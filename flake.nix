@@ -92,6 +92,16 @@
             };
           };
 
+          linpeas-bundle = pkgs.runCommand "linpeas-bundle-${pin.version}" { } ''
+            mkdir -p $out
+            install -m 0755 ${linpeas.src} $out/linpeas-bundle.sh
+            # Upstream linpeas.sh ships #!/bin/sh; rewrite to #!/usr/bin/env bash so
+            # the bundle is portable across systems where /bin/sh is dash/ash.
+            ${pkgs.gnused}/bin/sed --in-place '1s|^.*$|#!/usr/bin/env bash|' \
+              $out/linpeas-bundle.sh
+            chmod 0755 $out/linpeas-bundle.sh
+          '';
+
           treefmtEval = treefmt-nix.lib.evalModule pkgs ./treefmt.nix;
 
           preCommitCheck = pre-commit-hooks.lib.${system}.run {
@@ -142,7 +152,7 @@
             inherit linpeas;
             default = linpeas;
           } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
-            inherit linpeas-image;
+            inherit linpeas-image linpeas-bundle;
           };
 
           apps = {
