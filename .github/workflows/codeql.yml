@@ -1,0 +1,47 @@
+name: codeql
+
+# Statically analyses GitHub Actions workflow definitions for known
+# security antipatterns (untrusted-input expansion, missing permissions,
+# expression injection, etc.). Complements the `zizmor` pre-commit hook
+# by running CodeQL's queries and surfacing findings in the Security
+# tab. Shell support is deliberately omitted — CodeQL's `shell` analysis
+# is limited and `shellcheck` already covers our `run:` blocks.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 8 * * 1" # Monday 08:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: analyze (actions)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # upload-sarif
+      actions: read # read other workflows in repo
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+
+      - name: initialize CodeQL
+        uses: github/codeql-action/init@458d36d7d4f47d0dd16ca424c1d3cda0060f1360 # v3 (D2)
+        with:
+          languages: actions
+
+      - name: analyze
+        uses: github/codeql-action/analyze@458d36d7d4f47d0dd16ca424c1d3cda0060f1360 # v3 (D2)
+        with:
+          category: "/language:actions"
