@@ -1,0 +1,18 @@
+# Nix build symlinks
+result
+result-*
+
+# direnv
+.direnv/
+
+# Editor swap files
+*.swp
+*~
+
+# OS clutter
+.DS_Store
+
+# Local artifacts
+.flake-show.txt
+.flake-show.json
+/tmp/
