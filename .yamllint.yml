@@ -1,0 +1,17 @@
+extends: default
+
+rules:
+  # Renovate marker comments push lines past the 80-char default; the
+  # alternative (wrapping) defeats Renovate's regex matcher.
+  line-length: disable
+  # `# v3 (D2)` style comments after action SHAs need a single space, not two.
+  comments:
+    min-spaces-from-content: 1
+  # GitHub Actions `on:` is a YAML truthy value; allow the literal `on` key.
+  truthy:
+    check-keys: false
+  # nested job-step lists indent deeper than yamllint's 2-space default.
+  indentation:
+    indent-sequences: consistent
+  # Multiline strings appear inside `extra_nix_config: |` blocks.
+  document-start: disable

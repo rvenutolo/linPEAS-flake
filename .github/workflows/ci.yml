@@ -1,0 +1,211 @@
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # --- Required jobs (stable names, non-matrix) per D3 -----------------------
+
+  flake-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3 (D4)
+      - name: flake check
+        run: nix flake check --print-build-logs
+
+  build-linpeas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3 (D4)
+      - name: build linpeas
+        run: nix build .#linpeas --print-build-logs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linpeas-result
+          path: result/bin/linpeas
+          if-no-files-found: error
+
+  smoke-test:
+    needs: build-linpeas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3 (D4)
+      - name: smoke test linpeas -h
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          nix build .#linpeas
+          ./result/bin/linpeas -h | head -20
+          ./result/bin/linpeas -h >/dev/null
+
+  # D11: aarch64-linux required jobs ---------------------------------------
+
+  build-linpeas-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3 (D4)
+      - name: build linpeas (aarch64)
+        run: nix build .#linpeas --print-build-logs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linpeas-result-arm64
+          path: result/bin/linpeas
+          if-no-files-found: error
+
+  smoke-test-arm64:
+    needs: build-linpeas-arm64
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3 (D4)
+      - name: smoke test linpeas -h (aarch64)
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          nix build .#linpeas
+          ./result/bin/linpeas -h | head -20
+          ./result/bin/linpeas -h >/dev/null
+
+  # D9: image-smoke required job ------------------------------------------
+
+  image-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3 (D4)
+      - name: build, load, run image
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          # Build linpeas package first so a regression in the plain package
+          # surfaces here distinctly from the image build/load/run path.
+          nix build .#linpeas --print-build-logs
+          nix build .#linpeas-image --print-build-logs
+          docker load --input result
+          # Image tag matches pin version. Resolve from passthru.pin.
+          tag="$(nix eval --raw .#linpeas.passthru.pin.version)"
+          docker run --rm "rvenutolo/linpeas:${tag}" -h | head -20
+          docker run --rm "rvenutolo/linpeas:${tag}" -h >/dev/null
+
+  # D10: bundle-smoke required job ----------------------------------------
+
+  bundle-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3 (D4)
+      - name: build and run bundle
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          nix build .#linpeas-bundle --print-build-logs
+          ./result/linpeas-bundle.sh -h | head -20
+          ./result/linpeas-bundle.sh -h >/dev/null
+
+  # --- Coverage matrix (non-blocking) ---------------------------------------
+
+  flake-check-matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        nix-install-url:
+          - https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          - https://hydra.nixos.org/job/nix/master/buildStatic.x86_64-linux/latest/download-by-type/file/binary-dist
+        exclude:
+          # The non-matrix `flake-check` already covers ubuntu-latest+stable.
+          - os: ubuntu-latest
+            nix-install-url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          # Hydra static-Linux binary cannot install on Darwin runners.
+          - os: macos-latest
+            nix-install-url: https://hydra.nixos.org/job/nix/master/buildStatic.x86_64-linux/latest/download-by-type/file/binary-dist
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
+        with:
+          install_url: ${{ matrix.nix-install-url }}
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3 (D4)
+      - name: flake check
+        run: nix flake check --print-build-logs
+
+  build-linpeas-matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        nix-install-url:
+          - https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          - https://hydra.nixos.org/job/nix/master/buildStatic.x86_64-linux/latest/download-by-type/file/binary-dist
+        exclude:
+          - os: ubuntu-latest
+            nix-install-url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          # Hydra static-Linux binary cannot install on Darwin runners.
+          - os: macos-latest
+            nix-install-url: https://hydra.nixos.org/job/nix/master/buildStatic.x86_64-linux/latest/download-by-type/file/binary-dist
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
+        with:
+          install_url: ${{ matrix.nix-install-url }}
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3 (D4)
+      - name: build linpeas
+        run: nix build .#linpeas --print-build-logs
