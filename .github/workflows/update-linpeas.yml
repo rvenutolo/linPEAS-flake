@@ -19,6 +19,12 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
+          # The `bump` job invokes `git push --set-upstream origin <branch>`
+          # in-line below; it relies on the BUMP_PAT being persisted into
+          # .git/config by checkout. Declaring this explicitly silences
+          # zizmor's `artipacked` audit (intent is to persist) rather than
+          # suppressing it.
+          persist-credentials: true
           token: ${{ secrets.BUMP_PAT }}
 
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
