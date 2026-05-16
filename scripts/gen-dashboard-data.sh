@@ -8,7 +8,10 @@
 #
 # Hard-fail rules (security-critical):
 #   1. Any required CLI tool missing  -> exit 1.
-#   2. Any gh-api call non-200        -> exit 1 (curl/gh error surfaced).
+#   2. Upstream peass-ng releases/latest non-200 -> exit 1 (curl/gh error
+#      surfaced). This-repo lookups (releases/latest, last bump PR, latest
+#      verify-latest-release run) soft-fall-back to empty/"unknown" so a
+#      brand-new repo or transient API hiccup does not block the build.
 #   3. Missing required JSON field    -> exit 1 with field name; no partial
 #                                        yaml written.
 #   4. pin.version must match         -> [0-9]{8}-[0-9a-f]{7,40}
