@@ -1,0 +1,128 @@
+name: stale-pin-check
+
+# Daily watchdog: catches the silent-regression case where
+# `update-linpeas` runs green but the pin doesn't advance for an
+# extended window (network blip, API quota, BUMP_PAT expiry that
+# manifests later, etc.). The cron itself can't see "we stopped
+# bumping" because it would need to run AFTER `update-linpeas` and
+# correlate state.
+#
+# Logic: read the timestamp prefix of `pin.version` (peass-ng tags use
+# `YYYYMMDD-<sha>`). If we are >14d behind that date AND the upstream
+# `peass-ng/PEASS-ng` latest tag is newer than the pinned one, the
+# pin is considered stalled and a deduped `pin-stalled` issue opens.
+#
+# When the pin catches back up, the same composite auto-closes the
+# stalled issue on the next green run.
+
+on:
+  schedule:
+    - cron: "30 10 * * *" # daily 10:30 UTC (after update-linpeas at 09:00)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stale-pin-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.evaluate.outputs.result }}
+      pin_version: ${{ steps.evaluate.outputs.pin_version }}
+      upstream_version: ${{ steps.evaluate.outputs.upstream_version }}
+      pin_age_days: ${{ steps.evaluate.outputs.pin_age_days }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+
+      - name: evaluate pin freshness
+        id: evaluate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STALE_DAYS: "14"
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+
+          pin_version="$(jq --raw-output .version linpeas-pin.json)"
+          if [[ ! "${pin_version}" =~ ^([0-9]{4})([0-9]{2})([0-9]{2})- ]]; then
+            printf 'pin version %q does not match YYYYMMDD- prefix\n' "${pin_version}" >&2
+            exit 1
+          fi
+          pin_date="${BASH_REMATCH[1]}-${BASH_REMATCH[2]}-${BASH_REMATCH[3]}"
+
+          pin_epoch="$(date --utc --date "${pin_date}" +%s)"
+          now_epoch="$(date --utc +%s)"
+          age_days=$(( (now_epoch - pin_epoch) / 86400 ))
+
+          upstream_version="$(
+            gh api repos/peass-ng/PEASS-ng/releases/latest --jq .tag_name
+          )"
+
+          {
+            printf 'pin_version=%s\n' "${pin_version}"
+            printf 'upstream_version=%s\n' "${upstream_version}"
+            printf 'pin_age_days=%s\n' "${age_days}"
+          } >> "${GITHUB_OUTPUT}"
+
+          if [[ "${pin_version}" == "${upstream_version}" ]]; then
+            printf 'pin matches upstream (%s); fresh\n' "${pin_version}"
+            printf 'result=success\n' >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if (( age_days <= STALE_DAYS )); then
+            printf 'pin %s differs from upstream %s but is only %s days old; fresh\n' \
+              "${pin_version}" "${upstream_version}" "${age_days}"
+            printf 'result=success\n' >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          printf 'pin %s is %s days old; upstream latest is %s; STALLED\n' \
+            "${pin_version}" "${age_days}" "${upstream_version}" >&2
+          printf 'result=failure\n' >> "${GITHUB_OUTPUT}"
+
+  notify:
+    name: notify
+    needs: check
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          # If `check` itself errored (e.g. malformed pin, API rate-limit) we
+          # treat that as a stall-equivalent: surface to the same channel.
+          result: ${{ needs.check.outputs.result || (needs.check.result == 'failure' && 'failure' || 'skipped') }}
+          label: pin-stalled
+          title: "stale-pin-check: pin not advancing"
+          body: |
+            The daily `stale-pin-check` watchdog flagged the pin as stale.
+
+            - Pinned version: `${{ needs.check.outputs.pin_version }}`
+            - Upstream latest: `${{ needs.check.outputs.upstream_version }}`
+            - Pin age (days): `${{ needs.check.outputs.pin_age_days }}`
+
+            `update-linpeas` is reporting green runs but has not advanced the pin
+            for over 14 days while upstream has moved. Investigate:
+            - `update-linpeas.yml` recent run logs (action may be silently exiting 0
+              without bumping)
+            - `BUMP_PAT` validity / scopes
+            - Asset-URL prefix check rejecting upstream (peass-ng moved host)
+            - Upstream `.digest` field absent (silent skip is supposed to hard-fail
+              now; verify `bump-linpeas.sh`)
+
+            This issue auto-closes once the next watchdog run sees the pin within
+            tolerance of the upstream latest tag.
+          label-description: pin not advancing despite green update-linpeas runs
+          github-token: ${{ secrets.GITHUB_TOKEN }}
