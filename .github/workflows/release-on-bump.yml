@@ -277,3 +277,35 @@ jobs:
           # local checkout drift altering the bytes).
           gh release download "${VERSION}" --pattern linpeas-pin.json --clobber
           gh attestation verify linpeas-pin.json --repo rvenutolo/linPEAS-flake
+
+  notify:
+    name: notify
+    needs: [release, bundle, image, verify]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          # bundle/image/verify are gated on `tag-exists == 'false'` so
+          # `skipped` is the normal value when the tag already exists.
+          # Treat that path as success.
+          result: ${{ (needs.release.result == 'failure' || needs.bundle.result == 'failure' || needs.image.result == 'failure' || needs.verify.result == 'failure') && 'failure' || (needs.release.result == 'success') && 'success' || 'skipped' }}
+          label: release-on-bump-failure
+          title: "release-on-bump: release pipeline failed"
+          body: |
+            The `release-on-bump` workflow failed.
+
+            - Trigger: `${{ github.event_name }}`
+            - release: `${{ needs.release.result }}`
+            - bundle:  `${{ needs.bundle.result }}`
+            - image:   `${{ needs.image.result }}`
+            - verify:  `${{ needs.verify.result }}`
+
+            Investigate the failing job's logs. The just-published release may need to be deleted and recut once the underlying bug is fixed.
+          label-description: release-on-bump workflow failure
+          github-token: ${{ secrets.GITHUB_TOKEN }}

@@ -6,8 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 concurrency:
   group: update-flake-lock
@@ -16,6 +15,9 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # DeterminateSystems/update-flake-lock commits + pushes branch
+      pull-requests: write # action creates/updates PR
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
@@ -48,3 +50,32 @@ jobs:
           set -Eeuo pipefail
           IFS=$'\n\t'
           gh pr merge "${PR}" --auto --squash
+
+  notify:
+    name: notify
+    needs: update
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.update.result }}
+          label: update-flake-lock-failure
+          title: "update-flake-lock: weekly bump failed"
+          body: |
+            The weekly `update-flake-lock` cron failed.
+
+            - Trigger: `${{ github.event_name }}`
+            - Update conclusion: `${{ needs.update.result }}`
+
+            Investigate the `update` job logs. Common causes:
+            - `BUMP_PAT` expired
+            - `nixpkgs` input fetch failure
+            - DeterminateSystems action upstream regression
+          label-description: update-flake-lock workflow failure
+          github-token: ${{ secrets.GITHUB_TOKEN }}

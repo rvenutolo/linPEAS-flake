@@ -86,77 +86,35 @@ jobs:
       - id: deploy
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5 (D2)
 
-  notify-failure:
-    name: notify-on-failure
+  notify:
+    name: notify
     needs: [build, deploy]
-    if: always() && (needs.build.result == 'failure' || needs.deploy.result == 'failure') && github.event_name != 'pull_request'
+    # Always run so we can both auto-file on failure AND auto-close on
+    # the next green run. Skipped on PR events because we don't want
+    # noise from contributors' branches and the deploy job is gated to
+    # non-PR events anyway.
+    if: always() && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       issues: write
     steps:
-      - name: open or comment on issue
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0 (D2)
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
-          script: |
-            const label = 'pages-build-failure';
-            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const title = 'pages.yml: build/deploy failed';
-            const body = [
-              `The \`pages.yml\` workflow failed.`,
-              ``,
-              `- Run: ${runUrl}`,
-              `- Trigger: \`${context.eventName}\``,
-              `- Build conclusion: \`${{ needs.build.result }}\``,
-              `- Deploy conclusion: \`${{ needs.deploy.result }}\``,
-              ``,
-              `Investigate logs, fix forward, and close this issue once the next \`pages.yml\` run succeeds.`,
-            ].join('\n');
+          persist-credentials: false
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          # Aggregate: failure wins; success only when both legs green;
+          # otherwise no-op (cancelled / skipped).
+          result: ${{ (needs.build.result == 'failure' || needs.deploy.result == 'failure') && 'failure' || (needs.build.result == 'success' && needs.deploy.result == 'success') && 'success' || 'skipped' }}
+          label: pages-build-failure
+          title: "pages.yml: build/deploy failed"
+          body: |
+            The `pages.yml` workflow failed.
 
-            // De-dup: look for an open issue with the label.
-            const existing = await github.paginate(
-              github.rest.issues.listForRepo,
-              {
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                state: 'open',
-                labels: label,
-                per_page: 100,
-              },
-            );
+            - Trigger: `${{ github.event_name }}`
+            - Build conclusion: `${{ needs.build.result }}`
+            - Deploy conclusion: `${{ needs.deploy.result }}`
 
-            if (existing.length > 0) {
-              const issue = existing[0];
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issue.number,
-                body: `New failure: ${runUrl}`,
-              });
-              core.notice(`Appended comment to existing issue #${issue.number}`);
-              return;
-            }
-
-            // Ensure the label exists. createLabel is idempotent enough if we
-            // catch the "already exists" 422.
-            try {
-              await github.rest.issues.createLabel({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                name: label,
-                color: 'b60205',
-                description: 'pages.yml workflow failure',
-              });
-            } catch (err) {
-              if (err.status !== 422) {
-                throw err;
-              }
-            }
-
-            const created = await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title,
-              body,
-              labels: [label],
-            });
-            core.notice(`Opened issue #${created.data.number}`);
+            Investigate logs and fix forward. The next green `pages.yml` run will auto-close this issue.
+          label-description: pages.yml workflow failure
+          github-token: ${{ secrets.GITHUB_TOKEN }}

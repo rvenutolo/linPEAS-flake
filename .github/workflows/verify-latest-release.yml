@@ -126,3 +126,34 @@ jobs:
             exit 1
           fi
           printf 'upstream linpeas.sh matches pinned hash (%s)\n' "${expected_sri}"
+
+  notify:
+    name: notify
+    needs: verify
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.verify.result }}
+          label: verify-latest-release-failure
+          title: "verify-latest-release: daily verification failed"
+          body: |
+            The daily `verify-latest-release` cron failed. Treat as a security incident until proven otherwise.
+
+            - Trigger: `${{ github.event_name }}`
+            - Verify conclusion: `${{ needs.verify.result }}`
+
+            Investigate the `verify` job logs. A failure here means one of:
+            - Attestation verification failed (artifact provenance broken)
+            - Upstream `linpeas.sh` SRI hash drifted (tag-replacement)
+            - Release assets missing on the latest tag
+
+            Do NOT merge any subsequent pin bumps until this is resolved.
+          label-description: verify-latest-release daily check failed
+          github-token: ${{ secrets.GITHUB_TOKEN }}
