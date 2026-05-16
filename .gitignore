@@ -23,3 +23,5 @@ result-*
 # MkDocs Pages site
 docs/_data/dashboard.yml
 site/
+__pycache__/
+*.pyc
