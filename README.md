@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/rvenutolo/linPEAS-flake/actions/workflows/ci.yml/badge.svg)](https://github.com/rvenutolo/linPEAS-flake/actions/workflows/ci.yml)
 [![Pages](https://github.com/rvenutolo/linPEAS-flake/actions/workflows/pages.yml/badge.svg)](https://rvenutolo.github.io/linPEAS-flake/)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/rvenutolo/linPEAS-flake/badge)](https://scorecard.dev/viewer/?uri=github.com/rvenutolo/linPEAS-flake)
 [![Latest release](https://img.shields.io/github/v/release/rvenutolo/linPEAS-flake)](https://github.com/rvenutolo/linPEAS-flake/releases)
 [![Last commit](https://img.shields.io/github/last-commit/rvenutolo/linPEAS-flake)](https://github.com/rvenutolo/linPEAS-flake/commits/main)
 [![License](https://img.shields.io/github/license/rvenutolo/linPEAS-flake)](LICENSE)
