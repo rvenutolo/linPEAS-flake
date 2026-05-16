@@ -13,3 +13,10 @@ trim_trailing_whitespace = false
 
 [justfile]
 indent_style = tab
+
+[*.sh]
+# shfmt reads these EditorConfig keys (see shfmt --help / EditorConfig docs):
+# binary_next_line, switch_case_indent, space_redirects, shell_variant, etc.
+binary_next_line = true
+switch_case_indent = true
+space_redirects = true
