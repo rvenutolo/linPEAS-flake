@@ -162,6 +162,14 @@
               deadnix.enable = true;
               statix.enable = true;
               actionlint.enable = true;
+              zizmor = {
+                enable = true;
+                # Older zizmor versions (e.g. 1.8.0 from nixos-25.05) exit
+                # non-zero on any finding including informational. Newer
+                # versions default to `--min-severity=low`; mirror that
+                # here so the hook is consistent across nixpkgs bumps.
+                entry = "${pkgs.zizmor}/bin/zizmor --min-severity=low";
+              };
               yamllint.enable = true;
               shellcheck = {
                 enable = true;
@@ -249,6 +257,7 @@
               deadnix
               statix
               actionlint
+              zizmor
               yamllint
               nodePackages.prettier
               pre-commit

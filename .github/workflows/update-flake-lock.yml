@@ -19,6 +19,10 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
+          # DeterminateSystems/update-flake-lock receives the token via its
+          # own `token:` input below; the checkout itself doesn't need a
+          # persisted credential for any later `git push`.
+          persist-credentials: false
           token: ${{ secrets.BUMP_PAT }}
 
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)

@@ -6,12 +6,11 @@ on:
     paths:
       - linpeas-pin.json
 
+# Workflow default = read-only. Each job declares the writes it actually
+# needs, so contents:write / id-token:write / attestations:write /
+# packages:write are not silently available to unrelated steps.
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
-  packages: write
-  actions: read
+  contents: read
 
 concurrency:
   # Serialize on `main` rather than per-SHA so back-to-back pin bumps queue
@@ -23,6 +22,10 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # gh release create + upload
+      id-token: write # attest-build-provenance OIDC
+      attestations: write # attest-build-provenance write
     outputs:
       version: ${{ steps.read.outputs.version }}
       tag-exists: ${{ steps.exists.outputs.exists }}
@@ -30,6 +33,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: read pin version
         id: read
@@ -94,8 +98,14 @@ jobs:
     needs: release
     if: needs.release.outputs.tag-exists == 'false'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # gh release upload
+      id-token: write # attest-build-provenance OIDC
+      attestations: write # attest-build-provenance write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
 
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
         with:
@@ -132,8 +142,14 @@ jobs:
     needs: release
     if: needs.release.outputs.tag-exists == 'false'
     runs-on: ubuntu-latest
+    permissions:
+      packages: write # ghcr docker push
+      id-token: write # attest-build-provenance OIDC
+      attestations: write # attest-build-provenance write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
 
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
         with:
@@ -196,6 +212,8 @@ jobs:
       packages: read
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
 
       - name: download bundle from release
         env:
