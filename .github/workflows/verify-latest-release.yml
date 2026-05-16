@@ -1,0 +1,97 @@
+name: verify-latest-release
+
+on:
+  schedule:
+    - cron: "0 12 * * *" # daily 12:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  attestations: read
+  packages: read
+
+concurrency:
+  group: verify-latest-release
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: read latest release tag
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          tag="$(gh release view --repo rvenutolo/linPEAS-flake --json tagName --jq .tagName)"
+          printf 'tag=%s\n' "${tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: download bundle from latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.latest.outputs.tag }}
+        # Daily cron — same release-asset visibility lag possible if the run
+        # happens to fire moments after a release. Same poll-with-backoff.
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          for i in 1 2 3 4 5 6; do
+            if gh release download "${TAG}" \
+                 --repo rvenutolo/linPEAS-flake \
+                 --pattern linpeas-bundle.sh \
+                 --pattern linpeas-pin.json \
+                 --clobber; then
+              break
+            fi
+            printf 'assets not yet visible, retry %d/6\n' "${i}" >&2
+            sleep 5
+          done
+          [[ -f linpeas-bundle.sh && -f linpeas-pin.json ]] \
+            || { printf 'release assets never appeared\n' >&2; exit 1; }
+
+      - name: pull and inspect image
+        id: img
+        env:
+          GH_TOKEN_INLINE: ${{ github.token }}
+          GH_ACTOR: ${{ github.actor }}
+          TAG: ${{ steps.latest.outputs.tag }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          printf '%s' "${GH_TOKEN_INLINE}" \
+            | docker login ghcr.io --username "${GH_ACTOR}" --password-stdin
+          docker pull "ghcr.io/rvenutolo/linpeas:${TAG}"
+          repo_digest="$(docker inspect --format='{{index .RepoDigests 0}}' "ghcr.io/rvenutolo/linpeas:${TAG}")"
+          digest="${repo_digest#*@}"
+          printf 'digest=%s\n' "${digest}" >> "${GITHUB_OUTPUT}"
+
+      - name: verify bundle attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          gh attestation verify linpeas-bundle.sh --repo rvenutolo/linPEAS-flake
+
+      - name: verify image attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIGEST: ${{ steps.img.outputs.digest }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          gh attestation verify "oci://ghcr.io/rvenutolo/linpeas@${DIGEST}" --repo rvenutolo/linPEAS-flake
+
+      - name: verify pin file attestation
+        # The pin file uploaded to the release is the same blob attested at
+        # release-on-bump time. Re-verifying detects post-release tamper.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          gh attestation verify linpeas-pin.json --repo rvenutolo/linPEAS-flake
