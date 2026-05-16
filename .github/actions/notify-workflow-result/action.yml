@@ -1,0 +1,133 @@
+name: notify-workflow-result
+description: "Open/update a deduped issue on workflow failure; close it on next success."
+
+inputs:
+  result:
+    description: "Aggregate result of the parent job(s) (success/failure/cancelled/skipped)."
+    required: true
+  label:
+    description: "Label used to dedup open issues for this workflow."
+    required: true
+  title:
+    description: "Title of the issue when opening."
+    required: true
+  body:
+    description: "Markdown body of the issue when opening."
+    required: true
+  label-color:
+    description: "Hex color (without #) for the label, applied on first-time creation."
+    required: false
+    default: b60205
+  label-description:
+    description: "Description string set on first-time label creation."
+    required: false
+    default: Workflow failure auto-filed by .github/actions/notify-workflow-result
+  github-token:
+    description: "GitHub token with issues:write (e.g. secrets.GITHUB_TOKEN)."
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: open, comment, or close issue
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0 (D2)
+      env:
+        RESULT: ${{ inputs.result }}
+        LABEL: ${{ inputs.label }}
+        TITLE: ${{ inputs.title }}
+        BODY: ${{ inputs.body }}
+        LABEL_COLOR: ${{ inputs.label-color }}
+        LABEL_DESCRIPTION: ${{ inputs.label-description }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const result = process.env.RESULT;
+          const label = process.env.LABEL;
+          const title = process.env.TITLE;
+          const body = process.env.BODY;
+          const labelColor = process.env.LABEL_COLOR;
+          const labelDescription = process.env.LABEL_DESCRIPTION;
+          const runUrl =
+            `https://github.com/${context.repo.owner}/${context.repo.repo}` +
+            `/actions/runs/${context.runId}`;
+
+          // Inert on cancelled / skipped so flaky-cancel patterns
+          // don't reopen-and-close the same issue.
+          if (result !== 'success' && result !== 'failure') {
+            core.notice(`Result is '${result}'; no action.`);
+            return;
+          }
+
+          // Look up open issues carrying our dedup label.
+          const existing = await github.paginate(
+            github.rest.issues.listForRepo,
+            {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label,
+              per_page: 100,
+            },
+          );
+
+          if (result === 'success') {
+            if (existing.length === 0) {
+              core.notice('Success: no open issues to close.');
+              return;
+            }
+            for (const issue of existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `Auto-closing: workflow recovered. Run: ${runUrl}`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed',
+                state_reason: 'completed',
+              });
+              core.notice(`Closed issue #${issue.number}`);
+            }
+            return;
+          }
+
+          // result === 'failure'
+          if (existing.length > 0) {
+            const issue = existing[0];
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              body: `New failure: ${runUrl}`,
+            });
+            core.notice(`Appended comment to existing issue #${issue.number}`);
+            return;
+          }
+
+          // Ensure label exists before creating the issue.
+          // createLabel returns 422 when it already exists; swallow only that.
+          try {
+            await github.rest.issues.createLabel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: label,
+              color: labelColor,
+              description: labelDescription,
+            });
+          } catch (err) {
+            if (err.status !== 422) {
+              throw err;
+            }
+          }
+
+          const created = await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title,
+            body: `${body}\n\nRun: ${runUrl}`,
+            labels: [label],
+          });
+          core.notice(`Opened issue #${created.data.number}`);

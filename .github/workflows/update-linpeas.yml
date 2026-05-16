@@ -6,8 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 concurrency:
   group: update-linpeas
@@ -16,6 +15,9 @@ concurrency:
 jobs:
   bump:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # git push branch via persisted BUMP_PAT
+      pull-requests: write # gh pr create / merge --auto
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
@@ -107,3 +109,34 @@ jobs:
           fi
 
           gh pr merge "${branch}" --auto --squash
+
+  notify:
+    name: notify
+    needs: bump
+    # Always-runs so we both file on failure and auto-close on next green run.
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.bump.result }}
+          label: update-linpeas-failure
+          title: "update-linpeas: cron failed"
+          body: |
+            The daily `update-linpeas` cron failed before opening / merging a pin-bump PR.
+
+            - Trigger: `${{ github.event_name }}`
+            - Bump conclusion: `${{ needs.bump.result }}`
+
+            Investigate the `bump` job logs. Common causes:
+            - Upstream PEASS-ng API rate-limit
+            - `BUMP_PAT` expired
+            - Asset-URL prefix check tripped (peass-ng moved their release host)
+            - `digest` field missing or non-`sha256:` from upstream
+          label-description: update-linpeas workflow failure
+          github-token: ${{ secrets.GITHUB_TOKEN }}
