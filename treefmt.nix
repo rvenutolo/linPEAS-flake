@@ -2,15 +2,17 @@
 {
   projectRootFile = "flake.nix";
 
-  programs.nixpkgs-fmt.enable = true;
-  programs.prettier = {
-    enable = true;
-    package = pkgs.nodePackages.prettier;
-    includes = [ "*.json" "*.md" "*.yml" "*.yaml" ];
-  };
-  programs.shfmt = {
-    enable = true;
-    indent_size = 2;
+  programs = {
+    nixpkgs-fmt.enable = true;
+    prettier = {
+      enable = true;
+      package = pkgs.nodePackages.prettier;
+      includes = [ "*.json" "*.md" "*.yml" "*.yaml" ];
+    };
+    shfmt = {
+      enable = true;
+      indent_size = 2;
+    };
   };
 
   settings.global.excludes = [
