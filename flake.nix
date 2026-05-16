@@ -9,7 +9,12 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     pre-commit-hooks = {
-      url = "github:cachix/git-hooks.nix";
+      # Pinned to a commit compatible with nixos-25.05's lib + pre-commit 4.0.1.
+      # Newer git-hooks.nix uses `lib.cli.toCommandLine` (nixpkgs Oct 2025+,
+      # absent from 25.05) and emits `language: unsupported` (pre-commit >= 4.4).
+      # Renovate / a future nixpkgs bump unblocks moving forward.
+      url = "github:cachix/git-hooks.nix/3ff4596663c8cbbffe06d863ee4c950bce2c3b78";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
@@ -80,6 +85,12 @@
                 entry = "${pkgs.writeShellScript "readme-flake-show-fresh" ''
                   set -Eeuo pipefail
                   IFS=$'\n\t'
+                  # No-op until both the script and README exist (early-build
+                  # tasks land before T12/T14 — the hook activates once both
+                  # paths are present and otherwise stays silent).
+                  if [[ ! -f scripts/refresh-flake-show.sh || ! -f README.md ]]; then
+                    exit 0
+                  fi
                   exec ${pkgs.bash}/bin/bash scripts/refresh-flake-show.sh --check
                 ''}";
                 files = "^(flake\\.nix|flake\\.lock|linpeas-pin\\.json|README\\.md|scripts/refresh-flake-show\\.sh)$";
@@ -112,10 +123,33 @@
             formatting = treefmtEval.config.build.check self;
             pre-commit = preCommitCheck;
           };
+
+          devShells.default = pkgs.mkShell {
+            inherit (preCommitCheck) shellHook;
+
+            buildInputs = preCommitCheck.enabledPackages ++ (with pkgs; [
+              nix
+              jq
+              gh
+              just
+              curl
+              git
+              shellcheck
+              shfmt
+              nixpkgs-fmt
+              deadnix
+              statix
+              actionlint
+              yamllint
+              nodePackages.prettier
+              pre-commit
+              treefmtEval.config.build.wrapper
+            ]);
+          };
         })
     // {
       overlays.default = _final: prev: {
-        linpeas = self.packages.${prev.stdenv.hostPlatform.system}.linpeas;
+        inherit (self.packages.${prev.stdenv.hostPlatform.system}) linpeas;
       };
     };
 }
