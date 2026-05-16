@@ -79,7 +79,10 @@
             };
 
             config = {
-              Cmd = [ "${linpeas}/bin/linpeas" ];
+              # Entrypoint (not Cmd) so `docker run <img> <args>` appends to
+              # linpeas rather than replacing it. D9 image-smoke runs
+              # `docker run --rm <img> -h` and expects -h to reach linpeas.
+              Entrypoint = [ "${linpeas}/bin/linpeas" ];
               Labels = {
                 "org.opencontainers.image.source" = "https://github.com/rvenutolo/linPEAS-flake";
                 "org.opencontainers.image.description" = "LinPEAS — Linux Privilege Escalation Awesome Script";
