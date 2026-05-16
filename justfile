@@ -33,3 +33,16 @@ image:
 # Build the portable bundle for the current arch
 bundle:
 	nix build .#linpeas-bundle
+
+# Build the Pages site
+site:
+	nix build "path:$(pwd)#site"
+
+# Live-preview site at http://127.0.0.1:8000 (regenerates data first)
+site-dev:
+	./scripts/gen-dashboard-data.sh
+	mkdocs serve
+
+# Regenerate docs/_data/dashboard.yml standalone
+site-data:
+	./scripts/gen-dashboard-data.sh
