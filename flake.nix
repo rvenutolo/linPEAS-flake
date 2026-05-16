@@ -70,7 +70,12 @@
               statix.enable = true;
               actionlint.enable = true;
               yamllint.enable = true;
-              shellcheck.enable = true;
+              shellcheck = {
+                enable = true;
+                # justfile is parsed by `just`, not bash; shellcheck mis-IDs
+                # it as shell because the first line looks like a comment.
+                excludes = [ "^justfile$" ];
+              };
               treefmt = {
                 enable = true;
                 package = treefmtEval.config.build.wrapper;
