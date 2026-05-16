@@ -81,9 +81,20 @@
             # store path of linpeas, unambiguous regardless of /bin layering.
             contents = pkgs.buildEnv {
               name = "image-root";
+              # linpeas invokes grep/sed/awk/find/ps internally for most of its
+              # checks. Ship them so the image is actually useful for its
+              # intended use cases (container audit, CI image scanning,
+              # forensics on mounted captured filesystems, and host audit when
+              # launched with host namespaces + bind mount). See
+              # docs/install/docker.md for the use-case framing.
               paths = [
                 pkgs.bashInteractive
                 pkgs.coreutils
+                pkgs.gnugrep
+                pkgs.gnused
+                pkgs.gawk
+                pkgs.findutils
+                pkgs.procps
                 linpeas
               ];
               pathsToLink = [ "/bin" ];

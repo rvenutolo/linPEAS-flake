@@ -26,6 +26,11 @@ nix profile install github:rvenutolo/linPEAS-flake
 ```
 
 ### With Docker
+The image audits the **container** it runs in (container hardening, CI base-image
+scanning, forensics on a mounted captured filesystem). For a host audit, prefer
+the Nix or bundle install — or run with host namespaces explicitly. See
+[`docs/install/docker.md`](docs/install/docker.md) for use-case framing and the
+host-audit invocation.
 ```sh
 docker run --rm ghcr.io/rvenutolo/linpeas:latest -a
 ```
