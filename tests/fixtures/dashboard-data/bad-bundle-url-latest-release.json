@@ -1,0 +1,9 @@
+{
+  "tag_name": "20260510-cd4bd619",
+  "assets": [
+    {
+      "name": "linpeas-bundle.sh",
+      "browser_download_url": "https://evil.example.com/linpeas-bundle.sh"
+    }
+  ]
+}

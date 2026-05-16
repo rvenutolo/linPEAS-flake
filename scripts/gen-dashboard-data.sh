@@ -60,6 +60,24 @@ readonly THIS_REPO='rvenutolo/linPEAS-flake'
 readonly EXPECTED_BUNDLE_URL_PREFIX='https://github.com/rvenutolo/linPEAS-flake/releases/download/'
 readonly VERSION_REGEX='^[0-9]{8}-[0-9a-f]{7,40}$'
 
+# @description Fetch JSON from either an env-var override path (for tests) or
+# the live gh-api endpoint. Override path lets the test harness exercise the
+# script's security-critical failure branches without hitting the network and
+# without mutating real on-disk state. When the override var is empty/unset,
+# behavior is identical to a plain `gh api "${api_path}"`.
+# @arg $1 override env-var name (e.g. UPSTREAM_RELEASE_JSON_OVERRIDE)
+# @arg $2 gh api path used when the override is unset
+function fetch_or_override() {
+  local -r override_var="$1"
+  local -r api_path="$2"
+  local -r override_path="${!override_var:-}"
+  if [[ -n ${override_path} ]]; then
+    cat -- "${override_path}"
+  else
+    gh api "${api_path}"
+  fi
+}
+
 function main() {
   require_tool git
   require_tool gh
@@ -70,6 +88,9 @@ function main() {
   local repo_root pin_file out_file out_tmp
   repo_root="$(git rev-parse --show-toplevel)"
   pin_file="${repo_root}/linpeas-pin.json"
+  if [[ -n ${PIN_FILE_OVERRIDE:-} ]]; then
+    pin_file="${PIN_FILE_OVERRIDE}"
+  fi
   out_file="${repo_root}/docs/_data/dashboard.yml"
   readonly repo_root pin_file out_file
 
@@ -92,7 +113,8 @@ function main() {
   fi
 
   local upstream_release
-  upstream_release="$(gh api "repos/${UPSTREAM_REPO}/releases/latest")"
+  upstream_release="$(fetch_or_override UPSTREAM_RELEASE_JSON_OVERRIDE \
+    "repos/${UPSTREAM_REPO}/releases/latest")"
   upstream_tag="$(jq --raw-output .tag_name <<<"${upstream_release}")"
   upstream_date="$(jq --raw-output .published_at <<<"${upstream_release}")"
   require_field "${upstream_tag}" 'upstream_release.tag_name'
@@ -112,7 +134,8 @@ function main() {
 
   log_info 'gathering this-repo release data'
   local latest_release latest_tag bundle_url image_ref
-  latest_release="$(gh api "repos/${THIS_REPO}/releases/latest" 2>/dev/null || true)"
+  latest_release="$(fetch_or_override LATEST_RELEASE_JSON_OVERRIDE \
+    "repos/${THIS_REPO}/releases/latest" 2>/dev/null || true)"
   if [[ -z ${latest_release} || ${latest_release} == 'null' ]]; then
     latest_tag=''
     bundle_url=''
