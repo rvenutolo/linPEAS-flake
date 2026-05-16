@@ -1,0 +1,254 @@
+name: release-on-bump
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - linpeas-pin.json
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+  packages: write
+  actions: read
+
+concurrency:
+  # Serialize on `main` rather than per-SHA so back-to-back pin bumps queue
+  # through the release pipeline sequentially. Avoids parallel-runs racing
+  # the `gh release create` step on the same upstream tag.
+  group: release-on-bump-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+      tag-exists: ${{ steps.exists.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: read pin version
+        id: read
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          printf 'version=%s\n' "$(jq --raw-output .version linpeas-pin.json)" >> "${GITHUB_OUTPUT}"
+
+      - name: check tag exists
+        id: exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.read.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          if gh release view "${VERSION}" >/dev/null 2>&1; then
+            printf 'exists=true\n' >> "${GITHUB_OUTPUT}"
+          else
+            printf 'exists=false\n' >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: create release
+        if: steps.exists.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.read.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          gh release create "${VERSION}" \
+            --target main \
+            --title "${VERSION}" \
+            --notes "Tracks upstream [peass-ng/PEASS-ng@${VERSION}](https://github.com/peass-ng/PEASS-ng/releases/tag/${VERSION})."
+
+      - name: attest provenance for pin file
+        if: steps.exists.outputs.exists == 'false'
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2 (D2)
+        with:
+          subject-path: linpeas-pin.json
+
+      - name: attach pin file to release
+        # D12 scheduled verify (verify-latest-release.yml) downloads this asset.
+        if: steps.exists.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.read.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          gh release upload "${VERSION}" linpeas-pin.json --clobber
+
+  bundle:
+    # Per D1: single arch-agnostic asset (`linpeas-bundle.sh`). Built once on Linux.
+    needs: release
+    if: needs.release.outputs.tag-exists == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3 (D4)
+
+      - name: build bundle
+        run: nix build .#linpeas-bundle --print-build-logs
+
+      - name: stage artifact
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          cp -- result/linpeas-bundle.sh linpeas-bundle.sh
+
+      - name: upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          gh release upload "${VERSION}" linpeas-bundle.sh --clobber
+
+      - name: attest provenance for bundle
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2 (D2)
+        with:
+          subject-path: linpeas-bundle.sh
+
+  image:
+    needs: release
+    if: needs.release.outputs.tag-exists == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3 (D4)
+
+      - name: build OCI image
+        run: nix build .#linpeas-image --print-build-logs
+
+      - name: login to ghcr
+        env:
+          GH_TOKEN_INLINE: ${{ github.token }}
+          GH_ACTOR: ${{ github.actor }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          printf '%s' "${GH_TOKEN_INLINE}" \
+            | docker login ghcr.io --username "${GH_ACTOR}" --password-stdin
+
+      - name: load, tag, push image, and capture digest
+        # Per D8: capture digest from `docker inspect` after push for SLSA attest.
+        id: push
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          docker load --input result
+          docker tag "rvenutolo/linpeas:${VERSION}" "ghcr.io/rvenutolo/linpeas:${VERSION}"
+          docker tag "rvenutolo/linpeas:${VERSION}" "ghcr.io/rvenutolo/linpeas:latest"
+          docker push "ghcr.io/rvenutolo/linpeas:${VERSION}"
+          docker push "ghcr.io/rvenutolo/linpeas:latest"
+          # RepoDigests like `ghcr.io/rvenutolo/linpeas@sha256:abc...`; we want the `sha256:...` part.
+          repo_digest="$(docker inspect --format='{{index .RepoDigests 0}}' "ghcr.io/rvenutolo/linpeas:${VERSION}")"
+          digest="${repo_digest#*@}"
+          printf 'digest=%s\n' "${digest}" >> "${GITHUB_OUTPUT}"
+
+      - name: attest provenance for image
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2 (D2)
+        with:
+          subject-name: ghcr.io/rvenutolo/linpeas
+          subject-digest: ${{ steps.push.outputs.digest }}
+          # Push the sigstore bundle to ghcr.io as an OCI referrer so
+          # cosign/crane can verify attestations directly against the image.
+          push-to-registry: true
+
+  verify:
+    # D12 (synchronous): verify the just-published bundle, image, and pin
+    # attestations. Runs after both bundle + image jobs. Failure = release
+    # workflow goes red so we see broken-at-creation attestations immediately.
+    needs: [release, bundle, image]
+    if: needs.release.outputs.tag-exists == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      attestations: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: download bundle from release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.release.outputs.version }}
+        # Release-asset writes are eventually consistent; poll up to 30s for
+        # the just-uploaded bundle to become visible before failing.
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          for i in 1 2 3 4 5 6; do
+            if gh release download "${VERSION}" --pattern linpeas-bundle.sh; then
+              break
+            fi
+            printf 'asset not yet visible, retry %d/6\n' "${i}" >&2
+            sleep 5
+          done
+          [[ -f linpeas-bundle.sh ]] || { printf 'bundle asset never appeared\n' >&2; exit 1; }
+
+      - name: resolve image digest
+        id: resolve
+        env:
+          GH_TOKEN_INLINE: ${{ github.token }}
+          GH_ACTOR: ${{ github.actor }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          printf '%s' "${GH_TOKEN_INLINE}" \
+            | docker login ghcr.io --username "${GH_ACTOR}" --password-stdin
+          docker pull "ghcr.io/rvenutolo/linpeas:${VERSION}"
+          repo_digest="$(docker inspect --format='{{index .RepoDigests 0}}' "ghcr.io/rvenutolo/linpeas:${VERSION}")"
+          digest="${repo_digest#*@}"
+          printf 'digest=%s\n' "${digest}" >> "${GITHUB_OUTPUT}"
+
+      - name: verify bundle attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          gh attestation verify linpeas-bundle.sh --repo rvenutolo/linPEAS-flake
+
+      - name: verify image attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIGEST: ${{ steps.resolve.outputs.digest }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          gh attestation verify "oci://ghcr.io/rvenutolo/linpeas@${DIGEST}" --repo rvenutolo/linPEAS-flake
+
+      - name: verify pin file attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          # Re-fetch the pin file from the release (avoids any chance of
+          # local checkout drift altering the bytes).
+          gh release download "${VERSION}" --pattern linpeas-pin.json --clobber
+          gh attestation verify linpeas-pin.json --repo rvenutolo/linPEAS-flake
