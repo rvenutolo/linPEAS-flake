@@ -10,6 +10,10 @@
 
 **Docs:** <https://rvenutolo.github.io/linPEAS-flake/>
 
+> **Note:** Yes, this is an absurdly over-engineered way to skip running
+> `curl -LO https://github.com/peass-ng/PEASS-ng/releases/latest/download/linpeas.sh`.
+> Also built just for fun. No, I will not be taking questions.
+
 Personal Nix-flake wrapper around [peass-ng/PEASS-ng](https://github.com/peass-ng/PEASS-ng) linpeas.sh.
 All credit for LinPEAS itself belongs to the PEASS-ng authors.
 
