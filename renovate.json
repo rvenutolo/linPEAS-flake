@@ -11,7 +11,8 @@
   "packageRules": [
     {
       "matchManagers": ["github-actions"],
-      "groupName": "github-actions"
+      "groupName": "github-actions",
+      "pinDigests": true
     }
   ],
   "customManagers": [

@@ -23,7 +23,18 @@
       (system:
         let
           pkgs = import nixpkgs { inherit system; };
-          pin = builtins.fromJSON (builtins.readFile ./linpeas-pin.json);
+          # Read pin file with eager invariant checks. Anything outside the
+          # expected upstream shape (peass-ng release URL, YYYYMMDD-<hex> tag
+          # format) fails flake eval immediately — pin.version is interpolated
+          # into derivation names, docker tags, and OCI labels downstream, so
+          # an unvalidated value is a supply-chain footgun.
+          pin =
+            let
+              raw = builtins.fromJSON (builtins.readFile ./linpeas-pin.json);
+            in
+            assert (builtins.match "[0-9]{8}-[0-9a-f]{7,40}" raw.version) != null;
+            assert (builtins.match "https://github.com/peass-ng/PEASS-ng/releases/download/.*" raw.url) != null;
+            raw;
 
           linpeas = pkgs.stdenvNoCC.mkDerivation {
             pname = "linpeas";
@@ -95,6 +106,15 @@
           linpeas-bundle = pkgs.runCommand "linpeas-bundle-${pin.version}" { } ''
             mkdir -p $out
             install -m 0755 ${linpeas.src} $out/linpeas-bundle.sh
+            # Guard against empty or shebang-less upstream blob. Without
+            # this, sed's `1s|^.*$|...|` either no-ops on an empty file or
+            # mangles a single-line binary blob. Failing here surfaces the
+            # upstream weirdness loudly rather than letting a malformed
+            # bundle slip through smoke tests.
+            if ! head -n 1 $out/linpeas-bundle.sh | ${pkgs.gnugrep}/bin/grep --quiet '^#!'; then
+              echo "upstream linpeas.sh has no shebang on line 1" >&2
+              exit 1
+            fi
             # Upstream linpeas.sh ships #!/bin/sh; rewrite to #!/usr/bin/env bash so
             # the bundle is portable across systems where /bin/sh is dash/ash.
             ${pkgs.gnused}/bin/sed --in-place '1s|^.*$|#!/usr/bin/env bash|' \
