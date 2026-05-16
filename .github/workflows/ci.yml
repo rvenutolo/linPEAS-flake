@@ -202,6 +202,22 @@ jobs:
           nix build .#linpeas-bundle --print-build-logs
           ./result/linpeas-bundle.sh -h | sed -n '1,20p'
           ./result/linpeas-bundle.sh -h >/dev/null
+      - name: verify bundle shebang rewrite
+        # `flake.nix`'s `linpeas-bundle` derivation rewrites upstream linpeas.sh's
+        # shebang to `#!/usr/bin/env bash` via `sed`. The build-time guard only
+        # checks that upstream HAS a shebang; nothing else verifies the rewrite
+        # produced the expected line. A botched `sed` (typo, wrong flag, wrong
+        # path) would still build, still pass `-h`, and ship a non-portable
+        # bundle. This step locks the README's "arch-agnostic asset" contract.
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          line1="$(head -n 1 ./result/linpeas-bundle.sh)"
+          expected='#!/usr/bin/env bash'
+          if [ "${line1}" != "${expected}" ]; then
+            echo "FAIL: bundle line 1 is '${line1}', expected '${expected}'"
+            exit 1
+          fi
 
   # --- Coverage matrix (non-blocking) ---------------------------------------
 
