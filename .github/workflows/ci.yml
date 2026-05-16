@@ -136,8 +136,52 @@ jobs:
           docker load --input result
           # Image tag matches pin version. Resolve from passthru.pin.
           tag="$(nix eval --raw .#linpeas.passthru.pin.version)"
+          echo "IMAGE_TAG=${tag}" >>"${GITHUB_ENV}"
           docker run --rm "rvenutolo/linpeas:${tag}" -h | sed -n '1,20p'
           docker run --rm "rvenutolo/linpeas:${tag}" -h >/dev/null
+      - name: verify external tools present in image
+        # Guards against regression on the deliberate inclusion of
+        # gnugrep/gnused/gawk/findutils/procps. Without these, linpeas
+        # checks emit "command not found" noise and produce useless reports.
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          for tool in grep sed awk find ps; do
+            if ! docker run --rm --entrypoint /bin/sh \
+                "rvenutolo/linpeas:${IMAGE_TAG}" \
+                -c "command -v ${tool} >/dev/null"; then
+              echo "FAIL: ${tool} missing from image"
+              exit 1
+            fi
+          done
+      - name: smoke a real linpeas check against a separate target container
+        # Behavioral test: documented "container audit" use case. Linpeas
+        # runs in its own container, joins a separate ubuntu target's PID
+        # namespace + volumes, and runs an actual check. Fails on any
+        # "command not found" line in the output, which would indicate the
+        # image is missing a helper linpeas needs at runtime.
+        # The host is never the audit target — the linpeas container only
+        # sees the target container's namespaces, not the runner's.
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          docker run --detach --name linpeas-target --rm \
+            ubuntu:24.04 sleep 300 >/dev/null
+          trap 'docker rm --force linpeas-target >/dev/null 2>&1 || true' EXIT
+          out="$(docker run --rm \
+            --pid=container:linpeas-target \
+            --volumes-from linpeas-target \
+            "rvenutolo/linpeas:${IMAGE_TAG}" \
+            -o system_information 2>&1)"
+          echo "${out}" | sed -n '1,40p'
+          # Bash emits "<cmd>: command not found" when an external helper is
+          # missing. Anchor on the ": command not found" suffix to avoid
+          # matching benign output that happens to contain the phrase.
+          if echo "${out}" | grep --quiet --extended-regexp ': command not found'; then
+            echo "FAIL: linpeas reported missing commands:"
+            echo "${out}" | grep ': command not found'
+            exit 1
+          fi
 
   # D10: bundle-smoke required job ----------------------------------------
 
