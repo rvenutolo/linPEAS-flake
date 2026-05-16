@@ -73,7 +73,9 @@ function main() {
 
   local tmpfile
   tmpfile="$(mktemp)"
-  trap 'rm --force -- "${tmpfile}"' EXIT
+  # Use :- default so the trap (fires after main() returns) does not trip
+  # set -u when this local has gone out of scope.
+  trap 'rm --force -- "${tmpfile:-}"' EXIT
 
   curl --disable --fail --silent --show-error --location \
     --output "${tmpfile}" "${asset_url}"

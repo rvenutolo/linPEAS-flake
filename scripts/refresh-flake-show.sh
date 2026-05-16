@@ -42,7 +42,8 @@ function main() {
   require_tool nix
   require_tool awk
   require_tool grep
-  require_tool diff
+  require_tool cmp
+  require_tool sed
 
   local repo_root readme
   repo_root="$(git rev-parse --show-toplevel)"
@@ -66,12 +67,25 @@ function main() {
   flake_show_file="$(mktemp)"
   block_file="$(mktemp)"
   readme_new="$(mktemp)"
-  trap 'rm --force -- "${flake_show_file}" "${block_file}" "${readme_new}"' EXIT
+  # Use :- defaults so the trap (which fires after main() returns) does not
+  # trip set -u when these locals have already gone out of scope.
+  trap 'rm --force -- "${flake_show_file:-}" "${block_file:-}" "${readme_new:-}"' EXIT
 
   # --no-warn-dirty: suppress "Git tree is dirty" warning that would otherwise
   # leak into the README block and cause flaky --check diffs.
   # stderr discarded for the same reason.
-  nix flake show --all-systems --no-warn-dirty >"${flake_show_file}" 2>/dev/null
+  # nix flake show emits ANSI color escapes regardless of NO_COLOR / TTY
+  # detection; sed strips them so the rendered README stays plain text.
+  local raw_show
+  raw_show="$(mktemp)"
+  trap 'rm --force -- "${flake_show_file:-}" "${block_file:-}" "${readme_new:-}" "${raw_show:-}"' EXIT
+  nix flake show --all-systems --no-warn-dirty >"${raw_show}" 2>/dev/null
+  # Strip ANSI color escapes AND the leading flake-URL header line. The URL
+  # contains a per-commit rev (in CI) and a per-checkout absolute path (locally),
+  # neither of which are stable; without removing it, the readme-staleness
+  # check would fail on every commit.
+  sed --regexp-extended -e 's/\x1b\[[0-9;]*[mK]//g' -e '1{/^git\+/d}' \
+    "${raw_show}" >"${flake_show_file}"
 
   {
     printf '<!-- BEGIN flake-show -->\n'
@@ -83,14 +97,16 @@ function main() {
 
   # Replace inclusive of markers (single occurrence). awk emits the block once
   # at the BEGIN marker, then suppresses every line until (and including) END.
+  # Anchored to start-of-line so doc references to the marker (e.g. inside
+  # a markdown bullet) do not falsely match and emit the block twice.
   awk -v rep="${block_file}" '
-    /<!-- BEGIN flake-show -->/ {
+    /^<!-- BEGIN flake-show -->$/ {
       while ((getline line < rep) > 0) print line
       close(rep)
       skip = 1
       next
     }
-    /<!-- END flake-show -->/ {
+    /^<!-- END flake-show -->$/ {
       skip = 0
       next
     }
@@ -98,7 +114,9 @@ function main() {
   ' "${readme}" >"${readme_new}"
 
   if [[ ${check_only} == 'true' ]]; then
-    if ! diff --quiet -- "${readme}" "${readme_new}"; then
+    # cmp short-circuits on first byte difference and supports --silent across
+    # both GNU and BSD coreutils — diff --quiet is GNU-only.
+    if ! cmp --silent -- "${readme}" "${readme_new}"; then
       log_err 'README flake-show block is stale. Run scripts/refresh-flake-show.sh and commit.'
       exit 1
     fi
