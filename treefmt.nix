@@ -11,10 +11,7 @@
     };
     shfmt = {
       enable = true;
-      # Reads [*.sh] settings from .editorconfig (binary_next_line,
-      # switch_case_indent, space_redirects). When useEditorConfig is true
-      # the indent_size option must be unset.
-      useEditorConfig = true;
+      indent_size = 2;
     };
   };
 
