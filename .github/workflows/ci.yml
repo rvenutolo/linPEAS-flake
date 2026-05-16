@@ -162,14 +162,10 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         nix-install-url:
           - https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
-          - https://hydra.nixos.org/job/nix/master/buildStatic.x86_64-linux/latest/download-by-type/file/binary-dist
         exclude:
           # The non-matrix `flake-check` already covers ubuntu-latest+stable.
           - os: ubuntu-latest
             nix-install-url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
-          # Hydra static-Linux binary cannot install on Darwin runners.
-          - os: macos-latest
-            nix-install-url: https://hydra.nixos.org/job/nix/master/buildStatic.x86_64-linux/latest/download-by-type/file/binary-dist
     runs-on: ${{ matrix.os }}
     continue-on-error: true
     steps:
@@ -190,13 +186,9 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         nix-install-url:
           - https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
-          - https://hydra.nixos.org/job/nix/master/buildStatic.x86_64-linux/latest/download-by-type/file/binary-dist
         exclude:
           - os: ubuntu-latest
             nix-install-url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
-          # Hydra static-Linux binary cannot install on Darwin runners.
-          - os: macos-latest
-            nix-install-url: https://hydra.nixos.org/job/nix/master/buildStatic.x86_64-linux/latest/download-by-type/file/binary-dist
     runs-on: ${{ matrix.os }}
     continue-on-error: true
     steps:
