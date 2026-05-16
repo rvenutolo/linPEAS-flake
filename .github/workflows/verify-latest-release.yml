@@ -18,7 +18,7 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
 
       - name: read latest release tag
         id: latest
@@ -95,3 +95,32 @@ jobs:
           set -Eeuo pipefail
           IFS=$'\n\t'
           gh attestation verify linpeas-pin.json --repo rvenutolo/linPEAS-flake
+
+      - name: verify upstream linpeas.sh still matches pinned hash
+        # Detects upstream tag-replacement: re-fetch from peass-ng's release
+        # URL and confirm the SRI hash still matches the pinned value. The
+        # attestation steps above only prove *our* artifacts are untampered;
+        # they cannot detect upstream replacing the asset after we pinned it.
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          url="$(jq --raw-output .url linpeas-pin.json)"
+          expected_sri="$(jq --raw-output .hash linpeas-pin.json)"
+          if [[ "${expected_sri}" != sha256-* ]]; then
+            printf 'unsupported SRI algorithm in pin: %s\n' "${expected_sri}" >&2
+            exit 1
+          fi
+          tmpfile="$(mktemp)"
+          trap 'rm --force -- "${tmpfile:-}"' EXIT
+          curl --disable --fail --silent --show-error --location \
+            --output "${tmpfile}" "${url}"
+          # openssl is pre-installed on ubuntu-latest; produces the binary
+          # sha256 digest which we base64-encode to match Nix's SRI format.
+          sha256_b64="$(openssl dgst -sha256 -binary "${tmpfile}" | base64 --wrap=0)"
+          actual_sri="sha256-${sha256_b64}"
+          if [[ "${actual_sri}" != "${expected_sri}" ]]; then
+            printf 'upstream content drift: pin says %s, upstream now %s\n' \
+              "${expected_sri}" "${actual_sri}" >&2
+            exit 1
+          fi
+          printf 'upstream linpeas.sh matches pinned hash (%s)\n' "${expected_sri}"

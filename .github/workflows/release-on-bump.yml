@@ -27,7 +27,7 @@ jobs:
       version: ${{ steps.read.outputs.version }}
       tag-exists: ${{ steps.exists.outputs.exists }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           fetch-depth: 0
 
@@ -60,6 +60,13 @@ jobs:
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
+          # Defensive shape-check: refuse to publish a release whose version
+          # contains characters outside the github tag/release-notes safe set.
+          # Prevents markdown injection in --notes and catches malformed pins.
+          if [[ ! "${VERSION}" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+            printf 'refusing to release with non-conformant version: %q\n' "${VERSION}" >&2
+            exit 1
+          fi
           gh release create "${VERSION}" \
             --target main \
             --title "${VERSION}" \
@@ -88,7 +95,7 @@ jobs:
     if: needs.release.outputs.tag-exists == 'false'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
 
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
         with:
@@ -126,7 +133,7 @@ jobs:
     if: needs.release.outputs.tag-exists == 'false'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
 
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
         with:
@@ -188,7 +195,7 @@ jobs:
       attestations: read
       packages: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
 
       - name: download bundle from release
         env:

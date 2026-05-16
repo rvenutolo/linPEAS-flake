@@ -61,8 +61,11 @@ Three independent automations keep this flake current:
 ### Daily linpeas pin bump (`update-linpeas.yml`)
 - Cron 09:00 UTC + manual dispatch.
 - Queries `peass-ng/PEASS-ng` releases API. If the latest tag differs from the
-  pinned `linpeas-pin.json`, downloads the new `linpeas.sh`, cross-checks the
-  GitHub-API `digest` field, computes the SRI hash, and rewrites the pin.
+  pinned `linpeas-pin.json`, downloads the new `linpeas.sh`, **validates the
+  asset URL stays within the expected `github.com/peass-ng/PEASS-ng/releases/
+  download/` prefix**, **hard-fails if the GitHub-API `digest` field is
+  missing or non-`sha256:`** (previously a silent skip), cross-checks the
+  digest, computes the SRI hash, and atomically rewrites the pin.
 - Regenerates the README flake-outputs block in the same commit.
 - Opens a PR (`chore: bump linpeas to <tag>`) authored by `github-actions[bot]`
   via a fine-grained PAT (so CI fires; the default `GITHUB_TOKEN` would not
@@ -124,9 +127,11 @@ Renovate maintains them.
 
 Every release runs a `verify` job in `release-on-bump.yml` that downloads the
 just-published bundle + image and runs `gh attestation verify` on each.
-A separate daily cron workflow (`verify-latest-release.yml`) re-verifies
-the latest release's bundle, image, and pin file to detect post-release
-tampering. Either failing surfaces as a red workflow run.
+A separate daily cron workflow (`verify-latest-release.yml`) re-verifies the
+latest release's bundle, image, and pin file **and re-fetches the pinned
+`linpeas.sh` from upstream to confirm the SRI hash still matches** — this
+detects upstream tag-replacement that attestation alone cannot see. Any
+failing check surfaces as a red workflow run.
 
 ## Verification
 
@@ -134,10 +139,17 @@ Upstream PEASS-ng releases ship no signatures (GPG, cosign, SLSA). Integrity
 rests on:
 
 1. SRI hash pinning in `linpeas-pin.json` — Nix refuses to build on mismatch.
-2. GitHub Releases API `digest` field cross-check inside the bump workflow.
+2. Flake-eval-time assertions on `pin.version` (YYYYMMDD-<hex>) and `pin.url`
+   (peass-ng release prefix) — derivation eval fails on a malformed pin.
+3. GitHub Releases API `digest` field cross-check inside the bump workflow
+   (hard fail if absent — never a silent skip).
+4. Asset-URL prefix validation inside the bump workflow.
+5. Daily upstream parity check (`verify-latest-release.yml`).
 
 This matches the trust model of `curl ... | bash`, but with reproducible,
-hash-pinned downloads.
+hash-pinned downloads and SLSA build-provenance attestations. See
+[`SECURITY.md`](SECURITY.md) for the full trust model, including the
+distinction between build-provenance attestations and content trust.
 
 ## Flake outputs
 

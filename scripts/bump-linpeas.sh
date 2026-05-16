@@ -71,6 +71,15 @@ function main() {
     exit 1
   fi
 
+  # Defense in depth: refuse any asset URL outside the expected upstream
+  # release-asset prefix. Protects against a tampered or malformed API
+  # response substituting an attacker-controlled URL into the pin file.
+  local -r expected_url_prefix='https://github.com/peass-ng/PEASS-ng/releases/download/'
+  if [[ ${asset_url} != "${expected_url_prefix}"* ]]; then
+    log_err "asset URL outside expected prefix: ${asset_url}"
+    exit 1
+  fi
+
   local tmpfile
   tmpfile="$(mktemp)"
   # Use :- default so the trap (fires after main() returns) does not trip
@@ -80,15 +89,25 @@ function main() {
   curl --disable --fail --silent --show-error --location \
     --output "${tmpfile}" "${asset_url}"
 
-  if [[ -n ${asset_digest} && ${asset_digest} != 'null' ]]; then
-    local expected_sha actual_sha_line actual_sha
-    expected_sha="${asset_digest#sha256:}"
-    actual_sha_line="$(sha256sum "${tmpfile}")"
-    actual_sha="${actual_sha_line%% *}"
-    if [[ ${expected_sha} != "${actual_sha}" ]]; then
-      log_err "sha256 mismatch (expected ${expected_sha}, got ${actual_sha})"
-      exit 1
-    fi
+  # The GitHub release-asset `.digest` field is an independent integrity
+  # signal from the file we just downloaded. Absence/null is treated as a
+  # hard fail rather than a silent skip — readme.md advertises this as a
+  # security property, so it must never be silently bypassed.
+  if [[ -z ${asset_digest} || ${asset_digest} == 'null' ]]; then
+    log_err "release ${new_tag} asset has no .digest field — cannot cross-check"
+    exit 1
+  fi
+  if [[ ${asset_digest} != sha256:* ]]; then
+    log_err "unsupported digest algorithm: ${asset_digest}"
+    exit 1
+  fi
+  local expected_sha actual_sha_line actual_sha
+  expected_sha="${asset_digest#sha256:}"
+  actual_sha_line="$(sha256sum "${tmpfile}")"
+  actual_sha="${actual_sha_line%% *}"
+  if [[ ${expected_sha} != "${actual_sha}" ]]; then
+    log_err "sha256 mismatch (expected ${expected_sha}, got ${actual_sha})"
+    exit 1
   fi
 
   local sri_hash
@@ -103,7 +122,12 @@ function main() {
     --arg hash "${sri_hash}" \
     '{version: $version, url: $url, hash: $hash}')"
 
-  printf '%s\n' "${new_pin}" >"${pin_file}"
+  # Atomic replace: write to a sibling temp file then rename. Avoids
+  # leaving a truncated pin file behind on SIGKILL / runner termination.
+  local pin_tmp
+  pin_tmp="$(mktemp --tmpdir="$(dirname -- "${pin_file}")" linpeas-pin.json.XXXXXX)"
+  printf '%s\n' "${new_pin}" >"${pin_tmp}"
+  mv -- "${pin_tmp}" "${pin_file}"
   log_info "bumped ${current_version} -> ${new_tag}"
 }
 

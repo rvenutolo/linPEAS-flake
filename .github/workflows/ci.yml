@@ -21,7 +21,7 @@ jobs:
   flake-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
         with:
           install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
@@ -34,7 +34,7 @@ jobs:
   build-linpeas:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
         with:
           install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
@@ -43,7 +43,7 @@ jobs:
       - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3 (D4)
       - name: build linpeas
         run: nix build .#linpeas --print-build-logs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (D2)
         with:
           name: linpeas-result
           path: result/bin/linpeas
@@ -53,7 +53,7 @@ jobs:
     needs: build-linpeas
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
         with:
           install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
@@ -65,7 +65,10 @@ jobs:
           set -Eeuo pipefail
           IFS=$'\n\t'
           nix build .#linpeas
-          ./result/bin/linpeas -h | head -20
+          # `sed -n '1,20p'` (vs `head -20`) reads its entire stdin instead of
+          # closing early, avoiding SIGPIPE on linpeas under `set -o pipefail`
+          # if upstream -h output ever exceeds 20 lines.
+          ./result/bin/linpeas -h | sed -n '1,20p'
           ./result/bin/linpeas -h >/dev/null
 
   # D11: aarch64-linux required jobs ---------------------------------------
@@ -73,7 +76,7 @@ jobs:
   build-linpeas-arm64:
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
         with:
           install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
@@ -82,7 +85,7 @@ jobs:
       - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3 (D4)
       - name: build linpeas (aarch64)
         run: nix build .#linpeas --print-build-logs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (D2)
         with:
           name: linpeas-result-arm64
           path: result/bin/linpeas
@@ -92,7 +95,7 @@ jobs:
     needs: build-linpeas-arm64
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
         with:
           install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
@@ -104,7 +107,10 @@ jobs:
           set -Eeuo pipefail
           IFS=$'\n\t'
           nix build .#linpeas
-          ./result/bin/linpeas -h | head -20
+          # `sed -n '1,20p'` (vs `head -20`) reads its entire stdin instead of
+          # closing early, avoiding SIGPIPE on linpeas under `set -o pipefail`
+          # if upstream -h output ever exceeds 20 lines.
+          ./result/bin/linpeas -h | sed -n '1,20p'
           ./result/bin/linpeas -h >/dev/null
 
   # D9: image-smoke required job ------------------------------------------
@@ -112,7 +118,7 @@ jobs:
   image-smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
         with:
           install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
@@ -130,7 +136,7 @@ jobs:
           docker load --input result
           # Image tag matches pin version. Resolve from passthru.pin.
           tag="$(nix eval --raw .#linpeas.passthru.pin.version)"
-          docker run --rm "rvenutolo/linpeas:${tag}" -h | head -20
+          docker run --rm "rvenutolo/linpeas:${tag}" -h | sed -n '1,20p'
           docker run --rm "rvenutolo/linpeas:${tag}" -h >/dev/null
 
   # D10: bundle-smoke required job ----------------------------------------
@@ -138,7 +144,7 @@ jobs:
   bundle-smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
         with:
           install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
@@ -150,7 +156,7 @@ jobs:
           set -Eeuo pipefail
           IFS=$'\n\t'
           nix build .#linpeas-bundle --print-build-logs
-          ./result/linpeas-bundle.sh -h | head -20
+          ./result/linpeas-bundle.sh -h | sed -n '1,20p'
           ./result/linpeas-bundle.sh -h >/dev/null
 
   # --- Coverage matrix (non-blocking) ---------------------------------------
@@ -169,7 +175,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
         with:
           install_url: ${{ matrix.nix-install-url }}
@@ -192,7 +198,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
         with:
           install_url: ${{ matrix.nix-install-url }}
