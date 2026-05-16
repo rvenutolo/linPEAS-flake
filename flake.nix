@@ -8,9 +8,12 @@
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    pre-commit-hooks = {
+      url = "github:cachix/git-hooks.nix";
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils, treefmt-nix, ... }:
+  outputs = { self, nixpkgs, flake-utils, treefmt-nix, pre-commit-hooks, ... }:
     flake-utils.lib.eachDefaultSystem
       (system:
         let
@@ -19,7 +22,7 @@
 
           linpeas = pkgs.stdenvNoCC.mkDerivation {
             pname = "linpeas";
-            version = pin.version;
+            inherit (pin) version;
 
             src = pkgs.fetchurl {
               inherit (pin) url hash;
@@ -53,6 +56,38 @@
           };
 
           treefmtEval = treefmt-nix.lib.evalModule pkgs ./treefmt.nix;
+
+          preCommitCheck = pre-commit-hooks.lib.${system}.run {
+            src = ./.;
+            hooks = {
+              nixpkgs-fmt.enable = true;
+              deadnix.enable = true;
+              statix.enable = true;
+              actionlint.enable = true;
+              yamllint.enable = true;
+              shellcheck.enable = true;
+              treefmt = {
+                enable = true;
+                package = treefmtEval.config.build.wrapper;
+              };
+              # D6: refuse to commit if README flake-show block is stale.
+              # Invokes refresh-flake-show.sh in --check mode — never mutates the
+              # working tree, exits 1 on diff. Safe for the autonomous subagent
+              # path (no dirty README left behind on failure).
+              readme-flake-show-fresh = {
+                enable = true;
+                name = "readme-flake-show-fresh";
+                entry = "${pkgs.writeShellScript "readme-flake-show-fresh" ''
+                  set -Eeuo pipefail
+                  IFS=$'\n\t'
+                  exec ${pkgs.bash}/bin/bash scripts/refresh-flake-show.sh --check
+                ''}";
+                files = "^(flake\\.nix|flake\\.lock|linpeas-pin\\.json|README\\.md|scripts/refresh-flake-show\\.sh)$";
+                pass_filenames = false;
+                language = "system";
+              };
+            };
+          };
         in
         {
           packages = {
@@ -73,10 +108,13 @@
 
           formatter = treefmtEval.config.build.wrapper;
 
-          checks.formatting = treefmtEval.config.build.check self;
+          checks = {
+            formatting = treefmtEval.config.build.check self;
+            pre-commit = preCommitCheck;
+          };
         })
     // {
-      overlays.default = final: prev: {
+      overlays.default = _final: prev: {
         linpeas = self.packages.${prev.stdenv.hostPlatform.system}.linpeas;
       };
     };
