@@ -132,6 +132,14 @@
                 entry = "${pkgs.writeShellScript "readme-flake-show-fresh" ''
                   set -Eeuo pipefail
                   IFS=$'\n\t'
+                  # No-op when running inside a nix build sandbox — the
+                  # `checks.pre-commit` derivation runs all hooks, but the
+                  # script needs `nix flake show` which can't run inside the
+                  # sandbox (no daemon, restricted PATH). Local git pre-commit
+                  # invocation has full PATH and the check fires normally.
+                  if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then
+                    exit 0
+                  fi
                   # No-op until both the script and README exist (early-build
                   # tasks land before T12/T14 — the hook activates once both
                   # paths are present and otherwise stays silent).
