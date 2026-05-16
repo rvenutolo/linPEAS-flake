@@ -1,11 +1,14 @@
 # linPEAS-flake
 
 [![CI](https://github.com/rvenutolo/linPEAS-flake/actions/workflows/ci.yml/badge.svg)](https://github.com/rvenutolo/linPEAS-flake/actions/workflows/ci.yml)
+[![Pages](https://github.com/rvenutolo/linPEAS-flake/actions/workflows/pages.yml/badge.svg)](https://rvenutolo.github.io/linPEAS-flake/)
 [![Latest release](https://img.shields.io/github/v/release/rvenutolo/linPEAS-flake)](https://github.com/rvenutolo/linPEAS-flake/releases)
 [![Last commit](https://img.shields.io/github/last-commit/rvenutolo/linPEAS-flake)](https://github.com/rvenutolo/linPEAS-flake/commits/main)
 [![License](https://img.shields.io/github/license/rvenutolo/linPEAS-flake)](LICENSE)
 [![Nix flake](https://img.shields.io/badge/nix-flake-blue?logo=nixos)](https://nixos.wiki/wiki/Flakes)
 [![tracks peass-ng](https://img.shields.io/badge/dynamic/json?label=tracks%20peass-ng&query=%24.version&url=https%3A%2F%2Fraw.githubusercontent.com%2Frvenutolo%2FlinPEAS-flake%2Fmain%2Flinpeas-pin.json)](https://github.com/peass-ng/PEASS-ng/releases)
+
+**Docs:** <https://rvenutolo.github.io/linPEAS-flake/>
 
 Personal Nix-flake wrapper around [peass-ng/PEASS-ng](https://github.com/peass-ng/PEASS-ng) linpeas.sh.
 All credit for LinPEAS itself belongs to the PEASS-ng authors.
@@ -89,6 +92,18 @@ Three independent automations keep this flake current:
   `DeterminateSystems/update-flake-lock`. CI-gated auto-merge.
 - Renovate (Friday batch) — bumps GitHub Action SHAs and the pinned Nix
   version in CI workflows (custom regex manager). CI-gated auto-merge.
+
+### Pages site (`pages.yml`)
+- Triggers: push to `main`, PR, release published, daily 10:00 UTC cron,
+  and manual dispatch.
+- On every trigger: `scripts/gen-dashboard-data.sh` regenerates
+  `docs/_data/dashboard.yml` from `linpeas-pin.json` + GitHub API. `nix
+  build .#site` then renders the MkDocs Material site. On non-PR events
+  the artifact is deployed to <https://rvenutolo.github.io/linPEAS-flake/>
+  via `actions/deploy-pages` over OIDC.
+- Pages is **not** in the branch-protection required check set — a
+  Pages failure must not block linpeas-bump PRs from auto-merging. A
+  failure auto-files a deduped issue tagged `pages-build-failure`.
 
 ## Versioning
 
@@ -205,7 +220,8 @@ distinction between build-provenance attestations and content trust.
     │   ├───default: package 'linpeas-20260510-cd4bd619'
     │   ├───linpeas: package 'linpeas-20260510-cd4bd619'
     │   ├───linpeas-bundle: package 'linpeas-bundle-20260510-cd4bd619'
-    │   └───linpeas-image: package 'linpeas.tar.gz'
+    │   ├───linpeas-image: package 'linpeas.tar.gz'
+    │   └───site: package 'linpeas-flake-site-20260510-cd4bd619'
     ├───x86_64-darwin
     │   ├───default: package 'linpeas-20260510-cd4bd619'
     │   └───linpeas: package 'linpeas-20260510-cd4bd619'
@@ -213,7 +229,8 @@ distinction between build-provenance attestations and content trust.
         ├───default: package 'linpeas-20260510-cd4bd619'
         ├───linpeas: package 'linpeas-20260510-cd4bd619'
         ├───linpeas-bundle: package 'linpeas-bundle-20260510-cd4bd619'
-        └───linpeas-image: package 'linpeas.tar.gz'
+        ├───linpeas-image: package 'linpeas.tar.gz'
+        └───site: package 'linpeas-flake-site-20260510-cd4bd619'
 ```
 <!-- END flake-show -->
 
@@ -228,6 +245,9 @@ just fmt             # nix fmt
 just lint            # pre-commit run --all-files
 just bump            # refresh linpeas pin from upstream
 just show            # refresh README flake-show block
+just site            # nix build .#site
+just site-data       # regenerate docs/_data/dashboard.yml
+just site-dev        # local preview at http://127.0.0.1:8000
 pre-commit install   # one-time, wires git hooks
 ```
 
