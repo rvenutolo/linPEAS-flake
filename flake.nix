@@ -60,6 +60,35 @@
             };
           };
 
+          linpeas-image = pkgs.dockerTools.buildLayeredImage {
+            name = "rvenutolo/linpeas";
+            tag = pin.version;
+
+            # nixpkgs 25.05's `buildLayeredImage` only exposes `contents` (not
+            # `copyToRoot`). Wrap inputs in a `buildEnv` so `pathsToLink`
+            # controls the /bin layering explicitly. Cmd uses the absolute
+            # store path of linpeas, unambiguous regardless of /bin layering.
+            contents = pkgs.buildEnv {
+              name = "image-root";
+              paths = [
+                pkgs.bashInteractive
+                pkgs.coreutils
+                linpeas
+              ];
+              pathsToLink = [ "/bin" ];
+            };
+
+            config = {
+              Cmd = [ "${linpeas}/bin/linpeas" ];
+              Labels = {
+                "org.opencontainers.image.source" = "https://github.com/rvenutolo/linPEAS-flake";
+                "org.opencontainers.image.description" = "LinPEAS — Linux Privilege Escalation Awesome Script";
+                "org.opencontainers.image.licenses" = "MIT";
+                "org.opencontainers.image.version" = pin.version;
+              };
+            };
+          };
+
           treefmtEval = treefmt-nix.lib.evalModule pkgs ./treefmt.nix;
 
           preCommitCheck = pre-commit-hooks.lib.${system}.run {
@@ -109,6 +138,8 @@
           packages = {
             inherit linpeas;
             default = linpeas;
+          } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+            inherit linpeas-image;
           };
 
           apps = {
