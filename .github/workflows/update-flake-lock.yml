@@ -1,0 +1,46 @@
+name: update-flake-lock
+
+on:
+  schedule:
+    - cron: "0 6 * * 5" # Friday 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-flake-lock
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.BUMP_PAT }}
+
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - uses: DeterminateSystems/update-flake-lock@834c491b2ece4de0bbd00d85214bb5e83b4da5c6 # v28 (D2)
+        id: lock
+        with:
+          token: ${{ secrets.BUMP_PAT }}
+          pr-title: "chore: update flake.lock"
+          pr-labels: dependencies
+          commit-msg: "chore: update flake.lock"
+
+      - name: enable auto-merge
+        if: steps.lock.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.BUMP_PAT }}
+          PR: ${{ steps.lock.outputs.pull-request-number }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          gh pr merge "${PR}" --auto --squash
