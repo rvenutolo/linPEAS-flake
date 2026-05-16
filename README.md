@@ -187,20 +187,20 @@ hash-pinned downloads.
 │   └───default: Nixpkgs overlay
 └───packages
     ├───aarch64-darwin
-    │   ├───default: package 'linpeas-20260506-5a27482a'
-    │   └───linpeas: package 'linpeas-20260506-5a27482a'
+    │   ├───default: package 'linpeas-20260510-cd4bd619'
+    │   └───linpeas: package 'linpeas-20260510-cd4bd619'
     ├───aarch64-linux
-    │   ├───default: package 'linpeas-20260506-5a27482a'
-    │   ├───linpeas: package 'linpeas-20260506-5a27482a'
-    │   ├───linpeas-bundle: package 'linpeas-bundle-20260506-5a27482a'
+    │   ├───default: package 'linpeas-20260510-cd4bd619'
+    │   ├───linpeas: package 'linpeas-20260510-cd4bd619'
+    │   ├───linpeas-bundle: package 'linpeas-bundle-20260510-cd4bd619'
     │   └───linpeas-image: package 'linpeas.tar.gz'
     ├───x86_64-darwin
-    │   ├───default: package 'linpeas-20260506-5a27482a'
-    │   └───linpeas: package 'linpeas-20260506-5a27482a'
+    │   ├───default: package 'linpeas-20260510-cd4bd619'
+    │   └───linpeas: package 'linpeas-20260510-cd4bd619'
     └───x86_64-linux
-        ├───default: package 'linpeas-20260506-5a27482a'
-        ├───linpeas: package 'linpeas-20260506-5a27482a'
-        ├───linpeas-bundle: package 'linpeas-bundle-20260506-5a27482a'
+        ├───default: package 'linpeas-20260510-cd4bd619'
+        ├───linpeas: package 'linpeas-20260510-cd4bd619'
+        ├───linpeas-bundle: package 'linpeas-bundle-20260510-cd4bd619'
         └───linpeas-image: package 'linpeas.tar.gz'
 ```
 <!-- END flake-show -->
