@@ -122,6 +122,26 @@
             chmod 0755 $out/linpeas-bundle.sh
           '';
 
+          site = pkgs.stdenv.mkDerivation {
+            pname = "linpeas-flake-site";
+            inherit (pin) version;
+            src = ./.;
+            nativeBuildInputs = with pkgs.python3Packages; [
+              mkdocs-material
+              mkdocs-macros
+            ];
+            buildPhase = ''
+              runHook preBuild
+              if [ ! -f docs/_data/dashboard.yml ]; then
+                echo "ERROR: docs/_data/dashboard.yml missing. Run 'just site-data' first or use 'just site-dev'." >&2
+                exit 1
+              fi
+              mkdocs build --strict --site-dir $out/share/site
+              runHook postBuild
+            '';
+            dontInstall = true;
+          };
+
           treefmtEval = treefmt-nix.lib.evalModule pkgs ./treefmt.nix;
 
           preCommitCheck = pre-commit-hooks.lib.${system}.run {
@@ -180,7 +200,7 @@
             inherit linpeas;
             default = linpeas;
           } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
-            inherit linpeas-image linpeas-bundle;
+            inherit linpeas-image linpeas-bundle site;
           };
 
           apps = {
@@ -207,6 +227,7 @@
             buildInputs = preCommitCheck.enabledPackages ++ (with pkgs; [
               nix
               jq
+              yq-go
               gh
               just
               curl
@@ -221,6 +242,8 @@
               nodePackages.prettier
               pre-commit
               treefmtEval.config.build.wrapper
+              python3Packages.mkdocs-material
+              python3Packages.mkdocs-macros
             ]);
           };
         })
