@@ -24,5 +24,15 @@
     ".editorconfig"
     ".envrc"
     "justfile"
+    # Pages site: Jinja2 macros in markdown — prettier rewrap can split
+    # `{{ ... }}` expressions across lines and break macro expansion, and
+    # also strips indentation inside `!!! admonition` bodies which silently
+    # breaks Material rendering. Two patterns: `docs/*.md` covers direct
+    # children (e.g. dashboard.md), `docs/**/*.md` covers nested
+    # (install/nix.md, etc.).
+    "docs/*.md"
+    "docs/**/*.md"
+    # Generated, also gitignored — defense-in-depth.
+    "docs/_data/dashboard.yml"
   ];
 }

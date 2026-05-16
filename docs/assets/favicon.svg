@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="linPEAS-flake favicon">
+  <title>linPEAS-flake</title>
+  <defs>
+    <linearGradient id="nixBlue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5277c3"/>
+      <stop offset="100%" stop-color="#7ebae4"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#nixBlue)" stroke="none">
+    <polygon points="32,4 38,14 26,14"/>
+    <polygon points="32,60 26,50 38,50"/>
+    <polygon points="4,32 14,26 14,38"/>
+    <polygon points="60,32 50,38 50,26"/>
+    <polygon points="32,16 42,22 42,42 32,48 22,42 22,22" opacity="0.85"/>
+  </g>
+</svg>

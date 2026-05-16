@@ -1,0 +1,53 @@
+/* linPEAS-flake site overrides
+ *
+ * NixOS-blue accent (#5277C3 = NixOS lighthouse blue) layered over
+ * Material's slate/default schemes. Material's `primary: indigo`
+ * supplies a complementary base; the accent override here picks up
+ * links, focus rings, and active nav items.
+ */
+:root {
+  --md-accent-fg-color: #5277c3;
+  --md-accent-fg-color--transparent: #5277c333;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-accent-fg-color: #7aa3ff;
+  --md-accent-fg-color--transparent: #7aa3ff33;
+}
+
+/* Status tile grid on landing + dashboard pages */
+.status-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin: 1.25rem 0;
+}
+
+.status-tile {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.4rem;
+  padding: 0.75rem 1rem;
+  background: var(--md-code-bg-color);
+}
+
+.status-tile .label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+
+.status-tile .value {
+  font-family: var(--md-code-font-family);
+  font-size: 1.1rem;
+  margin-top: 0.25rem;
+  word-break: break-all;
+}
+
+.status-tile.ok .value {
+  color: #1f9d55;
+}
+
+.status-tile.fail .value {
+  color: #cc3333;
+}
