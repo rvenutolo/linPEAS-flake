@@ -73,7 +73,7 @@ jobs:
           # upload-pages-artifact can tarball it without symlink confusion.
           cp --recursive --no-preserve=mode,ownership ./result/share/site/. _site/
 
-      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1 (D2)
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0 (D2)
         with:
           path: _site
 
