@@ -85,4 +85,5 @@ nav:
   - Security:
       - Trust model: security/trust-model.md
       - Verification: security/verification.md
+      - Settings posture: security/settings-posture.md
   - Releases: releases.md
