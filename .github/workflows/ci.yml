@@ -265,6 +265,43 @@ jobs:
             exit 1
           fi
 
+  # image-cve-scan (advisory) ---------------------------------------------
+
+  image-cve-scan:
+    runs-on: ubuntu-latest
+    # Advisory: SARIF uploaded to code-scanning, NOT in branch protection.
+    # GAP-11 / P4.1. Detection control; nixpkgs auto-bump via
+    # update-flake-lock is the prevention path. Findings surface in
+    # the Security tab.
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3 (D4)
+      - name: build OCI image tarball
+        run: nix build .#linpeas-image --print-build-logs
+      - name: scan image with Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0 (D2)
+        with:
+          input: result
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: "0" # advisory; do not fail the job
+          ignore-unfixed: true
+      - uses: github/codeql-action/upload-sarif@458d36d7d4f47d0dd16ca424c1d3cda0060f1360 # v3 (D2)
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-image-cve
+
   # D10: bundle-smoke required job ----------------------------------------
 
   bundle-smoke:
