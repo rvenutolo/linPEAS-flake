@@ -76,8 +76,16 @@ jobs:
             printf 'refusing to release with non-conformant version: %q\n' "${VERSION}" >&2
             exit 1
           fi
+          # GAP-7 (P2.2, 2026-05-17): pin --target to the triggering
+          # commit SHA, not the symbolic "main". Without this, if a
+          # second push lands on main between this job's checkout and
+          # this step, gh release create resolves "main" to the NEWER
+          # commit — tag points at SHA-B while attestation records
+          # SHA-A. The concurrency: group only serializes runs; it
+          # does not freeze main during the window. SHA pinning closes
+          # the TOCTOU.
           gh release create "${VERSION}" \
-            --target main \
+            --target "${GITHUB_SHA}" \
             --title "${VERSION}" \
             --notes "Tracks upstream [peass-ng/PEASS-ng@${VERSION}](https://github.com/peass-ng/PEASS-ng/releases/tag/${VERSION})."
 
