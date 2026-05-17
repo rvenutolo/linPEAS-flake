@@ -1,0 +1,7 @@
+name: bad-short
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e1148
