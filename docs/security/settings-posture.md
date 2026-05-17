@@ -16,11 +16,10 @@ This document is the **source of truth** for every GitHub-side settings knob thi
 
 | Setting | Required value | Probe |
 |---|---|---|
+| `allowed_actions` | `selected` (per `docs/security/allowed-actions.md`) | `gh api /repos/rvenutolo/linPEAS-flake/actions/permissions --jq .allowed_actions` |
 | `sha_pinning_required` | `true` | `gh api /repos/rvenutolo/linPEAS-flake/actions/permissions --jq .sha_pinning_required` |
 | `default_workflow_permissions` | `read` | `gh api /repos/rvenutolo/linPEAS-flake/actions/permissions/workflow --jq .default_workflow_permissions` |
 | `can_approve_pull_request_reviews` | `false` | `gh api /repos/rvenutolo/linPEAS-flake/actions/permissions/workflow --jq .can_approve_pull_request_reviews` |
-
-`allowed_actions` is intentionally **not pinned here** in P1. It is covered by GAP-4 / P3.
 
 ## Environments
 
