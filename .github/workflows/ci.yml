@@ -51,6 +51,7 @@ jobs:
         with:
           name: linpeas-result
           path: result/bin/linpeas
+          retention-days: 1
           if-no-files-found: error
 
   smoke-test:
@@ -97,6 +98,7 @@ jobs:
         with:
           name: linpeas-result-arm64
           path: result/bin/linpeas
+          retention-days: 1
           if-no-files-found: error
 
   smoke-test-arm64:
