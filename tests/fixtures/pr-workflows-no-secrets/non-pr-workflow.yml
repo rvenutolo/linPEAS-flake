@@ -1,0 +1,13 @@
+# tests/fixtures/pr-workflows-no-secrets/non-pr-workflow.yml
+name: non-pr
+on:
+  push:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: noop
+        env:
+          BUMP_PAT: ${{ secrets.BUMP_PAT }}
+        run: 'true'
