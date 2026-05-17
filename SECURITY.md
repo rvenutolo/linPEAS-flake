@@ -137,3 +137,15 @@ The `codeql.yml` workflow is not in branch protection's required-check set. A Co
   `docker.io/rvenutolo/linpeas`. Mitigation: consumers verify the
   SLSA attestation with `gh attestation verify`; mismatched attestation
   is the canonical detection signal.
+
+## Settings posture
+
+Repository settings knobs the security model depends on (probe-verifiable from `docs/security/settings-posture.md`):
+
+- `secret_scanning`, `secret_scanning_push_protection`, `dependabot_security_updates` all **enabled**. `secret_scanning_non_provider_patterns` and `secret_scanning_validity_checks` are shown as `disabled` in the GitHub API but cannot be flipped via the REST API for personal accounts — they appear to require GitHub Advanced Security or a UI toggle not exposed programmatically. Documented as a residual gap (GAP-1 / GAP-2 partially addressed 2026-05-17, P1).
+- Actions: `sha_pinning_required: true` (added 2026-05-17, P1, GAP-3). Belt-and-braces against Renovate misconfiguration — every `uses:` must be SHA-pinned at GitHub level, not just by Renovate convention. Smoke-tested: unpinned `uses: actions/checkout@v4` was rejected by GitHub with "all actions must be pinned to a full-length commit SHA".
+- Workflow tokens: `default_workflow_permissions: read`, `can_approve_pull_request_reviews: false` (added 2026-05-17, P1, GAP-6). Prevents a compromised workflow from self-approving a PR.
+- `github-pages` environment: `can_admins_bypass: false` (added 2026-05-17, P1, GAP-10).
+- Account: 2FA enabled on the maintainer account, verified 2026-05-17 with non-SMS second factor (specifics not recorded) (P1, GAP-15).
+
+Any drift on any of the above is treated as a security incident. The `docs/security/settings-posture.md` file is the source of truth and includes copy-pasteable probe commands.
