@@ -1,0 +1,7 @@
+name: bad-branch
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@main

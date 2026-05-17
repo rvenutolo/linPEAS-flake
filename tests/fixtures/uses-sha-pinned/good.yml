@@ -1,0 +1,9 @@
+name: good
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: ./.github/actions/local-composite
+      - uses: rvenutolo/linPEAS-flake/.github/actions/notify-workflow-result@ffc97d8b617b52890430629d6bd15cec9bc71f53 # main@ffc97d8

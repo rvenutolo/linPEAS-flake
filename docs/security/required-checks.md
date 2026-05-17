@@ -21,6 +21,7 @@ to branch protection.
 | pr-workflows-no-secrets  | ci              | .github/workflows/ci.yml |
 | tag-protection-drift-check | ci            | .github/workflows/ci.yml |
 | renovate-invariants        | ci            | .github/workflows/ci.yml |
+| uses-sha-pinned            | ci            | .github/workflows/ci.yml |
 
 ## Invariant (AU-P-2)
 
