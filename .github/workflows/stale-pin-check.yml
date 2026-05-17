@@ -33,6 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       result: ${{ steps.evaluate.outputs.result }}
+      reason: ${{ steps.evaluate.outputs.reason }}
       pin_version: ${{ steps.evaluate.outputs.pin_version }}
       upstream_version: ${{ steps.evaluate.outputs.upstream_version }}
       pin_age_days: ${{ steps.evaluate.outputs.pin_age_days }}
@@ -50,13 +51,31 @@ jobs:
           set -Eeuo pipefail
           IFS=$'\n\t'
 
+          # Helper: emit `result=failure` plus a typed `reason=` to
+          # $GITHUB_OUTPUT and exit 0 so the notify job can attribute the
+          # failure correctly. Without explicit attribution, an upstream-API
+          # rate-limit looks identical to a stall-detected event and the
+          # auto-filed issue suggests irrelevant remediations (BUMP_PAT
+          # validity, asset-URL prefix). AU-P-7.
+          # @arg $1 reason token (pin-malformed | upstream-api-failure
+          #         | upstream-tag-malformed | stall-detected)
+          emit_failure() {
+            local -r reason="$1"
+            {
+              printf 'result=failure\n'
+              printf 'reason=%s\n' "${reason}"
+            } >> "${GITHUB_OUTPUT}"
+            exit 0
+          }
+
           pin_version="$(jq --raw-output .version linpeas-pin.json)"
           # Canonical pin shape (per CLAUDE.md "flake.nix pin invariants"):
           # YYYYMMDD-<7..40 hex>. Tighter than the prior date-prefix-only
           # check so malformed pins are rejected here instead of downstream.
           if [[ ! "${pin_version}" =~ ^([0-9]{4})([0-9]{2})([0-9]{2})-[0-9a-f]{7,40}$ ]]; then
             printf 'pin version %q does not match expected format\n' "${pin_version}" >&2
-            exit 1
+            printf 'pin_version=%s\n' "${pin_version}" >> "${GITHUB_OUTPUT}"
+            emit_failure pin-malformed
           fi
           pin_date="${BASH_REMATCH[1]}-${BASH_REMATCH[2]}-${BASH_REMATCH[3]}"
 
@@ -64,9 +83,27 @@ jobs:
           now_epoch="$(date --utc +%s)"
           age_days=$(( (now_epoch - pin_epoch) / 86400 ))
 
-          upstream_version="$(
-            gh api repos/peass-ng/PEASS-ng/releases/latest --jq .tag_name
-          )"
+          {
+            printf 'pin_version=%s\n' "${pin_version}"
+            printf 'pin_age_days=%s\n' "${age_days}"
+          } >> "${GITHUB_OUTPUT}"
+
+          # Capture upstream call status separately so an API failure
+          # (rate-limit, transient 5xx, empty body) is attributed as
+          # `reason=upstream-api-failure` rather than `stall-detected` in
+          # the auto-filed issue body. AU-P-7. The `X-GitHub-Api-Version`
+          # header is defense-in-depth, mirroring `scripts/bump-linpeas.sh`
+          # (AU-P-6).
+          upstream_version=""
+          if ! upstream_version="$(
+            gh api \
+              --header 'X-GitHub-Api-Version: 2022-11-28' \
+              repos/peass-ng/PEASS-ng/releases/latest --jq .tag_name
+          )" || [[ -z "${upstream_version}" ]]; then
+            printf 'upstream API call failed or returned empty tag_name\n' >&2
+            emit_failure upstream-api-failure
+          fi
+
           # Shape-validate the upstream tag before it reaches $GITHUB_OUTPUT
           # and the notify-composite issue body. Mirrors the pin_version
           # check above and the validate-then-use pattern in
@@ -74,14 +111,10 @@ jobs:
           # the auto-filed issue body if upstream publishes a hostile tag.
           if [[ ! "${upstream_version}" =~ ^[0-9]{8}-[0-9a-f]{7,40}$ ]]; then
             printf 'upstream tag %q does not match expected format\n' "${upstream_version}" >&2
-            exit 1
+            emit_failure upstream-tag-malformed
           fi
 
-          {
-            printf 'pin_version=%s\n' "${pin_version}"
-            printf 'upstream_version=%s\n' "${upstream_version}"
-            printf 'pin_age_days=%s\n' "${age_days}"
-          } >> "${GITHUB_OUTPUT}"
+          printf 'upstream_version=%s\n' "${upstream_version}" >> "${GITHUB_OUTPUT}"
 
           if [[ "${pin_version}" == "${upstream_version}" ]]; then
             printf 'pin matches upstream (%s); fresh\n' "${pin_version}"
@@ -98,7 +131,7 @@ jobs:
 
           printf 'pin %s is %s days old; upstream latest is %s; STALLED\n' \
             "${pin_version}" "${age_days}" "${upstream_version}" >&2
-          printf 'result=failure\n' >> "${GITHUB_OUTPUT}"
+          emit_failure stall-detected
 
   notify:
     name: notify
@@ -119,22 +152,42 @@ jobs:
           label: pin-stalled
           title: "stale-pin-check: pin not advancing"
           body: |
-            The daily `stale-pin-check` watchdog flagged the pin as stale.
+            The daily `stale-pin-check` watchdog flagged a failure.
 
+            - Reason: `${{ needs.check.outputs.reason || 'unknown' }}`
             - Pinned version: `${{ needs.check.outputs.pin_version }}`
             - Upstream latest: `${{ needs.check.outputs.upstream_version }}`
             - Pin age (days): `${{ needs.check.outputs.pin_age_days }}`
 
-            `update-linpeas` is reporting green runs but has not advanced the pin
-            for over 14 days while upstream has moved. Investigate:
-            - `update-linpeas.yml` recent run logs (action may be silently exiting 0
-              without bumping)
-            - `BUMP_PAT` validity / scopes
-            - Asset-URL prefix check rejecting upstream (peass-ng moved host)
-            - Upstream `.digest` field absent (silent skip is supposed to hard-fail
-              now; verify `bump-linpeas.sh`)
+            Reason values and what they mean:
 
-            This issue auto-closes once the next watchdog run sees the pin within
-            tolerance of the upstream latest tag.
+            - `stall-detected` — `update-linpeas` is reporting green runs but
+              has not advanced the pin for over 14 days while upstream has moved.
+              Investigate:
+              - `update-linpeas.yml` recent run logs (action may be silently
+                exiting 0 without bumping)
+              - `BUMP_PAT` validity / scopes
+              - Asset-URL prefix check rejecting upstream (peass-ng moved host)
+              - Upstream `.digest` field absent (silent skip is supposed to
+                hard-fail now; verify `bump-linpeas.sh`)
+            - `upstream-api-failure` — the `gh api
+              repos/peass-ng/PEASS-ng/releases/latest` call failed or returned
+              empty. Likely a transient GitHub API issue or rate-limit
+              (`github.token` authenticates at 5000/hr). The pin may or may
+              not actually be stale — re-run the workflow before investigating
+              the bump pipeline.
+            - `upstream-tag-malformed` — upstream published a tag outside the
+              canonical `YYYYMMDD-<hex>` shape. Check
+              <https://github.com/peass-ng/PEASS-ng/releases/latest>; if
+              upstream has switched versioning schemes, update the regex in
+              `flake.nix`, `bump-linpeas.sh`, and this workflow.
+            - `pin-malformed` — local `linpeas-pin.json` has a malformed
+              `.version` field. Inspect the file; likely a manual edit or a
+              broken bump pipeline.
+            - `unknown` — the check step exited non-zero without setting an
+              output. Inspect the run log directly.
+
+            This issue auto-closes once the next watchdog run sees a healthy
+            pin within tolerance of the upstream latest tag.
           label-description: pin not advancing despite green update-linpeas runs
           github-token: ${{ secrets.GITHUB_TOKEN }}
