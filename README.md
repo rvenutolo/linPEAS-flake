@@ -37,8 +37,15 @@ the Nix or bundle install — or run with host namespaces explicitly. See
 [`docs/install/docker.md`](docs/install/docker.md) for use-case framing and the
 host-audit invocation.
 ```sh
+# Docker Hub (default registry — no prefix needed)
+docker run --rm rvenutolo/linpeas:latest -a
+
+# Or pull explicitly from GitHub Container Registry
 docker run --rm ghcr.io/rvenutolo/linpeas:latest -a
 ```
+
+Both registries serve the **same** image bytes — every release pushes to both
+with identical content digests and matching SLSA attestations.
 
 ### Without Nix or Docker (portable bundle)
 The bundle is just `linpeas.sh` with `#!/usr/bin/env bash` — same script, single
@@ -92,7 +99,8 @@ Three independent automations keep this flake current:
 - Builds and attaches:
   - `linpeas-bundle.sh` — raw `linpeas.sh` with `#!/usr/bin/env bash`, a
     single arch-agnostic asset.
-  - OCI image to `ghcr.io/rvenutolo/linpeas:<tag>` and `:latest`.
+  - OCI image to both `docker.io/rvenutolo/linpeas:<tag>` and
+    `ghcr.io/rvenutolo/linpeas:<tag>` (plus `:latest` on both).
 - Generates SLSA build provenance attestations for the pin file, the bundle,
   and the image. Verify with
   `gh attestation verify <artifact> --repo rvenutolo/linPEAS-flake`.
