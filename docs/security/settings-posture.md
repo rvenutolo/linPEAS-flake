@@ -28,6 +28,12 @@ This document is the **source of truth** for every GitHub-side settings knob thi
 |---|---|---|---|
 | `github-pages` | `can_admins_bypass` | `false` | `gh api /repos/rvenutolo/linPEAS-flake/environments/github-pages --jq .can_admins_bypass` |
 
+## Tag-protection ruleset
+
+| Setting | Required value | Probe |
+|---|---|---|
+| Ruleset name `release-tag-protection` exists, target `tag`, enforcement `active`, rules include `deletion` + `update` + `non_fast_forward`, include pattern matches `refs/tags/[0-9]{8}-[0-9a-f]{7,40}` or `refs/tags/**` | `gh api /repos/rvenutolo/linPEAS-flake/rulesets` + filter | `nix develop --command ./scripts/check-tag-protection.sh` (exit 0 = posture intact) |
+
 ## Maintainer account (manual)
 
 - 2FA: **must be on**. Verify at <https://github.com/settings/security>. Not visible to `gh` CLI's OAuth scope.

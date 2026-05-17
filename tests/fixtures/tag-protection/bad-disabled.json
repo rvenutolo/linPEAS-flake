@@ -1,0 +1,18 @@
+{
+  "id": 99999999,
+  "name": "release-tag-protection",
+  "target": "tag",
+  "enforcement": "disabled",
+  "bypass_actors": [],
+  "conditions": {
+    "ref_name": {
+      "include": ["refs/tags/[0-9]{8}-[0-9a-f]{7,40}"],
+      "exclude": []
+    }
+  },
+  "rules": [
+    { "type": "deletion" },
+    { "type": "update" },
+    { "type": "non_fast_forward" }
+  ]
+}

@@ -354,6 +354,27 @@ jobs:
       - name: enforce harness passes
         run: nix develop --command bash tests/check-pr-workflows-no-secrets.test.sh
 
+  tag-protection-drift-check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3 (D4)
+      - name: probe live ruleset matches desired posture
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: nix develop --command ./scripts/check-tag-protection.sh
+      - name: harness passes against fixtures
+        run: nix develop --command bash tests/check-tag-protection.test.sh
+
   # --- Coverage matrix (non-blocking) ---------------------------------------
 
   flake-check-matrix:
