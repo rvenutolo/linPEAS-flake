@@ -10,4 +10,4 @@ jobs:
       - name: noop
         env:
           BUMP_PAT: ${{ secrets.BUMP_PAT }}
-        run: 'true'
+        run: "true"

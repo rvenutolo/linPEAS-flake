@@ -12,4 +12,4 @@ jobs:
       - name: noop
         env:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: 'true'
+        run: "true"
