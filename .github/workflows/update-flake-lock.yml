@@ -13,16 +13,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  update:
+  # P3.2 / GAP-8: this job runs untrusted Nix-evaluating actions with
+  # ZERO write credentials. BUMP_PAT is not present in env or on disk here.
+  # Mirrors update-linpeas.yml's AU-P-1 split.
+  compute-lock:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # DeterminateSystems/update-flake-lock commits + pushes branch
-      pull-requests: write # action creates/updates PR
+      contents: read
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
-          # BUMP_PAT is supplied directly to DeterminateSystems/update-flake-lock
-          # below — not needed on checkout. AU-P-4.
           persist-credentials: false
 
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
@@ -31,27 +33,111 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
-      - uses: DeterminateSystems/update-flake-lock@834c491b2ece4de0bbd00d85214bb5e83b4da5c6 # v28 (D2)
-        id: lock
-        with:
-          token: ${{ secrets.BUMP_PAT }}
-          pr-title: "chore: update flake.lock"
-          pr-labels: dependencies
-          commit-msg: "chore: update flake.lock"
-
-      - name: enable auto-merge
-        if: steps.lock.outputs.pull-request-number != ''
-        env:
-          GH_TOKEN: ${{ secrets.BUMP_PAT }}
-          PR: ${{ steps.lock.outputs.pull-request-number }}
+      - name: update flake.lock in-place
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
-          gh pr merge "${PR}" --auto --squash
+          cp flake.lock flake.lock.before
+          nix flake update --commit-lock-file=false
+
+      - name: detect change
+        id: diff
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          if cmp --silent flake.lock flake.lock.before; then
+            printf 'changed=false\n' >> "${GITHUB_OUTPUT}"
+          else
+            printf 'changed=true\n' >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: upload lock artifact
+        if: steps.diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (D2)
+        with:
+          name: flake-lock-result
+          path: flake.lock
+          retention-days: 1
+          if-no-files-found: error
+
+  # P3.2 / GAP-8: BUMP_PAT lives here, scoped to two run-step envs only.
+  # Action set restricted to GitHub-owned SHAs.
+  push-and-merge:
+    needs: compute-lock
+    if: needs.compute-lock.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.1.8 (D2)
+        with:
+          name: flake-lock-result
+
+      - name: sanity-check artifact
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          if git diff --quiet flake.lock; then
+            printf 'artifact produced no diff in flake.lock - aborting\n' >&2
+            exit 1
+          fi
+          # JSON shape check: flake.lock must be valid JSON with a "nodes" object.
+          # Defense-in-depth vs a compromised compute-lock writing garbage.
+          jq -e '.nodes | type == "object"' flake.lock >/dev/null
+
+      - name: configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: commit and push branch
+        env:
+          BUMP_PAT: ${{ secrets.BUMP_PAT }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          branch="chore/update-flake-lock-$(date -u +%Y%m%d)"
+          git fetch origin "${branch}" 2>/dev/null || true
+          git checkout -B "${branch}"
+          git add flake.lock
+          git commit --message "chore: update flake.lock"
+          if git ls-remote --exit-code --heads origin "${branch}" >/dev/null 2>&1; then
+            git -c http.extraheader="Authorization: token ${BUMP_PAT}" \
+              push --force-with-lease --set-upstream origin "${branch}"
+          else
+            git -c http.extraheader="Authorization: token ${BUMP_PAT}" \
+              push --set-upstream origin "${branch}"
+          fi
+          printf 'BRANCH=%s\n' "${branch}" >> "${GITHUB_ENV}"
+
+      - name: create and auto-merge PR
+        env:
+          GH_TOKEN: ${{ secrets.BUMP_PAT }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          if ! gh pr view "${BRANCH}" >/dev/null 2>&1; then
+            body="$(mktemp)"
+            trap 'rm --force -- "${body}"' EXIT
+            printf 'Auto-generated weekly flake.lock update.\n' > "${body}"
+            gh pr create \
+              --base main \
+              --head "${BRANCH}" \
+              --title "chore: update flake.lock" \
+              --label dependencies \
+              --body-file "${body}"
+          fi
+          gh pr merge "${BRANCH}" --auto --squash
 
   notify:
     name: notify
-    needs: update
+    needs: [compute-lock, push-and-merge]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -62,18 +148,19 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/notify-workflow-result
         with:
-          result: ${{ needs.update.result }}
+          result: ${{ needs.push-and-merge.result == 'skipped' && needs.compute-lock.result || needs.push-and-merge.result }}
           label: update-flake-lock-failure
           title: "update-flake-lock: weekly bump failed"
           body: |
             The weekly `update-flake-lock` cron failed.
 
             - Trigger: `${{ github.event_name }}`
-            - Update conclusion: `${{ needs.update.result }}`
+            - compute-lock conclusion: `${{ needs.compute-lock.result }}`
+            - push-and-merge conclusion: `${{ needs.push-and-merge.result }}`
 
-            Investigate the `update` job logs. Common causes:
-            - `BUMP_PAT` expired
-            - `nixpkgs` input fetch failure
-            - DeterminateSystems action upstream regression
+            Investigate the failing job's logs. Common causes:
+            - `BUMP_PAT` expired (affects push-and-merge only)
+            - `nixpkgs` input fetch failure (affects compute-lock)
+            - Sanity-check rejected artifact (flake.lock garbage from compute-lock)
           label-description: update-flake-lock workflow failure
           github-token: ${{ secrets.GITHUB_TOKEN }}
