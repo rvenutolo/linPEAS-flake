@@ -1,0 +1,12 @@
+# tests/fixtures/required-checks/bad-paths.yml
+name: bad-paths
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "**.nix"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'true'
