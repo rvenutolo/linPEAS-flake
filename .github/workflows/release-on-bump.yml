@@ -138,14 +138,18 @@ jobs:
         with:
           subject-path: linpeas-bundle.sh
 
-  image:
+  image-amd64:
     needs: release
     if: needs.release.outputs.tag-exists == 'false'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       packages: write # ghcr docker push
       id-token: write # attest-build-provenance OIDC
       attestations: write # attest-build-provenance write
+    outputs:
+      ghcr_digest: ${{ steps.push.outputs.ghcr_digest }}
+      hub_digest: ${{ steps.push.outputs.hub_digest }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
@@ -159,7 +163,7 @@ jobs:
 
       - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3 (D4)
 
-      - name: build OCI image
+      - name: build OCI image (amd64)
         run: nix build .#linpeas-image --print-build-logs
 
       - name: login to ghcr
@@ -182,47 +186,173 @@ jobs:
           printf '%s' "${DOCKERHUB_TOKEN}" \
             | docker login docker.io --username "${DOCKERHUB_USERNAME}" --password-stdin
 
-      - name: load, tag, push image, and capture digests
-        # Push to both registries; capture each registry's content digest
-        # via `docker inspect` for SLSA attest. Digests are registry-scoped
-        # in `.RepoDigests`, so each push entry produces its own sha256.
+      - name: load, tag, push arch image, and capture digests
+        # Push the per-arch image to both registries under arch-suffixed
+        # tags. The unsuffixed {version} and :latest tags are created later
+        # by the `manifest` job via `docker buildx imagetools create`.
         id: push
         env:
           VERSION: ${{ needs.release.outputs.version }}
+          ARCH: amd64
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
           docker load --input result
           for reg in ghcr.io docker.io; do
-            docker tag "rvenutolo/linpeas:${VERSION}" "${reg}/rvenutolo/linpeas:${VERSION}"
-            docker tag "rvenutolo/linpeas:${VERSION}" "${reg}/rvenutolo/linpeas:latest"
-            docker push "${reg}/rvenutolo/linpeas:${VERSION}"
-            docker push "${reg}/rvenutolo/linpeas:latest"
+            docker tag "rvenutolo/linpeas:${VERSION}" "${reg}/rvenutolo/linpeas:${VERSION}-${ARCH}"
+            docker push "${reg}/rvenutolo/linpeas:${VERSION}-${ARCH}"
           done
-          ghcr_digest="$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "ghcr.io/rvenutolo/linpeas:${VERSION}" | grep '^ghcr.io/' | head -n1)"
-          hub_digest="$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "docker.io/rvenutolo/linpeas:${VERSION}" | grep -E '(^|/)rvenutolo/linpeas@sha256:' | head -n1)"
+          ghcr_digest="$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "ghcr.io/rvenutolo/linpeas:${VERSION}-${ARCH}" | grep '^ghcr.io/' | head -n1)"
+          hub_digest="$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "docker.io/rvenutolo/linpeas:${VERSION}-${ARCH}" | grep --extended-regexp '(^|/)rvenutolo/linpeas@sha256:' | head -n1)"
           printf 'ghcr_digest=%s\n' "${ghcr_digest#*@}" >> "${GITHUB_OUTPUT}"
           printf 'hub_digest=%s\n' "${hub_digest#*@}" >> "${GITHUB_OUTPUT}"
 
-      - name: attest provenance for ghcr image
+      - name: attest provenance for ghcr image (amd64)
         uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2 (D2)
         with:
           subject-name: ghcr.io/rvenutolo/linpeas
           subject-digest: ${{ steps.push.outputs.ghcr_digest }}
           push-to-registry: true
 
-      - name: attest provenance for Docker Hub image
+      - name: attest provenance for Docker Hub image (amd64)
         uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2 (D2)
         with:
           subject-name: docker.io/rvenutolo/linpeas
           subject-digest: ${{ steps.push.outputs.hub_digest }}
           push-to-registry: true
 
+  image-arm64:
+    needs: release
+    if: needs.release.outputs.tag-exists == 'false'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    permissions:
+      packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      ghcr_digest: ${{ steps.push.outputs.ghcr_digest }}
+      hub_digest: ${{ steps.push.outputs.hub_digest }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3 (D4)
+
+      - name: build OCI image (arm64)
+        run: nix build .#linpeas-image --print-build-logs
+
+      - name: login to ghcr
+        env:
+          GH_TOKEN_INLINE: ${{ github.token }}
+          GH_ACTOR: ${{ github.actor }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          printf '%s' "${GH_TOKEN_INLINE}" \
+            | docker login ghcr.io --username "${GH_ACTOR}" --password-stdin
+
+      - name: login to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          printf '%s' "${DOCKERHUB_TOKEN}" \
+            | docker login docker.io --username "${DOCKERHUB_USERNAME}" --password-stdin
+
+      - name: load, tag, push arch image, and capture digests
+        id: push
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+          ARCH: arm64
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          docker load --input result
+          for reg in ghcr.io docker.io; do
+            docker tag "rvenutolo/linpeas:${VERSION}" "${reg}/rvenutolo/linpeas:${VERSION}-${ARCH}"
+            docker push "${reg}/rvenutolo/linpeas:${VERSION}-${ARCH}"
+          done
+          ghcr_digest="$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "ghcr.io/rvenutolo/linpeas:${VERSION}-${ARCH}" | grep '^ghcr.io/' | head -n1)"
+          hub_digest="$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "docker.io/rvenutolo/linpeas:${VERSION}-${ARCH}" | grep --extended-regexp '(^|/)rvenutolo/linpeas@sha256:' | head -n1)"
+          printf 'ghcr_digest=%s\n' "${ghcr_digest#*@}" >> "${GITHUB_OUTPUT}"
+          printf 'hub_digest=%s\n' "${hub_digest#*@}" >> "${GITHUB_OUTPUT}"
+
+      - name: attest provenance for ghcr image (arm64)
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2 (D2)
+        with:
+          subject-name: ghcr.io/rvenutolo/linpeas
+          subject-digest: ${{ steps.push.outputs.ghcr_digest }}
+          push-to-registry: true
+
+      - name: attest provenance for Docker Hub image (arm64)
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2 (D2)
+        with:
+          subject-name: docker.io/rvenutolo/linpeas
+          subject-digest: ${{ steps.push.outputs.hub_digest }}
+          push-to-registry: true
+
+  manifest:
+    needs: [release, image-amd64, image-arm64]
+    if: needs.release.outputs.tag-exists == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      packages: write # ghcr manifest push
+    steps:
+      - name: login to ghcr
+        env:
+          GH_TOKEN_INLINE: ${{ github.token }}
+          GH_ACTOR: ${{ github.actor }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          printf '%s' "${GH_TOKEN_INLINE}" \
+            | docker login ghcr.io --username "${GH_ACTOR}" --password-stdin
+
+      - name: login to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          printf '%s' "${DOCKERHUB_TOKEN}" \
+            | docker login docker.io --username "${DOCKERHUB_USERNAME}" --password-stdin
+
+      - name: create + push multi-arch manifests
+        # `docker buildx imagetools create` is the modern multi-arch
+        # manifest tool — supersedes `docker manifest create` and works
+        # cleanly against per-arch tags that already exist in the registry.
+        # Each create makes one OCI index tag pointing at both arch digests.
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          for reg in ghcr.io docker.io; do
+            for dst in "${VERSION}" latest; do
+              docker buildx imagetools create \
+                --tag "${reg}/rvenutolo/linpeas:${dst}" \
+                "${reg}/rvenutolo/linpeas:${VERSION}-amd64" \
+                "${reg}/rvenutolo/linpeas:${VERSION}-arm64"
+            done
+          done
+
   verify:
     # D12 (synchronous): verify the just-published bundle, image, and pin
     # attestations. Runs after both bundle + image jobs. Failure = release
     # workflow goes red so we see broken-at-creation attestations immediately.
-    needs: [release, bundle, image]
+    needs: [release, bundle, image-amd64, image-arm64, manifest]
     if: needs.release.outputs.tag-exists == 'false'
     runs-on: ubuntu-latest
     permissions:
@@ -252,22 +382,6 @@ jobs:
           done
           [[ -f linpeas-bundle.sh ]] || { printf 'bundle asset never appeared\n' >&2; exit 1; }
 
-      - name: resolve image digest
-        id: resolve
-        env:
-          GH_TOKEN_INLINE: ${{ github.token }}
-          GH_ACTOR: ${{ github.actor }}
-          VERSION: ${{ needs.release.outputs.version }}
-        run: |
-          set -Eeuo pipefail
-          IFS=$'\n\t'
-          printf '%s' "${GH_TOKEN_INLINE}" \
-            | docker login ghcr.io --username "${GH_ACTOR}" --password-stdin
-          docker pull "ghcr.io/rvenutolo/linpeas:${VERSION}"
-          repo_digest="$(docker inspect --format='{{index .RepoDigests 0}}' "ghcr.io/rvenutolo/linpeas:${VERSION}")"
-          digest="${repo_digest#*@}"
-          printf 'digest=%s\n' "${digest}" >> "${GITHUB_OUTPUT}"
-
       - name: verify bundle attestation
         env:
           GH_TOKEN: ${{ github.token }}
@@ -276,38 +390,31 @@ jobs:
           IFS=$'\n\t'
           gh attestation verify linpeas-bundle.sh --repo rvenutolo/linPEAS-flake
 
-      - name: verify image attestation
+      - name: verify per-arch attestations
         env:
           GH_TOKEN: ${{ github.token }}
-          DIGEST: ${{ steps.resolve.outputs.digest }}
-        run: |
-          set -Eeuo pipefail
-          IFS=$'\n\t'
-          gh attestation verify "oci://ghcr.io/rvenutolo/linpeas@${DIGEST}" --repo rvenutolo/linPEAS-flake
-
-      - name: resolve Docker Hub image digest
-        id: resolve-hub
-        env:
+          GH_TOKEN_INLINE: ${{ github.token }}
+          GH_ACTOR: ${{ github.actor }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          VERSION: ${{ needs.release.outputs.version }}
+          GHCR_AMD64_DIGEST: ${{ needs.image-amd64.outputs.ghcr_digest }}
+          HUB_AMD64_DIGEST: ${{ needs.image-amd64.outputs.hub_digest }}
+          GHCR_ARM64_DIGEST: ${{ needs.image-arm64.outputs.ghcr_digest }}
+          HUB_ARM64_DIGEST: ${{ needs.image-arm64.outputs.hub_digest }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
+          printf '%s' "${GH_TOKEN_INLINE}" \
+            | docker login ghcr.io --username "${GH_ACTOR}" --password-stdin
           printf '%s' "${DOCKERHUB_TOKEN}" \
             | docker login docker.io --username "${DOCKERHUB_USERNAME}" --password-stdin
-          docker pull "docker.io/rvenutolo/linpeas:${VERSION}"
-          repo_digest="$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "docker.io/rvenutolo/linpeas:${VERSION}" | grep -E '(^|/)rvenutolo/linpeas@sha256:' | head -n1)"
-          printf 'digest=%s\n' "${repo_digest#*@}" >> "${GITHUB_OUTPUT}"
-
-      - name: verify Docker Hub image attestation
-        env:
-          GH_TOKEN: ${{ github.token }}
-          DIGEST: ${{ steps.resolve-hub.outputs.digest }}
-        run: |
-          set -Eeuo pipefail
-          IFS=$'\n\t'
-          gh attestation verify "oci://docker.io/rvenutolo/linpeas@${DIGEST}" --repo rvenutolo/linPEAS-flake
+          for ref in \
+            "oci://ghcr.io/rvenutolo/linpeas@${GHCR_AMD64_DIGEST}" \
+            "oci://docker.io/rvenutolo/linpeas@${HUB_AMD64_DIGEST}" \
+            "oci://ghcr.io/rvenutolo/linpeas@${GHCR_ARM64_DIGEST}" \
+            "oci://docker.io/rvenutolo/linpeas@${HUB_ARM64_DIGEST}"; do
+            gh attestation verify "${ref}" --repo rvenutolo/linPEAS-flake
+          done
 
       - name: verify pin file attestation
         env:
@@ -323,7 +430,7 @@ jobs:
 
   notify:
     name: notify
-    needs: [release, bundle, image, verify]
+    needs: [release, bundle, image-amd64, image-arm64, manifest, verify]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -337,17 +444,19 @@ jobs:
           # bundle/image/verify are gated on `tag-exists == 'false'` so
           # `skipped` is the normal value when the tag already exists.
           # Treat that path as success.
-          result: ${{ (needs.release.result == 'failure' || needs.bundle.result == 'failure' || needs.image.result == 'failure' || needs.verify.result == 'failure') && 'failure' || (needs.release.result == 'success') && 'success' || 'skipped' }}
+          result: ${{ (needs.release.result == 'failure' || needs.bundle.result == 'failure' || needs.image-amd64.result == 'failure' || needs.image-arm64.result == 'failure' || needs.manifest.result == 'failure' || needs.verify.result == 'failure') && 'failure' || (needs.release.result == 'success') && 'success' || 'skipped' }}
           label: release-on-bump-failure
           title: "release-on-bump: release pipeline failed"
           body: |
             The `release-on-bump` workflow failed.
 
             - Trigger: `${{ github.event_name }}`
-            - release: `${{ needs.release.result }}`
-            - bundle:  `${{ needs.bundle.result }}`
-            - image:   `${{ needs.image.result }}`
-            - verify:  `${{ needs.verify.result }}`
+            - release:     `${{ needs.release.result }}`
+            - bundle:      `${{ needs.bundle.result }}`
+            - image-amd64: `${{ needs.image-amd64.result }}`
+            - image-arm64: `${{ needs.image-arm64.result }}`
+            - manifest:    `${{ needs.manifest.result }}`
+            - verify:      `${{ needs.verify.result }}`
 
             Investigate the failing job's logs. The just-published release may need to be deleted and recut once the underlying bug is fixed.
           label-description: release-on-bump workflow failure
