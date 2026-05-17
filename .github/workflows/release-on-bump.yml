@@ -614,6 +614,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false
+      # Common Docker Hub causes — parity with dockerhub-sync.yml; keep wording in sync.
       - uses: ./.github/actions/notify-workflow-result
         with:
           # bundle/image/verify are gated on `tag-exists == 'false'` so
@@ -671,5 +672,17 @@ jobs:
                  (Tag delete on Docker Hub requires the `Delete` scope on `DOCKERHUB_TOKEN`. If the rotated token is `Read, Write` only, do this from the maintainer's Docker Hub UI instead.)
             4. Re-trigger the release pipeline by re-pushing the same `linpeas-pin.json` commit (no-op edit + `chore: retrigger release` commit), or by re-running this workflow from the Actions UI if the pin commit is still HEAD.
             5. Confirm the next run goes green end-to-end before closing this issue.
+
+            ## Common Docker Hub causes
+
+            If `image-amd64`, `image-arm64`, or `manifest` failed and Docker Hub is
+            the suspected culprit:
+
+            - `DOCKERHUB_TOKEN` expired or revoked → rotate at
+              <https://hub.docker.com/settings/security> and
+              `gh secret set DOCKERHUB_TOKEN`.
+            - `DOCKERHUB_USERNAME` mismatch with the `rvenutolo/linpeas` repo owner.
+            - Docker Hub partial outage; manual re-run via `workflow_dispatch` is
+              often enough.
           label-description: release-on-bump workflow failure
           github-token: ${{ secrets.GITHUB_TOKEN }}
