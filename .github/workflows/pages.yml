@@ -101,7 +101,13 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false
-      - uses: ./.github/actions/notify-workflow-result
+      # Self-reference pinned by SHA (CIW-1): path-relative `uses: ./` would
+      # resolve to the PR branch's copy on `pull_request` events; SHA pin
+      # forces the composite to come from main regardless of the checked-out
+      # ref. Renovate's pinDigests rule updates this on the daily Friday run;
+      # if Renovate ever stops tracking self-references, bump manually via:
+      #   git rev-parse origin/main
+      - uses: rvenutolo/linPEAS-flake/.github/actions/notify-workflow-result@ffc97d8b617b52890430629d6bd15cec9bc71f53 # main@ffc97d8 (D-CIW-1)
         with:
           # Aggregate: failure wins; success only when both legs green;
           # otherwise no-op (cancelled / skipped).
