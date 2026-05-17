@@ -1,0 +1,13 @@
+# tests/fixtures/pr-workflows-no-secrets/pr-target-workflow.yml
+name: pr-target
+on:
+  pull_request_target:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: noop
+        env:
+          BUMP_PAT: ${{ secrets.BUMP_PAT }}
+        run: "true"

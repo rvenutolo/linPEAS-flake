@@ -1,0 +1,15 @@
+# tests/fixtures/pr-workflows-no-secrets/mixed-on-block.yml
+name: mixed-on
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: noop
+        env:
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: "true"

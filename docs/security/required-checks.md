@@ -18,6 +18,7 @@ to branch protection.
 | bundle-smoke             | ci              | .github/workflows/ci.yml |
 | dashboard-data-tests     | ci              | .github/workflows/ci.yml |
 | required-checks-no-paths | ci              | .github/workflows/ci.yml |
+| pr-workflows-no-secrets  | ci              | .github/workflows/ci.yml |
 
 ## Invariant (AU-P-2)
 
