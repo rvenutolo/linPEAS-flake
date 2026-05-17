@@ -73,3 +73,28 @@ flowchart TD
 ## Cache
 
 All Nix-based jobs use `DeterminateSystems/flakehub-cache-action` (free for public repos). All third-party actions are SHA-pinned with `# vX` version comments; Renovate maintains them via `helpers:pinGitHubActionDigests` + explicit `pinDigests: true` in `renovate.json`.
+
+## Cron schedule
+
+| Workflow | Cron | UTC | Purpose |
+|----------|------|-----|---------|
+| `update-linpeas` | `0 9 * * *` | 09:00 daily | Check upstream peass-ng for new release; open auto-merge bump PR |
+| `stale-pin-check` | `30 10 * * *` | 10:30 daily | Auto-file issue if pin is N days behind upstream |
+| `verify-latest-release` | `0 12 * * *` | 12:00 daily | Re-fetch published artifacts; verify SRI hash + attestations |
+| `pages` | `0 14 * * *` | 14:00 daily | Rebuild dashboard from current pin + upstream + release JSON |
+| `scorecard` | `0 6 * * 1` | Mon 06:00 | OpenSSF Scorecard scan |
+| `codeql` | `0 8 * * 1` | Mon 08:00 | CodeQL static analysis (Actions) |
+| `update-flake-lock` | `0 6 * * 5` | Fri 06:00 | Refresh `flake.lock` via auto-merge PR |
+
+Daily crons fire morning→afternoon UTC in this order. Bump-related crons (`update-linpeas`, `stale-pin-check`, `verify-latest-release`) front-load the day so the dashboard cron at 14:00 reads a settled state.
+
+### Pages staleness window
+
+On bump days, the 09:00 `update-linpeas` run opens a PR; required checks plus auto-merge typically complete within an hour, after which `release-on-bump.yml` cuts the GitHub release. The 14:00 `pages` cron then reads the freshly-bumped `linpeas-pin.json` from `main` plus the just-published release JSON and renders a consistent dashboard.
+
+If the bump pipeline is delayed past 14:00 (rare — CI queue surge, flakehub-cache cold-start, Renovate auto-merge held by a required check), the daily cron reads the previous day's pin and publishes a dashboard claiming `drift.days = 1`. This is **by-design** tolerable:
+
+- `pages.yml` also runs on `push: branches: [main]` and `release: published`, so the dashboard is re-rendered within minutes of any bump merge.
+- The dashboard page and `security/trust-model.md` self-describe as documentation, not a trust anchor. Authoritative signal lives in `gh attestation verify` against the published artifacts, not the dashboard text.
+
+Surfacing "open bump PR" state on the dashboard (audit NX-PD-3 option 1) is deliberately not implemented — it would couple a documentation surface to PR metadata without changing the underlying trust model.

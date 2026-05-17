@@ -8,7 +8,13 @@ on:
   release:
     types: [published]
   schedule:
-    - cron: "0 10 * * *"
+    # 14:00 UTC — sits after update-linpeas (09:00), stale-pin-check
+    # (10:30), and verify-latest-release (12:00). Push-trigger and
+    # release-trigger refresh the site within minutes of any bump
+    # merge, so the daily cron is a no-bump-today floor; 14:00 gives
+    # the bump pipeline ample slack to land before the floor reads
+    # `linpeas-pin.json`. See docs/architecture/ci.md.
+    - cron: "0 14 * * *"
   workflow_dispatch:
 
 permissions:
