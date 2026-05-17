@@ -111,9 +111,20 @@ Three independent automations keep this flake current:
 - Renovate (Friday batch) — bumps GitHub Action SHAs and the pinned Nix
   version in CI workflows (custom regex manager). CI-gated auto-merge.
 
+### Stale-pin watchdog (`stale-pin-check.yml`)
+- Cron 10:30 UTC daily — runs after the 09:00 bump pipeline.
+- Compares the pinned upstream tag against `peass-ng/PEASS-ng/releases/latest`.
+  If the bump pipeline is stalled (e.g. upstream-API failure, auto-merge blocked,
+  PAT expired) the workflow auto-files a deduped issue labelled
+  `stale-pin-check-failure` so the operator notices instead of silently
+  drifting.
+
 ### Pages site (`pages.yml`)
-- Triggers: push to `main`, PR, release published, daily 10:00 UTC cron,
-  and manual dispatch.
+- Triggers: push to `main`, PR, release published, daily 14:00 UTC cron,
+  and manual dispatch. The cron sits after `update-linpeas` (09:00),
+  `stale-pin-check` (10:30), and `verify-latest-release` (12:00) so the
+  dashboard reads a settled state. See `docs/architecture/ci.md` for the
+  full cron schedule.
 - On every trigger: `scripts/gen-dashboard-data.sh` regenerates
   `docs/_data/dashboard.yml` from `linpeas-pin.json` + GitHub API. `nix
   build .#site` then renders the MkDocs Material site. On non-PR events
@@ -136,7 +147,8 @@ thin.
 
 ## Continuous integration
 
-Every PR and push to `main` runs seven required jobs that gate auto-merge:
+Every PR and push to `main` runs the required jobs that gate auto-merge.
+Functional checks:
 
 | Job                   | Runner             | What it tests |
 |-----------------------|--------------------|---------------|
@@ -146,7 +158,20 @@ Every PR and push to `main` runs seven required jobs that gate auto-merge:
 | `build-linpeas-arm64` | `ubuntu-24.04-arm` | aarch64 build of `linpeas` |
 | `smoke-test-arm64`    | `ubuntu-24.04-arm` | aarch64 `-h` smoke |
 | `image-smoke`         | `ubuntu-latest`    | builds OCI image, `docker load`, `docker run --rm <img> -h` exits 0 |
+| `image-smoke-arm64`   | `ubuntu-24.04-arm` | aarch64 OCI image smoke |
 | `bundle-smoke`        | `ubuntu-latest`    | builds bundle, `./result/linpeas-bundle.sh -h` exits 0 |
+
+Self-enforcing invariant checks:
+
+| Job                        | What it enforces |
+|----------------------------|------------------|
+| `dashboard-data-tests`     | `scripts/gen-dashboard-data.sh` security guards (pin shape, asset-URL prefix, missing-field hard-fail) |
+| `required-checks-no-paths` | No required workflow declares `paths:` / `paths-ignore:` under `pull_request:` — closes the auto-merge path-filter trap |
+| `pr-workflows-no-secrets`  | PR-triggered workflows reference no `secrets.*` other than `secrets.GITHUB_TOKEN` (CIW-4) |
+
+The authoritative required-check list lives in
+[`docs/security/required-checks.md`](docs/security/required-checks.md); it
+mirrors live branch protection.
 
 A non-blocking coverage matrix runs `flake-check` and `build-linpeas` across
 `ubuntu-latest` / `macos-latest` × stable Nix / unstable Nix. Failures there
