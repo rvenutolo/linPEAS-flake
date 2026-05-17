@@ -172,8 +172,20 @@ jobs:
           printf '%s' "${GH_TOKEN_INLINE}" \
             | docker login ghcr.io --username "${GH_ACTOR}" --password-stdin
 
-      - name: load, tag, push image, and capture digest
-        # Per D8: capture digest from `docker inspect` after push for SLSA attest.
+      - name: login to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          printf '%s' "${DOCKERHUB_TOKEN}" \
+            | docker login docker.io --username "${DOCKERHUB_USERNAME}" --password-stdin
+
+      - name: load, tag, push image, and capture digests
+        # Push to both registries; capture each registry's content digest
+        # via `docker inspect` for SLSA attest. Digests are registry-scoped
+        # in `.RepoDigests`, so each push entry produces its own sha256.
         id: push
         env:
           VERSION: ${{ needs.release.outputs.version }}
@@ -181,22 +193,29 @@ jobs:
           set -Eeuo pipefail
           IFS=$'\n\t'
           docker load --input result
-          docker tag "rvenutolo/linpeas:${VERSION}" "ghcr.io/rvenutolo/linpeas:${VERSION}"
-          docker tag "rvenutolo/linpeas:${VERSION}" "ghcr.io/rvenutolo/linpeas:latest"
-          docker push "ghcr.io/rvenutolo/linpeas:${VERSION}"
-          docker push "ghcr.io/rvenutolo/linpeas:latest"
-          # RepoDigests like `ghcr.io/rvenutolo/linpeas@sha256:abc...`; we want the `sha256:...` part.
-          repo_digest="$(docker inspect --format='{{index .RepoDigests 0}}' "ghcr.io/rvenutolo/linpeas:${VERSION}")"
-          digest="${repo_digest#*@}"
-          printf 'digest=%s\n' "${digest}" >> "${GITHUB_OUTPUT}"
+          for reg in ghcr.io docker.io; do
+            docker tag "rvenutolo/linpeas:${VERSION}" "${reg}/rvenutolo/linpeas:${VERSION}"
+            docker tag "rvenutolo/linpeas:${VERSION}" "${reg}/rvenutolo/linpeas:latest"
+            docker push "${reg}/rvenutolo/linpeas:${VERSION}"
+            docker push "${reg}/rvenutolo/linpeas:latest"
+          done
+          ghcr_digest="$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "ghcr.io/rvenutolo/linpeas:${VERSION}" | grep '^ghcr.io/' | head -n1)"
+          hub_digest="$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "docker.io/rvenutolo/linpeas:${VERSION}" | grep '^docker.io/' | head -n1)"
+          printf 'ghcr_digest=%s\n' "${ghcr_digest#*@}" >> "${GITHUB_OUTPUT}"
+          printf 'hub_digest=%s\n' "${hub_digest#*@}" >> "${GITHUB_OUTPUT}"
 
-      - name: attest provenance for image
+      - name: attest provenance for ghcr image
         uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2 (D2)
         with:
           subject-name: ghcr.io/rvenutolo/linpeas
-          subject-digest: ${{ steps.push.outputs.digest }}
-          # Push the sigstore bundle to ghcr.io as an OCI referrer so
-          # cosign/crane can verify attestations directly against the image.
+          subject-digest: ${{ steps.push.outputs.ghcr_digest }}
+          push-to-registry: true
+
+      - name: attest provenance for Docker Hub image
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2 (D2)
+        with:
+          subject-name: docker.io/rvenutolo/linpeas
+          subject-digest: ${{ steps.push.outputs.hub_digest }}
           push-to-registry: true
 
   verify:
