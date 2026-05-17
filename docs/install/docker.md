@@ -1,6 +1,6 @@
 # Install with Docker
 
-Each release publishes an OCI image to GitHub Container Registry with the upstream tag and `:latest`.
+Each release publishes an OCI image to both Docker Hub (`docker.io/rvenutolo/linpeas`) and GitHub Container Registry (`ghcr.io/rvenutolo/linpeas`) with the upstream tag and `:latest`. Both registries serve identical image bytes with matching SLSA attestations.
 
 ## What this image is for
 
@@ -17,7 +17,7 @@ For a **host** audit, linpeas needs to see the host. Either install via Nix (`ni
 docker run --rm \
   --pid=host --net=host --ipc=host --userns=host --privileged \
   -v /:/host:ro \
-  ghcr.io/rvenutolo/linpeas:latest -d /host
+  rvenutolo/linpeas:latest -d /host
 ```
 
 The bundle is usually simpler for host audits — this form exists for environments where Docker is the only available shipping vehicle.
@@ -25,14 +25,20 @@ The bundle is usually simpler for host audits — this form exists for environme
 ## Run (container audit, default)
 
 ```bash
+# Docker Hub (default registry — no prefix needed)
+docker run --rm rvenutolo/linpeas:latest -a
+
+# Or pull explicitly from GitHub Container Registry
 docker run --rm ghcr.io/rvenutolo/linpeas:latest -a
 ```
 
-The image's `Entrypoint` is set to the linpeas binary, so any arguments after the image reference are passed straight to linpeas.
+The image's `Entrypoint` is set to the linpeas binary, so any arguments after the image reference are passed straight to linpeas. Both registries serve the **same** image bytes — every release pushes to both with identical content digests and matching SLSA attestations.
 
 ## Pin to a specific tag
 
 ```bash
+docker run --rm rvenutolo/linpeas:{{ dashboard.release.latest_tag or "20260510-cd4bd619" }} -a
+# or
 docker run --rm ghcr.io/rvenutolo/linpeas:{{ dashboard.release.latest_tag or "20260510-cd4bd619" }} -a
 ```
 
@@ -45,6 +51,11 @@ The image ships `bashInteractive`, `coreutils`, `gnugrep`, `gnused`, `gawk`, `fi
 ## Verify build provenance
 
 ```bash
+# Docker Hub
+gh attestation verify oci://docker.io/rvenutolo/linpeas:{{ dashboard.release.latest_tag or "<tag>" }} \
+  --repo rvenutolo/linPEAS-flake
+
+# GitHub Container Registry
 gh attestation verify oci://ghcr.io/rvenutolo/linpeas:{{ dashboard.release.latest_tag or "<tag>" }} \
   --repo rvenutolo/linPEAS-flake
 ```
