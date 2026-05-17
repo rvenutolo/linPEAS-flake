@@ -1,6 +1,37 @@
 name: notify-workflow-result
 description: "Open/update a deduped issue on workflow failure; close it on next success."
 
+# SECURITY CONTRACT for `title` and `body` inputs (L1, 2026-05-17):
+#
+# These values are rendered as **markdown** in a GitHub issue. The
+# composite uses env-var indirection so attacker-controlled values
+# cannot break out into shell or JS — but they CAN render arbitrary
+# markdown (links, @mentions, HTML comments) in the resulting issue.
+#
+# DO NOT pass values derived from:
+#   - github.event.issue.* / github.event.pull_request.*
+#   - github.event.head_commit.message
+#   - github.event.inputs.* (workflow_dispatch user input)
+#   - any third-party-API field that isn't shape-validated upstream
+#
+# SAFE inputs:
+#   - static literals
+#   - github.event_name, github.run_id, github.sha
+#   - needs.*.result
+#   - shape-validated values (e.g. the canonical
+#     `^[0-9]{8}-[0-9a-f]{7,40}$` pin shape enforced by
+#     stale-pin-check.yml before reaching this composite)
+#
+# DEDUPLICATION BEHAVIOR (L2): the composite lists open issues by
+# `label`, then opens one if none exist. Two concurrent runs of the
+# SAME caller workflow can race the `listForRepo` -> `issues.create`
+# window and produce two open issues with the same label. The
+# cleanup loop on the next success correctly closes N>1, so the
+# duplication is self-healing within one cycle. If you see two
+# duplicated failure issues, do not "fix" the race here; the
+# alternative (a `concurrency:` mutex on the notify job) adds cost
+# that isn't justified by the impact.
+
 inputs:
   result:
     description: "Aggregate result of the parent job(s) (success/failure/cancelled/skipped)."

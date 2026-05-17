@@ -65,9 +65,14 @@ jobs:
           set -Eeuo pipefail
           IFS=$'\n\t'
           # Defensive shape-check: refuse to publish a release whose version
-          # contains characters outside the github tag/release-notes safe set.
-          # Prevents markdown injection in --notes and catches malformed pins.
-          if [[ ! "${VERSION}" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+          # does not match the canonical peass-ng pin shape
+          # (YYYYMMDD-<7..40 hex>). Tightened from the prior
+          # `^[A-Za-z0-9._/-]+$` allowlist to the same regex enforced at
+          # `bump-linpeas.sh`, `flake.nix` eval, `stale-pin-check.yml`, and
+          # `gen-dashboard-data.sh`. Closes the NX-PD-1 cross-layer-parity
+          # tail item deferred from PR #16 to avoid conflict with PRs
+          # #17/#18 on this same workflow.
+          if [[ ! "${VERSION}" =~ ^[0-9]{8}-[0-9a-f]{7,40}$ ]]; then
             printf 'refusing to release with non-conformant version: %q\n' "${VERSION}" >&2
             exit 1
           fi
@@ -211,10 +216,40 @@ jobs:
             docker tag "rvenutolo/linpeas:${VERSION}" "${reg}/rvenutolo/linpeas:${VERSION}-${ARCH}"
             docker push "${reg}/rvenutolo/linpeas:${VERSION}-${ARCH}"
           done
-          ghcr_digest="$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "ghcr.io/rvenutolo/linpeas:${VERSION}-${ARCH}" | grep '^ghcr.io/' | head -n1)"
-          hub_digest="$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "docker.io/rvenutolo/linpeas:${VERSION}-${ARCH}" | grep --extended-regexp '(^|/)rvenutolo/linpeas@sha256:' | head -n1)"
-          printf 'ghcr_digest=%s\n' "${ghcr_digest#*@}" >> "${GITHUB_OUTPUT}"
-          printf 'hub_digest=%s\n' "${hub_digest#*@}" >> "${GITHUB_OUTPUT}"
+          # SC-POST-6: deterministic digest selection via `jq` against the
+          # JSON output of `docker inspect`. The prior `grep | head -n1`
+          # pipeline silently picked the first matching line; if RepoDigests
+          # ever contains more than one entry (e.g. multiple aliases), the
+          # ordering is non-deterministic. Selecting by repository prefix
+          # with `jq` and asserting the resulting digest starts with
+          # `sha256:` gives a hard fail rather than a misleading
+          # attestation-verify pass against the wrong image.
+          ghcr_digest="$(
+            docker inspect "ghcr.io/rvenutolo/linpeas:${VERSION}-${ARCH}" \
+              | jq --raw-output \
+                  '.[0].RepoDigests[] | select(startswith("ghcr.io/rvenutolo/linpeas@"))' \
+              | head -n1
+          )"
+          hub_digest="$(
+            docker inspect "docker.io/rvenutolo/linpeas:${VERSION}-${ARCH}" \
+              | jq --raw-output \
+                  '.[0].RepoDigests[]
+                    | select(startswith("rvenutolo/linpeas@")
+                          or startswith("docker.io/rvenutolo/linpeas@"))' \
+              | head -n1
+          )"
+          ghcr_digest="${ghcr_digest#*@}"
+          hub_digest="${hub_digest#*@}"
+          if [[ "${ghcr_digest}" != sha256:* ]]; then
+            printf 'unexpected ghcr digest for %s: %s\n' "${ARCH}" "${ghcr_digest}" >&2
+            exit 1
+          fi
+          if [[ "${hub_digest}" != sha256:* ]]; then
+            printf 'unexpected docker hub digest for %s: %s\n' "${ARCH}" "${hub_digest}" >&2
+            exit 1
+          fi
+          printf 'ghcr_digest=%s\n' "${ghcr_digest}" >> "${GITHUB_OUTPUT}"
+          printf 'hub_digest=%s\n' "${hub_digest}" >> "${GITHUB_OUTPUT}"
 
       - name: attest provenance for ghcr image (amd64)
         uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2 (D2)
@@ -229,6 +264,21 @@ jobs:
           subject-name: docker.io/rvenutolo/linpeas
           subject-digest: ${{ steps.push.outputs.hub_digest }}
           push-to-registry: true
+
+      - name: docker logout
+        # SC-POST-5: drop registry credentials from ~/.docker/config.json
+        # once the push + attest steps are done. The ubuntu-latest runner is
+        # ephemeral, but `if: always()` ensures the logout runs even if an
+        # intervening step fails — narrows the window for any later-step
+        # compromise (e.g. a future SHA-pinned action) to read the creds.
+        # Mirrors the docker logout already present in the verify-latest-
+        # release.yml cron (SC-POST-1 patch in PR #18).
+        if: always()
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          docker logout ghcr.io || true
+          docker logout docker.io || true
 
   image-arm64:
     needs: release
@@ -293,10 +343,33 @@ jobs:
             docker tag "rvenutolo/linpeas:${VERSION}" "${reg}/rvenutolo/linpeas:${VERSION}-${ARCH}"
             docker push "${reg}/rvenutolo/linpeas:${VERSION}-${ARCH}"
           done
-          ghcr_digest="$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "ghcr.io/rvenutolo/linpeas:${VERSION}-${ARCH}" | grep '^ghcr.io/' | head -n1)"
-          hub_digest="$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "docker.io/rvenutolo/linpeas:${VERSION}-${ARCH}" | grep --extended-regexp '(^|/)rvenutolo/linpeas@sha256:' | head -n1)"
-          printf 'ghcr_digest=%s\n' "${ghcr_digest#*@}" >> "${GITHUB_OUTPUT}"
-          printf 'hub_digest=%s\n' "${hub_digest#*@}" >> "${GITHUB_OUTPUT}"
+          # SC-POST-6: see amd64 job for rationale.
+          ghcr_digest="$(
+            docker inspect "ghcr.io/rvenutolo/linpeas:${VERSION}-${ARCH}" \
+              | jq --raw-output \
+                  '.[0].RepoDigests[] | select(startswith("ghcr.io/rvenutolo/linpeas@"))' \
+              | head -n1
+          )"
+          hub_digest="$(
+            docker inspect "docker.io/rvenutolo/linpeas:${VERSION}-${ARCH}" \
+              | jq --raw-output \
+                  '.[0].RepoDigests[]
+                    | select(startswith("rvenutolo/linpeas@")
+                          or startswith("docker.io/rvenutolo/linpeas@"))' \
+              | head -n1
+          )"
+          ghcr_digest="${ghcr_digest#*@}"
+          hub_digest="${hub_digest#*@}"
+          if [[ "${ghcr_digest}" != sha256:* ]]; then
+            printf 'unexpected ghcr digest for %s: %s\n' "${ARCH}" "${ghcr_digest}" >&2
+            exit 1
+          fi
+          if [[ "${hub_digest}" != sha256:* ]]; then
+            printf 'unexpected docker hub digest for %s: %s\n' "${ARCH}" "${hub_digest}" >&2
+            exit 1
+          fi
+          printf 'ghcr_digest=%s\n' "${ghcr_digest}" >> "${GITHUB_OUTPUT}"
+          printf 'hub_digest=%s\n' "${hub_digest}" >> "${GITHUB_OUTPUT}"
 
       - name: attest provenance for ghcr image (arm64)
         uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2 (D2)
@@ -311,6 +384,15 @@ jobs:
           subject-name: docker.io/rvenutolo/linpeas
           subject-digest: ${{ steps.push.outputs.hub_digest }}
           push-to-registry: true
+
+      - name: docker logout
+        # SC-POST-5: see amd64 job for rationale.
+        if: always()
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          docker logout ghcr.io || true
+          docker logout docker.io || true
 
   manifest:
     needs: [release, image-amd64, image-arm64]
@@ -372,6 +454,17 @@ jobs:
               "docker.io/rvenutolo/linpeas@${HUB_AMD64_DIGEST}" \
               "docker.io/rvenutolo/linpeas@${HUB_ARM64_DIGEST}"
           done
+
+      - name: docker logout
+        # SC-POST-5: see image-amd64 job for rationale. The manifest job
+        # also logs in to both registries and `imagetools create` is the
+        # last credential-requiring step.
+        if: always()
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          docker logout ghcr.io || true
+          docker logout docker.io || true
 
   verify:
     # D12 (synchronous): verify the just-published bundle, image, and pin
@@ -496,6 +589,19 @@ jobs:
             "${HUB_AMD64_DIGEST}" "${HUB_ARM64_DIGEST}"
           check "docker.io/rvenutolo/linpeas:latest" \
             "${HUB_AMD64_DIGEST}" "${HUB_ARM64_DIGEST}"
+
+      - name: docker logout
+        # SC-POST-5: drop docker registry credentials at the end of the
+        # verify job. The `verify per-arch attestations` step logs in to
+        # both registries; the subsequent `verify manifest tags` step uses
+        # `docker buildx imagetools inspect` which also reads those creds.
+        # Logout once both have completed.
+        if: always()
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          docker logout ghcr.io || true
+          docker logout docker.io || true
 
   notify:
     name: notify

@@ -5,9 +5,11 @@
 # Each scenario runs the script with environment-variable overrides that
 # inject malformed inputs into one of the three security checks:
 #   1. pin.version regex (^[0-9]{8}-[0-9a-f]{7,40}$)
-#   2. bundle URL prefix
+#   2. pin.url prefix
+#      (https://github.com/peass-ng/PEASS-ng/releases/download/)
+#   3. bundle URL prefix
 #      (https://github.com/rvenutolo/linPEAS-flake/releases/download/)
-#   3. required field non-empty / non-null (require_field)
+#   4. required field non-empty / non-null (require_field)
 #
 # Each scenario asserts:
 #   - exit code 1
@@ -135,14 +137,20 @@ function main() {
     'pin.version does not match expected format' \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/bad-version-pin.json"
 
-  # Scenario 2: missing required upstream field (tag_name). Pin is good so
+  # Scenario 2: bad pin.url prefix (NX-PD-2). Pin version is well-formed
+  # so the regex check passes; the URL prefix check then trips.
+  run_scenario 'bad pin.url prefix' \
+    'pin.url outside expected upstream prefix' \
+    "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/bad-pin-url.json"
+
+  # Scenario 3: missing required upstream field (tag_name). Pin is good so
   # we reach the upstream-release fetch and trip require_field on tag_name.
   run_scenario 'missing required field upstream_release.tag_name' \
     'required field missing: upstream_release.tag_name' \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
     "UPSTREAM_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/missing-tag-upstream-release.json"
 
-  # Scenario 3: bundle URL outside expected prefix. Pin good, upstream good,
+  # Scenario 4: bundle URL outside expected prefix. Pin good, upstream good,
   # but this-repo latest-release advertises a non-github.com bundle URL.
   run_scenario 'bundle URL outside expected prefix' \
     'bundle URL outside expected prefix' \
