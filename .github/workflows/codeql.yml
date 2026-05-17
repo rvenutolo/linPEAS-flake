@@ -6,6 +6,15 @@ name: codeql
 # by running CodeQL's queries and surfacing findings in the Security
 # tab. Shell support is deliberately omitted — CodeQL's `shell` analysis
 # is limited and `shellcheck` already covers our `run:` blocks.
+#
+# **Advisory only.** `codeql-action/analyze` is invoked without
+# `fail-on:`, so findings upload to the Security tab but do NOT fail
+# this workflow. A green run is therefore evidence that the scan
+# completed, NOT evidence that zero findings exist. The branch
+# protection required-check covers "scan ran"; closing the loop on
+# findings requires a maintainer to read the Security tab. See
+# SECURITY.md "Supply-chain posture monitoring" for the documented
+# policy on this.
 
 on:
   pull_request:
