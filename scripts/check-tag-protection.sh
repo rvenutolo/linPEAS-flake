@@ -62,7 +62,7 @@ if [[ ${target} != "${EXPECTED_TARGET}" ]]; then
   exit 1
 fi
 if [[ ${enforcement} != "${EXPECTED_ENFORCEMENT}" ]]; then
-  printf 'enforcement: %s, want %s\n' "${enforcement}" "${EXPECTED_ENFORCEMENT}" >&2
+  printf 'enforcement drift: got %s, want %s\n' "${enforcement}" "${EXPECTED_ENFORCEMENT}" >&2
   exit 1
 fi
 

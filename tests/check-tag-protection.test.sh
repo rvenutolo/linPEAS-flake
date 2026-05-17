@@ -57,7 +57,7 @@ function main() {
   run_scenario 'missing deletion rule fails' \
     'bad-no-deletion-rule.json' 1 'missing rule: deletion'
   run_scenario 'disabled enforcement fails' \
-    'bad-disabled.json' 1 'enforcement: disabled'
+    'bad-disabled.json' 1 'enforcement drift:'
   run_scenario 'wrong include pattern fails' \
     'bad-wrong-pattern.json' 1 'ref_name.include does not contain expected pattern'
 
