@@ -51,8 +51,11 @@ jobs:
           IFS=$'\n\t'
 
           pin_version="$(jq --raw-output .version linpeas-pin.json)"
-          if [[ ! "${pin_version}" =~ ^([0-9]{4})([0-9]{2})([0-9]{2})- ]]; then
-            printf 'pin version %q does not match YYYYMMDD- prefix\n' "${pin_version}" >&2
+          # Canonical pin shape (per CLAUDE.md "flake.nix pin invariants"):
+          # YYYYMMDD-<7..40 hex>. Tighter than the prior date-prefix-only
+          # check so malformed pins are rejected here instead of downstream.
+          if [[ ! "${pin_version}" =~ ^([0-9]{4})([0-9]{2})([0-9]{2})-[0-9a-f]{7,40}$ ]]; then
+            printf 'pin version %q does not match expected format\n' "${pin_version}" >&2
             exit 1
           fi
           pin_date="${BASH_REMATCH[1]}-${BASH_REMATCH[2]}-${BASH_REMATCH[3]}"
@@ -64,6 +67,15 @@ jobs:
           upstream_version="$(
             gh api repos/peass-ng/PEASS-ng/releases/latest --jq .tag_name
           )"
+          # Shape-validate the upstream tag before it reaches $GITHUB_OUTPUT
+          # and the notify-composite issue body. Mirrors the pin_version
+          # check above and the validate-then-use pattern in
+          # bump-linpeas.sh. Closes NC-M1: prevents markdown injection in
+          # the auto-filed issue body if upstream publishes a hostile tag.
+          if [[ ! "${upstream_version}" =~ ^[0-9]{8}-[0-9a-f]{7,40}$ ]]; then
+            printf 'upstream tag %q does not match expected format\n' "${upstream_version}" >&2
+            exit 1
+          fi
 
           {
             printf 'pin_version=%s\n' "${pin_version}"

@@ -55,6 +55,17 @@ function main() {
   new_tag="$(printf '%s' "${release_json}" | jq --raw-output .tag_name)"
   log_info "upstream latest: ${new_tag}"
 
+  # Shape-validate before any downstream use: branch name, commit message,
+  # PR title, and pin file all interpolate this verbatim. Hoists the
+  # canonical regex (per CLAUDE.md "flake.nix pin invariants") to the
+  # entry of the bump chain so a malformed upstream tag is rejected
+  # before any artefact is produced. Mirrors the layered "validate-then-use"
+  # pattern (flake.nix eval, gen-dashboard-data.sh, release-on-bump.yml).
+  if [[ ! ${new_tag} =~ ^[0-9]{8}-[0-9a-f]{7,40}$ ]]; then
+    log_err "upstream tag does not match expected format: ${new_tag}"
+    exit 1
+  fi
+
   if [[ ${current_version} == "${new_tag}" ]]; then
     log_info 'already at latest, nothing to do'
     exit 0
