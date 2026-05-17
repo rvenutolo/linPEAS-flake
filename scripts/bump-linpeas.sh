@@ -49,7 +49,14 @@ function main() {
   log_info "current pin: ${current_version}"
 
   local release_json
-  release_json="$(gh api repos/peass-ng/PEASS-ng/releases/latest)"
+  # Pin `X-GitHub-Api-Version` (defense-in-depth, AU-P-6). If GitHub ever
+  # ships a v2 of the `releases/latest` schema, the explicit header makes
+  # the failure mode "API version mismatch" rather than a downstream
+  # "asset URL empty, weird" failure. See:
+  # https://docs.github.com/en/rest/overview/api-versions
+  release_json="$(gh api \
+    --header 'X-GitHub-Api-Version: 2022-11-28' \
+    repos/peass-ng/PEASS-ng/releases/latest)"
 
   local new_tag
   new_tag="$(printf '%s' "${release_json}" | jq --raw-output .tag_name)"
