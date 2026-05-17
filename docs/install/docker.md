@@ -48,6 +48,30 @@ Tags exactly match upstream `peass-ng/PEASS-ng` tags.
 
 The image ships `bashInteractive`, `coreutils`, `gnugrep`, `gnused`, `gawk`, `findutils`, `procps`, and the `linpeas` binary. These cover the external tools linpeas invokes during its checks. Anything else linpeas tries to call (e.g. `lsof`, `netstat`, distro-specific helpers) will be missing — that is consistent with how linpeas behaves on a minimal host, and the script logs each missing tool rather than aborting.
 
+## Architecture support
+
+The image is published as a multi-arch manifest covering `linux/amd64`
+(Intel/AMD, most servers) and `linux/arm64` (Apple Silicon under Docker
+Desktop, AWS Graviton, Raspberry Pi 64-bit). `docker pull` automatically
+selects the matching native image — no QEMU, no fallback.
+
+To pull a specific arch explicitly:
+
+```bash
+docker pull --platform linux/arm64 rvenutolo/linpeas:latest
+```
+
+When verifying the SLSA attestation, point at the resolved arch-image
+digest (not the manifest pointer):
+
+```bash
+DIGEST=$(docker pull rvenutolo/linpeas:latest && docker inspect --format='{{index .RepoDigests 0}}' rvenutolo/linpeas:latest)
+gh attestation verify "oci://${DIGEST}" --repo rvenutolo/linPEAS-flake
+```
+
+See [Security → Multi-arch attestations](../security/verification.md) for
+the trust contract.
+
 ## Verify build provenance
 
 ```bash
