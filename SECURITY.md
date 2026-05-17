@@ -134,10 +134,16 @@ standard GitHub email channel.
   compromise). Stored as a repository secret.
 - `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` — Docker Hub access token
   used by `release-on-bump.yml` to mirror the OCI image to
-  `docker.io/rvenutolo/linpeas`. Token scope is `Read, Write, Delete`
+  `docker.io/rvenutolo/linpeas` and by `dockerhub-sync.yml` to
+  refresh the repo README. Token scope is `Read, Write, Delete`
   on the `rvenutolo/linpeas` repository only — **not** account-admin
-  or org-admin. Rotation: yearly; calendar reminder owned by
-  repo maintainer. If compromise is suspected: revoke at
+  or org-admin. The `Delete` capability is required by the
+  `peter-evans/dockerhub-description` action used in
+  `dockerhub-sync.yml`, which calls the Docker Hub repo-metadata
+  endpoint; a `Read, Write`-only PAT returns `403 Forbidden` on
+  that endpoint (verified empirically 2026-05-17). Rotation: on
+  suspected compromise only — no calendar cadence. If compromise
+  is suspected: revoke at
   <https://hub.docker.com/settings/security>, generate a replacement,
   update `gh secret set DOCKERHUB_TOKEN --repo rvenutolo/linPEAS-flake`.
   Compromise blast radius: attacker can push arbitrary tags to
