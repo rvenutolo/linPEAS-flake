@@ -200,7 +200,7 @@ jobs:
             docker push "${reg}/rvenutolo/linpeas:latest"
           done
           ghcr_digest="$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "ghcr.io/rvenutolo/linpeas:${VERSION}" | grep '^ghcr.io/' | head -n1)"
-          hub_digest="$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "docker.io/rvenutolo/linpeas:${VERSION}" | grep '^docker.io/' | head -n1)"
+          hub_digest="$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "docker.io/rvenutolo/linpeas:${VERSION}" | grep -E '(^|/)rvenutolo/linpeas@sha256:' | head -n1)"
           printf 'ghcr_digest=%s\n' "${ghcr_digest#*@}" >> "${GITHUB_OUTPUT}"
           printf 'hub_digest=%s\n' "${hub_digest#*@}" >> "${GITHUB_OUTPUT}"
 
@@ -297,7 +297,7 @@ jobs:
           printf '%s' "${DOCKERHUB_TOKEN}" \
             | docker login docker.io --username "${DOCKERHUB_USERNAME}" --password-stdin
           docker pull "docker.io/rvenutolo/linpeas:${VERSION}"
-          repo_digest="$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "docker.io/rvenutolo/linpeas:${VERSION}" | grep '^docker.io/' | head -n1)"
+          repo_digest="$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "docker.io/rvenutolo/linpeas:${VERSION}" | grep -E '(^|/)rvenutolo/linpeas@sha256:' | head -n1)"
           printf 'digest=%s\n' "${repo_digest#*@}" >> "${GITHUB_OUTPUT}"
 
       - name: verify Docker Hub image attestation
