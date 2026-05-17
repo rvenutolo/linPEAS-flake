@@ -93,21 +93,11 @@ downloads and build-provenance attestations.
 
 ## Supply-chain posture monitoring
 
-Two scheduled workflows track supply-chain hygiene independent of the
-release pipeline. Both upload findings to the Security tab; neither is
+One scheduled workflow tracks supply-chain hygiene independent of the
+release pipeline. It uploads findings to the Security tab; it is not
 in branch protection's required-check set for content-policy reasons
 documented below.
 
-- **`scorecard.yml`** runs the OpenSSF Scorecard on push to `main`,
-  weekly, on `workflow_dispatch`, **and** on `branch_protection_rule`.
-  The `branch_protection_rule` trigger is intentional: Scorecard
-  grades branch-protection posture, and any change to those rules
-  should re-evaluate the grade promptly rather than waiting for the
-  Monday cron. The trigger gives the workflow visibility into
-  admin-level repo events, but the job runs with only the permissions
-  needed for SARIF upload and OIDC publish to scorecard.dev. Do not
-  prune `branch_protection_rule` as "unused" — the trigger comment in
-  `scorecard.yml` pins this rationale.
 - **`codeql.yml`** scans GitHub Actions workflow definitions on every
   PR, push to `main`, and weekly. **Findings are advisory.** The
   workflow does not pass `fail-on:` to `codeql-action/analyze`, so a
@@ -120,10 +110,7 @@ documented below.
   complements (does not replace) the `zizmor` pre-commit hook and
   the SHA-pinning + `permissions:` discipline applied workflow-wide.
 
-Neither workflow is in branch protection's required-check set. A
-Scorecard outage or a CodeQL infrastructure failure must not block
-linpeas pin bumps; failure surfacing is via the public badges and the
-standard GitHub email channel.
+The `codeql.yml` workflow is not in branch protection's required-check set. A CodeQL infrastructure failure must not block linpeas pin bumps; failure surfacing is via the standard GitHub email channel.
 
 ## Secrets
 
