@@ -65,3 +65,15 @@ downloads and build-provenance attestations.
   bump PRs. Required scopes: this repository only, with `contents: write`
   and `pull-requests: write`. Rotate annually (or on suspected
   compromise). Stored as a repository secret.
+- `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` — Docker Hub access token
+  used by `release-on-bump.yml` to mirror the OCI image to
+  `docker.io/rvenutolo/linpeas`. Token scope is `Read, Write, Delete`
+  on the `rvenutolo/linpeas` repository only — **not** account-admin
+  or org-admin. Rotation: yearly; calendar reminder owned by
+  repo maintainer. If compromise is suspected: revoke at
+  <https://hub.docker.com/settings/security>, generate a replacement,
+  update `gh secret set DOCKERHUB_TOKEN --repo rvenutolo/linPEAS-flake`.
+  Compromise blast radius: attacker can push arbitrary tags to
+  `docker.io/rvenutolo/linpeas`. Mitigation: consumers verify the
+  SLSA attestation with `gh attestation verify`; mismatched attestation
+  is the canonical detection signal.
