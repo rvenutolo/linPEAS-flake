@@ -65,7 +65,8 @@ When verifying the SLSA attestation, point at the resolved arch-image
 digest (not the manifest pointer):
 
 ```bash
-DIGEST=$(docker pull rvenutolo/linpeas:latest && docker inspect --format='{{index .RepoDigests 0}}' rvenutolo/linpeas:latest)
+docker pull rvenutolo/linpeas:latest
+DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' rvenutolo/linpeas:latest)
 gh attestation verify "oci://${DIGEST}" --repo rvenutolo/linPEAS-flake
 ```
 
