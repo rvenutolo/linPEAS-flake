@@ -34,5 +34,9 @@
     "docs/**/*.md"
     # Generated, also gitignored — defense-in-depth.
     "docs/_data/dashboard.yml"
+    # Test fixtures for required-checks-no-paths lint — the placeholder
+    # doc uses `__SCENARIO__` which prettier rewrites to `**SCENARIO**`,
+    # breaking the harness sed substitution.
+    "tests/fixtures/required-checks/*"
   ];
 }

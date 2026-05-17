@@ -1,0 +1,12 @@
+# tests/fixtures/required-checks/bad-paths-ignore.yml
+name: bad-paths-ignore
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'true'

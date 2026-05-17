@@ -13,21 +13,22 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  bump:
+  # AU-P-1 Phase 1: this job runs untrusted Nix-evaluating actions with
+  # ZERO write credentials. BUMP_PAT is not present in env or on disk here.
+  # Compromise of any third-party action SHA below cannot exfiltrate the
+  # PAT — it lives only in the `push-and-merge` job below.
+  compute-pin:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # git push branch via persisted BUMP_PAT
-      pull-requests: write # gh pr create / merge --auto
+      contents: read
+    outputs:
+      changed: ${{ steps.bump.outputs.changed }}
+      old: ${{ steps.bump.outputs.old }}
+      new: ${{ steps.bump.outputs.new }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
-          # The `bump` job invokes `git push --set-upstream origin <branch>`
-          # in-line below; it relies on the BUMP_PAT being persisted into
-          # .git/config by checkout. Declaring this explicitly silences
-          # zizmor's `artipacked` audit (intent is to persist) rather than
-          # suppressing it.
-          persist-credentials: true
-          token: ${{ secrets.BUMP_PAT }}
+          persist-credentials: false
 
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
         with:
@@ -37,15 +38,8 @@ jobs:
 
       - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3 (D4)
 
-      - name: configure git identity
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
       - name: bump pin
         id: bump
-        env:
-          GH_TOKEN: ${{ secrets.BUMP_PAT }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
@@ -66,12 +60,56 @@ jobs:
         if: steps.bump.outputs.changed == 'true'
         run: ./scripts/refresh-flake-show.sh
 
-      - name: create branch and PR
+      - name: upload pin artifact
         if: steps.bump.outputs.changed == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (D2)
+        with:
+          name: bump-result
+          path: |
+            linpeas-pin.json
+            README.md
+          retention-days: 1
+          if-no-files-found: error
+
+  # AU-P-1 Phase 1: BUMP_PAT lives here, scoped to two run-step envs only.
+  # Action set restricted to GitHub-owned SHAs (actions/checkout +
+  # actions/download-artifact). persist-credentials: false means the PAT
+  # never enters .git/config — pushes use an inline http.extraheader.
+  push-and-merge:
+    needs: compute-pin
+    if: needs.compute-pin.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.1.8 (D2)
+        with:
+          name: bump-result
+
+      - name: sanity check artifact
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          if git diff --quiet linpeas-pin.json; then
+            printf 'artifact produced no diff in linpeas-pin.json — aborting\n' >&2
+            exit 1
+          fi
+
+      - name: configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: commit and push branch
         env:
-          GH_TOKEN: ${{ secrets.BUMP_PAT }}
-          NEW: ${{ steps.bump.outputs.new }}
-          OLD: ${{ steps.bump.outputs.old }}
+          BUMP_PAT: ${{ secrets.BUMP_PAT }}
+          NEW: ${{ needs.compute-pin.outputs.new }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
@@ -84,21 +122,29 @@ jobs:
           git add linpeas-pin.json README.md
           git commit --message "chore: bump linpeas to ${NEW}"
 
-          # --force-with-lease requires a remote ref to lease against. On a
-          # brand-new branch (typical first bump path) there is none, and
-          # git 2.30+ refuses. Branch only forces when it already exists
-          # remotely (retry of failed prior run).
+          # Push via inline http.extraheader; PAT never touches .git/config.
           if git ls-remote --exit-code --heads origin "${branch}" >/dev/null 2>&1; then
-            git push --force-with-lease --set-upstream origin "${branch}"
+            git -c http.extraheader="Authorization: token ${BUMP_PAT}" \
+              push --force-with-lease --set-upstream origin "${branch}"
           else
-            git push --set-upstream origin "${branch}"
+            git -c http.extraheader="Authorization: token ${BUMP_PAT}" \
+              push --set-upstream origin "${branch}"
           fi
 
+      - name: create and auto-merge PR
+        env:
+          GH_TOKEN: ${{ secrets.BUMP_PAT }}
+          NEW: ${{ needs.compute-pin.outputs.new }}
+          OLD: ${{ needs.compute-pin.outputs.old }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          branch="chore/bump-linpeas-${NEW}"
+
           # Open PR only if one does not already exist for this branch.
-          # Build the body in a temp file so YAML block-scalar indentation
-          # rules do not chop the multi-line content.
           if ! gh pr view "${branch}" >/dev/null 2>&1; then
             body="$(mktemp)"
+            trap 'rm --force -- "${body}"' EXIT
             printf "Auto-generated bump from \`%s\` to \`%s\`.\n\nUpstream release: https://github.com/peass-ng/PEASS-ng/releases/tag/%s\n" \
               "${OLD}" "${NEW}" "${NEW}" > "${body}"
             gh pr create \
@@ -112,7 +158,7 @@ jobs:
 
   notify:
     name: notify
-    needs: bump
+    needs: [compute-pin, push-and-merge]
     # Always-runs so we both file on failure and auto-close on next green run.
     if: always()
     runs-on: ubuntu-latest
@@ -124,19 +170,23 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/notify-workflow-result
         with:
-          result: ${{ needs.bump.result }}
+          # AU-P-1: collapse "compute-pin success + push-and-merge skipped"
+          # (no-op cron day) to overall success. See spec §Error handling.
+          result: ${{ needs.push-and-merge.result == 'skipped' && needs.compute-pin.result || needs.push-and-merge.result }}
           label: update-linpeas-failure
           title: "update-linpeas: cron failed"
           body: |
             The daily `update-linpeas` cron failed before opening / merging a pin-bump PR.
 
             - Trigger: `${{ github.event_name }}`
-            - Bump conclusion: `${{ needs.bump.result }}`
+            - compute-pin conclusion: `${{ needs.compute-pin.result }}`
+            - push-and-merge conclusion: `${{ needs.push-and-merge.result }}`
 
-            Investigate the `bump` job logs. Common causes:
+            Investigate the failing job's logs. Common causes:
             - Upstream PEASS-ng API rate-limit
-            - `BUMP_PAT` expired
+            - `BUMP_PAT` expired (affects push-and-merge only)
             - Asset-URL prefix check tripped (peass-ng moved their release host)
             - `digest` field missing or non-`sha256:` from upstream
+            - Artifact upload/download failure (between compute-pin and push-and-merge)
           label-description: update-linpeas workflow failure
           github-token: ${{ secrets.GITHUB_TOKEN }}
