@@ -332,20 +332,34 @@ jobs:
       - name: create + push multi-arch manifests
         # `docker buildx imagetools create` is the modern multi-arch
         # manifest tool — supersedes `docker manifest create` and works
-        # cleanly against per-arch tags that already exist in the registry.
+        # cleanly against per-arch refs that already exist in the registry.
         # Each create makes one OCI index tag pointing at both arch digests.
+        #
+        # SC-POST-3: Source refs are the immutable `@sha256:` digests
+        # captured by the per-arch `image-*` jobs at push time, NOT the
+        # mutable `${VERSION}-amd64` / `${VERSION}-arm64` tags. Tags can
+        # be rewritten between the per-arch push and this step (registry
+        # incident, credential compromise, manual re-run race); digests
+        # cannot. Using digests guarantees the manifest references the
+        # exact bytes that the `attest-build-provenance` step attested.
         env:
           VERSION: ${{ needs.release.outputs.version }}
+          GHCR_AMD64_DIGEST: ${{ needs.image-amd64.outputs.ghcr_digest }}
+          GHCR_ARM64_DIGEST: ${{ needs.image-arm64.outputs.ghcr_digest }}
+          HUB_AMD64_DIGEST: ${{ needs.image-amd64.outputs.hub_digest }}
+          HUB_ARM64_DIGEST: ${{ needs.image-arm64.outputs.hub_digest }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
-          for reg in ghcr.io docker.io; do
-            for dst in "${VERSION}" latest; do
-              docker buildx imagetools create \
-                --tag "${reg}/rvenutolo/linpeas:${dst}" \
-                "${reg}/rvenutolo/linpeas:${VERSION}-amd64" \
-                "${reg}/rvenutolo/linpeas:${VERSION}-arm64"
-            done
+          for dst in "${VERSION}" latest; do
+            docker buildx imagetools create \
+              --tag "ghcr.io/rvenutolo/linpeas:${dst}" \
+              "ghcr.io/rvenutolo/linpeas@${GHCR_AMD64_DIGEST}" \
+              "ghcr.io/rvenutolo/linpeas@${GHCR_ARM64_DIGEST}"
+            docker buildx imagetools create \
+              --tag "docker.io/rvenutolo/linpeas:${dst}" \
+              "docker.io/rvenutolo/linpeas@${HUB_AMD64_DIGEST}" \
+              "docker.io/rvenutolo/linpeas@${HUB_ARM64_DIGEST}"
           done
 
   verify:
@@ -427,6 +441,50 @@ jobs:
           # local checkout drift altering the bytes).
           gh release download "${VERSION}" --pattern linpeas-pin.json --clobber
           gh attestation verify linpeas-pin.json --repo rvenutolo/linPEAS-flake
+
+      - name: verify manifest tags resolve to attested per-arch digests
+        # SC-POST-2: the steps above re-validate the per-arch digests
+        # captured at push time, but never confirm the published
+        # `:VERSION` / `:latest` manifest tags still point at those exact
+        # digests. A registry-side rewrite between the per-arch push and
+        # this verify step (push race, credential compromise, manual
+        # re-run of just the `manifest` job) would otherwise go undetected.
+        # We re-fetch each manifest tag's raw OCI index and assert that
+        # each `manifests[].digest` matches the attested per-arch digest.
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+          GHCR_AMD64_DIGEST: ${{ needs.image-amd64.outputs.ghcr_digest }}
+          HUB_AMD64_DIGEST: ${{ needs.image-amd64.outputs.hub_digest }}
+          GHCR_ARM64_DIGEST: ${{ needs.image-arm64.outputs.ghcr_digest }}
+          HUB_ARM64_DIGEST: ${{ needs.image-arm64.outputs.hub_digest }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          check() {
+            local ref="$1" expected_amd64="$2" expected_arm64="$3"
+            local manifest got
+            manifest="$(docker buildx imagetools inspect --raw "${ref}")"
+            for pair in "amd64:${expected_amd64}" "arm64:${expected_arm64}"; do
+              local arch="${pair%%:*}" want="${pair#*:}"
+              got="$(printf '%s' "${manifest}" \
+                | jq --raw-output --arg a "${arch}" \
+                    '.manifests[] | select(.platform.architecture==$a) | .digest')"
+              if [[ "${got}" != "${want}" ]]; then
+                printf 'manifest drift on %s: want %s for %s, got %s\n' \
+                  "${ref}" "${want}" "${arch}" "${got}" >&2
+                exit 1
+              fi
+            done
+            printf 'manifest tag %s resolves to attested per-arch digests\n' "${ref}"
+          }
+          check "ghcr.io/rvenutolo/linpeas:${VERSION}" \
+            "${GHCR_AMD64_DIGEST}" "${GHCR_ARM64_DIGEST}"
+          check "ghcr.io/rvenutolo/linpeas:latest" \
+            "${GHCR_AMD64_DIGEST}" "${GHCR_ARM64_DIGEST}"
+          check "docker.io/rvenutolo/linpeas:${VERSION}" \
+            "${HUB_AMD64_DIGEST}" "${HUB_ARM64_DIGEST}"
+          check "docker.io/rvenutolo/linpeas:latest" \
+            "${HUB_AMD64_DIGEST}" "${HUB_ARM64_DIGEST}"
 
   notify:
     name: notify

@@ -55,7 +55,7 @@ jobs:
           [[ -f linpeas-bundle.sh && -f linpeas-pin.json ]] \
             || { printf 'release assets never appeared\n' >&2; exit 1; }
 
-      - name: pull and inspect image
+      - name: pull and inspect ghcr image
         id: img
         env:
           GH_TOKEN_INLINE: ${{ github.token }}
@@ -87,6 +87,43 @@ jobs:
           set -Eeuo pipefail
           IFS=$'\n\t'
           gh attestation verify "oci://ghcr.io/rvenutolo/linpeas@${DIGEST}" --repo rvenutolo/linPEAS-flake
+
+      - name: verify Docker Hub per-arch attestations
+        # SC-POST-1: Docker Hub is the only long-lived stealable-credential
+        # registry in the release pipeline (DOCKERHUB_TOKEN), yet the daily
+        # cron previously only re-verified ghcr (short-lived OIDC). A
+        # Docker-Hub-only compromise — stolen token, registry incident,
+        # accidental manual push — would replace published tags without
+        # surfacing on this cron. Mirror the ghcr image-attestation block
+        # for both arch tags on docker.io to close that gap.
+        #
+        # Pull rate: anonymous pulls are limited to 200/6h per IP on
+        # Docker Hub. One daily run pulling four arch images is well
+        # within budget; revisit if cadence increases.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          TAG: ${{ steps.latest.outputs.tag }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          printf '%s' "${DOCKERHUB_TOKEN}" \
+            | docker login docker.io --username "${DOCKERHUB_USERNAME}" --password-stdin
+          for arch in amd64 arm64; do
+            docker pull --platform "linux/${arch}" "docker.io/rvenutolo/linpeas:${TAG}"
+            repo_digest="$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' \
+              "docker.io/rvenutolo/linpeas:${TAG}" \
+              | grep --extended-regexp '(^|/)rvenutolo/linpeas@sha256:' | head -n1)"
+            digest="${repo_digest#*@}"
+            if [[ "${digest}" != sha256:* ]]; then
+              printf 'unexpected docker hub digest for %s: %s\n' "${arch}" "${digest}" >&2
+              exit 1
+            fi
+            gh attestation verify "oci://docker.io/rvenutolo/linpeas@${digest}" \
+              --repo rvenutolo/linPEAS-flake
+          done
+          docker logout docker.io
 
       - name: verify pin file attestation
         # The pin file uploaded to the release is the same blob attested at
