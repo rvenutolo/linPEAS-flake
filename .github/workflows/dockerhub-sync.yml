@@ -1,0 +1,75 @@
+name: dockerhub-sync
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - README.md
+      - .github/workflows/dockerhub-sync.yml
+  # Allow manual re-sync after a token rotation or Docker Hub blip.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dockerhub-sync-main
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      result: ${{ steps.outcome.outputs.result }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+
+      - name: push README to Docker Hub
+        uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5.0.0 (D2)
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: rvenutolo/linpeas
+          readme-filepath: README.md
+          short-description: "Nix flake wrapping peass-ng linpeas.sh with SLSA build provenance and pinned, auditable releases."
+
+      - name: record outcome
+        id: outcome
+        if: always()
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          printf 'result=%s\n' "${{ job.status }}" >> "${GITHUB_OUTPUT}"
+
+  notify:
+    name: notify
+    needs: sync
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.sync.result }}
+          label: dockerhub-sync-failure
+          title: "dockerhub-sync: README sync to Docker Hub failed"
+          body: |
+            The `dockerhub-sync` workflow failed.
+
+            - Trigger: `${{ github.event_name }}`
+            - sync: `${{ needs.sync.result }}`
+
+            Common causes:
+            - `DOCKERHUB_TOKEN` expired or revoked → rotate at <https://hub.docker.com/settings/security> and `gh secret set DOCKERHUB_TOKEN`.
+            - `DOCKERHUB_USERNAME` mismatch with the `rvenutolo/linpeas` repo owner.
+            - Docker Hub partial outage; manual re-run via `workflow_dispatch` is often enough.
+          label-description: dockerhub-sync workflow failure
+          github-token: ${{ secrets.GITHUB_TOKEN }}
