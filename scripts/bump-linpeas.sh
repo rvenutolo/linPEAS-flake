@@ -91,11 +91,17 @@ function main() {
     exit 1
   fi
 
-  local tmpfile
+  local tmpfile pin_tmp
+  # Declare `pin_tmp` early so the EXIT trap can reference it even if the
+  # second `mktemp` (below) never runs. AU-P-5: previously the trap only
+  # covered `tmpfile`, leaving a leftover `linpeas-pin.json.XXXXXX` in the
+  # working tree on partial failure between `mktemp --tmpdir=...` and the
+  # final `mv`.
+  pin_tmp=''
   tmpfile="$(mktemp)"
-  # Use :- default so the trap (fires after main() returns) does not trip
-  # set -u when this local has gone out of scope.
-  trap 'rm --force -- "${tmpfile:-}"' EXIT
+  # Use :- defaults so the trap (fires after main() returns) does not trip
+  # set -u when these locals have gone out of scope.
+  trap 'rm --force -- "${tmpfile:-}" "${pin_tmp:-}"' EXIT
 
   curl --disable --fail --silent --show-error --location \
     --output "${tmpfile}" "${asset_url}"
@@ -135,7 +141,8 @@ function main() {
 
   # Atomic replace: write to a sibling temp file then rename. Avoids
   # leaving a truncated pin file behind on SIGKILL / runner termination.
-  local pin_tmp
+  # `pin_tmp` was declared at the top of `main` so the EXIT trap also
+  # cleans up this temp on failure between `mktemp` and `mv`.
   pin_tmp="$(mktemp --tmpdir="$(dirname -- "${pin_file}")" linpeas-pin.json.XXXXXX)"
   printf '%s\n' "${new_pin}" >"${pin_tmp}"
   mv -- "${pin_tmp}" "${pin_file}"

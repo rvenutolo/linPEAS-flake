@@ -15,9 +15,11 @@
 #   3. Missing required JSON field    -> exit 1 with field name; no partial
 #                                        yaml written.
 #   4. pin.version must match         -> [0-9]{8}-[0-9a-f]{7,40}
-#   5. bundle_url must start with     -> https://github.com/rvenutolo/
+#   5. pin.url must start with        -> https://github.com/peass-ng/
+#                                        PEASS-ng/releases/download/
+#   6. bundle_url must start with     -> https://github.com/rvenutolo/
 #                                        linPEAS-flake/releases/download/
-#   6. Atomic write: mktemp + mv; never `>` redirect to the final path.
+#   7. Atomic write: mktemp + mv; never `>` redirect to the final path.
 #
 # Exits 0 on success.
 
@@ -58,6 +60,7 @@ function require_field() {
 readonly UPSTREAM_REPO='peass-ng/PEASS-ng'
 readonly THIS_REPO='rvenutolo/linPEAS-flake'
 readonly EXPECTED_BUNDLE_URL_PREFIX='https://github.com/rvenutolo/linPEAS-flake/releases/download/'
+readonly EXPECTED_PIN_URL_PREFIX='https://github.com/peass-ng/PEASS-ng/releases/download/'
 readonly VERSION_REGEX='^[0-9]{8}-[0-9a-f]{7,40}$'
 
 # @description Fetch JSON from either an env-var override path (for tests) or
@@ -109,6 +112,16 @@ function main() {
   require_field "${pin_url}" 'pin.url'
   if [[ ! ${pin_version} =~ ${VERSION_REGEX} ]]; then
     log_err "pin.version does not match expected format: ${pin_version}"
+    exit 1
+  fi
+  # NX-PD-2: symmetric prefix check for `pin.url`. The dashboard page
+  # renders `pin.url` as a clickable link; without this guard a malformed
+  # pin file reaching the site-build path could produce a phishing link.
+  # Mirrors the `pin.url` prefix guard already present in
+  # `bump-linpeas.sh` and the `pin.url` prefix invariant documented in
+  # `.claude/CLAUDE.md` ("flake.nix pin invariants").
+  if [[ ${pin_url} != "${EXPECTED_PIN_URL_PREFIX}"* ]]; then
+    log_err "pin.url outside expected upstream prefix: ${pin_url}"
     exit 1
   fi
 
