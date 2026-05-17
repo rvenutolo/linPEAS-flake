@@ -38,7 +38,9 @@ jobs:
           set -Eeuo pipefail
           IFS=$'\n\t'
           cp flake.lock flake.lock.before
-          nix flake update --commit-lock-file=false
+          # --commit-lock-file=false is unsupported on nix 2.34.x; use plain
+          # update which always writes flake.lock (commit happens in push-and-merge).
+          nix flake update
 
       - name: detect change
         id: diff
