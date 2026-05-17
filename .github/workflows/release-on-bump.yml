@@ -285,6 +285,30 @@ jobs:
           IFS=$'\n\t'
           gh attestation verify "oci://ghcr.io/rvenutolo/linpeas@${DIGEST}" --repo rvenutolo/linPEAS-flake
 
+      - name: resolve Docker Hub image digest
+        id: resolve-hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          printf '%s' "${DOCKERHUB_TOKEN}" \
+            | docker login docker.io --username "${DOCKERHUB_USERNAME}" --password-stdin
+          docker pull "docker.io/rvenutolo/linpeas:${VERSION}"
+          repo_digest="$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "docker.io/rvenutolo/linpeas:${VERSION}" | grep '^docker.io/' | head -n1)"
+          printf 'digest=%s\n' "${repo_digest#*@}" >> "${GITHUB_OUTPUT}"
+
+      - name: verify Docker Hub image attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIGEST: ${{ steps.resolve-hub.outputs.digest }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          gh attestation verify "oci://docker.io/rvenutolo/linpeas@${DIGEST}" --repo rvenutolo/linPEAS-flake
+
       - name: verify pin file attestation
         env:
           GH_TOKEN: ${{ github.token }}
