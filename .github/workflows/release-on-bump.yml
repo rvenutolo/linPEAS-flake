@@ -142,6 +142,7 @@ jobs:
     needs: release
     if: needs.release.outputs.tag-exists == 'false'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       packages: write # ghcr docker push
       id-token: write # attest-build-provenance OIDC
@@ -224,6 +225,7 @@ jobs:
     needs: release
     if: needs.release.outputs.tag-exists == 'false'
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
     permissions:
       packages: write
       id-token: write
@@ -303,6 +305,7 @@ jobs:
     needs: [release, image-amd64, image-arm64]
     if: needs.release.outputs.tag-exists == 'false'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       packages: write # ghcr manifest push
     steps:
