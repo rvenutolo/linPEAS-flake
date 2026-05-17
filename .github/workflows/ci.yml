@@ -21,7 +21,7 @@ jobs:
   flake-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
@@ -36,7 +36,7 @@ jobs:
   build-linpeas:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
@@ -57,7 +57,7 @@ jobs:
     needs: build-linpeas
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
@@ -82,7 +82,7 @@ jobs:
   build-linpeas-arm64:
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
@@ -103,7 +103,7 @@ jobs:
     needs: build-linpeas-arm64
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
@@ -128,7 +128,7 @@ jobs:
   image-smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
@@ -198,7 +198,7 @@ jobs:
   image-smoke-arm64:
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
@@ -270,7 +270,7 @@ jobs:
   bundle-smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
@@ -308,7 +308,7 @@ jobs:
   dashboard-data-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
@@ -323,7 +323,7 @@ jobs:
   required-checks-no-paths:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
@@ -340,7 +340,7 @@ jobs:
   pr-workflows-no-secrets:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
@@ -370,7 +370,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     continue-on-error: true
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
@@ -395,7 +395,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     continue-on-error: true
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
