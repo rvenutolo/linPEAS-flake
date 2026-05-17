@@ -12,6 +12,11 @@ name: scorecard
 # email channel.
 
 on:
+  # `branch_protection_rule` fires on creation/edit/deletion of branch
+  # protection rules. Scorecard grades branch protection posture, so
+  # any change to those rules should re-evaluate the score promptly
+  # rather than waiting for the weekly cron. Do not prune as "unused";
+  # see SECURITY.md "Supply-chain posture monitoring" for context.
   branch_protection_rule:
   push:
     branches: [main]
