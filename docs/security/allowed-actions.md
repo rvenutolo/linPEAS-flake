@@ -6,6 +6,7 @@
 
 ```
 actions/*
+anchore/*
 aquasecurity/*
 cachix/*
 DeterminateSystems/*
@@ -29,6 +30,7 @@ rvenutolo/*
      "verified_allowed": false,
      "patterns_allowed": [
        "actions/*",
+       "anchore/*",
        "aquasecurity/*",
        "cachix/*",
        "DeterminateSystems/*",

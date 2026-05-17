@@ -72,6 +72,9 @@ jobs:
           printf 'digest=%s\n' "${digest}" >> "${GITHUB_OUTPUT}"
 
       - name: verify bundle attestation
+        # Verifies both build-provenance AND SBOM (P4.2/GAP-12) attestations.
+        # gh attestation verify accepts any matching attestation by default
+        # (SLSA provenance + SPDX-JSON SBOM, both attested at release time).
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -80,6 +83,9 @@ jobs:
           gh attestation verify linpeas-bundle.sh --repo rvenutolo/linPEAS-flake
 
       - name: verify image attestation
+        # Verifies both build-provenance AND SBOM (P4.2/GAP-12) attestations
+        # for the ghcr amd64 image. gh attestation verify accepts any matching
+        # attestation by default (SLSA provenance + SPDX-JSON SBOM).
         env:
           GH_TOKEN: ${{ github.token }}
           DIGEST: ${{ steps.img.outputs.digest }}
