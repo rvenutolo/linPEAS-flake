@@ -6,6 +6,7 @@
 
 ```
 actions/*
+aquasecurity/*
 cachix/*
 DeterminateSystems/*
 github/*
@@ -28,6 +29,7 @@ rvenutolo/*
      "verified_allowed": false,
      "patterns_allowed": [
        "actions/*",
+       "aquasecurity/*",
        "cachix/*",
        "DeterminateSystems/*",
        "github/*",
