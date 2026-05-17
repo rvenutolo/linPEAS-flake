@@ -190,6 +190,15 @@ jobs:
         # Push the per-arch image to both registries under arch-suffixed
         # tags. The unsuffixed {version} and :latest tags are created later
         # by the `manifest` job via `docker buildx imagetools create`.
+        #
+        # DH-2 (2026-05-17): docker.io is pushed first, ghcr.io second.
+        # docker.io has historically lower availability than ghcr.io; by
+        # putting the flakier registry first, a docker.io push failure
+        # aborts before ghcr.io is touched, preventing a half-published
+        # state where ghcr has the arch tag but docker.io does not. The
+        # remaining failure mode (ghcr.io push fails after docker.io
+        # succeeded) is less likely and the recovery procedure in the
+        # notify body covers it.
         id: push
         env:
           VERSION: ${{ needs.release.outputs.version }}
@@ -198,7 +207,7 @@ jobs:
           set -Eeuo pipefail
           IFS=$'\n\t'
           docker load --input result
-          for reg in ghcr.io docker.io; do
+          for reg in docker.io ghcr.io; do
             docker tag "rvenutolo/linpeas:${VERSION}" "${reg}/rvenutolo/linpeas:${VERSION}-${ARCH}"
             docker push "${reg}/rvenutolo/linpeas:${VERSION}-${ARCH}"
           done
@@ -270,6 +279,8 @@ jobs:
             | docker login docker.io --username "${DOCKERHUB_USERNAME}" --password-stdin
 
       - name: load, tag, push arch image, and capture digests
+        # See DH-2 comment on the amd64 job: docker.io is pushed first to
+        # keep the flakier registry in the "all or nothing" position.
         id: push
         env:
           VERSION: ${{ needs.release.outputs.version }}
@@ -278,7 +289,7 @@ jobs:
           set -Eeuo pipefail
           IFS=$'\n\t'
           docker load --input result
-          for reg in ghcr.io docker.io; do
+          for reg in docker.io ghcr.io; do
             docker tag "rvenutolo/linpeas:${VERSION}" "${reg}/rvenutolo/linpeas:${VERSION}-${ARCH}"
             docker push "${reg}/rvenutolo/linpeas:${VERSION}-${ARCH}"
           done
@@ -517,5 +528,42 @@ jobs:
             - verify:      `${{ needs.verify.result }}`
 
             Investigate the failing job's logs. The just-published release may need to be deleted and recut once the underlying bug is fixed.
+
+            ## Half-published image recovery (DH-2)
+
+            If `image-amd64` or `image-arm64` failed, the per-arch job may have left a partially-published state. The push loop is ordered `docker.io` then `ghcr.io`, so:
+
+            - **docker.io push failed**: nothing was pushed to either registry for that arch. No cleanup needed beyond the release-delete/recut below.
+            - **ghcr.io push failed (docker.io succeeded)**: docker.io has the arch-suffixed tag for that arch but ghcr.io does not. The `manifest` job is skipped, so neither registry has the unsuffixed `{version}` or `:latest` tags. Recovery requires deleting the orphan docker.io arch tag before retrying.
+
+            Recovery procedure:
+
+            1. Identify the failing arch (`amd64` or `arm64`) and the release `VERSION` (the pin version, e.g. `20260516-deadbee`).
+            2. Delete the GitHub release and tag to keep release-creation idempotent on retry:
+               ```bash
+               gh release delete "${VERSION}" --repo rvenutolo/linPEAS-flake --cleanup-tag --yes
+               ```
+            3. Delete orphan arch-suffixed tags so the next run starts from a clean state:
+               - **ghcr.io** (if ghcr push succeeded but docker.io failed — does not apply with current push order, but kept for completeness):
+                 ```bash
+                 gh api -X DELETE \
+                   "/user/packages/container/linpeas/versions" \
+                   --jq '.[] | select(.metadata.container.tags[]? == "'"${VERSION}-${ARCH}"'") | .id' \
+                   | xargs -I{} gh api -X DELETE "/user/packages/container/linpeas/versions/{}"
+                 ```
+               - **docker.io** (if docker.io push succeeded but ghcr.io failed):
+                 ```bash
+                 TOKEN=$(curl -fsS -u "${DOCKERHUB_USERNAME}:${DOCKERHUB_TOKEN}" \
+                   -H 'Content-Type: application/json' \
+                   -X POST 'https://hub.docker.com/v2/users/login' \
+                   -d '{"username":"'"${DOCKERHUB_USERNAME}"'","password":"'"${DOCKERHUB_TOKEN}"'"}' \
+                   | jq --raw-output .token)
+                 curl -fsS -X DELETE \
+                   -H "Authorization: JWT ${TOKEN}" \
+                   "https://hub.docker.com/v2/repositories/rvenutolo/linpeas/tags/${VERSION}-${ARCH}/"
+                 ```
+                 (Tag delete on Docker Hub requires the `Delete` scope on `DOCKERHUB_TOKEN`. If the rotated token is `Read, Write` only, do this from the maintainer's Docker Hub UI instead.)
+            4. Re-trigger the release pipeline by re-pushing the same `linpeas-pin.json` commit (no-op edit + `chore: retrigger release` commit), or by re-running this workflow from the Actions UI if the pin commit is still HEAD.
+            5. Confirm the next run goes green end-to-end before closing this issue.
           label-description: release-on-bump workflow failure
           github-token: ${{ secrets.GITHUB_TOKEN }}
