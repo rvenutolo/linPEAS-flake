@@ -195,6 +195,76 @@ jobs:
             exit 1
           fi
 
+  image-smoke-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3 (D4)
+      - name: build, load, run image (aarch64)
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          # Build linpeas package first so a regression in the plain package
+          # surfaces here distinctly from the image build/load/run path.
+          nix build .#linpeas --print-build-logs
+          nix build .#linpeas-image --print-build-logs
+          docker load --input result
+          # Image tag matches pin version. Resolve from passthru.pin.
+          tag="$(nix eval --raw .#linpeas.passthru.pin.version)"
+          echo "IMAGE_TAG=${tag}" >>"${GITHUB_ENV}"
+          docker run --rm "rvenutolo/linpeas:${tag}" -h | sed -n '1,20p'
+          docker run --rm "rvenutolo/linpeas:${tag}" -h >/dev/null
+      - name: verify external tools present in image (aarch64)
+        # Guards against regression on the deliberate inclusion of
+        # gnugrep/gnused/gawk/findutils/procps. Without these, linpeas
+        # checks emit "command not found" noise and produce useless reports.
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          for tool in grep sed awk find ps; do
+            if ! docker run --rm --entrypoint /bin/sh \
+                "rvenutolo/linpeas:${IMAGE_TAG}" \
+                -c "command -v ${tool} >/dev/null"; then
+              echo "FAIL: ${tool} missing from image"
+              exit 1
+            fi
+          done
+      - name: smoke a real linpeas check against a separate target container (aarch64)
+        # Behavioral test: documented "container audit" use case. Linpeas
+        # runs in its own container, joins a separate ubuntu target's PID
+        # namespace + volumes, and runs an actual check. Fails on any
+        # "command not found" line in the output, which would indicate the
+        # image is missing a helper linpeas needs at runtime.
+        # The host is never the audit target — the linpeas container only
+        # sees the target container's namespaces, not the runner's.
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          docker run --detach --name linpeas-target --rm \
+            ubuntu:24.04 sleep 300 >/dev/null
+          trap 'docker rm --force linpeas-target >/dev/null 2>&1 || true' EXIT
+          out="$(docker run --rm \
+            --pid=container:linpeas-target \
+            --volumes-from linpeas-target \
+            "rvenutolo/linpeas:${IMAGE_TAG}" \
+            -o system_information 2>&1)"
+          echo "${out}" | sed -n '1,40p'
+          # Bash emits "<cmd>: command not found" when an external helper is
+          # missing. Anchor on the ": command not found" suffix to avoid
+          # matching benign output that happens to contain the phrase.
+          if echo "${out}" | grep --quiet --extended-regexp ': command not found'; then
+            echo "FAIL: linpeas reported missing commands:"
+            echo "${out}" | grep ': command not found'
+            exit 1
+          fi
+
   # D10: bundle-smoke required job ----------------------------------------
 
   bundle-smoke:
