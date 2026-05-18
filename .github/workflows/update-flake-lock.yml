@@ -141,7 +141,7 @@ jobs:
               --label dependencies \
               --body-file "${body}"
           fi
-          gh pr merge "${BRANCH}" --auto --squash
+          gh pr merge "${BRANCH}" --auto --rebase
 
   notify:
     name: notify

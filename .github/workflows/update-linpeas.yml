@@ -185,7 +185,7 @@ jobs:
               --body-file "${body}"
           fi
 
-          gh pr merge "${branch}" --auto --squash
+          gh pr merge "${branch}" --auto --rebase
 
   notify:
     name: notify
