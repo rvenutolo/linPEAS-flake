@@ -119,22 +119,22 @@ The `codeql.yml` workflow is not in branch protection's required-check set. A Co
   bump PRs. Required scopes: this repository only, with `contents: write`
   and `pull-requests: write`. Rotate annually (or on suspected
   compromise). Stored as a repository secret.
-- `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` — Docker Hub access token
-  used by `release-on-bump.yml` to mirror the OCI image to
-  `docker.io/rvenutolo/linpeas` and by `dockerhub-sync.yml` to
-  refresh the repo README. Token scope is `Read, Write, Delete`
-  on the `rvenutolo/linpeas` repository only — **not** account-admin
-  or org-admin. The `Delete` capability is required by the
-  `peter-evans/dockerhub-description` action used in
-  `dockerhub-sync.yml`, which calls the Docker Hub repo-metadata
-  endpoint; a `Read, Write`-only PAT returns `403 Forbidden` on
-  that endpoint (verified empirically 2026-05-17). Rotation: on
-  suspected compromise only — no calendar cadence. If compromise
-  is suspected: revoke at
+- `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN_RW` / `DOCKERHUB_TOKEN_DELETE` — Docker Hub access tokens used by the release pipeline. The split (P4.5 / GAP-17, 2026-05-17) limits blast radius:
+
+  - `DOCKERHUB_TOKEN_RW` — Read, Write on `rvenutolo/linpeas`. Used by `release-on-bump.yml` (per-arch + manifest + verify) and `verify-latest-release.yml`. Cannot delete tags.
+  - `DOCKERHUB_TOKEN_DELETE` — Read, Write, Delete on `rvenutolo/linpeas`. Used ONLY by `dockerhub-sync.yml` (`peter-evans/dockerhub-description` needs Delete to PATCH repo metadata).
+
+  The `Delete` capability is required by the `peter-evans/dockerhub-description`
+  action used in `dockerhub-sync.yml`, which calls the Docker Hub repo-metadata
+  endpoint; a `Read, Write`-only PAT returns `403 Forbidden` on that endpoint
+  (verified empirically 2026-05-17). Rotation: on suspected compromise only —
+  no calendar cadence. If compromise is suspected: revoke at
   <https://hub.docker.com/settings/security>, generate a replacement,
-  update `gh secret set DOCKERHUB_TOKEN --repo rvenutolo/linPEAS-flake`.
-  Compromise blast radius: attacker can push arbitrary tags to
-  `docker.io/rvenutolo/linpeas`. Mitigation: consumers verify the
+  update `gh secret set DOCKERHUB_TOKEN_RW --repo rvenutolo/linPEAS-flake` or
+  `gh secret set DOCKERHUB_TOKEN_DELETE --repo rvenutolo/linPEAS-flake` as
+  appropriate. Compromise blast radius: a `DOCKERHUB_TOKEN_RW` leak allows
+  pushing new tags but not deleting existing ones; a `DOCKERHUB_TOKEN_DELETE`
+  leak allows tag deletion in addition. Mitigation: consumers verify the
   SLSA attestation with `gh attestation verify`; mismatched attestation
   is the canonical detection signal.
 

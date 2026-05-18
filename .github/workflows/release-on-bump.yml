@@ -228,7 +228,7 @@ jobs:
       - name: login to Docker Hub
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN_RW }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
@@ -394,7 +394,7 @@ jobs:
       - name: login to Docker Hub
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN_RW }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
@@ -517,7 +517,7 @@ jobs:
       - name: login to Docker Hub
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN_RW }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
@@ -619,7 +619,7 @@ jobs:
           GH_TOKEN_INLINE: ${{ github.token }}
           GH_ACTOR: ${{ github.actor }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN_RW }}
           GHCR_AMD64_DIGEST: ${{ needs.image-amd64.outputs.ghcr_digest }}
           HUB_AMD64_DIGEST: ${{ needs.image-amd64.outputs.hub_digest }}
           GHCR_ARM64_DIGEST: ${{ needs.image-arm64.outputs.ghcr_digest }}
@@ -777,7 +777,7 @@ jobs:
                    -H "Authorization: JWT ${TOKEN}" \
                    "https://hub.docker.com/v2/repositories/rvenutolo/linpeas/tags/${VERSION}-${ARCH}/"
                  ```
-                 (Tag delete on Docker Hub requires the `Delete` scope on `DOCKERHUB_TOKEN`. If the rotated token is `Read, Write` only, do this from the maintainer's Docker Hub UI instead.)
+                 (Tag delete on Docker Hub requires the `Delete` scope. Use `DOCKERHUB_TOKEN_DELETE` here, not `DOCKERHUB_TOKEN_RW`. Alternatively, delete the tag from the maintainer's Docker Hub UI.)
             4. Re-trigger the release pipeline by re-pushing the same `linpeas-pin.json` commit (no-op edit + `chore: retrigger release` commit), or by re-running this workflow from the Actions UI if the pin commit is still HEAD.
             5. Confirm the next run goes green end-to-end before closing this issue.
 
@@ -786,9 +786,9 @@ jobs:
             If `image-amd64`, `image-arm64`, or `manifest` failed and Docker Hub is
             the suspected culprit:
 
-            - `DOCKERHUB_TOKEN` expired or revoked → rotate at
+            - `DOCKERHUB_TOKEN_RW` expired or revoked → rotate at
               <https://hub.docker.com/settings/security> and
-              `gh secret set DOCKERHUB_TOKEN`.
+              `gh secret set DOCKERHUB_TOKEN_RW`.
             - `DOCKERHUB_USERNAME` mismatch with the `rvenutolo/linpeas` repo owner.
             - Docker Hub partial outage; manual re-run via `workflow_dispatch` is
               often enough.
