@@ -1,0 +1,8 @@
+[files]
+extend-exclude = [
+  "flake.lock",
+  "linpeas-pin.json",
+  "docs/_data/**",
+  "result*",
+  ".direnv/**",
+]
