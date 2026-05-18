@@ -1,0 +1,22 @@
+name: Idea
+description: Capture an idea for the repo
+title: "idea: "
+labels: ["idea"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Idea
+      description: What's the idea?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: What problem does it solve / what value does it add?
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Sketch, references, prior art.
