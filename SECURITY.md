@@ -91,6 +91,10 @@ accepted trust model for a thin wrapper repo — it matches the trust model
 of `curl ... | bash`, with the addition of reproducible, hash-pinned
 downloads and build-provenance attestations.
 
+`dockerhub-sync.yml` triggers on `release-on-bump` workflow_run completed-successfully (plus manual dispatch). It does NOT trigger on arbitrary README pushes (P4.6 / GAP-19, 2026-05-17). This narrows the `DOCKERHUB_TOKEN_DELETE` exposure window to release-time only.
+
+The `workflow_run` trigger does not introduce the TOCTOU concern that issue #22 (BUMP_PAT → GitHub App) was rejected over: `dockerhub-sync.yml` has no `contents: write` and only PATCHes Docker Hub repo metadata.
+
 ## Supply-chain posture monitoring
 
 One scheduled workflow tracks supply-chain hygiene independent of the

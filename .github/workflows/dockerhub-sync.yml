@@ -1,11 +1,9 @@
 name: dockerhub-sync
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - README.md
-      - .github/workflows/dockerhub-sync.yml
+  workflow_run:
+    workflows: ["release-on-bump"]
+    types: [completed]
   # Allow manual re-sync after a token rotation or Docker Hub blip.
   workflow_dispatch:
 
@@ -18,6 +16,9 @@ concurrency:
 
 jobs:
   sync:
+    # P4.6 / GAP-19 (2026-05-17): gate on parent workflow_run success.
+    # Manual dispatch always runs.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
