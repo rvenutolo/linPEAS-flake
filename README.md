@@ -100,15 +100,22 @@ Three independent automations keep this flake current:
     single arch-agnostic asset.
   - OCI image to both `docker.io/rvenutolo/linpeas:<tag>` and
     `ghcr.io/rvenutolo/linpeas:<tag>` (plus `:latest` on both).
-- Generates SLSA build provenance attestations for the pin file, the bundle,
-  and the image. Verify with
-  `gh attestation verify <artifact> --repo rvenutolo/linPEAS-flake`.
+- Generates SLSA build-provenance attestations for the pin file, the bundle,
+  and the image. SPDX-JSON SBOMs for bundle + per-arch images are generated
+  (`anchore/sbom-action`) and attested (`actions/attest-sbom`). Verify any
+  artifact with `gh attestation verify <artifact> --repo rvenutolo/linPEAS-flake`.
 
 ### Weekly dependency upkeep
 - `update-flake-lock.yml` — Friday 06:00 UTC. Bumps the `nixpkgs` input via
-  `DeterminateSystems/update-flake-lock`. CI-gated auto-merge.
-- Renovate (Friday batch) — bumps GitHub Action SHAs and the pinned Nix
-  version in CI workflows (custom regex manager). CI-gated auto-merge.
+  `nix flake update` in a read-only `compute-lock` job, then commits and
+  auto-merges from a separate `push-and-merge` job that holds `BUMP_PAT`
+  (the third-party `DeterminateSystems/update-flake-lock` action was
+  removed for blast-radius reasons — see SECURITY.md).
+- Renovate (Friday batch) — bumps GitHub Action SHAs (via
+  `helpers:pinGitHubActionDigests` + `pinDigests: true`), the pinned Nix
+  installer version, and tracked flake inputs (`nixpkgs` stable branch,
+  `cachix/git-hooks.nix`). All Renovate PRs honor a `minimumReleaseAge`
+  cooldown (7 days) and per-manager `automerge` rules. CI-gated auto-merge.
 
 ### Stale-pin watchdog (`stale-pin-check.yml`)
 - Cron 10:30 UTC daily — runs after the 09:00 bump pipeline.
@@ -164,9 +171,12 @@ Self-enforcing invariant checks:
 
 | Job                        | What it enforces |
 |----------------------------|------------------|
-| `dashboard-data-tests`     | `scripts/gen-dashboard-data.sh` security guards (pin shape, asset-URL prefix, missing-field hard-fail) |
-| `required-checks-no-paths` | No required workflow declares `paths:` / `paths-ignore:` under `pull_request:` — closes the auto-merge path-filter trap |
-| `pr-workflows-no-secrets`  | PR-triggered workflows reference no `secrets.*` other than `secrets.GITHUB_TOKEN` (CIW-4) |
+| `dashboard-data-tests`       | `scripts/gen-dashboard-data.sh` security guards (pin shape, asset-URL prefix, missing-field hard-fail) |
+| `required-checks-no-paths`   | No required workflow declares `paths:` / `paths-ignore:` under `pull_request:` — closes the auto-merge path-filter trap |
+| `pr-workflows-no-secrets`    | PR-triggered workflows reference no `secrets.*` other than `secrets.GITHUB_TOKEN` (CIW-4) |
+| `uses-sha-pinned`            | Every `uses:` in `.github/workflows/*.yml` + `.github/actions/**/*.yml` is a full 40-hex SHA with a `# vX.Y.Z` comment (or a `./...` self-ref) |
+| `renovate-invariants`        | `renovate.json` keeps `helpers:pinGitHubActionDigests`, non-empty `minimumReleaseAge`, per-manager `automerge`, and `pinDigests: true` for `github-actions` |
+| `tag-protection-drift-check` | The `release-tag-protection` ruleset still blocks deletion / non-FF / update of release-tag refs |
 
 The authoritative required-check list lives in
 [`docs/security/required-checks.md`](docs/security/required-checks.md); it
@@ -177,8 +187,22 @@ A non-blocking coverage matrix runs `flake-check` and `build-linpeas` across
 surface in the PR view but do not gate merges.
 
 Cache: `DeterminateSystems/flakehub-cache-action` (free for public repos).
-All third-party actions are SHA-pinned with `# vX` version comments;
-Renovate maintains them.
+All third-party actions are SHA-pinned with `# vX` version comments; the
+`uses-sha-pinned` CI lint enforces this and Renovate maintains it.
+
+Defense-in-depth supply-chain layers (advisory or implicit, not in the
+required-check table):
+
+- `step-security/harden-runner` runs as the first step in every job
+  (`egress-policy: audit`) so unexpected runner egress is recorded.
+- `image-cve-scan` runs Trivy against the published OCI image and uploads
+  SARIF to code-scanning. Advisory only (`exit-code: 0`, `ignore-unfixed`);
+  the prevention path is a nixpkgs auto-bump via `update-flake-lock`.
+- `actions.permissions.allowed_actions` is `selected` with a vendor
+  allowlist (see [`docs/security/allowed-actions.md`](docs/security/allowed-actions.md)).
+- Release tags are protected by the `release-tag-protection` ruleset
+  (no delete / no non-fast-forward / no update); drift is asserted by
+  `tag-protection-drift-check`.
 
 ### Release attestation verification
 
