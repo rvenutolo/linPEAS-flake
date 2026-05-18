@@ -25,6 +25,7 @@ to branch protection.
 | markdownlint               | ci            | .github/workflows/ci.yml |
 | typos                      | ci            | .github/workflows/ci.yml |
 | editorconfig               | ci            | .github/workflows/ci.yml |
+| commitlint                 | ci            | .github/workflows/ci.yml |
 
 ## Invariant (AU-P-2)
 
