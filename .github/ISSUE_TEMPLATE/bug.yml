@@ -1,0 +1,27 @@
+name: Bug
+description: Report a defect
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Observed behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+      description: What should have happened.
+  - type: textarea
+    id: repro
+    attributes:
+      label: Repro
+      description: Minimal steps to reproduce.
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Logs, environment, related issues.
