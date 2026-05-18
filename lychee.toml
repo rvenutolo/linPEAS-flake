@@ -2,9 +2,21 @@ cache = true
 max_cache_age = "7d"
 no_progress = true
 include_verbatim = false
-accept = [200, 204, 206, 429]
+accept = [200, 204, 206, 302, 429]
 
 exclude_loopback = true
+
+# Jinja2-templated URLs (e.g. `.../releases/tag/{{ dashboard.pin.version }}`)
+# render to bare `/tag/` in raw markdown, which lychee sees as a 404. The
+# MkDocs site renders them correctly; lychee should not lint them.
+exclude = [
+  "https://github\\.com/peass-ng/PEASS-ng/releases/tag/?$",
+  "https://github\\.com/rvenutolo/linPEAS-flake/releases/tag/?$",
+  # docker.com / github.com /settings/* paths require auth — anonymous GETs
+  # 302-redirect to a login page, which is the documented expectation.
+  "https://hub\\.docker\\.com/settings/",
+  "https://github\\.com/settings/",
+]
 
 exclude_path = [
   ".git",
