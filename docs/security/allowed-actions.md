@@ -17,6 +17,7 @@ github/*
 peter-evans/*
 rvenutolo/*
 step-security/*
+wagoid/*
 ```
 
 ## Why this exists
@@ -46,6 +47,7 @@ step-security/*
        "peter-evans/*",
        "rvenutolo/*",
        "step-security/*",
+       "wagoid/*",
        "NEW_VENDOR/*"
      ]
    }
