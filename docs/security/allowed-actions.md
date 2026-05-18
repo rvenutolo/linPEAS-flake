@@ -4,12 +4,15 @@
 
 ## Allowlist (canonical)
 
-```
+```text
 actions/*
 anchore/*
 aquasecurity/*
 cachix/*
+crate-ci/*
+DavidAnson/*
 DeterminateSystems/*
+editorconfig-checker/*
 github/*
 peter-evans/*
 rvenutolo/*
@@ -24,6 +27,7 @@ step-security/*
 
 1. Edit this doc — append the new pattern.
 2. Edit the live setting:
+
    ```bash
    gh api -X PUT /repos/rvenutolo/linPEAS-flake/actions/permissions/selected-actions --input - <<'JSON'
    {
@@ -34,7 +38,10 @@ step-security/*
        "anchore/*",
        "aquasecurity/*",
        "cachix/*",
+       "crate-ci/*",
+       "DavidAnson/*",
        "DeterminateSystems/*",
+       "editorconfig-checker/*",
        "github/*",
        "peter-evans/*",
        "rvenutolo/*",
@@ -44,6 +51,7 @@ step-security/*
    }
    JSON
    ```
+
 3. Commit the doc change in the same PR that introduces the new `uses:` reference.
 
 `github_owned_allowed: true` permits `actions/*` and `github/*` implicitly — but listing them explicitly here is defensive against future GitHub-side semantic drift.

@@ -21,7 +21,7 @@ gh attestation verify linpeas-bundle.sh --repo rvenutolo/linPEAS-flake
 
 Expected output ends with:
 
-```
+```text
 Loaded digest sha256:... for file://linpeas-bundle.sh
 Verified attestation against GitHub's keyless signing flow.
 Successfully verified ...

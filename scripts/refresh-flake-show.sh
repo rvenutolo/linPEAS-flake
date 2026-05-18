@@ -89,7 +89,7 @@ function main() {
 
   {
     printf '<!-- BEGIN flake-show -->\n'
-    printf '```\n'
+    printf '```text\n'
     cat -- "${flake_show_file}"
     printf '```\n'
     printf '<!-- END flake-show -->\n'

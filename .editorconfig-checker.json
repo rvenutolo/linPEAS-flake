@@ -1,0 +1,12 @@
+{
+  "Disable": {
+    "IndentSize": true
+  },
+  "Exclude": [
+    "^LICENSE$",
+    "flake.lock",
+    "docs/_data/dashboard.yml",
+    "^result",
+    ".direnv/"
+  ]
+}

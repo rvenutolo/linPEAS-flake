@@ -169,8 +169,9 @@
               yamllint.enable = true;
               shellcheck = {
                 enable = true;
-                # justfile is parsed by `just`, not bash; shellcheck mis-IDs
-                # it as shell because the first line looks like a comment.
+                # justfile is parsed by `just`, not bash; shellcheck
+                # misidentifies it as shell because the first line looks
+                # like a comment.
                 excludes = [ "^justfile$" ];
               };
               treefmt = {

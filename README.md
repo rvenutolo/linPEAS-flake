@@ -20,21 +20,25 @@ All credit for LinPEAS itself belongs to the PEASS-ng authors.
 ## Usage
 
 ### With Nix
+
 ```sh
 nix run github:rvenutolo/linPEAS-flake -- -a
 ```
 
 Persistent install:
+
 ```sh
 nix profile install github:rvenutolo/linPEAS-flake
 ```
 
 ### With Docker
+
 The image audits the **container** it runs in (container hardening, CI base-image
 scanning, forensics on a mounted captured filesystem). For a host audit, prefer
 the Nix or bundle install — or run with host namespaces explicitly. See
 [`docs/install/docker.md`](docs/install/docker.md) for use-case framing and the
 host-audit invocation.
+
 ```sh
 # Docker Hub (default registry — no prefix needed)
 docker run --rm rvenutolo/linpeas:latest -a
@@ -47,8 +51,10 @@ Both registries serve the **same** image bytes — every release pushes to both
 with identical content digests and matching SLSA attestations.
 
 ### Without Nix or Docker (portable bundle)
+
 The bundle is just `linpeas.sh` with `#!/usr/bin/env bash` — same script, single
 arch-agnostic asset.
+
 ```sh
 curl -L https://github.com/rvenutolo/linPEAS-flake/releases/latest/download/linpeas-bundle.sh -o linpeas
 chmod +x linpeas
@@ -56,6 +62,7 @@ chmod +x linpeas
 ```
 
 ### As a flake input
+
 ```nix
 {
   inputs.linpeas-flake.url = "github:rvenutolo/linPEAS-flake";
@@ -65,6 +72,7 @@ chmod +x linpeas
 ```
 
 ### As an overlay
+
 ```nix
 {
   nixpkgs.overlays = [ inputs.linpeas-flake.overlays.default ];
@@ -78,6 +86,7 @@ chmod +x linpeas
 Three independent automations keep this flake current:
 
 ### Daily linpeas pin bump (`update-linpeas.yml`)
+
 - Cron 09:00 UTC + manual dispatch.
 - Queries `peass-ng/PEASS-ng` releases API. If the latest tag differs from the
   pinned `linpeas-pin.json`, downloads the new `linpeas.sh`, **validates the
@@ -92,6 +101,7 @@ Three independent automations keep this flake current:
 - CI gates auto-merge. On green, GitHub squash-merges to `main`.
 
 ### Release on bump (`release-on-bump.yml`)
+
 - Triggers when `linpeas-pin.json` changes on `main`.
 - Tags the release with the upstream tag verbatim (e.g. `20260510-cd4bd619`)
   — see Versioning below.
@@ -106,6 +116,7 @@ Three independent automations keep this flake current:
   artifact with `gh attestation verify <artifact> --repo rvenutolo/linPEAS-flake`.
 
 ### Weekly dependency upkeep
+
 - `update-flake-lock.yml` — Friday 06:00 UTC. Bumps the `nixpkgs` input via
   `nix flake update` in a read-only `compute-lock` job, then commits and
   auto-merges from a separate `push-and-merge` job that holds `BUMP_PAT`
@@ -118,6 +129,7 @@ Three independent automations keep this flake current:
   cooldown (7 days) and per-manager `automerge` rules. CI-gated auto-merge.
 
 ### Stale-pin watchdog (`stale-pin-check.yml`)
+
 - Cron 10:30 UTC daily — runs after the 09:00 bump pipeline.
 - Compares the pinned upstream tag against `peass-ng/PEASS-ng/releases/latest`.
   If the bump pipeline is stalled (e.g. upstream-API failure, auto-merge blocked,
@@ -126,6 +138,7 @@ Three independent automations keep this flake current:
   drifting.
 
 ### Pages site (`pages.yml`)
+
 - Triggers: push to `main`, PR, release published, daily 14:00 UTC cron,
   and manual dispatch. The cron sits after `update-linpeas` (09:00),
   `stale-pin-check` (10:30), and `verify-latest-release` (12:00) so the
@@ -235,7 +248,7 @@ distinction between build-provenance attestations and content trust.
 ## Flake outputs
 
 <!-- BEGIN flake-show -->
-```
+```text
 ├───apps
 │   ├───aarch64-darwin
 │   │   ├───default: app: Linux Privilege Escalation Awesome Script (LinPEAS) from peass-ng
