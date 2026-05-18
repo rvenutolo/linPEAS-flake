@@ -58,22 +58,6 @@ jobs:
           [[ -f linpeas-bundle.sh && -f linpeas-pin.json ]] \
             || { printf 'release assets never appeared\n' >&2; exit 1; }
 
-      - name: pull and inspect ghcr image
-        id: img
-        env:
-          GH_TOKEN_INLINE: ${{ github.token }}
-          GH_ACTOR: ${{ github.actor }}
-          TAG: ${{ steps.latest.outputs.tag }}
-        run: |
-          set -Eeuo pipefail
-          IFS=$'\n\t'
-          printf '%s' "${GH_TOKEN_INLINE}" \
-            | docker login ghcr.io --username "${GH_ACTOR}" --password-stdin
-          docker pull "ghcr.io/rvenutolo/linpeas:${TAG}"
-          repo_digest="$(docker inspect --format='{{index .RepoDigests 0}}' "ghcr.io/rvenutolo/linpeas:${TAG}")"
-          digest="${repo_digest#*@}"
-          printf 'digest=%s\n' "${digest}" >> "${GITHUB_OUTPUT}"
-
       - name: verify bundle attestation
         # Verifies both build-provenance AND SBOM (P4.2/GAP-12) attestations.
         # gh attestation verify accepts any matching attestation by default
@@ -85,17 +69,36 @@ jobs:
           IFS=$'\n\t'
           gh attestation verify linpeas-bundle.sh --repo rvenutolo/linPEAS-flake
 
-      - name: verify image attestation
-        # Verifies both build-provenance AND SBOM (P4.2/GAP-12) attestations
-        # for the ghcr amd64 image. gh attestation verify accepts any matching
-        # attestation by default (SLSA provenance + SPDX-JSON SBOM).
+      - name: verify ghcr per-arch attestations
+        # The release pipeline attaches per-arch attestations to the
+        # `<tag>-amd64` / `<tag>-arm64` digests captured at push time, NOT
+        # to the multi-arch manifest list digest that `docker pull <tag>`
+        # resolves to. Use `docker manifest inspect` against the tag to
+        # enumerate per-arch manifest digests directly, then verify each.
+        # Verifying against the manifest list digest returns 404 because
+        # `attest-build-provenance` never wrote an attestation for that
+        # subject — see issue #69.
         env:
           GH_TOKEN: ${{ github.token }}
-          DIGEST: ${{ steps.img.outputs.digest }}
+          GH_TOKEN_INLINE: ${{ github.token }}
+          GH_ACTOR: ${{ github.actor }}
+          TAG: ${{ steps.latest.outputs.tag }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
-          gh attestation verify "oci://ghcr.io/rvenutolo/linpeas@${DIGEST}" --repo rvenutolo/linPEAS-flake
+          printf '%s' "${GH_TOKEN_INLINE}" \
+            | docker login ghcr.io --username "${GH_ACTOR}" --password-stdin
+          for arch in amd64 arm64; do
+            digest="$(docker manifest inspect "ghcr.io/rvenutolo/linpeas:${TAG}" \
+              | jq --raw-output --arg arch "${arch}" \
+                  '.manifests[] | select(.platform.architecture==$arch and .platform.os=="linux") | .digest')"
+            if [[ "${digest}" != sha256:* ]]; then
+              printf 'unexpected ghcr digest for %s: %s\n' "${arch}" "${digest}" >&2
+              exit 1
+            fi
+            gh attestation verify "oci://ghcr.io/rvenutolo/linpeas@${digest}" \
+              --repo rvenutolo/linPEAS-flake
+          done
 
       - name: verify Docker Hub per-arch attestations
         # SC-POST-1: Docker Hub is the only long-lived stealable-credential
@@ -103,12 +106,16 @@ jobs:
         # cron previously only re-verified ghcr (short-lived OIDC). A
         # Docker-Hub-only compromise — stolen token, registry incident,
         # accidental manual push — would replace published tags without
-        # surfacing on this cron. Mirror the ghcr image-attestation block
-        # for both arch tags on docker.io to close that gap.
+        # surfacing on this cron. Mirror the ghcr per-arch block for
+        # docker.io to close that gap.
         #
-        # Pull rate: anonymous pulls are limited to 200/6h per IP on
-        # Docker Hub. One daily run pulling four arch images is well
-        # within budget; revisit if cadence increases.
+        # Uses `docker manifest inspect` to enumerate per-arch digests
+        # directly from the registry — `docker pull --platform` returns
+        # the manifest list digest in RepoDigests, which has no
+        # attestation. See issue #69.
+        #
+        # Pull rate: `docker manifest inspect` does not count against the
+        # anonymous pull quota; this loop is well within budget regardless.
         env:
           GH_TOKEN: ${{ github.token }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -120,11 +127,9 @@ jobs:
           printf '%s' "${DOCKERHUB_TOKEN}" \
             | docker login docker.io --username "${DOCKERHUB_USERNAME}" --password-stdin
           for arch in amd64 arm64; do
-            docker pull --platform "linux/${arch}" "docker.io/rvenutolo/linpeas:${TAG}"
-            repo_digest="$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' \
-              "docker.io/rvenutolo/linpeas:${TAG}" \
-              | grep --extended-regexp '(^|/)rvenutolo/linpeas@sha256:' | head -n1)"
-            digest="${repo_digest#*@}"
+            digest="$(docker manifest inspect "docker.io/rvenutolo/linpeas:${TAG}" \
+              | jq --raw-output --arg arch "${arch}" \
+                  '.manifests[] | select(.platform.architecture==$arch and .platform.os=="linux") | .digest')"
             if [[ "${digest}" != sha256:* ]]; then
               printf 'unexpected docker hub digest for %s: %s\n' "${arch}" "${digest}" >&2
               exit 1
