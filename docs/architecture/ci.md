@@ -109,6 +109,7 @@ All Nix-based jobs use `DeterminateSystems/flakehub-cache-action` (free for publ
 | `stale-pin-check` | `30 10 * * *` | 10:30 daily | Auto-file issue if pin is N days behind upstream |
 | `verify-latest-release` | `0 12 * * *` | 12:00 daily | Re-fetch published artifacts; verify SRI hash + attestations |
 | `pages` | `0 14 * * *` | 14:00 daily | Rebuild dashboard from current pin + upstream + release JSON |
+| `links` | `0 4 * * 1` | Mon 04:00 | Markdown link checker (lychee); cron-only, not a required check |
 | `codeql` | `0 8 * * 1` | Mon 08:00 | CodeQL static analysis (Actions) |
 | `update-flake-lock` | `0 6 * * 5` | Fri 06:00 | Refresh `flake.lock` via auto-merge PR |
 

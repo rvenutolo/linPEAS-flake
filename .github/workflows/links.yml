@@ -1,0 +1,33 @@
+name: links
+
+# Weekly Markdown link checker. Cron-only — intentionally NOT in the
+# required-check set, since transient network failures should never block
+# PRs. Manual `workflow_dispatch` allows on-demand verification.
+
+on:
+  schedule:
+    - cron: "0 4 * * 1" # Mon 04:00 UTC (outside the 09:00–14:00 daily-cron window)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: links-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lychee:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+      - uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # v2.8.0
+        with:
+          args: --config lychee.toml --no-progress --verbose './**/*.md'
+          fail: true
