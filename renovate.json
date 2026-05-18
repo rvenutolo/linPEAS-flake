@@ -24,8 +24,9 @@
       "automerge": true
     },
     {
-      "description": "Nix install URL: scoped automerge for the same reason as github-actions. The custom manager below extracts the version from the install_url string.",
+      "description": "Nix install URL: scoped automerge for the same reason as github-actions. The custom manager below extracts the version from the install_url string. matchDepNames is narrowed to 'nix' so the cachix/git-hooks.nix custom-regex manager (GAP-20) does NOT inherit automerge — that pin must be merged manually while the nixpkgs 25.05→25.11 bump is in flight.",
       "matchManagers": ["custom.regex"],
+      "matchDepNames": ["nix"],
       "automerge": true
     }
   ],
@@ -36,6 +37,17 @@
       "matchStrings": [
         "install_url:\\s*https://releases\\.nixos\\.org/nix/nix-(?<currentValue>\\d+\\.\\d+\\.\\d+)/install\\s*#\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)\\s+packageName=(?<packageName>\\S+)"
       ]
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^flake\\.nix$/"],
+      "matchStrings": [
+        "github:cachix/git-hooks\\.nix/(?<currentDigest>[0-9a-f]{40})"
+      ],
+      "currentValueTemplate": "master",
+      "datasourceTemplate": "git-refs",
+      "depNameTemplate": "cachix/git-hooks.nix",
+      "packageNameTemplate": "https://github.com/cachix/git-hooks.nix"
     }
   ]
 }
