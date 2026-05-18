@@ -43,6 +43,8 @@ jobs:
 
       - name: bump pin
         id: bump
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
