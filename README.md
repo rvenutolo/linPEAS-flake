@@ -101,7 +101,7 @@ Three independent automations keep this flake current:
 - Opens a PR (`chore: bump linpeas to <tag>`) authored by `github-actions[bot]`
   via a fine-grained PAT (so CI fires; the default `GITHUB_TOKEN` would not
   trigger `pull_request` workflows).
-- CI gates auto-merge. On green, GitHub squash-merges to `main`.
+- CI gates auto-merge. On green, GitHub rebase-merges to `main`.
 
 ### Release on bump (`release-on-bump.yml`)
 
@@ -152,7 +152,7 @@ Three independent automations keep this flake current:
   build .#site` then renders the MkDocs Material site. On non-PR events
   the artifact is deployed to <https://rvenutolo.github.io/linPEAS-flake/>
   via `actions/deploy-pages` over OIDC.
-- Pages is **not** in the branch-protection required check set — a
+- Pages is **not** in the `protect-main` ruleset's required check set — a
   Pages failure must not block linpeas-bump PRs from auto-merging. A
   failure auto-files a deduped issue tagged `pages-build-failure`.
 
@@ -196,7 +196,13 @@ Self-enforcing invariant checks:
 
 The authoritative required-check list lives in
 [`docs/security/required-checks.md`](docs/security/required-checks.md); it
-mirrors live branch protection.
+mirrors the `protect-main` branch ruleset.
+
+Merge policy: **rebase merge only**, enforced both repo-wide
+(`allow_rebase_merge=true`, others false) and by the `protect-main` ruleset
+(`pull_request.allowed_merge_methods=["rebase"]`). Every commit on a feature
+branch lands verbatim on `main` and must independently satisfy Conventional
+Commits — `commitlint` is a required check.
 
 A non-blocking coverage matrix runs `flake-check` and `build-linpeas` across
 `ubuntu-latest` / `macos-latest` × stable Nix / unstable Nix. Failures there

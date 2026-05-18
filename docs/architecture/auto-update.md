@@ -15,7 +15,7 @@ flowchart TD
   write["mktemp + mv<br/>linpeas-pin.json"]
   show["./scripts/refresh-flake-show.sh"]
   pr["gh pr create<br/>chore: bump linpeas to <tag>"]
-  automerge["gh pr merge --auto --squash"]
+  automerge["gh pr merge --auto --rebase"]
   done(["no-op"])
 
   cron --> api --> compare
@@ -52,7 +52,7 @@ flowchart LR
   pr1["PR: update flake.lock"]
   pr2["PR: action SHA / input bumps"]
   ci["required CI checks"]
-  merge["squash-merge on green"]
+  merge["rebase-merge on green"]
 
   flakelock --> pr1 --> ci --> merge
   renovate --> pr2 --> ci --> merge
@@ -69,4 +69,4 @@ The Pages workflow runs:
 - Daily at 14:00 UTC — after the bump-related crons (09:00 `update-linpeas`, 10:30 `stale-pin-check`, 12:00 `verify-latest-release`), so the dashboard reads a settled state. See [CI — cron schedule](ci.md#cron-schedule).
 - On manual `workflow_dispatch`.
 
-The Pages site is **not** in the branch-protection required check set; a Pages failure must not block pin bumps. See [CI](ci.md).
+The Pages site is **not** in the `protect-main` ruleset's required check set; a Pages failure must not block pin bumps. See [CI](ci.md).

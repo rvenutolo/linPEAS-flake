@@ -170,8 +170,11 @@ file change. If it rewrites something, re-stage and commit.
 
 ### 10. Wait for CI, merge
 
-Watch the PR's required checks. If everything is green, squash-merge
-through the GitHub UI or `gh pr merge <num> --squash --delete-branch`.
+Watch the PR's required checks. If everything is green, rebase-merge
+through the GitHub UI or `gh pr merge <num> --rebase --delete-branch`.
+Note: every commit on the branch must independently satisfy Conventional
+Commits (`commitlint` is a required check) since each lands verbatim on
+`main`.
 
 ### 11. Post-merge
 
