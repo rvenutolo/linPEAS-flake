@@ -14,6 +14,7 @@ DavidAnson/*
 DeterminateSystems/*
 editorconfig-checker/*
 github/*
+lycheeverse/*
 peter-evans/*
 rvenutolo/*
 step-security/*
@@ -44,6 +45,7 @@ wagoid/*
        "DeterminateSystems/*",
        "editorconfig-checker/*",
        "github/*",
+       "lycheeverse/*",
        "peter-evans/*",
        "rvenutolo/*",
        "step-security/*",
