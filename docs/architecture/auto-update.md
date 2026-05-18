@@ -31,10 +31,10 @@ flowchart TD
   validate["validate VERSION<br/>shape: [A-Za-z0-9._/-]+"]
   build_bundle["nix build .#linpeas-bundle"]
   build_image["nix build .#linpeas-image"]
-  push_image["docker push<br/>ghcr.io/rvenutolo/linpeas:<tag>"]
-  attest["actions/attest-build-provenance<br/>pin file + bundle + image"]
+  push_image["docker push<br/>ghcr.io + docker.io<br/>per-arch + manifest by digest"]
+  attest["actions/attest-build-provenance<br/>pin file + bundle + per-arch image<br/>+ actions/attest-sbom (SPDX)"]
   release["gh release create <tag><br/>--generate-notes"]
-  verify["verify job:<br/>gh attestation verify<br/>each new artifact"]
+  verify["verify job:<br/>gh attestation verify<br/>(provenance + SBOM)"]
 
   trigger --> validate --> build_bundle
   validate --> build_image --> push_image
@@ -47,10 +47,10 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-  flakelock["update-flake-lock.yml<br/>Friday 06:00 UTC"]
-  renovate["Renovate Friday batch<br/>(action SHAs + Nix pin)"]
+  flakelock["update-flake-lock.yml<br/>Friday 06:00 UTC<br/>compute-lock (read-only)<br/>+ push-and-merge (BUMP_PAT)"]
+  renovate["Renovate Friday batch<br/>(action SHAs + Nix pin<br/>+ tracked flake inputs)<br/>minimumReleaseAge: 7 days"]
   pr1["PR: update flake.lock"]
-  pr2["PR: action SHA bumps"]
+  pr2["PR: action SHA / input bumps"]
   ci["required CI checks"]
   merge["squash-merge on green"]
 
@@ -58,13 +58,15 @@ flowchart LR
   renovate --> pr2 --> ci --> merge
 ```
 
+The third-party `DeterminateSystems/update-flake-lock` action was removed: it required `BUMP_PAT` as a `with: token:` input, putting the PAT inside an externally-controlled action boundary. The split-job design now confines Nix evaluation to a `contents: read` job and isolates the PAT to a GitHub-owned-action job that pushes via `git -c http.extraheader=...` (never writing to `.git/config`).
+
 ## Where this site fits
 
 The Pages workflow runs:
 
 - On every push to `main` (catches docs and code changes).
 - On every release (catches release-on-bump pin landings).
-- Daily at 10:00 UTC — one hour after the pin-bump cron, so the dashboard reflects the day's bump.
+- Daily at 14:00 UTC — after the bump-related crons (09:00 `update-linpeas`, 10:30 `stale-pin-check`, 12:00 `verify-latest-release`), so the dashboard reads a settled state. See [CI — cron schedule](ci.md#cron-schedule).
 - On manual `workflow_dispatch`.
 
 The Pages site is **not** in the branch-protection required check set; a Pages failure must not block pin bumps. See [CI](ci.md).

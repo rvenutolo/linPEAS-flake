@@ -13,6 +13,7 @@ flowchart LR
   buildarm["build-linpeas-arm64"]
   smokearm["smoke-test-arm64"]
   image["image-smoke<br/>docker run -h"]
+  imagearm["image-smoke-arm64"]
   bundle["bundle-smoke<br/>./linpeas-bundle.sh -h"]
   merge{"all green?"}
   ok["auto-merge"]
@@ -22,17 +23,26 @@ flowchart LR
   pr --> build --> smoke
   pr --> buildarm --> smokearm
   pr --> image
+  pr --> imagearm
   pr --> bundle
   flakecheck --> merge
   smoke --> merge
   smokearm --> merge
   image --> merge
+  imagearm --> merge
   bundle --> merge
   merge -- yes --> ok
   merge -- no --> block
 ```
 
 ## Required check list
+
+The canonical, branch-protection-mirrored list lives in
+[`docs/security/required-checks.md`](../security/required-checks.md). The
+table below summarizes the functional and invariant gates; consult the
+canonical doc as source of truth.
+
+Functional gates:
 
 | Job | Runner | What it tests |
 |-----|--------|---------------|
@@ -42,11 +52,28 @@ flowchart LR
 | `build-linpeas-arm64` | `ubuntu-24.04-arm` | aarch64 build of `linpeas` |
 | `smoke-test-arm64` | `ubuntu-24.04-arm` | aarch64 `-h` smoke |
 | `image-smoke` | `ubuntu-latest` | builds OCI image, `docker load`, `docker run --rm <img> -h` exits 0 |
+| `image-smoke-arm64` | `ubuntu-24.04-arm` | aarch64 OCI image smoke |
 | `bundle-smoke` | `ubuntu-latest` | builds bundle, `./result/linpeas-bundle.sh -h` exits 0 |
 
-## Non-blocking coverage matrix
+Self-enforcing invariant gates:
 
-`flake-check` and `build-linpeas` also run across `ubuntu-latest` × `macos-latest` × stable-Nix × unstable-Nix. Failures surface in the PR view but do not gate merges.
+| Job | What it enforces |
+|-----|------------------|
+| `dashboard-data-tests` | `scripts/gen-dashboard-data.sh` security guards (pin shape, asset-URL prefix, missing-field hard-fail) |
+| `required-checks-no-paths` | No required workflow declares `paths:` / `paths-ignore:` under `pull_request:` |
+| `pr-workflows-no-secrets` | PR-triggered workflows reference no `secrets.*` other than `secrets.GITHUB_TOKEN` |
+| `uses-sha-pinned` | Every `uses:` in workflows + composite actions is a full 40-hex SHA with `# vX.Y.Z` comment (or a `./...` self-ref) |
+| `renovate-invariants` | `renovate.json` keeps SHA-digest pinning, `minimumReleaseAge`, per-manager `automerge`, and `pinDigests: true` for `github-actions` |
+| `tag-protection-drift-check` | The `release-tag-protection` ruleset still blocks deletion / non-FF / update of release-tag refs |
+
+## Non-blocking coverage / advisory checks
+
+- `flake-check` and `build-linpeas` also run across `ubuntu-latest` × `macos-latest` × stable-Nix × unstable-Nix. Failures surface in the PR view but do not gate merges.
+- `image-cve-scan` runs Trivy against the released OCI image and uploads SARIF to code-scanning. Advisory only (`exit-code: 0`, `ignore-unfixed: true`); the prevention path is a nixpkgs bump via `update-flake-lock`.
+
+## Runner egress
+
+Every job's first step is `step-security/harden-runner` with `egress-policy: audit`. eBPF-monitored runner egress is recorded for every workflow run; it must remain the first step in any job that hits the network or filesystem.
 
 ## Pages workflow
 
