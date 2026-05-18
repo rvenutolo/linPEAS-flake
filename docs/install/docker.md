@@ -64,11 +64,15 @@ docker pull --platform linux/arm64 rvenutolo/linpeas:latest
 When verifying the SLSA attestation, point at the resolved arch-image
 digest (not the manifest pointer):
 
+{% raw %}
+
 ```bash
 docker pull rvenutolo/linpeas:latest
 DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' rvenutolo/linpeas:latest)
 gh attestation verify "oci://${DIGEST}" --repo rvenutolo/linPEAS-flake
 ```
+
+{% endraw %}
 
 See [Security → Multi-arch attestations](../security/verification.md) for
 the trust contract.

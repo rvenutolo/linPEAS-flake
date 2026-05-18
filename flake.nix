@@ -2,18 +2,14 @@
   description = "Nix flake wrapping peass-ng/PEASS-ng linpeas.sh for `nix run`";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
     flake-utils.url = "github:numtide/flake-utils";
     treefmt-nix = {
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     pre-commit-hooks = {
-      # Pinned to a commit compatible with nixos-25.05's lib + pre-commit 4.0.1.
-      # Newer git-hooks.nix uses `lib.cli.toCommandLine` (nixpkgs Oct 2025+,
-      # absent from 25.05) and emits `language: unsupported` (pre-commit >= 4.4).
-      # Renovate / a future nixpkgs bump unblocks moving forward.
-      url = "github:cachix/git-hooks.nix/3ff4596663c8cbbffe06d863ee4c950bce2c3b78";
+      url = "github:cachix/git-hooks.nix/61ab0e80d9c7ab14c256b5b453d8b3fb0189ba0a";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
