@@ -13,6 +13,7 @@ DeterminateSystems/*
 github/*
 peter-evans/*
 rvenutolo/*
+step-security/*
 ```
 
 ## Why this exists
@@ -37,6 +38,7 @@ rvenutolo/*
        "github/*",
        "peter-evans/*",
        "rvenutolo/*",
+       "step-security/*",
        "NEW_VENDOR/*"
      ]
    }

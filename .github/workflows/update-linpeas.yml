@@ -26,6 +26,9 @@ jobs:
       old: ${{ steps.bump.outputs.old }}
       new: ${{ steps.bump.outputs.new }}
     steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false
@@ -83,6 +86,9 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false
@@ -188,6 +194,9 @@ jobs:
     permissions:
       issues: write
     steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false

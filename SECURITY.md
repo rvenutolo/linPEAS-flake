@@ -158,6 +158,12 @@ The bundle SBOM is also published as a release asset
 (`linpeas-bundle.sbom.spdx.json`) for consumers who want to ingest it directly
 without verifying the attestation.
 
+## Runner egress monitoring (harden-runner, audit mode)
+
+P4.4 / GAP-14 (2026-05-17): `step-security/harden-runner` runs as the first step of every job in every workflow, with `egress-policy: audit`. Provides defense-in-depth visibility into runner network egress; surfaces hosts each workflow actually contacts. Audit mode does NOT block; findings appear at the harden-runner dashboard and as job-summary annotations.
+
+Phase 2 (egress-policy: block with observed allowlist) is a follow-up PR after ~2 weeks of audit-mode data collection.
+
 ## Settings posture
 
 Repository settings knobs the security model depends on (probe-verifiable from `docs/security/settings-posture.md`):

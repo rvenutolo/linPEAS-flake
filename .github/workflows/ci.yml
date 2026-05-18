@@ -21,6 +21,9 @@ jobs:
   flake-check:
     runs-on: ubuntu-latest
     steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false
@@ -36,6 +39,9 @@ jobs:
   build-linpeas:
     runs-on: ubuntu-latest
     steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false
@@ -58,6 +64,9 @@ jobs:
     needs: build-linpeas
     runs-on: ubuntu-latest
     steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false
@@ -83,6 +92,9 @@ jobs:
   build-linpeas-arm64:
     runs-on: ubuntu-24.04-arm
     steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false
@@ -105,6 +117,9 @@ jobs:
     needs: build-linpeas-arm64
     runs-on: ubuntu-24.04-arm
     steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false
@@ -130,6 +145,9 @@ jobs:
   image-smoke:
     runs-on: ubuntu-latest
     steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false
@@ -200,6 +218,9 @@ jobs:
   image-smoke-arm64:
     runs-on: ubuntu-24.04-arm
     steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false
@@ -279,6 +300,9 @@ jobs:
       contents: read
       security-events: write
     steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false
@@ -309,6 +333,9 @@ jobs:
   bundle-smoke:
     runs-on: ubuntu-latest
     steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false
@@ -347,6 +374,9 @@ jobs:
   dashboard-data-tests:
     runs-on: ubuntu-latest
     steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false
@@ -362,6 +392,9 @@ jobs:
   required-checks-no-paths:
     runs-on: ubuntu-latest
     steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false
@@ -379,6 +412,9 @@ jobs:
   pr-workflows-no-secrets:
     runs-on: ubuntu-latest
     steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false
@@ -398,6 +434,9 @@ jobs:
     permissions:
       contents: read
     steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false
@@ -419,6 +458,9 @@ jobs:
     permissions:
       contents: read
     steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false
@@ -438,6 +480,9 @@ jobs:
     permissions:
       contents: read
     steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false
@@ -468,6 +513,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     continue-on-error: true
     steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false
@@ -493,6 +541,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     continue-on-error: true
     steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false
