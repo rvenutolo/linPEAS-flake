@@ -5,6 +5,20 @@ on:
     branches: [main]
     paths:
       - linpeas-pin.json
+  workflow_dispatch:
+    inputs:
+      force-republish:
+        description: |
+          Republish images + manifest for the version currently in
+          linpeas-pin.json, even if the GitHub release already exists.
+          The `release` and `bundle` jobs remain gated by `tag-exists`,
+          so existing release assets and the bundle attestation are
+          preserved. Used to recover from registry-side artifact loss
+          (e.g. Docker Hub repo wiped, missing per-arch tags after a
+          workflow refactor — see issue #69).
+        required: false
+        default: false
+        type: boolean
 
 # Workflow default = read-only. Each job declares the writes it actually
 # needs, so contents:write / id-token:write / attestations:write /
@@ -112,7 +126,7 @@ jobs:
   bundle:
     # Per D1: single arch-agnostic asset (`linpeas-bundle.sh`). Built once on Linux.
     needs: release
-    if: needs.release.outputs.tag-exists == 'false'
+    if: needs.release.outputs.tag-exists == 'false' || inputs.force-republish
     runs-on: ubuntu-latest
     permissions:
       contents: write # gh release upload
@@ -186,7 +200,7 @@ jobs:
 
   image-amd64:
     needs: release
-    if: needs.release.outputs.tag-exists == 'false'
+    if: needs.release.outputs.tag-exists == 'false' || inputs.force-republish
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -352,7 +366,7 @@ jobs:
 
   image-arm64:
     needs: release
-    if: needs.release.outputs.tag-exists == 'false'
+    if: needs.release.outputs.tag-exists == 'false' || inputs.force-republish
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     permissions:
@@ -495,7 +509,7 @@ jobs:
 
   manifest:
     needs: [release, image-amd64, image-arm64]
-    if: needs.release.outputs.tag-exists == 'false'
+    if: needs.release.outputs.tag-exists == 'false' || inputs.force-republish
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -573,7 +587,7 @@ jobs:
     # attestations. Runs after both bundle + image jobs. Failure = release
     # workflow goes red so we see broken-at-creation attestations immediately.
     needs: [release, bundle, image-amd64, image-arm64, manifest]
-    if: needs.release.outputs.tag-exists == 'false'
+    if: needs.release.outputs.tag-exists == 'false' || inputs.force-republish
     runs-on: ubuntu-latest
     permissions:
       contents: read
