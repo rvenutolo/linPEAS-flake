@@ -82,6 +82,7 @@ nav:
   - Architecture:
       - Auto-update: architecture/auto-update.md
       - CI: architecture/ci.md
+      - Flake-input bumps: architecture/flake-input-bumps.md
   - Security:
       - Trust model: security/trust-model.md
       - Verification: security/verification.md
