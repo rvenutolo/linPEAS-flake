@@ -124,7 +124,6 @@ The `codeql.yml` workflow is not in branch protection's required-check set. A Co
   and `pull-requests: write`. Rotate annually (or on suspected
   compromise). Stored as a repository secret.
 - `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN_RW` / `DOCKERHUB_TOKEN_DELETE` — Docker Hub access tokens used by the release pipeline. The split (P4.5 / GAP-17, 2026-05-17) limits blast radius:
-
   - `DOCKERHUB_TOKEN_RW` — Read, Write on `rvenutolo/linpeas`. Used by `release-on-bump.yml` (per-arch + manifest + verify) and `verify-latest-release.yml`. Cannot delete tags.
   - `DOCKERHUB_TOKEN_DELETE` — Read, Write, Delete on `rvenutolo/linpeas`. Used ONLY by `dockerhub-sync.yml` (`peter-evans/dockerhub-description` needs Delete to PATCH repo metadata).
 
