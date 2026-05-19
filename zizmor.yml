@@ -5,6 +5,17 @@ rules:
   # only `permissions: contents: read`. There is no pull_request context and no
   # contents: write surface, so the privilege-escalation attack zizmor warns
   # about is not present here.
+  #
+  # workflow_run in renovate-flake-lock-refresh.yml is also intentional. The
+  # `identify` job gates on PR `author.login == "renovate[bot]"`, which fork
+  # PRs and write-access users cannot spoof — only the Renovate GitHub App
+  # produces that author identity. `compute-refresh` runs Nix in `contents:
+  # read` mode without the App key (`nix flake update --update-input` only
+  # re-resolves an input URL → SHA; it does not evaluate flake outputs, so
+  # malicious code in flake.nix does not execute here). The App key lands
+  # only in `push-refresh`, which performs a REST PUT to flake.lock and
+  # nothing else.
   dangerous-triggers:
     ignore:
       - dockerhub-sync.yml
+      - renovate-flake-lock-refresh.yml

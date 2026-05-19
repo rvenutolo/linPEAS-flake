@@ -10,8 +10,25 @@ flake-input pins in `flake.nix`:
     lands plus the global 7-day `minimumReleaseAge` quarantine.
 
 Both managers are intentionally **manual-merge**. They do pure text
-substitution on `flake.nix` and **do not refresh `flake.lock`**, which
-is the reason this runbook exists.
+substitution on `flake.nix` and **do not refresh `flake.lock`**.
+
+The lockfile refresh — historically the reason this runbook existed —
+is now performed automatically by the `renovate-flake-lock-refresh`
+workflow, which fires on every `ci` completion against a `renovate/*`
+branch, detects the bumped input from the PR title, runs
+`nix flake update --update-input <name>`, and commits the refreshed
+`flake.lock` back to the PR branch (App-signed via REST
+`PUT /contents`). Watch the PR for a follow-on
+`chore(flake): refresh flake.lock for <input>` commit a few minutes
+after `ci` first goes green.
+
+The manual runbook below is the **fallback** when the auto-refresh
+does not fire — most often because the PR title format changed and
+no longer matches the `case` arm in
+`.github/workflows/renovate-flake-lock-refresh.yml`. If auto-refresh
+silently does not act, an issue is filed under the
+`renovate-flake-lock-refresh-failure` label; pursue the manual
+steps below in the meantime.
 
 ## Why a runbook
 
