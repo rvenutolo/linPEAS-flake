@@ -158,6 +158,26 @@
               deadnix.enable = true;
               statix.enable = true;
               actionlint.enable = true;
+              # Doc-quality hooks — mirror the CI lint required-check set
+              # so author catches issues before push.
+              markdownlint = {
+                enable = true;
+                # Excludes mirror the CI markdownlint-cli2-action globs:
+                # docs/dashboard.md + docs/releases.md are mkdocs-macros
+                # templated and not raw markdown; docs/_data/* is the
+                # generated dashboard YAML.
+                excludes = [
+                  "^docs/dashboard\\.md$"
+                  "^docs/releases\\.md$"
+                  "^docs/_data/"
+                ];
+              };
+              typos.enable = true;
+              editorconfig-checker.enable = true;
+              # `commitizen check` enforces Conventional Commits on the
+              # commit message — Conventional-Commits parity with the CI
+              # `commitlint` job, using a Python tool packaged in nixpkgs.
+              commitizen.enable = true;
               zizmor = {
                 enable = true;
                 # Older zizmor versions (e.g. 1.8.0 from nixos-25.05) exit
@@ -278,6 +298,7 @@
               treefmtEval.config.build.wrapper
               python3Packages.mkdocs-material
               python3Packages.mkdocs-macros
+              lychee
             ]);
           };
         })

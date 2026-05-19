@@ -18,6 +18,10 @@ fmt:
 lint:
 	pre-commit run --all-files
 
+# Run lychee link checker against tracked markdown files
+lint-links:
+	lychee --config lychee.toml README.md SECURITY.md 'docs/**/*.md'
+
 # Manually refresh linpeas pin from upstream latest release
 bump:
 	./scripts/bump-linpeas.sh

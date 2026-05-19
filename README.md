@@ -289,6 +289,7 @@ just bump            # refresh linpeas pin from upstream
 just check           # nix flake check
 just fmt             # nix fmt
 just lint            # pre-commit run --all-files
+just lint-links      # lychee link check on tracked markdown
 just show            # refresh README flake-show block
 just site            # nix build .#site
 just site-data       # regenerate docs/_data/dashboard.yml

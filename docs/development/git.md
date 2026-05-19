@@ -43,9 +43,10 @@ changes: `feat!: drop Java 11 support`.
 Run before pushing:
 
 ```sh
-just lint    # pre-commit run --all-files
-just fmt     # nix fmt (treefmt: shfmt, prettier, …)
-just check   # nix flake check
+just check       # nix flake check
+just fmt         # nix fmt (treefmt: shfmt, prettier, …)
+just lint        # pre-commit run --all-files
+just lint-links  # lychee link check on tracked markdown
 ```
 
 `pre-commit install` (once) wires git hooks so `just lint` runs
@@ -72,15 +73,23 @@ Hooks (alphabetical):
 | Hook                      | What it checks |
 |---------------------------|----------------|
 | `actionlint`              | GitHub Actions workflow syntax. |
+| `commitizen`              | Commit message satisfies Conventional Commits (local parity with the CI `commitlint` job). |
 | `deadnix`                 | Unused Nix bindings. |
+| `editorconfig-checker`    | `.editorconfig` compliance (charset, line endings, trailing whitespace, final newline). |
+| `markdownlint`            | Markdown style + structure (mirrors the CI `markdownlint` job). |
 | `nixpkgs-fmt`             | Nix file formatting. |
 | `readme-flake-show-fresh` | `README.md` `flake-show` block matches current flake outputs (guarded with `NIX_BUILD_TOP` so it skips inside the Nix sandbox). |
 | `shellcheck`              | Shell-script static analysis. |
 | `statix`                  | Nix anti-pattern lint. |
 | `treefmt`                 | Multi-language formatter aggregator (covers `shfmt`, `prettier`, etc). |
+| `typos`                   | Spell-check across the repo. |
 | `uses-sha-pinned`         | Every `uses:` is SHA-pinned (guarded with `NIX_BUILD_TOP`). |
 | `yamllint`                | YAML style. |
 | `zizmor`                  | GitHub Actions security audit. |
+
+Lychee is not a pre-commit hook (it hits the network and can flake on
+offline work). Run it manually with `just lint-links`; CI runs it on a
+weekly cron and as a PR check.
 
 One-time setup:
 
