@@ -3,11 +3,16 @@
   projectRootFile = "flake.nix";
 
   programs = {
-    nixpkgs-fmt.enable = true;
+    nixfmt.enable = true;
     prettier = {
       enable = true;
       package = pkgs.nodePackages.prettier;
-      includes = [ "*.json" "*.md" "*.yml" "*.yaml" ];
+      includes = [
+        "*.json"
+        "*.md"
+        "*.yml"
+        "*.yaml"
+      ];
     };
     shfmt = {
       enable = true;
