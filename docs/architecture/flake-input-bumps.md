@@ -47,6 +47,63 @@ The cost of this gap is one reviewer touch per bump:
 The wide-blast-radius nature of these bumps (especially nixpkgs) means a
 human review pass was needed anyway.
 
+## Expected breakage surface of a nixpkgs bump
+
+{% raw %}
+
+A major `NixOS/nixpkgs` bump (e.g. `25.11` → `26.05`) tends to drag in
+new versions of every tool the devShell + CI + image touch. The visible
+fallout falls into a small set of recurring classes. Walk the list
+before merging, even when CI is green — some failures land later (next
+cron tick, next contributor PR).
+
+- **Formatter rewrites.** `nixfmt`, `prettier`, `mdformat`, `shfmt`,
+    and `taplo` all move with nixpkgs. A new minor version often
+    rewrites whitespace, line wrapping, or quoting conventions across
+    Markdown / YAML / JSON / Nix / shell / TOML. Accept via `nix fmt`;
+    do not pin around it.
+- **mkdocs-macros strictness.** The site build (`nix build "path:$(pwd)#site"`) aborts on a literal `{{ ... }}` outside a Jinja2 raw block. New plugin behavior occasionally
+    starts treating a previously-quiet block as macro input. Wrap the
+    block in raw tags; do not loosen `--strict`.
+- **mkdocs --strict warnings.** Plugin upgrades can promote warnings
+    to errors (broken anchors, missing nav entries, deprecated
+    options). Fix forward; pin the misbehaving plugin only as a last
+    resort and document the pin reason in the same PR.
+- **zizmor major version.** New major versions change rule severities
+    or add rules that surface on existing workflows. `nix flake check`
+    fails on the new finding. Fix the workflow; only as a last resort
+    raise `--min-severity` in `flake.nix`, and never above `low`
+    without a security-review entry.
+- **CRITICAL CVEs in image base layers.** `image-cve-scan` (`ci.yml`)
+    is the canonical surface. The new nixpkgs may carry an unfixed
+    `CRITICAL` CVE in `coreutils`, `bashInteractive`, `gnused`, etc.
+    The CRITICAL-fail gate (post-PR #90) flags this loudly; the
+    remediation is "wait for nixpkgs to patch + bump again", not a
+    code change here. Skim the Security tab post-merge.
+- **Image base-layer tool renames.** If a tool the image previously
+    shipped is gone from the new nixpkgs (rename, removal,
+    refactor-to-a-module), `image-smoke`'s `linpeas -h` run inside
+    the image will surface `command not found`. Walk
+    `pkgs.buildEnv.paths` in `flake.nix` against the smoke output.
+- **`gh attestation verify` trust-root staleness.** Newer
+    `ubuntu-latest` images carry a newer `gh` CLI, which ships an
+    updated Sigstore TUF trust-root. A nixpkgs bump does not affect
+    this directly, but a coincident runner-image rotation can cause
+    spurious verify failures the same day — confirm by re-running the
+    `verify-latest-release` cron 24h later before assuming
+    attestation drift.
+- **pre-commit-hooks lib drift.** When `nixpkgs` lib symbols change
+    between releases, `cachix/git-hooks.nix` (and the hooks it
+    enables) sometimes break before the project's own pin bumps.
+    Surfaces as `nix flake check` failures unrelated to any
+    workflow change. See "Interaction between the two pins" below.
+
+Step 4 of the step-by-step below contains the same surface as a
+symptom → fix lookup table; use this section to anticipate before
+the PR arrives, and the table to triage after CI fails.
+
+{% endraw %}
+
 ## When the Renovate PR arrives
 
 PR title looks like one of:
@@ -234,5 +291,4 @@ If both PRs land cleanly when merged independently, no action needed.
 - 2026-05-17 — Bumped `nixos-25.05` → `nixos-25.11`
     (PR #63). Advanced `pre-commit-hooks` to upstream master `61ab0e80...`.
     Added Renovate trackers for both pins (PRs #62 and #64). See the
-    audit spec (`2026-05-17-automated-build-security-audit.md` section
-    Wave R-Closed) for the full closure rationale.
+    referenced PRs for the full closure rationale.
