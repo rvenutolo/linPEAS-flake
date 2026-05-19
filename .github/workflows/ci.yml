@@ -292,10 +292,11 @@ jobs:
 
   image-cve-scan:
     runs-on: ubuntu-latest
-    # Advisory: SARIF uploaded to code-scanning, NOT in branch protection.
-    # Detection control; nixpkgs auto-bump via
-    # update-flake-lock is the prevention path. Findings surface in
-    # the Security tab.
+    # Not in branch protection; prevention path is the nixpkgs auto-bump
+    # via update-flake-lock. SARIF uploads to the Security tab for the
+    # full CRITICAL+HIGH set; the job itself fails (and emits a notify
+    # issue on push) only when one or more CRITICAL findings are
+    # reported.
     permissions:
       contents: read
       security-events: write
@@ -321,12 +322,64 @@ jobs:
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
-          exit-code: "0" # advisory; do not fail the job
+          # Job-level failure is decided by the "fail on CRITICAL"
+          # step below; keep Trivy's own exit code at 0 here so the
+          # SARIF upload always runs.
+          exit-code: "0"
           ignore-unfixed: true
       - uses: github/codeql-action/upload-sarif@458d36d7d4f47d0dd16ca424c1d3cda0060f1360 # v3 (D2)
         with:
           sarif_file: trivy-results.sarif
           category: trivy-image-cve
+      - name: count CRITICAL findings
+        id: cve-count
+        run: |
+          set -euo pipefail
+          # SARIF security-severity is a CVSS-style numeric string;
+          # GitHub's mapping of CRITICAL is >= 9.0.
+          count=$(jq '[.runs[].results[]
+            | select((.properties["security-severity"] // "0") | tonumber >= 9.0)]
+            | length' trivy-results.sarif)
+          printf 'CRITICAL findings: %s\n' "${count}"
+          printf 'critical_count=%s\n' "${count}" >> "${GITHUB_OUTPUT}"
+      - name: fail on CRITICAL findings
+        if: steps.cve-count.outputs.critical_count != '0'
+        env:
+          CRITICAL_COUNT: ${{ steps.cve-count.outputs.critical_count }}
+        run: |
+          set -euo pipefail
+          printf '::error::Trivy reported %s CRITICAL CVE(s) in the OCI image\n' "${CRITICAL_COUNT}"
+          exit 1
+
+  image-cve-scan-notify:
+    # Open / update a deduped issue when image-cve-scan fails on a CRITICAL
+    # CVE during a push to main. PR runs are intentionally excluded —
+    # the failed check on the PR itself is the maintainer-facing signal.
+    needs: image-cve-scan
+    if: always() && github.event_name == 'push' && needs.image-cve-scan.result == 'failure'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: failure
+          label: image-cve-critical
+          title: "image-cve-scan: CRITICAL CVE in OCI image"
+          body: |
+            `image-cve-scan` failed on one or more CRITICAL CVEs in the OCI image.
+
+            - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            - Code Scanning tab: ${{ github.server_url }}/${{ github.repository }}/security/code-scanning?query=tool%3ATrivy
+
+            Remediation: bump `nixpkgs` via the `update-flake-lock` workflow, then rebuild the OCI image.
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
   # D10: bundle-smoke required job ----------------------------------------
 
