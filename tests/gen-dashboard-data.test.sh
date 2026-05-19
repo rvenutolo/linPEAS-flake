@@ -137,7 +137,7 @@ function main() {
     'pin.version does not match expected format' \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/bad-version-pin.json"
 
-  # Scenario 2: bad pin.url prefix (NX-PD-2). Pin version is well-formed
+  # Scenario 2: bad pin.url prefix. Pin version is well-formed
   # so the regex check passes; the URL prefix check then trips.
   run_scenario 'bad pin.url prefix' \
     'pin.url outside expected upstream prefix' \

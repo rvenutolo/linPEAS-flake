@@ -86,9 +86,7 @@ jobs:
           # (YYYYMMDD-<7..40 hex>). Tightened from the prior
           # `^[A-Za-z0-9._/-]+$` allowlist to the same regex enforced at
           # `bump-linpeas.sh`, `flake.nix` eval, `stale-pin-check.yml`, and
-          # `gen-dashboard-data.sh`. Closes the NX-PD-1 cross-layer-parity
-          # tail item deferred from PR #16 to avoid conflict with PRs
-          # #17/#18 on this same workflow.
+          # `gen-dashboard-data.sh`. Cross-layer pin-shape parity.
           if [[ ! "${VERSION}" =~ ^[0-9]{8}-[0-9a-f]{7,40}$ ]]; then
             printf 'refusing to release with non-conformant version: %q\n' "${VERSION}" >&2
             exit 1

@@ -17,7 +17,7 @@
       "automerge": true
     },
     {
-      "description": "Self-reference to local composite action pinned by SHA (CIW-1). Renovate's github-actions manager treats `owner/repo/path@sha` uniformly, so pinDigests above covers the bump path. This rule exists to document intent and to ensure the self-reference is not accidentally excluded by a future matcher.",
+      "description": "Self-reference to local composite action pinned by SHA. Renovate's github-actions manager treats `owner/repo/path@sha` uniformly, so pinDigests above covers the bump path. This rule exists to document intent and to ensure the self-reference is not accidentally excluded by a future matcher.",
       "matchManagers": ["github-actions"],
       "matchPackageNames": ["rvenutolo/linPEAS-flake"],
       "pinDigests": true,

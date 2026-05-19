@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/check-pr-workflows-no-secrets.sh
 #
-# CIW-4: verify that no workflow triggered by `pull_request` or
+# Verify that no workflow triggered by `pull_request` or
 # `pull_request_target` references any `secrets.*` other than
 # `secrets.GITHUB_TOKEN`. PR-authored code executes in the runner with
 # whatever secrets are exposed via env; restricting to GITHUB_TOKEN
@@ -19,7 +19,7 @@ IFS=$'\n\t'
 readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-.github/workflows}"
 
 if [[ ! -d ${WORKFLOWS_DIR} ]]; then
-  printf 'CIW-4 lint: workflows dir %s missing\n' "${WORKFLOWS_DIR}" >&2
+  printf 'pr-workflows-no-secrets lint: workflows dir %s missing\n' "${WORKFLOWS_DIR}" >&2
   exit 1
 fi
 
@@ -107,7 +107,7 @@ function scan_secrets() {
       if [[ ${token} == 'secrets.GITHUB_TOKEN' ]]; then
         continue
       fi
-      printf '%s:%s: %s not allowed in PR-triggered workflow (CIW-4)\n' \
+      printf '%s:%s: %s not allowed in PR-triggered workflow\n' \
         "${file}" "${lineno}" "${token}" >&2
       failed=$((failed + 1))
     done <"${tokens_file}"

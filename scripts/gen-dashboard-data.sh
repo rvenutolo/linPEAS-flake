@@ -114,7 +114,7 @@ function main() {
     log_err "pin.version does not match expected format: ${pin_version}"
     exit 1
   fi
-  # NX-PD-2: symmetric prefix check for `pin.url`. The dashboard page
+  # Symmetric prefix check for `pin.url`. The dashboard page
   # renders `pin.url` as a clickable link; without this guard a malformed
   # pin file reaching the site-build path could produce a phishing link.
   # Mirrors the `pin.url` prefix guard already present in
