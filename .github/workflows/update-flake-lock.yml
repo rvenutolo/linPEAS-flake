@@ -14,8 +14,8 @@ concurrency:
 
 jobs:
   # P3.2 / GAP-8: this job runs untrusted Nix-evaluating actions with
-  # ZERO write credentials. BUMP_PAT is not present in env or on disk here.
-  # Mirrors update-linpeas.yml's AU-P-1 split.
+  # ZERO write credentials. `BUMP_APP_PRIVATE_KEY` is not present in env
+  # or on disk here. Mirrors update-linpeas.yml's AU-P-1 split.
   compute-lock:
     runs-on: ubuntu-latest
     permissions:
@@ -65,15 +65,20 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-  # P3.2 / GAP-8: BUMP_PAT lives here, scoped to two run-step envs only.
-  # Action set restricted to GitHub-owned SHAs.
+  # P3.2 / GAP-8: bump credentials live here only. The job authenticates
+  # to the GitHub API as the `linpeas-flake-bumper` GitHub App via a
+  # short-lived installation token minted by `actions/create-github-app-token`
+  # (Client ID = `vars.BUMP_APP_CLIENT_ID`; private key =
+  # `secrets.BUMP_APP_PRIVATE_KEY`).
+  # Commits land on the bump branch via REST `PUT /contents`, which
+  # GitHub web-flow-signs when the request is authenticated by an App
+  # installation token. No `git push` happens.
   push-and-merge:
     needs: compute-lock
     if: needs.compute-lock.outputs.changed == 'true'
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     steps:
       - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
         with:
@@ -81,11 +86,16 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
         with:
           persist-credentials: false
-          fetch-depth: 0
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.1.8 (D2)
         with:
           name: flake-lock-result
+
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0 (D1)
+        id: app-token
+        with:
+          client-id: ${{ vars.BUMP_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BUMP_APP_PRIVATE_KEY }}
 
       - name: sanity-check artifact
         run: |
@@ -99,49 +109,58 @@ jobs:
           # Defense-in-depth vs a compromised compute-lock writing garbage.
           jq -e '.nodes | type == "object"' flake.lock >/dev/null
 
-      - name: configure git identity
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: commit and push branch
+      - name: open PR with signed commit via REST PUT /contents
         env:
-          BUMP_PAT: ${{ secrets.BUMP_PAT }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ github.repository }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
+
           branch="chore/update-flake-lock-$(date -u +%Y%m%d)"
-          git fetch origin "${branch}" 2>/dev/null || true
-          git checkout -B "${branch}"
-          git add flake.lock
-          git commit --message "chore: update flake.lock"
-          if git ls-remote --exit-code --heads origin "${branch}" >/dev/null 2>&1; then
-            git -c http.extraheader="Authorization: token ${BUMP_PAT}" \
-              push --force-with-lease --set-upstream origin "${branch}"
-          else
-            git -c http.extraheader="Authorization: token ${BUMP_PAT}" \
-              push --set-upstream origin "${branch}"
-          fi
-          printf 'BRANCH=%s\n' "${branch}" >> "${GITHUB_ENV}"
+          api_header="X-GitHub-Api-Version: 2022-11-28"
 
-      - name: create and auto-merge PR
-        env:
-          GH_TOKEN: ${{ secrets.BUMP_PAT }}
-        run: |
-          set -Eeuo pipefail
-          IFS=$'\n\t'
-          if ! gh pr view "${BRANCH}" >/dev/null 2>&1; then
+          # Resolve main HEAD sha + flake.lock blob sha on main.
+          base_sha="$(gh api "repos/${REPO}/git/refs/heads/main" \
+            --jq .object.sha --header "${api_header}")"
+          lock_blob_sha="$(git rev-parse "origin/main:flake.lock")"
+
+          # Delete stale branch ref if a prior failed run left one behind.
+          if gh api "repos/${REPO}/git/refs/heads/${branch}" \
+               --header "${api_header}" >/dev/null 2>&1; then
+            gh api --method DELETE "repos/${REPO}/git/refs/heads/${branch}" \
+              --header "${api_header}"
+          fi
+
+          # Create branch ref from main HEAD.
+          gh api --method POST "repos/${REPO}/git/refs" \
+            --field ref="refs/heads/${branch}" \
+            --field sha="${base_sha}" \
+            --header "${api_header}" >/dev/null
+
+          # Commit: flake.lock. Web-flow signs this commit.
+          lock_b64="$(base64 --wrap=0 flake.lock)"
+          gh api --method PUT "repos/${REPO}/contents/flake.lock" \
+            --field message="chore: update flake.lock" \
+            --field content="${lock_b64}" \
+            --field sha="${lock_blob_sha}" \
+            --field branch="${branch}" \
+            --header "${api_header}" >/dev/null
+
+          # Open PR only if one does not already exist for this branch.
+          if ! gh pr view "${branch}" >/dev/null 2>&1; then
             body="$(mktemp)"
             trap 'rm --force -- "${body}"' EXIT
             printf 'Auto-generated weekly flake.lock update.\n' > "${body}"
             gh pr create \
               --base main \
-              --head "${BRANCH}" \
+              --head "${branch}" \
               --title "chore: update flake.lock" \
               --label dependencies \
               --body-file "${body}"
           fi
-          gh pr merge "${BRANCH}" --auto --squash
+
+          gh pr merge "${branch}" --auto --merge
 
   notify:
     name: notify
@@ -170,7 +189,7 @@ jobs:
             - push-and-merge conclusion: `${{ needs.push-and-merge.result }}`
 
             Investigate the failing job's logs. Common causes:
-            - `BUMP_PAT` expired (affects push-and-merge only)
+            - `BUMP_APP_PRIVATE_KEY` invalid or App uninstalled (affects push-and-merge only)
             - `nixpkgs` input fetch failure (affects compute-lock)
             - Sanity-check rejected artifact (flake.lock garbage from compute-lock)
           label-description: update-flake-lock workflow failure
