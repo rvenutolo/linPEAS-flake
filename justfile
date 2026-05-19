@@ -22,6 +22,27 @@ lint:
 lint-links:
 	lychee --config lychee.toml README.md SECURITY.md 'docs/**/*.md'
 
+# Run every script-based required check + every .test.sh harness.
+# Mirrors the script-and-fixture side of CI (excludes nix-build jobs
+# and the link checker; run `just check` and `just lint-links` for those).
+# Wrapped in `nix develop --command` so check-jsonschema and bash
+# resolve from the devShell, even if the caller is outside of `nix develop`.
+verify:
+	nix develop --command bash -c '\
+	set -Eeuo pipefail; \
+	./scripts/check-uses-sha-pinned.sh; \
+	./scripts/check-pr-workflows-no-secrets.sh; \
+	./scripts/check-required-checks-no-paths.sh; \
+	./scripts/check-tag-protection.sh; \
+	./scripts/check-renovate-invariants.sh; \
+	./scripts/check-jsonschema.sh; \
+	bash tests/check-uses-sha-pinned.test.sh; \
+	bash tests/check-pr-workflows-no-secrets.test.sh; \
+	bash tests/check-required-checks-no-paths.test.sh; \
+	bash tests/check-tag-protection.test.sh; \
+	bash tests/check-renovate-invariants.test.sh; \
+	bash tests/gen-dashboard-data.test.sh'
+
 # Manually refresh linpeas pin from upstream latest release
 bump:
 	./scripts/bump-linpeas.sh
