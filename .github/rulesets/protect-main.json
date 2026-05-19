@@ -33,6 +33,7 @@
           { "context": "build-linpeas" },
           { "context": "build-linpeas-arm64", "integration_id": 15368 },
           { "context": "bundle-smoke", "integration_id": 15368 },
+          { "context": "check-jsonschema", "integration_id": 15368 },
           { "context": "commitlint", "integration_id": 15368 },
           { "context": "dashboard-data-tests", "integration_id": 15368 },
           { "context": "dependency-review", "integration_id": 15368 },

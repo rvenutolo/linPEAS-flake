@@ -33,6 +33,7 @@ ruleset.
 | markdownlint               | ci                | .github/workflows/ci.yml                |
 | typos                      | ci                | .github/workflows/ci.yml                |
 | editorconfig               | ci                | .github/workflows/ci.yml                |
+| check-jsonschema           | ci                | .github/workflows/ci.yml                |
 | commitlint                 | ci                | .github/workflows/ci.yml                |
 | lint-pr-title              | pr-title-lint     | .github/workflows/pr-title-lint.yml     |
 | dependency-review          | dependency-review | .github/workflows/dependency-review.yml |
