@@ -98,10 +98,12 @@ Three independent automations keep this flake current:
   missing or non-`sha256:`** (previously a silent skip), cross-checks the
   digest, computes the SRI hash, and atomically rewrites the pin.
 - Regenerates the README flake-outputs block in the same commit.
-- Opens a PR (`chore: bump linpeas to <tag>`) authored by `github-actions[bot]`
-  via a fine-grained PAT (so CI fires; the default `GITHUB_TOKEN` would not
-  trigger `pull_request` workflows).
-- CI gates auto-merge. On green, GitHub squash-merges to `main`.
+- Opens a PR (`chore: bump linpeas to <tag>`) whose commits are produced via
+  REST `PUT /repos/{owner}/{repo}/contents/{path}` authenticated as the
+  `linpeas-flake-bumper` GitHub App. GitHub web-flow-signs every such
+  commit, so the bump branch satisfies `required_signatures` on `main`.
+- CI gates auto-merge. On green, GitHub merge-commits the PR onto `main`,
+  preserving the signed branch commits verbatim.
 
 ### Release on bump (`release-on-bump.yml`)
 
@@ -121,9 +123,10 @@ Three independent automations keep this flake current:
 ### Weekly dependency upkeep
 
 - `update-flake-lock.yml` — Friday 06:00 UTC. Bumps the `nixpkgs` input via
-  `nix flake update` in a read-only `compute-lock` job, then commits and
-  auto-merges from a separate `push-and-merge` job that holds `BUMP_PAT`
-  (the third-party `DeterminateSystems/update-flake-lock` action was
+  `nix flake update` in a read-only `compute-lock` job, then commits via
+  REST `PUT /contents` (web-flow-signed) and auto-merges from a separate
+  `push-and-merge` job authenticated as the `linpeas-flake-bumper` GitHub
+  App (the third-party `DeterminateSystems/update-flake-lock` action was
   removed for blast-radius reasons — see SECURITY.md).
 - Renovate (Friday batch) — bumps GitHub Action SHAs (via
   `helpers:pinGitHubActionDigests` + `pinDigests: true`), the pinned Nix
@@ -152,7 +155,7 @@ Three independent automations keep this flake current:
   build .#site` then renders the MkDocs Material site. On non-PR events
   the artifact is deployed to <https://rvenutolo.github.io/linPEAS-flake/>
   via `actions/deploy-pages` over OIDC.
-- Pages is **not** in the branch-protection required check set — a
+- Pages is **not** in the `protect-main` ruleset's required check set — a
   Pages failure must not block linpeas-bump PRs from auto-merging. A
   failure auto-files a deduped issue tagged `pages-build-failure`.
 
@@ -196,7 +199,16 @@ Self-enforcing invariant checks:
 
 The authoritative required-check list lives in
 [`docs/security/required-checks.md`](docs/security/required-checks.md); it
-mirrors live branch protection.
+mirrors the `protect-main` branch ruleset.
+
+Merge policy: **merge-commit only**, enforced both repo-wide
+(`allow_merge_commit=true`, others false) and by the `protect-main` ruleset
+(`pull_request.allowed_merge_methods=["merge"]`). Branch commits land
+verbatim on `main`; every commit (branch + merge) must be signed —
+`required_signatures` is enforced. Each branch commit must independently
+satisfy Conventional Commits (`commitlint` is a required check); the PR
+title is the merge-commit subject and is independently lint-checked by
+`pr-title-lint`.
 
 A non-blocking coverage matrix runs `flake-check` and `build-linpeas` across
 `ubuntu-latest` / `macos-latest` × stable Nix / unstable Nix. Failures there

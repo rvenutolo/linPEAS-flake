@@ -37,9 +37,9 @@ flowchart LR
 
 ## Required check list
 
-The canonical, branch-protection-mirrored list lives in
-[`docs/security/required-checks.md`](../security/required-checks.md). The
-table below summarizes the functional and invariant gates; consult the
+The canonical list — mirroring the `protect-main` branch ruleset — lives
+in [`docs/security/required-checks.md`](../security/required-checks.md).
+The table below summarizes the functional and invariant gates; consult the
 canonical doc as source of truth.
 
 Functional gates:

@@ -15,7 +15,7 @@ flowchart TD
   write["mktemp + mv<br/>linpeas-pin.json"]
   show["./scripts/refresh-flake-show.sh"]
   pr["gh pr create<br/>chore: bump linpeas to <tag>"]
-  automerge["gh pr merge --auto --squash"]
+  automerge["gh pr merge --auto --merge"]
   done(["no-op"])
 
   cron --> api --> compare
@@ -47,18 +47,18 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-  flakelock["update-flake-lock.yml<br/>Friday 06:00 UTC<br/>compute-lock (read-only)<br/>+ push-and-merge (BUMP_PAT)"]
+  flakelock["update-flake-lock.yml<br/>Friday 06:00 UTC<br/>compute-lock (read-only)<br/>+ push-and-merge (App token, REST PUT /contents)"]
   renovate["Renovate Friday batch<br/>(action SHAs + Nix pin<br/>+ tracked flake inputs)<br/>minimumReleaseAge: 7 days"]
   pr1["PR: update flake.lock"]
   pr2["PR: action SHA / input bumps"]
   ci["required CI checks"]
-  merge["squash-merge on green"]
+  merge["merge-commit on green"]
 
   flakelock --> pr1 --> ci --> merge
   renovate --> pr2 --> ci --> merge
 ```
 
-The third-party `DeterminateSystems/update-flake-lock` action was removed: it required `BUMP_PAT` as a `with: token:` input, putting the PAT inside an externally-controlled action boundary. The split-job design now confines Nix evaluation to a `contents: read` job and isolates the PAT to a GitHub-owned-action job that pushes via `git -c http.extraheader=...` (never writing to `.git/config`).
+The third-party `DeterminateSystems/update-flake-lock` action was removed: it required `BUMP_PAT` as a `with: token:` input, putting the PAT inside an externally-controlled action boundary. The split-job design confines Nix evaluation to a `contents: read` job; the `push-and-merge` job authenticates to the GitHub API as the `linpeas-flake-bumper` App via a short-lived installation token (`actions/create-github-app-token`), then commits files via REST `PUT /contents`. No `git push`, no PAT in `.git/config`. REST commits authenticated by an App installation token are auto-signed by GitHub's web-flow GPG key, so the bump branch satisfies `required_signatures` on `main`.
 
 ## Where this site fits
 
@@ -69,4 +69,4 @@ The Pages workflow runs:
 - Daily at 14:00 UTC — after the bump-related crons (09:00 `update-linpeas`, 10:30 `stale-pin-check`, 12:00 `verify-latest-release`), so the dashboard reads a settled state. See [CI — cron schedule](ci.md#cron-schedule).
 - On manual `workflow_dispatch`.
 
-The Pages site is **not** in the branch-protection required check set; a Pages failure must not block pin bumps. See [CI](ci.md).
+The Pages site is **not** in the `protect-main` ruleset's required check set; a Pages failure must not block pin bumps. See [CI](ci.md).
