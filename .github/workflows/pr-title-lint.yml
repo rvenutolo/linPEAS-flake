@@ -1,0 +1,38 @@
+name: pr-title-lint
+
+# Enforces Conventional Commits on PR titles. The repo's merge-commit
+# subject is taken verbatim from the PR title (`merge_commit_title=PR_TITLE`),
+# so the PR title is what lands on `main` as the merge-commit subject and
+# must satisfy the same `commitlint` rules as branch commits.
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  lint-pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0 (D1)
+        with:
+          node-version: "20"
+      - name: install commitlint
+        run: npm install --no-save @commitlint/cli @commitlint/config-conventional
+      - name: lint PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          printf '%s\n' "${PR_TITLE}" | npx commitlint --config .commitlintrc.yml
