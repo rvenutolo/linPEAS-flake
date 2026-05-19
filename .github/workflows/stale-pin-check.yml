@@ -31,6 +31,7 @@ jobs:
   check:
     name: check
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       result: ${{ steps.evaluate.outputs.result }}
       reason: ${{ steps.evaluate.outputs.reason }}
@@ -140,6 +141,7 @@ jobs:
     needs: check
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       issues: write
     steps:
