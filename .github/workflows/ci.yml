@@ -344,9 +344,14 @@ jobs:
         run: |
           set -euo pipefail
           # SARIF security-severity is a CVSS-style numeric string;
-          # GitHub's mapping of CRITICAL is >= 9.0.
+          # GitHub's mapping of CRITICAL is >= 9.0. The `tonumber? // 0`
+          # form drops non-numeric severities (e.g. textual "high"
+          # emitted by some SARIF producers) from the CRITICAL count
+          # rather than erroring `set -euo pipefail` out — safe fallback
+          # is to under-count, not to misclassify the job as failed
+          # for a parse error.
           count=$(jq '[.runs[].results[]
-            | select((.properties["security-severity"] // "0") | tonumber >= 9.0)]
+            | select(((.properties["security-severity"] // "0") | tonumber? // 0) >= 9.0)]
             | length' trivy-results.sarif)
           printf 'CRITICAL findings: %s\n' "${count}"
           printf 'critical_count=%s\n' "${count}" >> "${GITHUB_OUTPUT}"
