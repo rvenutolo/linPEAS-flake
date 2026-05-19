@@ -14,6 +14,7 @@ DavidAnson/*
 DeterminateSystems/*
 editorconfig-checker/*
 github/*
+gitleaks/*
 lycheeverse/*
 peter-evans/*
 rvenutolo/*
@@ -46,6 +47,7 @@ wagoid/*
         "DeterminateSystems/*",
         "editorconfig-checker/*",
         "github/*",
+        "gitleaks/*",
         "lycheeverse/*",
         "peter-evans/*",
         "rvenutolo/*",

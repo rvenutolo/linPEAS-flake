@@ -1,0 +1,36 @@
+changelog:
+  categories:
+    - title: Features
+      labels:
+        - enhancement
+        - idea
+    - title: Fixes
+      labels:
+        - bug
+    - title: Security
+      labels:
+        - security
+    - title: Pin Bumps
+      labels:
+        - pin
+    - title: Nix
+      labels:
+        - nix
+    - title: CI
+      labels:
+        - ci
+    - title: Scripts
+      labels:
+        - scripts
+    - title: Docs
+      labels:
+        - docs
+    - title: Tests
+      labels:
+        - tests
+    - title: Renovate
+      labels:
+        - renovate
+    - title: Other Changes
+      labels:
+        - "*"

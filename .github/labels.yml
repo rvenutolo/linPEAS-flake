@@ -1,0 +1,39 @@
+- name: bug
+  color: d73a4a
+  description: Something isn't working
+
+- name: ci
+  color: 006b75
+  description: GitHub Actions, hooks, automation
+
+- name: docs
+  color: 0075ca
+  description: Documentation, README, MkDocs site
+
+- name: idea
+  color: a2eeef
+  description: Proposal captured via the idea issue template
+
+- name: nix
+  color: 5277c3
+  description: flake.nix / flake.lock / treefmt.nix
+
+- name: pin
+  color: fbca04
+  description: linpeas-pin.json pin bump
+
+- name: renovate
+  color: 1d76db
+  description: Renovate config / dep updates
+
+- name: scripts
+  color: 5319e7
+  description: Repo automation scripts under scripts/
+
+- name: security
+  color: b60205
+  description: Security posture, allowlists, rulesets
+
+- name: tests
+  color: 0e8a16
+  description: Test suite under tests/
