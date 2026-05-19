@@ -10,7 +10,7 @@
   "labels": ["dependencies"],
   "packageRules": [
     {
-      "description": "github-actions: pin SHAs and auto-merge after the 7-day quarantine. Per-manager automerge scope (P2.1, GAP-21) ensures a future manager activation (e.g. npm via a new package.json) does NOT inherit automerge.",
+      "description": "github-actions: pin SHAs and auto-merge after the 7-day quarantine. Per-manager automerge scope ensures a future manager activation (e.g. npm via a new package.json) does NOT inherit automerge.",
       "matchManagers": ["github-actions"],
       "groupName": "github-actions",
       "pinDigests": true,

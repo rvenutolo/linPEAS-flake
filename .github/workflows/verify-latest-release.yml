@@ -59,7 +59,7 @@ jobs:
             || { printf 'release assets never appeared\n' >&2; exit 1; }
 
       - name: verify bundle attestation
-        # Verifies both build-provenance AND SBOM (P4.2/GAP-12) attestations.
+        # Verifies both build-provenance AND SBOM attestations.
         # gh attestation verify accepts any matching attestation by default
         # (SLSA provenance + SPDX-JSON SBOM, both attested at release time).
         env:

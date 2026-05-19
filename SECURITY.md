@@ -91,7 +91,7 @@ accepted trust model for a thin wrapper repo — it matches the trust model
 of `curl ... | bash`, with the addition of reproducible, hash-pinned
 downloads and build-provenance attestations.
 
-`dockerhub-sync.yml` triggers on `release-on-bump` workflow_run completed-successfully (plus manual dispatch). It does NOT trigger on arbitrary README pushes (P4.6 / GAP-19, 2026-05-17). This narrows the `DOCKERHUB_TOKEN_DELETE` exposure window to release-time only.
+`dockerhub-sync.yml` triggers on `release-on-bump` workflow_run completed-successfully (plus manual dispatch). It does NOT trigger on arbitrary README pushes. This narrows the `DOCKERHUB_TOKEN_DELETE` exposure window to release-time only.
 
 The `workflow_run` trigger does not introduce the TOCTOU concern that issue #22 (BUMP_PAT → GitHub App) was rejected over: `dockerhub-sync.yml` has no `contents: write` and only PATCHes Docker Hub repo metadata.
 
@@ -123,7 +123,7 @@ The `codeql.yml` workflow is not in branch protection's required-check set. A Co
   bump PRs. Required scopes: this repository only, with `contents: write`
   and `pull-requests: write`. Rotate annually (or on suspected
   compromise). Stored as a repository secret.
-- `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN_RW` / `DOCKERHUB_TOKEN_DELETE` — Docker Hub access tokens used by the release pipeline. The split (P4.5 / GAP-17, 2026-05-17) limits blast radius:
+- `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN_RW` / `DOCKERHUB_TOKEN_DELETE` — Docker Hub access tokens used by the release pipeline. The split limits blast radius:
   - `DOCKERHUB_TOKEN_RW` — Read, Write on `rvenutolo/linpeas`. Used by `release-on-bump.yml` (per-arch + manifest + verify) and `verify-latest-release.yml`. Cannot delete tags.
   - `DOCKERHUB_TOKEN_DELETE` — Read, Write, Delete on `rvenutolo/linpeas`. Used ONLY by `dockerhub-sync.yml` (`peter-evans/dockerhub-description` needs Delete to PATCH repo metadata).
 
@@ -145,7 +145,7 @@ The `codeql.yml` workflow is not in branch protection's required-check set. A Co
 
 In addition to build-provenance attestations, each release carries SBOM
 attestations (SPDX-JSON predicate, predicate-type `https://spdx.dev/Document`)
-for the bundle and each per-arch OCI image (P4.2 / GAP-12, 2026-05-17).
+for the bundle and each per-arch OCI image.
 Verify with:
 
 ```bash
@@ -163,18 +163,18 @@ without verifying the attestation.
 
 ## Runner egress monitoring (harden-runner, audit mode)
 
-P4.4 / GAP-14 (2026-05-17): `step-security/harden-runner` runs as the first step of every job in every workflow, with `egress-policy: audit`. Provides defense-in-depth visibility into runner network egress; surfaces hosts each workflow actually contacts. Audit mode does NOT block; findings appear at the harden-runner dashboard and as job-summary annotations.
+`step-security/harden-runner` runs as the first step of every job in every workflow, with `egress-policy: audit`. Provides defense-in-depth visibility into runner network egress; surfaces hosts each workflow actually contacts. Audit mode does NOT block; findings appear at the harden-runner dashboard and as job-summary annotations.
 
-Phase 2 (egress-policy: block with observed allowlist) is a follow-up PR after ~2 weeks of audit-mode data collection.
+A future PR may tighten `egress-policy` from `audit` to `block` with an observed allowlist after ~2 weeks of audit-mode data collection.
 
 ## Settings posture
 
 Repository settings knobs the security model depends on (probe-verifiable from `docs/security/settings-posture.md`):
 
-- `secret_scanning`, `secret_scanning_push_protection`, `dependabot_security_updates` all **enabled**. `secret_scanning_non_provider_patterns` and `secret_scanning_validity_checks` are shown as `disabled` in the GitHub API but cannot be flipped via the REST API for personal accounts — they appear to require GitHub Advanced Security or a UI toggle not exposed programmatically. Documented as a residual gap (GAP-1 / GAP-2 partially addressed 2026-05-17, P1).
-- Actions: `sha_pinning_required: true` (added 2026-05-17, P1, GAP-3). Belt-and-braces against Renovate misconfiguration — every `uses:` must be SHA-pinned at GitHub level, not just by Renovate convention. Smoke-tested: unpinned `uses: actions/checkout@v4` was rejected by GitHub with "all actions must be pinned to a full-length commit SHA".
-- Workflow tokens: `default_workflow_permissions: read`, `can_approve_pull_request_reviews: false` (added 2026-05-17, P1, GAP-6). Prevents a compromised workflow from self-approving a PR.
-- `github-pages` environment: `can_admins_bypass: false` (added 2026-05-17, P1, GAP-10).
-- Account: 2FA enabled on the maintainer account, verified 2026-05-17 with non-SMS second factor (specifics not recorded) (P1, GAP-15).
+- `secret_scanning`, `secret_scanning_push_protection`, `dependabot_security_updates` all **enabled**. `secret_scanning_non_provider_patterns` and `secret_scanning_validity_checks` are shown as `disabled` in the GitHub API but cannot be flipped via the REST API for personal accounts — they appear to require GitHub Advanced Security or a UI toggle not exposed programmatically. Documented as a residual gap.
+- Actions: `sha_pinning_required: true`. Belt-and-braces against Renovate misconfiguration — every `uses:` must be SHA-pinned at GitHub level, not just by Renovate convention. Smoke-tested: unpinned `uses: actions/checkout@v4` was rejected by GitHub with "all actions must be pinned to a full-length commit SHA".
+- Workflow tokens: `default_workflow_permissions: read`, `can_approve_pull_request_reviews: false`. Prevents a compromised workflow from self-approving a PR.
+- `github-pages` environment: `can_admins_bypass: false`.
+- Account: 2FA enabled on the maintainer account with non-SMS second factor (specifics not recorded).
 
 Any drift on any of the above is treated as a security incident. The `docs/security/settings-posture.md` file is the source of truth and includes copy-pasteable probe commands.

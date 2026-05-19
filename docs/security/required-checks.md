@@ -36,7 +36,7 @@ ruleset.
 | commitlint                 | ci              | .github/workflows/ci.yml             |
 | lint-pr-title              | pr-title-lint   | .github/workflows/pr-title-lint.yml  |
 
-## Invariant (AU-P-2)
+## Path-filter invariant
 
 No workflow listed above may declare `paths:` or `paths-ignore:` under its
 `on.pull_request:` trigger. Such a filter creates the auto-merge

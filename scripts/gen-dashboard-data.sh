@@ -118,8 +118,7 @@ function main() {
   # renders `pin.url` as a clickable link; without this guard a malformed
   # pin file reaching the site-build path could produce a phishing link.
   # Mirrors the `pin.url` prefix guard already present in
-  # `bump-linpeas.sh` and the `pin.url` prefix invariant documented in
-  # `.claude/CLAUDE.md` ("flake.nix pin invariants").
+  # `bump-linpeas.sh` and the `pin.url` prefix assertion in `flake.nix`.
   if [[ ${pin_url} != "${EXPECTED_PIN_URL_PREFIX}"* ]]; then
     log_err "pin.url outside expected upstream prefix: ${pin_url}"
     exit 1

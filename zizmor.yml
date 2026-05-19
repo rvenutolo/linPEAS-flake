@@ -1,5 +1,5 @@
 rules:
-  # P4.6 / GAP-19 (2026-05-17): workflow_run trigger in dockerhub-sync.yml is
+  # workflow_run trigger in dockerhub-sync.yml is
   # intentional and safe. We trigger on release-on-bump (a trusted, repo-owned
   # workflow), the sync job is gated to completed-successfully, and the job has
   # only `permissions: contents: read`. There is no pull_request context and no

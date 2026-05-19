@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/check-renovate-invariants.sh
 #
-# P3.4 / GAP-22: assert renovate.json carries the security-critical
+# Assert renovate.json carries the security-critical
 # invariants:
 #   1. extends includes "helpers:pinGitHubActionDigests"
 #   2. minimumReleaseAge is set (any non-empty string)

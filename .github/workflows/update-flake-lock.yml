@@ -13,9 +13,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # P3.2 / GAP-8: this job runs untrusted Nix-evaluating actions with
+  # This job runs untrusted Nix-evaluating actions with
   # ZERO write credentials. `BUMP_APP_PRIVATE_KEY` is not present in env
-  # or on disk here. Mirrors update-linpeas.yml's AU-P-1 split.
+  # or on disk here. Mirrors the credential split in update-linpeas.yml.
   compute-lock:
     runs-on: ubuntu-latest
     permissions:
@@ -65,7 +65,7 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-  # P3.2 / GAP-8: bump credentials live here only. The job authenticates
+  # Bump credentials live here only. The job authenticates
   # to the GitHub API as the `linpeas-flake-bumper` GitHub App via a
   # short-lived installation token minted by `actions/create-github-app-token`
   # (Client ID = `vars.BUMP_APP_CLIENT_ID`; private key =
