@@ -25,10 +25,12 @@ not as a personal access token.
 - **Token lifetime:** one hour; minted per job by
   `actions/create-github-app-token` and automatically revoked at job end.
 
+{% raw %}
 Tokens flow only through `${{ steps.app-token.outputs.token }}` →
 `GH_TOKEN` → `gh api` / `gh pr`. No `git push` uses them. Commits land
 via REST `PUT /repos/{owner}/{repo}/contents/{path}` → web-flow-signed
-by GitHub. The key never enters compute jobs that run untrusted
+by GitHub.
+{% endraw %} The key never enters compute jobs that run untrusted
 third-party actions; see `update-linpeas.yml` and `update-flake-lock.yml`
 for the credential split.
 

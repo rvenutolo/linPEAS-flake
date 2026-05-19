@@ -86,78 +86,26 @@ chmod +x linpeas
 
 ## How updates work
 
-Three independent automations keep this flake current:
+Independent automations keep this flake current. Full pipeline,
+trigger semantics, and credential split live in
+[`docs/architecture/auto-update.md`](docs/architecture/auto-update.md).
 
-### Daily linpeas pin bump (`update-linpeas.yml`)
+<!-- Chronological by cron — daily then weekly. -->
 
-- Cron 09:00 UTC + manual dispatch.
-- Queries `peass-ng/PEASS-ng` releases API. If the latest tag differs from the
-  pinned `linpeas-pin.json`, downloads the new `linpeas.sh`, **validates the
-  asset URL stays within the expected `github.com/peass-ng/PEASS-ng/releases/
-  download/` prefix**, **hard-fails if the GitHub-API `digest` field is
-  missing or non-`sha256:`** (previously a silent skip), cross-checks the
-  digest, computes the SRI hash, and atomically rewrites the pin.
-- Regenerates the README flake-outputs block in the same commit.
-- Opens a PR (`chore: bump linpeas to <tag>`) whose commits are produced via
-  REST `PUT /repos/{owner}/{repo}/contents/{path}` authenticated as the
-  `linpeas-flake-bumper` GitHub App. GitHub web-flow-signs every such
-  commit, so the bump branch satisfies `required_signatures` on `main`.
-- CI gates auto-merge. On green, GitHub merge-commits the PR onto `main`,
-  preserving the signed branch commits verbatim.
+| Workflow                | When                                          | Purpose |
+|-------------------------|-----------------------------------------------|---------|
+| `update-linpeas.yml`    | daily 09:00 UTC + dispatch                    | Bumps `linpeas-pin.json` to the latest upstream tag. Opens PR; auto-merges on green. |
+| `stale-pin-check.yml`   | daily 10:30 UTC                               | Files a deduped issue if `update-linpeas` is stalled. |
+| `verify-latest-release.yml` | daily 12:00 UTC                           | Re-verifies the latest release's attestations and re-fetches upstream `linpeas.sh` to confirm the pinned SRI hash. |
+| `release-on-bump.yml`   | push to `main` changing the pin               | Tags the release, builds + pushes bundle + per-arch OCI images (ghcr.io + docker.io), attests SLSA provenance + SBOMs. |
+| `pages.yml`             | push, PR, release, daily 14:00 UTC, dispatch  | Rebuilds the MkDocs site; deploys via OIDC on non-PR events. Not in the required-check set. |
+| `update-flake-lock.yml` | weekly Fri 06:00 UTC                          | Bumps `nixpkgs` via `nix flake update`; opens auto-merging PR. |
+| Renovate                | weekly Fri batch                              | Bumps action SHAs + tracked flake inputs after a 7-day cooldown. |
 
-### Release on bump (`release-on-bump.yml`)
-
-- Triggers when `linpeas-pin.json` changes on `main`.
-- Tags the release with the upstream tag verbatim (e.g. `20260510-cd4bd619`)
-  — see Versioning below.
-- Builds and attaches:
-  - `linpeas-bundle.sh` — raw `linpeas.sh` with `#!/usr/bin/env bash`, a
-    single arch-agnostic asset.
-  - OCI image to both `docker.io/rvenutolo/linpeas:<tag>` and
-    `ghcr.io/rvenutolo/linpeas:<tag>` (plus `:latest` on both).
-- Generates SLSA build-provenance attestations for the pin file, the bundle,
-  and the image. SPDX-JSON SBOMs for bundle + per-arch images are generated
-  (`anchore/sbom-action`) and attested (`actions/attest-sbom`). Verify any
-  artifact with `gh attestation verify <artifact> --repo rvenutolo/linPEAS-flake`.
-
-### Weekly dependency upkeep
-
-- `update-flake-lock.yml` — Friday 06:00 UTC. Bumps the `nixpkgs` input via
-  `nix flake update` in a read-only `compute-lock` job, then commits via
-  REST `PUT /contents` (web-flow-signed) and auto-merges from a separate
-  `push-and-merge` job authenticated as the `linpeas-flake-bumper` GitHub
-  App (the third-party `DeterminateSystems/update-flake-lock` action was
-  removed for blast-radius reasons — see SECURITY.md).
-- Renovate (Friday batch) — bumps GitHub Action SHAs (via
-  `helpers:pinGitHubActionDigests` + `pinDigests: true`), the pinned Nix
-  installer version, and tracked flake inputs (`nixpkgs` stable branch,
-  `cachix/git-hooks.nix`). All Renovate PRs honor a `minimumReleaseAge`
-  cooldown (7 days) and per-manager `automerge` rules. CI-gated auto-merge.
-
-### Stale-pin watchdog (`stale-pin-check.yml`)
-
-- Cron 10:30 UTC daily — runs after the 09:00 bump pipeline.
-- Compares the pinned upstream tag against `peass-ng/PEASS-ng/releases/latest`.
-  If the bump pipeline is stalled (e.g. upstream-API failure, auto-merge blocked,
-  PAT expired) the workflow auto-files a deduped issue labelled
-  `stale-pin-check-failure` so the operator notices instead of silently
-  drifting.
-
-### Pages site (`pages.yml`)
-
-- Triggers: push to `main`, PR, release published, daily 14:00 UTC cron,
-  and manual dispatch. The cron sits after `update-linpeas` (09:00),
-  `stale-pin-check` (10:30), and `verify-latest-release` (12:00) so the
-  dashboard reads a settled state. See `docs/architecture/ci.md` for the
-  full cron schedule.
-- On every trigger: `scripts/gen-dashboard-data.sh` regenerates
-  `docs/_data/dashboard.yml` from `linpeas-pin.json` + GitHub API. `nix
-  build .#site` then renders the MkDocs Material site. On non-PR events
-  the artifact is deployed to <https://rvenutolo.github.io/linPEAS-flake/>
-  via `actions/deploy-pages` over OIDC.
-- Pages is **not** in the `protect-main` ruleset's required check set — a
-  Pages failure must not block linpeas-bump PRs from auto-merging. A
-  failure auto-files a deduped issue tagged `pages-build-failure`.
+Bump-workflow commits are authored by the `linpeas-flake-bumper` GitHub
+App and web-flow-signed by GitHub, satisfying `required_signatures` on
+`main` without a personal access token. See
+[`docs/security/repo-config.md`](docs/security/repo-config.md#app-based-bump-auth).
 
 ## Versioning
 
@@ -172,65 +120,42 @@ thin.
 
 ## Continuous integration
 
-Every PR and push to `main` runs the required jobs that gate auto-merge.
-Functional checks:
+Every PR and push to `main` runs a gated set of required checks before
+auto-merge. The authoritative check list lives in
+[`docs/security/required-checks.md`](docs/security/required-checks.md);
+the full job inventory + cron schedule lives in
+[`docs/architecture/ci.md`](docs/architecture/ci.md).
 
-| Job                   | Runner             | What it tests |
-|-----------------------|--------------------|---------------|
-| `flake-check`         | `ubuntu-latest`    | `nix flake check` — eval, treefmt, deadnix, statix, actionlint, yamllint, shellcheck, README-staleness, schema |
-| `build-linpeas`       | `ubuntu-latest`    | `nix build .#linpeas` — fetches upstream `linpeas.sh`, verifies SRI hash, builds the derivation |
-| `smoke-test`          | `ubuntu-latest`    | `./result/bin/linpeas -h` exits 0 |
-| `build-linpeas-arm64` | `ubuntu-24.04-arm` | aarch64 build of `linpeas` |
-| `smoke-test-arm64`    | `ubuntu-24.04-arm` | aarch64 `-h` smoke |
-| `image-smoke`         | `ubuntu-latest`    | builds OCI image, `docker load`, `docker run --rm <img> -h` exits 0 |
-| `image-smoke-arm64`   | `ubuntu-24.04-arm` | aarch64 OCI image smoke |
-| `bundle-smoke`        | `ubuntu-latest`    | builds bundle, `./result/linpeas-bundle.sh -h` exits 0 |
+<!-- Alphabetical by category. -->
 
-Self-enforcing invariant checks:
+- **Build + smoke**: `build-linpeas`, `build-linpeas-arm64`,
+  `bundle-smoke`, `flake-check`, `image-smoke`, `image-smoke-arm64`,
+  `smoke-test`, `smoke-test-arm64`.
+- **Conventional Commits**: `commitlint` (per-commit), `lint-pr-title`
+  (PR title).
+- **Doc quality**: `editorconfig`, `markdownlint`, `typos`.
+- **Security/invariant lints**: `dashboard-data-tests`,
+  `pr-workflows-no-secrets`, `renovate-invariants`,
+  `required-checks-no-paths`, `tag-protection-drift-check`,
+  `uses-sha-pinned`.
 
-| Job                        | What it enforces |
-|----------------------------|------------------|
-| `dashboard-data-tests`       | `scripts/gen-dashboard-data.sh` security guards (pin shape, asset-URL prefix, missing-field hard-fail) |
-| `required-checks-no-paths`   | No required workflow declares `paths:` / `paths-ignore:` under `pull_request:` — closes the auto-merge path-filter trap |
-| `pr-workflows-no-secrets`    | PR-triggered workflows reference no `secrets.*` other than `secrets.GITHUB_TOKEN` (CIW-4) |
-| `uses-sha-pinned`            | Every `uses:` in `.github/workflows/*.yml` + `.github/actions/**/*.yml` is a full 40-hex SHA with a `# vX.Y.Z` comment (or a `./...` self-ref) |
-| `renovate-invariants`        | `renovate.json` keeps `helpers:pinGitHubActionDigests`, non-empty `minimumReleaseAge`, per-manager `automerge`, and `pinDigests: true` for `github-actions` |
-| `tag-protection-drift-check` | The `release-tag-protection` ruleset still blocks deletion / non-FF / update of release-tag refs |
-
-The authoritative required-check list lives in
-[`docs/security/required-checks.md`](docs/security/required-checks.md); it
-mirrors the `protect-main` branch ruleset.
-
-Merge policy: **merge-commit only**, enforced both repo-wide
-(`allow_merge_commit=true`, others false) and by the `protect-main` ruleset
-(`pull_request.allowed_merge_methods=["merge"]`). Branch commits land
-verbatim on `main`; every commit (branch + merge) must be signed —
-`required_signatures` is enforced. Each branch commit must independently
-satisfy Conventional Commits (`commitlint` is a required check); the PR
-title is the merge-commit subject and is independently lint-checked by
-`pr-title-lint`.
-
-A non-blocking coverage matrix runs `flake-check` and `build-linpeas` across
-`ubuntu-latest` / `macos-latest` × stable Nix / unstable Nix. Failures there
-surface in the PR view but do not gate merges.
-
-Cache: `DeterminateSystems/flakehub-cache-action` (free for public repos).
-All third-party actions are SHA-pinned with `# vX` version comments; the
-`uses-sha-pinned` CI lint enforces this and Renovate maintains it.
+Merge policy: **merge-commit only**, with `required_signatures`
+enforced. Every branch commit must independently pass `commitlint` and be
+signed; see
+[`docs/development/git.md`](docs/development/git.md).
 
 Defense-in-depth supply-chain layers (advisory or implicit, not in the
-required-check table):
+required-check table; alphabetical):
 
+- `actions.permissions.allowed_actions` = `selected` with a vendor
+  allowlist
+  ([`docs/security/allowed-actions.md`](docs/security/allowed-actions.md)).
+- `image-cve-scan` (Trivy → code-scanning SARIF, advisory only;
+  prevention path is `update-flake-lock`).
+- `release-tag-protection` ruleset blocks delete / non-FF / update on
+  release tags; drift asserted by `tag-protection-drift-check`.
 - `step-security/harden-runner` runs as the first step in every job
-  (`egress-policy: audit`) so unexpected runner egress is recorded.
-- `image-cve-scan` runs Trivy against the published OCI image and uploads
-  SARIF to code-scanning. Advisory only (`exit-code: 0`, `ignore-unfixed`);
-  the prevention path is a nixpkgs auto-bump via `update-flake-lock`.
-- `actions.permissions.allowed_actions` is `selected` with a vendor
-  allowlist (see [`docs/security/allowed-actions.md`](docs/security/allowed-actions.md)).
-- Release tags are protected by the `release-tag-protection` ruleset
-  (no delete / no non-fast-forward / no update); drift is asserted by
-  `tag-protection-drift-check`.
+  (`egress-policy: audit`).
 
 ### Release attestation verification
 
@@ -328,21 +253,46 @@ distinction between build-provenance attestations and content trust.
 ```
 <!-- END flake-show -->
 
+## Git workflow
+
+Branches follow `type/description` (kebab-case); commits follow
+Conventional Commits and must be signed. PRs land via merge-commit only;
+rebase + squash are disabled to preserve branch-commit signatures.
+
+Full runbook — branch naming, commit signing, pre-commit hook list,
+local lint commands — lives in
+[`docs/development/git.md`](docs/development/git.md).
+
+## Repository configuration
+
+Repository-side posture is locked down: `main` is ruleset-protected with
+required checks + signed commits + merge-only; release tags are
+ruleset-protected against delete / non-FF / update; only allow-listed
+action vendors can run; bump workflows authenticate as a scoped GitHub
+App rather than a PAT.
+
+Full breakdown — allowed-actions allowlist, App-based bump auth, branch
++ tag protection, required-check list — lives in
+[`docs/security/repo-config.md`](docs/security/repo-config.md).
+
 ## Development
 
 ```sh
+# Entry points.
 nix develop          # enter dev shell (or direnv allow)
+pre-commit install   # one-time, wires git hooks
+
+# just recipes (alphabetical).
 just                 # list recipes
 just build           # nix build .#linpeas
+just bump            # refresh linpeas pin from upstream
 just check           # nix flake check
 just fmt             # nix fmt
 just lint            # pre-commit run --all-files
-just bump            # refresh linpeas pin from upstream
 just show            # refresh README flake-show block
 just site            # nix build .#site
 just site-data       # regenerate docs/_data/dashboard.yml
 just site-dev        # local preview at http://127.0.0.1:8000
-pre-commit install   # one-time, wires git hooks
 ```
 
 ## License and attribution
