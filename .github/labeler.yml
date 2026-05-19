@@ -1,0 +1,47 @@
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/workflows/**
+          - .github/actions/**
+          - .github/rulesets/**
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.md"
+          - docs/**
+          - mkdocs.yml
+
+nix:
+  - changed-files:
+      - any-glob-to-any-file:
+          - flake.nix
+          - flake.lock
+          - treefmt.nix
+
+scripts:
+  - changed-files:
+      - any-glob-to-any-file:
+          - scripts/**
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - tests/**
+
+security:
+  - changed-files:
+      - any-glob-to-any-file:
+          - docs/security/**
+          - SECURITY.md
+          - .github/rulesets/**
+
+pin:
+  - changed-files:
+      - any-glob-to-any-file:
+          - linpeas-pin.json
+
+renovate:
+  - changed-files:
+      - any-glob-to-any-file:
+          - renovate.json
