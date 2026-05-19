@@ -272,7 +272,7 @@ action vendors can run; bump workflows authenticate as a scoped GitHub
 App rather than a PAT.
 
 Full breakdown — allowed-actions allowlist, App-based bump auth, branch
-+ tag protection, required-check list — lives in
+and tag protection, required-check list — lives in
 [`docs/security/repo-config.md`](docs/security/repo-config.md).
 
 ## Development
