@@ -13,6 +13,8 @@
       enable = true;
       indent_size = 2;
     };
+    # TOML formatter — covers `lychee.toml` and `_typos.toml`.
+    taplo.enable = true;
   };
 
   settings.global.excludes = [
