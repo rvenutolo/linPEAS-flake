@@ -5,4 +5,5 @@ extend-exclude = [
   "docs/_data/**",
   "result*",
   ".direnv/**",
+  "tests/fixtures/**",
 ]

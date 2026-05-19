@@ -206,15 +206,21 @@ distinction between build-provenance attestations and content trust.
 ├───checks
 │   ├───aarch64-darwin
 │   │   ├───formatting: derivation 'treefmt-check'
+│   │   ├───linpeas-build: derivation 'linpeas-20260510-cd4bd619'
 │   │   └───pre-commit: derivation 'pre-commit-run'
 │   ├───aarch64-linux
 │   │   ├───formatting: derivation 'treefmt-check'
+│   │   ├───linpeas-build: derivation 'linpeas-20260510-cd4bd619'
+│   │   ├───linpeas-bundle-build: derivation 'linpeas-bundle-20260510-cd4bd619'
 │   │   └───pre-commit: derivation 'pre-commit-run'
 │   ├───x86_64-darwin
 │   │   ├───formatting: derivation 'treefmt-check'
+│   │   ├───linpeas-build: derivation 'linpeas-20260510-cd4bd619'
 │   │   └───pre-commit: derivation 'pre-commit-run'
 │   └───x86_64-linux
 │       ├───formatting: derivation 'treefmt-check'
+│       ├───linpeas-build: derivation 'linpeas-20260510-cd4bd619'
+│       ├───linpeas-bundle-build: derivation 'linpeas-bundle-20260510-cd4bd619'
 │       └───pre-commit: derivation 'pre-commit-run'
 ├───devShells
 │   ├───aarch64-darwin

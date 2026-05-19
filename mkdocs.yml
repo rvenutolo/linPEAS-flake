@@ -85,6 +85,7 @@ nav:
       - Flake-input bumps: architecture/flake-input-bumps.md
   - Development:
       - Git workflow: development/git.md
+      - Linting & formatting: development/linting.md
   - Security:
       - Repository configuration: security/repo-config.md
       - Settings posture: security/settings-posture.md

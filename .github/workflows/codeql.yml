@@ -7,14 +7,12 @@ name: codeql
 # tab. Shell support is deliberately omitted — CodeQL's `shell` analysis
 # is limited and `shellcheck` already covers our `run:` blocks.
 #
-# **Advisory only.** `codeql-action/analyze` is invoked without
-# `fail-on:`, so findings upload to the Security tab but do NOT fail
-# this workflow. A green run is therefore evidence that the scan
-# completed, NOT evidence that zero findings exist. The branch
-# protection required-check covers "scan ran"; closing the loop on
-# findings requires a maintainer to read the Security tab. See
-# SECURITY.md "Supply-chain posture monitoring" for the documented
-# policy on this.
+# Not in branch protection; failure of this workflow does NOT block
+# merge. The `analyze` step is invoked with `fail-on: critical`, so a
+# CRITICAL finding fails the job and — on push to main — the `notify`
+# job opens a deduped issue via `notify-workflow-result`. Findings
+# below CRITICAL still upload to the Security tab for maintainer
+# review. See SECURITY.md "Supply-chain posture monitoring".
 
 on:
   pull_request:
@@ -36,6 +34,7 @@ jobs:
   analyze:
     name: analyze (actions)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       security-events: write # upload-sarif
@@ -57,3 +56,38 @@ jobs:
         uses: github/codeql-action/analyze@458d36d7d4f47d0dd16ca424c1d3cda0060f1360 # v3 (D2)
         with:
           category: "/language:actions"
+          # Fail the workflow on any CRITICAL-severity finding so the
+          # signal is not silent. Lower-severity findings still upload
+          # to the Security tab.
+          fail-on: critical
+
+  notify:
+    name: notify
+    needs: analyze
+    if: always() && github.event_name == 'push' && needs.analyze.result == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      issues: write
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: failure
+          label: codeql-critical
+          title: "codeql: CRITICAL finding in workflow analysis"
+          body: |
+            `codeql / analyze` failed on a CRITICAL-severity finding in the
+            GitHub Actions workflow analysis.
+
+            - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            - Code Scanning tab: ${{ github.server_url }}/${{ github.repository }}/security/code-scanning?query=tool%3ACodeQL
+
+            Remediation: review the finding in the Security tab and apply
+            the suggested fix to the offending workflow file.
+          github-token: ${{ secrets.GITHUB_TOKEN }}

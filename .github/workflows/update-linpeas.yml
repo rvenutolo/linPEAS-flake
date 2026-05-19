@@ -20,6 +20,7 @@ jobs:
   # in the `push-and-merge` job below.
   compute-pin:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     outputs:
@@ -91,6 +92,7 @@ jobs:
     needs: compute-pin
     if: needs.compute-pin.outputs.changed == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -218,6 +220,7 @@ jobs:
     # Always-runs so we both file on failure and auto-close on next green run.
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       issues: write
     steps:
