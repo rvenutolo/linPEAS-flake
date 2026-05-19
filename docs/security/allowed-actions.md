@@ -28,35 +28,36 @@ wagoid/*
 ## Adding a vendor
 
 1. Edit this doc — append the new pattern.
-2. Edit the live setting:
 
-   ```bash
-   gh api -X PUT /repos/rvenutolo/linPEAS-flake/actions/permissions/selected-actions --input - <<'JSON'
-   {
-     "github_owned_allowed": true,
-     "verified_allowed": false,
-     "patterns_allowed": [
-       "actions/*",
-       "anchore/*",
-       "aquasecurity/*",
-       "cachix/*",
-       "crate-ci/*",
-       "DavidAnson/*",
-       "DeterminateSystems/*",
-       "editorconfig-checker/*",
-       "github/*",
-       "lycheeverse/*",
-       "peter-evans/*",
-       "rvenutolo/*",
-       "step-security/*",
-       "wagoid/*",
-       "NEW_VENDOR/*"
-     ]
-   }
-   JSON
-   ```
+1. Edit the live setting:
 
-3. Commit the doc change in the same PR that introduces the new `uses:` reference.
+    ```bash
+    gh api -X PUT /repos/rvenutolo/linPEAS-flake/actions/permissions/selected-actions --input - <<'JSON'
+    {
+      "github_owned_allowed": true,
+      "verified_allowed": false,
+      "patterns_allowed": [
+        "actions/*",
+        "anchore/*",
+        "aquasecurity/*",
+        "cachix/*",
+        "crate-ci/*",
+        "DavidAnson/*",
+        "DeterminateSystems/*",
+        "editorconfig-checker/*",
+        "github/*",
+        "lycheeverse/*",
+        "peter-evans/*",
+        "rvenutolo/*",
+        "step-security/*",
+        "wagoid/*",
+        "NEW_VENDOR/*"
+      ]
+    }
+    JSON
+    ```
+
+1. Commit the doc change in the same PR that introduces the new `uses:` reference.
 
 `github_owned_allowed: true` permits `actions/*` and `github/*` implicitly — but listing them explicitly here is defensive against future GitHub-side semantic drift.
 

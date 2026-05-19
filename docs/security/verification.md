@@ -70,17 +70,17 @@ and `linux/arm64`. **SLSA attestations are per-arch**, not per-manifest.
 This means:
 
 - `gh attestation verify oci://docker.io/rvenutolo/linpeas:<tag>` may
-  not resolve cleanly against the manifest index alone — point the verify
-  at the arch-specific image (or pull on the target arch and use the
-  resolved `RepoDigests` value).
+    not resolve cleanly against the manifest index alone — point the verify
+    at the arch-specific image (or pull on the target arch and use the
+    resolved `RepoDigests` value).
 - Each arch image was independently built from the same commit of this
-  repo, so the attestations cover the same source provenance.
+    repo, so the attestations cover the same source provenance.
 - The manifest index itself is **not** attested. An attacker with push
-  to either registry could repoint the manifest at unattested images;
-  the verify step in `release-on-bump.yml` would catch this at release
-  time, but consumers who only verify the manifest pointer (not the
-  arch image) would miss it. Always verify against the resolved
-  arch-image digest.
+    to either registry could repoint the manifest at unattested images;
+    the verify step in `release-on-bump.yml` would catch this at release
+    time, but consumers who only verify the manifest pointer (not the
+    arch image) would miss it. Always verify against the resolved
+    arch-image digest.
 
 ## 4. Verify the daily parity check is current
 

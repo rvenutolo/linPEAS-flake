@@ -14,27 +14,27 @@ ruleset.
 
 ## Required contexts
 
-| Context                    | Source workflow | Source file                          |
-|----------------------------|-----------------|--------------------------------------|
-| flake-check                | ci              | .github/workflows/ci.yml             |
-| build-linpeas              | ci              | .github/workflows/ci.yml             |
-| smoke-test                 | ci              | .github/workflows/ci.yml             |
-| build-linpeas-arm64        | ci              | .github/workflows/ci.yml             |
-| smoke-test-arm64           | ci              | .github/workflows/ci.yml             |
-| image-smoke                | ci              | .github/workflows/ci.yml             |
-| image-smoke-arm64          | ci              | .github/workflows/ci.yml             |
-| bundle-smoke               | ci              | .github/workflows/ci.yml             |
-| dashboard-data-tests       | ci              | .github/workflows/ci.yml             |
-| required-checks-no-paths   | ci              | .github/workflows/ci.yml             |
-| pr-workflows-no-secrets    | ci              | .github/workflows/ci.yml             |
-| tag-protection-drift-check | ci              | .github/workflows/ci.yml             |
-| renovate-invariants        | ci              | .github/workflows/ci.yml             |
-| uses-sha-pinned            | ci              | .github/workflows/ci.yml             |
-| markdownlint               | ci              | .github/workflows/ci.yml             |
-| typos                      | ci              | .github/workflows/ci.yml             |
-| editorconfig               | ci              | .github/workflows/ci.yml             |
-| commitlint                 | ci              | .github/workflows/ci.yml             |
-| lint-pr-title              | pr-title-lint   | .github/workflows/pr-title-lint.yml  |
+| Context                    | Source workflow | Source file                         |
+| -------------------------- | --------------- | ----------------------------------- |
+| flake-check                | ci              | .github/workflows/ci.yml            |
+| build-linpeas              | ci              | .github/workflows/ci.yml            |
+| smoke-test                 | ci              | .github/workflows/ci.yml            |
+| build-linpeas-arm64        | ci              | .github/workflows/ci.yml            |
+| smoke-test-arm64           | ci              | .github/workflows/ci.yml            |
+| image-smoke                | ci              | .github/workflows/ci.yml            |
+| image-smoke-arm64          | ci              | .github/workflows/ci.yml            |
+| bundle-smoke               | ci              | .github/workflows/ci.yml            |
+| dashboard-data-tests       | ci              | .github/workflows/ci.yml            |
+| required-checks-no-paths   | ci              | .github/workflows/ci.yml            |
+| pr-workflows-no-secrets    | ci              | .github/workflows/ci.yml            |
+| tag-protection-drift-check | ci              | .github/workflows/ci.yml            |
+| renovate-invariants        | ci              | .github/workflows/ci.yml            |
+| uses-sha-pinned            | ci              | .github/workflows/ci.yml            |
+| markdownlint               | ci              | .github/workflows/ci.yml            |
+| typos                      | ci              | .github/workflows/ci.yml            |
+| editorconfig               | ci              | .github/workflows/ci.yml            |
+| commitlint                 | ci              | .github/workflows/ci.yml            |
+| lint-pr-title              | pr-title-lint   | .github/workflows/pr-title-lint.yml |
 
 ## Path-filter invariant
 
@@ -54,20 +54,22 @@ required-check list above, so the enforcement is self-bootstrapping
 When the ruleset's required-check list changes:
 
 1. Update the table above to match.
-2. If a new workflow file appears in column 3, verify it does not declare
-   `paths:` / `paths-ignore:` under `pull_request:`. The lint will catch
-   this on PR, but the doc must reflect reality.
-3. Read the current list with:
 
-   ```sh
-   gh api repos/rvenutolo/linPEAS-flake/rules/branches/main \
-     --jq '.[] | select(.type=="required_status_checks")
-                | .parameters.required_status_checks[].context'
-   ```
+1. If a new workflow file appears in column 3, verify it does not declare
+    `paths:` / `paths-ignore:` under `pull_request:`. The lint will catch
+    this on PR, but the doc must reflect reality.
 
-   The ruleset id (for `PUT rulesets/<id>` updates) can be discovered with:
+1. Read the current list with:
 
-   ```sh
-   gh api repos/rvenutolo/linPEAS-flake/rulesets \
-     --jq '.[] | select(.name=="protect-main") | .id'
-   ```
+    ```sh
+    gh api repos/rvenutolo/linPEAS-flake/rules/branches/main \
+      --jq '.[] | select(.type=="required_status_checks")
+                 | .parameters.required_status_checks[].context'
+    ```
+
+    The ruleset id (for `PUT rulesets/<id>` updates) can be discovered with:
+
+    ```sh
+    gh api repos/rvenutolo/linPEAS-flake/rulesets \
+      --jq '.[] | select(.name=="protect-main") | .id'
+    ```

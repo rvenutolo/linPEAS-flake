@@ -49,17 +49,17 @@ and `linux/arm64`. **SLSA attestations are per-arch**, not per-manifest.
 This means:
 
 - `gh attestation verify oci://docker.io/rvenutolo/linpeas:<tag>` may
-  not resolve cleanly against the manifest index alone — point the verify
-  at the arch-specific image (or pull on the target arch and use the
-  resolved `RepoDigests` value).
+    not resolve cleanly against the manifest index alone — point the verify
+    at the arch-specific image (or pull on the target arch and use the
+    resolved `RepoDigests` value).
 - Each arch image was independently built from the same commit of this
-  repo, so the attestations cover the same source provenance.
+    repo, so the attestations cover the same source provenance.
 - The manifest index itself is **not** attested. An attacker with push
-  to either registry could repoint the manifest at unattested images;
-  the verify step in `release-on-bump.yml` would catch this at release
-  time, but consumers who only verify the manifest pointer (not the
-  arch image) would miss it. Always verify against the resolved
-  arch-image digest.
+    to either registry could repoint the manifest at unattested images;
+    the verify step in `release-on-bump.yml` would catch this at release
+    time, but consumers who only verify the manifest pointer (not the
+    arch image) would miss it. Always verify against the resolved
+    arch-image digest.
 
 The release pipeline's `verify` job validates the per-arch digests
 captured at push time. It does **not** re-resolve the published
@@ -82,7 +82,7 @@ Three independent automations merge to `main` without human review:
 - `update-linpeas.yml` (daily) — upstream `linpeas.sh` content.
 - `update-flake-lock.yml` (weekly) — `nixpkgs` and other flake input revs.
 - Renovate (weekly) — GitHub Action SHAs and the pinned Nix installer
-  version.
+    version.
 
 Each is gated by CI (build success + SRI-hash integrity), not by content
 review. A compromise of any upstream feed produces an attested release
@@ -103,43 +103,45 @@ in branch protection's required-check set for content-policy reasons
 documented below.
 
 - **`codeql.yml`** scans GitHub Actions workflow definitions on every
-  PR, push to `main`, and weekly. **Findings are advisory.** The
-  workflow does not pass `fail-on:` to `codeql-action/analyze`, so a
-  high-severity finding uploads to the Security tab but does **not**
-  fail the workflow. A green CodeQL run therefore proves that the
-  scan completed, **not** that zero findings exist. Treating
-  "CodeQL green" as evidence of workflow safety is a misreading.
-  Closing the loop on findings requires a maintainer to review the
-  Security tab when a PR touches `.github/workflows/`. CodeQL
-  complements (does not replace) the `zizmor` pre-commit hook and
-  the SHA-pinning + `permissions:` discipline applied workflow-wide.
+    PR, push to `main`, and weekly. **Findings are advisory.** The
+    workflow does not pass `fail-on:` to `codeql-action/analyze`, so a
+    high-severity finding uploads to the Security tab but does **not**
+    fail the workflow. A green CodeQL run therefore proves that the
+    scan completed, **not** that zero findings exist. Treating
+    "CodeQL green" as evidence of workflow safety is a misreading.
+    Closing the loop on findings requires a maintainer to review the
+    Security tab when a PR touches `.github/workflows/`. CodeQL
+    complements (does not replace) the `zizmor` pre-commit hook and
+    the SHA-pinning + `permissions:` discipline applied workflow-wide.
 
 The `codeql.yml` workflow is not in branch protection's required-check set. A CodeQL infrastructure failure must not block linpeas pin bumps; failure surfacing is via the standard GitHub email channel.
 
 ## Secrets
 
 - `BUMP_PAT` — fine-grained personal access token used by
-  `update-linpeas.yml` and `update-flake-lock.yml` to open and auto-merge
-  bump PRs. Required scopes: this repository only, with `contents: write`
-  and `pull-requests: write`. Rotate annually (or on suspected
-  compromise). Stored as a repository secret.
-- `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN_RW` / `DOCKERHUB_TOKEN_DELETE` — Docker Hub access tokens used by the release pipeline. The split limits blast radius:
-  - `DOCKERHUB_TOKEN_RW` — Read, Write on `rvenutolo/linpeas`. Used by `release-on-bump.yml` (per-arch + manifest + verify) and `verify-latest-release.yml`. Cannot delete tags.
-  - `DOCKERHUB_TOKEN_DELETE` — Read, Write, Delete on `rvenutolo/linpeas`. Used ONLY by `dockerhub-sync.yml` (`peter-evans/dockerhub-description` needs Delete to PATCH repo metadata).
+    `update-linpeas.yml` and `update-flake-lock.yml` to open and auto-merge
+    bump PRs. Required scopes: this repository only, with `contents: write`
+    and `pull-requests: write`. Rotate annually (or on suspected
+    compromise). Stored as a repository secret.
 
-  The `Delete` capability is required by the `peter-evans/dockerhub-description`
-  action used in `dockerhub-sync.yml`, which calls the Docker Hub repo-metadata
-  endpoint; a `Read, Write`-only PAT returns `403 Forbidden` on that endpoint
-  (verified empirically 2026-05-17). Rotation: on suspected compromise only —
-  no calendar cadence. If compromise is suspected: revoke at
-  <https://hub.docker.com/settings/security>, generate a replacement,
-  update `gh secret set DOCKERHUB_TOKEN_RW --repo rvenutolo/linPEAS-flake` or
-  `gh secret set DOCKERHUB_TOKEN_DELETE --repo rvenutolo/linPEAS-flake` as
-  appropriate. Compromise blast radius: a `DOCKERHUB_TOKEN_RW` leak allows
-  pushing new tags but not deleting existing ones; a `DOCKERHUB_TOKEN_DELETE`
-  leak allows tag deletion in addition. Mitigation: consumers verify the
-  SLSA attestation with `gh attestation verify`; mismatched attestation
-  is the canonical detection signal.
+- `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN_RW` / `DOCKERHUB_TOKEN_DELETE` — Docker Hub access tokens used by the release pipeline. The split limits blast radius:
+
+    - `DOCKERHUB_TOKEN_RW` — Read, Write on `rvenutolo/linpeas`. Used by `release-on-bump.yml` (per-arch + manifest + verify) and `verify-latest-release.yml`. Cannot delete tags.
+    - `DOCKERHUB_TOKEN_DELETE` — Read, Write, Delete on `rvenutolo/linpeas`. Used ONLY by `dockerhub-sync.yml` (`peter-evans/dockerhub-description` needs Delete to PATCH repo metadata).
+
+    The `Delete` capability is required by the `peter-evans/dockerhub-description`
+    action used in `dockerhub-sync.yml`, which calls the Docker Hub repo-metadata
+    endpoint; a `Read, Write`-only PAT returns `403 Forbidden` on that endpoint
+    (verified empirically 2026-05-17). Rotation: on suspected compromise only —
+    no calendar cadence. If compromise is suspected: revoke at
+    <https://hub.docker.com/settings/security>, generate a replacement,
+    update `gh secret set DOCKERHUB_TOKEN_RW --repo rvenutolo/linPEAS-flake` or
+    `gh secret set DOCKERHUB_TOKEN_DELETE --repo rvenutolo/linPEAS-flake` as
+    appropriate. Compromise blast radius: a `DOCKERHUB_TOKEN_RW` leak allows
+    pushing new tags but not deleting existing ones; a `DOCKERHUB_TOKEN_DELETE`
+    leak allows tag deletion in addition. Mitigation: consumers verify the
+    SLSA attestation with `gh attestation verify`; mismatched attestation
+    is the canonical detection signal.
 
 ## SBOM attestations
 

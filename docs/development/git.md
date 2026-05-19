@@ -7,7 +7,7 @@ How to commit, sign, and merge changes to `linPEAS-flake`.
 `type/description` in kebab-case. Allowed types (alphabetical):
 
 - `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`,
-  `revert`, `style`, `test`
+    `revert`, `style`, `test`
 
 Examples: `feat/add-lz4-support`, `fix/s3-retry-timeout`,
 `chore/update-quarkus-bom`.
@@ -18,10 +18,10 @@ Every commit on `main` must be signed. The `required_signatures` rule is
 enforced by the `protect-main` ruleset.
 
 - **Branch commits** sign locally via your SSH or GPG key. Configure once:
-  `git config commit.gpgsign true` (and set `user.signingkey`).
+    `git config commit.gpgsign true` (and set `user.signingkey`).
 - **Bot commits** originate from REST `PUT /repos/{owner}/{repo}/contents/{path}`
-  authenticated as the `linpeas-flake-bumper` GitHub App. GitHub web-flow-signs
-  every such commit.
+    authenticated as the `linpeas-flake-bumper` GitHub App. GitHub web-flow-signs
+    every such commit.
 
 ## Conventional Commits
 
@@ -30,7 +30,7 @@ Every branch commit must independently satisfy
 
 - `commitlint` — required check; runs per commit on a PR.
 - `lint-pr-title` (workflow `pr-title-lint`) — required check; runs against
-  the PR title.
+    the PR title.
 
 The PR title becomes the merge-commit subject (`merge_commit_title=PR_TITLE`);
 the PR body becomes the merge-commit body (`merge_commit_message=PR_BODY`).
@@ -70,22 +70,22 @@ the PR. Don't leak WIP commits onto `main`.
 
 Hooks (alphabetical):
 
-| Hook                      | What it checks |
-|---------------------------|----------------|
-| `actionlint`              | GitHub Actions workflow syntax. |
-| `commitizen`              | Commit message satisfies Conventional Commits (local parity with the CI `commitlint` job). |
-| `deadnix`                 | Unused Nix bindings. |
-| `editorconfig-checker`    | `.editorconfig` compliance (charset, line endings, trailing whitespace, final newline). |
-| `markdownlint`            | Markdown style + structure (mirrors the CI `markdownlint` job). |
-| `nixpkgs-fmt`             | Nix file formatting. |
+| Hook                      | What it checks                                                                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `actionlint`              | GitHub Actions workflow syntax.                                                                                                 |
+| `commitizen`              | Commit message satisfies Conventional Commits (local parity with the CI `commitlint` job).                                      |
+| `deadnix`                 | Unused Nix bindings.                                                                                                            |
+| `editorconfig-checker`    | `.editorconfig` compliance (charset, line endings, trailing whitespace, final newline).                                         |
+| `markdownlint`            | Markdown style + structure (mirrors the CI `markdownlint` job).                                                                 |
+| `nixpkgs-fmt`             | Nix file formatting.                                                                                                            |
 | `readme-flake-show-fresh` | `README.md` `flake-show` block matches current flake outputs (guarded with `NIX_BUILD_TOP` so it skips inside the Nix sandbox). |
-| `shellcheck`              | Shell-script static analysis. |
-| `statix`                  | Nix anti-pattern lint. |
-| `treefmt`                 | Multi-language formatter aggregator (covers `shfmt`, `prettier`, etc). |
-| `typos`                   | Spell-check across the repo. |
-| `uses-sha-pinned`         | Every `uses:` is SHA-pinned (guarded with `NIX_BUILD_TOP`). |
-| `yamllint`                | YAML style. |
-| `zizmor`                  | GitHub Actions security audit. |
+| `shellcheck`              | Shell-script static analysis.                                                                                                   |
+| `statix`                  | Nix anti-pattern lint.                                                                                                          |
+| `treefmt`                 | Multi-language formatter aggregator (covers `shfmt`, `prettier`, etc).                                                          |
+| `typos`                   | Spell-check across the repo.                                                                                                    |
+| `uses-sha-pinned`         | Every `uses:` is SHA-pinned (guarded with `NIX_BUILD_TOP`).                                                                     |
+| `yamllint`                | YAML style.                                                                                                                     |
+| `zizmor`                  | GitHub Actions security audit.                                                                                                  |
 
 Lychee is not a pre-commit hook (it hits the network and can flake on
 offline work). Run it manually with `just lint-links`; CI runs it on a

@@ -20,10 +20,9 @@ not as a personal access token.
 - **Client ID:** `vars.BUMP_APP_CLIENT_ID` (public).
 - **Private key:** `secrets.BUMP_APP_PRIVATE_KEY` (PEM).
 - **Installation:** scoped to this repository only.
-- **Permissions:** `Contents: Read and write`, `Pull requests: Read and
-  write`. No `Workflows` permission.
+- **Permissions:** `Contents: Read and write`, `Pull requests: Read and write`. No `Workflows` permission.
 - **Token lifetime:** one hour; minted per job by
-  `actions/create-github-app-token` and automatically revoked at job end.
+    `actions/create-github-app-token` and automatically revoked at job end.
 
 {% raw %}
 Tokens flow only through `${{ steps.app-token.outputs.token }}` →
@@ -45,7 +44,7 @@ for the credential split.
 Merge-commit only. Enforced at both layers:
 
 - **Repo:** `allow_merge_commit=true`, `allow_rebase_merge=false`,
-  `allow_squash_merge=false`.
+    `allow_squash_merge=false`.
 - **Ruleset:** `pull_request.allowed_merge_methods=["merge"]`.
 
 Why: see [`../development/git.md`](../development/git.md#merge-policy).

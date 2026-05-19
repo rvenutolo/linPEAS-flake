@@ -92,15 +92,15 @@ trigger semantics, and credential split live in
 
 <!-- Chronological by cron — daily then weekly. -->
 
-| Workflow                | When                                          | Purpose |
-|-------------------------|-----------------------------------------------|---------|
-| `update-linpeas.yml`    | daily 09:00 UTC + dispatch                    | Bumps `linpeas-pin.json` to the latest upstream tag. Opens PR; auto-merges on green. |
-| `stale-pin-check.yml`   | daily 10:30 UTC                               | Files a deduped issue if `update-linpeas` is stalled. |
-| `verify-latest-release.yml` | daily 12:00 UTC                           | Re-verifies the latest release's attestations and re-fetches upstream `linpeas.sh` to confirm the pinned SRI hash. |
-| `release-on-bump.yml`   | push to `main` changing the pin               | Tags the release, builds + pushes bundle + per-arch OCI images (ghcr.io + docker.io), attests SLSA provenance + SBOMs. |
-| `pages.yml`             | push, PR, release, daily 14:00 UTC, dispatch  | Rebuilds the MkDocs site; deploys via OIDC on non-PR events. Not in the required-check set. |
-| `update-flake-lock.yml` | weekly Fri 06:00 UTC                          | Bumps `nixpkgs` via `nix flake update`; opens auto-merging PR. |
-| Renovate                | weekly Fri batch                              | Bumps action SHAs + tracked flake inputs after a 7-day cooldown. |
+| Workflow                    | When                                         | Purpose                                                                                                                |
+| --------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `update-linpeas.yml`        | daily 09:00 UTC + dispatch                   | Bumps `linpeas-pin.json` to the latest upstream tag. Opens PR; auto-merges on green.                                   |
+| `stale-pin-check.yml`       | daily 10:30 UTC                              | Files a deduped issue if `update-linpeas` is stalled.                                                                  |
+| `verify-latest-release.yml` | daily 12:00 UTC                              | Re-verifies the latest release's attestations and re-fetches upstream `linpeas.sh` to confirm the pinned SRI hash.     |
+| `release-on-bump.yml`       | push to `main` changing the pin              | Tags the release, builds + pushes bundle + per-arch OCI images (ghcr.io + docker.io), attests SLSA provenance + SBOMs. |
+| `pages.yml`                 | push, PR, release, daily 14:00 UTC, dispatch | Rebuilds the MkDocs site; deploys via OIDC on non-PR events. Not in the required-check set.                            |
+| `update-flake-lock.yml`     | weekly Fri 06:00 UTC                         | Bumps `nixpkgs` via `nix flake update`; opens auto-merging PR.                                                         |
+| Renovate                    | weekly Fri batch                             | Bumps action SHAs + tracked flake inputs after a 7-day cooldown.                                                       |
 
 Bump-workflow commits are authored by the `linpeas-flake-bumper` GitHub
 App and web-flow-signed by GitHub, satisfying `required_signatures` on
@@ -129,15 +129,15 @@ the full job inventory + cron schedule lives in
 <!-- Alphabetical by category. -->
 
 - **Build + smoke**: `build-linpeas`, `build-linpeas-arm64`,
-  `bundle-smoke`, `flake-check`, `image-smoke`, `image-smoke-arm64`,
-  `smoke-test`, `smoke-test-arm64`.
+    `bundle-smoke`, `flake-check`, `image-smoke`, `image-smoke-arm64`,
+    `smoke-test`, `smoke-test-arm64`.
 - **Conventional Commits**: `commitlint` (per-commit), `lint-pr-title`
-  (PR title).
+    (PR title).
 - **Doc quality**: `editorconfig`, `markdownlint`, `typos`.
 - **Security/invariant lints**: `dashboard-data-tests`,
-  `pr-workflows-no-secrets`, `renovate-invariants`,
-  `required-checks-no-paths`, `tag-protection-drift-check`,
-  `uses-sha-pinned`.
+    `pr-workflows-no-secrets`, `renovate-invariants`,
+    `required-checks-no-paths`, `tag-protection-drift-check`,
+    `uses-sha-pinned`.
 
 Merge policy: **merge-commit only**, with `required_signatures`
 enforced. Every branch commit must independently pass `commitlint` and be
@@ -148,14 +148,14 @@ Defense-in-depth supply-chain layers (advisory or implicit, not in the
 required-check table; alphabetical):
 
 - `actions.permissions.allowed_actions` = `selected` with a vendor
-  allowlist
-  ([`docs/security/allowed-actions.md`](docs/security/allowed-actions.md)).
+    allowlist
+    ([`docs/security/allowed-actions.md`](docs/security/allowed-actions.md)).
 - `image-cve-scan` (Trivy → code-scanning SARIF, advisory only;
-  prevention path is `update-flake-lock`).
+    prevention path is `update-flake-lock`).
 - `release-tag-protection` ruleset blocks delete / non-FF / update on
-  release tags; drift asserted by `tag-protection-drift-check`.
+    release tags; drift asserted by `tag-protection-drift-check`.
 - `step-security/harden-runner` runs as the first step in every job
-  (`egress-policy: audit`).
+    (`egress-policy: audit`).
 
 ### Release attestation verification
 
@@ -173,12 +173,12 @@ Upstream PEASS-ng releases ship no signatures (GPG, cosign, SLSA). Integrity
 rests on:
 
 1. SRI hash pinning in `linpeas-pin.json` — Nix refuses to build on mismatch.
-2. Flake-eval-time assertions on `pin.version` (YYYYMMDD-<hex>) and `pin.url`
-   (peass-ng release prefix) — derivation eval fails on a malformed pin.
-3. GitHub Releases API `digest` field cross-check inside the bump workflow
-   (hard fail if absent — never a silent skip).
-4. Asset-URL prefix validation inside the bump workflow.
-5. Daily upstream parity check (`verify-latest-release.yml`).
+1. Flake-eval-time assertions on `pin.version` (YYYYMMDD-<hex>) and `pin.url`
+    (peass-ng release prefix) — derivation eval fails on a malformed pin.
+1. GitHub Releases API `digest` field cross-check inside the bump workflow
+    (hard fail if absent — never a silent skip).
+1. Asset-URL prefix validation inside the bump workflow.
+1. Daily upstream parity check (`verify-latest-release.yml`).
 
 This matches the trust model of `curl ... | bash`, but with reproducible,
 hash-pinned downloads and SLSA build-provenance attestations. See
@@ -188,6 +188,7 @@ distinction between build-provenance attestations and content trust.
 ## Flake outputs
 
 <!-- BEGIN flake-show -->
+
 ```text
 ├───apps
 │   ├───aarch64-darwin
@@ -251,6 +252,7 @@ distinction between build-provenance attestations and content trust.
         ├───linpeas-image: package 'linpeas.tar.gz'
         └───site: package 'linpeas-flake-site-20260510-cd4bd619'
 ```
+
 <!-- END flake-show -->
 
 ## Git workflow
