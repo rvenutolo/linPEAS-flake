@@ -208,8 +208,8 @@
                 pass_filenames = false;
                 language = "system";
               };
-              # P3.5 / GAP-23: belt-and-braces backup to GitHub-side
-              # sha_pinning_required. Mirrors the NIX_BUILD_TOP guard used
+              # Belt-and-braces backup to the GitHub-side
+              # `sha_pinning_required` setting. Mirrors the NIX_BUILD_TOP guard used
               # by readme-flake-show-fresh so nix flake check doesn't fail
               # inside the sandbox where the script can't reach .github/.
               uses-sha-pinned = {

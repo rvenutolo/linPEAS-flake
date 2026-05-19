@@ -114,7 +114,7 @@ nix build "path:$(pwd)#site" --print-build-logs
 
 The `path:$(pwd)#site` form is required for the `site` derivation —
 it bypasses the git filter so the gitignored `docs/_data/dashboard.yml`
-is visible to the build (see CLAUDE.md → "GitHub Pages site").
+is visible to the build.
 
 ### 6. Run all test suites
 
@@ -199,7 +199,7 @@ For `NixOS/nixpkgs` bumps specifically:
 If a `NixOS/nixpkgs` bump and a `cachix/git-hooks.nix` bump arrive in
 separate Renovate PRs, the order matters when the new nixpkgs `lib`
 adds or removes something `git-hooks.nix` depends on (this is the
-class of incompatibility that caused GAP-20 in the first place).
+class of incompatibility that caused the prior nixpkgs branch mismatch in the first place).
 
 The safe order:
 
@@ -214,7 +214,7 @@ If both PRs land cleanly when merged independently, no action needed.
 
 ## What changed historically
 
-- 2026-05-17 — GAP-20 closure. Bumped `nixos-25.05` → `nixos-25.11`
+- 2026-05-17 — Bumped `nixos-25.05` → `nixos-25.11`
   (PR #63). Advanced `pre-commit-hooks` to upstream master `61ab0e80...`.
   Added Renovate trackers for both pins (PRs #62 and #64). See the
   audit spec (`2026-05-17-automated-build-security-audit.md` section

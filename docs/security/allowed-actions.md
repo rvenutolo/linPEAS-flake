@@ -1,6 +1,6 @@
 # Allowed Actions Vendor Allowlist — `rvenutolo/linPEAS-flake`
 
-`actions.permissions.allowed_actions` is set to `selected` (P3.1, GAP-4, 2026-05-17). Each entry below is a vendor pattern from which `uses:` references may be drawn. Adding a new vendor is a **deliberate** action: see "Adding a vendor" below.
+`actions.permissions.allowed_actions` is set to `selected`. Each entry below is a vendor pattern from which `uses:` references may be drawn. Adding a new vendor is a **deliberate** action: see "Adding a vendor" below.
 
 ## Allowlist (canonical)
 

@@ -59,7 +59,7 @@ jobs:
           # failure correctly. Without explicit attribution, an upstream-API
           # rate-limit looks identical to a stall-detected event and the
           # auto-filed issue suggests irrelevant remediations (BUMP_PAT
-          # validity, asset-URL prefix). AU-P-7.
+          # validity, asset-URL prefix).
           # @arg $1 reason token (pin-malformed | upstream-api-failure
           #         | upstream-tag-malformed | stall-detected)
           emit_failure() {
@@ -72,7 +72,7 @@ jobs:
           }
 
           pin_version="$(jq --raw-output .version linpeas-pin.json)"
-          # Canonical pin shape (per CLAUDE.md "flake.nix pin invariants"):
+          # Canonical pin shape (mirrors the assertion in flake.nix):
           # YYYYMMDD-<7..40 hex>. Tighter than the prior date-prefix-only
           # check so malformed pins are rejected here instead of downstream.
           if [[ ! "${pin_version}" =~ ^([0-9]{4})([0-9]{2})([0-9]{2})-[0-9a-f]{7,40}$ ]]; then
@@ -94,9 +94,8 @@ jobs:
           # Capture upstream call status separately so an API failure
           # (rate-limit, transient 5xx, empty body) is attributed as
           # `reason=upstream-api-failure` rather than `stall-detected` in
-          # the auto-filed issue body. AU-P-7. The `X-GitHub-Api-Version`
-          # header is defense-in-depth, mirroring `scripts/bump-linpeas.sh`
-          # (AU-P-6).
+          # the auto-filed issue body. The `X-GitHub-Api-Version`
+          # header is defense-in-depth, mirroring `scripts/bump-linpeas.sh`.
           upstream_version=""
           if ! upstream_version="$(
             gh api \

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # scripts/check-uses-sha-pinned.sh
 #
-# P3.5 / GAP-23: belt-and-braces lint backup to GitHub-side
-# sha_pinning_required (P1 / GAP-3). Asserts every `uses:` in
+# Belt-and-braces lint backup to the GitHub-side
+# `sha_pinning_required` setting. Asserts every `uses:` in
 # .github/workflows/*.yml (and composite actions in .github/actions/)
 # ends with a full 40-hex SHA, OR is a local path-relative reference
 # (./...) which is intrinsically content-addressed by the checkout.

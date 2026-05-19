@@ -49,7 +49,7 @@ function main() {
   log_info "current pin: ${current_version}"
 
   local release_json
-  # Pin `X-GitHub-Api-Version` (defense-in-depth, AU-P-6). If GitHub ever
+  # Pin `X-GitHub-Api-Version` (defense-in-depth). If GitHub ever
   # ships a v2 of the `releases/latest` schema, the explicit header makes
   # the failure mode "API version mismatch" rather than a downstream
   # "asset URL empty, weird" failure. See:
@@ -64,7 +64,7 @@ function main() {
 
   # Shape-validate before any downstream use: branch name, commit message,
   # PR title, and pin file all interpolate this verbatim. Hoists the
-  # canonical regex (per CLAUDE.md "flake.nix pin invariants") to the
+  # canonical regex (mirrors the assertion in flake.nix) to the
   # entry of the bump chain so a malformed upstream tag is rejected
   # before any artefact is produced. Mirrors the layered "validate-then-use"
   # pattern (flake.nix eval, gen-dashboard-data.sh, release-on-bump.yml).
@@ -100,7 +100,7 @@ function main() {
 
   local tmpfile pin_tmp
   # Declare `pin_tmp` early so the EXIT trap can reference it even if the
-  # second `mktemp` (below) never runs. AU-P-5: previously the trap only
+  # second `mktemp` (below) never runs. Previously the trap only
   # covered `tmpfile`, leaving a leftover `linpeas-pin.json.XXXXXX` in the
   # working tree on partial failure between `mktemp --tmpdir=...` and the
   # final `mv`.

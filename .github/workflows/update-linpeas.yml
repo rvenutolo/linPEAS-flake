@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # AU-P-1 Phase 1: this job runs untrusted Nix-evaluating actions with
+  # This job runs untrusted Nix-evaluating actions with
   # ZERO write credentials. The `BUMP_APP_PRIVATE_KEY` secret is not
   # present in env or on disk here. Compromise of any third-party action
   # SHA below cannot mint an App installation token — the key lives only
@@ -77,7 +77,7 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-  # AU-P-1 Phase 1: bump credentials live here only. The job authenticates
+  # Bump credentials live here only. The job authenticates
   # to the GitHub API as the `linpeas-flake-bumper` GitHub App via a
   # short-lived installation token minted by `actions/create-github-app-token`
   # (Client ID = `vars.BUMP_APP_CLIENT_ID`; private key =
@@ -112,7 +112,7 @@ jobs:
           private-key: ${{ secrets.BUMP_APP_PRIVATE_KEY }}
 
       - name: sanity check artifact
-        # P3.3 / GAP-18: defense-in-depth. compute-pin's bump-linpeas.sh
+        # Defense-in-depth. compute-pin's bump-linpeas.sh
         # already validates pin shape + URL prefix + .digest cross-check;
         # this step re-validates the artifact inside the credential-
         # holding job so a compromised compute-pin cannot ship a malformed
@@ -124,7 +124,7 @@ jobs:
             printf 'artifact produced no diff in linpeas-pin.json - aborting\n' >&2
             exit 1
           fi
-          # Re-validate pin invariants (CLAUDE.md "flake.nix pin invariants").
+          # Re-validate pin invariants (mirrors flake.nix assertions).
           pin_version="$(jq --raw-output .version linpeas-pin.json)"
           pin_url="$(jq --raw-output .url linpeas-pin.json)"
           pin_hash="$(jq --raw-output .hash linpeas-pin.json)"
@@ -229,8 +229,8 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/notify-workflow-result
         with:
-          # AU-P-1: collapse "compute-pin success + push-and-merge skipped"
-          # (no-op cron day) to overall success. See spec §Error handling.
+          # Collapse "compute-pin success + push-and-merge skipped"
+          # (no-op cron day) to overall success.
           result: ${{ needs.push-and-merge.result == 'skipped' && needs.compute-pin.result || needs.push-and-merge.result }}
           label: update-linpeas-failure
           title: "update-linpeas: cron failed"

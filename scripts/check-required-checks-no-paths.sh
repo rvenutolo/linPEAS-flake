@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/check-required-checks-no-paths.sh
 #
-# AU-P-2: verify that no workflow listed in docs/security/required-checks.md
+# Verify that no workflow listed in docs/security/required-checks.md
 # declares `paths:` or `paths-ignore:` under `on.pull_request:`. Such filters
 # would create the auto-merge path-filter trap (skipped checks merging with
 # zero coverage on path-narrow PRs).
@@ -13,7 +13,7 @@ IFS=$'\n\t'
 readonly doc='docs/security/required-checks.md'
 
 if [[ ! -f ${doc} ]]; then
-  printf 'AU-P-2 lint: %s missing\n' "${doc}" >&2
+  printf 'required-checks-no-paths lint: %s missing\n' "${doc}" >&2
   exit 1
 fi
 
@@ -33,7 +33,7 @@ if ((${#workflows[@]} == 0)); then
 fi
 
 if ((${#workflows[@]} == 0)); then
-  printf 'AU-P-2 lint: no workflows found in %s — aborting\n' "${doc}" >&2
+  printf 'required-checks-no-paths lint: no workflows found in %s — aborting\n' "${doc}" >&2
   exit 1
 fi
 
@@ -58,7 +58,7 @@ for wf in "${workflows[@]}"; do
   done
 
   if [[ -z ${resolved} ]]; then
-    printf 'AU-P-2 lint: %s listed in %s but file missing\n' "${wf}" "${doc}" >&2
+    printf 'required-checks-no-paths lint: %s listed in %s but file missing\n' "${wf}" "${doc}" >&2
     failed=1
     continue
   fi
@@ -68,7 +68,7 @@ for wf in "${workflows[@]}"; do
       has("paths") or has("paths-ignore")
     )
   ' "${resolved}" >/dev/null 2>&1; then
-    printf 'AU-P-2 lint: %s declares paths/paths-ignore under pull_request\n' \
+    printf 'required-checks-no-paths lint: %s declares paths/paths-ignore under pull_request\n' \
       "${resolved}" >&2
     failed=1
   fi

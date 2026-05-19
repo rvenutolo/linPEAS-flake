@@ -10,14 +10,14 @@
   "labels": ["dependencies"],
   "packageRules": [
     {
-      "description": "github-actions: pin SHAs and auto-merge after the 7-day quarantine. Per-manager automerge scope (P2.1, GAP-21) ensures a future manager activation (e.g. npm via a new package.json) does NOT inherit automerge.",
+      "description": "github-actions: pin SHAs and auto-merge after the 7-day quarantine. Per-manager automerge scope ensures a future manager activation (e.g. npm via a new package.json) does NOT inherit automerge.",
       "matchManagers": ["github-actions"],
       "groupName": "github-actions",
       "pinDigests": true,
       "automerge": true
     },
     {
-      "description": "Self-reference to local composite action pinned by SHA (CIW-1). Renovate's github-actions manager treats `owner/repo/path@sha` uniformly, so pinDigests above covers the bump path. This rule exists to document intent and to ensure the self-reference is not accidentally excluded by a future matcher.",
+      "description": "Self-reference to local composite action pinned by SHA. Renovate's github-actions manager treats `owner/repo/path@sha` uniformly, so pinDigests above covers the bump path. This rule exists to document intent and to ensure the self-reference is not accidentally excluded by a future matcher.",
       "matchManagers": ["github-actions"],
       "matchPackageNames": ["rvenutolo/linPEAS-flake"],
       "pinDigests": true,

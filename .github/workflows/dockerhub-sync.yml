@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   sync:
-    # P4.6 / GAP-19 (2026-05-17): gate on parent workflow_run success.
+    # Gate on parent workflow_run success.
     # Manual dispatch always runs.
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest

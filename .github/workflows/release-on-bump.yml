@@ -86,14 +86,12 @@ jobs:
           # (YYYYMMDD-<7..40 hex>). Tightened from the prior
           # `^[A-Za-z0-9._/-]+$` allowlist to the same regex enforced at
           # `bump-linpeas.sh`, `flake.nix` eval, `stale-pin-check.yml`, and
-          # `gen-dashboard-data.sh`. Closes the NX-PD-1 cross-layer-parity
-          # tail item deferred from PR #16 to avoid conflict with PRs
-          # #17/#18 on this same workflow.
+          # `gen-dashboard-data.sh`. Cross-layer pin-shape parity.
           if [[ ! "${VERSION}" =~ ^[0-9]{8}-[0-9a-f]{7,40}$ ]]; then
             printf 'refusing to release with non-conformant version: %q\n' "${VERSION}" >&2
             exit 1
           fi
-          # GAP-7 (P2.2, 2026-05-17): pin --target to the triggering
+          # Pin --target to the triggering
           # commit SHA, not the symbolic "main". Without this, if a
           # second push lands on main between this job's checkout and
           # this step, gh release create resolves "main" to the NEWER
@@ -172,7 +170,7 @@ jobs:
           subject-path: linpeas-bundle.sh
 
       - name: generate SBOM for bundle
-        # P4.2 / GAP-12: SPDX-JSON SBOM for the arch-agnostic bundle.
+        # SPDX-JSON SBOM for the arch-agnostic bundle.
         # upload-artifact and upload-release-assets are false; we attach
         # to the release manually below and attest via actions/attest-sbom.
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0 (D2)
@@ -324,7 +322,7 @@ jobs:
           push-to-registry: true
 
       - name: generate SBOM for OCI image (amd64)
-        # P4.2 / GAP-12: SPDX-JSON SBOM for the amd64 image.
+        # SPDX-JSON SBOM for the amd64 image.
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0 (D2)
         with:
           image: rvenutolo/linpeas:${{ needs.release.outputs.version }}-amd64
@@ -473,7 +471,7 @@ jobs:
           push-to-registry: true
 
       - name: generate SBOM for OCI image (arm64)
-        # P4.2 / GAP-12: SPDX-JSON SBOM for the arm64 image.
+        # SPDX-JSON SBOM for the arm64 image.
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0 (D2)
         with:
           image: rvenutolo/linpeas:${{ needs.release.outputs.version }}-arm64

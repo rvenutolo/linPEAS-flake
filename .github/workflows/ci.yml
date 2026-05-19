@@ -293,7 +293,7 @@ jobs:
   image-cve-scan:
     runs-on: ubuntu-latest
     # Advisory: SARIF uploaded to code-scanning, NOT in branch protection.
-    # GAP-11 / P4.1. Detection control; nixpkgs auto-bump via
+    # Detection control; nixpkgs auto-bump via
     # update-flake-lock is the prevention path. Findings surface in
     # the Security tab.
     permissions:

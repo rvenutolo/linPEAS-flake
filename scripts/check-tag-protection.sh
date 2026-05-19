@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/check-tag-protection.sh
 #
-# P2.3 / GAP-9 lint: assert the live (or fixture-injected) tag-protection
+# Lint: assert the live (or fixture-injected) tag-protection
 # ruleset matches the desired posture:
 #   - name "release-tag-protection"
 #   - target "tag"
