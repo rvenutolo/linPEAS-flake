@@ -70,7 +70,7 @@ manifest tag and then verifies against the **arch-resolved** digest
 `docker inspect`) is protected. A consumer who trusts the manifest tag
 implicitly — without resolving to the per-arch digest — is not. The
 mitigation now in place is the `manifest-tag-reresolve` step in
-`release-on-bump.yml` (added as part of SC-POST-2), which re-fetches
+`release-on-bump.yml`, which re-fetches
 both `:VERSION` and `:latest` manifests post-publish and confirms
 their per-arch digests match the values that were attested. A drift
 at this step fails the release.
@@ -118,11 +118,15 @@ The `codeql.yml` workflow is not in branch protection's required-check set. A Co
 
 ## Secrets
 
-- `BUMP_PAT` — fine-grained personal access token used by
-    `update-linpeas.yml` and `update-flake-lock.yml` to open and auto-merge
-    bump PRs. Required scopes: this repository only, with `contents: write`
-    and `pull-requests: write`. Rotate annually (or on suspected
-    compromise). Stored as a repository secret.
+- `BUMP_APP_PRIVATE_KEY` / `vars.BUMP_APP_CLIENT_ID` — the
+    `linpeas-flake-bumper` GitHub App's PEM private key and public client
+    ID. Used by `update-linpeas.yml`, `update-flake-lock.yml`, and
+    `renovate-flake-lock-refresh.yml` to open and auto-merge bump PRs.
+    The App is installed only on this repository with `Contents: Read and write` and `Pull requests: Read and write` permissions. Installation
+    tokens are minted per job by `actions/create-github-app-token`, live
+    one hour, and revoke at job end. See
+    [`docs/security/repo-config.md`](docs/security/repo-config.md) for
+    the full credential model. Rotate on suspected compromise only.
 
 - `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN_RW` / `DOCKERHUB_TOKEN_DELETE` — Docker Hub access tokens used by the release pipeline. The split limits blast radius:
 

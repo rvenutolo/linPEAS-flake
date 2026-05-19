@@ -86,7 +86,7 @@ jobs:
   # The token lasts one hour and is automatically revoked at the end of
   # the job. Commits land on the bump branch via REST `PUT /contents`,
   # which GitHub web-flow-signs when the request is authenticated by an
-  # App installation token (verified empirically — see plan 04). No
+  # App installation token (verified empirically). No
   # `git push` happens.
   push-and-merge:
     needs: compute-pin
