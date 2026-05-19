@@ -60,11 +60,30 @@ Self-enforcing invariant gates:
 | Job | What it enforces |
 |-----|------------------|
 | `dashboard-data-tests` | `scripts/gen-dashboard-data.sh` security guards (pin shape, asset-URL prefix, missing-field hard-fail) |
-| `required-checks-no-paths` | No required workflow declares `paths:` / `paths-ignore:` under `pull_request:` |
 | `pr-workflows-no-secrets` | PR-triggered workflows reference no `secrets.*` other than `secrets.GITHUB_TOKEN` |
-| `uses-sha-pinned` | Every `uses:` in workflows + composite actions is a full 40-hex SHA with `# vX.Y.Z` comment (or a `./...` self-ref) |
 | `renovate-invariants` | `renovate.json` keeps SHA-digest pinning, `minimumReleaseAge`, per-manager `automerge`, and `pinDigests: true` for `github-actions` |
+| `required-checks-no-paths` | No required workflow declares `paths:` / `paths-ignore:` under `pull_request:` |
 | `tag-protection-drift-check` | The `release-tag-protection` ruleset still blocks deletion / non-FF / update of release-tag refs |
+| `uses-sha-pinned` | Every `uses:` in workflows + composite actions is a full 40-hex SHA with `# vX.Y.Z` comment (or a `./...` self-ref) |
+
+Doc-quality + conventional-commit gates (all alphabetical):
+
+| Job | What it enforces |
+|-----|------------------|
+| `commitlint` | Every branch commit independently satisfies [Conventional Commits](https://www.conventionalcommits.org). |
+| `editorconfig` | `.editorconfig` compliance (charset, line endings, trailing whitespace, final newline). |
+| `lint-pr-title` (workflow `pr-title-lint`) | PR title independently satisfies Conventional Commits. The PR title is used verbatim as the merge-commit subject. |
+| `markdownlint` | Markdown style + structure. |
+| `typos` | Spell-check across the repo. |
+
+## Merge policy
+
+Merge-commit only. Enforced at both layers:
+
+- **Repo:** `allow_merge_commit=true`, `allow_rebase_merge=false`, `allow_squash_merge=false`.
+- **Ruleset:** `pull_request.allowed_merge_methods=["merge"]`.
+
+`required_signatures` is enforced on the `protect-main` ruleset. Every commit on `main` (branch commit + merge commit) must carry a valid signature. Branch commits sign locally; bot commits originate from REST `PUT /contents` authenticated as the `linpeas-flake-bumper` GitHub App and are web-flow-signed by GitHub. See [Repository configuration](../security/repo-config.md) for the full posture.
 
 ## Non-blocking coverage / advisory checks
 
@@ -124,4 +143,4 @@ If the bump pipeline is delayed past 14:00 (rare — CI queue surge, flakehub-ca
 - `pages.yml` also runs on `push: branches: [main]` and `release: published`, so the dashboard is re-rendered within minutes of any bump merge.
 - The dashboard page and `security/trust-model.md` self-describe as documentation, not a trust anchor. Authoritative signal lives in `gh attestation verify` against the published artifacts, not the dashboard text.
 
-Surfacing "open bump PR" state on the dashboard (audit NX-PD-3 option 1) is deliberately not implemented — it would couple a documentation surface to PR metadata without changing the underlying trust model.
+Surfacing "open bump PR" state on the dashboard is deliberately not implemented — it would couple a documentation surface to PR metadata without changing the underlying trust model.
