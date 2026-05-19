@@ -60,8 +60,18 @@ concurrency:
 
 jobs:
   identify:
+    # Defense-in-depth gate. Today's load-bearing trust is the
+    # `author.login == renovate[bot]` check in the detect step below — a
+    # fork PR cannot impersonate that App identity. The
+    # `head_repository.full_name` check here closes a future-regression
+    # gap: if GitHub ever changes how `author.login` is computed for
+    # workflow_run-triggered events (or how PRs from forks declare their
+    # author), this top-level gate ensures we only act on PRs whose
+    # branch lives in the same repo, per GitHub's documented
+    # workflow_run hardening pattern.
     if: |
       github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
       startsWith(github.event.workflow_run.head_branch, 'renovate/')
     runs-on: ubuntu-latest
     timeout-minutes: 5
