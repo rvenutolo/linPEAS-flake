@@ -18,24 +18,28 @@ Personal Nix-flake wrapper around [peass-ng/PEASS-ng](https://github.com/peass-n
 **Pin**
 
 `{{ dashboard.pin.version }}`
+
 </div>
 
 <div class="status-tile {{ 'ok' if dashboard.drift.days == 0 else 'fail' }}" markdown>
 **Drift**
 
 {{ dashboard.drift.days }} day{{ '' if dashboard.drift.days == 1 else 's' }}
+
 </div>
 
 <div class="status-tile" markdown>
 **Latest release**
 
 `{{ dashboard.release.latest_tag or "—" }}`
+
 </div>
 
 <div class="status-tile {{ 'ok' if dashboard.parity.conclusion == 'success' else 'fail' }}" markdown>
 **Upstream parity**
 
 {{ dashboard.parity.conclusion }}
+
 </div>
 
 </div>

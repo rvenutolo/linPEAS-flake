@@ -44,37 +44,37 @@ canonical doc as source of truth.
 
 Functional gates:
 
-| Job | Runner | What it tests |
-|-----|--------|---------------|
-| `flake-check` | `ubuntu-latest` | `nix flake check` — eval, treefmt, deadnix, statix, actionlint, yamllint, shellcheck, README-staleness, schema |
-| `build-linpeas` | `ubuntu-latest` | `nix build .#linpeas` — fetches upstream `linpeas.sh`, verifies SRI hash, builds the derivation |
-| `smoke-test` | `ubuntu-latest` | `./result/bin/linpeas -h` exits 0 |
-| `build-linpeas-arm64` | `ubuntu-24.04-arm` | aarch64 build of `linpeas` |
-| `smoke-test-arm64` | `ubuntu-24.04-arm` | aarch64 `-h` smoke |
-| `image-smoke` | `ubuntu-latest` | builds OCI image, `docker load`, `docker run --rm <img> -h` exits 0 |
-| `image-smoke-arm64` | `ubuntu-24.04-arm` | aarch64 OCI image smoke |
-| `bundle-smoke` | `ubuntu-latest` | builds bundle, `./result/linpeas-bundle.sh -h` exits 0 |
+| Job                   | Runner             | What it tests                                                                                                  |
+| --------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `flake-check`         | `ubuntu-latest`    | `nix flake check` — eval, treefmt, deadnix, statix, actionlint, yamllint, shellcheck, README-staleness, schema |
+| `build-linpeas`       | `ubuntu-latest`    | `nix build .#linpeas` — fetches upstream `linpeas.sh`, verifies SRI hash, builds the derivation                |
+| `smoke-test`          | `ubuntu-latest`    | `./result/bin/linpeas -h` exits 0                                                                              |
+| `build-linpeas-arm64` | `ubuntu-24.04-arm` | aarch64 build of `linpeas`                                                                                     |
+| `smoke-test-arm64`    | `ubuntu-24.04-arm` | aarch64 `-h` smoke                                                                                             |
+| `image-smoke`         | `ubuntu-latest`    | builds OCI image, `docker load`, `docker run --rm <img> -h` exits 0                                            |
+| `image-smoke-arm64`   | `ubuntu-24.04-arm` | aarch64 OCI image smoke                                                                                        |
+| `bundle-smoke`        | `ubuntu-latest`    | builds bundle, `./result/linpeas-bundle.sh -h` exits 0                                                         |
 
 Self-enforcing invariant gates:
 
-| Job | What it enforces |
-|-----|------------------|
-| `dashboard-data-tests` | `scripts/gen-dashboard-data.sh` security guards (pin shape, asset-URL prefix, missing-field hard-fail) |
-| `pr-workflows-no-secrets` | PR-triggered workflows reference no `secrets.*` other than `secrets.GITHUB_TOKEN` |
-| `renovate-invariants` | `renovate.json` keeps SHA-digest pinning, `minimumReleaseAge`, per-manager `automerge`, and `pinDigests: true` for `github-actions` |
-| `required-checks-no-paths` | No required workflow declares `paths:` / `paths-ignore:` under `pull_request:` |
-| `tag-protection-drift-check` | The `release-tag-protection` ruleset still blocks deletion / non-FF / update of release-tag refs |
-| `uses-sha-pinned` | Every `uses:` in workflows + composite actions is a full 40-hex SHA with `# vX.Y.Z` comment (or a `./...` self-ref) |
+| Job                          | What it enforces                                                                                                                    |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `dashboard-data-tests`       | `scripts/gen-dashboard-data.sh` security guards (pin shape, asset-URL prefix, missing-field hard-fail)                              |
+| `pr-workflows-no-secrets`    | PR-triggered workflows reference no `secrets.*` other than `secrets.GITHUB_TOKEN`                                                   |
+| `renovate-invariants`        | `renovate.json` keeps SHA-digest pinning, `minimumReleaseAge`, per-manager `automerge`, and `pinDigests: true` for `github-actions` |
+| `required-checks-no-paths`   | No required workflow declares `paths:` / `paths-ignore:` under `pull_request:`                                                      |
+| `tag-protection-drift-check` | The `release-tag-protection` ruleset still blocks deletion / non-FF / update of release-tag refs                                    |
+| `uses-sha-pinned`            | Every `uses:` in workflows + composite actions is a full 40-hex SHA with `# vX.Y.Z` comment (or a `./...` self-ref)                 |
 
 Doc-quality + conventional-commit gates (all alphabetical):
 
-| Job | What it enforces |
-|-----|------------------|
-| `commitlint` | Every branch commit independently satisfies [Conventional Commits](https://www.conventionalcommits.org). |
-| `editorconfig` | `.editorconfig` compliance (charset, line endings, trailing whitespace, final newline). |
+| Job                                        | What it enforces                                                                                                  |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `commitlint`                               | Every branch commit independently satisfies [Conventional Commits](https://www.conventionalcommits.org).          |
+| `editorconfig`                             | `.editorconfig` compliance (charset, line endings, trailing whitespace, final newline).                           |
 | `lint-pr-title` (workflow `pr-title-lint`) | PR title independently satisfies Conventional Commits. The PR title is used verbatim as the merge-commit subject. |
-| `markdownlint` | Markdown style + structure. |
-| `typos` | Spell-check across the repo. |
+| `markdownlint`                             | Markdown style + structure.                                                                                       |
+| `typos`                                    | Spell-check across the repo.                                                                                      |
 
 ## Merge policy
 
@@ -122,15 +122,15 @@ All Nix-based jobs use `DeterminateSystems/flakehub-cache-action` (free for publ
 
 ## Cron schedule
 
-| Workflow | Cron | UTC | Purpose |
-|----------|------|-----|---------|
-| `update-linpeas` | `0 9 * * *` | 09:00 daily | Check upstream peass-ng for new release; open auto-merge bump PR |
-| `stale-pin-check` | `30 10 * * *` | 10:30 daily | Auto-file issue if pin is N days behind upstream |
-| `verify-latest-release` | `0 12 * * *` | 12:00 daily | Re-fetch published artifacts; verify SRI hash + attestations |
-| `pages` | `0 14 * * *` | 14:00 daily | Rebuild dashboard from current pin + upstream + release JSON |
-| `links` | `0 4 * * 1` | Mon 04:00 | Markdown link checker (lychee); cron-only, not a required check |
-| `codeql` | `0 8 * * 1` | Mon 08:00 | CodeQL static analysis (Actions) |
-| `update-flake-lock` | `0 6 * * 5` | Fri 06:00 | Refresh `flake.lock` via auto-merge PR |
+| Workflow                | Cron          | UTC         | Purpose                                                          |
+| ----------------------- | ------------- | ----------- | ---------------------------------------------------------------- |
+| `update-linpeas`        | `0 9 * * *`   | 09:00 daily | Check upstream peass-ng for new release; open auto-merge bump PR |
+| `stale-pin-check`       | `30 10 * * *` | 10:30 daily | Auto-file issue if pin is N days behind upstream                 |
+| `verify-latest-release` | `0 12 * * *`  | 12:00 daily | Re-fetch published artifacts; verify SRI hash + attestations     |
+| `pages`                 | `0 14 * * *`  | 14:00 daily | Rebuild dashboard from current pin + upstream + release JSON     |
+| `links`                 | `0 4 * * 1`   | Mon 04:00   | Markdown link checker (lychee); cron-only, not a required check  |
+| `codeql`                | `0 8 * * 1`   | Mon 08:00   | CodeQL static analysis (Actions)                                 |
+| `update-flake-lock`     | `0 6 * * 5`   | Fri 06:00   | Refresh `flake.lock` via auto-merge PR                           |
 
 Daily crons fire morning→afternoon UTC in this order. Bump-related crons (`update-linpeas`, `stale-pin-check`, `verify-latest-release`) front-load the day so the dashboard cron at 14:00 reads a settled state.
 

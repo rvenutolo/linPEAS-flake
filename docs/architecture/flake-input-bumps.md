@@ -4,10 +4,10 @@ This page is the reviewer playbook for the two Renovate PRs that touch
 flake-input pins in `flake.nix`:
 
 - **`cachix/git-hooks.nix`** — master HEAD tracker (Renovate manager
-  added 2026-05-17, PR #62). Fires whenever upstream master moves.
+    added 2026-05-17, PR #62). Fires whenever upstream master moves.
 - **`NixOS/nixpkgs`** — stable-branch tracker (Renovate manager added
-  2026-05-17, PR #64). Fires when the next NixOS GA tag (`YY.MM`)
-  lands plus the global 7-day `minimumReleaseAge` quarantine.
+    2026-05-17, PR #64). Fires when the next NixOS GA tag (`YY.MM`)
+    lands plus the global 7-day `minimumReleaseAge` quarantine.
 
 Both managers are intentionally **manual-merge**. They do pure text
 substitution on `flake.nix` and **do not refresh `flake.lock`**, which
@@ -91,13 +91,13 @@ The 2026-05-17 nixos-25.05 → 25.11 bump (PR #63) hit five distinct
 side-effect classes. Use them as a checklist for any future nixpkgs
 bump:
 
-| Class | Symptom | Fix |
-| --- | --- | --- |
-| `prettier` | YAML / Markdown / JSON whitespace diffs | accept the rewrite via `nix fmt` |
+| Class                      | Symptom                                                                                                | Fix                                                                                                                                           |
+| -------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prettier`                 | YAML / Markdown / JSON whitespace diffs                                                                | accept the rewrite via `nix fmt`                                                                                                              |
 | `mkdocs-macros` strictness | `nix build "path:$(pwd)#site"` aborts on a `&#123;&#123; ... &#125;&#125;` literal inside a code block | wrap the offending block in `&#123;% raw %&#125;...&#123;% endraw %&#125;` (mirrors the pre-existing convention in `docs/architecture/ci.md`) |
-| `zizmor` major version | `nix flake check` fails on a previously-quiet workflow finding | fix the workflow or, as a last resort, adjust `--min-severity` in `flake.nix` (do not raise above `low` without a security-review entry) |
-| `mkdocs --strict` | Build fails on a new plugin warning | fix forward; pin the misbehaving plugin only as a last resort and document the pin reason in the same PR |
-| linpeas-image base layers | `image-cve-scan` SARIF changes; `image-smoke` could surface `command not found` regressions | smoke test locally (step 6) — adjust `buildEnv.paths` in `flake.nix` only if a required tool genuinely disappeared from nixpkgs |
+| `zizmor` major version     | `nix flake check` fails on a previously-quiet workflow finding                                         | fix the workflow or, as a last resort, adjust `--min-severity` in `flake.nix` (do not raise above `low` without a security-review entry)      |
+| `mkdocs --strict`          | Build fails on a new plugin warning                                                                    | fix forward; pin the misbehaving plugin only as a last resort and document the pin reason in the same PR                                      |
+| linpeas-image base layers  | `image-cve-scan` SARIF changes; `image-smoke` could surface `command not found` regressions            | smoke test locally (step 6) — adjust `buildEnv.paths` in `flake.nix` only if a required tool genuinely disappeared from nixpkgs               |
 
 `cachix/git-hooks.nix` bumps in isolation usually only hit the `zizmor`
 row and only when the pre-commit-hooks repo changes hook versions in
@@ -184,15 +184,15 @@ merge-commit subject and must itself satisfy Conventional Commits
 For `NixOS/nixpkgs` bumps specifically:
 
 - The CVE-scan SARIF on `main` will change — surfacing CVEs is
-  advisory only (`ci.yml`'s `image-cve-scan` job is intentionally
-  outside required-checks). Skim the Security tab for any new
-  `CRITICAL` rows. The remediation path for an unfixed
-  base-layer CVE is the next nixpkgs bump.
+    advisory only (`ci.yml`'s `image-cve-scan` job is intentionally
+    outside required-checks). Skim the Security tab for any new
+    `CRITICAL` rows. The remediation path for an unfixed
+    base-layer CVE is the next nixpkgs bump.
 - The Pages cron (14:00 UTC daily) will rebuild the dashboard on its
-  next tick. Push-trigger and release-trigger also rebuild
-  immediately.
+    next tick. Push-trigger and release-trigger also rebuild
+    immediately.
 - The next `update-flake-lock.yml` cron run (weekly, Monday 06:00 UTC)
-  will refresh within-`YY.MM` patches automatically.
+    will refresh within-`YY.MM` patches automatically.
 
 ## Interaction between the two pins
 
@@ -204,18 +204,18 @@ class of incompatibility that caused the prior nixpkgs branch mismatch in the fi
 The safe order:
 
 1. **Bump `nixpkgs` first.** This forces any `lib` drift to surface
-   on a single PR.
-2. If `flake check` fails because `git-hooks.nix` is now incompatible,
-   bump `git-hooks.nix` in the **same** PR (rebase on top of the
-   nixpkgs PR before merging).
-3. Then close out the standalone `git-hooks.nix` PR.
+    on a single PR.
+1. If `flake check` fails because `git-hooks.nix` is now incompatible,
+    bump `git-hooks.nix` in the **same** PR (rebase on top of the
+    nixpkgs PR before merging).
+1. Then close out the standalone `git-hooks.nix` PR.
 
 If both PRs land cleanly when merged independently, no action needed.
 
 ## What changed historically
 
 - 2026-05-17 — Bumped `nixos-25.05` → `nixos-25.11`
-  (PR #63). Advanced `pre-commit-hooks` to upstream master `61ab0e80...`.
-  Added Renovate trackers for both pins (PRs #62 and #64). See the
-  audit spec (`2026-05-17-automated-build-security-audit.md` section
-  Wave R-Closed) for the full closure rationale.
+    (PR #63). Advanced `pre-commit-hooks` to upstream master `61ab0e80...`.
+    Added Renovate trackers for both pins (PRs #62 and #64). See the
+    audit spec (`2026-05-17-automated-build-security-audit.md` section
+    Wave R-Closed) for the full closure rationale.
