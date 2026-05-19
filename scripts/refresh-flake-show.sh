@@ -87,11 +87,16 @@ function main() {
   sed --regexp-extended -e 's/\x1b\[[0-9;]*[mK]//g' -e '1{/^git\+/d}' \
     "${raw_show}" >"${flake_show_file}"
 
+  # Blank lines between the HTML-comment markers and the fenced code block
+  # match mdformat's canonical form. Without them, mdformat would rewrite
+  # the surrounding README on every commit and fight this script.
   {
     printf '<!-- BEGIN flake-show -->\n'
+    printf '\n'
     printf '```text\n'
     cat -- "${flake_show_file}"
     printf '```\n'
+    printf '\n'
     printf '<!-- END flake-show -->\n'
   } >"${block_file}"
 
