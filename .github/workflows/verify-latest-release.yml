@@ -102,7 +102,7 @@ jobs:
           done
 
       - name: verify Docker Hub per-arch attestations
-        # SC-POST-1: Docker Hub is the only long-lived stealable-credential
+        # Docker Hub is the only long-lived stealable-credential
         # registry in the release pipeline (DOCKERHUB_TOKEN_RW), yet the daily
         # cron previously only re-verified ghcr (short-lived OIDC). A
         # Docker-Hub-only compromise — stolen token, registry incident,

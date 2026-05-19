@@ -22,10 +22,10 @@ This page expands the trust model briefly described in [`SECURITY.md`](https://g
 Three automations may auto-merge PRs into `main` when CI passes:
 
 1. **`update-linpeas.yml`** — daily 09:00 UTC pin bumps. Opens a PR authored by `github-actions[bot]`, gated by all required CI checks, auto-merged on green.
-2. **`update-flake-lock.yml`** — weekly nixpkgs input bump. Split into a `contents: read` `compute-lock` job (runs `nix flake update`) and a `push-and-merge` job that holds `BUMP_PAT` and uses only GitHub-owned action SHAs. The third-party `DeterminateSystems/update-flake-lock` action was removed so `BUMP_PAT` never enters a third-party action's env. Same CI gating.
+2. **`update-flake-lock.yml`** — weekly nixpkgs input bump. Split into a `contents: read` `compute-lock` job (runs `nix flake update`) and a `push-and-merge` job that mints a `linpeas-flake-bumper` GitHub App installation token and uses only GitHub-owned action SHAs. The third-party `DeterminateSystems/update-flake-lock` action was removed so the bump credential never enters a third-party action's env. Same CI gating.
 3. **Renovate** — Friday batch for GitHub Action SHA pins, the pinned Nix installer version, and tracked flake inputs (`nixpkgs` stable branch, `cachix/git-hooks.nix`). All PRs honor a non-empty `minimumReleaseAge` (7 days) and per-manager `automerge` scopes; the `renovate-invariants` CI lint enforces both. Same gating.
 
-A compromise of the **`BUMP_PAT`** fine-grained PAT used by `update-linpeas.yml` would let an attacker open a PR with arbitrary changes. The PAT is scoped to `contents:write` + `pull-requests:write` on this repo only, but the auto-merge bot would still gate on CI — so any malicious change would have to also pass all required checks (build, smoke, attestation re-verify, SRI cross-check).
+A compromise of the **`linpeas-flake-bumper` GitHub App** installation token used by `update-linpeas.yml` would let an attacker open a PR with arbitrary changes. The App is installed only on this repository with `Contents: Read and write` + `Pull requests: Read and write` permissions; the installation token is minted per job, lives one hour, and revokes at job end. The auto-merge bot would still gate on CI — so any malicious change would have to also pass all required checks (build, smoke, attestation re-verify, SRI cross-check). See [`docs/security/repo-config.md`](repo-config.md) for the full credential model.
 
 See `SECURITY.md` for the secret rotation policy.
 
