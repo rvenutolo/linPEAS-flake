@@ -167,13 +167,11 @@ without verifying the attestation.
 
 `step-security/harden-runner` runs as the first step of every job in every workflow, with `egress-policy: audit`. Provides defense-in-depth visibility into runner network egress; surfaces hosts each workflow actually contacts. Audit mode does NOT block; findings appear at the harden-runner dashboard and as job-summary annotations.
 
-A future PR may tighten `egress-policy` from `audit` to `block` with an observed allowlist after ~2 weeks of audit-mode data collection.
-
 ## Settings posture
 
 Repository settings knobs the security model depends on (probe-verifiable from `docs/security/settings-posture.md`):
 
-- `secret_scanning`, `secret_scanning_push_protection`, `dependabot_security_updates` all **enabled**. `secret_scanning_non_provider_patterns` and `secret_scanning_validity_checks` are shown as `disabled` in the GitHub API but cannot be flipped via the REST API for personal accounts — they appear to require GitHub Advanced Security or a UI toggle not exposed programmatically. Documented as a residual gap.
+- `secret_scanning`, `secret_scanning_push_protection`, `dependabot_security_updates` all **enabled**.
 - Actions: `sha_pinning_required: true`. Belt-and-braces against Renovate misconfiguration — every `uses:` must be SHA-pinned at GitHub level, not just by Renovate convention. Smoke-tested: unpinned `uses: actions/checkout@v4` was rejected by GitHub with "all actions must be pinned to a full-length commit SHA".
 - Workflow tokens: `default_workflow_permissions: read`, `can_approve_pull_request_reviews: false`. Prevents a compromised workflow from self-approving a PR.
 - `github-pages` environment: `can_admins_bypass: false`.

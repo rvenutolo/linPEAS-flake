@@ -4,13 +4,11 @@ This document is the **source of truth** for every GitHub-side settings knob thi
 
 ## Security & analysis
 
-| Setting                                        | Required value                                                                                      | Probe                                                                                                              |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `secret_scanning.status`                       | `enabled`                                                                                           | `gh api /repos/rvenutolo/linPEAS-flake --jq '.security_and_analysis.secret_scanning.status'`                       |
-| `secret_scanning_push_protection.status`       | `enabled`                                                                                           | `gh api /repos/rvenutolo/linPEAS-flake --jq '.security_and_analysis.secret_scanning_push_protection.status'`       |
-| `secret_scanning_non_provider_patterns.status` | `enabled` (residual — API silently ignores PATCH on personal accounts; probe will show `disabled`.) | `gh api /repos/rvenutolo/linPEAS-flake --jq '.security_and_analysis.secret_scanning_non_provider_patterns.status'` |
-| `secret_scanning_validity_checks.status`       | `enabled` (residual — same API limitation as above.)                                                | `gh api /repos/rvenutolo/linPEAS-flake --jq '.security_and_analysis.secret_scanning_validity_checks.status'`       |
-| `dependabot_security_updates.status`           | `enabled`                                                                                           | `gh api /repos/rvenutolo/linPEAS-flake --jq '.security_and_analysis.dependabot_security_updates.status'`           |
+| Setting                                  | Required value | Probe                                                                                                        |
+| ---------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------ |
+| `secret_scanning.status`                 | `enabled`      | `gh api /repos/rvenutolo/linPEAS-flake --jq '.security_and_analysis.secret_scanning.status'`                 |
+| `secret_scanning_push_protection.status` | `enabled`      | `gh api /repos/rvenutolo/linPEAS-flake --jq '.security_and_analysis.secret_scanning_push_protection.status'` |
+| `dependabot_security_updates.status`     | `enabled`      | `gh api /repos/rvenutolo/linPEAS-flake --jq '.security_and_analysis.dependabot_security_updates.status'`     |
 
 ## Actions permissions
 
