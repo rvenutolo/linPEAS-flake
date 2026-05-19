@@ -74,3 +74,9 @@ Workflow-security linter; `--min-severity=low` to catch everything.
 Suppressions live in `zizmor.yml` with documented rationale per
 suppressed rule + workflow. Do not raise `--min-severity` above
 `low` without a security-review entry in `.claude/CLAUDE.md`.
+
+Re-run locally before committing a workflow change:
+
+```sh
+nix develop --command zizmor .github/workflows/<file>.yml
+```
