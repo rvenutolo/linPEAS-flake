@@ -60,6 +60,16 @@
       "datasourceTemplate": "github-tags",
       "depNameTemplate": "NixOS/nixpkgs",
       "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)$"
+    },
+    {
+      "description": "SchemaStore master HEAD tracker for the JSON Schema URLs consumed by scripts/check-jsonschema.sh. Same shape as the cachix/git-hooks.nix manager — SchemaStore publishes 0 releases and 0 tags, master HEAD is the only upstream-truth signal. Renovate opens a PR whenever master advances; the global 7-day minimumReleaseAge applies. Not in any matchDepNames automerge narrow, so it stays manual-merge.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^scripts/check-jsonschema\\.sh$/"],
+      "matchStrings": ["SCHEMASTORE_SHA='(?<currentDigest>[0-9a-f]{40})'"],
+      "currentValueTemplate": "master",
+      "datasourceTemplate": "git-refs",
+      "depNameTemplate": "SchemaStore/schemastore",
+      "packageNameTemplate": "https://github.com/SchemaStore/schemastore"
     }
   ]
 }

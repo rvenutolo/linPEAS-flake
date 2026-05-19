@@ -245,6 +245,25 @@
                 pass_filenames = false;
                 language = "system";
               };
+              # Schema-shape validation for repo config. Catches typoed
+              # keys, wrong-type values, and upstream-removed fields that
+              # per-tool linters miss. NIX_BUILD_TOP guard skips inside
+              # the flake-check sandbox where network fetches for the
+              # pinned SchemaStore schema would fail.
+              check-jsonschema = {
+                enable = true;
+                name = "check-jsonschema";
+                entry = "${pkgs.writeShellScript "check-jsonschema-hook" ''
+                  set -Eeuo pipefail
+                  IFS=$'\n\t'
+                  if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+                  export PATH="${pkgs.check-jsonschema}/bin:$PATH"
+                  exec ${pkgs.bash}/bin/bash scripts/check-jsonschema.sh
+                ''}";
+                files = "^(renovate\\.json|\\.markdownlint\\.json|\\.github/workflows/.*\\.ya?ml|\\.github/actions/.*\\.ya?ml|scripts/check-jsonschema\\.sh)$";
+                pass_filenames = false;
+                language = "system";
+              };
             };
           };
         in
@@ -299,6 +318,7 @@
               python3Packages.mkdocs-material
               python3Packages.mkdocs-macros
               lychee
+              check-jsonschema
             ]);
           };
         })
