@@ -28,6 +28,7 @@ ruleset.
 | required-checks-no-paths    | ci                | .github/workflows/ci.yml                |
 | pr-workflows-no-secrets     | ci                | .github/workflows/ci.yml                |
 | tag-protection-drift-check  | ci                | .github/workflows/ci.yml                |
+| protect-main-drift-check    | ci                | .github/workflows/ci.yml                |
 | renovate-invariants         | ci                | .github/workflows/ci.yml                |
 | pre-commit-hooks-sha-parity | ci                | .github/workflows/ci.yml                |
 | pin-diff-isolated           | ci                | .github/workflows/ci.yml                |
