@@ -74,3 +74,13 @@ Workflow-security linter; `--min-severity=low` to catch everything.
 Suppressions live in `zizmor.yml` with documented rationale per
 suppressed rule + workflow. Do not raise `--min-severity` above
 `low` without a security-review entry in `.claude/CLAUDE.md`.
+
+## Treefmt YAML quote gotcha
+
+Prettier rewrites single-quoted YAML scalars to double-quoted. Run
+`nix fmt` before push, or use double quotes from the start.
+
+## README flake-show auto-block
+
+`scripts/refresh-flake-show.sh` regenerates the auto-block. Pre-commit
+hook `readme-flake-show-fresh` has `NIX_BUILD_TOP` sandbox guard.
