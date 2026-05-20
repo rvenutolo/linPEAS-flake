@@ -292,3 +292,59 @@ If both PRs land cleanly when merged independently, no action needed.
     (PR #63). Advanced `pre-commit-hooks` to upstream master `61ab0e80...`.
     Added Renovate trackers for both pins (PRs #62 and #64). See the
     referenced PRs for the full closure rationale.
+
+## update-flake-lock credential split
+
+`update-flake-lock.yml` mirrors the `update-linpeas.yml` split:
+
+- `compute-lock` job has `permissions: contents: read` and must not
+    reference `secrets.BUMP_APP_PRIVATE_KEY` or
+    `actions/create-github-app-token`. Nix-evaluating actions confined here.
+- `push-and-merge` job uses only GitHub-owned action SHAs
+    (`actions/checkout`, `actions/download-artifact`,
+    `actions/create-github-app-token`, `step-security/harden-runner`). No
+    third-party action without a security-review entry.
+- `DeterminateSystems/update-flake-lock` action removed entirely —
+    accepted BUMP_PAT directly as `with: token:`. Lock updates now via
+    `nix flake update` in the read-only job.
+- App installation token flows only to `gh api` / `gh pr` via `GH_TOKEN`.
+    No `git push`. Commit lands via REST `PUT /contents` → web-flow signed.
+- `flake.lock` artifact carries JSON shape guard: `push-and-merge`
+    verifies `.nodes | type == "object"` before committing.
+
+## renovate-flake-lock-refresh auto-refresh
+
+`renovate-flake-lock-refresh.yml` auto-completes the post-Renovate-PR
+lockfile-refresh step that hosted Renovate cannot run itself (no Nix
+on Renovate's SaaS runners; no `postUpgradeTasks` allowlist).
+
+Trigger: `workflow_run` of `ci` completing on a `renovate/*` head
+branch. The `identify` job gates on ALL of:
+
+- PR author == `renovate[bot]` (or legacy `renovate`).
+- PR head branch starts with `renovate/`.
+- PR diff touches `flake.nix`.
+- PR title contains a known dep name (`cachix/git-hooks.nix` →
+    `pre-commit-hooks` input; `NixOS/nixpkgs` → `nixpkgs` input).
+
+Adding a new auto-refreshable input requires three coordinated
+edits in the same PR: (1) extend the `case` arm in
+`identify`, (2) add a Renovate `customManager` in `renovate.json`,
+(3) extend the manual fallback runbook in
+`docs/architecture/flake-input-bumps.md`.
+
+Credential split mirrors `update-flake-lock.yml`:
+
+- `identify` + `compute-refresh` jobs: `permissions: contents: read`,
+    no App-key reference. Untrusted Nix-evaluating actions confined
+    to `compute-refresh`.
+- `push-refresh` job: holds `BUMP_APP_PRIVATE_KEY` only. Commits
+    refreshed `flake.lock` to PR branch via REST `PUT /contents` →
+    web-flow signed by GitHub. No `git push`.
+
+Loop-breaker: `push-refresh` compares `git hash-object flake.lock`
+vs branch's blob SHA; bails on match. Protects against the
+ci → refresh → ci cycle.
+
+Not in required-checks. Lockfile refresh on a PR cannot block the
+PR's own merge gate (chicken-and-egg).
