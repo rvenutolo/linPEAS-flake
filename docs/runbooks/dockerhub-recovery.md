@@ -1,0 +1,128 @@
+# Docker Hub recovery runbook
+
+Steps to recover from a half-published release where one registry
+(`docker.io` or `ghcr.io`) accepted a per-arch push but the other
+failed, leaving an orphan arch-suffixed tag that blocks a clean retry
+of `release-on-bump.yml`.
+
+This runbook is referenced from the auto-filed
+`release-on-bump-failure` issue body. The issue body intentionally
+links here rather than embedding the snippets inline, so:
+
+- The snippets stay correct (JSON construction via `jq -n` is
+    quote-safe, unlike shell-interpolated JSON).
+- The procedure is one file to update if Docker Hub's API contract
+    changes, not N copies across the workflow.
+
+## When this applies
+
+The push loop inside `release-on-bump.yml` per-arch jobs runs
+`docker.io` first, then `ghcr.io`. The two failure modes are:
+
+- **docker.io push failed.** Nothing was pushed to either registry
+    for that arch. No registry-side cleanup needed; only the GitHub
+    release / tag needs deleting before the retry.
+- **ghcr.io push failed after docker.io succeeded.** docker.io has
+    the arch-suffixed tag (`{version}-{arch}`) but ghcr.io does not.
+    The `manifest` job is skipped, so neither registry has the
+    unsuffixed `{version}` or `:latest` tags. Recovery requires
+    deleting the orphan docker.io arch tag before retrying, otherwise
+    the next push would push to a tag that already exists.
+
+## Prerequisites
+
+- A Docker Hub access token with **Delete** scope. Use the
+    `DOCKERHUB_TOKEN_DELETE` repository secret value
+    (the `_RW` token returns `401` on the tag-delete endpoint).
+    Fetch the secret value via the Docker Hub UI or your local
+    secret vault — **do not** print `gh secret` values inside the
+    auto-filed issue body.
+- `DOCKERHUB_USERNAME` matching the repo owner (`rvenutolo`).
+- A failing run identified in the `release-on-bump-failure` issue —
+    record `VERSION` (the pin version, e.g. `20260516-deadbee`) and
+    `ARCH` (`amd64` or `arm64`) before starting.
+
+## Step-by-step
+
+### 1. Delete the GitHub release + tag
+
+Release-creation is gated on tag-doesn't-exist; if you don't delete
+the orphan release first, the retry will skip the release step and
+the recovery is incomplete.
+
+```bash
+VERSION="<pin-version>"            # e.g. 20260516-deadbee
+gh release delete "${VERSION}" \
+  --repo rvenutolo/linPEAS-flake \
+  --cleanup-tag --yes
+```
+
+### 2. Delete the orphan docker.io arch tag
+
+Only required if `ghcr.io` failed after `docker.io` succeeded. Skip
+to step 3 otherwise.
+
+The simplest path is the Docker Hub web UI: navigate to
+[`rvenutolo/linpeas` tags](https://hub.docker.com/r/rvenutolo/linpeas/tags),
+find `{VERSION}-{ARCH}`, click "Delete".
+
+For automation / scripted recovery, use the API:
+
+```bash
+DOCKERHUB_USERNAME=rvenutolo
+DOCKERHUB_TOKEN="<paste DOCKERHUB_TOKEN_DELETE value>"
+VERSION="<pin-version>"
+ARCH="<amd64 or arm64>"
+
+# Build a quote-safe JSON body via jq -n --arg. Shell-interpolated
+# JSON construction breaks when the password contains a single quote
+# or backslash; `jq -n` guarantees correct escaping.
+TOKEN=$(curl --fail --silent --show-error \
+    --request POST 'https://hub.docker.com/v2/users/login' \
+    --header 'Content-Type: application/json' \
+    --data "$(jq --null-input \
+        --arg u "${DOCKERHUB_USERNAME}" \
+        --arg p "${DOCKERHUB_TOKEN}" \
+        '{username:$u, password:$p}')" \
+  | jq --raw-output .token)
+
+curl --fail --silent --show-error \
+  --request DELETE \
+  --header "Authorization: JWT ${TOKEN}" \
+  "https://hub.docker.com/v2/repositories/${DOCKERHUB_USERNAME}/linpeas/tags/${VERSION}-${ARCH}/"
+```
+
+### 3. Re-trigger the release pipeline
+
+Either:
+
+- Push the same `linpeas-pin.json` commit again (no-op edit +
+    `chore: retrigger release` commit), OR
+- Re-run the workflow from the Actions UI if the pin commit is
+    still `HEAD` on `main`. Use the `force-republish` input when
+    re-running so the `bundle` and `release` jobs skip the
+    "tag exists" guard.
+
+### 4. Confirm green end-to-end
+
+Watch the next `release-on-bump` run finish green. Specifically
+confirm:
+
+- `release` published a new release (or kept the existing one with
+    `force-republish`).
+- `image-amd64` and `image-arm64` both pushed clean to docker.io and
+    ghcr.io.
+- `manifest` built and pushed.
+- `verify` passed per-arch attestation re-verify, manifest reresolve,
+    and `:latest` matches `:VERSION` per-arch digests.
+
+Close the `release-on-bump-failure` issue with a one-line root-cause
+comment (e.g., `transient: docker.io 502 on push, retry green`).
+
+## Common Docker Hub failure modes
+
+**Token expired or revoked.** Rotate `DOCKERHUB_TOKEN_RW` (and/or `DOCKERHUB_TOKEN_DELETE` independently) at <https://hub.docker.com/settings/security>, then `gh secret set DOCKERHUB_TOKEN_RW`.
+
+**Username mismatch.** `DOCKERHUB_USERNAME` must equal the owner segment of the `rvenutolo/linpeas` repo path.
+
+**Docker Hub partial outage.** Manual re-run via `workflow_dispatch` is usually enough; if multiple retries fail with the same shape, check <https://status.docker.com>.
