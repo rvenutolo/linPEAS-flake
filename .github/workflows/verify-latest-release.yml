@@ -140,6 +140,42 @@ jobs:
           done
           docker logout docker.io
 
+      - name: verify :latest manifest matches :VERSION on both registries
+        # Asserts that the floating `:latest` tag still resolves to the
+        # same multi-arch manifest as the release-tagged `:VERSION` on
+        # both ghcr.io and docker.io. The release-pipeline verify job
+        # checks this at publish time; this cron is the only place the
+        # parity is re-asserted after release. A registry-side `:latest`
+        # repoint between releases (incident, account compromise,
+        # accidental `docker tag` push) would otherwise persist
+        # undetected for up to 24h until the next pin bump.
+        #
+        # Anonymous `docker buildx imagetools inspect --raw` works on
+        # public repos for both registries — no auth required.
+        env:
+          TAG: ${{ steps.latest.outputs.tag }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          for reg in ghcr.io docker.io; do
+            latest_raw="$(docker buildx imagetools inspect --raw \
+              "${reg}/rvenutolo/linpeas:latest")"
+            tagged_raw="$(docker buildx imagetools inspect --raw \
+              "${reg}/rvenutolo/linpeas:${TAG}")"
+            # Normalise via jq -S so deterministic ordering doesn't trip
+            # the comparison.
+            latest_norm="$(jq --sort-keys . <<<"${latest_raw}")"
+            tagged_norm="$(jq --sort-keys . <<<"${tagged_raw}")"
+            if [[ "${latest_norm}" != "${tagged_norm}" ]]; then
+              printf '%s:latest manifest differs from %s:%s\n' \
+                "${reg}" "${reg}" "${TAG}" >&2
+              printf '%s:latest:\n%s\n' "${reg}" "${latest_norm}" >&2
+              printf '%s:%s:\n%s\n' "${reg}" "${TAG}" "${tagged_norm}" >&2
+              exit 1
+            fi
+            printf '%s: :latest matches :%s\n' "${reg}" "${TAG}"
+          done
+
       - name: verify pin file attestation
         # The pin file uploaded to the release is the same blob attested at
         # release-on-bump time. Re-verifying detects post-release tamper.
