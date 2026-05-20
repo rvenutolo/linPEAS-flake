@@ -190,13 +190,13 @@
             };
             typos.enable = true;
             editorconfig-checker.enable = true;
-            # `commitizen check` validates the subject line against
-            # Conventional Commits. It does NOT enforce the full rule
-            # set the CI `commitlint` job uses (e.g. body-max-line-length),
-            # so we run both: commitizen for the subject, commitlint for
-            # the body. Without the latter, CI catches body line-length
-            # violations only after push.
-            commitizen.enable = true;
+            # Conventional Commits enforcement: `commitlint` with the
+            # `@commitlint/config-conventional` ruleset from
+            # `.commitlintrc.yml`. Parity with the CI `commitlint` job —
+            # same engine, same config, so any rule (subject type-enum,
+            # body-max-line-length, header-max-length, etc.) fails
+            # locally instead of after push. Replaces the older
+            # `commitizen.enable` hook, which validated the subject only.
             commitlint = {
               enable = true;
               name = "commitlint";
