@@ -89,6 +89,7 @@ nav:
       - Labeling: development/labeling.md
   - Runbooks:
       - Docker Hub recovery: runbooks/dockerhub-recovery.md
+      - Settings-drift App: runbooks/settings-drift-app.md
   - Security:
       - Repository configuration: security/repo-config.md
       - Settings posture: security/settings-posture.md

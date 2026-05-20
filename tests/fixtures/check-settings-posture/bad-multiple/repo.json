@@ -1,0 +1,21 @@
+{
+  "security_and_analysis": {
+    "secret_scanning": {
+      "status": "enabled"
+    },
+    "secret_scanning_push_protection": {
+      "status": "enabled"
+    },
+    "dependabot_security_updates": {
+      "status": "enabled"
+    }
+  },
+  "allow_merge_commit": true,
+  "allow_rebase_merge": true,
+  "allow_squash_merge": false,
+  "allow_auto_merge": true,
+  "allow_update_branch": true,
+  "delete_branch_on_merge": true,
+  "merge_commit_title": "MERGE_MESSAGE",
+  "merge_commit_message": "PR_BODY"
+}
