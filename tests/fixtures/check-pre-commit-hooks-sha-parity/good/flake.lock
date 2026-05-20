@@ -1,0 +1,22 @@
+{
+  "nodes": {
+    "pre-commit-hooks": {
+      "locked": {
+        "lastModified": 1778507602,
+        "narHash": "sha256-fake-hash-for-fixture-only",
+        "owner": "cachix",
+        "repo": "git-hooks.nix",
+        "rev": "61ab0e80d9c7ab14c256b5b453d8b3fb0189ba0a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "cachix",
+        "ref": "61ab0e80d9c7ab14c256b5b453d8b3fb0189ba0a",
+        "repo": "git-hooks.nix",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
