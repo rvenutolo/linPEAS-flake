@@ -18,6 +18,12 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      # Failure-attribution token consumed by the `notify` job's body.
+      # Mirrors the `reason=` pattern in `stale-pin-check.yml` — only
+      # `upstream-sri-drift` warrants the "security incident" framing
+      # in the auto-filed issue; the rest are operational.
+      reason: ${{ steps.attribute.outputs.reason }}
     steps:
       - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
         with:
@@ -27,7 +33,7 @@ jobs:
           persist-credentials: false
 
       - name: read latest release tag
-        id: latest
+        id: read-tag
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -37,9 +43,10 @@ jobs:
           printf 'tag=%s\n' "${tag}" >> "${GITHUB_OUTPUT}"
 
       - name: download bundle from latest release
+        id: download-assets
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.latest.outputs.tag }}
+          TAG: ${{ steps.read-tag.outputs.tag }}
         # Daily cron — same release-asset visibility lag possible if the run
         # happens to fire moments after a release. Same poll-with-backoff.
         run: |
@@ -60,6 +67,7 @@ jobs:
             || { printf 'release assets never appeared\n' >&2; exit 1; }
 
       - name: verify bundle attestation
+        id: verify-bundle
         # Verifies both build-provenance AND SBOM attestations.
         # gh attestation verify accepts any matching attestation by default
         # (SLSA provenance + SPDX-JSON SBOM, both attested at release time).
@@ -71,6 +79,7 @@ jobs:
           gh attestation verify linpeas-bundle.sh --repo rvenutolo/linPEAS-flake
 
       - name: verify ghcr per-arch attestations
+        id: verify-ghcr
         # The release pipeline attaches per-arch attestations to the
         # `<tag>-amd64` / `<tag>-arm64` digests captured at push time, NOT
         # to the multi-arch manifest list digest that `docker pull <tag>`
@@ -85,7 +94,7 @@ jobs:
         # No registry credentials enter this verify path.
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.latest.outputs.tag }}
+          TAG: ${{ steps.read-tag.outputs.tag }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
@@ -102,6 +111,7 @@ jobs:
           done
 
       - name: verify Docker Hub per-arch attestations
+        id: verify-hub
         # Docker Hub is the only long-lived stealable-credential
         # registry in the release pipeline (DOCKERHUB_TOKEN_RW), yet the daily
         # cron previously only re-verified ghcr (short-lived OIDC). A
@@ -120,7 +130,7 @@ jobs:
         # anonymous pull quota; this loop is well within budget regardless.
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.latest.outputs.tag }}
+          TAG: ${{ steps.read-tag.outputs.tag }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
@@ -137,6 +147,7 @@ jobs:
           done
 
       - name: verify :latest manifest matches :VERSION on both registries
+        id: verify-latest-parity
         # Asserts that the floating `:latest` tag still resolves to the
         # same multi-arch manifest as the release-tagged `:VERSION` on
         # both ghcr.io and docker.io. The release-pipeline verify job
@@ -149,7 +160,7 @@ jobs:
         # Anonymous `docker buildx imagetools inspect --raw` works on
         # public repos for both registries — no auth required.
         env:
-          TAG: ${{ steps.latest.outputs.tag }}
+          TAG: ${{ steps.read-tag.outputs.tag }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
@@ -158,8 +169,6 @@ jobs:
               "${reg}/rvenutolo/linpeas:latest")"
             tagged_raw="$(docker buildx imagetools inspect --raw \
               "${reg}/rvenutolo/linpeas:${TAG}")"
-            # Normalise via jq -S so deterministic ordering doesn't trip
-            # the comparison.
             latest_norm="$(jq --sort-keys . <<<"${latest_raw}")"
             tagged_norm="$(jq --sort-keys . <<<"${tagged_raw}")"
             if [[ "${latest_norm}" != "${tagged_norm}" ]]; then
@@ -173,6 +182,7 @@ jobs:
           done
 
       - name: verify pin file attestation
+        id: verify-pin
         # The pin file uploaded to the release is the same blob attested at
         # release-on-bump time. Re-verifying detects post-release tamper.
         env:
@@ -183,10 +193,13 @@ jobs:
           gh attestation verify linpeas-pin.json --repo rvenutolo/linPEAS-flake
 
       - name: verify upstream linpeas.sh still matches pinned hash
+        id: verify-upstream-sri
         # Detects upstream tag-replacement: re-fetch from peass-ng's release
         # URL and confirm the SRI hash still matches the pinned value. The
         # attestation steps above only prove *our* artifacts are untampered;
         # they cannot detect upstream replacing the asset after we pinned it.
+        # Failure of this step is the canonical "treat as security incident"
+        # signal; all other failures are operational.
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
@@ -211,6 +224,43 @@ jobs:
           fi
           printf 'upstream linpeas.sh matches pinned hash (%s)\n' "${expected_sri}"
 
+      - name: attribute failure reason
+        id: attribute
+        # Maps the first failed step to a reason token consumed by the
+        # `notify` job's body. Without explicit attribution, the auto-filed
+        # issue treats every failure as a possible security incident and
+        # the maintainer learns to skim-read the body — exactly the wrong
+        # reflex for the one time it really is `upstream-sri-drift`.
+        # `if: always()` ensures this runs even after a prior failure.
+        if: always()
+        env:
+          READ_TAG: ${{ steps.read-tag.outcome }}
+          DOWNLOAD_ASSETS: ${{ steps.download-assets.outcome }}
+          VERIFY_BUNDLE: ${{ steps.verify-bundle.outcome }}
+          VERIFY_GHCR: ${{ steps.verify-ghcr.outcome }}
+          VERIFY_HUB: ${{ steps.verify-hub.outcome }}
+          VERIFY_LATEST_PARITY: ${{ steps.verify-latest-parity.outcome }}
+          VERIFY_PIN: ${{ steps.verify-pin.outcome }}
+          VERIFY_UPSTREAM_SRI: ${{ steps.verify-upstream-sri.outcome }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          reason='ok'
+          # Order matters: the first failed step wins. Downstream steps
+          # skipped after a failure show outcome `skipped`; only the
+          # actually-failed step shows `failure`. Walk in execution order.
+          if   [[ ${READ_TAG}             == 'failure' ]]; then reason='release-tag-fetch-failed'
+          elif [[ ${DOWNLOAD_ASSETS}      == 'failure' ]]; then reason='release-asset-download-failed'
+          elif [[ ${VERIFY_BUNDLE}        == 'failure' ]]; then reason='bundle-attest-failed'
+          elif [[ ${VERIFY_GHCR}          == 'failure' ]]; then reason='ghcr-attest-failed'
+          elif [[ ${VERIFY_HUB}           == 'failure' ]]; then reason='hub-attest-failed'
+          elif [[ ${VERIFY_LATEST_PARITY} == 'failure' ]]; then reason='manifest-tag-drift'
+          elif [[ ${VERIFY_PIN}           == 'failure' ]]; then reason='pin-attest-failed'
+          elif [[ ${VERIFY_UPSTREAM_SRI}  == 'failure' ]]; then reason='upstream-sri-drift'
+          fi
+          printf 'reason=%s\n' "${reason}" >> "${GITHUB_OUTPUT}"
+          printf 'attributed reason: %s\n' "${reason}"
+
   notify:
     name: notify
     needs: verify
@@ -232,16 +282,43 @@ jobs:
           label: verify-latest-release-failure
           title: "verify-latest-release: daily verification failed"
           body: |
-            The daily `verify-latest-release` cron failed. Treat as a security incident until proven otherwise.
+            The daily `verify-latest-release` cron failed.
 
             - Trigger: `${{ github.event_name }}`
             - Verify conclusion: `${{ needs.verify.result }}`
+            - Reason: `${{ needs.verify.outputs.reason || 'unknown' }}`
 
-            Investigate the `verify` job logs. A failure here means one of:
-            - Attestation verification failed (artifact provenance broken)
-            - Upstream `linpeas.sh` SRI hash drifted (tag-replacement)
-            - Release assets missing on the latest tag
+            Reason values and what they mean:
 
-            Do NOT merge any subsequent pin bumps until this is resolved.
+            - `upstream-sri-drift` — **TREAT AS SECURITY INCIDENT.** The
+              upstream `linpeas.sh` URL still resolves but its SHA-256
+              no longer matches the pinned SRI. Either upstream
+              tag-replaced the asset or someone tampered with the pin.
+              Do NOT merge subsequent pin bumps until investigated.
+            - `manifest-tag-drift` — `:latest` on ghcr.io or docker.io
+              no longer resolves to the same manifest as the
+              release-tagged `:VERSION`. Likely registry-side repoint
+              (incident, account compromise, accidental `docker tag`
+              push); also a security signal but lower-confidence than
+              SRI drift.
+            - `ghcr-attest-failed` / `hub-attest-failed` /
+              `bundle-attest-failed` / `pin-attest-failed` — attestation
+              verification failed for one of the per-arch images, the
+              bundle, or the pin asset. Could be artifact tampering or
+              a Sigstore TUF trust-root rotation lag (newer `gh` CLI
+              with rotated root has shipped to runners but the cron
+              still runs on the old runner image). Re-run the cron 24h
+              later to distinguish.
+            - `release-tag-fetch-failed` / `release-asset-download-failed`
+              — `gh release view` / `gh release download` failed.
+              Transient GitHub API or release-asset visibility lag.
+              Re-run the cron.
+            - `unknown` — attribution step did not match a known failed
+              step. File a bug against this workflow's
+              `attribute failure reason` step.
+
+            Investigate the `verify` job logs for the failing step. Do
+            NOT merge any subsequent pin bumps if the reason is
+            `upstream-sri-drift` or `manifest-tag-drift` until resolved.
           label-description: verify-latest-release daily check failed
           github-token: ${{ secrets.GITHUB_TOKEN }}
