@@ -30,6 +30,7 @@ ruleset.
 | tag-protection-drift-check  | ci                | .github/workflows/ci.yml                |
 | renovate-invariants         | ci                | .github/workflows/ci.yml                |
 | pre-commit-hooks-sha-parity | ci                | .github/workflows/ci.yml                |
+| pin-diff-isolated           | ci                | .github/workflows/ci.yml                |
 | uses-sha-pinned             | ci                | .github/workflows/ci.yml                |
 | markdownlint                | ci                | .github/workflows/ci.yml                |
 | typos                       | ci                | .github/workflows/ci.yml                |
