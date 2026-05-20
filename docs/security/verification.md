@@ -93,3 +93,106 @@ gh run list \
 ```
 
 Look for `"conclusion": "success"` within the last 24-25 hours. Current state on the Pages site: **{{ dashboard.parity.conclusion }}** at {{ dashboard.parity.checked_at }}.
+
+## Bump-script integrity guards
+
+`scripts/bump-linpeas.sh`:
+
+- Asset URL must start with
+    `https://github.com/peass-ng/PEASS-ng/releases/download/`. Hard fail.
+- GitHub-API `.digest` field never silently skipped. Absent or
+    non-`sha256:` prefix is a hard fail.
+- Pin file written via `mktemp` + `mv` (atomic). Never `>`.
+- Every `gh api` call must pass `--header "X-GitHub-Api-Version: 2022-11-28"`.
+    Apply to any new security-sensitive GitHub-REST caller.
+
+## verify-latest-release upstream parity
+
+Daily verify cron re-fetches the pinned `linpeas.sh` URL, recomputes the SRI
+hash via `openssl dgst -sha256 -binary | base64 --wrap=0`, compares against
+`linpeas-pin.json`. Failure = security incident.
+
+## verify-latest-release failure attribution
+
+`verify-latest-release.yml`'s notify body distinguishes failure
+reasons via per-step `id:` outcomes mapped to a `reason` token by
+the `attribute failure reason` step. Reasons:
+
+- `upstream-sri-drift` — **security incident.** Upstream
+    `linpeas.sh` SHA-256 no longer matches the pinned SRI.
+- `manifest-tag-drift` — `:latest` no longer resolves to the same
+    manifest as `:VERSION` on ghcr.io or docker.io.
+- `ghcr-attest-failed` / `hub-attest-failed` /
+    `bundle-attest-failed` / `pin-attest-failed` — attestation
+    verification failed for a specific artifact.
+- `release-tag-fetch-failed` / `release-asset-download-failed` —
+    transient GitHub API / asset visibility lag.
+- `unknown` — attribution step couldn't match a known failed step
+    (bug in the attribute logic itself).
+
+Only `upstream-sri-drift` (and to a lesser extent `manifest-tag-drift`)
+warrant the "treat as security incident" framing. Folding all reasons
+into a single failure body trains the maintainer to skim-read auto-filed
+issues — exactly the wrong reflex when the failure is a real SRI drift.
+
+This pattern is the project default for every cron-notify caller: each
+must attribute distinct failure reasons to distinct issue-body wording.
+Alert fatigue is a security risk.
+
+## Gitleaks secret scanning
+
+`gitleaks.yml` scans the full git history (`fetch-depth: 0`) on push to
+main, every PR, and a weekly cron (Mon 13:00 UTC). Required check named
+`gitleaks` in the `protect-main` ruleset.
+
+- Uses only `secrets.GITHUB_TOKEN` — PR-triggered workflow secret
+    allowlist invariant holds.
+- New leaked-secret finding = security incident. Triage:
+    rotate → purge with `git filter-repo` → force-push (admin bypass).
+- Vendor `gitleaks/*` is in the `allowed_actions` allowlist; do not
+    remove without replacing the workflow.
+
+## Dependency review
+
+`dependency-review.yml` runs on every PR via
+`actions/dependency-review-action`. Required check named
+`dependency-review`. `fail-on-severity: moderate`,
+`comment-summary-in-pr: on-failure`.
+
+- Repo has no traditional package manifests today; the action mostly scans `.github/workflows/**` `uses:` against the GitHub Advisory DB + license policy. Belt-and-braces backup to SHA-pinning + Renovate + zizmor.
+- If a future PR adds a real manifest (npm/cargo/pip/etc.), the action
+    begins scanning it without any workflow change.
+
+## OCI image CVE scan (Trivy)
+
+`ci.yml`'s `image-cve-scan` job uploads SARIF (CRITICAL + HIGH) to
+code-scanning, then post-processes the SARIF to count CRITICAL findings
+and **fails the job** when count > 0. On push to main, an
+`image-cve-scan-notify` follow-on job (`needs: image-cve-scan`,
+`if: failure() + event_name=='push'`) opens / updates a deduped issue
+via `notify-workflow-result` (label: `image-cve-critical`).
+
+- NOT in required-checks (intentional — `update-flake-lock` must still
+    land even if a CVE is present, with explicit maintainer awareness).
+- Trivy's own `exit-code: "0"` + `ignore-unfixed: true` intentional;
+    the CRITICAL-fail decision lives in the `fail on CRITICAL findings`
+    step so the SARIF upload always runs.
+- Prevention path: nixpkgs auto-bump via `update-flake-lock`. CRITICAL
+    finding → bump nixpkgs, then rebuild the OCI image.
+- CRITICAL threshold is hardcoded to CVSS `>= 9.0` per GitHub's current
+    Code Scanning mapping. The `jq tonumber? // 0` guard drops non-numeric
+    SARIF severities (e.g. textual `"high"` from some scanners) instead
+    of erroring under `set -euo pipefail`. Revisit the threshold if
+    GitHub revises the CVSS-to-bucket mapping.
+
+## SBOM attestation
+
+`release-on-bump.yml` generates SPDX-JSON SBOMs via `anchore/sbom-action`,
+attests via `actions/attest-sbom`.
+
+- Bundle SBOM: attached to release as `linpeas-bundle.sbom.spdx.json`,
+    attested.
+- Per-arch image SBOMs: attested + pushed to ghcr.io and docker.io with
+    `push-to-registry: true`. NOT release assets.
+- `verify-latest-release.yml`'s `gh attestation verify` covers SBOMs
+    automatically (verifies ALL attestations).

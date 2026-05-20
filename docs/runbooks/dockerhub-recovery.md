@@ -126,3 +126,29 @@ comment (e.g., `transient: docker.io 502 on push, retry green`).
 **Username mismatch.** `DOCKERHUB_USERNAME` must equal the owner segment of the `rvenutolo/linpeas` repo path.
 
 **Docker Hub partial outage.** Manual re-run via `workflow_dispatch` is usually enough; if multiple retries fail with the same shape, check <https://status.docker.com>.
+
+## DOCKERHUB_TOKEN split (RW + DELETE)
+
+- **`DOCKERHUB_TOKEN_RW`** — Read, Write. Used by `release-on-bump.yml` and
+    `verify-latest-release.yml`.
+- **`DOCKERHUB_TOKEN_DELETE`** — Read, Write, Delete. Used ONLY by
+    `dockerhub-sync.yml` (`peter-evans/dockerhub-description` requires Delete
+    scope to PATCH repo metadata; `Read, Write`-only PAT returns `403`).
+
+Binding:
+
+1. `DOCKERHUB_TOKEN_RW` must never appear in `dockerhub-sync.yml`.
+1. `DOCKERHUB_TOKEN_DELETE` must never appear in `release-on-bump.yml` or
+    `verify-latest-release.yml`.
+1. Manual recovery snippets calling `curl -X DELETE` must use
+    `DOCKERHUB_TOKEN_DELETE` (the `_RW` token returns `401`).
+1. No unsuffixed `DOCKERHUB_TOKEN` secret may exist; only `_RW` and
+    `_DELETE` variants are authoritative. The legacy unsuffixed name
+    was deleted 2026-05-19 after Docker Hub-side revoke.
+
+Rotation: on suspected compromise only.
+
+## Notify-body parity invariant
+
+`release-on-bump.yml`'s notify-failure issue body carries a `## Common Docker Hub causes` subsection mirroring this runbook's "Common Docker
+Hub failure modes" section. Keep wording in parity.

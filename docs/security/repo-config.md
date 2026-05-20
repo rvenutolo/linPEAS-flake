@@ -12,6 +12,17 @@ references drawn from a vetted vendor allowlist may run in this repo.
 See [`allowed-actions.md`](allowed-actions.md) for the canonical
 vendor list and the procedure for adding a new vendor.
 
+## Workflow action SHA pinning
+
+Every `uses:` in `.github/workflows/*.yml` and `.github/actions/**/*.yml`
+must end with a full 40-hex SHA + trailing `# vX.Y.Z (Dn)` comment, OR be
+a path-relative `./...` self-reference. Includes first-party GitHub-owned
+actions.
+
+Enforced by `scripts/check-uses-sha-pinned.sh` (required CI job
+`uses-sha-pinned`; pre-commit hook same name with `NIX_BUILD_TOP` guard).
+Belt-and-braces backup to the GitHub-side `sha_pinning_required` setting.
+
 ## App-based bump auth
 
 Bump workflows authenticate as the `linpeas-flake-bumper` GitHub App,
@@ -72,3 +83,24 @@ update, and arbitrary update of release-tag refs matching
 
 Drift is asserted by the `tag-protection-drift-check` CI job and the
 matching pre-commit hook.
+
+Ruleset `release-tag-protection` (target=tag, enforcement=active,
+rules=[deletion, update, non_fast_forward],
+include=`refs/tags/[0-9]{8}-[0-9a-f]{7,40}`; fallback `refs/tags/**` if
+regex ever rejected).
+
+Lint: `scripts/check-tag-protection.sh` via `tag-protection-drift-check`
+required CI job. GitHub rulesets API shape change → update script +
+fixtures together.
+
+## Renovate invariants
+
+`scripts/check-renovate-invariants.sh` asserts:
+
+1. `extends` includes `"helpers:pinGitHubActionDigests"`.
+1. `minimumReleaseAge` is a non-empty string (e.g. `"7 days"`).
+1. No top-level `automerge` key — must live exclusively in per-manager
+    `packageRules`.
+1. The `github-actions` `packageRule` sets `pinDigests: true`.
+
+Enforced by `renovate-invariants` required CI job.

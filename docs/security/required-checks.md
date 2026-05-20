@@ -79,3 +79,21 @@ When the ruleset's required-check list changes:
     gh api repos/rvenutolo/linPEAS-flake/rulesets \
       --jq '.[] | select(.name=="protect-main") | .id'
     ```
+
+## protect-main ruleset (in-tree mirror)
+
+`.github/rulesets/protect-main.json` is the in-tree mirror of the live
+`protect-main` branch ruleset (id `16561598`). Live posture +
+mirror-parity asserted by `scripts/check-protect-main.sh` via the
+`protect-main-drift-check` required CI job. Mirrors the
+`tag-protection-drift-check` pattern.
+
+Asserted invariants: name `protect-main`; target `branch`; enforcement
+`active`; conditions.ref_name.include == `["~DEFAULT_BRANCH"]`;
+bypass_actors == `[]`; rules include `deletion`, `non_fast_forward`,
+`required_signatures`; pull_request allowed_merge_methods == `["merge"]`;
+required-status-checks set (semantic diff, sorted by context) matches
+the in-tree mirror.
+
+Any change to the live ruleset must update both the mirror file AND
+`docs/security/required-checks.md` in the same PR.

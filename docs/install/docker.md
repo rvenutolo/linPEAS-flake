@@ -90,3 +90,10 @@ gh attestation verify oci://ghcr.io/rvenutolo/linpeas:{{ dashboard.release.lates
 ```
 
 Proves image was built by `release-on-bump.yml` workflow in this repo. Does **not** prove content equivalence with upstream `linpeas.sh` — see [Security → Verification](../security/verification.md).
+
+## Manifest digest-pinning
+
+`release-on-bump.yml`'s `manifest` job MUST invoke `docker buildx imagetools create` with captured `@sha256:` digests from
+`needs.image-*.outputs.{ghcr,hub}_digest` — never the mutable
+`${VERSION}-amd64` / `${VERSION}-arm64` tags. Arch tags can be rewritten
+between per-arch push and manifest create; digests cannot.

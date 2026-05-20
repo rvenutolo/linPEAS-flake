@@ -38,3 +38,32 @@ See `SECURITY.md` for the secret rotation policy.
 | Upstream latest | `{{ dashboard.drift.upstream_latest }}` |
 | Drift | {{ dashboard.drift.days }} days |
 | Last parity check | {{ dashboard.parity.conclusion }} ({{ dashboard.parity.checked_at }}) |
+
+## Bump credentials blast-radius
+
+{% raw %}
+
+- Bump workflows authenticate as the `linpeas-flake-bumper` **GitHub App**, not as a PAT. The App is installed only on `rvenutolo/linPEAS-flake` with `Contents: Read and write` + `Pull requests: Read and write` permissions (`Metadata: Read` is implicit). No `Workflows` permission. Switching back to any PAT-based flow is a regression — web-flow signing of REST `PUT /contents` requires an App installation token, empirically confirmed (plan 04).
+- Storage:
+  - `vars.BUMP_APP_CLIENT_ID` — public, GitHub App Client ID (e.g. `Iv23...`). Preferred over App ID (numeric) per the `actions/create-github-app-token` v3 deprecation.
+  - `secrets.BUMP_APP_PRIVATE_KEY` — App's PEM private key. Rotate on suspected compromise; no forced cadence.
+- Tokens minted via `actions/create-github-app-token` are scoped to one job, valid one hour, and revoked at job end. They live only as `${{ steps.app-token.outputs.token }}` passed via `GH_TOKEN`. Never reach `.git/config`; there must never be a `git push` using them. Commits land via REST `PUT /repos/{owner}/{repo}/contents/{path}` → web-flow-signed by GitHub.
+- `BUMP_APP_PRIVATE_KEY` only enters env in `push-and-merge` jobs, never `compute-pin` / `compute-lock`. Those compute jobs must remain `permissions: contents: read`, must not reference the secret, and must keep untrusted Nix actions inside their own boundary.
+- `docs/security/required-checks.md` mirrors the `protect-main` branch ruleset's required-check set. Update in same change as GitHub-side list changes.
+- No `paths:` / `paths-ignore:` filter on any workflow listed in `docs/security/required-checks.md`. Enforced by `required-checks-no-paths` CI job.
+
+{% endraw %}
+
+## PR-triggered workflow secret allowlist
+
+PR-triggered workflows (`on: pull_request` or `on: pull_request_target`) MUST NOT reference any `secrets.*` other than `secrets.GITHUB_TOKEN`. Enforced by `scripts/check-pr-workflows-no-secrets.sh` via `pr-workflows-no-secrets` required CI job.
+
+Exception for a non-`GITHUB_TOKEN` secret requires documenting here BEFORE relaxing the script.
+
+## harden-runner
+
+`step-security/harden-runner` is the **first step** in every job in every workflow. `egress-policy: audit`.
+
+- Do not remove from any job.
+- Keep as first step, before `actions/checkout`, `cachix/install-nix-action`, or any network step. eBPF monitor must install before any I/O.
+- Do not add to composite actions — caller job already has it.
