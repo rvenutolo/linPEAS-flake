@@ -47,6 +47,7 @@
           { "context": "pin-diff-isolated", "integration_id": 15368 },
           { "context": "pr-workflows-no-secrets", "integration_id": 15368 },
           { "context": "pre-commit-hooks-sha-parity", "integration_id": 15368 },
+          { "context": "protect-main-drift-check", "integration_id": 15368 },
           { "context": "renovate-invariants", "integration_id": 15368 },
           { "context": "required-checks-no-paths", "integration_id": 15368 },
           { "context": "smoke-test" },
