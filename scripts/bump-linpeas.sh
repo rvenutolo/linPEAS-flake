@@ -138,7 +138,7 @@ function main() {
   # `--type sha256` is the default and is deprecated; default to SRI sha256.
   sri_hash="$(nix hash file --sri "${tmpfile}")"
 
-  # Per D5: key is `hash`, not `sha256`.
+  # Pin schema: key is `hash`, not `sha256`.
   local new_pin
   new_pin="$(jq --null-input \
     --arg version "${new_tag}" \

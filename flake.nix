@@ -108,8 +108,9 @@
 
           config = {
             # Entrypoint (not Cmd) so `docker run <img> <args>` appends to
-            # linpeas rather than replacing it. D9 image-smoke runs
-            # `docker run --rm <img> -h` and expects -h to reach linpeas.
+            # linpeas rather than replacing it. The image-smoke CI job
+            # runs `docker run --rm <img> -h` and expects -h to reach
+            # linpeas.
             Entrypoint = [ "${linpeas}/bin/linpeas" ];
             Labels = {
               "org.opencontainers.image.source" = "https://github.com/rvenutolo/linPEAS-flake";
@@ -226,7 +227,7 @@
               enable = true;
               package = treefmtEval.config.build.wrapper;
             };
-            # D6: refuse to commit if README flake-show block is stale.
+            # Refuse to commit if README flake-show block is stale.
             # Invokes refresh-flake-show.sh in --check mode — never mutates the
             # working tree, exits 1 on diff. Safe for the autonomous subagent
             # path (no dirty README left behind on failure).
