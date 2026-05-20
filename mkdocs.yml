@@ -86,6 +86,7 @@ nav:
   - Development:
       - Git workflow: development/git.md
       - Linting & formatting: development/linting.md
+      - Labeling: development/labeling.md
   - Runbooks:
       - Docker Hub recovery: runbooks/dockerhub-recovery.md
   - Security:
