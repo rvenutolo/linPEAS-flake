@@ -6,6 +6,7 @@
 [![Last commit](https://img.shields.io/github/last-commit/rvenutolo/linPEAS-flake)](https://github.com/rvenutolo/linPEAS-flake/commits/main)
 [![Open issues](https://img.shields.io/github/issues/rvenutolo/linPEAS-flake)](https://github.com/rvenutolo/linPEAS-flake/issues)
 [![Open PRs](https://img.shields.io/github/issues-pr/rvenutolo/linPEAS-flake)](https://github.com/rvenutolo/linPEAS-flake/pulls)
+[![Renovate dashboard](https://img.shields.io/badge/renovate-dashboard-blue)](https://github.com/rvenutolo/linPEAS-flake/issues?q=is%3Aissue+is%3Aopen+label%3Adependencies+%22Dependency+Dashboard%22)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg)](https://www.conventionalcommits.org)
 [![License](https://img.shields.io/github/license/rvenutolo/linPEAS-flake)](LICENSE)
 [![Nix flake](https://img.shields.io/badge/nix-flake-blue?logo=nixos)](https://nixos.wiki/wiki/Flakes)
@@ -19,6 +20,10 @@
 
 Personal Nix-flake wrapper around [peass-ng/PEASS-ng](https://github.com/peass-ng/PEASS-ng) linpeas.sh.
 All credit for LinPEAS itself belongs to the PEASS-ng authors.
+
+## Maintenance
+
+The [Renovate dependency dashboard](https://github.com/rvenutolo/linPEAS-flake/issues?q=is%3Aissue+is%3Aopen+label%3Adependencies+%22Dependency+Dashboard%22) tracks pending dependency bumps, rate-limited PRs, and config errors. Check there if a bump appears stalled.
 
 ## Usage
 
