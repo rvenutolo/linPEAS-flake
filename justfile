@@ -36,11 +36,13 @@ verify:
 	./scripts/check-tag-protection.sh; \
 	./scripts/check-renovate-invariants.sh; \
 	./scripts/check-jsonschema.sh; \
+	./scripts/check-pre-commit-hooks-sha-parity.sh; \
 	bash tests/check-uses-sha-pinned.test.sh; \
 	bash tests/check-pr-workflows-no-secrets.test.sh; \
 	bash tests/check-required-checks-no-paths.test.sh; \
 	bash tests/check-tag-protection.test.sh; \
 	bash tests/check-renovate-invariants.test.sh; \
+	bash tests/check-pre-commit-hooks-sha-parity.test.sh; \
 	bash tests/gen-dashboard-data.test.sh'
 
 # Manually refresh linpeas pin from upstream latest release
