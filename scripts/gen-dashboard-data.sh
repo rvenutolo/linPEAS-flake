@@ -77,7 +77,7 @@ function fetch_or_override() {
   if [[ -n ${override_path} ]]; then
     cat -- "${override_path}"
   else
-    gh api "${api_path}"
+    gh api --header 'X-GitHub-Api-Version: 2022-11-28' -- "${api_path}"
   fi
 }
 
@@ -166,11 +166,13 @@ function main() {
 
   log_info 'gathering recent releases'
   local releases_json
-  releases_json="$(gh api "repos/${THIS_REPO}/releases?per_page=20")"
+  releases_json="$(gh api --header 'X-GitHub-Api-Version: 2022-11-28' \
+    "repos/${THIS_REPO}/releases?per_page=20")"
 
   log_info 'gathering last bump PR'
   local bump_pr_json bump_pr_url bump_pr_number bump_pr_merged_at
   bump_pr_json="$(gh api --paginate \
+    --header 'X-GitHub-Api-Version: 2022-11-28' \
     "search/issues?q=repo:${THIS_REPO}+is:pr+is:merged+in:title+chore%3A+bump+linpeas&sort=updated&order=desc&per_page=1" ||
     true)"
   bump_pr_url="$(jq --raw-output '.items[0].html_url // ""' <<<"${bump_pr_json}")"
@@ -180,6 +182,7 @@ function main() {
   log_info 'gathering parity-check run'
   local parity_json parity_conclusion parity_checked_at parity_run_url
   parity_json="$(gh api \
+    --header 'X-GitHub-Api-Version: 2022-11-28' \
     "repos/${THIS_REPO}/actions/workflows/verify-latest-release.yml/runs?per_page=1" \
     2>/dev/null || true)"
   if [[ -z ${parity_json} ]]; then
