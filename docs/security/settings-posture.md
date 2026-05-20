@@ -28,26 +28,49 @@ browser. Outside contributor PRs queue until the maintainer clicks
 **Approve and run** — prevents arbitrary fork pushes from consuming
 Actions resources without review.
 
-## Merge method
+## Merge method (manual UI)
 
-| Setting                  | Required value | Probe                                                                |
-| ------------------------ | -------------- | -------------------------------------------------------------------- |
-| `allow_merge_commit`     | `true`         | `gh api /repos/rvenutolo/linPEAS-flake --jq .allow_merge_commit`     |
-| `allow_rebase_merge`     | `false`        | `gh api /repos/rvenutolo/linPEAS-flake --jq .allow_rebase_merge`     |
-| `allow_squash_merge`     | `false`        | `gh api /repos/rvenutolo/linPEAS-flake --jq .allow_squash_merge`     |
-| `allow_auto_merge`       | `true`         | `gh api /repos/rvenutolo/linPEAS-flake --jq .allow_auto_merge`       |
-| `allow_update_branch`    | `true`         | `gh api /repos/rvenutolo/linPEAS-flake --jq .allow_update_branch`    |
-| `delete_branch_on_merge` | `true`         | `gh api /repos/rvenutolo/linPEAS-flake --jq .delete_branch_on_merge` |
-| `merge_commit_title`     | `PR_TITLE`     | `gh api /repos/rvenutolo/linPEAS-flake --jq .merge_commit_title`     |
-| `merge_commit_message`   | `PR_BODY`      | `gh api /repos/rvenutolo/linPEAS-flake --jq .merge_commit_message`   |
+Settings → General → "Pull Requests" must match:
 
-Rationale: rebase + squash rewrite commits and break GPG/SSH signatures
-on the rewritten objects. Merge-commit preserves branch commits verbatim
-on `main`; the merge commit itself is web-flow-signed by GitHub, so
-`required_signatures` is satisfied for both the branch commits (signed by
-the author) and the merge commit. `merge_commit_title=PR_TITLE` means
-the PR title is the merge-commit subject — `pr-title-lint` enforces it
-as Conventional Commits.
+| Setting                  | Required value |
+| ------------------------ | -------------- |
+| `allow_merge_commit`     | `true`         |
+| `allow_rebase_merge`     | `false`        |
+| `allow_squash_merge`     | `false`        |
+| `allow_auto_merge`       | `true`         |
+| `allow_update_branch`    | `true`         |
+| `delete_branch_on_merge` | `true`         |
+| `merge_commit_title`     | `PR_TITLE`     |
+| `merge_commit_message`   | `PR_BODY`      |
+
+These flags appear on `GET /repos/{owner}/{repo}` but GitHub gates the
+fields behind `contents: read` AND `contents: write` — i.e. push
+access. The `settings-drift-checker` App
+([`docs/runbooks/settings-drift-app.md`](../runbooks/settings-drift-app.md))
+is read-only by construction; granting `contents: write` would let its
+installation token push arbitrary code, which is a far worse blast
+radius than the settings-mutation it would unlock. So merge-method
+posture is not API-probed.
+
+Defence-in-depth instead: the `protect-main` ruleset's
+`pull_request.allowed_merge_methods=["merge"]` rule
+([`docs/security/required-checks.md`](required-checks.md)) rejects any
+rebase/squash merge at push time regardless of the repo-level flags,
+and `pr-title-lint` enforces the Conventional-Commits shape that
+`merge_commit_title=PR_TITLE` relies on. A UI flip to enable
+squash/rebase as a repo default does not silently land non-merge
+commits on `main` — the ruleset rejects the merge. Drift on the
+ruleset itself is caught by `scripts/check-protect-main.sh`, which
+runs from the same daily cron and probes endpoints reachable with
+`Administration: Read`.
+
+Rationale for the values: rebase + squash rewrite commits and break
+GPG/SSH signatures on the rewritten objects. Merge-commit preserves
+branch commits verbatim on `main`; the merge commit itself is
+web-flow-signed by GitHub, so `required_signatures` is satisfied for
+both the branch commits (signed by the author) and the merge commit.
+`merge_commit_title=PR_TITLE` means the PR title is the merge-commit
+subject — `pr-title-lint` enforces it as Conventional Commits.
 
 ## Environments
 
@@ -69,7 +92,7 @@ as Conventional Commits.
 
 Every row above whose Probe column is a `gh api` invocation is enforced by `scripts/check-settings-posture.sh`, run from `.github/workflows/settings-posture-drift-check.yml` on a daily cron schedule (plus `workflow_dispatch` for manual probes). On mismatch the workflow opens a deduped `settings-drift` issue, which auto-closes when the next run sees the posture reconciled.
 
-Manual-UI rows (fork-PR approval gate, maintainer 2FA) are not covered — GitHub exposes no REST endpoint for either, and they remain a review-time check.
+Manual-UI rows (fork-PR approval gate, maintainer 2FA, merge-method flags) are not covered — GitHub either exposes no REST endpoint or gates the field behind `contents: write` (push access), which the read-only `settings-drift-checker` App cannot hold. Those rows are review-time + defence-in-depth checks (see the merge-method section above).
 
 The endpoints this check probes require Administration:Read scope, which `secrets.GITHUB_TOKEN` cannot have. Auth is done via a dedicated read-only `settings-drift-checker` GitHub App; setup is documented at [`docs/runbooks/settings-drift-app.md`](../runbooks/settings-drift-app.md).
 

@@ -1,4 +1,4 @@
 {
   "allowed_actions": "selected",
-  "sha_pinning_required": true
+  "sha_pinning_required": false
 }
