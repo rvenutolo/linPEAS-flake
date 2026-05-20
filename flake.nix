@@ -190,10 +190,22 @@
             };
             typos.enable = true;
             editorconfig-checker.enable = true;
-            # `commitizen check` enforces Conventional Commits on the
-            # commit message — Conventional-Commits parity with the CI
-            # `commitlint` job, using a Python tool packaged in nixpkgs.
+            # `commitizen check` validates the subject line against
+            # Conventional Commits. It does NOT enforce the full rule
+            # set the CI `commitlint` job uses (e.g. body-max-line-length),
+            # so we run both: commitizen for the subject, commitlint for
+            # the body. Without the latter, CI catches body line-length
+            # violations only after push.
             commitizen.enable = true;
+            commitlint = {
+              enable = true;
+              name = "commitlint";
+              description = "Lint commit message against .commitlintrc.yml (CI parity)";
+              entry = "${pkgs.commitlint}/bin/commitlint --config .commitlintrc.yml --edit";
+              stages = [ "commit-msg" ];
+              language = "system";
+              pass_filenames = true;
+            };
             zizmor = {
               enable = true;
               # Older zizmor versions (e.g. 1.8.0 from nixos-25.05) exit
