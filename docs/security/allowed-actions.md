@@ -67,10 +67,20 @@ wagoid/*
 
 ## Drift detection
 
-There is no live-drift CI check for this setting. If you suspect drift:
+The canonical list above is enforced against live API state by `scripts/check-allowed-actions-api.sh`, run on a daily cron + `workflow_dispatch` from `.github/workflows/allowed-actions-api-drift-check.yml`. On mismatch the workflow opens a deduped `allowed-actions-drift` issue, which auto-closes when the next run sees the allowlist reconciled.
+
+The check covers three things:
+
+- every entry in the doc must appear in `patterns_allowed` (and vice versa)
+- `github_owned_allowed` must be `true`
+- `verified_allowed` must be `false`
+
+The `/actions/permissions/selected-actions` endpoint requires Administration:Read scope, which `secrets.GITHUB_TOKEN` cannot have. The workflow authenticates via the read-only `settings-drift-checker` GitHub App documented at [`docs/runbooks/settings-drift-app.md`](../runbooks/settings-drift-app.md).
+
+To probe manually from a developer shell (requires `gh auth login` with admin-read scope on the repo):
 
 ```bash
-gh api /repos/rvenutolo/linPEAS-flake/actions/permissions/selected-actions
+nix develop --command ./scripts/check-allowed-actions-api.sh
 ```
 
-Compare against the canonical list above. Drift = security incident.
+Exits 0 on full match, 1 on any drift, with every mismatched entry logged to stderr.
