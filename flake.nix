@@ -116,6 +116,12 @@
               "org.opencontainers.image.description" = "LinPEAS — Linux Privilege Escalation Awesome Script";
               "org.opencontainers.image.licenses" = "MIT";
               "org.opencontainers.image.version" = pin.version;
+              # Wrapper-repo commit SHA at build time. Build-provenance
+              # attestation already binds the image to this commit, but
+              # the label is readable via `docker inspect` without
+              # `gh attestation verify` round-tripping. Falls back to
+              # `dirtyRev` for uncommitted local builds.
+              "org.opencontainers.image.revision" = self.rev or self.dirtyRev or "unknown";
             };
           };
         };
