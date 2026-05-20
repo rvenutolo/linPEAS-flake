@@ -14,30 +14,31 @@ ruleset.
 
 ## Required contexts
 
-| Context                    | Source workflow   | Source file                             |
-| -------------------------- | ----------------- | --------------------------------------- |
-| flake-check                | ci                | .github/workflows/ci.yml                |
-| build-linpeas              | ci                | .github/workflows/ci.yml                |
-| smoke-test                 | ci                | .github/workflows/ci.yml                |
-| build-linpeas-arm64        | ci                | .github/workflows/ci.yml                |
-| smoke-test-arm64           | ci                | .github/workflows/ci.yml                |
-| image-smoke                | ci                | .github/workflows/ci.yml                |
-| image-smoke-arm64          | ci                | .github/workflows/ci.yml                |
-| bundle-smoke               | ci                | .github/workflows/ci.yml                |
-| dashboard-data-tests       | ci                | .github/workflows/ci.yml                |
-| required-checks-no-paths   | ci                | .github/workflows/ci.yml                |
-| pr-workflows-no-secrets    | ci                | .github/workflows/ci.yml                |
-| tag-protection-drift-check | ci                | .github/workflows/ci.yml                |
-| renovate-invariants        | ci                | .github/workflows/ci.yml                |
-| uses-sha-pinned            | ci                | .github/workflows/ci.yml                |
-| markdownlint               | ci                | .github/workflows/ci.yml                |
-| typos                      | ci                | .github/workflows/ci.yml                |
-| editorconfig               | ci                | .github/workflows/ci.yml                |
-| check-jsonschema           | ci                | .github/workflows/ci.yml                |
-| commitlint                 | ci                | .github/workflows/ci.yml                |
-| lint-pr-title              | pr-title-lint     | .github/workflows/pr-title-lint.yml     |
-| dependency-review          | dependency-review | .github/workflows/dependency-review.yml |
-| gitleaks                   | gitleaks          | .github/workflows/gitleaks.yml          |
+| Context                     | Source workflow   | Source file                             |
+| --------------------------- | ----------------- | --------------------------------------- |
+| flake-check                 | ci                | .github/workflows/ci.yml                |
+| build-linpeas               | ci                | .github/workflows/ci.yml                |
+| smoke-test                  | ci                | .github/workflows/ci.yml                |
+| build-linpeas-arm64         | ci                | .github/workflows/ci.yml                |
+| smoke-test-arm64            | ci                | .github/workflows/ci.yml                |
+| image-smoke                 | ci                | .github/workflows/ci.yml                |
+| image-smoke-arm64           | ci                | .github/workflows/ci.yml                |
+| bundle-smoke                | ci                | .github/workflows/ci.yml                |
+| dashboard-data-tests        | ci                | .github/workflows/ci.yml                |
+| required-checks-no-paths    | ci                | .github/workflows/ci.yml                |
+| pr-workflows-no-secrets     | ci                | .github/workflows/ci.yml                |
+| tag-protection-drift-check  | ci                | .github/workflows/ci.yml                |
+| renovate-invariants         | ci                | .github/workflows/ci.yml                |
+| pre-commit-hooks-sha-parity | ci                | .github/workflows/ci.yml                |
+| uses-sha-pinned             | ci                | .github/workflows/ci.yml                |
+| markdownlint                | ci                | .github/workflows/ci.yml                |
+| typos                       | ci                | .github/workflows/ci.yml                |
+| editorconfig                | ci                | .github/workflows/ci.yml                |
+| check-jsonschema            | ci                | .github/workflows/ci.yml                |
+| commitlint                  | ci                | .github/workflows/ci.yml                |
+| lint-pr-title               | pr-title-lint     | .github/workflows/pr-title-lint.yml     |
+| dependency-review           | dependency-review | .github/workflows/dependency-review.yml |
+| gitleaks                    | gitleaks          | .github/workflows/gitleaks.yml          |
 
 ## Path-filter invariant
 
