@@ -1,0 +1,11 @@
+{
+  "github_owned_allowed": true,
+  "verified_allowed": false,
+  "patterns_allowed": [
+    "actions/*",
+    "DavidAnson/*",
+    "github/*",
+    "peter-evans/*",
+    "attacker/*"
+  ]
+}

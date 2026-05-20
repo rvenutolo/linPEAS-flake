@@ -1,0 +1,119 @@
+name: allowed-actions-api-drift-check
+
+# Asserts the live `actions.permissions.allowed_actions` API state
+# (selected-actions list, github_owned_allowed flag, verified_allowed
+# flag) matches the canonical allowlist in
+# `docs/security/allowed-actions.md`.
+#
+# Workflow-YAML linting (scripts/check-uses-sha-pinned.sh) catches new
+# `uses:` strings but cannot see an API-level vendor expansion until a
+# workflow happens to call the newly-allowed vendor. This watchdog
+# closes that gap.
+#
+# Schedule + dispatch only — the /actions/permissions/selected-actions
+# endpoint requires admin scope, which github.token never receives.
+# Auth is via the same read-only `settings-drift-checker` GitHub App
+# used by settings-posture-drift-check (Administration:Read,
+# Metadata:Read). See docs/runbooks/settings-drift-app.md.
+
+on:
+  schedule:
+    - cron: "30 11 * * *" # daily 11:30 UTC (15 min after settings-posture-drift-check)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: allowed-actions-api-drift-check
+  cancel-in-progress: false
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      result: ${{ steps.probe.outcome }}
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3 (D4)
+      - name: harness passes against fixtures
+        run: nix develop --command bash tests/check-allowed-actions-api.test.sh
+
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0 (D1)
+        id: app-token
+        with:
+          client-id: ${{ vars.SETTINGS_DRIFT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.SETTINGS_DRIFT_APP_PRIVATE_KEY }}
+
+      - name: probe live allowed-actions API matches doc
+        id: probe
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: nix develop --command ./scripts/check-allowed-actions-api.sh
+
+  notify:
+    name: notify
+    needs: drift-check
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      issues: write
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.drift-check.result == 'failure' && 'failure' || (needs.drift-check.result == 'success' && 'success' || 'skipped') }}
+          label: allowed-actions-drift
+          title: "allowed-actions-api-drift-check: live allowlist has drifted"
+          body: |
+            The daily `allowed-actions-api-drift-check` watchdog
+            detected that the live `actions.permissions.allowed_actions`
+            API state on `rvenutolo/linPEAS-flake` no longer matches
+            the canonical allowlist in
+            `docs/security/allowed-actions.md`.
+
+            Drift modes:
+
+            - `patterns_allowed drift: extra on API: <vendor>` — a
+              vendor not in the doc is allowed live. Most often: a
+              maintainer clicked "Approve" on an unlisted vendor in
+              repo Settings → Actions. Either add the vendor to the
+              doc (treat as a security review — why is it needed?)
+              or remove it from the live state via the API call in
+              the doc's "Adding a vendor" section.
+            - `patterns_allowed drift: missing on API: <vendor>` —
+              the doc declares a vendor but the live API does not.
+              Most likely: someone removed the vendor live without
+              updating the doc. Reconcile.
+            - `github_owned_allowed drift` — `actions/*` and
+              `github/*` should be implicit-allowed; flipping to
+              false silently breaks every workflow using those.
+            - `verified_allowed drift` — `verified_allowed` must
+              stay false. `true` lets opaque "verified creator"
+              vendors in without our involvement.
+
+            See the failing job logs for the specific drift line(s).
+
+            This issue auto-closes once the next watchdog run sees
+            the allowlist reconciled.
+          label-description: live allowed-actions API state drifted from doc
+          github-token: ${{ secrets.GITHUB_TOKEN }}
