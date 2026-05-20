@@ -79,16 +79,16 @@ jobs:
         # Verifying against the manifest list digest returns 404 because
         # `attest-build-provenance` never wrote an attestation for that
         # subject — see issue #69.
+        #
+        # Anonymous: `docker manifest inspect` and `gh attestation verify`
+        # both work without docker login against public ghcr.io repos.
+        # No registry credentials enter this verify path.
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_TOKEN_INLINE: ${{ github.token }}
-          GH_ACTOR: ${{ github.actor }}
           TAG: ${{ steps.latest.outputs.tag }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
-          printf '%s' "${GH_TOKEN_INLINE}" \
-            | docker login ghcr.io --username "${GH_ACTOR}" --password-stdin
           for arch in amd64 arm64; do
             digest="$(docker manifest inspect "ghcr.io/rvenutolo/linpeas:${TAG}" \
               | jq --raw-output --arg arch "${arch}" \
@@ -110,23 +110,20 @@ jobs:
         # surfacing on this cron. Mirror the ghcr per-arch block for
         # docker.io to close that gap.
         #
-        # Uses `docker manifest inspect` to enumerate per-arch digests
-        # directly from the registry — `docker pull --platform` returns
-        # the manifest list digest in RepoDigests, which has no
-        # attestation. See issue #69.
+        # Anonymous: `docker manifest inspect` against a public docker.io
+        # repo + `gh attestation verify oci://docker.io/...` both resolve
+        # without docker login. Dropping DOCKERHUB_TOKEN_RW from this
+        # read-only path means a compromised step inside this verify job
+        # cannot exfiltrate registry push credentials.
         #
         # Pull rate: `docker manifest inspect` does not count against the
         # anonymous pull quota; this loop is well within budget regardless.
         env:
           GH_TOKEN: ${{ github.token }}
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN_RW }}
           TAG: ${{ steps.latest.outputs.tag }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
-          printf '%s' "${DOCKERHUB_TOKEN}" \
-            | docker login docker.io --username "${DOCKERHUB_USERNAME}" --password-stdin
           for arch in amd64 arm64; do
             digest="$(docker manifest inspect "docker.io/rvenutolo/linpeas:${TAG}" \
               | jq --raw-output --arg arch "${arch}" \
@@ -138,7 +135,6 @@ jobs:
             gh attestation verify "oci://docker.io/rvenutolo/linpeas@${digest}" \
               --repo rvenutolo/linPEAS-flake
           done
-          docker logout docker.io
 
       - name: verify :latest manifest matches :VERSION on both registries
         # Asserts that the floating `:latest` tag still resolves to the
