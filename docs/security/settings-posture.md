@@ -67,9 +67,13 @@ as Conventional Commits.
 
 ## Drift detection
 
-Every row above whose Probe column is a `gh api` invocation is enforced by `scripts/check-settings-posture.sh`. The script runs on every PR/push (via `.github/workflows/settings-posture-drift-check.yml`) and on a daily cron schedule; the cron arm opens a deduped `settings-drift` issue on mismatch. Manual-UI rows (fork-PR approval gate, maintainer 2FA) are not covered — GitHub exposes no REST endpoint for either, and they remain a review-time check.
+Every row above whose Probe column is a `gh api` invocation is enforced by `scripts/check-settings-posture.sh`, run from `.github/workflows/settings-posture-drift-check.yml` on a daily cron schedule (plus `workflow_dispatch` for manual probes). On mismatch the workflow opens a deduped `settings-drift` issue, which auto-closes when the next run sees the posture reconciled.
 
-To probe manually:
+Manual-UI rows (fork-PR approval gate, maintainer 2FA) are not covered — GitHub exposes no REST endpoint for either, and they remain a review-time check.
+
+The endpoints this check probes require Administration:Read scope, which `secrets.GITHUB_TOKEN` cannot have. Auth is done via a dedicated read-only `settings-drift-checker` GitHub App; setup is documented at [`docs/runbooks/settings-drift-app.md`](../runbooks/settings-drift-app.md).
+
+To probe manually from a developer shell (requires `gh auth login` with admin-read scope on the repo):
 
 ```bash
 nix develop --command ./scripts/check-settings-posture.sh
