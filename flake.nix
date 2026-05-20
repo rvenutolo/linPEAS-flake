@@ -308,6 +308,25 @@
               pass_filenames = false;
               language = "system";
             };
+            # Asserts every `gh api` / `api.github.com` call in
+            # scripts/*.sh passes an explicit `X-GitHub-Api-Version`
+            # header. Without it, GitHub treats the client as
+            # unversioned and may auto-promote it to a future API
+            # version whose response shape differs from what the
+            # script parses.
+            gh-api-version-header = {
+              enable = true;
+              name = "gh-api-version-header";
+              entry = "${pkgs.writeShellScript "gh-api-version-header-hook" ''
+                set -Eeuo pipefail
+                IFS=$'\n\t'
+                if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+                exec ${pkgs.bash}/bin/bash scripts/check-gh-api-version-header.sh
+              ''}";
+              files = "^(scripts/.*\\.sh)$";
+              pass_filenames = false;
+              language = "system";
+            };
             # Catches divergence between the SHA in flake.nix's
             # pre-commit-hooks input URL and the locked.rev in flake.lock.
             # Fires when either file changes. NIX_BUILD_TOP guard skips
