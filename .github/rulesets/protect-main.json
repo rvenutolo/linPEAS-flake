@@ -44,6 +44,7 @@
           { "context": "image-smoke-arm64" },
           { "context": "lint-pr-title", "integration_id": 15368 },
           { "context": "markdownlint", "integration_id": 15368 },
+          { "context": "pin-diff-isolated", "integration_id": 15368 },
           { "context": "pr-workflows-no-secrets", "integration_id": 15368 },
           { "context": "pre-commit-hooks-sha-parity", "integration_id": 15368 },
           { "context": "renovate-invariants", "integration_id": 15368 },

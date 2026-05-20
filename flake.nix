@@ -274,6 +274,22 @@
               pass_filenames = false;
               language = "system";
             };
+            # Asserts only scripts/bump-linpeas.sh mutates
+            # linpeas-pin.json — the release-on-bump trigger contract
+            # depends on this isolation invariant.
+            pin-diff-isolated = {
+              enable = true;
+              name = "pin-diff-isolated";
+              entry = "${pkgs.writeShellScript "pin-diff-isolated-hook" ''
+                set -Eeuo pipefail
+                IFS=$'\n\t'
+                if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+                exec ${pkgs.bash}/bin/bash scripts/check-pin-diff-isolated.sh
+              ''}";
+              files = "^(scripts/.*\\.sh)$";
+              pass_filenames = false;
+              language = "system";
+            };
             # Catches divergence between the SHA in flake.nix's
             # pre-commit-hooks input URL and the locked.rev in flake.lock.
             # Fires when either file changes. NIX_BUILD_TOP guard skips
