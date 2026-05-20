@@ -64,3 +64,15 @@ as Conventional Commits.
 ## Maintainer account (manual)
 
 - 2FA: **must be on**. Verify at <https://github.com/settings/security>. Not visible to `gh` CLI's OAuth scope.
+
+## Drift detection
+
+Every row above whose Probe column is a `gh api` invocation is enforced by `scripts/check-settings-posture.sh`. The script runs on every PR/push (via `.github/workflows/settings-posture-drift-check.yml`) and on a daily cron schedule; the cron arm opens a deduped `settings-drift` issue on mismatch. Manual-UI rows (fork-PR approval gate, maintainer 2FA) are not covered — GitHub exposes no REST endpoint for either, and they remain a review-time check.
+
+To probe manually:
+
+```bash
+nix develop --command ./scripts/check-settings-posture.sh
+```
+
+Exits 0 on full match, 1 on any drift, with every mismatched setting logged to stderr.

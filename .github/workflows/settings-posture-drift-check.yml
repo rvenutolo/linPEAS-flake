@@ -1,0 +1,100 @@
+name: settings-posture-drift-check
+
+# Asserts the live repo settings match docs/security/settings-posture.md.
+# Closes the gap where settings-posture was the source of truth for
+# binding repo flags (default_workflow_permissions, secret-scanning,
+# allow_squash_merge, etc.) but had no CI drift check — a single UI
+# flip could silently invalidate other defense-in-depth controls
+# until the next manual review.
+#
+# Runs on PR + push + daily schedule. The schedule arm catches drift
+# that lands between PRs (UI clicks, GitHub-side defaults shifting).
+# On the schedule path only, failure opens a deduped `settings-drift`
+# issue; on PR/push the failing job is itself the signal.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "15 11 * * *" # daily 11:15 UTC (between stale-pin-check 10:30 and verify-latest-release 12:00)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: settings-posture-drift-check-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      result: ${{ steps.probe.outcome }}
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 (D2)
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3 (D4)
+      - name: harness passes against fixtures
+        run: nix develop --command bash tests/check-settings-posture.test.sh
+      - name: probe live repo settings match desired posture
+        id: probe
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: nix develop --command ./scripts/check-settings-posture.sh
+
+  notify:
+    name: notify
+    needs: drift-check
+    # Only file an issue on the schedule path; PR/push failures surface
+    # via the failing job itself. `always()` so we run even when
+    # drift-check failed; the inner `if` gates issue creation.
+    if: always() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      issues: write
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.drift-check.result == 'failure' && 'failure' || 'success' }}
+          label: settings-drift
+          title: "settings-posture-drift-check: live repo settings have drifted"
+          body: |
+            The daily `settings-posture-drift-check` watchdog detected
+            that the live `rvenutolo/linPEAS-flake` repository settings
+            no longer match `docs/security/settings-posture.md`.
+
+            See the failing job logs for the specific drift line(s);
+            every mismatched setting is reported in one run.
+
+            Remediation: reconcile by either
+            - reverting the UI change so live matches the doc, or
+            - updating `docs/security/settings-posture.md` AND any
+              dependent enforcement to reflect the new intended posture
+              (treat this as a security review).
+
+            This issue auto-closes once the next watchdog run sees the
+            settings reconciled.
+          label-description: live repo settings drifted from settings-posture.md
+          github-token: ${{ secrets.GITHUB_TOKEN }}
