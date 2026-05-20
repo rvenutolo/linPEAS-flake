@@ -35,6 +35,7 @@ verify:
 	./scripts/check-required-checks-no-paths.sh; \
 	./scripts/check-tag-protection.sh; \
 	./scripts/check-renovate-invariants.sh; \
+	./scripts/check-protect-main.sh; \
 	./scripts/check-jsonschema.sh; \
 	./scripts/check-pre-commit-hooks-sha-parity.sh; \
 	./scripts/check-pin-diff-isolated.sh; \
@@ -43,6 +44,7 @@ verify:
 	bash tests/check-required-checks-no-paths.test.sh; \
 	bash tests/check-tag-protection.test.sh; \
 	bash tests/check-renovate-invariants.test.sh; \
+	bash tests/check-protect-main.test.sh; \
 	bash tests/check-pre-commit-hooks-sha-parity.test.sh; \
 	bash tests/check-pin-diff-isolated.test.sh; \
 	bash tests/gen-dashboard-data.test.sh'
