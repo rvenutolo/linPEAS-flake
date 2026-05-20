@@ -1,0 +1,12 @@
+{
+  "nodes": {
+    "nixpkgs": {
+      "locked": {
+        "rev": "0000000000000000000000000000000000000000",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
