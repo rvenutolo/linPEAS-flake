@@ -41,6 +41,8 @@ See `SECURITY.md` for the secret rotation policy.
 
 ## Bump credentials blast-radius
 
+{% raw %}
+
 - Bump workflows authenticate as the `linpeas-flake-bumper` **GitHub App**, not as a PAT. The App is installed only on `rvenutolo/linPEAS-flake` with `Contents: Read and write` + `Pull requests: Read and write` permissions (`Metadata: Read` is implicit). No `Workflows` permission. Switching back to any PAT-based flow is a regression — web-flow signing of REST `PUT /contents` requires an App installation token, empirically confirmed (plan 04).
 - Storage:
   - `vars.BUMP_APP_CLIENT_ID` — public, GitHub App Client ID (e.g. `Iv23...`). Preferred over App ID (numeric) per the `actions/create-github-app-token` v3 deprecation.
@@ -49,6 +51,8 @@ See `SECURITY.md` for the secret rotation policy.
 - `BUMP_APP_PRIVATE_KEY` only enters env in `push-and-merge` jobs, never `compute-pin` / `compute-lock`. Those compute jobs must remain `permissions: contents: read`, must not reference the secret, and must keep untrusted Nix actions inside their own boundary.
 - `docs/security/required-checks.md` mirrors the `protect-main` branch ruleset's required-check set. Update in same change as GitHub-side list changes.
 - No `paths:` / `paths-ignore:` filter on any workflow listed in `docs/security/required-checks.md`. Enforced by `required-checks-no-paths` CI job.
+
+{% endraw %}
 
 ## PR-triggered workflow secret allowlist
 
