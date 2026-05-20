@@ -629,12 +629,14 @@ jobs:
           gh attestation verify linpeas-bundle.sh --repo rvenutolo/linPEAS-flake
 
       - name: verify per-arch attestations
+        # `gh attestation verify` reads attestations from the Sigstore
+        # transparency log + the GitHub API; it does NOT require docker
+        # registry credentials. Dropping the docker login pair here
+        # shrinks the blast radius of any compromised step inside the
+        # verify job — neither DOCKERHUB_TOKEN_RW nor a long-lived
+        # ghcr token enters this job's env.
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_TOKEN_INLINE: ${{ github.token }}
-          GH_ACTOR: ${{ github.actor }}
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN_RW }}
           GHCR_AMD64_DIGEST: ${{ needs.image-amd64.outputs.ghcr_digest }}
           HUB_AMD64_DIGEST: ${{ needs.image-amd64.outputs.hub_digest }}
           GHCR_ARM64_DIGEST: ${{ needs.image-arm64.outputs.ghcr_digest }}
@@ -642,10 +644,6 @@ jobs:
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
-          printf '%s' "${GH_TOKEN_INLINE}" \
-            | docker login ghcr.io --username "${GH_ACTOR}" --password-stdin
-          printf '%s' "${DOCKERHUB_TOKEN}" \
-            | docker login docker.io --username "${DOCKERHUB_USERNAME}" --password-stdin
           for ref in \
             "oci://ghcr.io/rvenutolo/linpeas@${GHCR_AMD64_DIGEST}" \
             "oci://docker.io/rvenutolo/linpeas@${HUB_AMD64_DIGEST}" \
@@ -709,19 +707,6 @@ jobs:
             "${HUB_AMD64_DIGEST}" "${HUB_ARM64_DIGEST}"
           check "docker.io/rvenutolo/linpeas:latest" \
             "${HUB_AMD64_DIGEST}" "${HUB_ARM64_DIGEST}"
-
-      - name: docker logout
-        # Drop docker registry credentials at the end of the
-        # verify job. The `verify per-arch attestations` step logs in to
-        # both registries; the subsequent `verify manifest tags` step uses
-        # `docker buildx imagetools inspect` which also reads those creds.
-        # Logout once both have completed.
-        if: always()
-        run: |
-          set -Eeuo pipefail
-          IFS=$'\n\t'
-          docker logout ghcr.io || true
-          docker logout docker.io || true
 
   notify:
     name: notify
