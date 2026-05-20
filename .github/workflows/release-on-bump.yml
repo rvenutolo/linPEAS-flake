@@ -274,7 +274,7 @@ jobs:
             docker tag "rvenutolo/linpeas:${VERSION}" "${reg}/rvenutolo/linpeas:${VERSION}-${ARCH}"
             docker push "${reg}/rvenutolo/linpeas:${VERSION}-${ARCH}"
           done
-          # SC-POST-6: deterministic digest selection via `jq` against the
+          # Deterministic digest selection via `jq` against the
           # JSON output of `docker inspect`. The prior `grep | head -n1`
           # pipeline silently picked the first matching line; if RepoDigests
           # ever contains more than one entry (e.g. multiple aliases), the
@@ -350,13 +350,13 @@ jobs:
           push-to-registry: true
 
       - name: docker logout
-        # SC-POST-5: drop registry credentials from ~/.docker/config.json
-        # once the push + attest steps are done. The ubuntu-latest runner is
+        # Drop registry credentials from ~/.docker/config.json once the
+        # push + attest steps are done. The ubuntu-latest runner is
         # ephemeral, but `if: always()` ensures the logout runs even if an
         # intervening step fails — narrows the window for any later-step
         # compromise (e.g. a future SHA-pinned action) to read the creds.
         # Mirrors the docker logout already present in the verify-latest-
-        # release.yml cron (SC-POST-1 patch in PR #18).
+        # release.yml cron.
         if: always()
         run: |
           set -Eeuo pipefail
@@ -430,7 +430,7 @@ jobs:
             docker tag "rvenutolo/linpeas:${VERSION}" "${reg}/rvenutolo/linpeas:${VERSION}-${ARCH}"
             docker push "${reg}/rvenutolo/linpeas:${VERSION}-${ARCH}"
           done
-          # SC-POST-6: see amd64 job for rationale.
+          # See amd64 job for rationale.
           ghcr_digest="$(
             docker inspect "ghcr.io/rvenutolo/linpeas:${VERSION}-${ARCH}" \
               | jq --raw-output \
@@ -499,7 +499,7 @@ jobs:
           push-to-registry: true
 
       - name: docker logout
-        # SC-POST-5: see amd64 job for rationale.
+        # See amd64 job for rationale.
         if: always()
         run: |
           set -Eeuo pipefail
@@ -544,7 +544,7 @@ jobs:
         # cleanly against per-arch refs that already exist in the registry.
         # Each create makes one OCI index tag pointing at both arch digests.
         #
-        # SC-POST-3: Source refs are the immutable `@sha256:` digests
+        # Source refs are the immutable `@sha256:` digests
         # captured by the per-arch `image-*` jobs at push time, NOT the
         # mutable `${VERSION}-amd64` / `${VERSION}-arm64` tags. Tags can
         # be rewritten between the per-arch push and this step (registry
@@ -572,7 +572,7 @@ jobs:
           done
 
       - name: docker logout
-        # SC-POST-5: see image-amd64 job for rationale. The manifest job
+        # See image-amd64 job for rationale. The manifest job
         # also logs in to both registries and `imagetools create` is the
         # last credential-requiring step.
         if: always()
@@ -667,7 +667,7 @@ jobs:
           gh attestation verify linpeas-pin.json --repo rvenutolo/linPEAS-flake
 
       - name: verify manifest tags resolve to attested per-arch digests
-        # SC-POST-2: the steps above re-validate the per-arch digests
+        # The steps above re-validate the per-arch digests
         # captured at push time, but never confirm the published
         # `:VERSION` / `:latest` manifest tags still point at those exact
         # digests. A registry-side rewrite between the per-arch push and
@@ -711,7 +711,7 @@ jobs:
             "${HUB_AMD64_DIGEST}" "${HUB_ARM64_DIGEST}"
 
       - name: docker logout
-        # SC-POST-5: drop docker registry credentials at the end of the
+        # Drop docker registry credentials at the end of the
         # verify job. The `verify per-arch attestations` step logs in to
         # both registries; the subsequent `verify manifest tags` step uses
         # `docker buildx imagetools inspect` which also reads those creds.
@@ -760,42 +760,11 @@ jobs:
 
             Investigate the failing job's logs. The just-published release may need to be deleted and recut once the underlying bug is fixed.
 
-            ## Half-published image recovery (DH-2)
+            ## Half-published image recovery
 
-            If `image-amd64` or `image-arm64` failed, the per-arch job may have left a partially-published state. The push loop is ordered `docker.io` then `ghcr.io`, so:
+            If `image-amd64` or `image-arm64` failed, the per-arch job may have left a partially-published state (orphan arch-suffixed tag on one registry, missing on the other). The push loop is ordered `docker.io` then `ghcr.io`, so today the typical orphan is a docker.io `{version}-{arch}` tag with no matching ghcr.io tag.
 
-            - **docker.io push failed**: nothing was pushed to either registry for that arch. No cleanup needed beyond the release-delete/recut below.
-            - **ghcr.io push failed (docker.io succeeded)**: docker.io has the arch-suffixed tag for that arch but ghcr.io does not. The `manifest` job is skipped, so neither registry has the unsuffixed `{version}` or `:latest` tags. Recovery requires deleting the orphan docker.io arch tag before retrying.
-
-            Recovery procedure:
-
-            1. Identify the failing arch (`amd64` or `arm64`) and the release `VERSION` (the pin version, e.g. `20260516-deadbee`).
-            2. Delete the GitHub release and tag to keep release-creation idempotent on retry:
-               ```bash
-               gh release delete "${VERSION}" --repo rvenutolo/linPEAS-flake --cleanup-tag --yes
-               ```
-            3. Delete orphan arch-suffixed tags so the next run starts from a clean state:
-               - **ghcr.io** (if ghcr push succeeded but docker.io failed — does not apply with current push order, but kept for completeness):
-                 ```bash
-                 gh api -X DELETE \
-                   "/user/packages/container/linpeas/versions" \
-                   --jq '.[] | select(.metadata.container.tags[]? == "'"${VERSION}-${ARCH}"'") | .id' \
-                   | xargs -I{} gh api -X DELETE "/user/packages/container/linpeas/versions/{}"
-                 ```
-               - **docker.io** (if docker.io push succeeded but ghcr.io failed):
-                 ```bash
-                 TOKEN=$(curl -fsS -u "${DOCKERHUB_USERNAME}:${DOCKERHUB_TOKEN}" \
-                   -H 'Content-Type: application/json' \
-                   -X POST 'https://hub.docker.com/v2/users/login' \
-                   -d '{"username":"'"${DOCKERHUB_USERNAME}"'","password":"'"${DOCKERHUB_TOKEN}"'"}' \
-                   | jq --raw-output .token)
-                 curl -fsS -X DELETE \
-                   -H "Authorization: JWT ${TOKEN}" \
-                   "https://hub.docker.com/v2/repositories/rvenutolo/linpeas/tags/${VERSION}-${ARCH}/"
-                 ```
-                 (Tag delete on Docker Hub requires the `Delete` scope. Use `DOCKERHUB_TOKEN_DELETE` here, not `DOCKERHUB_TOKEN_RW`. Alternatively, delete the tag from the maintainer's Docker Hub UI.)
-            4. Re-trigger the release pipeline by re-pushing the same `linpeas-pin.json` commit (no-op edit + `chore: retrigger release` commit), or by re-running this workflow from the Actions UI if the pin commit is still HEAD.
-            5. Confirm the next run goes green end-to-end before closing this issue.
+            Full step-by-step recovery — including the quote-safe Docker Hub API snippets and the `DOCKERHUB_TOKEN_DELETE` scope requirement — lives in [`docs/runbooks/dockerhub-recovery.md`](https://github.com/rvenutolo/linPEAS-flake/blob/main/docs/runbooks/dockerhub-recovery.md). Follow it end-to-end before closing this issue.
 
             ## Common Docker Hub causes
 

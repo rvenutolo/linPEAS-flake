@@ -1,0 +1,12 @@
+{
+  "nodes": {
+    "pre-commit-hooks": {
+      "locked": {
+        "rev": "61ab0e80d9c7ab14c256b5b453d8b3fb0189ba0a",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

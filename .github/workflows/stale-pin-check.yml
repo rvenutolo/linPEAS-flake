@@ -2,10 +2,10 @@ name: stale-pin-check
 
 # Daily watchdog: catches the silent-regression case where
 # `update-linpeas` runs green but the pin doesn't advance for an
-# extended window (network blip, API quota, BUMP_PAT expiry that
-# manifests later, etc.). The cron itself can't see "we stopped
-# bumping" because it would need to run AFTER `update-linpeas` and
-# correlate state.
+# extended window (network blip, API quota, GitHub App installation
+# revoked, etc.). The cron itself can't see "we stopped bumping"
+# because it would need to run AFTER `update-linpeas` and correlate
+# state.
 #
 # Logic: read the timestamp prefix of `pin.version` (peass-ng tags use
 # `YYYYMMDD-<sha>`). If we are >14d behind that date AND the upstream
@@ -59,8 +59,8 @@ jobs:
           # $GITHUB_OUTPUT and exit 0 so the notify job can attribute the
           # failure correctly. Without explicit attribution, an upstream-API
           # rate-limit looks identical to a stall-detected event and the
-          # auto-filed issue suggests irrelevant remediations (BUMP_PAT
-          # validity, asset-URL prefix).
+          # auto-filed issue suggests irrelevant remediations (App
+          # installation validity, asset-URL prefix).
           # @arg $1 reason token (pin-malformed | upstream-api-failure
           #         | upstream-tag-malformed | stall-detected)
           emit_failure() {
@@ -173,7 +173,8 @@ jobs:
               Investigate:
               - `update-linpeas.yml` recent run logs (action may be silently
                 exiting 0 without bumping)
-              - `BUMP_PAT` validity / scopes
+              - `linpeas-flake-bumper` GitHub App installation intact
+                (`BUMP_APP_PRIVATE_KEY` not rotated, App not uninstalled)
               - Asset-URL prefix check rejecting upstream (peass-ng moved host)
               - Upstream `.digest` field absent (silent skip is supposed to
                 hard-fail now; verify `bump-linpeas.sh`)
