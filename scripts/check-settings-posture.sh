@@ -7,8 +7,18 @@
 #
 # Closes the gap where settings-posture.md was the source-of-truth for
 # binding repo flags but had no CI drift check. The manual-UI rows
-# (fork-PR approval gate, maintainer 2FA) are intentionally not
-# covered: GitHub exposes no REST endpoint for either.
+# (fork-PR approval gate, maintainer 2FA, merge-method flags) are
+# intentionally not covered. GitHub exposes no REST endpoint for the
+# first two. The merge-method flags on `GET /repos/{owner}/{repo}`
+# (allow_*_merge, merge_commit_*, delete_branch_on_merge,
+# allow_update_branch) are returned by GitHub only to identities with
+# `contents: read` AND `contents: write` — i.e. push access. The
+# settings-drift-checker App is read-only by construction (Admin:Read +
+# Metadata:Read) and must remain so; granting contents:write would let
+# its installation token push arbitrary code. Merge-method posture is
+# verified at PR-merge time instead: the merge-commit ruleset rejects
+# rebase/squash merges, and `pr-title-lint` enforces the title shape
+# `merge_commit_title=PR_TITLE` relies on.
 #
 # Exits 0 on full match, 1 on any drift. Logs the specific drift to
 # stderr.
@@ -109,17 +119,6 @@ assert_field "${actions_workflow_perms_json}" \
   '.default_workflow_permissions' 'read' 'default_workflow_permissions'
 assert_field "${actions_workflow_perms_json}" \
   '.can_approve_pull_request_reviews' 'false' 'can_approve_pull_request_reviews'
-
-# --- Merge method -----------------------------------------------------------
-
-assert_field "${repo_json}" '.allow_merge_commit' 'true' 'allow_merge_commit'
-assert_field "${repo_json}" '.allow_rebase_merge' 'false' 'allow_rebase_merge'
-assert_field "${repo_json}" '.allow_squash_merge' 'false' 'allow_squash_merge'
-assert_field "${repo_json}" '.allow_auto_merge' 'true' 'allow_auto_merge'
-assert_field "${repo_json}" '.allow_update_branch' 'true' 'allow_update_branch'
-assert_field "${repo_json}" '.delete_branch_on_merge' 'true' 'delete_branch_on_merge'
-assert_field "${repo_json}" '.merge_commit_title' 'PR_TITLE' 'merge_commit_title'
-assert_field "${repo_json}" '.merge_commit_message' 'PR_BODY' 'merge_commit_message'
 
 # --- Environments -----------------------------------------------------------
 

@@ -60,17 +60,15 @@ function main() {
     'bad-secret-scanning-off' 1 'secret_scanning.status drift'
   run_scenario 'default workflow permissions write fails' \
     'bad-default-perms-write' 1 'default_workflow_permissions drift'
-  run_scenario 'allow_squash_merge enabled fails' \
-    'bad-allow-squash' 1 'allow_squash_merge drift'
   run_scenario 'github-pages env can_admins_bypass true fails' \
     'bad-admins-bypass' 1 'environments.github-pages.can_admins_bypass drift'
   run_scenario 'multiple simultaneous drifts surface all' \
-    'bad-multiple' 1 'allow_rebase_merge drift'
+    'bad-multiple' 1 'can_approve_pull_request_reviews drift'
 
   # Multi-drift scenario must surface every drift in a single run, not
   # stop at the first. This is asserted by counting drift lines in
-  # stderr — should be >=3 for bad-multiple (allow_rebase_merge,
-  # merge_commit_title, can_approve_pull_request_reviews).
+  # stderr — should be >=3 for bad-multiple (sha_pinning_required,
+  # default_workflow_permissions, can_approve_pull_request_reviews).
   local stderr_file
   stderr_file="$(mktemp)"
   REPO_JSON_OVERRIDE="${FIXTURES}/bad-multiple/repo.json" \
