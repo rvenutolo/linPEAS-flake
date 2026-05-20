@@ -1,7 +1,7 @@
 # Consume linPEAS-flake as a flake input
 
 This page covers importing this flake as an input to another flake.
-For one-shot use see `nix run` and the Docker image in [`README.md`](../../README.md#usage).
+For one-shot use see `nix run` and the Docker image in the project README.
 
 ## Plain flake consumer
 

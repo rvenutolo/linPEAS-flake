@@ -78,6 +78,7 @@ nav:
       - Nix: install/nix.md
       - Docker: install/docker.md
       - Bundle: install/bundle.md
+      - Consume as flake input: install/consume-from-flake.md
   - Dashboard: dashboard.md
   - Architecture:
       - Auto-update: architecture/auto-update.md
@@ -94,5 +95,6 @@ nav:
       - Repository configuration: security/repo-config.md
       - Settings posture: security/settings-posture.md
       - Trust model: security/trust-model.md
+      - Threat model: security/threat-model.md
       - Verification: security/verification.md
   - Releases: releases.md

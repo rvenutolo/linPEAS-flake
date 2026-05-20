@@ -28,8 +28,8 @@ upstream account compromise post-release.
 
 **Mitigations:**
 
-- SRI digest pin in [`linpeas-pin.json`](../../linpeas-pin.json),
-    written by `scripts/bump-linpeas.sh` only.
+- SRI digest pin in `linpeas-pin.json`, written by
+    `scripts/bump-linpeas.sh` only.
 - Per-release `.digest` recorded alongside the version.
 - URL-prefix lock to `https://github.com/peass-ng/PEASS-ng/releases/`.
 
