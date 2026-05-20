@@ -68,11 +68,16 @@ chmod +x linpeas
 
 ```nix
 {
-  inputs.linpeas-flake.url = "github:rvenutolo/linPEAS-flake";
-  # ...
-  # access via inputs.linpeas-flake.packages.${system}.linpeas
+  inputs.linpeas-flake = {
+    url = "github:rvenutolo/linPEAS-flake";
+    inputs.nixpkgs.follows = "nixpkgs";
+  };
+  # access via inputs.linpeas-flake.packages.${system}.default
 }
 ```
+
+For a full guide (plain flake + flake-parts, pinning, no binary cache),
+see [`docs/install/consume-from-flake.md`](docs/install/consume-from-flake.md).
 
 ### As an overlay
 
@@ -83,6 +88,8 @@ chmod +x linpeas
   # then pkgs.linpeas is available
 }
 ```
+
+See [`docs/install/consume-from-flake.md`](docs/install/consume-from-flake.md) for pinning guidance that applies to overlay use as well.
 
 ## How updates work
 
