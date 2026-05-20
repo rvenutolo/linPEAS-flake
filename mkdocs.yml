@@ -86,6 +86,8 @@ nav:
   - Development:
       - Git workflow: development/git.md
       - Linting & formatting: development/linting.md
+  - Runbooks:
+      - Docker Hub recovery: runbooks/dockerhub-recovery.md
   - Security:
       - Repository configuration: security/repo-config.md
       - Settings posture: security/settings-posture.md
