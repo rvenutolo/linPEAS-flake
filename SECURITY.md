@@ -93,7 +93,7 @@ downloads and build-provenance attestations.
 
 `dockerhub-sync.yml` triggers on `release-on-bump` workflow_run completed-successfully (plus manual dispatch). It does NOT trigger on arbitrary README pushes. This narrows the `DOCKERHUB_TOKEN_DELETE` exposure window to release-time only.
 
-The `workflow_run` trigger does not introduce the TOCTOU concern that issue #22 (BUMP_PAT → GitHub App) was rejected over: `dockerhub-sync.yml` has no `contents: write` and only PATCHes Docker Hub repo metadata.
+The `workflow_run` trigger does not introduce a TOCTOU concern: `dockerhub-sync.yml` has no `contents: write` and only PATCHes Docker Hub repo metadata.
 
 ## Supply-chain posture monitoring
 
@@ -135,8 +135,8 @@ The `codeql.yml` workflow is not in branch protection's required-check set. A Co
 
     The `Delete` capability is required by the `peter-evans/dockerhub-description`
     action used in `dockerhub-sync.yml`, which calls the Docker Hub repo-metadata
-    endpoint; a `Read, Write`-only PAT returns `403 Forbidden` on that endpoint
-    (verified empirically 2026-05-17). Rotation: on suspected compromise only —
+    endpoint; a `Read, Write`-only PAT returns `403 Forbidden` on that endpoint.
+    Rotation: on suspected compromise only —
     no calendar cadence. If compromise is suspected: revoke at
     <https://hub.docker.com/settings/security>, generate a replacement,
     update `gh secret set DOCKERHUB_TOKEN_RW --repo rvenutolo/linPEAS-flake` or

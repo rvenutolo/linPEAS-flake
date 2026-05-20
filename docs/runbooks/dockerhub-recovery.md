@@ -143,8 +143,7 @@ Binding:
 1. Manual recovery snippets calling `curl -X DELETE` must use
     `DOCKERHUB_TOKEN_DELETE` (the `_RW` token returns `401`).
 1. No unsuffixed `DOCKERHUB_TOKEN` secret may exist; only `_RW` and
-    `_DELETE` variants are authoritative. The legacy unsuffixed name
-    was deleted 2026-05-19 after Docker Hub-side revoke.
+    `_DELETE` variants are authoritative.
 
 Rotation: on suspected compromise only.
 

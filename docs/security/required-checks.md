@@ -1,16 +1,8 @@
 # Required Status Checks — main branch
 
-Snapshot of the `protect-main` branch ruleset
-(`gh api repos/rvenutolo/linPEAS-flake/rules/branches/main`) as of
-2026-05-19. Update this file in the same change as any modification to the
-ruleset.
-
-> Migration note: prior to 2026-05-18 these checks were enforced via classic
-> branch protection (`branches/main/protection`). They are now enforced via
-> a repository ruleset (`rulesets/<id>`, name `protect-main`). On 2026-05-19
-> the ruleset was further reshaped to merge-commit-only with
-> `required_signatures` retained and `required_linear_history` dropped;
-> the required-check set gained `pr-title-lint`.
+In-tree mirror of the `protect-main` branch ruleset
+(`gh api repos/rvenutolo/linPEAS-flake/rules/branches/main`). Update
+this file in the same change as any modification to the ruleset.
 
 ## Required contexts
 

@@ -25,10 +25,10 @@ jobs:
       # in the auto-filed issue; the rest are operational.
       reason: ${{ steps.attribute.outputs.reason }}
     steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
         with:
           egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
 
@@ -87,7 +87,7 @@ jobs:
         # enumerate per-arch manifest digests directly, then verify each.
         # Verifying against the manifest list digest returns 404 because
         # `attest-build-provenance` never wrote an attestation for that
-        # subject — see issue #69.
+        # subject.
         #
         # Anonymous: `docker manifest inspect` and `gh attestation verify`
         # both work without docker login against public ghcr.io repos.
@@ -113,12 +113,12 @@ jobs:
       - name: verify Docker Hub per-arch attestations
         id: verify-hub
         # Docker Hub is the only long-lived stealable-credential
-        # registry in the release pipeline (DOCKERHUB_TOKEN_RW), yet the daily
-        # cron previously only re-verified ghcr (short-lived OIDC). A
+        # registry in the release pipeline (DOCKERHUB_TOKEN_RW). A
         # Docker-Hub-only compromise — stolen token, registry incident,
         # accidental manual push — would replace published tags without
-        # surfacing on this cron. Mirror the ghcr per-arch block for
-        # docker.io to close that gap.
+        # surfacing on this cron unless docker.io is verified alongside
+        # ghcr. The block below mirrors the ghcr per-arch verification
+        # against docker.io.
         #
         # Anonymous: `docker manifest inspect` against a public docker.io
         # repo + `gh attestation verify oci://docker.io/...` both resolve
@@ -270,10 +270,10 @@ jobs:
     permissions:
       issues: write
     steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3 (D2)
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
         with:
           egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1 (D2)
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/notify-workflow-result

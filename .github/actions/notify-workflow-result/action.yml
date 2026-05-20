@@ -1,7 +1,7 @@
 name: notify-workflow-result
 description: "Open/update a deduped issue on workflow failure; close it on next success."
 
-# SECURITY CONTRACT for `title` and `body` inputs (L1, 2026-05-17):
+# SECURITY CONTRACT for `title` and `body` inputs:
 #
 # These values are rendered as **markdown** in a GitHub issue. The
 # composite uses env-var indirection so attacker-controlled values
@@ -22,7 +22,7 @@ description: "Open/update a deduped issue on workflow failure; close it on next 
 #     `^[0-9]{8}-[0-9a-f]{7,40}$` pin shape enforced by
 #     stale-pin-check.yml before reaching this composite)
 #
-# DEDUPLICATION BEHAVIOR (L2): the composite lists open issues by
+# DEDUPLICATION BEHAVIOR: the composite lists open issues by
 # `label`, then opens one if none exist. Two concurrent runs of the
 # SAME caller workflow can race the `listForRepo` -> `issues.create`
 # window and produce two open issues with the same label. The
@@ -61,7 +61,7 @@ runs:
   using: composite
   steps:
     - name: open, comment, or close issue
-      uses: actions/github-script@d746ffe35508b1917358783b479e04febd2b8f71 # v9.0.0 (D2)
+      uses: actions/github-script@d746ffe35508b1917358783b479e04febd2b8f71 # v9.0.0
       env:
         RESULT: ${{ inputs.result }}
         LABEL: ${{ inputs.label }}
