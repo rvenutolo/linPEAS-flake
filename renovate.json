@@ -6,7 +6,7 @@
   "platformAutomerge": true,
   "minimumReleaseAge": "7 days",
   "prConcurrentLimit": 3,
-  "dependencyDashboard": false,
+  "dependencyDashboard": true,
   "labels": ["dependencies"],
   "packageRules": [
     {
