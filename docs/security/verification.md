@@ -196,3 +196,25 @@ attests via `actions/attest-sbom`.
     `push-to-registry: true`. NOT release assets.
 - `verify-latest-release.yml`'s `gh attestation verify` covers SBOMs
     automatically (verifies ALL attestations).
+
+## SBOM diff in release notes
+
+After the bundle SBOM is generated and attested, the `bundle` job in
+`release-on-bump.yml` downloads the previous release's
+`linpeas-bundle.sbom.spdx.json` and runs `scripts/sbom-diff.sh` to
+produce a deterministic, sorted markdown diff (added / removed /
+version-changed packages). The diff is appended to the release body as
+a collapsible `<details>` block.
+
+Purpose: surface transitive-dependency churn that the Trivy CVE gate
+cannot see — a new dependency with no known CVE is invisible to Trivy
+but is itself worth review in a patch release.
+
+Soft-fail semantics: if no previous release exists, or the previous
+release has no `linpeas-bundle.sbom.spdx.json` asset (predates this
+feature), the step logs and exits 0 without modifying the release body.
+
+Idempotence: the append step is gated on `tag-exists == 'false'`, so a
+`workflow_dispatch` rerun with `force-republish` will republish the
+bundle and image artifacts but will NOT re-append the diff to an
+existing release body. Avoids double-appending the same block.
