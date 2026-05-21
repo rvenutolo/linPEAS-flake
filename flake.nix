@@ -294,6 +294,23 @@
               pass_filenames = false;
               language = "system";
             };
+            # Strict least-privilege lint: every workflow's top-level
+            # permissions: must be `{}` and every job must declare its
+            # own scopes. See docs/security/min-permissions.md.
+            min-permissions = {
+              enable = true;
+              name = "min-permissions";
+              entry = "${pkgs.writeShellScript "min-permissions-hook" ''
+                set -Eeuo pipefail
+                IFS=$'\n\t'
+                if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+                export PATH="${pkgs.yq-go}/bin:$PATH"
+                exec ${pkgs.bash}/bin/bash scripts/check-min-permissions.sh
+              ''}";
+              files = "^(\\.github/workflows/.*\\.ya?ml|scripts/check-min-permissions\\.sh)$";
+              pass_filenames = false;
+              language = "system";
+            };
             # Schema-shape validation for repo config. Catches typoed
             # keys, wrong-type values, and upstream-removed fields that
             # per-tool linters miss. NIX_BUILD_TOP guard skips inside

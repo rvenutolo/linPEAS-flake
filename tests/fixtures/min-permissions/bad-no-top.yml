@@ -1,0 +1,9 @@
+name: bad-no-top
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - run: echo a

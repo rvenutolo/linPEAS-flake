@@ -26,8 +26,7 @@ on:
     - cron: "15 11 * * *" # daily 11:15 UTC (between stale-pin-check 10:30 and verify-latest-release 12:00)
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: settings-posture-drift-check

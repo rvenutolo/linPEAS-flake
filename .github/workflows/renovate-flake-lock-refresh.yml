@@ -49,8 +49,7 @@ on:
     workflows: [ci]
     types: [completed]
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   # Branch-scoped: unrelated Renovate PRs can refresh in parallel,

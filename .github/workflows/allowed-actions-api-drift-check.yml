@@ -21,8 +21,7 @@ on:
     - cron: "30 11 * * *" # daily 11:30 UTC (15 min after settings-posture-drift-check)
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: allowed-actions-api-drift-check

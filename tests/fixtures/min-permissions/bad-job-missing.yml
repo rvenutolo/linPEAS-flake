@@ -1,0 +1,8 @@
+name: bad-job-missing
+on: push
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo a
