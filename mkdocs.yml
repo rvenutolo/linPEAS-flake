@@ -94,6 +94,8 @@ nav:
       - Settings-drift App: runbooks/settings-drift-app.md
   - Security:
       - Repository configuration: security/repo-config.md
+      - Allowed actions: security/allowed-actions.md
+      - Required checks: security/required-checks.md
       - Settings posture: security/settings-posture.md
       - Trust model: security/trust-model.md
       - Threat model: security/threat-model.md
