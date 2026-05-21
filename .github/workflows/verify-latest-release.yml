@@ -32,6 +32,14 @@ jobs:
         with:
           persist-credentials: false
 
+      # Nix installer is required for `nix run nixpkgs#cosign` in the
+      # cosign verify-blob / verify steps below.
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3
       - name: read latest release tag
         id: read-tag
         env:
@@ -56,6 +64,7 @@ jobs:
             if gh release download "${TAG}" \
                  --repo rvenutolo/linPEAS-flake \
                  --pattern linpeas-bundle.sh \
+                 --pattern linpeas-bundle.cosign.bundle \
                  --pattern linpeas-pin.json \
                  --clobber; then
               break
@@ -65,6 +74,10 @@ jobs:
           done
           [[ -f linpeas-bundle.sh && -f linpeas-pin.json ]] \
             || { printf 'release assets never appeared\n' >&2; exit 1; }
+          # cosign bundle is asserted optional here: releases predating the
+          # cosign-signing feature have no `.cosign.bundle` asset. The
+          # `verify-bundle-cosign` step below treats absence as a skip
+          # (rather than a verification failure) for backward compat.
 
       - name: verify bundle attestation
         id: verify-bundle
@@ -77,6 +90,27 @@ jobs:
           set -Eeuo pipefail
           IFS=$'\n\t'
           gh attestation verify linpeas-bundle.sh --repo rvenutolo/linPEAS-flake
+
+      - name: cosign verify bundle
+        id: verify-bundle-cosign
+        # Skips cleanly for releases that predate the cosign-signing
+        # feature (no .cosign.bundle asset). Once the feature is in
+        # effect for the latest release, this becomes a hard gate.
+        env:
+          COSIGN_IDENTITY: https://github.com/rvenutolo/linPEAS-flake/.github/workflows/release-on-bump.yml@refs/heads/main
+          COSIGN_OIDC_ISSUER: https://token.actions.githubusercontent.com
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          if [[ ! -f linpeas-bundle.cosign.bundle ]]; then
+            printf 'no cosign bundle asset; skipping cosign verify-blob\n' >&2
+            exit 0
+          fi
+          nix run nixpkgs#cosign -- verify-blob \
+            --bundle linpeas-bundle.cosign.bundle \
+            --certificate-identity "${COSIGN_IDENTITY}" \
+            --certificate-oidc-issuer "${COSIGN_OIDC_ISSUER}" \
+            linpeas-bundle.sh
 
       - name: verify ghcr per-arch attestations
         id: verify-ghcr
@@ -181,6 +215,65 @@ jobs:
             printf '%s: :latest matches :%s\n' "${reg}" "${TAG}"
           done
 
+      - name: cosign verify images (both registries, per-arch + index)
+        id: verify-images-cosign
+        # Re-uses the per-arch digests resolved by the earlier steps via
+        # `docker manifest inspect`, plus the multi-arch index digest of
+        # `:VERSION` on each registry. Skips cleanly for releases whose
+        # signatures don't exist yet (cosign verify exits non-zero with a
+        # "no matching signatures" message — detected and treated as a
+        # skip for back-compat with pre-cosign releases).
+        env:
+          COSIGN_IDENTITY: https://github.com/rvenutolo/linPEAS-flake/.github/workflows/release-on-bump.yml@refs/heads/main
+          COSIGN_OIDC_ISSUER: https://token.actions.githubusercontent.com
+          TAG: ${{ steps.read-tag.outputs.tag }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          # Probe: does the multi-arch index for this release have a
+          # cosign signature at all? If not, the release predates the
+          # feature — skip the entire cosign pass.
+          ghcr_index_digest="$(
+            docker buildx imagetools inspect --raw \
+              "ghcr.io/rvenutolo/linpeas:${TAG}" \
+              | sha256sum \
+              | awk '{print "sha256:" $1}'
+          )"
+          if ! nix run nixpkgs#cosign -- verify \
+                 --certificate-identity "${COSIGN_IDENTITY}" \
+                 --certificate-oidc-issuer "${COSIGN_OIDC_ISSUER}" \
+                 "ghcr.io/rvenutolo/linpeas@${ghcr_index_digest}" \
+                 > /dev/null 2>&1; then
+            printf 'no cosign signature on ghcr index %s; treating release as pre-cosign and skipping\n' \
+              "${ghcr_index_digest}" >&2
+            exit 0
+          fi
+          hub_index_digest="$(
+            docker buildx imagetools inspect --raw \
+              "docker.io/rvenutolo/linpeas:${TAG}" \
+              | sha256sum \
+              | awk '{print "sha256:" $1}'
+          )"
+          refs=(
+            "ghcr.io/rvenutolo/linpeas@${ghcr_index_digest}"
+            "docker.io/rvenutolo/linpeas@${hub_index_digest}"
+          )
+          for arch in amd64 arm64; do
+            for reg in ghcr.io docker.io; do
+              digest="$(docker manifest inspect "${reg}/rvenutolo/linpeas:${TAG}" \
+                | jq --raw-output --arg arch "${arch}" \
+                    '.manifests[] | select(.platform.architecture==$arch and .platform.os=="linux") | .digest')"
+              refs+=("${reg}/rvenutolo/linpeas@${digest}")
+            done
+          done
+          for ref in "${refs[@]}"; do
+            nix run nixpkgs#cosign -- verify \
+              --certificate-identity "${COSIGN_IDENTITY}" \
+              --certificate-oidc-issuer "${COSIGN_OIDC_ISSUER}" \
+              "${ref}" > /dev/null
+            printf 'cosign verified: %s\n' "${ref}"
+          done
+
       - name: verify pin file attestation
         id: verify-pin
         # The pin file uploaded to the release is the same blob attested at
@@ -237,8 +330,10 @@ jobs:
           READ_TAG: ${{ steps.read-tag.outcome }}
           DOWNLOAD_ASSETS: ${{ steps.download-assets.outcome }}
           VERIFY_BUNDLE: ${{ steps.verify-bundle.outcome }}
+          VERIFY_BUNDLE_COSIGN: ${{ steps.verify-bundle-cosign.outcome }}
           VERIFY_GHCR: ${{ steps.verify-ghcr.outcome }}
           VERIFY_HUB: ${{ steps.verify-hub.outcome }}
+          VERIFY_IMAGES_COSIGN: ${{ steps.verify-images-cosign.outcome }}
           VERIFY_LATEST_PARITY: ${{ steps.verify-latest-parity.outcome }}
           VERIFY_PIN: ${{ steps.verify-pin.outcome }}
           VERIFY_UPSTREAM_SRI: ${{ steps.verify-upstream-sri.outcome }}
@@ -249,14 +344,16 @@ jobs:
           # Order matters: the first failed step wins. Downstream steps
           # skipped after a failure show outcome `skipped`; only the
           # actually-failed step shows `failure`. Walk in execution order.
-          if   [[ ${READ_TAG}             == 'failure' ]]; then reason='release-tag-fetch-failed'
-          elif [[ ${DOWNLOAD_ASSETS}      == 'failure' ]]; then reason='release-asset-download-failed'
-          elif [[ ${VERIFY_BUNDLE}        == 'failure' ]]; then reason='bundle-attest-failed'
-          elif [[ ${VERIFY_GHCR}          == 'failure' ]]; then reason='ghcr-attest-failed'
-          elif [[ ${VERIFY_HUB}           == 'failure' ]]; then reason='hub-attest-failed'
-          elif [[ ${VERIFY_LATEST_PARITY} == 'failure' ]]; then reason='manifest-tag-drift'
-          elif [[ ${VERIFY_PIN}           == 'failure' ]]; then reason='pin-attest-failed'
-          elif [[ ${VERIFY_UPSTREAM_SRI}  == 'failure' ]]; then reason='upstream-sri-drift'
+          if   [[ ${READ_TAG}              == 'failure' ]]; then reason='release-tag-fetch-failed'
+          elif [[ ${DOWNLOAD_ASSETS}       == 'failure' ]]; then reason='release-asset-download-failed'
+          elif [[ ${VERIFY_BUNDLE}         == 'failure' ]]; then reason='bundle-attest-failed'
+          elif [[ ${VERIFY_BUNDLE_COSIGN}  == 'failure' ]]; then reason='bundle-cosign-failed'
+          elif [[ ${VERIFY_GHCR}           == 'failure' ]]; then reason='ghcr-attest-failed'
+          elif [[ ${VERIFY_HUB}            == 'failure' ]]; then reason='hub-attest-failed'
+          elif [[ ${VERIFY_IMAGES_COSIGN}  == 'failure' ]]; then reason='images-cosign-failed'
+          elif [[ ${VERIFY_LATEST_PARITY}  == 'failure' ]]; then reason='manifest-tag-drift'
+          elif [[ ${VERIFY_PIN}            == 'failure' ]]; then reason='pin-attest-failed'
+          elif [[ ${VERIFY_UPSTREAM_SRI}   == 'failure' ]]; then reason='upstream-sri-drift'
           fi
           printf 'reason=%s\n' "${reason}" >> "${GITHUB_OUTPUT}"
           printf 'attributed reason: %s\n' "${reason}"
@@ -309,6 +406,13 @@ jobs:
               with rotated root has shipped to runners but the cron
               still runs on the old runner image). Re-run the cron 24h
               later to distinguish.
+            - `bundle-cosign-failed` / `images-cosign-failed` — cosign
+              signature verification failed for the bundle or for one
+              of the per-arch / multi-arch image digests. Same
+              authenticity guarantee as the `*-attest-failed` reasons
+              above, exposed via the user-facing `cosign verify` path.
+              Same Sigstore TUF rotation caveat applies — re-run 24h
+              later before treating as tampering.
             - `release-tag-fetch-failed` / `release-asset-download-failed`
               — `gh release view` / `gh release download` failed.
               Transient GitHub API or release-asset visibility lag.
