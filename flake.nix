@@ -182,11 +182,13 @@
               # Excludes mirror the CI markdownlint-cli2-action globs:
               # docs/dashboard.md + docs/releases.md are mkdocs-macros
               # templated and not raw markdown; docs/_data/* is the
-              # generated dashboard YAML.
+              # generated dashboard YAML. tests/fixtures/* contains
+              # intentionally-invalid markdown for test harnesses.
               excludes = [
                 "^docs/dashboard\\.md$"
                 "^docs/releases\\.md$"
                 "^docs/_data/"
+                "^tests/fixtures/"
               ];
             };
             typos.enable = true;
