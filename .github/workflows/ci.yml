@@ -782,6 +782,7 @@ jobs:
             !.claude/**
             !docs/dashboard.md
             !docs/releases.md
+            !tests/fixtures/**
 
   typos:
     runs-on: ubuntu-latest
