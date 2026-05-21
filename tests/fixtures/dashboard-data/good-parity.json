@@ -1,0 +1,9 @@
+{
+  "workflow_runs": [
+    {
+      "conclusion": "success",
+      "updated_at": "2026-05-16T03:00:00Z",
+      "html_url": "https://github.com/rvenutolo/linPEAS-flake/actions/runs/12345"
+    }
+  ]
+}

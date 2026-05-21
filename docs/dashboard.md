@@ -82,6 +82,23 @@ The daily [`verify-latest-release.yml`](https://github.com/rvenutolo/linPEAS-fla
 No parity-check runs have completed yet.
 {% endif %}
 
+## Bump lag
+
+Hours between each upstream release and the corresponding this-repo
+release. Surfaces whether the auto-bump pipeline is keeping pace.
+
+{% if dashboard.lag.recent and dashboard.lag.recent | length > 0 %}
+```mermaid
+xychart-beta
+    title "Bump lag (hours) — last {{ dashboard.lag.recent | length }} releases"
+    x-axis [{% for entry in dashboard.lag.recent %}"{{ entry.tag }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+    y-axis "Lag (hours)"
+    bar [{% for entry in dashboard.lag.recent %}{{ entry.lag_hours }}{% if not loop.last %}, {% endif %}{% endfor %}]
+```
+{% else %}
+No paired releases yet.
+{% endif %}
+
 ---
 
 _Generated: {{ dashboard.generated_at }}_

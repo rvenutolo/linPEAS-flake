@@ -121,6 +121,79 @@ function run_scenario() {
   pass_count=$((pass_count + 1))
 }
 
+# @description Run the happy-path bump-lag scenario. Drives the script
+# with all *_OVERRIDE inputs pointed at fixtures, writes the output to a
+# temp file via OUT_FILE_OVERRIDE (so the real docs/_data/dashboard.yml is
+# never touched), and asserts:
+#   - exit code 0
+#   - lag.recent length == 2 (the orphan release is skipped, not failed)
+#   - skipped tag appears in stderr log
+#   - lag_hours values match the expected timestamp arithmetic
+# @noargs
+function run_happy_lag_scenario() {
+  local -r name='happy-path bump-lag pairing'
+  local out_tmp stderr_tmp
+  out_tmp="$(mktemp)"
+  stderr_tmp="$(mktemp)"
+  # shellcheck disable=SC2064  # capture paths at trap-set time
+  trap "rm --force -- '${out_tmp}' '${stderr_tmp}'" RETURN
+
+  local exit_code=0
+  env \
+    "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
+    "UPSTREAM_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-upstream-release.json" \
+    "LATEST_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-latest-release.json" \
+    "THIS_REPO_RELEASES_JSON_OVERRIDE=${FIXTURES_DIR}/good-this-repo-releases.json" \
+    "UPSTREAM_RELEASES_JSON_OVERRIDE=${FIXTURES_DIR}/good-upstream-releases.json" \
+    "BUMP_PR_JSON_OVERRIDE=${FIXTURES_DIR}/good-bump-pr.json" \
+    "PARITY_JSON_OVERRIDE=${FIXTURES_DIR}/good-parity.json" \
+    "OUT_FILE_OVERRIDE=${out_tmp}" \
+    bash "${SCRIPT}" >/dev/null 2>"${stderr_tmp}" || exit_code=$?
+
+  if ((exit_code != 0)); then
+    printf 'FAIL: %s — expected exit 0, got %d\n' "${name}" "${exit_code}" >&2
+    printf '  stderr was:\n' >&2
+    sed 's/^/    /' "${stderr_tmp}" >&2
+    fail_count=$((fail_count + 1))
+    return 0
+  fi
+
+  local recent_len
+  recent_len="$(yq eval '.lag.recent | length' "${out_tmp}")"
+  if [[ ${recent_len} != '2' ]]; then
+    printf 'FAIL: %s — expected lag.recent length 2, got %s\n' "${name}" "${recent_len}" >&2
+    fail_count=$((fail_count + 1))
+    return 0
+  fi
+
+  if ! grep --quiet --fixed-strings -- \
+    'lag: skipping this-repo release with no upstream match: 20240101-orphan0' \
+    "${stderr_tmp}"; then
+    printf 'FAIL: %s — stderr missing orphan-skip log line\n' "${name}" >&2
+    printf '  stderr was:\n' >&2
+    sed 's/^/    /' "${stderr_tmp}" >&2
+    fail_count=$((fail_count + 1))
+    return 0
+  fi
+
+  local lag_cd lag_5a
+  lag_cd="$(yq eval '.lag.recent[] | select(.tag == "20260510-cd4bd619") | .lag_hours' "${out_tmp}")"
+  lag_5a="$(yq eval '.lag.recent[] | select(.tag == "20260506-5a27482a") | .lag_hours' "${out_tmp}")"
+  if [[ ${lag_cd} != '130.9' ]]; then
+    printf 'FAIL: %s — expected lag 130.9 for cd4bd619, got %s\n' "${name}" "${lag_cd}" >&2
+    fail_count=$((fail_count + 1))
+    return 0
+  fi
+  if [[ ${lag_5a} != '48.6' ]]; then
+    printf 'FAIL: %s — expected lag 48.6 for 5a27482a, got %s\n' "${name}" "${lag_5a}" >&2
+    fail_count=$((fail_count + 1))
+    return 0
+  fi
+
+  printf 'PASS: %s\n' "${name}"
+  pass_count=$((pass_count + 1))
+}
+
 function main() {
   if [[ ! -f ${SCRIPT} ]]; then
     printf 'FAIL: script not found at %s\n' "${SCRIPT}" >&2
@@ -157,6 +230,11 @@ function main() {
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
     "UPSTREAM_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-upstream-release.json" \
     "LATEST_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/bad-bundle-url-latest-release.json"
+
+  # Scenario 5: happy-path bump-lag pairing. Two of three this-repo releases
+  # match upstream entries; the third is older than the upstream window and
+  # must be skipped with a warning, not failed.
+  run_happy_lag_scenario
 
   printf '\n%d passed, %d failed\n' "${pass_count}" "${fail_count}"
   if ((fail_count > 0)); then

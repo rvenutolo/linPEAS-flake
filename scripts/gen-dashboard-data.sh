@@ -2,9 +2,10 @@
 # Generate docs/_data/dashboard.yml for the MkDocs site.
 #
 # Aggregates pin metadata (from linpeas-pin.json) plus live data from the
-# GitHub REST API (upstream peass-ng/PEASS-ng release, this-repo releases,
-# last bump PR, latest verify-latest-release run) into a single YAML file
-# consumed at MkDocs build time via mkdocs-macros-plugin `include_yaml`.
+# GitHub REST API (upstream peass-ng/PEASS-ng release + recent upstream
+# releases for bump-lag pairing, this-repo releases, last bump PR, latest
+# verify-latest-release run) into a single YAML file consumed at MkDocs
+# build time via mkdocs-macros-plugin `include_yaml`.
 #
 # Hard-fail rules (security-critical):
 #   1. Any required CLI tool missing  -> exit 1.
@@ -94,7 +95,7 @@ function main() {
   if [[ -n ${PIN_FILE_OVERRIDE:-} ]]; then
     pin_file="${PIN_FILE_OVERRIDE}"
   fi
-  out_file="${repo_root}/docs/_data/dashboard.yml"
+  out_file="${OUT_FILE_OVERRIDE:-${repo_root}/docs/_data/dashboard.yml}"
   readonly repo_root pin_file out_file
 
   if [[ ! -f ${pin_file} ]]; then
@@ -166,13 +167,17 @@ function main() {
 
   log_info 'gathering recent releases'
   local releases_json
-  releases_json="$(gh api --header 'X-GitHub-Api-Version: 2022-11-28' \
+  releases_json="$(fetch_or_override THIS_REPO_RELEASES_JSON_OVERRIDE \
     "repos/${THIS_REPO}/releases?per_page=20")"
+
+  log_info 'gathering recent upstream releases'
+  local upstream_releases_json
+  upstream_releases_json="$(fetch_or_override UPSTREAM_RELEASES_JSON_OVERRIDE \
+    "repos/${UPSTREAM_REPO}/releases?per_page=20")"
 
   log_info 'gathering last bump PR'
   local bump_pr_json bump_pr_url bump_pr_number bump_pr_merged_at
-  bump_pr_json="$(gh api --paginate \
-    --header 'X-GitHub-Api-Version: 2022-11-28' \
+  bump_pr_json="$(fetch_or_override BUMP_PR_JSON_OVERRIDE \
     "search/issues?q=repo:${THIS_REPO}+is:pr+is:merged+in:title+chore%3A+bump+linpeas&sort=updated&order=desc&per_page=1" ||
     true)"
   bump_pr_url="$(jq --raw-output '.items[0].html_url // ""' <<<"${bump_pr_json}")"
@@ -181,8 +186,7 @@ function main() {
 
   log_info 'gathering parity-check run'
   local parity_json parity_conclusion parity_checked_at parity_run_url
-  parity_json="$(gh api \
-    --header 'X-GitHub-Api-Version: 2022-11-28' \
+  parity_json="$(fetch_or_override PARITY_JSON_OVERRIDE \
     "repos/${THIS_REPO}/actions/workflows/verify-latest-release.yml/runs?per_page=1" \
     2>/dev/null || true)"
   if [[ -z ${parity_json} ]]; then
@@ -213,6 +217,46 @@ function main() {
       image_tag: ("ghcr.io/rvenutolo/linpeas:" + .tag_name)
     }]' <<<"${releases_json}")"
 
+  # Pair each this-repo release with the upstream release of the same tag
+  # (this repo mirrors upstream tags) and compute bump lag in hours.
+  # Unmatched this-repo releases (no upstream entry within the fetched
+  # window) are skipped with a warning, not failed: the upstream window is
+  # finite and a very old this-repo release may have aged out of it.
+  local lag_recent
+  lag_recent="$(jq --compact-output --slurp '
+      (.[0] | map({(.tag_name): .published_at}) | add) as $upstream
+      | .[1]
+      | map(
+          . as $r
+          | ($upstream[$r.tag_name]) as $up
+          | select($up != null)
+          | {
+              tag: $r.tag_name,
+              our_date: $r.published_at,
+              upstream_date: $up,
+              lag_hours: (
+                ((($r.published_at | fromdateiso8601)
+                 - ($up | fromdateiso8601)) / 3600)
+                | (. * 10 | round) / 10
+              ),
+            }
+        )
+      | reverse
+    ' <(printf '%s' "${upstream_releases_json}") <(printf '%s' "${releases_json}"))"
+
+  local unmatched
+  unmatched="$(jq --raw-output --slurp '
+      (.[0] | map(.tag_name)) as $upstream_tags
+      | .[1]
+      | map(select(.tag_name as $t | ($upstream_tags | index($t)) | not) | .tag_name)
+      | .[]
+    ' <(printf '%s' "${upstream_releases_json}") <(printf '%s' "${releases_json}"))"
+  if [[ -n ${unmatched} ]]; then
+    while IFS= read -r tag; do
+      log_info "lag: skipping this-repo release with no upstream match: ${tag}"
+    done <<<"${unmatched}"
+  fi
+
   jq --null-input \
     --arg pin_version "${pin_version}" \
     --arg pin_url "${pin_url}" \
@@ -230,6 +274,7 @@ function main() {
     --arg parity_checked_at "${parity_checked_at}" \
     --arg parity_run_url "${parity_run_url}" \
     --argjson releases "${releases_yaml_items}" \
+    --argjson lag_recent "${lag_recent}" \
     --arg generated_at "${generated_at}" \
     '{
       pin: {
@@ -258,6 +303,9 @@ function main() {
         run_url: $parity_run_url,
       },
       releases: $releases,
+      lag: {
+        recent: $lag_recent,
+      },
       generated_at: $generated_at,
     }' |
     yq --prettyPrint --output-format=yaml eval '.' - >"${out_tmp}"

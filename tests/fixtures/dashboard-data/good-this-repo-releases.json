@@ -1,0 +1,27 @@
+[
+  {
+    "tag_name": "20260510-cd4bd619",
+    "published_at": "2026-05-16T04:25:47Z",
+    "assets": [
+      {
+        "name": "linpeas-bundle.sh",
+        "browser_download_url": "https://github.com/rvenutolo/linPEAS-flake/releases/download/20260510-cd4bd619/linpeas-bundle.sh"
+      }
+    ]
+  },
+  {
+    "tag_name": "20260506-5a27482a",
+    "published_at": "2026-05-08T10:00:00Z",
+    "assets": [
+      {
+        "name": "linpeas-bundle.sh",
+        "browser_download_url": "https://github.com/rvenutolo/linPEAS-flake/releases/download/20260506-5a27482a/linpeas-bundle.sh"
+      }
+    ]
+  },
+  {
+    "tag_name": "20240101-orphan0",
+    "published_at": "2024-01-03T00:00:00Z",
+    "assets": []
+  }
+]
