@@ -5,8 +5,7 @@ on:
     - cron: "0 9 * * *" # 09:00 UTC daily
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: update-linpeas

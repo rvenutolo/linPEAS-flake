@@ -19,11 +19,10 @@ on:
         default: false
         type: boolean
 
-# Workflow default = read-only. Each job declares the writes it actually
+# Workflow default = empty. Each job declares the exact scopes it
 # needs, so contents:write / id-token:write / attestations:write /
 # packages:write are not silently available to unrelated steps.
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   # Serialize on `main` rather than per-SHA so back-to-back pin bumps queue

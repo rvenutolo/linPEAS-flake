@@ -20,8 +20,7 @@ on:
     - cron: "30 10 * * *" # daily 10:30 UTC (after update-linpeas at 09:00)
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: stale-pin-check
@@ -32,6 +31,8 @@ jobs:
     name: check
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     outputs:
       result: ${{ steps.evaluate.outputs.result }}
       reason: ${{ steps.evaluate.outputs.reason }}

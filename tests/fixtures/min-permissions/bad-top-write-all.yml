@@ -1,0 +1,10 @@
+name: bad-top-write-all
+on: push
+permissions: write-all
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - run: echo a

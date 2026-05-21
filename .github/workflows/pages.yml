@@ -17,8 +17,7 @@ on:
     - cron: "0 14 * * *"
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: pages
