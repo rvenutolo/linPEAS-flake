@@ -42,6 +42,7 @@
           { "context": "editorconfig", "integration_id": 15368 },
           { "context": "flake-check" },
           { "context": "gitleaks", "integration_id": 15368 },
+          { "context": "harden-runner-first", "integration_id": 15368 },
           { "context": "image-smoke" },
           { "context": "image-smoke-arm64" },
           { "context": "lint-pr-title", "integration_id": 15368 },

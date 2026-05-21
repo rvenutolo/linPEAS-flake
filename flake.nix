@@ -276,6 +276,24 @@
               pass_filenames = false;
               language = "system";
             };
+            # Asserts every job in .github/workflows/*.yml starts with
+            # step-security/harden-runner as its first step. Belt-and-braces
+            # lint mirrors the trust-model invariant; eBPF monitor must
+            # install before any I/O.
+            harden-runner-first = {
+              enable = true;
+              name = "harden-runner-first";
+              entry = "${pkgs.writeShellScript "harden-runner-first-hook" ''
+                set -Eeuo pipefail
+                IFS=$'\n\t'
+                if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+                export PATH="${pkgs.yq-go}/bin:$PATH"
+                exec ${pkgs.bash}/bin/bash scripts/check-harden-runner-first.sh
+              ''}";
+              files = "^(\\.github/workflows/.*\\.ya?ml|scripts/check-harden-runner-first\\.sh)$";
+              pass_filenames = false;
+              language = "system";
+            };
             # Schema-shape validation for repo config. Catches typoed
             # keys, wrong-type values, and upstream-removed fields that
             # per-tool linters miss. NIX_BUILD_TOP guard skips inside

@@ -29,6 +29,7 @@ this file in the same change as any modification to the ruleset.
 | pre-commit-hooks-sha-parity | ci                | .github/workflows/ci.yml                |
 | pin-diff-isolated           | ci                | .github/workflows/ci.yml                |
 | uses-sha-pinned             | ci                | .github/workflows/ci.yml                |
+| harden-runner-first         | ci                | .github/workflows/ci.yml                |
 | markdownlint                | ci                | .github/workflows/ci.yml                |
 | typos                       | ci                | .github/workflows/ci.yml                |
 | editorconfig                | ci                | .github/workflows/ci.yml                |

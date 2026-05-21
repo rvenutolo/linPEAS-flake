@@ -68,3 +68,5 @@ Exception for a non-`GITHUB_TOKEN` secret requires documenting here BEFORE relax
 - Do not remove from any job.
 - Keep as first step, before `actions/checkout`, `cachix/install-nix-action`, or any network step. eBPF monitor must install before any I/O.
 - Do not add to composite actions — caller job already has it.
+
+Enforced by `scripts/check-harden-runner-first.sh` via the `harden-runner-first` required CI job. Lint parses every job in `.github/workflows/*.yml` with `yq` and rejects any job whose first step is not `step-security/harden-runner@<40-hex-sha>`.
