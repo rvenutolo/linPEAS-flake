@@ -218,3 +218,58 @@ Idempotence: the append step is gated on `tag-exists == 'false'`, so a
 `workflow_dispatch` rerun with `force-republish` will republish the
 bundle and image artifacts but will NOT re-append the diff to an
 existing release body. Avoids double-appending the same block.
+
+## Cosign keyless signatures
+
+In addition to `actions/attest-build-provenance` + `actions/attest-sbom`
+(verifiable via `gh attestation verify`), `release-on-bump.yml` signs
+the bundle and every published image digest with Sigstore cosign in
+keyless mode. Signatures are minted with an ephemeral Fulcio cert
+issued against the workflow's OIDC token, then recorded in Rekor.
+
+Signed artifacts per release:
+
+- **Bundle**: `cosign sign-blob --bundle linpeas-bundle.cosign.bundle   linpeas-bundle.sh`. The `.cosign.bundle` file (signature + cert +
+    Rekor inclusion proof) is uploaded as a release asset.
+- **Per-arch images**: `cosign sign <reg>/rvenutolo/linpeas@<digest>` on
+    both `ghcr.io` and `docker.io`. The signature lands as a `.sig` tag
+    next to each image in each registry.
+- **Multi-arch index**: same `cosign sign` invocation against the OCI
+    index digest of `:VERSION` (which equals the digest of `:latest`,
+    since they reference identical bytes). One signature per registry
+    covers both tags.
+
+### Identity pinning
+
+Verification must pin both:
+
+- `--certificate-identity https://github.com/rvenutolo/linPEAS-flake/.github/workflows/release-on-bump.yml@refs/heads/main`
+- `--certificate-oidc-issuer https://token.actions.githubusercontent.com`
+
+A signature minted by any other workflow, branch ref, or OIDC issuer
+fails verification. The release pipeline's `verify` job and the daily
+`verify-latest-release.yml` cron both enforce these exact values.
+
+### User-facing verification commands
+
+Bundle:
+
+```bash
+cosign verify-blob \
+  --bundle linpeas-bundle.cosign.bundle \
+  --certificate-identity 'https://github.com/rvenutolo/linPEAS-flake/.github/workflows/release-on-bump.yml@refs/heads/main' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  linpeas-bundle.sh
+```
+
+Image (any tag or digest works; both registries are signed):
+
+```bash
+cosign verify \
+  --certificate-identity 'https://github.com/rvenutolo/linPEAS-flake/.github/workflows/release-on-bump.yml@refs/heads/main' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  ghcr.io/rvenutolo/linpeas:latest
+```
+
+No `gh` CLI required. Pairs with the existing `gh attestation verify`
+path — pick whichever toolchain fits the consumer's pipeline.

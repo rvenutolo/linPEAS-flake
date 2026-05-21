@@ -18,6 +18,7 @@ live in `.claude/CLAUDE.md` (untracked).
 - **Bump-script integrity** — URL prefix, `.digest`, atomic write, API-version header. → [security/verification.md](security/verification.md)
 - **verify-latest-release parity + attribution** — SRI drift = incident; per-reason notify bodies. → [security/verification.md](security/verification.md)
 - **Gitleaks / Dependency review / Trivy / SBOM** — required-check details + thresholds. → [security/verification.md](security/verification.md)
+- **Cosign keyless signing + identity pinning** — bundle + per-arch + multi-arch index signed; verify must pin workflow ref + OIDC issuer. → [security/verification.md](security/verification.md)
 - **Bump credentials blast-radius** — GitHub App, no PAT, no `git push`. → [security/trust-model.md](security/trust-model.md)
 - **PR-triggered workflow secret allowlist** — only `secrets.GITHUB_TOKEN`. → [security/trust-model.md](security/trust-model.md)
 - **harden-runner** — first step in every job. → [security/trust-model.md](security/trust-model.md)
