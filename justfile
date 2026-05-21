@@ -31,6 +31,7 @@ verify:
 	nix develop --command bash -c '\
 	set -Eeuo pipefail; \
 	./scripts/check-uses-sha-pinned.sh; \
+	./scripts/check-harden-runner-first.sh; \
 	./scripts/check-pr-workflows-no-secrets.sh; \
 	./scripts/check-required-checks-no-paths.sh; \
 	./scripts/check-tag-protection.sh; \
@@ -40,6 +41,7 @@ verify:
 	./scripts/check-pre-commit-hooks-sha-parity.sh; \
 	./scripts/check-pin-diff-isolated.sh; \
 	bash tests/check-uses-sha-pinned.test.sh; \
+	bash tests/check-harden-runner-first.test.sh; \
 	bash tests/check-pr-workflows-no-secrets.test.sh; \
 	bash tests/check-required-checks-no-paths.test.sh; \
 	bash tests/check-tag-protection.test.sh; \

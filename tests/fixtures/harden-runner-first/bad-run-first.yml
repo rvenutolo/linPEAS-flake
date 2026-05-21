@@ -1,0 +1,7 @@
+name: bad-run-first
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo no harden-runner here

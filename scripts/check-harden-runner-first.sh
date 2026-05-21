@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# scripts/check-harden-runner-first.sh
+#
+# Asserts every job in .github/workflows/*.yml begins with
+# `step-security/harden-runner@<sha>` as its first step. The eBPF
+# monitor must install before any I/O, so this invariant is binding —
+# see docs/security/trust-model.md.
+#
+# Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures.
+# Exits 0 on full coverage, 1 on any drift.
+
+set -Eeuo pipefail
+IFS=$'\n\t'
+
+readonly DEFAULT_DIR=".github/workflows"
+readonly OVERRIDE="${WORKFLOWS_DIR_OVERRIDE:-}"
+readonly FILE_FILTER="${WORKFLOW_FILE_FILTER:-}"
+readonly DIR="${OVERRIDE:-${DEFAULT_DIR}}"
+
+if ! command -v yq >/dev/null 2>&1; then
+  printf 'yq not found on PATH\n' >&2
+  exit 2
+fi
+
+failed=0
+shopt -s nullglob
+for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
+  [[ -f ${f} ]] || continue
+  if [[ -n ${FILE_FILTER} && "$(basename "${f}")" != "${FILE_FILTER}" ]]; then
+    continue
+  fi
+  while IFS=$'\t' read -r job first_uses; do
+    [[ -z ${job} ]] && continue
+    if [[ ${first_uses} == "null" || -z ${first_uses} ]]; then
+      # shellcheck disable=SC2016 # literal backticks in human-readable prose
+      printf '%s: job %q has no first-step `uses:` (need step-security/harden-runner@<sha>)\n' \
+        "${f}" "${job}" >&2
+      failed=$((failed + 1))
+      continue
+    fi
+    if [[ ${first_uses} != step-security/harden-runner@* ]]; then
+      printf '%s: job %q first step is %q, want step-security/harden-runner@<sha>\n' \
+        "${f}" "${job}" "${first_uses}" >&2
+      failed=$((failed + 1))
+      continue
+    fi
+    if [[ ! ${first_uses} =~ ^step-security/harden-runner@[0-9a-f]{40}$ ]]; then
+      printf '%s: job %q harden-runner ref %q not SHA-pinned\n' \
+        "${f}" "${job}" "${first_uses}" >&2
+      failed=$((failed + 1))
+    fi
+  done < <(yq eval '.jobs | to_entries[] | .key + "\t" + (.value.steps[0].uses // "null")' "${f}")
+done
+shopt -u nullglob
+
+if ((failed > 0)); then
+  printf '%d job(s) missing harden-runner as first step\n' "${failed}" >&2
+  exit 1
+fi
+exit 0
