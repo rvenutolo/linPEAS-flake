@@ -196,6 +196,64 @@ jobs:
           subject-path: linpeas-bundle.sh
           sbom-path: linpeas-bundle.sbom.spdx.json
 
+      - name: append SBOM diff to release notes
+        # Embed a collapsible SBOM diff vs the previous release in the
+        # release body. Surfaces transitive-dep churn that the Trivy CVE
+        # gate cannot see (a new dependency with no known CVE is invisible
+        # to Trivy but worth review).
+        #
+        # Soft-fail: missing prior SBOM (first release, or release that
+        # predates the SBOM feature) is normal — log and continue.
+        #
+        # ${VERSION} is the pin version emitted by the `release` job;
+        # that job already enforces the `^[0-9]{8}-[0-9a-f]{7,40}$`
+        # shape before publishing, so it is safe to interpolate into
+        # shell here (no untrusted user-controlled input enters this
+        # step).
+        if: needs.release.outputs.tag-exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          prev_tag="$(
+            gh release list --limit 10 --json tagName,isDraft,isPrerelease \
+              --jq '.[] | select(.isDraft==false and .isPrerelease==false) | .tagName' \
+            | grep --invert-match --line-regexp --fixed-strings -- "${VERSION}" \
+            | head --lines=1
+          )"
+          if [[ -z "${prev_tag}" ]]; then
+            printf 'no previous release found; skipping SBOM diff\n' >&2
+            exit 0
+          fi
+          printf 'diffing SBOM against previous release: %s\n' "${prev_tag}" >&2
+
+          mkdir --parents prev-sbom
+          if ! gh release download "${prev_tag}" \
+               --pattern linpeas-bundle.sbom.spdx.json \
+               --dir prev-sbom; then
+            printf 'previous release %s has no bundle SBOM asset; skipping\n' \
+              "${prev_tag}" >&2
+            exit 0
+          fi
+
+          diff_block="$(mktemp)"
+          scripts/sbom-diff.sh \
+            prev-sbom/linpeas-bundle.sbom.spdx.json \
+            linpeas-bundle.sbom.spdx.json \
+            "${prev_tag}" > "${diff_block}"
+
+          current_body="$(mktemp)"
+          gh release view "${VERSION}" --json body --jq .body > "${current_body}"
+          new_body="$(mktemp)"
+          {
+            cat -- "${current_body}"
+            printf '\n\n'
+            cat -- "${diff_block}"
+          } > "${new_body}"
+          gh release edit "${VERSION}" --notes-file "${new_body}"
+
   image-amd64:
     needs: release
     if: needs.release.outputs.tag-exists == 'false' || inputs.force-republish
