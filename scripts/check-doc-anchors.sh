@@ -32,7 +32,7 @@ function slug() {
   s="${s%"${s##*[![:space:]]}"}"
   s="$(printf '%s' "${s}" | tr '[:upper:]' '[:lower:]')"
   s="$(printf '%s' "${s}" | sed --regexp-extended 's/[^a-z0-9]+/-/g; s/^-+|-+$//g')"
-  printf '%s' "${s}"
+  printf '%s\n' "${s}"
 }
 
 function headings_of() {
@@ -89,8 +89,9 @@ for src_rel in "${SOURCES[@]}"; do
     if [[ ! -f ${target_abs} ]]; then
       continue
     fi
-    if ! headings_of "${target_abs}" | grep --fixed-strings --line-regexp --quiet -- "${anchor}"; then
-      available="$(headings_of "${target_abs}" | paste -sd, -)"
+    local_headings="$(headings_of "${target_abs}")"
+    if ! printf '%s\n' "${local_headings}" | grep --fixed-strings --line-regexp --quiet -- "${anchor}"; then
+      available="$(printf '%s\n' "${local_headings}" | paste -sd, -)"
       printf '[anchor-miss] %s:%s: #%s not found in %s (available: %s)\n' \
         "${src_rel}" "${lineno}" "${anchor}" \
         "$(realpath --relative-to="${REPO_ROOT}" -- "${target_abs}")" \
