@@ -182,11 +182,13 @@
               # Excludes mirror the CI markdownlint-cli2-action globs:
               # docs/dashboard.md + docs/releases.md are mkdocs-macros
               # templated and not raw markdown; docs/_data/* is the
-              # generated dashboard YAML.
+              # generated dashboard YAML. tests/fixtures/* contains
+              # intentionally-invalid markdown for test harnesses.
               excludes = [
                 "^docs/dashboard\\.md$"
                 "^docs/releases\\.md$"
                 "^docs/_data/"
+                "^tests/fixtures/"
               ];
             };
             typos.enable = true;
@@ -342,6 +344,38 @@
                 exec ${pkgs.bash}/bin/bash scripts/check-pre-commit-hooks-sha-parity.sh
               ''}";
               files = "^(flake\\.nix|flake\\.lock|scripts/check-pre-commit-hooks-sha-parity\\.sh)$";
+              pass_filenames = false;
+              language = "system";
+            };
+            # Asserts every entry in docs/invariant-index.md resolves
+            # to an existing docs/ file, and every docs/**/*.md (minus
+            # EXEMPT and the index itself) has an entry.
+            check-orphan-invariants = {
+              enable = true;
+              name = "check-orphan-invariants";
+              entry = "${pkgs.writeShellScript "check-orphan-invariants-hook" ''
+                set -Eeuo pipefail
+                IFS=$'\n\t'
+                if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+                exec ${pkgs.bash}/bin/bash scripts/check-orphan-invariants.sh
+              ''}";
+              files = "^(docs/invariant-index\\.md|docs/.*\\.md|scripts/check-orphan-invariants\\.sh)$";
+              pass_filenames = false;
+              language = "system";
+            };
+            # Asserts every #anchor fragment in markdown links across
+            # README.md and docs/**/*.md matches a heading slug in the
+            # target file (ASCII GFM/mkdocs rule).
+            check-doc-anchors = {
+              enable = true;
+              name = "check-doc-anchors";
+              entry = "${pkgs.writeShellScript "check-doc-anchors-hook" ''
+                set -Eeuo pipefail
+                IFS=$'\n\t'
+                if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+                exec ${pkgs.bash}/bin/bash scripts/check-doc-anchors.sh
+              ''}";
+              files = "^(README\\.md|docs/.*\\.md|scripts/check-doc-anchors\\.sh)$";
               pass_filenames = false;
               language = "system";
             };

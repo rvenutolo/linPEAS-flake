@@ -16,6 +16,10 @@ this file in the same change as any modification to the ruleset.
 | image-smoke                 | ci                | .github/workflows/ci.yml                |
 | image-smoke-arm64           | ci                | .github/workflows/ci.yml                |
 | bundle-smoke                | ci                | .github/workflows/ci.yml                |
+| check-doc-anchors           | ci                | .github/workflows/ci.yml                |
+| check-jsonschema            | ci                | .github/workflows/ci.yml                |
+| check-orphan-invariants     | ci                | .github/workflows/ci.yml                |
+| commitlint                  | ci                | .github/workflows/ci.yml                |
 | dashboard-data-tests        | ci                | .github/workflows/ci.yml                |
 | required-checks-no-paths    | ci                | .github/workflows/ci.yml                |
 | pr-workflows-no-secrets     | ci                | .github/workflows/ci.yml                |
@@ -28,8 +32,6 @@ this file in the same change as any modification to the ruleset.
 | markdownlint                | ci                | .github/workflows/ci.yml                |
 | typos                       | ci                | .github/workflows/ci.yml                |
 | editorconfig                | ci                | .github/workflows/ci.yml                |
-| check-jsonschema            | ci                | .github/workflows/ci.yml                |
-| commitlint                  | ci                | .github/workflows/ci.yml                |
 | lint-pr-title               | pr-title-lint     | .github/workflows/pr-title-lint.yml     |
 | dependency-review           | dependency-review | .github/workflows/dependency-review.yml |
 | gitleaks                    | gitleaks          | .github/workflows/gitleaks.yml          |
