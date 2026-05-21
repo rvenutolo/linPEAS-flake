@@ -74,6 +74,7 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Invariants: invariant-index.md
   - Install:
       - Nix: install/nix.md
       - Docker: install/docker.md
