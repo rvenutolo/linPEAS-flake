@@ -55,7 +55,8 @@ required-check list above, so the enforcement is self-bootstrapping
 
 When the ruleset's required-check list changes:
 
-1. Update the table above to match.
+1. Update the table above to match. Also update `docs/_data/ci-check-categories.yml`
+    in the same change — `scripts/refresh-ci-summary.sh` fails if the two sets diverge.
 
 1. If a new workflow file appears in column 3, verify it does not declare
     `paths:` / `paths-ignore:` under `pull_request:`. The lint will catch

@@ -48,6 +48,7 @@ verify:
 	bash tests/check-pre-commit-hooks-sha-parity.test.sh; \
 	bash tests/check-pin-diff-isolated.test.sh; \
 	bash tests/gen-dashboard-data.test.sh; \
+	bash tests/refresh-ci-summary.test.sh; \
 	bash tests/refresh-just-recipes.test.sh; \
 	bash tests/refresh-precommit-table.test.sh'
 
@@ -66,6 +67,10 @@ show-hooks:
 # Regenerate the just-recipes list in README.md
 show-recipes:
 	./scripts/refresh-just-recipes.sh
+
+# Regenerate the Continuous integration summary in README.md
+show-ci-summary:
+	./scripts/refresh-ci-summary.sh
 
 # Build the OCI image
 image:

@@ -316,6 +316,21 @@
             pass_filenames = false;
             language = "system";
           };
+          ci-summary-fresh = {
+            enable = true;
+            name = "ci-summary-fresh";
+            description = "README CI summary matches required-checks.md and the category map.";
+            entry = "${pkgs.writeShellScript "ci-summary-fresh" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              export PATH="${pkgs.yq-go}/bin:$PATH"
+              exec ${pkgs.bash}/bin/bash scripts/refresh-ci-summary.sh --check
+            ''}";
+            files = "^(README\\.md|docs/security/required-checks\\.md|docs/_data/ci-check-categories\\.yml|scripts/refresh-ci-summary\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
           # Belt-and-braces backup to the GitHub-side
           # `sha_pinning_required` setting. Mirrors the NIX_BUILD_TOP guard used
           # by readme-flake-show-fresh so nix flake check doesn't fail

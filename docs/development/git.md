@@ -83,6 +83,7 @@ Hooks (alphabetical):
 | `check-doc-anchors`           | Every markdown #anchor link resolves to a heading slug in its target file.            |
 | `check-jsonschema`            | Schema-shape validation of repo config (renovate.json, workflows, actions).           |
 | `check-orphan-invariants`     | Every docs/ file has an invariant-index entry and vice versa.                         |
+| `ci-summary-fresh`            | README CI summary matches required-checks.md and the category map.                    |
 | `commitlint`                  | Commit message satisfies Conventional Commits (CI parity via .commitlintrc.yml).      |
 | `deadnix`                     | Unused Nix bindings.                                                                  |
 | `editorconfig-checker`        | .editorconfig compliance (charset, line endings, trailing whitespace, final newline). |

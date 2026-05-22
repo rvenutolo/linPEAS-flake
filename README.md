@@ -140,16 +140,14 @@ the full job inventory + cron schedule lives in
 
 <!-- Alphabetical by category. -->
 
-- **Build + smoke**: `build-linpeas`, `build-linpeas-arm64`,
-    `bundle-smoke`, `flake-check`, `image-smoke`, `image-smoke-arm64`,
-    `smoke-test`, `smoke-test-arm64`.
-- **Conventional Commits**: `commitlint` (per-commit), `lint-pr-title`
-    (PR title).
-- **Doc quality**: `editorconfig`, `markdownlint`, `typos`.
-- **Security/invariant lints**: `dashboard-data-tests`,
-    `pr-workflows-no-secrets`, `renovate-invariants`,
-    `required-checks-no-paths`, `tag-protection-drift-check`,
-    `uses-sha-pinned`.
+<!-- BEGIN ci-summary -->
+
+- **Build + smoke**: `build-linpeas`, `build-linpeas-arm64`, `bundle-smoke`, `flake-check`, `image-smoke`, `image-smoke-arm64`, `smoke-test`, `smoke-test-arm64`.
+- **Conventional Commits**: `commitlint`, `lint-pr-title`.
+- **Doc quality**: `check-doc-anchors`, `check-orphan-invariants`, `editorconfig`, `markdownlint`, `typos`.
+- **Security/invariant lints**: `check-jsonschema`, `dashboard-data-tests`, `dependency-review`, `gitleaks`, `harden-runner-first`, `min-permissions`, `pin-diff-isolated`, `pr-workflows-no-secrets`, `pre-commit-hooks-sha-parity`, `protect-main-drift-check`, `renovate-invariants`, `required-checks-no-paths`, `tag-protection-drift-check`, `uses-sha-pinned`.
+
+<!-- END ci-summary -->
 
 Merge policy: **merge-commit only**, with `required_signatures`
 enforced. Every branch commit must independently pass `commitlint` and be
@@ -331,6 +329,7 @@ just image           # Build the OCI image
 just lint            # Run pre-commit hooks against all files
 just lint-links      # Run lychee link checker against tracked markdown files
 just show            # Regenerate the <!-- BEGIN/END flake-show --> block in README.md
+just show-ci-summary # Regenerate the Continuous integration summary in README.md
 just show-hooks      # Regenerate the pre-commit hook table in docs/development/git.md
 just show-recipes    # Regenerate the just-recipes list in README.md
 just site            # Build the Pages site

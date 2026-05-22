@@ -46,6 +46,7 @@ live in `.claude/CLAUDE.md` (untracked).
 
 ## Development
 
+- **ci-summary-category-map** — every required status check is categorized for the README CI summary. → [security/required-checks.md](security/required-checks.md).
 - **Merging PRs** — merge-commit only, signed, PR title = subject. → [development/git.md](development/git.md)
 - **Treefmt YAML quote gotcha / README flake-show auto-block** → [development/linting.md](development/linting.md)
 - **PR auto-labeling** → [development/labeling.md](development/labeling.md)
