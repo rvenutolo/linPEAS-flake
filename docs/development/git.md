@@ -88,6 +88,7 @@ Hooks (alphabetical):
 | `editorconfig-checker`        | .editorconfig compliance (charset, line endings, trailing whitespace, final newline). |
 | `gh-api-version-header`       | Every gh api / api.github.com call in scripts passes an X-GitHub-Api-Version header.  |
 | `harden-runner-first`         | Every workflow job's first step is step-security/harden-runner.                       |
+| `just-recipes-fresh`          | README just-recipes block matches the justfile.                                       |
 | `markdownlint`                | Markdown style + structure.                                                           |
 | `min-permissions`             | Top-level workflow permissions empty; each job declares its own scopes.               |
 | `nixfmt-rfc-style`            | Nix file formatting.                                                                  |

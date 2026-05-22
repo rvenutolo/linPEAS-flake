@@ -22,11 +22,7 @@ lint:
 lint-links:
 	lychee --config lychee.toml README.md SECURITY.md 'docs/**/*.md'
 
-# Run every script-based required check + every .test.sh harness.
-# Mirrors the script-and-fixture side of CI (excludes nix-build jobs
-# and the link checker; run `just check` and `just lint-links` for those).
-# Wrapped in `nix develop --command` so check-jsonschema and bash
-# resolve from the devShell, even if the caller is outside of `nix develop`.
+# Run every script-based check and test harness (excludes nix-build and link-check jobs)
 verify:
 	nix develop --command bash -c '\
 	set -Eeuo pipefail; \
@@ -52,6 +48,7 @@ verify:
 	bash tests/check-pre-commit-hooks-sha-parity.test.sh; \
 	bash tests/check-pin-diff-isolated.test.sh; \
 	bash tests/gen-dashboard-data.test.sh; \
+	bash tests/refresh-just-recipes.test.sh; \
 	bash tests/refresh-precommit-table.test.sh'
 
 # Manually refresh linpeas pin from upstream latest release
@@ -65,6 +62,10 @@ show:
 # Regenerate the pre-commit hook table in docs/development/git.md
 show-hooks:
 	./scripts/refresh-precommit-table.sh
+
+# Regenerate the just-recipes list in README.md
+show-recipes:
+	./scripts/refresh-just-recipes.sh
 
 # Build the OCI image
 image:

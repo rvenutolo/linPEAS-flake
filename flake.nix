@@ -287,6 +287,21 @@
           # is stale relative to the flake hook manifest. Invokes
           # refresh-precommit-table.sh in --check mode — never mutates the
           # working tree, exits 1 on diff.
+          just-recipes-fresh = {
+            enable = true;
+            name = "just-recipes-fresh";
+            description = "README just-recipes block matches the justfile.";
+            entry = "${pkgs.writeShellScript "just-recipes-fresh" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              export PATH="${pkgs.just}/bin:$PATH"
+              exec ${pkgs.bash}/bin/bash scripts/refresh-just-recipes.sh --check
+            ''}";
+            files = "^(justfile|README\\.md|scripts/refresh-just-recipes\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
           precommit-table-fresh = {
             enable = true;
             name = "precommit-table-fresh";
