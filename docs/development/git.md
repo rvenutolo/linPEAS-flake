@@ -42,6 +42,11 @@ changes: `feat!: drop Java 11 support`.
 
 Run before pushing:
 
+These commands need no manual tool install — `just`, `pre-commit`, `lychee`,
+and every linter come from the flake `devShells.default`. Enter it with
+`nix develop` or via direnv (`direnv allow`). See the README Development
+section for details.
+
 ```sh
 just check       # nix flake check
 just fmt         # nix fmt (treefmt: shfmt, prettier, …)

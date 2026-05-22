@@ -297,6 +297,23 @@ and tag protection, required-check list — lives in
 
 ## Development
 
+All tooling below — `shfmt`, `shellcheck`, `just`, `pre-commit`,
+`nixfmt-rfc-style`, `deadnix`, `statix`, `actionlint`, `zizmor`, `yamllint`,
+`prettier`, `lychee`, `check-jsonschema`, and more (see `devShells.default` in
+`flake.nix` for the full set) — is supplied by the flake's `devShells.default`.
+You do **not** install any of it manually.
+
+Enter the shell one of two ways:
+
+- `nix develop` — explicit entry.
+- `direnv allow` once, then direnv auto-enters on `cd` (`.envrc` runs
+    `use flake`).
+
+Either path runs the `shellHook`, which installs the `pre-commit` git hooks
+automatically — the `pre-commit install` line below is shown only for
+reference / non-flake setups. Prerequisite: Nix
+with flakes enabled (`nix-command flakes`).
+
 ```sh
 # Entry points.
 nix develop          # enter dev shell (or direnv allow)
