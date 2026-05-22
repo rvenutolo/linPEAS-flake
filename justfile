@@ -51,7 +51,8 @@ verify:
 	bash tests/check-protect-main.test.sh; \
 	bash tests/check-pre-commit-hooks-sha-parity.test.sh; \
 	bash tests/check-pin-diff-isolated.test.sh; \
-	bash tests/gen-dashboard-data.test.sh'
+	bash tests/gen-dashboard-data.test.sh; \
+	bash tests/refresh-precommit-table.test.sh'
 
 # Manually refresh linpeas pin from upstream latest release
 bump:
@@ -60,6 +61,10 @@ bump:
 # Regenerate the <!-- BEGIN/END flake-show --> block in README.md
 show:
 	./scripts/refresh-flake-show.sh
+
+# Regenerate the pre-commit hook table in docs/development/git.md
+show-hooks:
+	./scripts/refresh-precommit-table.sh
 
 # Build the OCI image
 image:

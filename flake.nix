@@ -283,6 +283,24 @@
             pass_filenames = false;
             language = "system";
           };
+          # Refuse to commit if the pre-commit hook table in docs/development/git.md
+          # is stale relative to the flake hook manifest. Invokes
+          # refresh-precommit-table.sh in --check mode — never mutates the
+          # working tree, exits 1 on diff.
+          precommit-table-fresh = {
+            enable = true;
+            name = "precommit-table-fresh";
+            description = "Hook table in docs/development/git.md matches the flake hook manifest.";
+            entry = "${pkgs.writeShellScript "precommit-table-fresh" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              exec ${pkgs.bash}/bin/bash scripts/refresh-precommit-table.sh --check
+            ''}";
+            files = "^(flake\\.nix|docs/development/git\\.md|scripts/refresh-precommit-table\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
           # Belt-and-braces backup to the GitHub-side
           # `sha_pinning_required` setting. Mirrors the NIX_BUILD_TOP guard used
           # by readme-flake-show-fresh so nix flake check doesn't fail
@@ -524,6 +542,7 @@
         # Non-standard output (expect a harmless "unknown flake output" warning from
         # nix flake check): name -> description manifest of enabled pre-commit hooks,
         # consumed by scripts/refresh-precommit-table.sh via `nix eval --json`.
+        # NOTE: hook descriptions must not contain '|' (they render into a markdown table cell).
         devTooling.preCommitHooks = pkgs.lib.mapAttrs (_: v: v.description) (
           pkgs.lib.filterAttrs (_: v: (v.enable or false) && (v ? description)) preCommitHooks
         );
