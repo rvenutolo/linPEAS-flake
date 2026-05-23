@@ -130,11 +130,11 @@
           };
         };
 
-        site = pkgs.stdenv.mkDerivation {
+        site = pkgs-unstable.stdenv.mkDerivation {
           pname = "linpeas-flake-site";
           inherit (pin) version;
           src = ./.;
-          nativeBuildInputs = with pkgs.python3Packages; [
+          nativeBuildInputs = with pkgs-unstable.python3Packages; [
             mkdocs-material
             mkdocs-macros
           ];
@@ -160,9 +160,6 @@
           deadnix = {
             enable = true;
             description = "Unused Nix bindings.";
-            # flake.nix carries pkgs-unstable as a staging binding;
-            # deadnix would flag it until a later task wires it up.
-            excludes = [ "^flake\\.nix$" ];
           };
           statix = {
             enable = true;
