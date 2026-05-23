@@ -59,6 +59,7 @@
           { "context": "pull-request-target-absent", "integration_id": 15368 },
           { "context": "renovate-invariants", "integration_id": 15368 },
           { "context": "required-checks-no-paths", "integration_id": 15368 },
+          { "context": "script-has-test", "integration_id": 15368 },
           { "context": "script-shebang-pipefail", "integration_id": 15368 },
           { "context": "smoke-test" },
           { "context": "smoke-test-arm64" },
