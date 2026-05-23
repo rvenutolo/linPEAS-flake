@@ -793,7 +793,6 @@
               zizmor
               yamllint
               prettier
-              pre-commit
               treefmtEval.config.build.wrapper
               python3Packages.mkdocs-material
               python3Packages.mkdocs-macros
