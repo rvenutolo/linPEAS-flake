@@ -27,7 +27,7 @@ into the Nix store and is `.gitignore`d. Edits go in `flake.nix`'s
 `pre-commit.settings.hooks` block, not the symlink target.
 
 Hooks: actionlint, check-jsonschema, commitizen (commit-msg),
-deadnix, editorconfig-checker, markdownlint, nixfmt-rfc-style,
+deadnix, editorconfig-checker, markdownlint, nixfmt,
 statix, typos, yamllint, shellcheck (skipping `justfile`), treefmt,
 zizmor (`--min-severity=low`), flake-show-fresh,
 uses-sha-pinned.

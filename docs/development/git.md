@@ -100,7 +100,7 @@ Hooks (alphabetical):
 | `markdownlint`                 | Markdown style + structure.                                                           |
 | `min-permissions`              | Top-level workflow permissions empty; each job declares its own scopes.               |
 | `nix-run-pinned`               | No unpinned nix run nixpkgs#<pkg>; use nix shell .#<pkg> or pin a rev.                |
-| `nixfmt-rfc-style`             | Nix file formatting.                                                                  |
+| `nixfmt`                       | Nix file formatting.                                                                  |
 | `pin-diff-isolated`            | Only scripts/bump-linpeas.sh mutates linpeas-pin.json.                                |
 | `pre-commit-hooks-sha-parity`  | The pre-commit-hooks input SHA in flake.nix matches flake.lock locked.rev.            |
 | `precommit-table-fresh`        | Hook table in docs/development/git.md matches the flake hook manifest.                |

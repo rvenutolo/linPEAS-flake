@@ -27,7 +27,7 @@ function main() {
   fi
 
   if grep --quiet 'commitlint' "${DOC}" &&
-    grep --quiet 'nixfmt-rfc-style' "${DOC}" &&
+    grep --quiet 'nixfmt' "${DOC}" &&
     ! grep --quiet 'commitizen' "${DOC}" &&
     ! grep --quiet 'nixpkgs-fmt' "${DOC}"; then
     pass 'table reflects renamed hooks'
