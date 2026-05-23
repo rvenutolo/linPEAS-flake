@@ -51,7 +51,7 @@ jobs:
           tag="$(gh release view --repo rvenutolo/linPEAS-flake --json tagName --jq .tagName)"
           printf 'tag=%s\n' "${tag}" >> "${GITHUB_OUTPUT}"
 
-      - name: download bundle from latest release
+      - name: download pin file from latest release
         id: download-assets
         env:
           GH_TOKEN: ${{ github.token }}
@@ -64,8 +64,6 @@ jobs:
           for i in 1 2 3 4 5 6; do
             if gh release download "${TAG}" \
                  --repo rvenutolo/linPEAS-flake \
-                 --pattern linpeas-bundle.sh \
-                 --pattern linpeas-bundle.cosign.bundle \
                  --pattern linpeas-pin.json \
                  --clobber; then
               break
@@ -73,45 +71,8 @@ jobs:
             printf 'assets not yet visible, retry %d/6\n' "${i}" >&2
             sleep 5
           done
-          [[ -f linpeas-bundle.sh && -f linpeas-pin.json ]] \
+          [[ -f linpeas-pin.json ]] \
             || { printf 'release assets never appeared\n' >&2; exit 1; }
-          # cosign bundle is asserted optional here: releases predating the
-          # cosign-signing feature have no `.cosign.bundle` asset. The
-          # `verify-bundle-cosign` step below treats absence as a skip
-          # (rather than a verification failure) for backward compat.
-
-      - name: verify bundle attestation
-        id: verify-bundle
-        # Verifies both build-provenance AND SBOM attestations.
-        # gh attestation verify accepts any matching attestation by default
-        # (SLSA provenance + SPDX-JSON SBOM, both attested at release time).
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -Eeuo pipefail
-          IFS=$'\n\t'
-          gh attestation verify linpeas-bundle.sh --repo rvenutolo/linPEAS-flake
-
-      - name: cosign verify bundle
-        id: verify-bundle-cosign
-        # Skips cleanly for releases that predate the cosign-signing
-        # feature (no .cosign.bundle asset). Once the feature is in
-        # effect for the latest release, this becomes a hard gate.
-        env:
-          COSIGN_IDENTITY: https://github.com/rvenutolo/linPEAS-flake/.github/workflows/release-on-bump.yml@refs/heads/main
-          COSIGN_OIDC_ISSUER: https://token.actions.githubusercontent.com
-        run: |
-          set -Eeuo pipefail
-          IFS=$'\n\t'
-          if [[ ! -f linpeas-bundle.cosign.bundle ]]; then
-            printf 'no cosign bundle asset; skipping cosign verify-blob\n' >&2
-            exit 0
-          fi
-          nix run nixpkgs#cosign -- verify-blob \
-            --bundle linpeas-bundle.cosign.bundle \
-            --certificate-identity "${COSIGN_IDENTITY}" \
-            --certificate-oidc-issuer "${COSIGN_OIDC_ISSUER}" \
-            linpeas-bundle.sh
 
       - name: verify ghcr per-arch attestations
         id: verify-ghcr
@@ -330,8 +291,6 @@ jobs:
         env:
           READ_TAG: ${{ steps.read-tag.outcome }}
           DOWNLOAD_ASSETS: ${{ steps.download-assets.outcome }}
-          VERIFY_BUNDLE: ${{ steps.verify-bundle.outcome }}
-          VERIFY_BUNDLE_COSIGN: ${{ steps.verify-bundle-cosign.outcome }}
           VERIFY_GHCR: ${{ steps.verify-ghcr.outcome }}
           VERIFY_HUB: ${{ steps.verify-hub.outcome }}
           VERIFY_IMAGES_COSIGN: ${{ steps.verify-images-cosign.outcome }}
@@ -347,8 +306,6 @@ jobs:
           # actually-failed step shows `failure`. Walk in execution order.
           if   [[ ${READ_TAG}              == 'failure' ]]; then reason='release-tag-fetch-failed'
           elif [[ ${DOWNLOAD_ASSETS}       == 'failure' ]]; then reason='release-asset-download-failed'
-          elif [[ ${VERIFY_BUNDLE}         == 'failure' ]]; then reason='bundle-attest-failed'
-          elif [[ ${VERIFY_BUNDLE_COSIGN}  == 'failure' ]]; then reason='bundle-cosign-failed'
           elif [[ ${VERIFY_GHCR}           == 'failure' ]]; then reason='ghcr-attest-failed'
           elif [[ ${VERIFY_HUB}            == 'failure' ]]; then reason='hub-attest-failed'
           elif [[ ${VERIFY_IMAGES_COSIGN}  == 'failure' ]]; then reason='images-cosign-failed'
@@ -400,15 +357,15 @@ jobs:
               push); also a security signal but lower-confidence than
               SRI drift.
             - `ghcr-attest-failed` / `hub-attest-failed` /
-              `bundle-attest-failed` / `pin-attest-failed` — attestation
-              verification failed for one of the per-arch images, the
-              bundle, or the pin asset. Could be artifact tampering or
+              `pin-attest-failed` — attestation
+              verification failed for one of the per-arch images or
+              the pin asset. Could be artifact tampering or
               a Sigstore TUF trust-root rotation lag (newer `gh` CLI
               with rotated root has shipped to runners but the cron
               still runs on the old runner image). Re-run the cron 24h
               later to distinguish.
-            - `bundle-cosign-failed` / `images-cosign-failed` — cosign
-              signature verification failed for the bundle or for one
+            - `images-cosign-failed` — cosign
+              signature verification failed for one
               of the per-arch / multi-arch image digests. Same
               authenticity guarantee as the `*-attest-failed` reasons
               above, exposed via the user-facing `cosign verify` path.
