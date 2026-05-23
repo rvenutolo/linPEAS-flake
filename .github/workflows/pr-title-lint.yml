@@ -12,6 +12,10 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: pr-title-lint-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint-pr-title:
     runs-on: ubuntu-latest

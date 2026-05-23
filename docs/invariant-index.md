@@ -23,6 +23,7 @@ live in `.claude/CLAUDE.md` (untracked).
 - **PR-triggered workflow secret allowlist** — only `secrets.GITHUB_TOKEN`. → [security/trust-model.md](security/trust-model.md)
 - **harden-runner** — first step in every job. → [security/trust-model.md](security/trust-model.md)
 - **Per-job timeout-minutes** — every job declares explicit `timeout-minutes`. → [security/workflow-hardening.md](security/workflow-hardening.md)
+- **Workflow concurrency group** — every workflow declares top-level `concurrency.group`. → [security/workflow-hardening.md](security/workflow-hardening.md)
 - **GITHUB_TOKEN min-permissions** — top-level `permissions: {}`; every job declares own scopes. → [security/min-permissions.md](security/min-permissions.md)
 - **protect-main ruleset** — in-tree mirror + drift-check. → [security/required-checks.md](security/required-checks.md)
 - **Repo-settings posture** — three binding flags. → [security/settings-posture.md](security/settings-posture.md)

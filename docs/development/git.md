@@ -103,6 +103,7 @@ Hooks (alphabetical):
 | `treefmt`                     | Multi-language formatter aggregator (shfmt, prettier, etc).                           |
 | `typos`                       | Spell-check across the repo.                                                          |
 | `uses-sha-pinned`             | Every uses: reference is SHA-pinned.                                                  |
+| `workflow-concurrency`        | Every workflow declares a top-level concurrency.group.                                |
 | `yamllint`                    | YAML style.                                                                           |
 | `zizmor`                      | GitHub Actions security audit.                                                        |
 
