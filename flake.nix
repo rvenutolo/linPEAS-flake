@@ -599,6 +599,22 @@
             pass_filenames = false;
             language = "system";
           };
+          # Ban unpinned nix run nixpkgs#<pkg> invocations.
+          # See docs/security/workflow-hardening.md.
+          nix-run-pinned = {
+            enable = true;
+            name = "nix-run-pinned";
+            description = "No unpinned nix run nixpkgs#<pkg>; use nix shell .#<pkg> or pin a rev.";
+            entry = "${pkgs-unstable.writeShellScript "nix-run-pinned-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-nix-run-pinned.sh
+            ''}";
+            files = "^(\\.github/workflows/.*\\.ya?ml|scripts/.*\\.sh|docs/.*\\.md|README\\.md|SECURITY\\.md)$";
+            pass_filenames = false;
+            language = "system";
+          };
           # Schema-shape validation for repo config. Catches typoed
           # keys, wrong-type values, and upstream-removed fields that
           # per-tool linters miss. NIX_BUILD_TOP guard skips inside
@@ -719,6 +735,13 @@
         packages = {
           inherit linpeas;
           default = linpeas;
+          # Exposed so release-on-bump.yml and verify-latest-release.yml
+          # can call cosign via `nix shell .#cosign --command cosign ...`,
+          # which resolves through this repo's flake.lock-pinned
+          # nixpkgs rather than the runner registry's mutable
+          # `nixpkgs` reference. See
+          # docs/security/workflow-hardening.md (nix-run-pinned).
+          inherit (pkgs-unstable) cosign;
         }
         // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
           inherit linpeas-image site;

@@ -41,6 +41,7 @@ this file in the same change as any modification to the ruleset.
 | harden-runner-first          | ci                | .github/workflows/ci.yml                |
 | job-timeout-minutes          | ci                | .github/workflows/ci.yml                |
 | min-permissions              | ci                | .github/workflows/ci.yml                |
+| nix-run-pinned               | ci                | .github/workflows/ci.yml                |
 | markdownlint                 | ci                | .github/workflows/ci.yml                |
 | typos                        | ci                | .github/workflows/ci.yml                |
 | editorconfig                 | ci                | .github/workflows/ci.yml                |

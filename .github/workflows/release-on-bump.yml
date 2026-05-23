@@ -285,9 +285,9 @@ jobs:
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
-          nix run nixpkgs#cosign -- sign \
+          nix shell .#cosign --command cosign sign \
             "ghcr.io/rvenutolo/linpeas@${GHCR_DIGEST}"
-          nix run nixpkgs#cosign -- sign \
+          nix shell .#cosign --command cosign sign \
             "docker.io/rvenutolo/linpeas@${HUB_DIGEST}"
 
       - name: docker logout
@@ -448,9 +448,9 @@ jobs:
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
-          nix run nixpkgs#cosign -- sign \
+          nix shell .#cosign --command cosign sign \
             "ghcr.io/rvenutolo/linpeas@${GHCR_DIGEST}"
-          nix run nixpkgs#cosign -- sign \
+          nix shell .#cosign --command cosign sign \
             "docker.io/rvenutolo/linpeas@${HUB_DIGEST}"
 
       - name: docker logout
@@ -577,9 +577,9 @@ jobs:
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
-          nix run nixpkgs#cosign -- sign \
+          nix shell .#cosign --command cosign sign \
             "ghcr.io/rvenutolo/linpeas@${GHCR_INDEX_DIGEST}"
-          nix run nixpkgs#cosign -- sign \
+          nix shell .#cosign --command cosign sign \
             "docker.io/rvenutolo/linpeas@${HUB_INDEX_DIGEST}"
 
       - name: docker logout
@@ -669,7 +669,7 @@ jobs:
             "docker.io/rvenutolo/linpeas@${HUB_ARM64_DIGEST}" \
             "ghcr.io/rvenutolo/linpeas@${GHCR_INDEX_DIGEST}" \
             "docker.io/rvenutolo/linpeas@${HUB_INDEX_DIGEST}"; do
-            nix run nixpkgs#cosign -- verify \
+            nix shell .#cosign --command cosign verify \
               --certificate-identity "${COSIGN_IDENTITY}" \
               --certificate-oidc-issuer "${COSIGN_OIDC_ISSUER}" \
               "${ref}" > /dev/null
