@@ -126,10 +126,12 @@ Enforced by `scripts/check-nix-run-pinned.sh`. Wired as the `nix-run-pinned` req
 
 ## setup-nix composite required
 
+{% raw %}
 Every workflow that installs Nix must do so via
 `./.github/actions/setup-nix`, passing
 `github-token: ${{ secrets.GITHUB_TOKEN }}`. Direct use of
 `cachix/install-nix-action` from a workflow is forbidden.
+{% endraw %}
 
 **Why.** Unauthenticated `api.github.com` tarball fetches are capped
 at ~60 requests/hour per source IP. GitHub Actions runner IPs are
