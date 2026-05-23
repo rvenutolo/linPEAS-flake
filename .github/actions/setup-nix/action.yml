@@ -1,0 +1,39 @@
+name: setup-nix
+description: "Install Nix with authenticated GitHub access-tokens so flake-input tarball fetches don't hit the 60/hour unauthenticated rate limit."
+
+# WHY this composite exists:
+# `cachix/install-nix-action` defaults to unauthenticated tarball fetches
+# (`api.github.com/repos/<o>/<r>/tarball/<sha>`). GitHub caps unauthenticated
+# requests at 60/hour per source IP. GitHub Actions runner IP pools share
+# that budget across many concurrent jobs; once exhausted, the API returns
+# 401 ("Bad credentials"). Passing `access-tokens = github.com=<token>`
+# raises the limit to ~1000/hour and eliminates the recurring 401s.
+#
+# Flakehub-cache is intentionally NOT bundled here: a small number of
+# callers (`update-flake-lock`, `renovate-flake-lock-refresh`) need fresh
+# fetches and must omit it. Callers add `DeterminateSystems/flakehub-cache-action`
+# explicitly when wanted.
+
+inputs:
+  github-token:
+    description: "GitHub token used by Nix for `access-tokens = github.com=...`. Pass `secrets.GITHUB_TOKEN` from the caller."
+    required: true
+  install-url:
+    description: "Nix installer URL. Defaults to the pinned NixOS release; matrix callers override with `matrix.nix-install-url`."
+    required: false
+    default: "https://releases.nixos.org/nix/nix-2.34.7/install" # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+  extra-nix-config:
+    description: "Additional lines appended to nix.conf beyond the baseline (experimental-features, access-tokens)."
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31
+      with:
+        install_url: ${{ inputs.install-url }}
+        extra_nix_config: |
+          experimental-features = nix-command flakes
+          access-tokens = github.com=${{ inputs.github-token }}
+          ${{ inputs.extra-nix-config }}
