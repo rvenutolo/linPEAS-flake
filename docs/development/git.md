@@ -103,6 +103,7 @@ Hooks (alphabetical):
 | `statix`                       | Nix anti-pattern lint.                                                                |
 | `treefmt`                      | Multi-language formatter aggregator (shfmt, prettier, etc).                           |
 | `typos`                        | Spell-check across the repo.                                                          |
+| `upload-artifact-strict`       | Every actions/upload-artifact sets with.if-no-files-found: error.                     |
 | `uses-sha-pinned`              | Every uses: reference is SHA-pinned.                                                  |
 | `workflow-concurrency`         | Every workflow declares a top-level concurrency.group.                                |
 | `yamllint`                     | YAML style.                                                                           |

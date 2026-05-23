@@ -426,6 +426,25 @@
             pass_filenames = false;
             language = "system";
           };
+          # Every actions/upload-artifact step sets if-no-files-found:
+          # error so a broken path: glob fails the job instead of
+          # silently uploading an empty artifact. See
+          # docs/security/workflow-hardening.md.
+          upload-artifact-strict = {
+            enable = true;
+            name = "upload-artifact-strict";
+            description = "Every actions/upload-artifact sets with.if-no-files-found: error.";
+            entry = "${pkgs-unstable.writeShellScript "upload-artifact-strict-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-upload-artifact-strict.sh
+            ''}";
+            files = "^(\\.github/workflows/.*\\.ya?ml|scripts/check-upload-artifact-strict\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
           # Schema-shape validation for repo config. Catches typoed
           # keys, wrong-type values, and upstream-removed fields that
           # per-tool linters miss. NIX_BUILD_TOP guard skips inside
