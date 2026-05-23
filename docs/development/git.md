@@ -87,6 +87,7 @@ Hooks (alphabetical):
 | `commitlint`                  | Commit message satisfies Conventional Commits (CI parity via .commitlintrc.yml).      |
 | `deadnix`                     | Unused Nix bindings.                                                                  |
 | `editorconfig-checker`        | .editorconfig compliance (charset, line endings, trailing whitespace, final newline). |
+| `flake-show-fresh`            | flake-show block in docs/reference/flake-outputs.md matches current flake outputs.    |
 | `gh-api-version-header`       | Every gh api / api.github.com call in scripts passes an X-GitHub-Api-Version header.  |
 | `harden-runner-first`         | Every workflow job's first step is step-security/harden-runner.                       |
 | `just-recipes-fresh`          | README just-recipes block matches the justfile.                                       |
@@ -96,7 +97,6 @@ Hooks (alphabetical):
 | `pin-diff-isolated`           | Only scripts/bump-linpeas.sh mutates linpeas-pin.json.                                |
 | `pre-commit-hooks-sha-parity` | The pre-commit-hooks input SHA in flake.nix matches flake.lock locked.rev.            |
 | `precommit-table-fresh`       | Hook table in docs/development/git.md matches the flake hook manifest.                |
-| `readme-flake-show-fresh`     | README flake-show block matches current flake outputs.                                |
 | `shellcheck`                  | Shell-script static analysis.                                                         |
 | `statix`                      | Nix anti-pattern lint.                                                                |
 | `treefmt`                     | Multi-language formatter aggregator (shfmt, prettier, etc).                           |

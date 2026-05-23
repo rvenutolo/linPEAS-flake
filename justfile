@@ -56,7 +56,7 @@ verify:
 bump:
 	./scripts/bump-linpeas.sh
 
-# Regenerate the <!-- BEGIN/END flake-show --> block in README.md
+# Regenerate the <!-- BEGIN/END flake-show --> block in docs/reference/flake-outputs.md
 show:
 	./scripts/refresh-flake-show.sh
 

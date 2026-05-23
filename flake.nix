@@ -233,15 +233,15 @@
             description = "Multi-language formatter aggregator (shfmt, prettier, etc).";
             package = treefmtEval.config.build.wrapper;
           };
-          # Refuse to commit if README flake-show block is stale.
-          # Invokes refresh-flake-show.sh in --check mode — never mutates the
+          # Refuse to commit if the flake-show block in docs/reference/flake-outputs.md
+          # is stale. Invokes refresh-flake-show.sh in --check mode — never mutates the
           # working tree, exits 1 on diff. Safe for the autonomous subagent
-          # path (no dirty README left behind on failure).
-          readme-flake-show-fresh = {
+          # path (no dirty doc left behind on failure).
+          flake-show-fresh = {
             enable = true;
-            name = "readme-flake-show-fresh";
-            description = "README flake-show block matches current flake outputs.";
-            entry = "${pkgs.writeShellScript "readme-flake-show-fresh" ''
+            name = "flake-show-fresh";
+            description = "flake-show block in docs/reference/flake-outputs.md matches current flake outputs.";
+            entry = "${pkgs.writeShellScript "flake-show-fresh" ''
               set -Eeuo pipefail
               IFS=$'\n\t'
               # No-op when running inside a nix build sandbox — the
@@ -252,15 +252,14 @@
               if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then
                 exit 0
               fi
-              # No-op until both the script and README exist (early-build
-              # tasks land before T12/T14 — the hook activates once both
-              # paths are present and otherwise stays silent).
-              if [[ ! -f scripts/refresh-flake-show.sh || ! -f README.md ]]; then
+              # No-op until both the script and the doc exist; the hook
+              # activates once both paths are present and otherwise stays silent.
+              if [[ ! -f scripts/refresh-flake-show.sh || ! -f docs/reference/flake-outputs.md ]]; then
                 exit 0
               fi
               exec ${pkgs.bash}/bin/bash scripts/refresh-flake-show.sh --check
             ''}";
-            files = "^(flake\\.nix|flake\\.lock|linpeas-pin\\.json|README\\.md|scripts/refresh-flake-show\\.sh)$";
+            files = "^(flake\\.nix|flake\\.lock|linpeas-pin\\.json|docs/reference/flake-outputs\\.md|scripts/refresh-flake-show\\.sh)$";
             pass_filenames = false;
             language = "system";
           };
@@ -314,7 +313,7 @@
           };
           # Belt-and-braces backup to the GitHub-side
           # `sha_pinning_required` setting. Mirrors the NIX_BUILD_TOP guard used
-          # by readme-flake-show-fresh so nix flake check doesn't fail
+          # by flake-show-fresh so nix flake check doesn't fail
           # inside the sandbox where the script can't reach .github/.
           uses-sha-pinned = {
             enable = true;
