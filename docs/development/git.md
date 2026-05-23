@@ -101,6 +101,7 @@ Hooks (alphabetical):
 | `pre-commit-hooks-sha-parity`  | The pre-commit-hooks input SHA in flake.nix matches flake.lock locked.rev.            |
 | `precommit-table-fresh`        | Hook table in docs/development/git.md matches the flake hook manifest.                |
 | `pull-request-target-absent`   | No workflow uses the pull_request_target trigger.                                     |
+| `run-block-strict`             | Multi-line run: blocks start with set -Eeuo pipefail.                                 |
 | `script-has-test`              | Every scripts/check-*.sh paired with tests/check-*.test.sh.                           |
 | `script-shebang-pipefail`      | Every scripts/\*.sh has portable shebang + set -Eeuo pipefail.                        |
 | `shellcheck`                   | Shell-script static analysis.                                                         |

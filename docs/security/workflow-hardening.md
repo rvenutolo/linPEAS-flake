@@ -87,3 +87,13 @@ Every `jobs.<name>:` in `.github/workflows/ci.yml` either appears as a key in `d
 Adding a new ci.yml job that should be a required status check requires updating the categories map, the required-checks doc, and the protect-main ruleset (in-tree and live). Adding an auxiliary job requires only an `EXEMPT` entry justified in the script comment.
 
 Enforced by `scripts/check-ci-job-in-summary.sh`. Wired as the `ci-job-in-summary` required CI job and as a pre-commit hook.
+
+## run-block-strict
+
+Every multi-line `run:` block under `.github/workflows/*.yml` starts with `set -Eeuo pipefail` as its first non-blank, non-comment line.
+
+Bash inside Actions `run:` blocks defaults to `-e` off. A failed command in the middle of a multi-line block silently continues, producing wrong results in security-critical jobs (release signing, attestation verify, pin write-back). The strict-mode prelude closes that gap.
+
+Single-line `run:` invocations are exempt — they're already a single shell command whose exit status drives the step directly.
+
+Enforced by `scripts/check-run-block-strict.sh`. Wired as the `run-block-strict` required CI job and as a pre-commit hook.
