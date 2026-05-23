@@ -18,9 +18,7 @@
 #   4. pin.version must match         -> [0-9]{8}-[0-9a-f]{7,40}
 #   5. pin.url must start with        -> https://github.com/peass-ng/
 #                                        PEASS-ng/releases/download/
-#   6. bundle_url must start with     -> https://github.com/rvenutolo/
-#                                        linPEAS-flake/releases/download/
-#   7. Atomic write: mktemp + mv; never `>` redirect to the final path.
+#   6. Atomic write: mktemp + mv; never `>` redirect to the final path.
 #
 # Exits 0 on success.
 
@@ -60,7 +58,6 @@ function require_field() {
 
 readonly UPSTREAM_REPO='peass-ng/PEASS-ng'
 readonly THIS_REPO='rvenutolo/linPEAS-flake'
-readonly EXPECTED_BUNDLE_URL_PREFIX='https://github.com/rvenutolo/linPEAS-flake/releases/download/'
 readonly EXPECTED_PIN_URL_PREFIX='https://github.com/peass-ng/PEASS-ng/releases/download/'
 readonly VERSION_REGEX='^[0-9]{8}-[0-9a-f]{7,40}$'
 
@@ -146,23 +143,15 @@ function main() {
   fi
 
   log_info 'gathering this-repo release data'
-  local latest_release latest_tag bundle_url image_ref
+  local latest_release latest_tag image_ref
   latest_release="$(fetch_or_override LATEST_RELEASE_JSON_OVERRIDE \
     "repos/${THIS_REPO}/releases/latest" 2>/dev/null || true)"
   if [[ -z ${latest_release} || ${latest_release} == 'null' ]]; then
     latest_tag=''
-    bundle_url=''
     image_ref=''
   else
     latest_tag="$(jq --raw-output .tag_name <<<"${latest_release}")"
-    bundle_url="$(jq --raw-output \
-      '.assets[]? | select(.name == "linpeas-bundle.sh") | .browser_download_url' \
-      <<<"${latest_release}")"
     image_ref="ghcr.io/rvenutolo/linpeas:${latest_tag}"
-    if [[ -n ${bundle_url} && ${bundle_url} != "${EXPECTED_BUNDLE_URL_PREFIX}"* ]]; then
-      log_err "bundle URL outside expected prefix: ${bundle_url}"
-      exit 1
-    fi
   fi
 
   log_info 'gathering recent releases'
@@ -213,7 +202,6 @@ function main() {
   releases_yaml_items="$(jq --compact-output '[.[] | {
       tag: .tag_name,
       date: .published_at,
-      bundle_url: ((.assets[]? | select(.name == "linpeas-bundle.sh") | .browser_download_url) // ""),
       image_tag: ("ghcr.io/rvenutolo/linpeas:" + .tag_name)
     }]' <<<"${releases_json}")"
 
@@ -268,7 +256,6 @@ function main() {
     --argjson bump_pr_number "${bump_pr_number}" \
     --arg bump_pr_merged_at "${bump_pr_merged_at}" \
     --arg latest_tag "${latest_tag}" \
-    --arg bundle_url "${bundle_url}" \
     --arg image_ref "${image_ref}" \
     --arg parity_conclusion "${parity_conclusion}" \
     --arg parity_checked_at "${parity_checked_at}" \
@@ -294,7 +281,6 @@ function main() {
       },
       release: {
         latest_tag: $latest_tag,
-        bundle_url: $bundle_url,
         image_ref: $image_ref,
       },
       parity: {
