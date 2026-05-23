@@ -14,7 +14,22 @@ links here rather than embedding the snippets inline, so:
 - The procedure is one file to update if Docker Hub's API contract
     changes, not N copies across the workflow.
 
-## When this applies
+<!-- mdformat-toc start --slug=github --maxlevel=3 --minlevel=2 -->
+
+- [When this applies](#when-this-applies)
+- [Prerequisites](#prerequisites)
+- [Step-by-step](#step-by-step)
+  - [1. Delete the GitHub release + tag](#1-delete-the-github-release--tag)
+  - [2. Delete the orphan docker.io arch tag](#2-delete-the-orphan-dockerio-arch-tag)
+  - [3. Re-trigger the release pipeline](#3-re-trigger-the-release-pipeline)
+  - [4. Confirm green end-to-end](#4-confirm-green-end-to-end)
+- [Common Docker Hub failure modes](#common-docker-hub-failure-modes)
+- [DOCKERHUB_TOKEN split (RW + DELETE)](#dockerhub_token-split-rw--delete)
+- [Notify-body parity invariant](#notify-body-parity-invariant)
+
+<!-- mdformat-toc end -->
+
+## When this applies<a name="when-this-applies"></a>
 
 The push loop inside `release-on-bump.yml` per-arch jobs runs
 `docker.io` first, then `ghcr.io`. The two failure modes are:
@@ -29,7 +44,7 @@ The push loop inside `release-on-bump.yml` per-arch jobs runs
     deleting the orphan docker.io arch tag before retrying, otherwise
     the next push would push to a tag that already exists.
 
-## Prerequisites
+## Prerequisites<a name="prerequisites"></a>
 
 - A Docker Hub access token with **Delete** scope. Use the
     `DOCKERHUB_TOKEN_DELETE` repository secret value
@@ -42,9 +57,9 @@ The push loop inside `release-on-bump.yml` per-arch jobs runs
     record `VERSION` (the pin version, e.g. `20260516-deadbee`) and
     `ARCH` (`amd64` or `arm64`) before starting.
 
-## Step-by-step
+## Step-by-step<a name="step-by-step"></a>
 
-### 1. Delete the GitHub release + tag
+### 1. Delete the GitHub release + tag<a name="1-delete-the-github-release--tag"></a>
 
 Release-creation is gated on tag-doesn't-exist; if you don't delete
 the orphan release first, the retry will skip the release step and
@@ -57,7 +72,7 @@ gh release delete "${VERSION}" \
   --cleanup-tag --yes
 ```
 
-### 2. Delete the orphan docker.io arch tag
+### 2. Delete the orphan docker.io arch tag<a name="2-delete-the-orphan-dockerio-arch-tag"></a>
 
 Only required if `ghcr.io` failed after `docker.io` succeeded. Skip
 to step 3 otherwise.
@@ -92,7 +107,7 @@ curl --fail --silent --show-error \
   "https://hub.docker.com/v2/repositories/${DOCKERHUB_USERNAME}/linpeas/tags/${VERSION}-${ARCH}/"
 ```
 
-### 3. Re-trigger the release pipeline
+### 3. Re-trigger the release pipeline<a name="3-re-trigger-the-release-pipeline"></a>
 
 Either:
 
@@ -103,7 +118,7 @@ Either:
     re-running so the `release` job skips the
     "tag exists" guard.
 
-### 4. Confirm green end-to-end
+### 4. Confirm green end-to-end<a name="4-confirm-green-end-to-end"></a>
 
 Watch the next `release-on-bump` run finish green. Specifically
 confirm:
@@ -119,7 +134,7 @@ confirm:
 Close the `release-on-bump-failure` issue with a one-line root-cause
 comment (e.g., `transient: docker.io 502 on push, retry green`).
 
-## Common Docker Hub failure modes
+## Common Docker Hub failure modes<a name="common-docker-hub-failure-modes"></a>
 
 **Token expired or revoked.** Rotate `DOCKERHUB_TOKEN_RW` (and/or `DOCKERHUB_TOKEN_DELETE` independently) at <https://hub.docker.com/settings/security>, then `gh secret set DOCKERHUB_TOKEN_RW`.
 
@@ -127,7 +142,7 @@ comment (e.g., `transient: docker.io 502 on push, retry green`).
 
 **Docker Hub partial outage.** Manual re-run via `workflow_dispatch` is usually enough; if multiple retries fail with the same shape, check <https://status.docker.com>.
 
-## DOCKERHUB_TOKEN split (RW + DELETE)
+## DOCKERHUB_TOKEN split (RW + DELETE)<a name="dockerhub_token-split-rw--delete"></a>
 
 - **`DOCKERHUB_TOKEN_RW`** — Read, Write. Used by `release-on-bump.yml` and
     `verify-latest-release.yml`.
@@ -147,7 +162,7 @@ Binding:
 
 Rotation: on suspected compromise only.
 
-## Notify-body parity invariant
+## Notify-body parity invariant<a name="notify-body-parity-invariant"></a>
 
 `release-on-bump.yml`'s notify-failure issue body carries a `## Common Docker Hub causes` subsection mirroring this runbook's "Common Docker
 Hub failure modes" section. Keep wording in parity.

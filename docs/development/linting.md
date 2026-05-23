@@ -80,6 +80,30 @@ suppressed rule + workflow. Do not raise `--min-severity` above
 Prettier rewrites single-quoted YAML scalars to double-quoted. Run
 `nix fmt` before push, or use double quotes from the start.
 
+## mdformat-toc table-of-contents
+
+Long markdown files opt in to an auto-generated TOC by seeding two
+markers:
+
+```markdown
+<!-- mdformat-toc start --slug=github --maxlevel=3 --minlevel=2 -->
+<!-- mdformat-toc end -->
+```
+
+The `mdformat-toc` plugin (wired in `treefmt.nix`) regenerates the TOC
+between the markers on every `nix fmt` / `treefmt` invocation. Files
+without markers are untouched. `slug=github` matches the GFM anchor
+scheme used by MkDocs-Material and `gh`-rendered previews;
+`minlevel=2` skips the H1 title; `maxlevel=3` keeps the TOC shallow
+on long runbooks. The plugin also writes explicit `<a name="...">`
+anchors next to each in-range heading so the slugs are stable across
+heading-text edits.
+
+Seeded files: `docs/security/verification.md`,
+`docs/runbooks/dockerhub-recovery.md`,
+`docs/runbooks/settings-drift-app.md`. Add a file to the list by
+pasting the marker pair anywhere after the H1, then running `nix fmt`.
+
 ## Flake-show auto-block
 
 `scripts/refresh-flake-show.sh` regenerates the auto-block in
