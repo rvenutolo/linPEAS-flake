@@ -167,7 +167,7 @@ jobs:
 
           # Delete stale branch ref if a prior failed run left one behind.
           if gh api "repos/${REPO}/git/refs/heads/${branch}" \
-               --header "${api_header}" >/dev/null 2>&1; then
+              --header "${api_header}" >/dev/null 2>&1; then
             gh api --method DELETE "repos/${REPO}/git/refs/heads/${branch}" \
               --header "${api_header}"
           fi

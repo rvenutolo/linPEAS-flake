@@ -142,14 +142,14 @@ fi
 
 live_contexts="$(jq --compact-output \
   '.rules[] | select(.type=="required_status_checks") |
-   .parameters.required_status_checks |
-   map(.context) | sort | unique' \
+  .parameters.required_status_checks |
+  map(.context) | sort | unique' \
   <<<"${ruleset_json}")"
 
 mirror_contexts="$(jq --compact-output \
   '.rules[] | select(.type=="required_status_checks") |
-   .parameters.required_status_checks |
-   map(.context) | sort | unique' \
+  .parameters.required_status_checks |
+  map(.context) | sort | unique' \
   <<<"${mirror_json}")"
 
 if [[ ${live_contexts} != "${mirror_contexts}" ]]; then

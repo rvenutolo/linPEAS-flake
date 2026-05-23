@@ -36,7 +36,21 @@
     shfmt = {
       enable = true;
       indent_size = 2;
+      # Default shfmt glob `*.envrc` does not match the literal `.envrc`
+      # filename. Add it explicitly so direnv hooks are formatted.
+      includes = [
+        "*.sh"
+        "*.bash"
+        "*.envrc"
+        "*.envrc.*"
+        ".envrc"
+      ];
     };
+    # `just --fmt --unstable` formats the top-level `justfile`. The
+    # pinned `just` (1.43.1) hardcodes a 4-space recipe indent with no
+    # `--indentation` flag, so `.editorconfig` declares
+    # `[justfile] indent_size = 4` to match the formatter output.
+    just.enable = true;
     # TOML formatter — covers `lychee.toml` and `_typos.toml`.
     taplo.enable = true;
   };
@@ -47,8 +61,6 @@
     ".gitignore"
     ".gitattributes"
     ".editorconfig"
-    ".envrc"
-    "justfile"
     # Generated, also gitignored — defense-in-depth.
     "docs/_data/dashboard.yml"
     # mkdocs-macros template files — body is Jinja2, not raw markdown.
