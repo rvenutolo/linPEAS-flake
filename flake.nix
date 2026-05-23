@@ -567,6 +567,22 @@
             pass_filenames = false;
             language = "system";
           };
+          # Every gh attestation verify invocation passes --repo.
+          # See docs/security/verification.md.
+          gh-attestation-repo = {
+            enable = true;
+            name = "gh-attestation-repo";
+            description = "gh attestation verify pins --repo rvenutolo/linPEAS-flake.";
+            entry = "${pkgs-unstable.writeShellScript "gh-attestation-repo-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-gh-attestation-repo.sh
+            ''}";
+            files = "^(\\.github/workflows/.*\\.ya?ml|scripts/.*\\.sh|docs/.*\\.md|README\\.md|SECURITY\\.md)$";
+            pass_filenames = false;
+            language = "system";
+          };
           # Schema-shape validation for repo config. Catches typoed
           # keys, wrong-type values, and upstream-removed fields that
           # per-tool linters miss. NIX_BUILD_TOP guard skips inside

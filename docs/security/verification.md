@@ -193,3 +193,9 @@ cosign verify \
 
 No `gh` CLI required. Pairs with the existing `gh attestation verify`
 path — pick whichever toolchain fits the consumer's pipeline.
+
+## gh-attestation-repo invariant
+
+Every `gh attestation verify` invocation across workflows, scripts, and shell-fenced documentation must pass `--repo rvenutolo/linPEAS-flake`. Without the `--repo` pin, Sigstore returns any attestation matching the artifact digest, including one issued from a different repository — a trivial bypass.
+
+Enforced by `scripts/check-gh-attestation-repo.sh`. The lint joins backslash-continued shell invocations, ignores prose mentions in backticks, and only inspects fenced code blocks (`sh`, `bash`, `shell`, `console`, or unlabeled) in markdown files. Wired as the `gh-attestation-repo` required CI job and as a pre-commit hook.
