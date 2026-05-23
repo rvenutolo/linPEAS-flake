@@ -1,13 +1,19 @@
 # Flake-input bump runbook
 
-This page is the reviewer playbook for the two Renovate PRs that touch
+This page is the reviewer playbook for the Renovate PRs that touch
 flake-input pins in `flake.nix`:
 
 - **`cachix/git-hooks.nix`** — master HEAD tracker. Fires whenever
     upstream master moves.
 - **`NixOS/nixpkgs`** — stable-branch tracker. Fires when the next
     NixOS GA tag (`YY.MM`) lands plus the global 7-day
-    `minimumReleaseAge` quarantine.
+    `minimumReleaseAge` quarantine. **Widest blast: runtime, tooling,
+    and image base.**
+- **`NixOS/nixpkgs-unstable`** — rolling-branch tracker. Fires on
+    every upstream commit, grouped weekly by the global
+    `before 06:00 on friday` schedule. **Narrow blast: tooling only
+    — devShell, CI hooks, formatters, linters, mkdocs. Never touches
+    `linpeas-image`.**
 
 Both managers are intentionally **manual-merge**. They do pure text
 substitution on `flake.nix` and **do not refresh `flake.lock`**.
@@ -15,7 +21,10 @@ substitution on `flake.nix` and **do not refresh `flake.lock`**.
 The lockfile refresh is performed automatically by the
 `renovate-flake-lock-refresh` workflow, which fires on every `ci`
 completion against a `renovate/*` branch, detects the bumped input
-from the PR title, runs
+from the PR title (the `case` arms recognise three title shapes:
+`cachix/git-hooks.nix`, `NixOS/nixpkgs-unstable`, and `NixOS/nixpkgs`
+— the unstable arm is matched before the stable arm because the stable
+string is a substring of the unstable one), runs
 `nix flake update --update-input <name>`, and commits the refreshed
 `flake.lock` back to the PR branch (App-signed via REST
 `PUT /contents`). Watch the PR for a follow-on
@@ -42,19 +51,23 @@ The cost of this gap is one reviewer touch per bump:
 
 - `cachix/git-hooks.nix`: maybe a handful of bumps per year.
 - `NixOS/nixpkgs`: twice per year (May `YY.05`, November `YY.11`).
+- `NixOS/nixpkgs-unstable`: weekly, but narrow blast radius.
 
 The wide-blast-radius nature of these bumps (especially nixpkgs) means a
 human review pass was needed anyway.
 
-## Expected breakage surface of a nixpkgs bump
+## Expected breakage surface
+
+### Stable (`NixOS/nixpkgs`) bump — wide blast
 
 {% raw %}
 
 A major `NixOS/nixpkgs` bump (e.g. `25.11` → `26.05`) tends to drag in
-new versions of every tool the devShell + CI + image touch. The visible
-fallout falls into a small set of recurring classes. Walk the list
-before merging, even when CI is green — some failures land later (next
-cron tick, next contributor PR).
+new versions of every tool the devShell + CI + image touch, plus the
+image's bundled runtime payload. The visible fallout falls into a
+small set of recurring classes. Walk the full list before merging,
+even when CI is green — some failures land later (next cron tick,
+next contributor PR).
 
 - **Formatter rewrites.** `nixfmt`, `prettier`, `mdformat`, `shfmt`,
     and `taplo` all move with nixpkgs. A new minor version often
@@ -103,11 +116,32 @@ the PR arrives, and the table to triage after CI fails.
 
 {% endraw %}
 
+### Unstable (`NixOS/nixpkgs-unstable`) bump — narrow blast
+
+Tooling-only. Never touches the image runtime payload. The expected
+fallout is a strict subset of the stable list:
+
+- **Formatter rewrites.** `nixfmt`, `prettier`, `mdformat`, `shfmt`,
+    `taplo`, `just`. Frequent; usually one-line whitespace deltas.
+    Accept via `nix fmt`.
+- **New linter rules.** `zizmor`, `statix`, `deadnix`, `actionlint`,
+    `shellcheck`. Fix forward; raise minimum-severity only as a last
+    resort (and never above `low` for `zizmor` without a
+    security-review entry).
+- **mkdocs / mkdocs-macros plugin churn.** Same shape as the stable
+    bump, less frequent than a stable major.
+
+Out of scope for unstable bumps (these only happen on stable):
+
+- Image base-layer rotation / new bundled `coreutils` versions.
+- CRITICAL CVEs in runtime payload.
+
 ## When the Renovate PR arrives
 
 PR title looks like one of:
 
 - `Update dependency cachix/git-hooks.nix to <new-SHA>`
+- `Update dependency NixOS/nixpkgs-unstable to <new-SHA>`
 - `Update dependency NixOS/nixpkgs to <YY.MM>`
 
 Diff: exactly one line in `flake.nix` changed. `flake.lock` is **not**
@@ -128,6 +162,12 @@ For a `cachix/git-hooks.nix` bump:
 
 ```bash
 nix flake update --update-input pre-commit-hooks
+```
+
+For a `NixOS/nixpkgs-unstable` bump:
+
+```bash
+nix flake update --update-input nixpkgs-unstable
 ```
 
 For a `NixOS/nixpkgs` bump:
@@ -264,11 +304,13 @@ For `NixOS/nixpkgs` bumps specifically:
 - The next `update-flake-lock.yml` cron run (weekly, Monday 06:00 UTC)
     will refresh within-`YY.MM` patches automatically.
 
-## Interaction between the two pins
+## Interaction between the three pins
 
 If a `NixOS/nixpkgs` bump and a `cachix/git-hooks.nix` bump arrive in
 separate Renovate PRs, the order matters when the new nixpkgs `lib`
 adds or removes something `git-hooks.nix` depends on.
+`NixOS/nixpkgs-unstable` bumps are independent and do not affect the
+image; they can land in any order relative to the other two.
 
 The safe order:
 
@@ -280,6 +322,16 @@ The safe order:
 1. Then close out the standalone `git-hooks.nix` PR.
 
 If both PRs land cleanly when merged independently, no action needed.
+
+## Reviewer policy
+
+- **Stable (`nixpkgs`) bump:** full walk through every breakage class
+    above; verify `linpeas-image` build + bundled-binary version
+    inventory; do not auto-trust CI green.
+- **Unstable (`nixpkgs-unstable`) bump:** formatter-diff sanity-check
+    and CI green is sufficient. Image build is unaffected by definition
+    (allocation gates it to stable).
+- **`cachix/git-hooks.nix` bump:** hook config diff + CI green.
 
 ## update-flake-lock credential split
 
@@ -312,7 +364,10 @@ branch. The `identify` job gates on ALL of:
 - PR head branch starts with `renovate/`.
 - PR diff touches `flake.nix`.
 - PR title contains a known dep name (`cachix/git-hooks.nix` →
-    `pre-commit-hooks` input; `NixOS/nixpkgs` → `nixpkgs` input).
+    `pre-commit-hooks` input; `NixOS/nixpkgs-unstable` →
+    `nixpkgs-unstable` input; `NixOS/nixpkgs` → `nixpkgs` input —
+    unstable is matched before stable because the stable string is a
+    substring of the unstable title).
 
 Adding a new auto-refreshable input requires three coordinated
 edits in the same PR: (1) extend the `case` arm in
