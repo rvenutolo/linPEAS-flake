@@ -17,6 +17,7 @@ result-*
 .flake-show.json
 .lycheecache
 /tmp/
+.refresh-precommit-*.md
 
 # Personal scratch lists kept on disk but never tracked
 TODO
