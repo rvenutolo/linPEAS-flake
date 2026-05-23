@@ -97,6 +97,11 @@ jobs:
         with:
           client-id: ${{ vars.BUMP_APP_CLIENT_ID }}
           private-key: ${{ secrets.BUMP_APP_PRIVATE_KEY }}
+          # Least-privilege scope: token only needs to write file contents
+          # (PUT /contents for flake.lock) and open/merge the update PR.
+          # No other installation scopes are needed.
+          permission-contents: write
+          permission-pull-requests: write
 
       - name: sanity-check artifact
         run: |

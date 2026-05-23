@@ -205,7 +205,7 @@
             enable = true;
             name = "commitlint";
             description = "Commit message satisfies Conventional Commits (CI parity via .commitlintrc.yml).";
-            entry = "${pkgs.commitlint}/bin/commitlint --config .commitlintrc.yml --edit";
+            entry = "${pkgs-unstable.commitlint}/bin/commitlint --config .commitlintrc.yml --edit";
             stages = [ "commit-msg" ];
             language = "system";
             pass_filenames = true;
@@ -217,7 +217,7 @@
             # non-zero on any finding including informational. Newer
             # versions default to `--min-severity=low`; mirror that
             # here so the hook is consistent across nixpkgs bumps.
-            entry = "${pkgs.zizmor}/bin/zizmor --min-severity=low";
+            entry = "${pkgs-unstable.zizmor}/bin/zizmor --min-severity=low";
           };
           yamllint = {
             enable = true;
@@ -244,7 +244,7 @@
             enable = true;
             name = "flake-show-fresh";
             description = "flake-show block in docs/reference/flake-outputs.md matches current flake outputs.";
-            entry = "${pkgs.writeShellScript "flake-show-fresh" ''
+            entry = "${pkgs-unstable.writeShellScript "flake-show-fresh" ''
               set -Eeuo pipefail
               IFS=$'\n\t'
               # No-op when running inside a nix build sandbox — the
@@ -260,7 +260,7 @@
               if [[ ! -f scripts/refresh-flake-show.sh || ! -f docs/reference/flake-outputs.md ]]; then
                 exit 0
               fi
-              exec ${pkgs.bash}/bin/bash scripts/refresh-flake-show.sh --check
+              exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-flake-show.sh --check
             ''}";
             files = "^(flake\\.nix|flake\\.lock|linpeas-pin\\.json|docs/reference/flake-outputs\\.md|scripts/refresh-flake-show\\.sh)$";
             pass_filenames = false;
@@ -274,12 +274,12 @@
             enable = true;
             name = "just-recipes-fresh";
             description = "README just-recipes block matches the justfile.";
-            entry = "${pkgs.writeShellScript "just-recipes-fresh" ''
+            entry = "${pkgs-unstable.writeShellScript "just-recipes-fresh" ''
               set -Eeuo pipefail
               IFS=$'\n\t'
               if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-              export PATH="${pkgs.just}/bin:$PATH"
-              exec ${pkgs.bash}/bin/bash scripts/refresh-just-recipes.sh --check
+              export PATH="${pkgs-unstable.just}/bin:$PATH"
+              exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-just-recipes.sh --check
             ''}";
             files = "^(justfile|README\\.md|scripts/refresh-just-recipes\\.sh)$";
             pass_filenames = false;
@@ -289,11 +289,11 @@
             enable = true;
             name = "precommit-table-fresh";
             description = "Hook table in docs/development/git.md matches the flake hook manifest.";
-            entry = "${pkgs.writeShellScript "precommit-table-fresh" ''
+            entry = "${pkgs-unstable.writeShellScript "precommit-table-fresh" ''
               set -Eeuo pipefail
               IFS=$'\n\t'
               if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-              exec ${pkgs.bash}/bin/bash scripts/refresh-precommit-table.sh --check
+              exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-precommit-table.sh --check
             ''}";
             files = "^(flake\\.nix|docs/development/git\\.md|scripts/refresh-precommit-table\\.sh)$";
             pass_filenames = false;
@@ -303,12 +303,12 @@
             enable = true;
             name = "ci-summary-fresh";
             description = "README CI summary matches required-checks.md and the category map.";
-            entry = "${pkgs.writeShellScript "ci-summary-fresh" ''
+            entry = "${pkgs-unstable.writeShellScript "ci-summary-fresh" ''
               set -Eeuo pipefail
               IFS=$'\n\t'
               if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-              export PATH="${pkgs.yq-go}/bin:$PATH"
-              exec ${pkgs.bash}/bin/bash scripts/refresh-ci-summary.sh --check
+              export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+              exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-ci-summary.sh --check
             ''}";
             files = "^(README\\.md|docs/security/required-checks\\.md|docs/_data/ci-check-categories\\.yml|scripts/refresh-ci-summary\\.sh)$";
             pass_filenames = false;
@@ -322,11 +322,11 @@
             enable = true;
             name = "uses-sha-pinned";
             description = "Every uses: reference is SHA-pinned.";
-            entry = "${pkgs.writeShellScript "uses-sha-pinned-hook" ''
+            entry = "${pkgs-unstable.writeShellScript "uses-sha-pinned-hook" ''
               set -Eeuo pipefail
               IFS=$'\n\t'
               if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-              exec ${pkgs.bash}/bin/bash scripts/check-uses-sha-pinned.sh
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-uses-sha-pinned.sh
             ''}";
             files = "^(\\.github/workflows/.*\\.ya?ml|\\.github/actions/.*\\.ya?ml|scripts/check-uses-sha-pinned\\.sh)$";
             pass_filenames = false;
@@ -340,12 +340,12 @@
             enable = true;
             name = "harden-runner-first";
             description = "Every workflow job's first step is step-security/harden-runner.";
-            entry = "${pkgs.writeShellScript "harden-runner-first-hook" ''
+            entry = "${pkgs-unstable.writeShellScript "harden-runner-first-hook" ''
               set -Eeuo pipefail
               IFS=$'\n\t'
               if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-              export PATH="${pkgs.yq-go}/bin:$PATH"
-              exec ${pkgs.bash}/bin/bash scripts/check-harden-runner-first.sh
+              export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-harden-runner-first.sh
             ''}";
             files = "^(\\.github/workflows/.*\\.ya?ml|scripts/check-harden-runner-first\\.sh)$";
             pass_filenames = false;
@@ -358,12 +358,12 @@
             enable = true;
             name = "min-permissions";
             description = "Top-level workflow permissions empty; each job declares its own scopes.";
-            entry = "${pkgs.writeShellScript "min-permissions-hook" ''
+            entry = "${pkgs-unstable.writeShellScript "min-permissions-hook" ''
               set -Eeuo pipefail
               IFS=$'\n\t'
               if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-              export PATH="${pkgs.yq-go}/bin:$PATH"
-              exec ${pkgs.bash}/bin/bash scripts/check-min-permissions.sh
+              export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-min-permissions.sh
             ''}";
             files = "^(\\.github/workflows/.*\\.ya?ml|scripts/check-min-permissions\\.sh)$";
             pass_filenames = false;
@@ -378,12 +378,12 @@
             enable = true;
             name = "check-jsonschema";
             description = "Schema-shape validation of repo config (renovate.json, workflows, actions).";
-            entry = "${pkgs.writeShellScript "check-jsonschema-hook" ''
+            entry = "${pkgs-unstable.writeShellScript "check-jsonschema-hook" ''
               set -Eeuo pipefail
               IFS=$'\n\t'
               if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-              export PATH="${pkgs.check-jsonschema}/bin:$PATH"
-              exec ${pkgs.bash}/bin/bash scripts/check-jsonschema.sh
+              export PATH="${pkgs-unstable.check-jsonschema}/bin:$PATH"
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-jsonschema.sh
             ''}";
             files = "^(renovate\\.json|\\.markdownlint\\.json|\\.github/workflows/.*\\.ya?ml|\\.github/actions/.*\\.ya?ml|scripts/check-jsonschema\\.sh)$";
             pass_filenames = false;
@@ -396,11 +396,11 @@
             enable = true;
             name = "pin-diff-isolated";
             description = "Only scripts/bump-linpeas.sh mutates linpeas-pin.json.";
-            entry = "${pkgs.writeShellScript "pin-diff-isolated-hook" ''
+            entry = "${pkgs-unstable.writeShellScript "pin-diff-isolated-hook" ''
               set -Eeuo pipefail
               IFS=$'\n\t'
               if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-              exec ${pkgs.bash}/bin/bash scripts/check-pin-diff-isolated.sh
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-pin-diff-isolated.sh
             ''}";
             files = "^(scripts/.*\\.sh)$";
             pass_filenames = false;
@@ -416,11 +416,11 @@
             enable = true;
             name = "gh-api-version-header";
             description = "Every gh api / api.github.com call in scripts passes an X-GitHub-Api-Version header.";
-            entry = "${pkgs.writeShellScript "gh-api-version-header-hook" ''
+            entry = "${pkgs-unstable.writeShellScript "gh-api-version-header-hook" ''
               set -Eeuo pipefail
               IFS=$'\n\t'
               if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-              exec ${pkgs.bash}/bin/bash scripts/check-gh-api-version-header.sh
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-gh-api-version-header.sh
             ''}";
             files = "^(scripts/.*\\.sh)$";
             pass_filenames = false;
@@ -434,11 +434,11 @@
             enable = true;
             name = "pre-commit-hooks-sha-parity";
             description = "The pre-commit-hooks input SHA in flake.nix matches flake.lock locked.rev.";
-            entry = "${pkgs.writeShellScript "pre-commit-hooks-sha-parity-hook" ''
+            entry = "${pkgs-unstable.writeShellScript "pre-commit-hooks-sha-parity-hook" ''
               set -Eeuo pipefail
               IFS=$'\n\t'
               if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-              exec ${pkgs.bash}/bin/bash scripts/check-pre-commit-hooks-sha-parity.sh
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-pre-commit-hooks-sha-parity.sh
             ''}";
             files = "^(flake\\.nix|flake\\.lock|scripts/check-pre-commit-hooks-sha-parity\\.sh)$";
             pass_filenames = false;
@@ -451,11 +451,11 @@
             enable = true;
             name = "check-orphan-invariants";
             description = "Every docs/ file has an invariant-index entry and vice versa.";
-            entry = "${pkgs.writeShellScript "check-orphan-invariants-hook" ''
+            entry = "${pkgs-unstable.writeShellScript "check-orphan-invariants-hook" ''
               set -Eeuo pipefail
               IFS=$'\n\t'
               if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-              exec ${pkgs.bash}/bin/bash scripts/check-orphan-invariants.sh
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-orphan-invariants.sh
             ''}";
             files = "^(docs/invariant-index\\.md|docs/.*\\.md|scripts/check-orphan-invariants\\.sh)$";
             pass_filenames = false;
@@ -468,11 +468,11 @@
             enable = true;
             name = "check-doc-anchors";
             description = "Every markdown #anchor link resolves to a heading slug in its target file.";
-            entry = "${pkgs.writeShellScript "check-doc-anchors-hook" ''
+            entry = "${pkgs-unstable.writeShellScript "check-doc-anchors-hook" ''
               set -Eeuo pipefail
               IFS=$'\n\t'
               if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-              exec ${pkgs.bash}/bin/bash scripts/check-doc-anchors.sh
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-doc-anchors.sh
             ''}";
             files = "^(README\\.md|docs/.*\\.md|scripts/check-doc-anchors\\.sh)$";
             pass_filenames = false;

@@ -56,6 +56,9 @@ jobs:
         with:
           client-id: ${{ vars.SETTINGS_DRIFT_APP_CLIENT_ID }}
           private-key: ${{ secrets.SETTINGS_DRIFT_APP_PRIVATE_KEY }}
+          # Least-privilege scope: read-only administration access to probe
+          # allowed-actions API. No write permissions needed.
+          permission-administration: read
 
       - name: probe live allowed-actions API matches doc
         id: probe
