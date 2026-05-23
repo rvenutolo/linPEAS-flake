@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ lib, pkgs, ... }:
 {
   projectRootFile = "flake.nix";
 
@@ -46,14 +46,26 @@
         ".envrc"
       ];
     };
-    # `just --fmt --unstable` formats the top-level `justfile`. The
-    # pinned `just` (1.43.1) hardcodes a 4-space recipe indent with no
-    # `--indentation` flag, so `.editorconfig` declares
-    # `[justfile] indent_size = 4` to match the formatter output.
-    just.enable = true;
+    # `just --fmt --unstable --indentation 2` formats the top-level
+    # `justfile` to match the repo-wide 2-space convention.
+    just = {
+      enable = true;
+    };
     # TOML formatter — covers `lychee.toml` and `_typos.toml`.
     taplo.enable = true;
   };
+
+  # The treefmt-nix `just` module does not expose `indent_size`, so
+  # override the bash-wrapper options to pass `--indentation 2`.
+  settings.formatter.just.options = lib.mkForce [
+    "-euc"
+    ''
+      for f in "$@"; do
+        ${lib.getExe pkgs.just} --fmt --unstable --indentation "  " --justfile "$f"
+      done
+    ''
+    "--"
+  ];
 
   settings.global.excludes = [
     "LICENSE"
