@@ -41,6 +41,21 @@ Adds `linpeas` to your Nix profile. Upgrade with `nix profile upgrade linpeas`.
 }
 ```
 
+## Platform support
+
+The flake declares packages for all four systems in `flake-utils.lib.eachDefaultSystem`. CI coverage varies:
+
+| System           | Flake builds | CI tested                                  |
+| ---------------- | ------------ | ------------------------------------------ |
+| `x86_64-linux`   | yes          | yes (`ubuntu-latest`)                      |
+| `aarch64-linux`  | yes          | yes (`ubuntu-24.04-arm`)                   |
+| `aarch64-darwin` | yes          | yes (`macos-latest`)                       |
+| `x86_64-darwin`  | yes          | **no** — no GitHub-hosted Intel-mac runner |
+
+`x86_64-darwin` is declared because the upstream script is portable bash and is expected to work, but no automated test exercises it. If you run on an Intel Mac and hit a failure, please open an issue.
+
+The OCI image (`linpeas-image`) and portable bundle (`linpeas-bundle`) are Linux-only by design — containers run a Linux kernel regardless of host OS.
+
 ## Pin / version
 
 The currently pinned upstream tag is `{{ dashboard.pin.version }}`. See the [Dashboard](../dashboard.md) for full pin metadata.

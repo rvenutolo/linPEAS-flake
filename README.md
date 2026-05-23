@@ -216,21 +216,21 @@ distinction between build-provenance attestations and content trust.
 ├───checks
 │   ├───aarch64-darwin
 │   │   ├───formatting: derivation 'treefmt-check'
-│   │   ├───linpeas-build: derivation 'linpeas-20260510-cd4bd619'
+│   │   ├───linpeas-build: derivation 'linpeas-20260521-859cab5f'
 │   │   └───pre-commit: derivation 'pre-commit-run'
 │   ├───aarch64-linux
 │   │   ├───formatting: derivation 'treefmt-check'
-│   │   ├───linpeas-build: derivation 'linpeas-20260510-cd4bd619'
-│   │   ├───linpeas-bundle-build: derivation 'linpeas-bundle-20260510-cd4bd619'
+│   │   ├───linpeas-build: derivation 'linpeas-20260521-859cab5f'
+│   │   ├───linpeas-bundle-build: derivation 'linpeas-bundle-20260521-859cab5f'
 │   │   └───pre-commit: derivation 'pre-commit-run'
 │   ├───x86_64-darwin
 │   │   ├───formatting: derivation 'treefmt-check'
-│   │   ├───linpeas-build: derivation 'linpeas-20260510-cd4bd619'
+│   │   ├───linpeas-build: derivation 'linpeas-20260521-859cab5f'
 │   │   └───pre-commit: derivation 'pre-commit-run'
 │   └───x86_64-linux
 │       ├───formatting: derivation 'treefmt-check'
-│       ├───linpeas-build: derivation 'linpeas-20260510-cd4bd619'
-│       ├───linpeas-bundle-build: derivation 'linpeas-bundle-20260510-cd4bd619'
+│       ├───linpeas-build: derivation 'linpeas-20260521-859cab5f'
+│       ├───linpeas-bundle-build: derivation 'linpeas-bundle-20260521-859cab5f'
 │       └───pre-commit: derivation 'pre-commit-run'
 ├───devShells
 │   ├───aarch64-darwin
@@ -250,23 +250,23 @@ distinction between build-provenance attestations and content trust.
 │   └───default: Nixpkgs overlay
 └───packages
     ├───aarch64-darwin
-    │   ├───default: package 'linpeas-20260510-cd4bd619'
-    │   └───linpeas: package 'linpeas-20260510-cd4bd619'
+    │   ├───default: package 'linpeas-20260521-859cab5f'
+    │   └───linpeas: package 'linpeas-20260521-859cab5f'
     ├───aarch64-linux
-    │   ├───default: package 'linpeas-20260510-cd4bd619'
-    │   ├───linpeas: package 'linpeas-20260510-cd4bd619'
-    │   ├───linpeas-bundle: package 'linpeas-bundle-20260510-cd4bd619'
+    │   ├───default: package 'linpeas-20260521-859cab5f'
+    │   ├───linpeas: package 'linpeas-20260521-859cab5f'
+    │   ├───linpeas-bundle: package 'linpeas-bundle-20260521-859cab5f'
     │   ├───linpeas-image: package 'linpeas.tar.gz'
-    │   └───site: package 'linpeas-flake-site-20260510-cd4bd619'
+    │   └───site: package 'linpeas-flake-site-20260521-859cab5f'
     ├───x86_64-darwin
-    │   ├───default: package 'linpeas-20260510-cd4bd619'
-    │   └───linpeas: package 'linpeas-20260510-cd4bd619'
+    │   ├───default: package 'linpeas-20260521-859cab5f'
+    │   └───linpeas: package 'linpeas-20260521-859cab5f'
     └───x86_64-linux
-        ├───default: package 'linpeas-20260510-cd4bd619'
-        ├───linpeas: package 'linpeas-20260510-cd4bd619'
-        ├───linpeas-bundle: package 'linpeas-bundle-20260510-cd4bd619'
+        ├───default: package 'linpeas-20260521-859cab5f'
+        ├───linpeas: package 'linpeas-20260521-859cab5f'
+        ├───linpeas-bundle: package 'linpeas-bundle-20260521-859cab5f'
         ├───linpeas-image: package 'linpeas.tar.gz'
-        └───site: package 'linpeas-flake-site-20260510-cd4bd619'
+        └───site: package 'linpeas-flake-site-20260521-859cab5f'
 ```
 
 <!-- END flake-show -->
