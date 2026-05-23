@@ -63,9 +63,9 @@ jobs:
           IFS=$'\n\t'
           for i in 1 2 3 4 5 6; do
             if gh release download "${TAG}" \
-                 --repo rvenutolo/linPEAS-flake \
-                 --pattern linpeas-pin.json \
-                 --clobber; then
+                --repo rvenutolo/linPEAS-flake \
+                --pattern linpeas-pin.json \
+                --clobber; then
               break
             fi
             printf 'assets not yet visible, retry %d/6\n' "${i}" >&2
@@ -202,10 +202,10 @@ jobs:
               | awk '{print "sha256:" $1}'
           )"
           if ! nix run nixpkgs#cosign -- verify \
-                 --certificate-identity "${COSIGN_IDENTITY}" \
-                 --certificate-oidc-issuer "${COSIGN_OIDC_ISSUER}" \
-                 "ghcr.io/rvenutolo/linpeas@${ghcr_index_digest}" \
-                 > /dev/null 2>&1; then
+              --certificate-identity "${COSIGN_IDENTITY}" \
+              --certificate-oidc-issuer "${COSIGN_OIDC_ISSUER}" \
+              "ghcr.io/rvenutolo/linpeas@${ghcr_index_digest}" \
+              > /dev/null 2>&1; then
             printf 'no cosign signature on ghcr index %s; treating release as pre-cosign and skipping\n' \
               "${ghcr_index_digest}" >&2
             exit 0

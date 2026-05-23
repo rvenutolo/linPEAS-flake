@@ -66,7 +66,7 @@ When the ruleset's required-check list changes:
     ```sh
     gh api repos/rvenutolo/linPEAS-flake/rules/branches/main \
       --jq '.[] | select(.type=="required_status_checks")
-                 | .parameters.required_status_checks[].context'
+                | .parameters.required_status_checks[].context'
     ```
 
     The ruleset id (for `PUT rulesets/<id>` updates) can be discovered with:

@@ -224,7 +224,7 @@ function main() {
               upstream_date: $up,
               lag_hours: (
                 ((($r.published_at | fromdateiso8601)
-                 - ($up | fromdateiso8601)) / 3600)
+                - ($up | fromdateiso8601)) / 3600)
                 | (. * 10 | round) / 10
               ),
             }
