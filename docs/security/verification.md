@@ -155,9 +155,9 @@ attests via `actions/attest-sbom`.
 
 In addition to `actions/attest-build-provenance` + `actions/attest-sbom`
 (verifiable via `gh attestation verify`), `release-on-bump.yml` signs
-the bundle and every published image digest with Sigstore cosign in
-keyless mode. Signatures are minted with an ephemeral Fulcio cert
-issued against the workflow's OIDC token, then recorded in Rekor.
+every published image digest with Sigstore cosign in keyless mode.
+Signatures are minted with an ephemeral Fulcio cert issued against the
+workflow's OIDC token, then recorded in Rekor.
 
 Signed artifacts per release:
 
