@@ -225,7 +225,7 @@ nix flake check --print-build-logs 2>&1 | tail -30
 
 All pre-commit hooks must pass: `actionlint`, `deadnix`, `nixpkgs-fmt`,
 `treefmt`, `shellcheck`, `statix`, `uses-sha-pinned`, `yamllint`,
-`zizmor`, `readme-flake-show-fresh`.
+`zizmor`, `flake-show-fresh`.
 
 ### 9. Commit the refresh
 

@@ -62,7 +62,7 @@ jobs:
             } >> "${GITHUB_OUTPUT}"
           fi
 
-      - name: refresh README flake-show block
+      - name: refresh flake-show block
         if: steps.bump.outputs.changed == 'true'
         run: ./scripts/refresh-flake-show.sh
 
@@ -163,7 +163,7 @@ jobs:
           base_sha="$(gh api "repos/${REPO}/git/refs/heads/main" \
             --jq .object.sha --header "${api_header}")"
           pin_blob_sha="$(git rev-parse "origin/main:linpeas-pin.json")"
-          readme_blob_sha="$(git rev-parse "origin/main:README.md")"
+          flake_outputs_blob_sha="$(git rev-parse "origin/main:docs/reference/flake-outputs.md")"
 
           # Delete stale branch ref if a prior failed run left one behind.
           if gh api "repos/${REPO}/git/refs/heads/${branch}" \
@@ -187,14 +187,14 @@ jobs:
             --field branch="${branch}" \
             --header "${api_header}" >/dev/null
 
-          # Commit 2: README.md (flake-show block refresh). README's blob
-          # SHA on the bump branch still equals main's (only linpeas-pin
-          # changed in commit 1), so reuse readme_blob_sha.
-          readme_b64="$(base64 --wrap=0 README.md)"
-          gh api --method PUT "repos/${REPO}/contents/README.md" \
-            --field message="chore: refresh README flake-show for linpeas ${NEW}" \
-            --field content="${readme_b64}" \
-            --field sha="${readme_blob_sha}" \
+          # Commit 2: docs/reference/flake-outputs.md (flake-show block refresh).
+          # The doc's blob SHA on the bump branch still equals main's (only
+          # linpeas-pin changed in commit 1), so reuse flake_outputs_blob_sha.
+          flake_outputs_b64="$(base64 --wrap=0 docs/reference/flake-outputs.md)"
+          gh api --method PUT "repos/${REPO}/contents/docs/reference/flake-outputs.md" \
+            --field message="chore: refresh flake-show for linpeas ${NEW}" \
+            --field content="${flake_outputs_b64}" \
+            --field sha="${flake_outputs_blob_sha}" \
             --field branch="${branch}" \
             --header "${api_header}" >/dev/null
 

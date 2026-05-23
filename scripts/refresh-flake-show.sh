@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Replace the content between <!-- BEGIN flake-show --> and <!-- END flake-show -->
-# in README.md with the current `nix flake show --all-systems` output.
+# in docs/reference/flake-outputs.md with the current `nix flake show --all-systems`
+# output.
 #
 # Usage:
-#   scripts/refresh-flake-show.sh            # mutate README.md in place
-#   scripts/refresh-flake-show.sh --check    # exit 1 if README.md would change;
+#   scripts/refresh-flake-show.sh            # mutate docs/reference/flake-outputs.md in place
+#   scripts/refresh-flake-show.sh --check    # exit 1 if the doc would change;
 #                                            #   do NOT mutate the working tree
 
 set -Eeuo pipefail
@@ -45,31 +46,31 @@ function main() {
   require_tool cmp
   require_tool sed
 
-  local repo_root readme
+  local repo_root doc
   repo_root="$(git rev-parse --show-toplevel)"
-  readme="${repo_root}/README.md"
-  readonly repo_root readme
+  doc="${repo_root}/docs/reference/flake-outputs.md"
+  readonly repo_root doc
 
-  if [[ ! -f ${readme} ]]; then
-    log_err "${readme} not found"
+  if [[ ! -f ${doc} ]]; then
+    log_err "${doc} not found"
     exit 1
   fi
-  if ! grep --quiet '<!-- BEGIN flake-show -->' "${readme}"; then
-    log_err 'BEGIN marker missing from README.md'
+  if ! grep --quiet '<!-- BEGIN flake-show -->' "${doc}"; then
+    log_err 'BEGIN marker missing from docs/reference/flake-outputs.md'
     exit 1
   fi
-  if ! grep --quiet '<!-- END flake-show -->' "${readme}"; then
-    log_err 'END marker missing from README.md'
+  if ! grep --quiet '<!-- END flake-show -->' "${doc}"; then
+    log_err 'END marker missing from docs/reference/flake-outputs.md'
     exit 1
   fi
 
-  local flake_show_file block_file readme_new
+  local flake_show_file block_file doc_new
   flake_show_file="$(mktemp)"
   block_file="$(mktemp)"
-  readme_new="$(mktemp)"
+  doc_new="$(mktemp)"
   # Use :- defaults so the trap (which fires after main() returns) does not
   # trip set -u when these locals have already gone out of scope.
-  trap 'rm --force -- "${flake_show_file:-}" "${block_file:-}" "${readme_new:-}"' EXIT
+  trap 'rm --force -- "${flake_show_file:-}" "${block_file:-}" "${doc_new:-}"' EXIT
 
   # --no-warn-dirty: suppress "Git tree is dirty" warning that would otherwise
   # leak into the README block and cause flaky --check diffs.
@@ -78,7 +79,7 @@ function main() {
   # detection; sed strips them so the rendered README stays plain text.
   local raw_show
   raw_show="$(mktemp)"
-  trap 'rm --force -- "${flake_show_file:-}" "${block_file:-}" "${readme_new:-}" "${raw_show:-}"' EXIT
+  trap 'rm --force -- "${flake_show_file:-}" "${block_file:-}" "${doc_new:-}" "${raw_show:-}"' EXIT
   nix flake show --all-systems --no-warn-dirty >"${raw_show}" 2>/dev/null
   # Strip ANSI color escapes AND the leading flake-URL header line. The URL
   # contains a per-commit rev (in CI) and a per-checkout absolute path (locally),
@@ -89,7 +90,7 @@ function main() {
 
   # Blank lines between the HTML-comment markers and the fenced code block
   # match mdformat's canonical form. Without them, mdformat would rewrite
-  # the surrounding README on every commit and fight this script.
+  # the surrounding doc on every commit and fight this script.
   {
     printf '<!-- BEGIN flake-show -->\n'
     printf '\n'
@@ -116,21 +117,21 @@ function main() {
       next
     }
     !skip { print }
-  ' "${readme}" >"${readme_new}"
+  ' "${doc}" >"${doc_new}"
 
   if [[ ${check_only} == 'true' ]]; then
     # cmp short-circuits on first byte difference and supports --silent across
     # both GNU and BSD coreutils — diff --quiet is GNU-only.
-    if ! cmp --silent -- "${readme}" "${readme_new}"; then
-      log_err 'README flake-show block is stale. Run scripts/refresh-flake-show.sh and commit.'
+    if ! cmp --silent -- "${doc}" "${doc_new}"; then
+      log_err 'flake-show block in docs/reference/flake-outputs.md is stale. Run scripts/refresh-flake-show.sh and commit.'
       exit 1
     fi
-    log_info 'flake-show block in README.md is up to date'
+    log_info 'flake-show block in docs/reference/flake-outputs.md is up to date'
     return 0
   fi
 
-  mv -- "${readme_new}" "${readme}"
-  log_info 'refreshed flake-show block in README.md'
+  mv -- "${doc_new}" "${doc}"
+  log_info 'refreshed flake-show block in docs/reference/flake-outputs.md'
 }
 
 main "$@"

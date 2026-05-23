@@ -29,7 +29,7 @@ into the Nix store and is `.gitignore`d. Edits go in `flake.nix`'s
 Hooks: actionlint, check-jsonschema, commitizen (commit-msg),
 deadnix, editorconfig-checker, markdownlint, nixfmt-rfc-style,
 statix, typos, yamllint, shellcheck (skipping `justfile`), treefmt,
-zizmor (`--min-severity=low`), readme-flake-show-fresh,
+zizmor (`--min-severity=low`), flake-show-fresh,
 uses-sha-pinned.
 
 ## markdownlint rule disables
@@ -80,7 +80,8 @@ suppressed rule + workflow. Do not raise `--min-severity` above
 Prettier rewrites single-quoted YAML scalars to double-quoted. Run
 `nix fmt` before push, or use double quotes from the start.
 
-## README flake-show auto-block
+## Flake-show auto-block
 
-`scripts/refresh-flake-show.sh` regenerates the auto-block. Pre-commit
-hook `readme-flake-show-fresh` has `NIX_BUILD_TOP` sandbox guard.
+`scripts/refresh-flake-show.sh` regenerates the auto-block in
+[`docs/reference/flake-outputs.md`](../reference/flake-outputs.md). Pre-commit
+hook `flake-show-fresh` has `NIX_BUILD_TOP` sandbox guard.
