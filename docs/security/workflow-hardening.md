@@ -97,3 +97,13 @@ Bash inside Actions `run:` blocks defaults to `-e` off. A failed command in the 
 Single-line `run:` invocations are exempt — they're already a single shell command whose exit status drives the step directly.
 
 Enforced by `scripts/check-run-block-strict.sh`. Wired as the `run-block-strict` required CI job and as a pre-commit hook.
+
+## fork-guard-release
+
+Every workflow job that holds release-grade GITHUB_TOKEN scope includes a fork-guard `if:` clause containing `github.repository == 'rvenutolo/linPEAS-flake'`.
+
+Release-grade scopes are any of: `contents: write`, `packages: write`, `id-token: write`, `attestations: write`. A fork that inherits these workflows can otherwise fire them under its own `GITHUB_TOKEN` (or repo-scoped secrets, if any were configured) — accidentally cutting a release, pushing to the fork's container registry, or minting OIDC tokens. The repository check pins execution to the canonical repo.
+
+GitHub Actions `if:` is job-scoped (no workflow-level syntax), so every release-grade job must carry the guard in its own `if:` expression. Existing `if:` clauses are AND-ed with the repository check.
+
+Enforced by `scripts/check-fork-guard-release.sh`. Wired as the `fork-guard-release` required CI job and as a pre-commit hook.

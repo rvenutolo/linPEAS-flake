@@ -1,0 +1,14 @@
+name: bad-no-if
+on: push
+permissions: {}
+concurrency:
+  group: bad-no-if-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - run: echo release

@@ -83,7 +83,7 @@ jobs:
   deploy:
     name: deploy
     needs: build
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.repository == 'rvenutolo/linPEAS-flake'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

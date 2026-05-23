@@ -39,6 +39,7 @@ verify:
   ./scripts/check-script-has-test.sh; \
   ./scripts/check-ci-job-in-summary.sh; \
   ./scripts/check-run-block-strict.sh; \
+  ./scripts/check-fork-guard-release.sh; \
   ./scripts/check-pr-workflows-no-secrets.sh; \
   ./scripts/check-required-checks-no-paths.sh; \
   ./scripts/check-tag-protection.sh; \
@@ -60,6 +61,7 @@ verify:
   bash tests/check-script-has-test.test.sh; \
   bash tests/check-ci-job-in-summary.test.sh; \
   bash tests/check-run-block-strict.test.sh; \
+  bash tests/check-fork-guard-release.test.sh; \
   bash tests/check-pr-workflows-no-secrets.test.sh; \
   bash tests/check-required-checks-no-paths.test.sh; \
   bash tests/check-tag-protection.test.sh; \

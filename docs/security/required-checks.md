@@ -45,6 +45,7 @@ this file in the same change as any modification to the ruleset.
 | editorconfig                 | ci                | .github/workflows/ci.yml                |
 | lint-pr-title                | pr-title-lint     | .github/workflows/pr-title-lint.yml     |
 | dependency-review            | dependency-review | .github/workflows/dependency-review.yml |
+| fork-guard-release           | ci                | .github/workflows/ci.yml                |
 | gitleaks                     | gitleaks          | .github/workflows/gitleaks.yml          |
 
 ## Path-filter invariant

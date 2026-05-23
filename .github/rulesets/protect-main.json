@@ -45,6 +45,7 @@
           { "context": "dependency-review", "integration_id": 15368 },
           { "context": "editorconfig", "integration_id": 15368 },
           { "context": "flake-check" },
+          { "context": "fork-guard-release", "integration_id": 15368 },
           { "context": "gitleaks", "integration_id": 15368 },
           { "context": "harden-runner-first", "integration_id": 15368 },
           { "context": "image-smoke" },

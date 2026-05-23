@@ -550,6 +550,23 @@
             pass_filenames = false;
             language = "system";
           };
+          # Release-grade jobs include the fork-guard if: clause.
+          # See docs/security/workflow-hardening.md.
+          fork-guard-release = {
+            enable = true;
+            name = "fork-guard-release";
+            description = "Release-grade jobs include github.repository fork guard.";
+            entry = "${pkgs-unstable.writeShellScript "fork-guard-release-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-fork-guard-release.sh
+            ''}";
+            files = "^(\\.github/workflows/.*\\.ya?ml|scripts/check-fork-guard-release\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
           # Schema-shape validation for repo config. Catches typoed
           # keys, wrong-type values, and upstream-removed fields that
           # per-tool linters miss. NIX_BUILD_TOP guard skips inside

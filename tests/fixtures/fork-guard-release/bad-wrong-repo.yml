@@ -1,0 +1,15 @@
+name: bad-wrong-repo
+on: push
+permissions: {}
+concurrency:
+  group: bad-wrong-repo-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  release:
+    if: github.repository == 'someoneelse/different-repo'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - run: echo release

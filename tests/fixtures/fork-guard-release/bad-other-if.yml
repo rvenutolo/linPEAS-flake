@@ -1,0 +1,15 @@
+name: bad-other-if
+on: push
+permissions: {}
+concurrency:
+  group: bad-other-if-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  release:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      attestations: write
+    steps:
+      - run: echo release
