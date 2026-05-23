@@ -6,6 +6,10 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: labeler-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   label:
     name: label

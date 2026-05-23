@@ -1,0 +1,14 @@
+name: good-no-cancel
+on: push
+permissions: {}
+concurrency:
+  group: good-no-cancel-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - run: echo a

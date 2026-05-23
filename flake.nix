@@ -388,6 +388,25 @@
             pass_filenames = false;
             language = "system";
           };
+          # Every workflow declares a top-level concurrency.group so
+          # parallel runs on the same ref don't pile up. Without one,
+          # cron and back-to-back PR pushes can spawn racing runs that
+          # touch shared remote state. See docs/security/workflow-hardening.md.
+          workflow-concurrency = {
+            enable = true;
+            name = "workflow-concurrency";
+            description = "Every workflow declares a top-level concurrency.group.";
+            entry = "${pkgs-unstable.writeShellScript "workflow-concurrency-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-workflow-concurrency.sh
+            ''}";
+            files = "^(\\.github/workflows/.*\\.ya?ml|scripts/check-workflow-concurrency\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
           # Schema-shape validation for repo config. Catches typoed
           # keys, wrong-type values, and upstream-removed fields that
           # per-tool linters miss. NIX_BUILD_TOP guard skips inside

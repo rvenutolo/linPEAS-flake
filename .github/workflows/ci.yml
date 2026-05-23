@@ -911,6 +911,29 @@ jobs:
       - name: enforce job-timeout-minutes
         run: nix develop --command ./scripts/check-job-timeout-minutes.sh
 
+  workflow-concurrency:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3
+      - name: harness passes
+        run: nix develop --command bash tests/check-workflow-concurrency.test.sh
+      - name: enforce workflow-concurrency
+        run: nix develop --command ./scripts/check-workflow-concurrency.sh
+
   check-jsonschema:
     runs-on: ubuntu-latest
     timeout-minutes: 10
