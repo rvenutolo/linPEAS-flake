@@ -16,8 +16,8 @@ Step-by-step procedure to verify a release of this wrapper. None of this trusts 
 - [OCI image CVE scan (Trivy)](#oci-image-cve-scan-trivy)
 - [SBOM attestation](#sbom-attestation)
 - [Cosign keyless signatures](#cosign-keyless-signatures)
-    - [Identity pinning](#identity-pinning)
-    - [User-facing verification commands](#user-facing-verification-commands)
+  - [Identity pinning](#identity-pinning)
+  - [User-facing verification commands](#user-facing-verification-commands)
 - [gh-attestation-repo invariant](#gh-attestation-repo-invariant)
 - [cosign-identity-pinned invariant](#cosign-identity-pinned-invariant)
 
