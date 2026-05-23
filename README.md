@@ -27,13 +27,20 @@ The [Renovate dependency dashboard](https://github.com/rvenutolo/linPEAS-flake/i
 
 ## Usage
 
+Each install artifact serves a different scenario. Pick the one that
+matches your environment.
+
 ### With Nix
+
+**`nix run`** — ad-hoc host audit on a Nix-enabled machine. No
+install, no state.
 
 ```sh
 nix run github:rvenutolo/linPEAS-flake -- -a
 ```
 
-Persistent install:
+**`nix profile install`** — persistent install on a Nix-enabled
+machine. `linpeas` ends up on `$PATH`.
 
 ```sh
 nix profile install github:rvenutolo/linPEAS-flake
@@ -41,27 +48,38 @@ nix profile install github:rvenutolo/linPEAS-flake
 
 ### With Docker
 
-The image audits the **container** it runs in (container hardening, CI base-image
-scanning, forensics on a mounted captured filesystem). For a host audit, prefer
-the Nix or bundle install — or run with host namespaces explicitly. See
-[`docs/install/docker.md`](docs/install/docker.md) for use-case framing and the
-host-audit invocation.
+**Host audit** — use when Docker is the only install vehicle on the
+host. Joins host namespaces and bind-mounts rootfs read-only so
+linpeas sees the host instead of the container.
 
 ```sh
-# Docker Hub (default registry — no prefix needed)
-docker run --rm rvenutolo/linpeas:latest -a
-
-# Or pull explicitly from GitHub Container Registry
-docker run --rm ghcr.io/rvenutolo/linpeas:latest -a
+docker run --rm \
+  --pid=host --net=host --ipc=host --userns=host --privileged \
+  -v /:/host:ro \
+  rvenutolo/linpeas:latest -d /host
 ```
 
-Both registries serve the **same** image bytes — every release pushes to both
-with identical content digests and matching SLSA attestations.
+**Container / sidecar audit** — audit a *different* running
+container. Real use cases: CI hardening, base-image review, forensics
+on a running workload. Joins the target container's PID and network
+namespaces.
+
+```sh
+docker run --rm \
+  --pid=container:<target> --net=container:<target> \
+  rvenutolo/linpeas:latest -a
+```
+
+Both registries (`docker.io/rvenutolo/linpeas` and
+`ghcr.io/rvenutolo/linpeas`) serve the **same** image bytes — every
+release pushes to both with identical content digests and matching
+SLSA attestations. See [`docs/install/docker.md`](docs/install/docker.md)
+for the full use-case matrix.
 
 ### Without Nix or Docker (portable bundle)
 
-The bundle is just `linpeas.sh` with `#!/usr/bin/env bash` — same script, single
-arch-agnostic asset.
+For locked-down hosts where neither Nix nor Docker is allowed. Single
+arch-agnostic script — just `linpeas.sh` with `#!/usr/bin/env bash`.
 
 ```sh
 curl -L https://github.com/rvenutolo/linPEAS-flake/releases/latest/download/linpeas-bundle.sh -o linpeas
@@ -70,6 +88,9 @@ chmod +x linpeas
 ```
 
 ### As a flake input
+
+Pull linpeas as a dependency from another flake (e.g. a NixOS config
+or dev shell).
 
 ```nix
 {
@@ -81,10 +102,13 @@ chmod +x linpeas
 }
 ```
 
-For a full guide (plain flake + flake-parts, pinning, no binary cache),
-see [`docs/install/consume-from-flake.md`](docs/install/consume-from-flake.md).
+For a full guide (plain flake + flake-parts, pinning, no binary
+cache), see [`docs/install/consume-from-flake.md`](docs/install/consume-from-flake.md).
 
 ### As an overlay
+
+Expose `pkgs.linpeas` inside your nixpkgs set so existing `pkgs.*`
+consumers can reference it.
 
 ```nix
 {
@@ -94,7 +118,8 @@ see [`docs/install/consume-from-flake.md`](docs/install/consume-from-flake.md).
 }
 ```
 
-See [`docs/install/consume-from-flake.md`](docs/install/consume-from-flake.md) for pinning guidance that applies to overlay use as well.
+See [`docs/install/consume-from-flake.md`](docs/install/consume-from-flake.md)
+for pinning guidance that applies to overlay use as well.
 
 ## How updates work
 
@@ -241,6 +266,7 @@ distinction between build-provenance attestations and content trust.
 │   │   └───default: development environment 'nix-shell'
 │   └───x86_64-linux
 │       └───default: development environment 'nix-shell'
+├───devTooling: unknown
 ├───formatter
 │   ├───aarch64-darwin: package 'treefmt'
 │   ├───aarch64-linux: package 'treefmt'
