@@ -123,18 +123,33 @@ main, every PR, and a weekly cron (Mon 13:00 UTC). Required check named
 
 `ci.yml`'s `image-cve-scan` job uploads SARIF (CRITICAL + HIGH) to
 code-scanning, then post-processes the SARIF to count CRITICAL findings
-and **fails the job** when count > 0. On push to main, an
-`image-cve-scan-notify` follow-on job (`needs: image-cve-scan`,
-`if: failure() + event_name=='push'`) opens / updates a deduped issue
-via `notify-workflow-result` (label: `image-cve-critical`).
+and **fails the job** when count > 0. The job emits an
+`outputs.has-finding` boolean (`'true'` iff the count step ran and
+returned a non-zero count) so notify jobs can distinguish a real
+CRITICAL CVE from an infrastructure failure that prevented the scan.
+
+On push to main, two follow-on jobs (`needs: image-cve-scan`,
+`if: failure() + event_name=='push'`) gate on that output and open /
+update deduped issues via `notify-workflow-result`:
+
+- `image-cve-scan-notify-finding` (label: `image-cve-critical`) — real
+    CRITICAL CVE reported by Trivy. Remediation: bump `nixpkgs`.
+
+- `image-cve-scan-notify-infra` (label: `image-cve-infra`) — job failed
+    before Trivy produced a CRITICAL count (build, scan, or SARIF
+    upload broke). Remediation: inspect the failing step; if transient,
+    close once the next push is green.
 
 - NOT in required-checks (intentional — `update-flake-lock` must still
     land even if a CVE is present, with explicit maintainer awareness).
+
 - Trivy's own `exit-code: "0"` + `ignore-unfixed: true` intentional;
     the CRITICAL-fail decision lives in the `fail on CRITICAL findings`
     step so the SARIF upload always runs.
+
 - Prevention path: nixpkgs auto-bump via `update-flake-lock`. CRITICAL
     finding → bump nixpkgs, then rebuild the OCI image.
+
 - CRITICAL threshold is hardcoded to CVSS `>= 9.0` per GitHub's current
     Code Scanning mapping. The `jq tonumber? // 0` guard drops non-numeric
     SARIF severities (e.g. textual `"high"` from some scanners) instead

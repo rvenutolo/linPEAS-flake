@@ -9,10 +9,16 @@ name: codeql
 #
 # Not in branch protection; failure of this workflow does NOT block
 # merge. The `analyze` step is invoked with `fail-on: critical`, so a
-# CRITICAL finding fails the job and — on push to main — the `notify`
-# job opens a deduped issue via `notify-workflow-result`. Findings
-# below CRITICAL still upload to the Security tab for maintainer
-# review. See SECURITY.md "Supply-chain posture monitoring".
+# CRITICAL finding fails the job and — on push to main — the
+# `notify-finding` job opens a deduped issue via
+# `notify-workflow-result`. If the job fails before `analyze` runs
+# (e.g. checkout/init failure), `notify-infra` opens a separate, less
+# alarming issue so transient infrastructure flakes do not page as
+# CRITICAL findings. Classification is driven by
+# `needs.analyze.outputs.has-finding`, which is `'true'` iff the
+# `analyze` step itself ran and failed. Findings below CRITICAL still
+# upload to the Security tab for maintainer review. See SECURITY.md
+# "Supply-chain posture monitoring".
 
 on:
   pull_request:
@@ -38,6 +44,13 @@ jobs:
       contents: read
       security-events: write # upload-sarif
       actions: read # read other workflows in repo
+    # `has-finding` is `'true'` only when the `analyze` step ran and
+    # failed (i.e. CodeQL itself rejected the run on a CRITICAL
+    # finding). Any earlier failure (checkout, init) leaves the
+    # `analyze` step `skipped`, which evaluates to `'false'` and is
+    # classified as an infra failure by the notify jobs below.
+    outputs:
+      has-finding: ${{ steps.analyze.outcome == 'failure' }}
     steps:
       - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
         with:
@@ -52,6 +65,7 @@ jobs:
           languages: actions
 
       - name: analyze
+        id: analyze
         uses: github/codeql-action/analyze@458d36d7d4f47d0dd16ca424c1d3cda0060f1360 # v3
         with:
           category: "/language:actions"
@@ -60,10 +74,11 @@ jobs:
           # to the Security tab.
           fail-on: critical
 
-  notify:
-    name: notify
+  # Real CRITICAL finding: analyze ran and failed.
+  notify-finding:
+    name: notify (finding)
     needs: analyze
-    if: always() && github.event_name == 'push' && needs.analyze.result == 'failure'
+    if: always() && github.event_name == 'push' && needs.analyze.result == 'failure' && needs.analyze.outputs.has-finding == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -89,4 +104,43 @@ jobs:
 
             Remediation: review the finding in the Security tab and apply
             the suggested fix to the offending workflow file.
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  # Infrastructure failure: analyze never ran (checkout/init failed).
+  # Filed under a distinct label so transient runner / network / token
+  # issues are not paged as CRITICAL security findings.
+  notify-infra:
+    name: notify (infra)
+    needs: analyze
+    if: always() && github.event_name == 'push' && needs.analyze.result == 'failure' && needs.analyze.outputs.has-finding != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      issues: write
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: failure
+          label: codeql-infra
+          label-color: fbca04
+          label-description: codeql workflow infrastructure failure (no security finding)
+          title: "codeql: infrastructure failure (analyze did not run)"
+          body: |
+            `codeql / analyze` failed before the `analyze` step executed
+            (e.g. checkout, harden-runner, or CodeQL init). No CRITICAL
+            security finding was reported — the SARIF was never produced.
+
+            - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            Remediation: inspect the failing step in the run log. If the
+            cause is transient (auth, network), close the issue once the
+            next scheduled / push run is green. If the cause is
+            persistent (action breakage, permissions drift), fix or pin
+            accordingly.
           github-token: ${{ secrets.GITHUB_TOKEN }}
