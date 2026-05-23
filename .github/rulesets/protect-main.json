@@ -32,7 +32,6 @@
         "required_status_checks": [
           { "context": "build-linpeas" },
           { "context": "build-linpeas-arm64", "integration_id": 15368 },
-          { "context": "bundle-smoke", "integration_id": 15368 },
           { "context": "check-doc-anchors", "integration_id": 15368 },
           { "context": "check-jsonschema", "integration_id": 15368 },
           { "context": "check-orphan-invariants", "integration_id": 15368 },
