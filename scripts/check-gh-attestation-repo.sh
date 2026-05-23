@@ -132,6 +132,13 @@ extract_invocations() {
 failed=0
 for f in "${paths[@]}"; do
   [[ -f ${f} ]] || continue
+  # Skip self: this script contains literal "gh attestation verify"
+  # in its detection regex and would otherwise flag itself.
+  case "${f}" in
+  */scripts/check-gh-attestation-repo.sh | scripts/check-gh-attestation-repo.sh)
+    continue
+    ;;
+  esac
   while IFS= read -r invocation; do
     [[ -z ${invocation} ]] && continue
     # Skip prose: backticks-only mentions, comments-with-no-real-cmd.
