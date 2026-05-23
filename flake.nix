@@ -3,14 +3,15 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     treefmt-nix = {
       url = "github:numtide/treefmt-nix";
-      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nixpkgs.follows = "nixpkgs-unstable";
     };
     pre-commit-hooks = {
       url = "github:cachix/git-hooks.nix/61ab0e80d9c7ab14c256b5b453d8b3fb0189ba0a";
-      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nixpkgs.follows = "nixpkgs-unstable";
     };
   };
 
@@ -18,6 +19,7 @@
     {
       self,
       nixpkgs,
+      nixpkgs-unstable,
       flake-utils,
       treefmt-nix,
       pre-commit-hooks,
@@ -27,6 +29,7 @@
       system:
       let
         pkgs = import nixpkgs { inherit system; };
+        pkgs-unstable = import nixpkgs-unstable { inherit system; };
         # Read pin file with eager invariant checks. Anything outside the
         # expected upstream shape (peass-ng release URL, YYYYMMDD-<hex> tag
         # format) fails flake eval immediately — pin.version is interpolated
@@ -157,6 +160,9 @@
           deadnix = {
             enable = true;
             description = "Unused Nix bindings.";
+            # flake.nix carries pkgs-unstable as a staging binding;
+            # deadnix would flag it until a later task wires it up.
+            excludes = [ "^flake\\.nix$" ];
           };
           statix = {
             enable = true;
