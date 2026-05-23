@@ -30,6 +30,7 @@ live in `.claude/CLAUDE.md` (untracked).
 - **pull_request_target forbidden** — no workflow uses the `pull_request_target` trigger. → [security/workflow-hardening.md](security/workflow-hardening.md)
 - **scripts/\*.sh shebang + pipefail** — every script under `scripts/` starts with `#!/usr/bin/env bash` and uses `set -Eeuo pipefail`. → [security/workflow-hardening.md](security/workflow-hardening.md)
 - **check-script ↔ test pairing** — every `scripts/check-*.sh` has a matching `tests/check-*.test.sh` and vice versa. → [security/workflow-hardening.md](security/workflow-hardening.md)
+- **ci.yml job ↔ summary category** — every required ci.yml job appears in `ci-check-categories.yml`; every category entry points at a real job. → [security/workflow-hardening.md](security/workflow-hardening.md)
 - **GITHUB_TOKEN min-permissions** — top-level `permissions: {}`; every job declares own scopes. → [security/min-permissions.md](security/min-permissions.md)
 - **protect-main ruleset** — in-tree mirror + drift-check. → [security/required-checks.md](security/required-checks.md)
 - **Repo-settings posture** — three binding flags. → [security/settings-posture.md](security/settings-posture.md)
