@@ -42,6 +42,7 @@ verify:
   ./scripts/check-fork-guard-release.sh; \
   ./scripts/check-gh-attestation-repo.sh; \
   ./scripts/check-cosign-identity-pinned.sh; \
+  ./scripts/check-nix-run-pinned.sh; \
   ./scripts/check-pr-workflows-no-secrets.sh; \
   ./scripts/check-required-checks-no-paths.sh; \
   ./scripts/check-tag-protection.sh; \
@@ -66,6 +67,7 @@ verify:
   bash tests/check-fork-guard-release.test.sh; \
   bash tests/check-gh-attestation-repo.test.sh; \
   bash tests/check-cosign-identity-pinned.test.sh; \
+  bash tests/check-nix-run-pinned.test.sh; \
   bash tests/check-pr-workflows-no-secrets.test.sh; \
   bash tests/check-required-checks-no-paths.test.sh; \
   bash tests/check-tag-protection.test.sh; \

@@ -56,6 +56,7 @@
           { "context": "lint-pr-title", "integration_id": 15368 },
           { "context": "markdownlint", "integration_id": 15368 },
           { "context": "min-permissions", "integration_id": 15368 },
+          { "context": "nix-run-pinned", "integration_id": 15368 },
           { "context": "pin-diff-isolated", "integration_id": 15368 },
           { "context": "pr-workflows-no-secrets", "integration_id": 15368 },
           { "context": "pre-commit-hooks-sha-parity", "integration_id": 15368 },

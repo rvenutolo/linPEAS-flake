@@ -159,7 +159,7 @@ the full job inventory + cron schedule lives in
 - **Build + smoke**: `build-linpeas`, `build-linpeas-arm64`, `flake-check`, `image-smoke`, `image-smoke-arm64`, `smoke-test`, `smoke-test-arm64`.
 - **Conventional Commits**: `commitlint`, `lint-pr-title`.
 - **Doc quality**: `check-doc-anchors`, `check-orphan-invariants`, `editorconfig`, `markdownlint`, `typos`.
-- **Security/invariant lints**: `check-jsonschema`, `checkout-persist-credentials`, `ci-job-in-summary`, `cosign-identity-pinned`, `dashboard-data-tests`, `dependency-review`, `fork-guard-release`, `gh-attestation-repo`, `gitleaks`, `harden-runner-first`, `job-timeout-minutes`, `min-permissions`, `pin-diff-isolated`, `pr-workflows-no-secrets`, `pre-commit-hooks-sha-parity`, `protect-main-drift-check`, `pull-request-target-absent`, `renovate-invariants`, `required-checks-no-paths`, `run-block-strict`, `script-has-test`, `script-shebang-pipefail`, `tag-protection-drift-check`, `upload-artifact-strict`, `uses-sha-pinned`, `workflow-concurrency`, `workflow-on-branches`.
+- **Security/invariant lints**: `check-jsonschema`, `checkout-persist-credentials`, `ci-job-in-summary`, `cosign-identity-pinned`, `dashboard-data-tests`, `dependency-review`, `fork-guard-release`, `gh-attestation-repo`, `gitleaks`, `harden-runner-first`, `job-timeout-minutes`, `min-permissions`, `nix-run-pinned`, `pin-diff-isolated`, `pr-workflows-no-secrets`, `pre-commit-hooks-sha-parity`, `protect-main-drift-check`, `pull-request-target-absent`, `renovate-invariants`, `required-checks-no-paths`, `run-block-strict`, `script-has-test`, `script-shebang-pipefail`, `tag-protection-drift-check`, `upload-artifact-strict`, `uses-sha-pinned`, `workflow-concurrency`, `workflow-on-branches`.
 
 <!-- END ci-summary -->
 

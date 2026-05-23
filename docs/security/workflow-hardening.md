@@ -107,3 +107,19 @@ Release-grade scopes are any of: `contents: write`, `packages: write`, `id-token
 GitHub Actions `if:` is job-scoped (no workflow-level syntax), so every release-grade job must carry the guard in its own `if:` expression. Existing `if:` clauses are AND-ed with the repository check.
 
 Enforced by `scripts/check-fork-guard-release.sh`. Wired as the `fork-guard-release` required CI job and as a pre-commit hook.
+
+## nix-run-pinned
+
+No workflow, script, or shell-fenced documentation invokes `nix run nixpkgs#<pkg>` against the bare `nixpkgs` flake reference.
+
+At runtime the bare `nixpkgs` resolves through the user's (or runner's) flake registry — not this repo's `flake.lock`. A step that calls `nix run nixpkgs#cosign` therefore pulls whatever nixpkgs commit the runner's registry happens to point at, bypassing the Renovate-pinned `nixpkgs` input in `flake.lock`. A malicious or compromised nixpkgs revision could ship a backdoored tool.
+
+Allowed alternatives:
+
+- `nix shell .#<pkg> --command <pkg> <args>` — uses this repo's own flake outputs, resolved via `flake.lock`. Requires the package to be exposed under `packages.<pkg>` in `flake.nix`.
+- `nix run .#<pkg> -- <args>` — same.
+- `nix run nixpkgs/<rev>#<pkg>` — explicit commit-pin (the lint matches the literal `nixpkgs#` token with no `/<rev>` between).
+
+`cosign` is exposed under `packages.cosign` so `release-on-bump.yml` and `verify-latest-release.yml` can invoke it via the pinned shape. Future tools follow the same pattern.
+
+Enforced by `scripts/check-nix-run-pinned.sh`. Wired as the `nix-run-pinned` required CI job and as a pre-commit hook.

@@ -33,7 +33,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # Nix installer is required for `nix run nixpkgs#cosign` in the
+      # Nix installer is required for `nix shell .#cosign` in the
       # cosign verify-blob / verify steps below.
       - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31
         with:
@@ -201,7 +201,7 @@ jobs:
               | sha256sum \
               | awk '{print "sha256:" $1}'
           )"
-          if ! nix run nixpkgs#cosign -- verify \
+          if ! nix shell .#cosign --command cosign verify \
               --certificate-identity "${COSIGN_IDENTITY}" \
               --certificate-oidc-issuer "${COSIGN_OIDC_ISSUER}" \
               "ghcr.io/rvenutolo/linpeas@${ghcr_index_digest}" \
@@ -229,7 +229,7 @@ jobs:
             done
           done
           for ref in "${refs[@]}"; do
-            nix run nixpkgs#cosign -- verify \
+            nix shell .#cosign --command cosign verify \
               --certificate-identity "${COSIGN_IDENTITY}" \
               --certificate-oidc-issuer "${COSIGN_OIDC_ISSUER}" \
               "${ref}" > /dev/null

@@ -37,6 +37,7 @@ gitleaks: Security/invariant lints
 harden-runner-first: Security/invariant lints
 job-timeout-minutes: Security/invariant lints
 min-permissions: Security/invariant lints
+nix-run-pinned: Security/invariant lints
 pin-diff-isolated: Security/invariant lints
 pre-commit-hooks-sha-parity: Security/invariant lints
 pr-workflows-no-secrets: Security/invariant lints
