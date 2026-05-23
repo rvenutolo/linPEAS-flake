@@ -199,3 +199,11 @@ path — pick whichever toolchain fits the consumer's pipeline.
 Every `gh attestation verify` invocation across workflows, scripts, and shell-fenced documentation must pass `--repo rvenutolo/linPEAS-flake`. Without the `--repo` pin, Sigstore returns any attestation matching the artifact digest, including one issued from a different repository — a trivial bypass.
 
 Enforced by `scripts/check-gh-attestation-repo.sh`. The lint joins backslash-continued shell invocations, ignores prose mentions in backticks, and only inspects fenced code blocks (`sh`, `bash`, `shell`, `console`, or unlabeled) in markdown files. Wired as the `gh-attestation-repo` required CI job and as a pre-commit hook.
+
+## cosign-identity-pinned invariant
+
+Every `cosign verify` invocation across workflows, scripts, and shell-fenced documentation must pin BOTH `--certificate-identity` (or `--certificate-identity-regexp`) AND `--certificate-oidc-issuer`. The `nix run nixpkgs#cosign -- verify` shape is recognized as well.
+
+Without identity pinning, cosign accepts any keyless Sigstore signature for the artifact digest — including one minted by a different workflow, branch, or OIDC issuer. The two flags bind verification to a specific signer chain.
+
+Enforced by `scripts/check-cosign-identity-pinned.sh`. Wired as the `cosign-identity-pinned` required CI job and as a pre-commit hook.

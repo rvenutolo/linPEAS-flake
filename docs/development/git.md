@@ -87,6 +87,7 @@ Hooks (alphabetical):
 | `ci-job-in-summary`            | ci.yml jobs cross-checked against docs/\_data/ci-check-categories.yml.                |
 | `ci-summary-fresh`             | README CI summary matches required-checks.md and the category map.                    |
 | `commitlint`                   | Commit message satisfies Conventional Commits (CI parity via .commitlintrc.yml).      |
+| `cosign-identity-pinned`       | cosign verify pins --certificate-identity[-regexp] + --certificate-oidc-issuer.       |
 | `deadnix`                      | Unused Nix bindings.                                                                  |
 | `editorconfig-checker`         | .editorconfig compliance (charset, line endings, trailing whitespace, final newline). |
 | `flake-show-fresh`             | flake-show block in docs/reference/flake-outputs.md matches current flake outputs.    |
