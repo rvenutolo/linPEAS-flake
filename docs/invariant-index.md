@@ -20,6 +20,7 @@ live in `.claude/CLAUDE.md` (untracked).
 - **Gitleaks / Dependency review / Trivy / SBOM** — required-check details + thresholds. → [security/verification.md](security/verification.md)
 - **Cosign keyless signing + identity pinning** — per-arch + multi-arch index signed; verify must pin workflow ref + OIDC issuer. → [security/verification.md](security/verification.md)
 - **gh attestation verify --repo pin** — every `gh attestation verify` invocation passes `--repo rvenutolo/linPEAS-flake`. → [security/verification.md](security/verification.md)
+- **cosign verify identity + issuer pin** — every `cosign verify` pins `--certificate-identity[-regexp]` AND `--certificate-oidc-issuer`. → [security/verification.md](security/verification.md)
 - **Bump credentials blast-radius** — GitHub App, no PAT, no `git push`. → [security/trust-model.md](security/trust-model.md)
 - **PR-triggered workflow secret allowlist** — only `secrets.GITHUB_TOKEN`. → [security/trust-model.md](security/trust-model.md)
 - **harden-runner** — first step in every job. → [security/trust-model.md](security/trust-model.md)

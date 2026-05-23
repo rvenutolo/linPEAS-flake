@@ -583,6 +583,22 @@
             pass_filenames = false;
             language = "system";
           };
+          # cosign verify pins identity + OIDC issuer.
+          # See docs/security/verification.md.
+          cosign-identity-pinned = {
+            enable = true;
+            name = "cosign-identity-pinned";
+            description = "cosign verify pins --certificate-identity[-regexp] + --certificate-oidc-issuer.";
+            entry = "${pkgs-unstable.writeShellScript "cosign-identity-pinned-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-cosign-identity-pinned.sh
+            ''}";
+            files = "^(\\.github/workflows/.*\\.ya?ml|scripts/.*\\.sh|docs/.*\\.md|README\\.md|SECURITY\\.md)$";
+            pass_filenames = false;
+            language = "system";
+          };
           # Schema-shape validation for repo config. Catches typoed
           # keys, wrong-type values, and upstream-removed fields that
           # per-tool linters miss. NIX_BUILD_TOP guard skips inside
