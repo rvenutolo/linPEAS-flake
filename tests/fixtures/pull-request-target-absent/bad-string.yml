@@ -1,0 +1,14 @@
+name: bad-string
+on: pull_request_target
+permissions: {}
+concurrency:
+  group: bad-string-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - run: echo a

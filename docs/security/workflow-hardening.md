@@ -47,3 +47,13 @@ Every workflow that declares `on.pull_request:` or `on.push:` sets `branches: [m
 Without the allowlist, Actions fires the workflow on every branch — burning runner minutes on stale topic branches and attaching surprising status checks to refs nobody is watching. Workflows that only run on `schedule:`, `workflow_dispatch:`, or `workflow_call:` are unaffected; `pull_request_target:` is handled by a separate lint that forbids it outright.
 
 Enforced by `scripts/check-workflow-on-branches.sh`. Wired as the `workflow-on-branches` required CI job and as a pre-commit hook.
+
+## pull-request-target-absent
+
+No workflow uses the `pull_request_target` trigger.
+
+`pull_request_target` runs the **base** ref's workflow definition with the full secret scope of the base repo. If the workflow then checks out the PR head (the common reason to use this trigger), an attacker's fork PR can introduce malicious code that the base-ref workflow runs with secret access — the canonical Actions privilege-escalation footgun.
+
+This repo has no use for the trigger. The lint hard-fails any workflow that adopts it. Removing the ban requires deleting this script and the corresponding required-check entry.
+
+Enforced by `scripts/check-pull-request-target-absent.sh`. Wired as the `pull-request-target-absent` required CI job and as a pre-commit hook.

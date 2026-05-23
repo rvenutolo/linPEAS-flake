@@ -464,6 +464,25 @@
             pass_filenames = false;
             language = "system";
           };
+          # Hard-ban the pull_request_target trigger. Running the base
+          # ref's workflow with full secret scope while operating on
+          # head-ref code is the canonical Actions privilege-escalation
+          # footgun. See docs/security/workflow-hardening.md.
+          pull-request-target-absent = {
+            enable = true;
+            name = "pull-request-target-absent";
+            description = "No workflow uses the pull_request_target trigger.";
+            entry = "${pkgs-unstable.writeShellScript "pull-request-target-absent-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-pull-request-target-absent.sh
+            ''}";
+            files = "^(\\.github/workflows/.*\\.ya?ml|scripts/check-pull-request-target-absent\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
           # Schema-shape validation for repo config. Catches typoed
           # keys, wrong-type values, and upstream-removed fields that
           # per-tool linters miss. NIX_BUILD_TOP guard skips inside

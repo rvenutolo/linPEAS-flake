@@ -99,6 +99,7 @@ Hooks (alphabetical):
 | `pin-diff-isolated`            | Only scripts/bump-linpeas.sh mutates linpeas-pin.json.                                |
 | `pre-commit-hooks-sha-parity`  | The pre-commit-hooks input SHA in flake.nix matches flake.lock locked.rev.            |
 | `precommit-table-fresh`        | Hook table in docs/development/git.md matches the flake hook manifest.                |
+| `pull-request-target-absent`   | No workflow uses the pull_request_target trigger.                                     |
 | `shellcheck`                   | Shell-script static analysis.                                                         |
 | `statix`                       | Nix anti-pattern lint.                                                                |
 | `treefmt`                      | Multi-language formatter aggregator (shfmt, prettier, etc).                           |
