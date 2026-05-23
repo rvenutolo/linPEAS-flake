@@ -34,6 +34,10 @@
           { "context": "build-linpeas-arm64", "integration_id": 15368 },
           { "context": "check-doc-anchors", "integration_id": 15368 },
           { "context": "check-jsonschema", "integration_id": 15368 },
+          {
+            "context": "checkout-persist-credentials",
+            "integration_id": 15368
+          },
           { "context": "check-orphan-invariants", "integration_id": 15368 },
           { "context": "commitlint", "integration_id": 15368 },
           { "context": "dashboard-data-tests", "integration_id": 15368 },

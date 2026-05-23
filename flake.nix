@@ -407,6 +407,25 @@
             pass_filenames = false;
             language = "system";
           };
+          # Every actions/checkout step sets persist-credentials: false
+          # so GITHUB_TOKEN isn't written into .git/config and left on
+          # disk for later steps to read. See
+          # docs/security/workflow-hardening.md.
+          checkout-persist-credentials = {
+            enable = true;
+            name = "checkout-persist-credentials";
+            description = "Every actions/checkout sets with.persist-credentials: false.";
+            entry = "${pkgs-unstable.writeShellScript "checkout-persist-credentials-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-checkout-persist-credentials.sh
+            ''}";
+            files = "^(\\.github/workflows/.*\\.ya?ml|scripts/check-checkout-persist-credentials\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
           # Schema-shape validation for repo config. Catches typoed
           # keys, wrong-type values, and upstream-removed fields that
           # per-tool linters miss. NIX_BUILD_TOP guard skips inside
