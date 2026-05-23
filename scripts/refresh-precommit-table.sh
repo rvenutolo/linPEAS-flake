@@ -43,6 +43,12 @@ function main() {
   require_tool jq
   require_tool awk
   require_tool cmp
+  # treefmt runs mdformat (with mdformat-gfm) over the generated doc so the
+  # script's output matches what treefmt would emit after a commit. Without
+  # this, mdformat-gfm's table-cell escapes (e.g. `docs/_data` → `docs/\_data`,
+  # `scripts/*.sh` → `scripts/\*.sh`) cause the regenerated table to differ
+  # from the committed file, leaving precommit-table-fresh red on every commit.
+  require_tool treefmt
 
   local repo_root doc
   repo_root="$(git rev-parse --show-toplevel)"
@@ -62,11 +68,16 @@ function main() {
     exit 1
   fi
 
-  local hooks_file block_file doc_new
+  local hooks_file block_file doc_new doc_fmt
   hooks_file="$(mktemp)"
   block_file="$(mktemp)"
   doc_new="$(mktemp)"
-  trap 'rm --force -- "${hooks_file:-}" "${block_file:-}" "${doc_new:-}"' EXIT
+  # treefmt walks up to find flake.nix as projectRootFile, so the formatted
+  # tmp file must live inside the repo. Hidden name + .md extension so
+  # treefmt's mdformat picks it up; .gitignore keeps it untracked if a crash
+  # bypasses the EXIT trap.
+  doc_fmt="$(mktemp "${repo_root}/.refresh-precommit-XXXXXX.md")"
+  trap 'rm --force -- "${hooks_file:-}" "${block_file:-}" "${doc_new:-}" "${doc_fmt:-}"' EXIT
 
   local sys
   sys="$(nix eval --impure --raw --expr 'builtins.currentSystem')"
@@ -130,10 +141,17 @@ function main() {
     !skip { print }
   ' "${doc}" >"${doc_new}"
 
+  # Run treefmt over the regenerated doc so the comparison target matches
+  # what the formatter chain (mdformat-gfm) would produce on commit. Without
+  # this step, mdformat's table-cell escapes cause persistent drift between
+  # the script output and the committed file.
+  cp -- "${doc_new}" "${doc_fmt}"
+  treefmt --no-cache --quiet -- "${doc_fmt}" >/dev/null
+
   if [[ ${check_only} == 'true' ]]; then
     # cmp short-circuits on first byte difference and supports --silent across
     # both GNU and BSD coreutils — diff --quiet is GNU-only.
-    if ! cmp --silent -- "${doc}" "${doc_new}"; then
+    if ! cmp --silent -- "${doc}" "${doc_fmt}"; then
       log_err 'pre-commit table in docs/development/git.md is stale. Run scripts/refresh-precommit-table.sh and commit.'
       exit 1
     fi
@@ -141,7 +159,7 @@ function main() {
     return 0
   fi
 
-  mv -- "${doc_new}" "${doc}"
+  mv -- "${doc_fmt}" "${doc}"
   log_info 'refreshed pre-commit table in docs/development/git.md'
 }
 
