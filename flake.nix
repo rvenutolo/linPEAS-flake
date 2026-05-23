@@ -153,7 +153,7 @@
         treefmtEval = treefmt-nix.lib.evalModule pkgs-unstable ./treefmt.nix;
 
         preCommitHooks = {
-          nixfmt-rfc-style = {
+          nixfmt = {
             enable = true;
             description = "Nix file formatting.";
           };
@@ -786,7 +786,7 @@
               git
               shellcheck
               shfmt
-              nixfmt-rfc-style
+              nixfmt
               deadnix
               statix
               actionlint
