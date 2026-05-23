@@ -1,0 +1,24 @@
+name: good
+on: push
+permissions: {}
+concurrency:
+  group: good-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  release:
+    if: github.repository == 'rvenutolo/linPEAS-flake'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - run: echo release
+  build-image:
+    if: needs.release.outputs.something == 'x' && github.repository == 'rvenutolo/linPEAS-flake'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      packages: write
+    steps:
+      - run: echo build

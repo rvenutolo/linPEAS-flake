@@ -1,0 +1,15 @@
+name: good-read-only
+on: push
+permissions: {}
+concurrency:
+  group: good-read-only-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - run: echo test
