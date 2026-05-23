@@ -1,0 +1,16 @@
+name: bad-map
+on:
+  pull_request_target:
+    branches: [main]
+permissions: {}
+concurrency:
+  group: bad-map-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - run: echo a

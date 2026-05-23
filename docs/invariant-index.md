@@ -27,6 +27,7 @@ live in `.claude/CLAUDE.md` (untracked).
 - **Checkout persist-credentials false** — every `actions/checkout` step sets `persist-credentials: false`. → [security/workflow-hardening.md](security/workflow-hardening.md)
 - **upload-artifact strict** — every `actions/upload-artifact` step sets `if-no-files-found: error`. → [security/workflow-hardening.md](security/workflow-hardening.md)
 - **Workflow on.branches main-only** — every `pull_request:`/`push:` trigger declares `branches: [main]` exactly. → [security/workflow-hardening.md](security/workflow-hardening.md)
+- **pull_request_target forbidden** — no workflow uses the `pull_request_target` trigger. → [security/workflow-hardening.md](security/workflow-hardening.md)
 - **GITHUB_TOKEN min-permissions** — top-level `permissions: {}`; every job declares own scopes. → [security/min-permissions.md](security/min-permissions.md)
 - **protect-main ruleset** — in-tree mirror + drift-check. → [security/required-checks.md](security/required-checks.md)
 - **Repo-settings posture** — three binding flags. → [security/settings-posture.md](security/settings-posture.md)
