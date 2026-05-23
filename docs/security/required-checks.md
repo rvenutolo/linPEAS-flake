@@ -27,6 +27,7 @@ this file in the same change as any modification to the ruleset.
 | run-block-strict             | ci                | .github/workflows/ci.yml                |
 | script-has-test              | ci                | .github/workflows/ci.yml                |
 | script-shebang-pipefail      | ci                | .github/workflows/ci.yml                |
+| setup-nix-required           | ci                | .github/workflows/ci.yml                |
 | pr-workflows-no-secrets      | ci                | .github/workflows/ci.yml                |
 | tag-protection-drift-check   | ci                | .github/workflows/ci.yml                |
 | protect-main-drift-check     | ci                | .github/workflows/ci.yml                |

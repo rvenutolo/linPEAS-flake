@@ -67,6 +67,7 @@
           { "context": "run-block-strict", "integration_id": 15368 },
           { "context": "script-has-test", "integration_id": 15368 },
           { "context": "script-shebang-pipefail", "integration_id": 15368 },
+          { "context": "setup-nix-required", "integration_id": 15368 },
           { "context": "smoke-test" },
           { "context": "smoke-test-arm64" },
           { "context": "tag-protection-drift-check", "integration_id": 15368 },
