@@ -76,17 +76,6 @@ release pushes to both with identical content digests and matching
 SLSA attestations. See [`docs/install/docker.md`](docs/install/docker.md)
 for the full use-case matrix.
 
-### Without Nix or Docker (portable bundle)
-
-For locked-down hosts where neither Nix nor Docker is allowed. Single
-arch-agnostic script — just `linpeas.sh` with `#!/usr/bin/env bash`.
-
-```sh
-curl -L https://github.com/rvenutolo/linPEAS-flake/releases/latest/download/linpeas-bundle.sh -o linpeas
-chmod +x linpeas
-./linpeas -a
-```
-
 ### As a flake input
 
 Pull linpeas as a dependency from another flake (e.g. a NixOS config
@@ -129,15 +118,15 @@ trigger semantics, and credential split live in
 
 <!-- Chronological by cron — daily then weekly. -->
 
-| Workflow                    | When                                         | Purpose                                                                                                                |
-| --------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `update-linpeas.yml`        | daily 09:00 UTC + dispatch                   | Bumps `linpeas-pin.json` to the latest upstream tag. Opens PR; auto-merges on green.                                   |
-| `stale-pin-check.yml`       | daily 10:30 UTC                              | Files a deduped issue if `update-linpeas` is stalled.                                                                  |
-| `verify-latest-release.yml` | daily 12:00 UTC                              | Re-verifies the latest release's attestations and re-fetches upstream `linpeas.sh` to confirm the pinned SRI hash.     |
-| `release-on-bump.yml`       | push to `main` changing the pin              | Tags the release, builds + pushes bundle + per-arch OCI images (ghcr.io + docker.io), attests SLSA provenance + SBOMs. |
-| `pages.yml`                 | push, PR, release, daily 14:00 UTC, dispatch | Rebuilds the MkDocs site; deploys via OIDC on non-PR events. Not in the required-check set.                            |
-| `update-flake-lock.yml`     | weekly Fri 06:00 UTC                         | Bumps `nixpkgs` via `nix flake update`; opens auto-merging PR.                                                         |
-| Renovate                    | weekly Fri batch                             | Bumps action SHAs + tracked flake inputs after a 7-day cooldown.                                                       |
+| Workflow                    | When                                         | Purpose                                                                                                            |
+| --------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `update-linpeas.yml`        | daily 09:00 UTC + dispatch                   | Bumps `linpeas-pin.json` to the latest upstream tag. Opens PR; auto-merges on green.                               |
+| `stale-pin-check.yml`       | daily 10:30 UTC                              | Files a deduped issue if `update-linpeas` is stalled.                                                              |
+| `verify-latest-release.yml` | daily 12:00 UTC                              | Re-verifies the latest release's attestations and re-fetches upstream `linpeas.sh` to confirm the pinned SRI hash. |
+| `release-on-bump.yml`       | push to `main` changing the pin              | Tags the release, builds + pushes per-arch OCI images (ghcr.io + docker.io), attests SLSA provenance + SBOMs.      |
+| `pages.yml`                 | push, PR, release, daily 14:00 UTC, dispatch | Rebuilds the MkDocs site; deploys via OIDC on non-PR events. Not in the required-check set.                        |
+| `update-flake-lock.yml`     | weekly Fri 06:00 UTC                         | Bumps `nixpkgs` via `nix flake update`; opens auto-merging PR.                                                     |
+| Renovate                    | weekly Fri batch                             | Bumps action SHAs + tracked flake inputs after a 7-day cooldown.                                                   |
 
 Bump-workflow commits are authored by the `linpeas-flake-bumper` GitHub
 App and web-flow-signed by GitHub, satisfying `required_signatures` on
@@ -167,7 +156,7 @@ the full job inventory + cron schedule lives in
 
 <!-- BEGIN ci-summary -->
 
-- **Build + smoke**: `build-linpeas`, `build-linpeas-arm64`, `bundle-smoke`, `flake-check`, `image-smoke`, `image-smoke-arm64`, `smoke-test`, `smoke-test-arm64`.
+- **Build + smoke**: `build-linpeas`, `build-linpeas-arm64`, `flake-check`, `image-smoke`, `image-smoke-arm64`, `smoke-test`, `smoke-test-arm64`.
 - **Conventional Commits**: `commitlint`, `lint-pr-title`.
 - **Doc quality**: `check-doc-anchors`, `check-orphan-invariants`, `editorconfig`, `markdownlint`, `typos`.
 - **Security/invariant lints**: `check-jsonschema`, `dashboard-data-tests`, `dependency-review`, `gitleaks`, `harden-runner-first`, `min-permissions`, `pin-diff-isolated`, `pr-workflows-no-secrets`, `pre-commit-hooks-sha-parity`, `protect-main-drift-check`, `renovate-invariants`, `required-checks-no-paths`, `tag-protection-drift-check`, `uses-sha-pinned`.
@@ -195,9 +184,9 @@ required-check table; alphabetical):
 ### Release attestation verification
 
 Every release runs a `verify` job in `release-on-bump.yml` that downloads the
-just-published bundle + image and runs `gh attestation verify` on each.
+just-published image and runs `gh attestation verify` on each.
 A separate daily cron workflow (`verify-latest-release.yml`) re-verifies the
-latest release's bundle, image, and pin file **and re-fetches the pinned
+latest release's image and pin file **and re-fetches the pinned
 `linpeas.sh` from upstream to confirm the SRI hash still matches** — this
 detects upstream tag-replacement that attestation alone cannot see. Any
 failing check surfaces as a red workflow run.
@@ -246,7 +235,6 @@ distinction between build-provenance attestations and content trust.
 │   ├───aarch64-linux
 │   │   ├───formatting: derivation 'treefmt-check'
 │   │   ├───linpeas-build: derivation 'linpeas-20260521-859cab5f'
-│   │   ├───linpeas-bundle-build: derivation 'linpeas-bundle-20260521-859cab5f'
 │   │   └───pre-commit: derivation 'pre-commit-run'
 │   ├───x86_64-darwin
 │   │   ├───formatting: derivation 'treefmt-check'
@@ -255,7 +243,6 @@ distinction between build-provenance attestations and content trust.
 │   └───x86_64-linux
 │       ├───formatting: derivation 'treefmt-check'
 │       ├───linpeas-build: derivation 'linpeas-20260521-859cab5f'
-│       ├───linpeas-bundle-build: derivation 'linpeas-bundle-20260521-859cab5f'
 │       └───pre-commit: derivation 'pre-commit-run'
 ├───devShells
 │   ├───aarch64-darwin
@@ -281,7 +268,6 @@ distinction between build-provenance attestations and content trust.
     ├───aarch64-linux
     │   ├───default: package 'linpeas-20260521-859cab5f'
     │   ├───linpeas: package 'linpeas-20260521-859cab5f'
-    │   ├───linpeas-bundle: package 'linpeas-bundle-20260521-859cab5f'
     │   ├───linpeas-image: package 'linpeas.tar.gz'
     │   └───site: package 'linpeas-flake-site-20260521-859cab5f'
     ├───x86_64-darwin
@@ -290,7 +276,6 @@ distinction between build-provenance attestations and content trust.
     └───x86_64-linux
         ├───default: package 'linpeas-20260521-859cab5f'
         ├───linpeas: package 'linpeas-20260521-859cab5f'
-        ├───linpeas-bundle: package 'linpeas-bundle-20260521-859cab5f'
         ├───linpeas-image: package 'linpeas.tar.gz'
         └───site: package 'linpeas-flake-site-20260521-859cab5f'
 ```
@@ -348,7 +333,6 @@ pre-commit install   # one-time, wires git hooks
 just                 # Default: list recipes
 just build           # Build the linpeas package
 just bump            # Manually refresh linpeas pin from upstream latest release
-just bundle          # Build the portable bundle for the current arch
 just check           # Run all flake checks (eval, formatting, pre-commit)
 just fmt             # Format every file via treefmt
 just image           # Build the OCI image

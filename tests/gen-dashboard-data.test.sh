@@ -3,13 +3,11 @@
 # branches.
 #
 # Each scenario runs the script with environment-variable overrides that
-# inject malformed inputs into one of the three security checks:
+# inject malformed inputs into one of the security checks:
 #   1. pin.version regex (^[0-9]{8}-[0-9a-f]{7,40}$)
 #   2. pin.url prefix
 #      (https://github.com/peass-ng/PEASS-ng/releases/download/)
-#   3. bundle URL prefix
-#      (https://github.com/rvenutolo/linPEAS-flake/releases/download/)
-#   4. required field non-empty / non-null (require_field)
+#   3. required field non-empty / non-null (require_field)
 #
 # Each scenario asserts:
 #   - exit code 1
@@ -223,15 +221,7 @@ function main() {
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
     "UPSTREAM_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/missing-tag-upstream-release.json"
 
-  # Scenario 4: bundle URL outside expected prefix. Pin good, upstream good,
-  # but this-repo latest-release advertises a non-github.com bundle URL.
-  run_scenario 'bundle URL outside expected prefix' \
-    'bundle URL outside expected prefix' \
-    "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
-    "UPSTREAM_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-upstream-release.json" \
-    "LATEST_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/bad-bundle-url-latest-release.json"
-
-  # Scenario 5: happy-path bump-lag pairing. Two of three this-repo releases
+  # Scenario 4: happy-path bump-lag pairing. Two of three this-repo releases
   # match upstream entries; the third is older than the upstream window and
   # must be skipped with a warning, not failed.
   run_happy_lag_scenario

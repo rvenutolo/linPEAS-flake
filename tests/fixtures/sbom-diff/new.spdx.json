@@ -1,9 +1,0 @@
-{
-  "spdxVersion": "SPDX-2.3",
-  "packages": [
-    { "name": "foo", "versionInfo": "1.1" },
-    { "name": "baz", "versionInfo": "NOASSERTION" },
-    { "name": "keep", "versionInfo": "9.9" },
-    { "name": "qux", "versionInfo": "3.0" }
-  ]
-}

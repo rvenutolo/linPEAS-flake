@@ -178,7 +178,6 @@ lock-step.
 
 ```bash
 nix build .#linpeas --print-build-logs
-nix build .#linpeas-bundle --print-build-logs
 nix build .#linpeas-image --print-build-logs
 nix build "path:$(pwd)#site" --print-build-logs
 ```

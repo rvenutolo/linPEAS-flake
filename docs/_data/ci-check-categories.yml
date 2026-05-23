@@ -13,7 +13,6 @@
 # order matches intent.
 build-linpeas: Build + smoke
 build-linpeas-arm64: Build + smoke
-bundle-smoke: Build + smoke
 flake-check: Build + smoke
 image-smoke: Build + smoke
 image-smoke-arm64: Build + smoke

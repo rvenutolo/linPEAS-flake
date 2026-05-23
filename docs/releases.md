@@ -5,10 +5,10 @@ The 20 most recent releases. Full history on [GitHub Releases](https://github.co
 {% if dashboard.releases | length == 0 %}
 No releases have been published yet.
 {% else %}
-| Tag | Date | Bundle | Image |
-|-----|------|--------|-------|
+| Tag | Date | Image |
+|-----|------|-------|
 {% for r in dashboard.releases -%}
-| [`{{ r.tag }}`](https://github.com/rvenutolo/linPEAS-flake/releases/tag/{{ r.tag }}) | {{ r.date or "—" }} | {% if r.bundle_url %}[`linpeas-bundle.sh`]({{ r.bundle_url }}){% else %}—{% endif %} | `{{ r.image_tag }}` |
+| [`{{ r.tag }}`](https://github.com/rvenutolo/linPEAS-flake/releases/tag/{{ r.tag }}) | {{ r.date or "—" }} | `{{ r.image_tag }}` |
 {% endfor %}
 {% endif %}
 

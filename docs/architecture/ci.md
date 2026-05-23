@@ -14,7 +14,6 @@ flowchart LR
   smokearm["smoke-test-arm64"]
   image["image-smoke<br/>docker run -h"]
   imagearm["image-smoke-arm64"]
-  bundle["bundle-smoke<br/>./linpeas-bundle.sh -h"]
   merge{"all green?"}
   ok["auto-merge"]
   block["block merge"]
@@ -24,13 +23,11 @@ flowchart LR
   pr --> buildarm --> smokearm
   pr --> image
   pr --> imagearm
-  pr --> bundle
   flakecheck --> merge
   smoke --> merge
   smokearm --> merge
   image --> merge
   imagearm --> merge
-  bundle --> merge
   merge -- yes --> ok
   merge -- no --> block
 ```
@@ -53,7 +50,6 @@ Functional gates:
 | `smoke-test-arm64`    | `ubuntu-24.04-arm` | aarch64 `-h` smoke                                                                                             |
 | `image-smoke`         | `ubuntu-latest`    | builds OCI image, `docker load`, `docker run --rm <img> -h` exits 0                                            |
 | `image-smoke-arm64`   | `ubuntu-24.04-arm` | aarch64 OCI image smoke                                                                                        |
-| `bundle-smoke`        | `ubuntu-latest`    | builds bundle, `./result/linpeas-bundle.sh -h` exits 0                                                         |
 
 Self-enforcing invariant gates:
 
@@ -187,9 +183,6 @@ if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclu
 - `scripts/gen-dashboard-data.sh` enforces (mirrors `bump-linpeas.sh`):
 
     1. `pin.version` must match `[0-9]{8}-[0-9a-f]{7,40}` — hard-fail.
-    1. `bundle_url` must start with
-        `https://github.com/rvenutolo/linPEAS-flake/releases/download/` —
-        hard-fail.
     1. Missing required JSON fields hard-fail with field name; never partial
         YAML.
 

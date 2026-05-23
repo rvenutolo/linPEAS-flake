@@ -9,27 +9,7 @@ Step-by-step procedure to verify a release of this wrapper. None of this trusts 
 - `sha256sum` and/or `openssl` — for hash recomputation.
 - `nix` (optional) — for SRI hash recompute.
 
-## 1. Verify the bundle's build provenance
-
-```bash
-curl --location \
-  https://github.com/rvenutolo/linPEAS-flake/releases/download/{{ dashboard.release.latest_tag or "<tag>" }}/linpeas-bundle.sh \
-  --output linpeas-bundle.sh
-
-gh attestation verify linpeas-bundle.sh --repo rvenutolo/linPEAS-flake
-```
-
-Expected output ends with:
-
-```text
-Loaded digest sha256:... for file://linpeas-bundle.sh
-Verified attestation against GitHub's keyless signing flow.
-Successfully verified ...
-```
-
-This proves the bundle was produced by `release-on-bump.yml` in this repo. It does **not** prove the bundle equals upstream `linpeas.sh`.
-
-## 2. Verify the OCI image's build provenance
+## 1. Verify the OCI image's build provenance
 
 ```bash
 gh attestation verify \
@@ -38,30 +18,6 @@ gh attestation verify \
 ```
 
 Same trust model: proves the image was built by this repo's release workflow.
-
-## 3. Cross-check the bundle against upstream
-
-The bundle is `linpeas.sh` with line 1 rewritten. To verify content equivalence:
-
-```bash
-# Get this repo's pin
-PIN_URL=$(curl --silent https://raw.githubusercontent.com/rvenutolo/linPEAS-flake/main/linpeas-pin.json | jq --raw-output .url)
-PIN_HASH=$(curl --silent https://raw.githubusercontent.com/rvenutolo/linPEAS-flake/main/linpeas-pin.json | jq --raw-output .hash)
-echo "Pin URL:  $PIN_URL"
-echo "Pin hash: $PIN_HASH"
-
-# Download upstream
-curl --location "$PIN_URL" --output upstream-linpeas.sh
-
-# Compute SRI hash and compare
-COMPUTED=$(nix hash file --sri upstream-linpeas.sh)
-test "$PIN_HASH" = "$COMPUTED" && echo "OK" || echo "MISMATCH"
-
-# Diff line 1 only
-diff <(sed -n '2,$p' linpeas-bundle.sh) <(sed -n '2,$p' upstream-linpeas.sh)
-```
-
-Expected: hash matches, and the diff is empty for lines 2 onward. (Line 1 differs intentionally: `#!/usr/bin/env bash` in the bundle, `#!/bin/sh` in upstream.)
 
 ## Multi-arch attestations
 
@@ -82,7 +38,7 @@ This means:
     arch image) would miss it. Always verify against the resolved
     arch-image digest.
 
-## 4. Verify the daily parity check is current
+## 2. Verify the daily parity check is current
 
 ```bash
 gh run list \
@@ -123,7 +79,7 @@ the `attribute failure reason` step. Reasons:
 - `manifest-tag-drift` — `:latest` no longer resolves to the same
     manifest as `:VERSION` on ghcr.io or docker.io.
 - `ghcr-attest-failed` / `hub-attest-failed` /
-    `bundle-attest-failed` / `pin-attest-failed` — attestation
+    `pin-attest-failed` — attestation
     verification failed for a specific artifact.
 - `release-tag-fetch-failed` / `release-asset-download-failed` —
     transient GitHub API / asset visibility lag.
@@ -190,47 +146,21 @@ via `notify-workflow-result` (label: `image-cve-critical`).
 `release-on-bump.yml` generates SPDX-JSON SBOMs via `anchore/sbom-action`,
 attests via `actions/attest-sbom`.
 
-- Bundle SBOM: attached to release as `linpeas-bundle.sbom.spdx.json`,
-    attested.
 - Per-arch image SBOMs: attested + pushed to ghcr.io and docker.io with
     `push-to-registry: true`. NOT release assets.
 - `verify-latest-release.yml`'s `gh attestation verify` covers SBOMs
     automatically (verifies ALL attestations).
 
-## SBOM diff in release notes
-
-After the bundle SBOM is generated and attested, the `bundle` job in
-`release-on-bump.yml` downloads the previous release's
-`linpeas-bundle.sbom.spdx.json` and runs `scripts/sbom-diff.sh` to
-produce a deterministic, sorted markdown diff (added / removed /
-version-changed packages). The diff is appended to the release body as
-a collapsible `<details>` block.
-
-Purpose: surface transitive-dependency churn that the Trivy CVE gate
-cannot see — a new dependency with no known CVE is invisible to Trivy
-but is itself worth review in a patch release.
-
-Soft-fail semantics: if no previous release exists, or the previous
-release has no `linpeas-bundle.sbom.spdx.json` asset (predates this
-feature), the step logs and exits 0 without modifying the release body.
-
-Idempotence: the append step is gated on `tag-exists == 'false'`, so a
-`workflow_dispatch` rerun with `force-republish` will republish the
-bundle and image artifacts but will NOT re-append the diff to an
-existing release body. Avoids double-appending the same block.
-
 ## Cosign keyless signatures
 
 In addition to `actions/attest-build-provenance` + `actions/attest-sbom`
 (verifiable via `gh attestation verify`), `release-on-bump.yml` signs
-the bundle and every published image digest with Sigstore cosign in
-keyless mode. Signatures are minted with an ephemeral Fulcio cert
-issued against the workflow's OIDC token, then recorded in Rekor.
+every published image digest with Sigstore cosign in keyless mode.
+Signatures are minted with an ephemeral Fulcio cert issued against the
+workflow's OIDC token, then recorded in Rekor.
 
 Signed artifacts per release:
 
-- **Bundle**: `cosign sign-blob --bundle linpeas-bundle.cosign.bundle   linpeas-bundle.sh`. The `.cosign.bundle` file (signature + cert +
-    Rekor inclusion proof) is uploaded as a release asset.
 - **Per-arch images**: `cosign sign <reg>/rvenutolo/linpeas@<digest>` on
     both `ghcr.io` and `docker.io`. The signature lands as a `.sig` tag
     next to each image in each registry.
@@ -251,16 +181,6 @@ fails verification. The release pipeline's `verify` job and the daily
 `verify-latest-release.yml` cron both enforce these exact values.
 
 ### User-facing verification commands
-
-Bundle:
-
-```bash
-cosign verify-blob \
-  --bundle linpeas-bundle.cosign.bundle \
-  --certificate-identity 'https://github.com/rvenutolo/linPEAS-flake/.github/workflows/release-on-bump.yml@refs/heads/main' \
-  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-  linpeas-bundle.sh
-```
 
 Image (any tag or digest works; both registries are signed):
 

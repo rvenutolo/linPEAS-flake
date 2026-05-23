@@ -78,7 +78,6 @@ nav:
   - Install:
       - Nix: install/nix.md
       - Docker: install/docker.md
-      - Bundle: install/bundle.md
       - Consume as flake input: install/consume-from-flake.md
   - Dashboard: dashboard.md
   - Architecture:

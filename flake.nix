@@ -127,25 +127,6 @@
           };
         };
 
-        linpeas-bundle = pkgs.runCommand "linpeas-bundle-${pin.version}" { } ''
-          mkdir -p $out
-          install -m 0755 ${linpeas.src} $out/linpeas-bundle.sh
-          # Guard against empty or shebang-less upstream blob. Without
-          # this, sed's `1s|^.*$|...|` either no-ops on an empty file or
-          # mangles a single-line binary blob. Failing here surfaces the
-          # upstream weirdness loudly rather than letting a malformed
-          # bundle slip through smoke tests.
-          if ! head -n 1 $out/linpeas-bundle.sh | ${pkgs.gnugrep}/bin/grep --quiet '^#!'; then
-            echo "upstream linpeas.sh has no shebang on line 1" >&2
-            exit 1
-          fi
-          # Upstream linpeas.sh ships #!/bin/sh; rewrite to #!/usr/bin/env bash so
-          # the bundle is portable across systems where /bin/sh is dash/ash.
-          ${pkgs.gnused}/bin/sed --in-place '1s|^.*$|#!/usr/bin/env bash|' \
-            $out/linpeas-bundle.sh
-          chmod 0755 $out/linpeas-bundle.sh
-        '';
-
         site = pkgs.stdenv.mkDerivation {
           pname = "linpeas-flake-site";
           inherit (pin) version;
@@ -508,7 +489,7 @@
           default = linpeas;
         }
         // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
-          inherit linpeas-image linpeas-bundle site;
+          inherit linpeas-image site;
         };
 
         apps = {
@@ -533,9 +514,6 @@
           # `linpeas-image` is intentionally excluded — slow and
           # network-heavy; CI's `image-smoke` job covers it.
           linpeas-build = linpeas;
-        }
-        // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
-          linpeas-bundle-build = linpeas-bundle;
         };
 
         devShells.default = pkgs.mkShell {

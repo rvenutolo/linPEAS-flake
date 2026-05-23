@@ -15,7 +15,6 @@ this file in the same change as any modification to the ruleset.
 | smoke-test-arm64            | ci                | .github/workflows/ci.yml                |
 | image-smoke                 | ci                | .github/workflows/ci.yml                |
 | image-smoke-arm64           | ci                | .github/workflows/ci.yml                |
-| bundle-smoke                | ci                | .github/workflows/ci.yml                |
 | check-doc-anchors           | ci                | .github/workflows/ci.yml                |
 | check-jsonschema            | ci                | .github/workflows/ci.yml                |
 | check-orphan-invariants     | ci                | .github/workflows/ci.yml                |
