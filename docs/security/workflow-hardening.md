@@ -57,3 +57,13 @@ No workflow uses the `pull_request_target` trigger.
 This repo has no use for the trigger. The lint hard-fails any workflow that adopts it. Removing the ban requires deleting this script and the corresponding required-check entry.
 
 Enforced by `scripts/check-pull-request-target-absent.sh`. Wired as the `pull-request-target-absent` required CI job and as a pre-commit hook.
+
+## script-shebang-pipefail
+
+Every file under `scripts/*.sh` starts with `#!/usr/bin/env bash` (exact first line) and contains `set -Eeuo pipefail` somewhere in the file.
+
+A script that silently swallows a failure can corrupt `linpeas-pin.json`, skip a security check, or leave a stale build artifact behind. `set -Eeuo pipefail` plus a portable shebang are the hardening minimum: `-e` aborts on any command failure, `-E` propagates ERR traps into subshells, `-u` rejects unset variables, `-o pipefail` makes a pipeline fail when any stage fails (not just the last).
+
+The lint accepts longer set lines (e.g. `set -Eeuo pipefail -x`) as long as the exact `-Eeuo pipefail` token is present.
+
+Enforced by `scripts/check-script-shebang-pipefail.sh`. Wired as the `script-shebang-pipefail` required CI job and as a pre-commit hook.

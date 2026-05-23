@@ -22,6 +22,7 @@ this file in the same change as any modification to the ruleset.
 | commitlint                   | ci                | .github/workflows/ci.yml                |
 | dashboard-data-tests         | ci                | .github/workflows/ci.yml                |
 | required-checks-no-paths     | ci                | .github/workflows/ci.yml                |
+| script-shebang-pipefail      | ci                | .github/workflows/ci.yml                |
 | pr-workflows-no-secrets      | ci                | .github/workflows/ci.yml                |
 | tag-protection-drift-check   | ci                | .github/workflows/ci.yml                |
 | protect-main-drift-check     | ci                | .github/workflows/ci.yml                |
