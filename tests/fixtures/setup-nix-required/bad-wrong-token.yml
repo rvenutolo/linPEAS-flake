@@ -1,0 +1,10 @@
+name: bad-wrong-token
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/setup-nix
+        with:
+          github-token: ${{ secrets.BUMP_TOKEN }}
+      - run: nix build .
