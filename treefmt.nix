@@ -6,7 +6,7 @@
     nixfmt.enable = true;
     prettier = {
       enable = true;
-      package = pkgs.nodePackages.prettier;
+      package = pkgs.prettier;
       # Markdown is handled by mdformat below — prettier rewraps long lines
       # and can split Jinja2 `{{ ... }}` expressions or strip admonition
       # indentation. Keep prettier for JSON/YAML only.

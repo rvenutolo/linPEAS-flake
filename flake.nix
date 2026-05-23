@@ -150,7 +150,7 @@
           dontInstall = true;
         };
 
-        treefmtEval = treefmt-nix.lib.evalModule pkgs ./treefmt.nix;
+        treefmtEval = treefmt-nix.lib.evalModule pkgs-unstable ./treefmt.nix;
 
         preCommitHooks = {
           nixfmt-rfc-style = {
