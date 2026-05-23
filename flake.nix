@@ -499,6 +499,22 @@
             pass_filenames = false;
             language = "system";
           };
+          # Every scripts/check-*.sh has tests/check-*.test.sh and
+          # vice versa. See docs/security/workflow-hardening.md.
+          script-has-test = {
+            enable = true;
+            name = "script-has-test";
+            description = "Every scripts/check-*.sh paired with tests/check-*.test.sh.";
+            entry = "${pkgs-unstable.writeShellScript "script-has-test-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-script-has-test.sh
+            ''}";
+            files = "^(scripts/check-.*\\.sh|tests/check-.*\\.test\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
           # Schema-shape validation for repo config. Catches typoed
           # keys, wrong-type values, and upstream-removed fields that
           # per-tool linters miss. NIX_BUILD_TOP guard skips inside

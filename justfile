@@ -36,6 +36,7 @@ verify:
   ./scripts/check-workflow-on-branches.sh; \
   ./scripts/check-pull-request-target-absent.sh; \
   ./scripts/check-script-shebang-pipefail.sh; \
+  ./scripts/check-script-has-test.sh; \
   ./scripts/check-pr-workflows-no-secrets.sh; \
   ./scripts/check-required-checks-no-paths.sh; \
   ./scripts/check-tag-protection.sh; \
@@ -54,6 +55,7 @@ verify:
   bash tests/check-workflow-on-branches.test.sh; \
   bash tests/check-pull-request-target-absent.test.sh; \
   bash tests/check-script-shebang-pipefail.test.sh; \
+  bash tests/check-script-has-test.test.sh; \
   bash tests/check-pr-workflows-no-secrets.test.sh; \
   bash tests/check-required-checks-no-paths.test.sh; \
   bash tests/check-tag-protection.test.sh; \

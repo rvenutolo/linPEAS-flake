@@ -40,6 +40,7 @@ protect-main-drift-check: Security/invariant lints
 pull-request-target-absent: Security/invariant lints
 renovate-invariants: Security/invariant lints
 required-checks-no-paths: Security/invariant lints
+script-has-test: Security/invariant lints
 script-shebang-pipefail: Security/invariant lints
 tag-protection-drift-check: Security/invariant lints
 upload-artifact-strict: Security/invariant lints
