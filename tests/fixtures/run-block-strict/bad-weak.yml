@@ -1,0 +1,17 @@
+name: bad-weak
+on: push
+permissions: {}
+concurrency:
+  group: bad-weak-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: weak set line
+        run: |
+          set -euo pipefail
+          echo one
