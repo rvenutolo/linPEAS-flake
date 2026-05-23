@@ -168,253 +168,338 @@
 
         treefmtEval = treefmt-nix.lib.evalModule pkgs ./treefmt.nix;
 
+        preCommitHooks = {
+          nixfmt-rfc-style = {
+            enable = true;
+            description = "Nix file formatting.";
+          };
+          deadnix = {
+            enable = true;
+            description = "Unused Nix bindings.";
+          };
+          statix = {
+            enable = true;
+            description = "Nix anti-pattern lint.";
+          };
+          actionlint = {
+            enable = true;
+            description = "GitHub Actions workflow syntax.";
+          };
+          # Doc-quality hooks — mirror the CI lint required-check set
+          # so author catches issues before push.
+          markdownlint = {
+            enable = true;
+            description = "Markdown style + structure.";
+            # Excludes mirror the CI markdownlint-cli2-action globs:
+            # docs/dashboard.md + docs/releases.md are mkdocs-macros
+            # templated and not raw markdown; docs/_data/* is the
+            # generated dashboard YAML. tests/fixtures/* contains
+            # intentionally-invalid markdown for test harnesses.
+            excludes = [
+              "^docs/dashboard\\.md$"
+              "^docs/releases\\.md$"
+              "^docs/_data/"
+              "^tests/fixtures/"
+            ];
+          };
+          typos = {
+            enable = true;
+            description = "Spell-check across the repo.";
+          };
+          editorconfig-checker = {
+            enable = true;
+            description = ".editorconfig compliance (charset, line endings, trailing whitespace, final newline).";
+          };
+          # Conventional Commits enforcement: `commitlint` with the
+          # `@commitlint/config-conventional` ruleset from
+          # `.commitlintrc.yml`. Parity with the CI `commitlint` job —
+          # same engine, same config, so any rule (subject type-enum,
+          # body-max-line-length, header-max-length, etc.) fails
+          # locally instead of after push. Replaces the older
+          # `commitizen.enable` hook, which validated the subject only.
+          commitlint = {
+            enable = true;
+            name = "commitlint";
+            description = "Commit message satisfies Conventional Commits (CI parity via .commitlintrc.yml).";
+            entry = "${pkgs.commitlint}/bin/commitlint --config .commitlintrc.yml --edit";
+            stages = [ "commit-msg" ];
+            language = "system";
+            pass_filenames = true;
+          };
+          zizmor = {
+            enable = true;
+            description = "GitHub Actions security audit.";
+            # Older zizmor versions (e.g. 1.8.0 from nixos-25.05) exit
+            # non-zero on any finding including informational. Newer
+            # versions default to `--min-severity=low`; mirror that
+            # here so the hook is consistent across nixpkgs bumps.
+            entry = "${pkgs.zizmor}/bin/zizmor --min-severity=low";
+          };
+          yamllint = {
+            enable = true;
+            description = "YAML style.";
+          };
+          shellcheck = {
+            enable = true;
+            description = "Shell-script static analysis.";
+            # justfile is parsed by `just`, not bash; shellcheck
+            # misidentifies it as shell because the first line looks
+            # like a comment.
+            excludes = [ "^justfile$" ];
+          };
+          treefmt = {
+            enable = true;
+            description = "Multi-language formatter aggregator (shfmt, prettier, etc).";
+            package = treefmtEval.config.build.wrapper;
+          };
+          # Refuse to commit if README flake-show block is stale.
+          # Invokes refresh-flake-show.sh in --check mode — never mutates the
+          # working tree, exits 1 on diff. Safe for the autonomous subagent
+          # path (no dirty README left behind on failure).
+          readme-flake-show-fresh = {
+            enable = true;
+            name = "readme-flake-show-fresh";
+            description = "README flake-show block matches current flake outputs.";
+            entry = "${pkgs.writeShellScript "readme-flake-show-fresh" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              # No-op when running inside a nix build sandbox — the
+              # `checks.pre-commit` derivation runs all hooks, but the
+              # script needs `nix flake show` which can't run inside the
+              # sandbox (no daemon, restricted PATH). Local git pre-commit
+              # invocation has full PATH and the check fires normally.
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then
+                exit 0
+              fi
+              # No-op until both the script and README exist (early-build
+              # tasks land before T12/T14 — the hook activates once both
+              # paths are present and otherwise stays silent).
+              if [[ ! -f scripts/refresh-flake-show.sh || ! -f README.md ]]; then
+                exit 0
+              fi
+              exec ${pkgs.bash}/bin/bash scripts/refresh-flake-show.sh --check
+            ''}";
+            files = "^(flake\\.nix|flake\\.lock|linpeas-pin\\.json|README\\.md|scripts/refresh-flake-show\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
+          # Refuse to commit if the pre-commit hook table in docs/development/git.md
+          # is stale relative to the flake hook manifest. Invokes
+          # refresh-precommit-table.sh in --check mode — never mutates the
+          # working tree, exits 1 on diff.
+          just-recipes-fresh = {
+            enable = true;
+            name = "just-recipes-fresh";
+            description = "README just-recipes block matches the justfile.";
+            entry = "${pkgs.writeShellScript "just-recipes-fresh" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              export PATH="${pkgs.just}/bin:$PATH"
+              exec ${pkgs.bash}/bin/bash scripts/refresh-just-recipes.sh --check
+            ''}";
+            files = "^(justfile|README\\.md|scripts/refresh-just-recipes\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
+          precommit-table-fresh = {
+            enable = true;
+            name = "precommit-table-fresh";
+            description = "Hook table in docs/development/git.md matches the flake hook manifest.";
+            entry = "${pkgs.writeShellScript "precommit-table-fresh" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              exec ${pkgs.bash}/bin/bash scripts/refresh-precommit-table.sh --check
+            ''}";
+            files = "^(flake\\.nix|docs/development/git\\.md|scripts/refresh-precommit-table\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
+          ci-summary-fresh = {
+            enable = true;
+            name = "ci-summary-fresh";
+            description = "README CI summary matches required-checks.md and the category map.";
+            entry = "${pkgs.writeShellScript "ci-summary-fresh" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              export PATH="${pkgs.yq-go}/bin:$PATH"
+              exec ${pkgs.bash}/bin/bash scripts/refresh-ci-summary.sh --check
+            ''}";
+            files = "^(README\\.md|docs/security/required-checks\\.md|docs/_data/ci-check-categories\\.yml|scripts/refresh-ci-summary\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
+          # Belt-and-braces backup to the GitHub-side
+          # `sha_pinning_required` setting. Mirrors the NIX_BUILD_TOP guard used
+          # by readme-flake-show-fresh so nix flake check doesn't fail
+          # inside the sandbox where the script can't reach .github/.
+          uses-sha-pinned = {
+            enable = true;
+            name = "uses-sha-pinned";
+            description = "Every uses: reference is SHA-pinned.";
+            entry = "${pkgs.writeShellScript "uses-sha-pinned-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              exec ${pkgs.bash}/bin/bash scripts/check-uses-sha-pinned.sh
+            ''}";
+            files = "^(\\.github/workflows/.*\\.ya?ml|\\.github/actions/.*\\.ya?ml|scripts/check-uses-sha-pinned\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
+          # Asserts every job in .github/workflows/*.yml starts with
+          # step-security/harden-runner as its first step. Belt-and-braces
+          # lint mirrors the trust-model invariant; eBPF monitor must
+          # install before any I/O.
+          harden-runner-first = {
+            enable = true;
+            name = "harden-runner-first";
+            description = "Every workflow job's first step is step-security/harden-runner.";
+            entry = "${pkgs.writeShellScript "harden-runner-first-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              export PATH="${pkgs.yq-go}/bin:$PATH"
+              exec ${pkgs.bash}/bin/bash scripts/check-harden-runner-first.sh
+            ''}";
+            files = "^(\\.github/workflows/.*\\.ya?ml|scripts/check-harden-runner-first\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
+          # Strict least-privilege lint: every workflow's top-level
+          # permissions: must be `{}` and every job must declare its
+          # own scopes. See docs/security/min-permissions.md.
+          min-permissions = {
+            enable = true;
+            name = "min-permissions";
+            description = "Top-level workflow permissions empty; each job declares its own scopes.";
+            entry = "${pkgs.writeShellScript "min-permissions-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              export PATH="${pkgs.yq-go}/bin:$PATH"
+              exec ${pkgs.bash}/bin/bash scripts/check-min-permissions.sh
+            ''}";
+            files = "^(\\.github/workflows/.*\\.ya?ml|scripts/check-min-permissions\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
+          # Schema-shape validation for repo config. Catches typoed
+          # keys, wrong-type values, and upstream-removed fields that
+          # per-tool linters miss. NIX_BUILD_TOP guard skips inside
+          # the flake-check sandbox where network fetches for the
+          # pinned SchemaStore schema would fail.
+          check-jsonschema = {
+            enable = true;
+            name = "check-jsonschema";
+            description = "Schema-shape validation of repo config (renovate.json, workflows, actions).";
+            entry = "${pkgs.writeShellScript "check-jsonschema-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              export PATH="${pkgs.check-jsonschema}/bin:$PATH"
+              exec ${pkgs.bash}/bin/bash scripts/check-jsonschema.sh
+            ''}";
+            files = "^(renovate\\.json|\\.markdownlint\\.json|\\.github/workflows/.*\\.ya?ml|\\.github/actions/.*\\.ya?ml|scripts/check-jsonschema\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
+          # Asserts only scripts/bump-linpeas.sh mutates
+          # linpeas-pin.json — the release-on-bump trigger contract
+          # depends on this isolation invariant.
+          pin-diff-isolated = {
+            enable = true;
+            name = "pin-diff-isolated";
+            description = "Only scripts/bump-linpeas.sh mutates linpeas-pin.json.";
+            entry = "${pkgs.writeShellScript "pin-diff-isolated-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              exec ${pkgs.bash}/bin/bash scripts/check-pin-diff-isolated.sh
+            ''}";
+            files = "^(scripts/.*\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
+          # Asserts every `gh api` / `api.github.com` call in
+          # scripts/*.sh passes an explicit `X-GitHub-Api-Version`
+          # header. Without it, GitHub treats the client as
+          # unversioned and may auto-promote it to a future API
+          # version whose response shape differs from what the
+          # script parses.
+          gh-api-version-header = {
+            enable = true;
+            name = "gh-api-version-header";
+            description = "Every gh api / api.github.com call in scripts passes an X-GitHub-Api-Version header.";
+            entry = "${pkgs.writeShellScript "gh-api-version-header-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              exec ${pkgs.bash}/bin/bash scripts/check-gh-api-version-header.sh
+            ''}";
+            files = "^(scripts/.*\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
+          # Catches divergence between the SHA in flake.nix's
+          # pre-commit-hooks input URL and the locked.rev in flake.lock.
+          # Fires when either file changes. NIX_BUILD_TOP guard skips
+          # inside the flake-check sandbox where git is not available.
+          pre-commit-hooks-sha-parity = {
+            enable = true;
+            name = "pre-commit-hooks-sha-parity";
+            description = "The pre-commit-hooks input SHA in flake.nix matches flake.lock locked.rev.";
+            entry = "${pkgs.writeShellScript "pre-commit-hooks-sha-parity-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              exec ${pkgs.bash}/bin/bash scripts/check-pre-commit-hooks-sha-parity.sh
+            ''}";
+            files = "^(flake\\.nix|flake\\.lock|scripts/check-pre-commit-hooks-sha-parity\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
+          # Asserts every entry in docs/invariant-index.md resolves
+          # to an existing docs/ file, and every docs/**/*.md (minus
+          # EXEMPT and the index itself) has an entry.
+          check-orphan-invariants = {
+            enable = true;
+            name = "check-orphan-invariants";
+            description = "Every docs/ file has an invariant-index entry and vice versa.";
+            entry = "${pkgs.writeShellScript "check-orphan-invariants-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              exec ${pkgs.bash}/bin/bash scripts/check-orphan-invariants.sh
+            ''}";
+            files = "^(docs/invariant-index\\.md|docs/.*\\.md|scripts/check-orphan-invariants\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
+          # Asserts every #anchor fragment in markdown links across
+          # README.md and docs/**/*.md matches a heading slug in the
+          # target file (ASCII GFM/mkdocs rule).
+          check-doc-anchors = {
+            enable = true;
+            name = "check-doc-anchors";
+            description = "Every markdown #anchor link resolves to a heading slug in its target file.";
+            entry = "${pkgs.writeShellScript "check-doc-anchors-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              exec ${pkgs.bash}/bin/bash scripts/check-doc-anchors.sh
+            ''}";
+            files = "^(README\\.md|docs/.*\\.md|scripts/check-doc-anchors\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
+        };
+
         preCommitCheck = pre-commit-hooks.lib.${system}.run {
           src = ./.;
-          hooks = {
-            nixfmt-rfc-style.enable = true;
-            deadnix.enable = true;
-            statix.enable = true;
-            actionlint.enable = true;
-            # Doc-quality hooks — mirror the CI lint required-check set
-            # so author catches issues before push.
-            markdownlint = {
-              enable = true;
-              # Excludes mirror the CI markdownlint-cli2-action globs:
-              # docs/dashboard.md + docs/releases.md are mkdocs-macros
-              # templated and not raw markdown; docs/_data/* is the
-              # generated dashboard YAML. tests/fixtures/* contains
-              # intentionally-invalid markdown for test harnesses.
-              excludes = [
-                "^docs/dashboard\\.md$"
-                "^docs/releases\\.md$"
-                "^docs/_data/"
-                "^tests/fixtures/"
-              ];
-            };
-            typos.enable = true;
-            editorconfig-checker.enable = true;
-            # Conventional Commits enforcement: `commitlint` with the
-            # `@commitlint/config-conventional` ruleset from
-            # `.commitlintrc.yml`. Parity with the CI `commitlint` job —
-            # same engine, same config, so any rule (subject type-enum,
-            # body-max-line-length, header-max-length, etc.) fails
-            # locally instead of after push. Replaces the older
-            # `commitizen.enable` hook, which validated the subject only.
-            commitlint = {
-              enable = true;
-              name = "commitlint";
-              description = "Lint commit message against .commitlintrc.yml (CI parity)";
-              entry = "${pkgs.commitlint}/bin/commitlint --config .commitlintrc.yml --edit";
-              stages = [ "commit-msg" ];
-              language = "system";
-              pass_filenames = true;
-            };
-            zizmor = {
-              enable = true;
-              # Older zizmor versions (e.g. 1.8.0 from nixos-25.05) exit
-              # non-zero on any finding including informational. Newer
-              # versions default to `--min-severity=low`; mirror that
-              # here so the hook is consistent across nixpkgs bumps.
-              entry = "${pkgs.zizmor}/bin/zizmor --min-severity=low";
-            };
-            yamllint.enable = true;
-            shellcheck = {
-              enable = true;
-              # justfile is parsed by `just`, not bash; shellcheck
-              # misidentifies it as shell because the first line looks
-              # like a comment.
-              excludes = [ "^justfile$" ];
-            };
-            treefmt = {
-              enable = true;
-              package = treefmtEval.config.build.wrapper;
-            };
-            # Refuse to commit if README flake-show block is stale.
-            # Invokes refresh-flake-show.sh in --check mode — never mutates the
-            # working tree, exits 1 on diff. Safe for the autonomous subagent
-            # path (no dirty README left behind on failure).
-            readme-flake-show-fresh = {
-              enable = true;
-              name = "readme-flake-show-fresh";
-              entry = "${pkgs.writeShellScript "readme-flake-show-fresh" ''
-                set -Eeuo pipefail
-                IFS=$'\n\t'
-                # No-op when running inside a nix build sandbox — the
-                # `checks.pre-commit` derivation runs all hooks, but the
-                # script needs `nix flake show` which can't run inside the
-                # sandbox (no daemon, restricted PATH). Local git pre-commit
-                # invocation has full PATH and the check fires normally.
-                if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then
-                  exit 0
-                fi
-                # No-op until both the script and README exist (early-build
-                # tasks land before T12/T14 — the hook activates once both
-                # paths are present and otherwise stays silent).
-                if [[ ! -f scripts/refresh-flake-show.sh || ! -f README.md ]]; then
-                  exit 0
-                fi
-                exec ${pkgs.bash}/bin/bash scripts/refresh-flake-show.sh --check
-              ''}";
-              files = "^(flake\\.nix|flake\\.lock|linpeas-pin\\.json|README\\.md|scripts/refresh-flake-show\\.sh)$";
-              pass_filenames = false;
-              language = "system";
-            };
-            # Belt-and-braces backup to the GitHub-side
-            # `sha_pinning_required` setting. Mirrors the NIX_BUILD_TOP guard used
-            # by readme-flake-show-fresh so nix flake check doesn't fail
-            # inside the sandbox where the script can't reach .github/.
-            uses-sha-pinned = {
-              enable = true;
-              name = "uses-sha-pinned";
-              entry = "${pkgs.writeShellScript "uses-sha-pinned-hook" ''
-                set -Eeuo pipefail
-                IFS=$'\n\t'
-                if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-                exec ${pkgs.bash}/bin/bash scripts/check-uses-sha-pinned.sh
-              ''}";
-              files = "^(\\.github/workflows/.*\\.ya?ml|\\.github/actions/.*\\.ya?ml|scripts/check-uses-sha-pinned\\.sh)$";
-              pass_filenames = false;
-              language = "system";
-            };
-            # Asserts every job in .github/workflows/*.yml starts with
-            # step-security/harden-runner as its first step. Belt-and-braces
-            # lint mirrors the trust-model invariant; eBPF monitor must
-            # install before any I/O.
-            harden-runner-first = {
-              enable = true;
-              name = "harden-runner-first";
-              entry = "${pkgs.writeShellScript "harden-runner-first-hook" ''
-                set -Eeuo pipefail
-                IFS=$'\n\t'
-                if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-                export PATH="${pkgs.yq-go}/bin:$PATH"
-                exec ${pkgs.bash}/bin/bash scripts/check-harden-runner-first.sh
-              ''}";
-              files = "^(\\.github/workflows/.*\\.ya?ml|scripts/check-harden-runner-first\\.sh)$";
-              pass_filenames = false;
-              language = "system";
-            };
-            # Strict least-privilege lint: every workflow's top-level
-            # permissions: must be `{}` and every job must declare its
-            # own scopes. See docs/security/min-permissions.md.
-            min-permissions = {
-              enable = true;
-              name = "min-permissions";
-              entry = "${pkgs.writeShellScript "min-permissions-hook" ''
-                set -Eeuo pipefail
-                IFS=$'\n\t'
-                if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-                export PATH="${pkgs.yq-go}/bin:$PATH"
-                exec ${pkgs.bash}/bin/bash scripts/check-min-permissions.sh
-              ''}";
-              files = "^(\\.github/workflows/.*\\.ya?ml|scripts/check-min-permissions\\.sh)$";
-              pass_filenames = false;
-              language = "system";
-            };
-            # Schema-shape validation for repo config. Catches typoed
-            # keys, wrong-type values, and upstream-removed fields that
-            # per-tool linters miss. NIX_BUILD_TOP guard skips inside
-            # the flake-check sandbox where network fetches for the
-            # pinned SchemaStore schema would fail.
-            check-jsonschema = {
-              enable = true;
-              name = "check-jsonschema";
-              entry = "${pkgs.writeShellScript "check-jsonschema-hook" ''
-                set -Eeuo pipefail
-                IFS=$'\n\t'
-                if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-                export PATH="${pkgs.check-jsonschema}/bin:$PATH"
-                exec ${pkgs.bash}/bin/bash scripts/check-jsonschema.sh
-              ''}";
-              files = "^(renovate\\.json|\\.markdownlint\\.json|\\.github/workflows/.*\\.ya?ml|\\.github/actions/.*\\.ya?ml|scripts/check-jsonschema\\.sh)$";
-              pass_filenames = false;
-              language = "system";
-            };
-            # Asserts only scripts/bump-linpeas.sh mutates
-            # linpeas-pin.json — the release-on-bump trigger contract
-            # depends on this isolation invariant.
-            pin-diff-isolated = {
-              enable = true;
-              name = "pin-diff-isolated";
-              entry = "${pkgs.writeShellScript "pin-diff-isolated-hook" ''
-                set -Eeuo pipefail
-                IFS=$'\n\t'
-                if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-                exec ${pkgs.bash}/bin/bash scripts/check-pin-diff-isolated.sh
-              ''}";
-              files = "^(scripts/.*\\.sh)$";
-              pass_filenames = false;
-              language = "system";
-            };
-            # Asserts every `gh api` / `api.github.com` call in
-            # scripts/*.sh passes an explicit `X-GitHub-Api-Version`
-            # header. Without it, GitHub treats the client as
-            # unversioned and may auto-promote it to a future API
-            # version whose response shape differs from what the
-            # script parses.
-            gh-api-version-header = {
-              enable = true;
-              name = "gh-api-version-header";
-              entry = "${pkgs.writeShellScript "gh-api-version-header-hook" ''
-                set -Eeuo pipefail
-                IFS=$'\n\t'
-                if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-                exec ${pkgs.bash}/bin/bash scripts/check-gh-api-version-header.sh
-              ''}";
-              files = "^(scripts/.*\\.sh)$";
-              pass_filenames = false;
-              language = "system";
-            };
-            # Catches divergence between the SHA in flake.nix's
-            # pre-commit-hooks input URL and the locked.rev in flake.lock.
-            # Fires when either file changes. NIX_BUILD_TOP guard skips
-            # inside the flake-check sandbox where git is not available.
-            pre-commit-hooks-sha-parity = {
-              enable = true;
-              name = "pre-commit-hooks-sha-parity";
-              entry = "${pkgs.writeShellScript "pre-commit-hooks-sha-parity-hook" ''
-                set -Eeuo pipefail
-                IFS=$'\n\t'
-                if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-                exec ${pkgs.bash}/bin/bash scripts/check-pre-commit-hooks-sha-parity.sh
-              ''}";
-              files = "^(flake\\.nix|flake\\.lock|scripts/check-pre-commit-hooks-sha-parity\\.sh)$";
-              pass_filenames = false;
-              language = "system";
-            };
-            # Asserts every entry in docs/invariant-index.md resolves
-            # to an existing docs/ file, and every docs/**/*.md (minus
-            # EXEMPT and the index itself) has an entry.
-            check-orphan-invariants = {
-              enable = true;
-              name = "check-orphan-invariants";
-              entry = "${pkgs.writeShellScript "check-orphan-invariants-hook" ''
-                set -Eeuo pipefail
-                IFS=$'\n\t'
-                if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-                exec ${pkgs.bash}/bin/bash scripts/check-orphan-invariants.sh
-              ''}";
-              files = "^(docs/invariant-index\\.md|docs/.*\\.md|scripts/check-orphan-invariants\\.sh)$";
-              pass_filenames = false;
-              language = "system";
-            };
-            # Asserts every #anchor fragment in markdown links across
-            # README.md and docs/**/*.md matches a heading slug in the
-            # target file (ASCII GFM/mkdocs rule).
-            check-doc-anchors = {
-              enable = true;
-              name = "check-doc-anchors";
-              entry = "${pkgs.writeShellScript "check-doc-anchors-hook" ''
-                set -Eeuo pipefail
-                IFS=$'\n\t'
-                if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-                exec ${pkgs.bash}/bin/bash scripts/check-doc-anchors.sh
-              ''}";
-              files = "^(README\\.md|docs/.*\\.md|scripts/check-doc-anchors\\.sh)$";
-              pass_filenames = false;
-              language = "system";
-            };
-          };
+          hooks = preCommitHooks;
         };
       in
       {
@@ -483,6 +568,14 @@
               check-jsonschema
             ]);
         };
+
+        # Non-standard output (expect a harmless "unknown flake output" warning from
+        # nix flake check): name -> description manifest of enabled pre-commit hooks,
+        # consumed by scripts/refresh-precommit-table.sh via `nix eval --json`.
+        # NOTE: hook descriptions must not contain '|' (they render into a markdown table cell).
+        devTooling.preCommitHooks = pkgs.lib.mapAttrs (_: v: v.description) (
+          pkgs.lib.filterAttrs (_: v: (v.enable or false) && (v ? description)) preCommitHooks
+        );
       }
     )
     // {

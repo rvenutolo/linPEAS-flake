@@ -42,6 +42,11 @@ changes: `feat!: drop Java 11 support`.
 
 Run before pushing:
 
+These commands need no manual tool install — `just`, `pre-commit`, `lychee`,
+and every linter come from the flake `devShells.default`. Enter it with
+`nix develop` or via direnv (`direnv allow`). See the README Development
+section for details.
+
 ```sh
 just check       # nix flake check
 just fmt         # nix fmt (treefmt: shfmt, prettier, …)
@@ -70,22 +75,37 @@ the PR. Don't leak WIP commits onto `main`.
 
 Hooks (alphabetical):
 
-| Hook                      | What it checks                                                                                                                  |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `actionlint`              | GitHub Actions workflow syntax.                                                                                                 |
-| `commitizen`              | Commit message satisfies Conventional Commits (local parity with the CI `commitlint` job).                                      |
-| `deadnix`                 | Unused Nix bindings.                                                                                                            |
-| `editorconfig-checker`    | `.editorconfig` compliance (charset, line endings, trailing whitespace, final newline).                                         |
-| `markdownlint`            | Markdown style + structure (mirrors the CI `markdownlint` job).                                                                 |
-| `nixpkgs-fmt`             | Nix file formatting.                                                                                                            |
-| `readme-flake-show-fresh` | `README.md` `flake-show` block matches current flake outputs (guarded with `NIX_BUILD_TOP` so it skips inside the Nix sandbox). |
-| `shellcheck`              | Shell-script static analysis.                                                                                                   |
-| `statix`                  | Nix anti-pattern lint.                                                                                                          |
-| `treefmt`                 | Multi-language formatter aggregator (covers `shfmt`, `prettier`, etc).                                                          |
-| `typos`                   | Spell-check across the repo.                                                                                                    |
-| `uses-sha-pinned`         | Every `uses:` is SHA-pinned (guarded with `NIX_BUILD_TOP`).                                                                     |
-| `yamllint`                | YAML style.                                                                                                                     |
-| `zizmor`                  | GitHub Actions security audit.                                                                                                  |
+<!-- BEGIN precommit-table -->
+
+| Hook                          | What it checks                                                                        |
+| ----------------------------- | ------------------------------------------------------------------------------------- |
+| `actionlint`                  | GitHub Actions workflow syntax.                                                       |
+| `check-doc-anchors`           | Every markdown #anchor link resolves to a heading slug in its target file.            |
+| `check-jsonschema`            | Schema-shape validation of repo config (renovate.json, workflows, actions).           |
+| `check-orphan-invariants`     | Every docs/ file has an invariant-index entry and vice versa.                         |
+| `ci-summary-fresh`            | README CI summary matches required-checks.md and the category map.                    |
+| `commitlint`                  | Commit message satisfies Conventional Commits (CI parity via .commitlintrc.yml).      |
+| `deadnix`                     | Unused Nix bindings.                                                                  |
+| `editorconfig-checker`        | .editorconfig compliance (charset, line endings, trailing whitespace, final newline). |
+| `gh-api-version-header`       | Every gh api / api.github.com call in scripts passes an X-GitHub-Api-Version header.  |
+| `harden-runner-first`         | Every workflow job's first step is step-security/harden-runner.                       |
+| `just-recipes-fresh`          | README just-recipes block matches the justfile.                                       |
+| `markdownlint`                | Markdown style + structure.                                                           |
+| `min-permissions`             | Top-level workflow permissions empty; each job declares its own scopes.               |
+| `nixfmt-rfc-style`            | Nix file formatting.                                                                  |
+| `pin-diff-isolated`           | Only scripts/bump-linpeas.sh mutates linpeas-pin.json.                                |
+| `pre-commit-hooks-sha-parity` | The pre-commit-hooks input SHA in flake.nix matches flake.lock locked.rev.            |
+| `precommit-table-fresh`       | Hook table in docs/development/git.md matches the flake hook manifest.                |
+| `readme-flake-show-fresh`     | README flake-show block matches current flake outputs.                                |
+| `shellcheck`                  | Shell-script static analysis.                                                         |
+| `statix`                      | Nix anti-pattern lint.                                                                |
+| `treefmt`                     | Multi-language formatter aggregator (shfmt, prettier, etc).                           |
+| `typos`                       | Spell-check across the repo.                                                          |
+| `uses-sha-pinned`             | Every uses: reference is SHA-pinned.                                                  |
+| `yamllint`                    | YAML style.                                                                           |
+| `zizmor`                      | GitHub Actions security audit.                                                        |
+
+<!-- END precommit-table -->
 
 Lychee is not a pre-commit hook (it hits the network and can flake on
 offline work). Run it manually with `just lint-links`; CI runs it on a

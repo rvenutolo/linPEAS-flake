@@ -683,6 +683,77 @@ jobs:
       - name: enforce pre-commit-hooks SHA parity
         run: nix develop --command ./scripts/check-pre-commit-hooks-sha-parity.sh
 
+  refresh-just-recipes-test:
+    # Round-trip + drift harness for scripts/refresh-just-recipes.sh,
+    # which regenerates the just-recipes block in README.md from the justfile.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3
+      - name: harness passes
+        run: nix develop --command bash tests/refresh-just-recipes.test.sh
+
+  refresh-precommit-table-test:
+    # Round-trip + drift harness for scripts/refresh-precommit-table.sh,
+    # which regenerates the pre-commit hook table in docs/development/git.md
+    # from the flake.nix preCommitHookDescriptions manifest.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3
+      - name: harness passes
+        run: nix develop --command bash tests/refresh-precommit-table.test.sh
+
+  refresh-ci-summary-test:
+    # Round-trip + drift harness for scripts/refresh-ci-summary.sh,
+    # which regenerates the CI summary block in README.md from
+    # docs/security/required-checks.md and docs/_data/ci-check-categories.yml.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3
+      - name: harness passes
+        run: nix develop --command bash tests/refresh-ci-summary.test.sh
+
   protect-main-drift-check:
     # Asserts the live `protect-main` branch ruleset matches the in-tree
     # mirror at .github/rulesets/protect-main.json AND that key invariants

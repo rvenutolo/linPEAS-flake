@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+# Replace the content between <!-- BEGIN precommit-table --> and <!-- END precommit-table -->
+# in docs/development/git.md with the current pre-commit hook manifest from the flake.
+#
+# Usage:
+#   scripts/refresh-precommit-table.sh            # mutate docs/development/git.md in place
+#   scripts/refresh-precommit-table.sh --check    # exit 1 if the doc would change;
+#                                                 #   do NOT mutate the working tree
+
+set -Eeuo pipefail
+IFS=$'\n\t'
+trap 'printf "[%s] %-5s line %s (exit %s): %s\n" \
+  "$(date "+%Y-%m-%dT%H:%M:%S%z")" ERROR "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+function log() {
+  printf '[%s] %-5s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$1" "$2" >&2
+}
+function log_info() { log INFO "$*"; }
+function log_err() { log ERROR "$*"; }
+
+# @description Verify a required CLI tool is on PATH; exit 1 if missing.
+# @arg $1 tool name
+function require_tool() {
+  local -r tool="$1"
+  if ! command -v "${tool}" >/dev/null 2>&1; then
+    log_err "missing required tool: ${tool}"
+    exit 1
+  fi
+}
+
+function main() {
+  local check_only='false'
+  if [[ ${1:-} == '--check' ]]; then
+    check_only='true'
+  elif [[ -n ${1:-} ]]; then
+    log_err "unknown arg: ${1}"
+    exit 2
+  fi
+  readonly check_only
+
+  require_tool git
+  require_tool nix
+  require_tool jq
+  require_tool awk
+  require_tool cmp
+
+  local repo_root doc
+  repo_root="$(git rev-parse --show-toplevel)"
+  doc="${repo_root}/docs/development/git.md"
+  readonly repo_root doc
+
+  if [[ ! -f ${doc} ]]; then
+    log_err "${doc} not found"
+    exit 1
+  fi
+  if ! grep --quiet '<!-- BEGIN precommit-table -->' "${doc}"; then
+    log_err 'BEGIN marker missing from docs/development/git.md'
+    exit 1
+  fi
+  if ! grep --quiet '<!-- END precommit-table -->' "${doc}"; then
+    log_err 'END marker missing from docs/development/git.md'
+    exit 1
+  fi
+
+  local hooks_file block_file doc_new
+  hooks_file="$(mktemp)"
+  block_file="$(mktemp)"
+  doc_new="$(mktemp)"
+  trap 'rm --force -- "${hooks_file:-}" "${block_file:-}" "${doc_new:-}"' EXIT
+
+  local sys
+  sys="$(nix eval --impure --raw --expr 'builtins.currentSystem')"
+
+  nix eval --json ".#devTooling.${sys}.preCommitHooks" >"${hooks_file}"
+
+  # Render the block in prettier's canonical padded-column form.
+  # Compute the max widths for col1 (`name`) and col2 (description), then pad
+  # every cell so the regenerated table is stable after `nix fmt` runs prettier.
+  local col1_width col2_width
+
+  # col1: max of header "Hook" (4) and max(len("`name`")) across all hooks
+  col1_width="$(
+    jq --raw-output '
+      (["Hook"] + (keys | map("`" + . + "`"))) | map(length) | max
+    ' "${hooks_file}"
+  )"
+  # col2: max of header "What it checks" (14) and max(len(description)) across all hooks
+  col2_width="$(
+    jq --raw-output '
+      (["What it checks"] + [.[]] ) | map(length) | max
+    ' "${hooks_file}"
+  )"
+
+  # Render the block: markers, blank line, padded header, separator, rows, blank line, end marker.
+  {
+    printf '<!-- BEGIN precommit-table -->\n'
+    printf '\n'
+    # Header row: pad "Hook" to col1_width, "What it checks" to col2_width
+    printf '| %-*s | %-*s |\n' \
+      "${col1_width}" 'Hook' \
+      "${col2_width}" 'What it checks'
+    # Separator row: dashes matching each column width
+    printf '| %s | %s |\n' \
+      "$(printf '%*s' "${col1_width}" '' | tr ' ' '-')" \
+      "$(printf '%*s' "${col2_width}" '' | tr ' ' '-')"
+    # Data rows — use jq to read the sorted JSON and print padded lines
+    jq --raw-output --argjson w1 "${col1_width}" --argjson w2 "${col2_width}" '
+      to_entries | sort_by(.key)[] |
+      "| " + ("`" + .key + "`" | . + (" " * ($w1 - length))) +
+      " | " + (.value | . + (" " * ($w2 - length))) + " |"
+    ' "${hooks_file}"
+    printf '\n'
+    printf '<!-- END precommit-table -->\n'
+  } >"${block_file}"
+
+  # Replace inclusive of markers. awk emits the block once at BEGIN marker,
+  # then suppresses every line until (and including) END.
+  # Anchored to start-of-line so doc references to the marker don't falsely match.
+  awk -v rep="${block_file}" '
+    /^<!-- BEGIN precommit-table -->$/ {
+      while ((getline line < rep) > 0) print line
+      close(rep)
+      skip = 1
+      next
+    }
+    /^<!-- END precommit-table -->$/ {
+      skip = 0
+      next
+    }
+    !skip { print }
+  ' "${doc}" >"${doc_new}"
+
+  if [[ ${check_only} == 'true' ]]; then
+    # cmp short-circuits on first byte difference and supports --silent across
+    # both GNU and BSD coreutils — diff --quiet is GNU-only.
+    if ! cmp --silent -- "${doc}" "${doc_new}"; then
+      log_err 'pre-commit table in docs/development/git.md is stale. Run scripts/refresh-precommit-table.sh and commit.'
+      exit 1
+    fi
+    log_info 'pre-commit table in docs/development/git.md is up to date'
+    return 0
+  fi
+
+  mv -- "${doc_new}" "${doc}"
+  log_info 'refreshed pre-commit table in docs/development/git.md'
+}
+
+main "$@"

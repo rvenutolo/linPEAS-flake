@@ -140,16 +140,14 @@ the full job inventory + cron schedule lives in
 
 <!-- Alphabetical by category. -->
 
-- **Build + smoke**: `build-linpeas`, `build-linpeas-arm64`,
-    `bundle-smoke`, `flake-check`, `image-smoke`, `image-smoke-arm64`,
-    `smoke-test`, `smoke-test-arm64`.
-- **Conventional Commits**: `commitlint` (per-commit), `lint-pr-title`
-    (PR title).
-- **Doc quality**: `editorconfig`, `markdownlint`, `typos`.
-- **Security/invariant lints**: `dashboard-data-tests`,
-    `pr-workflows-no-secrets`, `renovate-invariants`,
-    `required-checks-no-paths`, `tag-protection-drift-check`,
-    `uses-sha-pinned`.
+<!-- BEGIN ci-summary -->
+
+- **Build + smoke**: `build-linpeas`, `build-linpeas-arm64`, `bundle-smoke`, `flake-check`, `image-smoke`, `image-smoke-arm64`, `smoke-test`, `smoke-test-arm64`.
+- **Conventional Commits**: `commitlint`, `lint-pr-title`.
+- **Doc quality**: `check-doc-anchors`, `check-orphan-invariants`, `editorconfig`, `markdownlint`, `typos`.
+- **Security/invariant lints**: `check-jsonschema`, `dashboard-data-tests`, `dependency-review`, `gitleaks`, `harden-runner-first`, `min-permissions`, `pin-diff-isolated`, `pr-workflows-no-secrets`, `pre-commit-hooks-sha-parity`, `protect-main-drift-check`, `renovate-invariants`, `required-checks-no-paths`, `tag-protection-drift-check`, `uses-sha-pinned`.
+
+<!-- END ci-summary -->
 
 Merge policy: **merge-commit only**, with `required_signatures`
 enforced. Every branch commit must independently pass `commitlint` and be
@@ -297,23 +295,48 @@ and tag protection, required-check list — lives in
 
 ## Development
 
+All tooling below — `shfmt`, `shellcheck`, `just`, `pre-commit`,
+`nixfmt-rfc-style`, `deadnix`, `statix`, `actionlint`, `zizmor`, `yamllint`,
+`prettier`, `lychee`, `check-jsonschema`, and more (see `devShells.default` in
+`flake.nix` for the full set) — is supplied by the flake's `devShells.default`.
+You do **not** install any of it manually.
+
+Enter the shell one of two ways:
+
+- `nix develop` — explicit entry.
+- `direnv allow` once, then direnv auto-enters on `cd` (`.envrc` runs
+    `use flake`).
+
+Either path runs the `shellHook`, which installs the `pre-commit` git hooks
+automatically — the `pre-commit install` line below is shown only for
+reference / non-flake setups. Prerequisite: Nix
+with flakes enabled (`nix-command flakes`).
+
 ```sh
 # Entry points.
 nix develop          # enter dev shell (or direnv allow)
 pre-commit install   # one-time, wires git hooks
 
 # just recipes (alphabetical).
-just                 # list recipes
-just build           # nix build .#linpeas
-just bump            # refresh linpeas pin from upstream
-just check           # nix flake check
-just fmt             # nix fmt
-just lint            # pre-commit run --all-files
-just lint-links      # lychee link check on tracked markdown
-just show            # refresh README flake-show block
-just site            # nix build .#site
-just site-data       # regenerate docs/_data/dashboard.yml
-just site-dev        # local preview at http://127.0.0.1:8000
+# BEGIN just-recipes
+just                 # Default: list recipes
+just build           # Build the linpeas package
+just bump            # Manually refresh linpeas pin from upstream latest release
+just bundle          # Build the portable bundle for the current arch
+just check           # Run all flake checks (eval, formatting, pre-commit)
+just fmt             # Format every file via treefmt
+just image           # Build the OCI image
+just lint            # Run pre-commit hooks against all files
+just lint-links      # Run lychee link checker against tracked markdown files
+just show            # Regenerate the <!-- BEGIN/END flake-show --> block in README.md
+just show-ci-summary # Regenerate the Continuous integration summary in README.md
+just show-hooks      # Regenerate the pre-commit hook table in docs/development/git.md
+just show-recipes    # Regenerate the just-recipes list in README.md
+just site            # Build the Pages site
+just site-data       # Regenerate docs/_data/dashboard.yml standalone
+just site-dev        # Live-preview site at http://127.0.0.1:8000 (regenerates data first)
+just verify          # Run every script-based check and test harness (excludes nix-build and link-check jobs)
+# END just-recipes
 ```
 
 ## License and attribution
