@@ -29,7 +29,7 @@ upstream tag replacement (intentional or compromise).
 
 ## Trust model and SLSA attestation semantics
 
-Every release artifact (bundle, OCI image, pin file) carries a SLSA
+Every release artifact (OCI image, pin file) carries a SLSA
 build-provenance attestation, verifiable with
 `gh attestation verify <artifact> --repo rvenutolo/linPEAS-flake`. These
 attestations prove **build provenance**: the published artifact was
@@ -151,21 +151,16 @@ The `codeql.yml` workflow is not in branch protection's required-check set. A Co
 
 In addition to build-provenance attestations, each release carries SBOM
 attestations (SPDX-JSON predicate, predicate-type `https://spdx.dev/Document`)
-for the bundle and each per-arch OCI image.
+for each per-arch OCI image.
 Verify with:
 
 ```bash
-gh attestation verify linpeas-bundle.sh --repo rvenutolo/linPEAS-flake
 gh attestation verify oci://ghcr.io/rvenutolo/linpeas@<DIGEST> --repo rvenutolo/linPEAS-flake
 ```
 
 `gh attestation verify` lists ALL attached attestations — the SBOM attestation
 is the one with predicate-type `https://spdx.dev/Document`; the provenance
 attestation carries `https://slsa.dev/provenance/v1`.
-
-The bundle SBOM is also published as a release asset
-(`linpeas-bundle.sbom.spdx.json`) for consumers who want to ingest it directly
-without verifying the attestation.
 
 ## Runner egress monitoring (harden-runner, audit mode)
 

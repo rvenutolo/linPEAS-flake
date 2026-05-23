@@ -62,18 +62,6 @@ Personal Nix-flake wrapper around [peass-ng/PEASS-ng](https://github.com/peass-n
 
     Tag-pinned alternatives on the [Docker install page](install/docker.md).
 
-=== "Bundle (no deps)"
-
-    ```bash
-    curl --location \
-      https://github.com/rvenutolo/linPEAS-flake/releases/latest/download/linpeas-bundle.sh \
-      --output linpeas
-    chmod +x linpeas
-    ./linpeas -a
-    ```
-
-    Details on the [bundle install page](install/bundle.md).
-
 === "Flake input"
 
     ```nix

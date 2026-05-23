@@ -76,10 +76,6 @@ show-ci-summary:
 image:
 	nix build .#linpeas-image
 
-# Build the portable bundle for the current arch
-bundle:
-	nix build .#linpeas-bundle
-
 # Build the Pages site
 site:
 	nix build "path:$(pwd)#site"

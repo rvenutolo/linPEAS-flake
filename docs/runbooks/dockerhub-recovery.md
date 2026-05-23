@@ -100,7 +100,7 @@ Either:
     `chore: retrigger release` commit), OR
 - Re-run the workflow from the Actions UI if the pin commit is
     still `HEAD` on `main`. Use the `force-republish` input when
-    re-running so the `bundle` and `release` jobs skip the
+    re-running so the `release` job skips the
     "tag exists" guard.
 
 ### 4. Confirm green end-to-end

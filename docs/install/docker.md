@@ -11,7 +11,7 @@ linpeas enumerates Linux privilege-escalation vectors against whatever filesyste
 - **Base-image hardening review.** Bring up a candidate base image, exec linpeas inside it, fail the review on findings above a threshold.
 - **Forensics on a captured container filesystem.** Mount the suspect filesystem into the linpeas image and run with `-d <path>`.
 
-For a **host** audit, linpeas needs to see the host. Either install via Nix (`nix run github:rvenutolo/linPEAS-flake`), grab the [portable bundle](bundle.md), or run the image with host namespaces explicitly:
+For a **host** audit, linpeas needs to see the host. Either install via Nix (`nix run github:rvenutolo/linPEAS-flake`), or run the image with host namespaces explicitly:
 
 ```bash
 docker run --rm \
@@ -20,7 +20,7 @@ docker run --rm \
   rvenutolo/linpeas:latest -d /host
 ```
 
-The bundle is usually simpler for host audits — this form exists for environments where Docker is the only available shipping vehicle.
+This form exists for environments where Docker is the only available shipping vehicle.
 
 ## Run (container audit, default)
 

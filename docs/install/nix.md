@@ -54,7 +54,7 @@ The flake declares packages for all four systems in `flake-utils.lib.eachDefault
 
 `x86_64-darwin` is declared because the upstream script is portable bash and is expected to work, but no automated test exercises it. If you run on an Intel Mac and hit a failure, please open an issue.
 
-The OCI image (`linpeas-image`) and portable bundle (`linpeas-bundle`) are Linux-only by design — containers run a Linux kernel regardless of host OS.
+The OCI image (`linpeas-image`) is Linux-only by design — containers run a Linux kernel regardless of host OS.
 
 ## Pin / version
 

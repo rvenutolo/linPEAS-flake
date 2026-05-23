@@ -57,13 +57,11 @@ No bump PRs found yet.
 
 {% if dashboard.release.latest_tag %}
 - **Tag:** [{{ dashboard.release.latest_tag }}](https://github.com/rvenutolo/linPEAS-flake/releases/tag/{{ dashboard.release.latest_tag }})
-- **Bundle:** [`linpeas-bundle.sh`]({{ dashboard.release.bundle_url }})
 - **OCI image:** `{{ dashboard.release.image_ref }}`
 
 Verify:
 
 ```bash
-gh attestation verify linpeas-bundle.sh --repo rvenutolo/linPEAS-flake
 gh attestation verify oci://{{ dashboard.release.image_ref }} --repo rvenutolo/linPEAS-flake
 ```
 {% else %}
