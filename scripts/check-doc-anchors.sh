@@ -38,11 +38,20 @@ function slug() {
 function headings_of() {
   local -r f="$1"
   [[ -f ${f} ]] || return 0
+  # Heading-derived slugs. Strip inline HTML (e.g. `<a name="...">`
+  # anchors written by mdformat-toc) before slugging so the computed
+  # slug matches the GFM/mkdocs auto-slug, which ignores HTML tags.
   grep --extended-regexp '^#+[[:space:]]+.+' "${f}" |
-    sed --regexp-extended 's/^#+[[:space:]]+//' |
+    sed --regexp-extended 's/^#+[[:space:]]+//; s/<[^>]+>//g' |
     while IFS= read -r heading; do
       slug "${heading}"
     done
+  # Explicit `<a name="..."></a>` anchors are also valid targets.
+  # mdformat-toc writes these next to every in-range heading so its
+  # TOC fragments resolve regardless of the slug algorithm in use.
+  grep --extended-regexp --only-matching \
+    '<a[[:space:]]+name="[^"]+"' "${f}" 2>/dev/null |
+    sed --regexp-extended 's/.*name="([^"]+)".*/\1/' || true
 }
 
 if [[ -n ${DOC_ANCHOR_SOURCES_OVERRIDE:-} ]]; then

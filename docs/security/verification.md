@@ -2,14 +2,35 @@
 
 Step-by-step procedure to verify a release of this wrapper. None of this trusts the Pages site you are reading.
 
-## Tools needed
+<!-- mdformat-toc start --slug=github --maxlevel=3 --minlevel=2 -->
+
+- [Tools needed](#tools-needed)
+- [1. Verify the OCI image's build provenance](#1-verify-the-oci-images-build-provenance)
+- [Multi-arch attestations](#multi-arch-attestations)
+- [2. Verify the daily parity check is current](#2-verify-the-daily-parity-check-is-current)
+- [Bump-script integrity guards](#bump-script-integrity-guards)
+- [verify-latest-release upstream parity](#verify-latest-release-upstream-parity)
+- [verify-latest-release failure attribution](#verify-latest-release-failure-attribution)
+- [Gitleaks secret scanning](#gitleaks-secret-scanning)
+- [Dependency review](#dependency-review)
+- [OCI image CVE scan (Trivy)](#oci-image-cve-scan-trivy)
+- [SBOM attestation](#sbom-attestation)
+- [Cosign keyless signatures](#cosign-keyless-signatures)
+    - [Identity pinning](#identity-pinning)
+    - [User-facing verification commands](#user-facing-verification-commands)
+- [gh-attestation-repo invariant](#gh-attestation-repo-invariant)
+- [cosign-identity-pinned invariant](#cosign-identity-pinned-invariant)
+
+<!-- mdformat-toc end -->
+
+## Tools needed<a name="tools-needed"></a>
 
 - `gh` (GitHub CLI) ≥ 2.40 — `gh attestation verify` subcommand.
 - `curl` — for direct asset download.
 - `sha256sum` and/or `openssl` — for hash recomputation.
 - `nix` (optional) — for SRI hash recompute.
 
-## 1. Verify the OCI image's build provenance
+## 1. Verify the OCI image's build provenance<a name="1-verify-the-oci-images-build-provenance"></a>
 
 ```bash
 gh attestation verify \
@@ -19,7 +40,7 @@ gh attestation verify \
 
 Same trust model: proves the image was built by this repo's release workflow.
 
-## Multi-arch attestations
+## Multi-arch attestations<a name="multi-arch-attestations"></a>
 
 The published OCI image is a multi-arch manifest covering `linux/amd64`
 and `linux/arm64`. **SLSA attestations are per-arch**, not per-manifest.
@@ -38,7 +59,7 @@ This means:
     arch image) would miss it. Always verify against the resolved
     arch-image digest.
 
-## 2. Verify the daily parity check is current
+## 2. Verify the daily parity check is current<a name="2-verify-the-daily-parity-check-is-current"></a>
 
 ```bash
 gh run list \
@@ -50,7 +71,7 @@ gh run list \
 
 Look for `"conclusion": "success"` within the last 24-25 hours. Current state on the Pages site: **{{ dashboard.parity.conclusion }}** at {{ dashboard.parity.checked_at }}.
 
-## Bump-script integrity guards
+## Bump-script integrity guards<a name="bump-script-integrity-guards"></a>
 
 `scripts/bump-linpeas.sh`:
 
@@ -62,13 +83,13 @@ Look for `"conclusion": "success"` within the last 24-25 hours. Current state on
 - Every `gh api` call must pass `--header "X-GitHub-Api-Version: 2022-11-28"`.
     Apply to any new security-sensitive GitHub-REST caller.
 
-## verify-latest-release upstream parity
+## verify-latest-release upstream parity<a name="verify-latest-release-upstream-parity"></a>
 
 Daily verify cron re-fetches the pinned `linpeas.sh` URL, recomputes the SRI
 hash via `openssl dgst -sha256 -binary | base64 --wrap=0`, compares against
 `linpeas-pin.json`. Failure = security incident.
 
-## verify-latest-release failure attribution
+## verify-latest-release failure attribution<a name="verify-latest-release-failure-attribution"></a>
 
 `verify-latest-release.yml`'s notify body distinguishes failure
 reasons via per-step `id:` outcomes mapped to a `reason` token by
@@ -95,7 +116,7 @@ This pattern is the project default for every cron-notify caller: each
 must attribute distinct failure reasons to distinct issue-body wording.
 Alert fatigue is a security risk.
 
-## Gitleaks secret scanning
+## Gitleaks secret scanning<a name="gitleaks-secret-scanning"></a>
 
 `gitleaks.yml` scans the full git history (`fetch-depth: 0`) on push to
 main, every PR, and a weekly cron (Mon 13:00 UTC). Required check named
@@ -108,7 +129,7 @@ main, every PR, and a weekly cron (Mon 13:00 UTC). Required check named
 - Vendor `gitleaks/*` is in the `allowed_actions` allowlist; do not
     remove without replacing the workflow.
 
-## Dependency review
+## Dependency review<a name="dependency-review"></a>
 
 `dependency-review.yml` runs on every PR via
 `actions/dependency-review-action`. Required check named
@@ -119,7 +140,7 @@ main, every PR, and a weekly cron (Mon 13:00 UTC). Required check named
 - If a future PR adds a real manifest (npm/cargo/pip/etc.), the action
     begins scanning it without any workflow change.
 
-## OCI image CVE scan (Trivy)
+## OCI image CVE scan (Trivy)<a name="oci-image-cve-scan-trivy"></a>
 
 `ci.yml`'s `image-cve-scan` job uploads SARIF (CRITICAL + HIGH) to
 code-scanning, then post-processes the SARIF to count CRITICAL findings
@@ -156,7 +177,7 @@ update deduped issues via `notify-workflow-result`:
     of erroring under `set -euo pipefail`. Revisit the threshold if
     GitHub revises the CVSS-to-bucket mapping.
 
-## SBOM attestation
+## SBOM attestation<a name="sbom-attestation"></a>
 
 `release-on-bump.yml` generates SPDX-JSON SBOMs via `anchore/sbom-action`,
 attests via `actions/attest-sbom`.
@@ -166,7 +187,7 @@ attests via `actions/attest-sbom`.
 - `verify-latest-release.yml`'s `gh attestation verify` covers SBOMs
     automatically (verifies ALL attestations).
 
-## Cosign keyless signatures
+## Cosign keyless signatures<a name="cosign-keyless-signatures"></a>
 
 In addition to `actions/attest-build-provenance` + `actions/attest-sbom`
 (verifiable via `gh attestation verify`), `release-on-bump.yml` signs
@@ -184,7 +205,7 @@ Signed artifacts per release:
     since they reference identical bytes). One signature per registry
     covers both tags.
 
-### Identity pinning
+### Identity pinning<a name="identity-pinning"></a>
 
 Verification must pin both:
 
@@ -195,7 +216,7 @@ A signature minted by any other workflow, branch ref, or OIDC issuer
 fails verification. The release pipeline's `verify` job and the daily
 `verify-latest-release.yml` cron both enforce these exact values.
 
-### User-facing verification commands
+### User-facing verification commands<a name="user-facing-verification-commands"></a>
 
 Image (any tag or digest works; both registries are signed):
 
@@ -209,13 +230,13 @@ cosign verify \
 No `gh` CLI required. Pairs with the existing `gh attestation verify`
 path — pick whichever toolchain fits the consumer's pipeline.
 
-## gh-attestation-repo invariant
+## gh-attestation-repo invariant<a name="gh-attestation-repo-invariant"></a>
 
 Every `gh attestation verify` invocation across workflows, scripts, and shell-fenced documentation must pass `--repo rvenutolo/linPEAS-flake`. Without the `--repo` pin, Sigstore returns any attestation matching the artifact digest, including one issued from a different repository — a trivial bypass.
 
 Enforced by `scripts/check-gh-attestation-repo.sh`. The lint joins backslash-continued shell invocations, ignores prose mentions in backticks, and only inspects fenced code blocks (`sh`, `bash`, `shell`, `console`, or unlabeled) in markdown files. Wired as the `gh-attestation-repo` required CI job and as a pre-commit hook.
 
-## cosign-identity-pinned invariant
+## cosign-identity-pinned invariant<a name="cosign-identity-pinned-invariant"></a>
 
 Every `cosign verify` invocation across workflows, scripts, and shell-fenced documentation must pin BOTH `--certificate-identity` (or `--certificate-identity-regexp`) AND `--certificate-oidc-issuer`. The `nix run nixpkgs#cosign -- verify` shape is recognized as well.
 

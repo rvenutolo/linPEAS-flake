@@ -31,6 +31,11 @@
         ps.mdformat-frontmatter
         ps.mdformat-mkdocs
         ps.mdformat-footnote
+        # Auto-regenerates TOC between
+        # `<!-- mdformat-toc start -->` / `<!-- mdformat-toc end -->`
+        # markers. No-op on files without markers; opt-in per file.
+        # Convention documented in docs/development/linting.md.
+        ps.mdformat-toc
       ];
     };
     shfmt = {

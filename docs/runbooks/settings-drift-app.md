@@ -2,13 +2,23 @@
 
 The `settings-posture-drift-check` workflow (and any other drift-check that needs admin-scoped read access to repo settings) authenticates as a dedicated read-only GitHub App. This isolates the admin-read blast radius from both `secrets.GITHUB_TOKEN` (which never receives admin scope) and from the `linpeas-flake-bumper` App used for bump commits.
 
-## Why a separate App
+<!-- mdformat-toc start --slug=github --maxlevel=3 --minlevel=2 -->
+
+- [Why a separate App](#why-a-separate-app)
+- [One-time setup](#one-time-setup)
+- [Failure modes](#failure-modes)
+- [Rotation](#rotation)
+- [Reuse for related drift checks](#reuse-for-related-drift-checks)
+
+<!-- mdformat-toc end -->
+
+## Why a separate App<a name="why-a-separate-app"></a>
 
 - **`secrets.GITHUB_TOKEN`** — never granted admin scope by GitHub regardless of `permissions:` block declarations. Returns `HTTP 403 Resource not accessible by integration` on `/repos/X/actions/permissions`, `security_and_analysis` fields of `/repos/X`, and environment endpoints.
 - **`linpeas-flake-bumper`** — the bump-bot App. Adding admin scope to it widens the blast radius of its write-capable installation token. Keep it scoped to its bump duties.
 - **`settings-drift-checker`** — this App. **Read-only**. Administration:Read + Metadata:Read. Cannot mutate any state. If its private key leaks, the worst an attacker gains is a snapshot of already-public repo metadata plus admin-only fields they could read by viewing repo Settings in a browser as a viewer.
 
-## One-time setup
+## One-time setup<a name="one-time-setup"></a>
 
 1. **Create the App.** <https://github.com/settings/apps/new> (or the user-account Apps page if registering personally).
 
@@ -56,13 +66,13 @@ The `settings-posture-drift-check` workflow (and any other drift-check that need
 
     Expect the `drift-check` job to pass with `settings-posture: live repo configuration matches docs/security/settings-posture.md` in the log.
 
-## Failure modes
+## Failure modes<a name="failure-modes"></a>
 
 - **`Error: Could not create installation access token`** — App not installed on this repo, or `SETTINGS_DRIFT_APP_CLIENT_ID` / `SETTINGS_DRIFT_APP_PRIVATE_KEY` mismatched or rotated without updating both halves.
 - **`HTTP 403 Resource not accessible by integration` on a settings endpoint** — App permissions narrower than required. Open the App's "Permissions & events" page and confirm Administration:Read + Metadata:Read are present. After widening, GitHub requires installation owners to accept the new permission scope before it takes effect.
 - **Workflow fires but `drift-check` reports drift on settings nobody touched** — most often: GitHub added a new field to one of the endpoints with a default that differs from the doc's expectation. Treat as a security review: either the new default is acceptable (update the doc) or it's a posture regression (revert via API or UI).
 
-## Rotation
+## Rotation<a name="rotation"></a>
 
 Rotate the private key every time:
 
@@ -84,7 +94,7 @@ To rotate:
 
 1. Re-dispatch the workflow to confirm the new key works.
 
-## Reuse for related drift checks
+## Reuse for related drift checks<a name="reuse-for-related-drift-checks"></a>
 
 This App is intentionally read-only and broadly useful. Any future workflow that needs Administration:Read + Metadata:Read against this repo should reuse `vars.SETTINGS_DRIFT_APP_CLIENT_ID` + `secrets.SETTINGS_DRIFT_APP_PRIVATE_KEY` rather than creating a parallel App. Subsequent drift checks (e.g., `allowed-actions-api-drift-check`) follow the same auth pattern.
 
