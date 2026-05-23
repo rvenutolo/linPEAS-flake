@@ -111,6 +111,11 @@ jobs:
         with:
           client-id: ${{ vars.BUMP_APP_CLIENT_ID }}
           private-key: ${{ secrets.BUMP_APP_PRIVATE_KEY }}
+          # Least-privilege scope: token only needs to write file contents
+          # (PUT /contents for linpeas-pin.json and flake-outputs.md) and
+          # open/merge the bump PR. No other installation scopes are needed.
+          permission-contents: write
+          permission-pull-requests: write
 
       - name: sanity check artifact
         # Defense-in-depth. compute-pin's bump-linpeas.sh

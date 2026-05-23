@@ -135,16 +135,24 @@ jobs:
 
           # Map PR title to flake input name. Renovate's hosted SaaS
           # uses dep names from the custom-managers in renovate.json:
-          # `cachix/git-hooks.nix` -> input `pre-commit-hooks`
-          # `NixOS/nixpkgs`        -> input `nixpkgs`
+          # `cachix/git-hooks.nix`       -> input `pre-commit-hooks`
+          # `NixOS/nixpkgs-unstable`     -> input `nixpkgs-unstable`
+          # `NixOS/nixpkgs`              -> input `nixpkgs`
           # Title shapes observed in past Renovate PRs:
           #   "Update cachix/git-hooks.nix digest to <sha>"
+          #   "Update NixOS/nixpkgs-unstable to <version>"
           #   "Update NixOS/nixpkgs to <version>"
           title=$(printf '%s' "${pr_json}" | jq -r '.title')
           input_name=""
+          # Map PR title to flake input name. nixpkgs-unstable arm MUST precede
+          # the nixpkgs arm — the latter is a substring of the former, so case
+          # ordering decides the match.
           case "${title}" in
             *"cachix/git-hooks.nix"*)
               input_name="pre-commit-hooks"
+              ;;
+            *"NixOS/nixpkgs-unstable"*)
+              input_name="nixpkgs-unstable"
               ;;
             *"NixOS/nixpkgs"*)
               input_name="nixpkgs"
@@ -236,6 +244,10 @@ jobs:
         with:
           client-id: ${{ vars.BUMP_APP_CLIENT_ID }}
           private-key: ${{ secrets.BUMP_APP_PRIVATE_KEY }}
+          # Least-privilege scope: token only needs to write file contents
+          # (PUT /contents for flake.lock on the Renovate PR branch).
+          # No other installation scopes are needed.
+          permission-contents: write
       - name: sanity-check artifact
         run: |
           set -Eeuo pipefail
