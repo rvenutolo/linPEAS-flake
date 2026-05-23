@@ -123,3 +123,21 @@ Allowed alternatives:
 `cosign` is exposed under `packages.cosign` so `release-on-bump.yml` and `verify-latest-release.yml` can invoke it via the pinned shape. Future tools follow the same pattern.
 
 Enforced by `scripts/check-nix-run-pinned.sh`. Wired as the `nix-run-pinned` required CI job and as a pre-commit hook.
+
+## setup-nix composite required
+
+Every workflow that installs Nix must do so via
+`./.github/actions/setup-nix`, passing
+`github-token: ${{ secrets.GITHUB_TOKEN }}`. Direct use of
+`cachix/install-nix-action` from a workflow is forbidden.
+
+**Why.** Unauthenticated `api.github.com` tarball fetches are capped
+at ~60 requests/hour per source IP. GitHub Actions runner IPs are
+shared across many concurrent jobs; under contention the cap is
+exhausted and the API returns `HTTP 401 Bad credentials`, which
+surfaces from `nix build` / `nix flake` as a flake-input fetch
+failure. Passing `access-tokens = github.com=<token>` raises the
+ceiling to ~1000/hour per token and eliminates the class.
+
+**Enforcement.** `scripts/check-setup-nix-required.sh`, gated by the
+`setup-nix-required` job in `.github/workflows/ci.yml`.

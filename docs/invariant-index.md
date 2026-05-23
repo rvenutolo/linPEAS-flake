@@ -36,6 +36,7 @@ live in `.claude/CLAUDE.md` (untracked).
 - **Multi-line run: strict-mode prelude** — every multi-line `run:` block starts with `set -Eeuo pipefail`. → [security/workflow-hardening.md](security/workflow-hardening.md)
 - **Fork-guard on release-grade jobs** — every job with write-scope perms includes `github.repository == 'rvenutolo/linPEAS-flake'` in its `if:`. → [security/workflow-hardening.md](security/workflow-hardening.md)
 - **No unpinned `nix run nixpkgs#`** — must use `nix shell .#<pkg>`, `nix run .#<pkg>`, or pin a revision. → [security/workflow-hardening.md](security/workflow-hardening.md)
+- **setup-nix composite required** — workflows install Nix only via .github/actions/setup-nix with github-token. → [security/workflow-hardening.md](security/workflow-hardening.md)
 - **GITHUB_TOKEN min-permissions** — top-level `permissions: {}`; every job declares own scopes. → [security/min-permissions.md](security/min-permissions.md)
 - **protect-main ruleset** — in-tree mirror + drift-check. → [security/required-checks.md](security/required-checks.md)
 - **Repo-settings posture** — three binding flags. → [security/settings-posture.md](security/settings-posture.md)
