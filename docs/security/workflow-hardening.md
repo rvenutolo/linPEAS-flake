@@ -31,3 +31,11 @@ Without it, `actions/checkout` writes `GITHUB_TOKEN` into `.git/config` and leav
 Boolean `false` is required; the string `"false"` does not satisfy `actions/checkout`'s parsing.
 
 Enforced by `scripts/check-checkout-persist-credentials.sh`. Wired as the `checkout-persist-credentials` required CI job and as a pre-commit hook.
+
+## upload-artifact-strict
+
+Every `actions/upload-artifact` step sets `with.if-no-files-found: error`.
+
+The action's default is `warn`, which silently uploads an empty artifact when the `path:` glob matches nothing. That hides build-output drift: a broken path produces a green job with no artifact, and the consumer side only notices when something downstream goes missing — sometimes many runs later. `error` turns the path-mismatch into a hard upload failure, surfacing the bug at its source.
+
+Enforced by `scripts/check-upload-artifact-strict.sh`. Wired as the `upload-artifact-strict` required CI job and as a pre-commit hook.

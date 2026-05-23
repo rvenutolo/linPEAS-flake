@@ -40,5 +40,6 @@ protect-main-drift-check: Security/invariant lints
 renovate-invariants: Security/invariant lints
 required-checks-no-paths: Security/invariant lints
 tag-protection-drift-check: Security/invariant lints
+upload-artifact-strict: Security/invariant lints
 uses-sha-pinned: Security/invariant lints
 workflow-concurrency: Security/invariant lints

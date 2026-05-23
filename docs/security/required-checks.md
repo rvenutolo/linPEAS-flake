@@ -28,6 +28,7 @@ this file in the same change as any modification to the ruleset.
 | renovate-invariants          | ci                | .github/workflows/ci.yml                |
 | pre-commit-hooks-sha-parity  | ci                | .github/workflows/ci.yml                |
 | pin-diff-isolated            | ci                | .github/workflows/ci.yml                |
+| upload-artifact-strict       | ci                | .github/workflows/ci.yml                |
 | uses-sha-pinned              | ci                | .github/workflows/ci.yml                |
 | workflow-concurrency         | ci                | .github/workflows/ci.yml                |
 | harden-runner-first          | ci                | .github/workflows/ci.yml                |
