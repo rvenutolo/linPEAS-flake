@@ -27,6 +27,7 @@ markdownlint: Doc quality
 typos: Doc quality
 check-jsonschema: Security/invariant lints
 checkout-persist-credentials: Security/invariant lints
+ci-job-in-summary: Security/invariant lints
 dashboard-data-tests: Security/invariant lints
 dependency-review: Security/invariant lints
 gitleaks: Security/invariant lints

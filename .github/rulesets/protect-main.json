@@ -39,6 +39,7 @@
             "integration_id": 15368
           },
           { "context": "check-orphan-invariants", "integration_id": 15368 },
+          { "context": "ci-job-in-summary", "integration_id": 15368 },
           { "context": "commitlint", "integration_id": 15368 },
           { "context": "dashboard-data-tests", "integration_id": 15368 },
           { "context": "dependency-review", "integration_id": 15368 },

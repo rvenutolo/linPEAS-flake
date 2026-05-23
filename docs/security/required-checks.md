@@ -18,6 +18,7 @@ this file in the same change as any modification to the ruleset.
 | check-doc-anchors            | ci                | .github/workflows/ci.yml                |
 | check-jsonschema             | ci                | .github/workflows/ci.yml                |
 | checkout-persist-credentials | ci                | .github/workflows/ci.yml                |
+| ci-job-in-summary            | ci                | .github/workflows/ci.yml                |
 | check-orphan-invariants      | ci                | .github/workflows/ci.yml                |
 | commitlint                   | ci                | .github/workflows/ci.yml                |
 | dashboard-data-tests         | ci                | .github/workflows/ci.yml                |

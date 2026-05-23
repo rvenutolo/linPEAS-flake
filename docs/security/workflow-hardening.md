@@ -77,3 +77,13 @@ The check-lint family is held together by naming convention: each lint script sh
 `check-jsonschema` is exempt: it's a thin wrapper around the upstream `check-jsonschema` tool plus a schema bundle, so there's no spec-driven behavior worth unit-testing. New exemptions require updating the `EXEMPT` list in the script and justifying the entry in its comment.
 
 Enforced by `scripts/check-script-has-test.sh`. Wired as the `script-has-test` required CI job and as a pre-commit hook.
+
+## ci-job-in-summary
+
+Every `jobs.<name>:` in `.github/workflows/ci.yml` either appears as a key in `docs/_data/ci-check-categories.yml` or is on the lint's `EXEMPT` list of auxiliary jobs (sandbox harnesses, notify-only jobs, matrix expansions). Conversely, every key in the category map corresponds to a real `jobs.<name>:` in some workflow file under `.github/workflows/`.
+
+`refresh-ci-summary.sh` already enforces parity between the category map and `docs/security/required-checks.md`. This lint adds the ci.yml ↔ categories check, so a new required job that ships without a category mapping fails the PR rather than landing and breaking the pre-commit summary regenerator on the next commit.
+
+Adding a new ci.yml job that should be a required status check requires updating the categories map, the required-checks doc, and the protect-main ruleset (in-tree and live). Adding an auxiliary job requires only an `EXEMPT` entry justified in the script comment.
+
+Enforced by `scripts/check-ci-job-in-summary.sh`. Wired as the `ci-job-in-summary` required CI job and as a pre-commit hook.

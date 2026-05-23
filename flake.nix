@@ -515,6 +515,24 @@
             pass_filenames = false;
             language = "system";
           };
+          # Every ci.yml job either in ci-check-categories.yml or
+          # EXEMPT, and every category entry points at a real job.
+          # See docs/security/workflow-hardening.md.
+          ci-job-in-summary = {
+            enable = true;
+            name = "ci-job-in-summary";
+            description = "ci.yml jobs cross-checked against docs/_data/ci-check-categories.yml.";
+            entry = "${pkgs-unstable.writeShellScript "ci-job-in-summary-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-ci-job-in-summary.sh
+            ''}";
+            files = "^(\\.github/workflows/ci\\.yml|docs/_data/ci-check-categories\\.yml|scripts/check-ci-job-in-summary\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
           # Schema-shape validation for repo config. Catches typoed
           # keys, wrong-type values, and upstream-removed fields that
           # per-tool linters miss. NIX_BUILD_TOP guard skips inside

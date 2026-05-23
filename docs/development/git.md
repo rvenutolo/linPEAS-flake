@@ -84,6 +84,7 @@ Hooks (alphabetical):
 | `check-jsonschema`             | Schema-shape validation of repo config (renovate.json, workflows, actions).           |
 | `check-orphan-invariants`      | Every docs/ file has an invariant-index entry and vice versa.                         |
 | `checkout-persist-credentials` | Every actions/checkout sets with.persist-credentials: false.                          |
+| `ci-job-in-summary`            | ci.yml jobs cross-checked against docs/\_data/ci-check-categories.yml.                |
 | `ci-summary-fresh`             | README CI summary matches required-checks.md and the category map.                    |
 | `commitlint`                   | Commit message satisfies Conventional Commits (CI parity via .commitlintrc.yml).      |
 | `deadnix`                      | Unused Nix bindings.                                                                  |
