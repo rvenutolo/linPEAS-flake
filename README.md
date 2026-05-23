@@ -246,7 +246,6 @@ distinction between build-provenance attestations and content trust.
 │   ├───aarch64-linux
 │   │   ├───formatting: derivation 'treefmt-check'
 │   │   ├───linpeas-build: derivation 'linpeas-20260521-859cab5f'
-│   │   ├───linpeas-bundle-build: derivation 'linpeas-bundle-20260521-859cab5f'
 │   │   └───pre-commit: derivation 'pre-commit-run'
 │   ├───x86_64-darwin
 │   │   ├───formatting: derivation 'treefmt-check'
@@ -255,7 +254,6 @@ distinction between build-provenance attestations and content trust.
 │   └───x86_64-linux
 │       ├───formatting: derivation 'treefmt-check'
 │       ├───linpeas-build: derivation 'linpeas-20260521-859cab5f'
-│       ├───linpeas-bundle-build: derivation 'linpeas-bundle-20260521-859cab5f'
 │       └───pre-commit: derivation 'pre-commit-run'
 ├───devShells
 │   ├───aarch64-darwin
@@ -281,7 +279,6 @@ distinction between build-provenance attestations and content trust.
     ├───aarch64-linux
     │   ├───default: package 'linpeas-20260521-859cab5f'
     │   ├───linpeas: package 'linpeas-20260521-859cab5f'
-    │   ├───linpeas-bundle: package 'linpeas-bundle-20260521-859cab5f'
     │   ├───linpeas-image: package 'linpeas.tar.gz'
     │   └───site: package 'linpeas-flake-site-20260521-859cab5f'
     ├───x86_64-darwin
@@ -290,7 +287,6 @@ distinction between build-provenance attestations and content trust.
     └───x86_64-linux
         ├───default: package 'linpeas-20260521-859cab5f'
         ├───linpeas: package 'linpeas-20260521-859cab5f'
-        ├───linpeas-bundle: package 'linpeas-bundle-20260521-859cab5f'
         ├───linpeas-image: package 'linpeas.tar.gz'
         └───site: package 'linpeas-flake-site-20260521-859cab5f'
 ```
