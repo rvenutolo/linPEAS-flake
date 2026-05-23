@@ -78,9 +78,8 @@ for the full use-case matrix.
 
 ### Without Nix or Docker (portable bundle)
 
-Use case: locked-down hosts where neither Nix nor Docker is allowed.
-Single arch-agnostic script — just `linpeas.sh` with
-`#!/usr/bin/env bash`.
+For locked-down hosts where neither Nix nor Docker is allowed. Single
+arch-agnostic script — just `linpeas.sh` with `#!/usr/bin/env bash`.
 
 ```sh
 curl -L https://github.com/rvenutolo/linPEAS-flake/releases/latest/download/linpeas-bundle.sh -o linpeas
@@ -90,8 +89,8 @@ chmod +x linpeas
 
 ### As a flake input
 
-Use case: pull linpeas as a dependency from another flake (e.g. a
-NixOS config or dev shell).
+Pull linpeas as a dependency from another flake (e.g. a NixOS config
+or dev shell).
 
 ```nix
 {
@@ -108,8 +107,8 @@ cache), see [`docs/install/consume-from-flake.md`](docs/install/consume-from-fla
 
 ### As an overlay
 
-Use case: expose `pkgs.linpeas` inside your nixpkgs set so existing
-`pkgs.*` consumers can reference it.
+Expose `pkgs.linpeas` inside your nixpkgs set so existing `pkgs.*`
+consumers can reference it.
 
 ```nix
 {
