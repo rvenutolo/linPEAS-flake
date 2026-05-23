@@ -518,12 +518,12 @@
           linpeas-build = linpeas;
         };
 
-        devShells.default = pkgs.mkShell {
+        devShells.default = pkgs-unstable.mkShell {
           inherit (preCommitCheck) shellHook;
 
           buildInputs =
             preCommitCheck.enabledPackages
-            ++ (with pkgs; [
+            ++ (with pkgs-unstable; [
               nix
               jq
               yq-go
@@ -539,7 +539,7 @@
               actionlint
               zizmor
               yamllint
-              nodePackages.prettier
+              prettier
               pre-commit
               treefmtEval.config.build.wrapper
               python3Packages.mkdocs-material
