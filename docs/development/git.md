@@ -77,35 +77,36 @@ Hooks (alphabetical):
 
 <!-- BEGIN precommit-table -->
 
-| Hook                          | What it checks                                                                        |
-| ----------------------------- | ------------------------------------------------------------------------------------- |
-| `actionlint`                  | GitHub Actions workflow syntax.                                                       |
-| `check-doc-anchors`           | Every markdown #anchor link resolves to a heading slug in its target file.            |
-| `check-jsonschema`            | Schema-shape validation of repo config (renovate.json, workflows, actions).           |
-| `check-orphan-invariants`     | Every docs/ file has an invariant-index entry and vice versa.                         |
-| `ci-summary-fresh`            | README CI summary matches required-checks.md and the category map.                    |
-| `commitlint`                  | Commit message satisfies Conventional Commits (CI parity via .commitlintrc.yml).      |
-| `deadnix`                     | Unused Nix bindings.                                                                  |
-| `editorconfig-checker`        | .editorconfig compliance (charset, line endings, trailing whitespace, final newline). |
-| `flake-show-fresh`            | flake-show block in docs/reference/flake-outputs.md matches current flake outputs.    |
-| `gh-api-version-header`       | Every gh api / api.github.com call in scripts passes an X-GitHub-Api-Version header.  |
-| `harden-runner-first`         | Every workflow job's first step is step-security/harden-runner.                       |
-| `job-timeout-minutes`         | Every workflow job declares an explicit timeout-minutes.                              |
-| `just-recipes-fresh`          | README just-recipes block matches the justfile.                                       |
-| `markdownlint`                | Markdown style + structure.                                                           |
-| `min-permissions`             | Top-level workflow permissions empty; each job declares its own scopes.               |
-| `nixfmt-rfc-style`            | Nix file formatting.                                                                  |
-| `pin-diff-isolated`           | Only scripts/bump-linpeas.sh mutates linpeas-pin.json.                                |
-| `pre-commit-hooks-sha-parity` | The pre-commit-hooks input SHA in flake.nix matches flake.lock locked.rev.            |
-| `precommit-table-fresh`       | Hook table in docs/development/git.md matches the flake hook manifest.                |
-| `shellcheck`                  | Shell-script static analysis.                                                         |
-| `statix`                      | Nix anti-pattern lint.                                                                |
-| `treefmt`                     | Multi-language formatter aggregator (shfmt, prettier, etc).                           |
-| `typos`                       | Spell-check across the repo.                                                          |
-| `uses-sha-pinned`             | Every uses: reference is SHA-pinned.                                                  |
-| `workflow-concurrency`        | Every workflow declares a top-level concurrency.group.                                |
-| `yamllint`                    | YAML style.                                                                           |
-| `zizmor`                      | GitHub Actions security audit.                                                        |
+| Hook                           | What it checks                                                                        |
+| ------------------------------ | ------------------------------------------------------------------------------------- |
+| `actionlint`                   | GitHub Actions workflow syntax.                                                       |
+| `check-doc-anchors`            | Every markdown #anchor link resolves to a heading slug in its target file.            |
+| `check-jsonschema`             | Schema-shape validation of repo config (renovate.json, workflows, actions).           |
+| `check-orphan-invariants`      | Every docs/ file has an invariant-index entry and vice versa.                         |
+| `checkout-persist-credentials` | Every actions/checkout sets with.persist-credentials: false.                          |
+| `ci-summary-fresh`             | README CI summary matches required-checks.md and the category map.                    |
+| `commitlint`                   | Commit message satisfies Conventional Commits (CI parity via .commitlintrc.yml).      |
+| `deadnix`                      | Unused Nix bindings.                                                                  |
+| `editorconfig-checker`         | .editorconfig compliance (charset, line endings, trailing whitespace, final newline). |
+| `flake-show-fresh`             | flake-show block in docs/reference/flake-outputs.md matches current flake outputs.    |
+| `gh-api-version-header`        | Every gh api / api.github.com call in scripts passes an X-GitHub-Api-Version header.  |
+| `harden-runner-first`          | Every workflow job's first step is step-security/harden-runner.                       |
+| `job-timeout-minutes`          | Every workflow job declares an explicit timeout-minutes.                              |
+| `just-recipes-fresh`           | README just-recipes block matches the justfile.                                       |
+| `markdownlint`                 | Markdown style + structure.                                                           |
+| `min-permissions`              | Top-level workflow permissions empty; each job declares its own scopes.               |
+| `nixfmt-rfc-style`             | Nix file formatting.                                                                  |
+| `pin-diff-isolated`            | Only scripts/bump-linpeas.sh mutates linpeas-pin.json.                                |
+| `pre-commit-hooks-sha-parity`  | The pre-commit-hooks input SHA in flake.nix matches flake.lock locked.rev.            |
+| `precommit-table-fresh`        | Hook table in docs/development/git.md matches the flake hook manifest.                |
+| `shellcheck`                   | Shell-script static analysis.                                                         |
+| `statix`                       | Nix anti-pattern lint.                                                                |
+| `treefmt`                      | Multi-language formatter aggregator (shfmt, prettier, etc).                           |
+| `typos`                        | Spell-check across the repo.                                                          |
+| `uses-sha-pinned`              | Every uses: reference is SHA-pinned.                                                  |
+| `workflow-concurrency`         | Every workflow declares a top-level concurrency.group.                                |
+| `yamllint`                     | YAML style.                                                                           |
+| `zizmor`                       | GitHub Actions security audit.                                                        |
 
 <!-- END precommit-table -->
 

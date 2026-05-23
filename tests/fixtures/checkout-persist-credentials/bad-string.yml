@@ -1,0 +1,16 @@
+name: bad-string
+on: push
+permissions: {}
+concurrency:
+  group: bad-string-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: "false"

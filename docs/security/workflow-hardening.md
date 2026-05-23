@@ -21,3 +21,13 @@ Without a concurrency group, cron pile-ups and back-to-back PR pushes can spawn 
 `cancel-in-progress` is not required by this lint; the group alone is the load-bearing setting. Pipelines that must run to completion once started (e.g., `release-on-bump.yml`) deliberately set `cancel-in-progress: false` so back-to-back triggers queue instead of cancelling.
 
 Enforced by `scripts/check-workflow-concurrency.sh`. Wired as the `workflow-concurrency` required CI job and as a pre-commit hook.
+
+## checkout-persist-credentials
+
+Every `actions/checkout` step sets `with.persist-credentials: false` (boolean, not string).
+
+Without it, `actions/checkout` writes `GITHUB_TOKEN` into `.git/config` and leaves it on disk for the remainder of the job. Any later step in the same job — a third-party action, a misbehaving binary, a shell injection in a `run:` block — can read the token from the working tree and use its scopes. `persist-credentials: false` drops the credential after the initial clone/fetch, narrowing the blast radius of a compromised later step.
+
+Boolean `false` is required; the string `"false"` does not satisfy `actions/checkout`'s parsing.
+
+Enforced by `scripts/check-checkout-persist-credentials.sh`. Wired as the `checkout-persist-credentials` required CI job and as a pre-commit hook.
