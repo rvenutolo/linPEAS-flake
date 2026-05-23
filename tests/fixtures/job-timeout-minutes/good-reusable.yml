@@ -1,0 +1,8 @@
+name: good-reusable
+on: push
+permissions: {}
+jobs:
+  call:
+    uses: ./.github/workflows/_reusable.yml
+    permissions:
+      contents: read

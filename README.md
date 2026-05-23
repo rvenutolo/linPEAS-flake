@@ -159,7 +159,7 @@ the full job inventory + cron schedule lives in
 - **Build + smoke**: `build-linpeas`, `build-linpeas-arm64`, `flake-check`, `image-smoke`, `image-smoke-arm64`, `smoke-test`, `smoke-test-arm64`.
 - **Conventional Commits**: `commitlint`, `lint-pr-title`.
 - **Doc quality**: `check-doc-anchors`, `check-orphan-invariants`, `editorconfig`, `markdownlint`, `typos`.
-- **Security/invariant lints**: `check-jsonschema`, `dashboard-data-tests`, `dependency-review`, `gitleaks`, `harden-runner-first`, `min-permissions`, `pin-diff-isolated`, `pr-workflows-no-secrets`, `pre-commit-hooks-sha-parity`, `protect-main-drift-check`, `renovate-invariants`, `required-checks-no-paths`, `tag-protection-drift-check`, `uses-sha-pinned`.
+- **Security/invariant lints**: `check-jsonschema`, `dashboard-data-tests`, `dependency-review`, `gitleaks`, `harden-runner-first`, `job-timeout-minutes`, `min-permissions`, `pin-diff-isolated`, `pr-workflows-no-secrets`, `pre-commit-hooks-sha-parity`, `protect-main-drift-check`, `renovate-invariants`, `required-checks-no-paths`, `tag-protection-drift-check`, `uses-sha-pinned`.
 
 <!-- END ci-summary -->
 

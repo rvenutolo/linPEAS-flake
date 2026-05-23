@@ -44,6 +44,7 @@
           { "context": "harden-runner-first", "integration_id": 15368 },
           { "context": "image-smoke" },
           { "context": "image-smoke-arm64" },
+          { "context": "job-timeout-minutes", "integration_id": 15368 },
           { "context": "lint-pr-title", "integration_id": 15368 },
           { "context": "markdownlint", "integration_id": 15368 },
           { "context": "min-permissions", "integration_id": 15368 },
