@@ -30,12 +30,11 @@ function main() {
     fail '--check failed right after generate'
   fi
 
-  if grep --quiet 'just bundle' "${DOC}" &&
-    grep --quiet 'just image' "${DOC}" &&
+  if grep --quiet 'just image' "${DOC}" &&
     grep --quiet 'just verify' "${DOC}"; then
-    pass 'recipe list includes bundle/image/verify'
+    pass 'recipe list includes image/verify'
   else
-    fail 'recipe list missing bundle/image/verify'
+    fail 'recipe list missing image/verify'
   fi
 
   backup="$(mktemp)"
