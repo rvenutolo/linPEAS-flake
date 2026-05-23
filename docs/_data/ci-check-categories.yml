@@ -30,6 +30,7 @@ dashboard-data-tests: Security/invariant lints
 dependency-review: Security/invariant lints
 gitleaks: Security/invariant lints
 harden-runner-first: Security/invariant lints
+job-timeout-minutes: Security/invariant lints
 min-permissions: Security/invariant lints
 pin-diff-isolated: Security/invariant lints
 pre-commit-hooks-sha-parity: Security/invariant lints

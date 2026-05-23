@@ -1,0 +1,11 @@
+name: bad-zero
+on: push
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 0
+    permissions:
+      contents: read
+    steps:
+      - run: echo a

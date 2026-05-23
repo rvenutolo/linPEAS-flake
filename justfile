@@ -29,6 +29,7 @@ verify:
   ./scripts/check-uses-sha-pinned.sh; \
   ./scripts/check-harden-runner-first.sh; \
   ./scripts/check-min-permissions.sh; \
+  ./scripts/check-job-timeout-minutes.sh; \
   ./scripts/check-pr-workflows-no-secrets.sh; \
   ./scripts/check-required-checks-no-paths.sh; \
   ./scripts/check-tag-protection.sh; \
@@ -40,6 +41,7 @@ verify:
   bash tests/check-uses-sha-pinned.test.sh; \
   bash tests/check-harden-runner-first.test.sh; \
   bash tests/check-min-permissions.test.sh; \
+  bash tests/check-job-timeout-minutes.test.sh; \
   bash tests/check-pr-workflows-no-secrets.test.sh; \
   bash tests/check-required-checks-no-paths.test.sh; \
   bash tests/check-tag-protection.test.sh; \

@@ -369,6 +369,25 @@
             pass_filenames = false;
             language = "system";
           };
+          # Every job under .github/workflows/ declares an explicit
+          # timeout-minutes. The default is 6 hours; without an
+          # explicit cap a hung job burns the runner budget and stalls
+          # the merge queue. See docs/security/workflow-hardening.md.
+          job-timeout-minutes = {
+            enable = true;
+            name = "job-timeout-minutes";
+            description = "Every workflow job declares an explicit timeout-minutes.";
+            entry = "${pkgs-unstable.writeShellScript "job-timeout-minutes-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-job-timeout-minutes.sh
+            ''}";
+            files = "^(\\.github/workflows/.*\\.ya?ml|scripts/check-job-timeout-minutes\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
           # Schema-shape validation for repo config. Catches typoed
           # keys, wrong-type values, and upstream-removed fields that
           # per-tool linters miss. NIX_BUILD_TOP guard skips inside

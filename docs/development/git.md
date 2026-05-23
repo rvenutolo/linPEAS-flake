@@ -90,6 +90,7 @@ Hooks (alphabetical):
 | `flake-show-fresh`            | flake-show block in docs/reference/flake-outputs.md matches current flake outputs.    |
 | `gh-api-version-header`       | Every gh api / api.github.com call in scripts passes an X-GitHub-Api-Version header.  |
 | `harden-runner-first`         | Every workflow job's first step is step-security/harden-runner.                       |
+| `job-timeout-minutes`         | Every workflow job declares an explicit timeout-minutes.                              |
 | `just-recipes-fresh`          | README just-recipes block matches the justfile.                                       |
 | `markdownlint`                | Markdown style + structure.                                                           |
 | `min-permissions`             | Top-level workflow permissions empty; each job declares its own scopes.               |
