@@ -1,0 +1,16 @@
+name: bad-pr-wildcard
+on:
+  pull_request:
+    branches: ["**"]
+permissions: {}
+concurrency:
+  group: bad-pr-wildcard-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - run: echo a

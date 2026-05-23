@@ -33,6 +33,7 @@ verify:
   ./scripts/check-workflow-concurrency.sh; \
   ./scripts/check-checkout-persist-credentials.sh; \
   ./scripts/check-upload-artifact-strict.sh; \
+  ./scripts/check-workflow-on-branches.sh; \
   ./scripts/check-pr-workflows-no-secrets.sh; \
   ./scripts/check-required-checks-no-paths.sh; \
   ./scripts/check-tag-protection.sh; \
@@ -48,6 +49,7 @@ verify:
   bash tests/check-workflow-concurrency.test.sh; \
   bash tests/check-checkout-persist-credentials.test.sh; \
   bash tests/check-upload-artifact-strict.test.sh; \
+  bash tests/check-workflow-on-branches.test.sh; \
   bash tests/check-pr-workflows-no-secrets.test.sh; \
   bash tests/check-required-checks-no-paths.test.sh; \
   bash tests/check-tag-protection.test.sh; \

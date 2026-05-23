@@ -1,0 +1,16 @@
+name: bad-push-no-branches
+on:
+  push:
+    tags: ["v*"]
+permissions: {}
+concurrency:
+  group: bad-push-no-branches-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - run: echo a

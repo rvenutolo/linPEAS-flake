@@ -1,0 +1,16 @@
+name: bad-push-extra
+on:
+  push:
+    branches: [main, develop]
+permissions: {}
+concurrency:
+  group: bad-push-extra-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - run: echo a

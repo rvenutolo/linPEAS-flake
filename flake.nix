@@ -445,6 +445,25 @@
             pass_filenames = false;
             language = "system";
           };
+          # Every pull_request: / push: trigger explicitly declares
+          # branches: [main]. Implicit all-branches triggers waste
+          # runner minutes on stale topic branches. See
+          # docs/security/workflow-hardening.md.
+          workflow-on-branches = {
+            enable = true;
+            name = "workflow-on-branches";
+            description = "pull_request: and push: declare branches: [main] explicitly.";
+            entry = "${pkgs-unstable.writeShellScript "workflow-on-branches-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-workflow-on-branches.sh
+            ''}";
+            files = "^(\\.github/workflows/.*\\.ya?ml|scripts/check-workflow-on-branches\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
           # Schema-shape validation for repo config. Catches typoed
           # keys, wrong-type values, and upstream-removed fields that
           # per-tool linters miss. NIX_BUILD_TOP guard skips inside

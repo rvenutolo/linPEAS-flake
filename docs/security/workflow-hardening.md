@@ -39,3 +39,11 @@ Every `actions/upload-artifact` step sets `with.if-no-files-found: error`.
 The action's default is `warn`, which silently uploads an empty artifact when the `path:` glob matches nothing. That hides build-output drift: a broken path produces a green job with no artifact, and the consumer side only notices when something downstream goes missing — sometimes many runs later. `error` turns the path-mismatch into a hard upload failure, surfacing the bug at its source.
 
 Enforced by `scripts/check-upload-artifact-strict.sh`. Wired as the `upload-artifact-strict` required CI job and as a pre-commit hook.
+
+## workflow-on-branches
+
+Every workflow that declares `on.pull_request:` or `on.push:` sets `branches: [main]` exactly under that trigger. No wildcards, no implicit all-branches, no other branch names.
+
+Without the allowlist, Actions fires the workflow on every branch — burning runner minutes on stale topic branches and attaching surprising status checks to refs nobody is watching. Workflows that only run on `schedule:`, `workflow_dispatch:`, or `workflow_call:` are unaffected; `pull_request_target:` is handled by a separate lint that forbids it outright.
+
+Enforced by `scripts/check-workflow-on-branches.sh`. Wired as the `workflow-on-branches` required CI job and as a pre-commit hook.
