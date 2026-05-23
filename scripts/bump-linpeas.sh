@@ -139,6 +139,12 @@ function main() {
   sri_hash="$(nix hash file --sri "${tmpfile}")"
 
   # Pin schema: key is `hash`, not `sha256`.
+  # The shape emitted here (3 top-level keys, sorted alphabetically by
+  # jq's default object construction order: hash, url, version, plus a
+  # trailing newline from printf) must stay byte-identical to what
+  # prettier would write for `*.json` files. treefmt runs prettier on
+  # `linpeas-pin.json`; any drift here would cause the next `nix fmt`
+  # to rewrite the bumper's output and trip pre-commit on the bump PR.
   local new_pin
   new_pin="$(jq --null-input \
     --arg version "${new_tag}" \
