@@ -1,0 +1,17 @@
+name: good-cron-only
+on:
+  schedule:
+    - cron: "0 12 * * 1"
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: good-cron-only-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - run: echo a

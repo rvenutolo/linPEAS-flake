@@ -106,6 +106,7 @@ Hooks (alphabetical):
 | `upload-artifact-strict`       | Every actions/upload-artifact sets with.if-no-files-found: error.                     |
 | `uses-sha-pinned`              | Every uses: reference is SHA-pinned.                                                  |
 | `workflow-concurrency`         | Every workflow declares a top-level concurrency.group.                                |
+| `workflow-on-branches`         | pull_request: and push: declare branches: [main] explicitly.                          |
 | `yamllint`                     | YAML style.                                                                           |
 | `zizmor`                       | GitHub Actions security audit.                                                        |
 

@@ -31,6 +31,7 @@ this file in the same change as any modification to the ruleset.
 | upload-artifact-strict       | ci                | .github/workflows/ci.yml                |
 | uses-sha-pinned              | ci                | .github/workflows/ci.yml                |
 | workflow-concurrency         | ci                | .github/workflows/ci.yml                |
+| workflow-on-branches         | ci                | .github/workflows/ci.yml                |
 | harden-runner-first          | ci                | .github/workflows/ci.yml                |
 | job-timeout-minutes          | ci                | .github/workflows/ci.yml                |
 | min-permissions              | ci                | .github/workflows/ci.yml                |

@@ -64,7 +64,8 @@
           { "context": "typos", "integration_id": 15368 },
           { "context": "upload-artifact-strict", "integration_id": 15368 },
           { "context": "uses-sha-pinned", "integration_id": 15368 },
-          { "context": "workflow-concurrency", "integration_id": 15368 }
+          { "context": "workflow-concurrency", "integration_id": 15368 },
+          { "context": "workflow-on-branches", "integration_id": 15368 }
         ]
       }
     }
