@@ -83,7 +83,8 @@ verify:
   bash tests/refresh-enforcement-matrix.test.sh; \
   bash tests/refresh-just-recipes.test.sh; \
   bash tests/refresh-precommit-table.test.sh; \
-  bash tests/refresh-scripts-reference.test.sh'
+  bash tests/refresh-scripts-reference.test.sh; \
+  bash tests/refresh-treefmt-config.test.sh'
 
 # Manually refresh linpeas pin from upstream latest release
 bump:
@@ -116,6 +117,10 @@ show-ci-summary:
 # Regenerate docs/security/enforcement-matrix.md from invariant-index annotations
 show-enforcement-matrix:
   ./scripts/refresh-enforcement-matrix.sh
+
+# Regenerate docs/reference/treefmt-config.md from treefmt.nix
+show-treefmt:
+  ./scripts/refresh-treefmt-config.sh
 
 # Build the OCI image
 image:

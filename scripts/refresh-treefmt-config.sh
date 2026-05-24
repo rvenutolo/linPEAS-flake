@@ -1,0 +1,172 @@
+#!/usr/bin/env bash
+# scripts/refresh-treefmt-config.sh
+#
+# @description Regenerate the treefmt-config managed block in
+# docs/reference/treefmt-config.md from the enabled-formatter manifest
+# exposed by `flake.nix` as `devTooling.<system>.treefmtConfig`.
+# @option --check exit 1 if the doc would change; do not mutate the working tree
+
+# Replace the content between <!-- BEGIN treefmt-config --> and <!-- END treefmt-config -->
+# in docs/reference/treefmt-config.md with the current set of enabled treefmt
+# formatters (one row per formatter, with the file patterns each handles) plus
+# a fenced list of global excludes.
+#
+# Usage:
+#   scripts/refresh-treefmt-config.sh            # mutate docs/reference/treefmt-config.md in place
+#   scripts/refresh-treefmt-config.sh --check    # exit 1 if the doc would change;
+#                                                #   do NOT mutate the working tree
+
+set -Eeuo pipefail
+IFS=$'\n\t'
+trap 'printf "[%s] %-5s line %s (exit %s): %s\n" \
+  "$(date "+%Y-%m-%dT%H:%M:%S%z")" ERROR "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+
+function log() {
+  printf '[%s] %-5s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$1" "$2" >&2
+}
+function log_info() { log INFO "$*"; }
+function log_err() { log ERROR "$*"; }
+
+# @description Verify a required CLI tool is on PATH; exit 1 if missing.
+# @arg $1 tool name
+function require_tool() {
+  local -r tool="$1"
+  if ! command -v "${tool}" >/dev/null 2>&1; then
+    log_err "missing required tool: ${tool}"
+    exit 1
+  fi
+}
+
+function main() {
+  local check_only='false'
+  if [[ ${1:-} == '--check' ]]; then
+    check_only='true'
+  elif [[ -n ${1:-} ]]; then
+    log_err "unknown arg: ${1}"
+    exit 2
+  fi
+  readonly check_only
+
+  require_tool git
+  require_tool nix
+  require_tool jq
+  require_tool awk
+  require_tool cmp
+  # treefmt runs mdformat (with mdformat-gfm) over the generated doc so the
+  # script's output matches what treefmt would emit after a commit. Without
+  # this, mdformat-gfm's escape rules (e.g. backtick-wrapped globs containing
+  # `*`) would cause the regenerated doc to differ from the committed file,
+  # leaving treefmt-config-fresh red on every commit.
+  require_tool treefmt
+
+  local repo_root doc
+  repo_root="$(git rev-parse --show-toplevel)"
+  doc="${repo_root}/docs/reference/treefmt-config.md"
+  readonly repo_root doc
+
+  if [[ ! -f ${doc} ]]; then
+    log_err "${doc} not found"
+    exit 1
+  fi
+  if ! grep --quiet '<!-- BEGIN treefmt-config -->' "${doc}"; then
+    log_err 'BEGIN marker missing from docs/reference/treefmt-config.md'
+    exit 1
+  fi
+  if ! grep --quiet '<!-- END treefmt-config -->' "${doc}"; then
+    log_err 'END marker missing from docs/reference/treefmt-config.md'
+    exit 1
+  fi
+
+  local cfg_file block_file doc_new doc_fmt
+  cfg_file="$(mktemp)"
+  block_file="$(mktemp)"
+  doc_new="$(mktemp)"
+  # treefmt walks up to find flake.nix as projectRootFile, so the formatted
+  # tmp file must live inside the repo. Hidden name + .md extension so
+  # treefmt's mdformat picks it up; .gitignore keeps it untracked if a crash
+  # bypasses the EXIT trap.
+  doc_fmt="$(mktemp "${repo_root}/.refresh-treefmt-config-XXXXXX.md")"
+  trap 'rm --force -- "${cfg_file:-}" "${block_file:-}" "${doc_new:-}" "${doc_fmt:-}"' EXIT
+
+  local sys
+  sys="$(nix eval --impure --raw --expr 'builtins.currentSystem')"
+
+  # Discard stderr so harmless `trace:` messages from treefmt-nix's evaluation
+  # do not corrupt the JSON payload on stdout.
+  nix eval --json ".#devTooling.${sys}.treefmtConfig" 2>/dev/null >"${cfg_file}"
+
+  # Render the block: header row, separator, one row per formatter sorted by
+  # name. Each glob is wrapped in backticks so mdformat-gfm renders patterns
+  # like `*.sh` as inline code (and so the literal `*` is not interpreted as
+  # markdown emphasis). Empty include / exclude lists render as an em dash
+  # so the cell is non-empty.
+  #
+  # Global excludes render as a fenced list below the table to avoid
+  # pipe-escape complications inside a single table cell.
+  {
+    printf '<!-- BEGIN treefmt-config -->\n'
+    printf '\n'
+    printf '| Formatter | Includes | Excludes |\n'
+    printf '| --- | --- | --- |\n'
+    jq --raw-output '
+      def fmt_globs(arr):
+        if (arr | length) == 0 then "—"
+        else (arr | map("`" + . + "`") | join(" "))
+        end;
+      .formatters
+      | sort_by(.name)[]
+      | "| `" + .name + "` | " + fmt_globs(.includes) + " | " + fmt_globs(.excludes) + " |"
+    ' "${cfg_file}"
+    printf '\n'
+    printf '## Global excludes\n'
+    printf '\n'
+    printf 'Patterns excluded from every formatter:\n'
+    printf '\n'
+    printf '```text\n'
+    jq --raw-output '.globalExcludes | unique | sort[]' "${cfg_file}"
+    printf '```\n'
+    printf '\n'
+    printf '<!-- END treefmt-config -->\n'
+  } >"${block_file}"
+
+  # Replace inclusive of markers (single occurrence). awk emits the block once
+  # at the BEGIN marker, then suppresses every line until (and including) END.
+  # Anchored to start-of-line so doc references to the marker do not falsely
+  # match and emit the block twice.
+  awk -v rep="${block_file}" '
+    /^<!-- BEGIN treefmt-config -->$/ {
+      while ((getline line < rep) > 0) print line
+      close(rep)
+      skip = 1
+      next
+    }
+    /^<!-- END treefmt-config -->$/ {
+      skip = 0
+      next
+    }
+    !skip { print }
+  ' "${doc}" >"${doc_new}"
+
+  # Run treefmt over the regenerated doc so the comparison target matches
+  # what the formatter chain (mdformat-gfm) would produce on commit. Without
+  # this step, mdformat's escape rules cause persistent drift between the
+  # script output and the committed file.
+  cp -- "${doc_new}" "${doc_fmt}"
+  treefmt --no-cache --quiet -- "${doc_fmt}" >/dev/null
+
+  if [[ ${check_only} == 'true' ]]; then
+    # cmp short-circuits on first byte difference and supports --silent across
+    # both GNU and BSD coreutils — diff --quiet is GNU-only.
+    if ! cmp --silent -- "${doc}" "${doc_fmt}"; then
+      log_err 'treefmt-config block in docs/reference/treefmt-config.md is stale. Run scripts/refresh-treefmt-config.sh and commit.'
+      exit 1
+    fi
+    log_info 'treefmt-config block in docs/reference/treefmt-config.md is up to date'
+    return 0
+  fi
+
+  mv -- "${doc_fmt}" "${doc}"
+  log_info 'refreshed treefmt-config block in docs/reference/treefmt-config.md'
+}
+
+main "$@"

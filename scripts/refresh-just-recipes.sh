@@ -2,15 +2,18 @@
 # scripts/refresh-just-recipes.sh
 #
 # @description Regenerate the just-recipes managed block in
-# README.md from the current `just` recipe list.
-# @option --check exit 1 if README.md would change; do not mutate the working tree
+# README.md and docs/reference/just-recipes.md from the current
+# `just` recipe list.
+# @option --check exit 1 if either doc would change; do not mutate the working tree
 
-# Replace the content between # BEGIN just-recipes and # END just-recipes
-# in README.md with the current just recipe list from the justfile.
+# Replace the content between the BEGIN/END just-recipes markers in
+# both README.md (bash-comment markers) and
+# docs/reference/just-recipes.md (HTML-comment markers) with the
+# current just recipe list from the justfile.
 #
 # Usage:
-#   scripts/refresh-just-recipes.sh            # mutate README.md in place
-#   scripts/refresh-just-recipes.sh --check    # exit 1 if the doc would change;
+#   scripts/refresh-just-recipes.sh            # mutate both docs in place
+#   scripts/refresh-just-recipes.sh --check    # exit 1 if either doc would change;
 #                                              #   do NOT mutate the working tree
 
 set -Eeuo pipefail
@@ -49,30 +52,41 @@ function main() {
   require_tool awk
   require_tool cmp
 
-  local repo_root doc
+  local repo_root
   repo_root="$(git rev-parse --show-toplevel)"
-  doc="${repo_root}/README.md"
-  readonly repo_root doc
+  readonly repo_root
 
-  if [[ ! -f ${doc} ]]; then
-    log_err "${doc} not found"
-    exit 1
-  fi
-  if ! grep --quiet '^# BEGIN just-recipes$' "${doc}"; then
-    log_err 'BEGIN marker missing from README.md'
-    exit 1
-  fi
-  if ! grep --quiet '^# END just-recipes$' "${doc}"; then
-    log_err 'END marker missing from README.md'
-    exit 1
-  fi
+  # (doc, begin_marker, end_marker, wrap_with_fence) tuples — README
+  # uses bash-comment markers and embeds the block inside an outer `sh`
+  # code fence already, so the block content is emitted raw. The
+  # standalone doc-site page uses HTML-comment markers and wraps the
+  # block in its own `text` fence (with surrounding blank lines) so
+  # mdformat does not rewrite the doc on every commit.
+  local -a docs begin_markers end_markers wrap_fence
+  docs=(
+    "${repo_root}/README.md"
+    "${repo_root}/docs/reference/just-recipes.md"
+  )
+  begin_markers=(
+    '# BEGIN just-recipes'
+    '<!-- BEGIN just-recipes -->'
+  )
+  end_markers=(
+    '# END just-recipes'
+    '<!-- END just-recipes -->'
+  )
+  wrap_fence=(
+    'false'
+    'true'
+  )
 
   local block_file doc_new
   block_file="$(mktemp)"
   doc_new="$(mktemp)"
   trap 'rm --force -- "${block_file:-}" "${doc_new:-}"' EXIT
 
-  # Generate the recipe block from `just --list` output.
+  # Generate the recipe block once — content is identical between outputs;
+  # only the surrounding marker shape differs.
   # `just --list` emits recipes in alphabetical order already (with `default`
   # appearing in name order, i.e. between 'c' and 'e').  We preserve that
   # order and emit the `default` recipe first (as bare "just") to match the
@@ -101,11 +115,11 @@ function main() {
     pcomments+=("${comment}")
   done <<<"${raw_list}"
 
-  # Render: default first (as bare "just"), then remaining in list order.
+  # Render the inner recipe lines (without surrounding markers) into
+  # block_file. Per-doc rendering re-emits the matching marker shape.
   {
-    printf '# BEGIN just-recipes\n'
-    # Pass 1: emit "default" as bare "just".
     local i
+    # Pass 1: emit "default" as bare "just".
     for i in "${!pnames[@]}"; do
       if [[ ${pnames[${i}]} == 'default' ]]; then
         if [[ -n ${pcomments[${i}]} ]]; then
@@ -128,39 +142,69 @@ function main() {
         printf '%s\n' "${display}"
       fi
     done
-    printf '# END just-recipes\n'
   } >"${block_file}"
 
-  # Replace inclusive of markers. awk emits the block once at BEGIN marker,
-  # then suppresses every line until (and including) END.
-  # Anchored to start-of-line so doc references to the marker don't falsely match.
-  awk -v rep="${block_file}" '
-    /^# BEGIN just-recipes$/ {
-      while ((getline line < rep) > 0) print line
-      close(rep)
-      skip = 1
-      next
-    }
-    /^# END just-recipes$/ {
-      skip = 0
-      next
-    }
-    !skip { print }
-  ' "${doc}" >"${doc_new}"
+  local idx doc begin_marker end_marker fence rel
+  for idx in "${!docs[@]}"; do
+    doc="${docs[${idx}]}"
+    begin_marker="${begin_markers[${idx}]}"
+    end_marker="${end_markers[${idx}]}"
+    fence="${wrap_fence[${idx}]}"
+    rel="${doc#"${repo_root}/"}"
 
-  if [[ ${check_only} == 'true' ]]; then
-    # cmp short-circuits on first byte difference and supports --silent across
-    # both GNU and BSD coreutils — diff --quiet is GNU-only.
-    if ! cmp --silent -- "${doc}" "${doc_new}"; then
-      log_err 'just-recipes block in README.md is stale. Run scripts/refresh-just-recipes.sh and commit.'
+    if [[ ! -f ${doc} ]]; then
+      log_err "${rel} not found"
       exit 1
     fi
-    log_info 'just-recipes block in README.md is up to date'
-    return 0
-  fi
+    if ! grep --quiet --fixed-strings --line-regexp -- "${begin_marker}" "${doc}"; then
+      log_err "BEGIN marker missing from ${rel}"
+      exit 1
+    fi
+    if ! grep --quiet --fixed-strings --line-regexp -- "${end_marker}" "${doc}"; then
+      log_err "END marker missing from ${rel}"
+      exit 1
+    fi
 
-  mv -- "${doc_new}" "${doc}"
-  log_info 'refreshed just-recipes block in README.md'
+    # Replace inclusive of markers. awk emits BEGIN marker, optional
+    # fence wrapper, block content, optional fence, then END marker;
+    # suppresses every line in between in the source. Anchored to
+    # whole-line via exact match.
+    awk -v rep="${block_file}" -v bm="${begin_marker}" -v em="${end_marker}" -v fence="${fence}" '
+      $0 == bm {
+        print bm
+        if (fence == "true") { print ""; print "```text" }
+        while ((getline line < rep) > 0) print line
+        close(rep)
+        if (fence == "true") { print "```"; print "" }
+        print em
+        skip = 1
+        next
+      }
+      $0 == em {
+        skip = 0
+        next
+      }
+      !skip { print }
+    ' "${doc}" >"${doc_new}"
+
+    if [[ ${check_only} == 'true' ]]; then
+      # cmp short-circuits on first byte difference and supports --silent across
+      # both GNU and BSD coreutils — diff --quiet is GNU-only.
+      if ! cmp --silent -- "${doc}" "${doc_new}"; then
+        log_err "just-recipes block in ${rel} is stale. Run scripts/refresh-just-recipes.sh and commit."
+        exit 1
+      fi
+      log_info "just-recipes block in ${rel} is up to date"
+      continue
+    fi
+
+    if cmp --silent -- "${doc}" "${doc_new}"; then
+      log_info "just-recipes block in ${rel} already up to date"
+    else
+      cp -- "${doc_new}" "${doc}"
+      log_info "refreshed just-recipes block in ${rel}"
+    fi
+  done
 }
 
 main "$@"

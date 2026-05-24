@@ -57,6 +57,7 @@ flowchart TD
   refresh-just-recipes-test:::aux
   refresh-precommit-table-test:::aux
   refresh-scripts-reference-test:::aux
+  refresh-treefmt-config-test:::aux
   renovate-config-validator:::security
   renovate-invariants:::security
   required-checks-no-paths:::security
