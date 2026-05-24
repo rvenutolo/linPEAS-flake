@@ -58,6 +58,7 @@ readonly EXEMPT=(
   "refresh-enforcement-matrix-test" # regenerator harness
   "refresh-just-recipes-test"       # regenerator harness
   "refresh-precommit-table-test"    # regenerator harness
+  "refresh-scripts-reference-test"  # regenerator harness
   "settings-posture-harness"        # harness sandbox
 )
 
