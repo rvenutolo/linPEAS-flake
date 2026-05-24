@@ -94,6 +94,10 @@
     # doc uses `__SCENARIO__` which formatters rewrite to `**SCENARIO**`,
     # breaking the harness sed substitution.
     "tests/fixtures/required-checks/*"
+    # Generator-owned changelog. mdformat re-escapes characters that
+    # git-cliff renders verbatim, causing a write-back loop between the
+    # release-on-bump `changelog` job and any local treefmt run.
+    "CHANGELOG.md"
     # renovate-config-validator bad-syntax fixture is intentionally
     # malformed JSON to exercise the parse-error branch of the validator;
     # prettier refuses to format invalid JSON.

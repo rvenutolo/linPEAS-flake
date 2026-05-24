@@ -9,7 +9,6 @@ repo is not on a semver track.
 ## Unreleased
 
 ### Build
-
 - Add cliff.toml for conventional-commit changelog generation
 - Expose git-cliff package for changelog generation
 - Add treefmt-config-fresh hook and extend just-recipes-fresh
@@ -18,7 +17,8 @@ repo is not on a semver track.
 - Add scripts-reference-fresh pre-commit hook
 
 ### CI
-
+- Generate CHANGELOG.md and patch release body
+- Enforce cliff.toml tag-pattern parity
 - Add refresh-treefmt-config-test job
 - Add refresh-ci-dag-test job
 - Add refresh-scripts-reference-test job
@@ -33,7 +33,6 @@ repo is not on a semver track.
 - Track nixpkgs-unstable input
 
 ### Chores
-
 - Add cliff-tag-pattern parity enforcer
 - Add renovate-config-validator local + CI check (#183, #189) ([#229](https://github.com/rvenutolo/linPEAS-flake/pull/229))
 - Wire renovate-config-validator into verify recipe
@@ -54,7 +53,7 @@ repo is not on a semver track.
 - Add nixpkgs-unstable input + binding
 - Expand auto-format and lint coverage to remaining tracked files ([#152](https://github.com/rvenutolo/linPEAS-flake/pull/152))
 - Enable IndentSize check + drop LICENSE ec-checker exclude
-- Drop [\*.md] trim_trailing_whitespace override
+- Drop [*.md] trim_trailing_whitespace override
 - Add .envrc + justfile to treefmt; wire just --fmt
 - Remove linpeas-bundle release artifact ([#150](https://github.com/rvenutolo/linPEAS-flake/pull/150))
 - Drop orphan sbom-diff script and tests
@@ -66,7 +65,8 @@ repo is not on a semver track.
 - Update flake.lock ([#145](https://github.com/rvenutolo/linPEAS-flake/pull/145))
 
 ### Documentation
-
+- Add changelog generation runbook and invariant entries
+- Seed changelog from historical release tags
 - Add show-treefmt recipe to justfile
 - Surface just-recipes and treefmt-config pages in mkdocs nav
 - Add show-ci-dag recipe to justfile
@@ -91,7 +91,6 @@ repo is not on a semver track.
 - Frame docker.md container-audit example as smoke test
 
 ### Features
-
 - Standalone just-recipes + treefmt-config reference pages ([#190](https://github.com/rvenutolo/linPEAS-flake/pull/190)) ([#233](https://github.com/rvenutolo/linPEAS-flake/pull/233))
 - Publish just-recipes as standalone reference page
 - Add refresh-treefmt-config generator + test
@@ -122,8 +121,8 @@ repo is not on a semver track.
 - Lint ci.yml jobs cross-checked against summary categories
 - Lint scripts/check-*.sh paired with tests/check-*.test.sh ([#207](https://github.com/rvenutolo/linPEAS-flake/pull/207))
 - Lint scripts/check-*.sh paired with tests/check-*.test.sh
-- Lint scripts/\*.sh shebang + set -Eeuo pipefail ([#206](https://github.com/rvenutolo/linPEAS-flake/pull/206))
-- Lint scripts/\*.sh shebang + set -Eeuo pipefail
+- Lint scripts/*.sh shebang + set -Eeuo pipefail ([#206](https://github.com/rvenutolo/linPEAS-flake/pull/206))
+- Lint scripts/*.sh shebang + set -Eeuo pipefail
 - Hard-ban pull_request_target trigger ([#205](https://github.com/rvenutolo/linPEAS-flake/pull/205))
 - Hard-ban pull_request_target trigger
 - Lint pull_request/push triggers declare branches main ([#202](https://github.com/rvenutolo/linPEAS-flake/pull/202))
@@ -139,7 +138,7 @@ repo is not on a semver track.
 - Generate derived doc blocks from source-of-truth files ([#146](https://github.com/rvenutolo/linPEAS-flake/pull/146))
 
 ### Fixes
-
+- Decouple verify from changelog job
 - Relativize matrix link paths to page location
 - Use comma for within-field separator in enforcer annotations
 - Canonicalize TOC nested-list indent to 2-space
@@ -152,26 +151,22 @@ repo is not on a semver track.
 - Use absolute README URL in docker.md link (mkdocs strict)
 
 ### Style
-
 - Align justfile to 2-space indent using newer just
 - Align continuation indents to multiples of two
 - Apply treefmt repo-wide (justfile reflow)
 
 ### Tests
-
 - Add fixtures (good + bad cases)
 - Add fixtures for setup-nix-required lint
 
 ## [20260521-859cab5f] - 2026-05-22
 
 ### Build
-
 - Register check-orphan-invariants and check-doc-anchors hooks
 
 ### CI
-
 - Add check-orphan-invariants and check-doc-anchors jobs
-- Exclude tests/fixtures/\*\* to match flake.nix
+- Exclude tests/fixtures/** to match flake.nix
 - Add settings-posture-harness job
 - Replace commitizen with commitlint for full CI parity ([#106](https://github.com/rvenutolo/linPEAS-flake/pull/106))
 - Add local commitlint pre-commit hook for CI parity
@@ -183,7 +178,6 @@ repo is not on a semver track.
 - Drop hydra unstable-Nix URL from coverage matrix
 
 ### Chores
-
 - Bump linpeas to 20260521-859cab5f ([#142](https://github.com/rvenutolo/linPEAS-flake/pull/142))
 - Refresh README flake-show for linpeas 20260521-859cab5f
 - Bump linpeas to 20260521-859cab5f
@@ -228,7 +222,6 @@ repo is not on a semver track.
 - Harden CI, build, and auto-update against supply-chain risks ([#3](https://github.com/rvenutolo/linPEAS-flake/pull/3))
 
 ### Documentation
-
 - Document platform support matrix and x86_64-darwin untested status ([#140](https://github.com/rvenutolo/linPEAS-flake/pull/140))
 - Document platform support matrix and x86_64-darwin untested status
 - State dev toolchain comes from flake devShell
@@ -273,7 +266,6 @@ repo is not on a semver track.
 - Add self-deprecating over-engineering note to README
 
 ### Features
-
 - Generate README CI summary from required-checks + category map
 - Generate README just-recipes list from justfile
 - Generate pre-commit hook table from flake manifest
@@ -330,7 +322,6 @@ repo is not on a semver track.
 - Add GitHub Pages site (landing + docs + dashboard) ([#4](https://github.com/rvenutolo/linPEAS-flake/pull/4))
 
 ### Fixes
-
 - Add orphaned security pages to mkdocs nav ([#132](https://github.com/rvenutolo/linPEAS-flake/pull/132))
 - Add orphaned security pages to mkdocs nav
 - Repair slug newline and SIGPIPE false-positives in check-doc-anchors
@@ -361,7 +352,6 @@ repo is not on a semver track.
 - Validate upstream peass-ng tag shape before interpolation ([#16](https://github.com/rvenutolo/linPEAS-flake/pull/16))
 
 ### Refactor
-
 - Name preCommitHooks and expose description manifest
 - Drop commitizen now that commitlint covers subject
 - Attribute verify-latest-release failures by reason ([#103](https://github.com/rvenutolo/linPEAS-flake/pull/103))
@@ -377,11 +367,9 @@ repo is not on a semver track.
 - BUMP_PAT blast-radius reduction phase 1 (AU-P-1/P-2/P-4) ([#20](https://github.com/rvenutolo/linPEAS-flake/pull/20))
 
 ### Style
-
 - Reformat markdown via mdformat
 
 ### Tests
-
 - Add fixtures and harness for check-doc-anchors
 - Add harness for check-orphan-invariants
 - Cover gen-dashboard-data.sh security hard-fail branches ([#6](https://github.com/rvenutolo/linPEAS-flake/pull/6))
@@ -391,7 +379,6 @@ repo is not on a semver track.
 ## [20260510-cd4bd619] - 2026-05-16
 
 ### CI
-
 - Add daily SLSA attestation re-verification of latest release
 - Add Renovate config (Friday batch, automerge, Nix-version regex manager)
 - Add release-on-bump workflow with SLSA attestation, bundles, ghcr image, sync verify
@@ -400,18 +387,15 @@ repo is not on a semver track.
 - Add CI workflow + yamllint config for renovate marker comments
 
 ### Chores
-
 - Bump linpeas to 20260510-cd4bd619 ([#2](https://github.com/rvenutolo/linPEAS-flake/pull/2))
 - Bootstrap repo with ignore/attribute/editor configs
 
 ### Documentation
-
 - Add README + harden refresh-flake-show.sh
 - Add SECURITY.md (resolve treefmt shfmt config)
 - Add MIT license
 
 ### Features
-
 - Add helper scripts + enable shfmt editorconfig
 - Add linpeas-bundle as raw linpeas.sh copy with portable shebang
 - Add linpeas-image OCI output
@@ -422,15 +406,14 @@ repo is not on a semver track.
 - Seed linpeas pin at 20260510-cd4bd619
 
 ### Fixes
-
 - Skip readme-flake-show-fresh hook inside nix build sandbox
 - Use Entrypoint not Cmd in linpeas-image so docker run args reach linpeas
 - Exclude justfile from shellcheck and add bash directive to .envrc
 
 ### Refactor
-
 - Merge programs attrset in treefmt.nix to satisfy statix
 
 ### Tests
-
 - Roll pin back to 20260506-5a27482a to exercise auto-bump pipeline ([#1](https://github.com/rvenutolo/linPEAS-flake/pull/1))
+
+

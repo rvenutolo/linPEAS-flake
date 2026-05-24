@@ -30,6 +30,7 @@ Patterns excluded from every formatter:
 .gitmodules
 .hgignore
 .svnignore
+CHANGELOG.md
 LICENSE
 docs/_data/dashboard.yml
 docs/dashboard.md

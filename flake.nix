@@ -184,6 +184,9 @@
               "^docs/releases\\.md$"
               "^docs/_data/"
               "^tests/fixtures/"
+              # Generator-owned by git-cliff; rule violations there
+              # come from cliff's template, not author choice.
+              "^CHANGELOG\\.md$"
             ];
           };
           typos = {
