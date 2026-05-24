@@ -694,7 +694,7 @@ jobs:
     # Synchronous verification of the just-published image and pin
     # attestations. Runs after the image jobs. Failure = release workflow
     # goes red so broken-at-creation attestations surface immediately.
-    needs: [release, image-amd64, image-arm64, manifest, changelog]
+    needs: [release, image-amd64, image-arm64, manifest]
     if: (needs.release.outputs.tag-exists == 'false' || inputs.force-republish) && github.repository == 'rvenutolo/linPEAS-flake'
     runs-on: ubuntu-latest
     timeout-minutes: 30
