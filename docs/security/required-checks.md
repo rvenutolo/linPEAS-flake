@@ -19,6 +19,7 @@ this file in the same change as any modification to the ruleset.
 | check-jsonschema             | ci                | .github/workflows/ci.yml                |
 | checkout-persist-credentials | ci                | .github/workflows/ci.yml                |
 | ci-job-in-summary            | ci                | .github/workflows/ci.yml                |
+| cliff-tag-pattern            | ci                | .github/workflows/ci.yml                |
 | cosign-identity-pinned       | ci                | .github/workflows/ci.yml                |
 | check-orphan-invariants      | ci                | .github/workflows/ci.yml                |
 | commitlint                   | ci                | .github/workflows/ci.yml                |

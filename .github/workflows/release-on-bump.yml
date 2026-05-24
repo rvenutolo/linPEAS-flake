@@ -587,6 +587,109 @@ jobs:
           docker logout ghcr.io || true
           docker logout docker.io || true
 
+  changelog:
+    needs: [release, manifest]
+    if: needs.release.outputs.tag-exists == 'false' && github.repository == 'rvenutolo/linPEAS-flake'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-nix
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          client-id: ${{ vars.BUMP_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BUMP_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: re-validate pin version shape
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          # Defense-in-depth at the credential boundary. Mirrors the release
+          # job's shape-check and the canonical pin regex enforced across
+          # bump-linpeas.sh, flake.nix, stale-pin-check.yml, cliff.toml,
+          # and gen-dashboard-data.sh.
+          if [[ ! "${VERSION}" =~ ^[0-9]{8}-[0-9a-f]{7,40}$ ]]; then
+            printf 'refusing to update changelog with non-conformant version: %q\n' "${VERSION}" >&2
+            exit 1
+          fi
+
+      - name: regenerate CHANGELOG.md
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          nix shell .#git-cliff --command git-cliff \
+            --config cliff.toml \
+            --output CHANGELOG.md
+          if git diff --quiet CHANGELOG.md; then
+            printf 'git-cliff produced no diff - aborting\n' >&2
+            exit 1
+          fi
+
+      - name: render latest section for release body
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          nix shell .#git-cliff --command git-cliff \
+            --config cliff.toml \
+            --latest \
+            --strip header > .release-notes.md
+
+      - name: commit CHANGELOG.md via web-flow App identity
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ github.repository }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          api_header="X-GitHub-Api-Version: 2022-11-28"
+          changelog_b64="$(base64 --wrap=0 CHANGELOG.md)"
+          if blob_sha="$(gh api "repos/${REPO}/contents/CHANGELOG.md" \
+                --header "${api_header}" --jq .sha 2>/dev/null)"; then
+            gh api --method PUT "repos/${REPO}/contents/CHANGELOG.md" \
+              --field message="docs: update changelog for ${VERSION}" \
+              --field content="${changelog_b64}" \
+              --field sha="${blob_sha}" \
+              --field branch="main" \
+              --header "${api_header}" >/dev/null
+          else
+            gh api --method PUT "repos/${REPO}/contents/CHANGELOG.md" \
+              --field message="docs: update changelog for ${VERSION}" \
+              --field content="${changelog_b64}" \
+              --field branch="main" \
+              --header "${api_header}" >/dev/null
+          fi
+
+      - name: patch release body with changelog section
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          {
+            cat .release-notes.md
+            printf '\n\n---\n\nTracks upstream [peass-ng/PEASS-ng@%s](https://github.com/peass-ng/PEASS-ng/releases/tag/%s).\n' \
+              "${VERSION}" "${VERSION}"
+          } > .release-body.md
+          gh release edit "${VERSION}" --notes-file .release-body.md
+
   verify:
     # Synchronous verification of the just-published image and pin
     # attestations. Runs after the image jobs. Failure = release workflow
@@ -726,7 +829,7 @@ jobs:
 
   notify:
     name: notify
-    needs: [release, image-amd64, image-arm64, manifest, verify]
+    needs: [release, image-amd64, image-arm64, manifest, changelog, verify]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -745,7 +848,7 @@ jobs:
           # image/verify are gated on `tag-exists == 'false'` so
           # `skipped` is the normal value when the tag already exists.
           # Treat that path as success.
-          result: ${{ (needs.release.result == 'failure' || needs.image-amd64.result == 'failure' || needs.image-arm64.result == 'failure' || needs.manifest.result == 'failure' || needs.verify.result == 'failure') && 'failure' || (needs.release.result == 'success') && 'success' || 'skipped' }}
+          result: ${{ (needs.release.result == 'failure' || needs.image-amd64.result == 'failure' || needs.image-arm64.result == 'failure' || needs.manifest.result == 'failure' || needs.changelog.result == 'failure' || needs.verify.result == 'failure') && 'failure' || (needs.release.result == 'success') && 'success' || 'skipped' }}
           label: release-on-bump-failure
           title: "release-on-bump: release pipeline failed"
           body: |
@@ -756,6 +859,7 @@ jobs:
             - image-amd64: `${{ needs.image-amd64.result }}`
             - image-arm64: `${{ needs.image-arm64.result }}`
             - manifest:    `${{ needs.manifest.result }}`
+            - changelog:   `${{ needs.changelog.result }}`
             - verify:      `${{ needs.verify.result }}`
 
             Investigate the failing job's logs. The just-published release may need to be deleted and recut once the underlying bug is fixed.

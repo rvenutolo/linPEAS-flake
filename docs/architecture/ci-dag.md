@@ -27,6 +27,7 @@ flowchart TD
   check-orphan-invariants:::doc
   checkout-persist-credentials:::security
   ci-job-in-summary:::security
+  cliff-tag-pattern:::security
   commitlint:::commits
   cosign-identity-pinned:::security
   dashboard-data-tests:::security

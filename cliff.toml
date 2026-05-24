@@ -1,0 +1,63 @@
+# git-cliff configuration. Generates CHANGELOG.md from conventional
+# commits between release tags. See docs/development/changelog.md for
+# the runbook. Tag pattern parity with the cross-layer pin-shape regex
+# is enforced by scripts/check-cliff-tag-pattern.sh.
+
+[changelog]
+header = """
+# Changelog
+
+All notable changes to this project are auto-generated from
+conventional commits between release tags. Format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The release
+tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
+repo is not on a semver track.
+
+"""
+body = """
+{% if version %}\
+## [{{ version }}] - {{ timestamp | date(format=\"%Y-%m-%d\") }}
+{% else %}\
+## Unreleased
+{% endif %}\
+{% for group, commits in commits | group_by(attribute=\"group\") %}
+### {{ group | upper_first }}
+{% for commit in commits %}\
+- {{ commit.message | upper_first | trim }}\
+{% if commit.remote.pr_number %} ([#{{ commit.remote.pr_number }}](https://github.com/rvenutolo/linPEAS-flake/pull/{{ commit.remote.pr_number }})){% endif %}
+{% endfor %}\
+{% endfor %}\n
+"""
+trim = true
+footer = ""
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+split_commits = false
+tag_pattern = "^[0-9]{8}-[0-9a-f]{7,40}$"
+topo_order = false
+sort_commits = "newest"
+
+commit_preprocessors = [
+  { pattern = '\(#([0-9]+)\)', replace = "([#${1}](https://github.com/rvenutolo/linPEAS-flake/pull/${1}))" },
+]
+
+commit_parsers = [
+  { message = "^docs: update changelog", skip = true },
+  { message = "^Merge ", skip = true },
+  { message = "^feat(\\(.+\\))?!:", group = "Breaking Changes" },
+  { message = "^fix(\\(.+\\))?!:", group = "Breaking Changes" },
+  { body = "BREAKING CHANGE:", group = "Breaking Changes" },
+  { message = "^feat", group = "Features" },
+  { message = "^fix", group = "Fixes" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Refactor" },
+  { message = "^docs", group = "Documentation" },
+  { message = "^ci", group = "CI" },
+  { message = "^build", group = "Build" },
+  { message = "^chore", group = "Chores" },
+  { message = "^style", group = "Style" },
+  { message = "^test", group = "Tests" },
+  { message = "^revert", group = "Reverts" },
+]

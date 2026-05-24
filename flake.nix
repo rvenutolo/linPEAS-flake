@@ -184,6 +184,9 @@
               "^docs/releases\\.md$"
               "^docs/_data/"
               "^tests/fixtures/"
+              # Generator-owned by git-cliff; rule violations there
+              # come from cliff's template, not author choice.
+              "^CHANGELOG\\.md$"
             ];
           };
           typos = {
@@ -858,7 +861,7 @@
           # nixpkgs rather than the runner registry's mutable
           # `nixpkgs` reference. See
           # docs/security/workflow-hardening.md (nix-run-pinned).
-          inherit (pkgs-unstable) cosign;
+          inherit (pkgs-unstable) cosign git-cliff;
         }
         // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
           inherit linpeas-image site;
