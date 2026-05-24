@@ -32,8 +32,8 @@ this file in the same change as any modification to the ruleset.
 | tag-protection-drift-check   | ci                | .github/workflows/ci.yml                |
 | protect-main-drift-check     | ci                | .github/workflows/ci.yml                |
 | pull-request-target-absent   | ci                | .github/workflows/ci.yml                |
-| renovate-invariants          | ci                | .github/workflows/ci.yml                |
 | renovate-config-validator    | ci                | .github/workflows/ci.yml                |
+| renovate-invariants          | ci                | .github/workflows/ci.yml                |
 | pre-commit-hooks-sha-parity  | ci                | .github/workflows/ci.yml                |
 | pin-diff-isolated            | ci                | .github/workflows/ci.yml                |
 | upload-artifact-strict       | ci                | .github/workflows/ci.yml                |
