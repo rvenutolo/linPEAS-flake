@@ -678,7 +678,7 @@ jobs:
 
       - name: patch release body with changelog section
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ needs.release.outputs.version }}
         run: |
           set -Eeuo pipefail
