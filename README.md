@@ -272,6 +272,7 @@ just image           # Build the OCI image
 just lint            # Run pre-commit hooks against all files
 just lint-links      # Run lychee link checker against tracked markdown files
 just show            # Regenerate the <!-- BEGIN/END flake-show --> block in docs/reference/flake-outputs.md
+just show-ci-dag     # Regenerate docs/architecture/ci-dag.md from ci.yml needs graph
 just show-ci-summary # Regenerate the Continuous integration summary in README.md
 just show-enforcement-matrix # Regenerate docs/security/enforcement-matrix.md from invariant-index annotations
 just show-hooks      # Regenerate the pre-commit hook table in docs/development/git.md

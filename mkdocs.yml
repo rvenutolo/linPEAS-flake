@@ -83,6 +83,7 @@ nav:
   - Architecture:
       - Auto-update: architecture/auto-update.md
       - CI: architecture/ci.md
+      - CI DAG: architecture/ci-dag.md
       - Flake-input bumps: architecture/flake-input-bumps.md
   - Development:
       - Git workflow: development/git.md

@@ -78,6 +78,7 @@ verify:
   bash tests/check-pre-commit-hooks-sha-parity.test.sh; \
   bash tests/check-pin-diff-isolated.test.sh; \
   bash tests/gen-dashboard-data.test.sh; \
+  bash tests/refresh-ci-dag.test.sh; \
   bash tests/refresh-ci-summary.test.sh; \
   bash tests/refresh-enforcement-matrix.test.sh; \
   bash tests/refresh-just-recipes.test.sh; \
@@ -103,6 +104,10 @@ show-recipes:
 # Regenerate docs/reference/scripts.md from in-script annotations
 show-scripts:
   ./scripts/refresh-scripts-reference.sh
+
+# Regenerate docs/architecture/ci-dag.md from ci.yml needs graph
+show-ci-dag:
+  ./scripts/refresh-ci-dag.sh
 
 # Regenerate the Continuous integration summary in README.md
 show-ci-summary:

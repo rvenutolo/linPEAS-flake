@@ -62,6 +62,7 @@ function require_tool() {
 # specific invariant.
 readonly HOOK_EXEMPT=(
   "actionlint"
+  "ci-dag-fresh"
   "ci-summary-fresh"
   "commitlint"
   "deadnix"

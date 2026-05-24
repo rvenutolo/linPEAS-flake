@@ -54,6 +54,7 @@ readonly EXEMPT=(
   "image-cve-scan"                  # CVE scan; surfaces issues, not blocker
   "image-cve-scan-notify-finding"   # notify-only job (real CRITICAL CVE)
   "image-cve-scan-notify-infra"     # notify-only job (infra failure, no CVE)
+  "refresh-ci-dag-test"             # regenerator harness
   "refresh-ci-summary-test"         # regenerator harness
   "refresh-enforcement-matrix-test" # regenerator harness
   "refresh-just-recipes-test"       # regenerator harness
