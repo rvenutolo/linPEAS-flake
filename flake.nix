@@ -635,6 +635,27 @@
             pass_filenames = false;
             language = "system";
           };
+          # Validates renovate.json against the upstream Renovate
+          # config schema. Catches typoed keys / wrong-type values
+          # before they ship and surface as a Dependency Dashboard
+          # error after merge. NIX_BUILD_TOP guard skips inside the
+          # flake-check sandbox where the validator's network probes
+          # would fail.
+          renovate-config-validator = {
+            enable = true;
+            name = "renovate-config-validator";
+            description = "Validate renovate.json against the upstream Renovate config schema.";
+            entry = "${pkgs-unstable.writeShellScript "renovate-config-validator-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              export PATH="${pkgs-unstable.renovate}/bin:$PATH"
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-renovate-config-validator.sh
+            ''}";
+            files = "^(renovate\\.json|scripts/check-renovate-config-validator\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
           # Asserts only scripts/bump-linpeas.sh mutates
           # linpeas-pin.json — the release-on-bump trigger contract
           # depends on this isolation invariant.
