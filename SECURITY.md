@@ -114,6 +114,18 @@ documented below.
     complements (does not replace) the `zizmor` pre-commit hook and
     the SHA-pinning + `permissions:` discipline applied workflow-wide.
 
+- **`osv-scanner.yml`** scans `flake.lock` (and any future lockfiles)
+    against the OSV database on every push to `main`, pull request to
+    `main`, and weekly Monday 09:00 UTC cron. It closes the coverage gap
+    where Trivy only scans the OCI image — `osv-scanner` reads
+    `flake.lock` directly and matches against OSV / GitHub Advisory
+    feeds. Findings upload as SARIF to the Security tab. The workflow is
+    not in branch protection's required-check set: a CVE in a transitive
+    nix dep must not block linpeas pin bumps; surfacing is via the
+    `notify-workflow-result` issue-opening pattern on `push` and
+    `schedule` events (cron pages too, since advisories often land
+    between pushes).
+
 The `codeql.yml` workflow is not in branch protection's required-check set. A CodeQL infrastructure failure must not block linpeas pin bumps; failure surfacing is via the standard GitHub email channel.
 
 ## Secrets
