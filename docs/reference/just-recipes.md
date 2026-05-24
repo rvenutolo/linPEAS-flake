@@ -31,6 +31,7 @@ just show-enforcement-matrix # Regenerate docs/security/enforcement-matrix.md fr
 just show-hooks      # Regenerate the pre-commit hook table in docs/development/git.md
 just show-recipes    # Regenerate the just-recipes list in README.md
 just show-scripts    # Regenerate docs/reference/scripts.md from in-script annotations
+just show-treefmt    # Regenerate docs/reference/treefmt-config.md from treefmt.nix
 just site            # Build the Pages site
 just site-data       # Regenerate docs/_data/dashboard.yml standalone
 just site-dev        # Live-preview site at http://127.0.0.1:8000 (regenerates data first)
