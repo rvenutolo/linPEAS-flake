@@ -38,6 +38,7 @@ readonly EXEMPT=(
   "install/nix.md"
   "invariant-index.md"
   "reference/scripts.md"
+  "reference/treefmt-config.md"
   "releases.md"
   "security/enforcement-matrix.md"
   "security/threat-model.md"

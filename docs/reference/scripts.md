@@ -279,6 +279,16 @@ prefix into Check / Refresh / Other sections.
 
 - `--check` — exit 1 if drift; do not mutate the working tree
 
+### scripts/refresh-treefmt-config.sh
+
+Regenerate the treefmt-config managed block in
+docs/reference/treefmt-config.md from the enabled-formatter manifest
+exposed by `flake.nix` as `devTooling.<system>.treefmtConfig`.
+
+**Options:**
+
+- `--check` — exit 1 if the doc would change; do not mutate the working tree
+
 ## Other
 
 ### scripts/bump-linpeas.sh
