@@ -1,0 +1,140 @@
+name: actions-cache-prune
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch: {}
+  pull_request:
+    branches: [main]
+    types: [closed]
+
+permissions: {}
+
+concurrency:
+  group: actions-cache-prune-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prune-stale:
+    if: |
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+      && github.repository == 'rvenutolo/linPEAS-flake'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+
+      - name: prune caches older than 7 days
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          threshold="$(date --utc --iso-8601=seconds --date='7 days ago')"
+          deleted=0
+          while read -r id; do
+            [[ -z "${id}" ]] && continue
+            gh api --method DELETE \
+              "repos/${REPO}/actions/caches/${id}" \
+              --header "X-GitHub-Api-Version: 2022-11-28" >/dev/null
+            deleted=$((deleted + 1))
+          done < <(
+            gh api --paginate \
+              "repos/${REPO}/actions/caches?per_page=100" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              --jq ".actions_caches[] | select(.last_accessed_at < \"${threshold}\") | .id"
+          )
+          printf 'pruned %d age-stale cache entries\n' "${deleted}"
+
+      - name: prune caches whose ref is a deleted branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          branches="$(
+            gh api --paginate \
+              "repos/${REPO}/branches?per_page=100" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              --jq '.[].name'
+          )"
+          open_pulls="$(
+            gh api --paginate \
+              "repos/${REPO}/pulls?state=open&per_page=100" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              --jq '.[].number'
+          )"
+          live=""
+          while read -r b; do
+            [[ -n "${b}" ]] && live+="refs/heads/${b}"$'\n'
+          done <<< "${branches}"
+          while read -r n; do
+            [[ -n "${n}" ]] && live+="refs/pull/${n}/merge"$'\n'
+          done <<< "${open_pulls}"
+          deleted=0
+          while IFS=$'\t' read -r id ref; do
+            [[ -z "${id}" ]] && continue
+            if ! grep --line-regexp --fixed-strings --quiet "${ref}" <<< "${live}"; then
+              gh api --method DELETE \
+                "repos/${REPO}/actions/caches/${id}" \
+                --header "X-GitHub-Api-Version: 2022-11-28" >/dev/null
+              deleted=$((deleted + 1))
+            fi
+          done < <(
+            gh api --paginate \
+              "repos/${REPO}/actions/caches?per_page=100" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              --jq '.actions_caches[] | [.id, .ref] | @tsv'
+          )
+          printf 'pruned %d orphan-ref cache entries\n' "${deleted}"
+
+  prune-on-pr-close:
+    if: |
+      github.event_name == 'pull_request'
+      && github.repository == 'rvenutolo/linPEAS-flake'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+
+      - name: prune caches scoped to closed PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          targets=(
+            "refs/pull/${PR_NUMBER}/merge"
+            "refs/heads/${HEAD_REF}"
+          )
+          deleted=0
+          for ref in "${targets[@]}"; do
+            while read -r id; do
+              [[ -z "${id}" ]] && continue
+              gh api --method DELETE \
+                "repos/${REPO}/actions/caches/${id}" \
+                --header "X-GitHub-Api-Version: 2022-11-28" >/dev/null
+              deleted=$((deleted + 1))
+            done < <(
+              gh api --paginate \
+                "repos/${REPO}/actions/caches?per_page=100&ref=${ref}" \
+                --header "X-GitHub-Api-Version: 2022-11-28" \
+                --jq '.actions_caches[].id'
+            )
+          done
+          printf 'pruned %d cache entries for PR #%s\n' "${deleted}" "${PR_NUMBER}"
