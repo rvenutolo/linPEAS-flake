@@ -62,6 +62,7 @@
           { "context": "pre-commit-hooks-sha-parity", "integration_id": 15368 },
           { "context": "protect-main-drift-check", "integration_id": 15368 },
           { "context": "pull-request-target-absent", "integration_id": 15368 },
+          { "context": "renovate-config-validator", "integration_id": 15368 },
           { "context": "renovate-invariants", "integration_id": 15368 },
           { "context": "required-checks-no-paths", "integration_id": 15368 },
           { "context": "run-block-strict", "integration_id": 15368 },
