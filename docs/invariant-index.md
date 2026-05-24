@@ -12,7 +12,7 @@ live in `.claude/CLAUDE.md` (untracked).
 ## Security
 
 - **Workflow SHA pinning** — every `uses:` SHA-pinned. → [security/repo-config.md](security/repo-config.md) <!-- enforcer: scripts/check-uses-sha-pinned.sh; ci: uses-sha-pinned; hook: uses-sha-pinned -->
-- **Renovate invariants** — pinDigests, minimumReleaseAge, no top-level automerge. → [security/repo-config.md](security/repo-config.md) <!-- enforcer: scripts/check-renovate-invariants.sh; scripts/check-renovate-config-validator.sh; ci: renovate-invariants; renovate-config-validator; hook: renovate-config-validator -->
+- **Renovate invariants** — pinDigests, minimumReleaseAge, no top-level automerge. → [security/repo-config.md](security/repo-config.md) <!-- enforcer: scripts/check-renovate-invariants.sh, scripts/check-renovate-config-validator.sh; ci: renovate-invariants, renovate-config-validator; hook: renovate-config-validator -->
 - **Tag-protection ruleset** — `release-tag-protection`, drift-check lint. → [security/repo-config.md](security/repo-config.md) <!-- enforcer: scripts/check-tag-protection.sh; ci: tag-protection-drift-check; hook: - -->
 - **Allowed-actions allowlist** — vendor list canonical; drift = incident. → [security/allowed-actions.md](security/allowed-actions.md) <!-- enforcer: scripts/check-allowed-actions-api.sh; ci: allowed-actions-api-harness; hook: - -->
 - **Bump-script integrity** — URL prefix, `.digest`, atomic write, API-version header. → [security/verification.md](security/verification.md) <!-- enforcer: scripts/check-gh-api-version-header.sh; ci: gh-api-version-header; hook: gh-api-version-header -->
@@ -60,8 +60,8 @@ live in `.claude/CLAUDE.md` (untracked).
 
 ## Development
 
-- **ci-summary-category-map** — every required status check is categorized for the README CI summary. → [security/required-checks.md](security/required-checks.md). <!-- enforcer: scripts/check-ci-job-in-summary.sh; scripts/refresh-ci-summary.sh; ci: ci-job-in-summary; refresh-ci-summary-test; hook: ci-job-in-summary; ci-summary-fresh -->
+- **ci-summary-category-map** — every required status check is categorized for the README CI summary. → [security/required-checks.md](security/required-checks.md). <!-- enforcer: scripts/check-ci-job-in-summary.sh, scripts/refresh-ci-summary.sh; ci: ci-job-in-summary, refresh-ci-summary-test; hook: ci-job-in-summary, ci-summary-fresh -->
 - **Merging PRs** — merge-commit only, signed, PR title = subject. → [development/git.md](development/git.md) <!-- enforcer: -; ci: -; hook: commitlint -->
-- **Treefmt YAML quote gotcha / flake-show auto-block** → [development/linting.md](development/linting.md) <!-- enforcer: scripts/refresh-flake-show.sh; ci: -; hook: treefmt; flake-show-fresh -->
+- **Treefmt YAML quote gotcha / flake-show auto-block** → [development/linting.md](development/linting.md) <!-- enforcer: scripts/refresh-flake-show.sh; ci: -; hook: treefmt, flake-show-fresh -->
 - **Flake outputs reference** — auto-regenerated `nix flake show --all-systems` tree; do not hand-edit. → [reference/flake-outputs.md](reference/flake-outputs.md) <!-- enforcer: scripts/refresh-flake-show.sh; ci: -; hook: flake-show-fresh -->
 - **PR auto-labeling** → [development/labeling.md](development/labeling.md) <!-- enforcer: -; ci: -; hook: - -->
