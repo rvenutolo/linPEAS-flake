@@ -37,6 +37,7 @@ readonly EXEMPT=(
   "install/consume-from-flake.md"
   "install/nix.md"
   "invariant-index.md"
+  "reference/just-recipes.md"
   "reference/scripts.md"
   "reference/treefmt-config.md"
   "releases.md"

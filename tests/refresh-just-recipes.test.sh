@@ -10,6 +10,7 @@ repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
 readonly SCRIPT="${REPO_ROOT}/scripts/refresh-just-recipes.sh"
 readonly DOC="${REPO_ROOT}/README.md"
+readonly DOC2="${REPO_ROOT}/docs/reference/just-recipes.md"
 
 failures=0
 function pass() { printf 'PASS: %s\n' "$1"; }
@@ -18,9 +19,24 @@ function fail() {
   failures=$((failures + 1))
 }
 
-# Declared at top-level so the EXIT trap can reference it across function
+# Declared at top-level so the EXIT trap can reference them across function
 # boundaries (mirrors tests/refresh-precommit-table.test.sh).
 backup=''
+backup2=''
+
+function restore_docs() {
+  if [[ -n ${backup:-} && -f ${backup} ]]; then
+    cp -- "${backup}" "${DOC}" 2>/dev/null || true
+    rm --force -- "${backup}"
+    backup=''
+  fi
+  if [[ -n ${backup2:-} && -f ${backup2} ]]; then
+    cp -- "${backup2}" "${DOC2}" 2>/dev/null || true
+    rm --force -- "${backup2}"
+    backup2=''
+  fi
+}
+trap restore_docs EXIT
 
 function main() {
   "${SCRIPT}"
@@ -32,14 +48,21 @@ function main() {
 
   if grep --quiet 'just image' "${DOC}" &&
     grep --quiet 'just verify' "${DOC}"; then
-    pass 'recipe list includes image/verify'
+    pass 'README recipe list includes image/verify'
   else
-    fail 'recipe list missing image/verify'
+    fail 'README recipe list missing image/verify'
   fi
 
+  if grep --quiet 'just image' "${DOC2}" &&
+    grep --quiet 'just verify' "${DOC2}"; then
+    pass 'reference page recipe list includes image/verify'
+  else
+    fail 'reference page recipe list missing image/verify'
+  fi
+
+  # Drift scenario 1: mutate README block.
   backup="$(mktemp)"
   cp -- "${DOC}" "${backup}"
-  trap 'if [[ -n "${backup:-}" && -f "${backup}" ]]; then cp -- "${backup}" "${DOC}" 2>/dev/null || true; rm --force -- "${backup}"; fi' EXIT
   # Inject drift INSIDE the managed block (a bogus recipe row right after the
   # BEGIN marker). The generator regenerates the block without it, so --check
   # must detect the mismatch.
@@ -54,9 +77,28 @@ function main() {
   rm --force -- "${backup}"
   backup=''
   if [[ ${rc} -ne 0 ]]; then
-    pass '--check fails on in-block drift'
+    pass '--check fails on README in-block drift'
   else
-    fail '--check passed despite in-block drift'
+    fail '--check passed despite README in-block drift'
+  fi
+
+  # Drift scenario 2: mutate the standalone reference page block.
+  backup2="$(mktemp)"
+  cp -- "${DOC2}" "${backup2}"
+  awk '
+    { print }
+    /^<!-- BEGIN just-recipes -->$/ { print "just drift-recipe   # injected" }
+  ' "${DOC2}" >"${DOC2}.tmp"
+  mv -- "${DOC2}.tmp" "${DOC2}"
+  rc=0
+  "${SCRIPT}" --check || rc=$?
+  cp -- "${backup2}" "${DOC2}"
+  rm --force -- "${backup2}"
+  backup2=''
+  if [[ ${rc} -ne 0 ]]; then
+    pass '--check fails on reference page in-block drift'
+  else
+    fail '--check passed despite reference page in-block drift'
   fi
 
   if [[ ${failures} -gt 0 ]]; then

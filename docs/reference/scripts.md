@@ -252,11 +252,12 @@ docs/reference/flake-outputs.md from `nix flake show --all-systems`.
 ### scripts/refresh-just-recipes.sh
 
 Regenerate the just-recipes managed block in
-README.md from the current `just` recipe list.
+README.md and docs/reference/just-recipes.md from the current
+`just` recipe list.
 
 **Options:**
 
-- `--check` — exit 1 if README.md would change; do not mutate the working tree
+- `--check` — exit 1 if either doc would change; do not mutate the working tree
 
 ### scripts/refresh-precommit-table.sh
 
