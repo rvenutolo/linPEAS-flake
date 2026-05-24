@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-setup-nix-required.sh
 #
+# @description Lint: every workflow installing Nix goes through the
+# composite `./.github/actions/setup-nix` and passes
+# `github-token: ${{ secrets.GITHUB_TOKEN }}`.
+
 # Asserts every workflow that installs Nix does so through the
 # composite `./.github/actions/setup-nix` and passes
 # `github-token: ${{ secrets.GITHUB_TOKEN }}`. Direct use of

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-renovate-invariants.sh
 #
+# @description Lint: renovate.json carries the security-critical
+# invariants — pinGitHubActionDigests, minimumReleaseAge, no top-level
+# automerge, per-manager pinDigests for github-actions.
+
 # Assert renovate.json carries the security-critical
 # invariants:
 #   1. extends includes "helpers:pinGitHubActionDigests"

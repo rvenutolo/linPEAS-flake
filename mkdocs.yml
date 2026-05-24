@@ -88,6 +88,9 @@ nav:
       - Git workflow: development/git.md
       - Linting & formatting: development/linting.md
       - Labeling: development/labeling.md
+  - Reference:
+      - Flake outputs: reference/flake-outputs.md
+      - Scripts: reference/scripts.md
   - Runbooks:
       - Docker Hub recovery: runbooks/dockerhub-recovery.md
       - Settings-drift App: runbooks/settings-drift-app.md

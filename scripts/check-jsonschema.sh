@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-jsonschema.sh
 #
+# @description Validate repo config files (renovate.json, workflow
+# YAML, composite-action YAML, .markdownlint.json) against pinned
+# JSON Schemas using `check-jsonschema`.
+
 # Validate repo config files against JSON Schemas. Catches schema-shape
 # regressions (typoed keys, wrong types, removed-by-upstream fields)
 # that the file-specific linters can miss.

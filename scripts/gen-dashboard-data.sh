@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# scripts/gen-dashboard-data.sh
+#
+# @description Generate docs/_data/dashboard.yml for the MkDocs site
+# by aggregating pin metadata and live GitHub REST API data.
+
 # Generate docs/_data/dashboard.yml for the MkDocs site.
 #
 # Aggregates pin metadata (from linpeas-pin.json) plus live data from the

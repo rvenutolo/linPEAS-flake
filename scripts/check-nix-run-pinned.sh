@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-nix-run-pinned.sh
 #
+# @description Lint: ban unpinned `nix run nixpkgs#<pkg>` invocations
+# across workflows, scripts, and shell-fenced markdown. Allowed
+# alternatives use the repo's own flake or an explicit commit pin.
+
 # Lint: ban unpinned `nix run nixpkgs#<pkg>` invocations.
 #
 # At runtime, the bare `nixpkgs` flake reference resolves through the

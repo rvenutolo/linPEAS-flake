@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-checkout-persist-credentials.sh
 #
+# @description Lint: every `actions/checkout` step in every workflow
+# sets `with.persist-credentials: false` so the GITHUB_TOKEN is not
+# left in `.git/config` for subsequent steps to read.
+
 # Lint: every `actions/checkout` step in every workflow under
 # `.github/workflows/*.yml` sets `with.persist-credentials: false`.
 #

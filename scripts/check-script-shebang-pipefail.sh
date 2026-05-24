@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-script-shebang-pipefail.sh
 #
+# @description Lint: every `scripts/*.sh` starts with
+# `#!/usr/bin/env bash` (exact first line) and contains
+# `set -Eeuo pipefail` somewhere in the file.
+
 # Lint: every file under `scripts/*.sh` starts with
 # `#!/usr/bin/env bash` (exact first line) and contains
 # `set -Eeuo pipefail` somewhere in the file.

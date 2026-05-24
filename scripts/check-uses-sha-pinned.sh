@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-uses-sha-pinned.sh
 #
+# @description Lint: every `uses:` in `.github/workflows/*.yml` and
+# `.github/actions/**/action.yml` ends with a full 40-hex SHA, or is
+# a local path-relative reference.
+
 # Belt-and-braces lint backup to the GitHub-side
 # `sha_pinning_required` setting. Asserts every `uses:` in
 # .github/workflows/*.yml (and composite actions in .github/actions/)

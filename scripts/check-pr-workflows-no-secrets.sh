@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-pr-workflows-no-secrets.sh
 #
+# @description Lint: no workflow triggered by `pull_request` /
+# `pull_request_target` references any `secrets.*` other than
+# `secrets.GITHUB_TOKEN`.
+
 # Verify that no workflow triggered by `pull_request` or
 # `pull_request_target` references any `secrets.*` other than
 # `secrets.GITHUB_TOKEN`. PR-authored code executes in the runner with

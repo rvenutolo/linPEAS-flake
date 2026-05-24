@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-upload-artifact-strict.sh
 #
+# @description Lint: every `actions/upload-artifact` step in every
+# workflow under `.github/workflows/*.yml` sets
+# `with.if-no-files-found: error` so empty-glob bugs hard-fail.
+
 # Lint: every `actions/upload-artifact` step in every workflow under
 # `.github/workflows/*.yml` sets `with.if-no-files-found: error`.
 #

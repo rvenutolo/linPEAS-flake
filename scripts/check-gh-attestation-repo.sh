@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-gh-attestation-repo.sh
 #
+# @description Lint: every `gh attestation verify` invocation across
+# workflows, scripts, and docs passes `--repo rvenutolo/linPEAS-flake`
+# so verification is bound to this repository.
+
 # Lint: every `gh attestation verify` invocation across workflows,
 # scripts, and docs passes `--repo rvenutolo/linPEAS-flake`.
 #

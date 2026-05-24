@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-pre-commit-hooks-sha-parity.sh
 #
+# @description Lint: the SHA embedded in `flake.nix`'s
+# `pre-commit-hooks` input URL matches `flake.lock`'s pinned
+# `pre-commit-hooks.locked.rev`.
+
 # Lint: assert the SHA embedded in `flake.nix`'s `pre-commit-hooks`
 # input URL matches `flake.lock`'s pinned `pre-commit-hooks.locked.rev`.
 #

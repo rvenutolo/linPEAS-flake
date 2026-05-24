@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# scripts/refresh-just-recipes.sh
+#
+# @description Regenerate the just-recipes managed block in
+# README.md from the current `just` recipe list.
+# @option --check exit 1 if README.md would change; do not mutate the working tree
+
 # Replace the content between # BEGIN just-recipes and # END just-recipes
 # in README.md with the current just recipe list from the justfile.
 #

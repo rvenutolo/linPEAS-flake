@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# scripts/refresh-flake-show.sh
+#
+# @description Regenerate the flake-show managed block in
+# docs/reference/flake-outputs.md from `nix flake show --all-systems`.
+# @option --check exit 1 if the doc would change; do not mutate the working tree
+
 # Replace the content between <!-- BEGIN flake-show --> and <!-- END flake-show -->
 # in docs/reference/flake-outputs.md with the current `nix flake show --all-systems`
 # output.

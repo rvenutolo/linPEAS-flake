@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-tag-protection.sh
 #
+# @description Lint: the live `release-tag-protection` ruleset
+# matches the desired posture (tag target, active enforcement, ref
+# include pattern, required rules).
+
 # Lint: assert the live (or fixture-injected) tag-protection
 # ruleset matches the desired posture:
 #   - name "release-tag-protection"

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Bump linpeas-pin.json to the latest peass-ng/PEASS-ng release.
+# scripts/bump-linpeas.sh
 #
+# @description Bump linpeas-pin.json to the latest peass-ng/PEASS-ng release.
+
 # Exits 0 with no changes if the pin is already current.
 # Exits 0 with file changes if a bump was made.
 # Exits non-zero on any error.

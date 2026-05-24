@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-gh-api-version-header.sh
 #
+# @description Lint: every `gh api` invocation and `api.github.com`
+# request in scripts/*.sh passes an explicit
+# `X-GitHub-Api-Version: <date>` header.
+
 # Lint: assert every `gh api` invocation and every `api.github.com`
 # request in scripts/*.sh passes an explicit
 # `X-GitHub-Api-Version: <date>` header.

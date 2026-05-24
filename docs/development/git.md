@@ -110,6 +110,7 @@ Hooks (alphabetical):
 | `run-block-strict`             | Multi-line run: blocks start with set -Eeuo pipefail.                                         |
 | `script-has-test`              | Every scripts/check-*.sh paired with tests/check-*.test.sh.                                   |
 | `script-shebang-pipefail`      | Every scripts/\*.sh has portable shebang + set -Eeuo pipefail.                                |
+| `scripts-reference-fresh`      | docs/reference/scripts.md matches in-script annotations.                                      |
 | `shellcheck`                   | Shell-script static analysis.                                                                 |
 | `statix`                       | Nix anti-pattern lint.                                                                        |
 | `treefmt`                      | Multi-language formatter aggregator (shfmt, prettier, etc).                                   |

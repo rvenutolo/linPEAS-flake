@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-workflow-on-branches.sh
 #
+# @description Lint: every workflow declaring `on.pull_request:` or
+# `on.push:` explicitly sets `branches: [main]` under that trigger
+# — no wildcards, no implicit all-branches.
+
 # Lint: every workflow that declares `on.pull_request:` or `on.push:`
 # must explicitly set `branches: [main]` under that trigger. No
 # wildcards, no implicit all-branches, no other branch names.

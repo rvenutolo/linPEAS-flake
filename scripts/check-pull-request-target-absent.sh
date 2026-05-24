@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-pull-request-target-absent.sh
 #
+# @description Lint: hard-fail if any workflow under
+# .github/workflows/*.yml uses the `pull_request_target` trigger,
+# foreclosing the canonical Actions privilege-escalation footgun.
+
 # Lint: hard-fail if any workflow under .github/workflows/*.yml uses
 # the `pull_request_target` trigger.
 #

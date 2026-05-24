@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-min-permissions.sh
 #
+# @description Strict least-privilege lint for GitHub Actions
+# GITHUB_TOKEN scopes: top-level `permissions: {}` and an explicit
+# per-job `permissions:` block in every workflow.
+
 # Strict least-privilege lint for GitHub Actions GITHUB_TOKEN scopes.
 # Asserts, for every .github/workflows/*.yml:
 #

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-settings-posture.sh
 #
+# @description Lint: every gh-API-verifiable row in
+# `docs/security/settings-posture.md` matches the live repository
+# configuration. Manual-UI rows are out of scope.
+
 # Lint: assert every gh-API-verifiable row in
 # `docs/security/settings-posture.md` matches the live (or
 # fixture-injected) repository configuration.

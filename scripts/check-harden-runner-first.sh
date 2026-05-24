@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-harden-runner-first.sh
 #
+# @description Lint: every job in .github/workflows/*.yml begins
+# with `step-security/harden-runner@<sha>` as its first step, so the
+# eBPF monitor installs before any I/O.
+
 # Asserts every job in .github/workflows/*.yml begins with
 # `step-security/harden-runner@<sha>` as its first step. The eBPF
 # monitor must install before any I/O, so this invariant is binding —

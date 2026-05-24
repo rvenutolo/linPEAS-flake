@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # scripts/check-pin-diff-isolated.sh
 #
+# @description Lint: exactly one script under `scripts/` writes to
+# `linpeas-pin.json` (bump-linpeas.sh), so the
+# `release-on-bump.yml` path-filter trigger contract is
+# self-enforcing.
+
 # Lint: assert that `linpeas-pin.json` is the only tracked file ever
 # mutated by a script under `scripts/`. The release pipeline trigger
 # `release-on-bump.yml` fires on `push` to main with `paths:

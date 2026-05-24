@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # scripts/check-required-checks-no-paths.sh
 #
+# @description Lint: no workflow listed in
+# docs/security/required-checks.md declares `paths:` or
+# `paths-ignore:` under `on.pull_request:` — avoiding the auto-merge
+# path-filter skip trap.
+
 # Verify that no workflow listed in docs/security/required-checks.md
 # declares `paths:` or `paths-ignore:` under `on.pull_request:`. Such filters
 # would create the auto-merge path-filter trap (skipped checks merging with

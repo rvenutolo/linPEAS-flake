@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-workflow-concurrency.sh
 #
+# @description Lint: every workflow under .github/workflows/*.yml
+# declares a top-level `concurrency:` block with a non-empty
+# `group:` string.
+
 # Lint: every workflow under .github/workflows/*.yml declares a
 # top-level `concurrency:` block with a non-empty `group:`. Without
 # one, cron pile-ups and PR/push overlap can multiply runner cost

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-ci-job-in-summary.sh
 #
+# @description Lint: cross-check `.github/workflows/ci.yml` jobs
+# against `docs/_data/ci-check-categories.yml` in both directions,
+# with an EXEMPT list for auxiliary (non-required) jobs.
+
 # Lint: cross-check `.github/workflows/ci.yml` jobs against
 # `docs/_data/ci-check-categories.yml`.
 #
@@ -54,6 +58,7 @@ readonly EXEMPT=(
   "refresh-enforcement-matrix-test" # regenerator harness
   "refresh-just-recipes-test"       # regenerator harness
   "refresh-precommit-table-test"    # regenerator harness
+  "refresh-scripts-reference-test"  # regenerator harness
   "settings-posture-harness"        # harness sandbox
 )
 

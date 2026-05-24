@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-doc-anchors.sh
 #
+# @description Lint: every markdown #anchor link pointing at an
+# in-tree .md (or same-file fragment) must match a heading slug in
+# the target file.
+
 # Lint: every markdown link with a #anchor fragment whose target is
 # an in-tree .md (or same-file fragment) must match a heading slug
 # in the target.
