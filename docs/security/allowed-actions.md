@@ -15,6 +15,7 @@ DeterminateSystems/*
 editorconfig-checker/*
 github/*
 gitleaks/*
+google/*
 lycheeverse/*
 pascalgn/*
 peter-evans/*
@@ -49,6 +50,7 @@ wagoid/*
         "editorconfig-checker/*",
         "github/*",
         "gitleaks/*",
+        "google/*",
         "lycheeverse/*",
         "pascalgn/*",
         "peter-evans/*",
