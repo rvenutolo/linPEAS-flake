@@ -33,6 +33,7 @@ readonly EXEMPT=(
   "install/nix.md"
   "invariant-index.md"
   "releases.md"
+  "security/enforcement-matrix.md"
   "security/threat-model.md"
 )
 
