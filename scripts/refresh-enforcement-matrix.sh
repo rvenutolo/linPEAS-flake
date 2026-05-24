@@ -72,6 +72,7 @@ readonly HOOK_EXEMPT=(
   "markdownlint"
   "nixfmt"
   "precommit-table-fresh"
+  "scripts-reference-fresh"
   "shellcheck"
   "shfmt"
   "statix"
@@ -124,6 +125,7 @@ readonly SCRIPT_EXEMPT=(
   "refresh-flake-show"
   "refresh-just-recipes"
   "refresh-precommit-table"
+  "refresh-scripts-reference"
 )
 
 function is_in_list() {

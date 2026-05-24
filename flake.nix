@@ -285,6 +285,21 @@
             pass_filenames = false;
             language = "system";
           };
+          scripts-reference-fresh = {
+            enable = true;
+            name = "scripts-reference-fresh";
+            description = "docs/reference/scripts.md matches in-script annotations.";
+            entry = "${pkgs-unstable.writeShellScript "scripts-reference-fresh" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              export PATH="${pkgs-unstable.jq}/bin:${pkgs-unstable.gawk}/bin:${treefmtEval.config.build.wrapper}/bin:$PATH"
+              exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-scripts-reference.sh --check
+            ''}";
+            files = "^(scripts/.*\\.sh|scripts/_script_docs\\.awk|docs/reference/scripts\\.md)$";
+            pass_filenames = false;
+            language = "system";
+          };
           precommit-table-fresh = {
             enable = true;
             name = "precommit-table-fresh";
