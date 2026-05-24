@@ -43,6 +43,7 @@ pre-commit-hooks-sha-parity: Security/invariant lints
 pr-workflows-no-secrets: Security/invariant lints
 protect-main-drift-check: Security/invariant lints
 pull-request-target-absent: Security/invariant lints
+renovate-config-validator: Security/invariant lints
 renovate-invariants: Security/invariant lints
 required-checks-no-paths: Security/invariant lints
 run-block-strict: Security/invariant lints
