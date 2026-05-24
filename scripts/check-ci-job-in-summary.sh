@@ -60,6 +60,7 @@ readonly EXEMPT=(
   "refresh-just-recipes-test"       # regenerator harness
   "refresh-precommit-table-test"    # regenerator harness
   "refresh-scripts-reference-test"  # regenerator harness
+  "refresh-treefmt-config-test"     # regenerator harness
   "settings-posture-harness"        # harness sandbox
 )
 
