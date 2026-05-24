@@ -36,6 +36,7 @@ readonly EXEMPT=(
   "install/consume-from-flake.md"
   "install/nix.md"
   "invariant-index.md"
+  "reference/scripts.md"
   "releases.md"
   "security/enforcement-matrix.md"
   "security/threat-model.md"
