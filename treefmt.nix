@@ -94,5 +94,9 @@
     # doc uses `__SCENARIO__` which formatters rewrite to `**SCENARIO**`,
     # breaking the harness sed substitution.
     "tests/fixtures/required-checks/*"
+    # renovate-config-validator bad-syntax fixture is intentionally
+    # malformed JSON to exercise the parse-error branch of the validator;
+    # prettier refuses to format invalid JSON.
+    "tests/fixtures/check-renovate-config-validator/bad-syntax.json"
   ];
 }
