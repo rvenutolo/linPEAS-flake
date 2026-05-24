@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-fork-guard-release.sh
 #
+# @description Lint: every workflow job holding release-grade
+# GITHUB_TOKEN scope (contents/packages/id-token/attestations: write)
+# carries a fork-guard `if:` pinning execution to the canonical repo.
+
 # Lint: every workflow job that holds release-grade GITHUB_TOKEN
 # scope includes a fork-guard `if:` clause containing
 # `github.repository == 'rvenutolo/linPEAS-flake'`.

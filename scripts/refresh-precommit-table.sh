@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+# scripts/refresh-precommit-table.sh
+#
+# @description Regenerate the precommit-table managed block in
+# docs/development/git.md from the current pre-commit hook manifest
+# in the flake.
+# @option --check exit 1 if the doc would change; do not mutate the working tree
+
 # Replace the content between <!-- BEGIN precommit-table --> and <!-- END precommit-table -->
 # in docs/development/git.md with the current pre-commit hook manifest from the flake.
 #

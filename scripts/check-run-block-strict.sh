@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-run-block-strict.sh
 #
+# @description Lint: every multi-line `run:` block under
+# `.github/workflows/*.yml` starts with `set -Eeuo pipefail` as its
+# first non-blank, non-comment line.
+
 # Lint: every multi-line `run:` block under
 # `.github/workflows/*.yml` starts with `set -Eeuo pipefail` as its
 # first non-blank, non-comment line.

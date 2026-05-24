@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-allowed-actions-api.sh
 #
+# @description Assert the live `actions.permissions.allowed_actions`
+# API state matches the canonical allowlist documented in
+# `docs/security/allowed-actions.md`.
+
 # Lint: assert the live `actions.permissions.allowed_actions` API state
 # matches the canonical allowlist documented at
 # `docs/security/allowed-actions.md`.

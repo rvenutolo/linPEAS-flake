@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# scripts/refresh-ci-summary.sh
+#
+# @description Regenerate the ci-summary managed block in README.md
+# from required-checks.md plus the ci-check-categories.yml map.
+# @option --check exit 1 if README.md would change; do not mutate the working tree
+
 # Replace the content between <!-- BEGIN ci-summary --> and <!-- END ci-summary -->
 # in README.md with a categorized bullet list generated from two sources:
 #   - docs/security/required-checks.md  (required context names, source of truth)

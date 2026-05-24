@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-cosign-identity-pinned.sh
 #
+# @description Lint: every `cosign verify` invocation pins both
+# `--certificate-identity` (or `-regexp`) and `--certificate-oidc-issuer`
+# so verification is bound to a specific signer.
+
 # Lint: every `cosign verify` invocation (including the `nix run
 # nixpkgs#cosign -- verify` shape) across workflows, scripts, and
 # shell-fenced markdown blocks pins BOTH:

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-job-timeout-minutes.sh
 #
+# @description Lint: every job under .github/workflows/*.yml
+# declares an explicit `timeout-minutes`, bounding blast radius
+# from hung jobs. Reusable-workflow jobs are exempt.
+
 # Lint: every job under .github/workflows/*.yml declares
 # `timeout-minutes`. The default GitHub Actions job timeout is 6 hours,
 # which lets a hung job burn the runner budget and stall the merge

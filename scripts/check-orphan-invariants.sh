@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-orphan-invariants.sh
 #
+# @description Lint: docs/invariant-index.md and docs/**/*.md stay
+# in lockstep — every index pointer resolves to a real file, and
+# every non-EXEMPT docs file has an index entry.
+
 # Lint: assert docs/invariant-index.md and docs/**/*.md stay in
 # lockstep.
 #   Forward: every `→ [<path>](<path>)` pointer in the index resolves

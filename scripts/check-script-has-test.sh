@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-script-has-test.sh
 #
+# @description Lint: every `scripts/check-*.sh` has a matching
+# `tests/check-*.test.sh` and vice versa, modulo an explicit EXEMPT
+# list.
+
 # Lint: every `scripts/check-*.sh` must have a matching
 # `tests/check-*.test.sh`, and every `tests/check-*.test.sh` must
 # have a matching `scripts/check-*.sh`. The pairing is held by

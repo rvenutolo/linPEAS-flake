@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-protect-main.sh
 #
+# @description Lint: the live `protect-main` branch ruleset matches
+# the desired posture AND the in-tree mirror at
+# `.github/rulesets/protect-main.json`.
+
 # Lint: assert the live (or fixture-injected) `protect-main` branch
 # ruleset matches the desired posture AND the in-tree mirror at
 # `.github/rulesets/protect-main.json`.
