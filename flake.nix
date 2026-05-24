@@ -858,7 +858,7 @@
           # nixpkgs rather than the runner registry's mutable
           # `nixpkgs` reference. See
           # docs/security/workflow-hardening.md (nix-run-pinned).
-          inherit (pkgs-unstable) cosign;
+          inherit (pkgs-unstable) cosign git-cliff;
         }
         // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
           inherit linpeas-image site;

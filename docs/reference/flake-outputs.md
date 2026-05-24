@@ -59,20 +59,24 @@ block between the markers by hand.
     ├───aarch64-darwin
     │   ├───cosign: package 'cosign-3.0.6'
     │   ├───default: package 'linpeas-20260521-859cab5f'
+    │   ├───git-cliff: package 'git-cliff-2.13.1'
     │   └───linpeas: package 'linpeas-20260521-859cab5f'
     ├───aarch64-linux
     │   ├───cosign: package 'cosign-3.0.6'
     │   ├───default: package 'linpeas-20260521-859cab5f'
+    │   ├───git-cliff: package 'git-cliff-2.13.1'
     │   ├───linpeas: package 'linpeas-20260521-859cab5f'
     │   ├───linpeas-image: package 'linpeas.tar.gz'
     │   └───site: package 'linpeas-flake-site-20260521-859cab5f'
     ├───x86_64-darwin
     │   ├───cosign: package 'cosign-3.0.6'
     │   ├───default: package 'linpeas-20260521-859cab5f'
+    │   ├───git-cliff: package 'git-cliff-2.13.1'
     │   └───linpeas: package 'linpeas-20260521-859cab5f'
     └───x86_64-linux
         ├───cosign: package 'cosign-3.0.6'
         ├───default: package 'linpeas-20260521-859cab5f'
+        ├───git-cliff: package 'git-cliff-2.13.1'
         ├───linpeas: package 'linpeas-20260521-859cab5f'
         ├───linpeas-image: package 'linpeas.tar.gz'
         └───site: package 'linpeas-flake-site-20260521-859cab5f'
