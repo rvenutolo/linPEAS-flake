@@ -446,6 +446,22 @@ function cross_check_reverse() {
   fi
 }
 
+# relativize_link <path>
+#
+# Translate a source-doc link path (written relative to docs/ root in
+# the invariant-index annotations) into a path that mkdocs resolves
+# correctly from docs/security/enforcement-matrix.md's perspective.
+#
+#   security/foo.md  -> foo.md          (same section)
+#   development/x.md -> ../development/x.md   (cross section)
+function relativize_link() {
+  local -r path="$1"
+  case "${path}" in
+  security/*) printf '%s' "${path#security/}" ;;
+  *) printf '../%s' "${path}" ;;
+  esac
+}
+
 # render_cell <csv> -> formatted cell string
 function render_cell() {
   local -r csv="$1"
@@ -496,9 +512,10 @@ function render_matrix() {
     printf '| --- | --- | --- | --- | --- |\n'
     local name link enforcer ci hook
     while IFS=$'\t' read -r name link enforcer ci hook; do
-      local link_cell
+      local link_cell rel_link
       if [[ -n ${link} ]]; then
-        link_cell="[${link}](${link})"
+        rel_link="$(relativize_link "${link}")"
+        link_cell="[${rel_link}](${rel_link})"
       else
         link_cell="_(none)_"
       fi

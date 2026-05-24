@@ -8,10 +8,10 @@
 
 <!-- BEGIN enforcement-matrix -->
 
-| Invariant            | Source doc                                         | Enforcer script                        | CI job                | Pre-commit hook       |
-| -------------------- | -------------------------------------------------- | -------------------------------------- | --------------------- | --------------------- |
-| Workflow SHA pinning | [security/repo-config.md](security/repo-config.md) | `scripts/check-uses-sha-pinned.sh`     | `uses-sha-pinned`     | `uses-sha-pinned`     |
-| Renovate invariants  | [security/repo-config.md](security/repo-config.md) | `scripts/check-renovate-invariants.sh` | `renovate-invariants` | `renovate-invariants` |
-| harden-runner        | [security/trust-model.md](security/trust-model.md) | `scripts/check-harden-runner-first.sh` | `harden-runner-first` | `harden-runner-first` |
+| Invariant            | Source doc                       | Enforcer script                        | CI job                | Pre-commit hook       |
+| -------------------- | -------------------------------- | -------------------------------------- | --------------------- | --------------------- |
+| Workflow SHA pinning | [repo-config.md](repo-config.md) | `scripts/check-uses-sha-pinned.sh`     | `uses-sha-pinned`     | `uses-sha-pinned`     |
+| Renovate invariants  | [repo-config.md](repo-config.md) | `scripts/check-renovate-invariants.sh` | `renovate-invariants` | `renovate-invariants` |
+| harden-runner        | [trust-model.md](trust-model.md) | `scripts/check-harden-runner-first.sh` | `harden-runner-first` | `harden-runner-first` |
 
 <!-- END enforcement-matrix -->
