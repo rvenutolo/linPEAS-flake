@@ -37,3 +37,23 @@
 - name: tests
   color: 0e8a16
   description: Test suite under tests/
+
+- name: size/XS
+  color: 009800
+  description: 0-9 lines changed
+
+- name: size/S
+  color: 7cfc00
+  description: 10-29 lines changed
+
+- name: size/M
+  color: fbca04
+  description: 30-99 lines changed
+
+- name: size/L
+  color: ff9800
+  description: 100-499 lines changed
+
+- name: size/XL
+  color: d73a4a
+  description: 500+ lines changed
