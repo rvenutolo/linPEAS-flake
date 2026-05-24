@@ -314,6 +314,21 @@
             pass_filenames = false;
             language = "system";
           };
+          enforcement-matrix-fresh = {
+            enable = true;
+            name = "enforcement-matrix-fresh";
+            description = "docs/security/enforcement-matrix.md matches the annotated invariant index and real enforcers.";
+            entry = "${pkgs-unstable.writeShellScript "enforcement-matrix-fresh" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              export PATH="${pkgs-unstable.jq}/bin:${pkgs-unstable.yq-go}/bin:$PATH"
+              exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-enforcement-matrix.sh --check
+            ''}";
+            files = "^(docs/invariant-index\\.md|docs/security/enforcement-matrix\\.md|scripts/check-.*\\.sh|scripts/refresh-enforcement-matrix\\.sh|\\.github/workflows/ci\\.yml|flake\\.nix)$";
+            pass_filenames = false;
+            language = "system";
+          };
           # Belt-and-braces backup to the GitHub-side
           # `sha_pinning_required` setting. Mirrors the NIX_BUILD_TOP guard used
           # by flake-show-fresh so nix flake check doesn't fail
