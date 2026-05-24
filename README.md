@@ -273,6 +273,7 @@ just lint            # Run pre-commit hooks against all files
 just lint-links      # Run lychee link checker against tracked markdown files
 just show            # Regenerate the <!-- BEGIN/END flake-show --> block in docs/reference/flake-outputs.md
 just show-ci-summary # Regenerate the Continuous integration summary in README.md
+just show-enforcement-matrix # Regenerate docs/security/enforcement-matrix.md from invariant-index annotations
 just show-hooks      # Regenerate the pre-commit hook table in docs/development/git.md
 just show-recipes    # Regenerate the just-recipes list in README.md
 just site            # Build the Pages site

@@ -94,6 +94,7 @@ nav:
   - Security:
       - Repository configuration: security/repo-config.md
       - Allowed actions: security/allowed-actions.md
+      - Enforcement matrix: security/enforcement-matrix.md
       - Required checks: security/required-checks.md
       - Settings posture: security/settings-posture.md
       - Trust model: security/trust-model.md

@@ -79,6 +79,7 @@ verify:
   bash tests/check-pin-diff-isolated.test.sh; \
   bash tests/gen-dashboard-data.test.sh; \
   bash tests/refresh-ci-summary.test.sh; \
+  bash tests/refresh-enforcement-matrix.test.sh; \
   bash tests/refresh-just-recipes.test.sh; \
   bash tests/refresh-precommit-table.test.sh'
 
@@ -101,6 +102,10 @@ show-recipes:
 # Regenerate the Continuous integration summary in README.md
 show-ci-summary:
   ./scripts/refresh-ci-summary.sh
+
+# Regenerate docs/security/enforcement-matrix.md from invariant-index annotations
+show-enforcement-matrix:
+  ./scripts/refresh-enforcement-matrix.sh
 
 # Build the OCI image
 image:
