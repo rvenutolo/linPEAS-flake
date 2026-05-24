@@ -211,6 +211,16 @@ Lint: every workflow declaring `on.pull_request:` or
 
 ## Refresh scripts
 
+### scripts/refresh-ci-dag.sh
+
+Regenerate the ci-dag managed block in
+docs/architecture/ci-dag.md from .github/workflows/ci.yml plus the
+docs/\_data/ci-check-categories.yml map.
+
+**Options:**
+
+- `--check` — exit 1 if the doc would change; exit 2 if ci.yml has
+
 ### scripts/refresh-ci-summary.sh
 
 Regenerate the ci-summary managed block in README.md

@@ -1,0 +1,4 @@
+# Fixture category map for refresh-ci-dag tests.
+job-a: Build + smoke
+job-b: Build + smoke
+job-c: Doc quality

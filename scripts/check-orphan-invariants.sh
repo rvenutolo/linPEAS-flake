@@ -31,6 +31,7 @@ readonly DOCS_ROOT="${DOCS_ROOT_OVERRIDE:-${REPO_ROOT}/docs}"
 
 # docs-relative paths that are intentionally not in the index.
 readonly EXEMPT=(
+  "architecture/ci-dag.md"
   "dashboard.md"
   "index.md"
   "install/consume-from-flake.md"
