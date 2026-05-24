@@ -16,6 +16,7 @@ editorconfig-checker/*
 github/*
 gitleaks/*
 lycheeverse/*
+pascalgn/*
 peter-evans/*
 rvenutolo/*
 step-security/*
@@ -49,6 +50,7 @@ wagoid/*
         "github/*",
         "gitleaks/*",
         "lycheeverse/*",
+        "pascalgn/*",
         "peter-evans/*",
         "rvenutolo/*",
         "step-security/*",
