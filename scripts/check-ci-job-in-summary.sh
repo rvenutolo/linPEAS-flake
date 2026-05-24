@@ -43,17 +43,18 @@ readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-${DEFAULT_WORKFLOWS_DIR}}"
 # Auxiliary ci.yml jobs intentionally absent from the category map.
 # Each entry is a job not exposed as a required status check.
 readonly EXEMPT=(
-  "allowed-actions-api-harness"   # harness sandbox
-  "build-linpeas-matrix"          # cross-OS matrix expansion
-  "flake-check-matrix"            # cross-OS matrix expansion
-  "gh-api-version-header"         # harness sandbox
-  "image-cve-scan"                # CVE scan; surfaces issues, not blocker
-  "image-cve-scan-notify-finding" # notify-only job (real CRITICAL CVE)
-  "image-cve-scan-notify-infra"   # notify-only job (infra failure, no CVE)
-  "refresh-ci-summary-test"       # regenerator harness
-  "refresh-just-recipes-test"     # regenerator harness
-  "refresh-precommit-table-test"  # regenerator harness
-  "settings-posture-harness"      # harness sandbox
+  "allowed-actions-api-harness"     # harness sandbox
+  "build-linpeas-matrix"            # cross-OS matrix expansion
+  "flake-check-matrix"              # cross-OS matrix expansion
+  "gh-api-version-header"           # harness sandbox
+  "image-cve-scan"                  # CVE scan; surfaces issues, not blocker
+  "image-cve-scan-notify-finding"   # notify-only job (real CRITICAL CVE)
+  "image-cve-scan-notify-infra"     # notify-only job (infra failure, no CVE)
+  "refresh-ci-summary-test"         # regenerator harness
+  "refresh-enforcement-matrix-test" # regenerator harness
+  "refresh-just-recipes-test"       # regenerator harness
+  "refresh-precommit-table-test"    # regenerator harness
+  "settings-posture-harness"        # harness sandbox
 )
 
 is_exempt() {
