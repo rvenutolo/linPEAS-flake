@@ -81,7 +81,8 @@ verify:
   bash tests/refresh-ci-summary.test.sh; \
   bash tests/refresh-enforcement-matrix.test.sh; \
   bash tests/refresh-just-recipes.test.sh; \
-  bash tests/refresh-precommit-table.test.sh'
+  bash tests/refresh-precommit-table.test.sh; \
+  bash tests/refresh-scripts-reference.test.sh'
 
 # Manually refresh linpeas pin from upstream latest release
 bump:
@@ -98,6 +99,10 @@ show-hooks:
 # Regenerate the just-recipes list in README.md
 show-recipes:
   ./scripts/refresh-just-recipes.sh
+
+# Regenerate docs/reference/scripts.md from in-script annotations
+show-scripts:
+  ./scripts/refresh-scripts-reference.sh
 
 # Regenerate the Continuous integration summary in README.md
 show-ci-summary:

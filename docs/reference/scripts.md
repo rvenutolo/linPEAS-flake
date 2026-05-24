@@ -6,6 +6,8 @@ Do not edit between the markers.
 
 <!-- BEGIN scripts-reference -->
 
+{% raw %}
+
 ## Check scripts
 
 ### scripts/check-allowed-actions-api.sh
@@ -277,5 +279,7 @@ Bump linpeas-pin.json to the latest peass-ng/PEASS-ng release.
 
 Generate docs/\_data/dashboard.yml for the MkDocs site
 by aggregating pin metadata and live GitHub REST API data.
+
+{% endraw %}
 
 <!-- END scripts-reference -->

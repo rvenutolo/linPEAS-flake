@@ -159,6 +159,10 @@ function main() {
 
   {
     printf '<!-- BEGIN scripts-reference -->\n'
+    # Wrap body in a Jinja raw block so mkdocs-macros does not try to
+    # interpret literal `${{ ... }}` expressions copied verbatim from
+    # GitHub Actions snippets in script @description text.
+    printf '{%% raw %%}\n\n'
     if [[ -s ${check_bucket} ]]; then
       printf '## Check scripts\n\n'
       cat -- "${check_bucket}"
@@ -171,6 +175,7 @@ function main() {
       printf '## Other\n\n'
       cat -- "${other_bucket}"
     fi
+    printf '{%% endraw %%}\n'
     printf '<!-- END scripts-reference -->\n'
   } >"${block_file}"
 
