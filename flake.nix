@@ -314,6 +314,21 @@
             pass_filenames = false;
             language = "system";
           };
+          ci-dag-fresh = {
+            enable = true;
+            name = "ci-dag-fresh";
+            description = "docs/architecture/ci-dag.md matches .github/workflows/ci.yml needs graph.";
+            entry = "${pkgs-unstable.writeShellScript "ci-dag-fresh" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              export PATH="${pkgs-unstable.jq}/bin:${pkgs-unstable.yq-go}/bin:${treefmtEval.config.build.wrapper}/bin:$PATH"
+              exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-ci-dag.sh --check
+            ''}";
+            files = "^(\\.github/workflows/ci\\.yml|docs/_data/ci-check-categories\\.yml|docs/architecture/ci-dag\\.md|scripts/refresh-ci-dag\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
           ci-summary-fresh = {
             enable = true;
             name = "ci-summary-fresh";
