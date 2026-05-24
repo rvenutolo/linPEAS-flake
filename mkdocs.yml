@@ -91,7 +91,9 @@ nav:
       - Labeling: development/labeling.md
   - Reference:
       - Flake outputs: reference/flake-outputs.md
+      - Just recipes: reference/just-recipes.md
       - Scripts: reference/scripts.md
+      - Treefmt config: reference/treefmt-config.md
   - Runbooks:
       - Docker Hub recovery: runbooks/dockerhub-recovery.md
       - Settings-drift App: runbooks/settings-drift-app.md
