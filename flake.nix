@@ -829,6 +829,7 @@
               python3Packages.mkdocs-macros
               lychee
               check-jsonschema
+              renovate
             ]);
         };
 
