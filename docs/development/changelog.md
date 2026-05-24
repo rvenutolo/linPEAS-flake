@@ -1,0 +1,123 @@
+# Changelog generation
+
+`CHANGELOG.md` is generator-owned. Manual edits are a review-blocker;
+every change is overwritten on the next run. Maintain `cliff.toml` to
+influence output, not the file directly.
+
+## Tool
+
+[git-cliff](https://git-cliff.org/) generates `CHANGELOG.md` from
+conventional commits between release tags. Per the `nix-run-pinned`
+invariant, git-cliff is invoked only via the flake-pinned package — not
+an unpinned `nix run nixpkgs#git-cliff`. CI uses:
+
+```sh
+nix shell .#git-cliff --command git-cliff --config cliff.toml --output CHANGELOG.md
+```
+
+The same command works locally for manual rebuilds.
+
+## When the job runs
+
+The changelog job runs as part of `release-on-bump.yml`, triggered on
+every push to `main` that changes `linpeas-pin.json`. It also runs on
+`workflow_dispatch` (see Recovery below). A changelog failure does not
+block image publication — the job runs after the release, image, and
+manifest jobs so a transient cliff error cannot prevent the OCI image
+from shipping.
+
+## App identity
+
+The changelog commit is pushed using the same `linpeas-flake-bumper`
+GitHub App identity that `update-linpeas.yml`'s `push-and-merge` job
+uses: `BUMP_APP_CLIENT_ID` + `BUMP_APP_PRIVATE_KEY`. No new secret
+surface is introduced.
+
+## cliff.toml load-bearing rules
+
+Four settings in `cliff.toml` must not be changed without understanding
+their effect:
+
+### tag_pattern
+
+```toml
+tag_pattern = "^[0-9]{8}-[0-9a-f]{7,40}$"
+```
+
+This regex must exactly match the canonical pin-shape regex enforced
+across the codebase. Drift causes git-cliff to see no tags and generate
+an empty changelog. `scripts/check-cliff-tag-pattern.sh` enforces
+parity at commit time; the cross-layer parity set it joins is
+`bump-linpeas.sh`, `flake.nix`, `stale-pin-check.yml`,
+`release-on-bump.yml`, and `gen-dashboard-data.sh`.
+
+### docs: update changelog skip rule
+
+```toml
+{ message = "^docs: update changelog", skip = true },
+```
+
+The changelog commit itself carries the subject `docs: update changelog`. Without this skip, each run would include the previous
+run's commit in the next release's entry — a self-reference loop that
+inflates the changelog with administrative noise.
+
+### Merge commit skip rule
+
+```toml
+{ message = "^Merge ", skip = true },
+```
+
+Every PR lands as a merge commit whose subject starts with `Merge`. The
+merge commit is structural scaffolding, not a user-visible change.
+Skipping it prevents duplicate entries (the branch commits are already
+included via `filter_unconventional = false` for conventional types).
+
+### PR-number preprocessor
+
+```toml
+{ pattern = '\(#([0-9]+)\)', replace = "([#${1}](https://github.com/rvenutolo/linPEAS-flake/pull/${1}))" },
+```
+
+Git-cliff runs this preprocessor before any other rule. Commit subjects
+that include `(#NNN)` — the format GitHub inserts into merge-commit
+subjects — are rewritten to a clickable `[#NNN](…)` link in the
+rendered changelog.
+
+## End-to-end sequence
+
+The changelog job in `release-on-bump.yml` performs these steps in
+order:
+
+1. Check out the repo with `fetch-depth: 0` (full history required for
+    git-cliff to walk all tags).
+1. Mint a short-lived App installation token using
+    `BUMP_APP_CLIENT_ID` + `BUMP_APP_PRIVATE_KEY`.
+1. Run `nix shell .#git-cliff --command git-cliff --config cliff.toml --output CHANGELOG.md`.
+1. Detect whether `CHANGELOG.md` changed (a no-op day — identical pin
+    — produces no diff).
+1. If changed, commit `CHANGELOG.md` via REST `PUT /contents` as the
+    App identity (GitHub web-flow-signs the commit).
+1. The signed commit lands on `main` directly; no PR is opened for
+    changelog-only changes.
+
+## Recovery procedures
+
+### Missed entry
+
+A missed changelog entry (changelog job failed or was skipped) can be
+recovered by triggering `release-on-bump.yml` via `workflow_dispatch`.
+The job re-runs git-cliff over the full tag history and commits the
+corrected file.
+
+### File lost entirely
+
+If `CHANGELOG.md` is deleted or corrupted, rebuild it locally:
+
+```sh
+nix shell .#git-cliff --command git-cliff \
+  --config cliff.toml \
+  --output CHANGELOG.md
+```
+
+Commit the result with subject `docs: update changelog` so the skip
+rule suppresses it from future changelog runs. Then push and verify.
