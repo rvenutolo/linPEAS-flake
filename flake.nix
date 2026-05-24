@@ -273,7 +273,7 @@
           just-recipes-fresh = {
             enable = true;
             name = "just-recipes-fresh";
-            description = "README just-recipes block matches the justfile.";
+            description = "just-recipes blocks in README.md and docs/reference/just-recipes.md match the justfile.";
             entry = "${pkgs-unstable.writeShellScript "just-recipes-fresh" ''
               set -Eeuo pipefail
               IFS=$'\n\t'
@@ -281,7 +281,27 @@
               export PATH="${pkgs-unstable.just}/bin:$PATH"
               exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-just-recipes.sh --check
             ''}";
-            files = "^(justfile|README\\.md|scripts/refresh-just-recipes\\.sh)$";
+            files = "^(justfile|README\\.md|docs/reference/just-recipes\\.md|scripts/refresh-just-recipes\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
+          treefmt-config-fresh = {
+            enable = true;
+            name = "treefmt-config-fresh";
+            description = "treefmt-config block in docs/reference/treefmt-config.md matches the evaluated treefmt config.";
+            entry = "${pkgs-unstable.writeShellScript "treefmt-config-fresh" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              # No-op when running inside a nix build sandbox — the script
+              # shells out to `nix eval` which can't run inside the sandbox.
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              if [[ ! -f scripts/refresh-treefmt-config.sh || ! -f docs/reference/treefmt-config.md ]]; then
+                exit 0
+              fi
+              export PATH="${pkgs-unstable.jq}/bin:${pkgs-unstable.gawk}/bin:${treefmtEval.config.build.wrapper}/bin:$PATH"
+              exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-treefmt-config.sh --check
+            ''}";
+            files = "^(treefmt\\.nix|flake\\.nix|flake\\.lock|docs/reference/treefmt-config\\.md|scripts/refresh-treefmt-config\\.sh)$";
             pass_filenames = false;
             language = "system";
           };

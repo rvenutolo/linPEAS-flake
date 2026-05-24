@@ -78,6 +78,7 @@ readonly HOOK_EXEMPT=(
   "shfmt"
   "statix"
   "treefmt"
+  "treefmt-config-fresh"
   "typos"
   "yamllint"
   "zizmor"
