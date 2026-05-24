@@ -77,48 +77,49 @@ Hooks (alphabetical):
 
 <!-- BEGIN precommit-table -->
 
-| Hook                           | What it checks                                                                        |
-| ------------------------------ | ------------------------------------------------------------------------------------- |
-| `actionlint`                   | GitHub Actions workflow syntax.                                                       |
-| `check-doc-anchors`            | Every markdown #anchor link resolves to a heading slug in its target file.            |
-| `check-jsonschema`             | Schema-shape validation of repo config (renovate.json, workflows, actions).           |
-| `check-orphan-invariants`      | Every docs/ file has an invariant-index entry and vice versa.                         |
-| `checkout-persist-credentials` | Every actions/checkout sets with.persist-credentials: false.                          |
-| `ci-job-in-summary`            | ci.yml jobs cross-checked against docs/\_data/ci-check-categories.yml.                |
-| `ci-summary-fresh`             | README CI summary matches required-checks.md and the category map.                    |
-| `commitlint`                   | Commit message satisfies Conventional Commits (CI parity via .commitlintrc.yml).      |
-| `cosign-identity-pinned`       | cosign verify pins --certificate-identity[-regexp] + --certificate-oidc-issuer.       |
-| `deadnix`                      | Unused Nix bindings.                                                                  |
-| `editorconfig-checker`         | .editorconfig compliance (charset, line endings, trailing whitespace, final newline). |
-| `flake-show-fresh`             | flake-show block in docs/reference/flake-outputs.md matches current flake outputs.    |
-| `fork-guard-release`           | Release-grade jobs include github.repository fork guard.                              |
-| `gh-api-version-header`        | Every gh api / api.github.com call in scripts passes an X-GitHub-Api-Version header.  |
-| `gh-attestation-repo`          | gh attestation verify pins --repo rvenutolo/linPEAS-flake.                            |
-| `harden-runner-first`          | Every workflow job's first step is step-security/harden-runner.                       |
-| `job-timeout-minutes`          | Every workflow job declares an explicit timeout-minutes.                              |
-| `just-recipes-fresh`           | README just-recipes block matches the justfile.                                       |
-| `markdownlint`                 | Markdown style + structure.                                                           |
-| `min-permissions`              | Top-level workflow permissions empty; each job declares its own scopes.               |
-| `nix-run-pinned`               | No unpinned nix run nixpkgs#<pkg>; use nix shell .#<pkg> or pin a rev.                |
-| `nixfmt`                       | Nix file formatting.                                                                  |
-| `pin-diff-isolated`            | Only scripts/bump-linpeas.sh mutates linpeas-pin.json.                                |
-| `pre-commit-hooks-sha-parity`  | The pre-commit-hooks input SHA in flake.nix matches flake.lock locked.rev.            |
-| `precommit-table-fresh`        | Hook table in docs/development/git.md matches the flake hook manifest.                |
-| `pull-request-target-absent`   | No workflow uses the pull_request_target trigger.                                     |
-| `renovate-config-validator`    | Validate renovate.json against the upstream Renovate config schema.                   |
-| `run-block-strict`             | Multi-line run: blocks start with set -Eeuo pipefail.                                 |
-| `script-has-test`              | Every scripts/check-*.sh paired with tests/check-*.test.sh.                           |
-| `script-shebang-pipefail`      | Every scripts/\*.sh has portable shebang + set -Eeuo pipefail.                        |
-| `shellcheck`                   | Shell-script static analysis.                                                         |
-| `statix`                       | Nix anti-pattern lint.                                                                |
-| `treefmt`                      | Multi-language formatter aggregator (shfmt, prettier, etc).                           |
-| `typos`                        | Spell-check across the repo.                                                          |
-| `upload-artifact-strict`       | Every actions/upload-artifact sets with.if-no-files-found: error.                     |
-| `uses-sha-pinned`              | Every uses: reference is SHA-pinned.                                                  |
-| `workflow-concurrency`         | Every workflow declares a top-level concurrency.group.                                |
-| `workflow-on-branches`         | pull_request: and push: declare branches: [main] explicitly.                          |
-| `yamllint`                     | YAML style.                                                                           |
-| `zizmor`                       | GitHub Actions security audit.                                                        |
+| Hook                           | What it checks                                                                                |
+| ------------------------------ | --------------------------------------------------------------------------------------------- |
+| `actionlint`                   | GitHub Actions workflow syntax.                                                               |
+| `check-doc-anchors`            | Every markdown #anchor link resolves to a heading slug in its target file.                    |
+| `check-jsonschema`             | Schema-shape validation of repo config (renovate.json, workflows, actions).                   |
+| `check-orphan-invariants`      | Every docs/ file has an invariant-index entry and vice versa.                                 |
+| `checkout-persist-credentials` | Every actions/checkout sets with.persist-credentials: false.                                  |
+| `ci-job-in-summary`            | ci.yml jobs cross-checked against docs/\_data/ci-check-categories.yml.                        |
+| `ci-summary-fresh`             | README CI summary matches required-checks.md and the category map.                            |
+| `commitlint`                   | Commit message satisfies Conventional Commits (CI parity via .commitlintrc.yml).              |
+| `cosign-identity-pinned`       | cosign verify pins --certificate-identity[-regexp] + --certificate-oidc-issuer.               |
+| `deadnix`                      | Unused Nix bindings.                                                                          |
+| `editorconfig-checker`         | .editorconfig compliance (charset, line endings, trailing whitespace, final newline).         |
+| `enforcement-matrix-fresh`     | docs/security/enforcement-matrix.md matches the annotated invariant index and real enforcers. |
+| `flake-show-fresh`             | flake-show block in docs/reference/flake-outputs.md matches current flake outputs.            |
+| `fork-guard-release`           | Release-grade jobs include github.repository fork guard.                                      |
+| `gh-api-version-header`        | Every gh api / api.github.com call in scripts passes an X-GitHub-Api-Version header.          |
+| `gh-attestation-repo`          | gh attestation verify pins --repo rvenutolo/linPEAS-flake.                                    |
+| `harden-runner-first`          | Every workflow job's first step is step-security/harden-runner.                               |
+| `job-timeout-minutes`          | Every workflow job declares an explicit timeout-minutes.                                      |
+| `just-recipes-fresh`           | README just-recipes block matches the justfile.                                               |
+| `markdownlint`                 | Markdown style + structure.                                                                   |
+| `min-permissions`              | Top-level workflow permissions empty; each job declares its own scopes.                       |
+| `nix-run-pinned`               | No unpinned nix run nixpkgs#<pkg>; use nix shell .#<pkg> or pin a rev.                        |
+| `nixfmt`                       | Nix file formatting.                                                                          |
+| `pin-diff-isolated`            | Only scripts/bump-linpeas.sh mutates linpeas-pin.json.                                        |
+| `pre-commit-hooks-sha-parity`  | The pre-commit-hooks input SHA in flake.nix matches flake.lock locked.rev.                    |
+| `precommit-table-fresh`        | Hook table in docs/development/git.md matches the flake hook manifest.                        |
+| `pull-request-target-absent`   | No workflow uses the pull_request_target trigger.                                             |
+| `renovate-config-validator`    | Validate renovate.json against the upstream Renovate config schema.                           |
+| `run-block-strict`             | Multi-line run: blocks start with set -Eeuo pipefail.                                         |
+| `script-has-test`              | Every scripts/check-*.sh paired with tests/check-*.test.sh.                                   |
+| `script-shebang-pipefail`      | Every scripts/\*.sh has portable shebang + set -Eeuo pipefail.                                |
+| `shellcheck`                   | Shell-script static analysis.                                                                 |
+| `statix`                       | Nix anti-pattern lint.                                                                        |
+| `treefmt`                      | Multi-language formatter aggregator (shfmt, prettier, etc).                                   |
+| `typos`                        | Spell-check across the repo.                                                                  |
+| `upload-artifact-strict`       | Every actions/upload-artifact sets with.if-no-files-found: error.                             |
+| `uses-sha-pinned`              | Every uses: reference is SHA-pinned.                                                          |
+| `workflow-concurrency`         | Every workflow declares a top-level concurrency.group.                                        |
+| `workflow-on-branches`         | pull_request: and push: declare branches: [main] explicitly.                                  |
+| `yamllint`                     | YAML style.                                                                                   |
+| `zizmor`                       | GitHub Actions security audit.                                                                |
 
 <!-- END precommit-table -->
 
