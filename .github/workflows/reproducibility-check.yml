@@ -47,7 +47,18 @@ jobs:
           image_path="$(readlink -f result-image)"
           linpeas_nar_hash="$(nix path-info --json "${linpeas_path}" | jq -r '.[].narHash')"
           image_tar_sha256="$(sha256sum "${image_path}" | awk '{print $1}')"
-          image_manifest_digest="$(tar -xOf "${image_path}" manifest.json | sha256sum | awk '{print "sha256:" $1}')"
+          case "$(file --brief --mime-type "${image_path}")" in
+            application/gzip | application/x-gzip)
+              image_manifest_digest="$(gunzip -c "${image_path}" | tar -xO manifest.json | sha256sum | awk '{print "sha256:" $1}')"
+              ;;
+            application/x-tar)
+              image_manifest_digest="$(tar -xOf "${image_path}" manifest.json | sha256sum | awk '{print "sha256:" $1}')"
+              ;;
+            *)
+              printf 'ERROR: unexpected image artifact type: %s\n' "$(file --brief "${image_path}")" >&2
+              exit 1
+              ;;
+          esac
           jq -n \
             --arg linpeas_store_path "${linpeas_path}" \
             --arg linpeas_nar_hash "${linpeas_nar_hash}" \
@@ -101,7 +112,18 @@ jobs:
           image_path="$(readlink -f result-image)"
           linpeas_nar_hash="$(nix path-info --json "${linpeas_path}" | jq -r '.[].narHash')"
           image_tar_sha256="$(sha256sum "${image_path}" | awk '{print $1}')"
-          image_manifest_digest="$(tar -xOf "${image_path}" manifest.json | sha256sum | awk '{print "sha256:" $1}')"
+          case "$(file --brief --mime-type "${image_path}")" in
+            application/gzip | application/x-gzip)
+              image_manifest_digest="$(gunzip -c "${image_path}" | tar -xO manifest.json | sha256sum | awk '{print "sha256:" $1}')"
+              ;;
+            application/x-tar)
+              image_manifest_digest="$(tar -xOf "${image_path}" manifest.json | sha256sum | awk '{print "sha256:" $1}')"
+              ;;
+            *)
+              printf 'ERROR: unexpected image artifact type: %s\n' "$(file --brief "${image_path}")" >&2
+              exit 1
+              ;;
+          esac
           jq -n \
             --arg linpeas_store_path "${linpeas_path}" \
             --arg linpeas_nar_hash "${linpeas_nar_hash}" \
