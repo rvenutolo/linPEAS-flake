@@ -211,6 +211,9 @@ jobs:
           IFS=$'\n\t'
           git fetch origin main --depth=1
           main_dir="$(mktemp -d)/main"
+          # Cleanup runs on every exit path so a failed nix build does
+          # not leave a dangling worktree registration in .git/worktrees.
+          trap 'git worktree remove --force "${main_dir}" 2>/dev/null || true' EXIT
           git worktree add "${main_dir}" origin/main
           pushd "${main_dir}" >/dev/null
           nix build .#linpeas-image --out-link result --print-build-logs
@@ -220,7 +223,6 @@ jobs:
           uncompressed="$(jq -r '.uncompressed_bytes' <<<"${json}")"
           echo "main_compressed=${compressed}" >>"${GITHUB_ENV}"
           echo "main_uncompressed=${uncompressed}" >>"${GITHUB_ENV}"
-          git worktree remove --force "${main_dir}"
 
       - name: render image size PR comment body
         id: render-comment
