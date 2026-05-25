@@ -27,11 +27,16 @@ function scenario_happy_path() {
     "${FIXTURE_DIR}#tiny-image" >"${result}.path"
   ln -s "$(cat "${result}.path")" "${result}"
 
+  local stderr_file
+  stderr_file="$(mktemp)"
   local json
-  if ! json="$("${SCRIPT}" "${result}" "${FIXTURE_DIR}#tiny-image" 2>&1)"; then
-    fail "happy path — script exited non-zero: ${json}"
+  if ! json="$("${SCRIPT}" "${result}" "${FIXTURE_DIR}#tiny-image" \
+    2>"${stderr_file}")"; then
+    fail "happy path — script exited non-zero: $(cat -- "${stderr_file}")"
+    rm -f -- "${stderr_file}"
     return
   fi
+  rm -f -- "${stderr_file}"
 
   if ! jq -e . >/dev/null 2>&1 <<<"${json}"; then
     fail "happy path — output is not valid JSON: ${json}"
