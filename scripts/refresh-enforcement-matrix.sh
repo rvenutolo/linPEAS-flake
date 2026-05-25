@@ -63,6 +63,7 @@ function require_tool() {
 readonly HOOK_EXEMPT=(
   "actionlint"
   "actionlint-shellcheck-active"
+  "check-run-block-pyflakes-required"
   "ci-dag-fresh"
   "ci-summary-fresh"
   "commitlint"
@@ -123,6 +124,7 @@ readonly SCRIPT_EXEMPT=(
   "check-orphan-invariants"            # meta: lints the index itself
   "check-pre-commit-hooks-sha-parity"  # meta: lints hook config
   "check-required-checks-no-paths"     # meta: lints CI config shape
+  "check-run-block-pyflakes-required"  # meta: passive guard for python+pyflakes wiring
   "check-script-has-test"              # meta: lints test pairing
   "gen-dashboard-data"
   "refresh-ci-summary"

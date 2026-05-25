@@ -191,6 +191,25 @@ docs/security/required-checks.md declares `paths:` or
 `paths-ignore:` under `on.pull_request:` — avoiding the auto-merge
 path-filter skip trap.
 
+### scripts/check-run-block-pyflakes-required.sh
+
+Guard: fail if any GitHub Actions `run:` block
+invokes python (python/python3/pip) while pyflakes is not wired
+into the actionlint hook. Today no python run: exists, so this
+is a passive gate. The day someone adds a python run:, this
+fails with a pointer to the runbook describing how to wire
+pyflakes.
+
+Scope: .github/workflows/\*.{yml,yaml} and
+.github/actions/\*\*/action.{yml,yaml}
+
+Env overrides (test-only):
+PYFLAKES_GUARD_SCAN_ROOT_OVERRIDE — alternate directory tree
+containing workflow/action YAML files (overrides the default
+repo-root .github/ scan).
+
+Exits 0 on clean, 1 if any python invocation found.
+
 ### scripts/check-run-block-strict.sh
 
 Lint: every multi-line `run:` block under

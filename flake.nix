@@ -857,6 +857,25 @@
             pass_filenames = false;
             language = "system";
           };
+          # Guard: fail if any GitHub Actions run: block invokes
+          # python/python3/pip while pyflakes is not wired into the
+          # actionlint hook. No python run: exists today, so this is
+          # a passive gate; the day one lands it fails with a pointer
+          # to docs/actionlint-embedded-linters.md.
+          check-run-block-pyflakes-required = {
+            enable = true;
+            name = "check-run-block-pyflakes-required";
+            description = "Fail if a workflow run: invokes python without pyflakes wired.";
+            entry = "${pkgs-unstable.writeShellScript "check-run-block-pyflakes-required-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-run-block-pyflakes-required.sh
+            ''}";
+            files = "^(\\.github/(workflows|actions)/.*\\.ya?ml|scripts/check-run-block-pyflakes-required\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
           # Asserts every #anchor fragment in markdown links across
           # README.md and docs/**/*.md matches a heading slug in the
           # target file (ASCII GFM/mkdocs rule).
