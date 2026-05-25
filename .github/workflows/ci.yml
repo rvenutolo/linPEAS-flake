@@ -156,6 +156,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      pull-requests: write
     steps:
       - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
         with:
@@ -181,6 +182,108 @@ jobs:
           echo "IMAGE_TAG=${tag}" >>"${GITHUB_ENV}"
           docker run --rm "rvenutolo/linpeas:${tag}" -h | sed -n '1,20p'
           docker run --rm "rvenutolo/linpeas:${tag}" -h >/dev/null
+      - name: measure head image
+        id: measure-head
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          json="$(scripts/measure-image-size.sh result)"
+          compressed="$(jq -r '.compressed_bytes' <<<"${json}")"
+          uncompressed="$(jq -r '.uncompressed_bytes' <<<"${json}")"
+          echo "head_compressed=${compressed}" >>"${GITHUB_ENV}"
+          echo "head_uncompressed=${uncompressed}" >>"${GITHUB_ENV}"
+          {
+            echo "## Image size"
+            echo
+            echo "| Metric | Head |"
+            echo "| --- | ---: |"
+            printf '| Compressed tar.gz | %s |\n' \
+              "$(numfmt --to=iec --suffix=B "${compressed}")"
+            printf '| Uncompressed tar | %s |\n' \
+              "$(numfmt --to=iec --suffix=B "${uncompressed}")"
+          } >>"${GITHUB_STEP_SUMMARY}"
+      - name: measure main baseline
+        id: measure-main
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          git fetch origin main --depth=1
+          main_dir="$(mktemp -d)/main"
+          # Cleanup runs on every exit path so a failed nix build does
+          # not leave a dangling worktree registration in .git/worktrees.
+          trap 'git worktree remove --force "${main_dir}" 2>/dev/null || true' EXIT
+          git worktree add "${main_dir}" origin/main
+          pushd "${main_dir}" >/dev/null
+          nix build .#linpeas-image --out-link result --print-build-logs
+          json="$("${GITHUB_WORKSPACE}/scripts/measure-image-size.sh" result)"
+          popd >/dev/null
+          compressed="$(jq -r '.compressed_bytes' <<<"${json}")"
+          uncompressed="$(jq -r '.uncompressed_bytes' <<<"${json}")"
+          echo "main_compressed=${compressed}" >>"${GITHUB_ENV}"
+          echo "main_uncompressed=${uncompressed}" >>"${GITHUB_ENV}"
+
+      - name: render image size PR comment body
+        id: render-comment
+        if: github.event_name == 'pull_request'
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          {
+            echo 'body<<EOF_COMMENT_BODY'
+            echo '<!-- image-size-advisory -->'
+            echo '## Image size advisory'
+            echo
+            if [[ "${{ steps.measure-main.outcome }}" != "success" ]]; then
+              echo '> Main baseline build failed — head sizes only.'
+              # shellcheck disable=SC2016 # literal backticks in human-readable prose
+              echo '> See the `measure main baseline` step in the job log.'
+              echo
+              echo '| Metric | Head |'
+              echo '| --- | ---: |'
+              printf '| Compressed tar.gz | %s |\n' \
+                "$(numfmt --to=iec --suffix=B "${head_compressed}")"
+              printf '| Uncompressed tar | %s |\n' \
+                "$(numfmt --to=iec --suffix=B "${head_uncompressed}")"
+            else
+              delta_compressed=$(( head_compressed - main_compressed ))
+              delta_uncompressed=$(( head_uncompressed - main_uncompressed ))
+              pct_compressed="$(awk -v h="${head_compressed}" \
+                -v m="${main_compressed}" \
+                'BEGIN { if (m==0) print "n/a"; \
+                        else printf "%+.1f%%", (h-m)*100/m }')"
+              pct_uncompressed="$(awk -v h="${head_uncompressed}" \
+                -v m="${main_uncompressed}" \
+                'BEGIN { if (m==0) print "n/a"; \
+                        else printf "%+.1f%%", (h-m)*100/m }')"
+              echo '| Metric | Main | Head | Delta | % |'
+              echo '| --- | ---: | ---: | ---: | ---: |'
+              printf '| Compressed tar.gz | %s | %s | %s%s | %s |\n' \
+                "$(numfmt --to=iec --suffix=B "${main_compressed}")" \
+                "$(numfmt --to=iec --suffix=B "${head_compressed}")" \
+                "$([[ ${delta_compressed} -ge 0 ]] && echo '+')" \
+                "$(numfmt --to=iec --suffix=B "${delta_compressed}")" \
+                "${pct_compressed}"
+              printf '| Uncompressed tar | %s | %s | %s%s | %s |\n' \
+                "$(numfmt --to=iec --suffix=B "${main_uncompressed}")" \
+                "$(numfmt --to=iec --suffix=B "${head_uncompressed}")" \
+                "$([[ ${delta_uncompressed} -ge 0 ]] && echo '+')" \
+                "$(numfmt --to=iec --suffix=B "${delta_uncompressed}")" \
+                "${pct_uncompressed}"
+            fi
+            echo 'EOF_COMMENT_BODY'
+          } >>"${GITHUB_OUTPUT}"
+
+      - name: upsert image size PR comment
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9 # v5.0.0
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: ${{ steps.render-comment.outputs.body }}
+          edit-mode: replace
+          body-includes: "<!-- image-size-advisory -->"
       - name: verify external tools present in image
         # Guards against regression on the deliberate inclusion of
         # gnugrep/gnused/gawk/findutils/procps. Without these, linpeas
