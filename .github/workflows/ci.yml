@@ -181,6 +181,26 @@ jobs:
           echo "IMAGE_TAG=${tag}" >>"${GITHUB_ENV}"
           docker run --rm "rvenutolo/linpeas:${tag}" -h | sed -n '1,20p'
           docker run --rm "rvenutolo/linpeas:${tag}" -h >/dev/null
+      - name: measure head image
+        id: measure-head
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          json="$(scripts/measure-image-size.sh result .#linpeas-image)"
+          compressed="$(jq -r '.compressed_bytes' <<<"${json}")"
+          closure="$(jq -r '.closure_bytes' <<<"${json}")"
+          echo "head_compressed=${compressed}" >>"${GITHUB_ENV}"
+          echo "head_closure=${closure}" >>"${GITHUB_ENV}"
+          {
+            echo "## Image size"
+            echo
+            echo "| Metric | Head |"
+            echo "| --- | ---: |"
+            printf '| Compressed tar.gz | %s |\n' \
+              "$(numfmt --to=iec --suffix=B "${compressed}")"
+            printf '| Closure size | %s |\n' \
+              "$(numfmt --to=iec --suffix=B "${closure}")"
+          } >>"${GITHUB_STEP_SUMMARY}"
       - name: verify external tools present in image
         # Guards against regression on the deliberate inclusion of
         # gnugrep/gnused/gawk/findutils/procps. Without these, linpeas
