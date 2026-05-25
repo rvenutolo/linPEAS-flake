@@ -12,6 +12,17 @@ Every Sunday at 06:00 UTC (and on `workflow_dispatch`), the workflow:
 1. Compares the five values pairwise.
 1. On any mismatch: installs `diffoscope`, runs it against the differing artifacts with a 20-minute cap, uploads `diffoscope.html` and `diffoscope.txt` as the `repro-diff` artifact (30-day retention), and opens a GitHub issue labelled `reproducibility`.
 
+## How you'll be notified
+
+During burn-in (`continue-on-error: true` on the compare job), workflow runs report green in the Actions UI even on mismatch — the only alert channel is the auto-opened GitHub issue.
+
+To ensure mismatches are seen:
+
+- The repo owner watches "All Activity" or "Issues" notifications on this repo, OR
+- Add `--assignee` to the `gh issue create` invocation in the workflow once a maintainer wants direct paging.
+
+Currently no `--assignee` is set; mismatches rely on default repo notification settings. Revisit after the first real mismatch (the runbook's "What to do when it fails" section assumes the responder has already seen the issue).
+
 ## What to do when it fails
 
 1. Open the auto-created issue (label: `reproducibility`).
