@@ -58,6 +58,7 @@ live in `.claude/CLAUDE.md` (untracked).
 - **DOCKERHUB_TOKEN split** — `_RW` vs `_DELETE`, never unsuffixed. → [runbooks/dockerhub-recovery.md](runbooks/dockerhub-recovery.md) <!-- enforcer: -; ci: -; hook: - -->
 - **Docker Hub notify-body parity** — issue body mirrors runbook. → [runbooks/dockerhub-recovery.md](runbooks/dockerhub-recovery.md) <!-- enforcer: -; ci: -; hook: - -->
 - **settings-drift-checker App scope** — dedicated read-only App for admin-scoped settings probes; isolates blast radius from GITHUB_TOKEN and the bump App. → [runbooks/settings-drift-app.md](runbooks/settings-drift-app.md) <!-- enforcer: -; ci: -; hook: - -->
+- **actionlint embedded-shellcheck pin** — actionlint hook in `flake.nix` wraps the binary with an explicit `-shellcheck=...` flag so embedded coverage does not silently degrade outside the devShell; canary smoke-tests the wiring; python `run:` blocks are guarded out until pyflakes is wired the same way. → [actionlint-embedded-linters.md](actionlint-embedded-linters.md) <!-- enforcer: scripts/check-actionlint-shellcheck-active.sh, scripts/check-run-block-pyflakes-required.sh; ci: -; hook: actionlint-shellcheck-active, check-run-block-pyflakes-required -->
 
 ## Development
 
