@@ -28,6 +28,20 @@ Lint: cross-check `.github/workflows/ci.yml` jobs
 against `docs/_data/ci-check-categories.yml` in both directions,
 with an EXEMPT list for auxiliary (non-required) jobs.
 
+### scripts/check-cliff-tag-pattern.sh
+
+Refuse to build if cliff.toml's tag_pattern drifts from the
+canonical pin-shape regex. Joins the cross-layer parity set enforced in
+bump-linpeas.sh, flake.nix, stale-pin-check.yml, release-on-bump.yml,
+and gen-dashboard-data.sh.
+
+Exits 0 when tag_pattern exactly matches the canonical value.
+Exits 1 on any failure (missing file, missing key, wrong value).
+
+Env overrides (test-only):
+CLIFF_TOML_OVERRIDE — path to a fixture cliff.toml instead of
+the repo-root cliff.toml
+
 ### scripts/check-cosign-identity-pinned.sh
 
 Lint: every `cosign verify` invocation pins both
@@ -57,6 +71,18 @@ request in scripts/\*.sh passes an explicit
 Lint: every `gh attestation verify` invocation across
 workflows, scripts, and docs passes `--repo rvenutolo/linPEAS-flake`
 so verification is bound to this repository.
+
+### scripts/check-hammer-shim-parity.sh
+
+Lint: nix/hammer-shim.nix's linpeas derivation matches
+flake.nix's linpeas derivation. The shim duplicates the derivation
+because `builtins.getFlake` cannot run inside the `nix flake check`
+sandbox. Compares bodies normalized to whitespace-collapsed form.
+Exits 0 on match, 1 on drift, 2 if extraction fails.
+
+Env overrides (test-only):
+FLAKE_NIX_OVERRIDE — path to flake.nix to read
+HAMMER_SHIM_OVERRIDE — path to nix/hammer-shim.nix to read
 
 ### scripts/check-harden-runner-first.sh
 

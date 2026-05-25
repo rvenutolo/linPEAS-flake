@@ -62,7 +62,12 @@ mapfile -t writer_files < <(
     grep --recursive --files-with-matches --extended-regexp \
       --include='*.sh' "${VAR_REGEX}" "${SCRIPTS_DIR}" 2>/dev/null || true
   } |
-    sed -E "s|^${SCRIPTS_DIR%/}/||" |
+    while IFS= read -r line; do
+      # Strip the scripts-dir prefix using bash parameter expansion to avoid
+      # regex-special characters in the path (e.g. '+' in worktree names)
+      # breaking a sed expression.
+      printf '%s\n' "${line#"${SCRIPTS_DIR%/}"/}"
+    done |
     grep --invert-match --line-regexp 'check-pin-diff-isolated\.sh' |
     sort -u
 )

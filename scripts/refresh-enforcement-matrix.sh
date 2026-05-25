@@ -72,6 +72,7 @@ readonly HOOK_EXEMPT=(
   "just-recipes-fresh"
   "markdownlint"
   "nixfmt"
+  "nixpkgs-hammering"
   "precommit-table-fresh"
   "scripts-reference-fresh"
   "shellcheck"
