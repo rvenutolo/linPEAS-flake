@@ -220,16 +220,13 @@ jobs:
           set -Eeuo pipefail
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           today="$(date -u +%Y-%m-%d)"
-          body="$(cat <<EOF
-          The weekly reproducibility check detected a mismatch.
-
-          - Run: ${run_url}
-          - Diffoscope artifact: \`repro-diff\` (30-day retention)
-          - Runbook: [docs/runbooks/reproducibility-check.md](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/main/docs/runbooks/reproducibility-check.md)
-
-          Investigate per the runbook; do not close until root cause is fixed or the workflow has been demoted per runbook criteria.
-          EOF
-          )"
+          runbook_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/main/docs/runbooks/reproducibility-check.md"
+          # Build body with printf -v to avoid YAML-breaking heredoc or indented multiline strings.
+          # Using %s for the backtick-containing artifact names avoids SC2016 false positives.
+          artifact_note="\`repro-diff\` (30-day retention) — includes \`image.html\`/\`image.txt\` and \`linpeas.html\`/\`linpeas.txt\`"
+          printf -v body \
+            'The weekly reproducibility check detected a mismatch.\n\n- Run: %s\n- Diffoscope artifacts: %s\n- Runbook: [docs/runbooks/reproducibility-check.md](%s)\n\nInvestigate per the runbook; do not close until root cause is fixed or the workflow has been demoted per runbook criteria.' \
+            "${run_url}" "${artifact_note}" "${runbook_url}"
           gh issue create \
             --repo "${GITHUB_REPOSITORY}" \
             --title "repro mismatch: ${today}" \
