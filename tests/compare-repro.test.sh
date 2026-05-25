@@ -75,6 +75,27 @@ run_scenario \
   1 \
   'docs/runbooks/reproducibility-check.md'
 
+# Custom scenario: missing input file → exit 2
+function run_missing_input_scenario() {
+  local stderr_file
+  stderr_file="$(mktemp)"
+  local actual_exit=0
+  "${SCRIPT}" "${FIXTURES}/nonexistent-a.json" "${FIXTURES}/nonexistent-b.json" \
+    >/dev/null 2>"${stderr_file}" || actual_exit=$?
+  if [[ ${actual_exit} -ne 2 ]]; then
+    printf 'FAIL: missing-input — expected exit 2, got %d\n' "${actual_exit}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet 'does not exist' "${stderr_file}"; then
+    printf 'FAIL: missing-input — stderr missing expected diagnostic\n' >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: missing-input → exit 2\n'
+  fi
+}
+
+run_missing_input_scenario
+
 if [[ ${failures} -gt 0 ]]; then
   printf '\n%d scenario(s) failed.\n' "${failures}" >&2
   exit 1
