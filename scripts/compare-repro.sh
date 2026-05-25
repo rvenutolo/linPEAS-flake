@@ -64,7 +64,13 @@ mismatches=()
     printf '**Result:** MATCH — builds are reproducible.\n'
   else
     printf '**Result:** MISMATCH in: %s\n' "${mismatches[*]}"
-    printf '\nSee runbook: [docs/runbooks/reproducibility-check.md](../blob/main/docs/runbooks/reproducibility-check.md)\n'
+    if [[ -n ${GITHUB_SERVER_URL:-} && -n ${GITHUB_REPOSITORY:-} ]]; then
+      printf '\nSee runbook: [%s](%s/%s/blob/main/%s)\n' \
+        'docs/runbooks/reproducibility-check.md' \
+        "${GITHUB_SERVER_URL}" "${GITHUB_REPOSITORY}" 'docs/runbooks/reproducibility-check.md'
+    else
+      printf '\nSee runbook: docs/runbooks/reproducibility-check.md\n'
+    fi
   fi
 } >>"${summary_out}"
 
