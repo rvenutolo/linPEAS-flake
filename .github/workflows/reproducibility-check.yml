@@ -36,6 +36,9 @@ jobs:
           set -Eeuo pipefail
           nix build .#linpeas --print-build-logs --out-link result-linpeas
           nix build .#linpeas-image --print-build-logs --out-link result-image
+          # Tarball linpeas so it can be uploaded as artifact and diffoscoped
+          linpeas_real="$(readlink -f result-linpeas)"
+          tar --create --gzip --file=linpeas.tar.gz --directory="$(dirname "${linpeas_real}")" "$(basename "${linpeas_real}")"
       - name: measure hashes
         id: measure
         run: |
@@ -60,6 +63,7 @@ jobs:
           path: |
             build.json
             result-image
+            linpeas.tar.gz
           retention-days: 7
           if-no-files-found: error
 
@@ -86,6 +90,9 @@ jobs:
           set -Eeuo pipefail
           nix build .#linpeas --print-build-logs --out-link result-linpeas
           nix build .#linpeas-image --print-build-logs --out-link result-image
+          # Tarball linpeas so it can be uploaded as artifact and diffoscoped
+          linpeas_real="$(readlink -f result-linpeas)"
+          tar --create --gzip --file=linpeas.tar.gz --directory="$(dirname "${linpeas_real}")" "$(basename "${linpeas_real}")"
       - name: measure hashes
         id: measure
         run: |
@@ -110,6 +117,7 @@ jobs:
           path: |
             build.json
             result-image
+            linpeas.tar.gz
           retention-days: 7
           if-no-files-found: error
 
@@ -161,12 +169,19 @@ jobs:
         run: |
           set -Eeuo pipefail
           mkdir -p diffoscope-out
+          # Always diff both pairs on any mismatch — the divergence may be in either or both.
           timeout 20m diffoscope \
-            --html diffoscope-out/diffoscope.html \
-            --text diffoscope-out/diffoscope.txt \
+            --html diffoscope-out/image.html \
+            --text diffoscope-out/image.txt \
             build-a/result-image \
             build-b/result-image \
-            || echo 'diffoscope exited non-zero (expected on differences or timeout)'
+            || echo 'diffoscope (image) exited non-zero (expected on differences or timeout)'
+          timeout 20m diffoscope \
+            --html diffoscope-out/linpeas.html \
+            --text diffoscope-out/linpeas.txt \
+            build-a/linpeas.tar.gz \
+            build-b/linpeas.tar.gz \
+            || echo 'diffoscope (linpeas) exited non-zero (expected on differences or timeout)'
       - name: upload diffoscope artifact (on mismatch)
         if: steps.compare.outputs.exit_code != '0'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
