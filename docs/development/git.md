@@ -79,7 +79,7 @@ Hooks (alphabetical):
 
 | Hook                           | What it checks                                                                                 |
 | ------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `actionlint`                   | GitHub Actions workflow syntax.                                                                |
+| `actionlint`                   | GitHub Actions workflow syntax (shellcheck pinned).                                            |
 | `check-doc-anchors`            | Every markdown #anchor link resolves to a heading slug in its target file.                     |
 | `check-jsonschema`             | Schema-shape validation of repo config (renovate.json, workflows, actions).                    |
 | `check-orphan-invariants`      | Every docs/ file has an invariant-index entry and vice versa.                                  |

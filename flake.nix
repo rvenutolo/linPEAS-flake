@@ -205,7 +205,8 @@
           };
           actionlint = {
             enable = true;
-            description = "GitHub Actions workflow syntax.";
+            description = "GitHub Actions workflow syntax (shellcheck pinned).";
+            entry = "${actionlintWrapped}/bin/actionlint";
           };
           # Doc-quality hooks — mirror the CI lint required-check set
           # so author catches issues before push.
@@ -871,6 +872,19 @@
         # binary committers actually run. A separate writeShellScriptBin
         # wrapper would not be reached by `pre-commit install` — only
         # `nix develop`-time invocations would see it.
+        # actionlint discovers embedded shellcheck via $PATH. Hook
+        # invocations from a shell that has not entered the devShell
+        # (fresh checkout without direnv, CI step that forgot
+        # `nix develop`) silently degrade: actionlint exits 0 with
+        # shellcheck coverage disabled. Pinning the binary path here
+        # makes discovery deterministic at flake evaluation. See
+        # docs/actionlint-embedded-linters.md.
+        actionlintWrapped = pkgs-unstable.writeShellScriptBin "actionlint" ''
+          exec ${pkgs-unstable.actionlint}/bin/actionlint \
+            -shellcheck=${pkgs-unstable.shellcheck}/bin/shellcheck \
+            "$@"
+        '';
+
         preCommitWrapped = pkgs-unstable.pre-commit.overrideAttrs (old: {
           postFixup = (old.postFixup or "") + ''
             mv "$out/bin/pre-commit" "$out/bin/.pre-commit-real"
