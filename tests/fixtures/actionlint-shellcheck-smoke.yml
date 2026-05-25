@@ -1,0 +1,19 @@
+# Fixture for scripts/check-actionlint-shellcheck-active.sh.
+# Contains a deliberate SC2086 (unquoted variable expansion in
+# word-splitting context). actionlint with shellcheck wired must
+# surface SC2086 against this file. Do NOT fix the lint — the
+# canary asserts the warning is produced.
+name: actionlint-shellcheck-smoke
+on: push
+permissions: {}
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: planted SC2086
+        env:
+          TARGETS: "a b c"
+        run: |
+          for t in $TARGETS; do
+            echo $t
+          done

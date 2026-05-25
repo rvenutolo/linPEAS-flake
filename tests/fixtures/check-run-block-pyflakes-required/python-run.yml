@@ -1,0 +1,9 @@
+name: python-run
+on: push
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          python3 -c 'import sys; print(sys.version)'

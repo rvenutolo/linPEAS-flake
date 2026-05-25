@@ -62,6 +62,8 @@ function require_tool() {
 # specific invariant.
 readonly HOOK_EXEMPT=(
   "actionlint"
+  "actionlint-shellcheck-active"
+  "check-run-block-pyflakes-required"
   "ci-dag-fresh"
   "ci-summary-fresh"
   "commitlint"
@@ -116,12 +118,14 @@ readonly CI_EXEMPT_EXTRA=(
 # Auxiliary scripts that don't enforce a documented invariant.
 readonly SCRIPT_EXEMPT=(
   "bump-linpeas"
-  "check-doc-anchors"                 # meta: lints anchor links in docs
-  "check-jsonschema"                  # wrapper around upstream tool
-  "check-orphan-invariants"           # meta: lints the index itself
-  "check-pre-commit-hooks-sha-parity" # meta: lints hook config
-  "check-required-checks-no-paths"    # meta: lints CI config shape
-  "check-script-has-test"             # meta: lints test pairing
+  "check-actionlint-shellcheck-active" # meta: canary for actionlint+shellcheck wiring
+  "check-doc-anchors"                  # meta: lints anchor links in docs
+  "check-jsonschema"                   # wrapper around upstream tool
+  "check-orphan-invariants"            # meta: lints the index itself
+  "check-pre-commit-hooks-sha-parity"  # meta: lints hook config
+  "check-required-checks-no-paths"     # meta: lints CI config shape
+  "check-run-block-pyflakes-required"  # meta: passive guard for python+pyflakes wiring
+  "check-script-has-test"              # meta: lints test pairing
   "gen-dashboard-data"
   "refresh-ci-summary"
   "refresh-enforcement-matrix"

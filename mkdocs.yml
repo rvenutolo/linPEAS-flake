@@ -95,6 +95,7 @@ nav:
       - Scripts: reference/scripts.md
       - Treefmt config: reference/treefmt-config.md
   - Runbooks:
+      - actionlint embedded linters: actionlint-embedded-linters.md
       - Docker Hub recovery: runbooks/dockerhub-recovery.md
       - Settings-drift App: runbooks/settings-drift-app.md
   - Security:

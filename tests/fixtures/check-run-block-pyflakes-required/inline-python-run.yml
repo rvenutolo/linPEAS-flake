@@ -1,0 +1,12 @@
+name: inline-python-run
+on: push
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: python3 script.py
+      - run: PYTHONPATH=. /usr/bin/python3 -V
+      - run: ./venv/bin/pip install foo
+      - run: pip3 install bar
+      - run: sudo python3 setup.py install

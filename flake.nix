@@ -205,7 +205,8 @@
           };
           actionlint = {
             enable = true;
-            description = "GitHub Actions workflow syntax.";
+            description = "GitHub Actions workflow syntax (shellcheck pinned).";
+            entry = "${actionlintWrapped}/bin/actionlint";
           };
           # Doc-quality hooks — mirror the CI lint required-check set
           # so author catches issues before push.
@@ -834,6 +835,47 @@
             pass_filenames = false;
             language = "system";
           };
+          # Canary: assert actionlint's embedded shellcheck
+          # integration is wired. Runs the wrapper-pinned actionlint
+          # binary against tests/fixtures/actionlint-shellcheck-smoke.yml
+          # (which has a planted SC2086) and fails if the finding is
+          # not surfaced. Guards against silent regression of the
+          # shellcheck pin in actionlintWrapped. See
+          # docs/actionlint-embedded-linters.md.
+          actionlint-shellcheck-active = {
+            enable = true;
+            name = "actionlint-shellcheck-active";
+            description = "actionlint shellcheck integration canary.";
+            entry = "${pkgs-unstable.writeShellScript "check-actionlint-shellcheck-active-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              export PATH="${actionlintWrapped}/bin:$PATH"
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-actionlint-shellcheck-active.sh
+            ''}";
+            files = "^(flake\\.nix|tests/fixtures/actionlint-shellcheck-smoke\\.yml|scripts/check-actionlint-shellcheck-active\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
+          # Guard: fail if any GitHub Actions run: block invokes
+          # python/python3/pip while pyflakes is not wired into the
+          # actionlint hook. No python run: exists today, so this is
+          # a passive gate; the day one lands it fails with a pointer
+          # to docs/actionlint-embedded-linters.md.
+          check-run-block-pyflakes-required = {
+            enable = true;
+            name = "check-run-block-pyflakes-required";
+            description = "Fail if a workflow run: invokes python without pyflakes wired.";
+            entry = "${pkgs-unstable.writeShellScript "check-run-block-pyflakes-required-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-run-block-pyflakes-required.sh
+            ''}";
+            files = "^(\\.github/(workflows|actions)/.*\\.ya?ml|scripts/check-run-block-pyflakes-required\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
           # Asserts every #anchor fragment in markdown links across
           # README.md and docs/**/*.md matches a heading slug in the
           # target file (ASCII GFM/mkdocs rule).
@@ -871,6 +913,19 @@
         # binary committers actually run. A separate writeShellScriptBin
         # wrapper would not be reached by `pre-commit install` — only
         # `nix develop`-time invocations would see it.
+        # actionlint discovers embedded shellcheck via $PATH. Hook
+        # invocations from a shell that has not entered the devShell
+        # (fresh checkout without direnv, CI step that forgot
+        # `nix develop`) silently degrade: actionlint exits 0 with
+        # shellcheck coverage disabled. Pinning the binary path here
+        # makes discovery deterministic at flake evaluation. See
+        # docs/actionlint-embedded-linters.md.
+        actionlintWrapped = pkgs-unstable.writeShellScriptBin "actionlint" ''
+          exec ${pkgs-unstable.actionlint}/bin/actionlint \
+            -shellcheck=${pkgs-unstable.shellcheck}/bin/shellcheck \
+            "$@"
+        '';
+
         preCommitWrapped = pkgs-unstable.pre-commit.overrideAttrs (old: {
           postFixup = (old.postFixup or "") + ''
             mv "$out/bin/pre-commit" "$out/bin/.pre-commit-real"

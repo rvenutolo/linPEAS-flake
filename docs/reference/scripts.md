@@ -10,6 +10,22 @@ Do not edit between the markers.
 
 ## Check scripts
 
+### scripts/check-actionlint-shellcheck-active.sh
+
+Canary: assert actionlint's embedded shellcheck
+integration is wired. Runs the (wrapper-pinned) actionlint
+binary against a fixture workflow containing a planted SC2086
+violation; fails if the SC2086 code does not appear in output.
+
+If this script fails, the actionlint hook has silently stopped
+invoking shellcheck on `run:` blocks. See
+docs/actionlint-embedded-linters.md.
+
+Env overrides (test-only):
+ACTIONLINT_SMOKE_FIXTURE_OVERRIDE — alternate fixture path
+
+Exits 0 on clean, 1 on any failure.
+
 ### scripts/check-allowed-actions-api.sh
 
 Assert the live `actions.permissions.allowed_actions`
@@ -174,6 +190,25 @@ Lint: no workflow listed in
 docs/security/required-checks.md declares `paths:` or
 `paths-ignore:` under `on.pull_request:` — avoiding the auto-merge
 path-filter skip trap.
+
+### scripts/check-run-block-pyflakes-required.sh
+
+Guard: fail if any GitHub Actions `run:` block
+invokes python (python/python3/pip/pip3) while pyflakes is not
+wired into the actionlint hook. Today no python run: exists,
+so this is a passive gate. The day someone adds a python run:,
+this fails with a pointer to the runbook describing how to
+wire pyflakes.
+
+Scope: .github/workflows/\*.{yml,yaml} and
+.github/actions/\*\*/action.{yml,yaml}
+
+Env overrides (test-only):
+PYFLAKES_GUARD_SCAN_ROOT_OVERRIDE — alternate directory tree
+containing workflow/action YAML files (overrides the default
+repo-root .github/ scan).
+
+Exits 0 on clean, 1 if any python invocation found.
 
 ### scripts/check-run-block-strict.sh
 
