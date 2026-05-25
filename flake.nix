@@ -835,6 +835,28 @@
             pass_filenames = false;
             language = "system";
           };
+          # Canary: assert actionlint's embedded shellcheck
+          # integration is wired. Runs the wrapper-pinned actionlint
+          # binary against tests/fixtures/actionlint-shellcheck-smoke.yml
+          # (which has a planted SC2086) and fails if the finding is
+          # not surfaced. Guards against silent regression of the
+          # shellcheck pin in actionlintWrapped. See
+          # docs/actionlint-embedded-linters.md.
+          actionlint-shellcheck-active = {
+            enable = true;
+            name = "actionlint-shellcheck-active";
+            description = "actionlint shellcheck integration canary.";
+            entry = "${pkgs-unstable.writeShellScript "check-actionlint-shellcheck-active-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              export PATH="${actionlintWrapped}/bin:$PATH"
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-actionlint-shellcheck-active.sh
+            ''}";
+            files = "^(flake\\.nix|tests/fixtures/actionlint-shellcheck-smoke\\.yml|scripts/check-actionlint-shellcheck-active\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
           # Asserts every #anchor fragment in markdown links across
           # README.md and docs/**/*.md matches a heading slug in the
           # target file (ASCII GFM/mkdocs rule).

@@ -10,6 +10,22 @@ Do not edit between the markers.
 
 ## Check scripts
 
+### scripts/check-actionlint-shellcheck-active.sh
+
+Canary: assert actionlint's embedded shellcheck
+integration is wired. Runs the (wrapper-pinned) actionlint
+binary against a fixture workflow containing a planted SC2086
+violation; fails if the SC2086 code does not appear in output.
+
+If this script fails, the actionlint hook has silently stopped
+invoking shellcheck on `run:` blocks. See
+docs/actionlint-embedded-linters.md.
+
+Env overrides (test-only):
+ACTIONLINT_SMOKE_FIXTURE_OVERRIDE — alternate fixture path
+
+Exits 0 on clean, 1 on any failure.
+
 ### scripts/check-allowed-actions-api.sh
 
 Assert the live `actions.permissions.allowed_actions`
