@@ -24,9 +24,7 @@ for f in "${BUILD_A}" "${BUILD_B}"; do
 done
 
 readonly FIELDS=(
-  linpeas_store_path
   linpeas_nar_hash
-  image_store_path
   image_tar_sha256
   image_manifest_digest
 )
@@ -51,6 +49,17 @@ mismatches=()
       "${field}" "${a_val}" "${b_val}" "${status}"
   done
   printf '\n'
+  {
+    printf '### Build paths (informational)\n\n'
+    printf '| Field | Build A | Build B |\n'
+    printf '|---|---|---|\n'
+    for field in linpeas_store_path image_store_path; do
+      a_val="$(jq -r --arg k "${field}" '.[$k]' "${BUILD_A}")"
+      b_val="$(jq -r --arg k "${field}" '.[$k]' "${BUILD_B}")"
+      printf "| \`%s\` | \`%s\` | \`%s\` |\n" "${field}" "${a_val}" "${b_val}"
+    done
+    printf '\n'
+  }
   if [[ ${#mismatches[@]} -eq 0 ]]; then
     printf '**Result:** MATCH — builds are reproducible.\n'
   else

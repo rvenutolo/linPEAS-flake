@@ -75,6 +75,12 @@ run_scenario \
   1 \
   'docs/runbooks/reproducibility-check.md'
 
+run_scenario \
+  'store-path-only diff: not a mismatch (paths informational only) → exit 0' \
+  'store-path-only-diff' \
+  0 \
+  'MATCH'
+
 # Custom scenario: missing input file → exit 2
 function run_missing_input_scenario() {
   local stderr_file
