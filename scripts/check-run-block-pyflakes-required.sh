@@ -2,11 +2,11 @@
 # scripts/check-run-block-pyflakes-required.sh
 #
 # @description Guard: fail if any GitHub Actions `run:` block
-# invokes python (python/python3/pip) while pyflakes is not wired
-# into the actionlint hook. Today no python run: exists, so this
-# is a passive gate. The day someone adds a python run:, this
-# fails with a pointer to the runbook describing how to wire
-# pyflakes.
+# invokes python (python/python3/pip/pip3) while pyflakes is not
+# wired into the actionlint hook. Today no python run: exists,
+# so this is a passive gate. The day someone adds a python run:,
+# this fails with a pointer to the runbook describing how to
+# wire pyflakes.
 #
 # Scope: .github/workflows/*.{yml,yaml} and
 #        .github/actions/**/action.{yml,yaml}
@@ -56,15 +56,16 @@ fi
 # false positive is one human glance at the runbook, which is
 # acceptable.
 #
-# `cmd_prefix` matches the optional `VAR=val ` env assignments
-# (zero or more) followed by an optional absolute or
+# `cmd_prefix` matches an optional command wrapper (`sudo`,
+# `env`, `time`, `nice`) followed by zero or more `VAR=val `
+# env assignments, optionally followed by an absolute or
 # relative-path prefix (`/usr/bin/`, `./venv/bin/`, etc.).
 violations=0
-cmd_prefix='([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((/|\./|\.\./)[^[:space:]]*/)?'
-pattern="(run:[[:space:]]+${cmd_prefix}|^[[:space:]]*([|>-][[:space:]]+)?${cmd_prefix})(python3?|pip)([[:space:]]|\$)"
+cmd_prefix='((sudo|env|time|nice)[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((/|\./|\.\./)[^[:space:]]*/)?'
+pattern="(run:[[:space:]]+${cmd_prefix}|^[[:space:]]*([|>-][[:space:]]+)?${cmd_prefix})(python3?|pip3?)([[:space:]]|\$)"
 for f in "${files[@]}"; do
-  # grep exits 1 when no lines match; `|| true` keeps us alive
-  # under `set -e`. A single invocation captures both the
+  # grep exits 1 when no lines match; the `if` guard keeps us
+  # alive under `set -e`. A single invocation captures both the
   # presence check and the matched lines.
   if matches="$(grep -nE "${pattern}" -- "${f}")"; then
     printf 'FOUND python invocation in %s:\n%s\n\n' "${f}" "${matches}" >&2
