@@ -43,6 +43,8 @@
           assert (builtins.match "https://github.com/peass-ng/PEASS-ng/releases/download/.*" raw.url) != null;
           raw;
 
+        # DUPLICATED into nix/hammer-shim.nix (sandbox cannot use getFlake).
+        # Parity enforced by scripts/check-hammer-shim-parity.sh.
         linpeas = pkgs.stdenvNoCC.mkDerivation {
           pname = "linpeas";
           inherit (pin) version;
@@ -184,6 +186,20 @@
                 -f nix/hammer-shim.nix linpeas
             ''}";
             files = "^(flake\\.nix|flake\\.lock|linpeas-pin\\.json|nix/hammer-shim\\.nix)$";
+            pass_filenames = false;
+            language = "system";
+          };
+          hammer-shim-parity = {
+            enable = true;
+            name = "hammer-shim-parity";
+            description = "nix/hammer-shim.nix linpeas derivation matches flake.nix.";
+            entry = "${pkgs-unstable.writeShellScript "hammer-shim-parity-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-hammer-shim-parity.sh
+            ''}";
+            files = "^(flake\\.nix|nix/hammer-shim\\.nix|scripts/check-hammer-shim-parity\\.sh)$";
             pass_filenames = false;
             language = "system";
           };

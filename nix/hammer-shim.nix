@@ -1,3 +1,7 @@
+# DUPLICATED — keep in sync with the `linpeas = pkgs.stdenvNoCC.mkDerivation`
+# block in flake.nix. Drift is enforced by scripts/check-hammer-shim-parity.sh
+# (wired as the `hammer-shim-parity` pre-commit hook).
+#
 # Adapter that re-exposes the linpeas derivation in the
 # `{ overlays }`-arg shape `nixpkgs-hammer` requires.
 #
