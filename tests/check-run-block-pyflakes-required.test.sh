@@ -51,7 +51,20 @@ cp -- "${FIXTURES}/python-run.yml" "${with_python}/python-run.yml"
 run_scenario "python run: present → fails with runbook pointer" \
   "${with_python}" 1 "docs/actionlint-embedded-linters.md"
 
-rm -rf -- "${clean_only}" "${with_python}"
+with_inline_python="$(mktemp -d)"
+cp -- "${FIXTURES}/clean.yml" "${with_inline_python}/clean.yml"
+cp -- "${FIXTURES}/inline-python-run.yml" "${with_inline_python}/inline-python-run.yml"
+run_scenario "inline python run: present → fails with runbook pointer" \
+  "${with_inline_python}" 1 "docs/actionlint-embedded-linters.md"
+
+clean_with_python_keys="$(mktemp -d)"
+cp -- "${FIXTURES}/clean-with-python-keys.yml" \
+  "${clean_with_python_keys}/clean-with-python-keys.yml"
+run_scenario "setup-python action + python-version keys → passes" \
+  "${clean_with_python_keys}" 0 ""
+
+rm -rf -- "${clean_only}" "${with_python}" \
+  "${with_inline_python}" "${clean_with_python_keys}"
 
 if [[ ${failures} -ne 0 ]]; then
   printf '\n%d scenario(s) failed.\n' "${failures}" >&2

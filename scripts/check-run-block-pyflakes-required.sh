@@ -41,20 +41,32 @@ if [[ ${#files[@]} -eq 0 ]]; then
   exit 0
 fi
 
-# Heuristic: look for python/python3/pip as the first token of a
-# command inside a run: block. We grep the whole file rather than
-# parse YAML — the cost of a false positive is one human glance
-# at the runbook, which is acceptable.
+# Heuristic: look for python/python3/pip used as an *invoked
+# command* in a GitHub Actions YAML file. The token must appear
+# in a command-position context — either right after `run:` on a
+# single-line step, or as the first non-whitespace token of a
+# line inside a `run: |` block, optionally preceded by an
+# env-var assignment (`VAR=val `) and/or a path prefix
+# (`/usr/bin/`, `./venv/bin/`, etc.). The token must also be
+# followed by whitespace or end-of-line, so that bare mentions
+# inside echo strings (`echo "no python here"`) and YAML key
+# names (`python-version`, `pip-cache`) don't trip the guard.
+#
+# We grep the whole file rather than parse YAML — the cost of a
+# false positive is one human glance at the runbook, which is
+# acceptable.
+#
+# `cmd_prefix` matches the optional `VAR=val ` env assignments
+# (zero or more) followed by an optional absolute or
+# relative-path prefix (`/usr/bin/`, `./venv/bin/`, etc.).
 violations=0
+cmd_prefix='([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((/|\./|\.\./)[^[:space:]]*/)?'
+pattern="(run:[[:space:]]+${cmd_prefix}|^[[:space:]]*([|>-][[:space:]]+)?${cmd_prefix})(python3?|pip)([[:space:]]|\$)"
 for f in "${files[@]}"; do
-  # Match lines that look like a shell command invoking python/pip.
-  # Skip comment lines (#...) and YAML keys.
-  if grep -nE \
-    '^\s*([|>-]\s+)?(python3?|pip)(\s|$)' \
-    -- "${f}" >/dev/null 2>&1; then
-    matches="$(grep -nE \
-      '^\s*([|>-]\s+)?(python3?|pip)(\s|$)' \
-      -- "${f}")"
+  # grep exits 1 when no lines match; `|| true` keeps us alive
+  # under `set -e`. A single invocation captures both the
+  # presence check and the matched lines.
+  if matches="$(grep -nE "${pattern}" -- "${f}")"; then
     printf 'FOUND python invocation in %s:\n%s\n\n' "${f}" "${matches}" >&2
     violations=$((violations + 1))
   fi
