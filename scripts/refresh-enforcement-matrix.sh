@@ -127,6 +127,7 @@ readonly SCRIPT_EXEMPT=(
   "check-run-block-pyflakes-required"  # meta: passive guard for python+pyflakes wiring
   "check-script-has-test"              # meta: lints test pairing
   "gen-dashboard-data"
+  "measure-image-size" # CI-only: pure measurement, no invariant
   "refresh-ci-summary"
   "refresh-enforcement-matrix"
   "refresh-flake-show"
