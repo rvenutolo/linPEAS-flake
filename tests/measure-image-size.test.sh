@@ -30,7 +30,7 @@ function scenario_happy_path() {
   local stderr_file
   stderr_file="$(mktemp)"
   local json
-  if ! json="$("${SCRIPT}" "${result}" "${FIXTURE_DIR}#tiny-image" \
+  if ! json="$("${SCRIPT}" "${result}" \
     2>"${stderr_file}")"; then
     fail "happy path — script exited non-zero: $(cat -- "${stderr_file}")"
     rm -f -- "${stderr_file}"
@@ -43,20 +43,20 @@ function scenario_happy_path() {
     return
   fi
 
-  local compressed closure
+  local compressed uncompressed
   compressed="$(jq -r '.compressed_bytes' <<<"${json}")"
-  closure="$(jq -r '.closure_bytes' <<<"${json}")"
+  uncompressed="$(jq -r '.uncompressed_bytes' <<<"${json}")"
 
   if ! [[ ${compressed} =~ ^[0-9]+$ ]] || [[ ${compressed} -le 0 ]]; then
     fail "happy path — compressed_bytes not a positive int: ${compressed}"
     return
   fi
-  if ! [[ ${closure} =~ ^[0-9]+$ ]] || [[ ${closure} -le 0 ]]; then
-    fail "happy path — closure_bytes not a positive int: ${closure}"
+  if ! [[ ${uncompressed} =~ ^[0-9]+$ ]] || [[ ${uncompressed} -le 0 ]]; then
+    fail "happy path — uncompressed_bytes not a positive int: ${uncompressed}"
     return
   fi
 
-  pass "happy path (compressed=${compressed}, closure=${closure})"
+  pass "happy path (compressed=${compressed}, uncompressed=${uncompressed})"
 }
 
 # Scenario 2: missing result path — must exit non-zero with a useful
@@ -65,7 +65,7 @@ function scenario_missing_result() {
   local stderr_file
   stderr_file="$(mktemp)"
   local exit_code=0
-  "${SCRIPT}" /nonexistent/result /no/such#thing \
+  "${SCRIPT}" /nonexistent/result \
     >/dev/null 2>"${stderr_file}" || exit_code=$?
 
   if [[ ${exit_code} -eq 0 ]]; then
@@ -95,10 +95,10 @@ function scenario_json_shape() {
   ln -s "$(cat "${result}.path")" "${result}"
 
   local keys
-  keys="$("${SCRIPT}" "${result}" "${FIXTURE_DIR}#tiny-image" |
+  keys="$("${SCRIPT}" "${result}" |
     jq -r 'keys | sort | join(",")')"
 
-  if [[ ${keys} != "closure_bytes,compressed_bytes" ]]; then
+  if [[ ${keys} != "compressed_bytes,uncompressed_bytes" ]]; then
     fail "json shape — expected exact keys, got: ${keys}"
     return
   fi

@@ -186,11 +186,11 @@ jobs:
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
-          json="$(scripts/measure-image-size.sh result .#linpeas-image)"
+          json="$(scripts/measure-image-size.sh result)"
           compressed="$(jq -r '.compressed_bytes' <<<"${json}")"
-          closure="$(jq -r '.closure_bytes' <<<"${json}")"
+          uncompressed="$(jq -r '.uncompressed_bytes' <<<"${json}")"
           echo "head_compressed=${compressed}" >>"${GITHUB_ENV}"
-          echo "head_closure=${closure}" >>"${GITHUB_ENV}"
+          echo "head_uncompressed=${uncompressed}" >>"${GITHUB_ENV}"
           {
             echo "## Image size"
             echo
@@ -198,8 +198,8 @@ jobs:
             echo "| --- | ---: |"
             printf '| Compressed tar.gz | %s |\n' \
               "$(numfmt --to=iec --suffix=B "${compressed}")"
-            printf '| Closure size | %s |\n' \
-              "$(numfmt --to=iec --suffix=B "${closure}")"
+            printf '| Uncompressed tar | %s |\n' \
+              "$(numfmt --to=iec --suffix=B "${uncompressed}")"
           } >>"${GITHUB_STEP_SUMMARY}"
       - name: verify external tools present in image
         # Guards against regression on the deliberate inclusion of

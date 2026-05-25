@@ -364,21 +364,20 @@ by aggregating pin metadata and live GitHub REST API data.
 
 ### scripts/measure-image-size.sh
 
-Measure two sizes of a built nix dockerTools image and
-emit them as JSON. Used by the image-smoke CI job to populate the
-size-advisory job summary and PR comment.
+Measure two sizes of a built dockerTools image tar.gz
+and emit them as JSON. Used by the image-smoke CI job to populate
+the size-advisory job summary and PR comment.
 
 Usage:
-measure-image-size.sh <result-symlink> <flake-ref>
+measure-image-size.sh <result-symlink>
 
 <result-symlink> — path to the `result` symlink from `nix build`,
 pointing at the compressed image tar.
-<flake-ref> — flake reference to the image attr (e.g. `.#linpeas-image`),
-passed to `nix path-info --closure-size` to compute
-the unpacked closure size.
 
-Output: single-line JSON `{"compressed_bytes": N, "closure_bytes": M}`
-on stdout. Both fields are positive integers (bytes).
+Output: single-line JSON `{"compressed_bytes": N, "uncompressed_bytes": M}`
+on stdout. Both fields are positive integers (bytes). "Compressed" is
+the on-wire/at-rest tar.gz size; "uncompressed" is the extracted
+tar size — what the image takes on disk when pulled.
 
 Exits 0 on success, non-zero on missing inputs or measurement failure.
 Diagnostic messages go to stderr.
