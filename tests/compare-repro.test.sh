@@ -57,6 +57,24 @@ run_scenario \
   0 \
   'MATCH'
 
+run_scenario \
+  'mismatch-store: differing linpeas_nar_hash → exit 1, summary names field' \
+  'mismatch-store' \
+  1 \
+  'linpeas_nar_hash'
+
+run_scenario \
+  'mismatch-image: differing image_tar_sha256 → exit 1, summary names field' \
+  'mismatch-image' \
+  1 \
+  'image_tar_sha256'
+
+run_scenario \
+  'mismatch: runbook link present in summary' \
+  'mismatch-store' \
+  1 \
+  'docs/runbooks/reproducibility-check.md'
+
 if [[ ${failures} -gt 0 ]]; then
   printf '\n%d scenario(s) failed.\n' "${failures}" >&2
   exit 1
