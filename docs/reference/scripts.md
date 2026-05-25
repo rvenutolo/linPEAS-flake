@@ -357,6 +357,12 @@ exposed by `flake.nix` as `devTooling.<system>.treefmtConfig`.
 
 Bump linpeas-pin.json to the latest peass-ng/PEASS-ng release.
 
+### scripts/compare-repro.sh
+
+Compare two reproducibility-build hash JSON files.
+Emits a markdown table to GITHUB_STEP_SUMMARY (or stdout if unset)
+and exits 0 on full match, 1 on any divergence, 2 on bad input.
+
 ### scripts/gen-dashboard-data.sh
 
 Generate docs/\_data/dashboard.yml for the MkDocs site

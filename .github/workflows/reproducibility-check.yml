@@ -1,0 +1,241 @@
+---
+name: reproducibility-check
+
+on:
+  schedule:
+    - cron: "0 6 * * 0"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: reproducibility-check-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-a:
+    name: build (runner A)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-nix
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3
+      - name: build linpeas + image
+        run: |
+          set -Eeuo pipefail
+          nix build .#linpeas --print-build-logs --out-link result-linpeas
+          nix build .#linpeas-image --print-build-logs --out-link result-image
+          # Tarball linpeas so it can be uploaded as artifact and diffoscoped
+          linpeas_real="$(readlink -f result-linpeas)"
+          tar --create --gzip --file=linpeas.tar.gz --directory="$(dirname "${linpeas_real}")" "$(basename "${linpeas_real}")"
+      - name: measure hashes
+        id: measure
+        run: |
+          set -Eeuo pipefail
+          linpeas_path="$(readlink -f result-linpeas)"
+          image_path="$(readlink -f result-image)"
+          linpeas_nar_hash="$(nix path-info --json "${linpeas_path}" | jq -r '.[].narHash')"
+          image_tar_sha256="$(sha256sum "${image_path}" | awk '{print $1}')"
+          case "$(file --brief --mime-type "${image_path}")" in
+            application/gzip | application/x-gzip)
+              image_manifest_digest="$(gunzip -c "${image_path}" | tar -xO manifest.json | sha256sum | awk '{print "sha256:" $1}')"
+              ;;
+            application/x-tar)
+              image_manifest_digest="$(tar -xOf "${image_path}" manifest.json | sha256sum | awk '{print "sha256:" $1}')"
+              ;;
+            *)
+              printf 'ERROR: unexpected image artifact type: %s\n' "$(file --brief "${image_path}")" >&2
+              exit 1
+              ;;
+          esac
+          jq -n \
+            --arg linpeas_store_path "${linpeas_path}" \
+            --arg linpeas_nar_hash "${linpeas_nar_hash}" \
+            --arg image_store_path "${image_path}" \
+            --arg image_tar_sha256 "${image_tar_sha256}" \
+            --arg image_manifest_digest "${image_manifest_digest}" \
+            '{linpeas_store_path: $linpeas_store_path, linpeas_nar_hash: $linpeas_nar_hash, image_store_path: $image_store_path, image_tar_sha256: $image_tar_sha256, image_manifest_digest: $image_manifest_digest}' \
+            > build.json
+          cat build.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: repro-build-a
+          path: |
+            build.json
+            result-image
+            linpeas.tar.gz
+          retention-days: 7
+          if-no-files-found: error
+
+  build-b:
+    name: build (runner B)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-nix
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3
+      - name: build linpeas + image
+        run: |
+          set -Eeuo pipefail
+          nix build .#linpeas --print-build-logs --out-link result-linpeas
+          nix build .#linpeas-image --print-build-logs --out-link result-image
+          # Tarball linpeas so it can be uploaded as artifact and diffoscoped
+          linpeas_real="$(readlink -f result-linpeas)"
+          tar --create --gzip --file=linpeas.tar.gz --directory="$(dirname "${linpeas_real}")" "$(basename "${linpeas_real}")"
+      - name: measure hashes
+        id: measure
+        run: |
+          set -Eeuo pipefail
+          linpeas_path="$(readlink -f result-linpeas)"
+          image_path="$(readlink -f result-image)"
+          linpeas_nar_hash="$(nix path-info --json "${linpeas_path}" | jq -r '.[].narHash')"
+          image_tar_sha256="$(sha256sum "${image_path}" | awk '{print $1}')"
+          case "$(file --brief --mime-type "${image_path}")" in
+            application/gzip | application/x-gzip)
+              image_manifest_digest="$(gunzip -c "${image_path}" | tar -xO manifest.json | sha256sum | awk '{print "sha256:" $1}')"
+              ;;
+            application/x-tar)
+              image_manifest_digest="$(tar -xOf "${image_path}" manifest.json | sha256sum | awk '{print "sha256:" $1}')"
+              ;;
+            *)
+              printf 'ERROR: unexpected image artifact type: %s\n' "$(file --brief "${image_path}")" >&2
+              exit 1
+              ;;
+          esac
+          jq -n \
+            --arg linpeas_store_path "${linpeas_path}" \
+            --arg linpeas_nar_hash "${linpeas_nar_hash}" \
+            --arg image_store_path "${image_path}" \
+            --arg image_tar_sha256 "${image_tar_sha256}" \
+            --arg image_manifest_digest "${image_manifest_digest}" \
+            '{linpeas_store_path: $linpeas_store_path, linpeas_nar_hash: $linpeas_nar_hash, image_store_path: $image_store_path, image_tar_sha256: $image_tar_sha256, image_manifest_digest: $image_manifest_digest}' \
+            > build.json
+          cat build.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: repro-build-b
+          path: |
+            build.json
+            result-image
+            linpeas.tar.gz
+          retention-days: 7
+          if-no-files-found: error
+
+  compare:
+    name: compare
+    needs: [build-a, build-b]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: repro-build-a
+          path: build-a
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: repro-build-b
+          path: build-b
+      - name: compare hashes
+        id: compare
+        run: |
+          set -Eeuo pipefail
+          compare_exit=0
+          ./scripts/compare-repro.sh build-a/build.json build-b/build.json || compare_exit=$?
+          echo "exit_code=${compare_exit}" >> "${GITHUB_OUTPUT}"
+          if [[ ${compare_exit} -eq 0 ]]; then
+            echo 'reproducibility check passed.'
+          else
+            echo 'reproducibility check failed; diffoscope step will run.'
+          fi
+      - name: install diffoscope (on mismatch)
+        if: steps.compare.outputs.exit_code != '0'
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes diffoscope
+      - name: run diffoscope on image tars (on mismatch)
+        if: steps.compare.outputs.exit_code != '0'
+        run: |
+          set -Eeuo pipefail
+          mkdir -p diffoscope-out
+          # Always diff both pairs on any mismatch — the divergence may be in either or both.
+          timeout 20m diffoscope \
+            --html diffoscope-out/image.html \
+            --text diffoscope-out/image.txt \
+            build-a/result-image \
+            build-b/result-image \
+            || echo 'diffoscope (image) exited non-zero (expected on differences or timeout)'
+          timeout 20m diffoscope \
+            --html diffoscope-out/linpeas.html \
+            --text diffoscope-out/linpeas.txt \
+            build-a/linpeas.tar.gz \
+            build-b/linpeas.tar.gz \
+            || echo 'diffoscope (linpeas) exited non-zero (expected on differences or timeout)'
+      - name: upload diffoscope artifact (on mismatch)
+        if: steps.compare.outputs.exit_code != '0'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: repro-diff
+          path: diffoscope-out
+          retention-days: 30
+          if-no-files-found: error
+      - name: open issue (on mismatch)
+        if: steps.compare.outputs.exit_code != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          today="$(date -u +%Y-%m-%d)"
+          runbook_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/main/docs/runbooks/reproducibility-check.md"
+          # Build body with printf -v to avoid YAML-breaking heredoc or indented multiline strings.
+          # Using %s for the backtick-containing artifact names avoids SC2016 false positives.
+          artifact_note="\`repro-diff\` (30-day retention) — includes \`image.html\`/\`image.txt\` and \`linpeas.html\`/\`linpeas.txt\`"
+          printf -v body \
+            'The weekly reproducibility check detected a mismatch.\n\n- Run: %s\n- Diffoscope artifacts: %s\n- Runbook: [docs/runbooks/reproducibility-check.md](%s)\n\nInvestigate per the runbook; do not close until root cause is fixed or the workflow has been demoted per runbook criteria.' \
+            "${run_url}" "${artifact_note}" "${runbook_url}"
+          gh issue create \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "repro mismatch: ${today}" \
+            --label reproducibility \
+            --body "${body}" \
+            || echo 'WARN: gh issue create failed; signal is still visible via job status + artifact.'
+      - name: fail job (on mismatch)
+        if: steps.compare.outputs.exit_code != '0'
+        run: |
+          set -Eeuo pipefail
+          echo 'Reproducibility mismatch detected. continue-on-error keeps workflow green during burn-in.'
+          exit 1
