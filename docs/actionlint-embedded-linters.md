@@ -40,11 +40,11 @@ workflow `run:` invokes `python`/`python3`/`pip` (also catches `pip3` and
 `sudo`-prefixed forms). When that happens:
 
 1. Add `pkgs.python3Packages.pyflakes` to the devShell package list in
-    `flake.nix` (same scope as the existing `shellcheck` entry around
-    line 1000).
-1. Extend `actionlintWrapped` in `flake.nix` (around line 923) to pass
-    `-pyflakes=${pkgs.python3Packages.pyflakes}/bin/pyflakes` in addition
-    to `-shellcheck=...`.
+    `flake.nix` (same scope as the existing `shellcheck` entry — grep
+    `flake.nix` for the bare `shellcheck` package line).
+1. Extend `actionlintWrapped` in `flake.nix` (grep for `actionlintWrapped =`)
+    to pass `-pyflakes=${pkgs.python3Packages.pyflakes}/bin/pyflakes` in
+    addition to `-shellcheck=...`.
 1. Add a python smoke fixture
     (`tests/fixtures/actionlint-pyflakes-smoke.yml`) containing a `run:`
     block with a deliberate pyflakes violation (e.g. `F401` unused import).
@@ -57,7 +57,11 @@ workflow `run:` invokes `python`/`python3`/`pip` (also catches `pip3` and
 
 ## Related
 
-- `flake.nix:206` — actionlint hook block.
-- `flake.nix:268` — standalone shellcheck pre-commit hook (covers tracked
+In `flake.nix` (grep anchors, since line numbers drift):
+
+- `actionlint = {` — actionlint pre-commit hook block (entry points at the
+    wrapper).
+- `actionlintWrapped =` — wrapper derivation; the `-shellcheck=` pin lives
+    here. This is the central artifact this runbook protects.
+- `shellcheck = {` — standalone shellcheck pre-commit hook (covers tracked
     `*.sh` files; complementary to actionlint's embedded coverage).
-- `flake.nix:923` — `actionlintWrapped` definition (the pin lives here).
