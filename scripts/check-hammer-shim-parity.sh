@@ -1,13 +1,22 @@
 #!/usr/bin/env bash
-# Refuse if nix/hammer-shim.nix's linpeas derivation has drifted from
+# scripts/check-hammer-shim-parity.sh
+#
+# @description Lint: nix/hammer-shim.nix's linpeas derivation matches
 # flake.nix's linpeas derivation. The shim duplicates the derivation
 # because `builtins.getFlake` cannot run inside the `nix flake check`
-# sandbox (it tries to refetch inputs from github.com).
+# sandbox. Compares bodies normalized to whitespace-collapsed form.
+# Exits 0 on match, 1 on drift, 2 if extraction fails.
 #
-# Compares the bodies normalized to whitespace-collapsed form. Exits
-# non-zero on diff.
+# Env overrides (test-only):
+#   FLAKE_NIX_OVERRIDE    — path to flake.nix to read
+#   HAMMER_SHIM_OVERRIDE  — path to nix/hammer-shim.nix to read
 set -Eeuo pipefail
 IFS=$'\n\t'
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || printf '.')"
+readonly REPO_ROOT
+readonly FLAKE_NIX="${FLAKE_NIX_OVERRIDE:-${REPO_ROOT}/flake.nix}"
+readonly HAMMER_SHIM="${HAMMER_SHIM_OVERRIDE:-${REPO_ROOT}/nix/hammer-shim.nix}"
 
 extract() {
   # Extract from `pkgs.stdenvNoCC.mkDerivation {` through its matching
@@ -28,13 +37,13 @@ extract() {
   ' "$1" | tr -s '[:space:]' ' '
 }
 
-a=$(extract flake.nix)
-b=$(extract nix/hammer-shim.nix)
-if [[ -z "${a}" || -z "${b}" ]]; then
+a=$(extract "${FLAKE_NIX}")
+b=$(extract "${HAMMER_SHIM}")
+if [[ -z ${a} || -z ${b} ]]; then
   echo "hammer-shim parity: could not extract derivation block from one of the files" >&2
   exit 2
 fi
-if [[ "${a}" != "${b}" ]]; then
+if [[ ${a} != "${b}" ]]; then
   echo "hammer-shim parity drift: nix/hammer-shim.nix linpeas derivation != flake.nix" >&2
   diff <(printf '%s\n' "${a}" | tr ' ' '\n') <(printf '%s\n' "${b}" | tr ' ' '\n') >&2 || true
   exit 1
