@@ -91,4 +91,5 @@ jobs:
             To resolve: run `nix develop --command pre-commit run zizmor --all-files`
             locally, fix the reported findings, and push. This issue
             auto-closes on the next clean scheduled run.
+          label-description: workflow file(s) drifted past zizmor --min-severity=low
           github-token: ${{ secrets.GITHUB_TOKEN }}
