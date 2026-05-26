@@ -174,7 +174,7 @@ required-check table; alphabetical):
 - `actions.permissions.allowed_actions` = `selected` with a vendor
     allowlist
     ([`docs/security/allowed-actions.md`](docs/security/allowed-actions.md)).
-- `image-cve-scan` (Trivy → code-scanning SARIF, advisory only;
+- `image-cve-scan-trivy` and `image-cve-scan-grype` (Trivy + Grype → code-scanning SARIF, advisory only;
     prevention path is `update-flake-lock`).
 - `release-tag-protection` ruleset blocks delete / non-FF / update on
     release tags; drift asserted by `tag-protection-drift-check`.

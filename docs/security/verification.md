@@ -14,6 +14,7 @@ Step-by-step procedure to verify a release of this wrapper. None of this trusts 
 - [Gitleaks secret scanning](#gitleaks-secret-scanning)
 - [Dependency review](#dependency-review)
 - [OCI image CVE scan (Trivy)](#oci-image-cve-scan-trivy)
+- [OCI image CVE scan (Grype)](#oci-image-cve-scan-grype)
 - [SBOM attestation](#sbom-attestation)
 - [Cosign keyless signatures](#cosign-keyless-signatures)
   - [Identity pinning](#identity-pinning)
@@ -142,21 +143,21 @@ main, every PR, and a weekly cron (Mon 13:00 UTC). Required check named
 
 ## OCI image CVE scan (Trivy)<a name="oci-image-cve-scan-trivy"></a>
 
-`ci.yml`'s `image-cve-scan` job uploads SARIF (CRITICAL + HIGH) to
+`ci.yml`'s `image-cve-scan-trivy` job uploads SARIF (CRITICAL + HIGH) to
 code-scanning, then post-processes the SARIF to count CRITICAL findings
 and **fails the job** when count > 0. The job emits an
 `outputs.has-finding` boolean (`'true'` iff the count step ran and
 returned a non-zero count) so notify jobs can distinguish a real
 CRITICAL CVE from an infrastructure failure that prevented the scan.
 
-On push to main, two follow-on jobs (`needs: image-cve-scan`,
+On push to main, two follow-on jobs (`needs: image-cve-scan-trivy`,
 `if: failure() + event_name=='push'`) gate on that output and open /
 update deduped issues via `notify-workflow-result`:
 
-- `image-cve-scan-notify-finding` (label: `image-cve-critical`) — real
+- `image-cve-scan-trivy-notify-finding` (label: `image-cve-critical-trivy`) — real
     CRITICAL CVE reported by Trivy. Remediation: bump `nixpkgs`.
 
-- `image-cve-scan-notify-infra` (label: `image-cve-infra`) — job failed
+- `image-cve-scan-trivy-notify-infra` (label: `image-cve-infra-trivy`) — job failed
     before Trivy produced a CRITICAL count (build, scan, or SARIF
     upload broke). Remediation: inspect the failing step; if transient,
     close once the next push is green.
@@ -176,6 +177,24 @@ update deduped issues via `notify-workflow-result`:
     SARIF severities (e.g. textual `"high"` from some scanners) instead
     of erroring under `set -euo pipefail`. Revisit the threshold if
     GitHub revises the CVSS-to-bucket mapping.
+
+## OCI image CVE scan (Grype)<a name="oci-image-cve-scan-grype"></a>
+
+`ci.yml`'s `image-cve-scan-grype` job uploads SARIF (CRITICAL + HIGH) to
+the Security tab under category `grype-image-cve`, using Grype as a
+second-opinion scanner alongside Trivy. The job itself fails (and
+emits a notify issue on push) only when one or more CRITICAL findings
+are reported. Advisory only — not a required status check; prevention
+path is a nixpkgs bump via `update-flake-lock`.
+
+On push to main, two follow-on jobs (`needs: image-cve-scan-grype`,
+`if: github.event_name == 'push' && failure()`) open or update a
+deduped issue via the `notify-workflow-result` composite:
+
+- `image-cve-scan-grype-notify-finding` (label: `image-cve-critical-grype`) — real
+    CRITICAL CVE was identified by Grype.
+- `image-cve-scan-grype-notify-infra` (label: `image-cve-infra-grype`) — job failed
+    before producing a CRITICAL count (build / scan / SARIF upload).
 
 ## SBOM attestation<a name="sbom-attestation"></a>
 
