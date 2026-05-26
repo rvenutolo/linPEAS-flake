@@ -53,6 +53,7 @@ script-has-test: Security/invariant lints
 script-shebang-pipefail: Security/invariant lints
 setup-nix-required: Security/invariant lints
 tag-protection-drift-check: Security/invariant lints
+trufflehog: Security/invariant lints
 upload-artifact-strict: Security/invariant lints
 uses-sha-pinned: Security/invariant lints
 workflow-concurrency: Security/invariant lints

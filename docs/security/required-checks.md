@@ -54,6 +54,7 @@ this file in the same change as any modification to the ruleset.
 | fork-guard-release           | ci                | .github/workflows/ci.yml                |
 | gh-attestation-repo          | ci                | .github/workflows/ci.yml                |
 | gitleaks                     | gitleaks          | .github/workflows/gitleaks.yml          |
+| trufflehog                   | trufflehog        | .github/workflows/trufflehog.yml        |
 
 ## Path-filter invariant
 
