@@ -97,6 +97,7 @@ nav:
   - Runbooks:
       - actionlint embedded linters: actionlint-embedded-linters.md
       - Docker Hub recovery: runbooks/dockerhub-recovery.md
+      - Ratchet pin audit: runbooks/ratchet-pin-audit.md
       - Reproducibility check: runbooks/reproducibility-check.md
       - Settings-drift App: runbooks/settings-drift-app.md
   - Security:
