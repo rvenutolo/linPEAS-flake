@@ -1,0 +1,101 @@
+name: actionlint-drift-check
+
+# Weekly drift detection for actionlint findings on .github/workflows/**.
+#
+# actionlint runs as a pre-commit hook today (entry =
+# actionlintWrapped, which pins shellcheck via -shellcheck=<path>
+# for the embedded integration) — that is prevention at commit
+# time. This watchdog covers the gaps:
+#   - commits made with --no-verify
+#   - edits authored outside the pre-commit environment (web UI, gh
+#     CLI, dependabot/renovate auto-edits before hook re-run)
+#   - upstream actionlint / shellcheck rule changes after a file
+#     merged green
+#
+# On findings: opens (or leaves) a deduped `actionlint-drift`
+# tracking issue via the notify-workflow-result composite. On the
+# next clean run, the composite closes any open `actionlint-drift`
+# issue(s).
+#
+# Binary source: `nix run .#actionlint-wrapped` invokes the
+# shellcheck-pinned wrapper (`actionlintWrapped`, flake.nix:923)
+# by store path. Same wrapper the pre-commit hook calls. Using the
+# package output sidesteps devShell PATH ordering (which would
+# otherwise surface the bare, unpinned actionlint). See
+# docs/actionlint-embedded-linters.md.
+
+on:
+  schedule:
+    - cron: "15 12 * * 1" # Monday 12:15 UTC (10 min after zizmor-drift's 12:05 UTC slot)
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: actionlint-drift-check
+  cancel-in-progress: false
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      result: ${{ steps.probe.outcome }}
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-nix
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3
+      - name: actionlint .github/workflows/
+        id: probe
+        run: nix run .#actionlint-wrapped -- -no-color .github/workflows/
+
+  notify:
+    name: notify
+    needs: drift-check
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      issues: write
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.drift-check.result == 'failure' && 'failure' || (needs.drift-check.result == 'success' && 'success' || 'skipped') }}
+          label: actionlint-drift
+          title: "actionlint-drift-check: workflow file(s) fail actionlint"
+          body: |
+            The weekly `actionlint-drift-check` watchdog detected
+            one or more findings in `.github/workflows/**`.
+
+            This means a workflow file landed on `main` that the
+            pre-commit `actionlint` hook would have caught — likely
+            via `--no-verify`, an edit made outside the pre-commit
+            environment (web UI, `gh` CLI, bot auto-edit), or an
+            upstream actionlint / shellcheck rule that tightened
+            after the file merged green.
+
+            See the failing job logs for the specific finding(s):
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            Run pinned at commit `${{ github.sha }}`.
+
+            To resolve: run `nix develop --command pre-commit run actionlint --all-files`
+            locally, fix the reported findings, and push. This
+            issue auto-closes on the next clean scheduled run.
+          label-description: workflow file(s) drifted past actionlint
+          github-token: ${{ secrets.GITHUB_TOKEN }}
