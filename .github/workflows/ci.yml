@@ -574,11 +574,21 @@ jobs:
       - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3
       - name: build OCI image tarball
         run: nix build .#linpeas-image --print-build-logs
+      - name: decompress image tarball for Grype
+        # `dockerTools.buildLayeredImage` writes a gzipped docker-archive
+        # tarball. Trivy auto-detects gzip; Grype's `docker-archive:`
+        # source expects an uncompressed tar (`archive/tar: invalid tar
+        # header` otherwise). Decompress to a sibling file rather than
+        # rebuilding the image uncompressed (would change the production
+        # artifact).
+        run: |
+          set -Eeuo pipefail
+          gunzip --keep --force --stdout result > image.tar
       - name: scan image with Grype
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
         id: grype-scan
         with:
-          image: "docker-archive:result"
+          image: "docker-archive:image.tar"
           output-format: sarif
           output-file: grype-results.sarif
           severity-cutoff: high
