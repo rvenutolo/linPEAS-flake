@@ -167,6 +167,13 @@ Lint: hard-fail if any workflow under
 .github/workflows/\*.yml uses the `pull_request_target` trigger,
 foreclosing the canonical Actions privilege-escalation footgun.
 
+### scripts/check-ratchet-pin-audit.sh
+
+Lint: the ratchet-pin-audit workflow keeps its
+hardened shape — empty top-level permissions, harden-runner first,
+typed reason tokens in the notify body, ratchet in the flake
+devShell — so future edits cannot silently weaken it.
+
 ### scripts/check-renovate-config-validator.sh
 
 Validate renovate.json against the upstream Renovate
