@@ -84,7 +84,7 @@ Merge-commit only. Enforced at both layers:
 ## Non-blocking coverage / advisory checks
 
 - `flake-check` and `build-linpeas` also run across `ubuntu-latest` × `macos-latest` × stable-Nix × unstable-Nix. Failures surface in the PR view but do not gate merges.
-- `image-cve-scan` runs Trivy against the released OCI image and uploads SARIF to code-scanning. Advisory only (`exit-code: 0`, `ignore-unfixed: true`); the prevention path is a nixpkgs bump via `update-flake-lock`.
+- `image-cve-scan-trivy` and `image-cve-scan-grype` run Trivy and Grype (respectively) against the released OCI image and upload SARIF to code-scanning under distinct categories (`trivy-image-cve`, `grype-image-cve`) for cross-scanner DB coverage. Both advisory only (job-level failure is `count > 0` of CRITICAL CVEs; SARIF upload always runs); the prevention path is a nixpkgs bump via `update-flake-lock`.
 
 ## Runner egress
 

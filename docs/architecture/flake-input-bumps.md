@@ -86,8 +86,8 @@ next contributor PR).
     fails on the new finding. Fix the workflow; only as a last resort
     raise `--min-severity` in `flake.nix`, and never above `low`
     without a security-review entry.
-- **CRITICAL CVEs in image base layers.** `image-cve-scan` (`ci.yml`)
-    is the canonical surface. The new nixpkgs may carry an unfixed
+- **CRITICAL CVEs in image base layers.** `image-cve-scan-trivy` and
+    `image-cve-scan-grype` (`ci.yml`) are the canonical surface. The new nixpkgs may carry an unfixed
     `CRITICAL` CVE in `coreutils`, `bashInteractive`, `gnused`, etc.
     The CRITICAL-fail gate flags this loudly; the remediation is
     "wait for nixpkgs to patch + bump again", not a code change here.
@@ -202,13 +202,13 @@ git add <whatever-the-formatter-touched>
 
 Use the table as a checklist for any nixpkgs bump:
 
-| Class                      | Symptom                                                                                                | Fix                                                                                                                                      |
-| -------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `prettier`                 | YAML / Markdown / JSON whitespace diffs                                                                | accept the rewrite via `nix fmt`                                                                                                         |
-| `mkdocs-macros` strictness | `nix build "path:$(pwd)#site"` aborts on a `&#123;&#123; ... &#125;&#125;` literal inside a code block | wrap the offending block in `&#123;% raw %&#125;...&#123;% endraw %&#125;` (mirrors the convention in `docs/architecture/ci.md`)         |
-| `zizmor` major version     | `nix flake check` fails on a workflow finding the older version did not surface                        | fix the workflow or, as a last resort, adjust `--min-severity` in `flake.nix` (do not raise above `low` without a security-review entry) |
-| `mkdocs --strict`          | Build fails on a new plugin warning                                                                    | fix forward; pin the misbehaving plugin only as a last resort and document the pin reason in the same PR                                 |
-| linpeas-image base layers  | `image-cve-scan` SARIF changes; `image-smoke` could surface `command not found` regressions            | smoke test locally (step 6) — adjust `buildEnv.paths` in `flake.nix` only if a required tool genuinely disappeared from nixpkgs          |
+| Class                      | Symptom                                                                                                                    | Fix                                                                                                                                      |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `prettier`                 | YAML / Markdown / JSON whitespace diffs                                                                                    | accept the rewrite via `nix fmt`                                                                                                         |
+| `mkdocs-macros` strictness | `nix build "path:$(pwd)#site"` aborts on a `&#123;&#123; ... &#125;&#125;` literal inside a code block                     | wrap the offending block in `&#123;% raw %&#125;...&#123;% endraw %&#125;` (mirrors the convention in `docs/architecture/ci.md`)         |
+| `zizmor` major version     | `nix flake check` fails on a workflow finding the older version did not surface                                            | fix the workflow or, as a last resort, adjust `--min-severity` in `flake.nix` (do not raise above `low` without a security-review entry) |
+| `mkdocs --strict`          | Build fails on a new plugin warning                                                                                        | fix forward; pin the misbehaving plugin only as a last resort and document the pin reason in the same PR                                 |
+| linpeas-image base layers  | `image-cve-scan-trivy` / `image-cve-scan-grype` SARIF changes; `image-smoke` could surface `command not found` regressions | smoke test locally (step 6) — adjust `buildEnv.paths` in `flake.nix` only if a required tool genuinely disappeared from nixpkgs          |
 
 `cachix/git-hooks.nix` bumps in isolation usually only hit the `zizmor`
 row and only when the pre-commit-hooks repo changes hook versions in
@@ -294,7 +294,7 @@ merge-commit subject and must itself satisfy Conventional Commits
 For `NixOS/nixpkgs` bumps specifically:
 
 - The CVE-scan SARIF on `main` will change — surfacing CVEs is
-    advisory only (`ci.yml`'s `image-cve-scan` job is intentionally
+    advisory only (`ci.yml`'s `image-cve-scan-trivy` and `image-cve-scan-grype` jobs are intentionally
     outside required-checks). Skim the Security tab for any new
     `CRITICAL` rows. The remediation path for an unfixed
     base-layer CVE is the next nixpkgs bump.
