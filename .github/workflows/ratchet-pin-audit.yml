@@ -121,18 +121,31 @@ jobs:
               tag="${BASH_REMATCH[3]}"
               # Skip local actions (./.github/actions/foo); they have no upstream.
               [[ "${repo}" == .* ]] && continue
+              # Strip monorepo subpaths: github/codeql-action/upload-sarif → github/codeql-action.
+              # GitHub's "owner/repo" is always exactly two slash-separated segments;
+              # anything after is an in-repo path. The API only accepts the top-level repo.
+              IFS=/ read -ra _parts <<<"${repo}"
+              repo_root="${_parts[0]}/${_parts[1]}"
+              # Skip self-references: `uses: <this-repo>/.github/actions/<name>@<sha>` is
+              # functionally a local action invocation via absolute slug. The SHA is the
+              # repo's own main-branch HEAD as Renovate maintains it; no canonical tag
+              # exists to compare against.
+              self_repo="${GITHUB_REPOSITORY:-rvenutolo/linPEAS-flake}"
+              if [[ "${repo_root}" == "${self_repo}" ]]; then
+                continue
+              fi
               ref_info=""
               if ! ref_info="$(gh api \
                 --header 'X-GitHub-Api-Version: 2022-11-28' \
-                "repos/${repo}/git/refs/tags/${tag}" \
+                "repos/${repo_root}/git/refs/tags/${tag}" \
                 --jq '{sha: .object.sha, type: .object.type}' 2>/dev/null)" || [[ -z "${ref_info}" ]]; then
-                printf 'API lookup failed for %s@%s\n' "${repo}" "${tag}" >&2
+                printf 'API lookup failed for %s@%s\n' "${repo_root}" "${tag}" >&2
                 emit_result failure upstream-api-failure ''
               fi
               canonical="$(jq -r '.sha // ""' <<<"${ref_info}")"
               tag_type="$(jq -r '.type // ""' <<<"${ref_info}")"
               if [[ -z "${canonical}" || -z "${tag_type}" ]]; then
-                printf 'malformed ref payload for %s@%s: %s\n' "${repo}" "${tag}" "${ref_info}" >&2
+                printf 'malformed ref payload for %s@%s: %s\n' "${repo_root}" "${tag}" "${ref_info}" >&2
                 emit_result failure upstream-api-failure ''
               fi
 
@@ -143,13 +156,14 @@ jobs:
               if [[ "${tag_type}" == "tag" ]]; then
                 if ! canonical="$(gh api \
                   --header 'X-GitHub-Api-Version: 2022-11-28' \
-                  "repos/${repo}/git/tags/${canonical}" \
+                  "repos/${repo_root}/git/tags/${canonical}" \
                   --jq '.object.sha' 2>/dev/null)" || [[ -z "${canonical}" ]]; then
-                  printf 'API lookup failed (annotated tag deref) for %s@%s\n' "${repo}" "${tag}" >&2
+                  printf 'API lookup failed (annotated tag deref) for %s@%s\n' "${repo_root}" "${tag}" >&2
                   emit_result failure upstream-api-failure ''
                 fi
               fi
               if [[ "${canonical}" != "${pinned}" ]]; then
+                # Use original `repo` (full subpath) so operators see the literal pinned ref.
                 drift_line="${repo}@${tag} pinned=${pinned} canonical=${canonical}"
                 # Shape-validate before letting it reach $GITHUB_OUTPUT.
                 if [[ ! "${drift_line}" =~ ^[A-Za-z0-9._/-]+@[A-Za-z0-9._/-]+\ pinned=[0-9a-f]{7,40}\ canonical=[0-9a-f]{7,40}$ ]]; then
