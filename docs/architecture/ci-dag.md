@@ -52,6 +52,7 @@ flowchart TD
   pre-commit-hooks-sha-parity:::security
   protect-main-drift-check:::security
   pull-request-target-absent:::security
+  ratchet-pin-audit-harness:::security
   refresh-ci-dag-test:::aux
   refresh-ci-summary-test:::aux
   refresh-enforcement-matrix-test:::aux
