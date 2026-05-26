@@ -20,6 +20,7 @@ pascalgn/*
 peter-evans/*
 rvenutolo/*
 step-security/*
+trufflesecurity/*
 wagoid/*
 ```
 
@@ -54,6 +55,7 @@ wagoid/*
         "peter-evans/*",
         "rvenutolo/*",
         "step-security/*",
+        "trufflesecurity/*",
         "wagoid/*",
         "NEW_VENDOR/*"
       ]

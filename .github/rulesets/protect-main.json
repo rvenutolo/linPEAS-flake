@@ -73,6 +73,7 @@
           { "context": "smoke-test" },
           { "context": "smoke-test-arm64" },
           { "context": "tag-protection-drift-check", "integration_id": 15368 },
+          { "context": "trufflehog", "integration_id": 15368 },
           { "context": "typos", "integration_id": 15368 },
           { "context": "upload-artifact-strict", "integration_id": 15368 },
           { "context": "uses-sha-pinned", "integration_id": 15368 },
