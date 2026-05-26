@@ -130,11 +130,26 @@ jobs:
                 printf 'API lookup failed for %s@%s\n' "${repo}" "${tag}" >&2
                 emit_result failure upstream-api-failure ''
               fi
-              # Some tags are annotated; resolve through the tag object if needed.
-              if [[ "${canonical}" != "${pinned}" ]]; then
-                tag_type="$(gh api "repos/${repo}/git/refs/tags/${tag}" --jq '.object.type' 2>/dev/null || true)"
-                if [[ "${tag_type}" == "tag" ]]; then
-                  canonical="$(gh api "repos/${repo}/git/tags/${canonical}" --jq '.object.sha' 2>/dev/null || echo "${canonical}")"
+              # Resolve annotated tags unconditionally: the canonical commit SHA is
+              # what we want to compare against `pinned`, not the tag-object SHA.
+              # This must happen BEFORE the equality comparison — pinning to the
+              # tag-object SHA (unusual but possible) would otherwise produce a
+              # false "no drift" result.
+              tag_type=""
+              if ! tag_type="$(gh api \
+                --header 'X-GitHub-Api-Version: 2022-11-28' \
+                "repos/${repo}/git/refs/tags/${tag}" \
+                --jq '.object.type' 2>/dev/null)"; then
+                printf 'API lookup failed (tag type) for %s@%s\n' "${repo}" "${tag}" >&2
+                emit_result failure upstream-api-failure ''
+              fi
+              if [[ "${tag_type}" == "tag" ]]; then
+                if ! canonical="$(gh api \
+                  --header 'X-GitHub-Api-Version: 2022-11-28' \
+                  "repos/${repo}/git/tags/${canonical}" \
+                  --jq '.object.sha' 2>/dev/null)" || [[ -z "${canonical}" ]]; then
+                  printf 'API lookup failed (annotated tag deref) for %s@%s\n' "${repo}" "${tag}" >&2
+                  emit_result failure upstream-api-failure ''
                 fi
               fi
               if [[ "${canonical}" != "${pinned}" ]]; then
