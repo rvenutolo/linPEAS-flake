@@ -220,11 +220,13 @@ jobs:
               matches the canonical SHA its tag now resolves to. The
               publisher force-moved the tag. Compare the canonical SHA
               against upstream release notes; if the re-tag is legitimate,
-              run `nix develop --command ratchet update
-              .github/workflows/*.yml` locally, review the diff, and open
+              replace each `pinned` SHA with the corresponding `canonical`
+              SHA in the affected workflow files (or wait for Renovate to
+              do it on its next scheduled run), review the diff, and open
               a PR. If the release notes do **not** describe the SHA
               change, treat this as a potential supply-chain event and
-              escalate — do **not** auto-update.
+              escalate — do **not** auto-update. See the runbook for the
+              exact remediation command.
             - `upstream-api-failure` — the GitHub API call inside
               `ratchet check` (or the per-ref re-derivation) failed or
               rate-limited. The `github.token` authenticates at 5000/hr;

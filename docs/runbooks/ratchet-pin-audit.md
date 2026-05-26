@@ -37,13 +37,21 @@ Steps:
 
 1. **If the re-tag is legitimate** (publisher acknowledges it, the
     diff between `pinned` and `canonical` matches their stated
-    change): locally run
+    change): update each drifted pin in place. Replace the old
+    `pinned` SHA with the `canonical` SHA from the issue body across
+    every workflow file that uses the action:
 
     ```shell
-    nix develop --command ratchet update .github/workflows/*.yml
+    sed --in-place \
+      's|<repo>@<old-sha>|<repo>@<new-sha>|g' \
+      .github/workflows/*.yml
     ```
 
-    review the diff, open a PR.
+    Review the diff, open a PR. (`ratchet update` is not used here
+    because our pins use plain `# v3` trailing-comment annotations
+    rather than ratchet's `# ratchet:repo@v3` format, so ratchet
+    does not recognize them as ratchet-managed.) Renovate will pick
+    these up on its next scheduled run if you prefer to wait.
 
 1. **If the release notes do not describe the SHA change**: treat
     this as a potential supply-chain event. Do not auto-update.
@@ -103,8 +111,14 @@ only — it does not contact upstream APIs and cannot detect
 tag-vs-SHA drift on its own. The workflow uses ratchet as a
 belt-and-suspenders tripwire and performs the actual drift
 detection via per-ref `gh api repos/{owner}/{repo}/git/refs/tags/{tag}`
-canonical-SHA re-derivation. `ratchet update`, by contrast, does
-reach upstream and is the right tool for remediation.
+canonical-SHA re-derivation.
+
+`ratchet update` does reach upstream, but it only operates on pins
+written in ratchet's own annotation format
+(`uses: foo@<sha> # ratchet:foo@v3`). Our pins use plain
+`# v3` trailing comments and are therefore invisible to
+`ratchet update`. Remediation must be done by hand (or via Renovate
+on its next scheduled run).
 
 ## Related
 
