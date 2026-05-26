@@ -955,6 +955,15 @@
           # `nixpkgs` reference. See
           # docs/security/workflow-hardening.md (nix-run-pinned).
           inherit (pkgs-unstable) cosign git-cliff;
+          # Exposed so actionlint-drift-check.yml can invoke the
+          # shellcheck-pinned wrapper (`actionlintWrapped`, defined
+          # above) via `nix run .#actionlint-wrapped -- ...`. Using
+          # the flake output bypasses devShell PATH ordering — the
+          # bare `actionlint` derivation otherwise shadows the
+          # wrapper because `preCommitCheck.enabledPackages` lands
+          # ahead of `buildInputs` on PATH. Same wrapper the
+          # pre-commit hook (flake.nix:209) invokes.
+          actionlint-wrapped = actionlintWrapped;
         }
         // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
           inherit linpeas-image site;

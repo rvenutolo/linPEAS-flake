@@ -57,11 +57,13 @@ block between the markers by hand.
 │   └───default: Nixpkgs overlay
 └───packages
     ├───aarch64-darwin
+    │   ├───actionlint-wrapped: package 'actionlint'
     │   ├───cosign: package 'cosign-3.0.6'
     │   ├───default: package 'linpeas-20260521-859cab5f'
     │   ├───git-cliff: package 'git-cliff-2.13.1'
     │   └───linpeas: package 'linpeas-20260521-859cab5f'
     ├───aarch64-linux
+    │   ├───actionlint-wrapped: package 'actionlint'
     │   ├───cosign: package 'cosign-3.0.6'
     │   ├───default: package 'linpeas-20260521-859cab5f'
     │   ├───git-cliff: package 'git-cliff-2.13.1'
@@ -69,11 +71,13 @@ block between the markers by hand.
     │   ├───linpeas-image: package 'linpeas.tar.gz'
     │   └───site: package 'linpeas-flake-site-20260521-859cab5f'
     ├───x86_64-darwin
+    │   ├───actionlint-wrapped: package 'actionlint'
     │   ├───cosign: package 'cosign-3.0.6'
     │   ├───default: package 'linpeas-20260521-859cab5f'
     │   ├───git-cliff: package 'git-cliff-2.13.1'
     │   └───linpeas: package 'linpeas-20260521-859cab5f'
     └───x86_64-linux
+        ├───actionlint-wrapped: package 'actionlint'
         ├───cosign: package 'cosign-3.0.6'
         ├───default: package 'linpeas-20260521-859cab5f'
         ├───git-cliff: package 'git-cliff-2.13.1'
