@@ -30,7 +30,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3
+      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3
       - name: build linpeas + image
         run: |
           set -Eeuo pipefail
@@ -95,7 +95,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@1f9a51a2959d3e26c7838c6f3bf9f48acae525ea # v3
+      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3
       - name: build linpeas + image
         run: |
           set -Eeuo pipefail

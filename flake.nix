@@ -1003,6 +1003,7 @@
               deadnix
               statix
               actionlint
+              ratchet
               zizmor
               yamllint
               prettier
