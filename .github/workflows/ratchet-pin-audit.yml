@@ -186,9 +186,45 @@ jobs:
         with:
           result: ${{ needs.check.outputs.result || (needs.check.result == 'failure' && 'failure' || 'skipped') }}
           label: ratchet-drift
+          label-description: action pin SHA drift detected by ratchet check
           title: "ratchet-pin-audit: action pin drift detected"
           body: |
-            Placeholder body — real per-reason content lands in Task 4.
+            The daily `ratchet-pin-audit` workflow flagged a failure.
 
-            Reasons covered: drift-detected, upstream-api-failure, ratchet-tool-failure, unknown.
+            - Reason: `${{ needs.check.outputs.reason || 'unknown' }}`
+            - Drifted refs (one per line):
+
+            ```
+            ${{ needs.check.outputs.drifted_refs }}
+            ```
+
+            Runbook: <https://rvenutolo.github.io/linPEAS-flake/runbooks/ratchet-pin-audit/>
+
+            Reason values and what they mean:
+
+            - `drift-detected` — at least one pinned action SHA no longer
+              matches the canonical SHA its tag now resolves to. The
+              publisher force-moved the tag. Compare the canonical SHA
+              against upstream release notes; if the re-tag is legitimate,
+              run `nix develop --command ratchet update
+              .github/workflows/*.yml` locally, review the diff, and open
+              a PR. If the release notes do **not** describe the SHA
+              change, treat this as a potential supply-chain event and
+              escalate — do **not** auto-update.
+            - `upstream-api-failure` — the GitHub API call inside
+              `ratchet check` (or the per-ref re-derivation) failed or
+              rate-limited. The `github.token` authenticates at 5000/hr;
+              transient 5xx is also possible. Re-run the workflow once
+              before investigating ratchet itself.
+            - `ratchet-tool-failure` — ratchet exited non-zero but the
+              re-derivation could not reproduce drift, OR a drift line
+              failed shape validation, OR the workflow glob matched zero
+              files. Likely a ratchet upgrade is needed (output format
+              drift) or a refactor moved workflow files. Bump
+              `pkgs-unstable.ratchet` via `nix flake update` and re-run.
+            - `unknown` — the check step exited non-zero without setting
+              an output. Inspect the run log directly.
+
+            This issue auto-closes once the next daily run sees a clean
+            audit (`result=success`, `reason=none`).
           github-token: ${{ secrets.GITHUB_TOKEN }}
