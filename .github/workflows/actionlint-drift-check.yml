@@ -54,9 +54,15 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3
+      # actionlint with no positional auto-discovers
+      # .github/workflows/**/*.{yml,yaml}. Passing the directory
+      # explicitly errors ("is a directory") — actionlint only
+      # accepts individual files as positional args. cwd here is
+      # repo root (post-checkout), so no-arg covers the intended
+      # scope.
       - name: actionlint .github/workflows/
         id: probe
-        run: nix run .#actionlint-wrapped -- -no-color .github/workflows/
+        run: nix run .#actionlint-wrapped -- -no-color
 
   notify:
     name: notify
