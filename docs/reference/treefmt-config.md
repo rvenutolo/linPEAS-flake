@@ -41,6 +41,7 @@ go.sum
 package-lock.json
 tests/fixtures/check-renovate-config-validator/bad-syntax.json
 tests/fixtures/required-checks/*
+tests/fixtures/scorecard-threshold/malformed.json
 ```
 
 <!-- END treefmt-config -->
