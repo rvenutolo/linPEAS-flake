@@ -1,0 +1,120 @@
+name: scorecard-drift-check
+
+# Weekly OpenSSF Scorecard drift detection for this repo.
+#
+# Independent second-opinion on hardening posture. Surfaces signals
+# not covered by existing in-tree lints (zizmor, actionlint,
+# check-uses-sha-pinned.sh, codeql, gitleaks/trufflehog,
+# settings-posture-drift, etc.):
+#
+#   Pinned-Dependencies, Token-Permissions, Dangerous-Workflow,
+#   Signed-Releases, SBOM, Branch-Protection, SAST, Vulnerabilities,
+#   Security-Policy, Dependency-Update-Tool, License, Webhooks,
+#   Binary-Artifacts, Maintained, Packaging
+#
+# Dropped from default check set as not applicable to a solo repo:
+# Code-Review, Contributors, CII-Best-Practices, Fuzzing.
+#
+# Binary source: `nix develop --command scorecard` resolves through
+# flake.lock-pinned nixpkgs-unstable — same pin model as zizmor and
+# actionlint sibling drift-checks. One source of truth.
+#
+# Token: scorecard's Webhooks check needs admin:repo_hook scope
+# (not grantable via job-level GITHUB_TOKEN permissions), so a
+# fine-grained PAT is stored as SCORECARD_PAT and passed via the
+# GITHUB_AUTH_TOKEN env var on the scorecard step only (never
+# job-wide). Rotation steps: docs/runbooks/scorecard-pat-rotation.md.
+#
+# On findings: the threshold script (scripts/check-scorecard-threshold.sh)
+# exits 1 if any included check scored < 10, which fails the
+# drift-check job and trips the notify-workflow-result composite to
+# open (or leave) a deduped `scorecard-drift` tracking issue. On
+# the next clean run the composite closes any open issue(s).
+
+on:
+  schedule:
+    - cron: "45 11 * * 1" # Monday 11:45 UTC (after the 11:30 daily settings-posture-drift slot, before the Mon 12:05 zizmor-drift slot)
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: scorecard-drift-check
+  cancel-in-progress: false
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      result: ${{ steps.probe.outcome }}
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-nix
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3
+      - name: scorecard --checks=<curated 15> → check-scorecard-threshold.sh
+        id: probe
+        # SCORECARD_PAT rotation: docs/runbooks/scorecard-pat-rotation.md
+        env:
+          GITHUB_AUTH_TOKEN: ${{ secrets.SCORECARD_PAT }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -Eeuo pipefail
+          nix develop --command scorecard \
+            --repo="github.com/${REPO}" \
+            --checks=Pinned-Dependencies,Token-Permissions,Dangerous-Workflow,Signed-Releases,SBOM,Branch-Protection,SAST,Vulnerabilities,Security-Policy,Dependency-Update-Tool,License,Webhooks,Binary-Artifacts,Maintained,Packaging \
+            --format=json \
+            --show-details \
+            > results.json
+          bash scripts/check-scorecard-threshold.sh < results.json
+
+  notify:
+    name: notify
+    needs: drift-check
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      issues: write
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.drift-check.result == 'failure' && 'failure' || (needs.drift-check.result == 'success' && 'success' || 'skipped') }}
+          label: scorecard-drift
+          title: "scorecard-drift-check: at least one check scored <10"
+          body: |
+            The weekly `scorecard-drift-check` watchdog detected one
+            or more curated OpenSSF Scorecard checks scoring below 10
+            for `${{ github.repository }}`.
+
+            See the failing job logs for the offending check
+            name(s) and reasons (printed on stderr by
+            `scripts/check-scorecard-threshold.sh`, then `--show-details`
+            output from the scorecard CLI itself):
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            Run pinned at commit `${{ github.sha }}`.
+
+            If failure mode is `401` / `403` /
+            `Resource not accessible by personal access token`, the
+            `SCORECARD_PAT` secret is expired or under-scoped — see
+            [docs/runbooks/scorecard-pat-rotation.md](https://github.com/${{ github.repository }}/blob/main/docs/runbooks/scorecard-pat-rotation.md).
+
+            This issue auto-closes on the next clean scheduled run.
+          label-description: scorecard check(s) scored below 10
+          github-token: ${{ secrets.GITHUB_TOKEN }}
