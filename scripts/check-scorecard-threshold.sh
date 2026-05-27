@@ -19,15 +19,28 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
+# Slurp stdin into a variable so we can reject empty input explicitly.
+# Without this guard, an empty stdin (scorecard crashed or wrote
+# nothing) silently flows through `jq '.checks[]'` as zero documents
+# and the script exits 0 — a silent no-op masquerading as success.
+# The drift-check workflow's `set -Eeuo pipefail` should already trip
+# on a nonzero scorecard exit before this script runs, but the guard
+# here is belt-and-braces against any "scorecard wrote nothing but
+# exited 0" path.
+payload="$(cat)"
+if [[ -z ${payload} ]]; then
+  printf 'scorecard threshold check failed — stdin was empty (scorecard produced no output)\n' >&2
+  exit 1
+fi
+
 # Parse stdin as scorecard JSON, emit "<name>: <score>" lines for
 # every check with score < 10. jq exits nonzero on malformed input;
-# pipefail propagates that. Output is captured so we can decide
-# exit code based on whether any offenders surfaced.
+# the if-guard converts that to exit 1 with a clear message.
 if ! offenders="$(jq --raw-output '
   .checks[]
   | select(.score < 10)
   | "\(.name): \(.score)"
-')"; then
+' <<<"${payload}")"; then
   printf 'scorecard threshold check failed — could not parse scorecard JSON on stdin\n' >&2
   exit 1
 fi

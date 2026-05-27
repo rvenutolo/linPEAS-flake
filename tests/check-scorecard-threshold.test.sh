@@ -63,6 +63,9 @@ function main() {
   run_scenario 'malformed JSON → exit 1 under pipefail' \
     'malformed.json' 1 ''
 
+  run_scenario 'empty stdin → exit 1 (no silent no-op)' \
+    'empty.json' 1 'stdin was empty'
+
   if [[ ${failures} -gt 0 ]]; then
     printf '%d scenario(s) FAILED\n' "${failures}" >&2
     exit 1
