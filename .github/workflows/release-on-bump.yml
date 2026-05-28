@@ -126,6 +126,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
+      contents: write # gh release upload (sbom asset)
       packages: write # ghcr docker push
       id-token: write # attest-build-provenance OIDC
       attestations: write # attest-build-provenance write
@@ -309,9 +310,10 @@ jobs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     permissions:
-      packages: write
-      id-token: write
-      attestations: write
+      contents: write # gh release upload (sbom asset)
+      packages: write # ghcr docker push
+      id-token: write # attest-build-provenance OIDC
+      attestations: write # attest-build-provenance write
     outputs:
       ghcr_digest: ${{ steps.push.outputs.ghcr_digest }}
       hub_digest: ${{ steps.push.outputs.hub_digest }}
