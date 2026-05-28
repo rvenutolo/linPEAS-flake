@@ -419,21 +419,22 @@ jobs:
           push-to-registry: true
 
       - name: generate SBOM for OCI image (arm64)
-        # SPDX-JSON SBOM for the arm64 image.
+        # CycloneDX-JSON SBOM for the arm64 image. Mirrors amd64 step;
+        # see that step for format + upload rationale.
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           image: rvenutolo/linpeas:${{ needs.release.outputs.version }}-arm64
-          format: spdx-json
-          output-file: linpeas-image-arm64.sbom.spdx.json
+          format: cyclonedx-json
+          output-file: linpeas-image-arm64.cdx.json
           upload-artifact: false
-          upload-release-assets: false
+          upload-release-assets: true
 
       - name: attest SBOM for ghcr image (arm64)
         uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
         with:
           subject-name: ghcr.io/rvenutolo/linpeas
           subject-digest: ${{ steps.push.outputs.ghcr_digest }}
-          sbom-path: linpeas-image-arm64.sbom.spdx.json
+          sbom-path: linpeas-image-arm64.cdx.json
           push-to-registry: true
 
       - name: attest SBOM for Docker Hub image (arm64)
@@ -441,7 +442,7 @@ jobs:
         with:
           subject-name: docker.io/rvenutolo/linpeas
           subject-digest: ${{ steps.push.outputs.hub_digest }}
-          sbom-path: linpeas-image-arm64.sbom.spdx.json
+          sbom-path: linpeas-image-arm64.cdx.json
           push-to-registry: true
 
       - name: cosign sign per-arch images (arm64, keyless)
