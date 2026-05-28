@@ -75,20 +75,22 @@ jobs:
           SCORECARD_EXPERIMENTAL: "1"
         run: |
           set -Eeuo pipefail
-          # --logLevel=panic silences scorecard's info-level log lines
-          # which otherwise leak into stdout alongside the JSON and
-          # break jq parsing in scripts/check-scorecard-threshold.sh
-          # ("jq: parse error: Invalid numeric literal at line 2, column 0"
-          # — surfaced by the second post-merge dispatch on 2026-05-28).
-          # --format=json is supposed to keep stdout pure JSON; the
-          # info-leak appears to be a scorecard CLI bug.
+          # --output writes the JSON payload to a file directly,
+          # bypassing stdout entirely so scorecard's info/warn log
+          # lines can never contaminate the parser input. The third
+          # post-merge dispatch on 2026-05-28 confirmed `--logLevel`
+          # is not a recognized flag — the only log-control knob is
+          # `--verbosity=info|debug|warn`, and even at `warn` the
+          # CLI prints info-level lines mixed with JSON when JSON
+          # goes to stdout. Routing JSON to a file sidesteps both
+          # problems and is the pattern the upstream scorecard-action
+          # composite uses internally.
           nix develop --command scorecard \
             --repo="github.com/${REPO}" \
             --checks=Pinned-Dependencies,Token-Permissions,Dangerous-Workflow,Signed-Releases,SBOM,Branch-Protection,SAST,Vulnerabilities,Security-Policy,Dependency-Update-Tool,License,Webhooks,Binary-Artifacts,Maintained,Packaging \
             --format=json \
             --show-details \
-            --logLevel=panic \
-            > results.json
+            --output=results.json
           # Belt-and-braces debug: if the threshold script trips on a
           # parse error, dump the first 1KiB of results.json to stderr
           # so the failure is diagnosable from the run log without a
