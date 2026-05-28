@@ -75,13 +75,31 @@ jobs:
           SCORECARD_EXPERIMENTAL: "1"
         run: |
           set -Eeuo pipefail
+          # --logLevel=panic silences scorecard's info-level log lines
+          # which otherwise leak into stdout alongside the JSON and
+          # break jq parsing in scripts/check-scorecard-threshold.sh
+          # ("jq: parse error: Invalid numeric literal at line 2, column 0"
+          # — surfaced by the second post-merge dispatch on 2026-05-28).
+          # --format=json is supposed to keep stdout pure JSON; the
+          # info-leak appears to be a scorecard CLI bug.
           nix develop --command scorecard \
             --repo="github.com/${REPO}" \
             --checks=Pinned-Dependencies,Token-Permissions,Dangerous-Workflow,Signed-Releases,SBOM,Branch-Protection,SAST,Vulnerabilities,Security-Policy,Dependency-Update-Tool,License,Webhooks,Binary-Artifacts,Maintained,Packaging \
             --format=json \
             --show-details \
+            --logLevel=panic \
             > results.json
-          bash scripts/check-scorecard-threshold.sh < results.json
+          # Belt-and-braces debug: if the threshold script trips on a
+          # parse error, dump the first 1KiB of results.json to stderr
+          # so the failure is diagnosable from the run log without a
+          # separate artifact upload.
+          bash scripts/check-scorecard-threshold.sh < results.json || {
+            ec=$?
+            printf '\n--- results.json head (first 1KiB) ---\n' >&2
+            head -c 1024 results.json >&2 || true
+            printf '\n--- /head ---\n' >&2
+            exit "${ec}"
+          }
 
   notify:
     name: notify
