@@ -64,9 +64,15 @@ jobs:
       - name: scorecard --checks=<curated 15> → check-scorecard-threshold.sh
         id: probe
         # SCORECARD_PAT rotation: docs/runbooks/scorecard-pat-rotation.md
+        # SCORECARD_EXPERIMENTAL=1 unlocks the SBOM and Webhooks checks
+        # (both are flagged experimental by the scorecard CLI; without
+        # the env var the CLI refuses to run them and exits 1 with
+        # "one or more checks failed during execution" — surfaced by
+        # the first post-merge dispatch on 2026-05-28).
         env:
           GITHUB_AUTH_TOKEN: ${{ secrets.SCORECARD_PAT }}
           REPO: ${{ github.repository }}
+          SCORECARD_EXPERIMENTAL: "1"
         run: |
           set -Eeuo pipefail
           nix develop --command scorecard \
