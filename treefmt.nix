@@ -102,5 +102,9 @@
     # malformed JSON to exercise the parse-error branch of the validator;
     # prettier refuses to format invalid JSON.
     "tests/fixtures/check-renovate-config-validator/bad-syntax.json"
+    # scorecard-threshold malformed fixture is intentionally invalid
+    # JSON to exercise the parse-error branch of the threshold check;
+    # prettier refuses to format invalid JSON.
+    "tests/fixtures/scorecard-threshold/malformed.json"
   ];
 }

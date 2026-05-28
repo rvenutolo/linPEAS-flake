@@ -1013,6 +1013,7 @@
               statix
               actionlint
               ratchet
+              scorecard
               zizmor
               yamllint
               prettier

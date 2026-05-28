@@ -223,6 +223,11 @@ Lint: every multi-line `run:` block under
 `.github/workflows/*.yml` starts with `set -Eeuo pipefail` as its
 first non-blank, non-comment line.
 
+### scripts/check-scorecard-threshold.sh
+
+Reads OSSF Scorecard JSON on stdin; exits 1 if any
+check scored below 10. Prints offender names + scores to stderr.
+
 ### scripts/check-script-has-test.sh
 
 Lint: every `scripts/check-*.sh` has a matching
