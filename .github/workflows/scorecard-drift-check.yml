@@ -8,12 +8,25 @@ name: scorecard-drift-check
 # settings-posture-drift, etc.):
 #
 #   Pinned-Dependencies, Token-Permissions, Dangerous-Workflow,
-#   Signed-Releases, SBOM, Branch-Protection, SAST, Vulnerabilities,
-#   Security-Policy, Dependency-Update-Tool, License, Webhooks,
-#   Binary-Artifacts, Maintained, Packaging
+#   Signed-Releases, SBOM, SAST, Vulnerabilities, Security-Policy,
+#   Dependency-Update-Tool, License, Webhooks, Binary-Artifacts,
+#   Packaging
 #
 # Dropped from default check set as not applicable to a solo repo:
-# Code-Review, Contributors, CII-Best-Practices, Fuzzing.
+# Code-Review, Contributors, CII-Best-Practices, Fuzzing,
+# Branch-Protection (failing subscore is entirely review-flow —
+# requires approvers, codeowners, stale-dismissal, last-push-approval;
+# all N/A for a one-maintainer repo. The non-review hardening
+# Branch-Protection would cover — force-push blocked, deletion
+# blocked, admin enforcement, required status checks, required PRs —
+# is already cross-checked by settings-posture-drift-check, so the
+# second-source value is diminished. Triaged 2026-05-28 in #261).
+#
+# Dropped temporarily (re-add after 2026-08-14, 90 days post repo
+# creation 2026-05-16): Maintained — fires "Repository was created
+# within the last 90 days" every run until the new-repo heuristic
+# clears. Re-enable once the 90-day window passes; the check is
+# genuinely useful long-term (catches abandoned-repo drift).
 #
 # Binary source: `nix develop --command scorecard` resolves through
 # flake.lock-pinned nixpkgs-unstable — same pin model as zizmor and
@@ -61,7 +74,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3
-      - name: scorecard --checks=<curated 15> → check-scorecard-threshold.sh
+      - name: scorecard --checks=<curated 13> → check-scorecard-threshold.sh
         id: probe
         # SCORECARD_PAT rotation: docs/runbooks/scorecard-pat-rotation.md
         # SCORECARD_EXPERIMENTAL=1 unlocks the SBOM and Webhooks checks
@@ -87,7 +100,7 @@ jobs:
           # composite uses internally.
           nix develop --command scorecard \
             --repo="github.com/${REPO}" \
-            --checks=Pinned-Dependencies,Token-Permissions,Dangerous-Workflow,Signed-Releases,SBOM,Branch-Protection,SAST,Vulnerabilities,Security-Policy,Dependency-Update-Tool,License,Webhooks,Binary-Artifacts,Maintained,Packaging \
+            --checks=Pinned-Dependencies,Token-Permissions,Dangerous-Workflow,Signed-Releases,SBOM,SAST,Vulnerabilities,Security-Policy,Dependency-Update-Tool,License,Webhooks,Binary-Artifacts,Packaging \
             --format=json \
             --show-details \
             --output=results.json
