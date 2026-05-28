@@ -1012,6 +1012,7 @@
               deadnix
               statix
               actionlint
+              commitlint
               ratchet
               scorecard
               zizmor
