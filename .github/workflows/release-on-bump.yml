@@ -52,6 +52,10 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - uses: ./.github/actions/setup-nix
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: read pin version
         id: read
         run: |
@@ -119,6 +123,27 @@ jobs:
           set -Eeuo pipefail
           IFS=$'\n\t'
           gh release upload "${VERSION}" linpeas-pin.json --clobber
+
+      - name: sign pin file (cosign sign-blob, keyless)
+        # Produces a .sigstore bundle (cosign ≥ 2.2 default container
+        # for signature + Fulcio cert + Rekor entry) as a sibling
+        # release asset. Scorecard Signed-Releases recognises
+        # .sigstore as a signature artifact, closing the gap reported
+        # for older releases that only had attest-build-provenance
+        # attestations (which live in the GitHub Attestations API and
+        # are NOT scanned as release-asset sidecars).
+        if: steps.exists.outputs.exists == 'false'
+        env:
+          COSIGN_YES: "true"
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.read.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          nix shell .#cosign --command cosign sign-blob \
+            --bundle linpeas-pin.json.sigstore \
+            linpeas-pin.json
+          gh release upload "${VERSION}" linpeas-pin.json.sigstore --clobber
 
   image-amd64:
     needs: release
@@ -260,6 +285,24 @@ jobs:
           output-file: linpeas-image-amd64.cdx.json
           upload-artifact: false
           upload-release-assets: true
+
+      - name: sign SBOM blob (amd64, cosign sign-blob, keyless)
+        # Sibling .sigstore bundle for the CycloneDX SBOM release
+        # asset. Same trust root as the existing per-image cosign
+        # signatures (Fulcio cert minted against this workflow's
+        # OIDC token, Rekor transparency entry). Verified at release
+        # time by the verify job and daily by verify-latest-release.yml.
+        env:
+          COSIGN_YES: "true"
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          nix shell .#cosign --command cosign sign-blob \
+            --bundle linpeas-image-amd64.cdx.json.sigstore \
+            linpeas-image-amd64.cdx.json
+          gh release upload "${VERSION}" linpeas-image-amd64.cdx.json.sigstore --clobber
 
       - name: attest SBOM for ghcr image (amd64)
         uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
@@ -428,6 +471,20 @@ jobs:
           output-file: linpeas-image-arm64.cdx.json
           upload-artifact: false
           upload-release-assets: true
+
+      - name: sign SBOM blob (arm64, cosign sign-blob, keyless)
+        # See amd64 job for rationale.
+        env:
+          COSIGN_YES: "true"
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          nix shell .#cosign --command cosign sign-blob \
+            --bundle linpeas-image-arm64.cdx.json.sigstore \
+            linpeas-image-arm64.cdx.json
+          gh release upload "${VERSION}" linpeas-image-arm64.cdx.json.sigstore --clobber
 
       - name: attest SBOM for ghcr image (arm64)
         uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
@@ -792,6 +849,39 @@ jobs:
           # local checkout drift altering the bytes).
           gh release download "${VERSION}" --pattern linpeas-pin.json --clobber
           gh attestation verify linpeas-pin.json --repo rvenutolo/linPEAS-flake
+
+      - name: cosign verify-blob for release-asset sidecars
+        # Re-fetch each release asset + .sigstore sidecar from the
+        # release rather than relying on the local checkout copy.
+        # Matches the rationale of `verify pin file attestation`
+        # above: eliminates any chance of local-checkout drift
+        # shifting the bytes between sign + verify. Identity pin is
+        # the same trust root used by the existing image cosign
+        # verify step; check-cosign-identity-pinned.sh enforces the
+        # two flags repo-wide so this step is caught by the lint.
+        env:
+          COSIGN_IDENTITY: https://github.com/rvenutolo/linPEAS-flake/.github/workflows/release-on-bump.yml@refs/heads/main
+          COSIGN_OIDC_ISSUER: https://token.actions.githubusercontent.com
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          for asset in \
+            linpeas-pin.json \
+            linpeas-image-amd64.cdx.json \
+            linpeas-image-arm64.cdx.json; do
+            gh release download "${VERSION}" \
+              --pattern "${asset}" \
+              --pattern "${asset}.sigstore" \
+              --clobber
+            nix shell .#cosign --command cosign verify-blob \
+              --certificate-identity "${COSIGN_IDENTITY}" \
+              --certificate-oidc-issuer "${COSIGN_OIDC_ISSUER}" \
+              --bundle "${asset}.sigstore" \
+              "${asset}" > /dev/null
+            printf 'cosign verify-blob ok: %s\n' "${asset}"
+          done
 
       - name: verify manifest tags resolve to attested per-arch digests
         # The steps above re-validate the per-arch digests
