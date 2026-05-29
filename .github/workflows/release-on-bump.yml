@@ -132,7 +132,12 @@ jobs:
         # for older releases that only had attest-build-provenance
         # attestations (which live in the GitHub Attestations API and
         # are NOT scanned as release-asset sidecars).
-        if: steps.exists.outputs.exists == 'false'
+        #
+        # Runs on force-republish as well: signs the local checked-in
+        # linpeas-pin.json (byte-identical to the release asset since
+        # the release was published from this same commit) and
+        # --clobber uploads the bundle. Allows recovery from missing
+        # sidecar without waiting for the next pin bump.
         env:
           COSIGN_YES: "true"
           GH_TOKEN: ${{ github.token }}
