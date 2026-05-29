@@ -787,6 +787,13 @@ jobs:
         # incident, credential compromise, manual re-run race); digests
         # cannot. Using digests guarantees the manifest references the
         # exact bytes that the `attest-build-provenance` step attested.
+        #
+        # In backfill mode the per-arch digests are read from the
+        # registry rather than from a fresh push, so the index
+        # rebuilt here is byte-identical to the one originally
+        # published. cosign sign on the same index digest is
+        # idempotent (Rekor accepts the new entry; verification
+        # passes against either).
         id: create
         env:
           VERSION: ${{ needs.release.outputs.version }}
