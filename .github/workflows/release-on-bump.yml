@@ -850,6 +850,39 @@ jobs:
           gh release download "${VERSION}" --pattern linpeas-pin.json --clobber
           gh attestation verify linpeas-pin.json --repo rvenutolo/linPEAS-flake
 
+      - name: cosign verify-blob for release-asset sidecars
+        # Re-fetch each release asset + .sigstore sidecar from the
+        # release rather than relying on the local checkout copy.
+        # Matches the rationale of `verify pin file attestation`
+        # above: eliminates any chance of local-checkout drift
+        # shifting the bytes between sign + verify. Identity pin is
+        # the same trust root used by the existing image cosign
+        # verify step; check-cosign-identity-pinned.sh enforces the
+        # two flags repo-wide so this step is caught by the lint.
+        env:
+          COSIGN_IDENTITY: https://github.com/rvenutolo/linPEAS-flake/.github/workflows/release-on-bump.yml@refs/heads/main
+          COSIGN_OIDC_ISSUER: https://token.actions.githubusercontent.com
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          for asset in \
+            linpeas-pin.json \
+            linpeas-image-amd64.cdx.json \
+            linpeas-image-arm64.cdx.json; do
+            gh release download "${VERSION}" \
+              --pattern "${asset}" \
+              --pattern "${asset}.sigstore" \
+              --clobber
+            nix shell .#cosign --command cosign verify-blob \
+              --certificate-identity "${COSIGN_IDENTITY}" \
+              --certificate-oidc-issuer "${COSIGN_OIDC_ISSUER}" \
+              --bundle "${asset}.sigstore" \
+              "${asset}" > /dev/null
+            printf 'cosign verify-blob ok: %s\n' "${asset}"
+          done
+
       - name: verify manifest tags resolve to attested per-arch digests
         # The steps above re-validate the per-arch digests
         # captured at push time, but never confirm the published
