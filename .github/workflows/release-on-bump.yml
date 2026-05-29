@@ -83,16 +83,38 @@ jobs:
             fi
           fi
 
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: read pin version
+      - name: read effective version
         id: read
+        env:
+          BACKFILL_TAG: ${{ inputs.backfill-tag }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
-          printf 'version=%s\n' "$(jq --raw-output .version linpeas-pin.json)" >> "${GITHUB_OUTPUT}"
+          if [[ -n "${BACKFILL_TAG}" ]]; then
+            version="${BACKFILL_TAG}"
+          else
+            version="$(jq --raw-output .version linpeas-pin.json)"
+          fi
+          printf 'version=%s\n' "${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: download existing pin asset (backfill mode)
+        if: inputs.backfill-tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.read.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          rm -f linpeas-pin.json
+          gh release download "${VERSION}" --pattern linpeas-pin.json
+          if [[ ! -s linpeas-pin.json ]]; then
+            printf 'release %q has no linpeas-pin.json asset to backfill\n' "${VERSION}" >&2
+            exit 1
+          fi
+
+      - uses: ./.github/actions/setup-nix
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: check tag exists
         id: exists
@@ -109,7 +131,7 @@ jobs:
           fi
 
       - name: create release
-        if: steps.exists.outputs.exists == 'false'
+        if: steps.exists.outputs.exists == 'false' && inputs.backfill-tag == ''
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.read.outputs.version }}
@@ -140,14 +162,14 @@ jobs:
 
       - name: attest provenance for pin file
         id: attest-pin
-        if: steps.exists.outputs.exists == 'false'
+        if: steps.exists.outputs.exists == 'false' || inputs.backfill-tag != ''
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
           subject-path: linpeas-pin.json
 
       - name: attach pin file to release
         # The scheduled verify (verify-latest-release.yml) downloads this asset.
-        if: steps.exists.outputs.exists == 'false'
+        if: steps.exists.outputs.exists == 'false' && inputs.backfill-tag == ''
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.read.outputs.version }}
@@ -188,7 +210,7 @@ jobs:
         # probe matches `.intoto.jsonl` suffix on release assets; it
         # does NOT query the GitHub Attestations API. Without this
         # sidecar, Scorecard Signed-Releases caps at 8/release.
-        if: steps.exists.outputs.exists == 'false'
+        if: steps.exists.outputs.exists == 'false' || inputs.backfill-tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.read.outputs.version }}
