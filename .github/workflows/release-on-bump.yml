@@ -52,6 +52,10 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - uses: ./.github/actions/setup-nix
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: read pin version
         id: read
         run: |
@@ -119,6 +123,27 @@ jobs:
           set -Eeuo pipefail
           IFS=$'\n\t'
           gh release upload "${VERSION}" linpeas-pin.json --clobber
+
+      - name: sign pin file (cosign sign-blob, keyless)
+        # Produces a .sigstore bundle (cosign ≥ 2.2 default container
+        # for signature + Fulcio cert + Rekor entry) as a sibling
+        # release asset. Scorecard Signed-Releases recognises
+        # .sigstore as a signature artifact, closing the gap reported
+        # for older releases that only had attest-build-provenance
+        # attestations (which live in the GitHub Attestations API and
+        # are NOT scanned as release-asset sidecars).
+        if: steps.exists.outputs.exists == 'false'
+        env:
+          COSIGN_YES: "true"
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.read.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          nix shell .#cosign --command cosign sign-blob \
+            --bundle linpeas-pin.json.sigstore \
+            linpeas-pin.json
+          gh release upload "${VERSION}" linpeas-pin.json.sigstore --clobber
 
   image-amd64:
     needs: release
