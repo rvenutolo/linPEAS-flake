@@ -509,8 +509,8 @@ jobs:
       id-token: write # attest-build-provenance OIDC
       attestations: write # attest-build-provenance write
     outputs:
-      ghcr_digest: ${{ steps.push.outputs.ghcr_digest }}
-      hub_digest: ${{ steps.push.outputs.hub_digest }}
+      ghcr_digest: ${{ steps.push.outputs.ghcr_digest || steps.pull.outputs.ghcr_digest }}
+      hub_digest: ${{ steps.push.outputs.hub_digest || steps.pull.outputs.hub_digest }}
     steps:
       - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
         with:
@@ -526,6 +526,7 @@ jobs:
       - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3
 
       - name: build OCI image (arm64)
+        if: inputs.backfill-tag == ''
         run: nix build .#linpeas-image --print-build-logs
 
       - name: login to ghcr
@@ -548,9 +549,49 @@ jobs:
           printf '%s' "${DOCKERHUB_TOKEN}" \
             | docker login docker.io --username "${DOCKERHUB_USERNAME}" --password-stdin
 
+      - name: pull existing image + capture digests (backfill mode)
+        id: pull
+        if: inputs.backfill-tag != ''
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+          ARCH: arm64
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          for reg in docker.io ghcr.io; do
+            docker pull "${reg}/rvenutolo/linpeas:${VERSION}-${ARCH}"
+          done
+          ghcr_digest="$(
+            docker inspect "ghcr.io/rvenutolo/linpeas:${VERSION}-${ARCH}" \
+              | jq --raw-output \
+                  '.[0].RepoDigests[] | select(startswith("ghcr.io/rvenutolo/linpeas@"))' \
+              | head -n1
+          )"
+          hub_digest="$(
+            docker inspect "docker.io/rvenutolo/linpeas:${VERSION}-${ARCH}" \
+              | jq --raw-output \
+                  '.[0].RepoDigests[]
+                    | select(startswith("rvenutolo/linpeas@")
+                          or startswith("docker.io/rvenutolo/linpeas@"))' \
+              | head -n1
+          )"
+          ghcr_digest="${ghcr_digest#*@}"
+          hub_digest="${hub_digest#*@}"
+          if [[ "${ghcr_digest}" != sha256:* ]]; then
+            printf 'unexpected ghcr digest for %s: %s\n' "${ARCH}" "${ghcr_digest}" >&2
+            exit 1
+          fi
+          if [[ "${hub_digest}" != sha256:* ]]; then
+            printf 'unexpected docker hub digest for %s: %s\n' "${ARCH}" "${hub_digest}" >&2
+            exit 1
+          fi
+          printf 'ghcr_digest=%s\n' "${ghcr_digest}" >> "${GITHUB_OUTPUT}"
+          printf 'hub_digest=%s\n' "${hub_digest}" >> "${GITHUB_OUTPUT}"
+
       - name: load, tag, push arch image, and capture digests
         # See comment on the amd64 job: docker.io is pushed first to
         # keep the flakier registry in the "all or nothing" position.
+        if: inputs.backfill-tag == ''
         id: push
         env:
           VERSION: ${{ needs.release.outputs.version }}
@@ -595,14 +636,14 @@ jobs:
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
           subject-name: ghcr.io/rvenutolo/linpeas
-          subject-digest: ${{ steps.push.outputs.ghcr_digest }}
+          subject-digest: ${{ steps.push.outputs.ghcr_digest || steps.pull.outputs.ghcr_digest }}
           push-to-registry: true
 
       - name: attest provenance for Docker Hub image (arm64)
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
           subject-name: docker.io/rvenutolo/linpeas
-          subject-digest: ${{ steps.push.outputs.hub_digest }}
+          subject-digest: ${{ steps.push.outputs.hub_digest || steps.pull.outputs.hub_digest }}
           push-to-registry: true
 
       - name: generate SBOM for OCI image (arm64)
@@ -656,7 +697,7 @@ jobs:
         uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
         with:
           subject-name: ghcr.io/rvenutolo/linpeas
-          subject-digest: ${{ steps.push.outputs.ghcr_digest }}
+          subject-digest: ${{ steps.push.outputs.ghcr_digest || steps.pull.outputs.ghcr_digest }}
           sbom-path: linpeas-image-arm64.cdx.json
           push-to-registry: true
 
@@ -664,7 +705,7 @@ jobs:
         uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
         with:
           subject-name: docker.io/rvenutolo/linpeas
-          subject-digest: ${{ steps.push.outputs.hub_digest }}
+          subject-digest: ${{ steps.push.outputs.hub_digest || steps.pull.outputs.hub_digest }}
           sbom-path: linpeas-image-arm64.cdx.json
           push-to-registry: true
 
@@ -672,8 +713,8 @@ jobs:
         # See amd64 job for rationale.
         env:
           COSIGN_YES: "true"
-          GHCR_DIGEST: ${{ steps.push.outputs.ghcr_digest }}
-          HUB_DIGEST: ${{ steps.push.outputs.hub_digest }}
+          GHCR_DIGEST: ${{ steps.push.outputs.ghcr_digest || steps.pull.outputs.ghcr_digest }}
+          HUB_DIGEST: ${{ steps.push.outputs.hub_digest || steps.pull.outputs.hub_digest }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
