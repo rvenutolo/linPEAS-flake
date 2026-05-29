@@ -308,6 +308,16 @@ jobs:
           upload-artifact: false
           upload-release-assets: false
 
+      - name: attest provenance for SBOM bytes (amd64)
+        # Separate from the existing attest-sbom step (which binds the
+        # SBOM to the image digest). This attestation's subject is the
+        # SBOM file bytes themselves; its bundle becomes the
+        # .intoto.jsonl release-asset sidecar consumed by Scorecard.
+        id: attest-sbom-amd64
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: linpeas-image-amd64.cdx.json
+
       - name: sign SBOM blob (amd64, cosign sign-blob, keyless)
         # Sibling .sigstore bundle for the CycloneDX SBOM release
         # asset. Same trust root as the existing per-image cosign
@@ -331,6 +341,18 @@ jobs:
             linpeas-image-amd64.cdx.json \
             linpeas-image-amd64.cdx.json.sigstore \
             --clobber
+
+      - name: upload amd64 SBOM provenance sidecar
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.release.outputs.version }}
+          BUNDLE_PATH: ${{ steps.attest-sbom-amd64.outputs.bundle-path }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          cp "${BUNDLE_PATH}" linpeas-image-amd64.cdx.json.intoto.jsonl
+          gh release upload "${VERSION}" \
+            linpeas-image-amd64.cdx.json.intoto.jsonl --clobber
 
       - name: attest SBOM for ghcr image (amd64)
         uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
