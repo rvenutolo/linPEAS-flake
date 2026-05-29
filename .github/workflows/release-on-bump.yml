@@ -522,6 +522,13 @@ jobs:
           upload-artifact: false
           upload-release-assets: false
 
+      - name: attest provenance for SBOM bytes (arm64)
+        # See amd64 job for rationale.
+        id: attest-sbom-arm64
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: linpeas-image-arm64.cdx.json
+
       - name: sign SBOM blob (arm64, cosign sign-blob, keyless)
         # See amd64 job for rationale.
         env:
@@ -538,6 +545,18 @@ jobs:
             linpeas-image-arm64.cdx.json \
             linpeas-image-arm64.cdx.json.sigstore \
             --clobber
+
+      - name: upload arm64 SBOM provenance sidecar
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.release.outputs.version }}
+          BUNDLE_PATH: ${{ steps.attest-sbom-arm64.outputs.bundle-path }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          cp "${BUNDLE_PATH}" linpeas-image-arm64.cdx.json.intoto.jsonl
+          gh release upload "${VERSION}" \
+            linpeas-image-arm64.cdx.json.intoto.jsonl --clobber
 
       - name: attest SBOM for ghcr image (arm64)
         uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
