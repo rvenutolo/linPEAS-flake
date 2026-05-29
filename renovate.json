@@ -34,6 +34,12 @@
       "matchManagers": ["custom.regex"],
       "matchDepNames": ["NixOS/nixpkgs-unstable"],
       "groupName": "nixpkgs-unstable"
+    },
+    {
+      "description": "octoscan: scoped automerge for the same reason as github-actions — digest-pinned, 7-day quarantine catches obvious breakage. Narrowed by matchDepNames so other custom.regex managers (NixOS/nixpkgs, cachix/git-hooks.nix, SchemaStore/schemastore, NixOS/nixpkgs-unstable) do NOT inherit automerge — those have wide blast radius and must be reviewed manually.",
+      "matchManagers": ["custom.regex"],
+      "matchDepNames": ["ghcr.io/synacktiv/octoscan"],
+      "automerge": true
     }
   ],
   "customManagers": [
@@ -88,6 +94,17 @@
       "datasourceTemplate": "git-refs",
       "depNameTemplate": "SchemaStore/schemastore",
       "packageNameTemplate": "https://github.com/SchemaStore/schemastore"
+    },
+    {
+      "description": "octoscan container image pinned by digest in .github/workflows/octoscan.yml. The matchString spans both the @sha256 digest and the OCTOSCAN_VERSION env var so Renovate updates both atomically — no drift between digest and version label. Uses docker datasource; Renovate resolves the newest tag for ghcr.io/synacktiv/octoscan and substitutes both currentDigest + currentValue in one PR. Automerge is enabled via a scoped packageRule (matchDepNames narrow), matching the github-actions pattern (digest-pinned + 7-day quarantine).",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/octoscan\\.yml$/"],
+      "matchStrings": [
+        "ghcr\\.io/synacktiv/octoscan@sha256:(?<currentDigest>[a-f0-9]{64})[\\s\\S]*?OCTOSCAN_VERSION:\\s*\"(?<currentValue>v\\d+\\.\\d+\\.\\d+)\""
+      ],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "ghcr.io/synacktiv/octoscan",
+      "packageNameTemplate": "ghcr.io/synacktiv/octoscan"
     }
   ]
 }
