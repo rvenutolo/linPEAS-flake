@@ -105,7 +105,14 @@
               pkgs.gnused
               pkgs.gawk
               pkgs.findutils
-              pkgs.procps
+              # Override drops libsystemd from procps, which in turn
+              # drops systemd-minimal-libs and libcap from the image
+              # closure. linpeas enumerates processes via plain
+              # `ps -e` / `ps auxf` and does not read systemd
+              # unit-name columns, so the lost functionality is
+              # irrelevant here; the win is a smaller OCI attack
+              # surface (no libsystemd/libcap CVE exposure).
+              (pkgs.procps.override { withSystemd = false; })
               linpeas
             ];
             pathsToLink = [ "/bin" ];
