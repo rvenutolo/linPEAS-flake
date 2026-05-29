@@ -201,7 +201,7 @@ jobs:
 
   image-amd64:
     needs: release
-    if: (needs.release.outputs.tag-exists == 'false' || inputs.force-republish) && github.repository == 'rvenutolo/linPEAS-flake'
+    if: (needs.release.outputs.tag-exists == 'false' || inputs.force-republish || inputs.backfill-tag != '') && github.repository == 'rvenutolo/linPEAS-flake'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -437,7 +437,7 @@ jobs:
 
   image-arm64:
     needs: release
-    if: (needs.release.outputs.tag-exists == 'false' || inputs.force-republish) && github.repository == 'rvenutolo/linPEAS-flake'
+    if: (needs.release.outputs.tag-exists == 'false' || inputs.force-republish || inputs.backfill-tag != '') && github.repository == 'rvenutolo/linPEAS-flake'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     permissions:
@@ -630,7 +630,7 @@ jobs:
 
   manifest:
     needs: [release, image-amd64, image-arm64]
-    if: (needs.release.outputs.tag-exists == 'false' || inputs.force-republish) && github.repository == 'rvenutolo/linPEAS-flake'
+    if: (needs.release.outputs.tag-exists == 'false' || inputs.force-republish || inputs.backfill-tag != '') && github.repository == 'rvenutolo/linPEAS-flake'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -868,7 +868,7 @@ jobs:
     # attestations. Runs after the image jobs. Failure = release workflow
     # goes red so broken-at-creation attestations surface immediately.
     needs: [release, image-amd64, image-arm64, manifest]
-    if: (needs.release.outputs.tag-exists == 'false' || inputs.force-republish) && github.repository == 'rvenutolo/linPEAS-flake'
+    if: (needs.release.outputs.tag-exists == 'false' || inputs.force-republish || inputs.backfill-tag != '') && github.repository == 'rvenutolo/linPEAS-flake'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
