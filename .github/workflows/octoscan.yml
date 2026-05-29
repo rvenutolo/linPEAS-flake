@@ -60,7 +60,7 @@ jobs:
 
       - name: octoscan scan
         id: scan
-        # Bump: docker buildx imagetools inspect ghcr.io/synacktiv/octoscan:latest
+        # Renovate manages digest + OCTOSCAN_VERSION in lockstep (renovate.json customManager).
         run: |
           set -Eeuo pipefail
           rc=0
@@ -76,7 +76,7 @@ jobs:
             *) echo "has-finding=false" >> "$GITHUB_OUTPUT"; exit 1 ;;
           esac
         env:
-          OCTOSCAN_VERSION: "v0.1.7" # readable bump anchor; image is pinned by digest above
+          OCTOSCAN_VERSION: "v0.1.7"
 
       - name: upload SARIF
         if: always()
