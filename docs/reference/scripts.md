@@ -400,6 +400,29 @@ tar size — what the image takes on disk when pulled.
 Exits 0 on success, non-zero on missing inputs or measurement failure.
 Diagnostic messages go to stderr.
 
+### scripts/octoscan-scan.sh
+
+Run synacktiv/octoscan against `.github/workflows`
+via the pinned ghcr container image. Single source of truth for
+the image digest, the version label tracked by Renovate, and the
+exit-code mapping shared by the CI workflow and the pre-commit
+hook.
+
+Usage:
+scripts/octoscan-scan.sh # text output to stdout
+scripts/octoscan-scan.sh --sarif <path> # SARIF output to <path>
+
+Exit codes:
+0 — scan clean
+1 — findings present, OR real error (docker missing,
+image pull failure, scanner internal error). The caller
+must distinguish via the `has-finding` line printed to
+stdout (`has-finding=true|false`) — same contract the CI
+workflow already exposes via `$GITHUB_OUTPUT`.
+
+Renovate manages OCTOSCAN_DIGEST + OCTOSCAN_VERSION in lockstep
+(renovate.json customManager scoped to this file).
+
 {% endraw %}
 
 <!-- END scripts-reference -->
