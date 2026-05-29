@@ -8,7 +8,17 @@ repo is not on a semver track.
 
 ## Unreleased
 
+### CI
+- Add customManager for octoscan digest + version bumps ([#278](https://github.com/rvenutolo/linPEAS-flake/pull/278))
+
+## [20260528-82c8c3b6] - 2026-05-29
+
 ### Build
+- Add commitlint to devShell buildInputs
+- Add scorecard CLI to devShell
+- Add ratchet to devShell for action pin audits
+- Add nixpkgs-hammer shim for flake-defined derivation
+- Exclude CHANGELOG.md from treefmt and markdownlint
 - Add cliff.toml for conventional-commit changelog generation
 - Expose git-cliff package for changelog generation
 - Add treefmt-config-fresh hook and extend just-recipes-fresh
@@ -17,6 +27,17 @@ repo is not on a semver track.
 - Add scripts-reference-fresh pre-commit hook
 
 ### CI
+- Add customManager for octoscan digest + version
+- Grant contents: write to release image jobs for SBOM upload
+- Add ratchet-pin-audit-harness to protect-main mirror ([#161](https://github.com/rvenutolo/linPEAS-flake/pull/161))
+- Gate ratchet-pin-audit invariants on PRs ([#161](https://github.com/rvenutolo/linPEAS-flake/pull/161))
+- Image size advisory in image-smoke ([#240](https://github.com/rvenutolo/linPEAS-flake/pull/240))
+- Harden actionlint embedded-linter integration ([#239](https://github.com/rvenutolo/linPEAS-flake/pull/239))
+- Add nixpkgs-hammering pre-commit hook ([#237](https://github.com/rvenutolo/linPEAS-flake/pull/237))
+- Add hammer-shim parity check ([#182](https://github.com/rvenutolo/linPEAS-flake/pull/182))
+- Add nixpkgs-hammering pre-commit hook ([#182](https://github.com/rvenutolo/linPEAS-flake/pull/182))
+- Prune stale actions caches on cron + PR close
+- Add size-label job
 - Generate CHANGELOG.md and patch release body
 - Enforce cliff.toml tag-pattern parity
 - Add refresh-treefmt-config-test job
@@ -33,6 +54,20 @@ repo is not on a semver track.
 - Track nixpkgs-unstable input
 
 ### Chores
+- Bump linpeas to 20260528-82c8c3b6 ([#280](https://github.com/rvenutolo/linPEAS-flake/pull/280))
+- Refresh flake-show for linpeas 20260528-82c8c3b6
+- Bump linpeas to 20260528-82c8c3b6
+- Update flake.lock ([#279](https://github.com/rvenutolo/linPEAS-flake/pull/279))
+- Update flake.lock
+- Drop manual-bump hints now that Renovate manages them
+- Triage scorecard-drift findings (drop 2 checks, pin commitlint) ([#265](https://github.com/rvenutolo/linPEAS-flake/pull/265))
+- Triage scorecard-drift findings (drop 2 checks, pin commitlint)
+- Add label-description for zizmor-drift label
+- Bump codeql-action v3; revert spurious v4.3.0 dl-artifact ([#161](https://github.com/rvenutolo/linPEAS-flake/pull/161))
+- Bump three force-moved action SHAs ([#161](https://github.com/rvenutolo/linPEAS-flake/pull/161))
+- Guard against python run: without pyflakes wired
+- Pin shellcheck path in actionlint hook
+- Add size/XS through size/XL
 - Add cliff-tag-pattern parity enforcer
 - Add renovate-config-validator local + CI check (#183, #189) ([#229](https://github.com/rvenutolo/linPEAS-flake/pull/229))
 - Wire renovate-config-validator into verify recipe
@@ -65,6 +100,21 @@ repo is not on a semver track.
 - Update flake.lock ([#145](https://github.com/rvenutolo/linPEAS-flake/pull/145))
 
 ### Documentation
+- Link verification.md to backfill runbook
+- Add scorecard signed-releases backfill procedure
+- Note manifest idempotency under backfill-tag mode
+- Index release-asset provenance sidecar invariant
+- Document release-asset .intoto.jsonl sidecar contract
+- Index release-asset blob sig invariant
+- Document cosign verify-blob for release-asset sidecars
+- Correct ratchet update guidance in pin audit ([#161](https://github.com/rvenutolo/linPEAS-flake/pull/161))
+- Runbook for ratchet-pin-audit workflow ([#161](https://github.com/rvenutolo/linPEAS-flake/pull/161))
+- Note burn-in notification path in runbook
+- Runbook for reproducibility check workflow
+- Replace flake.nix line numbers with grep anchors
+- Runbook for actionlint embedded linters
+- Document size labels and ignore-list parity
+- Add cache-cleanup runbook and ops-hygiene invariants
 - Add changelog generation runbook and invariant entries
 - Seed changelog from historical release tags
 - Add show-treefmt recipe to justfile
@@ -91,6 +141,51 @@ repo is not on a semver track.
 - Frame docker.md container-audit example as smoke test
 
 ### Features
+- Add backfill-tag mode to release-on-bump ([#277](https://github.com/rvenutolo/linPEAS-flake/pull/277))
+- Backfill arm64 SBOM + sidecars from registry image
+- Backfill amd64 SBOM + sidecars from registry image
+- Backfill pin .sigstore + .intoto.jsonl on existing release
+- Extend image/manifest/verify gates to honour backfill-tag
+- Add backfill-tag workflow_dispatch input with mutex validation
+- Emit .intoto.jsonl provenance sidecars on release assets ([#275](https://github.com/rvenutolo/linPEAS-flake/pull/275))
+- Upload arm64 SBOM provenance bundle as release-asset sidecar
+- Upload amd64 SBOM provenance bundle as release-asset sidecar
+- Upload pin provenance bundle as release-asset sidecar
+- Cosign sign-blob release-asset sidecars ([#270](https://github.com/rvenutolo/linPEAS-flake/pull/270))
+- Verify release-asset blob signatures in daily cron
+- Verify release-asset blob signatures at release time
+- Sign arm64 SBOM with cosign sign-blob
+- Sign amd64 SBOM with cosign sign-blob
+- Sign linpeas-pin.json with cosign sign-blob
+- Attach CycloneDX SBOMs to releases ([#269](https://github.com/rvenutolo/linPEAS-flake/pull/269))
+- Attach arm64 CycloneDX SBOM to release
+- Attach amd64 CycloneDX SBOM to release
+- Scorecard-drift-check workflow with curated 15-check allowlist ([#260](https://github.com/rvenutolo/linPEAS-flake/pull/260))
+- Add scorecard-drift-check workflow
+- Add check-scorecard-threshold.sh + scorecard PAT runbook
+- Add octoscan workflow vulnerability scanner ([#255](https://github.com/rvenutolo/linPEAS-flake/pull/255))
+- Add octoscan workflow vulnerability scanner (closes #159)
+- Actionlint cron drift-check workflow ([#251](https://github.com/rvenutolo/linPEAS-flake/pull/251))
+- Actionlint cron drift-check workflow (closes #247)
+- Expose actionlintWrapped as packages.actionlint-wrapped
+- Zizmor cron drift-check workflow ([#248](https://github.com/rvenutolo/linPEAS-flake/pull/248))
+- Zizmor cron drift-check workflow (closes #246)
+- Add Grype as second-opinion image CVE scanner ([#244](https://github.com/rvenutolo/linPEAS-flake/pull/244))
+- Add Grype as second-opinion image CVE scanner
+- Add trufflehog secret scanner ([#243](https://github.com/rvenutolo/linPEAS-flake/pull/243))
+- Add trufflehog secret scanner alongside gitleaks (closes #158)
+- Ratchet pin audit workflow (closes #161) ([#242](https://github.com/rvenutolo/linPEAS-flake/pull/242))
+- Ratchet-pin-audit notify body with per-reason runbook ([#161](https://github.com/rvenutolo/linPEAS-flake/pull/161))
+- Ratchet-pin-audit emits typed drift/api/tool reasons ([#161](https://github.com/rvenutolo/linPEAS-flake/pull/161))
+- Ratchet-pin-audit workflow skeleton ([#161](https://github.com/rvenutolo/linPEAS-flake/pull/161))
+- Reproducibility check workflow ([#241](https://github.com/rvenutolo/linPEAS-flake/pull/241))
+- Reproducibility-check workflow (closes #164)
+- Compare-repro.sh + match-scenario test
+- Post sticky PR comment with image-size delta vs main
+- Report image size in image-smoke job summary
+- Script to measure image compressed + closure sizes
+- Pr size labeler and actions cache prune workflows ([#235](https://github.com/rvenutolo/linPEAS-flake/pull/235))
+- Generate CHANGELOG.md from conventional commits ([#234](https://github.com/rvenutolo/linPEAS-flake/pull/234))
 - Standalone just-recipes + treefmt-config reference pages ([#190](https://github.com/rvenutolo/linPEAS-flake/pull/190)) ([#233](https://github.com/rvenutolo/linPEAS-flake/pull/233))
 - Publish just-recipes as standalone reference page
 - Add refresh-treefmt-config generator + test
@@ -138,6 +233,39 @@ repo is not on a semver track.
 - Generate derived doc blocks from source-of-truth files ([#146](https://github.com/rvenutolo/linPEAS-flake/pull/146))
 
 ### Fixes
+- Drop dead link to runbook from verification.md
+- Upload SBOM files to release explicitly ([#274](https://github.com/rvenutolo/linPEAS-flake/pull/274))
+- Upload SBOM files to release explicitly
+- Ungate pin sign-blob from exists check ([#273](https://github.com/rvenutolo/linPEAS-flake/pull/273))
+- Ungate pin sign-blob from exists check
+- Add checkout step to manifest job ([#272](https://github.com/rvenutolo/linPEAS-flake/pull/272))
+- Add checkout step to manifest job
+- Write scorecard JSON to file via --output, not stdout redirect ([#264](https://github.com/rvenutolo/linPEAS-flake/pull/264))
+- Write scorecard JSON to file via --output, not stdout redirect
+- Silence scorecard info logs leaking into stdout JSON ([#263](https://github.com/rvenutolo/linPEAS-flake/pull/263))
+- Silence scorecard info logs leaking into stdout JSON
+- Enable SCORECARD_EXPERIMENTAL for SBOM + Webhooks checks ([#262](https://github.com/rvenutolo/linPEAS-flake/pull/262))
+- Enable SCORECARD_EXPERIMENTAL for SBOM + Webhooks checks
+- Reject empty stdin in check-scorecard-threshold.sh
+- Drop directory positional from actionlint-drift probe ([#253](https://github.com/rvenutolo/linPEAS-flake/pull/253))
+- Drop directory positional from actionlint-drift probe
+- Decompress OCI image tarball before grype scan
+- Strip monorepo subpath + skip self-refs in pin audit ([#161](https://github.com/rvenutolo/linPEAS-flake/pull/161))
+- Use nix develop for ratchet; merge gh-api calls ([#161](https://github.com/rvenutolo/linPEAS-flake/pull/161))
+- Unconditionally resolve annotated tags in pin audit ([#161](https://github.com/rvenutolo/linPEAS-flake/pull/161))
+- Use absolute URL + nav entry for repro runbook
+- Unindent issue-body heredoc so markdown renders
+- Handle gzipped image when extracting manifest
+- Upload linpeas tar; diffoscope both pairs on mismatch
+- Absolute URL for runbook link in step summary
+- Drop store-path fields from compare loop
+- Trap-based worktree cleanup in measure-main step
+- Measure uncompressed tar size, not derivation closure
+- Don't merge stderr into JSON capture in happy-path scenario
+- Extend pyflakes guard to pip3 and sudo-prefixed forms
+- Broaden pyflakes guard regex to catch inline run: forms
+- Register hammer-shim-parity + fix pin-diff-isolated path bug
+- Use App token for gh release edit
 - Decouple verify from changelog job
 - Relativize matrix link paths to page location
 - Use comma for within-field separator in enforcer annotations
@@ -156,6 +284,10 @@ repo is not on a semver track.
 - Apply treefmt repo-wide (justfile reflow)
 
 ### Tests
+- Invariant + fixtures for ratchet-pin-audit shape ([#161](https://github.com/rvenutolo/linPEAS-flake/pull/161))
+- Missing-input scenario for compare-repro.sh
+- Mismatch scenarios for compare-repro.sh
+- Smoke-test actionlint shellcheck integration
 - Add fixtures (good + bad cases)
 - Add fixtures for setup-nix-required lint
 
