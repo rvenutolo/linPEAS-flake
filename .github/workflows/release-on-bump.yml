@@ -18,6 +18,18 @@ on:
         required: false
         default: false
         type: boolean
+      backfill-tag:
+        description: |
+          Tag of an existing release to backfill with missing
+          .sigstore + .intoto.jsonl sidecars and (if absent) per-arch
+          CycloneDX SBOMs. Mutually exclusive with force-republish.
+          Skips image build/push, manifest re-creation is idempotent,
+          changelog job is skipped. Used to bring historic releases up
+          to current sidecar coverage (Scorecard Signed-Releases). See
+          docs/runbooks/scorecard-signed-releases-backfill.md.
+        required: false
+        default: ""
+        type: string
 
 # Workflow default = empty. Each job declares the exact scopes it
 # needs, so contents:write / id-token:write / attestations:write /
@@ -51,6 +63,25 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: validate backfill inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BACKFILL_TAG: ${{ inputs.backfill-tag }}
+          FORCE_REPUBLISH: ${{ inputs.force-republish }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          if [[ -n "${BACKFILL_TAG}" && "${FORCE_REPUBLISH}" == "true" ]]; then
+            printf 'refusing to run: backfill-tag and force-republish are mutually exclusive\n' >&2
+            exit 1
+          fi
+          if [[ -n "${BACKFILL_TAG}" ]]; then
+            if ! gh release view "${BACKFILL_TAG}" >/dev/null 2>&1; then
+              printf 'refusing to backfill: release tag %q does not exist\n' "${BACKFILL_TAG}" >&2
+              exit 1
+            fi
+          fi
 
       - uses: ./.github/actions/setup-nix
         with:
