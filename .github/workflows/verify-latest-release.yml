@@ -277,6 +277,78 @@ jobs:
           fi
           printf 'upstream linpeas.sh matches pinned hash (%s)\n' "${expected_sri}"
 
+      - name: cosign verify-blob linpeas-pin.json
+        id: verify-blob-pin
+        # Re-fetch both the pin asset and its `.sigstore` sidecar from
+        # the release and verify the bundle against the pinned workflow
+        # identity. Distinct from `verify-pin` (gh attestation verify)
+        # above: that path checks the GitHub-Sigstore attestation; this
+        # path checks the user-facing `cosign verify-blob` flow that
+        # external consumers run per `docs/security/verification.md`.
+        env:
+          COSIGN_IDENTITY: https://github.com/rvenutolo/linPEAS-flake/.github/workflows/release-on-bump.yml@refs/heads/main
+          COSIGN_OIDC_ISSUER: https://token.actions.githubusercontent.com
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.read-tag.outputs.tag }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          gh release download "${TAG}" \
+            --repo rvenutolo/linPEAS-flake \
+            --pattern linpeas-pin.json \
+            --pattern linpeas-pin.json.sigstore \
+            --clobber
+          nix shell .#cosign --command cosign verify-blob \
+            --certificate-identity "${COSIGN_IDENTITY}" \
+            --certificate-oidc-issuer "${COSIGN_OIDC_ISSUER}" \
+            --bundle linpeas-pin.json.sigstore \
+            linpeas-pin.json > /dev/null
+          printf 'cosign verify-blob ok: linpeas-pin.json\n'
+
+      - name: cosign verify-blob linpeas-image-amd64.cdx.json
+        id: verify-blob-sbom-amd64
+        env:
+          COSIGN_IDENTITY: https://github.com/rvenutolo/linPEAS-flake/.github/workflows/release-on-bump.yml@refs/heads/main
+          COSIGN_OIDC_ISSUER: https://token.actions.githubusercontent.com
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.read-tag.outputs.tag }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          gh release download "${TAG}" \
+            --repo rvenutolo/linPEAS-flake \
+            --pattern linpeas-image-amd64.cdx.json \
+            --pattern linpeas-image-amd64.cdx.json.sigstore \
+            --clobber
+          nix shell .#cosign --command cosign verify-blob \
+            --certificate-identity "${COSIGN_IDENTITY}" \
+            --certificate-oidc-issuer "${COSIGN_OIDC_ISSUER}" \
+            --bundle linpeas-image-amd64.cdx.json.sigstore \
+            linpeas-image-amd64.cdx.json > /dev/null
+          printf 'cosign verify-blob ok: linpeas-image-amd64.cdx.json\n'
+
+      - name: cosign verify-blob linpeas-image-arm64.cdx.json
+        id: verify-blob-sbom-arm64
+        env:
+          COSIGN_IDENTITY: https://github.com/rvenutolo/linPEAS-flake/.github/workflows/release-on-bump.yml@refs/heads/main
+          COSIGN_OIDC_ISSUER: https://token.actions.githubusercontent.com
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.read-tag.outputs.tag }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          gh release download "${TAG}" \
+            --repo rvenutolo/linPEAS-flake \
+            --pattern linpeas-image-arm64.cdx.json \
+            --pattern linpeas-image-arm64.cdx.json.sigstore \
+            --clobber
+          nix shell .#cosign --command cosign verify-blob \
+            --certificate-identity "${COSIGN_IDENTITY}" \
+            --certificate-oidc-issuer "${COSIGN_OIDC_ISSUER}" \
+            --bundle linpeas-image-arm64.cdx.json.sigstore \
+            linpeas-image-arm64.cdx.json > /dev/null
+          printf 'cosign verify-blob ok: linpeas-image-arm64.cdx.json\n'
+
       - name: attribute failure reason
         id: attribute
         # Maps the first failed step to a reason token consumed by the
@@ -295,6 +367,9 @@ jobs:
           VERIFY_LATEST_PARITY: ${{ steps.verify-latest-parity.outcome }}
           VERIFY_PIN: ${{ steps.verify-pin.outcome }}
           VERIFY_UPSTREAM_SRI: ${{ steps.verify-upstream-sri.outcome }}
+          VERIFY_BLOB_PIN: ${{ steps.verify-blob-pin.outcome }}
+          VERIFY_BLOB_SBOM_AMD64: ${{ steps.verify-blob-sbom-amd64.outcome }}
+          VERIFY_BLOB_SBOM_ARM64: ${{ steps.verify-blob-sbom-arm64.outcome }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
@@ -310,6 +385,9 @@ jobs:
           elif [[ ${VERIFY_LATEST_PARITY}  == 'failure' ]]; then reason='manifest-tag-drift'
           elif [[ ${VERIFY_PIN}            == 'failure' ]]; then reason='pin-attest-failed'
           elif [[ ${VERIFY_UPSTREAM_SRI}   == 'failure' ]]; then reason='upstream-sri-drift'
+          elif [[ ${VERIFY_BLOB_PIN}        == 'failure' ]]; then reason='pin-blob-sig-failed'
+          elif [[ ${VERIFY_BLOB_SBOM_AMD64} == 'failure' ]]; then reason='sbom-amd64-blob-sig-failed'
+          elif [[ ${VERIFY_BLOB_SBOM_ARM64} == 'failure' ]]; then reason='sbom-arm64-blob-sig-failed'
           fi
           printf 'reason=%s\n' "${reason}" >> "${GITHUB_OUTPUT}"
           printf 'attributed reason: %s\n' "${reason}"
@@ -369,6 +447,42 @@ jobs:
               above, exposed via the user-facing `cosign verify` path.
               Same Sigstore TUF rotation caveat applies — re-run 24h
               later before treating as tampering.
+            - `pin-blob-sig-failed` — `cosign verify-blob` failed for
+              `linpeas-pin.json` on the latest release. Either the
+              `linpeas-pin.json.sigstore` sidecar is missing from the
+              release, or the bundle no longer verifies against the
+              pinned `release-on-bump.yml` workflow identity. Triage:
+              download both files with `gh release download`, re-run
+              `cosign verify-blob` locally using the identity flags in
+              `docs/security/verification.md`. If the sidecar is
+              missing, the release pipeline's `release` job did not run
+              the sign-blob step (possible registry-side asset loss);
+              re-trigger via `workflow_dispatch` with
+              `force-republish: true`.
+            - `sbom-amd64-blob-sig-failed` — `cosign verify-blob`
+              failed for `linpeas-image-amd64.cdx.json`. Either the
+              `linpeas-image-amd64.cdx.json.sigstore` sidecar is
+              missing from the release, or the bundle no longer
+              verifies against the pinned `release-on-bump.yml`
+              workflow identity. Triage: download both files with
+              `gh release download`, re-run `cosign verify-blob`
+              locally using the identity flags in
+              `docs/security/verification.md`. If the sidecar is
+              missing, the `image-amd64` job's SBOM sign-blob step
+              did not run (registry-side asset loss); re-trigger via
+              `workflow_dispatch` with `force-republish: true`.
+            - `sbom-arm64-blob-sig-failed` — `cosign verify-blob`
+              failed for `linpeas-image-arm64.cdx.json`. Either the
+              `linpeas-image-arm64.cdx.json.sigstore` sidecar is
+              missing from the release, or the bundle no longer
+              verifies against the pinned `release-on-bump.yml`
+              workflow identity. Triage: download both files with
+              `gh release download`, re-run `cosign verify-blob`
+              locally using the identity flags in
+              `docs/security/verification.md`. If the sidecar is
+              missing, the `image-arm64` job's SBOM sign-blob step
+              did not run (registry-side asset loss); re-trigger via
+              `workflow_dispatch` with `force-republish: true`.
             - `release-tag-fetch-failed` / `release-asset-download-failed`
               — `gh release view` / `gh release download` failed.
               Transient GitHub API or release-asset visibility lag.
