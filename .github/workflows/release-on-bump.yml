@@ -278,18 +278,17 @@ jobs:
         # CycloneDX-JSON SBOM for the amd64 image. CycloneDX chosen for
         # native dependency-graph edges, VEX readiness, and consumer
         # alignment (Grype, Trivy, cosign, Dependency-Track default).
-        # upload-release-assets: true attaches the file to the GitHub
-        # Release so OpenSSF Scorecard's SBOM check finds it on the
-        # latest release. Action lists+deletes existing same-named
-        # asset before upload, so force-republish workflow_dispatch
-        # path is safe.
+        # upload-release-assets here is a no-op (the action only
+        # uploads on release-typed events; this workflow runs on push
+        # and workflow_dispatch). The explicit gh release upload in
+        # the sign-blob step below is the release-asset path.
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           image: rvenutolo/linpeas:${{ needs.release.outputs.version }}-amd64
           format: cyclonedx-json
           output-file: linpeas-image-amd64.cdx.json
           upload-artifact: false
-          upload-release-assets: true
+          upload-release-assets: false
 
       - name: sign SBOM blob (amd64, cosign sign-blob, keyless)
         # Sibling .sigstore bundle for the CycloneDX SBOM release
@@ -297,6 +296,9 @@ jobs:
         # signatures (Fulcio cert minted against this workflow's
         # OIDC token, Rekor transparency entry). Verified at release
         # time by the verify job and daily by verify-latest-release.yml.
+        # Also uploads the SBOM file itself to the release here, since
+        # anchore/sbom-action's upload-release-assets does nothing on
+        # push / workflow_dispatch triggers.
         env:
           COSIGN_YES: "true"
           GH_TOKEN: ${{ github.token }}
@@ -307,7 +309,10 @@ jobs:
           nix shell .#cosign --command cosign sign-blob \
             --bundle linpeas-image-amd64.cdx.json.sigstore \
             linpeas-image-amd64.cdx.json
-          gh release upload "${VERSION}" linpeas-image-amd64.cdx.json.sigstore --clobber
+          gh release upload "${VERSION}" \
+            linpeas-image-amd64.cdx.json \
+            linpeas-image-amd64.cdx.json.sigstore \
+            --clobber
 
       - name: attest SBOM for ghcr image (amd64)
         uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
@@ -475,7 +480,7 @@ jobs:
           format: cyclonedx-json
           output-file: linpeas-image-arm64.cdx.json
           upload-artifact: false
-          upload-release-assets: true
+          upload-release-assets: false
 
       - name: sign SBOM blob (arm64, cosign sign-blob, keyless)
         # See amd64 job for rationale.
@@ -489,7 +494,10 @@ jobs:
           nix shell .#cosign --command cosign sign-blob \
             --bundle linpeas-image-arm64.cdx.json.sigstore \
             linpeas-image-arm64.cdx.json
-          gh release upload "${VERSION}" linpeas-image-arm64.cdx.json.sigstore --clobber
+          gh release upload "${VERSION}" \
+            linpeas-image-arm64.cdx.json \
+            linpeas-image-arm64.cdx.json.sigstore \
+            --clobber
 
       - name: attest SBOM for ghcr image (arm64)
         uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
