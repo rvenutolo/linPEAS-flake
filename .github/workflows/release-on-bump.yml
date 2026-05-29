@@ -472,6 +472,20 @@ jobs:
           upload-artifact: false
           upload-release-assets: true
 
+      - name: sign SBOM blob (arm64, cosign sign-blob, keyless)
+        # See amd64 job for rationale.
+        env:
+          COSIGN_YES: "true"
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          nix shell .#cosign --command cosign sign-blob \
+            --bundle linpeas-image-arm64.cdx.json.sigstore \
+            linpeas-image-arm64.cdx.json
+          gh release upload "${VERSION}" linpeas-image-arm64.cdx.json.sigstore --clobber
+
       - name: attest SBOM for ghcr image (arm64)
         uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
         with:
