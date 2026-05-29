@@ -7,3 +7,9 @@ extend-exclude = [
   ".direnv/**",
   "tests/fixtures/**",
 ]
+
+[default.extend-words]
+# "intoto" is the in-toto provenance framework name (https://in-toto.io/),
+# used in the .intoto.jsonl release-asset sidecar suffix required by
+# OSSF Scorecard's releasesHaveProvenance probe.
+intoto = "intoto"
