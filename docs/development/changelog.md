@@ -95,10 +95,17 @@ order:
 1. Run `nix shell .#git-cliff --command git-cliff --config cliff.toml --output CHANGELOG.md`.
 1. Detect whether `CHANGELOG.md` changed (a no-op day — identical pin
     — produces no diff).
-1. If changed, commit `CHANGELOG.md` via REST `PUT /contents` as the
+1. If changed, create a `chore/changelog-${VERSION}` branch from
+    `main` and commit `CHANGELOG.md` via REST `PUT /contents` as the
     App identity (GitHub web-flow-signs the commit).
-1. The signed commit lands on `main` directly; no PR is opened for
-    changelog-only changes.
+1. Open a PR against `main` and enable auto-merge
+    (`gh pr merge --auto --merge --delete-branch`). The PR lands once
+    the `protect-main` required status checks pass.
+
+The PR detour is mandatory: `protect-main` has `bypass_actors == []`
+and a `pull_request` rule, so direct `PUT /contents` to `branch=main`
+returns `HTTP 409 "Changes must be made through a pull request"`. The
+flow mirrors `update-linpeas.yml push-and-merge` exactly.
 
 ## Recovery procedures
 
