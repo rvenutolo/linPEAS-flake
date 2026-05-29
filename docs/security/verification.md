@@ -105,6 +105,18 @@ the `attribute failure reason` step. Reasons:
     verification failed for a specific artifact.
 - `release-tag-fetch-failed` / `release-asset-download-failed` —
     transient GitHub API / asset visibility lag.
+- `pin-blob-sig-failed` — cosign verify-blob failed for
+    `linpeas-pin.json` on the latest release. Indicates the
+    `.sigstore` sidecar is missing or no longer verifies against
+    the pinned workflow identity. Triage: re-trigger
+    `release-on-bump.yml` via `workflow_dispatch` with
+    `force-republish: true` if the sidecar is missing.
+- `sbom-amd64-blob-sig-failed` — same failure for the amd64
+    CycloneDX SBOM asset. Responsibility lives in the
+    `image-amd64` job of `release-on-bump.yml`.
+- `sbom-arm64-blob-sig-failed` — same failure for the arm64
+    CycloneDX SBOM asset. Responsibility lives in the
+    `image-arm64` job of `release-on-bump.yml`.
 - `unknown` — attribution step couldn't match a known failed step
     (bug in the attribute logic itself).
 
@@ -248,6 +260,39 @@ cosign verify \
 
 No `gh` CLI required. Pairs with the existing `gh attestation verify`
 path — pick whichever toolchain fits the consumer's pipeline.
+
+#### Release-asset blob signatures<a name="release-asset-blob-signatures"></a>
+
+Each GitHub Release asset has a sibling `.sigstore` bundle:
+
+- `linpeas-pin.json` + `linpeas-pin.json.sigstore`
+- `linpeas-image-amd64.cdx.json` + `linpeas-image-amd64.cdx.json.sigstore`
+- `linpeas-image-arm64.cdx.json` + `linpeas-image-arm64.cdx.json.sigstore`
+
+Download both files for the asset you want to verify, then run
+`cosign verify-blob` with the same identity pin used for image
+signatures:
+
+```bash
+gh release download <tag> \
+  --pattern linpeas-pin.json \
+  --pattern linpeas-pin.json.sigstore
+
+cosign verify-blob \
+  --certificate-identity 'https://github.com/rvenutolo/linPEAS-flake/.github/workflows/release-on-bump.yml@refs/heads/main' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  --bundle linpeas-pin.json.sigstore \
+  linpeas-pin.json
+```
+
+Same shape for both SBOM sidecars — swap the asset names.
+
+Why blob sigs in addition to the existing GitHub Attestations? The
+attestations live in the GitHub Attestations API + Rekor and verify
+via `gh attestation verify`. The `.sigstore` sidecars are file-system
+sibling artifacts on the GitHub Release, which is what OpenSSF
+Scorecard's `Signed-Releases` check scans for — and what consumers
+without `gh` CLI can verify with just `cosign`.
 
 ## gh-attestation-repo invariant<a name="gh-attestation-repo-invariant"></a>
 
