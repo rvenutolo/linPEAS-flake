@@ -19,6 +19,7 @@ Step-by-step procedure to verify a release of this wrapper. None of this trusts 
 - [Cosign keyless signatures](#cosign-keyless-signatures)
   - [Identity pinning](#identity-pinning)
   - [User-facing verification commands](#user-facing-verification-commands)
+- [Release-asset provenance sidecars](#release-asset-provenance-sidecars)
 - [gh-attestation-repo invariant](#gh-attestation-repo-invariant)
 - [cosign-identity-pinned invariant](#cosign-identity-pinned-invariant)
 
@@ -293,6 +294,33 @@ via `gh attestation verify`. The `.sigstore` sidecars are file-system
 sibling artifacts on the GitHub Release, which is what OpenSSF
 Scorecard's `Signed-Releases` check scans for — and what consumers
 without `gh` CLI can verify with just `cosign`.
+
+## Release-asset provenance sidecars<a name="release-asset-provenance-sidecars"></a>
+
+Every release asset is published alongside a sibling
+`<asset>.intoto.jsonl` file containing a SLSA Build Provenance v1
+attestation whose subject is the asset's content hash. The bundle is
+captured from `actions/attest-build-provenance` at release time and
+uploaded as a release asset.
+
+The sidecar serves two consumers:
+
+- **OSSF Scorecard `Signed-Releases`** — its
+    `releasesHaveProvenance` probe matches release-asset suffix
+    `.intoto.jsonl` only, and does not query the GitHub Attestations
+    API. Without the sidecar, the per-release score caps at 8 (signed
+    but no provenance).
+- **Manual verification** — consumers can verify the bundle with
+    `gh attestation verify <asset> --bundle <asset>.intoto.jsonl`
+    against the same Fulcio + Rekor trust root used by the
+    `.sigstore` signatures.
+
+The contract is: for every `<asset>` in a release, both
+`<asset>.sigstore` (cosign signature bundle) and
+`<asset>.intoto.jsonl` (build provenance bundle) MUST be present.
+A release missing either sidecar is a regression — see
+[docs/runbooks/scorecard-signed-releases-backfill.md](../runbooks/scorecard-signed-releases-backfill.md)
+for recovery.
 
 ## gh-attestation-repo invariant<a name="gh-attestation-repo-invariant"></a>
 
