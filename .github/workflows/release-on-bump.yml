@@ -108,6 +108,7 @@ jobs:
             --notes "Tracks upstream [peass-ng/PEASS-ng@${VERSION}](https://github.com/peass-ng/PEASS-ng/releases/tag/${VERSION})."
 
       - name: attest provenance for pin file
+        id: attest-pin
         if: steps.exists.outputs.exists == 'false'
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
@@ -149,6 +150,23 @@ jobs:
             --bundle linpeas-pin.json.sigstore \
             linpeas-pin.json
           gh release upload "${VERSION}" linpeas-pin.json.sigstore --clobber
+
+      - name: upload pin provenance sidecar
+        # Materialises the attest-build-provenance bundle as a
+        # release-asset sidecar. Scorecard releasesHaveProvenance
+        # probe matches `.intoto.jsonl` suffix on release assets; it
+        # does NOT query the GitHub Attestations API. Without this
+        # sidecar, Scorecard Signed-Releases caps at 8/release.
+        if: steps.exists.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.read.outputs.version }}
+          BUNDLE_PATH: ${{ steps.attest-pin.outputs.bundle-path }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          cp "${BUNDLE_PATH}" linpeas-pin.json.intoto.jsonl
+          gh release upload "${VERSION}" linpeas-pin.json.intoto.jsonl --clobber
 
   image-amd64:
     needs: release
