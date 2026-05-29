@@ -319,7 +319,8 @@ The contract is: for every `<asset>` in a release, both
 `<asset>.sigstore` (cosign signature bundle) and
 `<asset>.intoto.jsonl` (build provenance bundle) MUST be present.
 A release missing either sidecar is a regression; the recovery
-procedure lives in `docs/runbooks/scorecard-signed-releases-backfill.md`.
+procedure lives in
+[docs/runbooks/scorecard-signed-releases-backfill.md](../runbooks/scorecard-signed-releases-backfill.md).
 
 ## gh-attestation-repo invariant<a name="gh-attestation-repo-invariant"></a>
 
