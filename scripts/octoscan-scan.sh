@@ -3,9 +3,9 @@
 #
 # @description Run synacktiv/octoscan against `.github/workflows`
 # via the pinned ghcr container image. Single source of truth for
-# the image digest, the version label tracked by Renovate, and the
-# exit-code mapping shared by the CI workflow and the pre-commit
-# hook.
+# the image digest, the version label tracked by Renovate, the
+# noise-suppression flags, and the exit-code mapping shared by the
+# CI workflow and the pre-commit hook.
 #
 # Usage:
 #   scripts/octoscan-scan.sh                 # text output to stdout
@@ -19,6 +19,32 @@
 #       stdout (`has-finding=true|false`) — same contract the CI
 #       workflow already exposes via `$GITHUB_OUTPUT`.
 #
+# Per-file iteration: octoscan v0.1.7 directory-target mode silently
+# returns exit 0 with empty SARIF even when a single-file invocation
+# against the same workflow flags a finding. Loop over each workflow
+# yaml, take the max exit code, and merge per-file SARIF
+# `runs[0].results` into a single SARIF document for upload.
+#
+# Suppressions (CLI flags — `--config-file` is documented but
+# `paths.<glob>.ignore` is a no-op in v0.1.7):
+#   --disable-rules local-action  : repo intentionally uses
+#       `./.github/actions/*` composite actions (e.g.
+#       notify-workflow-result, setup-nix); every reference is a
+#       false positive.
+#   --disable-rules dangerous-write : every `>> "$GITHUB_OUTPUT"`
+#       and `>> "$GITHUB_ENV"` is flagged regardless of input
+#       trust; the rule has no notion of which writes carry
+#       attacker-controlled data, so it is unworkably noisy here.
+#   --ignore '(needs|steps)\.\*\*\.outputs\.\*\*' : `expression-injection`
+#       fires on every workflow-internal `${{ needs.X.outputs.Y }}`
+#       / `${{ steps.X.outputs.Y }}` reference; those carry data
+#       set by other jobs/steps in the same workflow, not external
+#       input.
+#   --ignore "actions/checkout' with a custom ref" : same regex
+#       covers the renovate-flake-lock-refresh workflow's
+#       `actions/checkout` with `ref:` set to a bot-controlled
+#       branch — the ref source is internal, not attacker-supplied.
+#
 # Renovate manages OCTOSCAN_DIGEST + OCTOSCAN_VERSION in lockstep
 # (renovate.json customManager scoped to this file).
 
@@ -29,6 +55,9 @@ OCTOSCAN_DIGEST="sha256:3368f42651f9ca0d7a7cd08de3b734476046d17ffa0b2b0c6c55acef
 OCTOSCAN_VERSION="v0.1.7"
 # shellcheck disable=SC2034 # Renovate reads OCTOSCAN_VERSION to track the version label in lockstep with OCTOSCAN_DIGEST.
 readonly OCTOSCAN_DIGEST OCTOSCAN_VERSION
+
+readonly DISABLE_RULES="local-action,dangerous-write"
+readonly IGNORE_PATTERN='(needs|steps)\.\*\*\.outputs\.\*\*|actions/checkout. with a custom ref'
 
 sarif_out=""
 while [[ $# -gt 0 ]]; do
@@ -60,24 +89,73 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
-repo_root="$(git rev-parse --show-toplevel 2>/dev/null || printf '%s' "$PWD")"
-
-rc=0
-if [[ -n ${sarif_out} ]]; then
-  docker run --rm \
-    -v "${repo_root}:/src:ro" \
-    "ghcr.io/synacktiv/octoscan@${OCTOSCAN_DIGEST}" \
-    scan /src/.github/workflows \
-    --format sarif \
-    >"${sarif_out}" || rc=$?
-else
-  docker run --rm \
-    -v "${repo_root}:/src:ro" \
-    "ghcr.io/synacktiv/octoscan@${OCTOSCAN_DIGEST}" \
-    scan /src/.github/workflows || rc=$?
+if [[ -n ${sarif_out} ]] && ! command -v jq >/dev/null 2>&1; then
+  printf 'octoscan-scan.sh requires jq for --sarif aggregation.\n' >&2
+  printf 'has-finding=false\n'
+  exit 1
 fi
 
-case "${rc}" in
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || printf '%s' "$PWD")"
+workflows_dir="${repo_root}/.github/workflows"
+
+shopt -s nullglob
+workflows=("${workflows_dir}"/*.yml "${workflows_dir}"/*.yaml)
+shopt -u nullglob
+
+if [[ ${#workflows[@]} -eq 0 ]]; then
+  printf 'has-finding=false\n'
+  exit 0
+fi
+
+per_file_sarifs=()
+# shellcheck disable=SC2329 # Invoked via `trap ... EXIT`.
+cleanup() {
+  if ((${#per_file_sarifs[@]} > 0)); then
+    rm -f -- "${per_file_sarifs[@]}"
+  fi
+}
+trap cleanup EXIT
+
+max_rc=0
+for wf in "${workflows[@]}"; do
+  rel="${wf#"${repo_root}/"}"
+  file_rc=0
+  if [[ -n ${sarif_out} ]]; then
+    tmp_sarif="$(mktemp)"
+    per_file_sarifs+=("${tmp_sarif}")
+    docker run --rm \
+      -v "${repo_root}:/src:ro" \
+      "ghcr.io/synacktiv/octoscan@${OCTOSCAN_DIGEST}" \
+      scan "/src/${rel}" \
+      --disable-rules "${DISABLE_RULES}" \
+      --ignore "${IGNORE_PATTERN}" \
+      --format sarif \
+      >"${tmp_sarif}" 2>/dev/null || file_rc=$?
+  else
+    docker run --rm \
+      -v "${repo_root}:/src:ro" \
+      "ghcr.io/synacktiv/octoscan@${OCTOSCAN_DIGEST}" \
+      scan "/src/${rel}" \
+      --disable-rules "${DISABLE_RULES}" \
+      --ignore "${IGNORE_PATTERN}" || file_rc=$?
+  fi
+  if [[ ${file_rc} -gt ${max_rc} ]]; then
+    max_rc=${file_rc}
+  fi
+done
+
+if [[ -n ${sarif_out} && ${max_rc} -ne 1 ]]; then
+  # Aggregate: the first SARIF carries the driver + rules manifest
+  # (identical across invocations of the same image). Concatenate
+  # `runs[0].results` from every per-file SARIF.
+  jq -s '
+    [.[].runs[0].results // []] as $all
+    | .[0]
+    | .runs[0].results = ($all | add)
+  ' "${per_file_sarifs[@]}" >"${sarif_out}"
+fi
+
+case "${max_rc}" in
 0)
   printf 'has-finding=false\n'
   exit 0
