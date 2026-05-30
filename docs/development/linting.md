@@ -27,7 +27,7 @@ into the Nix store and is `.gitignore`d. Edits go in `flake.nix`'s
 `pre-commit.settings.hooks` block, not the symlink target.
 
 Hooks: actionlint, check-jsonschema, commitizen (commit-msg),
-deadnix, editorconfig-checker, markdownlint, nixfmt,
+deadnix, editorconfig-checker, markdownlint, nixfmt, octoscan,
 statix, typos, yamllint, shellcheck (skipping `justfile`), treefmt,
 zizmor (`--min-severity=low`), flake-show-fresh,
 uses-sha-pinned.
@@ -74,6 +74,17 @@ Workflow-security linter; `--min-severity=low` to catch everything.
 Suppressions live in `zizmor.yml` with documented rationale per
 suppressed rule + workflow. Do not raise `--min-severity` above
 `low` without a security-review entry in `.claude/CLAUDE.md`.
+
+## Octoscan
+
+Workflow-vulnerability scanner; runs synacktiv/octoscan via a pinned
+ghcr.io container image against `.github/workflows/`. The pre-commit
+hook fires when any `.github/workflows/*.yml` or `*.yaml` file is
+staged; it always scans the full directory to match the CI workflow's
+invocation. Docker is required — the hook exits with a SKIP hint if
+docker is missing. The pinned image digest and the version label
+tracked by Renovate both live in `scripts/octoscan-scan.sh` (single
+source of truth).
 
 ## Treefmt YAML quote gotcha
 
