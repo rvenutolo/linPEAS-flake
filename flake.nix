@@ -921,6 +921,24 @@
             pass_filenames = false;
             language = "system";
           };
+          # Asserts the cron schedule table in docs/architecture/ci.md
+          # matches cron triggers in .github/workflows/*.yml — set
+          # parity, cron string accuracy, and daily arrow-list ordering
+          # with strictly increasing UTC times.
+          check-cron-table = {
+            enable = true;
+            name = "check-cron-table";
+            description = "Cron schedule table + ordering paragraph in docs/architecture/ci.md matches workflow cron triggers.";
+            entry = "${pkgs-unstable.writeShellScript "check-cron-table-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-cron-table.sh
+            ''}";
+            files = "^(\\.github/workflows/.*\\.ya?ml|docs/architecture/ci\\.md|scripts/check-cron-table\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
         };
 
         # Wrap the bundled pre-commit binary to scrub PYTHONPATH before

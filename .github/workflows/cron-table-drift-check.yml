@@ -1,0 +1,73 @@
+name: cron-table-drift-check
+
+# Weekly + push-triggered drift check for the cron schedule table in
+# docs/architecture/ci.md. Fails if the table or its ordering
+# paragraph drifts from cron lines under .github/workflows/. Same
+# source of truth as the local pre-commit hook
+# (scripts/check-cron-table.sh).
+
+on:
+  schedule:
+    - cron: "25 12 * * 1" # Monday 12:25 UTC (between actionlint-drift 12:15 and gitleaks/trufflehog 13:00)
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**.yml"
+      - "docs/architecture/ci.md"
+      - "scripts/check-cron-table.sh"
+
+permissions: {}
+
+concurrency:
+  group: cron-table-drift-check
+  cancel-in-progress: false
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      result: ${{ steps.probe.outcome }}
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - name: scripts/check-cron-table.sh
+        id: probe
+        run: bash scripts/check-cron-table.sh
+
+  notify:
+    name: notify
+    needs: drift-check
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      issues: write
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.drift-check.result == 'failure' && 'failure' || (needs.drift-check.result == 'success' && 'success' || 'skipped') }}
+          label: cron-table-drift
+          title: "cron-table-drift-check: docs/architecture/ci.md drifted from .github/workflows/"
+          body: |
+            The `cron-table-drift-check` watchdog detected drift between
+            the cron schedule table (or its ordering paragraph) in
+            `docs/architecture/ci.md` and the `cron:` lines under
+            `.github/workflows/`.
+
+            Run `bash scripts/check-cron-table.sh` locally to see the
+            specific mismatch.
+          github-token: ${{ secrets.GITHUB_TOKEN }}
