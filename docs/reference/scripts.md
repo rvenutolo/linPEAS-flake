@@ -64,6 +64,18 @@ Lint: every `cosign verify` invocation pins both
 `--certificate-identity` (or `-regexp`) and `--certificate-oidc-issuer`
 so verification is bound to a specific signer.
 
+### scripts/check-cron-table.sh
+
+Lint: cron schedule table in docs/architecture/ci.md
+matches cron triggers in .github/workflows/\*.yml — set parity, cron
+string accuracy, and daily arrow-list ordering with strictly
+increasing UTC times.
+
+Exit codes:
+0 all checks passed
+1 drift detected (details printed to stderr)
+2 missing input files / parse error
+
 ### scripts/check-doc-anchors.sh
 
 Lint: every markdown #anchor link pointing at an

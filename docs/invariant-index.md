@@ -50,7 +50,7 @@ live in `.claude/CLAUDE.md` (untracked).
 - **flake.nix pin invariants** — `pin.version` regex, `pin.url` prefix. → [architecture/auto-update.md](architecture/auto-update.md) <!-- enforcer: -; ci: -; hook: - -->
 - **Release VERSION shape** — `[A-Za-z0-9._/-]+`. → [architecture/auto-update.md](architecture/auto-update.md) <!-- enforcer: -; ci: -; hook: - -->
 - **Linpeas-pin release-trigger** — pin change must cut release. → [architecture/auto-update.md](architecture/auto-update.md) <!-- enforcer: -; ci: -; hook: - -->
-- **Stale-pin attribution / cron-notify root-cause / dockerhub-sync trigger / Pages invariants / Cron schedule** → [architecture/ci.md](architecture/ci.md) <!-- enforcer: -; ci: -; hook: - -->
+- **Stale-pin attribution / cron-notify root-cause / dockerhub-sync trigger / Pages invariants / Cron schedule** — cron schedule table in docs/architecture/ci.md must match workflow cron triggers. → [architecture/ci.md](architecture/ci.md) <!-- enforcer: scripts/check-cron-table.sh; ci: -; hook: - -->
 - **update-flake-lock credential split / renovate-flake-lock-refresh** → [architecture/flake-input-bumps.md](architecture/flake-input-bumps.md) <!-- enforcer: -; ci: -; hook: - -->
 
 ## Install / Runbooks
