@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+# tests/octoscan-scan.test.sh
+#
+# Failure-mode harness for scripts/octoscan-scan.sh.
+# Covers argument-parsing errors and the docker-missing branch without
+# requiring a live Docker daemon.
+
+set -Eeuo pipefail
+IFS=$'\n\t'
+
+repo_root="$(git rev-parse --show-toplevel)"
+readonly REPO_ROOT="${repo_root}"
+readonly SCRIPT="${REPO_ROOT}/scripts/octoscan-scan.sh"
+
+failures=0
+
+# @description Run the script; assert exit code + optional stderr/stdout substrings.
+# @arg $1 scenario name
+# @arg $2 expected exit code (0 or 1)
+# @arg $3 expected stderr substring (empty skips the check)
+# @arg $4 expected stdout substring (empty skips the check)
+# @arg $5 env override string passed to `env` (e.g. "PATH=/nonexistent"), or empty
+# @arg $6... arguments forwarded to the script
+function run_scenario() {
+  local -r name="$1"
+  local -r expected_exit="$2"
+  local -r expected_stderr="$3"
+  local -r expected_stdout="$4"
+  local -r env_override="$5"
+  shift 5
+
+  local stdout_file stderr_file
+  stdout_file="$(mktemp)"
+  stderr_file="$(mktemp)"
+
+  local actual_exit=0
+  if [[ -n ${env_override} ]]; then
+    # Unset BASH_ENV so that .bashrc (and any profile it sources) cannot
+    # re-inject system PATH entries into the controlled environment.
+    env --unset=BASH_ENV "${env_override}" "${SCRIPT}" "$@" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  else
+    "${SCRIPT}" "$@" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  fi
+
+  local failed=0
+
+  if [[ ${actual_exit} -ne ${expected_exit} ]]; then
+    printf 'FAIL: %s — expected exit %d, got %d\n' \
+      "${name}" "${expected_exit}" "${actual_exit}" >&2
+    printf 'stderr was:\n' >&2
+    cat -- "${stderr_file}" >&2
+    failed=1
+  fi
+
+  if [[ -n ${expected_stderr} ]] &&
+    ! grep --fixed-strings --quiet -- "${expected_stderr}" "${stderr_file}"; then
+    printf 'FAIL: %s — stderr missing %q\n' "${name}" "${expected_stderr}" >&2
+    printf 'stderr was:\n' >&2
+    cat -- "${stderr_file}" >&2
+    failed=1
+  fi
+
+  if [[ -n ${expected_stdout} ]] &&
+    ! grep --fixed-strings --quiet -- "${expected_stdout}" "${stdout_file}"; then
+    printf 'FAIL: %s — stdout missing %q\n' "${name}" "${expected_stdout}" >&2
+    printf 'stdout was:\n' >&2
+    cat -- "${stdout_file}" >&2
+    failed=1
+  fi
+
+  if [[ ${failed} -eq 0 ]]; then
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  else
+    failures=$((failures + 1))
+  fi
+
+  rm --force -- "${stdout_file}" "${stderr_file}"
+}
+
+function main() {
+  run_scenario 'unknown argument exits 1' \
+    1 'unknown argument' '' '' \
+    --bogus
+
+  run_scenario '--sarif without path exits 1' \
+    1 'requires a path' '' '' \
+    --sarif
+
+  # Build a PATH that excludes any directory containing the real docker binary
+  # so that `command -v docker` fails inside the script. Strip each colon-
+  # separated entry that contains a `docker` executable.
+  local no_docker_path=""
+  local dir
+  while IFS= read -r -d ':' dir || [[ -n ${dir} ]]; do
+    [[ -x "${dir}/docker" ]] || no_docker_path="${no_docker_path:+${no_docker_path}:}${dir}"
+  done <<<"${PATH}:"
+  run_scenario 'missing docker exits 1 with SKIP hint and has-finding=false' \
+    1 'SKIP=octoscan' 'has-finding=false' "PATH=${no_docker_path}"
+
+  if ((failures > 0)); then
+    printf '\n%d test(s) failed\n' "${failures}" >&2
+    exit 1
+  fi
+  printf '\nall tests passed\n'
+}
+
+main "$@"

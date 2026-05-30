@@ -400,6 +400,55 @@ tar size — what the image takes on disk when pulled.
 Exits 0 on success, non-zero on missing inputs or measurement failure.
 Diagnostic messages go to stderr.
 
+### scripts/octoscan-scan.sh
+
+Run synacktiv/octoscan against `.github/workflows`
+via the pinned ghcr container image. Single source of truth for
+the image digest, the version label tracked by Renovate, the
+noise-suppression flags, and the exit-code mapping shared by the
+CI workflow and the pre-commit hook.
+
+Usage:
+scripts/octoscan-scan.sh # text output to stdout
+scripts/octoscan-scan.sh --sarif <path> # SARIF output to <path>
+
+Exit codes:
+0 — scan clean
+1 — findings present, OR real error (docker missing,
+image pull failure, scanner internal error). The caller
+must distinguish via the `has-finding` line printed to
+stdout (`has-finding=true|false`) — same contract the CI
+workflow already exposes via `$GITHUB_OUTPUT`.
+
+Per-file iteration: octoscan v0.1.7 directory-target mode silently
+returns exit 0 with empty SARIF even when a single-file invocation
+against the same workflow flags a finding. Loop over each workflow
+yaml, take the max exit code, and merge per-file SARIF
+`runs[0].results` into a single SARIF document for upload.
+
+Suppressions (CLI flags — `--config-file` is documented but
+`paths.<glob>.ignore` is a no-op in v0.1.7):
+--disable-rules local-action : repo intentionally uses
+`./.github/actions/*` composite actions (e.g.
+notify-workflow-result, setup-nix); every reference is a
+false positive.
+--disable-rules dangerous-write : every `>> "$GITHUB_OUTPUT"`
+and `>> "$GITHUB_ENV"` is flagged regardless of input
+trust; the rule has no notion of which writes carry
+attacker-controlled data, so it is unworkably noisy here.
+--ignore '(needs|steps).\*\*.outputs.\*\*' : `expression-injection`
+fires on every workflow-internal `${{ needs.X.outputs.Y }}`
+/ `${{ steps.X.outputs.Y }}` reference; those carry data
+set by other jobs/steps in the same workflow, not external
+input.
+--ignore "actions/checkout' with a custom ref" : same regex
+covers the renovate-flake-lock-refresh workflow's
+`actions/checkout` with `ref:` set to a bot-controlled
+branch — the ref source is internal, not attacker-supplied.
+
+Renovate manages OCTOSCAN_DIGEST + OCTOSCAN_VERSION in lockstep
+(renovate.json customManager scoped to this file).
+
 {% endraw %}
 
 <!-- END scripts-reference -->

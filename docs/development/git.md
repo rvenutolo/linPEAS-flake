@@ -107,6 +107,7 @@ Hooks (alphabetical):
 | `nix-run-pinned`                    | No unpinned nix run nixpkgs#<pkg>; use nix shell .#<pkg> or pin a rev.                         |
 | `nixfmt`                            | Nix file formatting.                                                                           |
 | `nixpkgs-hammering`                 | nixpkgs idiom checker for the linpeas derivation.                                              |
+| `octoscan`                          | synacktiv/octoscan workflow vulnerability scanner.                                             |
 | `pin-diff-isolated`                 | Only scripts/bump-linpeas.sh mutates linpeas-pin.json.                                         |
 | `pre-commit-hooks-sha-parity`       | The pre-commit-hooks input SHA in flake.nix matches flake.lock locked.rev.                     |
 | `precommit-table-fresh`             | Hook table in docs/development/git.md matches the flake hook manifest.                         |

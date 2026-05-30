@@ -60,23 +60,22 @@ jobs:
 
       - name: octoscan scan
         id: scan
-        # Renovate manages digest + OCTOSCAN_VERSION in lockstep (renovate.json customManager).
+        # Single source of truth for the pinned ghcr image digest +
+        # OCTOSCAN_VERSION lives in scripts/octoscan-scan.sh.
+        # Renovate's customManager is scoped to that script.
         run: |
           set -Eeuo pipefail
           rc=0
-          docker run --rm \
-            -v "$PWD:/src:ro" \
-            ghcr.io/synacktiv/octoscan@sha256:3368f42651f9ca0d7a7cd08de3b734476046d17ffa0b2b0c6c55acef556300db \
-            scan /src/.github/workflows \
-            --format sarif \
-            > octoscan.sarif || rc=$?
-          case "$rc" in
-            0) echo "has-finding=false" >> "$GITHUB_OUTPUT" ;;
-            2) echo "has-finding=true"  >> "$GITHUB_OUTPUT"; exit 1 ;;
-            *) echo "has-finding=false" >> "$GITHUB_OUTPUT"; exit 1 ;;
-          esac
-        env:
-          OCTOSCAN_VERSION: "v0.1.7"
+          # Script prints `has-finding=true|false` to stdout exactly
+          # once and writes the SARIF report to the path passed via
+          # `--sarif`. Capture stdout to forward `has-finding` to
+          # GITHUB_OUTPUT; rc=0 clean, rc=1 = findings present OR
+          # real error (notify jobs branch on has-finding).
+          stdout="$(scripts/octoscan-scan.sh --sarif octoscan.sarif)" || rc=$?
+          has_finding="$(printf '%s\n' "${stdout}" | grep -E '^has-finding=' | tail -n1 || true)"
+          [[ -n "${has_finding}" ]] || has_finding="has-finding=false"
+          echo "${has_finding}" >> "$GITHUB_OUTPUT"
+          exit "${rc}"
 
       - name: upload SARIF
         if: always()
