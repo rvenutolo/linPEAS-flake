@@ -36,4 +36,11 @@ runs:
         extra_nix_config: |
           experimental-features = nix-command flakes
           access-tokens = github.com=${{ inputs.github-token }}
+          # Substituter resilience. cache.nixos.org and flakehub-cache
+          # intermittently return HTTP 416 on resumed NAR ranges or rate-limit
+          # under burst load; nix defaults of zero retries + short timeouts
+          # convert these transient blips into red CI jobs that re-run clean.
+          download-attempts = 5
+          connect-timeout = 15
+          stalled-download-timeout = 30
           ${{ inputs.extra-nix-config }}
