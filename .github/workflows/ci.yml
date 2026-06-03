@@ -164,6 +164,10 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
+          # Full history so `measure main baseline` can build a worktree at
+          # origin/main without nix's libgit2 fetcher tripping on a shallow
+          # `.git/shallow` boundary when walking parent commits.
+          fetch-depth: 0
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -209,7 +213,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
-          git fetch origin main --depth=1
+          git fetch origin main
           main_dir="$(mktemp -d)/main"
           # Cleanup runs on every exit path so a failed nix build does
           # not leave a dangling worktree registration in .git/worktrees.
