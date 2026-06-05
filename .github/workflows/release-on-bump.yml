@@ -163,7 +163,7 @@ jobs:
       - name: attest provenance for pin file
         id: attest-pin
         if: steps.exists.outputs.exists == 'false' || inputs.backfill-tag != ''
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-path: linpeas-pin.json
 
@@ -246,7 +246,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3
+      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
 
       - name: build OCI image (amd64)
         if: inputs.backfill-tag == ''
@@ -373,14 +373,14 @@ jobs:
           printf 'hub_digest=%s\n' "${hub_digest}" >> "${GITHUB_OUTPUT}"
 
       - name: attest provenance for ghcr image (amd64)
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-name: ghcr.io/rvenutolo/linpeas
           subject-digest: ${{ steps.push.outputs.ghcr_digest || steps.pull.outputs.ghcr_digest }}
           push-to-registry: true
 
       - name: attest provenance for Docker Hub image (amd64)
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-name: docker.io/rvenutolo/linpeas
           subject-digest: ${{ steps.push.outputs.hub_digest || steps.pull.outputs.hub_digest }}
@@ -408,7 +408,7 @@ jobs:
         # SBOM file bytes themselves; its bundle becomes the
         # .intoto.jsonl release-asset sidecar consumed by Scorecard.
         id: attest-sbom-amd64
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-path: linpeas-image-amd64.cdx.json
 
@@ -523,7 +523,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3
+      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
 
       - name: build OCI image (arm64)
         if: inputs.backfill-tag == ''
@@ -633,14 +633,14 @@ jobs:
           printf 'hub_digest=%s\n' "${hub_digest}" >> "${GITHUB_OUTPUT}"
 
       - name: attest provenance for ghcr image (arm64)
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-name: ghcr.io/rvenutolo/linpeas
           subject-digest: ${{ steps.push.outputs.ghcr_digest || steps.pull.outputs.ghcr_digest }}
           push-to-registry: true
 
       - name: attest provenance for Docker Hub image (arm64)
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-name: docker.io/rvenutolo/linpeas
           subject-digest: ${{ steps.push.outputs.hub_digest || steps.pull.outputs.hub_digest }}
@@ -660,7 +660,7 @@ jobs:
       - name: attest provenance for SBOM bytes (arm64)
         # See amd64 job for rationale.
         id: attest-sbom-arm64
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-path: linpeas-image-arm64.cdx.json
 
@@ -753,7 +753,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3
+      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: login to ghcr
         env:
           GH_TOKEN_INLINE: ${{ github.token }}
@@ -1031,7 +1031,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3
+      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: verify per-arch attestations
         # `gh attestation verify` reads attestations from the Sigstore
         # transparency log + the GitHub API; it does NOT require docker

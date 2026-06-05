@@ -148,6 +148,14 @@ Lint: docs/invariant-index.md and docs/\*\*/\*.md stay
 in lockstep — every index pointer resolves to a real file, and
 every non-EXEMPT docs file has an index entry.
 
+### scripts/check-patch-tag-pins.sh
+
+Lint: every SHA-pinned `uses:` in workflow / composite
+action files carries an exact patch-tag comment (e.g. `# v1.2.3`)
+rather than a floating major-tag comment (e.g. `# v1`), UNLESS the
+same line also carries an inline `# patch-tag-exception: <reason>`
+marker.
+
 ### scripts/check-pin-diff-isolated.sh
 
 Lint: exactly one script under `scripts/` writes to
@@ -377,6 +385,24 @@ exposed by `flake.nix` as `devTooling.<system>.treefmtConfig`.
 
 ## Other
 
+### scripts/apply-patch-tag-pin-rewrite.sh
+
+Apply the patch-tag pin comment rewrite recorded in an
+inventory TSV produced by scripts/inventory-action-pin-tags.sh.
+Refuses to run if any recorded line content no longer matches the
+inventory (stale inventory protection) — aborts before mutating any
+file so the rewrite is all-or-nothing across the tree.
+
+OK rows have `target_comment` populated and are applied in place.
+NO_PATCH_TAG rows are skipped with a stderr warning.
+Any API_FAILURE row aborts the run before any mutation.
+
+Literal substring splicing via awk index/substr — no regex pitfalls
+on semver dots or path slashes.
+
+Default inventory path: .claude/scratch/action-pin-inventory.tsv
+Override with --inventory PATH.
+
 ### scripts/bump-linpeas.sh
 
 Bump linpeas-pin.json to the latest peass-ng/PEASS-ng release.
@@ -391,6 +417,13 @@ and exits 0 on full match, 1 on any divergence, 2 on bad input.
 
 Generate docs/\_data/dashboard.yml for the MkDocs site
 by aggregating pin metadata and live GitHub REST API data.
+
+### scripts/inventory-action-pin-tags.sh
+
+Enumerate every SHA-pinned `uses:` in
+.github/workflows/\*.yml and .github/actions/\*\*/action.yml, resolve
+each pinned SHA to its exact patch tag via `gh api .../tags`, and
+emit a TSV mapping pin -> patch tag for downstream rewrite tooling.
 
 ### scripts/measure-image-size.sh
 

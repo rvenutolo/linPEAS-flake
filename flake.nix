@@ -467,6 +467,20 @@
             pass_filenames = false;
             language = "system";
           };
+          patch-tag-pins = {
+            enable = true;
+            name = "patch-tag-pins";
+            description = "SHA-pinned uses: comments name exact patch tag (vX.Y.Z), not major (vX).";
+            entry = "${pkgs-unstable.writeShellScript "patch-tag-pins-hook" ''
+              set -Eeuo pipefail
+              IFS=$'\n\t'
+              if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+              exec ${pkgs-unstable.bash}/bin/bash scripts/check-patch-tag-pins.sh
+            ''}";
+            files = "^(\\.github/workflows/.*\\.ya?ml|\\.github/actions/.*\\.ya?ml|scripts/check-patch-tag-pins\\.sh)$";
+            pass_filenames = false;
+            language = "system";
+          };
           # Asserts every job in .github/workflows/*.yml starts with
           # step-security/harden-runner as its first step. Belt-and-braces
           # lint mirrors the trust-model invariant; eBPF monitor must

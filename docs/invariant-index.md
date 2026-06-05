@@ -12,6 +12,7 @@ live in `.claude/CLAUDE.md` (untracked).
 ## Security
 
 - **Workflow SHA pinning** — every `uses:` SHA-pinned. → [security/repo-config.md](security/repo-config.md) <!-- enforcer: scripts/check-uses-sha-pinned.sh; ci: uses-sha-pinned; hook: uses-sha-pinned -->
+- **action pin comment** — SHA-pinned `uses:` carry exact patch-tag comment (`# vX.Y.Z`) not floating major (`# vX`), with inline `# patch-tag-exception: <reason>` markers for refs without a patch tag. → [architecture/pin-convention.md](architecture/pin-convention.md) <!-- enforcer: scripts/check-patch-tag-pins.sh; ci: -; hook: patch-tag-pins -->
 - **Renovate invariants** — pinDigests, minimumReleaseAge, no top-level automerge. → [security/repo-config.md](security/repo-config.md) <!-- enforcer: scripts/check-renovate-invariants.sh, scripts/check-renovate-config-validator.sh; ci: renovate-invariants, renovate-config-validator; hook: renovate-config-validator -->
 - **Tag-protection ruleset** — `release-tag-protection`, drift-check lint. → [security/repo-config.md](security/repo-config.md) <!-- enforcer: scripts/check-tag-protection.sh; ci: tag-protection-drift-check; hook: - -->
 - **Allowed-actions allowlist** — vendor list canonical; drift = incident. → [security/allowed-actions.md](security/allowed-actions.md) <!-- enforcer: scripts/check-allowed-actions-api.sh; ci: allowed-actions-api-harness; hook: - -->
