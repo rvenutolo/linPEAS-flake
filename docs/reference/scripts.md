@@ -392,6 +392,13 @@ and exits 0 on full match, 1 on any divergence, 2 on bad input.
 Generate docs/\_data/dashboard.yml for the MkDocs site
 by aggregating pin metadata and live GitHub REST API data.
 
+### scripts/inventory-action-pin-tags.sh
+
+Enumerate every SHA-pinned `uses:` in
+.github/workflows/\*.yml and .github/actions/\*\*/action.yml, resolve
+each pinned SHA to its exact patch tag via `gh api .../tags`, and
+emit a TSV mapping pin -> patch tag for downstream rewrite tooling.
+
 ### scripts/measure-image-size.sh
 
 Measure two sizes of a built dockerTools image tar.gz
