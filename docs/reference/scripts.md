@@ -148,6 +148,14 @@ Lint: docs/invariant-index.md and docs/\*\*/\*.md stay
 in lockstep — every index pointer resolves to a real file, and
 every non-EXEMPT docs file has an index entry.
 
+### scripts/check-patch-tag-pins.sh
+
+Lint: every SHA-pinned `uses:` in workflow / composite
+action files carries an exact patch-tag comment (e.g. `# v1.2.3`)
+rather than a floating major-tag comment (e.g. `# v1`), UNLESS the
+same line also carries an inline `# patch-tag-exception: <reason>`
+marker.
+
 ### scripts/check-pin-diff-isolated.sh
 
 Lint: exactly one script under `scripts/` writes to
