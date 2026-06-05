@@ -1,0 +1,3 @@
+file	line	ref	pinned_sha	current_comment	target_comment	status
+tests/fixtures/apply-patch-tag-pin-rewrite/before.yml	4	github/codeql-action/init	03e4368ac7daa2bd82b3e85262f3bf87ee112f57	v3	v3.36.0	OK
+tests/fixtures/apply-patch-tag-pin-rewrite/before.yml	5	github/codeql-action/analyze	03e4368ac7daa2bd82b3e85262f3bf87ee112f57	v3	v3.36.0	OK

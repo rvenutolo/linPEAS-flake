@@ -377,6 +377,24 @@ exposed by `flake.nix` as `devTooling.<system>.treefmtConfig`.
 
 ## Other
 
+### scripts/apply-patch-tag-pin-rewrite.sh
+
+Apply the patch-tag pin comment rewrite recorded in an
+inventory TSV produced by scripts/inventory-action-pin-tags.sh.
+Refuses to run if any recorded line content no longer matches the
+inventory (stale inventory protection) — aborts before mutating any
+file so the rewrite is all-or-nothing across the tree.
+
+OK rows have `target_comment` populated and are applied in place.
+NO_PATCH_TAG rows are skipped with a stderr warning.
+Any API_FAILURE row aborts the run before any mutation.
+
+Literal substring splicing via awk index/substr — no regex pitfalls
+on semver dots or path slashes.
+
+Default inventory path: .claude/scratch/action-pin-inventory.tsv
+Override with --inventory PATH.
+
 ### scripts/bump-linpeas.sh
 
 Bump linpeas-pin.json to the latest peass-ng/PEASS-ng release.
