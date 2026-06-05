@@ -66,7 +66,7 @@ jobs:
 
       - name: analyze
         id: analyze
-        uses: github/codeql-action/analyze@03e4368ac7daa2bd82b3e85262f3bf87ee112f57 # v3
+        uses: github/codeql-action/analyze@03e4368ac7daa2bd82b3e85262f3bf87ee112f57 # v3.36.0
         with:
           category: "/language:actions"
           # Fail the workflow on any CRITICAL-severity finding so the
