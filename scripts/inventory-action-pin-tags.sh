@@ -65,7 +65,21 @@ resolve_patch_tag() {
   local -r owner_repo="$1"
   local -r sha="$2"
   local payload
-  if [[ -z ${tag_cache[${owner_repo}]:-} ]]; then
+  # If INVENTORY_TAG_FIXTURE_DIR is set, read tag data from
+  # "${INVENTORY_TAG_FIXTURE_DIR}/<owner>__<repo>.tsv" instead of calling
+  # gh api. File format: one tag per line, `<tag>\t<sha>`. Missing file =
+  # empty payload = NO_PATCH_TAG. Use [[ -v ... ]] presence check so an
+  # empty payload doesn't trigger a re-query on subsequent calls.
+  if [[ -n ${INVENTORY_TAG_FIXTURE_DIR:-} ]]; then
+    if [[ ! -v tag_cache[${owner_repo}] ]]; then
+      local fixture_file="${INVENTORY_TAG_FIXTURE_DIR}/${owner_repo//\//__}.tsv"
+      if [[ -f ${fixture_file} ]]; then
+        tag_cache[${owner_repo}]=$(cat "${fixture_file}")
+      else
+        tag_cache[${owner_repo}]=""
+      fi
+    fi
+  elif [[ ! -v tag_cache[${owner_repo}] ]]; then
     if ! payload=$(gh api --paginate "repos/${owner_repo}/tags" \
       --jq '.[] | [.name, .commit.sha] | @tsv' 2>/dev/null); then
       tag_cache[${owner_repo}]="__API_FAIL__"
@@ -93,7 +107,9 @@ resolve_patch_tag() {
 printf 'file\tline\tref\tpinned_sha\tcurrent_comment\ttarget_comment\tstatus\n' >"${OUTPUT}"
 
 # Match:  [- ] uses: <owner/repo[/path]>@<40-hex> # <tag>
-re='^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*([^@[:space:]]+)@([0-9a-f]{40})[[:space:]]*#[[:space:]]*([^[:space:]]+)'
+# Note: quoted `uses:` forms (e.g. uses: "actions/checkout@..." ) are not
+# supported; the convention in this repo is unquoted.
+re='^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*([^@[:space:]]+)@([0-9a-fA-F]{40})[[:space:]]*#[[:space:]]*([^[:space:]]+)'
 
 for file in "${paths[@]}"; do
   [[ -f ${file} ]] || continue

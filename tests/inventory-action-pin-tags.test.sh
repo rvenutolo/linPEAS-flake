@@ -14,6 +14,7 @@ trap 'rm -f "${OUT}"' EXIT
 cd "${REPO_ROOT}"
 
 INVENTORY_PATHS_OVERRIDE="${INPUT}" \
+  INVENTORY_TAG_FIXTURE_DIR="${FIXTURE_DIR}/tag-fixtures" \
   bash "${SCRIPT}" --output "${OUT}"
 
 if ! diff -u "${EXPECTED}" "${OUT}"; then
