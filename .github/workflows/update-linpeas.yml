@@ -160,6 +160,36 @@ jobs:
           branch="chore/bump-linpeas-${NEW}"
           api_header="X-GitHub-Api-Version: 2022-11-28"
 
+          # Idempotency gate. If a PR already exists for this branch
+          # (same upstream version recurring across cron runs), branch
+          # state from the prior run is authoritative — never recreate.
+          # `gh pr view` returns PRs in any state, so inspect state
+          # explicitly before deciding.
+          pr_state="$(gh pr view "${branch}" --json state --jq .state 2>/dev/null || true)"
+          case "${pr_state}" in
+            OPEN)
+              # Prior run already opened the PR; files on branch are
+              # already correct. Re-assert auto-merge (idempotent) in
+              # case checks have since flipped and the merge stalled.
+              printf 'reusing open PR for %s\n' "${branch}"
+              gh pr merge "${branch}" --auto --merge
+              exit 0
+              ;;
+            CLOSED|MERGED)
+              # Same-version PR was already closed (declined) or merged
+              # (shipped). Recreating would overwrite that outcome.
+              # Fail loudly so notify files an issue.
+              printf 'PR for %s already in state %s - aborting\n' "${branch}" "${pr_state}" >&2
+              exit 1
+              ;;
+            '')
+              ;;
+            *)
+              printf 'unexpected PR state %q for %s\n' "${pr_state}" "${branch}" >&2
+              exit 1
+              ;;
+          esac
+
           # Resolve main HEAD sha (for branch creation) and per-file blob
           # SHAs on main (required by PUT /contents to identify the
           # file being replaced).
@@ -168,7 +198,10 @@ jobs:
           pin_blob_sha="$(git rev-parse "origin/main:linpeas-pin.json")"
           flake_outputs_blob_sha="$(git rev-parse "origin/main:docs/reference/flake-outputs.md")"
 
-          # Delete stale branch ref if a prior failed run left one behind.
+          # Delete stale orphan branch ref (no PR attached) if a prior
+          # failed run left one behind. Safe here: the PR-state gate
+          # above already rejected the case where a PR — open or
+          # closed — references this ref.
           if gh api "repos/${REPO}/git/refs/heads/${branch}" \
               --header "${api_header}" >/dev/null 2>&1; then
             gh api --method DELETE "repos/${REPO}/git/refs/heads/${branch}" \
@@ -201,18 +234,15 @@ jobs:
             --field branch="${branch}" \
             --header "${api_header}" >/dev/null
 
-          # Open PR only if one does not already exist for this branch.
-          if ! gh pr view "${branch}" >/dev/null 2>&1; then
-            body="$(mktemp)"
-            trap 'rm --force -- "${body}"' EXIT
-            printf "Auto-generated bump from \`%s\` to \`%s\`.\n\nUpstream release: https://github.com/peass-ng/PEASS-ng/releases/tag/%s\n" \
-              "${OLD}" "${NEW}" "${NEW}" > "${body}"
-            gh pr create \
-              --base main \
-              --head "${branch}" \
-              --title "chore: bump linpeas to ${NEW}" \
-              --body-file "${body}"
-          fi
+          body="$(mktemp)"
+          trap 'rm --force -- "${body}"' EXIT
+          printf "Auto-generated bump from \`%s\` to \`%s\`.\n\nUpstream release: https://github.com/peass-ng/PEASS-ng/releases/tag/%s\n" \
+            "${OLD}" "${NEW}" "${NEW}" > "${body}"
+          gh pr create \
+            --base main \
+            --head "${branch}" \
+            --title "chore: bump linpeas to ${NEW}" \
+            --body-file "${body}"
 
           gh pr merge "${branch}" --auto --merge
 
