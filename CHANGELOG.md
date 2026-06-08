@@ -6,6 +6,38 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20260604-085abf96] - 2026-06-08
+
+### Chores
+- Bump linpeas to 20260604-085abf96 ([#301](https://github.com/rvenutolo/linPEAS-flake/pull/301)) ([#301](https://github.com/rvenutolo/linPEAS-flake/pull/301))
+- Bump linpeas to 20260604-085abf96
+- Update flake.lock ([#297](https://github.com/rvenutolo/linPEAS-flake/pull/297)) ([#297](https://github.com/rvenutolo/linPEAS-flake/pull/297))
+- Update flake.lock
+- Pin GitHub Actions to exact patch tags ([#296](https://github.com/rvenutolo/linPEAS-flake/pull/296)) ([#296](https://github.com/rvenutolo/linPEAS-flake/pull/296))
+- Pin GitHub Actions to exact patch tags
+- Pin codeql-action/init comment to exact patch tag
+- Set nix substituter retry + timeouts in setup-nix ([#294](https://github.com/rvenutolo/linPEAS-flake/pull/294)) ([#294](https://github.com/rvenutolo/linPEAS-flake/pull/294))
+- Set nix substituter retry + timeouts in setup-nix
+
+### Documentation
+- Document patch-tag pin convention
+
+### Features
+- Enforce patch-tag pin convention via pre-commit hook
+- Add check-patch-tag-pins.sh lint
+- Add apply-patch-tag-pin-rewrite.sh
+- Add inventory-action-pin-tags.sh
+
+### Fixes
+- Make update-linpeas idempotent on same-version reruns ([#300](https://github.com/rvenutolo/linPEAS-flake/pull/300)) ([#300](https://github.com/rvenutolo/linPEAS-flake/pull/300))
+- Rebase open same-version bump PR onto main HEAD before re-merging
+- Make update-linpeas push-and-merge idempotent on same-version reruns
+- Unshallow image-smoke checkout for main baseline build ([#293](https://github.com/rvenutolo/linPEAS-flake/pull/293)) ([#293](https://github.com/rvenutolo/linPEAS-flake/pull/293))
+- Unshallow image-smoke checkout for main baseline build
+
+### Tests
+- Inventory-action-pin-tags offline-test fixture mode
+
 ## [20260601-a39c90f1] - 2026-06-01
 
 ### CI
