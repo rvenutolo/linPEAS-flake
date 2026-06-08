@@ -162,18 +162,18 @@ jobs:
 
           # Idempotency gate. If a PR already exists for this branch
           # (same upstream version recurring across cron runs), branch
-          # state from the prior run is authoritative — never recreate.
+          # state from the prior run is authoritative.
           # `gh pr view` returns PRs in any state, so inspect state
           # explicitly before deciding.
           pr_state="$(gh pr view "${branch}" --json state --jq .state 2>/dev/null || true)"
           case "${pr_state}" in
             OPEN)
-              # Prior run already opened the PR; files on branch are
-              # already correct. Re-assert auto-merge (idempotent) in
-              # case checks have since flipped and the merge stalled.
-              printf 'reusing open PR for %s\n' "${branch}"
-              gh pr merge "${branch}" --auto --merge
-              exit 0
+              # Reuse the existing PR. To clear strict-required-status
+              # branch-up-to-date enforcement, force-update the branch
+              # ref to main HEAD (rebase) below before re-applying file
+              # commits. The PR survives the force-update; auto-merge
+              # picks up from the new HEAD.
+              open_pr=true
               ;;
             CLOSED|MERGED)
               # Same-version PR was already closed (declined) or merged
@@ -183,6 +183,7 @@ jobs:
               exit 1
               ;;
             '')
+              open_pr=false
               ;;
             *)
               printf 'unexpected PR state %q for %s\n' "${pr_state}" "${branch}" >&2
@@ -190,29 +191,41 @@ jobs:
               ;;
           esac
 
-          # Resolve main HEAD sha (for branch creation) and per-file blob
-          # SHAs on main (required by PUT /contents to identify the
+          # Resolve main HEAD sha (for branch creation/rebase) and per-file
+          # blob SHAs on main (required by PUT /contents to identify the
           # file being replaced).
           base_sha="$(gh api "repos/${REPO}/git/refs/heads/main" \
             --jq .object.sha --header "${api_header}")"
           pin_blob_sha="$(git rev-parse "origin/main:linpeas-pin.json")"
           flake_outputs_blob_sha="$(git rev-parse "origin/main:docs/reference/flake-outputs.md")"
 
-          # Delete stale orphan branch ref (no PR attached) if a prior
-          # failed run left one behind. Safe here: the PR-state gate
-          # above already rejected the case where a PR — open or
-          # closed — references this ref.
-          if gh api "repos/${REPO}/git/refs/heads/${branch}" \
-              --header "${api_header}" >/dev/null 2>&1; then
-            gh api --method DELETE "repos/${REPO}/git/refs/heads/${branch}" \
-              --header "${api_header}"
+          if [[ "${open_pr}" == true ]]; then
+            # Rebase the open PR's branch onto main HEAD. Required because
+            # the `protect-main` ruleset sets
+            # strict_required_status_checks_policy: true — PR cannot merge
+            # while behind. PATCH /refs with force=true rewrites the
+            # branch tip without closing the PR.
+            printf 'rebasing open PR for %s onto main HEAD %s\n' "${branch}" "${base_sha}"
+            gh api --method PATCH "repos/${REPO}/git/refs/heads/${branch}" \
+              --field sha="${base_sha}" \
+              --raw-field force=true \
+              --header "${api_header}" >/dev/null
+          else
+            # Delete stale orphan branch ref (no PR attached) if a prior
+            # failed run left one behind. Safe: the PR-state gate above
+            # already rejected the case where a PR — open or closed —
+            # references this ref.
+            if gh api "repos/${REPO}/git/refs/heads/${branch}" \
+                --header "${api_header}" >/dev/null 2>&1; then
+              gh api --method DELETE "repos/${REPO}/git/refs/heads/${branch}" \
+                --header "${api_header}"
+            fi
+            # Create branch ref from main HEAD.
+            gh api --method POST "repos/${REPO}/git/refs" \
+              --field ref="refs/heads/${branch}" \
+              --field sha="${base_sha}" \
+              --header "${api_header}" >/dev/null
           fi
-
-          # Create branch ref from main HEAD.
-          gh api --method POST "repos/${REPO}/git/refs" \
-            --field ref="refs/heads/${branch}" \
-            --field sha="${base_sha}" \
-            --header "${api_header}" >/dev/null
 
           # Commit 1: linpeas-pin.json. Web-flow signs this commit.
           pin_b64="$(base64 --wrap=0 linpeas-pin.json)"
@@ -234,15 +247,17 @@ jobs:
             --field branch="${branch}" \
             --header "${api_header}" >/dev/null
 
-          body="$(mktemp)"
-          trap 'rm --force -- "${body}"' EXIT
-          printf "Auto-generated bump from \`%s\` to \`%s\`.\n\nUpstream release: https://github.com/peass-ng/PEASS-ng/releases/tag/%s\n" \
-            "${OLD}" "${NEW}" "${NEW}" > "${body}"
-          gh pr create \
-            --base main \
-            --head "${branch}" \
-            --title "chore: bump linpeas to ${NEW}" \
-            --body-file "${body}"
+          if [[ "${open_pr}" == false ]]; then
+            body="$(mktemp)"
+            trap 'rm --force -- "${body}"' EXIT
+            printf "Auto-generated bump from \`%s\` to \`%s\`.\n\nUpstream release: https://github.com/peass-ng/PEASS-ng/releases/tag/%s\n" \
+              "${OLD}" "${NEW}" "${NEW}" > "${body}"
+            gh pr create \
+              --base main \
+              --head "${branch}" \
+              --title "chore: bump linpeas to ${NEW}" \
+              --body-file "${body}"
+          fi
 
           gh pr merge "${branch}" --auto --merge
 
