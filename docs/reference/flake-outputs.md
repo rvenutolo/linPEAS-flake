@@ -24,19 +24,19 @@ block between the markers by hand.
 ├───checks
 │   ├───aarch64-darwin
 │   │   ├───formatting: derivation 'treefmt-check'
-│   │   ├───linpeas-build: derivation 'linpeas-20260601-a39c90f1'
+│   │   ├───linpeas-build: derivation 'linpeas-20260604-085abf96'
 │   │   └───pre-commit: derivation 'pre-commit-run'
 │   ├───aarch64-linux
 │   │   ├───formatting: derivation 'treefmt-check'
-│   │   ├───linpeas-build: derivation 'linpeas-20260601-a39c90f1'
+│   │   ├───linpeas-build: derivation 'linpeas-20260604-085abf96'
 │   │   └───pre-commit: derivation 'pre-commit-run'
 │   ├───x86_64-darwin
 │   │   ├───formatting: derivation 'treefmt-check'
-│   │   ├───linpeas-build: derivation 'linpeas-20260601-a39c90f1'
+│   │   ├───linpeas-build: derivation 'linpeas-20260604-085abf96'
 │   │   └───pre-commit: derivation 'pre-commit-run'
 │   └───x86_64-linux
 │       ├───formatting: derivation 'treefmt-check'
-│       ├───linpeas-build: derivation 'linpeas-20260601-a39c90f1'
+│       ├───linpeas-build: derivation 'linpeas-20260604-085abf96'
 │       └───pre-commit: derivation 'pre-commit-run'
 ├───devShells
 │   ├───aarch64-darwin
@@ -59,31 +59,31 @@ block between the markers by hand.
     ├───aarch64-darwin
     │   ├───actionlint-wrapped: package 'actionlint'
     │   ├───cosign: package 'cosign-3.0.6'
-    │   ├───default: package 'linpeas-20260601-a39c90f1'
+    │   ├───default: package 'linpeas-20260604-085abf96'
     │   ├───git-cliff: package 'git-cliff-2.13.1'
-    │   └───linpeas: package 'linpeas-20260601-a39c90f1'
+    │   └───linpeas: package 'linpeas-20260604-085abf96'
     ├───aarch64-linux
     │   ├───actionlint-wrapped: package 'actionlint'
     │   ├───cosign: package 'cosign-3.0.6'
-    │   ├───default: package 'linpeas-20260601-a39c90f1'
+    │   ├───default: package 'linpeas-20260604-085abf96'
     │   ├───git-cliff: package 'git-cliff-2.13.1'
-    │   ├───linpeas: package 'linpeas-20260601-a39c90f1'
+    │   ├───linpeas: package 'linpeas-20260604-085abf96'
     │   ├───linpeas-image: package 'linpeas.tar.gz'
-    │   └───site: package 'linpeas-flake-site-20260601-a39c90f1'
+    │   └───site: package 'linpeas-flake-site-20260604-085abf96'
     ├───x86_64-darwin
     │   ├───actionlint-wrapped: package 'actionlint'
     │   ├───cosign: package 'cosign-3.0.6'
-    │   ├───default: package 'linpeas-20260601-a39c90f1'
+    │   ├───default: package 'linpeas-20260604-085abf96'
     │   ├───git-cliff: package 'git-cliff-2.13.1'
-    │   └───linpeas: package 'linpeas-20260601-a39c90f1'
+    │   └───linpeas: package 'linpeas-20260604-085abf96'
     └───x86_64-linux
         ├───actionlint-wrapped: package 'actionlint'
         ├───cosign: package 'cosign-3.0.6'
-        ├───default: package 'linpeas-20260601-a39c90f1'
+        ├───default: package 'linpeas-20260604-085abf96'
         ├───git-cliff: package 'git-cliff-2.13.1'
-        ├───linpeas: package 'linpeas-20260601-a39c90f1'
+        ├───linpeas: package 'linpeas-20260604-085abf96'
         ├───linpeas-image: package 'linpeas.tar.gz'
-        └───site: package 'linpeas-flake-site-20260601-a39c90f1'
+        └───site: package 'linpeas-flake-site-20260604-085abf96'
 ```
 
 <!-- END flake-show -->
