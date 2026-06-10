@@ -18,94 +18,14 @@
 
   config.perSystem =
     {
-      self',
       pkgs,
       pkgs-unstable,
       config,
-      pin,
-      linpeas,
       actionlintWrapped,
       preCommitWrapped,
       ...
     }:
     let
-      linpeas-image = pkgs.dockerTools.buildLayeredImage {
-        name = "rvenutolo/linpeas";
-        tag = pin.version;
-
-        # nixpkgs 25.05's `buildLayeredImage` only exposes `contents` (not
-        # `copyToRoot`). Wrap inputs in a `buildEnv` so `pathsToLink`
-        # controls the /bin layering explicitly. Cmd uses the absolute
-        # store path of linpeas, unambiguous regardless of /bin layering.
-        contents = pkgs.buildEnv {
-          name = "image-root";
-          # linpeas invokes grep/sed/awk/find/ps internally for most of its
-          # checks. Ship them so the image is actually useful for its
-          # intended use cases (container audit, CI image scanning,
-          # forensics on mounted captured filesystems, and host audit when
-          # launched with host namespaces + bind mount). See
-          # docs/install/docker.md for the use-case framing.
-          paths = [
-            pkgs.bashInteractive
-            pkgs.coreutils
-            pkgs.gnugrep
-            pkgs.gnused
-            pkgs.gawk
-            pkgs.findutils
-            # Override drops libsystemd from procps, which in turn
-            # drops systemd-minimal-libs and libcap from the image
-            # closure. linpeas enumerates processes via plain
-            # `ps -e` / `ps auxf` and does not read systemd
-            # unit-name columns, so the lost functionality is
-            # irrelevant here; the win is a smaller OCI attack
-            # surface (no libsystemd/libcap CVE exposure).
-            (pkgs.procps.override { withSystemd = false; })
-            linpeas
-          ];
-          pathsToLink = [ "/bin" ];
-        };
-
-        config = {
-          # Entrypoint (not Cmd) so `docker run <img> <args>` appends to
-          # linpeas rather than replacing it. The image-smoke CI job
-          # runs `docker run --rm <img> -h` and expects -h to reach
-          # linpeas.
-          Entrypoint = [ "${linpeas}/bin/linpeas" ];
-          Labels = {
-            "org.opencontainers.image.source" = "https://github.com/rvenutolo/linPEAS-flake";
-            "org.opencontainers.image.description" = "LinPEAS — Linux Privilege Escalation Awesome Script";
-            "org.opencontainers.image.licenses" = "MIT";
-            "org.opencontainers.image.version" = pin.version;
-            # Wrapper-repo commit SHA at build time. Build-provenance
-            # attestation already binds the image to this commit, but
-            # the label is readable via `docker inspect` without
-            # `gh attestation verify` round-tripping. Falls back to
-            # `dirtyRev` for uncommitted local builds.
-            "org.opencontainers.image.revision" = inputs.self.rev or inputs.self.dirtyRev or "unknown";
-          };
-        };
-      };
-
-      site = pkgs-unstable.stdenv.mkDerivation {
-        pname = "linpeas-flake-site";
-        inherit (pin) version;
-        src = ../.;
-        nativeBuildInputs = with pkgs-unstable.python3Packages; [
-          mkdocs-material
-          mkdocs-macros
-        ];
-        buildPhase = ''
-          runHook preBuild
-          if [ ! -f docs/_data/dashboard.yml ]; then
-            echo "ERROR: docs/_data/dashboard.yml missing. Run 'just site-data' first or use 'just site-dev'." >&2
-            exit 1
-          fi
-          mkdocs build --strict --site-dir $out/share/site
-          runHook postBuild
-        '';
-        dontInstall = true;
-      };
-
       preCommitHooks = {
         nixfmt = {
           enable = true;
@@ -915,97 +835,6 @@
         };
       };
 
-      packages = {
-        inherit linpeas;
-        default = linpeas;
-        # Exposed so release-on-bump.yml and verify-latest-release.yml
-        # can call cosign via `nix shell .#cosign --command cosign ...`,
-        # which resolves through this repo's flake.lock-pinned
-        # nixpkgs rather than the runner registry's mutable
-        # `nixpkgs` reference. See
-        # docs/security/workflow-hardening.md (nix-run-pinned).
-        inherit (pkgs-unstable) cosign git-cliff;
-        # Exposed so actionlint-drift-check.yml can invoke the
-        # shellcheck-pinned wrapper (`actionlintWrapped`, defined
-        # above) via `nix run .#actionlint-wrapped -- ...`. Using
-        # the flake output bypasses devShell PATH ordering — the
-        # bare `actionlint` derivation otherwise shadows the
-        # wrapper because `config.pre-commit.settings.enabledPackages`
-        # lands ahead of `buildInputs` on PATH. Same wrapper the
-        # `actionlint` pre-commit hook invokes.
-        actionlint-wrapped = actionlintWrapped;
-      }
-      // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
-        inherit linpeas-image site;
-      };
-
-      apps = {
-        linpeas = {
-          type = "app";
-          program = "${linpeas}/bin/linpeas";
-          meta = {
-            description = "Linux Privilege Escalation Awesome Script (LinPEAS) from peass-ng";
-          };
-        };
-        default = self'.apps.linpeas;
-      };
-
-      # treefmt configuration consumed by inputs.treefmt-nix.flakeModule.
-      # Pinned to pkgs-unstable so formatter package closures match the rest
-      # of the dev tooling. flakeCheck is disabled because the formatting
-      # check is wired explicitly below as `checks.formatting` (preserving
-      # that output name); the module still supplies `formatter.<system>`.
-      treefmt = {
-        imports = [ ../treefmt.nix ];
-        pkgs = pkgs-unstable;
-        flakeCheck = false;
-      };
-
-      checks = {
-        formatting = config.treefmt.build.check inputs.self;
-        # `checks.pre-commit` is supplied by the flakeModule.
-        # Wire the derivation builds into `nix flake check` so a
-        # contributor running only the local check still exercises the
-        # build path (fetchurl hash, patchShebangs, install rules).
-        # `linpeas-image` is intentionally excluded — slow and
-        # network-heavy; CI's `image-smoke` job covers it.
-        linpeas-build = linpeas;
-      };
-
-      devShells.default = pkgs-unstable.mkShell {
-        inherit (config.pre-commit) shellHook;
-
-        buildInputs =
-          config.pre-commit.settings.enabledPackages
-          ++ (with pkgs-unstable; [
-            nix
-            jq
-            yq-go
-            gh
-            just
-            curl
-            git
-            shellcheck
-            shfmt
-            nixfmt
-            deadnix
-            statix
-            actionlint
-            commitlint
-            ratchet
-            scorecard
-            zizmor
-            yamllint
-            prettier
-            config.treefmt.build.wrapper
-            python3Packages.mkdocs-material
-            python3Packages.mkdocs-macros
-            lychee
-            check-jsonschema
-            renovate
-          ]);
-      };
-
       # Non-standard output (expect a harmless "unknown flake output" warning from
       # nix flake check): name -> description manifest of enabled pre-commit hooks,
       # consumed by scripts/refresh-precommit-table.sh via `nix eval --json`.
@@ -1013,25 +842,5 @@
       devTooling.preCommitHooks = pkgs.lib.mapAttrs (_: v: v.description) (
         pkgs.lib.filterAttrs (_: v: (v.enable or false) && (v ? description)) preCommitHooks
       );
-
-      # Non-standard output (expect a harmless "unknown flake output" warning from
-      # nix flake check): enabled-formatter manifest extracted from the evaluated
-      # treefmt module, consumed by scripts/refresh-treefmt-config.sh via
-      # `nix eval --json`. Coalesces missing includes/excludes to [] so the
-      # consumer can iterate uniformly without null-guards.
-      devTooling.treefmtConfig =
-        let
-          cfg = config.treefmt;
-          enabled = pkgs.lib.filterAttrs (_: v: (v.enable or false)) cfg.programs;
-          formatters = pkgs.lib.mapAttrsToList (name: v: {
-            inherit name;
-            includes = v.includes or [ ];
-            excludes = v.excludes or [ ];
-          }) enabled;
-        in
-        {
-          inherit formatters;
-          globalExcludes = cfg.settings.global.excludes or [ ];
-        };
     };
 }

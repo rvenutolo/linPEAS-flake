@@ -29,6 +29,11 @@
         inputs.pre-commit-hooks.flakeModule
         ./nix/pin.nix
         ./nix/wrappers.nix
+        ./nix/packages.nix
+        ./nix/image.nix
+        ./nix/checks.nix
+        ./nix/treefmt-config.nix
+        ./nix/devshell.nix
         ./nix/perSystem-monolith.nix
         ./nix/manifests.nix
       ];
