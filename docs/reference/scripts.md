@@ -425,26 +425,6 @@ Enumerate every SHA-pinned `uses:` in
 each pinned SHA to its exact patch tag via `gh api .../tags`, and
 emit a TSV mapping pin -> patch tag for downstream rewrite tooling.
 
-### scripts/measure-image-size.sh
-
-Measure two sizes of a built dockerTools image tar.gz
-and emit them as JSON. Used by the image-smoke CI job to populate
-the size-advisory job summary and PR comment.
-
-Usage:
-measure-image-size.sh <result-symlink>
-
-<result-symlink> — path to the `result` symlink from `nix build`,
-pointing at the compressed image tar.
-
-Output: single-line JSON `{"compressed_bytes": N, "uncompressed_bytes": M}`
-on stdout. Both fields are positive integers (bytes). "Compressed" is
-the on-wire/at-rest tar.gz size; "uncompressed" is the extracted
-tar size — what the image takes on disk when pulled.
-
-Exits 0 on success, non-zero on missing inputs or measurement failure.
-Diagnostic messages go to stderr.
-
 ### scripts/octoscan-scan.sh
 
 Run synacktiv/octoscan against `.github/workflows`
