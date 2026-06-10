@@ -103,13 +103,14 @@ so verification is bound to this repository.
 ### scripts/check-hammer-shim-parity.sh
 
 Lint: nix/hammer-shim.nix's linpeas derivation matches
-flake.nix's linpeas derivation. The shim duplicates the derivation
-because `builtins.getFlake` cannot run inside the `nix flake check`
-sandbox. Compares bodies normalized to whitespace-collapsed form.
+the canonical linpeas derivation in nix/perSystem-monolith.nix. The
+shim duplicates the derivation because `builtins.getFlake` cannot run
+inside the `nix flake check` sandbox. Compares bodies normalized to
+whitespace-collapsed form.
 Exits 0 on match, 1 on drift, 2 if extraction fails.
 
 Env overrides (test-only):
-FLAKE_NIX_OVERRIDE — path to flake.nix to read
+FLAKE_NIX_OVERRIDE — path to the canonical derivation source to read
 HAMMER_SHIM_OVERRIDE — path to nix/hammer-shim.nix to read
 
 ### scripts/check-harden-runner-first.sh
