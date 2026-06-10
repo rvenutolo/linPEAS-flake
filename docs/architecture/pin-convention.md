@@ -45,7 +45,7 @@ upstream tagging convention.
 ## Enforcement
 
 - Lint: `scripts/check-patch-tag-pins.sh`, wired as the
-    `patch-tag-pins` pre-commit hook (see `flake.nix`). Fails any PR
+    `patch-tag-pins` pre-commit hook (see `nix/hooks/workflow-security.nix`). Fails any PR
     that introduces or regresses a major-only comment without an
     exception marker.
 - Runtime check: [ratchet-pin-audit](../runbooks/ratchet-pin-audit.md)

@@ -12,7 +12,7 @@ actionlint discovers embedded linters via `$PATH`. A pre-commit invocation
 from a shell that has not entered the devShell (fresh checkout without
 direnv, CI step that forgot `nix develop`) silently degrades: actionlint
 exits 0 with embedded coverage disabled. To eliminate this, the actionlint
-hook in `flake.nix` is wrapped so the binary always receives an explicit
+hook in `nix/hooks/linters.nix` is wrapped so the binary always receives an explicit
 `-shellcheck=/nix/store/.../shellcheck` flag. Discovery is deterministic
 at flake evaluation.
 
@@ -40,9 +40,9 @@ workflow `run:` invokes `python`/`python3`/`pip` (also catches `pip3` and
 `sudo`-prefixed forms). When that happens:
 
 1. Add `pkgs.python3Packages.pyflakes` to the devShell package list in
-    `flake.nix` (same scope as the existing `shellcheck` entry — grep
-    `flake.nix` for the bare `shellcheck` package line).
-1. Extend `actionlintWrapped` in `flake.nix` (grep for `actionlintWrapped =`)
+    `nix/devshell.nix` (same scope as the existing `shellcheck` entry — grep
+    `nix/devshell.nix` for the bare `shellcheck` package line).
+1. Extend `actionlintWrapped` in `nix/wrappers.nix` (grep for `actionlintWrapped =`)
     to pass `-pyflakes=${pkgs.python3Packages.pyflakes}/bin/pyflakes` in
     addition to `-shellcheck=...`.
 1. Add a python smoke fixture
@@ -57,11 +57,13 @@ workflow `run:` invokes `python`/`python3`/`pip` (also catches `pip3` and
 
 ## Related
 
-In `flake.nix` (grep anchors, since line numbers drift):
+In the `nix/` modules (grep anchors, since line numbers drift):
 
-- `actionlint = {` — actionlint pre-commit hook block (entry points at the
-    wrapper).
-- `actionlintWrapped =` — wrapper derivation; the `-shellcheck=` pin lives
-    here. This is the central artifact this runbook protects.
-- `shellcheck = {` — standalone shellcheck pre-commit hook (covers tracked
-    `*.sh` files; complementary to actionlint's embedded coverage).
+- `actionlint = {` in `nix/hooks/linters.nix` — actionlint pre-commit hook
+    block (entry points at the wrapper).
+- `actionlintWrapped =` in `nix/wrappers.nix` — wrapper derivation; the
+    `-shellcheck=` pin lives here. This is the central artifact this runbook
+    protects.
+- `shellcheck = {` in `nix/hooks/linters.nix` — standalone shellcheck
+    pre-commit hook (covers tracked `*.sh` files; complementary to
+    actionlint's embedded coverage).

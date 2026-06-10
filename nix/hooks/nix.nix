@@ -41,7 +41,7 @@
   hammer-shim-parity = {
     enable = true;
     name = "hammer-shim-parity";
-    description = "nix/hammer-shim.nix linpeas derivation matches flake.nix.";
+    description = "nix/hammer-shim.nix linpeas derivation matches nix/pin.nix.";
     entry = "${pkgs-unstable.writeShellScript "hammer-shim-parity-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'

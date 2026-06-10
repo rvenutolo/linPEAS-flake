@@ -5,7 +5,7 @@ This page expands the trust model briefly described in [`SECURITY.md`](https://g
 ## What this wrapper guarantees
 
 1. **Hash-pinned upstream fetch.** `linpeas-pin.json` records an SRI hash for the upstream `linpeas.sh` asset. Nix refuses to build on hash mismatch — a swapped or corrupted upstream asset fails the build.
-2. **Pin-shape validation at flake eval.** `flake.nix` asserts that `pin.version` matches `[0-9]{8}-[0-9a-f]{7,40}` and that `pin.url` starts with `https://github.com/peass-ng/PEASS-ng/releases/download/`. An attacker-controlled pin file cannot smuggle arbitrary URLs into the derivation.
+2. **Pin-shape validation at flake eval.** `nix/pin.nix` asserts that `pin.version` matches `[0-9]{8}-[0-9a-f]{7,40}` and that `pin.url` starts with `https://github.com/peass-ng/PEASS-ng/releases/download/`. An attacker-controlled pin file cannot smuggle arbitrary URLs into the derivation.
 3. **GitHub Releases API digest cross-check.** `scripts/bump-linpeas.sh` reads the upstream release-asset `.digest` field over the API and refuses to bump if it is missing, non-`sha256:`, or does not match the downloaded file. This is **not** silent on missing data — bump aborts.
 4. **Asset URL prefix validation.** Same script refuses to record any asset URL outside the expected `peass-ng/PEASS-ng/releases/download/` prefix.
 5. **Daily upstream parity check.** `verify-latest-release.yml` re-fetches the pinned `linpeas.sh` daily and re-checks the SRI hash. Detects upstream tag replacement (intentional or compromised).
