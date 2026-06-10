@@ -3,8 +3,8 @@
 #
 # @description Lint: the ratchet-pin-audit workflow keeps its
 # hardened shape — empty top-level permissions, harden-runner first,
-# typed reason tokens in the notify body, ratchet in the flake
-# devShell — so future edits cannot silently weaken it.
+# typed reason tokens in the notify body, ratchet in the
+# nix/devshell.nix devShell — so future edits cannot silently weaken it.
 
 # Lint: assert ratchet-pin-audit.yml retains the structural
 # invariants documented in the design spec
@@ -22,7 +22,7 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
 readonly REPO_ROOT
 readonly DEFAULT_WORKFLOW="${REPO_ROOT}/.github/workflows/ratchet-pin-audit.yml"
 readonly WORKFLOW="${WORKFLOW_PATH_OVERRIDE:-${DEFAULT_WORKFLOW}}"
-readonly FLAKE="${REPO_ROOT}/flake.nix"
+readonly DEVSHELL="${REPO_ROOT}/nix/devshell.nix"
 
 if ! command -v yq >/dev/null 2>&1; then
   printf 'yq not found on PATH\n' >&2
@@ -96,13 +96,13 @@ for token in drift-detected upstream-api-failure ratchet-tool-failure unknown; d
   fi
 done
 
-# 9. flake.nix lists `ratchet` in the devShell buildInputs.
-# Skip this check when running against a fixture (override set) — the flake is
-# global, not per-fixture. Production runs (no override) enforce it.
+# 9. nix/devshell.nix lists `ratchet` in the devShell buildInputs.
+# Skip this check when running against a fixture (override set) — the devShell
+# is global, not per-fixture. Production runs (no override) enforce it.
 if [[ -z ${WORKFLOW_PATH_OVERRIDE:-} ]]; then
-  if ! grep -Eq '^\s+ratchet\s*$' "${FLAKE}"; then
+  if ! grep -Eq '^\s+ratchet\s*$' "${DEVSHELL}"; then
     # shellcheck disable=SC2016  # backticks are literal markdown, not command substitution
-    fail 'flake.nix devShell buildInputs must list `ratchet`'
+    fail 'nix/devshell.nix devShell buildInputs must list `ratchet`'
   fi
 fi
 
