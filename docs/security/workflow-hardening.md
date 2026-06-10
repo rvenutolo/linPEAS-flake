@@ -116,7 +116,7 @@ At runtime the bare `nixpkgs` resolves through the user's (or runner's) flake re
 
 Allowed alternatives:
 
-- `nix shell .#<pkg> --command <pkg> <args>` — uses this repo's own flake outputs, resolved via `flake.lock`. Requires the package to be exposed under `packages.<pkg>` in `flake.nix`.
+- `nix shell .#<pkg> --command <pkg> <args>` — uses this repo's own flake outputs, resolved via `flake.lock`. Requires the package to be exposed under `packages.<pkg>` by the flake (see `nix/packages.nix`).
 - `nix run .#<pkg> -- <args>` — same.
 - `nix run nixpkgs/<rev>#<pkg>` — explicit commit-pin (the lint matches the literal `nixpkgs#` token with no `/<rev>` between).
 

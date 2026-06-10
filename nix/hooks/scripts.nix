@@ -1,0 +1,129 @@
+{
+  pkgs-unstable,
+  ...
+}:
+{
+  # Every scripts/*.sh starts with #!/usr/bin/env bash and
+  # contains set -Eeuo pipefail. See docs/security/workflow-hardening.md.
+  script-shebang-pipefail = {
+    enable = true;
+    name = "script-shebang-pipefail";
+    description = "Every scripts/*.sh has portable shebang + set -Eeuo pipefail.";
+    entry = "${pkgs-unstable.writeShellScript "script-shebang-pipefail-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-script-shebang-pipefail.sh
+    ''}";
+    files = "^scripts/.*\\.sh$";
+    pass_filenames = false;
+    language = "system";
+  };
+  # Every scripts/check-*.sh has tests/check-*.test.sh and
+  # vice versa. See docs/security/workflow-hardening.md.
+  script-has-test = {
+    enable = true;
+    name = "script-has-test";
+    description = "Every scripts/check-*.sh paired with tests/check-*.test.sh.";
+    entry = "${pkgs-unstable.writeShellScript "script-has-test-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-script-has-test.sh
+    ''}";
+    files = "^(scripts/check-.*\\.sh|tests/check-.*\\.test\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
+  # Every ci.yml job either in ci-check-categories.yml or
+  # EXEMPT, and every category entry points at a real job.
+  # See docs/security/workflow-hardening.md.
+  ci-job-in-summary = {
+    enable = true;
+    name = "ci-job-in-summary";
+    description = "ci.yml jobs cross-checked against docs/_data/ci-check-categories.yml.";
+    entry = "${pkgs-unstable.writeShellScript "ci-job-in-summary-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-ci-job-in-summary.sh
+    ''}";
+    files = "^(\\.github/workflows/ci\\.yml|docs/_data/ci-check-categories\\.yml|scripts/check-ci-job-in-summary\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
+  # Every multi-line run: block starts with set -Eeuo pipefail.
+  # See docs/security/workflow-hardening.md.
+  run-block-strict = {
+    enable = true;
+    name = "run-block-strict";
+    description = "Multi-line run: blocks start with set -Eeuo pipefail.";
+    entry = "${pkgs-unstable.writeShellScript "run-block-strict-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-run-block-strict.sh
+    ''}";
+    files = "^(\\.github/workflows/.*\\.ya?ml|scripts/check-run-block-strict\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
+  # Asserts only scripts/bump-linpeas.sh mutates
+  # linpeas-pin.json — the release-on-bump trigger contract
+  # depends on this isolation invariant.
+  pin-diff-isolated = {
+    enable = true;
+    name = "pin-diff-isolated";
+    description = "Only scripts/bump-linpeas.sh mutates linpeas-pin.json.";
+    entry = "${pkgs-unstable.writeShellScript "pin-diff-isolated-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-pin-diff-isolated.sh
+    ''}";
+    files = "^(scripts/.*\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
+  # Asserts every `gh api` / `api.github.com` call in
+  # scripts/*.sh passes an explicit `X-GitHub-Api-Version`
+  # header. Without it, GitHub treats the client as
+  # unversioned and may auto-promote it to a future API
+  # version whose response shape differs from what the
+  # script parses.
+  gh-api-version-header = {
+    enable = true;
+    name = "gh-api-version-header";
+    description = "Every gh api / api.github.com call in scripts passes an X-GitHub-Api-Version header.";
+    entry = "${pkgs-unstable.writeShellScript "gh-api-version-header-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-gh-api-version-header.sh
+    ''}";
+    files = "^(scripts/.*\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
+  # Guard: fail if any GitHub Actions run: block invokes
+  # python/python3/pip while pyflakes is not wired into the
+  # actionlint hook. No python run: exists today, so this is
+  # a passive gate; the day one lands it fails with a pointer
+  # to docs/actionlint-embedded-linters.md.
+  check-run-block-pyflakes-required = {
+    enable = true;
+    name = "check-run-block-pyflakes-required";
+    description = "Fail if a workflow run: invokes python without pyflakes wired.";
+    entry = "${pkgs-unstable.writeShellScript "check-run-block-pyflakes-required-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-run-block-pyflakes-required.sh
+    ''}";
+    files = "^(\\.github/(workflows|actions)/.*\\.ya?ml|scripts/check-run-block-pyflakes-required\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
+}

@@ -43,7 +43,7 @@ Adds `linpeas` to your Nix profile. Upgrade with `nix profile upgrade linpeas`.
 
 ## Platform support
 
-The flake declares packages for all four systems in `flake-utils.lib.eachDefaultSystem`. CI coverage varies:
+The flake declares packages for all four systems via flake-parts' `perSystem` (the `systems` list in `flake.nix`). CI coverage varies:
 
 | System           | Flake builds | CI tested                                  |
 | ---------------- | ------------ | ------------------------------------------ |

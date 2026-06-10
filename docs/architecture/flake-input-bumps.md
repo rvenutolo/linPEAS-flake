@@ -84,8 +84,8 @@ next contributor PR).
 - **zizmor major version.** New major versions change rule severities
     or add rules that surface on existing workflows. `nix flake check`
     fails on the new finding. Fix the workflow; only as a last resort
-    raise `--min-severity` in `flake.nix`, and never above `low`
-    without a security-review entry.
+    raise `--min-severity` in `nix/hooks/linters.nix` (the `zizmor` hook),
+    and never above `low` without a security-review entry.
 - **CRITICAL CVEs in image base layers.** `image-cve-scan-trivy` and
     `image-cve-scan-grype` (`ci.yml`) are the canonical surface. The new nixpkgs may carry an unfixed
     `CRITICAL` CVE in `coreutils`, `bashInteractive`, `gnused`, etc.
@@ -96,7 +96,7 @@ next contributor PR).
     is gone from the new nixpkgs (rename, removal,
     refactor-to-a-module), `image-smoke`'s `linpeas -h` run inside
     the image will surface `command not found`. Walk
-    `pkgs.buildEnv.paths` in `flake.nix` against the smoke output.
+    `pkgs.buildEnv.paths` in `nix/image.nix` against the smoke output.
 - **`gh attestation verify` trust-root staleness.** Newer
     `ubuntu-latest` images carry a newer `gh` CLI, which ships an
     updated Sigstore TUF trust-root. A nixpkgs bump does not affect
@@ -202,13 +202,13 @@ git add <whatever-the-formatter-touched>
 
 Use the table as a checklist for any nixpkgs bump:
 
-| Class                      | Symptom                                                                                                                    | Fix                                                                                                                                      |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `prettier`                 | YAML / Markdown / JSON whitespace diffs                                                                                    | accept the rewrite via `nix fmt`                                                                                                         |
-| `mkdocs-macros` strictness | `nix build "path:$(pwd)#site"` aborts on a `&#123;&#123; ... &#125;&#125;` literal inside a code block                     | wrap the offending block in `&#123;% raw %&#125;...&#123;% endraw %&#125;` (mirrors the convention in `docs/architecture/ci.md`)         |
-| `zizmor` major version     | `nix flake check` fails on a workflow finding the older version did not surface                                            | fix the workflow or, as a last resort, adjust `--min-severity` in `flake.nix` (do not raise above `low` without a security-review entry) |
-| `mkdocs --strict`          | Build fails on a new plugin warning                                                                                        | fix forward; pin the misbehaving plugin only as a last resort and document the pin reason in the same PR                                 |
-| linpeas-image base layers  | `image-cve-scan-trivy` / `image-cve-scan-grype` SARIF changes; `image-smoke` could surface `command not found` regressions | smoke test locally (step 6) — adjust `buildEnv.paths` in `flake.nix` only if a required tool genuinely disappeared from nixpkgs          |
+| Class                      | Symptom                                                                                                                    | Fix                                                                                                                                                  |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prettier`                 | YAML / Markdown / JSON whitespace diffs                                                                                    | accept the rewrite via `nix fmt`                                                                                                                     |
+| `mkdocs-macros` strictness | `nix build "path:$(pwd)#site"` aborts on a `&#123;&#123; ... &#125;&#125;` literal inside a code block                     | wrap the offending block in `&#123;% raw %&#125;...&#123;% endraw %&#125;` (mirrors the convention in `docs/architecture/ci.md`)                     |
+| `zizmor` major version     | `nix flake check` fails on a workflow finding the older version did not surface                                            | fix the workflow or, as a last resort, adjust `--min-severity` in `nix/hooks/linters.nix` (do not raise above `low` without a security-review entry) |
+| `mkdocs --strict`          | Build fails on a new plugin warning                                                                                        | fix forward; pin the misbehaving plugin only as a last resort and document the pin reason in the same PR                                             |
+| linpeas-image base layers  | `image-cve-scan-trivy` / `image-cve-scan-grype` SARIF changes; `image-smoke` could surface `command not found` regressions | smoke test locally (step 6) — adjust `buildEnv.paths` in `nix/image.nix` only if a required tool genuinely disappeared from nixpkgs                  |
 
 `cachix/git-hooks.nix` bumps in isolation usually only hit the `zizmor`
 row and only when the pre-commit-hooks repo changes hook versions in
@@ -253,7 +253,7 @@ docker run --rm "rvenutolo/linpeas:${VERSION}" -h 2>&1 \
 ```
 
 A non-zero count means a tool the image expects is missing from the
-new nixpkgs. Compare `pkgs.buildEnv.paths` in `flake.nix` against the
+new nixpkgs. Compare `pkgs.buildEnv.paths` in `nix/image.nix` against the
 missing tool's package name — usually a rename. Update the path list
 in the same PR.
 

@@ -103,13 +103,14 @@ so verification is bound to this repository.
 ### scripts/check-hammer-shim-parity.sh
 
 Lint: nix/hammer-shim.nix's linpeas derivation matches
-flake.nix's linpeas derivation. The shim duplicates the derivation
-because `builtins.getFlake` cannot run inside the `nix flake check`
-sandbox. Compares bodies normalized to whitespace-collapsed form.
+the canonical linpeas derivation in nix/pin.nix. The
+shim duplicates the derivation because `builtins.getFlake` cannot run
+inside the `nix flake check` sandbox. Compares bodies normalized to
+whitespace-collapsed form.
 Exits 0 on match, 1 on drift, 2 if extraction fails.
 
 Env overrides (test-only):
-FLAKE_NIX_OVERRIDE — path to flake.nix to read
+FLAKE_NIX_OVERRIDE — path to the canonical derivation source to read
 HAMMER_SHIM_OVERRIDE — path to nix/hammer-shim.nix to read
 
 ### scripts/check-harden-runner-first.sh
@@ -191,8 +192,8 @@ foreclosing the canonical Actions privilege-escalation footgun.
 
 Lint: the ratchet-pin-audit workflow keeps its
 hardened shape — empty top-level permissions, harden-runner first,
-typed reason tokens in the notify body, ratchet in the flake
-devShell — so future edits cannot silently weaken it.
+typed reason tokens in the notify body, ratchet in the
+nix/devshell.nix devShell — so future edits cannot silently weaken it.
 
 ### scripts/check-renovate-config-validator.sh
 

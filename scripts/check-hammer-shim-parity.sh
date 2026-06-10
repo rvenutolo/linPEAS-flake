@@ -2,20 +2,21 @@
 # scripts/check-hammer-shim-parity.sh
 #
 # @description Lint: nix/hammer-shim.nix's linpeas derivation matches
-# flake.nix's linpeas derivation. The shim duplicates the derivation
-# because `builtins.getFlake` cannot run inside the `nix flake check`
-# sandbox. Compares bodies normalized to whitespace-collapsed form.
+# the canonical linpeas derivation in nix/pin.nix. The
+# shim duplicates the derivation because `builtins.getFlake` cannot run
+# inside the `nix flake check` sandbox. Compares bodies normalized to
+# whitespace-collapsed form.
 # Exits 0 on match, 1 on drift, 2 if extraction fails.
 #
 # Env overrides (test-only):
-#   FLAKE_NIX_OVERRIDE    — path to flake.nix to read
+#   FLAKE_NIX_OVERRIDE    — path to the canonical derivation source to read
 #   HAMMER_SHIM_OVERRIDE  — path to nix/hammer-shim.nix to read
 set -Eeuo pipefail
 IFS=$'\n\t'
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || printf '.')"
 readonly REPO_ROOT
-readonly FLAKE_NIX="${FLAKE_NIX_OVERRIDE:-${REPO_ROOT}/flake.nix}"
+readonly FLAKE_NIX="${FLAKE_NIX_OVERRIDE:-${REPO_ROOT}/nix/pin.nix}"
 readonly HAMMER_SHIM="${HAMMER_SHIM_OVERRIDE:-${REPO_ROOT}/nix/hammer-shim.nix}"
 
 extract() {
