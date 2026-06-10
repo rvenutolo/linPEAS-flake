@@ -27,6 +27,8 @@
       imports = [
         inputs.treefmt-nix.flakeModule
         inputs.pre-commit-hooks.flakeModule
+        ./nix/pin.nix
+        ./nix/wrappers.nix
         ./nix/perSystem-monolith.nix
         ./nix/manifests.nix
       ];

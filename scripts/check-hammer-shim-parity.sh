@@ -2,7 +2,7 @@
 # scripts/check-hammer-shim-parity.sh
 #
 # @description Lint: nix/hammer-shim.nix's linpeas derivation matches
-# the canonical linpeas derivation in nix/perSystem-monolith.nix. The
+# the canonical linpeas derivation in nix/pin.nix. The
 # shim duplicates the derivation because `builtins.getFlake` cannot run
 # inside the `nix flake check` sandbox. Compares bodies normalized to
 # whitespace-collapsed form.
@@ -16,7 +16,7 @@ IFS=$'\n\t'
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || printf '.')"
 readonly REPO_ROOT
-readonly FLAKE_NIX="${FLAKE_NIX_OVERRIDE:-${REPO_ROOT}/nix/perSystem-monolith.nix}"
+readonly FLAKE_NIX="${FLAKE_NIX_OVERRIDE:-${REPO_ROOT}/nix/pin.nix}"
 readonly HAMMER_SHIM="${HAMMER_SHIM_OVERRIDE:-${REPO_ROOT}/nix/hammer-shim.nix}"
 
 extract() {

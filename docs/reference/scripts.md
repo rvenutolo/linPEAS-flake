@@ -103,7 +103,7 @@ so verification is bound to this repository.
 ### scripts/check-hammer-shim-parity.sh
 
 Lint: nix/hammer-shim.nix's linpeas derivation matches
-the canonical linpeas derivation in nix/perSystem-monolith.nix. The
+the canonical linpeas derivation in nix/pin.nix. The
 shim duplicates the derivation because `builtins.getFlake` cannot run
 inside the `nix flake check` sandbox. Compares bodies normalized to
 whitespace-collapsed form.

@@ -22,62 +22,13 @@
       pkgs,
       pkgs-unstable,
       config,
+      pin,
+      linpeas,
+      actionlintWrapped,
+      preCommitWrapped,
       ...
     }:
     let
-      # `pkgs` (stable) and `pkgs-unstable` arrive as args — DO NOT re-import them.
-      # Read pin file with eager invariant checks. Anything outside the
-      # expected upstream shape (peass-ng release URL, YYYYMMDD-<hex> tag
-      # format) fails flake eval immediately — pin.version is interpolated
-      # into derivation names, docker tags, and OCI labels downstream, so
-      # an unvalidated value is a supply-chain footgun.
-      pin =
-        let
-          raw = builtins.fromJSON (builtins.readFile ../linpeas-pin.json);
-        in
-        assert (builtins.match "[0-9]{8}-[0-9a-f]{7,40}" raw.version) != null;
-        assert (builtins.match "https://github.com/peass-ng/PEASS-ng/releases/download/.*" raw.url) != null;
-        raw;
-
-      # DUPLICATED into nix/hammer-shim.nix (sandbox cannot use getFlake).
-      # Parity enforced by scripts/check-hammer-shim-parity.sh.
-      linpeas = pkgs.stdenvNoCC.mkDerivation {
-        pname = "linpeas";
-        inherit (pin) version;
-
-        src = pkgs.fetchurl {
-          inherit (pin) url hash;
-        };
-
-        dontUnpack = true;
-        dontBuild = true;
-
-        installPhase = ''
-          runHook preInstall
-          mkdir -p $out/bin
-          install -m 0755 $src $out/bin/linpeas
-          patchShebangs --host $out/bin/linpeas
-          runHook postInstall
-        '';
-
-        passthru.pin = pin;
-
-        meta = with pkgs.lib; {
-          description = "Linux Privilege Escalation Awesome Script (LinPEAS) from peass-ng";
-          homepage = "https://github.com/peass-ng/PEASS-ng";
-          license = licenses.mit;
-          platforms = platforms.unix;
-          mainProgram = "linpeas";
-          maintainers = [
-            {
-              name = "Rick Venutolo";
-              github = "rvenutolo";
-              githubId = 12970129;
-            }
-          ];
-        };
-      };
-
       linpeas-image = pkgs.dockerTools.buildLayeredImage {
         name = "rvenutolo/linpeas";
         tag = pin.version;
@@ -948,50 +899,6 @@
           language = "system";
         };
       };
-
-      # Wrap the bundled pre-commit binary to scrub PYTHONPATH before
-      # exec. pre-commit's Python launcher uses `site.addsitedir`, which
-      # APPENDS its bundled site-packages to sys.path — so any older
-      # `pre_commit` module reachable via an externally-inherited
-      # PYTHONPATH (a stale direnv profile, a parent shell that left
-      # `python3Packages.pre-commit` on the path, etc.) wins over the
-      # bundled one. When the inherited version pre-dates pre-commit
-      # 4.4.0 it rejects `language: unsupported` (the post-4.4 default
-      # emitted by git-hooks.nix) and every `git commit` fails before
-      # any hook runs.
-      #
-      # Override via `overrideAttrs` rather than a separate wrapper
-      # derivation so the upstream hook-tmpl resource (which has
-      # `$out/bin/pre-commit` substituted at build time and ends up
-      # baked into every `.git/hooks/pre-commit`) keeps pointing at the
-      # binary committers actually run. A separate writeShellScriptBin
-      # wrapper would not be reached by `pre-commit install` — only
-      # `nix develop`-time invocations would see it.
-      # actionlint discovers embedded shellcheck via $PATH. Hook
-      # invocations from a shell that has not entered the devShell
-      # (fresh checkout without direnv, CI step that forgot
-      # `nix develop`) silently degrade: actionlint exits 0 with
-      # shellcheck coverage disabled. Pinning the binary path here
-      # makes discovery deterministic at flake evaluation. See
-      # docs/actionlint-embedded-linters.md.
-      actionlintWrapped = pkgs-unstable.writeShellScriptBin "actionlint" ''
-        exec ${pkgs-unstable.actionlint}/bin/actionlint \
-          -shellcheck=${pkgs-unstable.shellcheck}/bin/shellcheck \
-          "$@"
-      '';
-
-      preCommitWrapped = pkgs-unstable.pre-commit.overrideAttrs (old: {
-        postFixup = (old.postFixup or "") + ''
-          mv "$out/bin/pre-commit" "$out/bin/.pre-commit-real"
-          cat > "$out/bin/pre-commit" <<EOF
-          #!${pkgs-unstable.bash}/bin/bash
-          unset PYTHONPATH
-          exec "$out/bin/.pre-commit-real" "\$@"
-          EOF
-          chmod +x "$out/bin/pre-commit"
-        '';
-      });
-
     in
     {
       # pre-commit wiring via inputs.pre-commit-hooks.flakeModule. `pkgs` is
