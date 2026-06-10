@@ -18,7 +18,6 @@
 
   config.perSystem =
     {
-      system,
       self',
       pkgs,
       pkgs-unstable,
@@ -993,13 +992,22 @@
         '';
       });
 
-      preCommitCheck = inputs.pre-commit-hooks.lib.${system}.run {
-        src = ../.;
-        hooks = preCommitHooks;
-        package = preCommitWrapped;
-      };
     in
     {
+      # pre-commit wiring via inputs.pre-commit-hooks.flakeModule. `pkgs` is
+      # pinned to pkgs-unstable to match the prior `lib.run` package set
+      # (the input follows nixpkgs-unstable). The module adds
+      # `checks.pre-commit` and exposes shellHook/enabledPackages for the
+      # devShell below.
+      pre-commit = {
+        pkgs = pkgs-unstable;
+        settings = {
+          src = ../.;
+          hooks = preCommitHooks;
+          package = preCommitWrapped;
+        };
+      };
+
       packages = {
         inherit linpeas;
         default = linpeas;
@@ -1015,9 +1023,9 @@
         # above) via `nix run .#actionlint-wrapped -- ...`. Using
         # the flake output bypasses devShell PATH ordering — the
         # bare `actionlint` derivation otherwise shadows the
-        # wrapper because `preCommitCheck.enabledPackages` lands
-        # ahead of `buildInputs` on PATH. Same wrapper the
-        # pre-commit hook (flake.nix:209) invokes.
+        # wrapper because `config.pre-commit.settings.enabledPackages`
+        # lands ahead of `buildInputs` on PATH. Same wrapper the
+        # `actionlint` pre-commit hook invokes.
         actionlint-wrapped = actionlintWrapped;
       }
       // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
@@ -1048,7 +1056,7 @@
 
       checks = {
         formatting = config.treefmt.build.check inputs.self;
-        pre-commit = preCommitCheck;
+        # `checks.pre-commit` is supplied by the flakeModule.
         # Wire the derivation builds into `nix flake check` so a
         # contributor running only the local check still exercises the
         # build path (fetchurl hash, patchShebangs, install rules).
@@ -1058,10 +1066,10 @@
       };
 
       devShells.default = pkgs-unstable.mkShell {
-        inherit (preCommitCheck) shellHook;
+        inherit (config.pre-commit) shellHook;
 
         buildInputs =
-          preCommitCheck.enabledPackages
+          config.pre-commit.settings.enabledPackages
           ++ (with pkgs-unstable; [
             nix
             jq
