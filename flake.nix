@@ -34,7 +34,7 @@
         ./nix/checks.nix
         ./nix/treefmt-config.nix
         ./nix/devshell.nix
-        ./nix/perSystem-monolith.nix
+        ./nix/hooks/default.nix
         ./nix/manifests.nix
       ];
       # Inject the second nixpkgs ONCE so every perSystem module receives
