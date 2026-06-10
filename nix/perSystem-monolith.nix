@@ -22,6 +22,7 @@
       self',
       pkgs,
       pkgs-unstable,
+      config,
       ...
     }:
     let
@@ -154,8 +155,6 @@
         '';
         dontInstall = true;
       };
-
-      treefmtEval = inputs.treefmt-nix.lib.evalModule pkgs-unstable ../treefmt.nix;
 
       preCommitHooks = {
         nixfmt = {
@@ -300,7 +299,7 @@
         treefmt = {
           enable = true;
           description = "Multi-language formatter aggregator (shfmt, prettier, etc).";
-          package = treefmtEval.config.build.wrapper;
+          package = config.treefmt.build.wrapper;
         };
         # Refuse to commit if the flake-show block in docs/reference/flake-outputs.md
         # is stale. Invokes refresh-flake-show.sh in --check mode — never mutates the
@@ -364,7 +363,7 @@
             if [[ ! -f scripts/refresh-treefmt-config.sh || ! -f docs/reference/treefmt-config.md ]]; then
               exit 0
             fi
-            export PATH="${pkgs-unstable.jq}/bin:${pkgs-unstable.gawk}/bin:${treefmtEval.config.build.wrapper}/bin:$PATH"
+            export PATH="${pkgs-unstable.jq}/bin:${pkgs-unstable.gawk}/bin:${config.treefmt.build.wrapper}/bin:$PATH"
             exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-treefmt-config.sh --check
           ''}";
           files = "^(treefmt\\.nix|flake\\.nix|flake\\.lock|docs/reference/treefmt-config\\.md|scripts/refresh-treefmt-config\\.sh)$";
@@ -379,7 +378,7 @@
             set -Eeuo pipefail
             IFS=$'\n\t'
             if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-            export PATH="${pkgs-unstable.jq}/bin:${pkgs-unstable.gawk}/bin:${treefmtEval.config.build.wrapper}/bin:$PATH"
+            export PATH="${pkgs-unstable.jq}/bin:${pkgs-unstable.gawk}/bin:${config.treefmt.build.wrapper}/bin:$PATH"
             exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-scripts-reference.sh --check
           ''}";
           files = "^(scripts/.*\\.sh|scripts/_script_docs\\.awk|docs/reference/scripts\\.md)$";
@@ -408,7 +407,7 @@
             set -Eeuo pipefail
             IFS=$'\n\t'
             if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-            export PATH="${pkgs-unstable.jq}/bin:${pkgs-unstable.yq-go}/bin:${treefmtEval.config.build.wrapper}/bin:$PATH"
+            export PATH="${pkgs-unstable.jq}/bin:${pkgs-unstable.yq-go}/bin:${config.treefmt.build.wrapper}/bin:$PATH"
             exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-ci-dag.sh --check
           ''}";
           files = "^(\\.github/workflows/ci\\.yml|docs/_data/ci-check-categories\\.yml|docs/architecture/ci-dag\\.md|scripts/refresh-ci-dag\\.sh)$";
@@ -1036,10 +1035,19 @@
         default = self'.apps.linpeas;
       };
 
-      formatter = treefmtEval.config.build.wrapper;
+      # treefmt configuration consumed by inputs.treefmt-nix.flakeModule.
+      # Pinned to pkgs-unstable so formatter package closures match the rest
+      # of the dev tooling. flakeCheck is disabled because the formatting
+      # check is wired explicitly below as `checks.formatting` (preserving
+      # that output name); the module still supplies `formatter.<system>`.
+      treefmt = {
+        imports = [ ../treefmt.nix ];
+        pkgs = pkgs-unstable;
+        flakeCheck = false;
+      };
 
       checks = {
-        formatting = treefmtEval.config.build.check inputs.self;
+        formatting = config.treefmt.build.check inputs.self;
         pre-commit = preCommitCheck;
         # Wire the derivation builds into `nix flake check` so a
         # contributor running only the local check still exercises the
@@ -1074,7 +1082,7 @@
             zizmor
             yamllint
             prettier
-            treefmtEval.config.build.wrapper
+            config.treefmt.build.wrapper
             python3Packages.mkdocs-material
             python3Packages.mkdocs-macros
             lychee
@@ -1098,7 +1106,7 @@
       # consumer can iterate uniformly without null-guards.
       devTooling.treefmtConfig =
         let
-          cfg = treefmtEval.config;
+          cfg = config.treefmt;
           enabled = pkgs.lib.filterAttrs (_: v: (v.enable or false)) cfg.programs;
           formatters = pkgs.lib.mapAttrsToList (name: v: {
             inherit name;

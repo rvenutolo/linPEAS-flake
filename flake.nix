@@ -25,6 +25,7 @@
         "aarch64-darwin"
       ];
       imports = [
+        inputs.treefmt-nix.flakeModule
         ./nix/perSystem-monolith.nix
         ./nix/manifests.nix
       ];
