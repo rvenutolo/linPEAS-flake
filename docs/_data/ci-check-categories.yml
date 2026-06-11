@@ -11,20 +11,28 @@
 # introducing a new category whose name starts with a letter that
 # breaks the display sequence requires renaming so the alphabetical
 # order matches intent.
-build-linpeas: Build + smoke
 build-linpeas-arm64: Build + smoke
+build-linpeas: Build + smoke
 flake-check: Build + smoke
-image-smoke: Build + smoke
 image-smoke-arm64: Build + smoke
-smoke-test: Build + smoke
+image-smoke: Build + smoke
 smoke-test-arm64: Build + smoke
+smoke-test: Build + smoke
 commitlint: Conventional Commits
 lint-pr-title: Conventional Commits
 check-doc-anchors: Doc quality
 check-orphan-invariants: Doc quality
 editorconfig: Doc quality
 markdownlint: Doc quality
+refresh-ci-dag-test: Doc quality
+refresh-ci-summary-test: Doc quality
+refresh-enforcement-matrix-test: Doc quality
+refresh-just-recipes-test: Doc quality
+refresh-precommit-table-test: Doc quality
+refresh-scripts-reference-test: Doc quality
+refresh-treefmt-config-test: Doc quality
 typos: Doc quality
+allowed-actions-api-harness: Security/invariant lints
 check-jsonschema: Security/invariant lints
 checkout-persist-credentials: Security/invariant lints
 ci-job-in-summary: Security/invariant lints
@@ -33,6 +41,7 @@ cosign-identity-pinned: Security/invariant lints
 dashboard-data-tests: Security/invariant lints
 dependency-review: Security/invariant lints
 fork-guard-release: Security/invariant lints
+gh-api-version-header: Security/invariant lints
 gh-attestation-repo: Security/invariant lints
 gitleaks: Security/invariant lints
 harden-runner-first: Security/invariant lints
@@ -40,8 +49,8 @@ job-timeout-minutes: Security/invariant lints
 min-permissions: Security/invariant lints
 nix-run-pinned: Security/invariant lints
 pin-diff-isolated: Security/invariant lints
-pre-commit-hooks-sha-parity: Security/invariant lints
 pr-workflows-no-secrets: Security/invariant lints
+pre-commit-hooks-sha-parity: Security/invariant lints
 protect-main-drift-check: Security/invariant lints
 pull-request-target-absent: Security/invariant lints
 ratchet-pin-audit-harness: Security/invariant lints
@@ -51,6 +60,7 @@ required-checks-no-paths: Security/invariant lints
 run-block-strict: Security/invariant lints
 script-has-test: Security/invariant lints
 script-shebang-pipefail: Security/invariant lints
+settings-posture-harness: Security/invariant lints
 setup-nix-required: Security/invariant lints
 tag-protection-drift-check: Security/invariant lints
 trufflehog: Security/invariant lints

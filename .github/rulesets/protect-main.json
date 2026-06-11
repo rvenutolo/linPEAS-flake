@@ -10,9 +10,15 @@
     }
   },
   "rules": [
-    { "type": "deletion" },
-    { "type": "non_fast_forward" },
-    { "type": "required_signatures" },
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "required_signatures"
+    },
     {
       "type": "pull_request",
       "parameters": {
@@ -30,55 +36,228 @@
         "strict_required_status_checks_policy": true,
         "do_not_enforce_on_create": false,
         "required_status_checks": [
-          { "context": "build-linpeas" },
-          { "context": "build-linpeas-arm64", "integration_id": 15368 },
-          { "context": "check-doc-anchors", "integration_id": 15368 },
-          { "context": "check-jsonschema", "integration_id": 15368 },
+          {
+            "context": "allowed-actions-api-harness",
+            "integration_id": 15368
+          },
+          {
+            "context": "build-linpeas"
+          },
+          {
+            "context": "build-linpeas-arm64",
+            "integration_id": 15368
+          },
+          {
+            "context": "check-doc-anchors",
+            "integration_id": 15368
+          },
+          {
+            "context": "check-jsonschema",
+            "integration_id": 15368
+          },
+          {
+            "context": "check-orphan-invariants",
+            "integration_id": 15368
+          },
           {
             "context": "checkout-persist-credentials",
             "integration_id": 15368
           },
-          { "context": "check-orphan-invariants", "integration_id": 15368 },
-          { "context": "ci-job-in-summary", "integration_id": 15368 },
-          { "context": "commitlint", "integration_id": 15368 },
-          { "context": "cosign-identity-pinned", "integration_id": 15368 },
-          { "context": "dashboard-data-tests", "integration_id": 15368 },
-          { "context": "dependency-review", "integration_id": 15368 },
-          { "context": "editorconfig", "integration_id": 15368 },
-          { "context": "flake-check" },
-          { "context": "fork-guard-release", "integration_id": 15368 },
-          { "context": "gh-attestation-repo", "integration_id": 15368 },
-          { "context": "gitleaks", "integration_id": 15368 },
-          { "context": "harden-runner-first", "integration_id": 15368 },
-          { "context": "image-smoke" },
-          { "context": "image-smoke-arm64" },
-          { "context": "job-timeout-minutes", "integration_id": 15368 },
-          { "context": "lint-pr-title", "integration_id": 15368 },
-          { "context": "markdownlint", "integration_id": 15368 },
-          { "context": "min-permissions", "integration_id": 15368 },
-          { "context": "nix-run-pinned", "integration_id": 15368 },
-          { "context": "pin-diff-isolated", "integration_id": 15368 },
-          { "context": "pr-workflows-no-secrets", "integration_id": 15368 },
-          { "context": "pre-commit-hooks-sha-parity", "integration_id": 15368 },
-          { "context": "protect-main-drift-check", "integration_id": 15368 },
-          { "context": "pull-request-target-absent", "integration_id": 15368 },
-          { "context": "ratchet-pin-audit-harness", "integration_id": 15368 },
-          { "context": "renovate-config-validator", "integration_id": 15368 },
-          { "context": "renovate-invariants", "integration_id": 15368 },
-          { "context": "required-checks-no-paths", "integration_id": 15368 },
-          { "context": "run-block-strict", "integration_id": 15368 },
-          { "context": "script-has-test", "integration_id": 15368 },
-          { "context": "script-shebang-pipefail", "integration_id": 15368 },
-          { "context": "setup-nix-required", "integration_id": 15368 },
-          { "context": "smoke-test" },
-          { "context": "smoke-test-arm64" },
-          { "context": "tag-protection-drift-check", "integration_id": 15368 },
-          { "context": "trufflehog", "integration_id": 15368 },
-          { "context": "typos", "integration_id": 15368 },
-          { "context": "upload-artifact-strict", "integration_id": 15368 },
-          { "context": "uses-sha-pinned", "integration_id": 15368 },
-          { "context": "workflow-concurrency", "integration_id": 15368 },
-          { "context": "workflow-on-branches", "integration_id": 15368 }
+          {
+            "context": "ci-job-in-summary",
+            "integration_id": 15368
+          },
+          {
+            "context": "cliff-tag-pattern",
+            "integration_id": 15368
+          },
+          {
+            "context": "commitlint",
+            "integration_id": 15368
+          },
+          {
+            "context": "cosign-identity-pinned",
+            "integration_id": 15368
+          },
+          {
+            "context": "dashboard-data-tests",
+            "integration_id": 15368
+          },
+          {
+            "context": "dependency-review",
+            "integration_id": 15368
+          },
+          {
+            "context": "editorconfig",
+            "integration_id": 15368
+          },
+          {
+            "context": "flake-check"
+          },
+          {
+            "context": "fork-guard-release",
+            "integration_id": 15368
+          },
+          {
+            "context": "gh-api-version-header",
+            "integration_id": 15368
+          },
+          {
+            "context": "gh-attestation-repo",
+            "integration_id": 15368
+          },
+          {
+            "context": "gitleaks",
+            "integration_id": 15368
+          },
+          {
+            "context": "harden-runner-first",
+            "integration_id": 15368
+          },
+          {
+            "context": "image-smoke"
+          },
+          {
+            "context": "image-smoke-arm64"
+          },
+          {
+            "context": "job-timeout-minutes",
+            "integration_id": 15368
+          },
+          {
+            "context": "lint-pr-title",
+            "integration_id": 15368
+          },
+          {
+            "context": "markdownlint",
+            "integration_id": 15368
+          },
+          {
+            "context": "min-permissions",
+            "integration_id": 15368
+          },
+          {
+            "context": "nix-run-pinned",
+            "integration_id": 15368
+          },
+          {
+            "context": "pin-diff-isolated",
+            "integration_id": 15368
+          },
+          {
+            "context": "pr-workflows-no-secrets",
+            "integration_id": 15368
+          },
+          {
+            "context": "pre-commit-hooks-sha-parity",
+            "integration_id": 15368
+          },
+          {
+            "context": "protect-main-drift-check",
+            "integration_id": 15368
+          },
+          {
+            "context": "pull-request-target-absent",
+            "integration_id": 15368
+          },
+          {
+            "context": "ratchet-pin-audit-harness",
+            "integration_id": 15368
+          },
+          {
+            "context": "refresh-ci-dag-test",
+            "integration_id": 15368
+          },
+          {
+            "context": "refresh-ci-summary-test",
+            "integration_id": 15368
+          },
+          {
+            "context": "refresh-enforcement-matrix-test",
+            "integration_id": 15368
+          },
+          {
+            "context": "refresh-just-recipes-test",
+            "integration_id": 15368
+          },
+          {
+            "context": "refresh-precommit-table-test",
+            "integration_id": 15368
+          },
+          {
+            "context": "refresh-scripts-reference-test",
+            "integration_id": 15368
+          },
+          {
+            "context": "refresh-treefmt-config-test",
+            "integration_id": 15368
+          },
+          {
+            "context": "renovate-config-validator",
+            "integration_id": 15368
+          },
+          {
+            "context": "renovate-invariants",
+            "integration_id": 15368
+          },
+          {
+            "context": "required-checks-no-paths",
+            "integration_id": 15368
+          },
+          {
+            "context": "run-block-strict",
+            "integration_id": 15368
+          },
+          {
+            "context": "script-has-test",
+            "integration_id": 15368
+          },
+          {
+            "context": "script-shebang-pipefail",
+            "integration_id": 15368
+          },
+          {
+            "context": "settings-posture-harness",
+            "integration_id": 15368
+          },
+          {
+            "context": "setup-nix-required",
+            "integration_id": 15368
+          },
+          {
+            "context": "smoke-test"
+          },
+          {
+            "context": "smoke-test-arm64"
+          },
+          {
+            "context": "tag-protection-drift-check",
+            "integration_id": 15368
+          },
+          {
+            "context": "trufflehog",
+            "integration_id": 15368
+          },
+          {
+            "context": "typos",
+            "integration_id": 15368
+          },
+          {
+            "context": "upload-artifact-strict",
+            "integration_id": 15368
+          },
+          {
+            "context": "uses-sha-pinned",
+            "integration_id": 15368
+          },
+          {
+            "context": "workflow-concurrency",
+            "integration_id": 15368
+          },
+          {
+            "context": "workflow-on-branches",
+            "integration_id": 15368
+          }
         ]
       }
     }

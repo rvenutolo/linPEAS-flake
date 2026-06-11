@@ -18,7 +18,7 @@ flowchart TD
   classDef commits fill:#e1bee7,stroke:#6a1b9a
   classDef aux fill:#eeeeee,stroke:#616161
 
-  allowed-actions-api-harness:::aux
+  allowed-actions-api-harness:::security
   build-linpeas:::build
   build-linpeas-arm64:::build
   check-doc-anchors:::doc
@@ -33,7 +33,7 @@ flowchart TD
   editorconfig:::doc
   flake-check:::build
   fork-guard-release:::security
-  gh-api-version-header:::aux
+  gh-api-version-header:::security
   gh-attestation-repo:::security
   harden-runner-first:::security
   image-smoke:::build
@@ -48,20 +48,20 @@ flowchart TD
   protect-main-drift-check:::security
   pull-request-target-absent:::security
   ratchet-pin-audit-harness:::security
-  refresh-ci-dag-test:::aux
-  refresh-ci-summary-test:::aux
-  refresh-enforcement-matrix-test:::aux
-  refresh-just-recipes-test:::aux
-  refresh-precommit-table-test:::aux
-  refresh-scripts-reference-test:::aux
-  refresh-treefmt-config-test:::aux
+  refresh-ci-dag-test:::doc
+  refresh-ci-summary-test:::doc
+  refresh-enforcement-matrix-test:::doc
+  refresh-just-recipes-test:::doc
+  refresh-precommit-table-test:::doc
+  refresh-scripts-reference-test:::doc
+  refresh-treefmt-config-test:::doc
   renovate-config-validator:::security
   renovate-invariants:::security
   required-checks-no-paths:::security
   run-block-strict:::security
   script-has-test:::security
   script-shebang-pipefail:::security
-  settings-posture-harness:::aux
+  settings-posture-harness:::security
   setup-nix-required:::security
   smoke-test:::build
   smoke-test-arm64:::build
