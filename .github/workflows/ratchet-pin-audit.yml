@@ -198,7 +198,11 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/notify-workflow-result
         with:
-          result: ${{ needs.check.outputs.result || (needs.check.result == 'failure' && 'failure' || 'skipped') }}
+          # Logical result computed by `check` wins; if the job died
+          # before producing one, fall back to its raw result so the
+          # composite files failed/cancelled runs and stays inert on
+          # skipped.
+          result: ${{ needs.check.outputs.result || needs.check.result }}
           label: ratchet-drift
           label-description: action pin SHA drift detected by ratchet check
           title: "ratchet-pin-audit: action pin drift detected"

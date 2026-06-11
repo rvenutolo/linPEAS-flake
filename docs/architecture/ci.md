@@ -188,7 +188,8 @@ if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclu
 - Do NOT reintroduce `push:` trigger.
 - Keep the `if:` gate on the `sync` job.
 - `notify` job uses `if: always()` and reads `needs.sync.result`; skipped =
-    inert in `notify-workflow-result`.
+    inert in `notify-workflow-result`, cancelled = filed as an
+    infrastructure failure.
 
 ## GitHub Pages site invariants
 
