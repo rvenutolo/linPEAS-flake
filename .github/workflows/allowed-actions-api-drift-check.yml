@@ -18,7 +18,7 @@ name: allowed-actions-api-drift-check
 
 on:
   schedule:
-    - cron: "30 11 * * *" # daily 11:30 UTC (15 min after settings-posture-drift-check)
+    - cron: "35 9 * * *" # daily 09:35 UTC (after settings-posture-drift-check in the drift-check cluster)
   workflow_dispatch:
 
 permissions: {}

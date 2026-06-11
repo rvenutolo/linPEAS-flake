@@ -2,7 +2,7 @@ name: verify-latest-release
 
 on:
   schedule:
-    - cron: "0 12 * * *" # daily 12:00 UTC
+    - cron: "40 5 * * 5" # Friday 05:40 UTC (weekly post-publish tamper check; publish-time verification lives in release-on-bump)
   workflow_dispatch:
 
 permissions: {}
@@ -54,7 +54,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.read-tag.outputs.tag }}
-        # Daily cron — same release-asset visibility lag possible if the run
+        # Scheduled cron — same release-asset visibility lag possible if the run
         # happens to fire moments after a release. Same poll-with-backoff.
         run: |
           set -Eeuo pipefail
@@ -411,9 +411,9 @@ jobs:
         with:
           result: ${{ needs.verify.result }}
           label: verify-latest-release-failure
-          title: "verify-latest-release: daily verification failed"
+          title: "verify-latest-release: scheduled verification failed"
           body: |
-            The daily `verify-latest-release` cron failed.
+            The scheduled `verify-latest-release` cron failed.
 
             - Trigger: `${{ github.event_name }}`
             - Verify conclusion: `${{ needs.verify.result }}`
@@ -494,5 +494,5 @@ jobs:
             Investigate the `verify` job logs for the failing step. Do
             NOT merge any subsequent pin bumps if the reason is
             `upstream-sri-drift` or `manifest-tag-drift` until resolved.
-          label-description: verify-latest-release daily check failed
+          label-description: verify-latest-release scheduled check failed
           github-token: ${{ secrets.GITHUB_TOKEN }}

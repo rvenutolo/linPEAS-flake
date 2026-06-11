@@ -101,8 +101,8 @@ next contributor PR).
     `ubuntu-latest` images carry a newer `gh` CLI, which ships an
     updated Sigstore TUF trust-root. A nixpkgs bump does not affect
     this directly, but a coincident runner-image rotation can cause
-    spurious verify failures the same day — confirm by re-running the
-    `verify-latest-release` cron 24h later before assuming
+    spurious verify failures the same day — confirm by re-dispatching
+    `verify-latest-release` the next day before assuming
     attestation drift.
 - **pre-commit-hooks lib drift.** When `nixpkgs` lib symbols change
     between releases, `cachix/git-hooks.nix` (and the hooks it
@@ -299,7 +299,7 @@ For `NixOS/nixpkgs` bumps specifically:
     outside required-checks). Skim the Security tab for any new
     `CRITICAL` rows. The remediation path for an unfixed
     base-layer CVE is the next nixpkgs bump.
-- The Pages cron (14:00 UTC daily) will rebuild the dashboard on its
+- The Pages cron (09:55 UTC daily) will rebuild the dashboard on its
     next tick. Push-trigger and release-trigger also rebuild
     immediately.
 - The next `update-flake-lock.yml` cron run (weekly, Monday 06:00 UTC)

@@ -3,7 +3,7 @@ name: reproducibility-check
 
 on:
   schedule:
-    - cron: "0 6 * * 0"
+    - cron: "10 5 * * 5" # Friday 05:10 UTC (after update-flake-lock opens the weekly window)
   workflow_dispatch:
 
 permissions: {}

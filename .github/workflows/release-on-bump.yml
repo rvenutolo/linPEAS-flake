@@ -417,7 +417,7 @@ jobs:
         # asset. Same trust root as the existing per-image cosign
         # signatures (Fulcio cert minted against this workflow's
         # OIDC token, Rekor transparency entry). Verified at release
-        # time by the verify job and daily by verify-latest-release.yml.
+        # time by the verify job and weekly by verify-latest-release.yml.
         # Also uploads the SBOM file itself to the release here, since
         # anchore/sbom-action's upload-release-assets does nothing on
         # push / workflow_dispatch triggers.

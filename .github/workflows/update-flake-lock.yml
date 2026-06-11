@@ -2,7 +2,7 @@ name: update-flake-lock
 
 on:
   schedule:
-    - cron: "0 6 * * 5" # Friday 06:00 UTC
+    - cron: "0 5 * * 5" # Friday 05:00 UTC (leads the weekly window so the auto-merge PR's CI runs inside it)
   workflow_dispatch:
 
 permissions: {}

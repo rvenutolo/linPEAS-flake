@@ -23,7 +23,7 @@ silent skip). Upstream PEASS-ng releases ship no signatures (GPG, cosign,
 SLSA, etc.), so all integrity rests on the pinned hash plus trust in
 GitHub's hosting.
 
-The daily `verify-latest-release` cron additionally re-fetches the pinned
+The weekly `verify-latest-release` cron additionally re-fetches the pinned
 `linpeas.sh` URL and compares the SRI hash against the pin file, detecting
 upstream tag replacement (intentional or compromise).
 

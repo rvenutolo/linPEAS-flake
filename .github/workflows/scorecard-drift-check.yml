@@ -46,7 +46,7 @@ name: scorecard-drift-check
 
 on:
   schedule:
-    - cron: "45 11 * * 1" # Monday 11:45 UTC (after the 11:30 daily settings-posture-drift slot, before the Mon 12:05 zizmor-drift slot)
+    - cron: "20 6 * * 5" # Friday 06:20 UTC (after octoscan in the scanner cluster)
   workflow_dispatch:
 
 permissions: {}
