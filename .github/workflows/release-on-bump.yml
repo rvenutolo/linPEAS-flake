@@ -1198,8 +1198,10 @@ jobs:
         with:
           # image/verify are gated on `tag-exists == 'false'` so
           # `skipped` is the normal value when the tag already exists.
-          # Treat that path as success.
-          result: ${{ (needs.release.result == 'failure' || needs.image-amd64.result == 'failure' || needs.image-arm64.result == 'failure' || needs.manifest.result == 'failure' || needs.changelog.result == 'failure' || needs.verify.result == 'failure') && 'failure' || (needs.release.result == 'success') && 'success' || 'skipped' }}
+          # Treat that path as success. A cancelled job anywhere in the
+          # pipeline (e.g. timeout) outranks success — the composite
+          # files it as an infrastructure failure.
+          result: ${{ (needs.release.result == 'failure' || needs.image-amd64.result == 'failure' || needs.image-arm64.result == 'failure' || needs.manifest.result == 'failure' || needs.changelog.result == 'failure' || needs.verify.result == 'failure') && 'failure' || (needs.release.result == 'cancelled' || needs.image-amd64.result == 'cancelled' || needs.image-arm64.result == 'cancelled' || needs.manifest.result == 'cancelled' || needs.changelog.result == 'cancelled' || needs.verify.result == 'cancelled') && 'cancelled' || (needs.release.result == 'success') && 'success' || 'skipped' }}
           label: release-on-bump-failure
           title: "release-on-bump: release pipeline failed"
           body: |

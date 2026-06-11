@@ -83,11 +83,14 @@ jobs:
           # to the Security tab.
           fail-on: critical
 
-  # Real CRITICAL finding: analyze ran and failed.
+  # Real CRITICAL finding: analyze ran and failed. PR runs are
+  # excluded — the failed check on the PR itself is the
+  # maintainer-facing signal there; push, cron, and dispatch runs
+  # have no PR surface, so they page via the deduped issue.
   notify-finding:
     name: notify (finding)
     needs: analyze
-    if: always() && github.event_name == 'push' && needs.analyze.result == 'failure' && needs.analyze.outputs.has-finding == 'true'
+    if: always() && github.event_name != 'pull_request' && needs.analyze.result == 'failure' && needs.analyze.outputs.has-finding == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -115,13 +118,15 @@ jobs:
             the suggested fix to the offending workflow file.
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-  # Infrastructure failure: analyze never ran (checkout/init failed).
-  # Filed under a distinct label so transient runner / network / token
-  # issues are not paged as CRITICAL security findings.
+  # Infrastructure failure: analyze never ran (checkout/init failed)
+  # or was cancelled (timeout). Filed under a distinct label so
+  # transient runner / network / token issues are not paged as
+  # CRITICAL security findings. PR runs are excluded — the failed
+  # check on the PR itself is the maintainer-facing signal there.
   notify-infra:
     name: notify (infra)
     needs: analyze
-    if: always() && github.event_name == 'push' && needs.analyze.result == 'failure' && needs.analyze.outputs.has-finding != 'true'
+    if: always() && github.event_name != 'pull_request' && (needs.analyze.result == 'cancelled' || (needs.analyze.result == 'failure' && needs.analyze.outputs.has-finding != 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -135,7 +140,10 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/notify-workflow-result
         with:
-          result: failure
+          # Raw result: 'failure' or 'cancelled' (the job's `if:` gate
+          # admits nothing else); the composite annotates cancelled
+          # runs as infrastructure failures.
+          result: ${{ needs.analyze.result }}
           label: codeql-infra
           label-color: fbca04
           label-description: codeql workflow infrastructure failure (no security finding)
