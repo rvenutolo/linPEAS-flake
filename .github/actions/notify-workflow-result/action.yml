@@ -1,5 +1,5 @@
 name: notify-workflow-result
-description: "Open/update a deduped issue on workflow failure; close it on next success."
+description: "Open/update a deduped issue on workflow failure or cancellation; close it on next success."
 
 # SECURITY CONTRACT for `title` and `body` inputs:
 #
@@ -34,7 +34,13 @@ description: "Open/update a deduped issue on workflow failure; close it on next 
 
 inputs:
   result:
-    description: "Aggregate result of the parent job(s) (success/failure/cancelled/skipped)."
+    description: >-
+      Aggregate result of the parent job(s)
+      (success/failure/cancelled/skipped). `cancelled` is treated as an
+      infrastructure failure (most commonly `timeout-minutes` exceeded):
+      it files/updates the same deduped issue as `failure`, with the
+      issue text flagging the run as cancelled so triage does not read
+      it as a finding. `skipped` is inert.
     required: true
   label:
     description: "Label used to dedup open issues for this workflow."
@@ -82,9 +88,20 @@ runs:
             `https://github.com/${context.repo.owner}/${context.repo.repo}` +
             `/actions/runs/${context.runId}`;
 
-          // Inert on cancelled / skipped so flaky-cancel patterns
-          // don't reopen-and-close the same issue.
-          if (result !== 'success' && result !== 'failure') {
+          // `cancelled` is an infrastructure failure: for scheduled
+          // watchdogs it almost always means `timeout-minutes` was
+          // exceeded (the drift-check crons set
+          // `cancel-in-progress: false`, and a concurrency-superseded
+          // or manually-cancelled run cancels this notify job too, so
+          // neither path reaches this code). Filing it keeps red runs
+          // from sitting in the Actions tab unalerted; the issue text
+          // flags it so triage does not read it as a finding.
+          const cancelled = result === 'cancelled';
+
+          // Inert on skipped so callers can pass a raw job result and
+          // let no-op paths (gated jobs, no-change cron days) stay
+          // silent.
+          if (result !== 'success' && result !== 'failure' && !cancelled) {
             core.notice(`Result is '${result}'; no action.`);
             return;
           }
@@ -125,14 +142,19 @@ runs:
             return;
           }
 
-          // result === 'failure'
+          // result === 'failure' || result === 'cancelled'
+          const cancelledNote =
+            'cancelled (likely `timeout-minutes` exceeded) — ' +
+            'infrastructure failure, not a finding';
           if (existing.length > 0) {
             const issue = existing[0];
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issue.number,
-              body: `New failure: ${runUrl}`,
+              body: cancelled
+                ? `New run ${cancelledNote}: ${runUrl}`
+                : `New failure: ${runUrl}`,
             });
             core.notice(`Appended comment to existing issue #${issue.number}`);
             return;
@@ -154,11 +176,17 @@ runs:
             }
           }
 
+          const issueBody = cancelled
+            ? `> [!WARNING]\n` +
+              `> This run was ${cancelledNote}. The body below ` +
+              `describes the workflow's failure mode and may not ` +
+              `apply.\n\n${body}\n\nRun: ${runUrl}`
+            : `${body}\n\nRun: ${runUrl}`;
           const created = await github.rest.issues.create({
             owner: context.repo.owner,
             repo: context.repo.repo,
             title,
-            body: `${body}\n\nRun: ${runUrl}`,
+            body: issueBody,
             labels: [label],
           });
           core.notice(`Opened issue #${created.data.number}`);

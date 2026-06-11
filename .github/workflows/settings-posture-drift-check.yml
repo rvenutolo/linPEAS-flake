@@ -91,7 +91,9 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/notify-workflow-result
         with:
-          result: ${{ needs.drift-check.result == 'failure' && 'failure' || (needs.drift-check.result == 'success' && 'success' || 'skipped') }}
+          # Raw job result: the composite files cancelled runs as
+          # infrastructure failures and is inert on skipped.
+          result: ${{ needs.drift-check.result }}
           label: settings-drift
           title: "settings-posture-drift-check: live repo settings have drifted"
           body: |

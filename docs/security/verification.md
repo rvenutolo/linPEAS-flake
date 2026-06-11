@@ -164,8 +164,8 @@ job** when count > 0. The job emits an `outputs.has-finding` boolean
 notify jobs can distinguish a real CRITICAL CVE from an
 infrastructure failure that prevented the scan.
 
-Two follow-on jobs (`needs: image-cve-scan-trivy`, `if: failure()`)
-gate on that output and open / update deduped issues via
+Two follow-on jobs (`needs: image-cve-scan-trivy`) gate on that
+output and open / update deduped issues via
 `notify-workflow-result`:
 
 - `image-cve-scan-trivy-notify-finding` (label: `image-cve-critical-trivy`) — real
@@ -173,8 +173,9 @@ gate on that output and open / update deduped issues via
 
 - `image-cve-scan-trivy-notify-infra` (label: `image-cve-infra-trivy`) — job failed
     before Trivy produced a CRITICAL count (build, scan, or SARIF
-    upload broke). Remediation: inspect the failing step; if transient,
-    close once the next scheduled run is green.
+    upload broke), or the job was cancelled (timeout). Remediation:
+    inspect the failing step; if transient, close once the next
+    scheduled run is green.
 
 - NOT in required-checks (intentional — `update-flake-lock` must still
     land even if a CVE is present, with explicit maintainer awareness).
@@ -202,14 +203,14 @@ when one or more CRITICAL findings are reported. Advisory only — not
 a required status check; prevention path is a nixpkgs bump via
 `update-flake-lock`.
 
-Two follow-on jobs (`needs: image-cve-scan-grype`, `if: failure()`)
-open or update a deduped issue via the `notify-workflow-result`
-composite:
+Two follow-on jobs (`needs: image-cve-scan-grype`) open or update a
+deduped issue via the `notify-workflow-result` composite:
 
 - `image-cve-scan-grype-notify-finding` (label: `image-cve-critical-grype`) — real
     CRITICAL CVE was identified by Grype.
 - `image-cve-scan-grype-notify-infra` (label: `image-cve-infra-grype`) — job failed
-    before producing a CRITICAL count (build / scan / SARIF upload).
+    before producing a CRITICAL count (build / scan / SARIF upload),
+    or the job was cancelled (timeout).
 
 ## SBOM attestation<a name="sbom-attestation"></a>
 
