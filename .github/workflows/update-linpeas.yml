@@ -2,7 +2,7 @@ name: update-linpeas
 
 on:
   schedule:
-    - cron: "0 9 * * *" # 09:00 UTC daily
+    - cron: "5 8 * * *" # daily 08:05 UTC (early in the window so the bump PR's CI + auto-merge land before the dashboard render)
   workflow_dispatch:
 
 permissions: {}

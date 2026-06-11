@@ -6,7 +6,7 @@ name: links
 
 on:
   schedule:
-    - cron: "0 4 * * 1" # Mon 04:00 UTC (outside the 09:00–14:00 daily-cron window)
+    - cron: "50 5 * * 5" # Friday 05:50 UTC (after verify-latest-release, before the scanner cluster)
   workflow_dispatch:
 
 permissions: {}

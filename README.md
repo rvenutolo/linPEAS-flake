@@ -120,12 +120,12 @@ trigger semantics, and credential split live in
 
 | Workflow                    | When                                         | Purpose                                                                                                            |
 | --------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `update-linpeas.yml`        | daily 09:00 UTC + dispatch                   | Bumps `linpeas-pin.json` to the latest upstream tag. Opens PR; auto-merges on green.                               |
-| `stale-pin-check.yml`       | daily 10:30 UTC                              | Files a deduped issue if `update-linpeas` is stalled.                                                              |
-| `verify-latest-release.yml` | daily 12:00 UTC                              | Re-verifies the latest release's attestations and re-fetches upstream `linpeas.sh` to confirm the pinned SRI hash. |
+| `update-linpeas.yml`        | daily 08:05 UTC + dispatch                   | Bumps `linpeas-pin.json` to the latest upstream tag. Opens PR; auto-merges on green.                               |
+| `stale-pin-check.yml`       | daily 09:00 UTC                              | Files a deduped issue if `update-linpeas` is stalled.                                                              |
+| `verify-latest-release.yml` | weekly Fri 05:40 UTC                         | Re-verifies the latest release's attestations and re-fetches upstream `linpeas.sh` to confirm the pinned SRI hash. |
 | `release-on-bump.yml`       | push to `main` changing the pin              | Tags the release, builds + pushes per-arch OCI images (ghcr.io + docker.io), attests SLSA provenance + SBOMs.      |
-| `pages.yml`                 | push, PR, release, daily 14:00 UTC, dispatch | Rebuilds the MkDocs site; deploys via OIDC on non-PR events. Not in the required-check set.                        |
-| `update-flake-lock.yml`     | weekly Fri 06:00 UTC                         | Bumps `nixpkgs` via `nix flake update`; opens auto-merging PR.                                                     |
+| `pages.yml`                 | push, PR, release, daily 09:55 UTC, dispatch | Rebuilds the MkDocs site; deploys via OIDC on non-PR events. Not in the required-check set.                        |
+| `update-flake-lock.yml`     | weekly Fri 05:00 UTC                         | Bumps `nixpkgs` via `nix flake update`; opens auto-merging PR.                                                     |
 | Renovate                    | weekly Fri batch                             | Bumps action SHAs + tracked flake inputs after a 7-day cooldown.                                                   |
 
 Bump-workflow commits are authored by the `linpeas-flake-bumper` GitHub
@@ -185,7 +185,7 @@ required-check table; alphabetical):
 
 Every release runs a `verify` job in `release-on-bump.yml` that downloads the
 just-published image and runs `gh attestation verify` on each.
-A separate daily cron workflow (`verify-latest-release.yml`) re-verifies the
+A separate weekly cron workflow (`verify-latest-release.yml`) re-verifies the
 latest release's image and pin file **and re-fetches the pinned
 `linpeas.sh` from upstream to confirm the SRI hash still matches** — this
 detects upstream tag-replacement that attestation alone cannot see. Any
@@ -202,7 +202,7 @@ rests on:
 1. GitHub Releases API `digest` field cross-check inside the bump workflow
     (hard fail if absent — never a silent skip).
 1. Asset-URL prefix validation inside the bump workflow.
-1. Daily upstream parity check (`verify-latest-release.yml`).
+1. Weekly upstream parity check (`verify-latest-release.yml`).
 
 This matches the trust model of `curl ... | bash`, but with reproducible,
 hash-pinned downloads and SLSA build-provenance attestations. See

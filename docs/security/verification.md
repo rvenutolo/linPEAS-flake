@@ -7,7 +7,7 @@ Step-by-step procedure to verify a release of this wrapper. None of this trusts 
 - [Tools needed](#tools-needed)
 - [1. Verify the OCI image's build provenance](#1-verify-the-oci-images-build-provenance)
 - [Multi-arch attestations](#multi-arch-attestations)
-- [2. Verify the daily parity check is current](#2-verify-the-daily-parity-check-is-current)
+- [2. Verify the weekly parity check is current](#2-verify-the-weekly-parity-check-is-current)
 - [Bump-script integrity guards](#bump-script-integrity-guards)
 - [verify-latest-release upstream parity](#verify-latest-release-upstream-parity)
 - [verify-latest-release failure attribution](#verify-latest-release-failure-attribution)
@@ -61,7 +61,7 @@ This means:
     arch image) would miss it. Always verify against the resolved
     arch-image digest.
 
-## 2. Verify the daily parity check is current<a name="2-verify-the-daily-parity-check-is-current"></a>
+## 2. Verify the weekly parity check is current<a name="2-verify-the-weekly-parity-check-is-current"></a>
 
 ```bash
 gh run list \
@@ -71,7 +71,7 @@ gh run list \
   --json conclusion,updatedAt,url
 ```
 
-Look for `"conclusion": "success"` within the last 24-25 hours. Current state on the Pages site: **{{ dashboard.parity.conclusion }}** at {{ dashboard.parity.checked_at }}.
+Look for `"conclusion": "success"` within the last 7 days. Current state on the Pages site: **{{ dashboard.parity.conclusion }}** at {{ dashboard.parity.checked_at }}.
 
 ## Bump-script integrity guards<a name="bump-script-integrity-guards"></a>
 
@@ -87,7 +87,7 @@ Look for `"conclusion": "success"` within the last 24-25 hours. Current state on
 
 ## verify-latest-release upstream parity<a name="verify-latest-release-upstream-parity"></a>
 
-Daily verify cron re-fetches the pinned `linpeas.sh` URL, recomputes the SRI
+The weekly verify cron re-fetches the pinned `linpeas.sh` URL, recomputes the SRI
 hash via `openssl dgst -sha256 -binary | base64 --wrap=0`, compares against
 `linpeas-pin.json`. Failure = security incident.
 
@@ -133,7 +133,7 @@ Alert fatigue is a security risk.
 ## Gitleaks secret scanning<a name="gitleaks-secret-scanning"></a>
 
 `gitleaks.yml` scans the full git history (`fetch-depth: 0`) on push to
-main, every PR, and a weekly cron (Mon 13:00 UTC). Required check named
+main, every PR, and a weekly cron (Fri 06:40 UTC). Required check named
 `gitleaks` in the `protect-main` ruleset.
 
 - Uses only `secrets.GITHUB_TOKEN` — PR-triggered workflow secret
@@ -247,7 +247,7 @@ Verification must pin both:
 - `--certificate-oidc-issuer https://token.actions.githubusercontent.com`
 
 A signature minted by any other workflow, branch ref, or OIDC issuer
-fails verification. The release pipeline's `verify` job and the daily
+fails verification. The release pipeline's `verify` job and the weekly
 `verify-latest-release.yml` cron both enforce these exact values.
 
 ### User-facing verification commands<a name="user-facing-verification-commands"></a>

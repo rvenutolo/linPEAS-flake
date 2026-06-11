@@ -119,35 +119,37 @@ All Nix-based jobs use `DeterminateSystems/flakehub-cache-action` (free for publ
 
 ## Cron schedule
 
-| Workflow                          | Cron          | UTC         | Purpose                                                          |
-| --------------------------------- | ------------- | ----------- | ---------------------------------------------------------------- |
-| `actions-cache-prune`             | `0 3 * * *`   | 03:00 daily | Evict stale `actions/cache` entries to stay under repo quota     |
-| `update-linpeas`                  | `0 9 * * *`   | 09:00 daily | Check upstream peass-ng for new release; open auto-merge bump PR |
-| `stale-pin-check`                 | `30 10 * * *` | 10:30 daily | Auto-file issue if pin is N days behind upstream                 |
-| `ratchet-pin-audit`               | `0 11 * * *`  | 11:00 daily | Audit third-party action pins are SHA-pinned + Renovate-tracked  |
-| `settings-posture-drift-check`    | `15 11 * * *` | 11:15 daily | Diff live repo settings vs committed baseline                    |
-| `allowed-actions-api-drift-check` | `30 11 * * *` | 11:30 daily | Diff live Actions allowlist vs committed baseline                |
-| `verify-latest-release`           | `0 12 * * *`  | 12:00 daily | Re-fetch published artifacts; verify SRI hash + attestations     |
-| `pages`                           | `0 14 * * *`  | 14:00 daily | Rebuild dashboard from current pin + upstream + release JSON     |
-| `reproducibility-check`           | `0 6 * * 0`   | Sun 06:00   | Rebuild flake outputs twice; fail on hash divergence             |
-| `links`                           | `0 4 * * 1`   | Mon 04:00   | Markdown link checker (lychee); cron-only, not a required check  |
-| `codeql`                          | `0 8 * * 1`   | Mon 08:00   | CodeQL static analysis (Actions)                                 |
-| `octoscan`                        | `0 8 * * 1`   | Mon 08:00   | Octoscan SAST on `.github/workflows/*.yml`                       |
-| `scorecard-drift-check`           | `45 11 * * 1` | Mon 11:45   | Diff OSSF Scorecard live results vs committed baseline           |
-| `zizmor-drift-check`              | `5 12 * * 1`  | Mon 12:05   | Diff live zizmor results vs committed baseline                   |
-| `gitleaks`                        | `0 13 * * 1`  | Mon 13:00   | Full-history secret scan                                         |
-| `trufflehog`                      | `0 13 * * 1`  | Mon 13:00   | Full-history secret scan (complementary detector set)            |
-| `coverage-matrix`                 | `20 5 * * 5`  | Fri 05:20   | Portability matrix: flake check + build across OS/Nix installers |
-| `image-cve-scan`                  | `30 5 * * 5`  | Fri 05:30   | Trivy + Grype CVE scan of the OCI image; SARIF to code-scanning  |
-| `update-flake-lock`               | `0 6 * * 5`   | Fri 06:00   | Refresh `flake.lock` via auto-merge PR                           |
+All schedules fit the maintainer's monitoring windows: daily crons run 08:00–10:00 UTC, weekly crons run Friday 05:00–07:00 UTC (both year-round inside the intended US-Eastern early-morning windows regardless of DST).
 
-Daily crons fire in this UTC order: `actions-cache-prune` (03:00) → `update-linpeas` (09:00) → `stale-pin-check` (10:30) → `ratchet-pin-audit` (11:00) → `settings-posture-drift-check` (11:15) → `allowed-actions-api-drift-check` (11:30) → `verify-latest-release` (12:00) → `pages` (14:00). Bump-related crons (`update-linpeas`, `stale-pin-check`, `verify-latest-release`) front-load the day so the dashboard cron at 14:00 reads a settled state. Drift-check crons cluster mid-morning (11:00–11:30) to surface upstream changes before the noon verification slot.
+| Workflow                          | Cron         | UTC         | Purpose                                                          |
+| --------------------------------- | ------------ | ----------- | ---------------------------------------------------------------- |
+| `actions-cache-prune`             | `0 8 * * *`  | 08:00 daily | Evict stale `actions/cache` entries to stay under repo quota     |
+| `update-linpeas`                  | `5 8 * * *`  | 08:05 daily | Check upstream peass-ng for new release; open auto-merge bump PR |
+| `stale-pin-check`                 | `0 9 * * *`  | 09:00 daily | Auto-file issue if pin is N days behind upstream                 |
+| `ratchet-pin-audit`               | `15 9 * * *` | 09:15 daily | Audit third-party action pins are SHA-pinned + Renovate-tracked  |
+| `settings-posture-drift-check`    | `25 9 * * *` | 09:25 daily | Diff live repo settings vs committed baseline                    |
+| `allowed-actions-api-drift-check` | `35 9 * * *` | 09:35 daily | Diff live Actions allowlist vs committed baseline                |
+| `pages`                           | `55 9 * * *` | 09:55 daily | Rebuild dashboard from current pin + upstream + release JSON     |
+| `update-flake-lock`               | `0 5 * * 5`  | Fri 05:00   | Refresh `flake.lock` via auto-merge PR                           |
+| `reproducibility-check`           | `10 5 * * 5` | Fri 05:10   | Rebuild flake outputs twice; fail on hash divergence             |
+| `coverage-matrix`                 | `20 5 * * 5` | Fri 05:20   | Portability matrix: flake check + build across OS/Nix installers |
+| `image-cve-scan`                  | `30 5 * * 5` | Fri 05:30   | Trivy + Grype CVE scan of the OCI image; SARIF to code-scanning  |
+| `verify-latest-release`           | `40 5 * * 5` | Fri 05:40   | Re-fetch published artifacts; verify SRI hash + attestations     |
+| `links`                           | `50 5 * * 5` | Fri 05:50   | Markdown link checker (lychee); cron-only, not a required check  |
+| `codeql`                          | `0 6 * * 5`  | Fri 06:00   | CodeQL static analysis (Actions)                                 |
+| `octoscan`                        | `10 6 * * 5` | Fri 06:10   | Octoscan SAST on `.github/workflows/*.yml`                       |
+| `scorecard-drift-check`           | `20 6 * * 5` | Fri 06:20   | Diff OSSF Scorecard live results vs committed baseline           |
+| `zizmor-drift-check`              | `30 6 * * 5` | Fri 06:30   | Diff live zizmor results vs committed baseline                   |
+| `gitleaks`                        | `40 6 * * 5` | Fri 06:40   | Full-history secret scan                                         |
+| `trufflehog`                      | `50 6 * * 5` | Fri 06:50   | Full-history secret scan (complementary detector set)            |
+
+Daily crons fire in this UTC order: `actions-cache-prune` (08:00) → `update-linpeas` (08:05) → `stale-pin-check` (09:00) → `ratchet-pin-audit` (09:15) → `settings-posture-drift-check` (09:25) → `allowed-actions-api-drift-check` (09:35) → `pages` (09:55). Bump-related crons (`update-linpeas`, `stale-pin-check`) front-load the window so the dashboard cron at 09:55 reads a settled state; drift checks cluster between them. Weekly crons fire Friday in slot order: `update-flake-lock` leads at 05:00 so its auto-merge PR's CI runs inside the window, the scanner cluster (`codeql` → `octoscan` → `scorecard-drift-check` → `zizmor-drift-check`) fills the second hour, and the secret-scan pair (`gitleaks`, `trufflehog`) closes it.
 
 ### Pages staleness window
 
-On bump days, the 09:00 `update-linpeas` run opens a PR; required checks plus auto-merge typically complete within an hour, after which `release-on-bump.yml` cuts the GitHub release. The 14:00 `pages` cron then reads the freshly-bumped `linpeas-pin.json` from `main` plus the just-published release JSON and renders a consistent dashboard.
+On bump days, the 08:05 `update-linpeas` run opens a PR; required checks plus auto-merge typically complete within an hour, after which `release-on-bump.yml` cuts the GitHub release. The 09:55 `pages` cron then reads the freshly-bumped `linpeas-pin.json` from `main` plus the just-published release JSON and renders a consistent dashboard. The ~1h50m slack between bump start and dashboard render is an accepted tradeoff for keeping every daily cron inside the maintainer's monitoring window — the typical bump pipeline finishes well inside it.
 
-If the bump pipeline is delayed past 14:00 (rare — CI queue surge, flakehub-cache cold-start, Renovate auto-merge held by a required check), the daily cron reads the previous day's pin and publishes a dashboard claiming `drift.days = 1`. This is **by-design** tolerable:
+If the bump pipeline is delayed past 09:55 (rare — CI queue surge, flakehub-cache cold-start, Renovate auto-merge held by a required check), the daily cron reads the previous day's pin and publishes a dashboard claiming `drift.days = 1`. This is **by-design** tolerable:
 
 - `pages.yml` also runs on `push: branches: [main]` and `release: published`, so the dashboard is re-rendered within minutes of any bump merge.
 - The dashboard page and `security/trust-model.md` self-describe as documentation, not a trust anchor. Authoritative signal lives in `gh attestation verify` against the published artifacts, not the dashboard text.

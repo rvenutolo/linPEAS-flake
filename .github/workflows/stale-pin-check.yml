@@ -17,7 +17,7 @@ name: stale-pin-check
 
 on:
   schedule:
-    - cron: "30 10 * * *" # daily 10:30 UTC (after update-linpeas at 09:00)
+    - cron: "0 9 * * *" # daily 09:00 UTC (after update-linpeas has had time to open and merge a bump PR)
   workflow_dispatch:
 
 permissions: {}

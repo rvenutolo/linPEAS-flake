@@ -70,7 +70,7 @@ No releases published yet.
 
 ## Upstream parity check
 
-The daily [`verify-latest-release.yml`](https://github.com/rvenutolo/linPEAS-flake/actions/workflows/verify-latest-release.yml) workflow re-fetches the pinned `linpeas.sh`, recomputes its SRI hash, and compares against the pin file. Detects upstream tag replacement that attestation alone cannot see.
+The weekly [`verify-latest-release.yml`](https://github.com/rvenutolo/linPEAS-flake/actions/workflows/verify-latest-release.yml) workflow re-fetches the pinned `linpeas.sh`, recomputes its SRI hash, and compares against the pin file. Detects upstream tag replacement that attestation alone cannot see.
 
 {% if dashboard.parity.checked_at %}
 - **Last result:** {{ dashboard.parity.conclusion }}

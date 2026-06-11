@@ -6,7 +6,7 @@ Three independent automations keep the pin current and the release artifacts in 
 
 ```mermaid
 flowchart TD
-  cron["cron: 09:00 UTC daily<br/>(update-linpeas.yml)"]
+  cron["cron: 08:05 UTC daily<br/>(update-linpeas.yml)"]
   api["gh api repos/peass-ng/PEASS-ng/releases/latest"]
   compare{"upstream tag<br/>== current pin?"}
   fetch["curl --location asset_url<br/>cross-check .digest<br/>(hard fail on absent)"]
@@ -63,7 +63,7 @@ The Pages workflow runs:
 
 - On every push to `main` (catches docs and code changes).
 - On every release (catches release-on-bump pin landings).
-- Daily at 14:00 UTC — after the bump-related crons (09:00 `update-linpeas`, 10:30 `stale-pin-check`, 12:00 `verify-latest-release`), so the dashboard reads a settled state. See [CI — cron schedule](ci.md#cron-schedule).
+- Daily at 09:55 UTC — last slot in the daily window, after `update-linpeas` (08:05) and `stale-pin-check` (09:00), so the dashboard reads a settled state. See [CI — cron schedule](ci.md#cron-schedule).
 - On manual `workflow_dispatch`.
 
 The Pages site is **not** in the `protect-main` ruleset's required check set; a Pages failure must not block pin bumps. See [CI](ci.md).
