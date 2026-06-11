@@ -97,25 +97,37 @@ The `workflow_run` trigger does not introduce a TOCTOU concern: `dockerhub-sync.
 
 ## Supply-chain posture monitoring
 
-One scheduled workflow tracks supply-chain hygiene independent of the
-release pipeline. It uploads findings to the Security tab; it is not
-in branch protection's required-check set for content-policy reasons
-documented below.
+Several scheduled workflows track supply-chain hygiene independent of
+the release pipeline — `codeql.yml`, `octoscan.yml`,
+`image-cve-scan.yml`, `scorecard-drift-check.yml`, and
+`zizmor-drift-check.yml` (full cron inventory in
+[`docs/architecture/ci.md`](docs/architecture/ci.md)). This section
+describes `codeql.yml`; it is not in branch protection's
+required-check set for the reasons documented below.
 
 - **`codeql.yml`** scans GitHub Actions workflow definitions on PRs
     that touch `.github/workflows/` or `.github/actions/`, every push
-    to `main`, and weekly. **Findings are advisory.** The
-    workflow does not pass `fail-on:` to `codeql-action/analyze`, so a
-    high-severity finding uploads to the Security tab but does **not**
-    fail the workflow. A green CodeQL run therefore proves that the
-    scan completed, **not** that zero findings exist. Treating
-    "CodeQL green" as evidence of workflow safety is a misreading.
-    Closing the loop on findings requires a maintainer to review the
-    Security tab when a PR touches `.github/workflows/`. CodeQL
-    complements (does not replace) the `zizmor` pre-commit hook and
-    the SHA-pinning + `permissions:` discipline applied workflow-wide.
+    to `main`, and weekly. The analyze step passes `fail-on: critical`
+    to `codeql-action/analyze`: a CRITICAL-severity finding fails the
+    workflow, and a notify job opens a deduped issue under the
+    `codeql-critical` label. An analyze failure that produced no
+    finding (scan crash, runner breakage) files under `codeql-infra`
+    instead, so transient infrastructure trouble is not paged as a
+    security finding. Findings **below** CRITICAL are advisory: they
+    upload to the Security tab without failing the workflow. A green
+    CodeQL run therefore proves the scan completed with zero CRITICAL
+    findings — **not** that zero findings exist. Closing the loop on
+    sub-critical findings requires a maintainer to review the Security
+    tab when a PR touches `.github/workflows/`. CodeQL complements
+    (does not replace) the `zizmor` pre-commit hook and the
+    SHA-pinning + `permissions:` discipline applied workflow-wide.
 
-The `codeql.yml` workflow is not in branch protection's required-check set. A CodeQL infrastructure failure must not block linpeas pin bumps; failure surfacing is via the standard GitHub email channel.
+The `codeql.yml` workflow is not in branch protection's required-check
+set, and must not be promoted while its PR trigger carries a `paths:`
+filter (the `required-checks-no-paths` invariant forbids paths filters
+on required workflows). A CodeQL infrastructure failure must not block
+linpeas pin bumps; failure surfacing is via the deduped issues filed by
+the notify jobs.
 
 ## Secrets
 
