@@ -118,27 +118,25 @@ All Nix-based jobs use `DeterminateSystems/flakehub-cache-action` (free for publ
 
 ## Cron schedule
 
-| Workflow                          | Cron          | UTC         | Purpose                                                           |
-| --------------------------------- | ------------- | ----------- | ----------------------------------------------------------------- |
-| `actions-cache-prune`             | `0 3 * * *`   | 03:00 daily | Evict stale `actions/cache` entries to stay under repo quota      |
-| `update-linpeas`                  | `0 9 * * *`   | 09:00 daily | Check upstream peass-ng for new release; open auto-merge bump PR  |
-| `stale-pin-check`                 | `30 10 * * *` | 10:30 daily | Auto-file issue if pin is N days behind upstream                  |
-| `ratchet-pin-audit`               | `0 11 * * *`  | 11:00 daily | Audit third-party action pins are SHA-pinned + Renovate-tracked   |
-| `settings-posture-drift-check`    | `15 11 * * *` | 11:15 daily | Diff live repo settings vs committed baseline                     |
-| `allowed-actions-api-drift-check` | `30 11 * * *` | 11:30 daily | Diff live Actions allowlist vs committed baseline                 |
-| `verify-latest-release`           | `0 12 * * *`  | 12:00 daily | Re-fetch published artifacts; verify SRI hash + attestations      |
-| `pages`                           | `0 14 * * *`  | 14:00 daily | Rebuild dashboard from current pin + upstream + release JSON      |
-| `reproducibility-check`           | `0 6 * * 0`   | Sun 06:00   | Rebuild flake outputs twice; fail on hash divergence              |
-| `links`                           | `0 4 * * 1`   | Mon 04:00   | Markdown link checker (lychee); cron-only, not a required check   |
-| `codeql`                          | `0 8 * * 1`   | Mon 08:00   | CodeQL static analysis (Actions)                                  |
-| `octoscan`                        | `0 8 * * 1`   | Mon 08:00   | Octoscan SAST on `.github/workflows/*.yml`                        |
-| `scorecard-drift-check`           | `45 11 * * 1` | Mon 11:45   | Diff OSSF Scorecard live results vs committed baseline            |
-| `zizmor-drift-check`              | `5 12 * * 1`  | Mon 12:05   | Diff live zizmor results vs committed baseline                    |
-| `actionlint-drift-check`          | `15 12 * * 1` | Mon 12:15   | Diff live actionlint results vs committed baseline                |
-| `cron-table-drift-check`          | `25 12 * * 1` | Mon 12:25   | Diff cron table + ordering paragraph vs `.github/workflows/*.yml` |
-| `gitleaks`                        | `0 13 * * 1`  | Mon 13:00   | Full-history secret scan                                          |
-| `trufflehog`                      | `0 13 * * 1`  | Mon 13:00   | Full-history secret scan (complementary detector set)             |
-| `update-flake-lock`               | `0 6 * * 5`   | Fri 06:00   | Refresh `flake.lock` via auto-merge PR                            |
+| Workflow                          | Cron          | UTC         | Purpose                                                          |
+| --------------------------------- | ------------- | ----------- | ---------------------------------------------------------------- |
+| `actions-cache-prune`             | `0 3 * * *`   | 03:00 daily | Evict stale `actions/cache` entries to stay under repo quota     |
+| `update-linpeas`                  | `0 9 * * *`   | 09:00 daily | Check upstream peass-ng for new release; open auto-merge bump PR |
+| `stale-pin-check`                 | `30 10 * * *` | 10:30 daily | Auto-file issue if pin is N days behind upstream                 |
+| `ratchet-pin-audit`               | `0 11 * * *`  | 11:00 daily | Audit third-party action pins are SHA-pinned + Renovate-tracked  |
+| `settings-posture-drift-check`    | `15 11 * * *` | 11:15 daily | Diff live repo settings vs committed baseline                    |
+| `allowed-actions-api-drift-check` | `30 11 * * *` | 11:30 daily | Diff live Actions allowlist vs committed baseline                |
+| `verify-latest-release`           | `0 12 * * *`  | 12:00 daily | Re-fetch published artifacts; verify SRI hash + attestations     |
+| `pages`                           | `0 14 * * *`  | 14:00 daily | Rebuild dashboard from current pin + upstream + release JSON     |
+| `reproducibility-check`           | `0 6 * * 0`   | Sun 06:00   | Rebuild flake outputs twice; fail on hash divergence             |
+| `links`                           | `0 4 * * 1`   | Mon 04:00   | Markdown link checker (lychee); cron-only, not a required check  |
+| `codeql`                          | `0 8 * * 1`   | Mon 08:00   | CodeQL static analysis (Actions)                                 |
+| `octoscan`                        | `0 8 * * 1`   | Mon 08:00   | Octoscan SAST on `.github/workflows/*.yml`                       |
+| `scorecard-drift-check`           | `45 11 * * 1` | Mon 11:45   | Diff OSSF Scorecard live results vs committed baseline           |
+| `zizmor-drift-check`              | `5 12 * * 1`  | Mon 12:05   | Diff live zizmor results vs committed baseline                   |
+| `gitleaks`                        | `0 13 * * 1`  | Mon 13:00   | Full-history secret scan                                         |
+| `trufflehog`                      | `0 13 * * 1`  | Mon 13:00   | Full-history secret scan (complementary detector set)            |
+| `update-flake-lock`               | `0 6 * * 5`   | Fri 06:00   | Refresh `flake.lock` via auto-merge PR                           |
 
 Daily crons fire in this UTC order: `actions-cache-prune` (03:00) → `update-linpeas` (09:00) → `stale-pin-check` (10:30) → `ratchet-pin-audit` (11:00) → `settings-posture-drift-check` (11:15) → `allowed-actions-api-drift-check` (11:30) → `verify-latest-release` (12:00) → `pages` (14:00). Bump-related crons (`update-linpeas`, `stale-pin-check`, `verify-latest-release`) front-load the day so the dashboard cron at 14:00 reads a settled state. Drift-check crons cluster mid-morning (11:00–11:30) to surface upstream changes before the noon verification slot.
 
