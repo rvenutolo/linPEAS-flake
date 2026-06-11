@@ -124,9 +124,10 @@ jobs:
       #   git rev-parse origin/main
       - uses: rvenutolo/linPEAS-flake/.github/actions/notify-workflow-result@ffc97d8b617b52890430629d6bd15cec9bc71f53 # self-reference; Renovate pinDigests bumps SHA # patch-tag-exception: self-reference to this repo, which publishes no release tags on composite actions
         with:
-          # Aggregate: failure wins; success only when both legs green;
-          # otherwise no-op (cancelled / skipped).
-          result: ${{ (needs.build.result == 'failure' || needs.deploy.result == 'failure') && 'failure' || (needs.build.result == 'success' && needs.deploy.result == 'success') && 'success' || 'skipped' }}
+          # Aggregate: failure wins, then cancelled (filed by the
+          # composite as an infrastructure failure); success only when
+          # both legs green; otherwise no-op (skipped).
+          result: ${{ (needs.build.result == 'failure' || needs.deploy.result == 'failure') && 'failure' || (needs.build.result == 'cancelled' || needs.deploy.result == 'cancelled') && 'cancelled' || (needs.build.result == 'success' && needs.deploy.result == 'success') && 'success' || 'skipped' }}
           label: pages-build-failure
           title: "pages.yml: build/deploy failed"
           body: |

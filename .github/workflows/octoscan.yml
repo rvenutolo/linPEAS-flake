@@ -94,11 +94,14 @@ jobs:
           sarif_file: octoscan.sarif
           category: octoscan
 
-  # Real finding: scan ran and octoscan exit-coded `2`.
+  # Real finding: scan ran and octoscan exit-coded `2`. PR runs are
+  # excluded — the failed check on the PR itself is the
+  # maintainer-facing signal there; push, cron, and dispatch runs
+  # have no PR surface, so they page via the deduped issue.
   notify-finding:
     name: notify (finding)
     needs: scan
-    if: always() && github.event_name == 'push' && needs.scan.result == 'failure' && needs.scan.outputs.has-finding == 'true'
+    if: always() && github.event_name != 'pull_request' && needs.scan.result == 'failure' && needs.scan.outputs.has-finding == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -132,13 +135,15 @@ jobs:
 
   # Infrastructure failure: scan never produced a findings result
   # (e.g. docker pull failure, checkout / harden-runner failure,
-  # octoscan exit `1` from an internal parse error). Filed under a
-  # distinct label so transient breakage is not paged as a security
-  # finding.
+  # octoscan exit `1` from an internal parse error) or was cancelled
+  # (timeout). Filed under a distinct label so transient breakage is
+  # not paged as a security finding. PR runs are excluded — the
+  # failed check on the PR itself is the maintainer-facing signal
+  # there.
   notify-infra:
     name: notify (infra)
     needs: scan
-    if: always() && github.event_name == 'push' && needs.scan.result == 'failure' && needs.scan.outputs.has-finding != 'true'
+    if: always() && github.event_name != 'pull_request' && (needs.scan.result == 'cancelled' || (needs.scan.result == 'failure' && needs.scan.outputs.has-finding != 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -152,7 +157,10 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/notify-workflow-result
         with:
-          result: failure
+          # Raw result: 'failure' or 'cancelled' (the job's `if:` gate
+          # admits nothing else); the composite annotates cancelled
+          # runs as infrastructure failures.
+          result: ${{ needs.scan.result }}
           label: octoscan-infra
           label-color: fbca04
           label-description: octoscan workflow infrastructure failure (no security finding)

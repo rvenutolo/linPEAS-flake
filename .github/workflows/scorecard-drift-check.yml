@@ -135,7 +135,9 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/notify-workflow-result
         with:
-          result: ${{ needs.drift-check.result == 'failure' && 'failure' || (needs.drift-check.result == 'success' && 'success' || 'skipped') }}
+          # Raw job result: the composite files cancelled runs as
+          # infrastructure failures and is inert on skipped.
+          result: ${{ needs.drift-check.result }}
           label: scorecard-drift
           title: "scorecard-drift-check: at least one check scored <10"
           body: |
