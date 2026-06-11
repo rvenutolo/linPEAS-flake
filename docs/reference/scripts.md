@@ -173,8 +173,9 @@ Lint: the SHA embedded in `flake.nix`'s
 ### scripts/check-protect-main.sh
 
 Lint: the live `protect-main` branch ruleset matches
-the desired posture AND the in-tree mirror at
-`.github/rulesets/protect-main.json`.
+the desired posture, the in-tree mirror at
+`.github/rulesets/protect-main.json`, and the `## Required contexts`
+table in `docs/security/required-checks.md`.
 
 ### scripts/check-pr-workflows-no-secrets.sh
 

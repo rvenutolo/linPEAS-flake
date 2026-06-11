@@ -85,6 +85,12 @@ When the ruleset's required-check list changes:
 
 1. Update the table above to match. Also update `docs/_data/ci-check-categories.yml`
     in the same change — `scripts/refresh-ci-summary.sh` fails if the two sets diverge.
+    The table is also parity-checked against the mirror:
+    `scripts/check-protect-main.sh` (required `protect-main-drift-check`
+    CI job) fails if the context set in the table above diverges from
+    `.github/rulesets/protect-main.json`, so a context cannot be
+    documented without being enforced, or enforced without being
+    documented.
 
 1. If a new workflow file appears in column 3, verify it does not declare
     `paths:` / `paths-ignore:` under `pull_request:`. The lint will catch
@@ -118,7 +124,9 @@ Asserted invariants: name `protect-main`; target `branch`; enforcement
 bypass_actors == `[]`; rules include `deletion`, `non_fast_forward`,
 `required_signatures`; pull_request allowed_merge_methods == `["merge"]`;
 required-status-checks set (semantic diff, sorted by context) matches
-the in-tree mirror.
+the in-tree mirror; the mirror's context set matches the
+`## Required contexts` table in this file (checked offline, before the
+live-ruleset fetch).
 
 Any change to the live ruleset must update both the mirror file AND
 `docs/security/required-checks.md` in the same PR.
