@@ -1,14 +1,13 @@
 name: cron-table-drift-check
 
-# Weekly + push-triggered drift check for the cron schedule table in
+# Push-triggered drift check for the cron schedule table in
 # docs/architecture/ci.md. Fails if the table or its ordering
-# paragraph drifts from cron lines under .github/workflows/. Same
-# source of truth as the local pre-commit hook
-# (scripts/check-cron-table.sh).
+# paragraph drifts from cron lines under .github/workflows/. The push
+# paths filter covers every file that can introduce a desync, so no
+# scheduled re-check is needed. Same source of truth as the local
+# pre-commit hook (scripts/check-cron-table.sh).
 
 on:
-  schedule:
-    - cron: "25 12 * * 1" # Monday 12:25 UTC (between actionlint-drift 12:15 and gitleaks/trufflehog 13:00)
   workflow_dispatch:
   push:
     branches: [main]
