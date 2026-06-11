@@ -1,0 +1,87 @@
+name: coverage-matrix
+
+# Weekly portability coverage: runs `nix flake check` and the linpeas
+# build across the OS × Nix-installer matrix. Non-blocking — the
+# required `flake-check` / `build-linpeas` jobs in ci.yml already
+# cover ubuntu-latest with the pinned stable Nix on every PR and push
+# to main; this matrix covers the remaining combinations (slow macOS
+# runners) for a portability-regression class that is rare and not
+# PR-urgent, so it runs on a weekly cron instead of per PR.
+
+on:
+  schedule:
+    - cron: "20 5 * * 5" # Friday 05:20 UTC (early weekly window, after reproducibility-check 05:10)
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: coverage-matrix
+  cancel-in-progress: false
+
+jobs:
+  flake-check-matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        nix-install-url:
+          - https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+        exclude:
+          # ci.yml's required `flake-check` already covers
+          # ubuntu-latest with the pinned stable Nix on every PR and
+          # push to main.
+          - os: ubuntu-latest
+            nix-install-url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-nix
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          install-url: ${{ matrix.nix-install-url }}
+      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
+      - name: flake check
+        run: nix flake check --print-build-logs
+
+  build-linpeas-matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        nix-install-url:
+          - https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+        exclude:
+          # ci.yml's required `build-linpeas` already covers
+          # ubuntu-latest with the pinned stable Nix on every PR and
+          # push to main.
+          - os: ubuntu-latest
+            nix-install-url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-nix
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          install-url: ${{ matrix.nix-install-url }}
+      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
+      - name: build linpeas
+        run: nix build .#linpeas --print-build-logs

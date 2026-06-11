@@ -21,7 +21,6 @@ flowchart TD
   allowed-actions-api-harness:::aux
   build-linpeas:::build
   build-linpeas-arm64:::build
-  build-linpeas-matrix:::aux
   check-doc-anchors:::doc
   check-jsonschema:::security
   check-orphan-invariants:::doc
@@ -33,17 +32,10 @@ flowchart TD
   dashboard-data-tests:::security
   editorconfig:::doc
   flake-check:::build
-  flake-check-matrix:::aux
   fork-guard-release:::security
   gh-api-version-header:::aux
   gh-attestation-repo:::security
   harden-runner-first:::security
-  image-cve-scan-grype:::aux
-  image-cve-scan-grype-notify-finding:::aux
-  image-cve-scan-grype-notify-infra:::aux
-  image-cve-scan-trivy:::aux
-  image-cve-scan-trivy-notify-finding:::aux
-  image-cve-scan-trivy-notify-infra:::aux
   image-smoke:::build
   image-smoke-arm64:::build
   job-timeout-minutes:::security
@@ -80,10 +72,6 @@ flowchart TD
   workflow-concurrency:::security
   workflow-on-branches:::security
 
-  image-cve-scan-grype --> image-cve-scan-grype-notify-finding
-  image-cve-scan-grype --> image-cve-scan-grype-notify-infra
-  image-cve-scan-trivy --> image-cve-scan-trivy-notify-finding
-  image-cve-scan-trivy --> image-cve-scan-trivy-notify-infra
   build-linpeas --> smoke-test
   build-linpeas-arm64 --> smoke-test-arm64
 ```

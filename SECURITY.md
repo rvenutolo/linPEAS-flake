@@ -102,8 +102,9 @@ release pipeline. It uploads findings to the Security tab; it is not
 in branch protection's required-check set for content-policy reasons
 documented below.
 
-- **`codeql.yml`** scans GitHub Actions workflow definitions on every
-    PR, push to `main`, and weekly. **Findings are advisory.** The
+- **`codeql.yml`** scans GitHub Actions workflow definitions on PRs
+    that touch `.github/workflows/` or `.github/actions/`, every push
+    to `main`, and weekly. **Findings are advisory.** The
     workflow does not pass `fail-on:` to `codeql-action/analyze`, so a
     high-severity finding uploads to the Security tab but does **not**
     fail the workflow. A green CodeQL run therefore proves that the

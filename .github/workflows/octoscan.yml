@@ -22,6 +22,16 @@ name: octoscan
 on:
   pull_request:
     branches: [main]
+    # scripts/octoscan-scan.sh scans .github/workflows/*.{yml,yaml}
+    # only (composite actions under .github/actions/ are not scan
+    # targets); skip PRs that touch nothing it reads. Safe because
+    # this workflow is not a required check
+    # (`required-checks-no-paths` forbids paths filters on required
+    # workflows — do not promote this one without removing the
+    # filter). The weekly cron still sweeps everything.
+    paths:
+      - ".github/workflows/**"
+      - "scripts/octoscan-scan.sh"
   push:
     branches: [main]
   schedule:

@@ -156,16 +156,17 @@ main, every PR, and a weekly cron (Mon 13:00 UTC). Required check named
 
 ## OCI image CVE scan (Trivy)<a name="oci-image-cve-scan-trivy"></a>
 
-`ci.yml`'s `image-cve-scan-trivy` job uploads SARIF (CRITICAL + HIGH) to
-code-scanning, then post-processes the SARIF to count CRITICAL findings
-and **fails the job** when count > 0. The job emits an
-`outputs.has-finding` boolean (`'true'` iff the count step ran and
-returned a non-zero count) so notify jobs can distinguish a real
-CRITICAL CVE from an infrastructure failure that prevented the scan.
+`image-cve-scan.yml`'s `image-cve-scan-trivy` job (weekly cron +
+dispatch) uploads SARIF (CRITICAL + HIGH) to code-scanning, then
+post-processes the SARIF to count CRITICAL findings and **fails the
+job** when count > 0. The job emits an `outputs.has-finding` boolean
+(`'true'` iff the count step ran and returned a non-zero count) so
+notify jobs can distinguish a real CRITICAL CVE from an
+infrastructure failure that prevented the scan.
 
-On push to main, two follow-on jobs (`needs: image-cve-scan-trivy`,
-`if: failure() + event_name=='push'`) gate on that output and open /
-update deduped issues via `notify-workflow-result`:
+Two follow-on jobs (`needs: image-cve-scan-trivy`, `if: failure()`)
+gate on that output and open / update deduped issues via
+`notify-workflow-result`:
 
 - `image-cve-scan-trivy-notify-finding` (label: `image-cve-critical-trivy`) — real
     CRITICAL CVE reported by Trivy. Remediation: bump `nixpkgs`.
@@ -173,7 +174,7 @@ update deduped issues via `notify-workflow-result`:
 - `image-cve-scan-trivy-notify-infra` (label: `image-cve-infra-trivy`) — job failed
     before Trivy produced a CRITICAL count (build, scan, or SARIF
     upload broke). Remediation: inspect the failing step; if transient,
-    close once the next push is green.
+    close once the next scheduled run is green.
 
 - NOT in required-checks (intentional — `update-flake-lock` must still
     land even if a CVE is present, with explicit maintainer awareness).
@@ -193,16 +194,17 @@ update deduped issues via `notify-workflow-result`:
 
 ## OCI image CVE scan (Grype)<a name="oci-image-cve-scan-grype"></a>
 
-`ci.yml`'s `image-cve-scan-grype` job uploads SARIF (CRITICAL + HIGH) to
-the Security tab under category `grype-image-cve`, using Grype as a
-second-opinion scanner alongside Trivy. The job itself fails (and
-emits a notify issue on push) only when one or more CRITICAL findings
-are reported. Advisory only — not a required status check; prevention
-path is a nixpkgs bump via `update-flake-lock`.
+`image-cve-scan.yml`'s `image-cve-scan-grype` job (weekly cron +
+dispatch) uploads SARIF (CRITICAL + HIGH) to the Security tab under
+category `grype-image-cve`, using Grype as a second-opinion scanner
+alongside Trivy. The job itself fails (and emits a notify issue) only
+when one or more CRITICAL findings are reported. Advisory only — not
+a required status check; prevention path is a nixpkgs bump via
+`update-flake-lock`.
 
-On push to main, two follow-on jobs (`needs: image-cve-scan-grype`,
-`if: github.event_name == 'push' && failure()`) open or update a
-deduped issue via the `notify-workflow-result` composite:
+Two follow-on jobs (`needs: image-cve-scan-grype`, `if: failure()`)
+open or update a deduped issue via the `notify-workflow-result`
+composite:
 
 - `image-cve-scan-grype-notify-finding` (label: `image-cve-critical-grype`) — real
     CRITICAL CVE was identified by Grype.
