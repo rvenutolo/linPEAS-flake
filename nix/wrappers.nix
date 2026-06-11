@@ -33,7 +33,23 @@
       # binary committers actually run. A separate writeShellScriptBin
       # wrapper would not be reached by `pre-commit install` — only
       # `nix develop`-time invocations would see it.
+      #
+      # `dontUsePytestCheck`: the override changes the derivation hash,
+      # so this build is never substitutable from cache.nixos.org — any
+      # binary-cache miss (e.g. the FlakeHub cache rate-limiting under
+      # CI's parallel job fan-out) falls back to building it from
+      # source on the runner. Re-running upstream's ~700-test pytest
+      # suite there adds no signal (the unmodified base package already
+      # passed it in nixpkgs' own build) and a single flaky upstream
+      # test can fail an unrelated CI job. Skipping the suite makes the
+      # fallback rebuild deterministic and fast; a cache miss degrades
+      # to a slowdown instead of a failure. (`dontUsePytestCheck`
+      # rather than `doInstallCheck = false` because nixpkgs'
+      # pytestCheckHook setup-hook force-sets `doInstallCheck=1` at
+      # build time; the attr alone is silently ignored.
+      # pythonImportsCheck still runs.)
       preCommitWrapped = pkgs-unstable.pre-commit.overrideAttrs (old: {
+        dontUsePytestCheck = true;
         postFixup = (old.postFixup or "") + ''
           mv "$out/bin/pre-commit" "$out/bin/.pre-commit-real"
           cat > "$out/bin/pre-commit" <<EOF
