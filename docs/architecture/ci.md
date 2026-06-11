@@ -1,6 +1,6 @@
 # CI architecture
 
-Every push to `main` and every PR runs a required set of jobs that gate auto-merge. A separate non-blocking coverage matrix runs informational checks.
+Every push to `main` and every PR runs a required set of jobs that gate auto-merge. Separate non-blocking weekly workflows run informational checks (portability matrix, image CVE scans).
 
 ## Required jobs
 
@@ -83,8 +83,9 @@ Merge-commit only. Enforced at both layers:
 
 ## Non-blocking coverage / advisory checks
 
-- `flake-check` and `build-linpeas` also run across `ubuntu-latest` × `macos-latest` × stable-Nix × unstable-Nix. Failures surface in the PR view but do not gate merges.
-- `image-cve-scan-trivy` and `image-cve-scan-grype` run Trivy and Grype (respectively) against the released OCI image and upload SARIF to code-scanning under distinct categories (`trivy-image-cve`, `grype-image-cve`) for cross-scanner DB coverage. Both advisory only (job-level failure is `count > 0` of CRITICAL CVEs; SARIF upload always runs); the prevention path is a nixpkgs bump via `update-flake-lock`.
+- `coverage-matrix.yml` (weekly cron + dispatch) runs `nix flake check` and the linpeas build across the OS × Nix-installer matrix beyond the ubuntu-latest + pinned-stable combination the required jobs cover. Portability regressions are rare and not PR-urgent — too slow on macOS runners to justify per-PR runs; failures surface in the Actions tab only.
+- `image-cve-scan.yml` (weekly cron + dispatch) runs Trivy and Grype against the released OCI image and uploads SARIF to code-scanning under distinct categories (`trivy-image-cve`, `grype-image-cve`) for cross-scanner DB coverage. Findings are CVE-DB-driven, not PR-driven, so the scheduled run against a fresh DB is the meaningful signal — and it fires even in weeks with no PR activity. Both scanners advisory only (job-level failure is `count > 0` of CRITICAL CVEs; SARIF upload always runs); failures auto-file deduped issues split by finding-vs-infrastructure label; the prevention path is a nixpkgs bump via `update-flake-lock`.
+- `codeql.yml` and `octoscan.yml` PR triggers are paths-filtered to the files each scanner actually reads (workflow files; plus composite actions for CodeQL, plus `scripts/octoscan-scan.sh` for octoscan). Both stay outside the required set — `required-checks-no-paths` forbids paths filters on required workflows.
 
 ## Runner egress
 
@@ -136,6 +137,8 @@ All Nix-based jobs use `DeterminateSystems/flakehub-cache-action` (free for publ
 | `zizmor-drift-check`              | `5 12 * * 1`  | Mon 12:05   | Diff live zizmor results vs committed baseline                   |
 | `gitleaks`                        | `0 13 * * 1`  | Mon 13:00   | Full-history secret scan                                         |
 | `trufflehog`                      | `0 13 * * 1`  | Mon 13:00   | Full-history secret scan (complementary detector set)            |
+| `coverage-matrix`                 | `20 5 * * 5`  | Fri 05:20   | Portability matrix: flake check + build across OS/Nix installers |
+| `image-cve-scan`                  | `30 5 * * 5`  | Fri 05:30   | Trivy + Grype CVE scan of the OCI image; SARIF to code-scanning  |
 | `update-flake-lock`               | `0 6 * * 5`   | Fri 06:00   | Refresh `flake.lock` via auto-merge PR                           |
 
 Daily crons fire in this UTC order: `actions-cache-prune` (03:00) → `update-linpeas` (09:00) → `stale-pin-check` (10:30) → `ratchet-pin-audit` (11:00) → `settings-posture-drift-check` (11:15) → `allowed-actions-api-drift-check` (11:30) → `verify-latest-release` (12:00) → `pages` (14:00). Bump-related crons (`update-linpeas`, `stale-pin-check`, `verify-latest-release`) front-load the day so the dashboard cron at 14:00 reads a settled state. Drift-check crons cluster mid-morning (11:00–11:30) to surface upstream changes before the noon verification slot.

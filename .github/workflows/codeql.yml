@@ -23,6 +23,15 @@ name: codeql
 on:
   pull_request:
     branches: [main]
+    # CodeQL's `actions` analysis only reads workflow + composite
+    # action files; skip PRs that touch neither. Safe because this
+    # workflow is not a required check (`required-checks-no-paths`
+    # forbids paths filters on required workflows — do not promote
+    # this one without removing the filter). The weekly cron still
+    # sweeps everything.
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/**"
   push:
     branches: [main]
   schedule:
