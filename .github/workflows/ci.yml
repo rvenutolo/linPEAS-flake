@@ -414,7 +414,7 @@ jobs:
     # Batched invariant lints asserting .github/workflows/* hardening.
     # Realizes the devShell once, runs every check in the
     # lint-workflow-security group of .github/lint-groups.yml, and prints
-    # a per-check pass/fail table. Replaces the former per-check jobs;
+    # a per-check pass/fail table. Required status context;
     # see docs/security/required-checks.md.
     runs-on: ubuntu-latest
     timeout-minutes: 15
