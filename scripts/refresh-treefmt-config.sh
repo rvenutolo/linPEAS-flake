@@ -37,6 +37,29 @@ function require_tool() {
   fi
 }
 
+# Temp files removed by the EXIT trap. Declared at script scope, not main-local:
+# the EXIT trap fires after main() returns and its locals leave scope, so a
+# main-local would read as empty at trap time and the in-repo .md temp would
+# leak on an abnormal exit.
+repo_root=''
+cfg_file=''
+block_file=''
+doc_new=''
+doc_fmt=''
+
+# @description Remove every temp file on exit, including any in-repo
+# .refresh-treefmt-config-*.md siblings left by an interrupted earlier run.
+function cleanup() {
+  rm --force -- "${cfg_file}" "${block_file}" "${doc_new}" "${doc_fmt}"
+  if [[ -n ${repo_root} ]]; then
+    local stray
+    shopt -s nullglob
+    for stray in "${repo_root}"/.refresh-treefmt-config-*.md; do
+      rm --force -- "${stray}"
+    done
+  fi
+}
+
 function main() {
   local check_only='false'
   if [[ ${1:-} == '--check' ]]; then
@@ -59,10 +82,12 @@ function main() {
   # leaving treefmt-config-fresh red on every commit.
   require_tool treefmt
 
-  local repo_root doc
+  local doc
   repo_root="$(git rev-parse --show-toplevel)"
   doc="${repo_root}/docs/reference/treefmt-config.md"
   readonly repo_root doc
+  # Set before the mktemps so even a failed mktemp triggers the sibling sweep.
+  trap cleanup EXIT
 
   if [[ ! -f ${doc} ]]; then
     log_err "${doc} not found"
@@ -77,7 +102,6 @@ function main() {
     exit 1
   fi
 
-  local cfg_file block_file doc_new doc_fmt
   cfg_file="$(mktemp)"
   block_file="$(mktemp)"
   doc_new="$(mktemp)"
@@ -86,7 +110,6 @@ function main() {
   # treefmt's mdformat picks it up; .gitignore keeps it untracked if a crash
   # bypasses the EXIT trap.
   doc_fmt="$(mktemp "${repo_root}/.refresh-treefmt-config-XXXXXX.md")"
-  trap 'rm --force -- "${cfg_file:-}" "${block_file:-}" "${doc_new:-}" "${doc_fmt:-}"' EXIT
 
   local sys
   sys="$(nix eval --impure --raw --expr 'builtins.currentSystem')"
