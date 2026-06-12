@@ -476,6 +476,13 @@ branch — the ref source is internal, not attacker-supplied.
 Renovate manages OCTOSCAN_DIGEST + OCTOSCAN_VERSION in lockstep
 (renovate.json customManager scoped to this file).
 
+### scripts/run-lint-group.sh
+
+Run every invariant-lint check in a named group from
+.github/lint-groups.yml inside one devShell, printing a per-check
+pass/fail summary table to stdout and $GITHUB_STEP_SUMMARY. Runs all
+checks even if one fails; exits 1 if any failed, 2 on config error.
+
 {% endraw %}
 
 <!-- END scripts-reference -->
