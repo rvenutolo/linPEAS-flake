@@ -21,32 +21,19 @@ flowchart TD
   allowed-actions-api-harness:::security
   build-linpeas:::build
   build-linpeas-arm64:::build
-  check-doc-anchors:::doc
-  check-jsonschema:::security
-  check-orphan-invariants:::doc
-  checkout-persist-credentials:::security
-  ci-job-in-summary:::security
   cliff-tag-pattern:::security
   commitlint:::commits
-  cosign-identity-pinned:::security
   dashboard-data-tests:::security
   editorconfig:::doc
   flake-check:::build
-  fork-guard-release:::security
-  gh-api-version-header:::security
-  gh-attestation-repo:::security
-  harden-runner-first:::security
   image-smoke:::build
   image-smoke-arm64:::build
-  job-timeout-minutes:::security
+  lint-doc-invariants:::security
+  lint-script-hygiene:::security
+  lint-workflow-security:::security
   markdownlint:::doc
-  min-permissions:::security
-  nix-run-pinned:::security
-  pin-diff-isolated:::security
   pr-workflows-no-secrets:::security
-  pre-commit-hooks-sha-parity:::security
   protect-main-drift-check:::security
-  pull-request-target-absent:::security
   ratchet-pin-audit-harness:::security
   refresh-ci-dag-test:::doc
   refresh-ci-summary-test:::doc
@@ -55,22 +42,14 @@ flowchart TD
   refresh-precommit-table-test:::doc
   refresh-scripts-reference-test:::doc
   refresh-treefmt-config-test:::doc
-  renovate-config-validator:::security
   renovate-invariants:::security
   required-checks-no-paths:::security
-  run-block-strict:::security
-  script-has-test:::security
-  script-shebang-pipefail:::security
   settings-posture-harness:::security
   setup-nix-required:::security
   smoke-test:::build
   smoke-test-arm64:::build
   tag-protection-drift-check:::security
   typos:::doc
-  upload-artifact-strict:::security
-  uses-sha-pinned:::security
-  workflow-concurrency:::security
-  workflow-on-branches:::security
 
   build-linpeas --> smoke-test
   build-linpeas-arm64 --> smoke-test-arm64
