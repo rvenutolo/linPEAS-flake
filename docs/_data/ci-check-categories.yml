@@ -20,15 +20,9 @@ smoke-test-arm64: Build + smoke
 smoke-test: Build + smoke
 commitlint: Conventional Commits
 lint-pr-title: Conventional Commits
+doc-freshness: Doc quality
 editorconfig: Doc quality
 markdownlint: Doc quality
-refresh-ci-dag-test: Doc quality
-refresh-ci-summary-test: Doc quality
-refresh-enforcement-matrix-test: Doc quality
-refresh-just-recipes-test: Doc quality
-refresh-precommit-table-test: Doc quality
-refresh-scripts-reference-test: Doc quality
-refresh-treefmt-config-test: Doc quality
 typos: Doc quality
 allowed-actions-api-harness: Security/invariant lints
 cliff-tag-pattern: Security/invariant lints

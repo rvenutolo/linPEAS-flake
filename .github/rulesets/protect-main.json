@@ -113,31 +113,7 @@
             "integration_id": 15368
           },
           {
-            "context": "refresh-ci-dag-test",
-            "integration_id": 15368
-          },
-          {
-            "context": "refresh-ci-summary-test",
-            "integration_id": 15368
-          },
-          {
-            "context": "refresh-enforcement-matrix-test",
-            "integration_id": 15368
-          },
-          {
-            "context": "refresh-just-recipes-test",
-            "integration_id": 15368
-          },
-          {
-            "context": "refresh-precommit-table-test",
-            "integration_id": 15368
-          },
-          {
-            "context": "refresh-scripts-reference-test",
-            "integration_id": 15368
-          },
-          {
-            "context": "refresh-treefmt-config-test",
+            "context": "doc-freshness",
             "integration_id": 15368
           },
           {
