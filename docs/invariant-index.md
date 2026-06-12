@@ -43,6 +43,7 @@ live in `.claude/CLAUDE.md` (untracked).
 - **GITHUB_TOKEN min-permissions** — top-level `permissions: {}`; every job declares own scopes. → [security/min-permissions.md](security/min-permissions.md) <!-- enforcer: scripts/check-min-permissions.sh; ci: lint-workflow-security; hook: min-permissions -->
 - **protect-main ruleset** — in-tree mirror + drift-check; mirror also parity-checked against the required-checks doc table. → [security/required-checks.md](security/required-checks.md) <!-- enforcer: scripts/check-protect-main.sh; ci: protect-main-drift-check; hook: - -->
 - **Repo-settings posture** — three binding flags. → [security/settings-posture.md](security/settings-posture.md) <!-- enforcer: scripts/check-settings-posture.sh; ci: harness-group; hook: - -->
+- **Workflow-scanner division of labor** — layered DiD model (pre-commit → PR/push → weekly sweep → watchdog) across zizmor/codeql/octoscan/scorecard plus in-tree lints; records why the overlap is budgeted. → [security/workflow-scanners.md](security/workflow-scanners.md) <!-- enforcer: -; ci: -; hook: - -->
 
 ## Architecture / CI
 

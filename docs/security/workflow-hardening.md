@@ -2,6 +2,10 @@
 
 Per-job hardening rules enforced across every workflow in `.github/workflows/`. Each rule is locked in by a script lint, wired as a required CI job and as a pre-commit hook.
 
+See [workflow-scanner division of labor](workflow-scanners.md) for how these
+in-tree lints fit the broader layered scanning model (pre-commit → PR/push →
+weekly sweep → watchdog) alongside the external scanners.
+
 ## job-timeout-minutes
 
 Every job declares an explicit `timeout-minutes` as a positive integer.
