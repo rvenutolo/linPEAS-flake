@@ -474,9 +474,11 @@ jobs:
       - name: run doc-invariant lints
         run: nix develop --command bash scripts/run-lint-group.sh lint-doc-invariants
 
-  refresh-just-recipes-test:
-    # Round-trip + drift harness for scripts/refresh-just-recipes.sh,
-    # which regenerates the just-recipes block in README.md from the justfile.
+  doc-freshness:
+    # Batched doc-freshness regenerate-and-diff harnesses. Realizes the
+    # devShell once and runs every tests/refresh-*.test.sh via
+    # scripts/run-doc-freshness.sh, printing a per-generator pass/fail
+    # table. Required status context; see docs/security/required-checks.md.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -492,144 +494,8 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/refresh-just-recipes.test.sh
-
-  refresh-scripts-reference-test:
-    # Round-trip + drift harness for scripts/refresh-scripts-reference.sh,
-    # which regenerates docs/reference/scripts.md from in-script
-    # @description / @arg / @option / @example header annotations.
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/refresh-scripts-reference.test.sh
-
-  refresh-treefmt-config-test:
-    # Round-trip + drift harness for scripts/refresh-treefmt-config.sh,
-    # which regenerates the treefmt-config block in
-    # docs/reference/treefmt-config.md from devTooling.treefmtConfig.
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/refresh-treefmt-config.test.sh
-
-  refresh-precommit-table-test:
-    # Round-trip + drift harness for scripts/refresh-precommit-table.sh,
-    # which regenerates the pre-commit hook table in docs/development/git.md
-    # from the flake.nix preCommitHookDescriptions manifest.
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/refresh-precommit-table.test.sh
-
-  refresh-ci-summary-test:
-    # Round-trip + drift harness for scripts/refresh-ci-summary.sh,
-    # which regenerates the CI summary block in README.md from
-    # docs/security/required-checks.md and docs/_data/ci-check-categories.yml.
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/refresh-ci-summary.test.sh
-
-  refresh-enforcement-matrix-test:
-    # Round-trip + drift harness for scripts/refresh-enforcement-matrix.sh,
-    # which regenerates docs/security/enforcement-matrix.md from the
-    # annotated invariant index and the real scripts/ci.yml/flake.nix
-    # enforcers.
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/refresh-enforcement-matrix.test.sh
-      - name: matrix is in sync
-        run: nix develop --command bash scripts/refresh-enforcement-matrix.sh --check
-
-  refresh-ci-dag-test:
-    # Round-trip + drift harness for scripts/refresh-ci-dag.sh, which
-    # regenerates the mermaid DAG in docs/architecture/ci-dag.md from
-    # the .github/workflows/ci.yml needs graph and the category map at
-    # docs/_data/ci-check-categories.yml.
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/refresh-ci-dag.test.sh
+      - name: run doc-freshness regenerate-and-diff harnesses
+        run: nix develop --command bash scripts/run-doc-freshness.sh
 
   protect-main-drift-check:
     # Asserts the live `protect-main` branch ruleset matches the in-tree

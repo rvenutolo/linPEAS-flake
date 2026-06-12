@@ -24,6 +24,7 @@ flowchart TD
   cliff-tag-pattern:::security
   commitlint:::commits
   dashboard-data-tests:::security
+  doc-freshness:::doc
   editorconfig:::doc
   flake-check:::build
   image-smoke:::build
@@ -35,13 +36,6 @@ flowchart TD
   pr-workflows-no-secrets:::security
   protect-main-drift-check:::security
   ratchet-pin-audit-harness:::security
-  refresh-ci-dag-test:::doc
-  refresh-ci-summary-test:::doc
-  refresh-enforcement-matrix-test:::doc
-  refresh-just-recipes-test:::doc
-  refresh-precommit-table-test:::doc
-  refresh-scripts-reference-test:::doc
-  refresh-treefmt-config-test:::doc
   renovate-invariants:::security
   required-checks-no-paths:::security
   settings-posture-harness:::security

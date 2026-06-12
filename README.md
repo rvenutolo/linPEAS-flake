@@ -158,7 +158,7 @@ the full job inventory + cron schedule lives in
 
 - **Build + smoke**: `build-linpeas`, `build-linpeas-arm64`, `flake-check`, `image-smoke`, `image-smoke-arm64`, `smoke-test`, `smoke-test-arm64`.
 - **Conventional Commits**: `commitlint`, `lint-pr-title`.
-- **Doc quality**: `editorconfig`, `markdownlint`, `refresh-ci-dag-test`, `refresh-ci-summary-test`, `refresh-enforcement-matrix-test`, `refresh-just-recipes-test`, `refresh-precommit-table-test`, `refresh-scripts-reference-test`, `refresh-treefmt-config-test`, `typos`.
+- **Doc quality**: `doc-freshness`, `editorconfig`, `markdownlint`, `typos`.
 - **Security/invariant lints**: `allowed-actions-api-harness`, `cliff-tag-pattern`, `dashboard-data-tests`, `dependency-review`, `gitleaks`, `lint-doc-invariants`, `lint-script-hygiene`, `lint-workflow-security`, `pr-workflows-no-secrets`, `protect-main-drift-check`, `ratchet-pin-audit-harness`, `renovate-invariants`, `required-checks-no-paths`, `settings-posture-harness`, `setup-nix-required`, `tag-protection-drift-check`, `trufflehog`.
 
 <!-- END ci-summary -->
