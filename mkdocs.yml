@@ -109,4 +109,5 @@ nav:
       - Trust model: security/trust-model.md
       - Threat model: security/threat-model.md
       - Verification: security/verification.md
+      - Workflow scanners: security/workflow-scanners.md
   - Releases: releases.md

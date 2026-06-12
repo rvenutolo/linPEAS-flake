@@ -1,0 +1,149 @@
+# Workflow-scanner division of labor
+
+Several tools analyze `.github/workflows/**`. Their coverage overlaps on
+purpose: each catches failure modes the others structurally cannot. This page
+records the layered model so the overlap reads as a budgeted defense-in-depth
+posture, not redundancy to trim.
+
+!!! warning "Do not trim a layer"
+
+    Removing any layer below requires a security-review entry. Do not drop one
+    because another "already covers it" — the whole point is that no single
+    layer covers every vector.
+
+## The layered model
+
+Workflow scanning runs at four moments, each with a blind spot the next layer
+closes:
+
+| Layer                  | When it fires                                                | Tools                                                                       | Closes the gap of                                                 |
+| ---------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Commit-time prevention | every `git commit` (pre-commit)                              | zizmor + the workflow-hardening hook family                                 | bad edits never enter history                                     |
+| PR / push detection    | every PR to `main` (paths-filtered) and every push to `main` | codeql, octoscan                                                            | changed workflows checked server-side, in the diff                |
+| Weekly full sweep      | Friday cron cluster                                          | codeql, octoscan                                                            | `--no-verify` bypasses, web-UI / bot edits, upstream rule changes |
+| Posture watchdog       | daily + weekly cron                                          | scorecard-drift, ratchet-pin-audit, settings-posture-drift, stale-pin-check | silent regressions no single PR introduces                        |
+
+Commit-time prevention is the cheapest and earliest gate, but it is bypassable
+(`--no-verify`, edits made in the GitHub web UI or by bots before hooks
+re-run). PR/push detection re-checks every change server-side. The weekly
+sweep re-runs the same scanners against the whole tree, so a file that merged
+green before a rule existed is re-evaluated. The posture watchdogs catch drift
+that accrues across commits — a force-moved tag, a loosened setting — that no
+individual diff reveals.
+
+## The four external scanners
+
+These are third-party scanners, distinct from the in-tree shell lints in the
+next section. The Friday cron cluster runs them in a fixed order:
+
+| UTC (Fri) | Scanner               |
+| --------- | --------------------- |
+| 06:00     | codeql                |
+| 06:10     | octoscan              |
+| 06:20     | scorecard-drift-check |
+| 06:30     | zizmor-drift-check    |
+
+### codeql
+
+- **Unique signal:** dataflow / taint analysis of workflow and
+    composite-action files (the `actions` query pack). Catches injection
+    reachable through variable flow that pattern matchers miss.
+- **Triggers:** PR to `main` filtered to `.github/workflows/**` and
+    `.github/actions/**`; push to `main`; Friday 06:00 cron (full tree); manual
+    dispatch.
+- **Status:** advisory. Not a required check — the required-check policy
+    forbids a paths filter on a required workflow, and the PR filter is
+    deliberate. The weekly cron sweeps everything regardless.
+
+### octoscan
+
+- **Unique signal:** repo-jacking and known-vuln (CVE) detection in `uses:`
+    references, plus a second injection-triangulation angle — coverage zizmor
+    and codeql do not provide.
+- **Triggers:** PR to `main` filtered to `.github/workflows/**` and the
+    octoscan scan script; push to `main`; Friday 06:10 cron (full tree); manual
+    dispatch.
+- **Status: advisory-by-design.** It is the cheapest scanner and runs
+    zero-noise, but it fails on *any* finding (no severity threshold) against an
+    untuned rule set, so as a required check a single false positive would block
+    merge. Promotion would also force removing its PR paths filter. It stays
+    advisory and path-filtered.
+    - **Tuning trigger (operational):** if octoscan ever accumulates confirmed
+        false positives — three or more distinct, or one duplicating an existing
+        zizmor or CodeQL finding one-to-one — narrow its rule set (`--ignore`,
+        `--disable-rules`, or `--filter-triggers external`) and document each
+        suppression in the octoscan workflow file. Until that data exists, no
+        action.
+
+### scorecard
+
+- **Unique signal:** OpenSSF Scorecard posture score — an independent second
+    opinion on repo hardening (pinned dependencies, signed releases, SAST
+    presence, security policy, and more) that no in-tree lint computes as a
+    single graded posture.
+- **Triggers:** Friday 06:20 cron and manual dispatch only. It does **not**
+    scan on PRs or pushes.
+- **Status:** weekly watchdog. A check scoring below threshold fails the run
+    and opens a deduped `scorecard-drift` tracking issue; the next clean run
+    closes it. The check set is curated — review-flow checks not applicable to a
+    solo repo, and checks duplicating a blocking in-tree gate, are dropped; the
+    scorecard drift-check workflow file carries the per-check rationale.
+
+### zizmor
+
+- **Unique signal:** GitHub-Actions-specific static analysis
+    (template-injection, excessive permissions, dangerous triggers) tuned to
+    Actions semantics.
+- **Triggers:** runs as a **pre-commit hook on every commit**
+    (`--min-severity=low`), plus a Friday 06:30 cron and manual dispatch. It
+    does **not** scan on PRs or pushes — commit-time prevention is its primary
+    mode.
+- **Status:** commit-time prevention + weekly watchdog. The drift-check covers
+    the pre-commit blind spots (`--no-verify`, web-UI and bot edits, upstream
+    rule changes); on a finding it opens a deduped `zizmor-drift` issue, closed
+    on the next clean run.
+
+## In-tree workflow lints
+
+Beyond the external scanners, a family of in-tree shell lints — pre-commit
+hooks plus daily watchdog crons — enforce specific workflow invariants. Each
+appears in the [enforcement matrix](enforcement-matrix.md) with its enforcer
+script, pre-commit hook id, and CI job; several also have narrative coverage
+in [workflow hardening](workflow-hardening.md). This table is an index, not a
+re-description.
+
+| Lint                         | Catches                                                                     |
+| ---------------------------- | --------------------------------------------------------------------------- |
+| actionlint                   | workflow syntax, `run:`-block shellcheck, expression errors                 |
+| actionlint-shellcheck-active | guards that actionlint's shellcheck integration stays enabled               |
+| uses-sha-pinned              | every `uses:` pinned to a full commit SHA                                   |
+| patch-tag-pins               | the patch-tag pin-comment convention on SHA pins                            |
+| pin-diff-isolated            | pin bumps isolated to their own diff                                        |
+| ratchet-pin-audit            | a publisher force-moving a tag to a new SHA after we pinned it (daily cron) |
+| stale-pin-check              | pins drifted from their canonical release tag (cron)                        |
+| min-permissions              | least-privilege `permissions:` on every workflow and job                    |
+| checkout-persist-credentials | `persist-credentials: false` on `actions/checkout`                          |
+| pull-request-target-absent   | bans the dangerous `pull_request_target` trigger                            |
+| workflow-concurrency         | top-level `concurrency.group` present                                       |
+| workflow-on-branches         | explicit branch scoping on `on:` triggers                                   |
+| nix-run-pinned               | `nix run` invocations pinned through the flake                              |
+| cosign-identity-pinned       | every `cosign verify` pins identity and OIDC issuer                         |
+| settings-posture-drift-check | repo settings vs. the expected hardened posture (daily cron)                |
+
+See the [enforcement matrix](enforcement-matrix.md) for the authoritative
+enforcer/hook/CI mapping of each.
+
+## Why the overlap is budgeted
+
+Each layer's blind spot is another layer's core competency:
+
+- Pre-commit is bypassable → PR/push and the weekly sweep re-check
+    server-side.
+- Pattern matchers miss dataflow → codeql does taint analysis.
+- codeql and zizmor do not model repo-jacking or CVEs → octoscan does.
+- Per-diff review misses slow drift → daily and weekly watchdogs catch it.
+- In-tree lints check specific invariants → scorecard grades overall posture
+    independently.
+
+Trimming a layer because another "overlaps" removes a unique angle. Any such
+change needs a security-review entry recording which vectors become uncovered.

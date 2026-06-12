@@ -87,6 +87,10 @@ Merge-commit only. Enforced at both layers:
 - `image-cve-scan.yml` (weekly cron + dispatch) runs Trivy and Grype against the released OCI image and uploads SARIF to code-scanning under distinct categories (`trivy-image-cve`, `grype-image-cve`) for cross-scanner DB coverage. Findings are CVE-DB-driven, not PR-driven, so the scheduled run against a fresh DB is the meaningful signal — and it fires even in weeks with no PR activity. Both scanners advisory only (job-level failure is `count > 0` of CRITICAL CVEs; SARIF upload always runs); failures auto-file deduped issues split by finding-vs-infrastructure label; the prevention path is a nixpkgs bump via `update-flake-lock`.
 - `codeql.yml` and `octoscan.yml` PR triggers are paths-filtered to the files each scanner actually reads (workflow files; plus composite actions for CodeQL, plus `scripts/octoscan-scan.sh` for octoscan). Both stay outside the required set — `required-checks-no-paths` forbids paths filters on required workflows.
 
+The full layered model — which scanner runs when, and why the overlap is a
+budgeted defense-in-depth posture rather than redundancy — is documented in
+[workflow-scanner division of labor](../security/workflow-scanners.md).
+
 ## Runner egress
 
 Every job's first step is `step-security/harden-runner` with `egress-policy: audit`. eBPF-monitored runner egress is recorded for every workflow run; it must remain the first step in any job that hits the network or filesystem.
