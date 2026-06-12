@@ -30,6 +30,7 @@ function run_scenario() {
   local actual_exit=0
   RULESET_JSON_OVERRIDE="${FIXTURES}/${fixture_dir}/live.json" \
     MIRROR_JSON_OVERRIDE="${FIXTURES}/${fixture_dir}/mirror.json" \
+    DOC_TABLE_OVERRIDE="${FIXTURES}/${fixture_dir}/required-checks.md" \
     "${SCRIPT}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
@@ -60,6 +61,8 @@ function main() {
     'bad-wrong-merge' 1 'allowed_merge_methods drift'
   run_scenario 'required-checks drift fails' \
     'bad-required-checks-drift' 1 'required-status-checks drift'
+  run_scenario 'doc-table drift fails' \
+    'bad-doc-table-drift' 1 'doc-table drift'
   run_scenario 'non-empty bypass_actors fails' \
     'bad-bypass-actors' 1 'bypass_actors non-empty'
   run_scenario 'missing required_signatures rule fails' \

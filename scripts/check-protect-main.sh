@@ -2,18 +2,24 @@
 # scripts/check-protect-main.sh
 #
 # @description Lint: the live `protect-main` branch ruleset matches
-# the desired posture AND the in-tree mirror at
-# `.github/rulesets/protect-main.json`.
+# the desired posture, the in-tree mirror at
+# `.github/rulesets/protect-main.json`, and the `## Required contexts`
+# table in `docs/security/required-checks.md`.
 
 # Lint: assert the live (or fixture-injected) `protect-main` branch
 # ruleset matches the desired posture AND the in-tree mirror at
-# `.github/rulesets/protect-main.json`.
+# `.github/rulesets/protect-main.json`, AND that the mirror's
+# required-status-check contexts match the `## Required contexts`
+# table in `docs/security/required-checks.md` (a documented-but-not-
+# enforced context — or an enforced-but-undocumented one — is drift).
 #
 # Mirrors the pattern in scripts/check-tag-protection.sh, closing the
 # asymmetry where the tag-protection ruleset had a CI drift check but
 # the branch-protection ruleset relied on review discipline alone.
 #
 # Asserted invariants:
+#   - mirror required-status-check contexts match the doc table
+#     (runs before any network call so it also fails offline)
 #   - ruleset name `protect-main`
 #   - target `branch`, enforcement `active`
 #   - conditions.ref_name.include == ["~DEFAULT_BRANCH"]
@@ -28,6 +34,8 @@
 # Env overrides (test-only):
 #   RULESET_JSON_OVERRIDE — path to a fixture JSON for the live ruleset
 #   MIRROR_JSON_OVERRIDE  — path to a fixture JSON for the in-tree mirror
+#   DOC_TABLE_OVERRIDE    — path to a fixture markdown doc for the
+#                           required-checks table
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -43,6 +51,7 @@ readonly THIS_REPO='rvenutolo/linPEAS-flake'
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || printf '.')"
 readonly REPO_ROOT
 readonly MIRROR_FILE="${MIRROR_JSON_OVERRIDE:-${REPO_ROOT}/.github/rulesets/protect-main.json}"
+readonly DOC_FILE="${DOC_TABLE_OVERRIDE:-${REPO_ROOT}/docs/security/required-checks.md}"
 
 # @description Fetch the live ruleset JSON or read the override fixture.
 function fetch_ruleset() {
@@ -67,9 +76,45 @@ if [[ ! -f ${MIRROR_FILE} ]]; then
   printf 'mirror file not found: %s\n' "${MIRROR_FILE}" >&2
   exit 1
 fi
+if [[ ! -f ${DOC_FILE} ]]; then
+  printf 'required-checks doc not found: %s\n' "${DOC_FILE}" >&2
+  exit 1
+fi
+
+mirror_json="$(cat -- "${MIRROR_FILE}")"
+
+# --- doc-table parity with in-tree mirror ------------------------------------
+# Contexts in the mirror must match the first column of the
+# `## Required contexts` table in docs/security/required-checks.md.
+# Runs before the live-ruleset fetch so the doc half also fails
+# offline (and under fixture overrides without a live fixture).
+
+mirror_contexts="$(jq --compact-output \
+  '.rules[] | select(.type=="required_status_checks") |
+  .parameters.required_status_checks |
+  map(.context) | sort | unique' \
+  <<<"${mirror_json}")"
+
+doc_contexts="$(awk --field-separator='|' '
+  /^## Required contexts$/ { in_section = 1; next }
+  in_section && /^## / { in_section = 0 }
+  in_section && /^\|/ {
+    cell = $2
+    gsub(/^[ \t]+|[ \t]+$/, "", cell)
+    if (cell != "Context" && cell !~ /^-+$/ && cell != "") { print cell }
+  }
+' "${DOC_FILE}" | jq --raw-input . | jq --slurp --compact-output 'sort | unique')"
+
+if [[ ${doc_contexts} != "${mirror_contexts}" ]]; then
+  printf 'doc-table drift between required-checks.md and in-tree mirror:\n' >&2
+  printf '  doc:    %s\n' "${doc_contexts}" >&2
+  printf '  mirror: %s\n' "${mirror_contexts}" >&2
+  printf 'Symmetric diff:\n' >&2
+  diff <(jq -r '.[]' <<<"${doc_contexts}") <(jq -r '.[]' <<<"${mirror_contexts}") >&2 || true
+  exit 1
+fi
 
 ruleset_json="$(fetch_ruleset)"
-mirror_json="$(cat -- "${MIRROR_FILE}")"
 
 # --- Top-level shape ---------------------------------------------------------
 
@@ -142,19 +187,14 @@ fi
 
 # --- required-status-checks parity with in-tree mirror ----------------------
 # Semantic diff: sort by context, drop integration_id and any other inert
-# defaults; compare the resulting context list.
+# defaults; compare the resulting context list. mirror_contexts was
+# computed for the doc-table check above.
 
 live_contexts="$(jq --compact-output \
   '.rules[] | select(.type=="required_status_checks") |
   .parameters.required_status_checks |
   map(.context) | sort | unique' \
   <<<"${ruleset_json}")"
-
-mirror_contexts="$(jq --compact-output \
-  '.rules[] | select(.type=="required_status_checks") |
-  .parameters.required_status_checks |
-  map(.context) | sort | unique' \
-  <<<"${mirror_json}")"
 
 if [[ ${live_contexts} != "${mirror_contexts}" ]]; then
   printf 'required-status-checks drift between live ruleset and in-tree mirror:\n' >&2

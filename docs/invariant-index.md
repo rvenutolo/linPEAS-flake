@@ -41,7 +41,7 @@ live in `.claude/CLAUDE.md` (untracked).
 - **No unpinned `nix run nixpkgs#`** — must use `nix shell .#<pkg>`, `nix run .#<pkg>`, or pin a revision. → [security/workflow-hardening.md](security/workflow-hardening.md) <!-- enforcer: scripts/check-nix-run-pinned.sh; ci: nix-run-pinned; hook: nix-run-pinned -->
 - **setup-nix composite required** — workflows install Nix only via .github/actions/setup-nix with github-token. → [security/workflow-hardening.md](security/workflow-hardening.md) <!-- enforcer: scripts/check-setup-nix-required.sh; ci: setup-nix-required; hook: - -->
 - **GITHUB_TOKEN min-permissions** — top-level `permissions: {}`; every job declares own scopes. → [security/min-permissions.md](security/min-permissions.md) <!-- enforcer: scripts/check-min-permissions.sh; ci: min-permissions; hook: min-permissions -->
-- **protect-main ruleset** — in-tree mirror + drift-check. → [security/required-checks.md](security/required-checks.md) <!-- enforcer: scripts/check-protect-main.sh; ci: protect-main-drift-check; hook: - -->
+- **protect-main ruleset** — in-tree mirror + drift-check; mirror also parity-checked against the required-checks doc table. → [security/required-checks.md](security/required-checks.md) <!-- enforcer: scripts/check-protect-main.sh; ci: protect-main-drift-check; hook: - -->
 - **Repo-settings posture** — three binding flags. → [security/settings-posture.md](security/settings-posture.md) <!-- enforcer: scripts/check-settings-posture.sh; ci: settings-posture-harness; hook: - -->
 
 ## Architecture / CI
