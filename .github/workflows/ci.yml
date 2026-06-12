@@ -410,9 +410,14 @@ jobs:
       - name: enforce renovate-invariants
         run: nix develop --command ./scripts/check-renovate-invariants.sh
 
-  renovate-config-validator:
+  lint-workflow-security:
+    # Batched invariant lints asserting .github/workflows/* hardening.
+    # Realizes the devShell once, runs every check in the
+    # lint-workflow-security group of .github/lint-groups.yml, and prints
+    # a per-check pass/fail table. Replaces the former per-check jobs;
+    # see docs/security/required-checks.md.
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -426,14 +431,13 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-renovate-config-validator.test.sh
-      - name: enforce renovate-config-validator
-        run: nix develop --command ./scripts/check-renovate-config-validator.sh
+      - name: run workflow-security invariant lints
+        run: nix develop --command bash scripts/run-lint-group.sh lint-workflow-security
 
-  check-orphan-invariants:
+  lint-script-hygiene:
+    # Batched invariant lints asserting scripts/*.sh + tooling-config shape.
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -447,14 +451,13 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-orphan-invariants.test.sh
-      - name: enforce check-orphan-invariants
-        run: nix develop --command ./scripts/check-orphan-invariants.sh
+      - name: run script-hygiene invariant lints
+        run: nix develop --command bash scripts/run-lint-group.sh lint-script-hygiene
 
-  check-doc-anchors:
+  lint-doc-invariants:
+    # Batched invariant lints asserting docs / config / repo-structure parity.
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -468,64 +471,8 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-doc-anchors.test.sh
-      - name: enforce check-doc-anchors
-        run: nix develop --command ./scripts/check-doc-anchors.sh
-
-  pin-diff-isolated:
-    # Asserts that only `scripts/bump-linpeas.sh` mutates
-    # `linpeas-pin.json`. release-on-bump.yml's push trigger fires on
-    # `paths: [linpeas-pin.json]`, so a future commit that bumps the
-    # pin together with unrelated files (or via a different script)
-    # would create a trigger contract that is implicit rather than
-    # enforced. This lint makes the constraint explicit.
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-pin-diff-isolated.test.sh
-      - name: enforce pin-diff isolation
-        run: nix develop --command ./scripts/check-pin-diff-isolated.sh
-
-  pre-commit-hooks-sha-parity:
-    # Asserts that the SHA embedded in flake.nix's pre-commit-hooks
-    # input URL matches flake.lock's locked.rev. Catches divergence at
-    # PR time (e.g. a manual flake.nix edit that forgot the
-    # `nix flake update --update-input pre-commit-hooks` follow-on).
-    # Belt-and-braces backup to renovate-flake-lock-refresh, which
-    # auto-completes the lock refresh on Renovate-authored PRs only.
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-pre-commit-hooks-sha-parity.test.sh
-      - name: enforce pre-commit-hooks SHA parity
-        run: nix develop --command ./scripts/check-pre-commit-hooks-sha-parity.sh
+      - name: run doc-invariant lints
+        run: nix develop --command bash scripts/run-lint-group.sh lint-doc-invariants
 
   refresh-just-recipes-test:
     # Round-trip + drift harness for scripts/refresh-just-recipes.sh,
@@ -712,30 +659,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: nix develop --command ./scripts/check-protect-main.sh
 
-  gh-api-version-header:
-    # Asserts every `gh api` / `api.github.com` call in scripts/*.sh
-    # passes an explicit X-GitHub-Api-Version header. Pre-commit
-    # enforces this locally; this job is the CI mirror.
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes against fixtures
-        run: nix develop --command bash tests/check-gh-api-version-header.test.sh
-      - name: enforce header on live scripts
-        run: nix develop --command ./scripts/check-gh-api-version-header.sh
-
   allowed-actions-api-harness:
     # Runs the failure-mode harness for scripts/check-allowed-actions-api.sh
     # on every PR/push. The live probe lives in
@@ -786,48 +709,6 @@ jobs:
       - name: harness passes
         run: nix develop --command bash tests/check-settings-posture.test.sh
 
-  uses-sha-pinned:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-uses-sha-pinned.test.sh
-      - name: enforce uses-sha-pinned
-        run: nix develop --command ./scripts/check-uses-sha-pinned.sh
-
-  harden-runner-first:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-harden-runner-first.test.sh
-      - name: enforce harden-runner-first
-        run: nix develop --command ./scripts/check-harden-runner-first.sh
-
   setup-nix-required:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -848,69 +729,6 @@ jobs:
         run: nix develop --command bash tests/check-setup-nix-required.test.sh
       - name: enforce setup-nix-required
         run: nix develop --command ./scripts/check-setup-nix-required.sh
-
-  min-permissions:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-min-permissions.test.sh
-      - name: enforce min-permissions
-        run: nix develop --command ./scripts/check-min-permissions.sh
-
-  job-timeout-minutes:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-job-timeout-minutes.test.sh
-      - name: enforce job-timeout-minutes
-        run: nix develop --command ./scripts/check-job-timeout-minutes.sh
-
-  workflow-concurrency:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-workflow-concurrency.test.sh
-      - name: enforce workflow-concurrency
-        run: nix develop --command ./scripts/check-workflow-concurrency.sh
 
   ratchet-pin-audit-harness:
     runs-on: ubuntu-latest
@@ -933,153 +751,6 @@ jobs:
       - name: enforce ratchet-pin-audit
         run: nix develop --command ./scripts/check-ratchet-pin-audit.sh
 
-  checkout-persist-credentials:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-checkout-persist-credentials.test.sh
-      - name: enforce checkout-persist-credentials
-        run: nix develop --command ./scripts/check-checkout-persist-credentials.sh
-
-  upload-artifact-strict:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-upload-artifact-strict.test.sh
-      - name: enforce upload-artifact-strict
-        run: nix develop --command ./scripts/check-upload-artifact-strict.sh
-
-  workflow-on-branches:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-workflow-on-branches.test.sh
-      - name: enforce workflow-on-branches
-        run: nix develop --command ./scripts/check-workflow-on-branches.sh
-
-  pull-request-target-absent:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-pull-request-target-absent.test.sh
-      - name: enforce pull-request-target-absent
-        run: nix develop --command ./scripts/check-pull-request-target-absent.sh
-
-  script-shebang-pipefail:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-script-shebang-pipefail.test.sh
-      - name: enforce script-shebang-pipefail
-        run: nix develop --command ./scripts/check-script-shebang-pipefail.sh
-
-  script-has-test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-script-has-test.test.sh
-      - name: enforce script-has-test
-        run: nix develop --command ./scripts/check-script-has-test.sh
-
-  ci-job-in-summary:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-ci-job-in-summary.test.sh
-      - name: enforce ci-job-in-summary
-        run: nix develop --command ./scripts/check-ci-job-in-summary.sh
-
   cliff-tag-pattern:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -1100,130 +771,6 @@ jobs:
         run: nix develop --command bash tests/check-cliff-tag-pattern.test.sh
       - name: enforce cliff-tag-pattern
         run: nix develop --command ./scripts/check-cliff-tag-pattern.sh
-
-  run-block-strict:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-run-block-strict.test.sh
-      - name: enforce run-block-strict
-        run: nix develop --command ./scripts/check-run-block-strict.sh
-
-  fork-guard-release:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-fork-guard-release.test.sh
-      - name: enforce fork-guard-release
-        run: nix develop --command ./scripts/check-fork-guard-release.sh
-
-  gh-attestation-repo:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-gh-attestation-repo.test.sh
-      - name: enforce gh-attestation-repo
-        run: nix develop --command ./scripts/check-gh-attestation-repo.sh
-
-  cosign-identity-pinned:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-cosign-identity-pinned.test.sh
-      - name: enforce cosign-identity-pinned
-        run: nix develop --command ./scripts/check-cosign-identity-pinned.sh
-
-  nix-run-pinned:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-nix-run-pinned.test.sh
-      - name: enforce nix-run-pinned
-        run: nix develop --command ./scripts/check-nix-run-pinned.sh
-
-  check-jsonschema:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: enforce check-jsonschema
-        run: nix develop --command ./scripts/check-jsonschema.sh
 
   markdownlint:
     runs-on: ubuntu-latest

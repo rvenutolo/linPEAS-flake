@@ -1,0 +1,3 @@
+lint-some-group:
+  - foo
+  - bar-nonexistent

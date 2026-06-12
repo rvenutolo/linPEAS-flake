@@ -19,6 +19,13 @@
 # dependency-review, pr-title-lint, …) are not the responsibility
 # of this lint.
 #
+# Manifest coverage — every check basename in
+# `.github/lint-groups.yml` resolves to a real
+# `scripts/check-<basename>.sh`. The grouped lint jobs no longer name
+# each check individually in `ci.yml`, so without this a check could
+# silently leave the merge gate (manifest entry orphaned, or the
+# script deleted) after its job was folded into a group.
+#
 # Adding a new ci.yml job that should be a required status check:
 #   - add the job to ci.yml
 #   - add an entry to docs/_data/ci-check-categories.yml
@@ -31,7 +38,8 @@
 #
 # See docs/security/workflow-hardening.md.
 #
-# Honors CI_WORKFLOW_OVERRIDE + CATEGORIES_FILE_OVERRIDE for fixtures.
+# Honors CI_WORKFLOW_OVERRIDE + CATEGORIES_FILE_OVERRIDE +
+# LINT_GROUPS_OVERRIDE + SCRIPTS_DIR_OVERRIDE for fixtures.
 # Exits 0 on full coverage, 1 on any drift.
 
 set -Eeuo pipefail
@@ -40,9 +48,13 @@ IFS=$'\n\t'
 readonly DEFAULT_CI=".github/workflows/ci.yml"
 readonly DEFAULT_CATEGORIES="docs/_data/ci-check-categories.yml"
 readonly DEFAULT_WORKFLOWS_DIR=".github/workflows"
+readonly DEFAULT_LINT_GROUPS=".github/lint-groups.yml"
+readonly DEFAULT_SCRIPTS_DIR="scripts"
 readonly CI_FILE="${CI_WORKFLOW_OVERRIDE:-${DEFAULT_CI}}"
 readonly CATEGORIES_FILE="${CATEGORIES_FILE_OVERRIDE:-${DEFAULT_CATEGORIES}}"
 readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-${DEFAULT_WORKFLOWS_DIR}}"
+readonly LINT_GROUPS_FILE="${LINT_GROUPS_OVERRIDE:-${DEFAULT_LINT_GROUPS}}"
+readonly SCRIPTS_DIR="${SCRIPTS_DIR_OVERRIDE:-${DEFAULT_SCRIPTS_DIR}}"
 
 # Auxiliary ci.yml jobs intentionally absent from the category map.
 # Each entry is a job not exposed as a required status check.
@@ -134,6 +146,26 @@ while IFS= read -r key; do
     failed=$((failed + 1))
   fi
 done <"${cat_keys_file}"
+
+# Manifest coverage: every check basename in lint-groups.yml must
+# resolve to a real scripts/check-<basename>.sh. Guards against a check
+# silently dropping off the merge gate once its job is folded into a
+# grouped lint job.
+# A missing manifest is a load-bearing infrastructure error, not drift —
+# fail hard like the CI_FILE / CATEGORIES_FILE preamble guards above.
+if [[ ! -f ${LINT_GROUPS_FILE} ]]; then
+  printf 'lint-groups manifest not found: %s\n' "${LINT_GROUPS_FILE}" >&2
+  exit 1
+fi
+while IFS= read -r basename; do
+  [[ -z ${basename} ]] && continue
+  script="${SCRIPTS_DIR}/check-${basename}.sh"
+  if [[ ! -f ${script} ]]; then
+    printf '%s: lint-groups basename %q has no check script (%s)\n' \
+      "${LINT_GROUPS_FILE}" "${basename}" "${script}" >&2
+    failed=$((failed + 1))
+  fi
+done < <(yq eval '.[] | .[]' "${LINT_GROUPS_FILE}")
 
 if ((failed > 0)); then
   printf '%d ci.yml / categories drift entry/entries\n' "${failed}" >&2
