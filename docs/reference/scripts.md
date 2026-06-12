@@ -483,6 +483,13 @@ Run every doc-freshness regenerate-and-diff harness
 pass/fail summary table to stdout and $GITHUB_STEP_SUMMARY. Runs all
 harnesses even if one fails; exits 1 if any failed, 2 if none found.
 
+### scripts/run-harness-group.sh
+
+Run every setup-tax failure-mode harness in one devShell,
+printing a per-harness pass/fail summary table to stdout and
+$GITHUB_STEP_SUMMARY. Runs all harnesses even if one fails; exits 1
+if any failed.
+
 ### scripts/run-lint-group.sh
 
 Run every invariant-lint check in a named group from

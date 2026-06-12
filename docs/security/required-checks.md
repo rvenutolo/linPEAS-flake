@@ -6,38 +6,36 @@ this file in the same change as any modification to the ruleset.
 
 ## Required contexts
 
-| Context                     | Source workflow   | Source file                             |
-| --------------------------- | ----------------- | --------------------------------------- |
-| flake-check                 | ci                | .github/workflows/ci.yml                |
-| build-linpeas               | ci                | .github/workflows/ci.yml                |
-| smoke-test                  | ci                | .github/workflows/ci.yml                |
-| build-linpeas-arm64         | ci                | .github/workflows/ci.yml                |
-| smoke-test-arm64            | ci                | .github/workflows/ci.yml                |
-| image-smoke                 | ci                | .github/workflows/ci.yml                |
-| image-smoke-arm64           | ci                | .github/workflows/ci.yml                |
-| lint-workflow-security      | ci                | .github/workflows/ci.yml                |
-| lint-script-hygiene         | ci                | .github/workflows/ci.yml                |
-| lint-doc-invariants         | ci                | .github/workflows/ci.yml                |
-| cliff-tag-pattern           | ci                | .github/workflows/ci.yml                |
-| commitlint                  | ci                | .github/workflows/ci.yml                |
-| dashboard-data-tests        | ci                | .github/workflows/ci.yml                |
-| required-checks-no-paths    | ci                | .github/workflows/ci.yml                |
-| setup-nix-required          | ci                | .github/workflows/ci.yml                |
-| pr-workflows-no-secrets     | ci                | .github/workflows/ci.yml                |
-| tag-protection-drift-check  | ci                | .github/workflows/ci.yml                |
-| protect-main-drift-check    | ci                | .github/workflows/ci.yml                |
-| ratchet-pin-audit-harness   | ci                | .github/workflows/ci.yml                |
-| renovate-invariants         | ci                | .github/workflows/ci.yml                |
-| markdownlint                | ci                | .github/workflows/ci.yml                |
-| typos                       | ci                | .github/workflows/ci.yml                |
-| editorconfig                | ci                | .github/workflows/ci.yml                |
-| allowed-actions-api-harness | ci                | .github/workflows/ci.yml                |
-| doc-freshness               | ci                | .github/workflows/ci.yml                |
-| settings-posture-harness    | ci                | .github/workflows/ci.yml                |
-| lint-pr-title               | pr-title-lint     | .github/workflows/pr-title-lint.yml     |
-| dependency-review           | dependency-review | .github/workflows/dependency-review.yml |
-| gitleaks                    | gitleaks          | .github/workflows/gitleaks.yml          |
-| trufflehog                  | trufflehog        | .github/workflows/trufflehog.yml        |
+| Context                    | Source workflow   | Source file                             |
+| -------------------------- | ----------------- | --------------------------------------- |
+| flake-check                | ci                | .github/workflows/ci.yml                |
+| build-linpeas              | ci                | .github/workflows/ci.yml                |
+| smoke-test                 | ci                | .github/workflows/ci.yml                |
+| build-linpeas-arm64        | ci                | .github/workflows/ci.yml                |
+| smoke-test-arm64           | ci                | .github/workflows/ci.yml                |
+| image-smoke                | ci                | .github/workflows/ci.yml                |
+| image-smoke-arm64          | ci                | .github/workflows/ci.yml                |
+| lint-workflow-security     | ci                | .github/workflows/ci.yml                |
+| lint-script-hygiene        | ci                | .github/workflows/ci.yml                |
+| lint-doc-invariants        | ci                | .github/workflows/ci.yml                |
+| cliff-tag-pattern          | ci                | .github/workflows/ci.yml                |
+| commitlint                 | ci                | .github/workflows/ci.yml                |
+| dashboard-data-tests       | ci                | .github/workflows/ci.yml                |
+| required-checks-no-paths   | ci                | .github/workflows/ci.yml                |
+| setup-nix-required         | ci                | .github/workflows/ci.yml                |
+| pr-workflows-no-secrets    | ci                | .github/workflows/ci.yml                |
+| tag-protection-drift-check | ci                | .github/workflows/ci.yml                |
+| protect-main-drift-check   | ci                | .github/workflows/ci.yml                |
+| harness-group              | ci                | .github/workflows/ci.yml                |
+| renovate-invariants        | ci                | .github/workflows/ci.yml                |
+| markdownlint               | ci                | .github/workflows/ci.yml                |
+| typos                      | ci                | .github/workflows/ci.yml                |
+| editorconfig               | ci                | .github/workflows/ci.yml                |
+| doc-freshness              | ci                | .github/workflows/ci.yml                |
+| lint-pr-title              | pr-title-lint     | .github/workflows/pr-title-lint.yml     |
+| dependency-review          | dependency-review | .github/workflows/dependency-review.yml |
+| gitleaks                   | gitleaks          | .github/workflows/gitleaks.yml          |
+| trufflehog                 | trufflehog        | .github/workflows/trufflehog.yml        |
 
 ## Path-filter invariant
 

@@ -497,6 +497,32 @@ jobs:
       - name: run doc-freshness regenerate-and-diff harnesses
         run: nix develop --command bash scripts/run-doc-freshness.sh
 
+  harness-group:
+    # Batched setup-tax failure-mode harnesses. Realizes the devShell
+    # once and runs each harness via scripts/run-harness-group.sh,
+    # printing a per-harness pass/fail table. ratchet-pin-audit also
+    # runs its live enforce script; the allowed-actions-api and
+    # settings-posture live probes need admin-scoped App tokens and run
+    # schedule-only in their own drift-check workflows. Required status
+    # context; see docs/security/required-checks.md.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-nix
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
+      - name: run setup-tax harnesses
+        run: nix develop --command bash scripts/run-harness-group.sh
+
   protect-main-drift-check:
     # Asserts the live `protect-main` branch ruleset matches the in-tree
     # mirror at .github/rulesets/protect-main.json AND that key invariants
@@ -525,56 +551,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: nix develop --command ./scripts/check-protect-main.sh
 
-  allowed-actions-api-harness:
-    # Runs the failure-mode harness for scripts/check-allowed-actions-api.sh
-    # on every PR/push. The live probe lives in
-    # .github/workflows/allowed-actions-api-drift-check.yml, which is
-    # schedule-only because the /actions/permissions/selected-actions
-    # endpoint requires admin scope via the settings-drift-checker App.
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-allowed-actions-api.test.sh
-
-  settings-posture-harness:
-    # Runs the failure-mode harness for scripts/check-settings-posture.sh
-    # on every PR/push. The live probe of this script lives in
-    # .github/workflows/settings-posture-drift-check.yml, which is
-    # schedule-only because the endpoints it queries require admin
-    # scope via a dedicated GitHub App rather than github.token. The
-    # harness here keeps the script + fixtures in working order even
-    # though the live probe never runs on PR.
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-settings-posture.test.sh
-
   setup-nix-required:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -595,27 +571,6 @@ jobs:
         run: nix develop --command bash tests/check-setup-nix-required.test.sh
       - name: enforce setup-nix-required
         run: nix develop --command ./scripts/check-setup-nix-required.sh
-
-  ratchet-pin-audit-harness:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: audit
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
-      - name: harness passes
-        run: nix develop --command bash tests/check-ratchet-pin-audit.test.sh
-      - name: enforce ratchet-pin-audit
-        run: nix develop --command ./scripts/check-ratchet-pin-audit.sh
 
   cliff-tag-pattern:
     runs-on: ubuntu-latest
