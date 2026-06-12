@@ -63,6 +63,19 @@ function main() {
     fail '--check passed despite in-block drift'
   fi
 
+  # A stray .refresh-treefmt-config-*.md left by an interrupted earlier run
+  # must be swept by the generator's EXIT-trap cleanup, not left to litter the
+  # tree (and risk being staged or tripping markdown lints on itself).
+  local stray="${REPO_ROOT}/.refresh-treefmt-config-LEAKTEST.md"
+  : >"${stray}"
+  "${SCRIPT}" >/dev/null
+  if [[ -e ${stray} ]]; then
+    rm --force -- "${stray}"
+    fail 'generator left a stray .refresh-treefmt-config-*.md temp behind'
+  else
+    pass 'generator sweeps stray in-repo temps on exit'
+  fi
+
   if [[ ${failures} -gt 0 ]]; then
     printf '%d failure(s)\n' "${failures}" >&2
     exit 1

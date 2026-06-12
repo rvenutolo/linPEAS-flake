@@ -18,6 +18,7 @@ result-*
 .lycheecache
 /tmp/
 .refresh-precommit-*.md
+.refresh-treefmt-config-*.md
 
 # Personal scratch lists kept on disk but never tracked
 TODO
