@@ -476,6 +476,13 @@ branch — the ref source is internal, not attacker-supplied.
 Renovate manages OCTOSCAN_DIGEST + OCTOSCAN_VERSION in lockstep
 (renovate.json customManager scoped to this file).
 
+### scripts/run-doc-freshness.sh
+
+Run every doc-freshness regenerate-and-diff harness
+(tests/refresh-\*.test.sh) in one devShell, printing a per-generator
+pass/fail summary table to stdout and $GITHUB_STEP_SUMMARY. Runs all
+harnesses even if one fails; exits 1 if any failed, 2 if none found.
+
 ### scripts/run-lint-group.sh
 
 Run every invariant-lint check in a named group from
