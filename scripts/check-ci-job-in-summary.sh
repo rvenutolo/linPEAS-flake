@@ -59,7 +59,6 @@ readonly SCRIPTS_DIR="${SCRIPTS_DIR_OVERRIDE:-${DEFAULT_SCRIPTS_DIR}}"
 # Auxiliary ci.yml jobs intentionally absent from the category map.
 # Each entry is a job not exposed as a required status check.
 readonly EXEMPT=(
-  "allowed-actions-api-harness"         # harness sandbox
   "build-linpeas-matrix"                # cross-OS matrix expansion
   "doc-freshness"                       # batched regenerator harnesses
   "flake-check-matrix"                  # cross-OS matrix expansion
@@ -70,7 +69,6 @@ readonly EXEMPT=(
   "image-cve-scan-grype"                # CVE scan (Grype); surfaces issues, not blocker
   "image-cve-scan-grype-notify-finding" # notify-only job (real CRITICAL CVE, Grype)
   "image-cve-scan-grype-notify-infra"   # notify-only job (infra failure, no CVE, Grype)
-  "settings-posture-harness"            # harness sandbox
 )
 
 is_exempt() {

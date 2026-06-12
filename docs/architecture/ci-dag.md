@@ -18,7 +18,6 @@ flowchart TD
   classDef commits fill:#e1bee7,stroke:#6a1b9a
   classDef aux fill:#eeeeee,stroke:#616161
 
-  allowed-actions-api-harness:::security
   build-linpeas:::build
   build-linpeas-arm64:::build
   cliff-tag-pattern:::security
@@ -27,6 +26,7 @@ flowchart TD
   doc-freshness:::doc
   editorconfig:::doc
   flake-check:::build
+  harness-group:::security
   image-smoke:::build
   image-smoke-arm64:::build
   lint-doc-invariants:::security
@@ -35,10 +35,8 @@ flowchart TD
   markdownlint:::doc
   pr-workflows-no-secrets:::security
   protect-main-drift-check:::security
-  ratchet-pin-audit-harness:::security
   renovate-invariants:::security
   required-checks-no-paths:::security
-  settings-posture-harness:::security
   setup-nix-required:::security
   smoke-test:::build
   smoke-test-arm64:::build
