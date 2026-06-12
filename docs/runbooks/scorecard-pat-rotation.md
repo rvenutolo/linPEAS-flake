@@ -22,7 +22,6 @@ This runbook is the durable record of how to create and rotate that PAT.
 - **Repository access:** Only select repositories → `rvenutolo/linPEAS-flake`.
 - **Expiration:** 1 year maximum.
 - **Repository permissions (all Read-only):**
-    - Administration — for `Branch-Protection` check
     - Contents — for `Security-Policy`, `License`, `SBOM`, etc.
     - Metadata — mandatory (auto-selected)
     - Webhooks — for `Webhooks` check
