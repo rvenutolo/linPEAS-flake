@@ -1,0 +1,45 @@
+# .github/lint-groups.yml
+#
+# group -> ordered list of invariant-lint check basenames. The runner
+# scripts/run-lint-group.sh resolves each basename to
+# scripts/check-<basename>.sh and (if present) tests/check-<basename>.test.sh.
+#
+# Single source of truth for: the CI job loop (run-lint-group.sh), the
+# ci-job-in-summary lint (manifest-coverage assertion), and the
+# refresh-enforcement-matrix generator (invariant -> group-job column).
+#
+# Adding a check: add its basename here AND keep scripts/check-<name>.sh
+# + tests/check-<name>.test.sh. Removing one: delete here too. The
+# ci-job-in-summary lint fails CI if a basename here has no real script.
+#
+# This is a subset of scripts/check-*.sh: checks that run via dedicated
+# harness/drift-check jobs (protect-main, settings-posture, ratchet-pin-audit,
+# allowed-actions-api, …) are not group-batched and stay out of this manifest.
+
+lint-workflow-security:
+  - uses-sha-pinned
+  - harden-runner-first
+  - min-permissions
+  - job-timeout-minutes
+  - workflow-concurrency
+  - checkout-persist-credentials
+  - upload-artifact-strict
+  - workflow-on-branches
+  - pull-request-target-absent
+  - fork-guard-release
+  - nix-run-pinned
+  - gh-attestation-repo
+  - cosign-identity-pinned
+  - run-block-strict
+lint-script-hygiene:
+  - script-shebang-pipefail
+  - script-has-test
+  - gh-api-version-header
+  - pre-commit-hooks-sha-parity
+lint-doc-invariants:
+  - orphan-invariants
+  - doc-anchors
+  - jsonschema
+  - renovate-config-validator
+  - ci-job-in-summary
+  - pin-diff-isolated
