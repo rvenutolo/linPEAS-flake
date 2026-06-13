@@ -25,4 +25,8 @@ exclude_path = [
   "result-image",
   "docs/_data",
   "site",
+  # Negative-test fixtures contain intentionally-broken relative links
+  # that drive check-orphan-invariants and refresh-enforcement-matrix;
+  # they are not real docs and must not be link-checked.
+  "tests/fixtures",
 ]
