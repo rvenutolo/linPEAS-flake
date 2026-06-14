@@ -660,3 +660,31 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed # v6.2.1
+
+  measure-devshell-entry:
+    # THROWAWAY: flake-input-cache spike. Measures the eval bucket on a
+    # cache-nix-action hit vs the ~30s flakehub baseline. Do not merge.
+    # No flakehub-cache-action: cache-nix-action is the sole store/input
+    # mechanism here so the hit-run eval isolates its restore vs github fetch.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-nix
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+      - name: measure devShell entry buckets
+        # Direct invocation (not via `nix develop`) so the script's internal
+        # nix calls are the first/cold ops; `nix` is on PATH from setup-nix.
+        run: bash scripts/measure-devshell-entry.sh
