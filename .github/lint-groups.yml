@@ -34,6 +34,7 @@ lint-workflow-security:
 lint-script-hygiene:
   - script-shebang-pipefail
   - script-has-test
+  - lint-shell-tools
   - gh-api-version-header
   - pre-commit-hooks-sha-parity
 lint-doc-invariants:

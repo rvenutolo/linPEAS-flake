@@ -34,6 +34,7 @@
         ./nix/checks.nix
         ./nix/treefmt-config.nix
         ./nix/devshell.nix
+        ./nix/devshell-lint.nix
         ./nix/hooks/default.nix
         ./nix/manifests.nix
       ];

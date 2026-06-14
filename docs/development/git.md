@@ -103,6 +103,7 @@ Hooks (alphabetical):
 | `harden-runner-first`               | Every workflow job's first step is step-security/harden-runner.                                     |
 | `job-timeout-minutes`               | Every workflow job declares an explicit timeout-minutes.                                            |
 | `just-recipes-fresh`                | just-recipes blocks in README.md and docs/reference/just-recipes.md match the justfile.             |
+| `lint-shell-tools`                  | Every tool the .#lint-hosted lint groups need is on PATH.                                           |
 | `markdownlint`                      | Markdown style + structure.                                                                         |
 | `min-permissions`                   | Top-level workflow permissions empty; each job declares its own scopes.                             |
 | `nix-run-pinned`                    | No unpinned nix run nixpkgs#<pkg>; use nix shell .#<pkg> or pin a rev.                              |

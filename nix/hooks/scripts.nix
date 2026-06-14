@@ -35,6 +35,23 @@
     pass_filenames = false;
     language = "system";
   };
+  # Every tool the .#lint-hosted lint groups rely on is present on
+  # PATH. Keeps devShells.lint buildInputs from silently dropping a
+  # tool. See docs/security/workflow-hardening.md.
+  lint-shell-tools = {
+    enable = true;
+    name = "lint-shell-tools";
+    description = "Every tool the .#lint-hosted lint groups need is on PATH.";
+    entry = "${pkgs-unstable.writeShellScript "lint-shell-tools-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-lint-shell-tools.sh
+    ''}";
+    files = "^(scripts/check-lint-shell-tools\\.sh|nix/devshell-lint\\.nix)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Every ci.yml job either in ci-check-categories.yml or
   # EXEMPT, and every category entry points at a real job.
   # See docs/security/workflow-hardening.md.
