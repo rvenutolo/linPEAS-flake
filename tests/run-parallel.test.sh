@@ -68,10 +68,44 @@ function test_order_preserved() {
   check 'order 1<2' "$([[ ${n1} -lt ${n2} ]] && echo ok)"
 }
 
+# --- scenario: RUN_PARALLEL_JOBS caps live concurrency ---
+function test_concurrency_bound() {
+  local cdir
+  cdir="$(mktemp -d)"
+  # Body runs inside each job's own subshell; $d, $(cat ...), flock vars must
+  # stay literal here. Only ${cdir} is interpolated via the concatenation.
+  # shellcheck disable=SC2016 # literal expansions are intentional (job body)
+  local body='
+    d="'"${cdir}"'"
+    ( flock 9
+      live=$(( $(cat "$d/live" 2>/dev/null || echo 0) + 1 ))
+      echo "$live" >"$d/live"
+      peak=$(cat "$d/peak" 2>/dev/null || echo 0)
+      (( live > peak )) && echo "$live" >"$d/peak"
+    ) 9>"$d/lock"
+    sleep 0.2
+    ( flock 9
+      live=$(( $(cat "$d/live") - 1 ))
+      echo "$live" >"$d/live"
+    ) 9>"$d/lock"'
+  # shellcheck disable=SC2034 # passed by name to run_parallel (nameref)
+  local -a jobs=(
+    "j0|${body}" "j1|${body}" "j2|${body}"
+    "j3|${body}" "j4|${body}" "j5|${body}"
+  )
+  RUN_PARALLEL_JOBS=2 run_parallel jobs check bound >/dev/null
+  local peak
+  peak="$(cat "${cdir}/peak")"
+  check 'concurrency peak <= 2' "$([[ ${peak} -le 2 ]] && echo ok)"
+  check 'concurrency peak >= 2' "$([[ ${peak} -ge 2 ]] && echo ok)"
+  rm --recursive --force -- "${cdir}"
+}
+
 function main() {
   test_all_pass
   test_one_fail
   test_order_preserved
+  test_concurrency_bound
   if [[ ${failures} -gt 0 ]]; then
     printf '\n%d check(s) failed\n' "${failures}" >&2
     exit 1
