@@ -50,9 +50,28 @@ function test_one_fail() {
   check 'one-fail ccc still ran' "$(grep -qF '| ccc | pass |' <<<"${out}" && echo ok)"
 }
 
+# --- scenario: output replayed in array order despite reverse finish order ---
+function test_order_preserved() {
+  # shellcheck disable=SC2034 # passed by name to run_parallel (nameref)
+  local -a jobs=(
+    'aaa|sleep 0.3; echo marker-0'
+    'bbb|sleep 0.2; echo marker-1'
+    'ccc|sleep 0.1; echo marker-2'
+  )
+  local out
+  out="$(RUN_PARALLEL_JOBS=4 run_parallel jobs check order)"
+  local n0 n1 n2
+  n0="$(grep -n marker-0 <<<"${out}" | head -1 | cut -d: -f1)"
+  n1="$(grep -n marker-1 <<<"${out}" | head -1 | cut -d: -f1)"
+  n2="$(grep -n marker-2 <<<"${out}" | head -1 | cut -d: -f1)"
+  check 'order 0<1' "$([[ ${n0} -lt ${n1} ]] && echo ok)"
+  check 'order 1<2' "$([[ ${n1} -lt ${n2} ]] && echo ok)"
+}
+
 function main() {
   test_all_pass
   test_one_fail
+  test_order_preserved
   if [[ ${failures} -gt 0 ]]; then
     printf '\n%d check(s) failed\n' "${failures}" >&2
     exit 1
