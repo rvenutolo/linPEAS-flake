@@ -1,41 +1,38 @@
 name: setup-nix
-description: "Install Nix with authenticated GitHub access-tokens so flake-input tarball fetches don't hit the 60/hour unauthenticated rate limit."
+description: "Install Determinate Nix with authenticated GitHub access-tokens so flake-input tarball fetches don't hit the 60/hour unauthenticated rate limit."
 
 # WHY this composite exists:
-# `cachix/install-nix-action` defaults to unauthenticated tarball fetches
-# (`api.github.com/repos/<o>/<r>/tarball/<sha>`). GitHub caps unauthenticated
-# requests at 60/hour per source IP. GitHub Actions runner IP pools share
-# that budget across many concurrent jobs; once exhausted, the API returns
-# 401 ("Bad credentials"). Passing `access-tokens = github.com=<token>`
-# raises the limit to ~1000/hour and eliminates the recurring 401s.
+# Nix fetches flake-input tarballs from api.github.com. GitHub caps
+# unauthenticated requests at 60/hour per source IP, shared across the
+# runner IP pool; once exhausted the API returns 401 ("Bad credentials").
+# determinate-nix-action injects `access-tokens = github.com=<github-token>`
+# automatically when `github-token` is set, raising the limit to ~1000/hour
+# and eliminating the recurring 401s. Determinate Nix also evaluates flakes
+# with lazy-trees, avoiding the eager copy of flake source trees into the
+# store that dominates cold flake eval.
 #
-# Flakehub-cache is intentionally NOT bundled here: a small number of
-# callers (`update-flake-lock`, `renovate-flake-lock-refresh`) need fresh
-# fetches and must omit it. Callers add `DeterminateSystems/flakehub-cache-action`
-# explicitly when wanted.
+# Flakehub-cache is intentionally NOT bundled here: callers that need fresh
+# fetches (`update-flake-lock`, `renovate-flake-lock-refresh`) must omit it.
+# Callers add `DeterminateSystems/flakehub-cache-action` explicitly when wanted.
 
 inputs:
   github-token:
     description: "GitHub token used by Nix for `access-tokens = github.com=...`. Pass `secrets.GITHUB_TOKEN` from the caller."
     required: true
-  install-url:
-    description: "Nix installer URL. Defaults to the pinned NixOS release; matrix callers override with `matrix.nix-install-url`."
-    required: false
-    default: "https://releases.nixos.org/nix/nix-2.34.7/install" # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
   extra-nix-config:
-    description: "Additional lines appended to nix.conf beyond the baseline (experimental-features, access-tokens)."
+    description: "Additional lines appended to nix.conf beyond the baseline (experimental-features, lazy-trees, download resilience)."
     required: false
     default: ""
 
 runs:
   using: composite
   steps:
-    - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 # patch-tag-exception: pinned SHA is the v31 annotated-tag object, not a release commit; cachix publishes only floating major tags (v31 retargets across patches) so there is no immutable patch tag to ratchet to
+    - uses: DeterminateSystems/determinate-nix-action@9adf02b41cfdac2632e1c16f0480ff5bf3b05dd6 # v3.21.1
       with:
-        install_url: ${{ inputs.install-url }}
-        extra_nix_config: |
-          experimental-features = nix-command flakes
-          access-tokens = github.com=${{ inputs.github-token }}
+        github-token: ${{ inputs.github-token }}
+        extra-conf: |
+          extra-experimental-features = nix-command flakes
+          lazy-trees = true
           # Substituter resilience. cache.nixos.org and flakehub-cache
           # intermittently return HTTP 416 on resumed NAR ranges or rate-limit
           # under burst load; nix defaults of zero retries + short timeouts
