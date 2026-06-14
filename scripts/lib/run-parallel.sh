@@ -11,8 +11,12 @@
 #   jobs entries: "label|command" — split on the FIRST pipe; command may
 #   contain pipes; label may not. Concurrency = ${RUN_PARALLEL_JOBS:-nproc},
 #   clamped to [1, job-count].
+#   Installs a RETURN trap for temp-dir cleanup — do not call run_parallel
+#   from a function that relies on its own RETURN trap.
 
 # shellcheck shell=bash
+# Sourced library: strict mode is the caller's responsibility (the runner
+# scripts source this under their own `set -Eeuo pipefail`).
 
 if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 3))); then
   printf 'run-parallel.sh requires bash 4.3+ (namerefs)\n' >&2
@@ -34,9 +38,9 @@ function _rp_run_one() {
 export -f _rp_run_one
 
 function run_parallel() {
-  local -n _jobs_ref="$1"
+  local -n __rp_jobs_ref="$1"
   local -r header="$2" title="$3"
-  local -r count="${#_jobs_ref[@]}"
+  local -r count="${#__rp_jobs_ref[@]}"
 
   local n="${RUN_PARALLEL_JOBS:-$(nproc)}"
   ((n > count)) && n="${count}"
@@ -44,11 +48,11 @@ function run_parallel() {
 
   RP_TMPDIR="$(mktemp -d)"
   export RP_TMPDIR
-  trap 'rm --recursive --force -- "${RP_TMPDIR}"' RETURN
+  trap 'rm --recursive --force -- "${RP_TMPDIR:-}"; unset RP_TMPDIR' RETURN
 
   local i entry
   for ((i = 0; i < count; i++)); do
-    entry="${_jobs_ref[i]}"
+    entry="${__rp_jobs_ref[i]}"
     printf '%s' "${entry#*|}" >"${RP_TMPDIR}/${i}.cmd"
     printf '%s' "${entry%%|*}" >"${RP_TMPDIR}/${i}.label"
   done
@@ -56,7 +60,7 @@ function run_parallel() {
   # Dispatch. xargs returns 123 if any worker exits non-zero; the
   # authoritative status is the per-index .rc files, so ignore it.
   if ((count > 0)); then
-    printf '%s\n' "$(seq 0 $((count - 1)))" |
+    seq 0 "$((count - 1))" |
       xargs -P "${n}" -I{} bash -c '_rp_run_one "$@"' _ {} || true
   fi
 
@@ -90,10 +94,10 @@ function run_parallel() {
 # Emits the markdown table. $1 header word; $2 name of the rows array.
 function _rp_emit_table() {
   local -r header="$1"
-  local -n _rows_ref="$2"
+  local -n __rp_rows_ref="$2"
   printf '| %s | result | time |\n' "${header}"
   printf '| --- | --- | --- |\n'
-  if ((${#_rows_ref[@]} > 0)); then
-    printf '%s\n' "${_rows_ref[@]}"
+  if ((${#__rp_rows_ref[@]} > 0)); then
+    printf '%s\n' "${__rp_rows_ref[@]}"
   fi
 }
