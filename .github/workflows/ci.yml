@@ -683,4 +683,9 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: measure devShell entry buckets (run ${{ matrix.run }})
-        run: nix develop --command bash scripts/measure-devshell-entry.sh
+        # Invoke DIRECTLY (not via `nix develop`): the script's internal
+        # `nix eval` / `nix develop` calls must be the first nix ops so the
+        # cold eval/realize buckets are genuinely cold. Wrapping in
+        # `nix develop` would warm the store + eval cache first. `nix` is on
+        # PATH from setup-nix; magic-nix-cache stays active for realize parity.
+        run: bash scripts/measure-devshell-entry.sh
