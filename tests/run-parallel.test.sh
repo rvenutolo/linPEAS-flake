@@ -38,8 +38,21 @@ function test_all_pass() {
   check 'all-pass header' "$(grep -qF '| check | result | time |' <<<"${out}" && echo ok)"
 }
 
+# --- scenario: one job fails -> exit 1, all rows present ---
+function test_one_fail() {
+  # shellcheck disable=SC2034 # passed by name to run_parallel (nameref)
+  local -a jobs=('aaa|true' 'bbb|false' 'ccc|true')
+  local out rc=0
+  out="$(run_parallel jobs check one-fail)" || rc=$?
+  check 'one-fail exit 1' "$([[ ${rc} -eq 1 ]] && echo ok)"
+  check 'one-fail aaa pass' "$(grep -qF '| aaa | pass |' <<<"${out}" && echo ok)"
+  check 'one-fail bbb FAIL' "$(grep -qF '| bbb | FAIL |' <<<"${out}" && echo ok)"
+  check 'one-fail ccc still ran' "$(grep -qF '| ccc | pass |' <<<"${out}" && echo ok)"
+}
+
 function main() {
   test_all_pass
+  test_one_fail
   if [[ ${failures} -gt 0 ]]; then
     printf '\n%d check(s) failed\n' "${failures}" >&2
     exit 1
