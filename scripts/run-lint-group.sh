@@ -2,9 +2,10 @@
 # scripts/run-lint-group.sh
 #
 # @description Run every invariant-lint check in a named group from
-# .github/lint-groups.yml inside one devShell, printing a per-check
-# pass/fail summary table to stdout and $GITHUB_STEP_SUMMARY. Runs all
-# checks even if one fails; exits 1 if any failed, 2 on config error.
+# .github/lint-groups.yml inside one devShell, with bounded parallelism,
+# printing a per-check pass/fail summary table to stdout and
+# $GITHUB_STEP_SUMMARY. Runs all checks even if one fails; exits 1 if any
+# failed, 2 on config error.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -12,6 +13,13 @@ IFS=$'\n\t'
 readonly MANIFEST="${LINT_GROUPS_OVERRIDE:-.github/lint-groups.yml}"
 readonly SCRIPTS_DIR="${SCRIPTS_DIR_OVERRIDE:-scripts}"
 readonly TESTS_DIR="${TESTS_DIR_OVERRIDE:-tests}"
+
+# shellcheck source=scripts/lib/run-parallel.sh
+# The pre-commit shellcheck hook runs without -x, so SC1091 ("not
+# following sourced file") fires on this dynamic path; the helper is
+# linted on its own. Suppress the info to keep the gate green.
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/lib/run-parallel.sh"
 
 function main() {
   local -r group="${1:-}"
@@ -35,55 +43,29 @@ function main() {
     exit 2
   fi
 
-  local failed=0
-  local -a rows=()
-  local name script test_file start end secs status rc
-
+  # Build one job per check. Each job runs the checker's unit test (if
+  # present) first, then the checker; a missing script is a failure. The
+  # command runs inside `bash -c` in a worker subshell, so it must be
+  # self-contained. SCRIPTS_DIR/TESTS_DIR are expanded here, at build time.
+  local -a jobs=()
+  local name script test_file cmd
   while IFS= read -r name; do
     [[ -n ${name} ]] || continue
     script="${SCRIPTS_DIR}/check-${name}.sh"
     test_file="${TESTS_DIR}/check-${name}.test.sh"
-    rc=0
-    start="$(date +%s)"
     if [[ ! -f ${script} ]]; then
-      printf '::error::missing check script: %s\n' "${script}" >&2
-      rc=1
+      cmd="printf '::error::missing check script: %s\n' '${script}' >&2; exit 1"
+    elif [[ -f ${test_file} ]]; then
+      cmd="bash '${test_file}' && bash '${script}'"
     else
-      if [[ -f ${test_file} ]]; then
-        bash "${test_file}" || rc=$?
-      fi
-      if [[ ${rc} -eq 0 ]]; then
-        bash "${script}" || rc=$?
-      fi
+      cmd="bash '${script}'"
     fi
-    end="$(date +%s)"
-    secs=$((end - start))
-    if [[ ${rc} -eq 0 ]]; then
-      status='pass'
-    else
-      status='FAIL'
-      failed=1
-    fi
-    rows+=("$(printf '| %s | %s | %ds |' "${name}" "${status}" "${secs}")")
+    jobs+=("${name}|${cmd}")
   done <<<"${checks}"
 
-  emit_table
-  if [[ -n ${GITHUB_STEP_SUMMARY:-} ]]; then
-    {
-      printf '### %s\n\n' "${group}"
-      emit_table
-    } >>"${GITHUB_STEP_SUMMARY}"
-  fi
-
-  exit "${failed}"
-}
-
-# Emits the markdown summary table from main's `rows` (dynamic scope).
-function emit_table() {
-  printf '| check | result | time |\n'
-  printf '| --- | --- | --- |\n'
-  # shellcheck disable=SC2154
-  printf '%s\n' "${rows[@]}"
+  local rc=0
+  run_parallel jobs check "${group}" || rc=$?
+  exit "${rc}"
 }
 
 main "$@"

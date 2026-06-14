@@ -493,9 +493,10 @@ if any failed.
 ### scripts/run-lint-group.sh
 
 Run every invariant-lint check in a named group from
-.github/lint-groups.yml inside one devShell, printing a per-check
-pass/fail summary table to stdout and $GITHUB_STEP_SUMMARY. Runs all
-checks even if one fails; exits 1 if any failed, 2 on config error.
+.github/lint-groups.yml inside one devShell, with bounded parallelism,
+printing a per-check pass/fail summary table to stdout and
+$GITHUB_STEP_SUMMARY. Runs all checks even if one fails; exits 1 if any
+failed, 2 on config error.
 
 {% endraw %}
 
