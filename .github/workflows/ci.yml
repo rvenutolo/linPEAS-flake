@@ -432,7 +432,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: run workflow-security invariant lints
-        run: nix develop --command bash scripts/run-lint-group.sh lint-workflow-security
+        run: nix develop .#lint --command bash scripts/run-lint-group.sh lint-workflow-security
 
   lint-script-hygiene:
     # Batched invariant lints asserting scripts/*.sh + tooling-config shape.
@@ -452,7 +452,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: run script-hygiene invariant lints
-        run: nix develop --command bash scripts/run-lint-group.sh lint-script-hygiene
+        run: nix develop .#lint --command bash scripts/run-lint-group.sh lint-script-hygiene
 
   lint-doc-invariants:
     # Batched invariant lints asserting docs / config / repo-structure parity.

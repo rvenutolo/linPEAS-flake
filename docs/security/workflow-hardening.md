@@ -82,6 +82,14 @@ The check-lint family is held together by naming convention: each lint script sh
 
 Enforced by `scripts/check-script-has-test.sh`. Wired as the `script-has-test` required CI job and as a pre-commit hook.
 
+## lint-shell-tools
+
+The `lint-workflow-security` and `lint-script-hygiene` invariant-lint groups run inside the lean `devShells.lint` shell, which carries only the tools those groups need (bash, coreutils, gnugrep, gnused, gawk, findutils, yq-go, jq, gh, git, shellcheck, shfmt, actionlint, check-jsonschema) rather than the full author toolchain. The lean shell trades realize cost for a tighter closure, so a tool dropped from its `buildInputs` would surface only as a cryptic mid-check failure deep inside one of the batched groups.
+
+This guard asserts every required tool is present on `PATH`. Run inside `devShells.lint` it validates the lean shell directly; run inside `devShells.default` it confirms the default shell remains a superset. A dropped tool becomes a named `::error::` line instead of an opaque downstream crash. The expected-tool list must stay in sync with `nix/devshell-lint.nix` `buildInputs`.
+
+Enforced by `scripts/check-lint-shell-tools.sh`. Wired as a member of the `lint-script-hygiene` required CI group and as a pre-commit hook.
+
 ## ci-job-in-summary
 
 Every `jobs.<name>:` in `.github/workflows/ci.yml` either appears as a key in `docs/_data/ci-check-categories.yml` or is on the lint's `EXEMPT` list of auxiliary jobs (sandbox harnesses, notify-only jobs, matrix expansions). Conversely, every key in the category map corresponds to a real `jobs.<name>:` in some workflow file under `.github/workflows/`.

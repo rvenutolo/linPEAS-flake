@@ -131,6 +131,14 @@ Validate repo config files (renovate.json, workflow
 YAML, composite-action YAML, .markdownlint.json) against pinned
 JSON Schemas using `check-jsonschema`.
 
+### scripts/check-lint-shell-tools.sh
+
+Assert every tool the batched `.#lint`-hosted invariant-lint
+groups (lint-workflow-security, lint-script-hygiene) rely on is present on
+PATH. These groups run inside devShells.lint in CI; this guard turns a
+dropped tool into a named failure instead of a cryptic mid-check error.
+Keep EXPECTED in sync with nix/devshell-lint.nix buildInputs.
+
 ### scripts/check-min-permissions.sh
 
 Strict least-privilege lint for GitHub Actions

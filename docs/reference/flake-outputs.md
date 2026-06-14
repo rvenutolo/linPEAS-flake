@@ -40,13 +40,17 @@ block between the markers by hand.
 │       └───pre-commit: derivation 'pre-commit-run'
 ├───devShells
 │   ├───aarch64-darwin
-│   │   └───default: development environment 'nix-shell'
+│   │   ├───default: development environment 'nix-shell'
+│   │   └───lint: development environment 'nix-shell'
 │   ├───aarch64-linux
-│   │   └───default: development environment 'nix-shell'
+│   │   ├───default: development environment 'nix-shell'
+│   │   └───lint: development environment 'nix-shell'
 │   ├───x86_64-darwin
-│   │   └───default: development environment 'nix-shell'
+│   │   ├───default: development environment 'nix-shell'
+│   │   └───lint: development environment 'nix-shell'
 │   └───x86_64-linux
-│       └───default: development environment 'nix-shell'
+│       ├───default: development environment 'nix-shell'
+│       └───lint: development environment 'nix-shell'
 ├───devTooling: unknown
 ├───formatter
 │   ├───aarch64-darwin: package 'treefmt'
