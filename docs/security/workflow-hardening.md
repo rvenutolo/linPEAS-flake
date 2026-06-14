@@ -82,6 +82,10 @@ The check-lint family is held together by naming convention: each lint script sh
 
 Enforced by `scripts/check-script-has-test.sh`. Wired as the `script-has-test` required CI job and as a pre-commit hook.
 
+## lean lint-shell routing
+
+The batched invariant-lint groups are split across two devShells by closure cost. The light groups — `lint-workflow-security` and `lint-script-hygiene` — run in `devShells.lint`, whose tight closure realizes far faster in CI than the full author shell. `lint-doc-invariants` must stay on `devShells.default`: its `renovate-config-validator` check invokes the `renovate` binary, which pulls the heavy renovate closure that the lean shell deliberately omits. Moving `lint-doc-invariants` to `.#lint` would break that check; moving the light groups back to `.#default` would forfeit the realize saving. A new batched group belongs in `.#lint` only if every tool it needs is in `nix/devshell-lint.nix` `buildInputs`; otherwise it stays on `.#default`.
+
 ## lint-shell-tools
 
 The `lint-workflow-security` and `lint-script-hygiene` invariant-lint groups run inside the lean `devShells.lint` shell, which carries only the tools those groups need (bash, coreutils, gnugrep, gnused, gawk, findutils, yq-go, jq, gh, git, shellcheck, shfmt, actionlint, check-jsonschema) rather than the full author toolchain. The lean shell trades realize cost for a tighter closure, so a tool dropped from its `buildInputs` would surface only as a cryptic mid-check failure deep inside one of the batched groups.
