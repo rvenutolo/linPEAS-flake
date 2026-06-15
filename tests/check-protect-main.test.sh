@@ -61,6 +61,8 @@ function main() {
     'bad-wrong-merge' 1 'allowed_merge_methods drift'
   run_scenario 'required-checks drift fails' \
     'bad-required-checks-drift' 1 'required-status-checks drift'
+  run_scenario 'integration_id drift fails' \
+    'bad-integration-id-drift' 1 'integration_id drift'
   run_scenario 'doc-table drift fails' \
     'bad-doc-table-drift' 1 'doc-table drift'
   run_scenario 'non-empty bypass_actors fails' \

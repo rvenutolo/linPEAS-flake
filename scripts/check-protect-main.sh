@@ -29,8 +29,10 @@
 #   - pull_request rule required_review_thread_resolution == true
 #   - required_status_checks rule strict_required_status_checks_policy
 #     == true
-#   - required-status-checks set matches the in-tree mirror (semantic
-#     diff: sorted by context, integration_id ignored)
+#   - required-status-checks set matches the in-tree mirror (context set,
+#     sorted)
+#   - each required context pins the same integration_id live-vs-mirror
+#     (absent normalized to null; a stripped/repointed id is drift)
 #
 # Exits 0 on match, 1 on drift. Logs the specific drift to stderr.
 #
@@ -213,9 +215,9 @@ if [[ ${strict_policy} != 'true' ]]; then
 fi
 
 # --- required-status-checks parity with in-tree mirror ----------------------
-# Semantic diff: sort by context, drop integration_id and any other inert
-# defaults; compare the resulting context list. mirror_contexts was
-# computed for the doc-table check above.
+# Context-set diff: sort by context, compare the context list (mirror_contexts
+# was computed for the doc-table check above). integration_id is verified
+# separately in the block that follows.
 
 live_contexts="$(jq --compact-output \
   '.rules[] | select(.type=="required_status_checks") |
@@ -229,6 +231,37 @@ if [[ ${live_contexts} != "${mirror_contexts}" ]]; then
   printf '  mirror: %s\n' "${mirror_contexts}" >&2
   printf 'Symmetric diff:\n' >&2
   diff <(jq -r '.[]' <<<"${live_contexts}") <(jq -r '.[]' <<<"${mirror_contexts}") >&2 || true
+  exit 1
+fi
+
+# --- integration_id parity with in-tree mirror ------------------------------
+# Context set already verified above. Now verify each context pins the same
+# integration_id live-vs-mirror (absent normalized to null) so a stripped or
+# repointed integration_id — which would let a non-Actions reporter satisfy a
+# provenance check — is flagged.
+
+mirror_tuples="$(jq --compact-output \
+  '.rules[] | select(.type=="required_status_checks") |
+  .parameters.required_status_checks |
+  map({context, integration_id: (.integration_id // null)}) |
+  sort_by(.context)' \
+  <<<"${mirror_json}")"
+
+live_tuples="$(jq --compact-output \
+  '.rules[] | select(.type=="required_status_checks") |
+  .parameters.required_status_checks |
+  map({context, integration_id: (.integration_id // null)}) |
+  sort_by(.context)' \
+  <<<"${ruleset_json}")"
+
+if [[ ${live_tuples} != "${mirror_tuples}" ]]; then
+  printf 'integration_id drift between live ruleset and in-tree mirror:\n' >&2
+  printf '  live:   %s\n' "${live_tuples}" >&2
+  printf '  mirror: %s\n' "${mirror_tuples}" >&2
+  printf 'Symmetric diff:\n' >&2
+  diff \
+    <(jq -r '.[] | "\(.context)\t\(.integration_id)"' <<<"${live_tuples}") \
+    <(jq -r '.[] | "\(.context)\t\(.integration_id)"' <<<"${mirror_tuples}") >&2 || true
   exit 1
 fi
 
