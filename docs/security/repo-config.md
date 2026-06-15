@@ -85,7 +85,7 @@ Drift is asserted by the `tag-protection-drift-check` CI job and the
 matching pre-commit hook.
 
 Ruleset `release-tag-protection` (target=tag, enforcement=active,
-rules=[deletion, update, non_fast_forward],
+rules=[deletion, update, non_fast_forward], bypass_actors empty,
 include=`refs/tags/[0-9]{8}-[0-9a-f]{7,40}`; fallback `refs/tags/**` if
 regex ever rejected).
 
