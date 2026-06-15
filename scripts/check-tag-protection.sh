@@ -11,6 +11,8 @@
 #   - target "tag"
 #   - enforcement "active"
 #   - rules include "deletion" AND "update" AND "non_fast_forward"
+#   - bypass_actors empty (no actor may bypass the deletion / update /
+#     non_fast_forward rules)
 #   - conditions.ref_name.include contains the canonical pin-version pattern
 #     OR a strict superset (refs/tags/** is the documented fallback).
 #
@@ -67,6 +69,15 @@ if [[ ${target} != "${EXPECTED_TARGET}" ]]; then
 fi
 if [[ ${enforcement} != "${EXPECTED_ENFORCEMENT}" ]]; then
   printf 'enforcement drift: got %s, want %s\n' "${enforcement}" "${EXPECTED_ENFORCEMENT}" >&2
+  exit 1
+fi
+
+# --- bypass_actors must be empty --------------------------------------------
+
+bypass_count="$(jq '.bypass_actors | length' <<<"${ruleset_json}")"
+if ((bypass_count != 0)); then
+  printf 'bypass_actors non-empty: got %d, want 0\n' "${bypass_count}" >&2
+  jq '.bypass_actors' <<<"${ruleset_json}" >&2
   exit 1
 fi
 
