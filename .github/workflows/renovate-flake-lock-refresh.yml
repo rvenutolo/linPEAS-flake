@@ -69,6 +69,7 @@ jobs:
     # branch lives in the same repo, per GitHub's documented
     # workflow_run hardening pattern.
     if: |
+      github.repository == 'rvenutolo/linPEAS-flake' &&
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
       startsWith(github.event.workflow_run.head_branch, 'renovate/')
@@ -176,7 +177,7 @@ jobs:
 
   compute-refresh:
     needs: identify
-    if: needs.identify.outputs.should_refresh == 'true'
+    if: needs.identify.outputs.should_refresh == 'true' && github.repository == 'rvenutolo/linPEAS-flake'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -225,7 +226,7 @@ jobs:
 
   push-refresh:
     needs: [identify, compute-refresh]
-    if: needs.compute-refresh.outputs.changed == 'true'
+    if: needs.compute-refresh.outputs.changed == 'true' && github.repository == 'rvenutolo/linPEAS-flake'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
