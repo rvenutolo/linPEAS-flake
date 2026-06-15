@@ -41,7 +41,8 @@
             "integration_id": 15368
           },
           {
-            "context": "build-linpeas"
+            "context": "build-linpeas",
+            "integration_id": 15368
           },
           {
             "context": "build-linpeas-arm64",
@@ -80,17 +81,20 @@
             "integration_id": 15368
           },
           {
-            "context": "flake-check"
+            "context": "flake-check",
+            "integration_id": 15368
           },
           {
             "context": "gitleaks",
             "integration_id": 15368
           },
           {
-            "context": "image-smoke"
+            "context": "image-smoke",
+            "integration_id": 15368
           },
           {
-            "context": "image-smoke-arm64"
+            "context": "image-smoke-arm64",
+            "integration_id": 15368
           },
           {
             "context": "lint-pr-title",
@@ -125,10 +129,12 @@
             "integration_id": 15368
           },
           {
-            "context": "smoke-test"
+            "context": "smoke-test",
+            "integration_id": 15368
           },
           {
-            "context": "smoke-test-arm64"
+            "context": "smoke-test-arm64",
+            "integration_id": 15368
           },
           {
             "context": "tag-protection-drift-check",
