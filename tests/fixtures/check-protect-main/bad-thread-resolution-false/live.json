@@ -4,16 +4,25 @@
   "enforcement": "active",
   "bypass_actors": [],
   "conditions": {
-    "ref_name": { "include": ["~DEFAULT_BRANCH"], "exclude": [] }
+    "ref_name": {
+      "include": ["~DEFAULT_BRANCH"],
+      "exclude": []
+    }
   },
   "rules": [
-    { "type": "deletion" },
-    { "type": "non_fast_forward" },
-    { "type": "required_signatures" },
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "required_signatures"
+    },
     {
       "type": "pull_request",
       "parameters": {
-        "required_review_thread_resolution": true,
+        "required_review_thread_resolution": false,
         "allowed_merge_methods": ["merge"]
       }
     },
@@ -22,8 +31,13 @@
       "parameters": {
         "strict_required_status_checks_policy": true,
         "required_status_checks": [
-          { "context": "flake-check" },
-          { "context": "build-linpeas", "integration_id": 15368 }
+          {
+            "context": "flake-check"
+          },
+          {
+            "context": "build-linpeas",
+            "integration_id": 15368
+          }
         ]
       }
     }
