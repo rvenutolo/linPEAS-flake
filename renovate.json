@@ -24,7 +24,7 @@
       "automerge": true
     },
     {
-      "description": "Nix install URL: scoped automerge for the same reason as github-actions. The custom manager below extracts the version from the install_url string. matchDepNames is narrowed to 'nix' so the other custom-regex managers in this file (cachix/git-hooks.nix, NixOS/nixpkgs) do NOT inherit automerge — those have wide blast radius (flake-eval-time evaluation, lib drift, package version refresh) and must be reviewed manually.",
+      "description": "Nix install URL: scoped automerge for the same reason as github-actions. The custom manager below extracts the version from the pinned Nix install URL. matchDepNames is narrowed to 'nix' so the other custom-regex managers in this file (cachix/git-hooks.nix, NixOS/nixpkgs) do NOT inherit automerge — those have wide blast radius (flake-eval-time evaluation, lib drift, package version refresh) and must be reviewed manually.",
       "matchManagers": ["custom.regex"],
       "matchDepNames": ["nix"],
       "automerge": true
@@ -45,9 +45,12 @@
   "customManagers": [
     {
       "customType": "regex",
-      "managerFilePatterns": ["/^\\.github/workflows/.*\\.ya?ml$/"],
+      "managerFilePatterns": [
+        "/^\\.github/workflows/.*\\.ya?ml$/",
+        "/^\\.github/actions/.*/action\\.ya?ml$/"
+      ],
       "matchStrings": [
-        "install_url:\\s*https://releases\\.nixos\\.org/nix/nix-(?<currentValue>\\d+\\.\\d+\\.\\d+)/install\\s*#\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)\\s+packageName=(?<packageName>\\S+)"
+        "https://releases\\.nixos\\.org/nix/nix-(?<currentValue>\\d+\\.\\d+\\.\\d+)/install\"?\\s*#\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)\\s+packageName=(?<packageName>\\S+)"
       ]
     },
     {
