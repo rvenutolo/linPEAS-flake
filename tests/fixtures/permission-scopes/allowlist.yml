@@ -1,0 +1,6 @@
+good.yml:
+  writer: [issues]
+bad-over-grant.yml:
+  writer: [issues]
+bad-stale-allowlist.yml:
+  writer: [issues, packages]

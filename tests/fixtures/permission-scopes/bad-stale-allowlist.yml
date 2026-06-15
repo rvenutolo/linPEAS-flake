@@ -1,0 +1,9 @@
+name: bad-stale-allowlist
+permissions: {}
+jobs:
+  writer:
+    permissions:
+      issues: write
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'true'
