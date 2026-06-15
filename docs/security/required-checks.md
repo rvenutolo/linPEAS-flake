@@ -94,6 +94,8 @@ Asserted invariants: name `protect-main`; target `branch`; enforcement
 `active`; conditions.ref_name.include == `["~DEFAULT_BRANCH"]`;
 bypass_actors == `[]`; rules include `deletion`, `non_fast_forward`,
 `required_signatures`; pull_request allowed_merge_methods == `["merge"]`;
+pull_request `required_review_thread_resolution` == `true`;
+required_status_checks `strict_required_status_checks_policy` == `true`;
 required-status-checks set (semantic diff, sorted by context) matches
 the in-tree mirror; the mirror's context set matches the
 `## Required contexts` table in this file (checked offline, before the
