@@ -55,6 +55,27 @@ See `SECURITY.md` for the secret rotation policy.
 
 {% endraw %}
 
+## flake.lock input-provenance gate
+
+The weekly `update-flake-lock` cron bumps every flake input and auto-merges
+the PR; the only build-path gate is `flake-check`, which does not verify input
+*provenance*. `check-flake-lock-provenance.sh` (run in the `lint-doc-invariants`
+required group) closes that gap: it diffs the PR's `flake.lock` against
+`origin/main` and fails when an input's source identity changes.
+
+Only `locked.rev`, `locked.narHash`, and `locked.lastModified` may move. Per
+node the check compares `original`, the `flake` flag, and the rest of `locked`
+(`type`/`owner`/`repo`/`url`/`ref`/…); `inputs` wiring is excluded so that
+legitimate transitive graph churn is tolerated. Scope is hybrid: a
+source-identity change on any node present in both base and head fails, while a
+node add/remove fails only for a top-level input (`root.inputs`). On a normal
+bump the gate is invisible and the PR auto-merges as before; it fails — pausing
+`gh pr merge --auto` — only on a source repoint, the event worth a human glance.
+
+The `lint-doc-invariants` job fetches `origin/main` before the check runs
+(`actions/checkout` does not create that ref on its own); if the base lock
+cannot be resolved the check exits non-zero rather than passing silently.
+
 ## PR-triggered workflow secret allowlist
 
 PR-triggered workflows (`on: pull_request` or `on: pull_request_target`) MUST NOT reference any `secrets.*` other than `secrets.GITHUB_TOKEN`. Enforced by `scripts/check-pr-workflows-no-secrets.sh` via `pr-workflows-no-secrets` required CI job.
