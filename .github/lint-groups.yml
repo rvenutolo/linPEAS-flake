@@ -44,3 +44,4 @@ lint-doc-invariants:
   - renovate-config-validator
   - ci-job-in-summary
   - pin-diff-isolated
+  - flake-lock-provenance
