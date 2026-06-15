@@ -21,6 +21,45 @@ Strict least-privilege rule for every workflow in `.github/workflows/`.
 
 Wired as the `min-permissions` required CI job and as a pre-commit hook.
 
+## Per-job write-scope allowlist
+
+`min-permissions` guarantees every job declares an explicit scope block,
+but it does not constrain *which* write scopes a block may grant. A
+hand-maintained allowlist closes that gap: `.github/permission-scopes.yml`
+pins, per job, exactly the `write`-valued scopes that job is permitted to
+hold. Widening a job's write surface means editing the allowlist, which
+makes every such change a reviewable, security-relevant diff.
+
+### Format
+
+The allowlist is a per-job YAML map: workflow filename → job id → sorted
+list of permitted write-scope **names**:
+
+```yaml
+release-on-bump.yml:
+  release: [attestations, contents, id-token]
+  notify: [issues]
+```
+
+Only scope *names* whose value is `write` are listed. Read scopes (and
+`none`) are unconstrained — they carry no least-privilege risk, so they
+need no entry, and a job with no write scopes is omitted entirely.
+
+### Enforcement
+
+`scripts/check-permission-scopes.sh` cross-checks the live workflows
+against the allowlist in both directions and fails on either:
+
+- **Over-grant** — a job grants a `write` scope that is not listed for
+    that job in the allowlist. The token a compromised step could wield
+    exceeds what was reviewed.
+- **Stale entry** — the allowlist lists a write scope the job no longer
+    grants, or names a workflow or job that no longer exists. Stale entries
+    rot the allowlist into a misleading record of the actual write surface.
+
+Wired into the `lint-workflow-security` CI group and as the
+`permission-scopes` pre-commit hook.
+
 ## Adding a workflow or job
 
 - Set top-level `permissions: {}` in the new workflow.

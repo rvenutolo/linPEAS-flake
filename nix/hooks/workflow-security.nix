@@ -73,6 +73,25 @@
     pass_filenames = false;
     language = "system";
   };
+  # Per-job GITHUB_TOKEN write-scope allowlist: every job's `write`
+  # scopes are pinned per job in .github/permission-scopes.yml; an
+  # un-listed write scope (over-grant) or a stale allowlist entry
+  # fails. See docs/security/min-permissions.md.
+  permission-scopes = {
+    enable = true;
+    name = "permission-scopes";
+    description = "Per-job GITHUB_TOKEN write scopes are allowlisted in .github/permission-scopes.yml.";
+    entry = "${pkgs-unstable.writeShellScript "permission-scopes-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-permission-scopes.sh
+    ''}";
+    files = "^(\\.github/workflows/.*\\.ya?ml|\\.github/permission-scopes\\.yml|scripts/check-permission-scopes\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Every job under .github/workflows/ declares an explicit
   # timeout-minutes. The default is 6 hours; without an
   # explicit cap a hung job burns the runner budget and stalls

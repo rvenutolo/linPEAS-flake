@@ -175,6 +175,12 @@ rather than a floating major-tag comment (e.g. `# v1`), UNLESS the
 same line also carries an inline `# patch-tag-exception: <reason>`
 marker.
 
+### scripts/check-permission-scopes.sh
+
+Per-job GITHUB_TOKEN write-scope allowlist lint for
+GitHub Actions. Fails when a job grants a write scope absent from
+.github/permission-scopes.yml, or when an allowlist entry is stale.
+
 ### scripts/check-pin-diff-isolated.sh
 
 Lint: exactly one script under `scripts/` writes to

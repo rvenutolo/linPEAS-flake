@@ -1,0 +1,68 @@
+# Per-job allowed GITHUB_TOKEN *write* scopes for .github/workflows/*.
+# Read scopes are unconstrained and need no entry. A job with no write
+# scopes is omitted. Adding a scope here is a security-relevant edit — it
+# widens the token granted to that job. Justify every addition.
+#
+# Enforced by scripts/check-permission-scopes.sh. See
+# docs/security/min-permissions.md.
+
+actions-cache-prune.yml:
+  prune-stale: [actions]
+  prune-on-pr-close: [actions]
+allowed-actions-api-drift-check.yml:
+  notify: [issues]
+codeql.yml:
+  analyze: [security-events]
+  notify-finding: [issues]
+  notify-infra: [issues]
+cron-table-drift-check.yml:
+  notify: [issues]
+dependency-review.yml:
+  dependency-review: [pull-requests]
+dockerhub-sync.yml:
+  notify: [issues]
+image-cve-scan.yml:
+  image-cve-scan-trivy: [security-events]
+  image-cve-scan-trivy-notify-finding: [issues]
+  image-cve-scan-trivy-notify-infra: [issues]
+  image-cve-scan-grype: [security-events]
+  image-cve-scan-grype-notify-finding: [issues]
+  image-cve-scan-grype-notify-infra: [issues]
+labeler.yml:
+  label: [pull-requests]
+  size: [pull-requests]
+links.yml:
+  lychee: [issues]
+octoscan.yml:
+  scan: [security-events]
+  notify-finding: [issues]
+  notify-infra: [issues]
+pages.yml:
+  deploy: [id-token, pages]
+  notify: [issues]
+ratchet-pin-audit.yml:
+  notify: [issues]
+release-on-bump.yml:
+  release: [attestations, contents, id-token]
+  image-amd64: [attestations, contents, id-token, packages]
+  image-arm64: [attestations, contents, id-token, packages]
+  manifest: [id-token, packages]
+  notify: [issues]
+renovate-flake-lock-refresh.yml:
+  notify: [issues]
+reproducibility-check.yml:
+  compare: [issues]
+scorecard-drift-check.yml:
+  notify: [issues]
+settings-posture-drift-check.yml:
+  notify: [issues]
+stale-pin-check.yml:
+  notify: [issues]
+update-flake-lock.yml:
+  notify: [issues]
+update-linpeas.yml:
+  notify: [issues]
+verify-latest-release.yml:
+  notify: [issues]
+zizmor-drift-check.yml:
+  notify: [issues]

@@ -1,0 +1,2 @@
+bad-stale-allowlist.yml:
+  writer: [issues, packages]

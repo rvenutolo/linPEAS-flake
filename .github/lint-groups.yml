@@ -20,6 +20,7 @@ lint-workflow-security:
   - uses-sha-pinned
   - harden-runner-first
   - min-permissions
+  - permission-scopes
   - job-timeout-minutes
   - workflow-concurrency
   - checkout-persist-credentials
