@@ -60,6 +60,8 @@ function main() {
     'bad-disabled.json' 1 'enforcement drift:'
   run_scenario 'wrong include pattern fails' \
     'bad-wrong-pattern.json' 1 'ref_name.include does not contain expected pattern'
+  run_scenario 'non-empty bypass_actors fails' \
+    'bad-bypass-actors.json' 1 'bypass_actors non-empty'
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2

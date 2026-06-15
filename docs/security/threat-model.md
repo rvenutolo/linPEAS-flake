@@ -59,7 +59,8 @@ forgery on `main`.
 **Mitigations:**
 
 - Tag-protection ruleset (`release-tag-protection`) gates who can push
-    release tags; drift-check lint asserts the ruleset is intact.
+    release tags; drift-check lint asserts the ruleset is intact and that
+    no bypass actors can delete or move release tags.
 - Releases are web-flow signed; no PAT, no `git push` from the bot.
 - `protect-main` ruleset enforces required checks and signed commits.
 
