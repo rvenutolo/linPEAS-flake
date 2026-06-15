@@ -1,0 +1,4 @@
+default: "https://releases.nixos.org/nix/nix-2.34.7/install" # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+steps:
+  - https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+  - nix-install-url: https://releases.nixos.org/nix/nix-2.34.7/install # renovate: datasource=github-releases depName=nix packageName=NixOS/nix

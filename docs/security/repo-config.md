@@ -104,3 +104,14 @@ fixtures together.
 1. The `github-actions` `packageRule` sets `pinDigests: true`.
 
 Enforced by `renovate-invariants` required CI job.
+
+`scripts/check-renovate-markers-matched.sh` enforces a complementary
+file-level rule: every file in the tree that carries a `# renovate: datasource=…` marker must be consumed by a live customManager — a
+`managerFilePattern` must scope the marker's file and a `matchString`
+must match a line in it. The rule is file-level, which covers both
+inline markers (value and comment on the same line) and above-style
+markers (comment on its own line, matched value on the next) without a
+line-adjacency heuristic. A customManager that matches none of its
+declarations silently freezes the dependency outside automation
+coverage; this check fails CI before that can happen. Wired into the
+`renovate-invariants` CI job.
