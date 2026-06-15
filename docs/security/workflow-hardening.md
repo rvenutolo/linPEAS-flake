@@ -116,11 +116,11 @@ Enforced by `scripts/check-run-block-strict.sh`. Wired as the `run-block-strict`
 
 ## fork-guard-release
 
-Every workflow job that holds release-grade GITHUB_TOKEN scope includes a fork-guard `if:` clause containing `github.repository == 'rvenutolo/linPEAS-flake'`.
+Every workflow job that holds a guard-required write scope includes a fork-guard `if:` clause containing `github.repository == 'rvenutolo/linPEAS-flake'`.
 
-Release-grade scopes are any of: `contents: write`, `packages: write`, `id-token: write`, `attestations: write`. A fork that inherits these workflows can otherwise fire them under its own `GITHUB_TOKEN` (or repo-scoped secrets, if any were configured) — accidentally cutting a release, pushing to the fork's container registry, or minting OIDC tokens. The repository check pins execution to the canonical repo.
+Guard-required write scopes are any of: `contents: write`, `packages: write`, `id-token: write`, `attestations: write`, `actions: write`. A fork that inherits these workflows can otherwise fire them under its own `GITHUB_TOKEN` (or repo-scoped secrets, if any were configured) — accidentally cutting a release, pushing to the fork's container registry, minting OIDC tokens, or (for `actions: write`) pruning/mutating the canonical repo's Actions cache namespace or cancelling its runs. The repository check pins execution to the canonical repo.
 
-GitHub Actions `if:` is job-scoped (no workflow-level syntax), so every release-grade job must carry the guard in its own `if:` expression. Existing `if:` clauses are AND-ed with the repository check.
+GitHub Actions `if:` is job-scoped (no workflow-level syntax), so every guard-required job must carry the guard in its own `if:` expression. Existing `if:` clauses are AND-ed with the repository check.
 
 Enforced by `scripts/check-fork-guard-release.sh`. Wired as the `fork-guard-release` required CI job and as a pre-commit hook.
 
