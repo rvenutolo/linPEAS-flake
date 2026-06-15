@@ -1,0 +1,19 @@
+name: good-app-token-guarded
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  push-and-merge:
+    runs-on: ubuntu-latest
+    if: github.repository == 'rvenutolo/linPEAS-flake'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          app-id: ${{ vars.BUMP_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BUMP_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      - run: echo push

@@ -16,6 +16,7 @@ jobs:
   # ZERO write credentials. `BUMP_APP_PRIVATE_KEY` is not present in env
   # or on disk here. Mirrors the credential split in update-linpeas.yml.
   compute-lock:
+    if: github.repository == 'rvenutolo/linPEAS-flake'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -73,7 +74,7 @@ jobs:
   # installation token. No `git push` happens.
   push-and-merge:
     needs: compute-lock
-    if: needs.compute-lock.outputs.changed == 'true'
+    if: needs.compute-lock.outputs.changed == 'true' && github.repository == 'rvenutolo/linPEAS-flake'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

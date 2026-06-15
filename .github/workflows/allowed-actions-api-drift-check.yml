@@ -30,6 +30,7 @@ concurrency:
 jobs:
   drift-check:
     runs-on: ubuntu-latest
+    if: github.repository == 'rvenutolo/linPEAS-flake'
     # Budget covers the flakehub-cache-action post-step retrying uploads
     # against a degraded cache service, not just the check itself.
     timeout-minutes: 20

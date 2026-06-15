@@ -18,6 +18,7 @@ jobs:
   # SHA below cannot mint an App installation token — the key lives only
   # in the `push-and-merge` job below.
   compute-pin:
+    if: github.repository == 'rvenutolo/linPEAS-flake'
     runs-on: ubuntu-latest
     # Budget covers the flakehub-cache-action post-step retrying uploads
     # against a degraded cache service, not just the build itself.
@@ -89,7 +90,7 @@ jobs:
   # `git push` happens.
   push-and-merge:
     needs: compute-pin
-    if: needs.compute-pin.outputs.changed == 'true'
+    if: needs.compute-pin.outputs.changed == 'true' && github.repository == 'rvenutolo/linPEAS-flake'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

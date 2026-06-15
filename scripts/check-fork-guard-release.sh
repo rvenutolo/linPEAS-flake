@@ -19,6 +19,14 @@
 #                             mutate the canonical repo's Actions cache
 #                             namespace or cancel its runs if unguarded
 #
+# A job that mints a GitHub App installation token also counts as
+# privileged even when it declares a read-only GITHUB_TOKEN: the App
+# token carries real write privilege, letting the job commit, open
+# PRs, and enable auto-merge through the App identity. Such a job is
+# detected by a reference to the `actions/create-github-app-token`
+# action or to the `secrets.BUMP_APP_PRIVATE_KEY` signing key, and
+# must carry the fork guard the same as a write-scoped job.
+#
 # Without the guard, a fork that inherits these workflows can fire
 # them under its own GITHUB_TOKEN (or repo-scoped secrets, if any
 # were configured). The repository check pins execution to the
@@ -61,6 +69,12 @@ job_needs_fork_guard() {
       return 0
     fi
   done
+  # App installation token = real write privilege despite a read-only
+  # GITHUB_TOKEN. A job minting one must carry the fork guard.
+  local body
+  body="$(yq eval ".jobs.\"${job}\"" "${file}")"
+  [[ ${body} == *"actions/create-github-app-token"* ]] && return 0
+  [[ ${body} == *"secrets.BUMP_APP_PRIVATE_KEY"* ]] && return 0
   return 1
 }
 
