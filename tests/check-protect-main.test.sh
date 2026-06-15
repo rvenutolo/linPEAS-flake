@@ -67,6 +67,10 @@ function main() {
     'bad-bypass-actors' 1 'bypass_actors non-empty'
   run_scenario 'missing required_signatures rule fails' \
     'bad-missing-rule' 1 'missing rule: required_signatures'
+  run_scenario 'strict policy false fails' \
+    'bad-strict-false' 1 'strict_required_status_checks_policy drift'
+  run_scenario 'thread-resolution false fails' \
+    'bad-thread-resolution-false' 1 'required_review_thread_resolution drift'
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2
