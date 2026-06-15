@@ -1,0 +1,12 @@
+{
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^install\\.sh$/"],
+      "matchStrings": ["PIN_SHA='(?<currentDigest>[0-9a-f]{40})'"],
+      "currentValueTemplate": "master",
+      "datasourceTemplate": "git-refs",
+      "depNameTemplate": "foo/bar"
+    }
+  ]
+}

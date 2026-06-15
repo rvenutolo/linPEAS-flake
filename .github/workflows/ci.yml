@@ -409,6 +409,10 @@ jobs:
         run: nix develop --command bash tests/check-renovate-invariants.test.sh
       - name: enforce renovate-invariants
         run: nix develop --command ./scripts/check-renovate-invariants.sh
+      - name: marker-match harness passes
+        run: nix develop --command bash tests/check-renovate-markers-matched.test.sh
+      - name: enforce renovate markers matched
+        run: nix develop --command ./scripts/check-renovate-markers-matched.sh
 
   lint-workflow-security:
     # Batched invariant lints asserting .github/workflows/* hardening.

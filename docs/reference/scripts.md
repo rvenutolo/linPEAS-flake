@@ -231,6 +231,24 @@ Lint: renovate.json carries the security-critical
 invariants — pinGitHubActionDigests, minimumReleaseAge, no top-level
 automerge, per-manager pinDigests for github-actions.
 
+### scripts/check-renovate-markers-matched.sh
+
+Lint: every `# renovate: datasource=…` marker in the tree is
+live — some renovate.json customManager scopes the marker's file (a
+managerFilePattern matches the path) and matches a line in it (a matchString
+matches). A customManager that matches none of its declarations freezes the
+dependency silently outside automation coverage; this check fails CI before
+that can happen.
+
+Coverage is file-level, not marker-line-level: marker styles differ (inline,
+where value + `# renovate:` share a line; and above, where the comment sits
+on its own line and the matched value is on the next). Asserting the marker's
+file is consumed by a live manager handles both without a line-adjacency
+heuristic.
+
+Honors RENOVATE_JSON_OVERRIDE (config path) and SCAN_ROOT (tree root) for
+fixture testing. Exits 0 when every marker is live, 1 on any dead marker.
+
 ### scripts/check-required-checks-no-paths.sh
 
 Lint: no workflow listed in

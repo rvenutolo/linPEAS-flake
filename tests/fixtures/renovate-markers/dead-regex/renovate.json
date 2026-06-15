@@ -1,0 +1,9 @@
+{
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^app\\.yml$/"],
+      "matchStrings": ["WILL_NOT_MATCH:v(?<currentValue>\\d+)"]
+    }
+  ]
+}
