@@ -94,9 +94,9 @@ closure unreviewed.
 
 ### scripts/check-fork-guard-release.sh
 
-Lint: every workflow job holding release-grade
-GITHUB_TOKEN scope (contents/packages/id-token/attestations: write)
-carries a fork-guard `if:` pinning execution to the canonical repo.
+Lint: every workflow job holding a guard-required write
+scope (contents/packages/id-token/attestations/actions: write) carries
+a fork-guard `if:` pinning execution to the canonical repo.
 
 ### scripts/check-gh-api-version-header.sh
 

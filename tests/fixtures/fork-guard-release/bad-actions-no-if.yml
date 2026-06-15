@@ -1,0 +1,15 @@
+name: bad-actions-no-if
+on: push
+permissions: {}
+concurrency:
+  group: bad-actions-no-if-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  cache-prune:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - run: echo prune

@@ -1,0 +1,16 @@
+name: good-actions-guarded
+on: push
+permissions: {}
+concurrency:
+  group: good-actions-guarded-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  cache-prune:
+    if: github.repository == 'rvenutolo/linPEAS-flake'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - run: echo prune

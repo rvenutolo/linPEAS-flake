@@ -1,19 +1,23 @@
 #!/usr/bin/env bash
 # scripts/check-fork-guard-release.sh
 #
-# @description Lint: every workflow job holding release-grade
-# GITHUB_TOKEN scope (contents/packages/id-token/attestations: write)
-# carries a fork-guard `if:` pinning execution to the canonical repo.
+# @description Lint: every workflow job holding a guard-required write
+# scope (contents/packages/id-token/attestations/actions: write) carries
+# a fork-guard `if:` pinning execution to the canonical repo.
 
-# Lint: every workflow job that holds release-grade GITHUB_TOKEN
-# scope includes a fork-guard `if:` clause containing
+# Lint: every workflow job that holds a guard-required write scope
+# includes a fork-guard `if:` clause containing
 # `github.repository == 'rvenutolo/linPEAS-flake'`.
 #
-# Release-grade scopes (any of):
+# Guard-required write scopes (any of):
 #   - contents: write       — push commits / tags / releases
 #   - packages: write       — push container images / packages
 #   - id-token: write       — mint OIDC tokens (cosign signing)
 #   - attestations: write   — record SLSA attestations
+#   - actions: write        — manage caches / cancel runs; a fork
+#                             inheriting the workflow could prune or
+#                             mutate the canonical repo's Actions cache
+#                             namespace or cancel its runs if unguarded
 #
 # Without the guard, a fork that inherits these workflows can fire
 # them under its own GITHUB_TOKEN (or repo-scoped secrets, if any
@@ -21,7 +25,7 @@
 # canonical repo.
 #
 # A workflow-level guard isn't valid in GitHub Actions syntax (`if:`
-# is job-scoped), so every release-grade job must carry the guard
+# is job-scoped), so every guard-required job must carry the guard
 # in its own `if:` expression. The lint matches the literal string
 # `github.repository == 'rvenutolo/linPEAS-flake'`.
 #
@@ -47,10 +51,10 @@ if ! command -v yq >/dev/null 2>&1; then
   exit 2
 fi
 
-# Detect release-grade scope on one job. Returns 0 if release-grade.
-job_is_release_grade() {
+# Detect a guard-required write scope on one job. Returns 0 if found.
+job_needs_fork_guard() {
   local -r file="$1" job="$2"
-  for scope in contents packages id-token attestations; do
+  for scope in contents packages id-token attestations actions; do
     local val
     val="$(yq eval ".jobs.\"${job}\".permissions.\"${scope}\" // \"\"" "${file}")"
     if [[ ${val} == "write" ]]; then
@@ -70,13 +74,13 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
 
   while IFS= read -r job; do
     [[ -z ${job} ]] && continue
-    if ! job_is_release_grade "${f}" "${job}"; then
+    if ! job_needs_fork_guard "${f}" "${job}"; then
       continue
     fi
     if_clause="$(yq eval ".jobs.\"${job}\".if // \"\"" "${f}")"
     if [[ ${if_clause} != *"${GUARD_NEEDLE}"* ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
-      printf '%s: job %q holds release-grade scope but is missing fork guard `%s`; got if=%q\n' \
+      printf '%s: job %q holds guard-required write scope but is missing fork guard `%s`; got if=%q\n' \
         "${f}" "${job}" "${GUARD_NEEDLE}" "${if_clause}" >&2
       failed=$((failed + 1))
     fi
@@ -85,7 +89,7 @@ done
 shopt -u nullglob
 
 if ((failed > 0)); then
-  printf '%d release-grade job(s) missing fork guard\n' "${failed}" >&2
+  printf '%d guard-required job(s) missing fork guard\n' "${failed}" >&2
   exit 1
 fi
 exit 0
