@@ -29,7 +29,7 @@ daily cron sweep.
 
 ## Permissions
 
-Both jobs declare `actions: write` (cache deletion) and `contents: read` (branch enumeration). No other scopes. The fork-guard
+Both jobs declare `actions: write` (cache deletion) and `contents: read` (branch enumeration). No other scopes — this exact write-scope set is enforced by `scripts/check-permission-scopes.sh` via the per-job allowlist in `.github/permission-scopes.yml`. The fork-guard
 `github.repository == 'rvenutolo/linPEAS-flake'` is on both jobs;
 forked-repo PRs do not trigger prune logic.
 
