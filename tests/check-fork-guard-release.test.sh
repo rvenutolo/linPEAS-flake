@@ -28,5 +28,7 @@ expect good-read-only.yml 0 ""
 expect bad-no-if.yml 1 "missing fork guard"
 expect bad-wrong-repo.yml 1 "missing fork guard"
 expect bad-other-if.yml 1 "missing fork guard"
+expect bad-actions-no-if.yml 1 "missing fork guard"
+expect good-actions-guarded.yml 0 ""
 
 printf 'all tests passed\n'
