@@ -26,6 +26,9 @@
 #   - bypass_actors == []
 #   - rules include `deletion`, `non_fast_forward`, `required_signatures`
 #   - pull_request rule allowed_merge_methods == ["merge"]
+#   - pull_request rule required_review_thread_resolution == true
+#   - required_status_checks rule strict_required_status_checks_policy
+#     == true
 #   - required-status-checks set matches the in-tree mirror (semantic
 #     diff: sorted by context, integration_id ignored)
 #
@@ -182,6 +185,30 @@ merge_methods="$(jq --compact-output \
 if [[ ${merge_methods} != "${EXPECTED_MERGE_METHODS}" ]]; then
   printf 'allowed_merge_methods drift: got %s, want %s\n' \
     "${merge_methods}" "${EXPECTED_MERGE_METHODS}" >&2
+  exit 1
+fi
+
+# --- pull_request rule: required_review_thread_resolution == true ----------
+
+thread_resolution="$(jq --raw-output \
+  '.rules[] | select(.type=="pull_request") |
+  .parameters.required_review_thread_resolution' \
+  <<<"${ruleset_json}")"
+if [[ ${thread_resolution} != 'true' ]]; then
+  printf 'required_review_thread_resolution drift: got %q, want true\n' \
+    "${thread_resolution}" >&2
+  exit 1
+fi
+
+# --- required_status_checks rule: strict policy == true --------------------
+
+strict_policy="$(jq --raw-output \
+  '.rules[] | select(.type=="required_status_checks") |
+  .parameters.strict_required_status_checks_policy' \
+  <<<"${ruleset_json}")"
+if [[ ${strict_policy} != 'true' ]]; then
+  printf 'strict_required_status_checks_policy drift: got %q, want true\n' \
+    "${strict_policy}" >&2
   exit 1
 fi
 
