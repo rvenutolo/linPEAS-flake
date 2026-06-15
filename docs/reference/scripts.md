@@ -82,6 +82,16 @@ Lint: every markdown #anchor link pointing at an
 in-tree .md (or same-file fragment) must match a heading slug in
 the target file.
 
+### scripts/check-flake-lock-provenance.sh
+
+Lint: a bot `flake.lock` bump may only move
+`rev`/`narHash`/`lastModified`. Fails when a top-level input is
+added, removed, or repointed, or when any node present in both base
+and head has its source identity (owner/repo/type/url/ref/flake/...)
+changed. Gates the auto-merged weekly flake.lock update so a
+source-level repoint of an input cannot slip into the build/dev
+closure unreviewed.
+
 ### scripts/check-fork-guard-release.sh
 
 Lint: every workflow job holding release-grade
