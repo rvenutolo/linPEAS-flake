@@ -22,7 +22,7 @@
       "parameters": {
         "strict_required_status_checks_policy": true,
         "required_status_checks": [
-          { "context": "flake-check", "integration_id": 15368 },
+          { "context": "flake-check" },
           { "context": "build-linpeas", "integration_id": 15368 }
         ]
       }
