@@ -30,5 +30,7 @@ expect bad-wrong-repo.yml 1 "missing fork guard"
 expect bad-other-if.yml 1 "missing fork guard"
 expect bad-actions-no-if.yml 1 "missing fork guard"
 expect good-actions-guarded.yml 0 ""
+expect bad-app-token-no-if.yml 1 "missing fork guard"
+expect good-app-token-guarded.yml 0 ""
 
 printf 'all tests passed\n'
