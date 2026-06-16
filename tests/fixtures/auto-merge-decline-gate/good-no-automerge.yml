@@ -1,0 +1,11 @@
+name: good-no-automerge
+on: workflow_dispatch
+jobs:
+  manual-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: merge without auto
+        run: |
+          set -Eeuo pipefail
+          branch="chore/x"
+          gh pr merge "${branch}" --merge

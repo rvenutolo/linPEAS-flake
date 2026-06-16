@@ -206,6 +206,24 @@
     pass_filenames = false;
     language = "system";
   };
+  # Auto-merge update workflows must inspect PR state before merging
+  # so a maintainer-closed (declined) or merged PR is not resurrected.
+  # See docs/security/workflow-hardening.md.
+  auto-merge-decline-gate = {
+    enable = true;
+    name = "auto-merge-decline-gate";
+    description = "Auto-merge run-blocks carry the CLOSED/MERGED decline gate.";
+    entry = "${pkgs-unstable.writeShellScript "auto-merge-decline-gate-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-auto-merge-decline-gate.sh
+    ''}";
+    files = "^(\\.github/workflows/.*\\.ya?ml|scripts/check-auto-merge-decline-gate\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Release-grade jobs include the fork-guard if: clause.
   # See docs/security/workflow-hardening.md.
   fork-guard-release = {
