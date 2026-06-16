@@ -87,7 +87,12 @@ function main() {
   doc="${repo_root}/docs/reference/treefmt-config.md"
   readonly repo_root doc
   # Set before the mktemps so even a failed mktemp triggers the sibling sweep.
+  # Signal handlers force exit (they do not on their own), which re-triggers the
+  # EXIT trap so cleanup runs on Ctrl-C / SIGTERM / SIGHUP too.
   trap cleanup EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  trap 'exit 129' HUP
 
   if [[ ! -f ${doc} ]]; then
     log_err "${doc} not found"

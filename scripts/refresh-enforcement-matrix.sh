@@ -43,6 +43,38 @@ IFS=$'\n\t'
 trap 'printf "[%s] %-5s line %s (exit %s): %s\n" \
   "$(date "+%Y-%m-%dT%H:%M:%S%z")" ERROR "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
 
+# Temp files removed by the EXIT trap. Declared at script scope, not main-local:
+# the EXIT trap fires after main() returns and its locals leave scope, so a
+# main-local would read as empty at trap time and the in-repo .md temp would
+# leak on an abnormal exit.
+repo_root=""
+ref_scripts=""
+ref_jobs=""
+ref_hooks=""
+real_scripts=""
+ci_exempt_file=""
+tsv=""
+hook_names=""
+ci_jobs=""
+tmp_out=""
+fmt_target=""
+
+function cleanup() {
+  rm --force -- "${ref_scripts}" "${ref_jobs}" "${ref_hooks}" "${real_scripts}" "${ci_exempt_file}" "${tsv}" "${hook_names}" "${ci_jobs}" "${tmp_out}" "${fmt_target}"
+  if [[ -n ${repo_root} ]]; then
+    local stray
+    shopt -s nullglob
+    for stray in "${repo_root}"/.refresh-enforcement-matrix-*.md; do
+      rm --force -- "${stray}"
+    done
+  fi
+}
+
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+
 function log() {
   printf '[%s] %-5s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$1" "$2" >&2
 }
@@ -373,8 +405,9 @@ function collect_referenced() {
 function cross_check_reverse() {
   local -r tsv="$1" scripts_dir="$2" ci_jobs_file="$3" hook_names_file="$4" sibling="$5"
   local -i failed=0
-  local ref_scripts ref_jobs ref_hooks
-  local real_scripts ci_exempt_file
+  # ref_scripts, ref_jobs, ref_hooks, real_scripts, ci_exempt_file are
+  # script-scoped (declared at top) so the EXIT trap can clean them up;
+  # do not redeclare them local here or the trap would see empty values.
   ref_scripts="$(mktemp)"
   ref_jobs="$(mktemp)"
   ref_hooks="$(mktemp)"
@@ -557,7 +590,9 @@ function render_matrix() {
 
 function parse_and_render() {
   local -r index_file="$1" output_file="$2" ci_yml="$3" scripts_dir="$4" check_only="$5"
-  local tsv hook_names ci_jobs tmp_out sibling
+  # tsv, hook_names, ci_jobs, tmp_out are script-scoped (declared at top) so
+  # the EXIT trap can clean them up; do not redeclare them local here.
+  local sibling
   tsv="$(mktemp)"
   hook_names="$(mktemp)"
   ci_jobs="$(mktemp)"
@@ -578,7 +613,9 @@ function parse_and_render() {
   # commit. Without this, mdformat's table-cell padding causes
   # persistent drift between the script output and the committed file.
   if command -v treefmt >/dev/null 2>&1; then
-    local fmt_target fmt_root
+    # fmt_target is script-scoped (declared at top) so the EXIT trap can
+    # remove the in-repo .md temp; do not redeclare it local here.
+    local fmt_root
     fmt_root="$(git rev-parse --show-toplevel)"
     fmt_target="$(mktemp "${fmt_root}/.refresh-enforcement-matrix-XXXXXX.md")"
     cp -- "${tmp_out}" "${fmt_target}"
@@ -625,13 +662,15 @@ function main() {
   # matches what the formatter (mdformat-gfm) emits at commit time.
   require_tool treefmt
 
-  local repo_root index_file output_file ci_yml scripts_dir
+  # repo_root is script-scoped (declared above) so the EXIT trap's sweep
+  # can find the in-repo .md temp; assign it before any mktemp runs.
   repo_root="$(git rev-parse --show-toplevel)"
+  local index_file output_file ci_yml scripts_dir
   index_file="${INVARIANT_INDEX_OVERRIDE:-${repo_root}/docs/invariant-index.md}"
   output_file="${MATRIX_OUTPUT_OVERRIDE:-${repo_root}/docs/security/enforcement-matrix.md}"
   ci_yml="${CI_YML_OVERRIDE:-${repo_root}/.github/workflows/ci.yml}"
   scripts_dir="${SCRIPTS_DIR_OVERRIDE:-${repo_root}/scripts}"
-  readonly repo_root index_file output_file ci_yml scripts_dir
+  readonly index_file output_file ci_yml scripts_dir
 
   parse_and_render "${index_file}" "${output_file}" "${ci_yml}" \
     "${scripts_dir}" "${check_only}"

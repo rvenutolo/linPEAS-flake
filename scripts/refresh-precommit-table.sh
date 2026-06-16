@@ -25,6 +25,29 @@ function log() {
 function log_info() { log INFO "$*"; }
 function log_err() { log ERROR "$*"; }
 
+# Temp files removed by the EXIT trap. Declared at script scope, not main-local:
+# the EXIT trap fires after main() returns and its locals leave scope, so a
+# main-local would read as empty at trap time and the in-repo .md temp would
+# leak on an abnormal exit.
+repo_root=''
+hooks_file=''
+block_file=''
+doc_new=''
+doc_fmt=''
+
+# @description Remove every temp file this script creates, then sweep any
+# stray in-repo .md temps left by an interrupted earlier run.
+function cleanup() {
+  rm --force -- "${hooks_file}" "${block_file}" "${doc_new}" "${doc_fmt}"
+  if [[ -n ${repo_root} ]]; then
+    local stray
+    shopt -s nullglob
+    for stray in "${repo_root}"/.refresh-precommit-*.md; do
+      rm --force -- "${stray}"
+    done
+  fi
+}
+
 # @description Verify a required CLI tool is on PATH; exit 1 if missing.
 # @arg $1 tool name
 function require_tool() {
@@ -57,7 +80,7 @@ function main() {
   # from the committed file, leaving precommit-table-fresh red on every commit.
   require_tool treefmt
 
-  local repo_root doc
+  local doc
   repo_root="$(git rev-parse --show-toplevel)"
   doc="${repo_root}/docs/development/git.md"
   readonly repo_root doc
@@ -75,7 +98,16 @@ function main() {
     exit 1
   fi
 
-  local hooks_file block_file doc_new doc_fmt
+  # Set cleanup traps before the first mktemp so any temp created below is
+  # removed on exit or signal. The signal handlers force exit, which
+  # re-triggers the EXIT trap so cleanup runs exactly once. A bare
+  # `trap cleanup INT` would run the handler then RESUME, so Ctrl-C would not
+  # abort — the explicit `exit` is required.
+  trap cleanup EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  trap 'exit 129' HUP
+
   hooks_file="$(mktemp)"
   block_file="$(mktemp)"
   doc_new="$(mktemp)"
@@ -84,7 +116,6 @@ function main() {
   # treefmt's mdformat picks it up; .gitignore keeps it untracked if a crash
   # bypasses the EXIT trap.
   doc_fmt="$(mktemp "${repo_root}/.refresh-precommit-XXXXXX.md")"
-  trap 'rm --force -- "${hooks_file:-}" "${block_file:-}" "${doc_new:-}" "${doc_fmt:-}"' EXIT
 
   local sys
   sys="$(nix eval --impure --raw --expr 'builtins.currentSystem')"

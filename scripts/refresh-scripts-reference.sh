@@ -21,6 +21,29 @@ function log() {
 function log_info() { log INFO "$*"; }
 function log_err() { log ERROR "$*"; }
 
+# Temp files removed by the EXIT trap. Declared at script scope, not main-local:
+# the EXIT trap fires after main() returns and its locals leave scope, so a
+# main-local would read as empty at trap time and the in-repo .md temp would
+# leak on an abnormal exit.
+repo_root=''
+block_file=''
+doc_new=''
+check_bucket=''
+refresh_bucket=''
+other_bucket=''
+fmt_target=''
+
+function cleanup() {
+  rm --force -- "${block_file}" "${doc_new}" "${check_bucket}" "${refresh_bucket}" "${other_bucket}" "${fmt_target}"
+  if [[ -n ${repo_root} ]]; then
+    local stray
+    shopt -s nullglob
+    for stray in "${repo_root}"/.refresh-scripts-reference-*.md; do
+      rm --force -- "${stray}"
+    done
+  fi
+}
+
 # @description Verify a required CLI tool is on PATH; exit 1 if missing.
 # @arg $1 tool name
 function require_tool() {
@@ -94,12 +117,13 @@ function main() {
   # matches what the formatter (mdformat-gfm) emits at commit time.
   require_tool treefmt
 
-  local repo_root scripts_dir doc awk_parser
+  local scripts_dir doc awk_parser
   repo_root="$(git rev-parse --show-toplevel)"
+  readonly repo_root
   scripts_dir="${SCRIPTS_DIR_OVERRIDE:-${repo_root}/scripts}"
   doc="${repo_root}/docs/reference/scripts.md"
   awk_parser="${repo_root}/scripts/_script_docs.awk"
-  readonly repo_root scripts_dir doc awk_parser
+  readonly scripts_dir doc awk_parser
 
   if [[ ! -f ${doc} ]]; then
     log_err "${doc} not found; run without --check to bootstrap (after creating the skeleton)"
@@ -118,13 +142,16 @@ function main() {
     exit 1
   fi
 
-  local block_file doc_new check_bucket refresh_bucket other_bucket
+  trap cleanup EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  trap 'exit 129' HUP
+
   block_file="$(mktemp)"
   doc_new="$(mktemp)"
   check_bucket="$(mktemp)"
   refresh_bucket="$(mktemp)"
   other_bucket="$(mktemp)"
-  trap 'rm --force -- "${block_file:-}" "${doc_new:-}" "${check_bucket:-}" "${refresh_bucket:-}" "${other_bucket:-}"' EXIT
 
   # Walk scripts in sorted order, skipping `_*.sh` helpers.
   local script name json bucket
@@ -196,10 +223,8 @@ function main() {
 
   # Run treefmt over the regenerated doc so the comparison target
   # matches what the formatter chain (mdformat-gfm) produces on commit.
-  local fmt_target fmt_root
-  fmt_root="$(git rev-parse --show-toplevel)"
-  fmt_target="$(mktemp "${fmt_root}/.refresh-scripts-reference-XXXXXX.md")"
-  trap 'rm --force -- "${block_file:-}" "${doc_new:-}" "${check_bucket:-}" "${refresh_bucket:-}" "${other_bucket:-}" "${fmt_target:-}"' EXIT
+  # treefmt needs flake.nix as project root, so the temp must live in-repo.
+  fmt_target="$(mktemp "${repo_root}/.refresh-scripts-reference-XXXXXX.md")"
   cp -- "${doc_new}" "${fmt_target}"
   treefmt --no-cache --quiet -- "${fmt_target}" >/dev/null 2>&1 || true
   mv -- "${fmt_target}" "${doc_new}"

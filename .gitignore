@@ -17,7 +17,9 @@ result-*
 .flake-show.json
 .lycheecache
 /tmp/
+.refresh-enforcement-matrix-*.md
 .refresh-precommit-*.md
+.refresh-scripts-reference-*.md
 .refresh-treefmt-config-*.md
 
 # Personal scratch lists kept on disk but never tracked
