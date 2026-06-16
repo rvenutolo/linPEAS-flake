@@ -14,13 +14,13 @@
 # Literal substring splicing via awk index/substr — no regex pitfalls
 # on semver dots or path slashes.
 #
-# Default inventory path: .claude/scratch/action-pin-inventory.tsv
+# Default inventory path: ${TMPDIR:-/tmp}/action-pin-inventory.tsv
 # Override with --inventory PATH.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-INVENTORY=".claude/scratch/action-pin-inventory.tsv"
+INVENTORY="${TMPDIR:-/tmp}/action-pin-inventory.tsv"
 while [[ $# -gt 0 ]]; do
   case "$1" in
   --inventory)
