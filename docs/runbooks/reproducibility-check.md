@@ -5,7 +5,7 @@
 
 ## What this workflow does
 
-Every Sunday at 06:00 UTC (and on `workflow_dispatch`), the workflow:
+Every Friday at 05:10 UTC (and on `workflow_dispatch`), the workflow:
 
 1. Builds `.#linpeas` and `.#linpeas-image` twice on independent `ubuntu-latest` runners.
 1. Records each build's: linpeas store path, linpeas NAR hash, image store path, image tar SHA-256, image manifest digest.
