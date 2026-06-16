@@ -61,16 +61,25 @@ The changelog commit itself carries the subject `docs: update changelog`. Withou
 run's commit in the next release's entry — a self-reference loop that
 inflates the changelog with administrative noise.
 
-### Merge commit skip rule
+### PR-merge entry filter
 
 ```toml
 { message = "^Merge ", skip = true },
+{ message = "^feat.*\\[#[0-9]+\\]", group = "Features" },
+# … one rule per type, each requiring the [#N] link …
+{ message = ".*", skip = true },
 ```
 
-Every PR lands as a merge commit whose subject starts with `Merge`. The
-merge commit is structural scaffolding, not a user-visible change.
-Skipping it prevents duplicate entries (the branch commits are already
-included via `filter_unconventional = false` for conventional types).
+`protect-main` forces every change through a pull request, so each
+landed change is a merge commit whose subject is the PR title plus
+`(#N)` — rewritten to a `[#N]` link by the preprocessor below. Every
+group rule requires that link, so only the merge commits are kept; the
+trailing catch-all skips the branch commits the merge brought in.
+Without this, both the merge commit (linked) and its branch commits
+(unlinked) would render, producing duplicate entries for every PR. The
+leading `^Merge ` rule skips any commit that uses GitHub's default
+`Merge pull request …` subject. Breaking changes are recognized by the
+`!` type suffix, per the repo's commit convention.
 
 ### PR-number preprocessor
 

@@ -46,21 +46,28 @@ commit_preprocessors = [
   { pattern = '\(#([0-9]+)\)', replace = "([#${1}](https://github.com/rvenutolo/linPEAS-flake/pull/${1}))" },
 ]
 
+# Keep only PR-merge commits. protect-main forces every change through a
+# pull request, so the merge commit carries the PR number — rendered as a
+# `[#N]` link by the preprocessor above — while the branch commits it merges
+# do not. Requiring that link on every group rule collapses each PR to a
+# single entry and the trailing catch-all skips the duplicate, unlinked
+# branch commits. Breaking changes are detected via the `!` type suffix per
+# the repo's commit convention.
 commit_parsers = [
   { message = "^docs: update changelog", skip = true },
   { message = "^Merge ", skip = true },
-  { message = "^feat(\\(.+\\))?!:", group = "Breaking Changes" },
-  { message = "^fix(\\(.+\\))?!:", group = "Breaking Changes" },
-  { body = "BREAKING CHANGE:", group = "Breaking Changes" },
-  { message = "^feat", group = "Features" },
-  { message = "^fix", group = "Fixes" },
-  { message = "^perf", group = "Performance" },
-  { message = "^refactor", group = "Refactor" },
-  { message = "^docs", group = "Documentation" },
-  { message = "^ci", group = "CI" },
-  { message = "^build", group = "Build" },
-  { message = "^chore", group = "Chores" },
-  { message = "^style", group = "Style" },
-  { message = "^test", group = "Tests" },
-  { message = "^revert", group = "Reverts" },
+  { message = "^feat(\\(.+\\))?!:.*\\[#[0-9]+\\]", group = "Breaking Changes" },
+  { message = "^fix(\\(.+\\))?!:.*\\[#[0-9]+\\]", group = "Breaking Changes" },
+  { message = "^feat.*\\[#[0-9]+\\]", group = "Features" },
+  { message = "^fix.*\\[#[0-9]+\\]", group = "Fixes" },
+  { message = "^perf.*\\[#[0-9]+\\]", group = "Performance" },
+  { message = "^refactor.*\\[#[0-9]+\\]", group = "Refactor" },
+  { message = "^docs.*\\[#[0-9]+\\]", group = "Documentation" },
+  { message = "^ci.*\\[#[0-9]+\\]", group = "CI" },
+  { message = "^build.*\\[#[0-9]+\\]", group = "Build" },
+  { message = "^chore.*\\[#[0-9]+\\]", group = "Chores" },
+  { message = "^style.*\\[#[0-9]+\\]", group = "Style" },
+  { message = "^test.*\\[#[0-9]+\\]", group = "Tests" },
+  { message = "^revert.*\\[#[0-9]+\\]", group = "Reverts" },
+  { message = ".*", skip = true },
 ]
