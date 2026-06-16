@@ -32,6 +32,7 @@ lint-workflow-security:
   - gh-attestation-repo
   - cosign-identity-pinned
   - run-block-strict
+  - auto-merge-decline-gate
 lint-script-hygiene:
   - script-shebang-pipefail
   - script-has-test

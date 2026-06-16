@@ -1,0 +1,21 @@
+name: good-gated
+on: workflow_dispatch
+jobs:
+  push-and-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: open and merge
+        run: |
+          set -Eeuo pipefail
+          branch="chore/x"
+          pr_state="$(gh pr view "${branch}" --json state --jq .state 2>/dev/null || true)"
+          case "${pr_state}" in
+          OPEN) open_pr=true ;;
+          CLOSED|MERGED)
+            printf 'aborting\n' >&2
+            exit 1
+            ;;
+          '') open_pr=false ;;
+          *) exit 1 ;;
+          esac
+          gh pr merge "${branch}" --auto --merge

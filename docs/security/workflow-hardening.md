@@ -62,6 +62,16 @@ This repo has no use for the trigger. The lint hard-fails any workflow that adop
 
 Enforced by `scripts/check-pull-request-target-absent.sh`. Wired as the `pull-request-target-absent` required CI job and as a pre-commit hook.
 
+## auto-merge-decline-gate
+
+Every workflow run-block that calls `gh pr merge` with `--auto` also carries the decline gate: a `gh pr view --json state` query and a `CLOSED|MERGED` arm that exits non-zero.
+
+An auto-merging update workflow recreates a per-period branch and merges its PR unattended. Without inspecting PR state first, a re-run in the same period overwrites a PR the maintainer explicitly closed (declined) or one already merged — silently reversing a human decision in a no-review flow. The gate aborts non-zero on `CLOSED|MERGED` so the run fails and a failure issue is filed instead.
+
+This protects only an explicitly closed or merged PR; routine PRs are unaffected, so the fully-automated update flow is preserved.
+
+Enforced by `scripts/check-auto-merge-decline-gate.sh`. Wired into the `lint-workflow-security` CI group and as a pre-commit hook.
+
 ## script-shebang-pipefail
 
 Every file under `scripts/*.sh` starts with `#!/usr/bin/env bash` (exact first line) and contains `set -Eeuo pipefail` somewhere in the file.

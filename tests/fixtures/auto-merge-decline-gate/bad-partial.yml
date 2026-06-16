@@ -1,0 +1,12 @@
+name: bad-partial
+on: workflow_dispatch
+jobs:
+  push-and-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: open and merge
+        run: |
+          set -Eeuo pipefail
+          branch="chore/x"
+          pr_state="$(gh pr view "${branch}" --json state --jq .state 2>/dev/null || true)"
+          gh pr merge "${branch}" --auto --merge

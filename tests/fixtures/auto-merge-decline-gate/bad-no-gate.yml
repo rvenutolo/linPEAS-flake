@@ -1,0 +1,11 @@
+name: bad-no-gate
+on: workflow_dispatch
+jobs:
+  push-and-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: open and merge
+        run: |
+          set -Eeuo pipefail
+          branch="chore/x"
+          gh pr merge "${branch}" --auto --merge

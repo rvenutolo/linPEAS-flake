@@ -32,6 +32,13 @@ Assert the live `actions.permissions.allowed_actions`
 API state matches the canonical allowlist documented in
 `docs/security/allowed-actions.md`.
 
+### scripts/check-auto-merge-decline-gate.sh
+
+Lint: every workflow run-block that calls `gh pr merge`
+with `--auto` must also carry the decline gate (a `gh pr view --json state` query plus a CLOSED|MERGED arm that exits non-zero), so a
+maintainer-closed (declined) or already-merged PR is never silently
+resurrected by an auto-merging update workflow.
+
 ### scripts/check-checkout-persist-credentials.sh
 
 Lint: every `actions/checkout` step in every workflow
