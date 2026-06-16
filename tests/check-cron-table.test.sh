@@ -74,6 +74,11 @@ function main() {
     "${FIXTURES}/bad-cron-mismatch/ci.md" \
     1 'cron-mismatch'
 
+  run_scenario 'workflow with multiple cron lines exits 2' \
+    "${FIXTURES}/bad-multi-cron/workflows" \
+    "${FIXTURES}/good/ci.md" \
+    2 'multiple cron'
+
   run_scenario 'arrow list with wrong workflow name fails' \
     "${FIXTURES}/bad-arrow-name/workflows" \
     "${FIXTURES}/bad-arrow-name/ci.md" \
