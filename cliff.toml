@@ -23,8 +23,7 @@ body = """
 {% for group, commits in commits | group_by(attribute=\"group\") %}
 ### {{ group | upper_first }}
 {% for commit in commits %}\
-- {{ commit.message | upper_first | trim }}\
-{% if commit.remote.pr_number %} ([#{{ commit.remote.pr_number }}](https://github.com/rvenutolo/linPEAS-flake/pull/{{ commit.remote.pr_number }})){% endif %}
+- {{ commit.message | upper_first | trim }}
 {% endfor %}\
 {% endfor %}\n
 """
@@ -40,6 +39,10 @@ topo_order = false
 sort_commits = "newest"
 
 commit_preprocessors = [
+  # The scorecard allowlist shipped at 11 checks; an early commit subject
+  # mislabeled it "15-check". Correct the count so the rendered changelog
+  # matches the workflow and the invariant index.
+  { pattern = '15-check allowlist', replace = "11-check allowlist" },
   { pattern = '\(#([0-9]+)\)', replace = "([#${1}](https://github.com/rvenutolo/linPEAS-flake/pull/${1}))" },
 ]
 

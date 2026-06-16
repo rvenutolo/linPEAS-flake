@@ -44,7 +44,7 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-  flakelock["update-flake-lock.yml<br/>Friday 06:00 UTC<br/>compute-lock (read-only)<br/>+ push-and-merge (App token, REST PUT /contents)"]
+  flakelock["update-flake-lock.yml<br/>Friday 05:00 UTC<br/>compute-lock (read-only)<br/>+ push-and-merge (App token, REST PUT /contents)"]
   renovate["Renovate Friday batch<br/>(action SHAs + Nix pin<br/>+ tracked flake inputs)<br/>minimumReleaseAge: 7 days"]
   pr1["PR: update flake.lock"]
   pr2["PR: action SHA / input bumps"]
