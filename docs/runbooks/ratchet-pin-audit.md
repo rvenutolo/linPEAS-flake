@@ -122,7 +122,6 @@ on its next scheduled run).
 
 ## Related
 
-- Issue that introduced this: #161
 - Adjacent watchdog: `stale-pin-check.yml` (`pin-stalled` label)
 - Underlying enforcer: `scripts/check-uses-sha-pinned.sh`
 - Structural invariant: `scripts/check-ratchet-pin-audit.sh`

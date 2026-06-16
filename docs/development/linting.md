@@ -73,7 +73,7 @@ otherwise trigger typo flags.
 Workflow-security linter; `--min-severity=low` to catch everything.
 Suppressions live in `zizmor.yml` with documented rationale per
 suppressed rule + workflow. Do not raise `--min-severity` above
-`low` without a security-review entry in `.claude/CLAUDE.md`.
+`low` without a corresponding security-review entry.
 
 ## Octoscan
 
