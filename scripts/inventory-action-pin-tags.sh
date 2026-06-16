@@ -27,7 +27,7 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-OUTPUT=".claude/scratch/action-pin-inventory.tsv"
+OUTPUT="${TMPDIR:-/tmp}/action-pin-inventory.tsv"
 while [[ $# -gt 0 ]]; do
   case "$1" in
   --output)

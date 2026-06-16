@@ -451,7 +451,7 @@ Any API_FAILURE row aborts the run before any mutation.
 Literal substring splicing via awk index/substr — no regex pitfalls
 on semver dots or path slashes.
 
-Default inventory path: .claude/scratch/action-pin-inventory.tsv
+Default inventory path: ${TMPDIR:-/tmp}/action-pin-inventory.tsv
 Override with --inventory PATH.
 
 ### scripts/bump-linpeas.sh
