@@ -81,7 +81,7 @@ increasing UTC times.
 Exit codes:
 0 all checks passed
 1 drift detected (details printed to stderr)
-2 missing input files / parse error
+2 missing input files / parse error / workflow declares >1 cron line
 
 ### scripts/check-doc-anchors.sh
 

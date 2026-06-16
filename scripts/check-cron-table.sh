@@ -9,7 +9,7 @@
 # Exit codes:
 #   0  all checks passed
 #   1  drift detected (details printed to stderr)
-#   2  missing input files / parse error
+#   2  missing input files / parse error / workflow declares >1 cron line
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -29,6 +29,7 @@ function workflow_pairs() {
   for f in "${WORKFLOWS_DIR}"/*.yml; do
     [[ -f ${f} ]] || continue
     name="$(basename "${f}" .yml)"
+    # defense-in-depth: the main() guard guarantees ≤1 cron line per file.
     cron="$(grep -E '^[[:space:]]*-[[:space:]]*cron:' "${f}" 2>/dev/null |
       head -1 |
       sed -E 's/.*cron:[[:space:]]*"([^"]+)".*/\1/')" || true
@@ -74,6 +75,19 @@ function main() {
     printf 'missing %s\n' "${DOC_FILE}" >&2
     exit 2
   }
+
+  # A workflow with >1 cron line can't be represented in the name-keyed
+  # table model; surface the limitation rather than silently dropping lines.
+  local f cron_count
+  for f in "${WORKFLOWS_DIR}"/*.yml; do
+    [[ -f ${f} ]] || continue
+    cron_count="$(grep -Ec '^[[:space:]]*-[[:space:]]*cron:' "${f}" || true)"
+    if ((cron_count > 1)); then
+      printf 'multiple cron lines in %s (%d); not supported — extend check-cron-table.sh\n' \
+        "${f}" "${cron_count}" >&2
+      exit 2
+    fi
+  done
 
   local wf_tmp tbl_tmp arrow_tmp
   wf_tmp="$(mktemp)"
