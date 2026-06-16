@@ -22,6 +22,7 @@ function fail() {
 # Declared at top-level so the EXIT trap can reach across function boundaries.
 backup=''
 fixture_dir=''
+stray=''
 
 function cleanup() {
   if [[ -n ${backup:-} && -f ${backup} ]]; then
@@ -30,6 +31,9 @@ function cleanup() {
   fi
   if [[ -n ${fixture_dir:-} && -d ${fixture_dir} ]]; then
     rm --recursive --force -- "${fixture_dir}"
+  fi
+  if [[ -n ${stray:-} ]]; then
+    rm --force -- "${stray}"
   fi
 }
 trap cleanup EXIT
@@ -97,6 +101,22 @@ EOF
   else
     fail "--check expected exit 2 on missing @description, got ${rc}"
   fi
+
+  # 5. Leak cleanup: a stray in-repo temp from an interrupted run must be
+  # swept by the EXIT trap on the next default-mode run.
+  stray="${REPO_ROOT}/.refresh-scripts-reference-deadbeef.md"
+  : >"${stray}"
+  "${SCRIPT}"
+  local -a leaked
+  shopt -s nullglob
+  leaked=("${REPO_ROOT}"/.refresh-scripts-reference-*.md)
+  shopt -u nullglob
+  if [[ ! -e ${stray} && ${#leaked[@]} -eq 0 ]]; then
+    pass 'stray in-repo temp swept and none leaked after default run'
+  else
+    fail "leak cleanup failed: stray present=$([[ -e ${stray} ]] && echo yes || echo no), remaining=${#leaked[@]}"
+  fi
+  stray=''
 
   if [[ ${failures} -gt 0 ]]; then
     printf '%d failure(s)\n' "${failures}" >&2

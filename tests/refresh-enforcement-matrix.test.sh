@@ -18,6 +18,13 @@ readonly FIXTURES="${REPO_ROOT}/tests/fixtures/refresh-enforcement-matrix"
 readonly FIXTURE_HOOKS=$'uses-sha-pinned\nrenovate-invariants\nharden-runner-first\nbogus\ny'
 
 failures=0
+
+# Guard against leaving the planted leak-test stray behind on any exit
+# (including an early assertion failure). Script-scoped so the trap sees it.
+readonly LEAK_STRAY="${REPO_ROOT}/.refresh-enforcement-matrix-deadbeef.md"
+function cleanup_test() { rm --force -- "${LEAK_STRAY}"; }
+trap cleanup_test EXIT
+
 function pass() { printf 'PASS: %s\n' "$1"; }
 function fail() {
   printf 'FAIL: %s\n' "$1" >&2
@@ -88,6 +95,24 @@ function main() {
     fail 'good fixture diverges from expected matrix'
   fi
   rm --force -- "${out_file}"
+
+  # Assertion 6: an interrupted run leaks no in-repo .md temp, and the
+  # EXIT-trap sweep removes any pre-existing stray. Plant a stray in the
+  # repo root, run default mode, assert no .refresh-enforcement-matrix-*.md
+  # remain afterward.
+  : >"${LEAK_STRAY}"
+  local leak_out
+  leak_out="$(mktemp)"
+  MATRIX_OUTPUT_OVERRIDE="${leak_out}" "${SCRIPT}" >/dev/null 2>&1 || true
+  rm --force -- "${leak_out}"
+  local remaining
+  remaining="$(find "${REPO_ROOT}" -maxdepth 1 -type f \
+    -name '.refresh-enforcement-matrix-*.md' | wc -l | tr -d '[:space:]')"
+  if [[ ! -e ${LEAK_STRAY} ]] && [[ ${remaining} -eq 0 ]]; then
+    pass 'leak cleanup removes stray in-repo .md temp'
+  else
+    fail "leak cleanup left ${remaining} stray .refresh-enforcement-matrix-*.md (planted stray exists: $([[ -e ${LEAK_STRAY} ]] && echo yes || echo no))"
+  fi
 
   if [[ ${failures} -gt 0 ]]; then
     printf '%d failure(s)\n' "${failures}" >&2
