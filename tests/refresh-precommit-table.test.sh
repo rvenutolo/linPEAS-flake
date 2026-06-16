@@ -42,7 +42,11 @@ function main() {
   # aborts early or the backup file still exists.
   backup="$(mktemp)"
   cp -- "${DOC}" "${backup}"
-  trap '[[ -n "${backup:-}" && -f "${backup}" ]] && { cp -- "${backup}" "${DOC}" 2>/dev/null || true; rm --force -- "${backup}"; }' EXIT
+  # The EXIT trap restores the tracked doc and removes the planted leak-test
+  # stray. It folds both jobs into one trap because a second `trap ... EXIT`
+  # would override this one, leaving the doc unrestored.
+  stray="${REPO_ROOT}/.refresh-precommit-deadbeef.md"
+  trap '[[ -n "${backup:-}" && -f "${backup}" ]] && { cp -- "${backup}" "${DOC}" 2>/dev/null || true; rm --force -- "${backup}"; }; rm --force -- "${stray:-}"' EXIT
   # Inject drift INSIDE the managed block (a bogus table row right after the
   # BEGIN marker). The generator regenerates the block without it, so --check
   # must detect the mismatch. Drift outside the markers is intentionally NOT
@@ -63,6 +67,25 @@ function main() {
     pass '--check fails on in-block drift'
   else
     fail '--check passed despite in-block drift'
+  fi
+
+  # Leak-cleanup: plant a stray in-repo .md temp (as an interrupted earlier run
+  # would leave), run the generator in default mode, and assert the sibling
+  # sweep in cleanup() removed both the planted stray and every other
+  # .refresh-precommit-*.md in the repo root.
+  : >"${stray}"
+  "${SCRIPT}"
+  if [[ ! -e ${stray} ]]; then
+    pass 'sibling sweep removes a planted stray temp'
+  else
+    fail 'planted stray temp survived a normal run'
+  fi
+  local leftovers
+  leftovers="$(find "${REPO_ROOT}" -maxdepth 1 -name '.refresh-precommit-*.md' -print 2>/dev/null)"
+  if [[ -z ${leftovers} ]]; then
+    pass 'no .refresh-precommit-*.md temps remain after a normal run'
+  else
+    fail "stray .refresh-precommit-*.md temps remain: ${leftovers}"
   fi
 
   if [[ ${failures} -gt 0 ]]; then
