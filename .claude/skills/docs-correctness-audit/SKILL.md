@@ -55,11 +55,16 @@ agree on one source of truth.
     (`lint-workflow-security`, `lint-script-hygiene`, `lint-doc-invariants`,
     `harness-group`) — not standalone jobs and not required status checks. Prose
     that calls such a member a "required CI job" is real drift that *no* freshness
-    gate catches, because nothing generates that sentence. So verify every
-    hand-written reference to a job / required-check / check name against the
-    actual `ci.yml` job list (`grep -nE '^  [a-z][a-z0-9-]+:' .github/workflows/ci.yml`), `.github/lint-groups.yml`, and the ruleset —
-    *even when every freshness check is green*. A green pipeline beside a sentence
-    naming a job that doesn't exist is exactly what this audit exists to surface.
+    gate catches, because nothing generates that sentence. Two failure modes,
+    both high severity: (a) **mislabel** — a real lint-group *member* called a
+    standalone "required CI job"; (b) **ghost** — a doc names a "CI job" / "required
+    check" that exists in *no* workflow and *no* lint group at all. Catch both by
+    checking every hand-written job / required-check / check name against the
+    collector's **VALID CI JOB / CHECK NAMES** union allowlist (every workflow job
+    id + every lint-group member): a name absent from that list is a ghost; a name
+    present only as a lint-group member but called a standalone job is a mislabel.
+    Do this *even when every freshness check is green* — a green pipeline beside a
+    sentence naming a job that doesn't exist is exactly what this audit surfaces.
 - **Ephemeral references rot.** This repo bans dates, PR/issue numbers, planning
     labels, and causal-history phrasing in tracked docs (the rationale: tracked
     files describe the *current* state; history lives in git). Flag violations of

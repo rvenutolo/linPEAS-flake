@@ -24,6 +24,13 @@ The authoritative cron table for prose to match is
 diagram or runbook names a schedule, verify against both the workflow `cron:`
 line and that table.
 
+For CI job / required-check names, the collector emits a **VALID CI JOB / CHECK
+NAMES** union allowlist — every workflow job id plus every lint-group member.
+Any name a doc calls a "CI job" or "required check" that is absent from that
+list is a **ghost** reference (exists nowhere); a name present only as a
+lint-group member but described as a standalone job is a **mislabel**. Both are
+high severity, and neither is caught by a freshness gate.
+
 ## 2. Doc cluster map (one read-only agent per row)
 
 | Cluster      | Files                                                                                                                                                                                     |
