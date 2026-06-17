@@ -28,6 +28,30 @@ esac
 
 # (further fixture-based checks added in Tasks 2 and 3)
 
+# --- ephemeral-token fixture ---
+fx="$(mktemp -d)"
+(
+  cd "${fx}"
+  git init -q && git config user.email t@t && git config user.name t
+  mkdir -p docs
+  cp "${REAL_REPO}/lychee.toml" .
+  printf '# Doc\n\nPhase 3 work remains.\nTracking #388 here.\nclassDef x fill:#c8e6c9,stroke:#2e7d32\nEntity &#123; literal.\nsee [toc](#1-delete-the-thing).\nEvery call passes X-GitHub-Api-Version: 2022-11-28 header.\nUses SHA-256 digest.\n' >docs/eph.md
+  printf '# Changelog\n\n- #999 shipped 2024-01-01\n' >CHANGELOG.md
+  git add -A && git commit -qm init
+)
+# shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
+eph="$(cd "${fx}" && source "${COLLECTOR}" && sweep_ephemeral_tokens)"
+case "${eph}" in *"(planning-label)"*"Phase 3"*) check "flags Phase 3" 0 ;; *) check "flags Phase 3" 1 ;; esac
+case "${eph}" in *"(pr-ref)"*"#388"*) check "flags #388" 0 ;; *) check "flags #388" 1 ;; esac
+case "${eph}" in *"c8e6c9"*) check "suppresses hex color" 1 ;; *) check "suppresses hex color" 0 ;; esac
+case "${eph}" in *"&#123"*) check "suppresses HTML entity" 1 ;; *) check "suppresses HTML entity" 0 ;; esac
+case "${eph}" in *"#1-delete"*) check "suppresses anchor target" 1 ;; *) check "suppresses anchor target" 0 ;; esac
+case "${eph}" in *"X-GitHub-Api-Version"*) check "suppresses api-version literal" 1 ;; *) check "suppresses api-version literal" 0 ;; esac
+case "${eph}" in *"SHA-256"*) check "suppresses SHA-256" 1 ;; *) check "suppresses SHA-256" 0 ;; esac
+case "${eph}" in *"#999"*) check "exempts CHANGELOG pr-ref" 1 ;; *) check "exempts CHANGELOG pr-ref" 0 ;; esac
+case "${eph}" in *"2024-01-01"*) check "exempts CHANGELOG date" 1 ;; *) check "exempts CHANGELOG date" 0 ;; esac
+rm -rf "${fx}"
+
 if [[ ${fails} -ne 0 ]]; then
   printf '\n%d FAILED\n' "${fails}"
   exit 1

@@ -17,6 +17,39 @@ IFS=$'\n\t'
 
 section() { printf '\n===== %s =====\n' "$1"; }
 
+# Banned-token sweep over tracked docs. Canonical list: references/repo-map.md §4.
+# Authoritative: a hit here is real; readers flag it without re-judging by eye.
+EPH_FILES=()
+_emit_eph() { # $1=category $2=ERE — emits "file:line\t(category) <trimmed line>"
+  grep -HnE "$2" -- "${EPH_FILES[@]}" 2>/dev/null |
+    sed -E "s/^([^:]+:[0-9]+):[[:space:]]*/\1	($1) /" || true
+}
+sweep_ephemeral_tokens() {
+  mapfile -t EPH_FILES < <(git ls-files '*.md' | grep -vE '^(tests/fixtures/|docs/_data/)' || true)
+  if [[ ${#EPH_FILES[@]} -eq 0 ]]; then
+    echo '(none)'
+    return 0
+  fi
+  local hits
+  hits="$(
+    {
+      _emit_eph planning-label 'GAP-[0-9]+|P[0-9]+\.[0-9]+|Wave-P?[0-9]+|Phase [0-9]+|AU-P-[0-9]+|SC-POST-[0-9]+|plan [0-9]+|F-[0-9]+'
+      _emit_eph review-pass '\(D[0-9]+\)|\(L[0-9]+[,) ]|Per D[0-9]+|D[0-9]+:'
+      _emit_eph ad-hoc-ticket 'DH-[0-9]+|NC-[A-Z][0-9]+|[A-Z]{2,3}-[0-9]+' |
+        grep -vE '(SHA|UTF|RFC|ISO|BASE)-[0-9]+' || true
+      _emit_eph date '[0-9]{4}-[0-9]{2}-[0-9]{2}|(January|February|March|April|May|June|July|August|September|October|November|December) [0-9]{4}|Q[1-4] [0-9]{4}' |
+        grep -vE 'X-GitHub-Api-Version: [0-9]{4}-[0-9]{2}-[0-9]{2}' |
+        grep -vE '^(CHANGELOG\.md|docs/releases\.md):' || true
+      _emit_eph causal-history 'prior to|previously|Migration note|was reshaped|Tightened from|swapped|switched (from|to)|legacy .* was deleted|added in #?[0-9]+|post-PR #[0-9]+'
+      _emit_eph pr-ref '#[0-9]+|PR #[0-9]+|issue #[0-9]+' |
+        grep -vE '(fill|stroke|color):#[0-9a-fA-F]{3,8}|&#[0-9]+;|#[0-9]+-' |
+        grep -vE '^(CHANGELOG\.md|docs/releases\.md):' || true
+      _emit_eph claude-path '\.claude/'
+    } | sort -u || true
+  )"
+  if [[ -z ${hits} ]]; then echo '(none)'; else printf '%s\n' "${hits}"; fi
+}
+
 main() {
   REPO_ROOT="$(git rev-parse --show-toplevel)"
   cd "${REPO_ROOT}"
@@ -87,6 +120,12 @@ for k, v in sorted(d.items()):
   else
     echo '(no ruleset file at .github/rulesets/protect-main.json)'
   fi
+
+  section "EPHEMERAL-TOKEN HITS (banned shapes in tracked docs; authoritative — see repo-map §4)"
+  sweep_ephemeral_tokens
+  echo '(SUPPRESSED deterministically: fill:/stroke:#hex, &#NNN;, #N-anchor targets,'
+  echo ' SHA/UTF/RFC/ISO/BASE-NNN, X-GitHub-Api-Version date literal, CHANGELOG.md +'
+  echo ' docs/releases.md PR/date refs. A hit above is authoritative — flag it.)'
 }
 
 if [[ ${BASH_SOURCE[0]} == "${0:-}" ]]; then
