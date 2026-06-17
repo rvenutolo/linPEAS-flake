@@ -1,0 +1,120 @@
+{
+  "skill_name": "docs-correctness-audit",
+  "note": "Invoke-only skill (run via the /docs-audit slash command or by naming the skill). These evals exercise REPORT QUALITY when invoked, not natural-language triggering — auto-triggering was intentionally removed. Eval prompts are phrased the way a user would type them into /docs-audit; do not add triggering assertions.",
+  "evals": [
+    {
+      "id": 0,
+      "name": "broad-review",
+      "prompt": "Review all the project documentation — README, the docs/ tree, CLAUDE.md, the changelog — and make sure everything is correct and up to date.",
+      "expected_output": "A severity-ranked findings report, no docs edited, each finding backed by evidence from real repo state, systemic defects collapsed by root cause.",
+      "files": [],
+      "assertions": [
+        "Read-only: git status shows no modified tracked files at the end of the run",
+        "A severity-ranked findings report is the deliverable (severity index + HIGH/MED/LOW grouping)",
+        "Each finding cites concrete evidence (file:line, command output, or workflow line)",
+        "The run inspected real repo state (ran the ground-truth collector or equivalent commands)",
+        "No prose edits are proposed inside generated-doc bodies",
+        "Root-cause grouping: findings sharing a single defect are collapsed into one finding listing all affected file:line, not emitted as N separate rows",
+        "Every HIGH finding includes a concrete, actionable Fix: line, not merely a restatement of the problem",
+        "RECALL: surfaced the systemic CI drift (a lint-group member check described as a standalone required CI job)"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "post-refactor-drift",
+      "prompt": "I've been moving workflows and just recipes around lately. Go through the docs and tell me anything that no longer matches the actual repo — wrong paths, removed scripts, stale commands. Don't fix anything yet, just give me a prioritized list.",
+      "expected_output": "A read-only, prioritized findings report focused on factual drift, each item proven against ground truth, systemic defects grouped.",
+      "files": [],
+      "assertions": [
+        "A findings report is produced and nothing is edited (git status clean)",
+        "Findings are prioritized by severity",
+        "Drift findings are verified against the actual files (each cites the ground-truth source that proves the mismatch)",
+        "Any named workflow/recipe/script/path was checked for existence, not assumed",
+        "No HIGH-severity finding is a false positive when re-checked",
+        "Root-cause grouping: findings sharing a single defect are collapsed into one finding listing all affected file:line",
+        "Every HIGH finding includes a concrete, actionable Fix: line",
+        "RECALL: surfaced the systemic CI job-vs-group drift even though the prompt does not mention CI explicitly"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "casual-currency",
+      "prompt": "are the docs still accurate? feels like some of them might've drifted from how CI actually works now",
+      "expected_output": "Runs the full audit; produces a read-only report; verifies CI claims; groups systemic drift.",
+      "files": [],
+      "assertions": [
+        "A read-only findings report is produced (git status clean)",
+        "CI-related claims (cron, job names, required checks) are verified against the actual workflow YAML and ci.md table",
+        "The report distinguishes generated docs (verify-only) from hand-written prose",
+        "Root-cause grouping: findings sharing a single defect are collapsed into one finding listing all affected file:line",
+        "Every HIGH finding includes a concrete, actionable Fix: line",
+        "RECALL: surfaced the systemic CI job-vs-group drift"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "security-deep",
+      "prompt": "go through docs/security and confirm everything still matches the actual rulesets, workflows, and required checks.",
+      "expected_output": "A read-only report scoped to (or led by) the security cluster, verifying each security claim against rulesets/workflows.",
+      "files": [],
+      "assertions": [
+        "A read-only findings report is produced (git status clean)",
+        "Security-doc claims are verified against .github/lint-groups.yml, the ruleset, and the workflows",
+        "Each finding cites the ground-truth artifact that proves it",
+        "Root-cause grouping: findings sharing a single defect are collapsed into one finding listing all affected file:line",
+        "RECALL: surfaced the systemic CI job-vs-group drift (member checks called standalone required jobs in the security docs)"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "install-correctness",
+      "prompt": "double-check the install instructions in the README and docs/install — are all the nix and docker commands still correct and runnable?",
+      "expected_output": "A read-only report verifying install commands, flake outputs, image names, and links resolve correctly.",
+      "files": [],
+      "assertions": [
+        "A read-only findings report is produced (git status clean)",
+        "Install commands are checked against actual flake outputs / package / image names (nix flake show, flake.nix)",
+        "Each finding cites concrete evidence",
+        "Internal links in the install docs are verified to resolve"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "links-and-consistency",
+      "prompt": "run through all the docs and the changelog looking for broken or wrong internal links and anything that contradicts itself.",
+      "expected_output": "A read-only report focused on link integrity and internal consistency across docs.",
+      "files": [],
+      "assertions": [
+        "A read-only findings report is produced (git status clean)",
+        "Internal links/anchors are checked for resolution against real targets",
+        "Cross-doc contradictions are flagged with both locations cited",
+        "CHANGELOG/releases pages are not flagged for the PR-ref / date ephemeral bans"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "minimal-phrasing",
+      "prompt": "look over the docs and flag anything off",
+      "expected_output": "Runs the full read-only audit from a terse prompt and produces a severity-ranked report.",
+      "files": [],
+      "assertions": [
+        "A read-only severity-ranked findings report is produced (git status clean)",
+        "Findings are backed by evidence, not vibes",
+        "Root-cause grouping: findings sharing a single defect are collapsed into one finding"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "contributing-ci",
+      "prompt": "is CONTRIBUTING.md still accurate about how CI gating and merging actually work in this repo?",
+      "expected_output": "A read-only report verifying CONTRIBUTING.md's CI/merge claims against ci.yml, the ruleset, and lint-groups.",
+      "files": [],
+      "assertions": [
+        "A read-only findings report is produced (git status clean)",
+        "CONTRIBUTING.md CI/merge claims are verified against ci.yml, the ruleset, and lint-groups.yml",
+        "Each finding cites the ground-truth artifact",
+        "RECALL: surfaced any standalone-required-job mislabeling and the required-check count mismatch if present"
+      ]
+    }
+  ]
+}
