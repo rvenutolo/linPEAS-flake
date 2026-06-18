@@ -84,8 +84,9 @@ bash <this-skill-dir>/scripts/collect-ground-truth.sh
 
 It emits one labeled bundle — flake outputs, `just` recipes, `scripts/*.sh`,
 workflows, the **ci.yml top-level job list**, **lint-group membership**, workflow
-crons, and the required-check context count. Hand this same bundle to every
-reader so a path/recipe/output/job/cron named in a doc is checked against one
+crons, the required-check context count, an **`EPHEMERAL-TOKEN HITS`** sweep of
+banned token shapes over tracked docs, and an **`UNRESOLVED INTERNAL LINKS / ANCHORS`** check via `lychee --offline`. Hand this same bundle to every reader
+so a path/recipe/output/job/cron named in a doc is checked against one
 authoritative list, not re-derived per agent (and not re-run by all of them).
 `references/repo-map.md` explains what each field means and how to use it; the
 collector is its executable form.
@@ -115,12 +116,23 @@ Read-only fan-out needs no orchestration opt-in — it is plain parallel reads.
     YAML, is high severity. Job names, required-check names, and phrasings like
     "required CI job X" are first-class references here — apply the CI-prose
     discipline above (member-vs-standalone is real drift, not pedantry).
+    Internal link and heading-anchor resolution is given authoritatively by the
+    collector's **`UNRESOLVED INTERNAL LINKS / ANCHORS`** section — flag every
+    listed entry as high severity; do not re-derive by running lychee again.
 1. **Internal consistency.** Docs contradicting each other (same fact stated two
     ways); invariant-index entries vs their tracked-doc sections; a claimed
     invariant with no backing check.
 1. **Prose quality.** Clarity, grammar, dead links, and ephemeral-token
     violations per the regex. CHANGELOG / releases pages are exempt from the
     PR-ref and date bans (they structurally list PRs and dates).
+    Ephemeral-token violations are given authoritatively by the collector's
+    **`EPHEMERAL-TOKEN HITS`** section (see `references/repo-map.md §4` for
+    the full suppression and scope rules). For the **structural categories**
+    (`planning-label`, `review-pass`, `ad-hoc-ticket`, `pr-ref`, `date`), flag
+    every hit without re-judging. For the **fuzzy categories**
+    (`causal-history`, `claude-path`), eyeball each candidate — a common word
+    like "previously" or a legitimate reference to `.claude/CLAUDE.md` can
+    match; confirm context before reporting.
 
 ### 4. Controller verifies, completeness-gates, dedups, ranks
 
