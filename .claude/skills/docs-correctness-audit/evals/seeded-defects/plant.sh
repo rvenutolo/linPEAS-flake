@@ -30,7 +30,9 @@ fi
 
 mkdir -p "$results"
 remove_worktree # idempotent: clear any prior worktree first
-git -C "$repo_root" worktree add --quiet "$wt" main
+# Detach so the worktree does not occupy the `main` branch ref — required when
+# the primary tree itself has `main` checked out. Seeds are never committed.
+git -C "$repo_root" worktree add --quiet --detach "$wt" main
 
 # Copy the (untracked) skill into the worktree so /docs-audit is discoverable.
 mkdir -p "$wt/.claude/skills"
