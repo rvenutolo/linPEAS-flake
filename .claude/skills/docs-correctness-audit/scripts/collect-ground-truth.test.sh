@@ -58,6 +58,25 @@ case "${eph}" in *"Phase 9"*) check "fully exempts CHANGELOG planning-label" 1 ;
 case "${eph}" in *"Phase 8"*) check "excludes .claude/ from sweep" 1 ;; *) check "excludes .claude/ from sweep" 0 ;; esac
 rm -rf "${fx}"
 
+# --- internal-link fixture ---
+fl="$(mktemp -d)"
+(
+  cd "${fl}"
+  git init -q && git config user.email t@t && git config user.name t
+  cp "${REAL_REPO}/lychee.toml" .
+  mkdir -p docs
+  printf '# A\n[bad](./nope.md)\n[badanchor](./b.md#missing)\n[ok](./b.md#real)\n[ext](https://example.com)\n' >docs/links.md
+  printf '# Real\n' >docs/b.md
+  git add -A && git commit -qm init
+)
+# shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
+lnk="$(cd "${fl}" && source "${COLLECTOR}" && sweep_internal_links)"
+case "${lnk}" in *"nope.md"*) check "flags broken relative link" 0 ;; *) check "flags broken relative link" 1 ;; esac
+case "${lnk}" in *"missing"*) check "flags broken anchor" 0 ;; *) check "flags broken anchor" 1 ;; esac
+case "${lnk}" in *"example.com"*) check "skips external URL" 1 ;; *) check "skips external URL" 0 ;; esac
+case "${lnk}" in *"#real"*) check "resolves valid anchor (no error)" 1 ;; *) check "resolves valid anchor (no error)" 0 ;; esac
+rm -rf "${fl}"
+
 if [[ ${fails} -ne 0 ]]; then
   printf '\n%d FAILED\n' "${fails}"
   exit 1

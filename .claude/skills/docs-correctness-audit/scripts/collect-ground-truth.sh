@@ -48,6 +48,34 @@ sweep_ephemeral_tokens() {
   if [[ -z ${hits} ]]; then echo '(none)'; else printf '%s\n' "${hits}"; fi
 }
 
+# Internal link + anchor resolution via lychee (offline; external URLs skipped).
+# Run from a tmp cwd so lychee's gitignored .lycheecache never lands in the repo.
+sweep_internal_links() {
+  if ! command -v lychee >/dev/null 2>&1; then
+    echo '(lychee not found — internal-link sweep skipped)'
+    return 0
+  fi
+  local repo_root tmp errs
+  repo_root="$(git rev-parse --show-toplevel)"
+  local files=()
+  mapfile -t files < <(git ls-files '*.md' | grep -vE '^(\.claude/|tests/fixtures/)' || true)
+  if [[ ${#files[@]} -eq 0 ]]; then
+    echo '(none)'
+    return 0
+  fi
+  tmp="$(mktemp -d)"
+  errs="$(
+    cd "${tmp}" &&
+      lychee --config "${repo_root}/lychee.toml" --offline \
+        --include-fragments=anchor-only --cache=false --no-progress \
+        "${files[@]/#/${repo_root}/}" 2>&1 |
+      grep '\[ERROR\]' |
+        sed "s#file://${repo_root}/##g" || true
+  )"
+  rm -rf "${tmp}"
+  if [[ -z ${errs} ]]; then echo '(none)'; else printf '%s\n' "${errs}"; fi
+}
+
 main() {
   REPO_ROOT="$(git rev-parse --show-toplevel)"
   cd "${REPO_ROOT}"
@@ -125,6 +153,9 @@ for k, v in sorted(d.items()):
   echo ' SHA/UTF/RFC/ISO/BASE-NNN, X-GitHub-Api-Version date literal.'
   echo ' Excludes .claude/ tooling, CHANGELOG.md + docs/releases.md (historical records),'
   echo ' tests/fixtures. A hit above is authoritative — flag it.)'
+
+  section "UNRESOLVED INTERNAL LINKS / ANCHORS (lychee --offline; external skipped; authoritative)"
+  sweep_internal_links
 }
 
 if [[ ${BASH_SOURCE[0]} == "${0:-}" ]]; then
