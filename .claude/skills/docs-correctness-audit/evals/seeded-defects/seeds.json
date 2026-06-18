@@ -1,0 +1,88 @@
+{
+  "seeds": [
+    {
+      "id": "broken-link",
+      "category": "internal-link",
+      "file": "docs/index.md",
+      "anchor": "All credit for LinPEAS itself belongs to the PEASS-ng authors.",
+      "op": "insert-after",
+      "from": "",
+      "payload": "See the [ghost note](zzq7-ghostnote.md) for details.",
+      "expected_severity": "high",
+      "sentinel": "zzq7-ghostnote",
+      "line_tol": 3
+    },
+    {
+      "id": "ghost-job",
+      "category": "ghost CI job",
+      "file": "CONTRIBUTING.md",
+      "anchor": "## Reporting a security issue",
+      "op": "insert-after",
+      "from": "",
+      "payload": "The **zzq7-ghost-job** required CI job must pass before merge.",
+      "expected_severity": "high",
+      "sentinel": "zzq7-ghost-job",
+      "line_tol": 3
+    },
+    {
+      "id": "stale-path",
+      "category": "stale ref",
+      "file": "docs/development/linting.md",
+      "anchor": "# Linting & formatting",
+      "op": "insert-after",
+      "from": "",
+      "payload": "Run `scripts/zzq7-stale.sh` to validate.",
+      "expected_severity": "high",
+      "sentinel": "zzq7-stale",
+      "line_tol": 3
+    },
+    {
+      "id": "mislabel-member",
+      "category": "lint-group mislabel",
+      "file": "docs/security/workflow-hardening.md",
+      "anchor": "## job-timeout-minutes",
+      "op": "insert-after",
+      "from": "",
+      "payload": "The `harden-runner-first` standalone required CI job gates every PR.",
+      "expected_severity": "high",
+      "sentinel": "",
+      "line_tol": 3
+    },
+    {
+      "id": "ephemeral-token",
+      "category": "ephemeral",
+      "file": "docs/index.md",
+      "anchor": "Site: documentation only, **not** a trust anchor.",
+      "op": "insert-after",
+      "from": "",
+      "payload": "Last reviewed 2099-01-01.",
+      "expected_severity": "high",
+      "sentinel": "2099-01-01",
+      "line_tol": 3
+    },
+    {
+      "id": "wrong-check-count",
+      "category": "required-check count",
+      "file": "CONTRIBUTING.md",
+      "anchor": "Every PR must pass roughly 22 required status checks before merge.",
+      "op": "replace-substr",
+      "from": "roughly 22",
+      "payload": "roughly 19",
+      "expected_severity": "high",
+      "sentinel": "",
+      "line_tol": 3
+    },
+    {
+      "id": "drifted-cron",
+      "category": "cron drift",
+      "file": "docs/architecture/ci.md",
+      "anchor": "| `actions-cache-prune`             | `0 8 * * *`",
+      "op": "replace-substr",
+      "from": "0 8 * * *",
+      "payload": "0 7 * * *",
+      "expected_severity": "high",
+      "sentinel": "",
+      "line_tol": 3
+    }
+  ]
+}

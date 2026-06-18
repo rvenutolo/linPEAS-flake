@@ -1,0 +1,29 @@
+[
+  {
+    "id": "alpha",
+    "category": "internal-link",
+    "file": "docs/a.md",
+    "line": 14,
+    "expected_severity": "high",
+    "sentinel": "sent-alpha",
+    "line_tol": 3
+  },
+  {
+    "id": "beta",
+    "category": "cron drift",
+    "file": "docs/b.md",
+    "line": 40,
+    "expected_severity": "high",
+    "sentinel": "",
+    "line_tol": 3
+  },
+  {
+    "id": "gamma",
+    "category": "ghost CI job",
+    "file": "docs/c.md",
+    "line": 7,
+    "expected_severity": "high",
+    "sentinel": "sent-gamma",
+    "line_tol": 3
+  }
+]
