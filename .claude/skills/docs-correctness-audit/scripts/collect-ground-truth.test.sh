@@ -36,7 +36,9 @@ fx="$(mktemp -d)"
   mkdir -p docs
   cp "${REAL_REPO}/lychee.toml" .
   printf '# Doc\n\nPhase 3 work remains.\nTracking #388 here.\nclassDef x fill:#c8e6c9,stroke:#2e7d32\nEntity &#123; literal.\nsee [toc](#1-delete-the-thing).\nEvery call passes X-GitHub-Api-Version: 2022-11-28 header.\nUses SHA-256 digest.\n' >docs/eph.md
-  printf '# Changelog\n\n- #999 shipped 2024-01-01\n' >CHANGELOG.md
+  printf '# Changelog\n\n- #999 shipped 2024-01-01\n- Phase 9 cleanup\n' >CHANGELOG.md
+  mkdir -p .claude
+  printf 'Phase 8 work\n' >.claude/x.md
   git add -A && git commit -qm init
 )
 # shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
@@ -50,6 +52,8 @@ case "${eph}" in *"X-GitHub-Api-Version"*) check "suppresses api-version literal
 case "${eph}" in *"SHA-256"*) check "suppresses SHA-256" 1 ;; *) check "suppresses SHA-256" 0 ;; esac
 case "${eph}" in *"#999"*) check "exempts CHANGELOG pr-ref" 1 ;; *) check "exempts CHANGELOG pr-ref" 0 ;; esac
 case "${eph}" in *"2024-01-01"*) check "exempts CHANGELOG date" 1 ;; *) check "exempts CHANGELOG date" 0 ;; esac
+case "${eph}" in *"Phase 9"*) check "fully exempts CHANGELOG planning-label" 1 ;; *) check "fully exempts CHANGELOG planning-label" 0 ;; esac
+case "${eph}" in *"Phase 8"*) check "excludes .claude/ from sweep" 1 ;; *) check "excludes .claude/ from sweep" 0 ;; esac
 rm -rf "${fx}"
 
 if [[ ${fails} -ne 0 ]]; then
