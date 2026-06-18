@@ -39,7 +39,9 @@ fx="$(mktemp -d)"
   printf '# Changelog\n\n- #999 shipped 2024-01-01\n- Phase 9 cleanup\n' >CHANGELOG.md
   mkdir -p .claude
   printf 'Phase 8 work\n' >.claude/x.md
-  git add -A && git commit -qm init
+  git add -A
+  git add --force .claude/x.md # force past the inherited global gitignore, mirroring the real repo's tracked .claude skill
+  git commit -qm init
 )
 # shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
 eph="$(cd "${fx}" && source "${COLLECTOR}" && sweep_ephemeral_tokens)"
