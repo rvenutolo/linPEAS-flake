@@ -94,6 +94,20 @@ banned shapes in tracked docs and comments:
 Allowed: incident-warning text that prevents a regression (keep the warning,
 drop any dated tag).
 
+The collector emits an authoritative **`EPHEMERAL-TOKEN HITS`** section that
+applies these shapes over all tracked `*.md` files, excluding `.claude/`
+tooling, `tests/fixtures/`, `docs/_data/`, and fully exempting `CHANGELOG.md`
+and `docs/releases.md` (historical records). Deterministic suppressions remove
+known-good matches: `(fill|stroke|color):#hex` colors, `&#NNN;` HTML entities,
+`#N-` anchor targets, `(SHA|UTF|RFC|ISO|BASE)-NNN` standard acronyms, and the
+`X-GitHub-Api-Version: <date>` literal. The **structural categories** —
+`planning-label`, `review-pass`, `ad-hoc-ticket`, `pr-ref`, and `date` — are
+authoritative: flag every hit without re-deriving by eye. The **fuzzy
+categories** — `causal-history` (common words like "previously" appear in
+legitimate prose) and `claude-path` (a doc may legitimately reference
+`.claude/CLAUDE.md`) — are candidates that warrant a quick eyeball before
+reporting; do not treat them as automatically confirmed violations.
+
 ## 5. Invariant-index consistency
 
 `docs/invariant-index.md` is the binding-rules index; `check-orphan-invariants.sh`
@@ -102,3 +116,13 @@ For the consistency dimension, mirror that intent and additionally check the
 *semantic* agreement the script cannot: does the index one-liner still match
 what the linked section says, and does a claimed invariant have a backing
 enforcer (script / CI job / hook) that still exists?
+
+## 6. Internal links / anchors
+
+The collector emits an authoritative **`UNRESOLVED INTERNAL LINKS / ANCHORS`**
+section produced by `lychee --offline --include-fragments=anchor-only`, reusing
+`lychee.toml`. It runs over all tracked `*.md` files, excluding `.claude/`
+tooling and `tests/fixtures/`. External URLs are skipped entirely — only
+relative file paths and heading anchors are checked. A listed entry is
+authoritative drift: the link target does not exist (high severity). Flag every
+entry without re-deriving by eye.
