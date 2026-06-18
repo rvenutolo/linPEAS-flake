@@ -82,7 +82,7 @@ Enforced by `scripts/check-pin-diff-isolated.sh` via the
 `pin-diff-isolated` required CI job + pre-commit hook. Lint asserts
 exactly one writer (`scripts/bump-linpeas.sh`) under `scripts/`.
 
-## flake.nix pin invariants
+## nix/pin.nix pin invariants
 
 `pin.version` must match `[0-9]{8}-[0-9a-f]{7,40}`. `pin.url` must start with
 `https://github.com/peass-ng/PEASS-ng/releases/download/`. Flake-eval-time

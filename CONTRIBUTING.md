@@ -30,7 +30,7 @@ just bump             # manually refresh linpeas pin from upstream latest
 
 ## What CI gates on
 
-Every PR must pass roughly 22 required status checks before merge.
+Every PR must pass the required status checks before merge.
 The canonical list of required checks lives in
 [`docs/security/required-checks.md`](docs/security/required-checks.md).
 Highlights:
