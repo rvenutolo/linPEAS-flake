@@ -14,6 +14,7 @@ Wired in `treefmt.nix`. Run via `nix fmt` or `just fmt`. Pre-commit hook
 | prettier  | JSON and YAML only                                          |
 | mdformat  | `*.md` (with gfm + frontmatter + mkdocs + footnote plugins) |
 | shfmt     | shell scripts, 2-space indent                               |
+| just      | top-level `justfile`, 2-space indent                        |
 | taplo     | TOML                                                        |
 
 Prettier rewrites single-quoted YAML scalars to double-quoted. Use
