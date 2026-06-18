@@ -33,15 +33,23 @@ high severity, and neither is caught by a freshness gate.
 
 ## 2. Doc cluster map (one read-only agent per row)
 
-| Cluster      | Files                                                                                                                                                                                     |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| reference    | `docs/reference/*.md`                                                                                                                                                                     |
-| security     | `docs/security/*.md`                                                                                                                                                                      |
-| architecture | `docs/architecture/*.md`                                                                                                                                                                  |
-| install      | `docs/install/*.md`                                                                                                                                                                       |
-| runbooks     | `docs/runbooks/*.md`                                                                                                                                                                      |
-| development  | `docs/development/*.md`                                                                                                                                                                   |
-| root + misc  | `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`, `docs/index.md`, `docs/dashboard.md`, `docs/releases.md`, `docs/invariant-index.md`, `docs/actionlint-embedded-linters.md` |
+| Cluster     | Files                                                                                                                                                                                     |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| core-docs   | `docs/reference/*.md`, `docs/install/*.md`, `docs/runbooks/*.md`                                                                                                                          |
+| security    | `docs/security/*.md`                                                                                                                                                                      |
+| arch+dev    | `docs/architecture/*.md`, `docs/development/*.md`                                                                                                                                         |
+| root + misc | `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`, `docs/index.md`, `docs/dashboard.md`, `docs/releases.md`, `docs/invariant-index.md`, `docs/actionlint-embedded-linters.md` |
+
+Four clusters, not one per `docs/` subdirectory: most of a reader's cost is
+fixed per-agent overhead (re-reading the ground-truth bundle, tool setup), so
+collapsing the low-drift-density doc groups — `reference`+`install`+`runbooks`
+into `core-docs`, `architecture`+`development` into `arch+dev` — cuts reader
+count without losing the load-bearing detections. `security` and `root + misc`
+stay standalone because they hold the dense, high-severity drift surfaces
+(member-vs-job CI prose; required-check counts, ghost jobs, broken links). The
+recall-vs-cost evidence for this map is in
+[`../evals/tuning-results.md`](../evals/tuning-results.md). Keep `security` and
+`root + misc` un-merged; merging them regresses high-severity recall.
 
 `.claude/CLAUDE.md` and the global CLAUDE.md are read-only reference for the
 rules (esp. the ephemeral-token regex); the global one lives outside the repo
