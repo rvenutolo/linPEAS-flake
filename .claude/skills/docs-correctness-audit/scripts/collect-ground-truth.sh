@@ -58,7 +58,7 @@ sweep_internal_links() {
   local repo_root tmp errs
   repo_root="$(git rev-parse --show-toplevel)"
   local files=()
-  mapfile -t files < <(git ls-files '*.md' | grep -vE '^(\.claude/|tests/fixtures/)' || true)
+  mapfile -t files < <(git ls-files '*.md' | grep -vE '^(\.claude/|tests/fixtures/|docs/_data/)' || true) # mirrors ephemeral sweep scope; neither depends on lychee.toml for docs-scope decisions
   if [[ ${#files[@]} -eq 0 ]]; then
     echo '(none)'
     return 0
@@ -149,7 +149,7 @@ for k, v in sorted(d.items()):
 
   section "EPHEMERAL-TOKEN HITS (banned shapes in tracked docs; authoritative — see repo-map §4)"
   sweep_ephemeral_tokens
-  echo '(SUPPRESSED deterministically: fill:/stroke:#hex, &#NNN;, #N-anchor targets,'
+  echo '(SUPPRESSED deterministically: fill:/stroke:/color:#hex, &#NNN;, #N-anchor targets,'
   echo ' SHA/UTF/RFC/ISO/BASE-NNN, X-GitHub-Api-Version date literal.'
   echo ' Excludes .claude/ tooling, CHANGELOG.md + docs/releases.md (historical records),'
   echo ' tests/fixtures. A hit above is authoritative — flag it.)'
