@@ -98,7 +98,7 @@
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
       exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-precommit-table.sh --check
     ''}";
-    files = "^(flake\\.nix|docs/development/git\\.md|scripts/refresh-precommit-table\\.sh)$";
+    files = "^(flake\\.nix|nix/hooks/.*\\.nix|docs/development/git\\.md|scripts/refresh-precommit-table\\.sh)$";
     pass_filenames = false;
     language = "system";
   };
@@ -143,7 +143,7 @@
       export PATH="${pkgs-unstable.jq}/bin:${pkgs-unstable.yq-go}/bin:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-enforcement-matrix.sh --check
     ''}";
-    files = "^(docs/invariant-index\\.md|docs/security/enforcement-matrix\\.md|scripts/check-.*\\.sh|scripts/refresh-enforcement-matrix\\.sh|\\.github/workflows/ci\\.yml|flake\\.nix)$";
+    files = "^(docs/invariant-index\\.md|docs/security/enforcement-matrix\\.md|scripts/check-.*\\.sh|scripts/refresh-enforcement-matrix\\.sh|\\.github/workflows/ci\\.yml|flake\\.nix|nix/hooks/.*\\.nix)$";
     pass_filenames = false;
     language = "system";
   };

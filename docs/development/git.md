@@ -107,6 +107,7 @@ Hooks (alphabetical):
 | `job-timeout-minutes`               | Every workflow job declares an explicit timeout-minutes.                                                                             |
 | `just-recipes-fresh`                | just-recipes blocks in README.md and docs/reference/just-recipes.md match the justfile.                                              |
 | `lint-shell-tools`                  | Every tool the .#lint-hosted lint groups need is on PATH.                                                                            |
+| `manifest-hook-watches-nix`         | Every manifest-reading freshness hook watches nix/hooks in its files filter.                                                         |
 | `markdownlint`                      | Markdown style + structure.                                                                                                          |
 | `min-permissions`                   | Top-level workflow permissions empty; each job declares its own scopes.                                                              |
 | `nix-run-pinned`                    | No unpinned nix run nixpkgs#<pkg>; use nix shell .#<pkg> or pin a rev.                                                               |

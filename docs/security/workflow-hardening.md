@@ -92,6 +92,16 @@ The check-lint family is held together by naming convention: each lint script sh
 
 Enforced by `scripts/check-script-has-test.sh`. Wired as the `script-has-test` required CI job and as a pre-commit hook.
 
+## manifest-reading hook watches nix/hooks
+
+Every pre-commit hook whose script reads the Nix hook manifest (`nix eval .#devTooling.<system>.preCommitHooks`) includes `nix/hooks` in its `files` filter.
+
+A freshness hook regenerates or validates a generated doc from the manifest. When its `files` filter omits `nix/hooks`, a commit that edits only a hook definition under `nix/hooks/*.nix` changes the manifest but does not re-trigger the hook on the per-changed-file `git commit` path, so a stale generated doc can be committed locally. The `--all-files` CI mirror still catches the drift, but the local fast-path defense is lost. Tying every manifest-reader's filter to `nix/hooks` keeps the local and CI paths in agreement.
+
+The guard derives the manifest-reading scripts by content (`preCommitHooks` / `PRECOMMIT_HOOK_NAMES`), not a hardcoded list, then asserts each referencing hook's `files` filter contains `nix/hooks`. It fails loud if it finds zero manifest-reading hooks, catching a parser break from a hook-file reformat.
+
+Enforced by `scripts/check-manifest-hook-watches-nix.sh`. Wired in the `lint-script-hygiene` CI group and as a pre-commit hook.
+
 ## lean lint-shell routing
 
 The batched invariant-lint groups are split across two devShells by closure cost. The light groups — `lint-workflow-security` and `lint-script-hygiene` — run in `devShells.lint`, whose tight closure realizes far faster in CI than the full author shell. `lint-doc-invariants` must stay on `devShells.default`: its `renovate-config-validator` check invokes the `renovate` binary, which pulls the heavy renovate closure that the lean shell deliberately omits. Moving `lint-doc-invariants` to `.#lint` would break that check; moving the light groups back to `.#default` would forfeit the realize saving. A new batched group belongs in `.#lint` only if every tool it needs is in `nix/devshell-lint.nix` `buildInputs`; otherwise it stays on `.#default`.
