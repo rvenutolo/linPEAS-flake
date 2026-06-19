@@ -53,13 +53,13 @@
     pass_filenames = false;
     language = "system";
   };
-  # Every tool the .#lint-hosted lint groups rely on is present on
+  # Every tool the .#lint lint groups rely on is present on
   # PATH. Keeps devShells.lint buildInputs from silently dropping a
   # tool. See docs/security/workflow-hardening.md.
   lint-shell-tools = {
     enable = true;
     name = "lint-shell-tools";
-    description = "Every tool the .#lint-hosted lint groups need is on PATH.";
+    description = "Every tool the .#lint lint groups need is on PATH.";
     entry = "${pkgs-unstable.writeShellScript "lint-shell-tools-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'
