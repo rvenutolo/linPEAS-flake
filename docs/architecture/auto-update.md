@@ -6,7 +6,7 @@ Three independent automations keep the pin current and the release artifacts in 
 
 ```mermaid
 flowchart TD
-  cron["cron: 08:05 UTC daily<br/>(update-linpeas.yml)"]
+  cron["update-linpeas.yml<br/>(daily cron)"]
   api["gh api repos/peass-ng/PEASS-ng/releases/latest"]
   compare{"upstream tag<br/>== current pin?"}
   fetch["curl --location asset_url<br/>cross-check .digest<br/>(hard fail on absent)"]
@@ -44,7 +44,7 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-  flakelock["update-flake-lock.yml<br/>Friday 05:00 UTC<br/>compute-lock (read-only)<br/>+ push-and-merge (App token, REST PUT /contents)"]
+  flakelock["update-flake-lock.yml<br/>compute-lock (read-only)<br/>+ push-and-merge (App token, REST PUT /contents)"]
   renovate["Renovate Friday batch<br/>(action SHAs + Nix pin<br/>+ tracked flake inputs)<br/>minimumReleaseAge: 7 days"]
   pr1["PR: update flake.lock"]
   pr2["PR: action SHA / input bumps"]
@@ -63,7 +63,7 @@ The Pages workflow runs:
 
 - On every push to `main` (catches docs and code changes).
 - On every release (catches release-on-bump pin landings).
-- Daily at 09:55 UTC — last slot in the daily window, after `update-linpeas` (08:05) and `stale-pin-check` (09:00), so the dashboard reads a settled state. See [CI — cron schedule](ci.md#cron-schedule).
+- Last slot in the daily window, after `update-linpeas` and `stale-pin-check`, so the dashboard reads a settled state. See [CI — cron schedule](ci.md#cron-schedule).
 - On manual `workflow_dispatch`.
 
 The Pages site is **not** in the `protect-main` ruleset's required check set; a Pages failure must not block pin bumps. See [CI](ci.md).

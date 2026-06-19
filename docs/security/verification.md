@@ -133,7 +133,7 @@ Alert fatigue is a security risk.
 ## Gitleaks secret scanning<a name="gitleaks-secret-scanning"></a>
 
 `gitleaks.yml` scans the full git history (`fetch-depth: 0`) on push to
-main, every PR, and a weekly cron (Fri 06:40 UTC). Required check named
+main, every PR, and a weekly Friday cron. Required check named
 `gitleaks` in the `protect-main` ruleset.
 
 - Uses only `secrets.GITHUB_TOKEN` — PR-triggered workflow secret

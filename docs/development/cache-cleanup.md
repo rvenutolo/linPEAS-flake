@@ -3,9 +3,9 @@
 The `actions-cache-prune.yml` workflow keeps the repository's
 Actions-cache namespace from accumulating stale entries. Two triggers:
 
-## Daily cron (08:00 UTC)
+## Daily cron
 
-The `prune-stale` job runs every day at 08:00 UTC and on manual
+The `prune-stale` job runs daily and on manual
 `workflow_dispatch`. It removes:
 
 1. **Age-stale entries** — any cache entry whose `last_accessed_at`
