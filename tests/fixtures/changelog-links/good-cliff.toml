@@ -1,0 +1,73 @@
+# git-cliff configuration. Generates CHANGELOG.md from conventional
+# commits between release tags. See docs/development/changelog.md for
+# the runbook. Tag pattern parity with the cross-layer pin-shape regex
+# is enforced by scripts/check-cliff-tag-pattern.sh.
+
+[changelog]
+header = """
+# Changelog
+
+All notable changes to this project are auto-generated from
+conventional commits between release tags. Format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The release
+tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
+repo is not on a semver track.
+
+"""
+body = """
+{% if version %}\
+## [{{ version }}] - {{ timestamp | date(format=\"%Y-%m-%d\") }}
+{% else %}\
+## Unreleased
+{% endif %}\
+{% for group, commits in commits | group_by(attribute=\"group\") %}
+### {{ group | upper_first }}
+{% for commit in commits %}\
+- {{ commit.message | upper_first | trim }}
+{% endfor %}\
+{% endfor %}\n
+"""
+trim = true
+footer = ""
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+split_commits = false
+tag_pattern = "^[0-9]{8}-[0-9a-f]{7,40}$"
+topo_order = false
+sort_commits = "newest"
+
+commit_preprocessors = [
+  # The scorecard allowlist shipped at 11 checks; an early commit subject
+  # mislabeled it "15-check". Correct the count so the rendered changelog
+  # matches the workflow and the invariant index.
+  { pattern = '15-check allowlist', replace = "11-check allowlist" },
+  { pattern = '\(#([0-9]+)\)', replace = "([#${1}](https://github.com/rvenutolo/linPEAS-flake/pull/${1}))" },
+]
+
+# Keep only PR-merge commits. protect-main forces every change through a
+# pull request, so the merge commit carries the PR number — rendered as a
+# `[#N]` link by the preprocessor above — while the branch commits it merges
+# do not. Requiring that link on every group rule collapses each PR to a
+# single entry and the trailing catch-all skips the duplicate, unlinked
+# branch commits. Breaking changes are detected via the `!` type suffix per
+# the repo's commit convention.
+commit_parsers = [
+  { message = "^docs: update changelog", skip = true },
+  { message = "^Merge ", skip = true },
+  { message = "^feat(\\(.+\\))?!:.*\\[#[0-9]+\\]", group = "Breaking Changes" },
+  { message = "^fix(\\(.+\\))?!:.*\\[#[0-9]+\\]", group = "Breaking Changes" },
+  { message = "^feat.*\\[#[0-9]+\\]", group = "Features" },
+  { message = "^fix.*\\[#[0-9]+\\]", group = "Fixes" },
+  { message = "^perf.*\\[#[0-9]+\\]", group = "Performance" },
+  { message = "^refactor.*\\[#[0-9]+\\]", group = "Refactor" },
+  { message = "^docs.*\\[#[0-9]+\\]", group = "Documentation" },
+  { message = "^ci.*\\[#[0-9]+\\]", group = "CI" },
+  { message = "^build.*\\[#[0-9]+\\]", group = "Build" },
+  { message = "^chore.*\\[#[0-9]+\\]", group = "Chores" },
+  { message = "^style.*\\[#[0-9]+\\]", group = "Style" },
+  { message = "^test.*\\[#[0-9]+\\]", group = "Tests" },
+  { message = "^revert.*\\[#[0-9]+\\]", group = "Reverts" },
+  { message = ".*", skip = true },
+]

@@ -19,6 +19,7 @@ this file in the same change as any modification to the ruleset.
 | lint-script-hygiene        | ci                | .github/workflows/ci.yml                |
 | lint-doc-invariants        | ci                | .github/workflows/ci.yml                |
 | cliff-tag-pattern          | ci                | .github/workflows/ci.yml                |
+| changelog-links            | ci                | .github/workflows/ci.yml                |
 | commitlint                 | ci                | .github/workflows/ci.yml                |
 | dashboard-data-tests       | ci                | .github/workflows/ci.yml                |
 | required-checks-no-paths   | ci                | .github/workflows/ci.yml                |

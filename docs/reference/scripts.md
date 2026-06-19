@@ -39,6 +39,28 @@ with `--auto` must also carry the decline gate (a `gh pr view --json state` quer
 maintainer-closed (declined) or already-merged PR is never silently
 resurrected by an auto-merging update workflow.
 
+### scripts/check-changelog-links.sh
+
+Refuse to build if the regenerated changelog contains
+duplicate identical PR links or loses the scorecard-count preprocessor.
+Validates git-cliff OUTPUT, not the committed CHANGELOG.md formatting.
+CHANGELOG.md is generator-owned and excluded from treefmt + markdownlint,
+so no other check guards a malformed regeneration.
+
+Offline and deterministic: git-cliff parses the PR number from the `(#N)`
+subject suffix, so no GitHub token is required.
+
+git-cliff is invoked only via the flake-pinned `.#git-cliff` output, never
+an unpinned `nix run nixpkgs#git-cliff`, per the nix-run-pinned invariant.
+
+Exits 0 when both invariants hold.
+Exits 1 on any violation (duplicate links, lost preprocessor, missing file).
+Exits 2 when nix is not on PATH.
+
+Env overrides (test-only):
+CLIFF_TOML_OVERRIDE — path to a fixture cliff.toml instead of
+the repo-root cliff.toml
+
 ### scripts/check-checkout-persist-credentials.sh
 
 Lint: every `actions/checkout` step in every workflow
