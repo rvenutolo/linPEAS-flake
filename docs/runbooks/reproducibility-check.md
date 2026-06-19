@@ -54,7 +54,7 @@ Promotion steps:
 
 1. Edit `.github/workflows/reproducibility-check.yml`: remove `continue-on-error: true` from the `compare` job.
 1. Run the workflow once manually via `workflow_dispatch` to confirm it still passes.
-1. Add `Reproducibility Check / compare` to the branch protection ruleset required-checks list (see [`docs/runbooks/settings-drift-app.md`](settings-drift-app.md) for ruleset edit flow).
+1. Add `Reproducibility Check / compare` to the branch protection ruleset required-checks list (see [`docs/security/required-checks.md`](../security/required-checks.md) for the ruleset / required-checks edit flow).
 1. Update this runbook's **Status** header to `Required`.
 1. Commit changes on a single PR titled `ci: promote reproducibility check to required`.
 
