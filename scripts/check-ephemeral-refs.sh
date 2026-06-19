@@ -62,8 +62,13 @@ readonly ADVISORY
 # or a word char (so `#1-anchor` is excluded by its trailing `-`).
 readonly RE_ISSUE='(^|[^-&[:alnum:]_])#[0-9]+([^-[:alnum:]_]|$)'
 readonly RE_DATE='([0-9]{4}-[0-9]{2}-[0-9]{2}|(January|February|March|April|May|June|July|August|September|October|November|December)[[:space:]]+[0-9]{4}|Q[1-4][[:space:]]+[0-9]{4})'
-readonly RE_PLANNING='(GAP-[0-9]+|P[0-9]+\.[0-9]+|Wave-P?[0-9]+|Phase[[:space:]]+[0-9]+|AU-P-[0-9]+|SC-POST-[0-9]+|plan[[:space:]]+[0-9]+|F-[0-9]+)'
-readonly RE_REVIEW='(\(D[0-9]+\)|\(L[0-9]+[,)]|Per[[:space:]]+D[0-9]+|D[0-9]+:)'
+# Each enumerated shape carries the same left boundary guard as
+# RE_ISSUE so it cannot match inside a larger token (e.g. `UTF-8` ->
+# `F-8`, `PDF-1.7` -> `F-1`, `ID5:` -> `D5:`). No right guard on shapes
+# ending in literal punctuation (`(D3)`, `D5:`, `(L4,`) — that suffix is
+# itself the boundary.
+readonly RE_PLANNING='(^|[^-&[:alnum:]_])(GAP-[0-9]+|P[0-9]+\.[0-9]+|Wave-P?[0-9]+|Phase[[:space:]]+[0-9]+|AU-P-[0-9]+|SC-POST-[0-9]+|plan[[:space:]]+[0-9]+|F-[0-9]+)'
+readonly RE_REVIEW='(^|[^-&[:alnum:]_])(\(D[0-9]+\)|\(L[0-9]+[,)]|Per[[:space:]]+D[0-9]+|D[0-9]+:)'
 readonly RE_CLAUDE='\.claude/'
 
 # Advisory class: fuzzy causal-history phrases.
@@ -73,11 +78,18 @@ readonly RE_CAUSAL='(prior to|previously|Migration note|was reshaped|Tightened f
 # count so downstream line numbers match the original file. Blanks
 # generated <!-- BEGIN x -->/<!-- END x --> blocks (and their fences),
 # fenced ``` code blocks (and their fences), and inline `code` spans.
+# A generated BEGIN with no matching END would otherwise blank every
+# line to EOF, silently hiding any violation below it — an unterminated
+# marker is a doc defect, so fail loud (exit 1) instead.
 # @arg $1 file path to the source file
+# @arg $2 src_rel source path relative to REPO_ROOT (for the error message)
 # @stdout the file with exempt regions replaced by blank lines
+# @stderr `src_rel: unterminated generated block` if a BEGIN lacks an END
+# @exitcode 0 on clean strip, 1 on unterminated generated block
 function strip_exempt() {
   local -r file="$1"
-  awk '
+  local -r src_rel="$2"
+  awk -v src_rel="${src_rel}" '
     {
       line = $0
       # Generated BEGIN/END blocks: blank the markers and everything
@@ -104,6 +116,12 @@ function strip_exempt() {
         line = substr(line, 1, RSTART - 1) pad substr(line, RSTART + RLENGTH)
       }
       print line
+    }
+    END {
+      if (in_gen) {
+        printf "%s: unterminated generated block\n", src_rel > "/dev/stderr"
+        exit 1
+      }
     }
   ' "${file}"
 }
@@ -212,7 +230,12 @@ function main() {
     [[ -f ${src_abs} ]] || continue
 
     stripped="$(mktemp)"
-    strip_exempt "${src_abs}" >"${stripped}"
+    # An unterminated generated block is a fatal doc defect: fail loud
+    # rather than let strip_exempt blank to EOF and hide violations.
+    if ! strip_exempt "${src_abs}" "${src_rel}" >"${stripped}"; then
+      rm --force -- "${stripped}"
+      exit 1
+    fi
 
     if [[ ${ADVISORY} -eq 1 ]]; then
       scan_advisory "${src_rel}" "${stripped}"

@@ -65,6 +65,18 @@ function main() {
     'bad-planning' 'source.md' '' 1 '[planning]'
   run_scenario 'review-pass label fails' \
     'bad-review' 'source.md' '' 1 '[review]'
+  # Enumerated shapes that legitimately start a match must still report.
+  run_scenario 'standalone planning shapes still match' \
+    'planning-shapes' 'source.md' '' 1 '[planning]'
+  run_scenario 'standalone review shapes still match' \
+    'review-shapes' 'source.md' '' 1 '[review]'
+  # Mid-word matches (UTF-8 -> F-8, ID5: -> D5:) must not be smuggled
+  # back into the blocking gate by the bare planning/review shapes.
+  run_scenario 'encoding shapes are not planning/review labels' \
+    'false-positive-shapes' 'source.md' '' 0 ''
+  # An unterminated generated block must fail loud, not blank to EOF.
+  run_scenario 'unterminated generated block errors' \
+    'bad-unterminated-genblock' 'source.md' '' 1 'unterminated generated block'
   run_scenario 'literal .claude path fails' \
     'bad-claude-path' 'source.md' '' 1 '[claude-path]'
   run_scenario 'code-span/block banned shapes pass' \
