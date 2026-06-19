@@ -100,8 +100,9 @@ function strip_exempt() {
         print ""
         next
       }
-      # Fenced code blocks: blank the fences and everything between.
-      if (line ~ /^[[:space:]]*```/) {
+      # Fenced code blocks (backtick or tilde): blank the fences and
+      # everything between them.
+      if (line ~ /^[[:space:]]*(```|~~~)/) {
         in_fence = !in_fence
         print ""
         next
@@ -195,7 +196,8 @@ function resolve_sources() {
   fi
   {
     [[ -f ${REPO_ROOT}/README.md ]] && printf 'README.md\n'
-    (cd "${REPO_ROOT}" && find docs -type f -name '*.md' 2>/dev/null | sort)
+    [[ -d ${REPO_ROOT}/docs ]] &&
+      (cd "${REPO_ROOT}" && find docs -type f -name '*.md' 2>/dev/null | sort)
   }
 }
 

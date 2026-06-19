@@ -55,6 +55,32 @@ function run_scenario() {
   rm --force -- "${stderr_file}"
 }
 
+# @description Assert that banned shapes inside a tilde (`~~~`) code
+# fence are stripped. The fixture is built at runtime in a temp dir so
+# the Markdown formatter cannot normalize the tilde fence to backticks.
+function run_tilde_scenario() {
+  local tmp_root
+  tmp_root="$(mktemp -d)"
+  mkdir -p "${tmp_root}/docs"
+  printf '# t\n\n~~~\nref #123 on 2026-06-18 Phase 2 (D3) .claude/x.md\n~~~\n' \
+    >"${tmp_root}/docs/tilde.md"
+
+  local actual_exit=0
+  EPHEMERAL_REFS_ROOT_OVERRIDE="${tmp_root}" \
+    EPHEMERAL_REFS_SOURCES_OVERRIDE='docs/tilde.md' \
+    "${SCRIPT}" >/dev/null 2>&1 || actual_exit=$?
+
+  if [[ ${actual_exit} -ne 0 ]]; then
+    printf 'FAIL: tilde-fenced banned shapes pass — expected exit 0, got %d\n' \
+      "${actual_exit}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: tilde-fenced banned shapes pass (exit 0)\n'
+  fi
+
+  rm --recursive --force -- "${tmp_root}"
+}
+
 function main() {
   run_scenario 'good prose passes' 'good' 'source.md' '' 0 ''
   run_scenario 'bare issue ref fails' \
@@ -83,6 +109,7 @@ function main() {
     'exempt-codeblock' 'source.md' '' 0 ''
   run_scenario 'generated-block banned shapes pass' \
     'exempt-genblock' 'source.md' '' 0 ''
+  run_tilde_scenario
   run_scenario 'causal phrase passes blocking pass' \
     'advisory' 'source.md' '' 0 ''
   run_scenario 'causal phrase prints in advisory mode' \
