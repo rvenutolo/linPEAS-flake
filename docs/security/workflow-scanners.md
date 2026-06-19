@@ -34,14 +34,13 @@ individual diff reveals.
 ## The four external scanners
 
 These are third-party scanners, distinct from the in-tree shell lints in the
-next section. The Friday cron cluster runs them in a fixed order:
+next section. The weekly Friday cron cluster runs them in a fixed order (see
+[CI — cron schedule](../architecture/ci.md#cron-schedule) for the exact slots):
 
-| UTC (Fri) | Scanner               |
-| --------- | --------------------- |
-| 06:00     | codeql                |
-| 06:10     | octoscan              |
-| 06:20     | scorecard-drift-check |
-| 06:30     | zizmor-drift-check    |
+1. codeql
+1. octoscan
+1. scorecard-drift-check
+1. zizmor-drift-check
 
 ### codeql
 
@@ -49,7 +48,7 @@ next section. The Friday cron cluster runs them in a fixed order:
     composite-action files (the `actions` query pack). Catches injection
     reachable through variable flow that pattern matchers miss.
 - **Triggers:** PR to `main` filtered to `.github/workflows/**` and
-    `.github/actions/**`; push to `main`; Friday 06:00 cron (full tree); manual
+    `.github/actions/**`; push to `main`; weekly Friday cron (full tree); manual
     dispatch.
 - **Status:** advisory. Not a required check — the required-check policy
     forbids a paths filter on a required workflow, and the PR filter is
@@ -61,7 +60,7 @@ next section. The Friday cron cluster runs them in a fixed order:
     references, plus a second injection-triangulation angle — coverage zizmor
     and codeql do not provide.
 - **Triggers:** PR to `main` filtered to `.github/workflows/**` and the
-    octoscan scan script; push to `main`; Friday 06:10 cron (full tree); manual
+    octoscan scan script; push to `main`; weekly Friday cron (full tree); manual
     dispatch.
 - **Status: advisory-by-design.** It is the cheapest scanner and runs
     zero-noise, but it fails on *any* finding (no severity threshold) against an
@@ -81,7 +80,7 @@ next section. The Friday cron cluster runs them in a fixed order:
     opinion on repo hardening (pinned dependencies, signed releases, SAST
     presence, security policy, and more) that no in-tree lint computes as a
     single graded posture.
-- **Triggers:** Friday 06:20 cron and manual dispatch only. It does **not**
+- **Triggers:** weekly Friday cron and manual dispatch only. It does **not**
     scan on PRs or pushes.
 - **Status:** weekly watchdog. A check scoring below threshold fails the run
     and opens a deduped `scorecard-drift` tracking issue; the next clean run
@@ -95,7 +94,7 @@ next section. The Friday cron cluster runs them in a fixed order:
     (template-injection, excessive permissions, dangerous triggers) tuned to
     Actions semantics.
 - **Triggers:** runs as a **pre-commit hook on every commit**
-    (`--min-severity=low`), plus a Friday 06:30 cron and manual dispatch. It
+    (`--min-severity=low`), plus a weekly Friday cron and manual dispatch. It
     does **not** scan on PRs or pushes — commit-time prevention is its primary
     mode.
 - **Status:** commit-time prevention + weekly watchdog. The drift-check covers

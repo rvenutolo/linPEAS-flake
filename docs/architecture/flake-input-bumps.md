@@ -299,10 +299,10 @@ For `NixOS/nixpkgs` bumps specifically:
     outside required-checks). Skim the Security tab for any new
     `CRITICAL` rows. The remediation path for an unfixed
     base-layer CVE is the next nixpkgs bump.
-- The Pages cron (09:55 UTC daily) will rebuild the dashboard on its
+- The Pages cron (daily) will rebuild the dashboard on its
     next tick. Push-trigger and release-trigger also rebuild
     immediately.
-- The next `update-flake-lock.yml` cron run (weekly, Friday 05:00 UTC)
+- The next `update-flake-lock.yml` cron run (weekly, Friday)
     will refresh within-`YY.MM` patches automatically.
 
 ## Interaction between the three pins
