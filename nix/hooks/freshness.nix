@@ -219,4 +219,21 @@
     pass_filenames = false;
     language = "system";
   };
+  # Asserts docs outside ci.md never restate a literal workflow cron
+  # time: a line naming a workflow and carrying an HH:MM clock time
+  # belongs only in the ci.md schedule table; other docs link it.
+  check-doc-cron-restatement = {
+    enable = true;
+    name = "check-doc-cron-restatement";
+    description = "Docs outside ci.md must link the cron schedule table, not restate literal workflow times.";
+    entry = "${pkgs-unstable.writeShellScript "check-doc-cron-restatement-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-doc-cron-restatement.sh
+    ''}";
+    files = "^(README\\.md|docs/.*\\.md|\\.github/workflows/.*\\.ya?ml|scripts/check-doc-cron-restatement\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
 }

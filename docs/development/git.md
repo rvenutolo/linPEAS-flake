@@ -84,6 +84,7 @@ Hooks (alphabetical):
 | `auto-merge-decline-gate`           | Auto-merge run-blocks carry the CLOSED/MERGED decline gate.                                                                          |
 | `check-cron-table`                  | Cron schedule table + ordering paragraph in docs/architecture/ci.md matches workflow cron triggers.                                  |
 | `check-doc-anchors`                 | Every markdown #anchor link resolves to a heading slug in its target file.                                                           |
+| `check-doc-cron-restatement`        | Docs outside ci.md must link the cron schedule table, not restate literal workflow times.                                            |
 | `check-ephemeral-refs`              | Tracked Markdown prose carries no ephemeral references (PR/issue refs, prose dates, planning/review labels, literal .claude/ paths). |
 | `check-jsonschema`                  | Schema-shape validation of repo config (renovate.json, workflows, actions).                                                          |
 | `check-orphan-invariants`           | Every docs/ file has an invariant-index entry and vice versa.                                                                        |

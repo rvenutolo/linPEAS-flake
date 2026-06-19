@@ -43,6 +43,7 @@ lint-doc-invariants:
   - orphan-invariants
   - doc-anchors
   - ephemeral-refs
+  - doc-cron-restatement
   - jsonschema
   - renovate-config-validator
   - ci-job-in-summary

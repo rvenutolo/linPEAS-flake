@@ -89,6 +89,20 @@ Lint: every markdown #anchor link pointing at an
 in-tree .md (or same-file fragment) must match a heading slug in
 the target file.
 
+### scripts/check-doc-cron-restatement.sh
+
+Lint: ban restating literal workflow cron times in docs.
+A line that names a workflow (backticked bare name `NAME` or a
+`NAME.yml` token) AND carries a clock time (HH:MM) restates the
+single source of truth, the schedule table in docs/architecture/ci.md.
+Such lines must live only in that table; this lint flags them
+everywhere else (README.md + docs/\*\*, excluding ci.md itself).
+
+Exit codes:
+0 no restatements found
+1 restatement(s) found (details printed to stderr)
+2 missing/empty .github/workflows directory
+
 ### scripts/check-ephemeral-refs.sh
 
 Lint: tracked Markdown prose must carry no ephemeral
