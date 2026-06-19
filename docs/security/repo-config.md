@@ -15,7 +15,7 @@ vendor list and the procedure for adding a new vendor.
 ## Workflow action SHA pinning
 
 Every `uses:` in `.github/workflows/*.yml` and `.github/actions/**/*.yml`
-must end with a full 40-hex SHA + trailing `# vX.Y.Z (Dn)` comment, OR be
+must end with a full 40-hex SHA + trailing `# vX.Y.Z` comment, OR be
 a path-relative `./...` self-reference. Includes first-party GitHub-owned
 actions.
 
