@@ -42,6 +42,7 @@ lint-script-hygiene:
 lint-doc-invariants:
   - orphan-invariants
   - doc-anchors
+  - ephemeral-refs
   - jsonschema
   - renovate-config-validator
   - ci-job-in-summary

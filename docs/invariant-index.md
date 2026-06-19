@@ -79,6 +79,7 @@ live in `.claude/CLAUDE.md` (untracked).
 
 - **ci-summary-category-map** — every required status check is categorized for the README CI summary. → [security/required-checks.md](security/required-checks.md). <!-- enforcer: scripts/check-ci-job-in-summary.sh, scripts/refresh-ci-summary.sh; ci: lint-doc-invariants, doc-freshness; hook: ci-job-in-summary, ci-summary-fresh -->
 - **Merging PRs** — merge-commit only, signed, PR title = subject. → [development/git.md](development/git.md) <!-- enforcer: -; ci: -; hook: commitlint -->
+- **Ephemeral-reference ban** — tracked Markdown carries no PR/issue refs, prose dates, planning/review labels, or literal `.claude/` paths. → [development/linting.md](development/linting.md) <!-- enforcer: scripts/check-ephemeral-refs.sh; ci: lint-doc-invariants; hook: check-ephemeral-refs -->
 - **Treefmt YAML quote gotcha / flake-show auto-block** → [development/linting.md](development/linting.md) <!-- enforcer: scripts/refresh-flake-show.sh; ci: -; hook: treefmt, flake-show-fresh -->
 - **Flake outputs reference** — auto-regenerated `nix flake show --all-systems` tree; do not hand-edit. → [reference/flake-outputs.md](reference/flake-outputs.md) <!-- enforcer: scripts/refresh-flake-show.sh; ci: -; hook: flake-show-fresh -->
 - **PR auto-labeling** → [development/labeling.md](development/labeling.md) <!-- enforcer: -; ci: -; hook: - -->
