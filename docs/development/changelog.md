@@ -90,7 +90,22 @@ leading `^Merge ` rule skips any commit that uses GitHub's default
 Git-cliff runs this preprocessor before any other rule. Commit subjects
 that include `(#NNN)` — the format GitHub inserts into merge-commit
 subjects — are rewritten to a clickable `[#NNN](…)` link in the
-rendered changelog.
+rendered changelog. This preprocessor is the **sole** source of PR
+links: rendering a second link (e.g. a body-template `pr_number` block)
+would double-link every entry as `([#N](…)) ([#N](…))`.
+
+### Link-duplication guard
+
+`scripts/check-changelog-links.sh` regenerates the changelog from the
+flake-pinned `.#git-cliff` into a temp file and asserts two invariants
+on the output: zero duplicate *identical* adjacent PR links (a commit
+citing two distinct PRs is legitimate and passes), and that the
+scorecard-count preprocessor still applies (no `15-check allowlist`
+survives). `CHANGELOG.md` is generator-owned and excluded from treefmt
+and markdownlint, so this check is the only guard against a malformed
+regeneration. It runs offline — git-cliff parses the PR number from the
+`(#N)` subject suffix, so no token is needed — as the required
+`changelog-links` CI job on every PR.
 
 ## End-to-end sequence
 
