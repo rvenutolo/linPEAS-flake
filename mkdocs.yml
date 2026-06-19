@@ -85,10 +85,13 @@ nav:
       - CI: architecture/ci.md
       - CI DAG: architecture/ci-dag.md
       - Flake-input bumps: architecture/flake-input-bumps.md
+      - Pin convention: architecture/pin-convention.md
   - Development:
       - Git workflow: development/git.md
       - Linting & formatting: development/linting.md
       - Labeling: development/labeling.md
+      - Cache cleanup: development/cache-cleanup.md
+      - Changelog: development/changelog.md
   - Reference:
       - Flake outputs: reference/flake-outputs.md
       - Just recipes: reference/just-recipes.md
@@ -99,15 +102,19 @@ nav:
       - Docker Hub recovery: runbooks/dockerhub-recovery.md
       - Ratchet pin audit: runbooks/ratchet-pin-audit.md
       - Reproducibility check: runbooks/reproducibility-check.md
+      - Scorecard PAT rotation: runbooks/scorecard-pat-rotation.md
+      - Scorecard signed-releases backfill: runbooks/scorecard-signed-releases-backfill.md
       - Settings-drift App: runbooks/settings-drift-app.md
   - Security:
       - Repository configuration: security/repo-config.md
       - Allowed actions: security/allowed-actions.md
       - Enforcement matrix: security/enforcement-matrix.md
+      - Minimum permissions: security/min-permissions.md
       - Required checks: security/required-checks.md
       - Settings posture: security/settings-posture.md
       - Trust model: security/trust-model.md
       - Threat model: security/threat-model.md
       - Verification: security/verification.md
+      - Workflow hardening: security/workflow-hardening.md
       - Workflow scanners: security/workflow-scanners.md
   - Releases: releases.md
