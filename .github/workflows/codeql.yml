@@ -7,8 +7,13 @@ name: codeql
 # tab. Shell support is deliberately omitted — CodeQL's `shell` analysis
 # is limited and `shellcheck` already covers our `run:` blocks.
 #
-# Not in branch protection; failure of this workflow does NOT block
-# merge. The `analyze` step is invoked with `fail-on: critical`, so a
+# Deliberately advisory — never a required check; failure does NOT
+# block merge. Gating merge on CodeQL would let a single CRITICAL
+# false positive or a transient CodeQL infra flake wedge every PR. The
+# merge gate is the in-tree workflow lints plus the zizmor pre-commit
+# hook; CodeQL is the deeper dataflow second opinion that runs on every
+# PR for fast feedback without holding the merge button hostage.
+# The `analyze` step is invoked with `fail-on: critical`, so a
 # CRITICAL finding fails the job and — on push to main — the
 # `notify-finding` job opens a deduped issue via
 # `notify-workflow-result`. If the job fails before `analyze` runs
@@ -23,15 +28,13 @@ name: codeql
 on:
   pull_request:
     branches: [main]
-    # CodeQL's `actions` analysis only reads workflow + composite
-    # action files; skip PRs that touch neither. Safe because this
-    # workflow is not a required check (`required-checks-no-paths`
-    # forbids paths filters on required workflows — do not promote
-    # this one without removing the filter). The weekly cron still
-    # sweeps everything.
-    paths:
-      - ".github/workflows/**"
-      - ".github/actions/**"
+    # Runs on every PR — no paths filter. The OpenSSF Scorecard SAST
+    # check scores the fraction of recent merged PRs that ran a SAST
+    # tool, so skipping path-narrow PRs would drag that fraction below
+    # 10. The `actions` query pack re-analyses the whole tree's
+    # workflow / action files on each run (~1 min), so a PR that
+    # touches neither still produces a valid analysis. The weekly cron
+    # sweeps the full tree regardless.
   push:
     branches: [main]
   schedule:
