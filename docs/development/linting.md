@@ -98,9 +98,9 @@ not leak into prose.
 The script has two modes. The default pass is **blocking** (exit 1 on any
 hit, printing `file:line: [class] token` to stderr). The `--advisory`
 pass is **warn-only** — it prints `[advisory] file:line: phrase` and
-always exits 0. The pre-commit hook `check-ephemeral-refs` and the CI
-`lint-doc-invariants` group run the blocking pass first, then the
-advisory pass; only the blocking pass gates a merge.
+always exits 0. The pre-commit hook `check-ephemeral-refs` runs the
+blocking pass first, then the advisory pass; the CI `lint-doc-invariants`
+group runs the blocking pass. Only the blocking pass gates a merge.
 
 ### Blocking classes
 
