@@ -86,6 +86,69 @@ docker is missing. The pinned image digest and the version label
 tracked by Renovate both live in `scripts/octoscan-scan.sh` (single
 source of truth).
 
+## Ephemeral-reference lint
+
+`scripts/check-ephemeral-refs.sh` gates tracked Markdown prose against
+"ephemeral references": tokens that describe what a doc *replaced* or
+which plan, review pass, ticket, date, or PR introduced it, rather than
+the CURRENT state of the repo. Tracked docs are the durable home for
+behavior; history is recovered from `git log` and PR threads, so it must
+not leak into prose.
+
+The script has two modes. The default pass is **blocking** (exit 1 on any
+hit, printing `file:line: [class] token` to stderr). The `--advisory`
+pass is **warn-only** — it prints `[advisory] file:line: phrase` and
+always exits 0. The pre-commit hook `check-ephemeral-refs` and the CI
+`lint-doc-invariants` group run the blocking pass first, then the
+advisory pass; only the blocking pass gates a merge.
+
+### Blocking classes
+
+| Class              | Shapes                                                                        |
+| ------------------ | ----------------------------------------------------------------------------- |
+| PR / issue refs    | `#123`, `PR #123`, `issue #123`                                               |
+| Dates-in-prose     | `2026-06-18`, `<Month> 2026`, `Q2 2026`                                       |
+| Planning labels    | `GAP-1`, `P1.2`, `Wave-P3`, `Phase 2`, `AU-P-4`, `SC-POST-5`, `plan 6`, `F-7` |
+| Review-pass labels | `(D3)`, `(L4,`, `Per D3`, `D5:`                                               |
+| Literal `.claude/` | any `.claude/` path — tracked docs must not point into the untracked tree     |
+
+The PR/issue-ref match is boundary-guarded so anchor targets
+(`#1-anchor`), HTML numeric entities (`&#123;`), and hex colors (`#fff`)
+do not trip it. The enumerated planning/review shapes carry the same
+left-boundary guard so they cannot match inside a larger token (e.g.
+`UTF-8`, `PDF-1.7`, `ID5:`).
+
+### Advisory class (warn-only)
+
+Fuzzy causal-history phrases surface as advisories, never blockers:
+`prior to`, `previously`, `Migration note`, `was reshaped`,
+`Tightened from`, `swapped`, `switched from`/`switched to`,
+`legacy <X> was deleted`, `added in #123`, `post-PR #123`.
+
+### Exemptions
+
+- **File allowlist (skipped entirely):** `CHANGELOG.md`,
+    `docs/releases.md`, and everything under `tests/fixtures/**`. The first
+    two structurally list PR refs and dates; fixtures carry intentional
+    static data.
+- **Structural stripping:** generated auto-blocks (the `BEGIN`/`END`
+    HTML-comment marker pairs), fenced code blocks, and inline code spans
+    are blanked in place (preserving line count) before matching. Stable
+    literals already
+    written in a code span — e.g. an `X-GitHub-Api-Version` header value —
+    are therefore exempt without any per-literal allowlist. This is why
+    every example token on this page is wrapped in backticks: a code span
+    is invisible to the scanner, so the doc passes its own gate.
+
+### v1 decision
+
+Causal-history phrases are **advisory only**, not blocking: they
+false-positive on legitimate prose, so they warn rather than fail. The
+generic `<2-3 uppercase letters>-<digits>` ticket shape is intentionally
+**excluded** from the blocking gate because it false-positives on stable
+literals such as `SHA-256` and `UTF-8`; only the enumerated
+planning/review labels above are matched.
+
 ## Treefmt YAML quote gotcha
 
 Prettier rewrites single-quoted YAML scalars to double-quoted. Run

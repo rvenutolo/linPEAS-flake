@@ -181,6 +181,26 @@
     pass_filenames = false;
     language = "system";
   };
+  # Asserts tracked Markdown prose carries no ephemeral references
+  # (PR/issue refs, prose dates, planning/review-pass labels, literal
+  # .claude/ paths). Runs the blocking pass first (gates the commit),
+  # then the --advisory pass for fuzzy causal-history phrases (never
+  # gates — always exits 0).
+  check-ephemeral-refs = {
+    enable = true;
+    name = "check-ephemeral-refs";
+    description = "Tracked Markdown prose carries no ephemeral references (PR/issue refs, prose dates, planning/review labels, literal .claude/ paths).";
+    entry = "${pkgs-unstable.writeShellScript "check-ephemeral-refs-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      ${pkgs-unstable.bash}/bin/bash scripts/check-ephemeral-refs.sh
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-ephemeral-refs.sh --advisory
+    ''}";
+    files = "^(README\\.md|docs/.*\\.md|scripts/check-ephemeral-refs\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Asserts the cron schedule table in docs/architecture/ci.md
   # matches cron triggers in .github/workflows/*.yml — set
   # parity, cron string accuracy, and daily arrow-list ordering

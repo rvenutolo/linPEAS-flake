@@ -89,6 +89,13 @@ Lint: every markdown #anchor link pointing at an
 in-tree .md (or same-file fragment) must match a heading slug in
 the target file.
 
+### scripts/check-ephemeral-refs.sh
+
+Lint: tracked Markdown prose must carry no ephemeral
+references — PR/issue refs, prose dates, planning/review-pass labels,
+or literal .claude/ paths. Default mode blocks (exit 1); --advisory
+mode warns on fuzzy causal-history phrases and always exits 0.
+
 ### scripts/check-flake-lock-provenance.sh
 
 Lint: a bot `flake.lock` bump may only move
