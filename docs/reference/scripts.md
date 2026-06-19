@@ -177,6 +177,12 @@ PATH. These groups run inside devShells.lint in CI; this guard turns a
 dropped tool into a named failure instead of a cryptic mid-check error.
 Keep EXPECTED in sync with nix/devshell-lint.nix buildInputs.
 
+### scripts/check-manifest-hook-watches-nix.sh
+
+Lint: every pre-commit hook whose entry runs a
+manifest-reading script (one referencing the flake hook manifest)
+includes `nix/hooks` in its `files` regex.
+
 ### scripts/check-min-permissions.sh
 
 Strict least-privilege lint for GitHub Actions

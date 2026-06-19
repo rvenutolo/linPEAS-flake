@@ -35,6 +35,24 @@
     pass_filenames = false;
     language = "system";
   };
+  # Every manifest-reading freshness hook watches nix/hooks in its
+  # files filter, so a hook-definition edit re-triggers the freshness
+  # check on the per-changed-file git commit path. See
+  # docs/security/workflow-hardening.md.
+  manifest-hook-watches-nix = {
+    enable = true;
+    name = "manifest-hook-watches-nix";
+    description = "Every manifest-reading freshness hook watches nix/hooks in its files filter.";
+    entry = "${pkgs-unstable.writeShellScript "manifest-hook-watches-nix-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-manifest-hook-watches-nix.sh
+    ''}";
+    files = "^(nix/hooks/.*\\.nix|scripts/.*\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Every tool the .#lint-hosted lint groups rely on is present on
   # PATH. Keeps devShells.lint buildInputs from silently dropping a
   # tool. See docs/security/workflow-hardening.md.

@@ -39,6 +39,7 @@ lint-script-hygiene:
   - lint-shell-tools
   - gh-api-version-header
   - pre-commit-hooks-sha-parity
+  - manifest-hook-watches-nix
 lint-doc-invariants:
   - orphan-invariants
   - doc-anchors
