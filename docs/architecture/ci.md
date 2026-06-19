@@ -53,14 +53,14 @@ Functional gates:
 
 Self-enforcing invariant gates:
 
-| Job                          | What it enforces                                                                                                                    |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `dashboard-data-tests`       | `scripts/gen-dashboard-data.sh` security guards (pin shape, asset-URL prefix, missing-field hard-fail)                              |
-| `pr-workflows-no-secrets`    | PR-triggered workflows reference no `secrets.*` other than `secrets.GITHUB_TOKEN`                                                   |
-| `renovate-invariants`        | `renovate.json` keeps SHA-digest pinning, `minimumReleaseAge`, per-manager `automerge`, and `pinDigests: true` for `github-actions` |
-| `required-checks-no-paths`   | No required workflow declares `paths:` / `paths-ignore:` under `pull_request:`                                                      |
-| `tag-protection-drift-check` | The `release-tag-protection` ruleset still blocks deletion / non-FF / update of release-tag refs                                    |
-| `uses-sha-pinned`            | Every `uses:` in workflows + composite actions is a full 40-hex SHA with `# vX.Y.Z` comment (or a `./...` self-ref)                 |
+| Job                          | What it enforces                                                                                                                                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `dashboard-data-tests`       | `scripts/gen-dashboard-data.sh` security guards (pin shape, asset-URL prefix, missing-field hard-fail)                                                                                           |
+| `pr-workflows-no-secrets`    | PR-triggered workflows reference no `secrets.*` other than `secrets.GITHUB_TOKEN`                                                                                                                |
+| `renovate-invariants`        | `renovate.json` keeps SHA-digest pinning, `minimumReleaseAge`, per-manager `automerge`, and `pinDigests: true` for `github-actions`                                                              |
+| `required-checks-no-paths`   | No required workflow declares `paths:` / `paths-ignore:` under `pull_request:`                                                                                                                   |
+| `tag-protection-drift-check` | The `release-tag-protection` ruleset still blocks deletion / non-FF / update of release-tag refs                                                                                                 |
+| `lint-workflow-security`     | Batched workflow-security member lints; e.g. member check `uses-sha-pinned`: every `uses:` in workflows + composite actions is a full 40-hex SHA with `# vX.Y.Z` comment (or a `./...` self-ref) |
 
 Doc-quality + conventional-commit gates (all alphabetical):
 

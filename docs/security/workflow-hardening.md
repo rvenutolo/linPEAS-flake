@@ -1,6 +1,6 @@
 # Workflow-hardening invariants
 
-Per-job hardening rules enforced across every workflow in `.github/workflows/`. Each rule is locked in by a script lint, wired as a required CI job and as a pre-commit hook.
+Per-job hardening rules enforced across every workflow in `.github/workflows/`. Each rule is locked in by a script lint, run as a member check of a batched lint group job (`lint-workflow-security`, `lint-script-hygiene`, or `lint-doc-invariants`) and as a pre-commit hook.
 
 See [workflow-scanner division of labor](workflow-scanners.md) for how these
 in-tree lints fit the broader layered scanning model (pre-commit → PR/push →
@@ -14,7 +14,7 @@ GitHub Actions defaults a job timeout to 6 hours. A hung job at that ceiling bur
 
 Reusable-workflow callers (jobs that use `uses: ./.github/workflows/<file>.yml`) are exempt because `timeout-minutes` is not valid on that shape; the timeout belongs in the called workflow's jobs.
 
-Enforced by `scripts/check-job-timeout-minutes.sh`. Wired as the `job-timeout-minutes` required CI job and as a pre-commit hook.
+Enforced by `scripts/check-job-timeout-minutes.sh`. Wired as the `lint-workflow-security` CI job (member check `job-timeout-minutes`) and as a pre-commit hook.
 
 ## workflow-concurrency
 
@@ -24,7 +24,7 @@ Without a concurrency group, cron pile-ups and back-to-back PR pushes can spawn 
 
 `cancel-in-progress` is not required by this lint; the group alone is the load-bearing setting. Pipelines that must run to completion once started (e.g., `release-on-bump.yml`) deliberately set `cancel-in-progress: false` so back-to-back triggers queue instead of cancelling.
 
-Enforced by `scripts/check-workflow-concurrency.sh`. Wired as the `workflow-concurrency` required CI job and as a pre-commit hook.
+Enforced by `scripts/check-workflow-concurrency.sh`. Wired as the `lint-workflow-security` CI job (member check `workflow-concurrency`) and as a pre-commit hook.
 
 ## checkout-persist-credentials
 
@@ -34,7 +34,7 @@ Without it, `actions/checkout` writes `GITHUB_TOKEN` into `.git/config` and leav
 
 Boolean `false` is required; the string `"false"` does not satisfy `actions/checkout`'s parsing.
 
-Enforced by `scripts/check-checkout-persist-credentials.sh`. Wired as the `checkout-persist-credentials` required CI job and as a pre-commit hook.
+Enforced by `scripts/check-checkout-persist-credentials.sh`. Wired as the `lint-workflow-security` CI job (member check `checkout-persist-credentials`) and as a pre-commit hook.
 
 ## upload-artifact-strict
 
@@ -42,7 +42,7 @@ Every `actions/upload-artifact` step sets `with.if-no-files-found: error`.
 
 The action's default is `warn`, which silently uploads an empty artifact when the `path:` glob matches nothing. That hides build-output drift: a broken path produces a green job with no artifact, and the consumer side only notices when something downstream goes missing — sometimes many runs later. `error` turns the path-mismatch into a hard upload failure, surfacing the bug at its source.
 
-Enforced by `scripts/check-upload-artifact-strict.sh`. Wired as the `upload-artifact-strict` required CI job and as a pre-commit hook.
+Enforced by `scripts/check-upload-artifact-strict.sh`. Wired as the `lint-workflow-security` CI job (member check `upload-artifact-strict`) and as a pre-commit hook.
 
 ## workflow-on-branches
 
@@ -50,7 +50,7 @@ Every workflow that declares `on.pull_request:` or `on.push:` sets `branches: [m
 
 Without the allowlist, Actions fires the workflow on every branch — burning runner minutes on stale topic branches and attaching surprising status checks to refs nobody is watching. Workflows that only run on `schedule:`, `workflow_dispatch:`, or `workflow_call:` are unaffected; `pull_request_target:` is handled by a separate lint that forbids it outright.
 
-Enforced by `scripts/check-workflow-on-branches.sh`. Wired as the `workflow-on-branches` required CI job and as a pre-commit hook.
+Enforced by `scripts/check-workflow-on-branches.sh`. Wired as the `lint-workflow-security` CI job (member check `workflow-on-branches`) and as a pre-commit hook.
 
 ## pull-request-target-absent
 
@@ -60,7 +60,7 @@ No workflow uses the `pull_request_target` trigger.
 
 This repo has no use for the trigger. The lint hard-fails any workflow that adopts it. Removing the ban requires deleting this script and the corresponding required-check entry.
 
-Enforced by `scripts/check-pull-request-target-absent.sh`. Wired as the `pull-request-target-absent` required CI job and as a pre-commit hook.
+Enforced by `scripts/check-pull-request-target-absent.sh`. Wired as the `lint-workflow-security` CI job (member check `pull-request-target-absent`) and as a pre-commit hook.
 
 ## auto-merge-decline-gate
 
@@ -70,7 +70,7 @@ An auto-merging update workflow recreates a per-period branch and merges its PR 
 
 This protects only an explicitly closed or merged PR; routine PRs are unaffected, so the fully-automated update flow is preserved.
 
-Enforced by `scripts/check-auto-merge-decline-gate.sh`. Wired into the `lint-workflow-security` CI group and as a pre-commit hook.
+Enforced by `scripts/check-auto-merge-decline-gate.sh`. Wired as the `lint-workflow-security` CI job (member check `auto-merge-decline-gate`) and as a pre-commit hook.
 
 ## script-shebang-pipefail
 
@@ -80,7 +80,7 @@ A script that silently swallows a failure can corrupt `linpeas-pin.json`, skip a
 
 The lint accepts longer set lines (e.g. `set -Eeuo pipefail -x`) as long as the exact `-Eeuo pipefail` token is present.
 
-Enforced by `scripts/check-script-shebang-pipefail.sh`. Wired as the `script-shebang-pipefail` required CI job and as a pre-commit hook.
+Enforced by `scripts/check-script-shebang-pipefail.sh`. Wired as the `lint-script-hygiene` CI job (member check `script-shebang-pipefail`) and as a pre-commit hook.
 
 ## script-has-test
 
@@ -90,7 +90,7 @@ The check-lint family is held together by naming convention: each lint script sh
 
 `check-jsonschema` is exempt: it's a thin wrapper around the upstream `check-jsonschema` tool plus a schema bundle, so there's no spec-driven behavior worth unit-testing. New exemptions require updating the `EXEMPT` list in the script and justifying the entry in its comment.
 
-Enforced by `scripts/check-script-has-test.sh`. Wired as the `script-has-test` required CI job and as a pre-commit hook.
+Enforced by `scripts/check-script-has-test.sh`. Wired as the `lint-script-hygiene` CI job (member check `script-has-test`) and as a pre-commit hook.
 
 ## manifest-reading hook watches nix/hooks
 
@@ -100,7 +100,7 @@ A freshness hook regenerates or validates a generated doc from the manifest. Whe
 
 The guard derives the manifest-reading scripts by content (`preCommitHooks` / `PRECOMMIT_HOOK_NAMES`), not a hardcoded list, then asserts each referencing hook's `files` filter contains `nix/hooks`. It fails loud if it finds zero manifest-reading hooks, catching a parser break from a hook-file reformat.
 
-Enforced by `scripts/check-manifest-hook-watches-nix.sh`. Wired in the `lint-script-hygiene` CI group and as a pre-commit hook.
+Enforced by `scripts/check-manifest-hook-watches-nix.sh`. Wired as the `lint-script-hygiene` CI job (member check `manifest-hook-watches-nix`) and as a pre-commit hook.
 
 ## lean lint-shell routing
 
@@ -112,7 +112,7 @@ The `lint-workflow-security` and `lint-script-hygiene` invariant-lint groups run
 
 This guard asserts every required tool is present on `PATH`. Run inside `devShells.lint` it validates the lean shell directly; run inside `devShells.default` it confirms the default shell remains a superset. A dropped tool becomes a named `::error::` line instead of an opaque downstream crash. The expected-tool list must stay in sync with `nix/devshell-lint.nix` `buildInputs`.
 
-Enforced by `scripts/check-lint-shell-tools.sh`. Wired as a member of the `lint-script-hygiene` required CI group and as a pre-commit hook.
+Enforced by `scripts/check-lint-shell-tools.sh`. Wired as the `lint-script-hygiene` CI job (member check `lint-shell-tools`) and as a pre-commit hook.
 
 ## ci-job-in-summary
 
@@ -122,7 +122,7 @@ Every `jobs.<name>:` in `.github/workflows/ci.yml` either appears as a key in `d
 
 Adding a new ci.yml job that should be a required status check requires updating the categories map, the required-checks doc, and the protect-main ruleset (in-tree and live). Adding an auxiliary job requires only an `EXEMPT` entry justified in the script comment.
 
-Enforced by `scripts/check-ci-job-in-summary.sh`. Wired as the `ci-job-in-summary` required CI job and as a pre-commit hook.
+Enforced by `scripts/check-ci-job-in-summary.sh`. Wired as the `lint-doc-invariants` CI job (member check `ci-job-in-summary`) and as a pre-commit hook.
 
 ## run-block-strict
 
@@ -132,7 +132,7 @@ Bash inside Actions `run:` blocks defaults to `-e` off. A failed command in the 
 
 Single-line `run:` invocations are exempt — they're already a single shell command whose exit status drives the step directly.
 
-Enforced by `scripts/check-run-block-strict.sh`. Wired as the `run-block-strict` required CI job and as a pre-commit hook.
+Enforced by `scripts/check-run-block-strict.sh`. Wired as the `lint-workflow-security` CI job (member check `run-block-strict`) and as a pre-commit hook.
 
 ## fork-guard-release
 
@@ -144,7 +144,7 @@ A job that mints a GitHub App installation token (via `actions/create-github-app
 
 GitHub Actions `if:` is job-scoped (no workflow-level syntax), so every guard-required job must carry the guard in its own `if:` expression. Existing `if:` clauses are AND-ed with the repository check.
 
-Enforced by `scripts/check-fork-guard-release.sh`. Wired as the `fork-guard-release` required CI job and as a pre-commit hook.
+Enforced by `scripts/check-fork-guard-release.sh`. Wired as the `lint-workflow-security` CI job (member check `fork-guard-release`) and as a pre-commit hook.
 
 ## nix-run-pinned
 
@@ -160,7 +160,7 @@ Allowed alternatives:
 
 `cosign` is exposed under `packages.cosign` so `release-on-bump.yml` and `verify-latest-release.yml` can invoke it via the pinned shape. Future tools follow the same pattern.
 
-Enforced by `scripts/check-nix-run-pinned.sh`. Wired as the `nix-run-pinned` required CI job and as a pre-commit hook.
+Enforced by `scripts/check-nix-run-pinned.sh`. Wired as the `lint-workflow-security` CI job (member check `nix-run-pinned`) and as a pre-commit hook.
 
 ## setup-nix composite required
 

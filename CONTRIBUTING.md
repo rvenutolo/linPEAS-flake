@@ -37,8 +37,9 @@ Highlights:
 
 - `commitlint`, `lint-pr-title` — Conventional Commits client- and
     server-side.
-- `uses-sha-pinned` — every `uses:` is a full 40-hex SHA with a
-    trailing `# vX.Y.Z` version comment.
+- `lint-workflow-security` — batched workflow-security lints; e.g.
+    member check `uses-sha-pinned`: every `uses:` is a full 40-hex SHA
+    with a trailing `# vX.Y.Z` version comment.
 - `flake-check`, `build-linpeas`, `image-smoke` —
     derivation health on x86_64 and aarch64.
 - `gitleaks`, `dependency-review` — supply-chain.

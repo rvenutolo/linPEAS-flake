@@ -329,7 +329,7 @@ procedure lives in
 
 Every `gh attestation verify` invocation across workflows, scripts, and shell-fenced documentation must pass `--repo rvenutolo/linPEAS-flake`. Without the `--repo` pin, Sigstore returns any attestation matching the artifact digest, including one issued from a different repository — a trivial bypass.
 
-Enforced by `scripts/check-gh-attestation-repo.sh`. The lint joins backslash-continued shell invocations, ignores prose mentions in backticks, and only inspects fenced code blocks (`sh`, `bash`, `shell`, `console`, or unlabeled) in markdown files. Wired as the `gh-attestation-repo` required CI job and as a pre-commit hook.
+Enforced by `scripts/check-gh-attestation-repo.sh`. The lint joins backslash-continued shell invocations, ignores prose mentions in backticks, and only inspects fenced code blocks (`sh`, `bash`, `shell`, `console`, or unlabeled) in markdown files. Wired as the `lint-workflow-security` CI job (member check `gh-attestation-repo`) and as a pre-commit hook.
 
 ## cosign-identity-pinned invariant<a name="cosign-identity-pinned-invariant"></a>
 
@@ -337,4 +337,4 @@ Every `cosign verify` invocation across workflows, scripts, and shell-fenced doc
 
 Without identity pinning, cosign accepts any keyless Sigstore signature for the artifact digest — including one minted by a different workflow, branch, or OIDC issuer. The two flags bind verification to a specific signer chain.
 
-Enforced by `scripts/check-cosign-identity-pinned.sh`. Wired as the `cosign-identity-pinned` required CI job and as a pre-commit hook.
+Enforced by `scripts/check-cosign-identity-pinned.sh`. Wired as the `lint-workflow-security` CI job (member check `cosign-identity-pinned`) and as a pre-commit hook.
