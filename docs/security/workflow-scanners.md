@@ -16,12 +16,12 @@ posture, not redundancy to trim.
 Workflow scanning runs at four moments, each with a blind spot the next layer
 closes:
 
-| Layer                  | When it fires                                                | Tools                                                                       | Closes the gap of                                                 |
-| ---------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Commit-time prevention | every `git commit` (pre-commit)                              | zizmor + the workflow-hardening hook family                                 | bad edits never enter history                                     |
-| PR / push detection    | every PR to `main` (paths-filtered) and every push to `main` | codeql, octoscan                                                            | changed workflows checked server-side, in the diff                |
-| Weekly full sweep      | Friday cron cluster                                          | codeql, octoscan                                                            | `--no-verify` bypasses, web-UI / bot edits, upstream rule changes |
-| Posture watchdog       | daily + weekly cron                                          | scorecard-drift, ratchet-pin-audit, settings-posture-drift, stale-pin-check | silent regressions no single PR introduces                        |
+| Layer                  | When it fires                                                                      | Tools                                                                       | Closes the gap of                                                 |
+| ---------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Commit-time prevention | every `git commit` (pre-commit)                                                    | zizmor + the workflow-hardening hook family                                 | bad edits never enter history                                     |
+| PR / push detection    | every PR to `main` (codeql full; octoscan paths-filtered) and every push to `main` | codeql, octoscan                                                            | changed workflows checked server-side, in the diff                |
+| Weekly full sweep      | Friday cron cluster                                                                | codeql, octoscan                                                            | `--no-verify` bypasses, web-UI / bot edits, upstream rule changes |
+| Posture watchdog       | daily + weekly cron                                                                | scorecard-drift, ratchet-pin-audit, settings-posture-drift, stale-pin-check | silent regressions no single PR introduces                        |
 
 Commit-time prevention is the cheapest and earliest gate, but it is bypassable
 (`--no-verify`, edits made in the GitHub web UI or by bots before hooks
@@ -47,12 +47,16 @@ next section. The weekly Friday cron cluster runs them in a fixed order (see
 - **Unique signal:** dataflow / taint analysis of workflow and
     composite-action files (the `actions` query pack). Catches injection
     reachable through variable flow that pattern matchers miss.
-- **Triggers:** PR to `main` filtered to `.github/workflows/**` and
-    `.github/actions/**`; push to `main`; weekly Friday cron (full tree); manual
-    dispatch.
-- **Status:** advisory. Not a required check — the required-check policy
-    forbids a paths filter on a required workflow, and the PR filter is
-    deliberate. The weekly cron sweeps everything regardless.
+- **Triggers:** every PR to `main` (no paths filter); push to `main`; weekly
+    Friday cron (full tree); manual dispatch. It runs on every PR — not just
+    workflow-touching ones — so the Scorecard SAST check sees a SAST tool on
+    every merged PR (it scores the fraction analysed). The `actions` pack
+    re-analyses the whole tree each run (~1 min), so a PR touching neither a
+    workflow nor an action still produces a valid analysis.
+- **Status:** advisory. Deliberately not a required check — gating merge on it
+    would let a single CRITICAL false positive or a transient CodeQL infra flake
+    wedge every PR; the merge gate is the in-tree workflow lints plus the zizmor
+    pre-commit hook, with CodeQL as the deeper dataflow second opinion.
 
 ### octoscan
 
