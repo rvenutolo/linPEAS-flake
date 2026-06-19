@@ -79,7 +79,7 @@ that arrives via a different script breaks the trigger-contract
 assumption.
 
 Enforced by `scripts/check-pin-diff-isolated.sh` via the
-`pin-diff-isolated` required CI job + pre-commit hook. Lint asserts
+`lint-doc-invariants` CI job (member check `pin-diff-isolated`) + pre-commit hook. Lint asserts
 exactly one writer (`scripts/bump-linpeas.sh`) under `scripts/`.
 
 ## flake.nix pin invariants

@@ -19,7 +19,7 @@ Strict least-privilege rule for every workflow in `.github/workflows/`.
 - top-level `permissions:` missing, non-empty map, or scalar (`read-all` / `write-all`)
 - any job whose `permissions:` block is omitted or not a map
 
-Wired as the `min-permissions` required CI job and as a pre-commit hook.
+Wired as the `lint-workflow-security` CI job (member check `min-permissions`) and as a pre-commit hook.
 
 ## Per-job write-scope allowlist
 

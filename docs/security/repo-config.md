@@ -19,8 +19,8 @@ must end with a full 40-hex SHA + trailing `# vX.Y.Z (Dn)` comment, OR be
 a path-relative `./...` self-reference. Includes first-party GitHub-owned
 actions.
 
-Enforced by `scripts/check-uses-sha-pinned.sh` (required CI job
-`uses-sha-pinned`; pre-commit hook same name with `NIX_BUILD_TOP` guard).
+Enforced by `scripts/check-uses-sha-pinned.sh` (member check
+`uses-sha-pinned` of the `lint-workflow-security` CI job; pre-commit hook same name with `NIX_BUILD_TOP` guard).
 Belt-and-braces backup to the GitHub-side `sha_pinning_required` setting.
 
 ## App-based bump auth
