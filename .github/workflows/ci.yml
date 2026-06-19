@@ -614,6 +614,9 @@ jobs:
           egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
+          # git-cliff walks all release tags and commit history; a shallow
+          # clone hides the commits the fixtures assert against.
+          fetch-depth: 0
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
         with:
