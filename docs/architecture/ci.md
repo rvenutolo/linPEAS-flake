@@ -93,7 +93,7 @@ budgeted defense-in-depth posture rather than redundancy — is documented in
 
 ## Runner egress
 
-Every job's first step is `step-security/harden-runner` with `egress-policy: audit`. eBPF-monitored runner egress is recorded for every workflow run; it must remain the first step in any job that hits the network or filesystem.
+Every job's first step is `step-security/harden-runner` with `egress-policy: block` and a per-job `allowed-endpoints:` allowlist. The eBPF monitor enforces the allowlist and must remain the first step in any job that hits the network or filesystem. The macOS leg of `coverage-matrix` is inherently unenforced (the monitor is Linux-only). A missed host appears as a blocked-egress failure and is fixed forward by extending that job's allowlist.
 
 ## Pages workflow
 
