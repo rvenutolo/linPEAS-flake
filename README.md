@@ -9,7 +9,7 @@
 [![Renovate dashboard](https://img.shields.io/badge/renovate-dashboard-blue)](https://github.com/rvenutolo/linPEAS-flake/issues?q=is%3Aissue+is%3Aopen+label%3Adependencies+%22Dependency+Dashboard%22)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg)](https://www.conventionalcommits.org)
 [![License](https://img.shields.io/github/license/rvenutolo/linPEAS-flake)](LICENSE)
-[![Nix flake](https://img.shields.io/badge/nix-flake-blue?logo=nixos)](https://nixos.wiki/wiki/Flakes)
+[![Nix flake](https://img.shields.io/badge/nix-flake-blue?logo=nixos)](https://nixos.org/manual/nix/stable/command-ref/new-cli/nix3-flake)
 [![tracks peass-ng](https://img.shields.io/badge/dynamic/json?label=tracks%20peass-ng&query=%24.version&url=https%3A%2F%2Fraw.githubusercontent.com%2Frvenutolo%2FlinPEAS-flake%2Fmain%2Flinpeas-pin.json)](https://github.com/peass-ng/PEASS-ng/releases)
 
 **Docs:** <https://rvenutolo.github.io/linPEAS-flake/>
