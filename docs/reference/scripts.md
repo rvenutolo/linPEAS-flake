@@ -173,6 +173,12 @@ Env overrides (test-only):
 FLAKE_NIX_OVERRIDE — path to the canonical derivation source to read
 HAMMER_SHIM_OVERRIDE — path to nix/hammer-shim.nix to read
 
+### scripts/check-harden-runner-block.sh
+
+Lint: every step-security/harden-runner step uses
+egress-policy: block with a non-empty allowed-endpoints list,
+preventing network-level egress to unlisted hosts.
+
 ### scripts/check-harden-runner-first.sh
 
 Lint: every job in .github/workflows/\*.yml begins

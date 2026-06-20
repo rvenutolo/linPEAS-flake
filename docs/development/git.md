@@ -103,6 +103,7 @@ Hooks (alphabetical):
 | `gh-api-version-header`             | Every gh api / api.github.com call in scripts passes an X-GitHub-Api-Version header.                                                 |
 | `gh-attestation-repo`               | gh attestation verify pins --repo rvenutolo/linPEAS-flake.                                                                           |
 | `hammer-shim-parity`                | nix/hammer-shim.nix linpeas derivation matches nix/pin.nix.                                                                          |
+| `harden-runner-block`               | Every harden-runner step uses egress-policy: block with non-empty allowed-endpoints.                                                 |
 | `harden-runner-first`               | Every workflow job's first step is step-security/harden-runner.                                                                      |
 | `job-timeout-minutes`               | Every workflow job declares an explicit timeout-minutes.                                                                             |
 | `just-recipes-fresh`                | just-recipes blocks in README.md and docs/reference/just-recipes.md match the justfile.                                              |
