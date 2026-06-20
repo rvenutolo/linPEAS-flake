@@ -16,6 +16,9 @@ exclude = [
   # 302-redirect to a login page, which is the documented expectation.
   "https://hub\\.docker\\.com/settings/",
   "https://github\\.com/settings/",
+  # The Docker status page redirect-chains through several status-host
+  # domains; it is an operational pointer, not a doc-correctness link.
+  "https://status\\.docker\\.com",
 ]
 
 exclude_path = [
