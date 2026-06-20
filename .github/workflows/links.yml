@@ -29,14 +29,20 @@ jobs:
           allowed-endpoints: >
             api.github.com:443
             cache.nixos.org:443
+            git-cliff.org:443
+            github.blog:443
             github.com:443
+            hub.docker.com:443
             img.shields.io:443
+            keepachangelog.com:443
             nixos.wiki:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             rvenutolo.github.io:443
+            status.docker.com:443
             www.conventionalcommits.org:443
+            www.githubstatus.com:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
