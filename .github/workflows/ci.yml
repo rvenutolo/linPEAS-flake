@@ -35,7 +35,9 @@ jobs:
             github.com:443
             install.determinate.systems:443
             objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -65,7 +67,9 @@ jobs:
             github.com:443
             install.determinate.systems:443
             objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -104,6 +108,7 @@ jobs:
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -143,7 +148,9 @@ jobs:
             github.com:443
             install.determinate.systems:443
             objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -180,8 +187,9 @@ jobs:
             github.com:443
             install.determinate.systems:443
             objects.githubusercontent.com:443
-            releases.nixos.org:443
             release-assets.githubusercontent.com:443
+            releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -224,7 +232,9 @@ jobs:
             objects.githubusercontent.com:443
             production.cloudfront.docker.com:443
             registry-1.docker.io:443
+            release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -304,15 +314,17 @@ jobs:
             *.actions.githubusercontent.com:443
             *.blob.core.windows.net:443
             api.github.com:443
+            auth.docker.io:443
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
             install.determinate.systems:443
             objects.githubusercontent.com:443
-            releases.nixos.org:443
-            auth.docker.io:443
             production.cloudfront.docker.com:443
             registry-1.docker.io:443
+            release-assets.githubusercontent.com:443
+            releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -399,7 +411,9 @@ jobs:
             github.com:443
             install.determinate.systems:443
             objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -430,7 +444,9 @@ jobs:
             install.determinate.systems:443
             magic-nix-cache20230623203105255200000001.s3.dualstack.us-east-2.amazonaws.com:443
             objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -463,7 +479,9 @@ jobs:
             github.com:443
             install.determinate.systems:443
             objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -495,7 +513,9 @@ jobs:
             github.com:443
             install.determinate.systems:443
             objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -529,7 +549,9 @@ jobs:
             github.com:443
             install.determinate.systems:443
             objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -569,7 +591,9 @@ jobs:
             github.com:443
             install.determinate.systems:443
             objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -600,7 +624,9 @@ jobs:
             github.com:443
             install.determinate.systems:443
             objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -631,7 +657,9 @@ jobs:
             install.determinate.systems:443
             objects.githubusercontent.com:443
             raw.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -670,7 +698,9 @@ jobs:
             github.com:443
             install.determinate.systems:443
             objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -706,7 +736,9 @@ jobs:
             github.com:443
             install.determinate.systems:443
             objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -740,7 +772,9 @@ jobs:
             github.com:443
             install.determinate.systems:443
             objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -773,7 +807,9 @@ jobs:
             github.com:443
             install.determinate.systems:443
             objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -805,7 +841,9 @@ jobs:
             github.com:443
             install.determinate.systems:443
             objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -836,7 +874,9 @@ jobs:
             github.com:443
             install.determinate.systems:443
             objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           # git-cliff walks all release tags and commit history; a shallow
