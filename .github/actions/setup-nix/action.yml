@@ -30,6 +30,19 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Wait for egress DNS to settle
+      # harden-runner block mode restarts systemd-resolved at job start; the
+      # brief resolver gap can race the first Nix substituter fetch. Block until
+      # cache.nixos.org resolves so the installer and substituter fetches don't
+      # fail on a first run that a manual re-run would clear.
+      shell: bash
+      run: |
+        for _ in $(seq 1 30); do
+          if getent hosts cache.nixos.org; then exit 0; fi
+          sleep 1
+        done
+        echo 'cache.nixos.org never resolved after 30s' >&2
+        exit 1
     - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 # patch-tag-exception: pinned SHA is the v31 annotated-tag object, not a release commit; cachix publishes only floating major tags (v31 retargets across patches) so there is no immutable patch tag to ratchet to
       with:
         install_url: ${{ inputs.install-url }}
