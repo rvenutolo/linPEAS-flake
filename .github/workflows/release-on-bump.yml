@@ -72,6 +72,7 @@ jobs:
             rekor.sigstore.dev:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
             tuf-repo-cdn.sigstore.dev:443
             uploads.github.com:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -277,6 +278,7 @@ jobs:
             rekor.sigstore.dev:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
             tuf-repo-cdn.sigstore.dev:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -579,6 +581,7 @@ jobs:
             rekor.sigstore.dev:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
             tuf-repo-cdn.sigstore.dev:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -831,7 +834,9 @@ jobs:
             pkg-containers.githubusercontent.com:443
             production.cloudfront.docker.com:443
             registry-1.docker.io:443
+            release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -976,7 +981,9 @@ jobs:
             github.com:443
             install.determinate.systems:443
             objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
@@ -1183,7 +1190,9 @@ jobs:
             production.cloudfront.docker.com:443
             registry-1.docker.io:443
             rekor.sigstore.dev:443
+            release-assets.githubusercontent.com:443
             releases.nixos.org:443
+            tarballs.nixos.org:443
             tuf-repo-cdn.sigstore.dev:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:

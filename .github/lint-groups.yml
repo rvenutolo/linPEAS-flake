@@ -19,6 +19,7 @@
 lint-workflow-security:
   - uses-sha-pinned
   - harden-runner-first
+  - harden-runner-block
   - min-permissions
   - permission-scopes
   - job-timeout-minutes

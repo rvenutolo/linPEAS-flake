@@ -55,6 +55,25 @@
     pass_filenames = false;
     language = "system";
   };
+  # Asserts every step-security/harden-runner step uses
+  # egress-policy: block with a non-empty allowed-endpoints list.
+  # Locks in the block-mode posture so a revert to audit or an
+  # empty allowlist is caught before merge.
+  harden-runner-block = {
+    enable = true;
+    name = "harden-runner-block";
+    description = "Every harden-runner step uses egress-policy: block with non-empty allowed-endpoints.";
+    entry = "${pkgs-unstable.writeShellScript "harden-runner-block-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-harden-runner-block.sh
+    ''}";
+    files = "^(\\.github/workflows/.*\\.ya?ml|scripts/check-harden-runner-block\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Strict least-privilege lint: every workflow's top-level
   # permissions: must be `{}` and every job must declare its
   # own scopes. See docs/security/min-permissions.md.

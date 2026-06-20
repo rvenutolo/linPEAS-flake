@@ -179,7 +179,8 @@ required-check table; alphabetical):
 - `release-tag-protection` ruleset blocks delete / non-FF / update on
     release tags; drift asserted by `tag-protection-drift-check`.
 - `step-security/harden-runner` runs as the first step in every job
-    (`egress-policy: audit`).
+    in `egress-policy: block` mode, each with a per-job
+    `allowed-endpoints:` allowlist.
 
 ### Release attestation verification
 

@@ -175,9 +175,11 @@ gh attestation verify oci://ghcr.io/rvenutolo/linpeas@<DIGEST> --repo rvenutolo/
 is the one with predicate-type `https://spdx.dev/Document`; the provenance
 attestation carries `https://slsa.dev/provenance/v1`.
 
-## Runner egress monitoring (harden-runner, audit mode)
+## Runner egress control (harden-runner, block mode)
 
-`step-security/harden-runner` runs as the first step of every job in every workflow, with `egress-policy: audit`. Provides defense-in-depth visibility into runner network egress; surfaces hosts each workflow actually contacts. Audit mode does NOT block; findings appear at the harden-runner dashboard and as job-summary annotations.
+`step-security/harden-runner` runs as the first step of every job in every workflow, with `egress-policy: block`. Each job declares an `allowed-endpoints:` allowlist scoped to the minimum outbound hosts it needs: a shared baseline (`api.github.com`, `github.com`, `objects.githubusercontent.com`, `cache.nixos.org`, `releases.nixos.org`) plus job-specific endpoints. Block mode drops any egress to a host outside the allowlist, so a compromised step cannot exfiltrate a credential (App token, Docker Hub PAT, signing key) to an attacker-controlled host. Rotating host families — Actions cache/artifact storage (`*.blob.core.windows.net`), the hosted-runner control plane (`*.githubapp.com`), and the Actions runtime (`*.actions.githubusercontent.com`) — are matched by wildcard.
+
+When a job legitimately needs a new endpoint, add it to that job's `allowed-endpoints:`; never relax a job back to audit. `scripts/check-harden-runner-block.sh` (pre-commit and the `lint-workflow-security` CI job) fails any harden-runner step that is not `egress-policy: block` with a non-empty allowlist. The macOS leg of `coverage-matrix` is an inherent exception: harden-runner's eBPF egress monitor is Linux-only, so block mode is inert there and enforces only on the Linux legs; the step is still declared block for uniformity.
 
 ## Settings posture
 
