@@ -29,6 +29,7 @@ jobs:
           allowed-endpoints: >
             api.github.com:443
             cache.nixos.org:443
+            dockerstatus.com:443
             git-cliff.org:443
             github.blog:443
             github.com:443
