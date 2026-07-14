@@ -74,6 +74,28 @@
     pass_filenames = false;
     language = "system";
   };
+  # Binds each job's harden-runner allowed-endpoints list to what its
+  # tool inventory actually reaches: forward rules keyed on uses:/run:
+  # text, sigstore host-set consistency keyed on hosts (catches a job
+  # that signs or verifies but was never given the matching hosts,
+  # even with no cosign invocation visible in the workflow file), and
+  # a denylist of hosts nothing in this repo reaches. See
+  # docs/security/trust-model.md.
+  egress-allowlist = {
+    enable = true;
+    name = "egress-allowlist";
+    description = "Every job's allowed-endpoints list matches its tool inventory and carries no denylisted host.";
+    entry = "${pkgs-unstable.writeShellScript "egress-allowlist-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-egress-allowlist.sh
+    ''}";
+    files = "^(\\.github/workflows/.*\\.ya?ml|scripts/check-egress-allowlist\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Strict least-privilege lint: every workflow's top-level
   # permissions: must be `{}` and every job must declare its
   # own scopes. See docs/security/min-permissions.md.

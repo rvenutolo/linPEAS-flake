@@ -125,6 +125,13 @@ Exit codes:
 1 restatement(s) found (details printed to stderr)
 2 missing/empty .github/workflows directory
 
+### scripts/check-egress-allowlist.sh
+
+Lint: every job's harden-runner `allowed-endpoints` list
+carries the hosts its tool inventory actually reaches, carries a complete
+sigstore host set if it carries any sigstore host at all, and carries no
+denylisted host.
+
 ### scripts/check-ephemeral-refs.sh
 
 Lint: tracked Markdown prose must carry no ephemeral
