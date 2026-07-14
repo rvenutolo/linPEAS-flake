@@ -123,31 +123,32 @@ Nix-based jobs pull from the public `cache.nixos.org` substituter; there is no r
 
 ## Cron schedule
 
-All schedules fit the maintainer's monitoring windows: daily crons run 08:00–10:00 UTC, weekly crons run Friday 05:00–07:00 UTC (both year-round inside the intended US-Eastern early-morning windows regardless of DST).
+All schedules fit the maintainer's monitoring windows: daily crons run 08:00–10:00 UTC, weekly crons run Friday 05:00–07:00 UTC (both year-round inside the intended US-Eastern early-morning windows regardless of DST). `ci-watchdog` is the one exception: it is a backstop that must fire around the clock, not a monitoring-window report, so it runs on a continuous 30-minute cadence instead.
 
-| Workflow                          | Cron         | UTC         | Purpose                                                          |
-| --------------------------------- | ------------ | ----------- | ---------------------------------------------------------------- |
-| `actions-cache-prune`             | `0 8 * * *`  | 08:00 daily | Evict stale `actions/cache` entries to stay under repo quota     |
-| `update-linpeas`                  | `5 8 * * *`  | 08:05 daily | Check upstream peass-ng for new release; open auto-merge bump PR |
-| `stale-pin-check`                 | `0 9 * * *`  | 09:00 daily | Auto-file issue if pin is N days behind upstream                 |
-| `ratchet-pin-audit`               | `15 9 * * *` | 09:15 daily | Audit third-party action pins are SHA-pinned + Renovate-tracked  |
-| `settings-posture-drift-check`    | `25 9 * * *` | 09:25 daily | Diff live repo settings vs committed baseline                    |
-| `allowed-actions-api-drift-check` | `35 9 * * *` | 09:35 daily | Diff live Actions allowlist vs committed baseline                |
-| `pages`                           | `55 9 * * *` | 09:55 daily | Rebuild dashboard from current pin + upstream + release JSON     |
-| `update-flake-lock`               | `0 5 * * 5`  | Fri 05:00   | Refresh `flake.lock` via auto-merge PR                           |
-| `reproducibility-check`           | `10 5 * * 5` | Fri 05:10   | Rebuild flake outputs twice; fail on hash divergence             |
-| `coverage-matrix`                 | `20 5 * * 5` | Fri 05:20   | Portability matrix: flake check + build across OS/Nix installers |
-| `image-cve-scan`                  | `30 5 * * 5` | Fri 05:30   | Trivy + Grype CVE scan of the OCI image; SARIF to code-scanning  |
-| `verify-latest-release`           | `40 5 * * 5` | Fri 05:40   | Re-fetch published artifacts; verify SRI hash + attestations     |
-| `links`                           | `50 5 * * 5` | Fri 05:50   | Markdown link checker (lychee); cron-only, not a required check  |
-| `codeql`                          | `0 6 * * 5`  | Fri 06:00   | CodeQL static analysis (Actions)                                 |
-| `octoscan`                        | `10 6 * * 5` | Fri 06:10   | Octoscan SAST on `.github/workflows/*.yml`                       |
-| `scorecard-drift-check`           | `20 6 * * 5` | Fri 06:20   | Diff OSSF Scorecard live results vs committed baseline           |
-| `zizmor-drift-check`              | `30 6 * * 5` | Fri 06:30   | Diff live zizmor results vs committed baseline                   |
-| `gitleaks`                        | `40 6 * * 5` | Fri 06:40   | Full-history secret scan                                         |
-| `trufflehog`                      | `50 6 * * 5` | Fri 06:50   | Full-history secret scan (complementary detector set)            |
+| Workflow                          | Cron            | UTC          | Purpose                                                               |
+| --------------------------------- | --------------- | ------------ | --------------------------------------------------------------------- |
+| `ci-watchdog`                     | `20,50 * * * *` | every 30 min | Re-run failed jobs on stuck auto-merge bot PRs, bounded to 3 attempts |
+| `actions-cache-prune`             | `0 8 * * *`     | 08:00 daily  | Evict stale `actions/cache` entries to stay under repo quota          |
+| `update-linpeas`                  | `5 8 * * *`     | 08:05 daily  | Check upstream peass-ng for new release; open auto-merge bump PR      |
+| `stale-pin-check`                 | `0 9 * * *`     | 09:00 daily  | Auto-file issue if pin is N days behind upstream                      |
+| `ratchet-pin-audit`               | `15 9 * * *`    | 09:15 daily  | Audit third-party action pins are SHA-pinned + Renovate-tracked       |
+| `settings-posture-drift-check`    | `25 9 * * *`    | 09:25 daily  | Diff live repo settings vs committed baseline                         |
+| `allowed-actions-api-drift-check` | `35 9 * * *`    | 09:35 daily  | Diff live Actions allowlist vs committed baseline                     |
+| `pages`                           | `55 9 * * *`    | 09:55 daily  | Rebuild dashboard from current pin + upstream + release JSON          |
+| `update-flake-lock`               | `0 5 * * 5`     | Fri 05:00    | Refresh `flake.lock` via auto-merge PR                                |
+| `reproducibility-check`           | `10 5 * * 5`    | Fri 05:10    | Rebuild flake outputs twice; fail on hash divergence                  |
+| `coverage-matrix`                 | `20 5 * * 5`    | Fri 05:20    | Portability matrix: flake check + build across OS/Nix installers      |
+| `image-cve-scan`                  | `30 5 * * 5`    | Fri 05:30    | Trivy + Grype CVE scan of the OCI image; SARIF to code-scanning       |
+| `verify-latest-release`           | `40 5 * * 5`    | Fri 05:40    | Re-fetch published artifacts; verify SRI hash + attestations          |
+| `links`                           | `50 5 * * 5`    | Fri 05:50    | Markdown link checker (lychee); cron-only, not a required check       |
+| `codeql`                          | `0 6 * * 5`     | Fri 06:00    | CodeQL static analysis (Actions)                                      |
+| `octoscan`                        | `10 6 * * 5`    | Fri 06:10    | Octoscan SAST on `.github/workflows/*.yml`                            |
+| `scorecard-drift-check`           | `20 6 * * 5`    | Fri 06:20    | Diff OSSF Scorecard live results vs committed baseline                |
+| `zizmor-drift-check`              | `30 6 * * 5`    | Fri 06:30    | Diff live zizmor results vs committed baseline                        |
+| `gitleaks`                        | `40 6 * * 5`    | Fri 06:40    | Full-history secret scan                                              |
+| `trufflehog`                      | `50 6 * * 5`    | Fri 06:50    | Full-history secret scan (complementary detector set)                 |
 
-Daily crons fire in this UTC order: `actions-cache-prune` (08:00) → `update-linpeas` (08:05) → `stale-pin-check` (09:00) → `ratchet-pin-audit` (09:15) → `settings-posture-drift-check` (09:25) → `allowed-actions-api-drift-check` (09:35) → `pages` (09:55). Bump-related crons (`update-linpeas`, `stale-pin-check`) front-load the window so the dashboard cron at 09:55 reads a settled state; drift checks cluster between them. Weekly crons fire Friday in slot order: `update-flake-lock` leads at 05:00 so its auto-merge PR's CI runs inside the window, the scanner cluster (`codeql` → `octoscan` → `scorecard-drift-check` → `zizmor-drift-check`) fills the second hour, and the secret-scan pair (`gitleaks`, `trufflehog`) closes it.
+Daily crons fire in this UTC order: `ci-watchdog` (00:20) → `actions-cache-prune` (08:00) → `update-linpeas` (08:05) → `stale-pin-check` (09:00) → `ratchet-pin-audit` (09:15) → `settings-posture-drift-check` (09:25) → `allowed-actions-api-drift-check` (09:35) → `pages` (09:55). `ci-watchdog`'s minute field (`20,50`) recurs every 30 minutes around the clock — the 00:20 timestamp is only where its cron string sorts among the fixed-time daily crons, not a single daily firing. Bump-related crons (`update-linpeas`, `stale-pin-check`) front-load the window so the dashboard cron at 09:55 reads a settled state; drift checks cluster between them. Weekly crons fire Friday in slot order: `update-flake-lock` leads at 05:00 so its auto-merge PR's CI runs inside the window, the scanner cluster (`codeql` → `octoscan` → `scorecard-drift-check` → `zizmor-drift-check`) fills the second hour, and the secret-scan pair (`gitleaks`, `trufflehog`) closes it.
 
 ### Pages staleness window
 
