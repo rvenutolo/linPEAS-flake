@@ -11,6 +11,8 @@ actions-cache-prune.yml:
   prune-on-pr-close: [actions]
 allowed-actions-api-drift-check.yml:
   notify: [issues]
+ci-watchdog.yml:
+  retry: [actions, issues]
 codeql.yml:
   analyze: [security-events]
   notify-finding: [issues]
