@@ -7,7 +7,7 @@ name: scorecard-drift-check
 # check-uses-sha-pinned.sh, codeql, gitleaks/trufflehog,
 # settings-posture-drift, etc.):
 #
-#   Pinned-Dependencies, Signed-Releases, SBOM, SAST, Vulnerabilities,
+#   Pinned-Dependencies, Signed-Releases, SBOM, Vulnerabilities,
 #   Security-Policy, Dependency-Update-Tool, License, Webhooks,
 #   Binary-Artifacts, Packaging
 #
@@ -23,9 +23,12 @@ name: scorecard-drift-check
 #
 # Dropped as duplicates of a blocking, required in-tree gate — the
 # scorecard signal is coarser than the lint that already fails the
-# PR: Token-Permissions (covered by check-min-permissions.sh) and
+# PR: Token-Permissions (covered by check-min-permissions.sh),
 # Dangerous-Workflow (covered by check-pull-request-target-absent.sh
-# + check-checkout-persist-credentials.sh + zizmor).
+# + check-checkout-persist-credentials.sh + zizmor), and SAST
+# (covered by the required codeql gate). SAST additionally scores a
+# rolling percentage of merged PRs carrying a registered SAST run,
+# so it cannot be driven to 10 by any in-repo change.
 #
 # Dropped temporarily (re-add after 2026-08-14, 90 days post repo
 # creation 2026-05-16): Maintained — fires "Repository was created
@@ -93,7 +96,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: scorecard --checks=<curated 11> → check-scorecard-threshold.sh
+      - name: scorecard --checks=<curated 10> → check-scorecard-threshold.sh
         id: probe
         # SCORECARD_PAT rotation: docs/runbooks/scorecard-pat-rotation.md
         # SCORECARD_EXPERIMENTAL=1 unlocks the SBOM and Webhooks checks
@@ -119,7 +122,7 @@ jobs:
           # composite uses internally.
           nix develop --command scorecard \
             --repo="github.com/${REPO}" \
-            --checks=Pinned-Dependencies,Signed-Releases,SBOM,SAST,Vulnerabilities,Security-Policy,Dependency-Update-Tool,License,Webhooks,Binary-Artifacts,Packaging \
+            --checks=Pinned-Dependencies,Signed-Releases,SBOM,Vulnerabilities,Security-Policy,Dependency-Update-Tool,License,Webhooks,Binary-Artifacts,Packaging \
             --format=json \
             --show-details \
             --output=results.json
