@@ -33,7 +33,6 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
-            install.determinate.systems:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
@@ -44,7 +43,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: flake check
         run: nix flake check --print-build-logs
 
@@ -65,7 +63,6 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
-            install.determinate.systems:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
@@ -76,7 +73,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: build linpeas
         run: nix build .#linpeas --print-build-logs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -104,7 +100,6 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
-            install.determinate.systems:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
@@ -115,7 +110,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: smoke test linpeas -h
         run: |
           set -Eeuo pipefail
@@ -146,7 +140,6 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
-            install.determinate.systems:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
@@ -157,7 +150,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: build linpeas (aarch64)
         run: nix build .#linpeas --print-build-logs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -185,7 +177,6 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
-            install.determinate.systems:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
@@ -196,7 +187,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: smoke test linpeas -h (aarch64)
         run: |
           set -Eeuo pipefail
@@ -228,7 +218,6 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
-            install.determinate.systems:443
             objects.githubusercontent.com:443
             production.cloudfront.docker.com:443
             registry-1.docker.io:443
@@ -241,7 +230,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: build, load, run image
         run: |
           set -Eeuo pipefail
@@ -318,7 +306,6 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
-            install.determinate.systems:443
             objects.githubusercontent.com:443
             production.cloudfront.docker.com:443
             registry-1.docker.io:443
@@ -331,7 +318,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: build, load, run image (aarch64)
         run: |
           set -Eeuo pipefail
@@ -409,7 +395,6 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
-            install.determinate.systems:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
@@ -420,7 +405,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: run gen-dashboard-data failure-mode harness
         run: nix develop --command bash tests/gen-dashboard-data.test.sh
 
@@ -441,7 +425,6 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
-            install.determinate.systems:443
             magic-nix-cache20230623203105255200000001.s3.dualstack.us-east-2.amazonaws.com:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
@@ -453,7 +436,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: enforce required-checks-no-paths invariant
         run: nix develop --command ./scripts/check-required-checks-no-paths.sh
       - name: enforce harness passes
@@ -477,7 +459,6 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
-            install.determinate.systems:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
@@ -488,7 +469,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: enforce pr-workflows-no-secrets invariant
         run: nix develop --command ./scripts/check-pr-workflows-no-secrets.sh
       - name: enforce harness passes
@@ -511,7 +491,6 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
-            install.determinate.systems:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
@@ -522,7 +501,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: harness passes against fixtures
         run: nix develop --command bash tests/check-tag-protection.test.sh
       - name: probe live ruleset matches desired posture
@@ -547,7 +525,6 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
-            install.determinate.systems:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
@@ -558,7 +535,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: harness passes
         run: nix develop --command bash tests/check-renovate-invariants.test.sh
       - name: enforce renovate-invariants
@@ -589,7 +565,6 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
-            install.determinate.systems:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
@@ -600,7 +575,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: run workflow-security invariant lints
         run: nix develop .#lint --command bash scripts/run-lint-group.sh lint-workflow-security
 
@@ -622,7 +596,6 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
-            install.determinate.systems:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
@@ -633,7 +606,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: run script-hygiene invariant lints
         run: nix develop .#lint --command bash scripts/run-lint-group.sh lint-script-hygiene
 
@@ -654,7 +626,6 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
-            install.determinate.systems:443
             objects.githubusercontent.com:443
             raw.githubusercontent.com:443
             release-assets.githubusercontent.com:443
@@ -672,7 +643,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: run doc-invariant lints
         run: nix develop --command bash scripts/run-lint-group.sh lint-doc-invariants
 
@@ -696,7 +666,6 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
-            install.determinate.systems:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
@@ -707,7 +676,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: run doc-freshness regenerate-and-diff harnesses
         run: nix develop --command bash scripts/run-doc-freshness.sh
 
@@ -734,7 +702,6 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
-            install.determinate.systems:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
@@ -745,7 +712,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: run setup-tax harnesses
         run: nix develop --command bash scripts/run-harness-group.sh
 
@@ -770,7 +736,6 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
-            install.determinate.systems:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
@@ -781,7 +746,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: harness passes
         run: nix develop --command bash tests/check-protect-main.test.sh
       - name: enforce protect-main posture and in-tree mirror parity
@@ -805,7 +769,6 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
-            install.determinate.systems:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
@@ -816,7 +779,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: harness passes
         run: nix develop --command bash tests/check-setup-nix-required.test.sh
       - name: enforce setup-nix-required
@@ -839,7 +801,6 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
-            install.determinate.systems:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
@@ -850,7 +811,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: harness passes
         run: nix develop --command bash tests/check-cliff-tag-pattern.test.sh
       - name: enforce cliff-tag-pattern
@@ -872,7 +832,6 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
-            install.determinate.systems:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
@@ -886,7 +845,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: harness passes
         run: nix develop --command bash tests/check-changelog-links.test.sh
       - name: enforce changelog-links

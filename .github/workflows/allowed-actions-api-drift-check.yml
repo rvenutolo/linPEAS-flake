@@ -31,8 +31,6 @@ jobs:
   drift-check:
     runs-on: ubuntu-latest
     if: github.repository == 'rvenutolo/linPEAS-flake'
-    # Budget covers the flakehub-cache-action post-step retrying uploads
-    # against a degraded cache service, not just the check itself.
     timeout-minutes: 20
     permissions:
       contents: read
@@ -49,7 +47,6 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             github.com:443
-            install.determinate.systems:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
@@ -60,7 +57,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: harness passes against fixtures
         run: nix develop --command bash tests/check-allowed-actions-api.test.sh
 
