@@ -37,7 +37,6 @@ jobs:
             api.github.com:443
             cache.nixos.org:443
             github.com:443
-            magic-nix-cache20230623203105255200000001.s3.dualstack.us-east-2.amazonaws.com:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
@@ -113,6 +112,7 @@ jobs:
             cache.nixos.org:443
             github.com:443
             objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
             releases.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:

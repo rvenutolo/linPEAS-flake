@@ -116,9 +116,9 @@ jobs:
         with:
           egress-policy: block
           allowed-endpoints: >
+            *.actions.githubusercontent.com:443
             api.github.com:443
             cache.nixos.org:443
-            cafe.github.com:443
             github.com:443
             objects.githubusercontent.com:443
             releases.nixos.org:443
