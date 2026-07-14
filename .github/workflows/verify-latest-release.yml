@@ -40,7 +40,6 @@ jobs:
             ghcr.io:443
             github.com:443
             index.docker.io:443
-            install.determinate.systems:443
             objects.githubusercontent.com:443
             pkg-containers.githubusercontent.com:443
             production.cloudfront.docker.com:443
@@ -59,7 +58,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
       - name: read latest release tag
         id: read-tag
         env:

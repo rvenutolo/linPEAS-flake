@@ -119,7 +119,7 @@ flowchart TD
 
 ## Cache
 
-All Nix-based jobs use `DeterminateSystems/flakehub-cache-action` (free for public repos). All third-party actions are SHA-pinned with `# vX` version comments; Renovate maintains them via `helpers:pinGitHubActionDigests` + explicit `pinDigests: true` in `renovate.json`.
+Nix-based jobs pull from the public `cache.nixos.org` substituter; there is no repo-specific Nix binary cache layered on top. All third-party actions are SHA-pinned with `# vX` version comments; Renovate maintains them via `helpers:pinGitHubActionDigests` + explicit `pinDigests: true` in `renovate.json`.
 
 ## Cron schedule
 
@@ -153,7 +153,7 @@ Daily crons fire in this UTC order: `actions-cache-prune` (08:00) → `update-li
 
 On bump days, the 08:05 `update-linpeas` run opens a PR; required checks plus auto-merge typically complete within an hour, after which `release-on-bump.yml` cuts the GitHub release. The 09:55 `pages` cron then reads the freshly-bumped `linpeas-pin.json` from `main` plus the just-published release JSON and renders a consistent dashboard. The ~1h50m slack between bump start and dashboard render is an accepted tradeoff for keeping every daily cron inside the maintainer's monitoring window — the typical bump pipeline finishes well inside it.
 
-If the bump pipeline is delayed past 09:55 (rare — CI queue surge, flakehub-cache cold-start, Renovate auto-merge held by a required check), the daily cron reads the previous day's pin and publishes a dashboard claiming `drift.days = 1`. This is **by-design** tolerable:
+If the bump pipeline is delayed past 09:55 (rare — CI queue surge, Renovate auto-merge held by a required check), the daily cron reads the previous day's pin and publishes a dashboard claiming `drift.days = 1`. This is **by-design** tolerable:
 
 - `pages.yml` also runs on `push: branches: [main]` and `release: published`, so the dashboard is re-rendered within minutes of any bump merge.
 - The dashboard page and `security/trust-model.md` self-describe as documentation, not a trust anchor. Authoritative signal lives in `gh attestation verify` against the published artifacts, not the dashboard text.
@@ -173,7 +173,7 @@ Do not collapse into single `failure` classification.
 
 When a `notify-workflow-result` issue auto-closes after a transient
 failure recovers, leave a one-line root-cause comment on the closed
-issue (e.g. `transient: docker.io 502`, `transient: flakehub-cache ETIMEDOUT`). The issue itself is closed; the comment is the durable
+issue (e.g. `transient: docker.io 502`, `transient: cache.nixos.org 5xx`). The issue itself is closed; the comment is the durable
 record. Future failures of the same shape get triaged faster, and
 the closed-issue history doubles as a frequency log.
 

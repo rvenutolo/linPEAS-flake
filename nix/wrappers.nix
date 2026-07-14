@@ -36,7 +36,7 @@
       #
       # `dontUsePytestCheck`: the override changes the derivation hash,
       # so this build is never substitutable from cache.nixos.org — any
-      # binary-cache miss (e.g. the FlakeHub cache rate-limiting under
+      # binary-cache miss (e.g. cache.nixos.org rate-limiting under
       # CI's parallel job fan-out) falls back to building it from
       # source on the runner. Re-running upstream's ~700-test pytest
       # suite there adds no signal (the unmodified base package already

@@ -8,11 +8,6 @@ description: "Install Nix with authenticated GitHub access-tokens so flake-input
 # that budget across many concurrent jobs; once exhausted, the API returns
 # 401 ("Bad credentials"). Passing `access-tokens = github.com=<token>`
 # raises the limit to ~1000/hour and eliminates the recurring 401s.
-#
-# Flakehub-cache is intentionally NOT bundled here: a small number of
-# callers (`update-flake-lock`, `renovate-flake-lock-refresh`) need fresh
-# fetches and must omit it. Callers add `DeterminateSystems/flakehub-cache-action`
-# explicitly when wanted.
 
 inputs:
   github-token:
@@ -57,9 +52,9 @@ runs:
         extra_nix_config: |
           experimental-features = nix-command flakes
           access-tokens = github.com=${{ inputs.github-token }}
-          # Substituter resilience. cache.nixos.org and flakehub-cache
-          # intermittently return HTTP 416 on resumed NAR ranges or rate-limit
-          # under burst load; nix defaults of zero retries + short timeouts
+          # Substituter resilience. cache.nixos.org intermittently returns
+          # HTTP 416 on resumed NAR ranges or rate-limits under burst load;
+          # nix defaults of zero retries + short timeouts
           # convert these transient blips into red CI jobs that re-run clean.
           download-attempts = 5
           connect-timeout = 15

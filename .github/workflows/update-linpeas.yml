@@ -20,8 +20,6 @@ jobs:
   compute-pin:
     if: github.repository == 'rvenutolo/linPEAS-flake'
     runs-on: ubuntu-latest
-    # Budget covers the flakehub-cache-action post-step retrying uploads
-    # against a degraded cache service, not just the build itself.
     timeout-minutes: 25
     permissions:
       contents: read
@@ -39,7 +37,6 @@ jobs:
             api.github.com:443
             cache.nixos.org:443
             github.com:443
-            install.determinate.systems:443
             magic-nix-cache20230623203105255200000001.s3.dualstack.us-east-2.amazonaws.com:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
@@ -52,8 +49,6 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: DeterminateSystems/flakehub-cache-action@c01e819d047464c3edf6ba778f075952af5a3aa7 # v3.21.0
 
       - name: bump pin
         id: bump
