@@ -93,3 +93,26 @@ Exception for a non-`GITHUB_TOKEN` secret requires documenting here BEFORE relax
 Enforced by `scripts/check-harden-runner-first.sh` via the `lint-workflow-security` CI job (member check `harden-runner-first`). Lint parses every job in `.github/workflows/*.yml` with `yq` and rejects any job whose first step is not `step-security/harden-runner@<40-hex-sha>`.
 
 The block-mode contract is enforced by `scripts/check-harden-runner-block.sh` via the same `lint-workflow-security` CI job (member check `harden-runner-block`) and a pre-commit hook: it rejects any harden-runner step that is not `egress-policy: block` with a non-empty `allowed-endpoints:`. A missed host surfaces as a blocked-egress CI failure and is fixed forward by adding the host to that job's allowlist.
+
+### Egress allowlist matches tool inventory
+
+A hand-authored `allowed-endpoints:` list has nothing binding it to what the job's tooling actually reaches. A tool version bumps, a URL changes, or a fallback path activates, and the list is not updated — the resulting failure is latent: it surfaces only when the blocked path is finally exercised, sometimes long after the change that broke it. `scripts/check-egress-allowlist.sh` binds each job's allowlist to its tool inventory with three assertions, keyed off the job's `uses:` and `run:` text:
+
+1. **Forward rules**, mechanical and exact:
+    - `github/codeql-action/init` requires `release-assets.githubusercontent.com` — the CodeQL bundle falls back to a release asset when the toolcache misses, and a `github.com` release-download URL 302s there unconditionally.
+    - `aquasecurity/trivy-action` requires both `mirror.gcr.io` and `ghcr.io` — `ghcr.io` is the documented vulnerability-DB fallback; without it a `mirror.gcr.io` outage fails the scan instead of degrading.
+    - A `run:` step containing a `releases/download` URL requires `release-assets.githubusercontent.com` — the same GitHub redirect as above, reached directly instead of through the CodeQL action.
+    - `DeterminateSystems/flakehub-cache-action` is banned outright: no job may use it, and no allowlist may carry a flakehub or Determinate Systems host.
+
+    These are instances of a general hazard, not the full set: a redirect to any host outside the allowlist is the defect class. A `github.com/.../releases/download` URL 302s to `release-assets.githubusercontent.com` (covered above); a `nixos.org/manual` URL 302s to `nix.dev` (not covered — `nixos.org` is a lychee link-check target host, outside this lint's tool-inventory scope). Extending the table for a new redirecting host means pinning both the source URL pattern and the host it lands on.
+
+2. **Sigstore host-set consistency**, keyed on hosts rather than on which cosign subcommand is detected. Any job whose allowlist carries any sigstore host, or whose `run:` text invokes cosign, must carry a complete set for what it does:
+    - **Signing** (`cosign sign` / `cosign sign-blob`) requires all four: `fulcio.sigstore.dev`, `rekor.sigstore.dev`, `tuf-repo-cdn.sigstore.dev`, and `timestamp.sigstore.dev` — cosign requests an RFC3161 timestamp when producing a bundle.
+    - **Verifying** (`cosign verify` / `cosign verify-blob`), when the job does not also sign, requires `tuf-repo-cdn.sigstore.dev` only, and must not carry `timestamp.sigstore.dev`. A `.sigstore` bundle embeds the signing certificate and transparency-log entry, so verification is self-contained apart from the TUF root refresh; the timestamp authority is signing-only, and demanding it on a verify job would force an unjustified host into the allowlist.
+    - When neither is detected in the workflow file but a sigstore host is present, the lint demands the conservative floor (`fulcio.sigstore.dev`, `rekor.sigstore.dev`, `tuf-repo-cdn.sigstore.dev`). This is what catches a job that reaches cosign indirectly — through a script or `just` recipe, invisible to the `run:`-text rules — but was never given a complete host set.
+
+3. **Reverse check**: a denylist of hosts nothing in this repo justifies (`cafe.github.com`, `magic-nix-cache*.amazonaws.com`, `api.flakehub.com`, `cache.flakehub.com`, `flakehub.com`, `install.determinate.systems`). This is deliberately a denylist, not a full justification model — a missing host has broken this repo's egress posture repeatedly; an extra host never has.
+
+Known blind spot: detection reads the workflow file only, one level deep. A job that reaches cosign through a script or `just` recipe is invisible to the `run:`-text sign/verify rules — assertion 2's "neither detected" branch covers that case regardless of detection, which is why no call-graph resolver is warranted.
+
+Enforced by `scripts/check-egress-allowlist.sh` via the `lint-workflow-security` CI job (member check `egress-allowlist`) and a pre-commit hook.

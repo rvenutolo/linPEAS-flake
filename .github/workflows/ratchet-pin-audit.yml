@@ -39,7 +39,6 @@ jobs:
             *.actions.githubusercontent.com:443
             api.github.com:443
             cache.nixos.org:443
-            cafe.github.com:443
             codeload.github.com:443
             github.com:443
             objects.githubusercontent.com:443
