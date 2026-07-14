@@ -230,8 +230,8 @@ jobs:
             # branch tip without closing the PR.
             printf 'rebasing open PR for %s onto main HEAD %s\n' "${branch}" "${base_sha}"
             gh api --method PATCH "repos/${REPO}/git/refs/heads/${branch}" \
-              --field sha="${base_sha}" \
-              --raw-field force=true \
+              --raw-field sha="${base_sha}" \
+              --field force=true \
               --header "${api_header}" >/dev/null
           else
             # Delete stale orphan branch ref (no PR attached) if a prior

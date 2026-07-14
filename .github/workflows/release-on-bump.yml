@@ -73,6 +73,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
+            timestamp.sigstore.dev:443
             tuf-repo-cdn.sigstore.dev:443
             uploads.github.com:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -279,6 +280,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
+            timestamp.sigstore.dev:443
             tuf-repo-cdn.sigstore.dev:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -582,6 +584,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
+            timestamp.sigstore.dev:443
             tuf-repo-cdn.sigstore.dev:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -825,6 +828,7 @@ jobs:
             cache.nixos.org:443
             codeload.github.com:443
             flakehub.com:443
+            fulcio.sigstore.dev:443
             ghcr.io:443
             github.com:443
             hub.docker.com:443
@@ -834,9 +838,12 @@ jobs:
             pkg-containers.githubusercontent.com:443
             production.cloudfront.docker.com:443
             registry-1.docker.io:443
+            rekor.sigstore.dev:443
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
+            timestamp.sigstore.dev:443
+            tuf-repo-cdn.sigstore.dev:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -1095,8 +1102,8 @@ jobs:
             # branch tip without closing the PR.
             printf 'rebasing open PR for %s onto main HEAD %s\n' "${branch}" "${base_sha}"
             gh api --method PATCH "repos/${REPO}/git/refs/heads/${branch}" \
-              --field sha="${base_sha}" \
-              --raw-field force=true \
+              --raw-field sha="${base_sha}" \
+              --field force=true \
               --header "${api_header}" >/dev/null
           else
             # Delete stale orphan branch ref (no PR attached) if a prior
@@ -1193,6 +1200,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
+            timestamp.sigstore.dev:443
             tuf-repo-cdn.sigstore.dev:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
