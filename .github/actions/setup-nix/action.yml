@@ -32,17 +32,25 @@ runs:
   steps:
     - name: Wait for egress DNS to settle
       # harden-runner block mode restarts systemd-resolved at job start; the
-      # brief resolver gap can race the first Nix substituter fetch. Block until
-      # cache.nixos.org resolves so the installer and substituter fetches don't
-      # fail on a first run that a manual re-run would clear.
+      # brief resolver gap can race the first Nix substituter fetch. Wait for
+      # cache.nixos.org to resolve so the installer and substituter fetches
+      # don't fail on a first run that a manual re-run would clear.
+      #
+      # `host` is used rather than `getent`: getent is glibc-only and is absent
+      # on macOS runners, where it fails the step before Nix is even installed.
+      #
+      # A timeout here is a WARNING, not a failure. This probe is a race
+      # mitigation, not a correctness gate — if the resolver is still cold, the
+      # substituter retry settings below (download-attempts, connect-timeout,
+      # stalled-download-timeout) absorb it. Hard-failing here would convert a
+      # slow resolver into a red build.
       shell: bash
       run: |
         for _ in $(seq 1 30); do
-          if getent hosts cache.nixos.org; then exit 0; fi
+          if host cache.nixos.org >/dev/null 2>&1; then exit 0; fi
           sleep 1
         done
-        echo 'cache.nixos.org never resolved after 30s' >&2
-        exit 1
+        echo '::warning::cache.nixos.org did not resolve within 30s; proceeding and relying on nix download retries' >&2
     - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 # patch-tag-exception: pinned SHA is the v31 annotated-tag object, not a release commit; cachix publishes only floating major tags (v31 retargets across patches) so there is no immutable patch tag to ratchet to
       with:
         install_url: ${{ inputs.install-url }}
