@@ -35,6 +35,7 @@ jobs:
             hub.docker.com:443
             img.shields.io:443
             keepachangelog.com:443
+            nixos.org:443
             nixos.wiki:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
