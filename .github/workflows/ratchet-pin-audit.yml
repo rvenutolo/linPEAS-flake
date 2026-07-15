@@ -160,8 +160,16 @@ jobs:
                 printf 'API lookup failed for %s@%s\n' "${repo_root}" "${tag}" >&2
                 emit_result failure upstream-api-failure ''
               fi
-              ref_object_sha="$(jq -r '.sha // ""' <<<"${ref_info}")"
-              tag_type="$(jq -r '.type // ""' <<<"${ref_info}")"
+              # A malformed payload can make jq exit non-zero; without this
+              # guard, errexit would abort the step before emit_result, so the
+              # notify job would report reason=unknown instead of a typed
+              # reason. Route jq failure to upstream-api-failure — the payload
+              # came from the GitHub API.
+              if ! ref_object_sha="$(jq -r '.sha // ""' <<<"${ref_info}")" \
+                || ! tag_type="$(jq -r '.type // ""' <<<"${ref_info}")"; then
+                printf 'jq parse failed for %s@%s: %s\n' "${repo_root}" "${tag}" "${ref_info}" >&2
+                emit_result failure upstream-api-failure ''
+              fi
               if [[ -z "${ref_object_sha}" || -z "${tag_type}" ]]; then
                 printf 'malformed ref payload for %s@%s: %s\n' "${repo_root}" "${tag}" "${ref_info}" >&2
                 emit_result failure upstream-api-failure ''
