@@ -19,8 +19,14 @@ Do NOT use for:
 
 - A current-tag release missing assets due to a partial publish —
     use `force-republish` instead.
-- A release whose per-arch images have been evicted from the GHCR
-    registry. See "Escape hatch" below.
+- A release with a PARTIAL per-arch image set (some but not all four
+    `{ghcr.io,docker.io}:<tag>-{amd64,arm64}` tags present). The
+    preflight fails loudly on this half-published state — see
+    "Partial image set" below.
+
+An IMAGE-LESS release (all four per-arch tags absent) is fully
+supported: backfill writes the pin sidecars, the image jobs skip, and
+the run finishes green. No image rebuild is required.
 
 ## Procedure
 
@@ -69,13 +75,21 @@ Expect:
 - Workflow run green.
 - Issue auto-closed by `notify-workflow-result` deduper.
 
-## Escape hatch — registry image evicted
+## Partial image set
 
-If `docker pull ghcr.io/rvenutolo/linpeas:<tag>-<arch>` fails because
-the image has been evicted from GHCR (manual delete, retention
-policy), the backfill workflow's image jobs will fail.
+The `preflight` job probes the four per-arch tags
+(`{ghcr.io,docker.io}/rvenutolo/linpeas:<tag>-{amd64,arm64}`) and
+classifies the release:
 
-Recovery requires rebuilding the image at the historic commit:
+- **all four present** → images are pulled, image SBOM sidecars
+    regenerated, the multi-arch index rebuilt.
+- **all four absent** → image-less; the image/manifest jobs skip and
+    only the pin sidecars are backfilled. The run is green.
+- **partial** (1–3 present) → `preflight` fails. This is a
+    half-published state no automatic path can safely repair.
+
+To resolve a partial set, restore the missing per-arch images by
+rebuilding at the historic commit, then re-run the backfill:
 
 1. Identify the commit that pinned `<tag>`:
     `git log --diff-filter=A --format='%H %s' -- linpeas-pin.json`
@@ -83,13 +97,16 @@ Recovery requires rebuilding the image at the historic commit:
 1. Locally check out that commit and run
     `nix build .#linpeas-image --print-build-logs`.
 1. `docker load --input result` + retag + push to GHCR / Docker Hub
-    under `${tag}-${arch}`.
+    under `${tag}-${arch}` for the missing arch(es)/registry(ies).
 1. Re-run `gh workflow run release-on-bump.yml --ref main -F backfill-tag=<tag>`.
 
-Note that the rebuilt image must be byte-identical to the original
-for cosign image-digest verification to match. The repository's
-`reproducibility-check.yml` workflow asserts this property weekly;
-verify it has been green for `<tag>` before relying on rebuild.
+The rebuilt image must be byte-identical to the original for cosign
+image-digest verification to match. `reproducibility-check.yml`
+asserts this weekly; confirm it has been green for `<tag>` before
+relying on a rebuild.
+
+Restoring images to an image-less release (making all four present) is
+optional and uses the same rebuild-and-push steps for every arch.
 
 ## Timestamps
 
