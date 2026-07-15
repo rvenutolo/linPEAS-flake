@@ -80,7 +80,7 @@ jobs:
           name: bump-result
           path: |
             linpeas-pin.json
-            README.md
+            docs/reference/flake-outputs.md
           retention-days: 1
           if-no-files-found: error
 
