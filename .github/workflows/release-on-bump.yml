@@ -237,9 +237,96 @@ jobs:
           cp "${BUNDLE_PATH}" linpeas-pin.json.intoto.jsonl
           gh release upload "${VERSION}" linpeas-pin.json.intoto.jsonl --clobber
 
+  preflight:
+    # Backfill-only image-presence probe and single source of truth
+    # for image gating. On a normal push / force-republish
+    # (backfill-tag == '') it emits image-mode=full immediately with no
+    # registry probe, so the hot release path pays nothing. In backfill
+    # mode it anonymously inspects the four per-arch tags and
+    # classifies the release as `full` (complete image set -> run the
+    # image/manifest jobs) or `none` (image-less -> skip them, backfill
+    # pin sidecars only, finish green). A partial mix fails loudly.
+    if: github.repository == 'rvenutolo/linPEAS-flake'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read # checkout the classifier script
+    outputs:
+      image-mode: ${{ steps.classify.outputs.image-mode }}
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: block
+          # Anonymous registry reads only: no cosign (no sigstore
+          # hosts), no Nix, no docker login. buildx imagetools inspect
+          # reads a public manifest via the registry + its CDN/auth.
+          allowed-endpoints: >
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+            api.github.com:443
+            auth.docker.io:443
+            codeload.github.com:443
+            ghcr.io:443
+            github.com:443
+            index.docker.io:443
+            objects.githubusercontent.com:443
+            pkg-containers.githubusercontent.com:443
+            production.cloudfront.docker.com:443
+            registry-1.docker.io:443
+            release-assets.githubusercontent.com:443
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: classify image presence
+        id: classify
+        env:
+          BACKFILL_TAG: ${{ inputs.backfill-tag }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          # Normal push / force-republish: images are (re)built
+          # unconditionally, so no probe is needed.
+          if [[ -z "${BACKFILL_TAG}" ]]; then
+            printf 'image-mode=full\n' >>"${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          # Probe one public per-arch tag. Echo present|absent, or
+          # return non-zero on an ambiguous (non-404) error so a
+          # transient registry blip never misclassifies an existing
+          # image as absent (which would silently skip image backfill).
+          probe() {
+            local ref="$1" out attempt
+            for attempt in 1 2 3; do
+              if out="$(docker buildx imagetools inspect "${ref}" 2>&1)"; then
+                printf 'present'
+                return 0
+              fi
+              if grep --quiet --ignore-case --extended-regexp \
+                'not found|manifest unknown|no such manifest|manifest_unknown|\b404\b' \
+                <<<"${out}"; then
+                printf 'absent'
+                return 0
+              fi
+              printf 'preflight: registry probe attempt %d/3 failed for %s, retrying\n' \
+                "${attempt}" "${ref}" >&2
+              sleep 3
+            done
+            printf 'preflight: ambiguous registry error probing %s:\n%s\n' \
+              "${ref}" "${out}" >&2
+            return 1
+          }
+          amd64_ghcr="$(probe "ghcr.io/rvenutolo/linpeas:${BACKFILL_TAG}-amd64")"
+          amd64_hub="$(probe "docker.io/rvenutolo/linpeas:${BACKFILL_TAG}-amd64")"
+          arm64_ghcr="$(probe "ghcr.io/rvenutolo/linpeas:${BACKFILL_TAG}-arm64")"
+          arm64_hub="$(probe "docker.io/rvenutolo/linpeas:${BACKFILL_TAG}-arm64")"
+          mode="$(bash scripts/classify-backfill-image-mode.sh \
+            "${amd64_ghcr}" "${amd64_hub}" "${arm64_ghcr}" "${arm64_hub}")"
+          printf 'image-mode=%s\n' "${mode}" >>"${GITHUB_OUTPUT}"
+
   image-amd64:
-    needs: release
-    if: (needs.release.outputs.tag-exists == 'false' || inputs.force-republish || inputs.backfill-tag != '') && github.repository == 'rvenutolo/linPEAS-flake'
+    needs: [release, preflight]
+    if: (needs.release.outputs.tag-exists == 'false' || inputs.force-republish || (inputs.backfill-tag != '' && needs.preflight.outputs.image-mode == 'full')) && github.repository == 'rvenutolo/linPEAS-flake'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -536,8 +623,8 @@ jobs:
           docker logout docker.io || true
 
   image-arm64:
-    needs: release
-    if: (needs.release.outputs.tag-exists == 'false' || inputs.force-republish || inputs.backfill-tag != '') && github.repository == 'rvenutolo/linPEAS-flake'
+    needs: [release, preflight]
+    if: (needs.release.outputs.tag-exists == 'false' || inputs.force-republish || (inputs.backfill-tag != '' && needs.preflight.outputs.image-mode == 'full')) && github.repository == 'rvenutolo/linPEAS-flake'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     permissions:
@@ -791,8 +878,8 @@ jobs:
           docker logout docker.io || true
 
   manifest:
-    needs: [release, image-amd64, image-arm64]
-    if: (needs.release.outputs.tag-exists == 'false' || inputs.force-republish || inputs.backfill-tag != '') && github.repository == 'rvenutolo/linPEAS-flake'
+    needs: [release, image-amd64, image-arm64, preflight]
+    if: (needs.release.outputs.tag-exists == 'false' || inputs.force-republish || (inputs.backfill-tag != '' && needs.preflight.outputs.image-mode == 'full')) && github.repository == 'rvenutolo/linPEAS-flake'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -1145,8 +1232,12 @@ jobs:
     # Synchronous verification of the just-published image and pin
     # attestations. Runs after the image jobs. Failure = release workflow
     # goes red so broken-at-creation attestations surface immediately.
-    needs: [release, image-amd64, image-arm64, manifest]
-    if: (needs.release.outputs.tag-exists == 'false' || inputs.force-republish || inputs.backfill-tag != '') && github.repository == 'rvenutolo/linPEAS-flake'
+    needs: [release, image-amd64, image-arm64, manifest, preflight]
+    if: >-
+      !cancelled()
+      && needs.release.result == 'success'
+      && (needs.release.outputs.tag-exists == 'false' || inputs.force-republish || inputs.backfill-tag != '')
+      && github.repository == 'rvenutolo/linPEAS-flake'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -1188,6 +1279,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: verify per-arch attestations
+        if: needs.preflight.outputs.image-mode == 'full'
         # `gh attestation verify` reads attestations from the Sigstore
         # transparency log + the GitHub API; it does NOT require docker
         # registry credentials. Dropping the docker login pair here
@@ -1212,6 +1304,7 @@ jobs:
           done
 
       - name: cosign verify per-arch + multi-arch images (keyless)
+        if: needs.preflight.outputs.image-mode == 'full'
         # Same identity pinning as the `verify per-arch attestations` step
         # above. Covers all four per-arch digests (signed by image-amd64 /
         # image-arm64) plus both multi-arch index digests (signed by the
@@ -1270,13 +1363,21 @@ jobs:
           COSIGN_OIDC_ISSUER: https://token.actions.githubusercontent.com
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.release.outputs.version }}
+          IMAGE_MODE: ${{ needs.preflight.outputs.image-mode }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
-          for asset in \
-            linpeas-pin.json \
-            linpeas-image-amd64.cdx.json \
-            linpeas-image-arm64.cdx.json; do
+          # Image SBOM sidecars only exist when the release has images.
+          # In image-less backfill (image-mode == none) verify only the
+          # pin sidecar; the .cdx.json assets are absent by design.
+          assets=(linpeas-pin.json)
+          if [[ "${IMAGE_MODE}" == full ]]; then
+            assets+=(
+              linpeas-image-amd64.cdx.json
+              linpeas-image-arm64.cdx.json
+            )
+          fi
+          for asset in "${assets[@]}"; do
             gh release download "${VERSION}" \
               --pattern "${asset}" \
               --pattern "${asset}.sigstore" \
@@ -1285,11 +1386,12 @@ jobs:
               --certificate-identity "${COSIGN_IDENTITY}" \
               --certificate-oidc-issuer "${COSIGN_OIDC_ISSUER}" \
               --bundle "${asset}.sigstore" \
-              "${asset}" > /dev/null
+              "${asset}" >/dev/null
             printf 'cosign verify-blob ok: %s\n' "${asset}"
           done
 
       - name: verify manifest tags resolve to attested per-arch digests
+        if: needs.preflight.outputs.image-mode == 'full'
         # The steps above re-validate the per-arch digests
         # captured at push time, but never confirm the published
         # `:VERSION` / `:latest` manifest tags still point at those exact
@@ -1335,7 +1437,16 @@ jobs:
 
   notify:
     name: notify
-    needs: [release, image-amd64, image-arm64, manifest, changelog, verify]
+    needs:
+      [
+        release,
+        preflight,
+        image-amd64,
+        image-arm64,
+        manifest,
+        changelog,
+        verify,
+      ]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -1363,7 +1474,7 @@ jobs:
           # Treat that path as success. A cancelled job anywhere in the
           # pipeline (e.g. timeout) outranks success — the composite
           # files it as an infrastructure failure.
-          result: ${{ (needs.release.result == 'failure' || needs.image-amd64.result == 'failure' || needs.image-arm64.result == 'failure' || needs.manifest.result == 'failure' || needs.changelog.result == 'failure' || needs.verify.result == 'failure') && 'failure' || (needs.release.result == 'cancelled' || needs.image-amd64.result == 'cancelled' || needs.image-arm64.result == 'cancelled' || needs.manifest.result == 'cancelled' || needs.changelog.result == 'cancelled' || needs.verify.result == 'cancelled') && 'cancelled' || (needs.release.result == 'success') && 'success' || 'skipped' }}
+          result: ${{ (needs.release.result == 'failure' || needs.preflight.result == 'failure' || needs.image-amd64.result == 'failure' || needs.image-arm64.result == 'failure' || needs.manifest.result == 'failure' || needs.changelog.result == 'failure' || needs.verify.result == 'failure') && 'failure' || (needs.release.result == 'cancelled' || needs.preflight.result == 'cancelled' || needs.image-amd64.result == 'cancelled' || needs.image-arm64.result == 'cancelled' || needs.manifest.result == 'cancelled' || needs.changelog.result == 'cancelled' || needs.verify.result == 'cancelled') && 'cancelled' || (needs.release.result == 'success') && 'success' || 'skipped' }}
           label: release-on-bump-failure
           title: "release-on-bump: release pipeline failed"
           body: |
@@ -1371,6 +1482,7 @@ jobs:
 
             - Trigger: `${{ github.event_name }}`
             - release:     `${{ needs.release.result }}`
+            - preflight:   `${{ needs.preflight.result }}`
             - image-amd64: `${{ needs.image-amd64.result }}`
             - image-arm64: `${{ needs.image-arm64.result }}`
             - manifest:    `${{ needs.manifest.result }}`
