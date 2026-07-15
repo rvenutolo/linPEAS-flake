@@ -303,7 +303,7 @@ jobs:
                 return 0
               fi
               if grep --quiet --ignore-case --extended-regexp \
-                'not found|manifest unknown|no such manifest|manifest_unknown|404' \
+                'not found|manifest unknown|no such manifest|manifest_unknown|\b404\b' \
                 <<<"${out}"; then
                 printf 'absent'
                 return 0
