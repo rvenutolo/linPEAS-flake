@@ -183,4 +183,7 @@ pasting the marker pair anywhere after the H1, then running `nix fmt`.
 
 `scripts/refresh-flake-show.sh` regenerates the auto-block in
 [`docs/reference/flake-outputs.md`](../reference/flake-outputs.md). Pre-commit
-hook `flake-show-fresh` has `NIX_BUILD_TOP` sandbox guard.
+hook `flake-show-fresh` has `NIX_BUILD_TOP` sandbox guard. Freshness of the
+generated block is also enforced in CI by the required `doc-freshness`
+context via `tests/refresh-flake-show.test.sh`, so a stale doc is caught
+even when the pre-commit hook is bypassed.
