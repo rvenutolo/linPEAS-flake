@@ -30,4 +30,66 @@ expect bad-missing-concurrency.yml 1 "concurrency.group must be"
 expect bad-missing-reason.yml 1 "notify body missing reason token"
 expect bad-missing-dispatch.yml 1 "on: must include workflow_dispatch"
 
+# --- classify-pin-ref.sh verdict tests -------------------------------
+# Pure classifier: <tag> <pinned> <ref_object_sha> <ref_object_type>
+# <deref_commit_sha>. Fake 40-hex SHAs keep the cases offline and
+# deterministic; only equality/inequality and tag shape matter.
+readonly CLASSIFY="${REPO_ROOT}/scripts/classify-pin-ref.sh"
+
+function classify() {
+  local -r desc="$1" want="$2"
+  shift 2
+  local got rc=0
+  got="$(bash "${CLASSIFY}" "$@" 2>/dev/null)" || rc=$?
+  if [[ ${want} == "<error>" ]]; then
+    if [[ ${rc} -eq 0 ]]; then
+      printf 'FAIL classify %s: expected non-zero exit\n' "${desc}" >&2
+      return 1
+    fi
+    printf 'OK   classify %s (exit %d)\n' "${desc}" "${rc}"
+    return 0
+  fi
+  if [[ ${rc} -ne 0 ]]; then
+    printf 'FAIL classify %s: exit %d, want %s\n' "${desc}" "${rc}" "${want}" >&2
+    return 1
+  fi
+  if [[ ${got} != "${want}" ]]; then
+    printf 'FAIL classify %s: got %q want %q\n' "${desc}" "${got}" "${want}" >&2
+    return 1
+  fi
+  printf 'OK   classify %s\n' "${desc}"
+}
+
+# tag-object pin of an unmoved annotated tag: pinned == tag object.
+classify "tag-object pin, unmoved annotated tag" current \
+  v9.0.0 dddddddddddddddddddddddddddddddddddddddd \
+  dddddddddddddddddddddddddddddddddddddddd tag \
+  cccccccccccccccccccccccccccccccccccccccc
+# commit pin of an annotated tag: pinned == dereferenced commit.
+classify "commit pin, annotated tag" current \
+  v9.0.0 cccccccccccccccccccccccccccccccccccccccc \
+  dddddddddddddddddddddddddddddddddddddddd tag \
+  cccccccccccccccccccccccccccccccccccccccc
+# lightweight tag: object is the commit, no deref.
+classify "commit pin, lightweight tag" current \
+  v4.3.1 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa commit ""
+# genuine force-move: pin matches neither new object nor new commit.
+classify "genuine force-move -> drift" drift \
+  v9.0.0 dddddddddddddddddddddddddddddddddddddddd \
+  eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee tag \
+  ffffffffffffffffffffffffffffffffffffffff
+# floating major: skip regardless of SHAs.
+classify "floating major -> skip" skip-floating-major \
+  v31 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+  7777777777777777777777777777777777777777 tag \
+  8888888888888888888888888888888888888888
+# patch tag with a major-looking prefix is NOT skipped.
+classify "patch tag not over-skipped" drift \
+  v31.2.0 1111111111111111111111111111111111111111 \
+  2222222222222222222222222222222222222222 tag \
+  3333333333333333333333333333333333333333
+# usage error: too few args.
+classify "usage error (too few args)" "<error>" v9.0.0 deadbeef
+
 printf 'all tests passed\n'
