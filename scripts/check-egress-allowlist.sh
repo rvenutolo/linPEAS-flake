@@ -23,6 +23,12 @@
 #          (ghcr.io is the documented DB fallback; without it a mirror.gcr.io
 #           outage fails the scan instead of degrading)
 #        a `releases/download` URL  -> release-assets.githubusercontent.com
+#        anchore/sbom-action        -> raw.githubusercontent.com AND get.anchore.io
+#          (the syft-install path reaches raw.githubusercontent.com
+#           non-deterministically across arches; get.anchore.io serves the
+#           install script)
+#        a `gh release upload` run  -> uploads.github.com
+#          (asset bytes POST to the uploads host, not the REST API host)
 #        DeterminateSystems/flakehub-cache-action -> banned outright
 #
 #      GENERAL HAZARD this rule table only partially covers: a redirect to
@@ -161,6 +167,18 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
     if [[ ${runs} == *"releases/download"* ]]; then
       has_host "${endpoints}" "${RELEASE_ASSETS}" ||
         fail "${f}: job '${job}' downloads a GitHub release asset but does not allowlist ${RELEASE_ASSETS} (the github.com redirect is unconditional)"
+    fi
+
+    if [[ ${uses} == *"anchore/sbom-action"* ]]; then
+      has_host "${endpoints}" "raw.githubusercontent.com" ||
+        fail "${f}: job '${job}' uses anchore/sbom-action but does not allowlist raw.githubusercontent.com (the syft-install path reaches it, non-deterministically across arches, so the gap is latent)"
+      has_host "${endpoints}" "get.anchore.io" ||
+        fail "${f}: job '${job}' uses anchore/sbom-action but does not allowlist get.anchore.io (the syft install-script host)"
+    fi
+
+    if [[ ${runs} == *"gh release upload"* ]]; then
+      has_host "${endpoints}" "uploads.github.com" ||
+        fail "${f}: job '${job}' runs 'gh release upload' but does not allowlist uploads.github.com (asset bytes POST to the uploads host, not the REST API host)"
     fi
 
     # --- Assertion 2: sigstore host-set consistency ----------------------
