@@ -1,0 +1,6 @@
+# The global ~/.config/git/ignore un-ignores `.claude/skills/**`, which
+# re-exposes any scratch written inside the tracked skills subtree. Keep
+# eval output and tuning workspaces out of git status here.
+docs-correctness-audit-workspace/
+docs-correctness-audit/.claude/
+docs-correctness-audit/evals/seeded-defects/results/
