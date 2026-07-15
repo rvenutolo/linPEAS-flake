@@ -143,7 +143,8 @@ Hooks (alphabetical):
 
 Lychee is not a pre-commit hook (it hits the network and can flake on
 offline work). Run it manually with `just lint-links`; CI runs it on a
-weekly cron and as a PR check.
+weekly cron only (plus manual `workflow_dispatch`); it is not a required
+check.
 
 One-time setup:
 
