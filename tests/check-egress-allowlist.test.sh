@@ -32,5 +32,7 @@ expect bad-sigstore-partial-set.yml 1 "incomplete sigstore host set"
 expect bad-verify-carries-timestamp.yml 1 "timestamp.sigstore.dev"
 expect bad-denylisted-host.yml 1 "cafe.github.com"
 expect bad-flakehub-action.yml 1 "flakehub-cache-action"
+expect bad-sbom-missing-raw-githubusercontent.yml 1 "raw.githubusercontent.com"
+expect bad-gh-release-upload-missing-uploads.yml 1 "uploads.github.com"
 
 printf 'all tests passed\n'
