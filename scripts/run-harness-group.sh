@@ -24,6 +24,7 @@ readonly -a HARNESSES=(
   'ratchet-pin-audit|check-ratchet-pin-audit.test.sh|check-ratchet-pin-audit.sh'
   'allowed-actions-api|check-allowed-actions-api.test.sh|'
   'settings-posture|check-settings-posture.test.sh|'
+  'backfill-image-mode|classify-backfill-image-mode.test.sh|'
 )
 
 function main() {
