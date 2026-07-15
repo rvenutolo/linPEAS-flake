@@ -520,6 +520,15 @@ Override with --inventory PATH.
 
 Bump linpeas-pin.json to the latest peass-ng/PEASS-ng release.
 
+### scripts/classify-pin-ref.sh
+
+Classify one SHA-pinned action ref for
+ratchet-pin-audit: given the pinned SHA and the tag's resolved git
+objects, print `current`, `drift`, or `skip-floating-major`. Pure
+and side-effect free so the drift decision — including the
+attack-detection branch — is unit-testable without contacting the
+GitHub API.
+
 ### scripts/compare-repro.sh
 
 Compare two reproducibility-build hash JSON files.

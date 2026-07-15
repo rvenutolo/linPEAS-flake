@@ -48,9 +48,21 @@ upstream tagging convention.
     `patch-tag-pins` pre-commit hook (see `nix/hooks/workflow-security.nix`). Fails any PR
     that introduces or regresses a major-only comment without an
     exception marker.
+
 - Runtime check: [ratchet-pin-audit](../runbooks/ratchet-pin-audit.md)
     (daily). Patch-tag immutability means the audit stays quiet under
     routine publisher releases; a fire is a real upstream tag-move.
+
+    The audit compares each pin against the tag it names, accepting a pin
+    that equals **either** the annotated-tag-object SHA or the commit that
+    tag dereferences to — so a tag-object pin (the form some
+    `patch-tag-exception` refs use) is not mistaken for drift, while a
+    genuine force-move (which changes both SHAs) still is. Refs whose
+    comment names a floating major (`vN`) are excluded from the
+    comparison and logged: a deliberately-moving tag cannot be judged by
+    tag-vs-pin equality, so their integrity rests on the immutable digest
+    pin plus Renovate currency, not on this audit.
+
 - Bump path: Renovate's `helpers:pinGitHubActionDigests` preset.
     Renovate's github-actions manager parses the trailing comment as
     `currentValue` and rewrites both the SHA and the comment on each
