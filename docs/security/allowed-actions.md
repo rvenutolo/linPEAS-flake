@@ -11,7 +11,6 @@ aquasecurity/*
 cachix/*
 crate-ci/*
 DavidAnson/*
-DeterminateSystems/*
 editorconfig-checker/*
 github/*
 gitleaks/*
@@ -46,7 +45,6 @@ wagoid/*
         "cachix/*",
         "crate-ci/*",
         "DavidAnson/*",
-        "DeterminateSystems/*",
         "editorconfig-checker/*",
         "github/*",
         "gitleaks/*",
