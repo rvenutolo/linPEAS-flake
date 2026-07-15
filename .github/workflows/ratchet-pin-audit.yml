@@ -142,6 +142,16 @@ jobs:
               if [[ "${repo_root}" == "${self_repo}" ]]; then
                 continue
               fi
+              # Floating-major tags (vN) retarget on every release; the
+              # audit cannot distinguish a benign move from an attack.
+              # Skip before any API call to avoid wasted requests and a
+              # spurious upstream-api-failure on a ref we exclude anyway.
+              # Same rule as scripts/classify-pin-ref.sh.
+              if [[ "${tag}" =~ ^v[0-9]+$ ]]; then
+                printf 'excluded (floating major): %s@%s — integrity via immutable digest pin + Renovate\n' \
+                  "${repo}" "${tag}" >&2
+                continue
+              fi
               ref_info=""
               if ! ref_info="$(gh api \
                 --header 'X-GitHub-Api-Version: 2022-11-28' \
@@ -150,36 +160,56 @@ jobs:
                 printf 'API lookup failed for %s@%s\n' "${repo_root}" "${tag}" >&2
                 emit_result failure upstream-api-failure ''
               fi
-              canonical="$(jq -r '.sha // ""' <<<"${ref_info}")"
+              ref_object_sha="$(jq -r '.sha // ""' <<<"${ref_info}")"
               tag_type="$(jq -r '.type // ""' <<<"${ref_info}")"
-              if [[ -z "${canonical}" || -z "${tag_type}" ]]; then
+              if [[ -z "${ref_object_sha}" || -z "${tag_type}" ]]; then
                 printf 'malformed ref payload for %s@%s: %s\n' "${repo_root}" "${tag}" "${ref_info}" >&2
                 emit_result failure upstream-api-failure ''
               fi
 
-              # Resolve annotated tags unconditionally: the canonical commit SHA is what we
-              # compare against `pinned`, not the tag-object SHA. This must run BEFORE the
-              # equality check — pinning to the tag-object SHA (unusual but possible) would
-              # otherwise produce a false "no drift" result.
+              # Dereference annotated tags to their commit. Keep BOTH the
+              # tag-object SHA and the commit: a pin may legitimately be
+              # either (docs/architecture/pin-convention.md), and the
+              # classifier accepts both.
+              deref_commit_sha=""
               if [[ "${tag_type}" == "tag" ]]; then
-                if ! canonical="$(gh api \
+                if ! deref_commit_sha="$(gh api \
                   --header 'X-GitHub-Api-Version: 2022-11-28' \
-                  "repos/${repo_root}/git/tags/${canonical}" \
-                  --jq '.object.sha' 2>/dev/null)" || [[ -z "${canonical}" ]]; then
+                  "repos/${repo_root}/git/tags/${ref_object_sha}" \
+                  --jq '.object.sha' 2>/dev/null)" || [[ -z "${deref_commit_sha}" ]]; then
                   printf 'API lookup failed (annotated tag deref) for %s@%s\n' "${repo_root}" "${tag}" >&2
                   emit_result failure upstream-api-failure ''
                 fi
               fi
-              if [[ "${canonical}" != "${pinned}" ]]; then
-                # Use original `repo` (full subpath) so operators see the literal pinned ref.
-                drift_line="${repo}@${tag} pinned=${pinned} canonical=${canonical}"
-                # Shape-validate before letting it reach $GITHUB_OUTPUT.
-                if [[ ! "${drift_line}" =~ ^[A-Za-z0-9._/-]+@[A-Za-z0-9._/-]+\ pinned=[0-9a-f]{7,40}\ canonical=[0-9a-f]{7,40}$ ]]; then
-                  printf 'malformed drift line rejected: %q\n' "${drift_line}" >&2
-                  emit_result failure ratchet-tool-failure ''
-                fi
-                drift_lines+="${drift_line}"$'\n'
+
+              verdict=""
+              if ! verdict="$(bash scripts/classify-pin-ref.sh \
+                "${tag}" "${pinned}" "${ref_object_sha}" "${tag_type}" "${deref_commit_sha}")"; then
+                printf 'classify-pin-ref failed for %s@%s\n' "${repo_root}" "${tag}" >&2
+                emit_result failure ratchet-tool-failure ''
               fi
+
+              case "${verdict}" in
+                current) ;;
+                drift)
+                  # canonical = where the tag now resolves (the commit
+                  # for an annotated tag, else the ref object itself).
+                  canonical="${deref_commit_sha:-${ref_object_sha}}"
+                  # Use original `repo` (full subpath) so operators see the literal pinned ref.
+                  drift_line="${repo}@${tag} pinned=${pinned} canonical=${canonical}"
+                  # Shape-validate before letting it reach $GITHUB_OUTPUT.
+                  if [[ ! "${drift_line}" =~ ^[A-Za-z0-9._/-]+@[A-Za-z0-9._/-]+\ pinned=[0-9a-f]{7,40}\ canonical=[0-9a-f]{7,40}$ ]]; then
+                    printf 'malformed drift line rejected: %q\n' "${drift_line}" >&2
+                    emit_result failure ratchet-tool-failure ''
+                  fi
+                  drift_lines+="${drift_line}"$'\n'
+                  ;;
+                skip-floating-major) ;;
+                *)
+                  printf 'unexpected classifier verdict %q for %s@%s\n' "${verdict}" "${repo_root}" "${tag}" >&2
+                  emit_result failure ratchet-tool-failure ''
+                  ;;
+              esac
             fi
           done < <(grep -hE '^\s*-?\s*uses:\s+[A-Za-z0-9._/-]+@[0-9a-f]{7,40}' "${files[@]}" || true)
 
