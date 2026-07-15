@@ -4,11 +4,11 @@ description: >-
   Read-only documentation correctness audit for this repo: cross-checks every
   Markdown doc (README, docs/**, CLAUDE.md, CHANGELOG, SECURITY, CONTRIBUTING)
   against the actual code, CI, config, and workflows, then emits one
-  severity-ranked findings report without editing anything. Invoke ONLY when the
-  user explicitly runs the /docs-audit slash command or names this skill
-  directly. Do NOT auto-trigger on natural-language mentions of docs, reviews,
-  audits, staleness, or "are the docs up to date" — this skill runs on explicit
-  request only.
+  severity-ranked findings report without editing anything. Invoke ONLY via the
+  /docs-audit slash command. Do NOT auto-trigger on natural-language mentions of
+  docs, reviews, audits, staleness, or "are the docs up to date" — this skill
+  runs on explicit request only.
+user-invocable: false
 ---
 
 # Documentation correctness audit
