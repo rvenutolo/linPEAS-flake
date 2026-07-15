@@ -56,7 +56,7 @@ Highlights:
     from REST `PUT /contents` calls authenticated as the
     `linpeas-flake-bumper` App and are web-flow-signed by GitHub.
 - **Every branch commit must independently satisfy Conventional
-    Commits.** PR title is independently linted by `pr-title-lint` and
+    Commits.** PR title is independently linted by `lint-pr-title` and
     becomes the merge-commit subject.
 
 See [`docs/development/git.md`](docs/development/git.md) for the full
