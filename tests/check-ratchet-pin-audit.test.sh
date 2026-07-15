@@ -74,6 +74,11 @@ classify "commit pin, annotated tag" current \
 classify "commit pin, lightweight tag" current \
   v4.3.1 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
   aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa commit ""
+# lightweight tag force-moved: object is a commit, pin matches neither
+# the new ref object nor the (empty) deref commit -> drift.
+classify "lightweight-tag force-move -> drift" drift \
+  v4.3.1 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb commit ""
 # genuine force-move: pin matches neither new object nor new commit.
 classify "genuine force-move -> drift" drift \
   v9.0.0 dddddddddddddddddddddddddddddddddddddddd \
