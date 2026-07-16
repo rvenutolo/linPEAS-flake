@@ -12,7 +12,10 @@
         buildInputs =
           config.pre-commit.settings.enabledPackages
           ++ (with pkgs-unstable; [
-            nix
+            # `nix` intentionally omitted: host runs Determinate Nix, which
+            # provides `nix` on PATH. Pinning upstream nix here shadowed it
+            # and warned on Determinate-only settings (eval-cores, lazy-trees)
+            # in /etc/nix/nix.conf. `nix shell .#cosign` still works via host.
             jq
             yq-go
             gh
