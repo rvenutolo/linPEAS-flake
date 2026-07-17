@@ -545,6 +545,26 @@ Compare two reproducibility-build hash JSON files.
 Emits a markdown table to GITHUB_STEP_SUMMARY (or stdout if unset)
 and exits 0 on full match, 1 on any divergence, 2 on bad input.
 
+### scripts/docs-audit-pressure.sh
+
+Report docs-audit drift pressure over a rolling window:
+how many commits touched CI structure (.github/workflows, scripts,
+.github/lint-groups.yml), and which job ids / lint-group members were
+added or removed. Emits a Markdown body for the monthly docs-audit
+reminder issue, terminated by a machine-readable PRESSURE=<n> line.
+
+Freshness gates validate only generated blocks; hand-written prose about
+CI drifts silently. CI churn is the best cheap proxy for that drift, so it
+decides whether a semantic audit is worth running this month.
+
+Body contents are restricted to integers and shape-validated identifiers
+parsed from YAML — never commit subjects or other free text, which would
+render as arbitrary markdown in the resulting issue.
+
+Exit codes:
+0 success (body on stdout, PRESSURE=<n> as the final line)
+2 missing inputs / parse error
+
 ### scripts/gen-dashboard-data.sh
 
 Generate docs/\_data/dashboard.yml for the MkDocs site
