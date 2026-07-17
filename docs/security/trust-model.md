@@ -22,7 +22,7 @@ This page expands the trust model briefly described in [`SECURITY.md`](https://g
 
 Three automations may auto-merge PRs into `main` when CI passes:
 
-1. **`update-linpeas.yml`** — daily pin bumps. Opens a PR authored by `github-actions[bot]`, gated by all required CI checks, auto-merged on green.
+1. **`update-linpeas.yml`** — daily pin bumps. Opens a PR authored by the `linpeas-flake-bumper` GitHub App bot, gated by all required CI checks, auto-merged on green.
 2. **`update-flake-lock.yml`** — weekly nixpkgs input bump. Split into a `contents: read` `compute-lock` job (runs `nix flake update`) and a `push-and-merge` job that mints a `linpeas-flake-bumper` GitHub App installation token and uses only GitHub-owned action SHAs, keeping the bump credential out of any third-party action's env. Same CI gating.
 3. **Renovate** — Friday batch for GitHub Action SHA pins, the pinned Nix installer version, and tracked flake inputs (`nixpkgs` stable branch, `cachix/git-hooks.nix`). All PRs honor a non-empty `minimumReleaseAge` (7 days) and per-manager `automerge` scopes; the `renovate-invariants` CI lint enforces both. Same gating.
 
