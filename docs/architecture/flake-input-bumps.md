@@ -15,7 +15,7 @@ flake-input pins in `flake.nix`:
     — devShell, CI hooks, formatters, linters, mkdocs. Never touches
     `linpeas-image`.**
 
-Both managers are intentionally **manual-merge**. They do pure text
+All three managers are intentionally **manual-merge**. They do pure text
 substitution on `flake.nix` and **do not refresh `flake.lock`**.
 
 The lockfile refresh is performed automatically by the
@@ -108,7 +108,7 @@ next contributor PR).
     between releases, `cachix/git-hooks.nix` (and the hooks it
     enables) sometimes break before the project's own pin bumps.
     Surfaces as `nix flake check` failures unrelated to any
-    workflow change. See "Interaction between the two pins" below.
+    workflow change. See "Interaction between the three pins" below.
 
 Step 4 of the step-by-step below contains the same surface as a
 symptom → fix lookup table; use this section to anticipate before
@@ -176,7 +176,7 @@ For a `NixOS/nixpkgs` bump:
 nix flake update nixpkgs
 ```
 
-Both commands rewrite `flake.lock` in place. Confirm the diff is sane
+All three commands rewrite `flake.lock` in place. Confirm the diff is sane
 (`git diff flake.lock`) — should show new `lastModified` /
 `narHash` / `rev` for the relevant node, nothing else.
 

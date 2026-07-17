@@ -100,9 +100,8 @@ Several scheduled workflows track supply-chain hygiene independent of
 the release pipeline — `codeql.yml`, `octoscan.yml`,
 `image-cve-scan.yml`, `scorecard-drift-check.yml`, and
 `zizmor-drift-check.yml` (full cron inventory in
-[`docs/architecture/ci.md`](docs/architecture/ci.md)). This section
-describes `codeql.yml`; it is not in branch protection's
-required-check set for the reasons documented below.
+[`docs/architecture/ci.md`](docs/architecture/ci.md)). The rest of this
+section covers `codeql.yml`; the other four are inventoried there.
 
 - **`codeql.yml`** scans GitHub Actions workflow definitions on PRs
     that touch `.github/workflows/` or `.github/actions/`, every push

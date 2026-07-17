@@ -18,5 +18,5 @@ below becomes the merge-commit body. -->
 - [ ] PR title satisfies Conventional Commits (`lint-pr-title` will enforce)
 - [ ] Every branch commit independently satisfies Conventional Commits (`commitlint` will enforce)
 - [ ] All branch commits are signed (`required_signatures` is enforced on `main`)
-- [ ] If touching a security invariant documented in `.claude/CLAUDE.md`, the corresponding entry there is updated in the same change
+- [ ] If touching a security invariant, the corresponding entry in `docs/invariant-index.md` is updated in the same change
 - [ ] If adding a new external `uses:` action, the vendor is on the `allowed_actions` allowlist (`docs/security/allowed-actions.md`)
