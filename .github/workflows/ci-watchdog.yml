@@ -57,6 +57,19 @@ jobs:
           MAX_ATTEMPTS: "3"
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          # A GitHub 5xx on any request otherwise faults the whole sweep.
+          # This retry is per-HTTP-request and is unrelated to MAX_ATTEMPTS,
+          # which bounds workflow-run re-runs.
+          #
+          # The exempt list is the action's default plus 409. The input
+          # replaces the default wholesale, so every code must be restated:
+          # 422 so createLabel's try/catch sees the already-exists conflict
+          # immediately, 403 because retrying a rate limit makes it worse,
+          # 409 so a re-run that already took effect does not burn the budget
+          # re-conflicting, and 400/401/404 because a malformed, unauthorized,
+          # or missing request will not become valid on a second try.
+          retries: "3"
+          retry-exempt-status-codes: 400,401,403,404,409,422
           script: |
             const maxAttempts = Number(process.env.MAX_ATTEMPTS);
             const { owner, repo } = context.repo;
