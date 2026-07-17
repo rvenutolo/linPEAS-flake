@@ -55,7 +55,7 @@ jobs:
       - uses: pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          IGNORED: "CHANGELOG.md\nflake.lock\ndocs/reference/flake-outputs.md\ndocs/reference/treefmt-config.md\ndocs/reference/just-recipes.md\ndocs/architecture/ci-dag.md\ndocs/security/enforcement-matrix.md\ndocs/security/required-checks.md\ndocs/_data/dashboard.yml\ntests/fixtures/**"
+          IGNORED: "CHANGELOG.md\nflake.lock\ndocs/reference/flake-outputs.md\ndocs/reference/treefmt-config.md\ndocs/reference/just-recipes.md\ndocs/reference/scripts.md\ndocs/architecture/ci-dag.md\ndocs/security/enforcement-matrix.md\ndocs/security/required-checks.md\ndocs/_data/dashboard.yml\ntests/fixtures/**"
         with:
           sizes: >
             {
