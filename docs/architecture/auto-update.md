@@ -106,7 +106,7 @@ release-asset copy of `linpeas-pin.json` matches the in-tree copy
 (attestation verification). A pin change that lands without firing
 the release pipeline leaves `main` in a state where the in-tree pin
 diverges from the latest-release-asset pin; the verify cron would
-fail the next morning.
+fail on its next weekly run.
 
 Paired with the `pin-diff-isolated` invariant: the only mutator
 (`bump-linpeas.sh`) writes only `linpeas-pin.json`, so any pin

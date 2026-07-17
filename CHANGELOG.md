@@ -130,7 +130,7 @@ repo is not on a semver track.
 - Emit .intoto.jsonl provenance sidecars on release assets ([#275](https://github.com/rvenutolo/linPEAS-flake/pull/275))
 - Cosign sign-blob release-asset sidecars ([#270](https://github.com/rvenutolo/linPEAS-flake/pull/270))
 - Attach CycloneDX SBOMs to releases ([#269](https://github.com/rvenutolo/linPEAS-flake/pull/269))
-- Scorecard-drift-check workflow with curated 11-check allowlist ([#260](https://github.com/rvenutolo/linPEAS-flake/pull/260))
+- Scorecard-drift-check workflow with curated 10-check allowlist ([#260](https://github.com/rvenutolo/linPEAS-flake/pull/260))
 - Add octoscan workflow vulnerability scanner ([#255](https://github.com/rvenutolo/linPEAS-flake/pull/255))
 - Actionlint cron drift-check workflow ([#251](https://github.com/rvenutolo/linPEAS-flake/pull/251))
 - Zizmor cron drift-check workflow ([#248](https://github.com/rvenutolo/linPEAS-flake/pull/248))
