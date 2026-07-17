@@ -1,7 +1,7 @@
 # Ratchet Pin Audit Runbook
 
-The `ratchet-pin-audit` workflow runs on a daily cron (see [CI — cron schedule](../architecture/ci.md#cron-schedule)). It invokes
-`sethvargo/ratchet check` against every workflow file under
+The `ratchet-pin-audit` workflow runs on a daily cron (see [CI — cron schedule](../architecture/ci.md#cron-schedule)). It runs
+`ratchet lint` (from the devshell) against every workflow file under
 `.github/workflows/` and re-derives the canonical SHA for each
 SHA-pinned action ref. When any pinned SHA no longer matches the
 canonical SHA its tag now resolves to, the workflow opens (or
@@ -16,8 +16,9 @@ This runbook is linked inline from the auto-filed issue body.
 is a full SHA. Renovate keeps those SHAs aligned with upstream
 release tags. Neither mechanism catches the case where an action
 publisher **force-moves a tag to a different SHA after we pinned to
-it** — the tag-vs-pin drift attack. Ratchet is the canonical
-detector for that class.
+it** — the tag-vs-pin drift attack. The per-ref re-derivation in this
+workflow (`gh api …/git/refs/tags/{tag}`) is the detector for that
+class; `ratchet lint` is a local pin-shape tripwire alongside it.
 
 ## Triage by reason
 

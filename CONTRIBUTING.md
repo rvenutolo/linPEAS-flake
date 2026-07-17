@@ -40,8 +40,8 @@ Highlights:
 - `lint-workflow-security` — batched workflow-security lints; e.g.
     member check `uses-sha-pinned`: every `uses:` is a full 40-hex SHA
     with a trailing `# vX.Y.Z` version comment.
-- `flake-check`, `build-linpeas`, `image-smoke` —
-    derivation health on x86_64 and aarch64.
+- `flake-check`; `build-linpeas`(`-arm64`), `smoke-test`(`-arm64`),
+    `image-smoke`(`-arm64`) — derivation health on x86_64 and aarch64.
 - `gitleaks`, `dependency-review` — supply-chain.
 - `pr-workflows-no-secrets`, `required-checks-no-paths`,
     `renovate-invariants`, `tag-protection-drift-check` — invariant

@@ -69,8 +69,7 @@ manifest tag and then verifies against the **arch-resolved** digest
 (via `docker manifest inspect` or the `RepoDigests` value returned by
 `docker inspect`) is protected. A consumer who trusts the manifest tag
 implicitly — without resolving to the per-arch digest — is not. The
-mitigation now in place is the `manifest-tag-reresolve` step in
-`release-on-bump.yml`, which re-fetches
+mitigation is the `verify manifest tags resolve to attested per-arch digests` step in `release-on-bump.yml`'s `verify` job, which re-fetches
 both `:VERSION` and `:latest` manifests post-publish and confirms
 their per-arch digests match the values that were attested. A drift
 at this step fails the release.

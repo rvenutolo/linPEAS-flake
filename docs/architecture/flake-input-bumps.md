@@ -263,9 +263,11 @@ in the same PR.
 nix flake check --print-build-logs 2>&1 | tail -30
 ```
 
-All pre-commit hooks must pass: `actionlint`, `deadnix`, `nixpkgs-fmt`,
-`treefmt`, `shellcheck`, `statix`, `uses-sha-pinned`, `yamllint`,
-`zizmor`, `flake-show-fresh`.
+All pre-commit hooks must pass. Representative ones for a flake-input
+bump: `actionlint`, `deadnix`, `nixfmt`, `treefmt`, `shellcheck`,
+`statix`, `uses-sha-pinned`, `yamllint`, `zizmor`, `flake-show-fresh`.
+The full, generated list is in
+[Git workflow → Pre-commit hooks](../development/git.md#pre-commit-hooks).
 
 ### 9. Commit the refresh
 
@@ -287,7 +289,7 @@ Commits (`commitlint` is a required check) and be signed
 (`required_signatures` is enforced), since each lands verbatim on
 `main` under the merge-commit-only ruleset. The PR title becomes the
 merge-commit subject and must itself satisfy Conventional Commits
-(`pr-title-lint` is a required check).
+(`lint-pr-title` is a required check).
 
 ### 11. Post-merge
 

@@ -15,7 +15,7 @@ below becomes the merge-commit body. -->
 
 ## Checklist
 
-- [ ] PR title satisfies Conventional Commits (`pr-title-lint` will enforce)
+- [ ] PR title satisfies Conventional Commits (`lint-pr-title` will enforce)
 - [ ] Every branch commit independently satisfies Conventional Commits (`commitlint` will enforce)
 - [ ] All branch commits are signed (`required_signatures` is enforced on `main`)
 - [ ] If touching a security invariant documented in `.claude/CLAUDE.md`, the corresponding entry there is updated in the same change
