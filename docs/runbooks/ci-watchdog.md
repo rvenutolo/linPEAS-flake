@@ -11,6 +11,11 @@ place and increments its attempt counter, so the bound needs no stored
 state — and a new commit resets it, because a new commit produces a new run
 at attempt 1.
 
+Separately from that 3-attempt run bound, the watchdog's own API requests
+retry on a 5xx, so a transient GitHub error does not abort the sweep.
+Rate limits, conflicts, and malformed or unauthorized requests are exempt —
+they do not become valid on a second try.
+
 The watchdog re-runs **any** failure, without trying to classify it as
 transient. Classification would need a hand-maintained list of failure
 signatures, and such lists rot silently. It also could not work here:
