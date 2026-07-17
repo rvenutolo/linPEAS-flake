@@ -28,7 +28,7 @@ flowchart TD
 ```mermaid
 flowchart TD
   trigger["push to main<br/>changes linpeas-pin.json<br/>(release-on-bump.yml)"]
-  validate["validate VERSION<br/>shape: [A-Za-z0-9._/-]+"]
+  validate["validate VERSION<br/>shape: YYYYMMDD-hex"]
   build_image["nix build .#linpeas-image"]
   push_image["docker push<br/>ghcr.io + docker.io<br/>per-arch + manifest by digest"]
   attest["actions/attest-build-provenance<br/>pin file + per-arch image<br/>+ actions/attest-sbom (SPDX)"]
@@ -94,8 +94,9 @@ shape check.
 
 ## Release VERSION shape validation
 
-`release-on-bump.yml` rejects any tag outside `[A-Za-z0-9._/-]+` before
-calling `gh release create`.
+`release-on-bump.yml` rejects any tag outside the canonical pin shape
+`^[0-9]{8}-[0-9a-f]{7,40}$` (`YYYYMMDD-<hex>`) before calling
+`gh release create`.
 
 ## Linpeas-pin release-trigger
 
