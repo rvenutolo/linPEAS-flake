@@ -161,7 +161,7 @@ the notify jobs.
 ## SBOM attestations
 
 In addition to build-provenance attestations, each release carries SBOM
-attestations (SPDX-JSON predicate, predicate-type `https://spdx.dev/Document`)
+attestations (CycloneDX-JSON predicate, predicate-type `https://cyclonedx.org/bom`)
 for each per-arch OCI image.
 Verify with:
 
@@ -170,7 +170,7 @@ gh attestation verify oci://ghcr.io/rvenutolo/linpeas@<DIGEST> --repo rvenutolo/
 ```
 
 `gh attestation verify` lists ALL attached attestations — the SBOM attestation
-is the one with predicate-type `https://spdx.dev/Document`; the provenance
+is the one with predicate-type `https://cyclonedx.org/bom`; the provenance
 attestation carries `https://slsa.dev/provenance/v1`.
 
 ## Runner egress control (harden-runner, block mode)
