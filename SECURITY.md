@@ -62,9 +62,9 @@ This means:
     arch-image digest.
 
 The release pipeline's `verify` job validates the per-arch digests
-captured at push time. It does **not** re-resolve the published
-`:VERSION` and `:latest` manifest tags after manifest publication to
-confirm they still point at those digests. A consumer who pulls by the
+captured at push time. Those push-time steps do **not** re-resolve the
+published `:VERSION` and `:latest` manifest tags after manifest
+publication to confirm they still point at those digests. A consumer who pulls by the
 manifest tag and then verifies against the **arch-resolved** digest
 (via `docker manifest inspect` or the `RepoDigests` value returned by
 `docker inspect`) is protected. A consumer who trusts the manifest tag
