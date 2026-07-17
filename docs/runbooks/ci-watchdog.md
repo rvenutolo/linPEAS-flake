@@ -12,9 +12,16 @@ state — and a new commit resets it, because a new commit produces a new run
 at attempt 1.
 
 Separately from that 3-attempt run bound, the watchdog's own API requests
-retry on a 5xx, so a transient GitHub error does not abort the sweep.
-Rate limits, conflicts, and malformed or unauthorized requests are exempt —
-they do not become valid on a second try.
+retry on a 5xx. Rate limits, conflicts, and malformed or unauthorized
+requests are exempt — they do not become valid on a second try.
+
+An error that survives that retry is confined to the PR it happened on. The
+sweep processes every remaining PR and then fails the job, naming the PRs
+that errored. The one exception is a rate limit: continuing to request
+against an exhausted budget can make it worse, so the sweep halts instead
+and fails the job naming both the PRs that errored and the PRs it left
+untried. Either way, no PR is starved silently, and no error is swallowed
+except `createLabel`'s 422 when the escalation label already exists.
 
 The watchdog re-runs **any** failure, without trying to classify it as
 transient. Classification would need a hand-maintained list of failure
@@ -48,6 +55,77 @@ That is no longer a transient — treat it as a real failure.
     closing.
 
 Close the issue once the PR merges or is closed.
+
+## When the watchdog job goes red
+
+Check the job log for a line starting with `Sweep`. Its presence, or
+absence, tells you which of three things happened:
+
+- **No `Sweep` line at all.** The job died before the loop finished, so
+    nothing was attempted. Usually enumerating open PRs failed — that call
+    sits outside the per-PR try/catch, so it aborts before any PR is
+    processed — but harden-runner, checkout, or the job timeout produce the
+    same silence. Read the log's stack trace directly; the per-PR guidance
+    below does not apply.
+- **`Sweep halted by rate limit; ...`.** The sweep hit a rate limit partway
+    through and stopped rather than keep spending an exhausted budget. The PRs
+    listed as "not attempted" were never touched this run — they are not
+    errors, they are untried. The next scheduled run picks them up.
+- **`Sweep completed; N PR(s) errored: ...`.** Every open PR was attempted.
+    The named PRs errored while being processed; everything else succeeded or
+    had nothing to do.
+
+```text
+Sweep completed; 2 PR(s) errored: #123, #456
+```
+
+For each PR named as errored, find its `core.error` line in the job log.
+`core.error` emits a workflow `::error::` command, and `@actions/core`
+escapes newlines in it to `%0A` — so in the raw job log it is one line with
+literal `%0A` separating the status from each stack frame:
+
+```text
+::error::PR #123: 404 HttpError: Not Found%0A    at ... listWorkflowRunsForRepo ...
+```
+
+Search the raw log for `PR #123:` to find it. GitHub renders the same
+`core.error` call as a multi-line entry in the job's Annotations panel — use
+that view if you want it split into lines instead of `%0A`-joined:
+
+```text
+PR #123: 404 HttpError: Not Found
+    at ... listWorkflowRunsForRepo ...
+```
+
+The status and the stack frame together identify which API call failed and
+why. Work from those:
+
+1. A `404` or `422` usually means the PR moved under the sweep — closed,
+    merged, or force-pushed between enumeration and processing. Harmless; it
+    clears on the next sweep.
+1. A `403` on `listWorkflowRunsForRepo`, `issues.listForRepo`, or similar
+    read/write calls, on a PR in the "errored" list of a `Sweep completed`
+    message, is a permissions gap — check the job's `permissions:` block
+    against the call in the stack. If the message is instead
+    `Sweep halted by rate limit`, the errored PR's 403 is the rate limit that
+    triggered the halt; the PRs in its "not attempted" list get no
+    `core.error` line at all because the sweep never reached them — nothing
+    to check there, they are simply picked up on the next scheduled run.
+1. A `403` on `reRunWorkflowFailedJobs` specifically, with a message like
+    "Unable to retry this workflow run because it was created over a month
+    ago", is neither of those — GitHub refuses to re-run runs past roughly a
+    month old. This is not rare: a bot PR can sit long enough for its run to
+    age out, and once it does, every sweep errors on it forever. The watchdog
+    cannot fix this itself; the PR needs a fresh commit to produce a new run,
+    or should be closed.
+1. A `5xx` that reached this log already exhausted the step's own request
+    retries, so it is a sustained GitHub incident rather than a blip. Check
+    the GitHub status page.
+
+A PR that errors on **every** sweep is a real bug, not a transient. It is
+also the case worth acting on quickly: while it is failing it is not being
+retried, so if it is a bot PR with auto-merge on, it is sitting stuck for
+exactly the reason this watchdog exists.
 
 ## Forcing a run
 
