@@ -21,7 +21,7 @@ posture is non-negotiable.
 nix develop           # drops you into the devShell with every tool CI uses
 just                  # list recipes
 just check            # nix flake check (formatting + pre-commit + derivation builds)
-just fmt              # treefmt — prettier + nixfmt + shfmt + taplo + mdformat
+just fmt              # treefmt — prettier + nixfmt + shfmt + taplo + mdformat + just
 just lint             # pre-commit run --all-files
 just lint-links       # lychee on tracked markdown
 just verify           # every script-based check + every .test.sh fixture
