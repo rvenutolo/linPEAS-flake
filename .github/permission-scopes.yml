@@ -21,6 +21,8 @@ cron-table-drift-check.yml:
   notify: [issues]
 dependency-review.yml:
   dependency-review: [pull-requests]
+docs-audit-reminder.yml:
+  pressure: [issues]
 dockerhub-sync.yml:
   notify: [issues]
 image-cve-scan.yml:

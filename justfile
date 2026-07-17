@@ -78,6 +78,7 @@ verify:
   bash tests/check-pre-commit-hooks-sha-parity.test.sh; \
   bash tests/check-pin-diff-isolated.test.sh; \
   bash tests/gen-dashboard-data.test.sh; \
+  bash tests/docs-audit-pressure.test.sh; \
   bash tests/refresh-ci-dag.test.sh; \
   bash tests/refresh-ci-summary.test.sh; \
   bash tests/refresh-enforcement-matrix.test.sh; \
