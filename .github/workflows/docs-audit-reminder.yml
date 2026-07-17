@@ -1,0 +1,92 @@
+name: docs-audit-reminder
+
+# Monthly prompt to run the semantic docs audit.
+#
+# Freshness gates (*-fresh) validate only generated block bodies. Nothing
+# generates hand-written prose about CI, so a sentence naming a job that
+# does not exist passes every gate. A reading agent is the only mechanism
+# that catches that class; this workflow decides when it is worth running,
+# using CI churn as the proxy for prose drift.
+#
+# Non-zero drift pressure always exits 0: it never signals "audit due" by
+# failing, because a workflow that goes red during normal CI churn trains
+# the maintainer to ignore red. A genuine failure — the pressure script
+# erroring, or a GitHub API call failing — does go red: that is a real
+# problem, not a drift signal, and deserves attention on its own.
+
+on:
+  schedule:
+    - cron: "0 10 1 * *" # monthly, 1st 10:00 UTC (off the daily and weekly clusters)
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: docs-audit-reminder-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  pressure:
+    # Fork guard: a fork's scheduled run has no business filing issues here.
+    if: github.repository == 'rvenutolo/linPEAS-flake'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          # Full history: pressure diffs against a commit ~31 days back.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: compute drift pressure
+        id: pressure
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          body_file="$(mktemp)"
+          ./scripts/docs-audit-pressure.sh >"${body_file}"
+          pressure="$(sed -n 's/^PRESSURE=//p' "${body_file}")"
+          if [[ -z ${pressure} ]]; then
+            printf 'pressure script emitted no PRESSURE line\n' >&2
+            exit 1
+          fi
+          printf 'pressure=%s\n' "${pressure}" >>"${GITHUB_OUTPUT}"
+          printf 'body_file=%s\n' "${body_file}" >>"${GITHUB_OUTPUT}"
+      - name: open, update, or close the reminder issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRESSURE: ${{ steps.pressure.outputs.pressure }}
+          BODY_FILE: ${{ steps.pressure.outputs.body_file }}
+          LABEL: docs-audit
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          existing="$(gh issue list --label "${LABEL}" --state open \
+            --json number --jq '.[0].number // empty')"
+
+          if [[ ${PRESSURE} -eq 0 ]]; then
+            if [[ -n ${existing} ]]; then
+              gh issue close "${existing}" \
+                --comment 'No CI-structure churn in the last window; closing until drift accrues.'
+            fi
+            printf 'no pressure; nothing to do\n'
+            exit 0
+          fi
+
+          if [[ -n ${existing} ]]; then
+            gh issue comment "${existing}" --body-file "${BODY_FILE}"
+          else
+            gh label create "${LABEL}" --color ededed \
+              --description 'Docs correctness audit is due' 2>/dev/null || true
+            gh issue create --label "${LABEL}" \
+              --title 'docs-audit: CI churn since last audit — run /docs-audit' \
+              --body-file "${BODY_FILE}"
+          fi
