@@ -22,9 +22,9 @@ The same command works locally for manual rebuilds.
 The changelog job runs as part of `release-on-bump.yml`, triggered on
 every push to `main` that changes `linpeas-pin.json`. It also runs on
 `workflow_dispatch` (see Recovery below). A changelog failure does not
-block image publication — the job runs after the release, image, and
-manifest jobs so a transient cliff error cannot prevent the OCI image
-from shipping.
+block image publication — the job runs after the `release` and
+`manifest` jobs (and so, transitively, after both image builds), so a
+transient cliff error cannot prevent the OCI image from shipping.
 
 ## App identity
 
@@ -94,7 +94,7 @@ rendered changelog. This preprocessor is the **sole** source of PR
 links: rendering a second link (e.g. a body-template `pr_number` block)
 would double-link every entry as `([#N](…)) ([#N](…))`.
 
-### Link-duplication guard
+## Link-duplication guard
 
 `scripts/check-changelog-links.sh` regenerates the changelog from the
 flake-pinned `.#git-cliff` into a temp file and asserts two invariants

@@ -34,10 +34,15 @@ auto-regenerations do not inflate PR size. The ignore list is supplied
 to `pascalgn/size-label-action` via the `IGNORED` env var inline in
 the workflow file.
 
-**Invariant:** when a new generator-owned file is added to the repo,
-its path must be added to the ignore list in the same PR. Drift
+**Invariant:** when a new *wholly* generator-owned file is added to the
+repo, its path must be added to the ignore list in the same PR. Drift
 allows a regeneration to mask a legitimately-large change behind a
 spuriously-small size label.
+
+Files that carry a generated block inside otherwise hand-written prose
+(`docs/development/git.md`) stay off the list on purpose: ignoring them
+wholesale would also drop hand-edits to the surrounding prose from the
+size count, which is the same failure in the opposite direction.
 
 ### Label bootstrap
 

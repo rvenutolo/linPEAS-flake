@@ -43,7 +43,10 @@ execution, secret exfiltration from third-party actions.
 **Mitigations:**
 
 - Every `uses:` is SHA-pinned (full 40-char commit SHA, not tag).
-- `permissions:` allowlist per workflow vendor (no `*`).
+- `uses:` vendors are restricted by the repo Actions allowlist
+    (`allowed_actions: selected`).
+- Top-level `permissions: {}`; every job declares an explicit
+    least-privilege `GITHUB_TOKEN` scope block.
 - `harden-runner` is the first step in every job.
 - PR-triggered workflows expose only `secrets.GITHUB_TOKEN`.
 
@@ -77,7 +80,11 @@ dependency.
 
 - Multi-arch manifests are created with `buildx imagetools create` using
     `@sha256:` digest references — no tag-only manifests.
-- Trivy CVE scan and SBOM generation run on every release (non-blocking by design; failures surface as CI annotations).
+- SBOM generation and attestation run on every release
+    (`release-on-bump.yml`).
+- Trivy and Grype CVE scans run on a weekly cron (`image-cve-scan.yml`),
+    advisory-only — not in the required-check set. Each fails its own job on
+    CRITICAL findings and opens a deduped tracking issue.
 - Docker Hub push credentials are split into `_RW` and `_DELETE` tokens,
     never an unsuffixed PAT.
 

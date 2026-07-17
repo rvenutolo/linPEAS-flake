@@ -214,11 +214,12 @@ deduped issue via the `notify-workflow-result` composite:
 
 ## SBOM attestation<a name="sbom-attestation"></a>
 
-`release-on-bump.yml` generates SPDX-JSON SBOMs via `anchore/sbom-action`,
+`release-on-bump.yml` generates CycloneDX-JSON SBOMs via `anchore/sbom-action`,
 attests via `actions/attest-sbom`.
 
 - Per-arch image SBOMs: attested + pushed to ghcr.io and docker.io with
-    `push-to-registry: true`. NOT release assets.
+    `push-to-registry: true`, **and** uploaded as release assets with
+    `.sigstore` + `.intoto.jsonl` sidecars.
 - `verify-latest-release.yml`'s `gh attestation verify` covers SBOMs
     automatically (verifies ALL attestations).
 

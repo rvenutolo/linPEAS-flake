@@ -111,7 +111,9 @@ next section. The weekly Friday cron cluster runs them in a fixed order (see
 Beyond the external scanners, a family of in-tree shell lints — pre-commit
 hooks plus daily watchdog crons — enforce specific workflow invariants. Each
 appears in the [enforcement matrix](enforcement-matrix.md) with its enforcer
-script, pre-commit hook id, and CI job; several also have narrative coverage
+script, pre-commit hook id, and CI job where one exists — some are enforced by
+hook alone, and some are standalone workflows rather than member checks;
+several also have narrative coverage
 in [workflow hardening](workflow-hardening.md). This table is an index, not a
 re-description.
 

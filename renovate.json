@@ -54,7 +54,7 @@
       ]
     },
     {
-      "description": "cachix/git-hooks.nix master HEAD tracker. Uses git-refs datasource because that repo publishes 0 GitHub releases and 0 tags — master HEAD is the only upstream-truth signal. Renovate opens a PR whenever master advances; runs through the global 7-day minimumReleaseAge quarantine. Stays manual-merge by design (see matchDepNames narrow above). REVIEWER NOTE: this manager only substitutes the SHA in flake.nix; flake.lock will be stale until you run `nix flake update --update-input pre-commit-hooks` locally and push the refresh — see docs/architecture/flake-input-bumps.md for the full runbook.",
+      "description": "cachix/git-hooks.nix master HEAD tracker. Uses git-refs datasource because that repo publishes 0 GitHub releases and 0 tags — master HEAD is the only upstream-truth signal. Renovate opens a PR whenever master advances; runs through the global 7-day minimumReleaseAge quarantine. Stays manual-merge by design (see matchDepNames narrow above). REVIEWER NOTE: this manager only substitutes the SHA in flake.nix; flake.lock will be stale until you run `nix flake update pre-commit-hooks` locally and push the refresh — see docs/architecture/flake-input-bumps.md for the full runbook.",
       "customType": "regex",
       "managerFilePatterns": ["/^flake\\.nix$/"],
       "matchStrings": [
@@ -66,7 +66,7 @@
       "packageNameTemplate": "https://github.com/cachix/git-hooks.nix"
     },
     {
-      "description": "NixOS/nixpkgs stable branch tracker. Captures the YY.MM suffix of the nixos-YY.MM branch in flake.nix and watches NixOS/nixpkgs tags for new YY.MM tags (versioningTemplate restricts to MAJOR.MINOR form). NixOS tags only at GA, so this naturally proposes the next stable branch when it ships. Stays manual-merge by design (see matchDepNames narrow above) because nixpkgs branch bumps have wide blast radius. REVIEWER NOTE: this manager only substitutes the branch name in flake.nix; flake.lock will be stale and CI will fail until you run `nix flake update --update-input nixpkgs` locally and push the refresh. Expect downstream side-effects (prettier, mkdocs-macros strictness, zizmor major version, image base-layer rotation) — see docs/architecture/flake-input-bumps.md for the full runbook.",
+      "description": "NixOS/nixpkgs stable branch tracker. Captures the YY.MM suffix of the nixos-YY.MM branch in flake.nix and watches NixOS/nixpkgs tags for new YY.MM tags (versioningTemplate restricts to MAJOR.MINOR form). NixOS tags only at GA, so this naturally proposes the next stable branch when it ships. Stays manual-merge by design (see matchDepNames narrow above) because nixpkgs branch bumps have wide blast radius. REVIEWER NOTE: this manager only substitutes the branch name in flake.nix; flake.lock will be stale and CI will fail until you run `nix flake update nixpkgs` locally and push the refresh. Expect downstream side-effects (prettier, mkdocs-macros strictness, zizmor major version, image base-layer rotation) — see docs/architecture/flake-input-bumps.md for the full runbook.",
       "customType": "regex",
       "managerFilePatterns": ["/^flake\\.nix$/"],
       "matchStrings": [
@@ -77,7 +77,7 @@
       "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)$"
     },
     {
-      "description": "NixOS/nixpkgs-unstable rolling branch tracker. The branch name 'nixos-unstable' itself never changes; the actual movement is via flake.lock. This manager exists as a trigger for renovate-flake-lock-refresh.yml (which runs `nix flake update --update-input nixpkgs-unstable` and commits the refreshed lockfile) and to surface tooling-layer churn for human review. git-refs datasource on the branch HEAD; weekly cadence inherits global schedule. REVIEWER NOTE: this is the tooling-layer bump — expect formatter-output diffs (shfmt, prettier, mdformat, taplo, just, nixfmt) and new linter rules (zizmor, statix, deadnix, actionlint, shellcheck). No runtime regressions; linpeas-image stays on stable nixpkgs. See docs/architecture/flake-input-bumps.md.",
+      "description": "NixOS/nixpkgs-unstable rolling branch tracker. The branch name 'nixos-unstable' itself never changes; the actual movement is via flake.lock. This manager exists as a trigger for renovate-flake-lock-refresh.yml (which runs `nix flake update nixpkgs-unstable` and commits the refreshed lockfile) and to surface tooling-layer churn for human review. git-refs datasource on the branch HEAD; weekly cadence inherits global schedule. REVIEWER NOTE: this is the tooling-layer bump — expect formatter-output diffs (shfmt, prettier, mdformat, taplo, just, nixfmt) and new linter rules (zizmor, statix, deadnix, actionlint, shellcheck). No runtime regressions; linpeas-image stays on stable nixpkgs. See docs/architecture/flake-input-bumps.md.",
       "customType": "regex",
       "managerFilePatterns": ["/^flake\\.nix$/"],
       "matchStrings": [

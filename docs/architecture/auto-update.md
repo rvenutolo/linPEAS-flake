@@ -55,7 +55,7 @@ flowchart LR
   renovate --> pr2 --> ci --> merge
 ```
 
-The third-party `DeterminateSystems/update-flake-lock` action was removed: it required `BUMP_PAT` as a `with: token:` input, putting the PAT inside an externally-controlled action boundary. The split-job design confines Nix evaluation to a `contents: read` job; the `push-and-merge` job authenticates to the GitHub API as the `linpeas-flake-bumper` App via a short-lived installation token (`actions/create-github-app-token`), then commits files via REST `PUT /contents`. No `git push`, no PAT in `.git/config`. REST commits authenticated by an App installation token are auto-signed by GitHub's web-flow GPG key, so the bump branch satisfies `required_signatures` on `main`.
+No third-party flake-lock action is used: such actions take the write credential as a `with: token:` input, which would put it inside an externally-controlled action boundary. The split-job design instead confines Nix evaluation to a `contents: read` job; the `push-and-merge` job authenticates to the GitHub API as the `linpeas-flake-bumper` App via a short-lived installation token (`actions/create-github-app-token`), then commits files via REST `PUT /contents`. No `git push`, no PAT in `.git/config`. REST commits authenticated by an App installation token are auto-signed by GitHub's web-flow GPG key, so the bump branch satisfies `required_signatures` on `main`.
 
 ## Where this site fits
 
@@ -106,7 +106,7 @@ release-asset copy of `linpeas-pin.json` matches the in-tree copy
 (attestation verification). A pin change that lands without firing
 the release pipeline leaves `main` in a state where the in-tree pin
 diverges from the latest-release-asset pin; the verify cron would
-fail the next morning.
+fail on its next weekly run.
 
 Paired with the `pin-diff-isolated` invariant: the only mutator
 (`bump-linpeas.sh`) writes only `linpeas-pin.json`, so any pin

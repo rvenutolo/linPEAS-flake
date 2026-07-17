@@ -15,7 +15,7 @@ flake-input pins in `flake.nix`:
     — devShell, CI hooks, formatters, linters, mkdocs. Never touches
     `linpeas-image`.**
 
-Both managers are intentionally **manual-merge**. They do pure text
+All three managers are intentionally **manual-merge**. They do pure text
 substitution on `flake.nix` and **do not refresh `flake.lock`**.
 
 The lockfile refresh is performed automatically by the
@@ -25,7 +25,7 @@ from the PR title (the `case` arms recognise three title shapes:
 `cachix/git-hooks.nix`, `NixOS/nixpkgs-unstable`, and `NixOS/nixpkgs`
 — the unstable arm is matched before the stable arm because the stable
 string is a substring of the unstable one), runs
-`nix flake update --update-input <name>`, and commits the refreshed
+`nix flake update <name>`, and commits the refreshed
 `flake.lock` back to the PR branch (App-signed via REST
 `PUT /contents`). Watch the PR for a follow-on
 `chore(flake): refresh flake.lock for <input>` commit a few minutes
@@ -108,7 +108,7 @@ next contributor PR).
     between releases, `cachix/git-hooks.nix` (and the hooks it
     enables) sometimes break before the project's own pin bumps.
     Surfaces as `nix flake check` failures unrelated to any
-    workflow change. See "Interaction between the two pins" below.
+    workflow change. See "Interaction between the three pins" below.
 
 Step 4 of the step-by-step below contains the same surface as a
 symptom → fix lookup table; use this section to anticipate before
@@ -161,22 +161,22 @@ gh pr checkout <number>
 For a `cachix/git-hooks.nix` bump:
 
 ```bash
-nix flake update --update-input pre-commit-hooks
+nix flake update pre-commit-hooks
 ```
 
 For a `NixOS/nixpkgs-unstable` bump:
 
 ```bash
-nix flake update --update-input nixpkgs-unstable
+nix flake update nixpkgs-unstable
 ```
 
 For a `NixOS/nixpkgs` bump:
 
 ```bash
-nix flake update --update-input nixpkgs
+nix flake update nixpkgs
 ```
 
-Both commands rewrite `flake.lock` in place. Confirm the diff is sane
+All three commands rewrite `flake.lock` in place. Confirm the diff is sane
 (`git diff flake.lock`) — should show new `lastModified` /
 `narHash` / `rev` for the relevant node, nothing else.
 
@@ -263,9 +263,11 @@ in the same PR.
 nix flake check --print-build-logs 2>&1 | tail -30
 ```
 
-All pre-commit hooks must pass: `actionlint`, `deadnix`, `nixpkgs-fmt`,
-`treefmt`, `shellcheck`, `statix`, `uses-sha-pinned`, `yamllint`,
-`zizmor`, `flake-show-fresh`.
+All pre-commit hooks must pass. Representative ones for a flake-input
+bump: `actionlint`, `deadnix`, `nixfmt`, `treefmt`, `shellcheck`,
+`statix`, `uses-sha-pinned`, `yamllint`, `zizmor`, `flake-show-fresh`.
+The full, generated list is in
+[Git workflow → Pre-commit hooks](../development/git.md#pre-commit-hooks).
 
 ### 9. Commit the refresh
 
@@ -287,7 +289,7 @@ Commits (`commitlint` is a required check) and be signed
 (`required_signatures` is enforced), since each lands verbatim on
 `main` under the merge-commit-only ruleset. The PR title becomes the
 merge-commit subject and must itself satisfy Conventional Commits
-(`pr-title-lint` is a required check).
+(`lint-pr-title` is a required check).
 
 ### 11. Post-merge
 

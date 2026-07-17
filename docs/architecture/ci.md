@@ -41,15 +41,15 @@ canonical doc as source of truth.
 
 Functional gates:
 
-| Job                   | Runner             | What it tests                                                                                                  |
-| --------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------- |
-| `flake-check`         | `ubuntu-latest`    | `nix flake check` — eval, treefmt, deadnix, statix, actionlint, yamllint, shellcheck, README-staleness, schema |
-| `build-linpeas`       | `ubuntu-latest`    | `nix build .#linpeas` — fetches upstream `linpeas.sh`, verifies SRI hash, builds the derivation                |
-| `smoke-test`          | `ubuntu-latest`    | `./result/bin/linpeas -h` exits 0                                                                              |
-| `build-linpeas-arm64` | `ubuntu-24.04-arm` | aarch64 build of `linpeas`                                                                                     |
-| `smoke-test-arm64`    | `ubuntu-24.04-arm` | aarch64 `-h` smoke                                                                                             |
-| `image-smoke`         | `ubuntu-latest`    | builds OCI image, `docker load`, `docker run --rm <img> -h` exits 0                                            |
-| `image-smoke-arm64`   | `ubuntu-24.04-arm` | aarch64 OCI image smoke                                                                                        |
+| Job                   | Runner             | What it tests                                                                                   |
+| --------------------- | ------------------ | ----------------------------------------------------------------------------------------------- |
+| `flake-check`         | `ubuntu-latest`    | `nix flake check` — eval, treefmt, deadnix, statix, actionlint, yamllint, shellcheck, schema    |
+| `build-linpeas`       | `ubuntu-latest`    | `nix build .#linpeas` — fetches upstream `linpeas.sh`, verifies SRI hash, builds the derivation |
+| `smoke-test`          | `ubuntu-latest`    | `./result/bin/linpeas -h` exits 0                                                               |
+| `build-linpeas-arm64` | `ubuntu-24.04-arm` | aarch64 build of `linpeas`                                                                      |
+| `smoke-test-arm64`    | `ubuntu-24.04-arm` | aarch64 `-h` smoke                                                                              |
+| `image-smoke`         | `ubuntu-latest`    | builds OCI image, `docker load`, `docker run --rm <img> -h` exits 0                             |
+| `image-smoke-arm64`   | `ubuntu-24.04-arm` | aarch64 OCI image smoke                                                                         |
 
 Self-enforcing invariant gates:
 

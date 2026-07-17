@@ -64,7 +64,7 @@ fi
 if grep --fixed-strings --quiet '15-check allowlist' "${tmp}"; then
   printf 'Regenerated changelog contains "15-check allowlist" (%s):\n' \
     "${CLIFF_TOML}" >&2
-  printf 'The scorecard-count commit_preprocessor (15-check -> 11-check) is\n' >&2
+  printf 'The scorecard-count commit_preprocessor (15-check -> 10-check) is\n' >&2
   printf 'missing from cliff.toml.\n' >&2
   status=1
 fi

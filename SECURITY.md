@@ -69,8 +69,7 @@ manifest tag and then verifies against the **arch-resolved** digest
 (via `docker manifest inspect` or the `RepoDigests` value returned by
 `docker inspect`) is protected. A consumer who trusts the manifest tag
 implicitly — without resolving to the per-arch digest — is not. The
-mitigation now in place is the `manifest-tag-reresolve` step in
-`release-on-bump.yml`, which re-fetches
+mitigation is the `verify manifest tags resolve to attested per-arch digests` step in `release-on-bump.yml`'s `verify` job, which re-fetches
 both `:VERSION` and `:latest` manifests post-publish and confirms
 their per-arch digests match the values that were attested. A drift
 at this step fails the release.
@@ -101,9 +100,8 @@ Several scheduled workflows track supply-chain hygiene independent of
 the release pipeline — `codeql.yml`, `octoscan.yml`,
 `image-cve-scan.yml`, `scorecard-drift-check.yml`, and
 `zizmor-drift-check.yml` (full cron inventory in
-[`docs/architecture/ci.md`](docs/architecture/ci.md)). This section
-describes `codeql.yml`; it is not in branch protection's
-required-check set for the reasons documented below.
+[`docs/architecture/ci.md`](docs/architecture/ci.md)). The rest of this
+section covers `codeql.yml`; the other four are inventoried there.
 
 - **`codeql.yml`** scans GitHub Actions workflow definitions on PRs
     that touch `.github/workflows/` or `.github/actions/`, every push

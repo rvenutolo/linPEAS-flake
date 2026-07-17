@@ -10,7 +10,7 @@ rules:
   # `identify` job gates on PR `author.login == "renovate[bot]"`, which fork
   # PRs and write-access users cannot spoof — only the Renovate GitHub App
   # produces that author identity. `compute-refresh` runs Nix in `contents:
-  # read` mode without the App key (`nix flake update --update-input` only
+  # read` mode without the App key (`nix flake update <input>` only
   # re-resolves an input URL → SHA; it does not evaluate flake outputs, so
   # malicious code in flake.nix does not execute here). The App key lands
   # only in `push-refresh`, which performs a REST PUT to flake.lock and

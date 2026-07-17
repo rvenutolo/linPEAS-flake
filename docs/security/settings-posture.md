@@ -60,9 +60,9 @@ and `pr-title-lint` enforces the Conventional-Commits shape that
 `merge_commit_title=PR_TITLE` relies on. A UI flip to enable
 squash/rebase as a repo default does not silently land non-merge
 commits on `main` — the ruleset rejects the merge. Drift on the
-ruleset itself is caught by `scripts/check-protect-main.sh`, which
-runs from the same daily cron and probes endpoints reachable with
-`Administration: Read`.
+ruleset itself is caught by `scripts/check-protect-main.sh` via the
+required `protect-main-drift-check` CI job in `ci.yml`, which probes
+endpoints reachable with `Administration: Read`.
 
 Rationale for the values: rebase + squash rewrite commits and break
 GPG/SSH signatures on the rewritten objects. Merge-commit preserves

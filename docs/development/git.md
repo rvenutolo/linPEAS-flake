@@ -9,8 +9,8 @@ How to commit, sign, and merge changes to `linPEAS-flake`.
 - `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`,
     `revert`, `style`, `test`
 
-Examples: `feat/add-lz4-support`, `fix/s3-retry-timeout`,
-`chore/update-quarkus-bom`.
+Examples: `feat/add-arm64-image`, `fix/pin-url-prefix-check`,
+`chore/bump-nixpkgs-unstable`.
 
 ## Commit signing
 
@@ -36,7 +36,7 @@ The PR title becomes the merge-commit subject (`merge_commit_title=PR_TITLE`);
 the PR body becomes the merge-commit body (`merge_commit_message=PR_BODY`).
 
 Allowed types match branch naming. Append `!` after the type for breaking
-changes: `feat!: drop Java 11 support`.
+changes: `feat!: drop x86_64-darwin output`.
 
 ## Local lint commands
 
@@ -54,8 +54,10 @@ just lint        # pre-commit run --all-files
 just lint-links  # lychee link check on tracked markdown
 ```
 
-`pre-commit install` (once) wires git hooks so `just lint` runs
-automatically on commit.
+`pre-commit install` (once) wires the git hooks so the same hooks run
+against staged files on every commit (`just lint` runs them against
+every file in the repo). Entering the devShell — `nix develop` or
+direnv — installs them for you.
 
 ## Merge policy
 

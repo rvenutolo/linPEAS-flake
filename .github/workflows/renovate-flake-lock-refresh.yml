@@ -3,7 +3,7 @@ name: renovate-flake-lock-refresh
 # Auto-refreshes `flake.lock` on Renovate PRs that bump a flake input
 # URL fragment (currently `cachix/git-hooks.nix` SHA and the
 # `NixOS/nixpkgs` branch name). Renovate's hosted SaaS cannot run
-# `nix flake update --update-input <name>` itself (no Nix on the
+# `nix flake update <name>` itself (no Nix on the
 # runner, no `postUpgradeTasks` allowlist), so Renovate ships a PR with
 # `flake.nix` ahead of `flake.lock`. CI's `flake-check` job fails on
 # that PR until a maintainer runs the lock-refresh by hand, per the
@@ -16,7 +16,7 @@ name: renovate-flake-lock-refresh
 #      author is the `renovate[bot]` App, confirms it touches
 #      `flake.nix`, and maps the PR title to a flake input name.
 #   2. `compute-refresh` — checks out the PR branch, runs
-#      `nix flake update --update-input <name>`, uploads the resulting
+#      `nix flake update <name>`, uploads the resulting
 #      `flake.lock` as a job-scoped artifact. No write credentials.
 #   3. `push-refresh` — downloads the artifact, mints an App
 #      installation token (`linpeas-flake-bumper` GitHub App), and
@@ -219,9 +219,9 @@ jobs:
           set -Eeuo pipefail
           IFS=$'\n\t'
           cp flake.lock flake.lock.before
-          # --commit-lock-file=false is unsupported on nix 2.34.x; use plain
-          # update --update-input which writes flake.lock in place.
-          nix flake update --update-input "${INPUT_NAME}"
+          # --commit-lock-file=false is unsupported on nix 2.34.x; plain
+          # update writes flake.lock in place, which is what we want.
+          nix flake update "${INPUT_NAME}"
       - name: detect change
         id: diff
         run: |
@@ -365,7 +365,7 @@ jobs:
             - push-refresh: `${{ needs.push-refresh.result }}`
 
             Manual fallback runbook: `docs/architecture/flake-input-bumps.md`
-            steps 1-3 (checkout PR, `nix flake update --update-input <name>`,
+            steps 1-3 (checkout PR, `nix flake update <name>`,
             `nix fmt`).
           label-description: renovate-flake-lock-refresh workflow failure
           github-token: ${{ secrets.GITHUB_TOKEN }}

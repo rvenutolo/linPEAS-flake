@@ -6,7 +6,7 @@
 requests that have auto-merge enabled and a failed workflow run on their
 current head commit, and re-runs the failed jobs.
 
-Each run gets at most 3 attempts. `gh run rerun --failed` re-runs a run in
+Each run gets at most 3 attempts. `reRunWorkflowFailedJobs` re-runs a run in
 place and increments its attempt counter, so the bound needs no stored
 state — and a new commit resets it, because a new commit produces a new run
 at attempt 1.
@@ -76,7 +76,7 @@ absence, tells you which of three things happened:
     had nothing to do.
 
 ```text
-Sweep completed; 2 PR(s) errored: #123, #456
+Sweep completed; 2 PR(s) errored: #N, #M
 ```
 
 For each PR named as errored, find its `core.error` line in the job log.
@@ -85,15 +85,15 @@ escapes newlines in it to `%0A` — so in the raw job log it is one line with
 literal `%0A` separating the status from each stack frame:
 
 ```text
-::error::PR #123: 404 HttpError: Not Found%0A    at ... listWorkflowRunsForRepo ...
+::error::PR #N: 404 HttpError: Not Found%0A    at ... listWorkflowRunsForRepo ...
 ```
 
-Search the raw log for `PR #123:` to find it. GitHub renders the same
+Search the raw log for `PR #N:` to find it. GitHub renders the same
 `core.error` call as a multi-line entry in the job's Annotations panel — use
 that view if you want it split into lines instead of `%0A`-joined:
 
 ```text
-PR #123: 404 HttpError: Not Found
+PR #N: 404 HttpError: Not Found
     at ... listWorkflowRunsForRepo ...
 ```
 

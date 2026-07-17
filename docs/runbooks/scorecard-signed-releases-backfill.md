@@ -71,7 +71,8 @@ gh workflow run scorecard-drift-check.yml
 
 Expect:
 
-- `Signed-Releases: 10`.
+- No `Signed-Releases: <N>` offender line — the threshold script prints only
+    checks scoring below 10.
 - Workflow run green.
 - Issue auto-closed by `notify-workflow-result` deduper.
 
