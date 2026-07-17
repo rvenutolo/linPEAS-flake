@@ -11,7 +11,7 @@ below becomes the merge-commit body. -->
 - [ ] `just verify` passes locally
 - [ ] `just check` (`nix flake check`) passes locally
 - [ ] If touching workflows: `nix develop --command zizmor .github/workflows/<file>.yml`
-- [ ] If touching `flake.nix` inputs: ran `nix flake update --update-input <name>` and committed the refreshed `flake.lock`
+- [ ] If touching `flake.nix` inputs: ran `nix flake update <name>` and committed the refreshed `flake.lock`
 
 ## Checklist
 

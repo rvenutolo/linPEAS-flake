@@ -11,8 +11,7 @@
 # Why: the `pre-commit-hooks` input is unusual — it carries a SHA in
 # the `inputs.url` literal (Renovate's `cachix/git-hooks.nix` custom
 # manager bumps that SHA), separate from `flake.lock`'s `locked.rev`
-# which only updates when `nix flake update --update-input
-# pre-commit-hooks` runs. The `renovate-flake-lock-refresh` workflow
+# which only updates when `nix flake update pre-commit-hooks` runs. The `renovate-flake-lock-refresh` workflow
 # auto-completes that lock refresh on Renovate PRs, but the same
 # divergence can appear from any other source — a manual `flake.nix`
 # edit without a corresponding `nix flake update`, a force-pushed
@@ -86,7 +85,7 @@ if [[ ${lock_rev} != "${url_sha}"* ]]; then
   printf '  flake.nix URL SHA: %s\n' "${url_sha}" >&2
   printf '  flake.lock rev:    %s\n' "${lock_rev}" >&2
   # shellcheck disable=SC2016 # literal backtick prose for human reader
-  printf 'Run `nix flake update --update-input pre-commit-hooks` to refresh the lock.\n' >&2
+  printf 'Run `nix flake update pre-commit-hooks` to refresh the lock.\n' >&2
   exit 1
 fi
 

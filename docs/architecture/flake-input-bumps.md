@@ -25,7 +25,7 @@ from the PR title (the `case` arms recognise three title shapes:
 `cachix/git-hooks.nix`, `NixOS/nixpkgs-unstable`, and `NixOS/nixpkgs`
 — the unstable arm is matched before the stable arm because the stable
 string is a substring of the unstable one), runs
-`nix flake update --update-input <name>`, and commits the refreshed
+`nix flake update <name>`, and commits the refreshed
 `flake.lock` back to the PR branch (App-signed via REST
 `PUT /contents`). Watch the PR for a follow-on
 `chore(flake): refresh flake.lock for <input>` commit a few minutes
@@ -161,19 +161,19 @@ gh pr checkout <number>
 For a `cachix/git-hooks.nix` bump:
 
 ```bash
-nix flake update --update-input pre-commit-hooks
+nix flake update pre-commit-hooks
 ```
 
 For a `NixOS/nixpkgs-unstable` bump:
 
 ```bash
-nix flake update --update-input nixpkgs-unstable
+nix flake update nixpkgs-unstable
 ```
 
 For a `NixOS/nixpkgs` bump:
 
 ```bash
-nix flake update --update-input nixpkgs
+nix flake update nixpkgs
 ```
 
 Both commands rewrite `flake.lock` in place. Confirm the diff is sane

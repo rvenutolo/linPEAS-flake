@@ -55,7 +55,7 @@ SHA-checked by Nix on lock; `main` floats and will silently change.
 Update the pin with:
 
 ```sh
-nix flake lock --update-input linpeas-flake
+nix flake update linpeas-flake
 ```
 
 ## No binary cache
