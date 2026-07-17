@@ -10,7 +10,7 @@ On its weekly Friday cron (and on `workflow_dispatch`), the workflow:
 1. Builds `.#linpeas` and `.#linpeas-image` twice on independent `ubuntu-latest` runners.
 1. Records each build's: linpeas store path, linpeas NAR hash, image store path, image tar SHA-256, image manifest digest.
 1. Compares the five values pairwise.
-1. On any mismatch: installs `diffoscope`, runs it against the differing artifacts with a 20-minute cap, uploads `diffoscope.html` and `diffoscope.txt` as the `repro-diff` artifact (30-day retention), and opens a GitHub issue labelled `reproducibility`.
+1. On any mismatch: installs `diffoscope`, runs it against the differing artifacts with a 20-minute cap, uploads `image.html`/`image.txt` and `linpeas.html`/`linpeas.txt` as the `repro-diff` artifact (30-day retention), and opens a GitHub issue labelled `reproducibility`.
 
 ## How you'll be notified
 
@@ -28,7 +28,7 @@ Currently no `--assignee` is set; mismatches rely on default repo notification s
 1. Open the auto-created issue (label: `reproducibility`).
 1. Follow the run link to the failed workflow run.
 1. Download the `repro-diff` artifact.
-1. Open `diffoscope.html` in a browser.
+1. Open `image.html` (or `linpeas.html`) in a browser.
 1. Classify the divergence using the table below, then fix the root cause.
 
 ## Common nondeterminism sources
@@ -54,7 +54,7 @@ Promotion steps:
 
 1. Edit `.github/workflows/reproducibility-check.yml`: remove `continue-on-error: true` from the `compare` job.
 1. Run the workflow once manually via `workflow_dispatch` to confirm it still passes.
-1. Add `Reproducibility Check / compare` to the branch protection ruleset required-checks list (see [`docs/security/required-checks.md`](../security/required-checks.md) for the ruleset / required-checks edit flow).
+1. Add `compare` to the branch protection ruleset required-checks list (see [`docs/security/required-checks.md`](../security/required-checks.md) for the ruleset / required-checks edit flow).
 1. Update this runbook's **Status** header to `Required`.
 1. Commit changes on a single PR titled `ci: promote reproducibility check to required`.
 
@@ -63,6 +63,6 @@ Promotion steps:
 If a real-world repro break cannot be fixed within one week of detection:
 
 1. Re-add `continue-on-error: true` to the `compare` job.
-1. Remove `Reproducibility Check / compare` from the ruleset required checks.
+1. Remove `compare` from the ruleset required checks.
 1. Update **Status** header to `Burn-in (demoted YYYY-MM-DD pending issue #N)`.
 1. Link the blocking issue here under a `## Active demotions` section.

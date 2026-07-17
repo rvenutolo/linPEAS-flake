@@ -146,9 +146,11 @@ comment (e.g., `transient: docker.io 502 on push, retry green`).
 
 - **`DOCKERHUB_TOKEN_RW`** — Read, Write. Used by `release-on-bump.yml` and
     `verify-latest-release.yml`.
-- **`DOCKERHUB_TOKEN_DELETE`** — Read, Write, Delete. Used ONLY by
-    `dockerhub-sync.yml` (`peter-evans/dockerhub-description` requires Delete
-    scope to PATCH repo metadata; `Read, Write`-only PAT returns `403`).
+- **`DOCKERHUB_TOKEN_DELETE`** — Read, Write, Delete. Used by
+    `dockerhub-sync.yml` — the only workflow consumer
+    (`peter-evans/dockerhub-description` requires Delete scope to PATCH repo
+    metadata; `Read, Write`-only PAT returns `403`) — and by the manual
+    recovery snippets in this runbook.
 
 Binding:
 

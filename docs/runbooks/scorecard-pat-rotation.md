@@ -30,7 +30,7 @@ This runbook is the durable record of how to create and rotate that PAT.
 ## Create the token
 
 1. GitHub → top-right avatar → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**.
-1. Name: `peass-ng-scorecard-drift-check`.
+1. Name: `linpeas-flake-scorecard-drift-check`.
 1. Expiration: 1 year from today.
 1. Resource owner: `rvenutolo`.
 1. Repository access: Only select repositories → `linPEAS-flake`.
