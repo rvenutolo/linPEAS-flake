@@ -73,14 +73,15 @@ function run_scenario() {
   rm --force -- "${out_file}" "${step_file}"
 }
 
-# Seeds the three exact harness names. Exit codes per component are passed
-# in; the allowed-actions and settings-posture enforce stubs (which the
-# runner must never call for test-only harnesses) touch their respective
-# forbidden markers when run.
+# Seeds the four exact harness names in the runner's HARNESSES list. Exit
+# codes per component are passed in; the allowed-actions and
+# settings-posture enforce stubs (which the runner must never call for
+# test-only harnesses) touch their respective forbidden markers when run.
 # @arg $1 work dir  @arg $2 ratchet-test  $3 ratchet-enforce exit code
 #      $4 allowed-test  $5 settings-test
 #      $6 allowed forbidden-marker  $7 settings forbidden-marker
 #      $8 ratchet-enforce forbidden-marker (optional)
+#      $9 backfill-image-mode test exit code (optional, default 0)
 function seed() {
   local -r work="$1"
   local -r tests_dir="${work}/tests" scripts_dir="${work}/scripts"
@@ -89,6 +90,8 @@ function seed() {
   make_stub "${scripts_dir}/check-ratchet-pin-audit.sh" "$3" "${8:-}"
   make_stub "${tests_dir}/check-allowed-actions-api.test.sh" "$4"
   make_stub "${tests_dir}/check-settings-posture.test.sh" "$5"
+  # backfill-image-mode is a test-only harness (no enforce script).
+  make_stub "${tests_dir}/classify-backfill-image-mode.test.sh" "${9:-0}"
   # Same-named enforce stubs the runner must NOT run for test-only harnesses.
   make_stub "${scripts_dir}/check-allowed-actions-api.sh" 0 "$6"
   make_stub "${scripts_dir}/check-settings-posture.sh" 0 "$7"
@@ -146,6 +149,18 @@ function main() {
   run_scenario 'ratchet test fails -> enforce skipped, row FAIL' \
     "${work}/tests" "${work}/scripts" 1 '| ratchet-pin-audit | FAIL |' \
     "${forbidden_allowed}" "${forbidden_settings}" "${forbidden_ratchet}"
+  rm --recursive --force -- "${work}"
+
+  # Scenario 5: the test-only backfill-image-mode harness fails -> row
+  # FAIL, exit 1. Guards against the harness being dropped or its failure
+  # being swallowed.
+  work="$(mktemp -d)"
+  forbidden_allowed="${work}/ran-allowed"
+  forbidden_settings="${work}/ran-settings"
+  seed "${work}" 0 0 0 0 "${forbidden_allowed}" "${forbidden_settings}" "" 1
+  run_scenario 'backfill-image-mode test fails -> exit 1' \
+    "${work}/tests" "${work}/scripts" 1 '| backfill-image-mode | FAIL |' \
+    "${forbidden_allowed}" "${forbidden_settings}"
   rm --recursive --force -- "${work}"
 
   if [[ ${failures} -gt 0 ]]; then

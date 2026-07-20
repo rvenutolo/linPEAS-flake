@@ -41,6 +41,17 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
     continue
   fi
 
+  # Capture yq's output (and exit status) into a variable rather than
+  # feeding the loop from `< <(yq ...)`: a process substitution's exit
+  # status is not propagated under set -Eeuo pipefail, so a yq failure
+  # (unparsable workflow, or a query that errors on a valid-but-odd
+  # shape) would yield empty input and the check would pass silently.
+  if ! rows="$(yq eval '.jobs | to_entries[] | .key + "|" + (.value.uses | tag) + "|" + (.value."timeout-minutes" | tag) + "|" + (.value."timeout-minutes" | tostring)' "${f}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+
   while IFS='|' read -r job uses_tag timeout_tag timeout_val; do
     [[ -z ${job} ]] && continue
 
@@ -69,7 +80,7 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
       failed=$((failed + 1))
       ;;
     esac
-  done < <(yq eval '.jobs | to_entries[] | .key + "|" + (.value.uses | tag) + "|" + (.value."timeout-minutes" | tag) + "|" + (.value."timeout-minutes" | tostring)' "${f}")
+  done <<<"${rows}"
 done
 shopt -u nullglob
 

@@ -28,5 +28,6 @@ expect bad-missing.yml 1 "first step is"
 expect bad-not-first.yml 1 "first step is"
 expect bad-unpinned.yml 1 "not SHA-pinned"
 expect bad-run-first.yml 1 "no first-step"
+expect bad-malformed.yml 1 "could not evaluate"
 
 printf 'all tests passed\n'

@@ -27,5 +27,6 @@ expect good.yml 0 ""
 expect bad-audit.yml 1 "not block"
 expect bad-empty.yml 1 "empty allowed-endpoints"
 expect bad-missing.yml 1 "empty allowed-endpoints"
+expect bad-seq-endpoints.yml 1 "could not evaluate"
 
 printf 'all tests passed\n'

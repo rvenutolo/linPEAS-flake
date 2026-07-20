@@ -112,7 +112,11 @@ for src_rel in "${SOURCES[@]}"; do
       failures=$((failures + 1))
     fi
   done < <(
-    grep --line-number --extended-regexp \
+    # `--only-matching` emits one line per link (with its line number),
+    # so a line carrying several anchor links is checked link-by-link.
+    # Without it, the greedy target extraction below would keep only the
+    # last `](...)` on the line and skip every earlier link.
+    grep --line-number --only-matching --extended-regexp \
       '\[[^]]+\]\([^)]*#[^)]+\)' "${src_abs}" || true
   )
 done

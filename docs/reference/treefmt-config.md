@@ -40,6 +40,8 @@ go.mod
 go.sum
 package-lock.json
 tests/fixtures/check-renovate-config-validator/bad-syntax.json
+tests/fixtures/harden-runner-first/bad-malformed.yml
+tests/fixtures/job-timeout-minutes/bad-malformed.yml
 tests/fixtures/required-checks/*
 tests/fixtures/scorecard-threshold/malformed.json
 ```
