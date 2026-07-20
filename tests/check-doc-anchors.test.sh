@@ -49,6 +49,8 @@ function main() {
     'bad-anchor-miss' 'source.md' 1 '[anchor-miss]'
   run_scenario 'same-file anchor miss fails' \
     'bad-same-file' 'source.md' 1 '[anchor-miss]'
+  run_scenario 'broken first link among multiple on one line fails' \
+    'bad-multi-link' 'source.md' 1 '#nonexistent'
 
   if [[ ${failures} -gt 0 ]]; then
     printf '\n%d test(s) failed\n' "${failures}" >&2
