@@ -33,7 +33,24 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
   if [[ -n ${FILE_FILTER} && "$(basename "${f}")" != "${FILE_FILTER}" ]]; then
     continue
   fi
+  # Capture yq's output (and exit status) into a variable rather than
+  # feeding the loop from `< <(yq ...)`: a process substitution's exit
+  # status is not propagated under set -Eeuo pipefail, so a yq failure
+  # would yield empty input and the check would pass silently. This bites
+  # on a valid workflow whose `allowed-endpoints` is a YAML sequence: the
+  # string-concat query aborts with "!!seq cannot be added to !!str".
   # shellcheck disable=SC2016 # $j is a yq variable inside single-quoted yq expression
+  if ! rows="$(yq eval '
+    .jobs | to_entries[] as $j
+    | $j.value.steps[]
+    | select(.uses // "" | test("step-security/harden-runner@"))
+    | $j.key + "\t" + (.with."egress-policy" // "null") + "\t" + (.with."allowed-endpoints" // "null")
+  ' "${f}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed, or non-string allowed-endpoints?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+
   while IFS=$'\t' read -r job policy endpoints; do
     [[ -z ${job} ]] && continue
     if [[ ${policy} != "block" ]]; then
@@ -46,12 +63,7 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
       printf '%s: job %q has block mode but empty allowed-endpoints\n' "${f}" "${job}" >&2
       failed=$((failed + 1))
     fi
-  done < <(yq eval '
-    .jobs | to_entries[] as $j
-    | $j.value.steps[]
-    | select(.uses // "" | test("step-security/harden-runner@"))
-    | $j.key + "\t" + (.with."egress-policy" // "null") + "\t" + (.with."allowed-endpoints" // "null")
-  ' "${f}")
+  done <<<"${rows}"
 done
 shopt -u nullglob
 
