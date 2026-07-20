@@ -26,6 +26,7 @@ function expect() {
 expect good-map.yml 0 ""
 expect good-string.yml 0 ""
 expect bad-map.yml 1 "pull_request_target"
+expect bad-map-null.yml 1 "pull_request_target"
 expect bad-string.yml 1 "pull_request_target"
 expect bad-seq.yml 1 "pull_request_target"
 
