@@ -31,7 +31,7 @@ flowchart TD
   validate["validate VERSION<br/>shape: YYYYMMDD-hex"]
   build_image["nix build .#linpeas-image"]
   push_image["docker push<br/>ghcr.io + docker.io<br/>per-arch + manifest by digest"]
-  attest["actions/attest-build-provenance<br/>pin file + per-arch image<br/>+ actions/attest-sbom (SPDX)"]
+  attest["actions/attest-build-provenance<br/>pin file + per-arch image<br/>+ actions/attest-sbom (CycloneDX)"]
   release["gh release create <tag><br/>--target $GITHUB_SHA<br/>--title <tag><br/>--notes 'Tracks upstream …'"]
   verify["verify job:<br/>gh attestation verify<br/>(provenance + SBOM)"]
 

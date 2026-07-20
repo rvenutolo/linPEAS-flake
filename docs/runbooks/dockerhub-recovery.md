@@ -115,8 +115,11 @@ Either:
     `chore: retrigger release` commit), OR
 - Re-run the workflow from the Actions UI if the pin commit is
     still `HEAD` on `main`. Use the `force-republish` input when
-    re-running so the `release` job skips the
-    "tag exists" guard.
+    re-running so the image, manifest, and verify jobs re-run for the
+    current pin even though the GitHub release already exists. The
+    `release` job stays gated by the "tag exists" guard and preserves the
+    existing release assets — if the release itself must be recreated,
+    delete it first, then re-run.
 
 ### 4. Confirm green end-to-end<a name="4-confirm-green-end-to-end"></a>
 
@@ -144,8 +147,7 @@ comment (e.g., `transient: docker.io 502 on push, retry green`).
 
 ## DOCKERHUB_TOKEN split (RW + DELETE)<a name="dockerhub_token-split-rw--delete"></a>
 
-- **`DOCKERHUB_TOKEN_RW`** — Read, Write. Used by `release-on-bump.yml` and
-    `verify-latest-release.yml`.
+- **`DOCKERHUB_TOKEN_RW`** — Read, Write. Used by `release-on-bump.yml`.
 - **`DOCKERHUB_TOKEN_DELETE`** — Read, Write, Delete. Used by
     `dockerhub-sync.yml` — the only workflow consumer
     (`peter-evans/dockerhub-description` requires Delete scope to PATCH repo

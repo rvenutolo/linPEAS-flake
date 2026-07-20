@@ -131,8 +131,9 @@ the notify jobs.
 
 - `BUMP_APP_PRIVATE_KEY` / `vars.BUMP_APP_CLIENT_ID` — the
     `linpeas-flake-bumper` GitHub App's PEM private key and public client
-    ID. Used by `update-linpeas.yml`, `update-flake-lock.yml`, and
-    `renovate-flake-lock-refresh.yml` to open and auto-merge bump PRs.
+    ID. Used by `update-linpeas.yml`, `update-flake-lock.yml`,
+    `renovate-flake-lock-refresh.yml`, and `release-on-bump.yml` to open
+    and auto-merge bump and changelog PRs.
     The App is installed only on this repository with `Contents: Read and write` and `Pull requests: Read and write` permissions. Installation
     tokens are minted per job by `actions/create-github-app-token`, live
     one hour, and revoke at job end. See
