@@ -68,8 +68,12 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
     fi
     ;;
   '!!map')
-    pr_target_tag="$(yq eval '.on.pull_request_target | tag' "${f}")"
-    if [[ ${pr_target_tag} != "!!null" ]]; then
+    # A present-but-null key (bare `pull_request_target:` with no
+    # sub-keys) is still the forbidden trigger — GitHub fires on all its
+    # activity types. `has()` is true for the null case; inspecting the
+    # value tag is not (it yields `!!null` for both absent and null).
+    pr_target_present="$(yq eval '.on | has("pull_request_target")' "${f}")"
+    if [[ ${pr_target_present} == "true" ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
       printf '%s: uses `pull_request_target` trigger (forbidden — base-ref workflow with head-ref code + full secrets)\n' \
         "${f}" >&2
