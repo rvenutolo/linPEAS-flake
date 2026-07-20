@@ -106,5 +106,10 @@
     # JSON to exercise the parse-error branch of the threshold check;
     # prettier refuses to format invalid JSON.
     "tests/fixtures/scorecard-threshold/malformed.json"
+    # `bad-malformed.yml` fixtures are intentionally unparsable YAML that
+    # exercise the parse-failure branch of the workflow-lint checks;
+    # prettier refuses to format invalid YAML.
+    "tests/fixtures/harden-runner-first/bad-malformed.yml"
+    "tests/fixtures/job-timeout-minutes/bad-malformed.yml"
   ];
 }

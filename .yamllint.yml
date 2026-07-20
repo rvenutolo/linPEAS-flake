@@ -1,5 +1,10 @@
 extends: default
 
+# `bad-malformed.yml` fixtures are intentionally unparsable YAML that
+# exercise the parse-failure branch of the workflow-lint checks.
+ignore: |
+  tests/fixtures/**/bad-malformed.yml
+
 rules:
   # Renovate marker comments push lines past the 80-char default; the
   # alternative (wrapping) defeats Renovate's regex matcher.
