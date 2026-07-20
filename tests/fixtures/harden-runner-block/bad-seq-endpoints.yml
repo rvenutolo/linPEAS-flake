@@ -1,0 +1,21 @@
+name: bad-seq-endpoints
+on:
+  push:
+    branches: [main]
+permissions: {}
+concurrency:
+  group: bad-seq-endpoints-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@0000000000000000000000000000000000000000
+        with:
+          egress-policy: block
+          allowed-endpoints:
+            - api.github.com:443
+      - run: echo a

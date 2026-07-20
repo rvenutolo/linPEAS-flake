@@ -28,5 +28,6 @@ expect good-reusable.yml 0 ""
 expect bad-missing.yml 1 "missing"
 expect bad-zero.yml 1 "positive"
 expect bad-non-int.yml 1 "unexpected shape"
+expect bad-malformed.yml 1 "could not evaluate"
 
 printf 'all tests passed\n'
