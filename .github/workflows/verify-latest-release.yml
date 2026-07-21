@@ -198,10 +198,9 @@ jobs:
         id: verify-images-cosign
         # Re-uses the per-arch digests resolved by the earlier steps via
         # `docker manifest inspect`, plus the multi-arch index digest of
-        # `:VERSION` on each registry. Skips cleanly for releases whose
-        # signatures don't exist yet (cosign verify exits non-zero with a
-        # "no matching signatures" message — detected and treated as a
-        # skip for back-compat with pre-cosign releases).
+        # `:VERSION` on each registry. Every ref must carry a valid cosign
+        # signature from this repo's release workflow identity; a missing,
+        # invalid, or wrong-identity signature fails the run.
         env:
           COSIGN_IDENTITY: https://github.com/rvenutolo/linPEAS-flake/.github/workflows/release-on-bump.yml@refs/heads/main
           COSIGN_OIDC_ISSUER: https://token.actions.githubusercontent.com
@@ -209,24 +208,19 @@ jobs:
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
-          # Probe: does the multi-arch index for this release have a
-          # cosign signature at all? If not, the release predates the
-          # feature — skip the entire cosign pass.
+          # Every published release is cosign-signed (signed at release
+          # time; historic releases are kept signed by the backfill
+          # runbook). So a signature that is missing, invalid, from the
+          # wrong identity, or unverifiable is a real regression — it must
+          # fail the run, never be swallowed as "pre-cosign". Each index
+          # and per-arch digest is verified in the loop below; any failure
+          # aborts the step under set -e.
           ghcr_index_digest="$(
             docker buildx imagetools inspect --raw \
               "ghcr.io/rvenutolo/linpeas:${TAG}" \
               | sha256sum \
               | awk '{print "sha256:" $1}'
           )"
-          if ! nix shell .#cosign --command cosign verify \
-              --certificate-identity "${COSIGN_IDENTITY}" \
-              --certificate-oidc-issuer "${COSIGN_OIDC_ISSUER}" \
-              "ghcr.io/rvenutolo/linpeas@${ghcr_index_digest}" \
-              > /dev/null 2>&1; then
-            printf 'no cosign signature on ghcr index %s; treating release as pre-cosign and skipping\n' \
-              "${ghcr_index_digest}" >&2
-            exit 0
-          fi
           hub_index_digest="$(
             docker buildx imagetools inspect --raw \
               "docker.io/rvenutolo/linpeas:${TAG}" \
