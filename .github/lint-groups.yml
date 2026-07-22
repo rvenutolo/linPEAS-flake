@@ -53,3 +53,4 @@ lint-doc-invariants:
   - ci-job-in-summary
   - pin-diff-isolated
   - flake-lock-provenance
+  - dockerhub-token-scope-split

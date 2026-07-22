@@ -72,7 +72,7 @@ live in `.claude/CLAUDE.md` (untracked).
 
 - **OCI image** — `Entrypoint` not `Cmd`; bash+coreutils set. → [install/docker.md](install/docker.md) <!-- enforcer: -; ci: -; hook: - -->
 - **Manifest digest-pinning** — `buildx imagetools create` uses `@sha256:`. → [install/docker.md](install/docker.md) <!-- enforcer: -; ci: -; hook: - -->
-- **DOCKERHUB_TOKEN split** — `_RW` vs `_DELETE`, never unsuffixed. → [runbooks/dockerhub-recovery.md](runbooks/dockerhub-recovery.md) <!-- enforcer: -; ci: -; hook: - -->
+- **DOCKERHUB_TOKEN split** — `_RW` vs `_DELETE`, never unsuffixed. → [runbooks/dockerhub-recovery.md](runbooks/dockerhub-recovery.md) <!-- enforcer: scripts/check-dockerhub-token-scope-split.sh; ci: lint-doc-invariants; hook: - -->
 - **Docker Hub notify-body parity** — issue body mirrors runbook. → [runbooks/dockerhub-recovery.md](runbooks/dockerhub-recovery.md) <!-- enforcer: -; ci: -; hook: - -->
 - **settings-drift-checker App scope** — dedicated read-only App for admin-scoped settings probes; isolates blast radius from GITHUB_TOKEN and the bump App. → [runbooks/settings-drift-app.md](runbooks/settings-drift-app.md) <!-- enforcer: -; ci: -; hook: - -->
 - **Ratchet pin audit** — daily detection of tag-vs-SHA drift on pinned action refs; deduped `ratchet-drift` umbrella issue auto-opens/closes. → [runbooks/ratchet-pin-audit.md](runbooks/ratchet-pin-audit.md) <!-- enforcer: scripts/check-ratchet-pin-audit.sh; ci: harness-group; hook: - -->
