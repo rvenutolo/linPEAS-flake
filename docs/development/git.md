@@ -36,7 +36,7 @@ The PR title becomes the merge-commit subject (`merge_commit_title=PR_TITLE`);
 the PR body becomes the merge-commit body (`merge_commit_message=PR_BODY`).
 
 Allowed types match branch naming. Append `!` after the type for breaking
-changes: `feat!: drop x86_64-darwin output`.
+changes: `feat!: drop Java 11 support`.
 
 ## Local lint commands
 

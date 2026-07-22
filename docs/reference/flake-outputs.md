@@ -9,28 +9,14 @@ block between the markers by hand.
 
 ```text
 ├───apps
-│   ├───aarch64-darwin
-│   │   ├───default: app: Linux Privilege Escalation Awesome Script (LinPEAS) from peass-ng
-│   │   └───linpeas: app: Linux Privilege Escalation Awesome Script (LinPEAS) from peass-ng
 │   ├───aarch64-linux
-│   │   ├───default: app: Linux Privilege Escalation Awesome Script (LinPEAS) from peass-ng
-│   │   └───linpeas: app: Linux Privilege Escalation Awesome Script (LinPEAS) from peass-ng
-│   ├───x86_64-darwin
 │   │   ├───default: app: Linux Privilege Escalation Awesome Script (LinPEAS) from peass-ng
 │   │   └───linpeas: app: Linux Privilege Escalation Awesome Script (LinPEAS) from peass-ng
 │   └───x86_64-linux
 │       ├───default: app: Linux Privilege Escalation Awesome Script (LinPEAS) from peass-ng
 │       └───linpeas: app: Linux Privilege Escalation Awesome Script (LinPEAS) from peass-ng
 ├───checks
-│   ├───aarch64-darwin
-│   │   ├───formatting: derivation 'treefmt-check'
-│   │   ├───linpeas-build: derivation 'linpeas-20260715-81d3c7f8'
-│   │   └───pre-commit: derivation 'pre-commit-run'
 │   ├───aarch64-linux
-│   │   ├───formatting: derivation 'treefmt-check'
-│   │   ├───linpeas-build: derivation 'linpeas-20260715-81d3c7f8'
-│   │   └───pre-commit: derivation 'pre-commit-run'
-│   ├───x86_64-darwin
 │   │   ├───formatting: derivation 'treefmt-check'
 │   │   ├───linpeas-build: derivation 'linpeas-20260715-81d3c7f8'
 │   │   └───pre-commit: derivation 'pre-commit-run'
@@ -39,13 +25,7 @@ block between the markers by hand.
 │       ├───linpeas-build: derivation 'linpeas-20260715-81d3c7f8'
 │       └───pre-commit: derivation 'pre-commit-run'
 ├───devShells
-│   ├───aarch64-darwin
-│   │   ├───default: development environment 'nix-shell'
-│   │   └───lint: development environment 'nix-shell'
 │   ├───aarch64-linux
-│   │   ├───default: development environment 'nix-shell'
-│   │   └───lint: development environment 'nix-shell'
-│   ├───x86_64-darwin
 │   │   ├───default: development environment 'nix-shell'
 │   │   └───lint: development environment 'nix-shell'
 │   └───x86_64-linux
@@ -53,18 +33,11 @@ block between the markers by hand.
 │       └───lint: development environment 'nix-shell'
 ├───devTooling: unknown
 ├───formatter
-│   ├───aarch64-darwin: package 'treefmt'
 │   ├───aarch64-linux: package 'treefmt'
-│   ├───x86_64-darwin: package 'treefmt'
 │   └───x86_64-linux: package 'treefmt'
 ├───overlays
 │   └───default: Nixpkgs overlay
 └───packages
-    ├───aarch64-darwin
-    │   ├───cosign: package 'cosign-3.1.1'
-    │   ├───default: package 'linpeas-20260715-81d3c7f8'
-    │   ├───git-cliff: package 'git-cliff-2.13.1'
-    │   └───linpeas: package 'linpeas-20260715-81d3c7f8'
     ├───aarch64-linux
     │   ├───cosign: package 'cosign-3.1.1'
     │   ├───default: package 'linpeas-20260715-81d3c7f8'
@@ -72,11 +45,6 @@ block between the markers by hand.
     │   ├───linpeas: package 'linpeas-20260715-81d3c7f8'
     │   ├───linpeas-image: package 'linpeas.tar.gz'
     │   └───site: package 'linpeas-flake-site-20260715-81d3c7f8'
-    ├───x86_64-darwin
-    │   ├───cosign: package 'cosign-3.1.1'
-    │   ├───default: package 'linpeas-20260715-81d3c7f8'
-    │   ├───git-cliff: package 'git-cliff-2.13.1'
-    │   └───linpeas: package 'linpeas-20260715-81d3c7f8'
     └───x86_64-linux
         ├───cosign: package 'cosign-3.1.1'
         ├───default: package 'linpeas-20260715-81d3c7f8'

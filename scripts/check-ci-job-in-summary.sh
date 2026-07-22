@@ -59,9 +59,7 @@ readonly SCRIPTS_DIR="${SCRIPTS_DIR_OVERRIDE:-${DEFAULT_SCRIPTS_DIR}}"
 # Auxiliary ci.yml jobs intentionally absent from the category map.
 # Each entry is a job not exposed as a required status check.
 readonly EXEMPT=(
-  "build-linpeas-matrix"                # cross-OS matrix expansion
   "doc-freshness"                       # batched regenerator harnesses
-  "flake-check-matrix"                  # cross-OS matrix expansion
   "gh-api-version-header"               # harness sandbox
   "image-cve-scan-trivy"                # CVE scan (Trivy); surfaces issues, not blocker
   "image-cve-scan-trivy-notify-finding" # notify-only job (real CRITICAL CVE, Trivy)
