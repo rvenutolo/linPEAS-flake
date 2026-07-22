@@ -100,6 +100,34 @@ EOF
   rm --force -- "${tmpdoc}"
   tmpdoc=''
 
+  # Scenario 5: with-needs fixture (incl a scalar needs:) renders edges to golden.
+  tmpdoc="$(mktemp --suffix=.md)"
+  cat >"${tmpdoc}" <<'EOF'
+<!-- BEGIN ci-dag -->
+<!-- END ci-dag -->
+EOF
+  CI_WORKFLOW_OVERRIDE="${FIXTURES}/with-needs/ci.yml" \
+    CATEGORIES_FILE_OVERRIDE="${FIXTURES}/categories.yml" \
+    DOC_OVERRIDE="${tmpdoc}" \
+    "${SCRIPT}" >/dev/null
+  if cmp --silent -- "${tmpdoc}" "${FIXTURES}/with-needs/expected.md"; then
+    pass 'with-needs fixture renders edges (incl scalar needs) byte-for-byte'
+  else
+    fail 'with-needs fixture diverges from expected.md'
+    diff -u -- "${FIXTURES}/with-needs/expected.md" "${tmpdoc}" >&2 || true
+  fi
+  rm --force -- "${tmpdoc}"
+  tmpdoc=''
+
+  # Scenario 6: unknown arg exits 2 (arg parse precedes any file I/O).
+  local rc3=0
+  "${SCRIPT}" --bogus-arg >/dev/null 2>&1 || rc3=$?
+  if [[ ${rc3} -eq 2 ]]; then
+    pass 'unknown arg exits 2'
+  else
+    fail "unknown arg exit was ${rc3}, want 2"
+  fi
+
   if [[ ${failures} -gt 0 ]]; then
     printf '%d failure(s)\n' "${failures}" >&2
     exit 1

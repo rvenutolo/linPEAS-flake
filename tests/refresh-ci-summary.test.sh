@@ -11,6 +11,7 @@ readonly REPO_ROOT="${repo_root}"
 readonly SCRIPT="${REPO_ROOT}/scripts/refresh-ci-summary.sh"
 readonly DOC="${REPO_ROOT}/README.md"
 readonly CAT_MAP="${REPO_ROOT}/docs/_data/ci-check-categories.yml"
+readonly REQ_DOC="${REPO_ROOT}/docs/security/required-checks.md"
 
 failures=0
 function pass() { printf 'PASS: %s\n' "$1"; }
@@ -23,6 +24,7 @@ function fail() {
 # boundaries (mirrors tests/refresh-just-recipes.test.sh).
 backup=''
 map_backup=''
+req_backup=''
 
 function main() {
   "${SCRIPT}"
@@ -45,7 +47,8 @@ function main() {
   backup="$(mktemp)"
   cp -- "${DOC}" "${backup}"
   trap 'if [[ -n "${backup:-}" && -f "${backup}" ]]; then cp -- "${backup}" "${DOC}" 2>/dev/null || true; rm --force -- "${backup}"; fi
-        if [[ -n "${map_backup:-}" && -f "${map_backup}" ]]; then cp -- "${map_backup}" "${CAT_MAP}" 2>/dev/null || true; rm --force -- "${map_backup}"; fi' EXIT
+        if [[ -n "${map_backup:-}" && -f "${map_backup}" ]]; then cp -- "${map_backup}" "${CAT_MAP}" 2>/dev/null || true; rm --force -- "${map_backup}"; fi
+        if [[ -n "${req_backup:-}" && -f "${req_backup}" ]]; then cp -- "${req_backup}" "${REQ_DOC}" 2>/dev/null || true; rm --force -- "${req_backup}"; fi' EXIT
   awk '
     { print }
     /^<!-- BEGIN ci-summary -->$/ { print "- **Drift**: `bogus-context`." }
@@ -82,6 +85,25 @@ function main() {
     pass '--check fails when required context has no category-map entry'
   else
     fail '--check passed despite missing category-map entry for gitleaks'
+  fi
+
+  # Assertion 5: generator fails when a category-map key has no
+  # required-checks entry (divergence direction 2: map key not in
+  # required contexts).
+  req_backup="$(mktemp)"
+  cp -- "${REQ_DOC}" "${req_backup}"
+  # Orphan gitleaks: drop its required-checks row, leaving gitleaks: in the map.
+  grep --invert-match --extended-regexp '^\| *gitleaks *\|' "${REQ_DOC}" >"${REQ_DOC}.tmp"
+  mv -- "${REQ_DOC}.tmp" "${REQ_DOC}"
+  local rc3=0
+  "${SCRIPT}" --check || rc3=$?
+  cp -- "${req_backup}" "${REQ_DOC}"
+  rm --force -- "${req_backup}"
+  req_backup=''
+  if [[ ${rc3} -ne 0 ]]; then
+    pass '--check fails when category-map key has no required-checks entry'
+  else
+    fail '--check passed despite orphaned category-map key gitleaks'
   fi
 
   if [[ ${failures} -gt 0 ]]; then
