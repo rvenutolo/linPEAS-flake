@@ -131,6 +131,20 @@ Exit codes:
 1 restatement(s) found (details printed to stderr)
 2 missing/empty .github/workflows directory
 
+### scripts/check-dockerhub-token-scope-split.sh
+
+Lint: enforce the DOCKERHUB_TOKEN RW/DELETE scope split.
+The delete-scoped PAT (secrets.DOCKERHUB_TOKEN_DELETE) is consumed only
+by dockerhub-sync.yml (peter-evans/dockerhub-description needs Delete
+scope to PATCH repo metadata; a Read/Write-only PAT returns 403). The
+write-scoped PAT (secrets.DOCKERHUB_TOKEN_RW) is consumed only by
+release-on-bump.yml. The delete-capable token must never leak into
+workflows that only push images, and no unsuffixed secrets.DOCKERHUB_TOKEN
+may exist — only \_RW and \_DELETE are authoritative.
+
+Honors WORKFLOWS_DIR_OVERRIDE (defaults to .github/workflows) so the test
+harness can point at a temp dir. Exits 0 if the split holds, 1 otherwise.
+
 ### scripts/check-egress-allowlist.sh
 
 Lint: every job's harden-runner `allowed-endpoints` list
