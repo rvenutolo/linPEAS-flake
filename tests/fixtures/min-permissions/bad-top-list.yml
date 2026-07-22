@@ -1,0 +1,9 @@
+name: bad-top-list
+on: push
+permissions: [contents]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - run: echo a
