@@ -40,6 +40,7 @@ lint-script-hygiene:
   - script-has-test
   - lint-shell-tools
   - gh-api-version-header
+  - bump-script-integrity
   - pre-commit-hooks-sha-parity
   - manifest-hook-watches-nix
 lint-doc-invariants:

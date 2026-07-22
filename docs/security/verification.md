@@ -85,6 +85,11 @@ Look for `"conclusion": "success"` within the last 7 days. Current state on the 
 - Every `gh api` call must pass `--header "X-GitHub-Api-Version: 2022-11-28"`.
     Apply to any new security-sensitive GitHub-REST caller.
 
+Guards 1–3 are lint-enforced by `scripts/check-bump-script-integrity.sh`
+(regex-presence over `scripts/bump-linpeas.sh`); guard 4 by
+`scripts/check-gh-api-version-header.sh`. Both run in the
+`lint-script-hygiene` CI job and as pre-commit hooks.
+
 ## verify-latest-release upstream parity<a name="verify-latest-release-upstream-parity"></a>
 
 The weekly verify cron re-fetches the pinned `linpeas.sh` URL, recomputes the SRI

@@ -142,6 +142,25 @@
     pass_filenames = false;
     language = "system";
   };
+  # Asserts scripts/bump-linpeas.sh retains its three supply-chain
+  # integrity guards — asset-URL prefix, `.digest` cross-check, and
+  # atomic (mktemp + mv) pin write. A refactor that drops any of them
+  # would otherwise leave the Bump-script integrity invariant green
+  # while the guard no longer exists.
+  bump-script-integrity = {
+    enable = true;
+    name = "bump-script-integrity";
+    description = "scripts/bump-linpeas.sh keeps its URL-prefix, .digest, and atomic-write guards.";
+    entry = "${pkgs-unstable.writeShellScript "bump-script-integrity-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-bump-script-integrity.sh
+    ''}";
+    files = "^(scripts/.*\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Guard: fail if any GitHub Actions run: block invokes
   # python/python3/pip while pyflakes is not wired into the
   # actionlint hook. No python run: exists today, so this is

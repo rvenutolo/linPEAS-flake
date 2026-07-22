@@ -84,6 +84,7 @@ Hooks (alphabetical):
 | `actionlint`                        | GitHub Actions workflow syntax (shellcheck pinned).                                                                                  |
 | `actionlint-shellcheck-active`      | actionlint shellcheck integration canary.                                                                                            |
 | `auto-merge-decline-gate`           | Auto-merge run-blocks carry the CLOSED/MERGED decline gate.                                                                          |
+| `bump-script-integrity`             | scripts/bump-linpeas.sh keeps its URL-prefix, .digest, and atomic-write guards.                                                      |
 | `check-cron-table`                  | Cron schedule table + ordering paragraph in docs/architecture/ci.md matches workflow cron triggers.                                  |
 | `check-doc-anchors`                 | Every markdown #anchor link resolves to a heading slug in its target file.                                                           |
 | `check-doc-cron-restatement`        | Docs outside ci.md must link the cron schedule table, not restate literal workflow times.                                            |

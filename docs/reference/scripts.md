@@ -39,6 +39,12 @@ with `--auto` must also carry the decline gate (a `gh pr view --json state` quer
 maintainer-closed (declined) or already-merged PR is never silently
 resurrected by an auto-merging update workflow.
 
+### scripts/check-bump-script-integrity.sh
+
+Lint: scripts/bump-linpeas.sh retains its three
+supply-chain integrity guards — asset-URL prefix, `.digest`
+cross-check, and atomic (mktemp + mv) pin write.
+
 ### scripts/check-changelog-links.sh
 
 Refuse to build if the regenerated changelog contains
