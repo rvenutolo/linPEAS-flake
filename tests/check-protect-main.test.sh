@@ -73,6 +73,39 @@ function main() {
     'bad-strict-false' 1 'strict_required_status_checks_policy drift'
   run_scenario 'thread-resolution false fails' \
     'bad-thread-resolution-false' 1 'required_review_thread_resolution drift'
+  run_scenario 'disabled enforcement fails' \
+    'bad-enforcement-drift' 1 'enforcement drift'
+  run_scenario 'wrong target fails' \
+    'bad-target-drift' 1 'target drift'
+  run_scenario 'ref_name include drift fails' \
+    'bad-ref-name-drift' 1 'conditions.ref_name.include drift'
+
+  # The no-op-ruleset guard (fetch_ruleset hard-fails when the live
+  # ruleset id is empty) is unreachable through run_scenario, which always
+  # sets RULESET_JSON_OVERRIDE. Exercise it directly: stub `gh` to return
+  # an empty ruleset list (empty id) and run the live path with only the
+  # mirror + doc overrides.
+  local gh_stub_dir stderr_file no_op_exit=0
+  gh_stub_dir="$(mktemp --directory)"
+  stderr_file="$(mktemp)"
+  printf '#!/usr/bin/env bash\nprintf ""\n' >"${gh_stub_dir}/gh"
+  chmod +x "${gh_stub_dir}/gh"
+  PATH="${gh_stub_dir}:${PATH}" \
+    MIRROR_JSON_OVERRIDE="${FIXTURES}/good/mirror.json" \
+    DOC_TABLE_OVERRIDE="${FIXTURES}/good/required-checks.md" \
+    "${SCRIPT}" >/dev/null 2>"${stderr_file}" || no_op_exit=$?
+  if [[ ${no_op_exit} -ne 1 ]]; then
+    printf 'FAIL: no-op-ruleset guard — expected exit 1, got %d\n' "${no_op_exit}" >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet -- 'no ruleset named protect-main' "${stderr_file}"; then
+    printf 'FAIL: no-op-ruleset guard — stderr missing %q\n' 'no ruleset named protect-main' >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: no-op-ruleset guard fires on empty ruleset id\n'
+  fi
+  rm --recursive --force -- "${gh_stub_dir}" "${stderr_file}"
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2

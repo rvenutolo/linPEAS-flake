@@ -62,6 +62,12 @@ function main() {
     'bad-wrong-pattern.json' 1 'ref_name.include does not contain expected pattern'
   run_scenario 'non-empty bypass_actors fails' \
     'bad-bypass-actors.json' 1 'bypass_actors non-empty'
+  run_scenario 'fallback glob pattern passes' \
+    'good-fallback-glob.json' 0 ''
+  run_scenario 'wrong ruleset name fails' \
+    'bad-name-drift.json' 1 'name drift'
+  run_scenario 'wrong target fails' \
+    'bad-target-drift.json' 1 'target drift'
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2

@@ -64,6 +64,12 @@ function main() {
     'bad-admins-bypass' 1 'environments.github-pages.can_admins_bypass drift'
   run_scenario 'multiple simultaneous drifts surface all' \
     'bad-multiple' 1 'can_approve_pull_request_reviews drift'
+  run_scenario 'push-protection disabled fails' \
+    'bad-push-protection-off' 1 'secret_scanning_push_protection.status drift'
+  run_scenario 'dependabot updates disabled fails' \
+    'bad-dependabot-off' 1 'dependabot_security_updates.status drift'
+  run_scenario 'allowed_actions all fails' \
+    'bad-allowed-actions-all' 1 'allowed_actions drift'
 
   # Multi-drift scenario must surface every drift in a single run, not
   # stop at the first. This is asserted by counting drift lines in

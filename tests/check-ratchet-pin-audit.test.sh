@@ -29,6 +29,11 @@ expect bad-missing-permissions.yml 1 "top-level permissions must be {}"
 expect bad-missing-concurrency.yml 1 "concurrency.group must be"
 expect bad-missing-reason.yml 1 "notify body missing reason token"
 expect bad-missing-dispatch.yml 1 "on: must include workflow_dispatch"
+expect bad-hardenrunner-first.yml 1 "first step must be step-security/harden-runner"
+expect bad-job-permissions.yml 1 "permissions must be exactly { contents: read }"
+expect bad-persist-credentials.yml 1 "set persist-credentials: false"
+expect bad-job-timeout.yml 1 "timeout-minutes missing"
+expect bad-schedule.yml 1 "on: must include a schedule sequence"
 
 # --- classify-pin-ref.sh verdict tests -------------------------------
 # Pure classifier: <tag> <pinned> <ref_object_sha> <ref_object_type>
