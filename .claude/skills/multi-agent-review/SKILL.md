@@ -70,31 +70,43 @@ Bake the answers in. Do not re-ask a settled parameter per dimension.
 ### 2. Run each selected dimension as a gated `Workflow`
 
 For each selected dimension, in order: **wait for the user's "go"**, then launch
-one `Workflow` whose script is the pipeline in the template below. After it
-returns, append its survivors to the running report and show the user a
-one-screen summary (counts + top findings) before the next gate.
+one `Workflow` whose script is the template below. It returns
+`{ survivors, refuted }`: append `survivors` to the running report's dimension
+section and fold `refuted` into the Refutation log (the killed findings *are*
+the finder false-positive rate — dropping them leaves that section empty). Each
+`refuted` entry carries `contested` — a `true` there is a **2-1 kill**: one
+skeptic could not refute it, so a real finding may have been buried. Surface
+those in a **Contested kills** subsection, never silently. Then show the user a
+one-screen summary (counts + top findings, contested-kill count called out)
+before the next gate.
 
-Seed later dimensions' finder prompts with earlier **confirmed** findings —
-especially dimension 5 with dimensions 2 & 6 (a silent-pass bug is usually an
-untested rejection path). Pass them in via the finder prompt text.
+Seed later dimensions' finders with earlier **confirmed** findings — especially
+dimension 5 with dimensions 2 & 6 (a silent-pass bug is usually an untested
+rejection path). Inject them via the template's `SEED_FINDINGS` slot, not by
+hand-editing each finder prompt.
 
 ### 3. Workflow script template
 
-One dimension = one `Workflow` call. Fan out the dimension's slices as finders;
-each finding is refuted by 3 skeptics; keep ≥2/3 survivors. Adapt `SLICES` and
-the prompts per dimension from `references/dimensions.md`. **No backticks inside
-the template literals** (they break the JS parser — concatenate strings).
+One dimension = one `Workflow` call. Fan out the dimension's slices as finders,
+dedup, then refute each survivor with 3 skeptics; keep ≥2/3. The controller
+injects four per-dimension values from `references/dimensions.md`: `SLICES`,
+`FINDER_PROMPT(s)`, `REFUTER_GUIDANCE` (that dimension's refuter paragraph
+*verbatim* — this is what scopes the skeptic to the dimension's claim type), and
+`SEED_FINDINGS` (earlier confirmed findings as text, or `''`). **No backticks
+inside the template literals** (they break the JS parser — concatenate strings).
 
 ```javascript
 export const meta = {
   name: 'review-dimension',
-  description: 'Finder fan-out then 3-skeptic refute-all for one review dimension',
+  description: 'Finder fan-out, dedup, then 3-skeptic refute-all for one dimension',
   phases: [{ title: 'Find' }, { title: 'Refute' }],
 }
-const FINDING = { /* JSON Schema: {findings:[{file,line,severity,claim,evidence,failure_scenario}]} */
+// severity is an enum so the report's ranking scale is honest at the schema layer.
+const FINDING = {
   type: 'object',
   properties: { findings: { type: 'array', items: { type: 'object',
-    properties: { file:{type:'string'}, line:{type:'integer'}, severity:{type:'string'},
+    properties: { file:{type:'string'}, line:{type:'integer'},
+      severity:{type:'string', enum:['critical','high','medium','low','advisory']},
       claim:{type:'string'}, evidence:{type:'string'}, failure_scenario:{type:'string'} },
     required: ['file','claim','failure_scenario'] } } },
   required: ['findings'],
@@ -103,19 +115,47 @@ const VERDICT = { type:'object',
   properties: { refuted:{type:'boolean'}, why:{type:'string'} },
   required: ['refuted'] }
 
-// SLICES + the shared finder instruction come from references/dimensions.md,
-// injected by the controller for the chosen dimension.
-const results = await pipeline(
-  SLICES,
-  s => agent(FINDER_PROMPT(s), { label: 'find:' + s.key, phase: 'Find', schema: FINDING }),
-  review => parallel((review.findings || []).map(f => () =>
-    parallel([0,1,2].map(i => () =>
-      agent('Try to REFUTE this finding. Default refuted=true unless you can '
-        + 'reproduce the defect against the real file. Finding: ' + JSON.stringify(f),
-        { label: 'refute:' + (f.file||'?'), phase: 'Refute', schema: VERDICT })))
-      .then(vs => ({ f, survived: vs.filter(Boolean).filter(v => !v.refuted).length >= 2 }))))
-)
-return results.flat().filter(Boolean).filter(r => r.survived).map(r => r.f)
+// Barrier, not pipeline: dedup every slice's findings BEFORE the expensive refute
+// fan-out, so one file:line is not independently refuted by three skeptics twice.
+const found = await parallel(SLICES.map(s => () =>
+  agent(FINDER_PROMPT(s) + SEED_FINDINGS, { label: 'find:' + s.key, phase: 'Find', schema: FINDING })))
+const seen = new Set()
+const deduped = found.filter(Boolean).flatMap(r => r.findings || []).filter(f => {
+  const key = (f.file || '?') + ':' + (f.line || '') + ':' + (f.claim || '').slice(0, 40)
+  return seen.has(key) ? false : (seen.add(key), true)
+})
+const RANK = { critical: 0, high: 1, medium: 2, low: 3, advisory: 4 }
+deduped.sort((a, b) => (RANK[a.severity] ?? 5) - (RANK[b.severity] ?? 5))
+const CAP = 25
+const toRefute = deduped.slice(0, CAP)
+if (deduped.length > CAP) log('capped: refuting top ' + CAP + ' of ' + deduped.length + ' deduped findings (most-severe first)')
+
+// REFUTER_GUIDANCE scopes the skeptic to this dimension's claim type — an
+// is-it-enforced skeptic would wrongly kill an is-it-buggy finding.
+const graded = (await parallel(toRefute.map(f => () =>
+  parallel([0,1,2].map(i => () =>
+    agent('You may run read-only commands to reproduce (nix eval/build, run the script '
+      + 'against a crafted input, git show) but MUST NOT modify the tree. ' + REFUTER_GUIDANCE
+      + ' Default refuted=true unless you reproduce the defect against the real artifact. '
+      + 'Finding: ' + JSON.stringify(f),
+      { label: 'refute:' + (f.file || '?'), phase: 'Refute', schema: VERDICT })))
+    .then(vs => {
+      const live = vs.filter(Boolean)
+      const nonRefuted = live.filter(v => !v.refuted).length
+      // contested = killed (< 2 skeptics failed to refute) but NOT unanimous: at
+      // least one skeptic could not refute it. A 2-1 kill can bury a real finding,
+      // so it is surfaced separately rather than dropped silently.
+      return { f, survived: nonRefuted >= 2, contested: nonRefuted === 1,
+        votes: { nonRefuted, total: live.length }, why: live.map(v => v.why).filter(Boolean) }
+    })))).filter(Boolean)
+
+// Keep the killed findings — the Refutation log needs the false-positive rate,
+// and contested kills (2-1) must be visible, not silently dropped.
+return {
+  survivors: graded.filter(r => r.survived).map(r => r.f),
+  refuted: graded.filter(r => !r.survived).map(r => ({
+    finding: r.f, contested: r.contested, votes: r.votes, why: r.why })),
+}
 ```
 
 If a task-notification truncates, recover per-agent returns from the run's
@@ -147,13 +187,20 @@ After the last dimension, confirm `git status` shows no modified tracked files.
 
 ## Refutation log
 <per dimension: what was found-then-killed and why — shows the finder's
-  false-positive rate, not just survivors>
+  false-positive rate, not just survivors. Unanimous 3-0 kills only.>
+
+### Contested kills (2-1)
+<killed findings where one skeptic could NOT refute (contested=true): each with
+  its file:line, the dissenting skeptic's reason, and why the majority killed it.
+  These are near-misses — a real finding may be buried here; do not omit them.>
 ```
 
 Severity scale: `critical / high / medium / low / advisory`. Dimension 7
 findings are always `advisory`. Rank findings most-severe-first within each
 dimension. Every reported finding must be self-contained and carry its
-`failure_scenario`.
+`failure_scenario`. A `refuted` entry with `contested: true` was a 2-1 kill —
+list it under **Contested kills**, never fold it silently into the clean-kill
+log.
 
 ## Spot-check protocol (offer to the user)
 
