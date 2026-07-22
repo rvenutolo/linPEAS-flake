@@ -64,6 +64,10 @@ function main() {
     'non-pr-workflow.yml' 0 ''
   run_scenario 'mixed pull_request + push with non-allowed secret fails' \
     'mixed-on-block.yml' 1 'secrets.DOCKERHUB_TOKEN not allowed'
+  run_scenario 'flow-string pull_request with secret fails' \
+    'flow-string-pr.yml' 1 'secrets.DOCKERHUB_TOKEN not allowed'
+  run_scenario 'flow-seq including pull_request with secret fails' \
+    'flow-seq-pr.yml' 1 'secrets.DOCKERHUB_TOKEN not allowed'
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2
