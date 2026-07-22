@@ -34,21 +34,7 @@
       exec ${pkgs-unstable.nixpkgs-hammering}/bin/nixpkgs-hammer \
         -f nix/hammer-shim.nix linpeas
     ''}";
-    files = "^(flake\\.nix|flake\\.lock|linpeas-pin\\.json|nix/hammer-shim\\.nix)$";
-    pass_filenames = false;
-    language = "system";
-  };
-  hammer-shim-parity = {
-    enable = true;
-    name = "hammer-shim-parity";
-    description = "nix/hammer-shim.nix linpeas derivation matches nix/pin.nix.";
-    entry = "${pkgs-unstable.writeShellScript "hammer-shim-parity-hook" ''
-      set -Eeuo pipefail
-      IFS=$'\n\t'
-      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-      exec ${pkgs-unstable.bash}/bin/bash scripts/check-hammer-shim-parity.sh
-    ''}";
-    files = "^(flake\\.nix|nix/hammer-shim\\.nix|scripts/check-hammer-shim-parity\\.sh)$";
+    files = "^(flake\\.nix|flake\\.lock|linpeas-pin\\.json|nix/linpeas\\.nix|nix/hammer-shim\\.nix)$";
     pass_filenames = false;
     language = "system";
   };

@@ -167,19 +167,6 @@ Lint: every `gh attestation verify` invocation across
 workflows, scripts, and docs passes `--repo rvenutolo/linPEAS-flake`
 so verification is bound to this repository.
 
-### scripts/check-hammer-shim-parity.sh
-
-Lint: nix/hammer-shim.nix's linpeas derivation matches
-the canonical linpeas derivation in nix/pin.nix. The
-shim duplicates the derivation because `builtins.getFlake` cannot run
-inside the `nix flake check` sandbox. Compares bodies normalized to
-whitespace-collapsed form.
-Exits 0 on match, 1 on drift, 2 if extraction fails.
-
-Env overrides (test-only):
-FLAKE_NIX_OVERRIDE — path to the canonical derivation source to read
-HAMMER_SHIM_OVERRIDE — path to nix/hammer-shim.nix to read
-
 ### scripts/check-harden-runner-block.sh
 
 Lint: every step-security/harden-runner step uses
