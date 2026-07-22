@@ -95,6 +95,16 @@
     # misidentifies it as shell because the first line looks
     # like a comment.
     excludes = [ "^justfile$" ];
+    # `-x`/`--external-sources`: scripts/*.sh source scripts/lib/log.sh
+    # via a runtime-computed BASH_SOURCE path, which shellcheck cannot
+    # statically resolve. Without `-x`, SC1091 fires unpredictably —
+    # pre-commit partitions matched files across parallel shellcheck
+    # invocations, so whether a given batch happens to also contain
+    # scripts/lib/log.sh (letting the `# shellcheck source=` directive
+    # resolve) is nondeterministic. `-x` permits following any sourced
+    # file's static content for analysis; it does not execute the
+    # script or weaken the lint's own findings.
+    args = [ "-x" ];
   };
   treefmt = {
     enable = true;

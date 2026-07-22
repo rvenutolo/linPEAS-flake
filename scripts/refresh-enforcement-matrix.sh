@@ -40,8 +40,9 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
-trap 'printf "[%s] %-5s line %s (exit %s): %s\n" \
-  "$(date "+%Y-%m-%dT%H:%M:%S%z")" ERROR "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
+# shellcheck source=scripts/lib/log.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
+install_err_trap
 
 # Temp files removed by the EXIT trap. Declared at script scope, not main-local:
 # the EXIT trap fires after main() returns and its locals leave scope, so a
@@ -75,20 +76,9 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
 
-function log() {
-  printf '[%s] %-5s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$1" "$2" >&2
-}
-function log_info() { log INFO "$*"; }
+# @description Level not covered by scripts/lib/log.sh; this script
+# alone emits non-fatal per-invariant gap warnings.
 function log_warn() { log WARN "$*"; }
-function log_err() { log ERROR "$*"; }
-
-function require_tool() {
-  local -r tool="$1"
-  if ! command -v "${tool}" >/dev/null 2>&1; then
-    log_err "missing required tool: ${tool}"
-    exit 1
-  fi
-}
 
 # Format-only / aggregate hooks that intentionally don't map to a
 # specific invariant.

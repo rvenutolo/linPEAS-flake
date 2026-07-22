@@ -18,24 +18,9 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
-trap 'printf "[%s] %-5s line %s (exit %s): %s\n" \
-  "$(date "+%Y-%m-%dT%H:%M:%S%z")" ERROR "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
-
-function log() {
-  printf '[%s] %-5s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$1" "$2" >&2
-}
-function log_info() { log INFO "$*"; }
-function log_err() { log ERROR "$*"; }
-
-# @description Verify a required CLI tool is on PATH; exit 1 if missing.
-# @arg $1 tool name
-function require_tool() {
-  local -r tool="$1"
-  if ! command -v "${tool}" >/dev/null 2>&1; then
-    log_err "missing required tool: ${tool}"
-    exit 1
-  fi
-}
+# shellcheck source=scripts/lib/log.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
+install_err_trap
 
 # Temp files removed by the EXIT trap. Declared at script scope, not main-local:
 # the EXIT trap fires after main() returns and its locals leave scope, so a
