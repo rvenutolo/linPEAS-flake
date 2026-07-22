@@ -43,7 +43,10 @@ tests/fixtures/check-renovate-config-validator/bad-syntax.json
 tests/fixtures/harden-runner-first/bad-malformed.yml
 tests/fixtures/job-timeout-minutes/bad-malformed.yml
 tests/fixtures/required-checks/*
+tests/fixtures/run-block-strict/bad-malformed.yml
 tests/fixtures/scorecard-threshold/malformed.json
+tests/fixtures/setup-nix-required/bad-malformed.yml
+tests/fixtures/upload-artifact-strict/bad-malformed.yml
 ```
 
 <!-- END treefmt-config -->
