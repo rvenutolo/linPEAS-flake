@@ -29,5 +29,6 @@ expect good.yml 0 ""
 expect bad-direct-install.yml 1 "direct cachix/install-nix-action"
 expect bad-missing-token.yml 1 "missing github-token"
 expect bad-wrong-token.yml 1 "wrong github-token"
+expect bad-malformed.yml 1 "could not evaluate"
 
 printf 'all tests passed\n'

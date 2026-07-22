@@ -1,0 +1,5 @@
+name: bad-malformed
+on:
+  push:
+    branches: [main]
+jobs: [this is not: valid yaml
