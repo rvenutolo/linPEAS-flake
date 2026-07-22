@@ -1,0 +1,4 @@
+jobs:
+  x:
+    steps:
+      - uses: some/action@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa # v2 # patch-tag-exception:

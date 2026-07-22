@@ -27,5 +27,8 @@ expect good-gated.yml 0 ""
 expect good-no-automerge.yml 0 ""
 expect bad-no-gate.yml 1 "decline gate"
 expect bad-partial.yml 1 "decline gate"
+expect drop-only-exit1.yml 1 "decline gate"
+expect drop-only-closedmerged.yml 1 "decline gate"
+expect drop-only-jsonstate.yml 1 "decline gate"
 
 printf 'all tests passed\n'

@@ -27,5 +27,6 @@ expect good-prose.md 0 ""
 expect bad-no-identity.sh 1 "certificate-identity"
 expect bad-no-issuer.sh 1 "certificate-oidc-issuer"
 expect bad-bare.sh 1 "certificate-identity"
+expect bad-fence.md 1 "certificate-identity"
 
 printf 'all tests passed\n'

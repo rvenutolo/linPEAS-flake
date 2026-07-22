@@ -27,5 +27,7 @@ expect good-pinned-rev.sh 0 ""
 expect good-local-flake.sh 0 ""
 expect good-prose.md 0 ""
 expect bad-unpinned.sh 1 "unpinned"
+expect bad-fence.md 1 "unpinned"
+expect bad-fence-unlabeled.md 1 "unpinned"
 
 printf 'all tests passed\n'
