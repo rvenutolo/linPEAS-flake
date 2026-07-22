@@ -34,5 +34,7 @@ expect bad-denylisted-host.yml 1 "cafe.github.com"
 expect bad-flakehub-action.yml 1 "flakehub-cache-action"
 expect bad-sbom-missing-raw-githubusercontent.yml 1 "raw.githubusercontent.com"
 expect bad-gh-release-upload-missing-uploads.yml 1 "uploads.github.com"
+expect bad-verify-missing-tuf.yml 1 "verification requires at least tuf-repo-cdn.sigstore.dev"
+expect bad-sbom-missing-get-anchore.yml 1 "get.anchore.io"
 
 printf 'all tests passed\n'
