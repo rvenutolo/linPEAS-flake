@@ -74,6 +74,49 @@ YAML
   rm --recursive --force -- "${work}" "${out_file}" "${step_file}"
 }
 
+# @description Prove a failing check *.test.sh skips its check script and
+#              marks the row FAIL (the runner gates each check on its test).
+function run_test_gate_scenario() {
+  local work scripts_dir tests_dir manifest out_file step_file sentinel
+  work="$(mktemp -d)"
+  scripts_dir="${work}/scripts"
+  tests_dir="${work}/tests"
+  manifest="${work}/lint-groups.yml"
+  sentinel="${work}/ran"
+  mkdir -p "${scripts_dir}" "${tests_dir}"
+  # The check would pass AND leave a sentinel if it ran...
+  printf '#!/usr/bin/env bash\ntouch %q\nexit 0\n' "${sentinel}" >"${scripts_dir}/check-ttt.sh"
+  # ...but its test fails, so the runner must skip the check script.
+  printf '#!/usr/bin/env bash\nexit 1\n' >"${tests_dir}/check-ttt.test.sh"
+  chmod +x "${scripts_dir}"/check-*.sh "${tests_dir}"/check-*.test.sh
+  printf 'demo-testfail:\n  - ttt\n' >"${manifest}"
+
+  out_file="$(mktemp)"
+  step_file="$(mktemp)"
+  local actual_exit=0
+  LINT_GROUPS_OVERRIDE="${manifest}" \
+    SCRIPTS_DIR_OVERRIDE="${scripts_dir}" \
+    TESTS_DIR_OVERRIDE="${tests_dir}" \
+    GITHUB_STEP_SUMMARY="${step_file}" \
+    "${SCRIPT}" demo-testfail >"${out_file}" 2>&1 || actual_exit=$?
+
+  if [[ ${actual_exit} -ne 1 ]]; then
+    printf 'FAIL: failing test -> expected exit 1, got %d\n' "${actual_exit}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet -- '| ttt | FAIL |' "${out_file}"; then
+    printf 'FAIL: failing test -> ttt not marked FAIL\n' >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  elif [[ -e ${sentinel} ]]; then
+    printf 'FAIL: failing test did not skip the check script (sentinel present)\n' >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: failing check test skips the check script and marks it FAIL\n'
+  fi
+  rm --recursive --force -- "${work}" "${out_file}" "${step_file}"
+}
+
 function main() {
   run_scenario 'all checks pass -> exit 0' 'demo-all-pass' 0 '| aaa |'
   run_scenario 'one check fails -> exit 1' 'demo-one-fail' 1 'FAIL'
@@ -81,6 +124,7 @@ function main() {
   run_scenario 'failing check does not abort the rest' 'demo-one-fail' 1 '| ccc |'
   run_scenario 'missing script -> exit 1' 'demo-missing' 1 'FAIL'
   run_scenario 'unknown group -> exit 2' 'no-such-group' 2 ''
+  run_test_gate_scenario
 
   if [[ ${failures} -gt 0 ]]; then
     printf '\n%d scenario(s) failed\n' "${failures}" >&2

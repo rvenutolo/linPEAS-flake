@@ -105,6 +105,39 @@ run_scenario 'malformed job id dropped from body' 0 '' 'Bad Job'
 WF_DIR="${SANDBOX}/nope"
 run_scenario 'missing workflows dir fails loudly' 2 '' ''
 
+# @description Fresh sandbox whose backdated baseline already contains the
+#              job + member that a within-window commit then removes, so the
+#              removal render paths fire (removals are computed against the
+#              backdated boundary, not the previous commit).
+function make_removal_sandbox() {
+  SANDBOX="$(mktemp -d)"
+  WF_DIR="${SANDBOX}/.github/workflows"
+  LG_FILE="${SANDBOX}/.github/lint-groups.yml"
+  mkdir -p "${WF_DIR}"
+  git -C "${SANDBOX}" init --quiet
+  git -C "${SANDBOX}" config user.email t@t.t
+  git -C "${SANDBOX}" config user.name t
+  printf 'lint-a:\n  - alpha\n  - beta\n' >"${LG_FILE}"
+  printf 'name: a\njobs:\n  build:\n    runs-on: x\n  publish:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
+  git -C "${SANDBOX}" add -A
+  local -r backdate_ts="$(date -d '90 days ago' '+%s') +0000"
+  GIT_AUTHOR_DATE="${backdate_ts}" GIT_COMMITTER_DATE="${backdate_ts}" \
+    git -C "${SANDBOX}" commit --quiet -m baseline
+  # Within-window commit removes publish job and beta member.
+  printf 'lint-a:\n  - alpha\n' >"${LG_FILE}"
+  printf 'name: a\njobs:\n  build:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
+  git -C "${SANDBOX}" add -A
+  git -C "${SANDBOX}" commit --quiet -m 'ci: remove publish job and beta member'
+}
+
+# --- scenario: job + member removed inside window ---
+make_removal_sandbox
+cd "${SANDBOX}"
+run_scenario 'removed job is reported' 0 'Jobs removed:' ''
+run_scenario 'removed job id rendered' 0 'publish' ''
+run_scenario 'removed member is reported' 0 'Lint-group members removed:' ''
+run_scenario 'removed member id rendered' 0 'beta' ''
+
 cd "${REPO_ROOT}"
 
 if ((failures)); then
