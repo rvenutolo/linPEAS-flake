@@ -48,6 +48,16 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
 
   # 1) Any direct cachix/install-nix-action use is forbidden.
   # shellcheck disable=SC2016  # single quotes intentional: yq expression, no bash expansion wanted
+  if ! uses_rows="$(yq -r '
+    .jobs // {} | to_entries[] |
+    .key as $job |
+    (.value.steps // []) [] |
+    [$job, (.uses // "null")] | @tsv
+  ' "${f}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
   while IFS=$'\t' read -r job step_uses; do
     [[ -z ${step_uses} || ${step_uses} == "null" ]] && continue
     if [[ ${step_uses} == cachix/install-nix-action* ]]; then
@@ -55,15 +65,21 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
         "${f}" "${job}" >&2
       failed=$((failed + 1))
     fi
-  done < <(yq -r '
-    .jobs // {} | to_entries[] |
-    .key as $job |
-    (.value.steps // []) [] |
-    [$job, (.uses // "null")] | @tsv
-  ' "${f}")
+  done <<<"${uses_rows}"
 
   # 2) Every ./.github/actions/setup-nix caller must pass the exact token.
   # shellcheck disable=SC2016  # single quotes intentional: yq expression, no bash expansion wanted
+  if ! token_rows="$(yq -r '
+    .jobs // {} | to_entries[] |
+    .key as $job |
+    (.value.steps // []) [] |
+    select(.uses == "./.github/actions/setup-nix") |
+    [$job, (.with["github-token"] // "null")] | @tsv
+  ' "${f}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
   while IFS=$'\t' read -r job token; do
     [[ -z ${job} ]] && continue
     if [[ ${token} == "null" || -z ${token} ]]; then
@@ -78,13 +94,7 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
         "${f}" "${job}" "${norm}" "${EXPECTED_TOKEN}" >&2
       failed=$((failed + 1))
     fi
-  done < <(yq -r '
-    .jobs // {} | to_entries[] |
-    .key as $job |
-    (.value.steps // []) [] |
-    select(.uses == "./.github/actions/setup-nix") |
-    [$job, (.with["github-token"] // "null")] | @tsv
-  ' "${f}")
+  done <<<"${token_rows}"
 done
 
 if ((failed > 0)); then

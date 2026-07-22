@@ -111,5 +111,8 @@
     # prettier refuses to format invalid YAML.
     "tests/fixtures/harden-runner-first/bad-malformed.yml"
     "tests/fixtures/job-timeout-minutes/bad-malformed.yml"
+    "tests/fixtures/run-block-strict/bad-malformed.yml"
+    "tests/fixtures/setup-nix-required/bad-malformed.yml"
+    "tests/fixtures/upload-artifact-strict/bad-malformed.yml"
   ];
 }
