@@ -27,5 +27,6 @@ expect good.yml 0 ""
 expect good-with-comment.yml 0 ""
 expect bad-missing.yml 1 "must start with"
 expect bad-weak.yml 1 "must start with"
+expect bad-malformed.yml 1 "could not evaluate"
 
 printf 'all tests passed\n'
