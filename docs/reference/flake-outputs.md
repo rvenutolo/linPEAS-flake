@@ -35,6 +35,7 @@ block between the markers by hand.
 ├───formatter
 │   ├───aarch64-linux: package 'treefmt'
 │   └───x86_64-linux: package 'treefmt'
+├───lib: unknown
 ├───overlays
 │   └───default: Nixpkgs overlay
 └───packages

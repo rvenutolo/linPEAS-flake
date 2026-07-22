@@ -70,6 +70,7 @@ live in `.claude/CLAUDE.md` (untracked).
 
 ## Install / Runbooks
 
+- **Declared systems evaluate** — every system in `flake.lib.systems` force-evaluates in CI, failing with the system named. → [install/nix.md](install/nix.md) <!-- enforcer: scripts/check-flake-systems-eval.sh; ci: flake-check; hook: - -->
 - **OCI image** — `Entrypoint` not `Cmd`; bash+coreutils set. → [install/docker.md](install/docker.md) <!-- enforcer: -; ci: -; hook: - -->
 - **Manifest digest-pinning** — `buildx imagetools create` uses `@sha256:`. → [install/docker.md](install/docker.md) <!-- enforcer: -; ci: -; hook: - -->
 - **DOCKERHUB_TOKEN split** — `_RW` vs `_DELETE`, never unsuffixed. → [runbooks/dockerhub-recovery.md](runbooks/dockerhub-recovery.md) <!-- enforcer: scripts/check-dockerhub-token-scope-split.sh; ci: lint-doc-invariants; hook: - -->
