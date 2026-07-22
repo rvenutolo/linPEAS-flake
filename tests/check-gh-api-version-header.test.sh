@@ -58,6 +58,8 @@ function main() {
     'bad-continuation' 1 'missing X-GitHub-Api-Version'
   run_scenario 'gh api in comments only passes' \
     'good-comment-only' 0 ''
+  run_scenario 'api.github.com request without header fails' \
+    'bad-apigithub' 1 'missing X-GitHub-Api-Version'
 
   # Self-scan: the live scripts/ dir must lint clean. Guards against
   # any future script regressing on the X-GitHub-Api-Version header.
