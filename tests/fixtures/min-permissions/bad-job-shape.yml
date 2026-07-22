@@ -1,0 +1,9 @@
+name: bad-job-shape
+on: push
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+      - run: echo a

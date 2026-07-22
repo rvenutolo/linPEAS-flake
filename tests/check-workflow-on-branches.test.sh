@@ -29,5 +29,7 @@ expect bad-pr-no-branches.yml 1 "missing"
 expect bad-pr-wildcard.yml 1 "must be exactly"
 expect bad-push-extra.yml 1 "must be exactly"
 expect bad-push-no-branches.yml 1 "missing"
+expect bad-pr-null.yml 1 "present but null"
+expect bad-push-null.yml 1 "present but null"
 
 printf 'all tests passed\n'

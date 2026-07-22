@@ -44,6 +44,17 @@ check_trigger() {
   trig_tag="$(yq eval ".on.\"${trigger}\" | tag" "${file}")"
   case "${trig_tag}" in
   '!!null')
+    # yq reports !!null for both an absent trigger and one that is
+    # present with no value. A present-but-null trigger
+    # (`pull_request:` with nothing under it) fires on every branch —
+    # exactly the implicit all-branches this lint forbids — so treat
+    # only the absent case as unaffected.
+    if [[ "$(yq eval ".on | has(\"${trigger}\")" "${file}")" == "true" ]]; then
+      # shellcheck disable=SC2016 # literal backticks in human-readable prose
+      printf '%s: on.%s is present but null (implicit all-branches forbidden; need `branches: [main]`)\n' \
+        "${file}" "${trigger}" >&2
+      return 1
+    fi
     return 0
     ;;
   '!!map') ;;

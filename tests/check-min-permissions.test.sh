@@ -28,5 +28,7 @@ expect bad-no-top.yml 1 "missing top-level"
 expect bad-top-nonempty.yml 1 "non-empty"
 expect bad-top-write-all.yml 1 "scalar"
 expect bad-job-missing.yml 1 "missing"
+expect bad-top-list.yml 1 "unexpected shape"
+expect bad-job-shape.yml 1 "unexpected shape"
 
 printf 'all tests passed\n'

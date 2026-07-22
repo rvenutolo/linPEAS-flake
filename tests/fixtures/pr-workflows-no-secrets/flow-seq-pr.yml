@@ -1,0 +1,11 @@
+# tests/fixtures/pr-workflows-no-secrets/flow-seq-pr.yml
+name: flow-seq-pr
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: noop
+        env:
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: "true"
