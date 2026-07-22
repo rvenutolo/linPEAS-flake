@@ -1,0 +1,7 @@
+name: smoke
+on: workflow_dispatch
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9999999999999999999999999999999999999999 # v5

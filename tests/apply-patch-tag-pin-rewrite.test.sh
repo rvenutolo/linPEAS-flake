@@ -96,4 +96,47 @@ if ! grep --quiet 'analyze@03e4368ac7daa2bd82b3e85262f3bf87ee112f57 # v3$' "${WO
   exit 1
 fi
 
+# --- Test 5: unknown status aborts, with no file mutation ---
+cp "${BEFORE}" "${WORK}/unknown.yml"
+UNKNOWN_SNAPSHOT="${WORK}/unknown.snapshot"
+cp "${WORK}/unknown.yml" "${UNKNOWN_SNAPSHOT}"
+INV_UNKNOWN="${WORK}/unknown-inventory.tsv"
+{
+  printf 'file\tline\tref\tpinned_sha\tcurrent_comment\ttarget_comment\tstatus\n'
+  printf '%s\t4\tgithub/codeql-action/init\t03e4368ac7daa2bd82b3e85262f3bf87ee112f57\tv3\tv3.36.0\tWEIRD\n' \
+    "${WORK}/unknown.yml"
+} >"${INV_UNKNOWN}"
+unknown_exit=0
+unknown_err="$(bash "${SCRIPT}" --inventory "${INV_UNKNOWN}" 2>&1)" || unknown_exit=$?
+if ((unknown_exit == 0)); then
+  printf 'FAIL: unknown status should have caused non-zero exit\n' >&2
+  exit 1
+fi
+if [[ ${unknown_err} != *"abort (unknown status"* ]]; then
+  printf 'FAIL: unknown-status abort missing message\n  got: %s\n' "${unknown_err}" >&2
+  exit 1
+fi
+if ! diff -u "${UNKNOWN_SNAPSHOT}" "${WORK}/unknown.yml"; then
+  printf 'FAIL: unknown.yml was mutated despite unknown-status abort\n' >&2
+  exit 1
+fi
+
+# --- Test 6: missing target file aborts (status OK, path nonexistent) ---
+INV_MISSING="${WORK}/missing-inventory.tsv"
+{
+  printf 'file\tline\tref\tpinned_sha\tcurrent_comment\ttarget_comment\tstatus\n'
+  printf '%s/does-not-exist.yml\t4\tgithub/codeql-action/init\t03e4368ac7daa2bd82b3e85262f3bf87ee112f57\tv3\tv3.36.0\tOK\n' \
+    "${WORK}"
+} >"${INV_MISSING}"
+missing_exit=0
+missing_err="$(bash "${SCRIPT}" --inventory "${INV_MISSING}" 2>&1)" || missing_exit=$?
+if ((missing_exit == 0)); then
+  printf 'FAIL: missing target file should have caused non-zero exit\n' >&2
+  exit 1
+fi
+if [[ ${missing_err} != *"abort (file missing)"* ]]; then
+  printf 'FAIL: file-missing abort missing message\n  got: %s\n' "${missing_err}" >&2
+  exit 1
+fi
+
 printf 'all tests passed\n'
