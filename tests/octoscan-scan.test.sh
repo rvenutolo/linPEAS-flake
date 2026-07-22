@@ -77,6 +77,19 @@ function run_scenario() {
   rm --force -- "${stdout_file}" "${stderr_file}"
 }
 
+# @description Make a temp dir whose `docker` stub exits with a fixed code,
+#              standing in for octoscan's scan return so the has-finding /
+#              exit-code contract can be exercised without a daemon.
+# @arg $1 exit code the stub docker returns
+function make_docker_stub() {
+  local -r code="$1"
+  local d
+  d="$(mktemp -d)"
+  printf '#!/usr/bin/env bash\nexit %s\n' "${code}" >"${d}/docker"
+  chmod +x "${d}/docker"
+  printf '%s' "${d}"
+}
+
 function main() {
   run_scenario 'unknown argument exits 1' \
     1 'unknown argument' '' '' \
@@ -96,6 +109,22 @@ function main() {
   done <<<"${PATH}:"
   run_scenario 'missing docker exits 1 with SKIP hint and has-finding=false' \
     1 'SKIP=octoscan' 'has-finding=false' "PATH=${no_docker_path}"
+
+  # has-finding / exit-code contract, docker return stubbed:
+  #   scan rc 0 -> has-finding=false, exit 0
+  #   scan rc 2 -> has-finding=true,  exit 1
+  #   scan rc other -> has-finding=false, exit 1 (tool error)
+  local stub0 stub2 stub3
+  stub0="$(make_docker_stub 0)"
+  stub2="$(make_docker_stub 2)"
+  stub3="$(make_docker_stub 3)"
+  run_scenario 'octoscan clean -> has-finding=false exit 0' \
+    0 '' 'has-finding=false' "PATH=${stub0}:${PATH}"
+  run_scenario 'octoscan finding -> has-finding=true exit 1' \
+    1 '' 'has-finding=true' "PATH=${stub2}:${PATH}"
+  run_scenario 'octoscan tool error -> has-finding=false exit 1' \
+    1 '' 'has-finding=false' "PATH=${stub3}:${PATH}"
+  rm --recursive --force -- "${stub0}" "${stub2}" "${stub3}"
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2

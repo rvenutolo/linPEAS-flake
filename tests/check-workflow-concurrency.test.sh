@@ -29,5 +29,7 @@ expect bad-missing.yml 1 "missing top-level"
 expect bad-no-group.yml 1 "missing"
 expect bad-empty-group.yml 1 "empty"
 expect bad-scalar.yml 1 "unexpected shape"
+expect bad-seq-group.yml 1 "group has unexpected shape"
+expect bad-map-group.yml 1 "group has unexpected shape"
 
 printf 'all tests passed\n'

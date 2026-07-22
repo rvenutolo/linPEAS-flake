@@ -1,0 +1,16 @@
+name: bad-seq-group
+on: push
+permissions: {}
+concurrency:
+  group:
+    - a
+    - b
+  cancel-in-progress: true
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - run: echo a
