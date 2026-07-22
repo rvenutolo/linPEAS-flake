@@ -28,6 +28,7 @@ install_err_trap
 # leak on an abnormal exit.
 repo_root=''
 cfg_file=''
+raw_err=''
 block_file=''
 doc_new=''
 doc_fmt=''
@@ -35,7 +36,7 @@ doc_fmt=''
 # @description Remove every temp file on exit, including any in-repo
 # .refresh-treefmt-config-*.md siblings left by an interrupted earlier run.
 function cleanup() {
-  rm --force -- "${cfg_file}" "${block_file}" "${doc_new}" "${doc_fmt}"
+  rm --force -- "${cfg_file}" "${raw_err}" "${block_file}" "${doc_new}" "${doc_fmt}"
   if [[ -n ${repo_root} ]]; then
     local stray
     shopt -s nullglob
@@ -93,6 +94,7 @@ function main() {
   fi
 
   cfg_file="$(mktemp)"
+  raw_err="$(mktemp)"
   block_file="$(mktemp)"
   doc_new="$(mktemp)"
   # treefmt walks up to find flake.nix as projectRootFile, so the formatted
@@ -104,9 +106,15 @@ function main() {
   local sys
   sys="$(nix eval --impure --raw --expr 'builtins.currentSystem')"
 
-  # Discard stderr so harmless `trace:` messages from treefmt-nix's evaluation
-  # do not corrupt the JSON payload on stdout.
-  nix eval --json ".#devTooling.${sys}.treefmtConfig" 2>/dev/null >"${cfg_file}"
+  # Capture stderr (instead of discarding it) so harmless `trace:` messages
+  # from treefmt-nix's evaluation do not corrupt the JSON payload on stdout,
+  # while an eval failure still surfaces a readable diagnostic instead of a
+  # blank one.
+  if ! nix eval --json ".#devTooling.${sys}.treefmtConfig" >"${cfg_file}" 2>"${raw_err}"; then
+    log_err 'nix eval failed:'
+    cat -- "${raw_err}" >&2
+    exit 1
+  fi
 
   # Render the block: header row, separator, one row per formatter sorted by
   # name. Each glob is wrapped in backticks so mdformat-gfm renders patterns

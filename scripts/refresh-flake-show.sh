@@ -65,13 +65,19 @@ function main() {
 
   # --no-warn-dirty: suppress "Git tree is dirty" warning that would otherwise
   # leak into the README block and cause flaky --check diffs.
-  # stderr discarded for the same reason.
+  # stderr is captured (not discarded) so an eval failure still surfaces a
+  # readable diagnostic instead of a blank one.
   # nix flake show emits ANSI color escapes regardless of NO_COLOR / TTY
   # detection; sed strips them so the rendered README stays plain text.
-  local raw_show
+  local raw_show raw_err
   raw_show="$(mktemp)"
-  trap 'rm --force -- "${flake_show_file:-}" "${block_file:-}" "${doc_new:-}" "${raw_show:-}"' EXIT
-  nix flake show --all-systems --no-warn-dirty >"${raw_show}" 2>/dev/null
+  raw_err="$(mktemp)"
+  trap 'rm --force -- "${flake_show_file:-}" "${block_file:-}" "${doc_new:-}" "${raw_show:-}" "${raw_err:-}"' EXIT
+  if ! nix flake show --all-systems --no-warn-dirty >"${raw_show}" 2>"${raw_err}"; then
+    log_err 'nix flake show failed:'
+    cat -- "${raw_err}" >&2
+    exit 1
+  fi
   # Strip ANSI color escapes AND the leading flake-URL header line. The URL
   # contains a per-commit rev (in CI) and a per-checkout absolute path (locally),
   # neither of which are stable; without removing it, the readme-staleness

@@ -80,6 +80,13 @@ function main() {
   cp -- "${BACKUP}" "${DOC}"
   rm --force -- "${stderr_file}"
 
+  # Assertion 4: the generator no longer discards nix stderr.
+  if grep -Eq 'nix flake show .*2>[[:space:]]*/dev/null' "${SCRIPT}"; then
+    fail 'nix flake show still discards stderr to /dev/null'
+  else
+    pass 'nix flake show stderr is surfaced on failure'
+  fi
+
   if [[ ${failures} -gt 0 ]]; then
     printf '%d failure(s)\n' "${failures}" >&2
     exit 1
