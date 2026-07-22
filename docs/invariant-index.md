@@ -56,7 +56,6 @@ live in `.claude/CLAUDE.md` (untracked).
 
 ## Architecture / CI
 
-- **hammer-shim derivation parity** — `nix/hammer-shim.nix` linpeas derivation must match the canonical `nix/pin.nix` linpeas derivation; the shim is a sandbox-required duplicate. → [architecture/auto-update.md](architecture/auto-update.md) <!-- enforcer: scripts/check-hammer-shim-parity.sh; ci: -; hook: hammer-shim-parity -->
 - **Pin-diff isolation** — only `bump-linpeas.sh` mutates `linpeas-pin.json`. → [architecture/auto-update.md](architecture/auto-update.md) <!-- enforcer: scripts/check-pin-diff-isolated.sh; ci: lint-doc-invariants; hook: pin-diff-isolated -->
 - **flake.nix pin invariants** — `pin.version` regex, `pin.url` prefix. → [architecture/auto-update.md](architecture/auto-update.md) <!-- enforcer: -; ci: -; hook: - -->
 - **Release VERSION shape** — `^[0-9]{8}-[0-9a-f]{7,40}$`. → [architecture/auto-update.md](architecture/auto-update.md) <!-- enforcer: -; ci: -; hook: - -->
