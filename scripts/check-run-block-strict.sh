@@ -61,6 +61,11 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
 
   # Enumerate (job, step-index) pairs that have a multi-line run:.
   # shellcheck disable=SC2016 # yq expression: literal $ refs, not shell expansion
+  if ! rows="$(yq eval '.jobs | to_entries[] as $j | $j.value.steps | to_entries[] | select(.value.run != null and (.value.run | contains("\n"))) | $j.key + "|" + (.key | tostring)' "${f}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
   while IFS='|' read -r job idx; do
     [[ -z ${job} ]] && continue
     body="$(yq eval ".jobs.\"${job}\".steps[${idx}].run" "${f}")"
@@ -71,7 +76,7 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
     printf '%s: job %q step[%s] multi-line run: must start with %q (got %q)\n' \
       "${f}" "${job}" "${idx}" "${WANT}" "${first}" >&2
     failed=$((failed + 1))
-  done < <(yq eval '.jobs | to_entries[] as $j | $j.value.steps | to_entries[] | select(.value.run != null and (.value.run | contains("\n"))) | $j.key + "|" + (.key | tostring)' "${f}")
+  done <<<"${rows}"
 done
 shopt -u nullglob
 
