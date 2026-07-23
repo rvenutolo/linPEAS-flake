@@ -78,11 +78,11 @@ function main() {
     log_err "${doc} not found"
     exit 1
   fi
-  if ! grep --quiet '<!-- BEGIN ci-dag -->' "${doc}"; then
+  if ! grep --quiet '^<!-- BEGIN ci-dag -->$' "${doc}"; then
     log_err "BEGIN marker missing from ${doc}"
     exit 1
   fi
-  if ! grep --quiet '<!-- END ci-dag -->' "${doc}"; then
+  if ! grep --quiet '^<!-- END ci-dag -->$' "${doc}"; then
     log_err "END marker missing from ${doc}"
     exit 1
   fi

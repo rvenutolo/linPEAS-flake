@@ -63,11 +63,11 @@ function main() {
     log_err "${required_checks_doc} not found"
     exit 1
   fi
-  if ! grep --quiet '<!-- BEGIN ci-summary -->' "${doc}"; then
+  if ! grep --quiet '^<!-- BEGIN ci-summary -->$' "${doc}"; then
     log_err 'BEGIN marker missing from README.md'
     exit 1
   fi
-  if ! grep --quiet '<!-- END ci-summary -->' "${doc}"; then
+  if ! grep --quiet '^<!-- END ci-summary -->$' "${doc}"; then
     log_err 'END marker missing from README.md'
     exit 1
   fi
