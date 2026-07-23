@@ -609,7 +609,11 @@ function parse_and_render() {
     fmt_root="$(git rev-parse --show-toplevel)"
     fmt_target="$(mktemp "${fmt_root}/.refresh-enforcement-matrix-XXXXXX.md")"
     cp -- "${tmp_out}" "${fmt_target}"
-    treefmt --no-cache --quiet -- "${fmt_target}" >/dev/null 2>&1 || true
+    # No `|| true`: a treefmt/mdformat failure must abort under set -e before
+    # the unformatted render is moved back into place, matching the sibling
+    # generators. Swallowing it wrote an unformatted matrix to the tracked
+    # file while the script exited 0 "refreshed".
+    treefmt --no-cache --quiet -- "${fmt_target}" >/dev/null
     mv -- "${fmt_target}" "${tmp_out}"
   fi
 
