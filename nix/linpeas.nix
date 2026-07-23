@@ -21,6 +21,12 @@ let
     in
     assert (builtins.match "[0-9]{8}-[0-9a-f]{7,40}" raw.version) != null;
     assert (builtins.match "https://github.com/peass-ng/PEASS-ng/releases/download/.*" raw.url) != null;
+    # peass-ng release URLs embed the tag as a path segment
+    # (.../download/<tag>/linpeas.sh). Require version to be that segment so a
+    # hand-edited pin cannot declare one version while fetching another
+    # release's artifact — the derivation name, docker tag, and OCI version
+    # label would otherwise advertise content that does not match.
+    assert (builtins.match ".*/${raw.version}/.*" raw.url) != null;
     raw;
 
   linpeas = pkgs.stdenvNoCC.mkDerivation {
