@@ -1042,10 +1042,20 @@ jobs:
           docker logout docker.io || true
 
   changelog:
-    needs: [release, manifest]
-    if: needs.release.outputs.tag-exists == 'false' && github.repository == 'rvenutolo/linPEAS-flake'
+    # Decoupled from manifest and gated on release success (not the tag-exists
+    # first-publish edge alone) so a re-run recovers a changelog that never
+    # landed: the release job creates the tag early, so a plain
+    # tag-exists == 'false' gate skips the job on every recovery path. Runs on
+    # first publish or force-republish; the regen step is idempotent, so a
+    # re-run where the changelog is already current is a clean no-op.
+    needs: [release]
+    if: >-
+      !cancelled()
+      && needs.release.result == 'success'
+      && (needs.release.outputs.tag-exists == 'false' || inputs.force-republish)
+      && github.repository == 'rvenutolo/linPEAS-flake'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -1101,18 +1111,26 @@ jobs:
           fi
 
       - name: regenerate CHANGELOG.md
+        id: regen
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
           nix shell .#git-cliff --command git-cliff \
             --config cliff.toml \
             --output CHANGELOG.md
+          # Idempotent: no diff means the committed changelog already covers
+          # this release (a recovery re-run, or the changelog already landed),
+          # so there is nothing to open a PR for. Previously this aborted,
+          # which made a recovery re-run fail instead of no-op'ing.
           if git diff --quiet CHANGELOG.md; then
-            printf 'git-cliff produced no diff - aborting\n' >&2
-            exit 1
+            printf 'CHANGELOG.md already current; no changelog PR needed\n'
+            printf 'changed=false\n' >>"${GITHUB_OUTPUT}"
+          else
+            printf 'changed=true\n' >>"${GITHUB_OUTPUT}"
           fi
 
       - name: render latest section for release body
+        if: steps.regen.outputs.changed == 'true'
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
@@ -1122,6 +1140,7 @@ jobs:
             --strip header > .release-notes.md
 
       - name: commit CHANGELOG.md via PR + auto-merge
+        if: steps.regen.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPO: ${{ github.repository }}
@@ -1216,9 +1235,35 @@ jobs:
               --body "${pr_body}"
           fi
 
-          gh pr merge "${branch}" --auto --merge --delete-branch
+          # Arm auto-merge, then block until it lands rather than firing and
+          # forgetting: `gh pr merge --auto` returns 0 as soon as auto-merge
+          # is armed, so without this poll the job reported success while the
+          # changelog PR sat open (and, once tag-exists flipped true, could
+          # never re-run to rebase it). Fail on a closed PR or a stall so the
+          # notify job surfaces it; a re-run (force-republish) then recovers.
+          # `gh pr view` by number still resolves after --delete-branch.
+          pr_number="$(gh pr view "${branch}" --json number --jq .number)"
+          gh pr merge "${pr_number}" --auto --merge --delete-branch
+          deadline=$(($(date +%s) + 720))
+          while :; do
+            state="$(gh pr view "${pr_number}" --json state --jq .state)"
+            if [[ "${state}" == MERGED ]]; then
+              printf 'changelog PR #%s merged\n' "${pr_number}"
+              break
+            fi
+            if [[ "${state}" == CLOSED ]]; then
+              printf 'changelog PR #%s was closed without merging\n' "${pr_number}" >&2
+              exit 1
+            fi
+            if (($(date +%s) > deadline)); then
+              printf 'changelog PR #%s did not merge within 12m; auto-merge armed but required checks may be stuck or conflicting\n' "${pr_number}" >&2
+              exit 1
+            fi
+            sleep 20
+          done
 
       - name: patch release body with changelog section
+        if: steps.regen.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ needs.release.outputs.version }}
