@@ -156,7 +156,9 @@ comment (e.g., `transient: docker.io 502 on push, retry green`).
 
 Binding:
 
-1. `secrets.DOCKERHUB_TOKEN_RW` must never be consumed in `dockerhub-sync.yml`.
+1. `secrets.DOCKERHUB_TOKEN_RW` must never be consumed in `dockerhub-sync.yml`
+    or the anonymous/read-only `verify-latest-release.yml` (the write-scoped
+    token is release-only).
 1. `secrets.DOCKERHUB_TOKEN_DELETE` must never be consumed in
     `release-on-bump.yml` or `verify-latest-release.yml`.
 1. Manual recovery snippets calling `curl -X DELETE` must use

@@ -138,7 +138,8 @@ The delete-scoped PAT (secrets.DOCKERHUB_TOKEN_DELETE) is consumed only
 by dockerhub-sync.yml (peter-evans/dockerhub-description needs Delete
 scope to PATCH repo metadata; a Read/Write-only PAT returns 403). The
 write-scoped PAT (secrets.DOCKERHUB_TOKEN_RW) is consumed only by
-release-on-bump.yml. The delete-capable token must never leak into
+release-on-bump.yml — never by the anonymous/read-only
+verify-latest-release.yml. The delete-capable token must never leak into
 workflows that only push images, and no unsuffixed secrets.DOCKERHUB_TOKEN
 may exist — only \_RW and \_DELETE are authoritative.
 
