@@ -106,6 +106,30 @@ function main() {
     fail '--check passed despite orphaned category-map key gitleaks'
   fi
 
+  # Assertion 6: markers the anchored awk splice cannot match (trailing
+  # whitespace on both markers) must be rejected by the guard, not silently
+  # emitted unchanged. An unanchored guard grep false-greens here; the
+  # anchored guard fails closed with a marker-missing message.
+  backup="$(mktemp)"
+  ws_err="$(mktemp)"
+  cp -- "${DOC}" "${backup}"
+  sed -e 's/^<!-- BEGIN ci-summary -->$/<!-- BEGIN ci-summary --> /' \
+    -e 's/^<!-- END ci-summary -->$/<!-- END ci-summary --> /' \
+    "${backup}" >"${DOC}"
+  local rc4=0
+  "${SCRIPT}" --check >/dev/null 2>"${ws_err}" || rc4=$?
+  cp -- "${backup}" "${DOC}"
+  rm --force -- "${backup}"
+  backup=''
+  if [[ ${rc4} -eq 1 ]] &&
+    grep --fixed-strings --quiet -- 'marker missing' "${ws_err}"; then
+    pass 'whitespace-perturbed markers rejected (fail-closed, not false-green)'
+  else
+    fail "whitespace marker guard: expected exit 1 + 'marker missing', got exit ${rc4}"
+    cat -- "${ws_err}" >&2
+  fi
+  rm --force -- "${ws_err}"
+
   if [[ ${failures} -gt 0 ]]; then
     printf '%d failure(s)\n' "${failures}" >&2
     exit 1

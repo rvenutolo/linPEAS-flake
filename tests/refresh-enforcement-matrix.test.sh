@@ -114,6 +114,35 @@ function main() {
     fail "leak cleanup left ${remaining} stray .refresh-enforcement-matrix-*.md (planted stray exists: $([[ -e ${LEAK_STRAY} ]] && echo yes || echo no))"
   fi
 
+  # Swallowed-treefmt scenario: a failing treefmt must abort the generator
+  # (nonzero exit) and must NOT write the unformatted matrix into place. With
+  # the `|| true` swallow the run went green while moving the unformatted
+  # render into the output file. Reuses the hermetic good-index fixture path.
+  local ts_out ts_bin ts_rc=0
+  ts_out="$(mktemp)"
+  ts_bin="$(mktemp --directory)"
+  cat >"${ts_bin}/treefmt" <<'EOF'
+#!/usr/bin/env bash
+echo 'treefmt stub: simulated failure' >&2
+exit 1
+EOF
+  chmod +x "${ts_bin}/treefmt"
+  PATH="${ts_bin}:${PATH}" \
+    SKIP_REVERSE_CHECK=1 \
+    PRECOMMIT_HOOK_NAMES_OVERRIDE=$'uses-sha-pinned\nrenovate-invariants\nharden-runner-first' \
+    INVARIANT_INDEX_OVERRIDE="${FIXTURES}/good-index.md" \
+    MATRIX_OUTPUT_OVERRIDE="${ts_out}" \
+    "${SCRIPT}" >/dev/null 2>&1 || ts_rc=$?
+  rm --recursive --force -- "${ts_bin}"
+  local ts_empty='no'
+  [[ ! -s ${ts_out} ]] && ts_empty='yes'
+  rm --force -- "${ts_out}"
+  if [[ ${ts_rc} -ne 0 && ${ts_empty} == 'yes' ]]; then
+    pass 'failing treefmt aborts without writing an unformatted matrix'
+  else
+    fail "treefmt-failure: want nonzero exit + no output written, got exit ${ts_rc}, empty=${ts_empty}"
+  fi
+
   if [[ ${failures} -gt 0 ]]; then
     printf '%d failure(s)\n' "${failures}" >&2
     exit 1

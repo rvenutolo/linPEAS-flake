@@ -88,6 +88,28 @@ function main() {
     fail "stray .refresh-precommit-*.md temps remain: ${leftovers}"
   fi
 
+  # Markers the anchored awk splice cannot match (trailing whitespace on both
+  # markers) must be rejected by the guard, not silently emitted unchanged.
+  # An unanchored guard grep false-greens here; the anchored guard fails
+  # closed with a marker-missing message.
+  local ws_backup ws_err ws_rc=0
+  ws_backup="$(mktemp)"
+  ws_err="$(mktemp)"
+  cp -- "${DOC}" "${ws_backup}"
+  sed -e 's/^<!-- BEGIN precommit-table -->$/<!-- BEGIN precommit-table --> /' \
+    -e 's/^<!-- END precommit-table -->$/<!-- END precommit-table --> /' \
+    "${ws_backup}" >"${DOC}"
+  "${SCRIPT}" --check >/dev/null 2>"${ws_err}" || ws_rc=$?
+  cp -- "${ws_backup}" "${DOC}"
+  if [[ ${ws_rc} -eq 1 ]] &&
+    grep --fixed-strings --quiet -- 'marker missing' "${ws_err}"; then
+    pass 'whitespace-perturbed markers rejected (fail-closed, not false-green)'
+  else
+    fail "whitespace marker guard: expected exit 1 + 'marker missing', got exit ${ws_rc}"
+    cat -- "${ws_err}" >&2
+  fi
+  rm --force -- "${ws_backup}" "${ws_err}"
+
   if [[ ${failures} -gt 0 ]]; then
     printf '%d failure(s)\n' "${failures}" >&2
     exit 1

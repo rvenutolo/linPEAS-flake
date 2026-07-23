@@ -74,11 +74,11 @@ function main() {
     log_err "${doc} not found"
     exit 1
   fi
-  if ! grep --quiet '<!-- BEGIN precommit-table -->' "${doc}"; then
+  if ! grep --quiet '^<!-- BEGIN precommit-table -->$' "${doc}"; then
     log_err 'BEGIN marker missing from docs/development/git.md'
     exit 1
   fi
-  if ! grep --quiet '<!-- END precommit-table -->' "${doc}"; then
+  if ! grep --quiet '^<!-- END precommit-table -->$' "${doc}"; then
     log_err 'END marker missing from docs/development/git.md'
     exit 1
   fi

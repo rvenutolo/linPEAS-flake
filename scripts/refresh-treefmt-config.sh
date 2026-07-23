@@ -84,11 +84,11 @@ function main() {
     log_err "${doc} not found"
     exit 1
   fi
-  if ! grep --quiet '<!-- BEGIN treefmt-config -->' "${doc}"; then
+  if ! grep --quiet '^<!-- BEGIN treefmt-config -->$' "${doc}"; then
     log_err 'BEGIN marker missing from docs/reference/treefmt-config.md'
     exit 1
   fi
-  if ! grep --quiet '<!-- END treefmt-config -->' "${doc}"; then
+  if ! grep --quiet '^<!-- END treefmt-config -->$' "${doc}"; then
     log_err 'END marker missing from docs/reference/treefmt-config.md'
     exit 1
   fi

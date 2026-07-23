@@ -87,6 +87,28 @@ function main() {
     pass 'nix flake show stderr is surfaced on failure'
   fi
 
+  # Assertion 5: markers the anchored awk splice cannot match (trailing
+  # whitespace on BOTH markers) must be rejected by the guard, not silently
+  # emitted unchanged. An unanchored guard grep false-greens here — awk
+  # matches neither marker, emits the doc verbatim, and --check cmp reports
+  # it fresh even when the block is stale. The anchored guard fails closed
+  # with a marker-missing message.
+  stderr_file="$(mktemp)"
+  actual_exit=0
+  sed -e 's/^<!-- BEGIN flake-show -->$/<!-- BEGIN flake-show --> /' \
+    -e 's/^<!-- END flake-show -->$/<!-- END flake-show --> /' \
+    "${BACKUP}" >"${DOC}"
+  "${SCRIPT}" --check >/dev/null 2>"${stderr_file}" || actual_exit=$?
+  if [[ ${actual_exit} -eq 1 ]] &&
+    grep --fixed-strings --quiet -- 'marker missing' "${stderr_file}"; then
+    pass 'whitespace-perturbed markers rejected (fail-closed, not false-green)'
+  else
+    fail "whitespace marker guard: expected exit 1 + 'marker missing', got exit ${actual_exit}"
+    cat -- "${stderr_file}" >&2
+  fi
+  cp -- "${BACKUP}" "${DOC}"
+  rm --force -- "${stderr_file}"
+
   if [[ ${failures} -gt 0 ]]; then
     printf '%d failure(s)\n' "${failures}" >&2
     exit 1
