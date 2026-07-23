@@ -8,7 +8,122 @@ repo is not on a semver track.
 
 ## Unreleased
 
+### Breaking Changes
+- Drop darwin outputs, harden flake-eval observability ([#504](https://github.com/rvenutolo/linPEAS-flake/pull/504))
+
 ### CI
+- Add monthly docs-audit reminder ([#481](https://github.com/rvenutolo/linPEAS-flake/pull/481))
+- Retry watchdog API requests on transient GitHub 5xx ([#477](https://github.com/rvenutolo/linPEAS-flake/pull/477))
+
+### Chores
+- Drop local skills gitignore ([#475](https://github.com/rvenutolo/linPEAS-flake/pull/475))
+
+### Documentation
+- Correct security-doc inaccuracies, guard RW-token claim, fix stale comments ([#516](https://github.com/rvenutolo/linPEAS-flake/pull/516))
+- Correct release VERSION shape to canonical pin regex ([#488](https://github.com/rvenutolo/linPEAS-flake/pull/488))
+- Correct SBOM attestation predicate to CycloneDX ([#487](https://github.com/rvenutolo/linPEAS-flake/pull/487))
+- Fix CI/verify/formatter prose drift ([#486](https://github.com/rvenutolo/linPEAS-flake/pull/486))
+- Correct bump-PR author and split bundled invariant entry ([#485](https://github.com/rvenutolo/linPEAS-flake/pull/485))
+- Correct CI, release-pipeline, and runbook claims ([#480](https://github.com/rvenutolo/linPEAS-flake/pull/480))
+- Fix stale CI job and hook references ([#470](https://github.com/rvenutolo/linPEAS-flake/pull/470))
+
+### Features
+- Enforce DOCKERHUB_TOKEN scope split; reword bindings to consumption ([#503](https://github.com/rvenutolo/linPEAS-flake/pull/503))
+- Enforce bump-script integrity guards 1-3 ([#501](https://github.com/rvenutolo/linPEAS-flake/pull/501))
+- Add multi-agent-review skill (/repo-review) ([#498](https://github.com/rvenutolo/linPEAS-flake/pull/498))
+
+### Fixes
+- Assert linpeas pin version is the tag segment in its url ([#521](https://github.com/rvenutolo/linPEAS-flake/pull/521))
+- Stop octoscan masking a per-file scanner error behind a finding ([#520](https://github.com/rvenutolo/linPEAS-flake/pull/520))
+- Parse uses: with yq so flow-style refs cannot bypass SHA-pin lint ([#519](https://github.com/rvenutolo/linPEAS-flake/pull/519))
+- Harden refresh-* generators against stale-block false-greens ([#517](https://github.com/rvenutolo/linPEAS-flake/pull/517))
+- Soft-fall-back gen-dashboard-data on empty bump_pr_json ([#515](https://github.com/rvenutolo/linPEAS-flake/pull/515))
+- Fail verify cron on any cosign image-signature failure ([#490](https://github.com/rvenutolo/linPEAS-flake/pull/490))
+- Close silent-pass bugs in workflow-lint enforcers ([#489](https://github.com/rvenutolo/linPEAS-flake/pull/489))
+- Confine ci-watchdog per-PR errors to the erroring PR ([#479](https://github.com/rvenutolo/linPEAS-flake/pull/479))
+- Drop upstream nix from devshell in favor of host Determinate nix ([#476](https://github.com/rvenutolo/linPEAS-flake/pull/476))
+- Catch sbom-action and gh-release-upload egress gaps ([#474](https://github.com/rvenutolo/linPEAS-flake/pull/474))
+- Allowlist uploads.github.com in release image jobs ([#472](https://github.com/rvenutolo/linPEAS-flake/pull/472))
+- Allowlist raw.githubusercontent.com in release image jobs ([#471](https://github.com/rvenutolo/linPEAS-flake/pull/471))
+
+### Refactor
+- Harden multi-agent-review workflow template ([#499](https://github.com/rvenutolo/linPEAS-flake/pull/499))
+- Single-source the linpeas derivation across pin and shim ([#491](https://github.com/rvenutolo/linPEAS-flake/pull/491))
+
+### Tests
+- Wire the 14 orphan test harnesses into a runner + reachability guard ([#518](https://github.com/rvenutolo/linPEAS-flake/pull/518))
+- Backfill coverage for five scanner/rewriter checks ([#497](https://github.com/rvenutolo/linPEAS-flake/pull/497))
+- Backfill coverage for four generator/harness checks ([#496](https://github.com/rvenutolo/linPEAS-flake/pull/496))
+- Backfill negative fixtures for five doc/script-scan checks ([#495](https://github.com/rvenutolo/linPEAS-flake/pull/495))
+- Backfill negative fixtures for five posture/ratchet checks ([#494](https://github.com/rvenutolo/linPEAS-flake/pull/494))
+- Cover workflow-shape null/flow gaps; fix present-null trigger bug ([#493](https://github.com/rvenutolo/linPEAS-flake/pull/493))
+- Close yq-unparsable silent-pass gap in three workflow-lint checks ([#492](https://github.com/rvenutolo/linPEAS-flake/pull/492))
+
+## [20260715-81d3c7f8] - 2026-07-15
+
+### CI
+- Drop SAST from curated scorecard check list ([#446](https://github.com/rvenutolo/linPEAS-flake/pull/446))
+
+### Chores
+- Bump linpeas to 20260715-81d3c7f8 ([#468](https://github.com/rvenutolo/linPEAS-flake/pull/468))
+- Route docs-audit skill through slash command only ([#467](https://github.com/rvenutolo/linPEAS-flake/pull/467))
+- Remove dead DeterminateSystems/* from Actions allowlist ([#456](https://github.com/rvenutolo/linPEAS-flake/pull/456))
+
+### Features
+- Lint egress allowlists against each job's tool inventory ([#453](https://github.com/rvenutolo/linPEAS-flake/pull/453))
+- Add bounded CI retry watchdog for stuck bot PRs ([#452](https://github.com/rvenutolo/linPEAS-flake/pull/452))
+
+### Fixes
+- Stop flake-outputs.md drift and gate its freshness ([#466](https://github.com/rvenutolo/linPEAS-flake/pull/466))
+- Let backfill-tag skip image jobs on image-less releases ([#465](https://github.com/rvenutolo/linPEAS-flake/pull/465))
+- Guard jq substitutions in ratchet-pin-audit so failures emit a typed reason ([#462](https://github.com/rvenutolo/linPEAS-flake/pull/462))
+- Stop ratchet-pin-audit flagging tag-object pins and floating majors ([#458](https://github.com/rvenutolo/linPEAS-flake/pull/458))
+- Use portable DNS probe in setup-nix and degrade on timeout ([#447](https://github.com/rvenutolo/linPEAS-flake/pull/447))
+- Swap gh api --field/--raw-field on force-rebase PATCH ([#448](https://github.com/rvenutolo/linPEAS-flake/pull/448))
+- Allow sigstore timestamp and manifest signing egress ([#445](https://github.com/rvenutolo/linPEAS-flake/pull/445))
+- Allow nixos.org egress in links workflow ([#444](https://github.com/rvenutolo/linPEAS-flake/pull/444))
+
+### Refactor
+- Remove flakehub-cache action and its egress hosts ([#451](https://github.com/rvenutolo/linPEAS-flake/pull/451))
+
+### Tests
+- Add lightweight-tag force-move case to classify-pin-ref matrix ([#463](https://github.com/rvenutolo/linPEAS-flake/pull/463))
+
+## [20260708-abaa95f3] - 2026-07-14
+
+### Chores
+- Bump linpeas to 20260708-abaa95f3 ([#428](https://github.com/rvenutolo/linPEAS-flake/pull/428))
+- Update flake.lock ([#429](https://github.com/rvenutolo/linPEAS-flake/pull/429))
+- Update flake.lock ([#427](https://github.com/rvenutolo/linPEAS-flake/pull/427))
+
+### Fixes
+- Allow release-assets.githubusercontent.com egress in codeql ([#443](https://github.com/rvenutolo/linPEAS-flake/pull/443))
+
+## [20260701-584b0e93] - 2026-07-01
+
+### Chores
+- Bump linpeas to 20260701-584b0e93 ([#426](https://github.com/rvenutolo/linPEAS-flake/pull/426))
+
+## [20260629-0cf8c387] - 2026-06-30
+
+### Chores
+- Bump linpeas to 20260629-0cf8c387 ([#425](https://github.com/rvenutolo/linPEAS-flake/pull/425))
+
+## [20260629-d458af0e] - 2026-06-29
+
+### Chores
+- Bump linpeas to 20260629-d458af0e ([#424](https://github.com/rvenutolo/linPEAS-flake/pull/424))
+
+## [20260624-872a1386] - 2026-06-25
+
+### CI
+- Enforce harden-runner block mode and document the policy ([#412](https://github.com/rvenutolo/linPEAS-flake/pull/412))
+- Switch harden-runner to block mode for remaining workflows ([#411](https://github.com/rvenutolo/linPEAS-flake/pull/411))
+- Switch harden-runner to block mode for credential-bearing workflows ([#409](https://github.com/rvenutolo/linPEAS-flake/pull/409))
+- Switch harden-runner to block mode for PR-triggered workflows ([#408](https://github.com/rvenutolo/linPEAS-flake/pull/408))
+- Guard git-cliff output against duplicate PR links ([#401](https://github.com/rvenutolo/linPEAS-flake/pull/401))
+- Watch nix/hooks in manifest-reading freshness filters ([#400](https://github.com/rvenutolo/linPEAS-flake/pull/400))
+- Single-source workflow cron schedules + ban restatements ([#398](https://github.com/rvenutolo/linPEAS-flake/pull/398))
 - Parity-check required-checks.md table against the ruleset mirror ([#330](https://github.com/rvenutolo/linPEAS-flake/pull/330))
 - Raise timeouts on flakehub-cache cron jobs for upload headroom ([#327](https://github.com/rvenutolo/linPEAS-flake/pull/327))
 - Promote 11 advisory CI jobs to required status checks ([#321](https://github.com/rvenutolo/linPEAS-flake/pull/321))
@@ -17,17 +132,25 @@ repo is not on a semver track.
 - Remove actionlint-drift-check; drop cron-table-drift-check cron ([#318](https://github.com/rvenutolo/linPEAS-flake/pull/318))
 
 ### Chores
+- Bump linpeas to 20260624-872a1386 ([#420](https://github.com/rvenutolo/linPEAS-flake/pull/420))
 - Drop Administration from SCORECARD_PAT invariant scope ([#375](https://github.com/rvenutolo/linPEAS-flake/pull/375))
 - Update flake.lock ([#344](https://github.com/rvenutolo/linPEAS-flake/pull/344))
 - Remove image size monitoring ([#303](https://github.com/rvenutolo/linPEAS-flake/pull/303))
 
 ### Documentation
+- Add nav-orphaned docs to mkdocs site navigation ([#405](https://github.com/rvenutolo/linPEAS-flake/pull/405))
+- Fix dead refs to nonexistent CI job and devShell ([#404](https://github.com/rvenutolo/linPEAS-flake/pull/404))
+- Fix assorted factual drift in hand-written prose ([#403](https://github.com/rvenutolo/linPEAS-flake/pull/403))
+- Map lint member checks to their group CI jobs ([#402](https://github.com/rvenutolo/linPEAS-flake/pull/402))
 - Fix changelog PR-link duplication, scorecard count, and stale cron/ephemeral references ([#378](https://github.com/rvenutolo/linPEAS-flake/pull/378))
 - Index the lean lint-shell routing invariant ([#353](https://github.com/rvenutolo/linPEAS-flake/pull/353))
 - Document workflow-scanner division of labor ([#341](https://github.com/rvenutolo/linPEAS-flake/pull/341))
 - Align SECURITY.md posture-monitoring section with codeql.yml ([#328](https://github.com/rvenutolo/linPEAS-flake/pull/328))
 
 ### Features
+- Enforce the ephemeral-reference ban with a CI lint ([#397](https://github.com/rvenutolo/linPEAS-flake/pull/397))
+- Deterministic ephemeral-token + internal-link sweeps in docs-correctness-audit ([#392](https://github.com/rvenutolo/linPEAS-flake/pull/392))
+- Add invoke-only docs-correctness-audit skill ([#388](https://github.com/rvenutolo/linPEAS-flake/pull/388))
 - Gate auto-merge workflows on prior PR state ([#372](https://github.com/rvenutolo/linPEAS-flake/pull/372))
 - Pin and verify integration_id on protect-main required checks ([#371](https://github.com/rvenutolo/linPEAS-flake/pull/371))
 - Treat App-token-minting jobs as fork-guard privileged ([#370](https://github.com/rvenutolo/linPEAS-flake/pull/370))
@@ -37,6 +160,14 @@ repo is not on a semver track.
 - Gate flake.lock auto-merge on input provenance ([#364](https://github.com/rvenutolo/linPEAS-flake/pull/364))
 
 ### Fixes
+- Point README flake badge at nixos.org manual ([#418](https://github.com/rvenutolo/linPEAS-flake/pull/418))
+- Wait for DNS to settle before Nix install in setup-nix ([#419](https://github.com/rvenutolo/linPEAS-flake/pull/419))
+- Exclude redirect-chaining Docker status page from link check ([#416](https://github.com/rvenutolo/linPEAS-flake/pull/416))
+- Allow second-order blocked egress on links and scorecard jobs ([#415](https://github.com/rvenutolo/linPEAS-flake/pull/415))
+- Allow blocked egress on links and scorecard-drift-check jobs ([#414](https://github.com/rvenutolo/linPEAS-flake/pull/414))
+- Run CodeQL on every PR to keep Scorecard SAST at 10 ([#407](https://github.com/rvenutolo/linPEAS-flake/pull/407))
+- Detach seeded-defect worktree so plant.sh runs on main ([#394](https://github.com/rvenutolo/linPEAS-flake/pull/394))
+- One entry per PR; move action-pin scratch off .claude ([#379](https://github.com/rvenutolo/linPEAS-flake/pull/379))
 - Sweep in-repo temp files left by interrupted refresh generators ([#377](https://github.com/rvenutolo/linPEAS-flake/pull/377))
 - Fail-fast when a workflow declares more than one cron line ([#373](https://github.com/rvenutolo/linPEAS-flake/pull/373))
 - Require fork-guard on actions:write jobs in lint ([#369](https://github.com/rvenutolo/linPEAS-flake/pull/369))
@@ -47,6 +178,7 @@ repo is not on a semver track.
 - Skip redundant pytest suite in the pre-commit wrapper build ([#324](https://github.com/rvenutolo/linPEAS-flake/pull/324))
 
 ### Performance
+- Merge docs-audit clusters to 4 readers (~29% token cut) ([#396](https://github.com/rvenutolo/linPEAS-flake/pull/396))
 - Host light lint groups in lean devShells.lint ([#350](https://github.com/rvenutolo/linPEAS-flake/pull/350))
 - Batch 3 setup-tax harness jobs into one harness-group job ([#336](https://github.com/rvenutolo/linPEAS-flake/pull/336))
 - Batch 7 doc-freshness jobs into one doc-freshness job ([#332](https://github.com/rvenutolo/linPEAS-flake/pull/332))
@@ -58,6 +190,9 @@ repo is not on a semver track.
 
 ### Style
 - Drop causal-history phrase from lint-workflow-security comment ([#338](https://github.com/rvenutolo/linPEAS-flake/pull/338))
+
+### Tests
+- Seeded-defect eval harness to quantify docs-correctness-audit recall ([#393](https://github.com/rvenutolo/linPEAS-flake/pull/393))
 
 ## [20260604-085abf96] - 2026-06-08
 
