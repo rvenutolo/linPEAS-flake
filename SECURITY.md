@@ -142,7 +142,7 @@ the notify jobs.
 
 - `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN_RW` / `DOCKERHUB_TOKEN_DELETE` — Docker Hub access tokens used by the release pipeline. The split limits blast radius:
 
-    - `DOCKERHUB_TOKEN_RW` — Read, Write on `rvenutolo/linpeas`. Used by `release-on-bump.yml` (per-arch + manifest + verify) and `verify-latest-release.yml`. Cannot delete tags.
+    - `DOCKERHUB_TOKEN_RW` — Read, Write on `rvenutolo/linpeas`. Used ONLY by `release-on-bump.yml` (per-arch + manifest + verify jobs). Cannot delete tags. `verify-latest-release.yml` deliberately does NOT receive it — its Docker Hub attestation checks run anonymously/read-only, so a compromised step there cannot exfiltrate the push credential.
     - `DOCKERHUB_TOKEN_DELETE` — Read, Write, Delete on `rvenutolo/linpeas`. Used ONLY by `dockerhub-sync.yml` (`peter-evans/dockerhub-description` needs Delete to PATCH repo metadata).
 
     The `Delete` capability is required by the `peter-evans/dockerhub-description`
