@@ -46,6 +46,7 @@ readonly -a HARNESSES=(
   'run-doc-freshness|run-doc-freshness.test.sh|'
   'run-harness-group|run-harness-group.test.sh|'
   'run-lint-group|run-lint-group.test.sh|'
+  'linpeas-pin-assert|linpeas-pin-assert.test.sh|'
 )
 
 function main() {
