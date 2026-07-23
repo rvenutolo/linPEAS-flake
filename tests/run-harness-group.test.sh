@@ -98,6 +98,20 @@ function seed() {
   # Same-named enforce stubs the runner must NOT run for test-only harnesses.
   make_stub "${scripts_dir}/check-allowed-actions-api.sh" 0 "$6"
   make_stub "${scripts_dir}/check-settings-posture.sh" 0 "$7"
+
+  # The runner declares harnesses beyond the scenario-controlled ones above.
+  # Stub every other declared harness as passing so the fixture tree is
+  # complete (the runner errors on a missing harness) and this spec-test
+  # stays decoupled from the exact HARNESSES membership.
+  local entry test_rel
+  while IFS= read -r entry; do
+    entry="${entry#*\'}"
+    entry="${entry%%\'*}"
+    IFS='|' read -r _ test_rel _ <<<"${entry}"
+    if [[ -n ${test_rel} && ! -e "${tests_dir}/${test_rel}" ]]; then
+      make_stub "${tests_dir}/${test_rel}" 0
+    fi
+  done < <(grep -E "^[[:space:]]*'[^']+\|[^']+\.test\.sh\|[^']*'" "${SCRIPT}")
 }
 
 function main() {
