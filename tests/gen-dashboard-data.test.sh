@@ -192,6 +192,72 @@ function run_happy_lag_scenario() {
   pass_count=$((pass_count + 1))
 }
 
+# @description Run the empty-bump-PR soft-fallback scenario. A transient
+# Search-API failure yields an empty bump_pr_json (the fetch carries a
+# trailing `|| true`). Per the script's hard-fail rule #2, a this-repo
+# lookup failure must soft-fall-back to an empty section, not crash the
+# build. Drives every other input from the happy fixtures and points
+# BUMP_PR_JSON_OVERRIDE at an empty file, then asserts:
+#   - exit code 0
+#   - last_bump.pr_number == 0
+#   - last_bump.pr_url == "" (empty)
+#   - last_bump.merged_at == "" (empty)
+#   - the output file was written
+# @noargs
+function run_empty_bump_pr_scenario() {
+  local -r name='empty bump_pr_json soft-fallback'
+  local out_tmp stderr_tmp empty_bump
+  out_tmp="$(mktemp)"
+  stderr_tmp="$(mktemp)"
+  empty_bump="$(mktemp)"
+  : >"${empty_bump}"
+  # shellcheck disable=SC2064  # capture paths at trap-set time
+  trap "rm --force -- '${out_tmp}' '${stderr_tmp}' '${empty_bump}'" RETURN
+
+  local exit_code=0
+  env \
+    "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
+    "UPSTREAM_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-upstream-release.json" \
+    "LATEST_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-latest-release.json" \
+    "THIS_REPO_RELEASES_JSON_OVERRIDE=${FIXTURES_DIR}/good-this-repo-releases.json" \
+    "UPSTREAM_RELEASES_JSON_OVERRIDE=${FIXTURES_DIR}/good-upstream-releases.json" \
+    "BUMP_PR_JSON_OVERRIDE=${empty_bump}" \
+    "PARITY_JSON_OVERRIDE=${FIXTURES_DIR}/good-parity.json" \
+    "OUT_FILE_OVERRIDE=${out_tmp}" \
+    bash "${SCRIPT}" >/dev/null 2>"${stderr_tmp}" || exit_code=$?
+
+  if ((exit_code != 0)); then
+    printf 'FAIL: %s — expected exit 0, got %d\n' "${name}" "${exit_code}" >&2
+    printf '  stderr was:\n' >&2
+    sed 's/^/    /' "${stderr_tmp}" >&2
+    fail_count=$((fail_count + 1))
+    return 0
+  fi
+
+  local pr_number pr_url merged_at
+  pr_number="$(yq eval '.last_bump.pr_number' "${out_tmp}")"
+  pr_url="$(yq eval '.last_bump.pr_url' "${out_tmp}")"
+  merged_at="$(yq eval '.last_bump.merged_at' "${out_tmp}")"
+  if [[ ${pr_number} != '0' ]]; then
+    printf 'FAIL: %s — expected last_bump.pr_number 0, got %s\n' "${name}" "${pr_number}" >&2
+    fail_count=$((fail_count + 1))
+    return 0
+  fi
+  if [[ -n ${pr_url} && ${pr_url} != '""' ]]; then
+    printf 'FAIL: %s — expected empty last_bump.pr_url, got %s\n' "${name}" "${pr_url}" >&2
+    fail_count=$((fail_count + 1))
+    return 0
+  fi
+  if [[ -n ${merged_at} && ${merged_at} != '""' ]]; then
+    printf 'FAIL: %s — expected empty last_bump.merged_at, got %s\n' "${name}" "${merged_at}" >&2
+    fail_count=$((fail_count + 1))
+    return 0
+  fi
+
+  printf 'PASS: %s\n' "${name}"
+  pass_count=$((pass_count + 1))
+}
+
 function main() {
   if [[ ! -f ${SCRIPT} ]]; then
     printf 'FAIL: script not found at %s\n' "${SCRIPT}" >&2
@@ -225,6 +291,11 @@ function main() {
   # match upstream entries; the third is older than the upstream window and
   # must be skipped with a warning, not failed.
   run_happy_lag_scenario
+
+  # Scenario 5: empty bump_pr_json soft-fallback. A transient last-bump-PR
+  # Search-API failure must degrade to an empty last-bump section (exit 0),
+  # per hard-fail rule #2, not crash the whole generator.
+  run_empty_bump_pr_scenario
 
   printf '\n%d passed, %d failed\n' "${pass_count}" "${fail_count}"
   if ((fail_count > 0)); then
