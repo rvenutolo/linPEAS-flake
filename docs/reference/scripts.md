@@ -409,6 +409,24 @@ Lint: the live `release-tag-protection` ruleset
 matches the desired posture (tag target, active enforcement, ref
 include pattern, required rules).
 
+### scripts/check-test-reachable.sh
+
+Lint: every tests/\*.test.sh harness is executed by some runner.
+check-script-has-test guarantees a test FILE exists for each script; it does
+not guarantee the test ever RUNS. A harness reachable by no runner is a
+coverage no-op — the regressions it would catch pass green while the pairing
+guard stays satisfied. This asserts every harness is reachable via one of
+four runners:
+
+1. the HARNESSES array in scripts/run-harness-group.sh (harness-group job),
+1. the tests/refresh-\*.test.sh glob in scripts/run-doc-freshness.sh,
+1. a .github/lint-groups.yml member -> tests/check-<name>.test.sh
+    (executed by scripts/run-lint-group.sh), or
+1. a direct `tests/<x>.test.sh` invocation in a .github/workflows/\*.yml.
+
+Overridable dirs/paths let the paired test harness point at fixtures. Exits
+0 if every harness is reachable, 1 otherwise.
+
 ### scripts/check-upload-artifact-strict.sh
 
 Lint: every `actions/upload-artifact` step in every
