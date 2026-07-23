@@ -159,9 +159,21 @@ function main() {
   bump_pr_json="$(fetch_or_override BUMP_PR_JSON_OVERRIDE \
     "search/issues?q=repo:${THIS_REPO}+is:pr+is:merged+in:title+chore%3A+bump+linpeas&sort=updated&order=desc&per_page=1" ||
     true)"
-  bump_pr_url="$(jq --raw-output '.items[0].html_url // ""' <<<"${bump_pr_json}")"
-  bump_pr_number="$(jq --raw-output '.items[0].number // 0' <<<"${bump_pr_json}")"
-  bump_pr_merged_at="$(jq --raw-output '.items[0].closed_at // ""' <<<"${bump_pr_json}")"
+  # A swallowed Search-API failure (the `|| true` above) yields an empty
+  # string, not `{"items":[]}`. jq on empty input emits nothing — the `// 0`
+  # default never fires (zero inputs, not a null value) — so bump_pr_number
+  # would be "" and `--argjson bump_pr_number ""` aborts the assembly jq.
+  # Degrade to the documented empty last-bump section instead, matching the
+  # latest_release / parity_json soft-fallbacks (hard-fail rule #2).
+  if [[ -z ${bump_pr_json} ]]; then
+    bump_pr_url=''
+    bump_pr_number=0
+    bump_pr_merged_at=''
+  else
+    bump_pr_url="$(jq --raw-output '.items[0].html_url // ""' <<<"${bump_pr_json}")"
+    bump_pr_number="$(jq --raw-output '.items[0].number // 0' <<<"${bump_pr_json}")"
+    bump_pr_merged_at="$(jq --raw-output '.items[0].closed_at // ""' <<<"${bump_pr_json}")"
+  fi
 
   log_info 'gathering parity-check run'
   local parity_json parity_conclusion parity_checked_at parity_run_url
