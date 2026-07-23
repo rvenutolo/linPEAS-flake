@@ -45,6 +45,33 @@ Lint: scripts/bump-linpeas.sh retains its three
 supply-chain integrity guards — asset-URL prefix, `.digest`
 cross-check, and atomic (mktemp + mv) pin write.
 
+### scripts/check-changelog-fresh.sh
+
+Guard that CHANGELOG.md's released sections match a fresh
+git-cliff regeneration. The release-on-bump changelog job can be skipped
+(its tag-exists gate carries no recovery branch), letting the committed
+released sections silently fall behind the tags that shipped. This detects
+that drift even when the release-time job never ran.
+
+Only the released portion (from the first `## [<tag>]` header onward) is
+compared. The `## Unreleased` section legitimately changes with every merged
+commit, so comparing it would force a changelog regen on every PR — the
+staleness this guards is released sections lagging the release tags.
+
+git-cliff is invoked only via the flake-pinned `.#git-cliff` output, per the
+nix-run-pinned invariant. Offline and deterministic: git-cliff parses the PR
+number from the `(#N)` subject suffix, so no GitHub token is required. Needs
+full history + tags (fetch-depth: 0) so every release tag is visible.
+
+Exits 0 when released sections are fresh, 1 when stale (or CHANGELOG
+missing), 2 when nix is not on PATH.
+
+Env overrides (test-only):
+CHANGELOG_OVERRIDE — committed changelog path (default CHANGELOG.md)
+CLIFF_TOML_OVERRIDE — cliff config path (default cliff.toml)
+REGEN_OVERRIDE — pre-generated regen file; when set, the git-cliff
+call is skipped so the comparison logic can be tested without nix
+
 ### scripts/check-changelog-links.sh
 
 Refuse to build if the regenerated changelog contains

@@ -852,6 +852,10 @@ jobs:
         run: nix develop --command bash tests/check-changelog-links.test.sh
       - name: enforce changelog-links
         run: nix develop --command ./scripts/check-changelog-links.sh
+      - name: freshness harness passes
+        run: nix develop --command bash tests/check-changelog-fresh.test.sh
+      - name: enforce changelog freshness
+        run: nix develop --command ./scripts/check-changelog-fresh.sh
 
   markdownlint:
     runs-on: ubuntu-latest
