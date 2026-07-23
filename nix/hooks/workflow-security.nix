@@ -16,6 +16,7 @@
       set -Eeuo pipefail
       IFS=$'\n\t'
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-uses-sha-pinned.sh
     ''}";
     files = "^(\\.github/workflows/.*\\.ya?ml|\\.github/actions/.*\\.ya?ml|scripts/check-uses-sha-pinned\\.sh)$";
