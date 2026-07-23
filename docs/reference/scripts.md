@@ -636,8 +636,10 @@ workflow already exposes via `$GITHUB_OUTPUT`.
 Per-file iteration: octoscan v0.1.7 directory-target mode silently
 returns exit 0 with empty SARIF even when a single-file invocation
 against the same workflow flags a finding. Loop over each workflow
-yaml, take the max exit code, and merge per-file SARIF
-`runs[0].results` into a single SARIF document for upload.
+yaml, tracking "any file errored" separately from "any file has a
+finding" (an error must not be masked by another file's finding), and
+merge per-file SARIF `runs[0].results` into a single SARIF document for
+upload only when no file errored.
 
 Suppressions (CLI flags — `--config-file` is documented but
 `paths.<glob>.ignore` is a no-op in v0.1.7):

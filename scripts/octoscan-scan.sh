@@ -22,8 +22,10 @@
 # Per-file iteration: octoscan v0.1.7 directory-target mode silently
 # returns exit 0 with empty SARIF even when a single-file invocation
 # against the same workflow flags a finding. Loop over each workflow
-# yaml, take the max exit code, and merge per-file SARIF
-# `runs[0].results` into a single SARIF document for upload.
+# yaml, tracking "any file errored" separately from "any file has a
+# finding" (an error must not be masked by another file's finding), and
+# merge per-file SARIF `runs[0].results` into a single SARIF document for
+# upload only when no file errored.
 #
 # Suppressions (CLI flags — `--config-file` is documented but
 # `paths.<glob>.ignore` is a no-op in v0.1.7):
@@ -116,7 +118,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-max_rc=0
+any_error=0
+any_finding=0
 for wf in "${workflows[@]}"; do
   rel="${wf#"${repo_root}/"}"
   file_rc=0
@@ -139,15 +142,23 @@ for wf in "${workflows[@]}"; do
       --disable-rules "${DISABLE_RULES}" \
       --ignore "${IGNORE_PATTERN}" || file_rc=$?
   fi
-  if [[ ${file_rc} -gt ${max_rc} ]]; then
-    max_rc=${file_rc}
-  fi
+  # octoscan per-file exit codes: 0 clean, 2 finding, anything else (1, …) a
+  # scanner error — the file was never analyzed. Track "any error" separately
+  # from "any finding": a max-of-codes reduction would let a finding (2)
+  # outrank an error (1) and misclassify a mixed run as a clean finding,
+  # silently dropping the errored file.
+  case "${file_rc}" in
+  0) ;;
+  2) any_finding=1 ;;
+  *) any_error=1 ;;
+  esac
 done
 
-if [[ -n ${sarif_out} && ${max_rc} -ne 1 ]]; then
-  # Aggregate: the first SARIF carries the driver + rules manifest
-  # (identical across invocations of the same image). Concatenate
-  # `runs[0].results` from every per-file SARIF.
+if [[ -n ${sarif_out} && ${any_error} -eq 0 ]]; then
+  # Aggregate only when no file errored, so a file that never analyzed cannot
+  # be silently absent from the merged SARIF and reported clean. The first
+  # SARIF carries the driver + rules manifest (identical across invocations of
+  # the same image); concatenate `runs[0].results` from every per-file SARIF.
   jq -s '
     [.[].runs[0].results // []] as $all
     | .[0]
@@ -155,21 +166,19 @@ if [[ -n ${sarif_out} && ${max_rc} -ne 1 ]]; then
   ' "${per_file_sarifs[@]}" >"${sarif_out}"
 fi
 
-case "${max_rc}" in
-0)
-  printf 'has-finding=false\n'
-  exit 0
-  ;;
-2)
-  printf 'has-finding=true\n'
-  exit 1
-  ;;
-*)
-  # Truncated/partial SARIF is worse than missing SARIF; drop it
-  # so downstream consumers (CI upload-sarif) skip cleanly instead
-  # of uploading garbage.
+# Error outranks finding: a file that never analyzed is an infra failure even
+# when another file produced a finding, so it routes to the infra-failure path
+# (has-finding=false, exit 1) and is re-examined rather than reported clean.
+if ((any_error > 0)); then
+  # Truncated/partial SARIF is worse than missing SARIF; drop it so downstream
+  # consumers (CI upload-sarif) skip cleanly instead of uploading garbage.
   [[ -n ${sarif_out} ]] && rm -f -- "${sarif_out}"
   printf 'has-finding=false\n'
   exit 1
-  ;;
-esac
+elif ((any_finding > 0)); then
+  printf 'has-finding=true\n'
+  exit 1
+else
+  printf 'has-finding=false\n'
+  exit 0
+fi
