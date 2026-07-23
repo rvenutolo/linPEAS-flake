@@ -40,6 +40,7 @@ function main() {
       rc=1
     fi
   done <<<"${systems}"
+  trap - ERR
   return "${rc}"
 }
 main "$@"
