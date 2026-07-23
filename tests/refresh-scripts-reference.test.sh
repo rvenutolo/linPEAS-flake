@@ -118,6 +118,34 @@ EOF
   fi
   stray=''
 
+  # 6. Swallowed-treefmt scenario: a failing treefmt must abort the generator
+  # (nonzero exit) and must NOT overwrite the tracked doc with unformatted
+  # content. With the `|| true` swallow the run went green while moving the
+  # unformatted splice into place.
+  backup="$(mktemp)"
+  cp -- "${DOC}" "${backup}"
+  local stub_bin
+  stub_bin="$(mktemp --directory)"
+  cat >"${stub_bin}/treefmt" <<'EOF'
+#!/usr/bin/env bash
+echo 'treefmt stub: simulated failure' >&2
+exit 1
+EOF
+  chmod +x "${stub_bin}/treefmt"
+  local rc4=0
+  PATH="${stub_bin}:${PATH}" "${SCRIPT}" >/dev/null 2>&1 || rc4=$?
+  rm --recursive --force -- "${stub_bin}"
+  local doc_unchanged='no'
+  cmp --silent -- "${backup}" "${DOC}" && doc_unchanged='yes'
+  cp -- "${backup}" "${DOC}"
+  rm --force -- "${backup}"
+  backup=''
+  if [[ ${rc4} -ne 0 && ${doc_unchanged} == 'yes' ]]; then
+    pass 'failing treefmt aborts without writing an unformatted doc'
+  else
+    fail "treefmt-failure: want nonzero exit + unchanged doc, got exit ${rc4}, unchanged=${doc_unchanged}"
+  fi
+
   if [[ ${failures} -gt 0 ]]; then
     printf '%d failure(s)\n' "${failures}" >&2
     exit 1
