@@ -92,6 +92,16 @@ The check-lint family is held together by naming convention: each lint script sh
 
 Enforced by `scripts/check-script-has-test.sh`. Wired as the `lint-script-hygiene` CI job (member check `script-has-test`) and as a pre-commit hook.
 
+## test-runner reachability
+
+Every `tests/*.test.sh` harness is executed by at least one runner, so the coverage it represents is real rather than latent.
+
+`check-script-has-test` guarantees a test *file* exists for each script; it does not guarantee the test ever *runs*. A harness wired into no runner is a coverage no-op — a regression it would catch merges green while the pairing guard stays satisfied. This asserts every harness is reachable via one of four runners: the `HARNESSES` array in `scripts/run-harness-group.sh` (the `harness-group` job), the `tests/refresh-*.test.sh` glob in `scripts/run-doc-freshness.sh` (the `doc-freshness` job), a `.github/lint-groups.yml` member resolving to `tests/check-<name>.test.sh` (run by `scripts/run-lint-group.sh`), or a direct `tests/<x>.test.sh` invocation in a `.github/workflows/*.yml`.
+
+The `EXEMPT` list in the script is empty: every harness must be wired to a runner. A genuinely manual-only harness would be listed there with a rationale.
+
+Enforced by `scripts/check-test-reachable.sh`. Wired as the `lint-script-hygiene` CI job (member check `test-reachable`).
+
 ## manifest-reading hook watches nix/hooks
 
 Every pre-commit hook whose script reads the Nix hook manifest (`nix eval .#devTooling.<system>.preCommitHooks`) includes `nix/hooks` in its `files` filter.

@@ -26,6 +26,26 @@ readonly -a HARNESSES=(
   'settings-posture|check-settings-posture.test.sh|'
   'backfill-image-mode|classify-backfill-image-mode.test.sh|'
   'lib-log|lib-log.test.sh|'
+  # Harnesses with no bespoke CI job, lint-group, or refresh-* glob home run
+  # here test-only. Any paired enforce script runs in its own workflow or
+  # pre-commit hook (e.g. octoscan-scan.sh in octoscan.yml,
+  # check-scorecard-threshold.sh in scorecard-drift-check.yml), so re-running
+  # it here would be redundant or need inputs this job lacks; the spec-test
+  # is the piece that was otherwise executed nowhere.
+  'script-docs|_script_docs.test.sh|'
+  'apply-patch-tag-pin-rewrite|apply-patch-tag-pin-rewrite.test.sh|'
+  'actionlint-shellcheck-active|check-actionlint-shellcheck-active.test.sh|'
+  'cron-table|check-cron-table.test.sh|'
+  'patch-tag-pins|check-patch-tag-pins.test.sh|'
+  'run-block-pyflakes-required|check-run-block-pyflakes-required.test.sh|'
+  'scorecard-threshold|check-scorecard-threshold.test.sh|'
+  'compare-repro|compare-repro.test.sh|'
+  'docs-audit-pressure|docs-audit-pressure.test.sh|'
+  'inventory-action-pin-tags|inventory-action-pin-tags.test.sh|'
+  'octoscan-scan|octoscan-scan.test.sh|'
+  'run-doc-freshness|run-doc-freshness.test.sh|'
+  'run-harness-group|run-harness-group.test.sh|'
+  'run-lint-group|run-lint-group.test.sh|'
 )
 
 function main() {

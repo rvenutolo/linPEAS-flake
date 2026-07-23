@@ -38,6 +38,7 @@ lint-workflow-security:
 lint-script-hygiene:
   - script-shebang-pipefail
   - script-has-test
+  - test-reachable
   - lint-shell-tools
   - gh-api-version-header
   - bump-script-integrity
