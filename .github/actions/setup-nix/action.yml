@@ -31,8 +31,9 @@ runs:
       # cache.nixos.org to resolve so the installer and substituter fetches
       # don't fail on a first run that a manual re-run would clear.
       #
-      # `host` is used rather than `getent`: getent is glibc-only and is absent
-      # on macOS runners, where it fails the step before Nix is even installed.
+      # `host` is used rather than `getent`: `host` is the portable resolver
+      # probe available across the runner images this action targets,
+      # whereas `getent` availability varies by libc implementation.
       #
       # A timeout here is a WARNING, not a failure. This probe is a race
       # mitigation, not a correctness gate — if the resolver is still cold, the

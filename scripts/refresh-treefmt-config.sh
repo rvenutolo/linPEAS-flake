@@ -18,24 +18,9 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
-trap 'printf "[%s] %-5s line %s (exit %s): %s\n" \
-  "$(date "+%Y-%m-%dT%H:%M:%S%z")" ERROR "${LINENO}" "$?" "${BASH_COMMAND}" >&2' ERR
-
-function log() {
-  printf '[%s] %-5s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$1" "$2" >&2
-}
-function log_info() { log INFO "$*"; }
-function log_err() { log ERROR "$*"; }
-
-# @description Verify a required CLI tool is on PATH; exit 1 if missing.
-# @arg $1 tool name
-function require_tool() {
-  local -r tool="$1"
-  if ! command -v "${tool}" >/dev/null 2>&1; then
-    log_err "missing required tool: ${tool}"
-    exit 1
-  fi
-}
+# shellcheck source=scripts/lib/log.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
+install_err_trap
 
 # Temp files removed by the EXIT trap. Declared at script scope, not main-local:
 # the EXIT trap fires after main() returns and its locals leave scope, so a
@@ -43,6 +28,7 @@ function require_tool() {
 # leak on an abnormal exit.
 repo_root=''
 cfg_file=''
+raw_err=''
 block_file=''
 doc_new=''
 doc_fmt=''
@@ -50,7 +36,7 @@ doc_fmt=''
 # @description Remove every temp file on exit, including any in-repo
 # .refresh-treefmt-config-*.md siblings left by an interrupted earlier run.
 function cleanup() {
-  rm --force -- "${cfg_file}" "${block_file}" "${doc_new}" "${doc_fmt}"
+  rm --force -- "${cfg_file}" "${raw_err}" "${block_file}" "${doc_new}" "${doc_fmt}"
   if [[ -n ${repo_root} ]]; then
     local stray
     shopt -s nullglob
@@ -108,6 +94,7 @@ function main() {
   fi
 
   cfg_file="$(mktemp)"
+  raw_err="$(mktemp)"
   block_file="$(mktemp)"
   doc_new="$(mktemp)"
   # treefmt walks up to find flake.nix as projectRootFile, so the formatted
@@ -119,9 +106,15 @@ function main() {
   local sys
   sys="$(nix eval --impure --raw --expr 'builtins.currentSystem')"
 
-  # Discard stderr so harmless `trace:` messages from treefmt-nix's evaluation
-  # do not corrupt the JSON payload on stdout.
-  nix eval --json ".#devTooling.${sys}.treefmtConfig" 2>/dev/null >"${cfg_file}"
+  # Capture stderr (instead of discarding it) so harmless `trace:` messages
+  # from treefmt-nix's evaluation do not corrupt the JSON payload on stdout,
+  # while an eval failure still surfaces a readable diagnostic instead of a
+  # blank one.
+  if ! nix eval --json ".#devTooling.${sys}.treefmtConfig" >"${cfg_file}" 2>"${raw_err}"; then
+    log_err 'nix eval failed:'
+    cat -- "${raw_err}" >&2
+    exit 1
+  fi
 
   # Render the block: header row, separator, one row per formatter sorted by
   # name. Each glob is wrapped in backticks so mdformat-gfm renders patterns

@@ -17,13 +17,19 @@
 
   outputs =
     inputs@{ flake-parts, ... }:
-    flake-parts.lib.mkFlake { inherit inputs; } {
+    let
+      # Single source of truth for the flake's declared systems. Referenced
+      # both as flake-parts' `systems` (drives perSystem) and as
+      # `flake.lib.systems` (drives scripts/check-flake-systems-eval.sh,
+      # which force-evaluates each declared system so a broken platform
+      # fails CI by name instead of silently passing `nix flake check`).
       systems = [
         "x86_64-linux"
         "aarch64-linux"
-        "x86_64-darwin"
-        "aarch64-darwin"
       ];
+    in
+    flake-parts.lib.mkFlake { inherit inputs; } {
+      inherit systems;
       imports = [
         inputs.treefmt-nix.flakeModule
         inputs.pre-commit-hooks.flakeModule
@@ -47,6 +53,7 @@
           _module.args.pkgs-unstable = import inputs.nixpkgs-unstable { inherit system; };
         };
       flake = {
+        lib.systems = systems;
         overlays.default = _final: prev: {
           inherit (inputs.self.packages.${prev.stdenv.hostPlatform.system}) linpeas;
         };

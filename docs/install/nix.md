@@ -43,18 +43,16 @@ Adds `linpeas` to your Nix profile. Upgrade with `nix profile upgrade linpeas`.
 
 ## Platform support
 
-The flake declares packages for all four systems via flake-parts' `perSystem` (the `systems` list in `flake.nix`). CI coverage varies:
+The flake declares packages for both Linux systems via flake-parts' `perSystem` (the `systems` list in `flake.nix`). CI coverage varies:
 
-| System           | Flake builds | CI tested                                  |
-| ---------------- | ------------ | ------------------------------------------ |
-| `x86_64-linux`   | yes          | yes (`ubuntu-latest`)                      |
-| `aarch64-linux`  | yes          | yes (`ubuntu-24.04-arm`)                   |
-| `aarch64-darwin` | yes          | yes (`macos-latest`)                       |
-| `x86_64-darwin`  | yes          | **no** — no GitHub-hosted Intel-mac runner |
-
-`x86_64-darwin` is declared because the upstream script is portable bash and is expected to work, but no automated test exercises it. If you run on an Intel Mac and hit a failure, please open an issue.
+| System          | Flake builds | CI tested                |
+| --------------- | ------------ | ------------------------ |
+| `x86_64-linux`  | yes          | yes (`ubuntu-latest`)    |
+| `aarch64-linux` | yes          | yes (`ubuntu-24.04-arm`) |
 
 The OCI image (`linpeas-image`) is Linux-only by design — containers run a Linux kernel regardless of host OS.
+
+`flake.lib.systems` is the single source of truth for the declared systems list above. CI's `flake-check` job runs `scripts/check-flake-systems-eval.sh`, which reads `flake.lib.systems` and force-evaluates each declared system's packages, failing with the system named if one breaks. `nix flake check` alone does not force per-system module thunks (e.g. a second nixpkgs input imported per `perSystem`), so a platform that silently stopped evaluating would otherwise pass CI undetected.
 
 ## Pin / version
 

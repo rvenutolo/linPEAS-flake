@@ -1,6 +1,6 @@
 # CI architecture
 
-Every push to `main` and every PR runs a required set of jobs that gate auto-merge. Separate non-blocking weekly workflows run informational checks (portability matrix, image CVE scans).
+Every push to `main` and every PR runs a required set of jobs that gate auto-merge. Separate non-blocking weekly workflows run informational checks (image CVE scans).
 
 ## Required jobs
 
@@ -83,7 +83,6 @@ Merge-commit only. Enforced at both layers:
 
 ## Non-blocking coverage / advisory checks
 
-- `coverage-matrix.yml` (weekly cron + dispatch) runs `nix flake check` and the linpeas build across the OS × Nix-installer matrix beyond the ubuntu-latest + pinned-stable combination the required jobs cover. Portability regressions are rare and not PR-urgent — too slow on macOS runners to justify per-PR runs; failures surface in the Actions tab only.
 - `image-cve-scan.yml` (weekly cron + dispatch) runs Trivy and Grype against the released OCI image and uploads SARIF to code-scanning under distinct categories (`trivy-image-cve`, `grype-image-cve`) for cross-scanner DB coverage. Findings are CVE-DB-driven, not PR-driven, so the scheduled run against a fresh DB is the meaningful signal — and it fires even in weeks with no PR activity. Both scanners advisory only (job-level failure is `count > 0` of CRITICAL CVEs; SARIF upload always runs); failures auto-file deduped issues split by finding-vs-infrastructure label; the prevention path is a nixpkgs bump via `update-flake-lock`.
 - `docs-audit-reminder.yml` (monthly cron + dispatch) opens a deduped `docs-audit` issue when CI-structure churn suggests hand-written CI prose has drifted. Advisory by construction: freshness gates cover only generated blocks, and the semantic claims they miss need a reading agent rather than a lint. Non-zero drift pressure never fails the job — a workflow that reddens during normal CI churn trains the maintainer to ignore red — but a genuine failure, such as the pressure script erroring or a GitHub API call failing, does go red, because that is a real problem rather than a drift signal. The issue only closes when drift pressure returns to zero, not because an audit ran, so after running `/docs-audit` the maintainer should close it manually; a fresh issue opens the following month if pressure is non-zero again.
 - `octoscan.yml`'s PR trigger is paths-filtered to the files it reads (`.github/workflows/**` plus `scripts/octoscan-scan.sh`; composite actions under `.github/actions/` are not scan targets). `codeql.yml` deliberately runs on **every** PR with no paths filter, so the OpenSSF Scorecard SAST check keeps scoring the fraction of merged PRs that ran a SAST tool above threshold. Both stay outside the required set — `required-checks-no-paths` forbids paths filters on required workflows.
@@ -94,7 +93,7 @@ budgeted defense-in-depth posture rather than redundancy — is documented in
 
 ## Runner egress
 
-Every job's first step is `step-security/harden-runner` with `egress-policy: block` and a per-job `allowed-endpoints:` allowlist. The eBPF monitor enforces the allowlist and must remain the first step in any job that hits the network or filesystem. The macOS leg of `coverage-matrix` is inherently unenforced (the monitor is Linux-only). A missed host appears as a blocked-egress failure and is fixed forward by extending that job's allowlist.
+Every job's first step is `step-security/harden-runner` with `egress-policy: block` and a per-job `allowed-endpoints:` allowlist. The eBPF monitor enforces the allowlist and must remain the first step in any job that hits the network or filesystem. A missed host appears as a blocked-egress failure and is fixed forward by extending that job's allowlist.
 
 ## Pages workflow
 
@@ -138,7 +137,6 @@ All schedules fit the maintainer's monitoring windows: daily crons run 08:00–1
 | `pages`                           | `55 9 * * *`    | 09:55 daily  | Rebuild dashboard from current pin + upstream + release JSON                                                               |
 | `update-flake-lock`               | `0 5 * * 5`     | Fri 05:00    | Refresh `flake.lock` via auto-merge PR                                                                                     |
 | `reproducibility-check`           | `10 5 * * 5`    | Fri 05:10    | Rebuild flake outputs twice; fail on hash divergence                                                                       |
-| `coverage-matrix`                 | `20 5 * * 5`    | Fri 05:20    | Portability matrix: flake check + build across OS/Nix installers                                                           |
 | `image-cve-scan`                  | `30 5 * * 5`    | Fri 05:30    | Trivy + Grype CVE scan of the OCI image; SARIF to code-scanning                                                            |
 | `verify-latest-release`           | `40 5 * * 5`    | Fri 05:40    | Re-fetch published artifacts; verify SRI hash + attestations                                                               |
 | `links`                           | `50 5 * * 5`    | Fri 05:50    | Markdown link checker (lychee); cron-only, not a required check                                                            |

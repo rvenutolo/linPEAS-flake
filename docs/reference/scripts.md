@@ -169,6 +169,16 @@ changed. Gates the auto-merged weekly flake.lock update so a
 source-level repoint of an input cannot slip into the build/dev
 closure unreviewed.
 
+### scripts/check-flake-systems-eval.sh
+
+Assert every system declared in `flake.lib.systems`
+evaluates. Fails naming the offending system + the real nix error,
+so a platform drop in a nixpkgs bump is diagnosable at a glance.
+
+**Options:**
+
+- `--flake` — <dir> flake to check (default: repo root)
+
 ### scripts/check-fork-guard-release.sh
 
 Lint: every workflow job holding a guard-required write

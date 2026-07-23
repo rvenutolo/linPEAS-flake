@@ -45,6 +45,10 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: flake check
         run: nix flake check --print-build-logs
+      - name: declared systems evaluate
+        run: nix develop --command bash scripts/check-flake-systems-eval.sh
+      - name: declared-systems guard harness
+        run: nix develop --command bash tests/check-flake-systems-eval.test.sh
 
   build-linpeas:
     runs-on: ubuntu-latest
