@@ -6,7 +6,8 @@
 # by dockerhub-sync.yml (peter-evans/dockerhub-description needs Delete
 # scope to PATCH repo metadata; a Read/Write-only PAT returns 403). The
 # write-scoped PAT (secrets.DOCKERHUB_TOKEN_RW) is consumed only by
-# release-on-bump.yml. The delete-capable token must never leak into
+# release-on-bump.yml — never by the anonymous/read-only
+# verify-latest-release.yml. The delete-capable token must never leak into
 # workflows that only push images, and no unsuffixed secrets.DOCKERHUB_TOKEN
 # may exist — only _RW and _DELETE are authoritative.
 #
@@ -57,6 +58,15 @@ done
 # Absence: write-scoped token must not appear in the sync workflow.
 if consumes_secret "${SYNC_WF}" 'DOCKERHUB_TOKEN_RW'; then
   violation "${SYNC_WF}: consumes secrets.DOCKERHUB_TOKEN_RW (sync must use the delete-scoped token)"
+fi
+
+# Absence: write-scoped token must not leak into the read-only verify
+# workflow. verify-latest-release.yml runs its Docker Hub attestation checks
+# anonymously/read-only by design, so dropping DOCKERHUB_TOKEN_RW means a
+# compromised step there cannot exfiltrate the push credential. The RW token
+# is release-only.
+if consumes_secret "${VERIFY_WF}" 'DOCKERHUB_TOKEN_RW'; then
+  violation "${VERIFY_WF}: consumes secrets.DOCKERHUB_TOKEN_RW (verify is read-only; the write-scoped token is release-only)"
 fi
 
 # Suffix: every secrets.DOCKERHUB_TOKEN* reference must be _RW or _DELETE.

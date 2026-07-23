@@ -13,10 +13,10 @@
         name = "rvenutolo/linpeas";
         tag = pin.version;
 
-        # nixpkgs 25.05's `buildLayeredImage` only exposes `contents` (not
-        # `copyToRoot`). Wrap inputs in a `buildEnv` so `pathsToLink`
-        # controls the /bin layering explicitly. Cmd uses the absolute
-        # store path of linpeas, unambiguous regardless of /bin layering.
+        # `buildLayeredImage` takes image contents via `contents`. Wrap
+        # inputs in a `buildEnv` so `pathsToLink` controls the /bin layering
+        # explicitly. `Entrypoint` (set below) uses the absolute store path
+        # of linpeas, unambiguous regardless of /bin layering.
         contents = pkgs.buildEnv {
           name = "image-root";
           # linpeas invokes grep/sed/awk/find/ps internally for most of its

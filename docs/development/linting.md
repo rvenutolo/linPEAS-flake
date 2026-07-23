@@ -8,14 +8,14 @@ or whose rationale would otherwise be lost.
 Wired in `treefmt.nix`. Run via `nix fmt` or `just fmt`. Pre-commit hook
 `treefmt` runs the same set.
 
-| Formatter | Scope                                                       |
-| --------- | ----------------------------------------------------------- |
-| nixfmt    | `*.nix`                                                     |
-| prettier  | JSON and YAML only                                          |
-| mdformat  | `*.md` (with gfm + frontmatter + mkdocs + footnote plugins) |
-| shfmt     | shell scripts, 2-space indent                               |
-| taplo     | TOML                                                        |
-| just      | `justfile`                                                  |
+| Formatter | Scope                                                             |
+| --------- | ----------------------------------------------------------------- |
+| nixfmt    | `*.nix`                                                           |
+| prettier  | JSON and YAML only                                                |
+| mdformat  | `*.md` (with gfm + frontmatter + mkdocs + footnote + toc plugins) |
+| shfmt     | shell scripts, 2-space indent                                     |
+| taplo     | TOML                                                              |
+| just      | `justfile`                                                        |
 
 Prettier rewrites single-quoted YAML scalars to double-quoted. Use
 double quotes from the start in workflow files.

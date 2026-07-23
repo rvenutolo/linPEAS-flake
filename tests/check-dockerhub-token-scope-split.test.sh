@@ -84,6 +84,19 @@ function main() {
     'verify-latest-release.yml: consumes secrets.DOCKERHUB_TOKEN_DELETE'
   rm --recursive --force -- "${dir}"
 
+  # RW token leaked into verify workflow. verify-latest-release.yml runs its
+  # Docker Hub attestation checks anonymously/read-only by design; the
+  # write-scoped token is release-only, so its presence in verify is a
+  # hardening regression the lint must reject.
+  dir="$(mktemp --directory)"
+  write_baseline "${dir}"
+  # shellcheck disable=SC2016 # literal GH Actions ${{ }} expression, not shell expansion
+  printf '      - env:\n          X: ${{ secrets.DOCKERHUB_TOKEN_RW }}\n' \
+    >>"${dir}/verify-latest-release.yml"
+  assert_run 'RW token in verify fails' "${dir}" 1 \
+    'verify-latest-release.yml: consumes secrets.DOCKERHUB_TOKEN_RW'
+  rm --recursive --force -- "${dir}"
+
   # RW token leaked into sync workflow.
   dir="$(mktemp --directory)"
   write_baseline "${dir}"

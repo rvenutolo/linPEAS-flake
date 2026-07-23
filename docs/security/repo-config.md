@@ -81,8 +81,7 @@ The `release-tag-protection` ruleset blocks deletion, non-fast-forward
 update, and arbitrary update of release-tag refs matching
 `refs/tags/[0-9]{8}-[0-9a-f]{7,40}`.
 
-Drift is asserted by the `tag-protection-drift-check` CI job and the
-matching pre-commit hook.
+Drift is asserted by the `tag-protection-drift-check` CI job.
 
 Ruleset `release-tag-protection` (target=tag, enforcement=active,
 rules=[deletion, update, non_fast_forward], bypass_actors empty,
