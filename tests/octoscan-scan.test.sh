@@ -90,6 +90,27 @@ function make_docker_stub() {
   printf '%s' "${d}"
 }
 
+# @description Make a temp dir whose `docker` stub exits 1 on its first
+#              invocation and 2 on every later one — a per-file scanner error
+#              on one workflow mixed with a finding on another within a single
+#              octoscan-scan run.
+# @noargs
+function make_docker_stub_seq() {
+  local d
+  d="$(mktemp -d)"
+  cat >"${d}/docker" <<SEQ
+#!/usr/bin/env bash
+counter="${d}/n"
+n=0
+[[ -f "\${counter}" ]] && n="\$(cat -- "\${counter}")"
+n=\$((n + 1))
+printf '%s' "\${n}" >"\${counter}"
+if ((n == 1)); then exit 1; else exit 2; fi
+SEQ
+  chmod +x "${d}/docker"
+  printf '%s' "${d}"
+}
+
 function main() {
   run_scenario 'unknown argument exits 1' \
     1 'unknown argument' '' '' \
@@ -125,6 +146,16 @@ function main() {
   run_scenario 'octoscan tool error -> has-finding=false exit 1' \
     1 '' 'has-finding=false' "PATH=${stub3}:${PATH}"
   rm --recursive --force -- "${stub0}" "${stub2}" "${stub3}"
+
+  # A per-file scanner error (rc 1 = file never analyzed) mixed with a finding
+  # (rc 2) must classify as an infra failure — has-finding=false, exit 1 — so
+  # the errored file routes to the infra-failure path and is re-examined, not
+  # hidden behind the finding and reported clean.
+  local stub_seq
+  stub_seq="$(make_docker_stub_seq)"
+  run_scenario 'per-file error mixed with finding -> infra failure not finding' \
+    1 '' 'has-finding=false' "PATH=${stub_seq}:${PATH}"
+  rm --recursive --force -- "${stub_seq}"
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2
