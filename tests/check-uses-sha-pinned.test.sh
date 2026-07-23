@@ -24,8 +24,37 @@ function expect() {
 }
 
 expect good.yml 0 ""
+expect good-quoted.yml 0 ""
 expect bad-tag.yml 1 "not SHA-pinned"
 expect bad-branch.yml 1 "not SHA-pinned"
 expect bad-short-sha.yml 1 "not SHA-pinned"
+
+# Flow-style unpinned ref, generated at runtime: a committed flow-mapping
+# fixture is unusable because prettier normalizes `{uses: x}` to
+# `{ uses: x }` while yamllint forbids the inner-brace spaces. The old
+# line-grep selector never matched a flow-style step, so the unpinned ref
+# bypassed the lint entirely.
+flowdir="$(mktemp --directory)"
+printf 'on: push\njobs:\n  a:\n    steps:\n      - {uses: actions/checkout@v4}\n' \
+  >"${flowdir}/flow.yml"
+flow_exit=0
+flow_err="$(WORKFLOWS_DIR_OVERRIDE="${flowdir}" WORKFLOW_FILE_FILTER=flow.yml \
+  "${SCRIPT}" 2>&1 >/dev/null)" || flow_exit=$?
+rm --recursive --force -- "${flowdir}"
+if [[ ${flow_exit} != 1 || ${flow_err} != *"not SHA-pinned"* ]]; then
+  printf 'FAIL flow-style: exit %s (want 1)\n  stderr: %s\n' "${flow_exit}" "${flow_err}" >&2
+  exit 1
+fi
+printf 'OK   flow-style unpinned rejected\n'
+
+# A single-violation top-level file must report exactly one violation line;
+# the file-list glob must not match (and re-scan) a top-level *.yml twice.
+count="$(WORKFLOWS_DIR_OVERRIDE="${FIXTURES}" WORKFLOW_FILE_FILTER=bad-tag.yml \
+  "${SCRIPT}" 2>&1 >/dev/null | grep -c 'not SHA-pinned')" || true
+if [[ ${count} != 1 ]]; then
+  printf 'FAIL bad-tag.yml: expected exactly 1 violation line, got %s\n' "${count}" >&2
+  exit 1
+fi
+printf 'OK   bad-tag.yml violation counted once\n'
 
 printf 'all tests passed\n'
