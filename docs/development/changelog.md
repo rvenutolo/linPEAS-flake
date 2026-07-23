@@ -107,6 +107,29 @@ regeneration. It runs offline — git-cliff parses the PR number from the
 `(#N)` subject suffix, so no token is needed — as the required
 `changelog-links` CI job on every PR.
 
+## Freshness guard
+
+`scripts/check-changelog-fresh.sh` regenerates the changelog from the
+flake-pinned `.#git-cliff` and compares its **released** sections (from
+the first `## [<tag>]` header onward) against the committed `CHANGELOG.md`.
+The `changelog` job in `release-on-bump.yml` creates the release tag early
+and carries no recovery branch, so a skipped or failed run leaves the
+released sections silently behind the tags that shipped. This guard catches
+that drift on the next PR even though the release-time job never landed its
+update.
+
+Only released sections are compared: the `## Unreleased` section
+legitimately changes with every merged commit, so diffing it would force a
+changelog regen on every PR. When it fails, regenerate and commit:
+
+```sh
+nix shell .#git-cliff --command git-cliff --config cliff.toml --output CHANGELOG.md
+```
+
+It runs offline (like the link guard) as part of the required
+`changelog-links` CI job, which checks out with `fetch-depth: 0` so every
+release tag is visible to git-cliff.
+
 ## End-to-end sequence
 
 The changelog job in `release-on-bump.yml` performs these steps in
