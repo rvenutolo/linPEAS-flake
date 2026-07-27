@@ -6,7 +6,7 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
-## Unreleased
+## [20260726-c62415cf] - 2026-07-27
 
 ### Breaking Changes
 - Drop darwin outputs, harden flake-eval observability ([#504](https://github.com/rvenutolo/linPEAS-flake/pull/504))
@@ -16,6 +16,8 @@ repo is not on a semver track.
 - Retry watchdog API requests on transient GitHub 5xx ([#477](https://github.com/rvenutolo/linPEAS-flake/pull/477))
 
 ### Chores
+- Bump linpeas to 20260726-c62415cf ([#526](https://github.com/rvenutolo/linPEAS-flake/pull/526))
+- Update flake.lock ([#524](https://github.com/rvenutolo/linPEAS-flake/pull/524))
 - Drop local skills gitignore ([#475](https://github.com/rvenutolo/linPEAS-flake/pull/475))
 
 ### Documentation
@@ -28,11 +30,13 @@ repo is not on a semver track.
 - Fix stale CI job and hook references ([#470](https://github.com/rvenutolo/linPEAS-flake/pull/470))
 
 ### Features
+- Guard CHANGELOG.md freshness and backfill six shipped releases ([#522](https://github.com/rvenutolo/linPEAS-flake/pull/522))
 - Enforce DOCKERHUB_TOKEN scope split; reword bindings to consumption ([#503](https://github.com/rvenutolo/linPEAS-flake/pull/503))
 - Enforce bump-script integrity guards 1-3 ([#501](https://github.com/rvenutolo/linPEAS-flake/pull/501))
 - Add multi-agent-review skill (/repo-review) ([#498](https://github.com/rvenutolo/linPEAS-flake/pull/498))
 
 ### Fixes
+- Recover the release changelog job from its tag-exists gate ([#523](https://github.com/rvenutolo/linPEAS-flake/pull/523))
 - Assert linpeas pin version is the tag segment in its url ([#521](https://github.com/rvenutolo/linPEAS-flake/pull/521))
 - Stop octoscan masking a per-file scanner error behind a finding ([#520](https://github.com/rvenutolo/linPEAS-flake/pull/520))
 - Parse uses: with yq so flow-style refs cannot bypass SHA-pin lint ([#519](https://github.com/rvenutolo/linPEAS-flake/pull/519))
