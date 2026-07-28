@@ -171,6 +171,17 @@ jobs:
           # SHA-A. The concurrency: group only serializes runs; it
           # does not freeze main during the window. SHA pinning closes
           # the TOCTOU.
+          #
+          # Ordering contract: this tag must be created BEFORE the
+          # changelog job commits its section, and on a commit that is
+          # an ancestor of that changelog commit.
+          # scripts/check-changelog-fresh.sh compares a release tag only
+          # when the tag is an ancestor of the newest CHANGELOG.md
+          # commit; that is what keeps the changelog PR's own merge ref
+          # fully compared. Tagging after the changelog commit would make
+          # the tag a non-ancestor, and the freshness guard would then
+          # exclude — and stop guarding — the case it exists to catch,
+          # silently and on every release. See docs/development/changelog.md.
           gh release create "${VERSION}" \
             --target "${GITHUB_SHA}" \
             --title "${VERSION}" \
@@ -1183,6 +1194,12 @@ jobs:
             ;;
           esac
 
+          # Cut from main, never from the release tag. The tag must stay
+          # an ancestor of the changelog commit produced here, because
+          # scripts/check-changelog-fresh.sh compares a release tag only
+          # while that holds. Branching from the tag instead would make
+          # every release's own changelog PR exempt from the freshness
+          # guard. See docs/development/changelog.md.
           base_sha="$(gh api "repos/${REPO}/git/refs/heads/main" \
             --jq .object.sha --header "${api_header}")"
 
