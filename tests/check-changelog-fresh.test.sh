@@ -168,6 +168,8 @@ EOF
 function main() {
   local root content
   root="$(mktemp --directory)"
+  # shellcheck disable=SC2064
+  trap "rm --force --recursive -- '${root}'" EXIT
   content="${root}/content"
   mkdir --parents "${content}"
   write_content "${content}"
@@ -214,7 +216,61 @@ function main() {
   run_case 'unreleased-only difference ignored -> exit 0' \
     "${unreleased}" "${content}/t1-only-alt-unreleased.md" 0
 
-  rm --recursive --force -- "${root}"
+  # --- Case: release window, newest tag at HEAD --------------------------
+  # T2 was just created and its changelog commit has not landed. The
+  # regeneration renders T2's section; the committed file cannot carry it yet.
+  local window="${root}/window"
+  init_repo "${window}"
+  commit_other "${window}" 'work-1'
+  tag_head "${window}" '20260715-aaaaaaaa'
+  commit_changelog "${window}" "${content}/t1-only.md"
+  commit_other "${window}" 'work-2'
+  tag_head "${window}" '20260726-bbbbbbbb'
+  run_case 'release window, newest tag at HEAD -> exit 0' \
+    "${window}" "${content}/both.md" 0
+
+  # --- Case: release window, HEAD past the tag ---------------------------
+  # The shape a PR merge ref takes during the window: the tag is an ancestor of
+  # HEAD but no CHANGELOG.md commit has landed since. This is the case that
+  # blocks unrelated PRs on a required check.
+  local window_past="${root}/window-past"
+  init_repo "${window_past}"
+  commit_other "${window_past}" 'work-1'
+  tag_head "${window_past}" '20260715-aaaaaaaa'
+  commit_changelog "${window_past}" "${content}/t1-only.md"
+  commit_other "${window_past}" 'work-2'
+  tag_head "${window_past}" '20260726-bbbbbbbb'
+  commit_other "${window_past}" 'work-3'
+  run_case 'release window, HEAD past the tag -> exit 0' \
+    "${window_past}" "${content}/both.md" 0
+
+  # --- Case: older section missing while the newest tag is excluded ------
+  # The exclusion must not swallow a real drop. T1's section is absent from a
+  # changelog commit that post-dates T1, so T1 is compared and fails, even
+  # though T2 is excluded.
+  local older_missing="${root}/older-missing"
+  init_repo "${older_missing}"
+  commit_other "${older_missing}" 'work-1'
+  tag_head "${older_missing}" '20260715-aaaaaaaa'
+  commit_changelog "${older_missing}" "${content}/none.md"
+  commit_other "${older_missing}" 'work-2'
+  tag_head "${older_missing}" '20260726-bbbbbbbb'
+  run_case 'older section missing while newest excluded -> exit 1' \
+    "${older_missing}" "${content}/both.md" 1
+
+  # --- Case: changelog path outside the repository ------------------------
+  # The git queries cannot resolve a path outside the work tree, so no tag can
+  # be excluded and everything is compared. Missing git information must make
+  # the check stricter, never looser.
+  local outside="${root}/outside"
+  init_repo "${outside}"
+  commit_other "${outside}" 'work-1'
+  tag_head "${outside}" '20260715-aaaaaaaa'
+  commit_changelog "${outside}" "${content}/t1-only.md"
+  commit_other "${outside}" 'work-2'
+  tag_head "${outside}" '20260726-bbbbbbbb'
+  run_case 'changelog outside the repo -> no exclusion -> exit 1' \
+    "${outside}" "${content}/both.md" 1 "${content}/t1-only.md"
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2
