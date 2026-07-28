@@ -1,8 +1,8 @@
-name: bad-trivy-missing-ghcr-fallback
+name: bad-scan-action-missing-raw-githubusercontent
 on:
   workflow_dispatch: {}
 jobs:
-  trivy:
+  scan:
     runs-on: ubuntu-latest
     steps:
       - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
@@ -10,7 +10,7 @@ jobs:
           egress-policy: block
           allowed-endpoints: >
             api.github.com:443
-            get.trivy.dev:443
+            get.anchore.io:443
             github.com:443
-            mirror.gcr.io:443
-      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+            grype.anchore.io:443
+      - uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0

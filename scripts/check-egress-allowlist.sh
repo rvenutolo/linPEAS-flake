@@ -19,14 +19,22 @@
 #        github/codeql-action/init  -> release-assets.githubusercontent.com
 #          (the bundle falls back to a release asset when the toolcache misses,
 #           and a github.com release-download URL 302s there unconditionally)
-#        aquasecurity/trivy-action  -> mirror.gcr.io AND ghcr.io
-#          (ghcr.io is the documented DB fallback; without it a mirror.gcr.io
-#           outage fails the scan instead of degrading)
+#        aquasecurity/trivy-action  -> get.trivy.dev AND mirror.gcr.io AND ghcr.io
+#          (get.trivy.dev serves the binary — the release tag resolves against
+#           github.com but the bytes do not; ghcr.io is the documented DB
+#           fallback, so without it a mirror.gcr.io outage fails the scan
+#           instead of degrading)
 #        a `releases/download` URL  -> release-assets.githubusercontent.com
 #        anchore/sbom-action        -> raw.githubusercontent.com AND get.anchore.io
 #          (the syft-install path reaches raw.githubusercontent.com
 #           non-deterministically across arches; get.anchore.io serves the
 #           install script)
+#        anchore/scan-action        -> get.anchore.io AND grype.anchore.io AND
+#                                      raw.githubusercontent.com
+#          (get.anchore.io serves the grype install script,
+#           raw.githubusercontent.com is reached by the same install path
+#           non-deterministically across arches, and grype itself fetches its
+#           vulnerability DB from grype.anchore.io)
 #        a `gh release upload` run  -> uploads.github.com
 #          (asset bytes POST to the uploads host, not the REST API host)
 #        DeterminateSystems/flakehub-cache-action -> banned outright
@@ -158,6 +166,8 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
     fi
 
     if [[ ${uses} == *"aquasecurity/trivy-action"* ]]; then
+      has_host "${endpoints}" "get.trivy.dev" ||
+        fail "${f}: job '${job}' uses trivy-action but does not allowlist get.trivy.dev (the action resolves the release tag against github.com but downloads the binary from get.trivy.dev; without it Trivy never installs and every later step is skipped)"
       has_host "${endpoints}" "mirror.gcr.io" ||
         fail "${f}: job '${job}' uses trivy-action but does not allowlist mirror.gcr.io"
       has_host "${endpoints}" "ghcr.io" ||
@@ -174,6 +184,15 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
         fail "${f}: job '${job}' uses anchore/sbom-action but does not allowlist raw.githubusercontent.com (the syft-install path reaches it, non-deterministically across arches, so the gap is latent)"
       has_host "${endpoints}" "get.anchore.io" ||
         fail "${f}: job '${job}' uses anchore/sbom-action but does not allowlist get.anchore.io (the syft install-script host)"
+    fi
+
+    if [[ ${uses} == *"anchore/scan-action"* ]]; then
+      has_host "${endpoints}" "get.anchore.io" ||
+        fail "${f}: job '${job}' uses anchore/scan-action but does not allowlist get.anchore.io (the grype install-script host)"
+      has_host "${endpoints}" "grype.anchore.io" ||
+        fail "${f}: job '${job}' uses anchore/scan-action but does not allowlist grype.anchore.io (grype fetches its vulnerability DB there; without it the scan cannot run)"
+      has_host "${endpoints}" "raw.githubusercontent.com" ||
+        fail "${f}: job '${job}' uses anchore/scan-action but does not allowlist raw.githubusercontent.com (the grype-install path reaches it, non-deterministically across arches, so the gap is latent)"
     fi
 
     if [[ ${runs} == *"gh release upload"* ]]; then

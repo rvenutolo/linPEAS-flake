@@ -26,6 +26,7 @@ function expect() {
 expect good.yml 0 ""
 expect bad-codeql-missing-release-assets.yml 1 "release-assets.githubusercontent.com"
 expect bad-trivy-missing-ghcr-fallback.yml 1 "ghcr.io"
+expect bad-trivy-missing-get-trivy.yml 1 "get.trivy.dev"
 expect bad-release-asset-download.yml 1 "release-assets.githubusercontent.com"
 expect bad-sign-missing-timestamp.yml 1 "timestamp.sigstore.dev"
 expect bad-sigstore-partial-set.yml 1 "incomplete sigstore host set"
@@ -36,5 +37,8 @@ expect bad-sbom-missing-raw-githubusercontent.yml 1 "raw.githubusercontent.com"
 expect bad-gh-release-upload-missing-uploads.yml 1 "uploads.github.com"
 expect bad-verify-missing-tuf.yml 1 "verification requires at least tuf-repo-cdn.sigstore.dev"
 expect bad-sbom-missing-get-anchore.yml 1 "get.anchore.io"
+expect bad-scan-action-missing-get-anchore.yml 1 "get.anchore.io"
+expect bad-scan-action-missing-grype-anchore.yml 1 "grype.anchore.io"
+expect bad-scan-action-missing-raw-githubusercontent.yml 1 "raw.githubusercontent.com"
 
 printf 'all tests passed\n'

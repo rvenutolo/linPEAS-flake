@@ -100,8 +100,11 @@ A hand-authored `allowed-endpoints:` list has nothing binding it to what the job
 
 1. **Forward rules**, mechanical and exact:
     - `github/codeql-action/init` requires `release-assets.githubusercontent.com` — the CodeQL bundle falls back to a release asset when the toolcache misses, and a `github.com` release-download URL 302s there unconditionally.
-    - `aquasecurity/trivy-action` requires both `mirror.gcr.io` and `ghcr.io` — `ghcr.io` is the documented vulnerability-DB fallback; without it a `mirror.gcr.io` outage fails the scan instead of degrading.
+    - `aquasecurity/trivy-action` requires `get.trivy.dev`, `mirror.gcr.io`, and `ghcr.io`. The action resolves the release tag against `github.com` but downloads the binary from `get.trivy.dev`, so a job carrying only the database hosts installs nothing and skips every later step. `ghcr.io` is the documented vulnerability-DB fallback; without it a `mirror.gcr.io` outage fails the scan instead of degrading.
+    - `anchore/scan-action` requires `get.anchore.io`, `grype.anchore.io`, and `raw.githubusercontent.com` — the first two serve the grype install script and the vulnerability DB, and the install path reaches `raw.githubusercontent.com` non-deterministically across architectures, which makes that gap latent rather than immediate.
+    - `anchore/sbom-action` requires `raw.githubusercontent.com` and `get.anchore.io` — the syft-install path reaches the first non-deterministically across architectures; the second serves the install script.
     - A `run:` step containing a `releases/download` URL requires `release-assets.githubusercontent.com` — the same GitHub redirect as above, reached directly instead of through the CodeQL action.
+    - A `run:` step invoking `gh release upload` requires `uploads.github.com` — asset bytes POST to the uploads host, not to the REST API host.
     - `DeterminateSystems/flakehub-cache-action` is banned outright: no job may use it, and no allowlist may carry a flakehub or Determinate Systems host.
 
     These are instances of a general hazard, not the full set: a redirect to any host outside the allowlist is the defect class. A `github.com/.../releases/download` URL 302s to `release-assets.githubusercontent.com` (covered above); a `nixos.org/manual` URL 302s to `nix.dev` (not covered — `nixos.org` is a lychee link-check target host, outside this lint's tool-inventory scope). Extending the table for a new redirecting host means pinning both the source URL pattern and the host it lands on.
