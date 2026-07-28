@@ -68,6 +68,28 @@ function tag_head() {
   git -C "$1" tag "$2"
 }
 
+# @description Create a branch at HEAD without switching to it.
+# @arg $1 directory  @arg $2 branch name
+function branch_at_head() {
+  local -r dir="$1" branch="$2"
+  git -C "${dir}" branch "${branch}"
+}
+
+# @description Switch to an existing branch.
+# @arg $1 directory  @arg $2 branch name
+function checkout_branch() {
+  local -r dir="$1" branch="$2"
+  git -C "${dir}" checkout --quiet "${branch}"
+}
+
+# @description Merge a branch into the current branch with --no-ff, so a real
+# merge commit is guaranteed even though the merge is a fast-forward candidate.
+# @arg $1 directory  @arg $2 branch name to merge in
+function merge_no_ff() {
+  local -r dir="$1" branch="$2"
+  git -C "${dir}" merge --quiet --no-ff --message "merge: ${branch}" "${branch}"
+}
+
 # @description Run the script with the working directory inside a fixture repo.
 # @arg $1 name  @arg $2 repo dir  @arg $3 regen file  @arg $4 expected exit
 # @arg $5 optional CHANGELOG_OVERRIDE path
@@ -230,9 +252,11 @@ function main() {
     "${window}" "${content}/both.md" 0
 
   # --- Case: release window, HEAD past the tag ---------------------------
-  # The shape a PR merge ref takes during the window: the tag is an ancestor of
-  # HEAD but no CHANGELOG.md commit has landed since. This is the case that
-  # blocks unrelated PRs on a required check.
+  # Exercises the ancestry relationship the exclusion is keyed on, via linear
+  # history: the tag is an ancestor of HEAD but no CHANGELOG.md commit has
+  # landed since. This is the relationship that keeps unrelated PRs unblocked
+  # on a required check; see the merge-commit case below for the same
+  # relationship reproduced through an actual merge ref.
   local window_past="${root}/window-past"
   init_repo "${window_past}"
   commit_other "${window_past}" 'work-1'
@@ -243,6 +267,42 @@ function main() {
   commit_other "${window_past}" 'work-3'
   run_case 'release window, HEAD past the tag -> exit 0' \
     "${window_past}" "${content}/both.md" 0
+
+  # --- Case: changelog PR's own merge ref, T2 section still missing ------
+  # Reproduces the actual history shape CI evaluates on a pull request: a real
+  # merge commit, not linear history standing in for the ancestry relationship
+  # (see the case above). T1 is tagged and its changelog lands on main. T2 is
+  # tagged on a later main-line commit — a release tag is always created on
+  # main before the changelog branch that describes it is cut. A changelog
+  # branch is then cut from that same commit (mirroring the real changelog PR
+  # workflow) and commits a changelog that omits T2's section — the exact
+  # window in which the check must not go permanently blind. Merging that
+  # branch back into main with --no-ff produces the merge commit that CI's
+  # `HEAD` actually is on a pull-request merge ref.
+  #
+  # This locks in the property the whole design depends on: because the
+  # release tag is always created on main before the changelog branch is cut,
+  # the tag is necessarily an ancestor of the changelog commit that
+  # `git log -1 -- CHANGELOG.md` resolves to here (verified separately via
+  # `git merge-base --is-ancestor`) — so on the changelog PR's own merge ref
+  # the tag is compared, not excluded. Its section is missing, so the check
+  # must fail. A future "fix" that makes the ancestry query `--first-parent`
+  # (or otherwise changes which parent it follows through a merge) would
+  # either exclude the tag here and flip this to a false exit 0, or fail to
+  # resolve at all — either way this case goes red.
+  local merge_ref="${root}/merge-ref"
+  init_repo "${merge_ref}"
+  commit_other "${merge_ref}" 'work-1'
+  commit_changelog "${merge_ref}" "${content}/t1-only.md"
+  commit_other "${merge_ref}" 'work-2'
+  tag_head "${merge_ref}" '20260726-bbbbbbbb'
+  branch_at_head "${merge_ref}" 'changelog-branch'
+  checkout_branch "${merge_ref}" 'changelog-branch'
+  commit_changelog "${merge_ref}" "${content}/t1-only-alt-unreleased.md"
+  checkout_branch "${merge_ref}" 'main'
+  merge_no_ff "${merge_ref}" 'changelog-branch'
+  run_case 'changelog PR merge ref, T2 section still missing -> exit 1' \
+    "${merge_ref}" "${content}/both.md" 1
 
   # --- Case: older section missing while the newest tag is excluded ------
   # The exclusion must not swallow a real drop. T1's section is absent from a
