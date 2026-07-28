@@ -1,8 +1,8 @@
-name: bad-trivy-missing-get-trivy
+name: bad-ghcr-missing-pkg-containers
 on:
   workflow_dispatch: {}
 jobs:
-  scan:
+  pull:
     runs-on: ubuntu-latest
     steps:
       - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
@@ -12,6 +12,5 @@ jobs:
             api.github.com:443
             ghcr.io:443
             github.com:443
-            mirror.gcr.io:443
-            pkg-containers.githubusercontent.com:443
-      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      - name: pull image
+        run: docker pull ghcr.io/example/image:latest

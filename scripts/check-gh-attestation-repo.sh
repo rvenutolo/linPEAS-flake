@@ -136,10 +136,12 @@ extract_invocations() {
 failed=0
 for f in "${paths[@]}"; do
   [[ -f ${f} ]] || continue
-  # Skip self: this script contains literal "gh attestation verify"
-  # in its detection regex and would otherwise flag itself.
+  # Skip self, and check-egress-allowlist.sh: both scripts contain the
+  # literal "gh attestation verify" as a `run:`-text match key rather
+  # than an actual invocation, and would otherwise flag themselves.
   case "${f}" in
-  */scripts/check-gh-attestation-repo.sh | scripts/check-gh-attestation-repo.sh)
+  */scripts/check-gh-attestation-repo.sh | scripts/check-gh-attestation-repo.sh | \
+    */scripts/check-egress-allowlist.sh | scripts/check-egress-allowlist.sh)
     continue
     ;;
   esac

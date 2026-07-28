@@ -1,8 +1,8 @@
-name: bad-trivy-missing-get-trivy
+name: bad-dockerhub-description-missing-hub
 on:
   workflow_dispatch: {}
 jobs:
-  scan:
+  push:
     runs-on: ubuntu-latest
     steps:
       - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
@@ -10,8 +10,5 @@ jobs:
           egress-policy: block
           allowed-endpoints: >
             api.github.com:443
-            ghcr.io:443
             github.com:443
-            mirror.gcr.io:443
-            pkg-containers.githubusercontent.com:443
-      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      - uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5.0.0

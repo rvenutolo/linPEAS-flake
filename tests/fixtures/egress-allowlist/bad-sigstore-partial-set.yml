@@ -4,7 +4,7 @@ on:
 jobs:
   # Models the manifest-job bug: no cosign invocation is visible in this
   # workflow file (it is reached indirectly, e.g. via a script), yet the
-  # allowlist carries a partial sigstore host set. Assertion 2 must fire
+  # allowlist carries a partial sigstore host set. Assertion 4 must fire
   # on the host set alone, with zero cosign detection.
   manifest:
     runs-on: ubuntu-latest
