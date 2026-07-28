@@ -112,11 +112,8 @@ regeneration. It runs offline — git-cliff parses the PR number from the
 `scripts/check-changelog-fresh.sh` regenerates the changelog from the
 flake-pinned `.#git-cliff` and compares its **released** sections (from
 the first `## [<tag>]` header onward) against the committed `CHANGELOG.md`.
-The `changelog` job in `release-on-bump.yml` creates the release tag early
-and carries no recovery branch, so a skipped or failed run leaves the
-released sections silently behind the tags that shipped. This guard catches
-that drift on the next PR even though the release-time job never landed its
-update.
+A release that ships without its changelog update landing — or a manual edit
+to a released section — is caught rather than accruing silently.
 
 Only released sections are compared: the `## Unreleased` section
 legitimately changes with every merged commit, so diffing it would force a
@@ -125,6 +122,29 @@ changelog regen on every PR. When it fails, regenerate and commit:
 ```sh
 nix shell .#git-cliff --command git-cliff --config cliff.toml --output CHANGELOG.md
 ```
+
+### Release-window exclusion
+
+The release tag is created before the changelog commit that describes it, so
+between the two there is a window in which the regenerated changelog carries a
+released section that no committed file could yet contain. Comparing it there
+reports staleness nothing can fix: `main` goes red, and because
+`changelog-links` is a required check, every open PR based before the changelog
+commit is blocked on it.
+
+A release tag is therefore compared only when its commit is an ancestor of the
+most recent commit that touched `CHANGELOG.md` — only when the changelog was
+written at a point where that tag already existed. Newer tags are excluded from
+both sides of the comparison. The condition is history-relative rather than
+time-based: a wall-clock grace period would either mask a genuinely dropped
+changelog or still flake, depending on how it was tuned.
+
+This accepts one blind spot: only tags predating the last `CHANGELOG.md` commit
+are covered. A release whose changelog never lands stays uncovered until some
+later changelog commit exists, and two releases stacking up inside the window
+would exclude both. That is tolerable because a dropped changelog job fails
+loudly through the `release-on-bump` notify path — this check is the backstop,
+not the primary signal.
 
 It runs offline (like the link guard) as part of the required
 `changelog-links` CI job, which checks out with `fetch-depth: 0` so every
