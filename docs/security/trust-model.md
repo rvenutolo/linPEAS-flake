@@ -129,4 +129,9 @@ Known blind spot: detection reads the workflow file only, one level deep. A job 
 
 **Sweep method.** The rules above are mechanical, but they only bind hosts to the tools this lint knows to look for. Every host in a job's allowlist is one of three things: repo infrastructure (the Actions runtime, checkout, caching), a documentation-link target (checked by the link-check job, never reached by a tool), or a tool host one of the assertions above requires. A tool host that no rule requires is unguarded — nothing stops it from being deleted, and the lint stays green until the job that still depends on it next runs and gets blocked. Finding that case is a manual sweep of the workflow files against this rule table, not an automated check: deciding which hosts count as infrastructure needs a curated list that would itself rot the same way a hand-authored allowlist does, and the documentation-link targets would need to be carved out of the tool-host set by name, which is the same rot risk one layer up.
 
+The sweep does not conclude every tool host is required by a rule — two are deliberately allowed but not required:
+
+- `check.trivy.dev` serves Trivy's version/VEX lookup. Blocking it degrades Trivy to a warning rather than failing the scan, so no rule demands it.
+- `www.bestpractices.dev` serves the CII-Best-Practices check, which the scorecard job's curated `--checks` list does not run, so nothing in that job ever reaches it. Unlike `check.trivy.dev`, this host has no fallback behavior to preserve — it is a removal candidate from the job's allowlist, not a rule candidate for this lint, and removing it is a separate decision from this lint's coverage.
+
 Enforced by `scripts/check-egress-allowlist.sh` via the `lint-workflow-security` CI job (member check `egress-allowlist`) and a pre-commit hook.
