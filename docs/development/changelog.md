@@ -146,6 +146,21 @@ would exclude both. That is tolerable because a dropped changelog job fails
 loudly through the `release-on-bump` notify path — this check is the backstop,
 not the primary signal.
 
+The exclusion depends on an ordering property of `release-on-bump.yml`, and
+changing that workflow can silently weaken this guard. The release job creates
+the tag on the triggering commit (`gh release create --target`), and the
+changelog job later cuts its branch from `main`. The tag is therefore always an
+ancestor of the changelog commit, so on the changelog pull request's own merge
+ref the tag is compared rather than excluded — the exclusion suppresses the
+window for unrelated pull requests while never disabling the check on the one
+pull request that has to land the section.
+
+Reorder those two steps — tag after the changelog commit, or cut the changelog
+branch from the tag instead of from `main` — and the tag stops being an
+ancestor. The exclusion would then swallow the very case this guard exists to
+catch, on every release, with no test going red. Treat that ordering as part of
+this guard's contract rather than an incidental detail of the release workflow.
+
 It runs offline (like the link guard) as part of the required
 `changelog-links` CI job, which checks out with `fetch-depth: 0` so every
 release tag is visible to git-cliff.
