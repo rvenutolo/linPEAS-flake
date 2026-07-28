@@ -83,9 +83,12 @@ fi
 #
 # Every git call is failure-tolerant. With no tags, no changelog commit, or no
 # repository the set is empty, which compares everything — missing git
-# information can only make this check stricter, never looser.
-function graced_tags() {
-  local last_cl tag
+# information can only make this check stricter, never looser. In particular,
+# an unresolvable ancestry query (git-merge-base exit 128) is neither a
+# confirmed ancestor nor a confirmed non-ancestor, so it does not exclude —
+# only a confirmed non-ancestor (exit 1) does.
+function excluded_tags() {
+  local last_cl tag status
   last_cl="$(git log -1 --format=%H -- "${CHANGELOG}" 2>/dev/null || true)"
   if [[ -z ${last_cl} ]]; then
     return 0
@@ -94,7 +97,9 @@ function graced_tags() {
     if [[ -z ${tag} ]]; then
       continue
     fi
-    if ! git merge-base --is-ancestor "${tag}^{commit}" "${last_cl}" 2>/dev/null; then
+    status=0
+    git merge-base --is-ancestor "${tag}^{commit}" "${last_cl}" 2>/dev/null || status=$?
+    if [[ ${status} -eq 1 ]]; then
       printf '%s\n' "${tag}"
     fi
   done < <(git tag --merged HEAD 2>/dev/null || true)
@@ -106,12 +111,12 @@ function graced_tags() {
 # @arg $1 file
 # @arg $2 newline-separated excluded tag names (may be empty)
 function released() {
-  awk -v graced="$2" '
+  awk -v excluded_list="$2" '
     BEGIN {
-      n = split(graced, g, "\n")
+      n = split(excluded_list, g, "\n")
       for (i = 1; i <= n; i++) {
         if (g[i] != "") {
-          excluded[g[i]] = 1
+          skip[g[i]] = 1
         }
       }
     }
@@ -120,25 +125,25 @@ function released() {
       tag = $0
       sub(/^## \[/, "", tag)
       sub(/\].*$/, "", tag)
-      skipping = (tag in excluded)
+      skipping = (tag in skip)
     }
     started && !skipping
   ' "$1"
 }
 
-graced="$(graced_tags)"
+excluded="$(excluded_tags)"
 
-if ! diff <(released "${CHANGELOG}" "${graced}") <(released "${tmp}" "${graced}") >/dev/null; then
+if ! diff <(released "${CHANGELOG}" "${excluded}") <(released "${tmp}" "${excluded}") >/dev/null; then
   printf 'CHANGELOG.md released sections are stale vs a fresh git-cliff regen.\n' >&2
   printf 'A release shipped without the changelog job landing its update.\n' >&2
   printf 'Regenerate and commit:\n' >&2
   printf '  nix shell .#git-cliff --command git-cliff --config cliff.toml --output CHANGELOG.md\n' >&2
-  if [[ -n ${graced} ]]; then
+  if [[ -n ${excluded} ]]; then
     printf '\nExcluded (no CHANGELOG.md commit after these tags yet): %s\n' \
-      "$(printf '%s' "${graced}" | tr '\n' ' ')" >&2
+      "$(printf '%s' "${excluded}" | tr '\n' ' ')" >&2
   fi
   printf '\n--- committed vs regenerated (released sections only) ---\n' >&2
-  diff <(released "${CHANGELOG}" "${graced}") <(released "${tmp}" "${graced}") >&2 || true
+  diff <(released "${CHANGELOG}" "${excluded}") <(released "${tmp}" "${excluded}") >&2 || true
   exit 1
 fi
 
