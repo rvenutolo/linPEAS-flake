@@ -148,4 +148,8 @@ if ! diff <(released "${CHANGELOG}" "${excluded}") <(released "${tmp}" "${exclud
 fi
 
 printf 'CHANGELOG.md released sections match a fresh git-cliff regeneration\n'
+if [[ -n ${excluded} ]]; then
+  printf '\nExcluded (no CHANGELOG.md commit after these tags yet): %s\n' \
+    "$(printf '%s' "${excluded}" | tr '\n' ' ')"
+fi
 exit 0
