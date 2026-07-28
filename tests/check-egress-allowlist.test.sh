@@ -41,5 +41,9 @@ expect bad-scan-action-missing-get-anchore.yml 1 "get.anchore.io"
 expect bad-scan-action-missing-grype-anchore.yml 1 "grype.anchore.io"
 expect bad-scan-action-missing-raw-githubusercontent.yml 1 "raw.githubusercontent.com"
 expect bad-ghcr-missing-pkg-containers.yml 1 "pkg-containers.githubusercontent.com"
+expect bad-dockerhub-missing-auth.yml 1 "auth.docker.io"
+expect bad-dockerhub-missing-registry.yml 1 "registry-1.docker.io"
+expect bad-dockerhub-missing-cloudfront.yml 1 "production.cloudfront.docker.com"
+expect bad-dockerhub-push-missing-index.yml 1 "index.docker.io"
 
 printf 'all tests passed\n'

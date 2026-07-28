@@ -3,7 +3,9 @@
 #
 # @description Lint: every job's harden-runner `allowed-endpoints` list
 # carries the hosts its tool inventory actually reaches, carries the ghcr
-# blob host alongside ghcr.io, carries a complete sigstore host set if it
+# blob host alongside ghcr.io, carries a complete Docker Hub pull host set
+# (and the push host too, if it logs in or pushes) if it carries any Docker
+# Hub registry host at all, carries a complete sigstore host set if it
 # carries any sigstore host at all, and carries no denylisted host.
 
 # Binds each job's `allowed-endpoints` list to what the job's tooling actually
@@ -13,7 +15,7 @@
 # finally exercised, which can be months later. A `connection refused` against
 # a healthy public host is harden-runner's block signature, not an outage.
 #
-# Four assertions per job:
+# Five assertions per job:
 #
 #   1. Forward rules, keyed on `uses:` and on `run:` text:
 #        github/codeql-action/init  -> release-assets.githubusercontent.com
@@ -55,7 +57,18 @@
 #      blobs come from the pkg-containers host, so a pull, push, or a
 #      Trivy vulnerability-DB fallback stalls on the first blob without it.
 #
-#   3. Sigstore host-set consistency. Any job whose allowlist carries ANY
+#   3. Docker Hub host-set consistency. Any job whose allowlist carries ANY
+#      Docker Hub registry host must carry the full pull floor:
+#      auth.docker.io + registry-1.docker.io + production.cloudfront.docker.com
+#      (the token service, the registry API, and the layer CDN — pulling a
+#      single image needs all three together). A job that additionally logs
+#      in or pushes (`docker login`/`docker push`, `buildx imagetools`, or
+#      `peter-evans/dockerhub-description`) must also carry index.docker.io,
+#      the write-path host. `hub.docker.com` is deliberately never required —
+#      it is the Docker Hub web API and a lychee link-check target, not a
+#      registry host.
+#
+#   4. Sigstore host-set consistency. Any job whose allowlist carries ANY
 #      sigstore host, OR whose `run:` text invokes cosign, must carry a
 #      COMPLETE set for what it does:
 #        signing (`cosign sign` / `cosign sign-blob`):
@@ -76,12 +89,12 @@
 #          `manifest` job bug, which shipped with a partial (zero-of-three)
 #          sigstore set while its four signing siblings each carried three.
 #
-#   4. Reverse check: a denylist of hosts nothing in this repo justifies.
+#   5. Reverse check: a denylist of hosts nothing in this repo justifies.
 #      Junk entries defeat allowlist review.
 #
 # KNOWN BLIND SPOT: detection reads the workflow file only, one level deep. A
 # job that reaches cosign through `scripts/*.sh` or `just` is invisible to the
-# `run:`-text sign/verify rules. Assertion 3's "neither detected" branch
+# `run:`-text sign/verify rules. Assertion 4's "neither detected" branch
 # covers that case regardless of detection, so an approximate call-graph
 # resolver would buy false confidence, not coverage.
 #
@@ -101,6 +114,16 @@ readonly REKOR="rekor.sigstore.dev"
 readonly TUF="tuf-repo-cdn.sigstore.dev"
 readonly TIMESTAMP="timestamp.sigstore.dev"
 readonly RELEASE_ASSETS="release-assets.githubusercontent.com"
+
+# Docker Hub pull path: token service, registry API, and layer CDN. All three
+# are required to pull a single image. `hub.docker.com` is deliberately absent —
+# it is the web API and a lychee link-check target, not a registry host.
+readonly -a DOCKERHUB_PULL=(
+  'auth.docker.io'
+  'production.cloudfront.docker.com'
+  'registry-1.docker.io'
+)
+readonly DOCKERHUB_PUSH='index.docker.io'
 
 # Hosts nothing in this repo justifies. Patterns are matched with `==` glob.
 readonly -a DENYLIST=(
@@ -213,7 +236,29 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
         fail "${f}: job '${job}' allowlists ghcr.io but not pkg-containers.githubusercontent.com (ghcr.io serves manifests; layer blobs come from the pkg-containers host, so a pull or push stalls on the first blob)"
     fi
 
-    # --- Assertion 3: sigstore host-set consistency ----------------------
+    # --- Assertion 3: Docker Hub host-set consistency --------------------
+
+    dockerhub_any=0
+    for h in "${DOCKERHUB_PULL[@]}" "${DOCKERHUB_PUSH}"; do
+      if has_host "${endpoints}" "${h}"; then
+        dockerhub_any=1
+      fi
+    done
+
+    if ((dockerhub_any == 1)); then
+      for h in "${DOCKERHUB_PULL[@]}"; do
+        has_host "${endpoints}" "${h}" ||
+          fail "${f}: job '${job}' carries a Docker Hub registry host but not ${h} (pulling one image needs the token service, the registry API, and the layer CDN together)"
+      done
+      if [[ ${runs} =~ docker[[:space:]]+(login|push) ]] ||
+        [[ ${runs} == *"buildx imagetools"* ]] ||
+        [[ ${uses} == *"peter-evans/dockerhub-description"* ]]; then
+        has_host "${endpoints}" "${DOCKERHUB_PUSH}" ||
+          fail "${f}: job '${job}' logs in or pushes to Docker Hub but does not allowlist ${DOCKERHUB_PUSH} (the write path authenticates against the index host, not the pull registry host)"
+      fi
+    fi
+
+    # --- Assertion 4: sigstore host-set consistency ----------------------
 
     has_fulcio=0 has_rekor=0 has_tuf=0 has_ts=0
     has_host "${endpoints}" "${FULCIO}" && has_fulcio=1
@@ -254,7 +299,7 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
       fi
     fi
 
-    # --- Assertion 4: reverse check (denylist) ---------------------------
+    # --- Assertion 5: reverse check (denylist) ---------------------------
 
     while IFS= read -r e; do
       [[ -z ${e} ]] && continue
