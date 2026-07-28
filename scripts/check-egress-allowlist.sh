@@ -29,6 +29,12 @@
 #          (the syft-install path reaches raw.githubusercontent.com
 #           non-deterministically across arches; get.anchore.io serves the
 #           install script)
+#        anchore/scan-action        -> get.anchore.io AND grype.anchore.io AND
+#                                      raw.githubusercontent.com
+#          (get.anchore.io serves the grype install script,
+#           raw.githubusercontent.com is reached by the same install path
+#           non-deterministically across arches, and grype itself fetches its
+#           vulnerability DB from grype.anchore.io)
 #        a `gh release upload` run  -> uploads.github.com
 #          (asset bytes POST to the uploads host, not the REST API host)
 #        DeterminateSystems/flakehub-cache-action -> banned outright
@@ -178,6 +184,15 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
         fail "${f}: job '${job}' uses anchore/sbom-action but does not allowlist raw.githubusercontent.com (the syft-install path reaches it, non-deterministically across arches, so the gap is latent)"
       has_host "${endpoints}" "get.anchore.io" ||
         fail "${f}: job '${job}' uses anchore/sbom-action but does not allowlist get.anchore.io (the syft install-script host)"
+    fi
+
+    if [[ ${uses} == *"anchore/scan-action"* ]]; then
+      has_host "${endpoints}" "get.anchore.io" ||
+        fail "${f}: job '${job}' uses anchore/scan-action but does not allowlist get.anchore.io (the grype install-script host)"
+      has_host "${endpoints}" "grype.anchore.io" ||
+        fail "${f}: job '${job}' uses anchore/scan-action but does not allowlist grype.anchore.io (grype fetches its vulnerability DB there; without it the scan cannot run)"
+      has_host "${endpoints}" "raw.githubusercontent.com" ||
+        fail "${f}: job '${job}' uses anchore/scan-action but does not allowlist raw.githubusercontent.com (the grype-install path reaches it, non-deterministically across arches, so the gap is latent)"
     fi
 
     if [[ ${runs} == *"gh release upload"* ]]; then
