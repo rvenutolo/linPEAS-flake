@@ -194,9 +194,9 @@ harness can point at a temp dir. Exits 0 if the split holds, 1 otherwise.
 ### scripts/check-egress-allowlist.sh
 
 Lint: every job's harden-runner `allowed-endpoints` list
-carries the hosts its tool inventory actually reaches, carries a complete
-sigstore host set if it carries any sigstore host at all, and carries no
-denylisted host.
+carries the hosts its tool inventory actually reaches, carries the ghcr
+blob host alongside ghcr.io, carries a complete sigstore host set if it
+carries any sigstore host at all, and carries no denylisted host.
 
 ### scripts/check-ephemeral-refs.sh
 

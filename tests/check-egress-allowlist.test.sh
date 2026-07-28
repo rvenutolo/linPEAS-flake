@@ -40,5 +40,6 @@ expect bad-sbom-missing-get-anchore.yml 1 "get.anchore.io"
 expect bad-scan-action-missing-get-anchore.yml 1 "get.anchore.io"
 expect bad-scan-action-missing-grype-anchore.yml 1 "grype.anchore.io"
 expect bad-scan-action-missing-raw-githubusercontent.yml 1 "raw.githubusercontent.com"
+expect bad-ghcr-missing-pkg-containers.yml 1 "pkg-containers.githubusercontent.com"
 
 printf 'all tests passed\n'

@@ -2,9 +2,9 @@
 # scripts/check-egress-allowlist.sh
 #
 # @description Lint: every job's harden-runner `allowed-endpoints` list
-# carries the hosts its tool inventory actually reaches, carries a complete
-# sigstore host set if it carries any sigstore host at all, and carries no
-# denylisted host.
+# carries the hosts its tool inventory actually reaches, carries the ghcr
+# blob host alongside ghcr.io, carries a complete sigstore host set if it
+# carries any sigstore host at all, and carries no denylisted host.
 
 # Binds each job's `allowed-endpoints` list to what the job's tooling actually
 # reaches. Hand-authored allowlists rot silently: a tool version bumps, a URL
@@ -13,7 +13,7 @@
 # finally exercised, which can be months later. A `connection refused` against
 # a healthy public host is harden-runner's block signature, not an outage.
 #
-# Three assertions per job:
+# Four assertions per job:
 #
 #   1. Forward rules, keyed on `uses:` and on `run:` text:
 #        github/codeql-action/init  -> release-assets.githubusercontent.com
@@ -49,7 +49,13 @@
 #      new redirecting host needs the same treatment: pin both the source
 #      URL pattern and the host it lands on, not just the source.
 #
-#   2. Sigstore host-set consistency. Any job whose allowlist carries ANY
+#   2. ghcr blob-host consistency. Any job whose allowlist carries ghcr.io
+#      at all must also carry pkg-containers.githubusercontent.com,
+#      whatever tool put ghcr.io there: ghcr.io serves manifests, but layer
+#      blobs come from the pkg-containers host, so a pull, push, or a
+#      Trivy vulnerability-DB fallback stalls on the first blob without it.
+#
+#   3. Sigstore host-set consistency. Any job whose allowlist carries ANY
 #      sigstore host, OR whose `run:` text invokes cosign, must carry a
 #      COMPLETE set for what it does:
 #        signing (`cosign sign` / `cosign sign-blob`):
@@ -70,12 +76,12 @@
 #          `manifest` job bug, which shipped with a partial (zero-of-three)
 #          sigstore set while its four signing siblings each carried three.
 #
-#   3. Reverse check: a denylist of hosts nothing in this repo justifies.
+#   4. Reverse check: a denylist of hosts nothing in this repo justifies.
 #      Junk entries defeat allowlist review.
 #
 # KNOWN BLIND SPOT: detection reads the workflow file only, one level deep. A
 # job that reaches cosign through `scripts/*.sh` or `just` is invisible to the
-# `run:`-text sign/verify rules. Assertion 2's "neither detected" branch
+# `run:`-text sign/verify rules. Assertion 3's "neither detected" branch
 # covers that case regardless of detection, so an approximate call-graph
 # resolver would buy false confidence, not coverage.
 #
@@ -200,7 +206,14 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
         fail "${f}: job '${job}' runs 'gh release upload' but does not allowlist uploads.github.com (asset bytes POST to the uploads host, not the REST API host)"
     fi
 
-    # --- Assertion 2: sigstore host-set consistency ----------------------
+    # --- Assertion 2: ghcr blob-host consistency -------------------------
+
+    if has_host "${endpoints}" "ghcr.io"; then
+      has_host "${endpoints}" "pkg-containers.githubusercontent.com" ||
+        fail "${f}: job '${job}' allowlists ghcr.io but not pkg-containers.githubusercontent.com (ghcr.io serves manifests; layer blobs come from the pkg-containers host, so a pull or push stalls on the first blob)"
+    fi
+
+    # --- Assertion 3: sigstore host-set consistency ----------------------
 
     has_fulcio=0 has_rekor=0 has_tuf=0 has_ts=0
     has_host "${endpoints}" "${FULCIO}" && has_fulcio=1
@@ -241,7 +254,7 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
       fi
     fi
 
-    # --- Assertion 3: reverse check (denylist) ---------------------------
+    # --- Assertion 4: reverse check (denylist) ---------------------------
 
     while IFS= read -r e; do
       [[ -z ${e} ]] && continue
