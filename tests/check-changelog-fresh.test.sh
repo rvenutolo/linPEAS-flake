@@ -259,9 +259,11 @@ function main() {
     "${older_missing}" "${content}/both.md" 1
 
   # --- Case: changelog path outside the repository ------------------------
-  # The git queries cannot resolve a path outside the work tree, so no tag can
-  # be excluded and everything is compared. Missing git information must make
-  # the check stricter, never looser.
+  # The comparison runs against a file outside the work tree. If the ancestry
+  # query is driven by the changelog path actually in use (the override), it
+  # cannot resolve and no tag is excluded. If instead the query hardcodes
+  # CHANGELOG.md, it resolves the tracked file, the newest tag is excluded, and
+  # this case silently flips to exit 0. This case asserts the query is path-aware.
   local outside="${root}/outside"
   init_repo "${outside}"
   commit_other "${outside}" 'work-1'
@@ -271,6 +273,21 @@ function main() {
   tag_head "${outside}" '20260726-bbbbbbbb'
   run_case 'changelog outside the repo -> no exclusion -> exit 1' \
     "${outside}" "${content}/both.md" 1 "${content}/t1-only.md"
+
+  # --- Case: no CHANGELOG.md commit in history ---------------------------
+  # The file exists on disk but was never committed. The ancestry query cannot
+  # resolve the path under any implementation (neither hardcoded nor path-aware),
+  # so no tag is excluded and everything is compared. Missing git information
+  # must make the check stricter, never looser.
+  local no_commit="${root}/no-commit"
+  init_repo "${no_commit}"
+  commit_other "${no_commit}" 'work-1'
+  tag_head "${no_commit}" '20260715-aaaaaaaa'
+  commit_other "${no_commit}" 'work-2'
+  tag_head "${no_commit}" '20260726-bbbbbbbb'
+  cp -- "${content}/t1-only.md" "${no_commit}/CHANGELOG.md"
+  run_case 'no CHANGELOG.md commit in history -> no exclusion -> exit 1' \
+    "${no_commit}" "${content}/both.md" 1
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2
