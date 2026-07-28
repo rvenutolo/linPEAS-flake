@@ -108,6 +108,15 @@
 # covers that case regardless of detection, so an approximate call-graph
 # resolver would buy false confidence, not coverage.
 #
+# TWO MORE LIMITATIONS in the same detection family, both in assertion 3's
+# Docker Hub push-branch check: it matches `docker push` / `docker login`
+# anywhere in a job's concatenated `run:` text, including inside a shell
+# comment, so a job that merely mentions those words in a comment would be
+# required to carry index.docker.io, the write-path host, even though it
+# never reaches it. The same check is also blind to a push performed by
+# tooling shaped differently — `skopeo copy`, `crane push`, `regctl`, or a
+# wrapped script — which would silently under-guard the write path.
+#
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures.
 # Exits 0 clean, 1 on any drift, 2 if yq is missing.
 
