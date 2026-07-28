@@ -26,6 +26,7 @@ function expect() {
 expect good.yml 0 ""
 expect bad-codeql-missing-release-assets.yml 1 "release-assets.githubusercontent.com"
 expect bad-trivy-missing-ghcr-fallback.yml 1 "ghcr.io"
+expect bad-trivy-missing-get-trivy.yml 1 "get.trivy.dev"
 expect bad-release-asset-download.yml 1 "release-assets.githubusercontent.com"
 expect bad-sign-missing-timestamp.yml 1 "timestamp.sigstore.dev"
 expect bad-sigstore-partial-set.yml 1 "incomplete sigstore host set"

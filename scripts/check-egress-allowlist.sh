@@ -19,9 +19,11 @@
 #        github/codeql-action/init  -> release-assets.githubusercontent.com
 #          (the bundle falls back to a release asset when the toolcache misses,
 #           and a github.com release-download URL 302s there unconditionally)
-#        aquasecurity/trivy-action  -> mirror.gcr.io AND ghcr.io
-#          (ghcr.io is the documented DB fallback; without it a mirror.gcr.io
-#           outage fails the scan instead of degrading)
+#        aquasecurity/trivy-action  -> get.trivy.dev AND mirror.gcr.io AND ghcr.io
+#          (get.trivy.dev serves the binary — the release tag resolves against
+#           github.com but the bytes do not; ghcr.io is the documented DB
+#           fallback, so without it a mirror.gcr.io outage fails the scan
+#           instead of degrading)
 #        a `releases/download` URL  -> release-assets.githubusercontent.com
 #        anchore/sbom-action        -> raw.githubusercontent.com AND get.anchore.io
 #          (the syft-install path reaches raw.githubusercontent.com
@@ -158,6 +160,8 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
     fi
 
     if [[ ${uses} == *"aquasecurity/trivy-action"* ]]; then
+      has_host "${endpoints}" "get.trivy.dev" ||
+        fail "${f}: job '${job}' uses trivy-action but does not allowlist get.trivy.dev (the action resolves the release tag against github.com but downloads the binary from get.trivy.dev; without it Trivy never installs and every later step is skipped)"
       has_host "${endpoints}" "mirror.gcr.io" ||
         fail "${f}: job '${job}' uses trivy-action but does not allowlist mirror.gcr.io"
       has_host "${endpoints}" "ghcr.io" ||
