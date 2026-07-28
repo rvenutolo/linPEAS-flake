@@ -48,15 +48,33 @@ cross-check, and atomic (mktemp + mv) pin write.
 ### scripts/check-changelog-fresh.sh
 
 Guard that CHANGELOG.md's released sections match a fresh
-git-cliff regeneration. The release-on-bump changelog job can be skipped
-(its tag-exists gate carries no recovery branch), letting the committed
-released sections silently fall behind the tags that shipped. This detects
-that drift even when the release-time job never ran.
+git-cliff regeneration, so a release that ships without its changelog update
+landing — or a manual edit to a released section — is caught rather than
+accruing silently.
 
 Only the released portion (from the first `## [<tag>]` header onward) is
 compared. The `## Unreleased` section legitimately changes with every merged
 commit, so comparing it would force a changelog regen on every PR — the
 staleness this guards is released sections lagging the release tags.
+
+A release tag is created before the changelog commit that describes it, so
+between the two there is a window in which a released section cannot yet
+exist in the committed file. Comparing it there reports staleness that no
+commit could fix: main goes red, and because the enforcing CI job is a
+required check, every open PR based before the changelog commit is blocked.
+A tag is therefore compared only when its commit is an ancestor of the most
+recent commit that touched CHANGELOG.md — only when the changelog was written
+at a point where that tag already existed. Newer tags are excluded from both
+sides of the diff. The condition is history-relative rather than time-based:
+a wall-clock grace period would either mask a genuinely dropped changelog or
+still flake, depending on how it was tuned.
+
+Blind spot this accepts: only tags predating the last CHANGELOG.md commit are
+guarded. A release whose changelog never lands stays unguarded until some
+later changelog commit exists, and two releases stacking up inside the window
+would exclude both. That is tolerable because a dropped changelog job fails
+loudly through the release-on-bump notify path — this check is the backstop,
+not the primary signal.
 
 git-cliff is invoked only via the flake-pinned `.#git-cliff` output, per the
 nix-run-pinned invariant. Offline and deterministic: git-cliff parses the PR
