@@ -89,7 +89,6 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-            www.bestpractices.dev:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -120,6 +119,14 @@ jobs:
           # goes to stdout. Routing JSON to a file sidesteps both
           # problems and is the pattern the upstream scorecard-action
           # composite uses internally.
+          # This list and the job's allowed-endpoints are coupled: each
+          # check reaches its own datasets. The curated ten reach
+          # api.securityscorecards.dev, api.osv.dev, and api.deps.dev,
+          # which the egress lint requires. Adding a check back means
+          # adding the host it queries — CII-Best-Practices needs
+          # www.bestpractices.dev, which is absent because that check
+          # is not run. A missing host surfaces as a blocked-egress
+          # failure, not a wrong score.
           nix develop --command scorecard \
             --repo="github.com/${REPO}" \
             --checks=Pinned-Dependencies,Signed-Releases,SBOM,Vulnerabilities,Security-Policy,Dependency-Update-Tool,License,Webhooks,Binary-Artifacts,Packaging \
