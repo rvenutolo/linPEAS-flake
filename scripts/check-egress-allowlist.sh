@@ -37,6 +37,10 @@
 #           raw.githubusercontent.com is reached by the same install path
 #           non-deterministically across arches, and grype itself fetches its
 #           vulnerability DB from grype.anchore.io)
+#        peter-evans/dockerhub-description -> hub.docker.com
+#          (the action authenticates against and PATCHes the Docker Hub web
+#           API to publish the repository README; it never talks to a
+#           registry host)
 #        a `gh release upload` run  -> uploads.github.com
 #          (asset bytes POST to the uploads host, not the REST API host)
 #        the scorecard CLI (`nix develop --command scorecard` or
@@ -72,11 +76,13 @@
 #      auth.docker.io + registry-1.docker.io + production.cloudfront.docker.com
 #      (the token service, the registry API, and the layer CDN — pulling a
 #      single image needs all three together). A job that additionally logs
-#      in or pushes (`docker login`/`docker push`, `buildx imagetools`, or
-#      `peter-evans/dockerhub-description`) must also carry index.docker.io,
-#      the write-path host. `hub.docker.com` is deliberately never required —
-#      it is the Docker Hub web API and a lychee link-check target, not a
-#      registry host.
+#      in or pushes (`docker login`/`docker push` or `buildx imagetools
+#      create`) must also carry index.docker.io, the write-path host.
+#      `hub.docker.com` is never required by this assertion — it is the
+#      Docker Hub web API, not a registry host, and it doubles as a lychee
+#      link-check target in links.yml. Assertion 1 requires it directly
+#      wherever peter-evans/dockerhub-description appears, since that
+#      action's writes land on the web API rather than the registry.
 #
 #   4. Sigstore host-set consistency. Any job whose allowlist carries ANY
 #      sigstore host, OR whose `run:` text invokes cosign, must carry a
@@ -135,8 +141,10 @@ readonly TIMESTAMP="timestamp.sigstore.dev"
 readonly RELEASE_ASSETS="release-assets.githubusercontent.com"
 
 # Docker Hub pull path: token service, registry API, and layer CDN. All three
-# are required to pull a single image. `hub.docker.com` is deliberately absent —
-# it is the web API and a lychee link-check target, not a registry host.
+# are required to pull a single image. `hub.docker.com` is deliberately absent
+# from this set — it is the web API and a lychee link-check target, not a
+# registry host. It is instead required directly by assertion 1 wherever
+# peter-evans/dockerhub-description appears.
 readonly -a DOCKERHUB_PULL=(
   'auth.docker.io'
   'production.cloudfront.docker.com'
@@ -243,6 +251,11 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
         fail "${f}: job '${job}' uses anchore/scan-action but does not allowlist raw.githubusercontent.com (the grype-install path reaches it, non-deterministically across arches, so the gap is latent)"
     fi
 
+    if [[ ${uses} == *"peter-evans/dockerhub-description"* ]]; then
+      has_host "${endpoints}" "hub.docker.com" ||
+        fail "${f}: job '${job}' uses peter-evans/dockerhub-description but does not allowlist hub.docker.com (the action authenticates against and PATCHes the Docker Hub web API to publish the repository README; it never reaches a registry host)"
+    fi
+
     if [[ ${runs} == *"gh release upload"* ]]; then
       has_host "${endpoints}" "uploads.github.com" ||
         fail "${f}: job '${job}' runs 'gh release upload' but does not allowlist uploads.github.com (asset bytes POST to the uploads host, not the REST API host)"
@@ -282,8 +295,7 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
           fail "${f}: job '${job}' carries a Docker Hub registry host but not ${h} (pulling one image needs the token service, the registry API, and the layer CDN together)"
       done
       if [[ ${runs} =~ docker[[:space:]]+(login|push) ]] ||
-        [[ ${runs} == *"buildx imagetools"* ]] ||
-        [[ ${uses} == *"peter-evans/dockerhub-description"* ]]; then
+        [[ ${runs} == *"buildx imagetools create"* ]]; then
         has_host "${endpoints}" "${DOCKERHUB_PUSH}" ||
           fail "${f}: job '${job}' logs in or pushes to Docker Hub but does not allowlist ${DOCKERHUB_PUSH} (the write path authenticates against the index host, not the pull registry host)"
       fi
