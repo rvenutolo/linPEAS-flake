@@ -39,6 +39,16 @@
 #           vulnerability DB from grype.anchore.io)
 #        a `gh release upload` run  -> uploads.github.com
 #          (asset bytes POST to the uploads host, not the REST API host)
+#        the scorecard CLI (`nix develop --command scorecard` or
+#        `scorecard --repo`, either substring)  -> api.securityscorecards.dev
+#                                                   AND api.osv.dev AND
+#                                                   api.deps.dev
+#          (scorecard queries its own API plus the OSV and deps.dev datasets
+#           while evaluating checks; an invocation shaped differently than
+#           either keyed substring is not detected)
+#        a `gh attestation verify` run -> tuf-repo.github.com
+#          (verification refreshes GitHub's TUF root before checking the
+#           bundle)
 #        DeterminateSystems/flakehub-cache-action -> banned outright
 #
 #      GENERAL HAZARD this rule table only partially covers: a redirect to
@@ -227,6 +237,18 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
     if [[ ${runs} == *"gh release upload"* ]]; then
       has_host "${endpoints}" "uploads.github.com" ||
         fail "${f}: job '${job}' runs 'gh release upload' but does not allowlist uploads.github.com (asset bytes POST to the uploads host, not the REST API host)"
+    fi
+
+    if [[ ${runs} == *"command scorecard"* || ${runs} == *"scorecard --repo"* ]]; then
+      for h in 'api.securityscorecards.dev' 'api.deps.dev' 'api.osv.dev'; do
+        has_host "${endpoints}" "${h}" ||
+          fail "${f}: job '${job}' runs the scorecard CLI but does not allowlist ${h} (scorecard queries its own API plus the OSV and deps.dev datasets while evaluating checks)"
+      done
+    fi
+
+    if [[ ${runs} == *"gh attestation verify"* ]]; then
+      has_host "${endpoints}" "tuf-repo.github.com" ||
+        fail "${f}: job '${job}' runs 'gh attestation verify' but does not allowlist tuf-repo.github.com (verification refreshes GitHub's TUF root before checking the bundle)"
     fi
 
     # --- Assertion 2: ghcr blob-host consistency -------------------------

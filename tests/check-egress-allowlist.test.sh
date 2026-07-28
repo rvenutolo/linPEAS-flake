@@ -45,5 +45,9 @@ expect bad-dockerhub-missing-auth.yml 1 "auth.docker.io"
 expect bad-dockerhub-missing-registry.yml 1 "registry-1.docker.io"
 expect bad-dockerhub-missing-cloudfront.yml 1 "production.cloudfront.docker.com"
 expect bad-dockerhub-push-missing-index.yml 1 "index.docker.io"
+expect bad-scorecard-missing-scorecards-api.yml 1 "api.securityscorecards.dev"
+expect bad-scorecard-missing-osv.yml 1 "api.osv.dev"
+expect bad-scorecard-missing-deps-dev.yml 1 "api.deps.dev"
+expect bad-attestation-verify-missing-tuf.yml 1 "tuf-repo.github.com"
 
 printf 'all tests passed\n'
