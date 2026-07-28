@@ -286,10 +286,9 @@ function main() {
   # `git log -1 -- CHANGELOG.md` resolves to here (verified separately via
   # `git merge-base --is-ancestor`) — so on the changelog PR's own merge ref
   # the tag is compared, not excluded. Its section is missing, so the check
-  # must fail. A future "fix" that makes the ancestry query `--first-parent`
-  # (or otherwise changes which parent it follows through a merge) would
-  # either exclude the tag here and flip this to a false exit 0, or fail to
-  # resolve at all — either way this case goes red.
+  # must fail. This case guards that comparison: an exclusion rule that
+  # wrongly swallowed this shape — excluding the tag even though it is an
+  # ancestor of the resolved changelog commit — would turn this case red.
   local merge_ref="${root}/merge-ref"
   init_repo "${merge_ref}"
   commit_other "${merge_ref}" 'work-1'
