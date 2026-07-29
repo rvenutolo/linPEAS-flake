@@ -6,6 +6,20 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20260729-41db79f4] - 2026-07-29
+
+### Chores
+- Bump linpeas to 20260729-41db79f4 ([#535](https://github.com/rvenutolo/linPEAS-flake/pull/535))
+- Drop the unreached bestpractices host from scorecard egress ([#534](https://github.com/rvenutolo/linPEAS-flake/pull/534))
+
+### Documentation
+- Record the release ordering the changelog guard depends on ([#532](https://github.com/rvenutolo/linPEAS-flake/pull/532))
+
+### Fixes
+- Guard the egress host sets the allowlist lint left unbound ([#533](https://github.com/rvenutolo/linPEAS-flake/pull/533))
+- Stop changelog freshness failing in the release window ([#531](https://github.com/rvenutolo/linPEAS-flake/pull/531))
+- Restore the Trivy CVE scan blocked by its egress allowlist ([#530](https://github.com/rvenutolo/linPEAS-flake/pull/530))
+
 ## [20260726-c62415cf] - 2026-07-27
 
 ### Breaking Changes
