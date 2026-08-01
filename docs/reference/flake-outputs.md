@@ -18,11 +18,11 @@ block between the markers by hand.
 ├───checks
 │   ├───aarch64-linux
 │   │   ├───formatting: derivation 'treefmt-check'
-│   │   ├───linpeas-build: derivation 'linpeas-20260731-9ad89e9d'
+│   │   ├───linpeas-build: derivation 'linpeas-20260801-fa5487e8'
 │   │   └───pre-commit: derivation 'pre-commit-run'
 │   └───x86_64-linux
 │       ├───formatting: derivation 'treefmt-check'
-│       ├───linpeas-build: derivation 'linpeas-20260731-9ad89e9d'
+│       ├───linpeas-build: derivation 'linpeas-20260801-fa5487e8'
 │       └───pre-commit: derivation 'pre-commit-run'
 ├───devShells
 │   ├───aarch64-linux
@@ -41,18 +41,18 @@ block between the markers by hand.
 └───packages
     ├───aarch64-linux
     │   ├───cosign: package 'cosign-3.1.1'
-    │   ├───default: package 'linpeas-20260731-9ad89e9d'
+    │   ├───default: package 'linpeas-20260801-fa5487e8'
     │   ├───git-cliff: package 'git-cliff-2.13.1'
-    │   ├───linpeas: package 'linpeas-20260731-9ad89e9d'
+    │   ├───linpeas: package 'linpeas-20260801-fa5487e8'
     │   ├───linpeas-image: package 'linpeas.tar.gz'
-    │   └───site: package 'linpeas-flake-site-20260731-9ad89e9d'
+    │   └───site: package 'linpeas-flake-site-20260801-fa5487e8'
     └───x86_64-linux
         ├───cosign: package 'cosign-3.1.1'
-        ├───default: package 'linpeas-20260731-9ad89e9d'
+        ├───default: package 'linpeas-20260801-fa5487e8'
         ├───git-cliff: package 'git-cliff-2.13.1'
-        ├───linpeas: package 'linpeas-20260731-9ad89e9d'
+        ├───linpeas: package 'linpeas-20260801-fa5487e8'
         ├───linpeas-image: package 'linpeas.tar.gz'
-        └───site: package 'linpeas-flake-site-20260731-9ad89e9d'
+        └───site: package 'linpeas-flake-site-20260801-fa5487e8'
 ```
 
 <!-- END flake-show -->
