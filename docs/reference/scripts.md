@@ -124,6 +124,10 @@ Lint: cross-check `.github/workflows/ci.yml` jobs
 against `docs/_data/ci-check-categories.yml` in both directions,
 with a self-policed EXEMPT list for auxiliary (non-required) jobs.
 
+**Options:**
+
+- `--print-exempt` — print the EXEMPT job list, one name per line, and exit 0 without linting
+
 ### scripts/check-cliff-tag-pattern.sh
 
 Refuse to build if cliff.toml's tag_pattern drifts from the

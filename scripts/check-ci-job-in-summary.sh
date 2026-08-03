@@ -4,6 +4,7 @@
 # @description Lint: cross-check `.github/workflows/ci.yml` jobs
 # against `docs/_data/ci-check-categories.yml` in both directions,
 # with a self-policed EXEMPT list for auxiliary (non-required) jobs.
+# @option --print-exempt print the EXEMPT job list, one name per line, and exit 0 without linting
 
 # Lint: cross-check `.github/workflows/ci.yml` jobs against
 # `docs/_data/ci-check-categories.yml`.
@@ -41,9 +42,19 @@
 #
 # See docs/security/workflow-hardening.md.
 #
+# EXEMPT as a shared list — `--print-exempt` writes the list to stdout,
+# one name per line, and exits 0 without touching ci.yml or the category
+# map. An empty list prints nothing, so exit status carries "the list is
+# empty" and only a nonzero exit means "the list is unreadable".
+# scripts/refresh-enforcement-matrix.sh reads its ci-job exemptions from
+# this mode, so one declaration serves both lints instead of one script
+# re-deriving the other's source. Any other argument exits 2, so a
+# renamed or dropped mode fails loud in the caller.
+#
 # Honors CI_WORKFLOW_OVERRIDE + CATEGORIES_FILE_OVERRIDE +
 # LINT_GROUPS_OVERRIDE + SCRIPTS_DIR_OVERRIDE + EXEMPT_OVERRIDE for
-# fixtures. Exits 0 on full coverage, 1 on any drift.
+# fixtures. Exits 0 on full coverage, 1 on any drift, 2 on a usage or
+# missing-tool error.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -72,6 +83,28 @@ if [[ -n ${EXEMPT_OVERRIDE:-} ]]; then
   done <<<"${EXEMPT_OVERRIDE}"
 fi
 readonly EXEMPT
+
+# Argument handling runs after EXEMPT is assembled so `--print-exempt`
+# reflects EXEMPT_OVERRIDE, and before the tool/file preamble so the mode
+# stays readable without yq or a checked-out ci.yml.
+if (($# > 0)); then
+  case "$1" in
+  --print-exempt)
+    if (($# > 1)); then
+      printf 'unexpected extra arguments after %s\n' "$1" >&2
+      exit 2
+    fi
+    if ((${#EXEMPT[@]} > 0)); then
+      printf '%s\n' "${EXEMPT[@]}"
+    fi
+    exit 0
+    ;;
+  *)
+    printf 'unknown argument: %s\n' "$1" >&2
+    exit 2
+    ;;
+  esac
+fi
 
 is_exempt() {
   local -r name="$1"
