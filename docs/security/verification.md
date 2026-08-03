@@ -48,7 +48,7 @@ The published OCI image is a multi-arch manifest covering `linux/amd64`
 and `linux/arm64`. **SLSA attestations are per-arch**, not per-manifest.
 This means:
 
-- `gh attestation verify oci://docker.io/rvenutolo/linpeas:<tag>` may
+- `gh attestation verify oci://docker.io/rvenutolo/linpeas:<tag> --repo rvenutolo/linPEAS-flake` may
     not resolve cleanly against the manifest index alone — point the verify
     at the arch-specific image (or pull on the target arch and use the
     resolved `RepoDigests` value).
@@ -123,6 +123,10 @@ the `attribute failure reason` step. Reasons:
 - `sbom-arm64-blob-sig-failed` — same failure for the arm64
     CycloneDX SBOM asset. Responsibility lives in the
     `image-arm64` job of `release-on-bump.yml`.
+- `images-cosign-failed` — `cosign verify` of the published per-arch and
+    index images failed against the pinned workflow identity and OIDC issuer.
+    Treat as a signing-chain incident, adjacent in severity to the
+    `*-attest-failed` reasons.
 - `unknown` — attribution step couldn't match a known failed step
     (bug in the attribute logic itself).
 
@@ -320,7 +324,7 @@ The sidecar serves two consumers:
     API. Without the sidecar, the per-release score caps at 8 (signed
     but no provenance).
 - **Manual verification** — consumers can verify the bundle with
-    `gh attestation verify <asset> --bundle <asset>.intoto.jsonl`
+    `gh attestation verify <asset> --bundle <asset>.intoto.jsonl --repo rvenutolo/linPEAS-flake`
     against the same Fulcio + Rekor trust root used by the
     `.sigstore` signatures.
 
@@ -335,7 +339,7 @@ procedure lives in
 
 Every `gh attestation verify` invocation across workflows, scripts, and shell-fenced documentation must pass `--repo rvenutolo/linPEAS-flake`. Without the `--repo` pin, Sigstore returns any attestation matching the artifact digest, including one issued from a different repository — a trivial bypass.
 
-Enforced by `scripts/check-gh-attestation-repo.sh`. The lint joins backslash-continued shell invocations, ignores prose mentions in backticks, and only inspects fenced code blocks (`sh`, `bash`, `shell`, `console`, or unlabeled) in markdown files. Wired as the `lint-workflow-security` CI job (member check `gh-attestation-repo`) and as a pre-commit hook.
+Enforced by `scripts/check-gh-attestation-repo.sh`. The lint joins backslash-continued shell invocations, ignores prose mentions in backticks, and only inspects fenced code blocks (`sh`, `bash`, `shell`, `console`, `text`, or unlabeled) in markdown files. Wired as the `lint-workflow-security` CI job (member check `gh-attestation-repo`) and as a pre-commit hook.
 
 ## cosign-identity-pinned invariant<a name="cosign-identity-pinned-invariant"></a>
 
