@@ -35,10 +35,12 @@ verify:
   ./scripts/check-pr-workflows-no-secrets.sh || rc=1; \
   ./scripts/check-tag-protection.sh || rc=1; \
   ./scripts/check-renovate-invariants.sh || rc=1; \
+  ./scripts/check-renovate-markers-matched.sh || rc=1; \
   ./scripts/check-protect-main.sh || rc=1; \
   ./scripts/check-setup-nix-required.sh || rc=1; \
   ./scripts/check-cliff-tag-pattern.sh || rc=1; \
   ./scripts/check-changelog-links.sh || rc=1; \
+  ./scripts/check-changelog-fresh.sh || rc=1; \
   bash tests/gen-dashboard-data.test.sh || rc=1; \
   exit $rc'
 

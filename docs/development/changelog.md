@@ -22,10 +22,10 @@ The same command works locally for manual rebuilds.
 The changelog job runs as part of `release-on-bump.yml`, triggered on
 every push to `main` that changes `linpeas-pin.json`. It also runs on
 `workflow_dispatch` (see Recovery below). A changelog failure does not
-block image publication — the job is decoupled from `manifest` and depends
-only on `release` (`needs: [release]`), so it runs in parallel with the image
-and manifest jobs and a transient cliff error cannot prevent the OCI image
-from shipping.
+block image publication — the job depends only on `release`
+(`needs: [release]`), so it runs in parallel with the image and manifest
+jobs and a transient cliff error cannot prevent the OCI image from
+shipping.
 
 ## App identity
 

@@ -21,12 +21,13 @@ name: scorecard-drift-check
 # is already cross-checked by settings-posture-drift-check, so the
 # second-source value is diminished. Triaged 2026-05-28 in #261).
 #
-# Dropped as duplicates of a blocking, required in-tree gate — the
-# scorecard signal is coarser than the lint that already fails the
-# PR: Token-Permissions (covered by check-min-permissions.sh),
-# Dangerous-Workflow (covered by check-pull-request-target-absent.sh
-# + check-checkout-persist-credentials.sh + zizmor), and SAST
-# (covered by the required codeql gate). SAST additionally scores a
+# Dropped as duplicates of an existing in-tree signal — the
+# scorecard signal is coarser than the check that already covers it:
+# Token-Permissions (covered by the required check-min-permissions.sh
+# gate), Dangerous-Workflow (covered by the required
+# check-pull-request-target-absent.sh + check-checkout-persist-credentials.sh
+# + zizmor gates), and SAST (covered by the advisory codeql workflow,
+# which is not itself a required gate). SAST additionally scores a
 # rolling percentage of merged PRs carrying a registered SAST run,
 # so it cannot be driven to 10 by any in-repo change.
 #
