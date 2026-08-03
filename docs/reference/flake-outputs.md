@@ -45,6 +45,7 @@ block between the markers by hand.
     │   ├───git-cliff: package 'git-cliff-2.13.1'
     │   ├───linpeas: package 'linpeas-20260803-00785084'
     │   ├───linpeas-image: package 'linpeas.tar.gz'
+    │   ├───nix: package 'nix-2.34.8'
     │   └───site: package 'linpeas-flake-site-20260803-00785084'
     └───x86_64-linux
         ├───cosign: package 'cosign-3.1.1'
@@ -52,6 +53,7 @@ block between the markers by hand.
         ├───git-cliff: package 'git-cliff-2.13.1'
         ├───linpeas: package 'linpeas-20260803-00785084'
         ├───linpeas-image: package 'linpeas.tar.gz'
+        ├───nix: package 'nix-2.34.8'
         └───site: package 'linpeas-flake-site-20260803-00785084'
 ```
 

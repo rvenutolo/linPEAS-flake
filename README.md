@@ -136,7 +136,7 @@ App and web-flow-signed by GitHub, satisfying `required_signatures` on
 ## Versioning
 
 Release tags match the upstream `peass-ng/PEASS-ng` tag verbatim
-(e.g. `20260510-cd4bd619`). No `v` prefix, no `-flake` suffix.
+(shaped `YYYYMMDD-<sha>`). No `v` prefix, no `-flake` suffix.
 
 This keeps the mapping from a release here to the corresponding upstream
 release one-to-one and obvious. Wrapper-only fixes (e.g. a `flake.nix` bug
@@ -184,8 +184,11 @@ required-check table; alphabetical):
 
 ### Release attestation verification
 
-Every release runs a `verify` job in `release-on-bump.yml` that downloads the
-just-published image and runs `gh attestation verify` on each.
+Every release runs a `verify` job in `release-on-bump.yml` that runs
+`gh attestation verify` against each just-published per-arch digest, reading
+from the Sigstore transparency log and the GitHub API, plus `cosign verify`
+against the published registries — both registry reads are anonymous, so no
+registry credential is required.
 A separate weekly cron workflow (`verify-latest-release.yml`) re-verifies the
 latest release's image and pin file **and re-fetches the pinned
 `linpeas.sh` from upstream to confirm the SRI hash still matches** — this
@@ -283,7 +286,7 @@ just show-treefmt    # Regenerate docs/reference/treefmt-config.md from treefmt.
 just site            # Build the Pages site
 just site-data       # Regenerate docs/_data/dashboard.yml standalone
 just site-dev        # Live-preview site at http://127.0.0.1:8000 (regenerates data first)
-just verify          # Run every script-based check and test harness (excludes nix-build and link-check jobs)
+just verify          # Run the batched lint groups, harnesses, and doc-freshness checks CI runs
 # END just-recipes
 ```
 

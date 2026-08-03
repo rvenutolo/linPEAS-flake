@@ -22,70 +22,27 @@ lint:
 lint-links:
   lychee --config lychee.toml README.md SECURITY.md 'docs/**/*.md'
 
-# Run every script-based check and test harness (excludes nix-build and link-check jobs)
+# Run the batched lint groups, harnesses, and doc-freshness checks CI runs
 verify:
   nix develop --command bash -c '\
-  set -Eeuo pipefail; \
-  ./scripts/check-uses-sha-pinned.sh; \
-  ./scripts/check-harden-runner-first.sh; \
-  ./scripts/check-min-permissions.sh; \
-  ./scripts/check-job-timeout-minutes.sh; \
-  ./scripts/check-workflow-concurrency.sh; \
-  ./scripts/check-checkout-persist-credentials.sh; \
-  ./scripts/check-upload-artifact-strict.sh; \
-  ./scripts/check-workflow-on-branches.sh; \
-  ./scripts/check-pull-request-target-absent.sh; \
-  ./scripts/check-script-shebang-pipefail.sh; \
-  ./scripts/check-script-has-test.sh; \
-  ./scripts/check-ci-job-in-summary.sh; \
-  ./scripts/check-run-block-strict.sh; \
-  ./scripts/check-fork-guard-release.sh; \
-  ./scripts/check-gh-attestation-repo.sh; \
-  ./scripts/check-cosign-identity-pinned.sh; \
-  ./scripts/check-nix-run-pinned.sh; \
-  ./scripts/check-pr-workflows-no-secrets.sh; \
-  ./scripts/check-required-checks-no-paths.sh; \
-  ./scripts/check-tag-protection.sh; \
-  ./scripts/check-renovate-invariants.sh; \
-  ./scripts/check-renovate-config-validator.sh; \
-  ./scripts/check-protect-main.sh; \
-  ./scripts/check-jsonschema.sh; \
-  ./scripts/check-pre-commit-hooks-sha-parity.sh; \
-  ./scripts/check-pin-diff-isolated.sh; \
-  bash tests/check-uses-sha-pinned.test.sh; \
-  bash tests/check-harden-runner-first.test.sh; \
-  bash tests/check-min-permissions.test.sh; \
-  bash tests/check-job-timeout-minutes.test.sh; \
-  bash tests/check-workflow-concurrency.test.sh; \
-  bash tests/check-checkout-persist-credentials.test.sh; \
-  bash tests/check-upload-artifact-strict.test.sh; \
-  bash tests/check-workflow-on-branches.test.sh; \
-  bash tests/check-pull-request-target-absent.test.sh; \
-  bash tests/check-script-shebang-pipefail.test.sh; \
-  bash tests/check-script-has-test.test.sh; \
-  bash tests/check-ci-job-in-summary.test.sh; \
-  bash tests/check-run-block-strict.test.sh; \
-  bash tests/check-fork-guard-release.test.sh; \
-  bash tests/check-gh-attestation-repo.test.sh; \
-  bash tests/check-cosign-identity-pinned.test.sh; \
-  bash tests/check-nix-run-pinned.test.sh; \
-  bash tests/check-pr-workflows-no-secrets.test.sh; \
-  bash tests/check-required-checks-no-paths.test.sh; \
-  bash tests/check-tag-protection.test.sh; \
-  bash tests/check-renovate-invariants.test.sh; \
-  bash tests/check-renovate-config-validator.test.sh; \
-  bash tests/check-protect-main.test.sh; \
-  bash tests/check-pre-commit-hooks-sha-parity.test.sh; \
-  bash tests/check-pin-diff-isolated.test.sh; \
-  bash tests/gen-dashboard-data.test.sh; \
-  bash tests/docs-audit-pressure.test.sh; \
-  bash tests/refresh-ci-dag.test.sh; \
-  bash tests/refresh-ci-summary.test.sh; \
-  bash tests/refresh-enforcement-matrix.test.sh; \
-  bash tests/refresh-just-recipes.test.sh; \
-  bash tests/refresh-precommit-table.test.sh; \
-  bash tests/refresh-scripts-reference.test.sh; \
-  bash tests/refresh-treefmt-config.test.sh'
+  rc=0; \
+  ./scripts/run-lint-group.sh lint-workflow-security || rc=1; \
+  ./scripts/run-lint-group.sh lint-script-hygiene || rc=1; \
+  ./scripts/run-lint-group.sh lint-doc-invariants || rc=1; \
+  ./scripts/run-harness-group.sh || rc=1; \
+  ./scripts/run-doc-freshness.sh || rc=1; \
+  ./scripts/check-required-checks-no-paths.sh || rc=1; \
+  ./scripts/check-pr-workflows-no-secrets.sh || rc=1; \
+  ./scripts/check-tag-protection.sh || rc=1; \
+  ./scripts/check-renovate-invariants.sh || rc=1; \
+  ./scripts/check-renovate-markers-matched.sh || rc=1; \
+  ./scripts/check-protect-main.sh || rc=1; \
+  ./scripts/check-setup-nix-required.sh || rc=1; \
+  ./scripts/check-cliff-tag-pattern.sh || rc=1; \
+  ./scripts/check-changelog-links.sh || rc=1; \
+  ./scripts/check-changelog-fresh.sh || rc=1; \
+  bash tests/gen-dashboard-data.test.sh || rc=1; \
+  exit $rc'
 
 # Manually refresh linpeas pin from upstream latest release
 bump:

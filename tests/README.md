@@ -4,8 +4,9 @@ Bash test harnesses for the script-based invariant checks under
 `scripts/`. Each test exercises its target script against a tree of
 fixtures with expected exit codes and stderr substrings.
 
-Run all tests via `just verify` (also runs the underlying scripts
-against the live tree).
+Most tests run via `just verify` (also runs the underlying scripts
+against the live tree); it reaches the majority of `tests/*.test.sh`
+harnesses but not all of them.
 
 ## Layout
 
@@ -94,7 +95,12 @@ canonical list before writing a new test.
     harnesses' shape (env-var overrides, `expect` function).
 1. Create `tests/fixtures/<script-name>/` with at least one `good`
     and one `bad-*` fixture.
-1. Add the harness invocation to the `just verify` recipe.
+1. Register the harness so it actually runs: add its basename to
+    `.github/lint-groups.yml` if the `check-<name>.sh` + `test.sh`
+    pair belongs to a lint group, add it to the `HARNESSES` array in
+    `scripts/run-harness-group.sh` if it is a standalone harness, or
+    name it `tests/refresh-*.test.sh` to be picked up automatically
+    by `scripts/run-doc-freshness.sh`'s glob.
 1. If the script is wired into a CI required check, also document
     it in `docs/security/required-checks.md` and ensure
     `scripts/check-required-checks-no-paths.sh` covers the new

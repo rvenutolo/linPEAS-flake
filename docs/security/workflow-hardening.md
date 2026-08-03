@@ -1,6 +1,6 @@
 # Workflow-hardening invariants
 
-Per-job hardening rules enforced across every workflow in `.github/workflows/`. Each rule is locked in by a script lint, run as a member check of a batched lint group job (`lint-workflow-security`, `lint-script-hygiene`, or `lint-doc-invariants`) and as a pre-commit hook.
+Per-job hardening rules enforced across every workflow in `.github/workflows/`. Most rules are locked in by a script lint, run as a member check of a batched lint group job (`lint-workflow-security`, `lint-script-hygiene`, or `lint-doc-invariants`) and as a pre-commit hook. A few differ: some are enforced by a standalone CI job (`setup-nix-required`), some by CI only with no hook (`test-reachable`), and some are convention-only with no automated enforcer (lean lint-shell routing). See the [enforcement matrix](enforcement-matrix.md) for the authoritative per-rule mapping.
 
 See [workflow-scanner division of labor](workflow-scanners.md) for how these
 in-tree lints fit the broader layered scanning model (pre-commit → PR/push →
@@ -126,7 +126,7 @@ Enforced by `scripts/check-lint-shell-tools.sh`. Wired as the `lint-script-hygie
 
 ## ci-job-in-summary
 
-Every `jobs.<name>:` in `.github/workflows/ci.yml` either appears as a key in `docs/_data/ci-check-categories.yml` or is on the lint's `EXEMPT` list of auxiliary jobs (sandbox harnesses, notify-only jobs, matrix expansions). Conversely, every key in the category map corresponds to a real `jobs.<name>:` in some workflow file under `.github/workflows/`.
+Every `jobs.<name>:` in `.github/workflows/ci.yml` either appears as a key in `docs/_data/ci-check-categories.yml` or is on the lint's `EXEMPT` list of auxiliary jobs (sandbox harnesses, notify-only jobs). Conversely, every key in the category map corresponds to a real `jobs.<name>:` in some workflow file under `.github/workflows/`.
 
 `refresh-ci-summary.sh` already enforces parity between the category map and `docs/security/required-checks.md`. This lint adds the ci.yml ↔ categories check, so a new required job that ships without a category mapping fails the PR rather than landing and breaking the pre-commit summary regenerator on the next commit.
 

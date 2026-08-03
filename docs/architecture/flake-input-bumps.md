@@ -343,7 +343,8 @@ If both PRs land cleanly when merged independently, no action needed.
 - `compute-lock` job has `permissions: contents: read` and must not
     reference `secrets.BUMP_APP_PRIVATE_KEY` or
     `actions/create-github-app-token`. Nix-evaluating actions confined here.
-- `push-and-merge` job uses only GitHub-owned action SHAs
+- `push-and-merge` job uses only `actions/*` SHAs plus the repo-wide
+    `step-security/harden-runner` pin
     (`actions/checkout`, `actions/download-artifact`,
     `actions/create-github-app-token`, `step-security/harden-runner`). No
     third-party action without a security-review entry.
@@ -380,8 +381,10 @@ edits in the same PR: (1) extend the `case` arm in
 
 Credential split mirrors `update-flake-lock.yml`:
 
-- `identify` + `compute-refresh` jobs: `permissions: contents: read`,
-    no App-key reference. Untrusted Nix-evaluating actions confined
+- `identify` job: `permissions: contents: read` + `pull-requests: read`
+    (it reads PR author, branch, diff, and title). `compute-refresh` job:
+    `permissions: contents: read`. Neither references the App key.
+    Untrusted Nix-evaluating actions confined
     to `compute-refresh`.
 - `push-refresh` job: holds `BUMP_APP_PRIVATE_KEY` only. Commits
     refreshed `flake.lock` to PR branch via REST `PUT /contents` →

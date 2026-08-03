@@ -80,9 +80,9 @@ subject — `pr-title-lint` enforces it as Conventional Commits.
 
 ## Tag-protection ruleset
 
-| Setting                                                                                                                                                                                                                   | Required value                                            | Probe                                                                               |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Ruleset name `release-tag-protection` exists, target `tag`, enforcement `active`, rules include `deletion` + `update` + `non_fast_forward`, include pattern matches `refs/tags/[0-9]{8}-[0-9a-f]{7,40}` or `refs/tags/**` | `gh api /repos/rvenutolo/linPEAS-flake/rulesets` + filter | `nix develop --command ./scripts/check-tag-protection.sh` (exit 0 = posture intact) |
+| Setting                          | Required value                                                                                                                                                                      | Probe                                                                               |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Ruleset `release-tag-protection` | exists, target `tag`, enforcement `active`, rules include `deletion` + `update` + `non_fast_forward`, include pattern matches `refs/tags/[0-9]{8}-[0-9a-f]{7,40}` or `refs/tags/**` | `nix develop --command ./scripts/check-tag-protection.sh` (exit 0 = posture intact) |
 
 ## Maintainer account (manual)
 
@@ -90,7 +90,7 @@ subject — `pr-title-lint` enforces it as Conventional Commits.
 
 ## Drift detection
 
-Every row above whose Probe column is a `gh api` invocation is enforced by `scripts/check-settings-posture.sh`, run from `.github/workflows/settings-posture-drift-check.yml` on a daily cron schedule (plus `workflow_dispatch` for manual probes). On mismatch the workflow opens a deduped `settings-drift` issue, which auto-closes when the next run sees the posture reconciled.
+Every row above whose Probe column is a `gh api` invocation is enforced by `scripts/check-settings-posture.sh`, run from `.github/workflows/settings-posture-drift-check.yml` on a daily cron schedule (plus `workflow_dispatch` for manual probes). On mismatch the workflow opens a deduped `settings-drift` issue, which auto-closes when the next run sees the posture reconciled. The tag-protection ruleset row is the exception: it is enforced by `scripts/check-tag-protection.sh` via the `tag-protection-drift-check` required CI job, not by `scripts/check-settings-posture.sh`, which probes only the repo, Actions-permissions, workflow-permissions, and `github-pages` environment endpoints.
 
 Manual-UI rows (fork-PR approval gate, maintainer 2FA, merge-method flags) are not covered — GitHub either exposes no REST endpoint or gates the field behind `contents: write` (push access), which the read-only `settings-drift-checker` App cannot hold. Those rows are review-time + defence-in-depth checks (see the merge-method section above).
 
