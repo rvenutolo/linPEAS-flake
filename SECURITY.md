@@ -48,7 +48,7 @@ The published OCI image is a multi-arch manifest covering `linux/amd64`
 and `linux/arm64`. **SLSA attestations are per-arch**, not per-manifest.
 This means:
 
-- `gh attestation verify oci://docker.io/rvenutolo/linpeas:<tag>` may
+- `gh attestation verify oci://docker.io/rvenutolo/linpeas:<tag> --repo rvenutolo/linPEAS-flake` may
     not resolve cleanly against the manifest index alone — point the verify
     at the arch-specific image (or pull on the target arch and use the
     resolved `RepoDigests` value).

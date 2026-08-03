@@ -1,0 +1,10 @@
+name: verify example
+on:
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: print usage
+        run: |
+          echo 'Run `gh attestation verify oci://ghcr.io/example/foo:tag` manually.'
