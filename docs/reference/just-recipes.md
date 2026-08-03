@@ -35,7 +35,7 @@ just show-treefmt    # Regenerate docs/reference/treefmt-config.md from treefmt.
 just site            # Build the Pages site
 just site-data       # Regenerate docs/_data/dashboard.yml standalone
 just site-dev        # Live-preview site at http://127.0.0.1:8000 (regenerates data first)
-just verify          # Run every script-based check and test harness (excludes nix-build and link-check jobs)
+just verify          # Run the batched lint groups, harnesses, and doc-freshness checks CI runs
 ```
 
 <!-- END just-recipes -->
