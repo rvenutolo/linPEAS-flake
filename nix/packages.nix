@@ -16,7 +16,13 @@
         # nixpkgs rather than the runner registry's mutable
         # `nixpkgs` reference. See
         # docs/security/workflow-hardening.md (nix-run-pinned).
-        inherit (pkgs-unstable) cosign git-cliff;
+        #
+        # `nix` is exposed for the same reason plus one more:
+        # `nix flake show`'s text rendering differs between
+        # implementations, so scripts/refresh-flake-show.sh pins which
+        # nix renders the block. Without it the generated output
+        # depends on whichever nix the operator has installed.
+        inherit (pkgs-unstable) cosign git-cliff nix;
       };
 
       apps = {

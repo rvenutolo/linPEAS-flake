@@ -73,7 +73,14 @@ function main() {
   raw_show="$(mktemp)"
   raw_err="$(mktemp)"
   trap 'rm --force -- "${flake_show_file:-}" "${block_file:-}" "${doc_new:-}" "${raw_show:-}" "${raw_err:-}"' EXIT
-  if ! nix flake show --all-systems --no-warn-dirty >"${raw_show}" 2>"${raw_err}"; then
+  # The renderer is pinned to this repo's flake.lock nix rather than
+  # ambient `nix`: implementations differ in how they render the output
+  # tree (derivation names, empty top-level attrs), so an unpinned
+  # invocation makes the generated block depend on the operator's
+  # install. Ambient nix still evaluates the flake and realises the
+  # pinned derivation; only the rendering step runs under it.
+  if ! nix shell .#nix --command nix flake show --all-systems --no-warn-dirty \
+    >"${raw_show}" 2>"${raw_err}"; then
     log_err 'nix flake show failed:'
     cat -- "${raw_err}" >&2
     exit 1
