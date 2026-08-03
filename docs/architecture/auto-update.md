@@ -28,16 +28,24 @@ flowchart TD
 ```mermaid
 flowchart TD
   trigger["push to main<br/>changes linpeas-pin.json<br/>(release-on-bump.yml)"]
-  validate["validate VERSION<br/>shape: YYYYMMDD-hex"]
-  build_image["nix build .#linpeas-image"]
-  push_image["docker push<br/>ghcr.io + docker.io<br/>per-arch + manifest by digest"]
-  attest["actions/attest-build-provenance<br/>pin file + per-arch image<br/>+ actions/attest-sbom (CycloneDX)"]
-  release["gh release create <tag><br/>--target $GITHUB_SHA<br/>--title <tag><br/>--notes 'Tracks upstream …'"]
-  verify["verify job:<br/>gh attestation verify<br/>(provenance + SBOM)"]
+  preflight["preflight:<br/>classify image-mode<br/>(image presence)"]
+  release["release:<br/>validate VERSION shape<br/>gh release create --target $GITHUB_SHA<br/>attest + cosign-sign pin file"]
+  image_amd64["image-amd64:<br/>build, push, attest<br/>provenance + SBOM, cosign sign"]
+  image_arm64["image-arm64:<br/>build, push, attest<br/>provenance + SBOM, cosign sign"]
+  manifest["manifest:<br/>multi-arch manifest by digest"]
+  verify["verify:<br/>gh attestation verify<br/>(provenance + SBOM)"]
+  changelog["changelog:<br/>git-cliff regenerate + PR"]
 
-  trigger --> validate --> build_image --> push_image
-  push_image --> attest
-  attest --> release --> verify
+  trigger --> release
+  trigger --> preflight
+  release --> image_amd64
+  release --> image_arm64
+  preflight --> image_amd64
+  preflight --> image_arm64
+  image_amd64 --> manifest
+  image_arm64 --> manifest
+  manifest --> verify
+  release --> changelog
 ```
 
 ## Weekly dependency upkeep
@@ -72,8 +80,9 @@ The Pages site is **not** in the `protect-main` ruleset's required check set; a 
 
 Only `scripts/bump-linpeas.sh` may mutate `linpeas-pin.json`. Any
 commit landing on `main` that changes the SRI hash, pin URL, or pin
-version must isolate that change to `linpeas-pin.json`. Sole trigger
-for `release-on-bump.yml` is `push.paths: [linpeas-pin.json]`; a pin
+version must isolate that change to `linpeas-pin.json`. The only automatic trigger
+for `release-on-bump.yml` is `push.paths: [linpeas-pin.json]` (a manual
+`workflow_dispatch` recovery and backfill path also exists); a pin
 change that bundles in unrelated files is fine, but a pin change
 that arrives via a different script breaks the trigger-contract
 assumption.

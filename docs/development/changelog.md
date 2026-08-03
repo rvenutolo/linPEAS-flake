@@ -22,9 +22,10 @@ The same command works locally for manual rebuilds.
 The changelog job runs as part of `release-on-bump.yml`, triggered on
 every push to `main` that changes `linpeas-pin.json`. It also runs on
 `workflow_dispatch` (see Recovery below). A changelog failure does not
-block image publication — the job runs after the `release` and
-`manifest` jobs (and so, transitively, after both image builds), so a
-transient cliff error cannot prevent the OCI image from shipping.
+block image publication — the job is decoupled from `manifest` and depends
+only on `release` (`needs: [release]`), so it runs in parallel with the image
+and manifest jobs and a transient cliff error cannot prevent the OCI image
+from shipping.
 
 ## App identity
 
@@ -57,7 +58,7 @@ parity at commit time; the cross-layer parity set it joins is
 { message = "^docs: update changelog", skip = true },
 ```
 
-The changelog commit itself carries the subject `docs: update changelog`. Without this skip, each run would include the previous
+The changelog commit itself carries the subject `docs: update changelog for <VERSION>`, and the skip rule is anchored to the `^docs: update changelog` prefix so both that commit and a manual regeneration are suppressed. Without this skip, each run would include the previous
 run's commit in the next release's entry — a self-reference loop that
 inflates the changelog with administrative noise.
 
