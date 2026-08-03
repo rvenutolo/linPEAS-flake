@@ -31,6 +31,13 @@
 #   CI_YML_OVERRIDE                alternate ci.yml path
 #   PRECOMMIT_HOOK_NAMES_OVERRIDE  newline-separated hook list
 #                                  (bypasses the slow `nix eval`)
+#   EXEMPT_SOURCE_OVERRIDE         alternate `--print-exempt` provider
+#                                  in place of
+#                                  scripts/check-ci-job-in-summary.sh
+#   EXEMPT_OVERRIDE                inherited by
+#                                  scripts/check-ci-job-in-summary.sh
+#                                  --print-exempt, which supplies the
+#                                  ci-job exemption list
 #   SKIP_REVERSE_CHECK             if "1", skip orphan-script /
 #                                  orphan-job / orphan-hook checks.
 #                                  Used by the fixture round-trip
@@ -291,26 +298,29 @@ function load_ci_jobs() {
   yq eval '.jobs | keys | .[]' "${ci_yml}" | sort --unique >"${out_file}"
 }
 
-# load_ci_jobs_exempt <out_file>
-# Source the EXEMPT list at runtime from scripts/check-ci-job-in-summary.sh.
+# load_ci_jobs_exempt <out_file> <sibling>
+# Read the ci-job EXEMPT list from scripts/check-ci-job-in-summary.sh via
+# its --print-exempt mode, so both lints agree on one declaration rather
+# than this one re-deriving the other's source.
+#
+# The orphan-job check treats every name here as "deliberately not an
+# invariant enforcer", so an empty list is the strictest reading and a
+# wrongly-empty list is invisible. Exit 0 is therefore the only accepted
+# answer — a missing script, a dropped mode, or any nonzero exit aborts
+# instead of standing in for an empty list.
 function load_ci_jobs_exempt() {
   local -r out_file="$1" sibling="$2"
-  if [[ ! -f ${sibling} ]]; then
-    : >"${out_file}"
-    return 0
+  if [[ ! -x ${sibling} ]]; then
+    log_err "ci-job EXEMPT source ${sibling@Q} is missing or not executable"
+    exit 2
   fi
-  awk '
-    /^readonly EXEMPT=\(/ { in_block = 1; next }
-    in_block && /^\)/ { exit }
-    in_block {
-      # Lines look like:  "name"   # comment
-      if (match($0, /"[^"]+"/)) {
-        token = substr($0, RSTART, RLENGTH)
-        gsub(/"/, "", token)
-        print token
-      }
-    }
-  ' "${sibling}" | sort --unique >"${out_file}"
+  local -i rc=0
+  "${sibling}" --print-exempt >"${out_file}" || rc=$?
+  if ((rc != 0)); then
+    log_err "ci-job EXEMPT source ${sibling@Q} --print-exempt failed with exit ${rc}"
+    exit 2
+  fi
+  sort --unique --output="${out_file}" -- "${out_file}"
 }
 
 # cross_check_forward <tsv> <scripts_dir> <ci_jobs_file> <hook_names_file>
@@ -587,7 +597,7 @@ function parse_and_render() {
   hook_names="$(mktemp)"
   ci_jobs="$(mktemp)"
   tmp_out="$(mktemp)"
-  sibling="$(git rev-parse --show-toplevel)/scripts/check-ci-job-in-summary.sh"
+  sibling="${EXEMPT_SOURCE_OVERRIDE:-$(git rev-parse --show-toplevel)/scripts/check-ci-job-in-summary.sh}"
 
   parse_index "${index_file}" "${tsv}"
   load_hook_names "${hook_names}"

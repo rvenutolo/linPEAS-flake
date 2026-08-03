@@ -13,15 +13,21 @@
 # different repo. The `--repo` pin binds the verification to this
 # repository, so an attestation forged elsewhere fails the check.
 #
-# Detection works on backslash-continued shell invocations: when a
-# line contains `gh attestation verify`, the lint walks forward while
-# the previous line ends with `\`, then checks the joined block for
-# `--repo rvenutolo/linPEAS-flake` (or `--repo=<slug>`).
+# Detection has two shapes. Backslash-continued shell invocations:
+# when a runnable line contains `gh attestation verify`, the lint walks
+# forward while the previous line ends with `\`, then checks the joined
+# block for `--repo rvenutolo/linPEAS-flake` (or `--repo=<slug>`).
+# Backtick-quoted spans: a span carrying the command plus at least one
+# further token is an invocation and must pass the pin; a span holding
+# the bare command name is a prose mention and is ignored.
 #
-# Documentation prose that *mentions* the command in backticks but
-# isn't an actual invocation (no leading shell context) still gets
-# scanned. Markdown fenced code blocks are the canonical place a
-# bare invocation could land; the lint catches those.
+# Which lines are runnable depends on the file. In markdown, fenced
+# `sh`/`bash`/`shell`/`console`/`text` (or unlabeled) blocks are shell
+# source and prose lines contribute only their inline code spans;
+# other fences are diagrams and are skipped entirely. In yml/sh, every
+# non-comment line is shell source — the comment skip runs first so a
+# backticked command with an elided argument inside a comment is not
+# read as an invocation.
 #
 # See docs/security/verification.md.
 #
@@ -54,15 +60,17 @@ else
     'README.md' 'SECURITY.md' 2>/dev/null || true)
 fi
 
-# Join backslash-continued lines starting at the line that contains
-# `gh attestation verify`. Returns one logical-line per occurrence.
+# Emits one logical line per `gh attestation verify` invocation, drawn
+# from two sources: backslash-continued runnable lines, joined into a
+# single string, and backtick spans that classify as invocations — a
+# span carrying the command plus at least one further token. A span
+# holding the bare command name is a prose mention and is skipped.
 #
-# Filters out:
-#   - shell/yaml comment lines (leading optional ws + `#`)
-#   - markdown prose: for .md files, only lines INSIDE a fenced
-#     ``` code block are considered
-#   - inline mentions wrapped in backticks (line where the verify
-#     command appears only inside `...` backticks)
+# Markdown prose lines contribute only their inline spans; markdown
+# fences labeled sh/bash/shell/console/text (or unlabeled) are shell
+# source and get the full treatment above, other fences are skipped
+# entirely. In yml/sh, comment lines are skipped before the span scan
+# runs.
 extract_invocations() {
   local -r file="$1"
   local mode="other"
@@ -71,12 +79,30 @@ extract_invocations() {
   esac
   awk -v mode="${mode}" '
     BEGIN { in_fence = 0; fence_lang = "" }
+
+    # Emit every backtick span on `s` that parses as an invocation: a
+    # span holding the command plus at least one further non-space
+    # token. A span holding the bare command name is a prose mention.
+    function emit_inline_spans(s,   span, rest) {
+      while (match(s, /`[^`]*`/)) {
+        span = substr(s, RSTART + 1, RLENGTH - 2)
+        s = substr(s, RSTART + RLENGTH)
+        if (span !~ /gh attestation verify/) continue
+        rest = span
+        sub(/^.*gh attestation verify/, "", rest)
+        sub(/^[[:space:]]+/, "", rest)
+        sub(/[[:space:]]+$/, "", rest)
+        if (rest == "") continue
+        print span
+      }
+    }
+
     {
       line = $0
-      # Track fenced-code state for markdown. Only treat sh/bash/
-      # console/text fences (or unlabeled fences) as runnable code;
-      # mermaid/dot/etc. are diagrams, not invocations.
       if (mode == "md") {
+        # Track fenced-code state. Only sh/bash/shell/console/text
+        # fences (or unlabeled ones) are runnable code; mermaid/dot
+        # and friends are diagrams, not invocations.
         if (line ~ /^[[:space:]]*```/) {
           if (in_fence) {
             in_fence = 0
@@ -90,29 +116,39 @@ extract_invocations() {
           }
           next
         }
-        if (!in_fence) next
+        if (!in_fence) {
+          # Markdown prose. An inline code span is the only runnable
+          # shape here; the surrounding sentence is not shell source.
+          emit_inline_spans(line)
+          next
+        }
         if (fence_lang != "" \
             && fence_lang != "sh" \
             && fence_lang != "bash" \
             && fence_lang != "shell" \
             && fence_lang != "console" \
             && fence_lang != "text") next
+      } else {
+        # yml/sh: a comment line is prose whatever it quotes. This skip
+        # must precede the span scan — a comment can carry a backticked
+        # command with an elided argument, which the span rule would
+        # otherwise read as an invocation.
+        if (line ~ /^[[:space:]]*#/) next
       }
-      # Skip comment lines for non-md sources (yml/sh).
-      if (mode != "md" && line ~ /^[[:space:]]*#/) next
-      # Skip backtick-only mentions (no shell context).
-      # If `gh attestation verify` appears only between paired backticks
-      # on this line and there are no unquoted occurrences, it is prose.
+      # Runnable source line: a markdown shell fence body, or a
+      # non-comment yml/sh line. Backtick spans here are command
+      # substitution and get the same treatment as markdown inline code.
+      emit_inline_spans(line)
       if (line ~ /gh attestation verify/) {
-        # crude check: strip backtick-quoted spans, then see if the
-        # command still appears.
+        # The span scan already handled quoted occurrences. Keep the
+        # line only if the command also appears unquoted.
         stripped = line
         gsub(/`[^`]*`/, "", stripped)
         if (stripped !~ /gh attestation verify/) next
       }
       lines[++count] = line
-      orig_nr[count] = NR
     }
+
     END {
       for (i = 1; i <= count; i++) {
         if (lines[i] !~ /gh attestation verify/) continue
@@ -147,13 +183,8 @@ for f in "${paths[@]}"; do
   esac
   while IFS= read -r invocation; do
     [[ -z ${invocation} ]] && continue
-    # Skip prose: backticks-only mentions, comments-with-no-real-cmd.
-    # Heuristic: if the invocation, after stripping, starts with a
-    # backtick or a single word ending in a closing backtick AND has
-    # no continuation actually firing the command, treat as prose.
-    # For safety we instead REQUIRE the slug; prose mentions almost
-    # always omit it. False positives are easy to silence by adding
-    # the slug.
+    # Prose mentions were filtered during extraction; everything
+    # reaching here is an invocation and must carry the slug.
     if [[ ${invocation} == *"${NEEDLE}"* || ${invocation} == *"${NEEDLE_EQ}"* ]]; then
       continue
     fi

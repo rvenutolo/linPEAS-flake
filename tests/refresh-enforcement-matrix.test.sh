@@ -114,6 +114,81 @@ function main() {
     fail "leak cleanup left ${remaining} stray .refresh-enforcement-matrix-*.md (planted stray exists: $([[ -e ${LEAK_STRAY} ]] && echo yes || echo no))"
   fi
 
+  # Assertion 7: the ci-job EXEMPT list crosses from
+  # scripts/check-ci-job-in-summary.sh into the orphan-job check, proven
+  # with a NON-EMPTY list. A fixture ci.yml job that no invariant bullet
+  # references is an orphan; naming it in the sibling's EXEMPT list clears
+  # it. An exemption list that is empty on both sides cannot tell a live
+  # coupling from a dead one, so the populated case is the one that pins
+  # it. The fixture index uses the `-` sentinel in all three fields and
+  # the scripts dir is empty, leaving the ci-job column as the only
+  # orphan source.
+  local cx_scripts cx_out cx_err cx_rc=0
+  cx_scripts="$(mktemp --directory)"
+  cx_out="$(mktemp)"
+  cx_err="$(mktemp)"
+  PRECOMMIT_HOOK_NAMES_OVERRIDE='shellcheck' \
+    INVARIANT_INDEX_OVERRIDE="${FIXTURES}/exempt-coupling/index.md" \
+    CI_YML_OVERRIDE="${FIXTURES}/exempt-coupling/ci.yml" \
+    SCRIPTS_DIR_OVERRIDE="${cx_scripts}" \
+    MATRIX_OUTPUT_OVERRIDE="${cx_out}" \
+    "${SCRIPT}" >/dev/null 2>"${cx_err}" || cx_rc=$?
+  if [[ ${cx_rc} -eq 2 ]] &&
+    grep --fixed-strings --quiet -- 'orphan ci job: aux-sandbox' "${cx_err}"; then
+    pass 'unexempted auxiliary ci job is reported as an orphan'
+  else
+    fail "exempt-coupling baseline: want exit 2 naming aux-sandbox, got exit ${cx_rc}"
+    cat -- "${cx_err}" >&2
+  fi
+
+  cx_rc=0
+  EXEMPT_OVERRIDE='aux-sandbox' \
+    PRECOMMIT_HOOK_NAMES_OVERRIDE='shellcheck' \
+    INVARIANT_INDEX_OVERRIDE="${FIXTURES}/exempt-coupling/index.md" \
+    CI_YML_OVERRIDE="${FIXTURES}/exempt-coupling/ci.yml" \
+    SCRIPTS_DIR_OVERRIDE="${cx_scripts}" \
+    MATRIX_OUTPUT_OVERRIDE="${cx_out}" \
+    "${SCRIPT}" >/dev/null 2>"${cx_err}" || cx_rc=$?
+  if [[ ${cx_rc} -eq 0 ]]; then
+    pass 'ci-job EXEMPT list from the sibling clears the orphan job'
+  else
+    fail "exempt-coupling: EXEMPT entry aux-sandbox did not reach the orphan-job check (exit ${cx_rc})"
+    cat -- "${cx_err}" >&2
+  fi
+  rm --recursive --force -- "${cx_scripts}"
+  rm --force -- "${cx_out}" "${cx_err}"
+
+  # Assertion 8: an unreadable EXEMPT source aborts instead of standing in
+  # for an empty list. A stub sibling that rejects --print-exempt is the
+  # shape a renamed or dropped mode takes at the call site.
+  local gg_dir gg_scripts gg_out gg_err gg_rc=0
+  gg_dir="$(mktemp --directory)"
+  gg_scripts="$(mktemp --directory)"
+  cat >"${gg_dir}/exempt-source-stub" <<'EOF'
+#!/usr/bin/env bash
+printf 'stub: unknown argument: %s\n' "${1:-}" >&2
+exit 2
+EOF
+  chmod +x "${gg_dir}/exempt-source-stub"
+  gg_out="$(mktemp)"
+  gg_err="$(mktemp)"
+  PRECOMMIT_HOOK_NAMES_OVERRIDE='shellcheck' \
+    INVARIANT_INDEX_OVERRIDE="${FIXTURES}/exempt-coupling/index.md" \
+    CI_YML_OVERRIDE="${FIXTURES}/exempt-coupling/ci.yml" \
+    SCRIPTS_DIR_OVERRIDE="${gg_scripts}" \
+    MATRIX_OUTPUT_OVERRIDE="${gg_out}" \
+    EXEMPT_SOURCE_OVERRIDE="${gg_dir}/exempt-source-stub" \
+    "${SCRIPT}" >/dev/null 2>"${gg_err}" || gg_rc=$?
+  if [[ ${gg_rc} -eq 2 ]] &&
+    grep --fixed-strings --quiet -- '--print-exempt failed' "${gg_err}"; then
+    pass 'unreadable EXEMPT source aborts instead of reading as empty'
+  else
+    fail "guard-the-guard: want exit 2 naming --print-exempt, got exit ${gg_rc}"
+    cat -- "${gg_err}" >&2
+  fi
+  rm --recursive --force -- "${gg_dir}" "${gg_scripts}"
+  rm --force -- "${gg_out}" "${gg_err}"
+
   # Swallowed-treefmt scenario: a failing treefmt must abort the generator
   # (nonzero exit) and must NOT write the unformatted matrix into place. With
   # the `|| true` swallow the run went green while moving the unformatted

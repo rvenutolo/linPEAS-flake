@@ -1,0 +1,12 @@
+name: verify example
+on:
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: verify per-arch attestation
+        run: |
+          echo "placeholder step body"
+        # Anonymous: `gh attestation verify oci://ghcr.io/example/foo:tag`
+        # resolves without a login; mentioned here for context, not run.

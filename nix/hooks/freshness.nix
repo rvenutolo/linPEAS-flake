@@ -30,7 +30,7 @@
       fi
       exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-flake-show.sh --check
     ''}";
-    files = "^(flake\\.nix|flake\\.lock|linpeas-pin\\.json|docs/reference/flake-outputs\\.md|scripts/refresh-flake-show\\.sh)$";
+    files = "^(flake\\.nix|flake\\.lock|linpeas-pin\\.json|nix/.*\\.nix|docs/reference/flake-outputs\\.md|scripts/refresh-flake-show\\.sh)$";
     pass_filenames = false;
     language = "system";
   };

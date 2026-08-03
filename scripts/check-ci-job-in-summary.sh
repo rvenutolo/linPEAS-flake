@@ -3,15 +3,18 @@
 #
 # @description Lint: cross-check `.github/workflows/ci.yml` jobs
 # against `docs/_data/ci-check-categories.yml` in both directions,
-# with an EXEMPT list for auxiliary (non-required) jobs.
+# with a self-policed EXEMPT list for auxiliary (non-required) jobs.
+# @option --print-exempt print the EXEMPT job list, one name per line, and exit 0 without linting
 
 # Lint: cross-check `.github/workflows/ci.yml` jobs against
 # `docs/_data/ci-check-categories.yml`.
 #
 # Forward — every `jobs.<name>:` in `ci.yml` either appears as a key
 # in the category map OR is on the EXEMPT list of auxiliary jobs that
-# legitimately don't show up as required status checks (sandbox /
-# notify / matrix-expansion jobs).
+# legitimately don't show up as required status checks. EXEMPT is
+# currently empty: every ci.yml job is mapped. It is self-policed —
+# an entry must name a real `ci.yml` job that is absent from the
+# category map, so it cannot rot into a name that exempts nothing.
 #
 # Reverse — every key in `ci.yml`'s share of the category map
 # corresponds to a real `jobs.<name>:` in `ci.yml`. Category-map
@@ -34,13 +37,24 @@
 #   - sync the live ruleset
 # Adding a new auxiliary ci.yml job (test sandbox, notify-style):
 #   - add the job to ci.yml
-#   - add the job name to the EXEMPT list in this script
+#   - add the job name to the EXEMPT list in this script; it must be a
+#     real ci.yml job with no category-map key, or the lint rejects it
 #
 # See docs/security/workflow-hardening.md.
 #
+# EXEMPT as a shared list — `--print-exempt` writes the list to stdout,
+# one name per line, and exits 0 without touching ci.yml or the category
+# map. An empty list prints nothing, so exit status carries "the list is
+# empty" and only a nonzero exit means "the list is unreadable".
+# scripts/refresh-enforcement-matrix.sh reads its ci-job exemptions from
+# this mode, so one declaration serves both lints instead of one script
+# re-deriving the other's source. Any other argument exits 2, so a
+# renamed or dropped mode fails loud in the caller.
+#
 # Honors CI_WORKFLOW_OVERRIDE + CATEGORIES_FILE_OVERRIDE +
-# LINT_GROUPS_OVERRIDE + SCRIPTS_DIR_OVERRIDE for fixtures.
-# Exits 0 on full coverage, 1 on any drift.
+# LINT_GROUPS_OVERRIDE + SCRIPTS_DIR_OVERRIDE + EXEMPT_OVERRIDE for
+# fixtures. Exits 0 on full coverage, 1 on any drift, 2 on a usage or
+# missing-tool error.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -56,23 +70,46 @@ readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-${DEFAULT_WORKFLOWS_DIR}}"
 readonly LINT_GROUPS_FILE="${LINT_GROUPS_OVERRIDE:-${DEFAULT_LINT_GROUPS}}"
 readonly SCRIPTS_DIR="${SCRIPTS_DIR_OVERRIDE:-${DEFAULT_SCRIPTS_DIR}}"
 
-# Auxiliary ci.yml jobs intentionally absent from the category map.
-# Each entry is a job not exposed as a required status check.
-readonly EXEMPT=(
-  "doc-freshness"                       # batched regenerator harnesses
-  "gh-api-version-header"               # harness sandbox
-  "image-cve-scan-trivy"                # CVE scan (Trivy); surfaces issues, not blocker
-  "image-cve-scan-trivy-notify-finding" # notify-only job (real CRITICAL CVE, Trivy)
-  "image-cve-scan-trivy-notify-infra"   # notify-only job (infra failure, no CVE, Trivy)
-  "image-cve-scan-grype"                # CVE scan (Grype); surfaces issues, not blocker
-  "image-cve-scan-grype-notify-finding" # notify-only job (real CRITICAL CVE, Grype)
-  "image-cve-scan-grype-notify-infra"   # notify-only job (infra failure, no CVE, Grype)
-)
+# ci.yml jobs deliberately not exposed as required status checks.
+# Currently empty: every ci.yml job is mapped in the category file.
+# Self-policed below — an entry must name a real ci.yml job that is
+# absent from the category map, so the list cannot rot into a set of
+# names that exempt nothing while the lint stays green.
+EXEMPT=()
+if [[ -n ${EXEMPT_OVERRIDE:-} ]]; then
+  while IFS= read -r e; do
+    [[ -z ${e} ]] && continue
+    EXEMPT+=("${e}")
+  done <<<"${EXEMPT_OVERRIDE}"
+fi
+readonly EXEMPT
+
+# Argument handling runs after EXEMPT is assembled so `--print-exempt`
+# reflects EXEMPT_OVERRIDE, and before the tool/file preamble so the mode
+# stays readable without yq or a checked-out ci.yml.
+if (($# > 0)); then
+  case "$1" in
+  --print-exempt)
+    if (($# > 1)); then
+      printf 'unexpected extra arguments after %s\n' "$1" >&2
+      exit 2
+    fi
+    if ((${#EXEMPT[@]} > 0)); then
+      printf '%s\n' "${EXEMPT[@]}"
+    fi
+    exit 0
+    ;;
+  *)
+    printf 'unknown argument: %s\n' "$1" >&2
+    exit 2
+    ;;
+  esac
+fi
 
 is_exempt() {
   local -r name="$1"
   local e
-  for e in "${EXEMPT[@]}"; do
+  for e in ${EXEMPT[@]+"${EXEMPT[@]}"}; do
     [[ ${name} == "${e}" ]] && return 0
   done
   return 1
@@ -113,6 +150,22 @@ while IFS= read -r job; do
     "${CI_FILE}" "${job}" "${CATEGORIES_FILE}" >&2
   failed=$((failed + 1))
 done <"${ci_jobs_file}"
+
+# EXEMPT self-policing. Both shapes below leave the list syntactically
+# valid while covering no job, so the lint would stay green with an
+# exemption that exempts nothing.
+for e in ${EXEMPT[@]+"${EXEMPT[@]}"}; do
+  if ! grep --quiet --fixed-strings --line-regexp -- "${e}" "${ci_jobs_file}"; then
+    printf 'EXEMPT entry %q is not a job in %s\n' "${e}" "${CI_FILE}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  if grep --quiet --fixed-strings --line-regexp -- "${e}" "${cat_keys_file}"; then
+    printf 'EXEMPT entry %q is already a key in %s\n' \
+      "${e}" "${CATEGORIES_FILE}" >&2
+    failed=$((failed + 1))
+  fi
+done
 
 # Reverse: a category entry that targets a ci.yml job must exist.
 # We can't tell from categories.yml alone which entries point at

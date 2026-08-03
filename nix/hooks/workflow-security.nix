@@ -354,7 +354,8 @@
   # binary against tests/fixtures/actionlint-shellcheck-smoke.yml
   # (which has a planted SC2086) and fails if the finding is
   # not surfaced. Guards against silent regression of the
-  # shellcheck pin in actionlintWrapped. See
+  # shellcheck pin in actionlintWrapped (nix/wrappers.nix), which the
+  # files filter below watches directly. See
   # docs/actionlint-embedded-linters.md.
   actionlint-shellcheck-active = {
     enable = true;
@@ -367,7 +368,7 @@
       export PATH="${actionlintWrapped}/bin:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-actionlint-shellcheck-active.sh
     ''}";
-    files = "^(flake\\.nix|tests/fixtures/actionlint-shellcheck-smoke\\.yml|scripts/check-actionlint-shellcheck-active\\.sh)$";
+    files = "^(flake\\.nix|nix/wrappers\\.nix|tests/fixtures/actionlint-shellcheck-smoke\\.yml|scripts/check-actionlint-shellcheck-active\\.sh)$";
     pass_filenames = false;
     language = "system";
   };

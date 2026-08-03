@@ -10,7 +10,8 @@ function expect() {
   local -r fixture="$1" want_exit="$2" want_msg="$3"
   # Optional 4th/5th args override the lint-groups manifest + scripts dir
   # so the manifest-coverage assertion can be exercised against a fixture.
-  # Only set when provided so the script's own defaults apply otherwise.
+  # Optional 6th arg overrides the EXEMPT list. Only set when provided so
+  # the script's own defaults apply otherwise.
   local -a env_overrides=(
     "WORKFLOWS_DIR_OVERRIDE=${FIXTURES}/${fixture}"
     "CI_WORKFLOW_OVERRIDE=${FIXTURES}/${fixture}/ci.yml"
@@ -18,6 +19,7 @@ function expect() {
   )
   [[ -n ${4:-} ]] && env_overrides+=("LINT_GROUPS_OVERRIDE=${4}")
   [[ -n ${5:-} ]] && env_overrides+=("SCRIPTS_DIR_OVERRIDE=${5}")
+  [[ -n ${6:-} ]] && env_overrides+=("EXEMPT_OVERRIDE=${6}")
   local got_exit=0 got_stderr
   got_stderr="$(env "${env_overrides[@]}" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
   if [[ ${got_exit} != "${want_exit}" ]]; then
@@ -42,5 +44,53 @@ expect bad-missing-manifest-check 1 "lint-groups basename" \
 expect good 1 "manifest not found" \
   "${FIXTURES}/bad-missing-manifest-check/does-not-exist.yml" \
   "${FIXTURES}/bad-missing-manifest-check/scripts"
+# An unmapped auxiliary job with no EXEMPT entry fails — the exemption in
+# the next scenario is load-bearing, not incidentally passing.
+expect good-exempt 1 "EXEMPT"
+# An EXEMPT entry naming a real, unmapped ci.yml job exempts it.
+expect good-exempt 0 "" "" "" "aux"
+# An EXEMPT entry that is not a ci.yml job exempts nothing.
+expect good 1 "is not a job" "" "" "not-a-real-job"
+# An EXEMPT entry that is already a category key exempts nothing — the
+# forward loop matches the category map first and never reaches it.
+expect good 1 "already a key" "" "" "foo"
+
+# --print-exempt is the shared source of the ci-job exemption list for
+# scripts/refresh-enforcement-matrix.sh. It must exit 0 and emit exactly
+# the list — nothing at all when the list is empty, so that an empty
+# stdout means "no exemptions" and a nonzero exit means "unreadable".
+function expect_print_exempt() {
+  local -r label="$1" override="$2" want="$3"
+  local got exit_code=0
+  if [[ -n ${override} ]]; then
+    got="$(EXEMPT_OVERRIDE="${override}" "${SCRIPT}" --print-exempt)" || exit_code=$?
+  else
+    got="$("${SCRIPT}" --print-exempt)" || exit_code=$?
+  fi
+  if [[ ${exit_code} != 0 ]]; then
+    printf 'FAIL %s: exit %s, want 0\n' "${label}" "${exit_code}" >&2
+    return 1
+  fi
+  if [[ ${got} != "${want}" ]]; then
+    printf 'FAIL %s: got %q, want %q\n' "${label}" "${got}" "${want}" >&2
+    return 1
+  fi
+  printf 'OK   %s\n' "${label}"
+}
+
+expect_print_exempt 'print-exempt: empty list prints nothing' "" ""
+expect_print_exempt 'print-exempt: single entry' "aux-sandbox" "aux-sandbox"
+expect_print_exempt 'print-exempt: multiple entries, one per line' \
+  $'aux-one\naux-two' $'aux-one\naux-two'
+
+# An unrecognized argument exits 2 so a caller that asks for a mode this
+# script does not have fails loud instead of reading an empty list.
+unknown_arg_exit=0
+"${SCRIPT}" --not-a-mode >/dev/null 2>&1 || unknown_arg_exit=$?
+if [[ ${unknown_arg_exit} != 2 ]]; then
+  printf 'FAIL unknown-argument: exit %s, want 2\n' "${unknown_arg_exit}" >&2
+  exit 1
+fi
+printf 'OK   unknown-argument\n'
 
 printf 'all tests passed\n'
