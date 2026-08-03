@@ -122,7 +122,7 @@ left in `.git/config` for subsequent steps to read.
 
 Lint: cross-check `.github/workflows/ci.yml` jobs
 against `docs/_data/ci-check-categories.yml` in both directions,
-with an EXEMPT list for auxiliary (non-required) jobs.
+with a self-policed EXEMPT list for auxiliary (non-required) jobs.
 
 ### scripts/check-cliff-tag-pattern.sh
 
