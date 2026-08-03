@@ -49,7 +49,7 @@ Both `packages.<system>.default` and `packages.<system>.linpeas` are exposed; th
 
 ## Pinning recommendation
 
-Pin to a release tag (e.g. `20260510-cd4bd619`), not `main`. Tag pins are
+Pin to a release tag (shaped `YYYYMMDD-<sha>`), not `main`. Tag pins are
 SHA-checked by Nix on lock; `main` floats and will silently change.
 
 Update the pin with:

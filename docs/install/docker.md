@@ -39,9 +39,9 @@ The image's `Entrypoint` is set to the linpeas binary, so any arguments after th
 ## Pin to a specific tag
 
 ```bash
-docker run --rm rvenutolo/linpeas:{{ dashboard.release.latest_tag or "20260510-cd4bd619" }} -a
+docker run --rm rvenutolo/linpeas:{{ dashboard.release.latest_tag or "<tag>" }} -a
 # or
-docker run --rm ghcr.io/rvenutolo/linpeas:{{ dashboard.release.latest_tag or "20260510-cd4bd619" }} -a
+docker run --rm ghcr.io/rvenutolo/linpeas:{{ dashboard.release.latest_tag or "<tag>" }} -a
 ```
 
 Tags exactly match upstream `peass-ng/PEASS-ng` tags.

@@ -136,7 +136,7 @@ App and web-flow-signed by GitHub, satisfying `required_signatures` on
 ## Versioning
 
 Release tags match the upstream `peass-ng/PEASS-ng` tag verbatim
-(e.g. `20260510-cd4bd619`). No `v` prefix, no `-flake` suffix.
+(shaped `YYYYMMDD-<sha>`). No `v` prefix, no `-flake` suffix.
 
 This keeps the mapping from a release here to the corresponding upstream
 release one-to-one and obvious. Wrapper-only fixes (e.g. a `flake.nix` bug
@@ -184,8 +184,10 @@ required-check table; alphabetical):
 
 ### Release attestation verification
 
-Every release runs a `verify` job in `release-on-bump.yml` that downloads the
-just-published image and runs `gh attestation verify` on each.
+Every release runs a `verify` job in `release-on-bump.yml` that runs
+`gh attestation verify` against each just-published per-arch digest, reading
+from the Sigstore transparency log and the GitHub API — no registry pull
+required.
 A separate weekly cron workflow (`verify-latest-release.yml`) re-verifies the
 latest release's image and pin file **and re-fetches the pinned
 `linpeas.sh` from upstream to confirm the SRI hash still matches** — this
