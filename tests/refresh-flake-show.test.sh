@@ -109,6 +109,64 @@ function main() {
   cp -- "${BACKUP}" "${DOC}"
   rm --force -- "${stderr_file}"
 
+  # Assertion 6: the flake-show-fresh pre-commit hook must watch every
+  # nix module flake.nix imports. The flake outputs this generator reads
+  # are defined in those modules, not in the flake.nix entrypoint; a
+  # filter naming only flake.nix leaves the generated doc stale on the
+  # per-changed-file commit path.
+  local -a modules=()
+  local m
+  while IFS= read -r m; do
+    [[ -z ${m} ]] && continue
+    modules+=("${m}")
+  done < <(awk '
+    /^      imports = \[/ { in_imports = 1; next }
+    in_imports && /^      \];/ { exit }
+    in_imports && match($0, /\.\/nix\/[A-Za-z0-9._\/-]+\.nix/) {
+      print substr($0, RSTART + 2, RLENGTH - 2)
+    }
+  ' "${REPO_ROOT}/flake.nix" | sort --unique)
+
+  # Guard-the-guard: zero imports means the awk parser broke on a
+  # reformat. Fail loud rather than vacuously pass.
+  if [[ ${#modules[@]} -eq 0 ]]; then
+    fail 'no ./nix/*.nix imports parsed from flake.nix — parser broke'
+  else
+    local files_re
+    files_re="$(awk '
+      /^  flake-show-fresh = \{/ { in_block = 1; next }
+      in_block && /^  \};/ { exit }
+      in_block && match($0, /files = "[^"]*"/) {
+        s = substr($0, RSTART, RLENGTH)
+        sub(/^files = "/, "", s)
+        sub(/"$/, "", s)
+        print s
+        exit
+      }
+    ' "${REPO_ROOT}/nix/hooks/freshness.nix")"
+
+    if [[ -z ${files_re} ]]; then
+      fail 'could not extract files filter for flake-show-fresh'
+    else
+      # Nix string literal: "\\." in source is the ERE "\.".
+      local ere
+      ere="$(printf '%s' "${files_re}" | sed 's/\\\\/\\/g')"
+      local p uncovered=0
+      for p in "${modules[@]}"; do
+        if ! printf '%s\n' "${p}" |
+          grep --quiet --extended-regexp -- "${ere}"; then
+          printf '  uncovered module: %s\n' "${p}" >&2
+          uncovered=1
+        fi
+      done
+      if ((uncovered)); then
+        fail 'flake-show-fresh files filter does not cover every imported nix module'
+      else
+        pass 'flake-show-fresh files filter covers every imported nix module'
+      fi
+    fi
+  fi
+
   if [[ ${failures} -gt 0 ]]; then
     printf '%d failure(s)\n' "${failures}" >&2
     exit 1

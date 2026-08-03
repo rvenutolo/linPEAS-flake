@@ -58,6 +58,69 @@ function scenario_default_passes() {
 
 scenario_default_passes
 
+# The canary guards the `-shellcheck=` pin. Its pre-commit `files` filter
+# must match wherever that pin lives, or editing the pin alone does not
+# re-trigger the canary on the per-changed-file commit path. Derived from
+# the tree, not hardcoded: if the pin moves to another nix module, this
+# fails until the filter follows.
+function scenario_hook_watches_pin() {
+  local -a pin_files=()
+  local f
+  while IFS= read -r f; do
+    [[ -z ${f} ]] && continue
+    pin_files+=("${f#"${REPO_ROOT}/"}")
+  done < <(grep --recursive --files-with-matches --include='*.nix' \
+    --fixed-strings -- '-shellcheck=' "${REPO_ROOT}/nix" | sort)
+
+  # Guard-the-guard: an empty result means the pin moved out of nix/ or
+  # was renamed. Fail loud rather than vacuously pass.
+  if [[ ${#pin_files[@]} -eq 0 ]]; then
+    printf 'FAIL: no nix/**/*.nix file contains the -shellcheck= pin\n' >&2
+    failures=$((failures + 1))
+    return
+  fi
+
+  local files_re
+  files_re="$(awk '
+    /^  actionlint-shellcheck-active = \{/ { in_block = 1; next }
+    in_block && /^  \};/ { exit }
+    in_block && match($0, /files = "[^"]*"/) {
+      s = substr($0, RSTART, RLENGTH)
+      sub(/^files = "/, "", s)
+      sub(/"$/, "", s)
+      print s
+      exit
+    }
+  ' "${REPO_ROOT}/nix/hooks/workflow-security.nix")"
+
+  if [[ -z ${files_re} ]]; then
+    printf 'FAIL: could not extract files filter for actionlint-shellcheck-active\n' >&2
+    failures=$((failures + 1))
+    return
+  fi
+
+  # Nix string literal: "\\." in source is the ERE "\.".
+  local ere
+  ere="$(printf '%s' "${files_re}" | sed 's/\\\\/\\/g')"
+
+  local p missing=0
+  for p in "${pin_files[@]}"; do
+    if ! printf '%s\n' "${p}" |
+      grep --quiet --extended-regexp -- "${ere}"; then
+      printf 'FAIL: hook files filter does not match %s (the pin lives there)\n' \
+        "${p}" >&2
+      missing=1
+    fi
+  done
+  if ((missing)); then
+    failures=$((failures + 1))
+  else
+    printf 'PASS: hook files filter covers the -shellcheck= pin\n'
+  fi
+}
+
+scenario_hook_watches_pin
+
 # Override pointing at a clean workflow (no SC2086) — must fail
 # because the canary expects shellcheck to surface a finding.
 clean_fixture="$(mktemp --suffix=.yml)"
