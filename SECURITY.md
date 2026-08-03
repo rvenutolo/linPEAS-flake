@@ -103,9 +103,11 @@ the release pipeline — `codeql.yml`, `octoscan.yml`,
 [`docs/architecture/ci.md`](docs/architecture/ci.md)). The rest of this
 section covers `codeql.yml`; the other four are inventoried there.
 
-- **`codeql.yml`** scans GitHub Actions workflow definitions on PRs
-    that touch `.github/workflows/` or `.github/actions/`, every push
-    to `main`, and weekly. The analyze step passes `fail-on: critical`
+- **`codeql.yml`** scans GitHub Actions workflow definitions on every PR,
+    every push to `main`, and weekly. It runs unfiltered because the OpenSSF
+    Scorecard SAST check scores the fraction of recent merged PRs that ran a
+    SAST tool, so skipping path-narrow PRs would drag that fraction down.
+    The analyze step passes `fail-on: critical`
     to `codeql-action/analyze`: a CRITICAL-severity finding fails the
     workflow, and a notify job opens a deduped issue under the
     `codeql-critical` label. An analyze failure that produced no
@@ -116,14 +118,15 @@ section covers `codeql.yml`; the other four are inventoried there.
     CodeQL run therefore proves the scan completed with zero CRITICAL
     findings — **not** that zero findings exist. Closing the loop on
     sub-critical findings requires a maintainer to review the Security
-    tab when a PR touches `.github/workflows/`. CodeQL complements
+    tab after a PR whose analysis reported below-CRITICAL findings. CodeQL complements
     (does not replace) the `zizmor` pre-commit hook and the
     SHA-pinning + `permissions:` discipline applied workflow-wide.
 
 The `codeql.yml` workflow is not in branch protection's required-check
-set, and must not be promoted while its PR trigger carries a `paths:`
-filter (the `required-checks-no-paths` invariant forbids paths filters
-on required workflows). A CodeQL infrastructure failure must not block
+set, and is deliberately advisory: gating merge on CodeQL would let a
+single CRITICAL false positive or a transient CodeQL infrastructure flake
+wedge every PR. The merge gate is the in-tree workflow lints plus the
+zizmor pre-commit hook. A CodeQL infrastructure failure must not block
 linpeas pin bumps; failure surfacing is via the deduped issues filed by
 the notify jobs.
 
@@ -142,7 +145,7 @@ the notify jobs.
 
 - `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN_RW` / `DOCKERHUB_TOKEN_DELETE` — Docker Hub access tokens used by the release pipeline. The split limits blast radius:
 
-    - `DOCKERHUB_TOKEN_RW` — Read, Write on `rvenutolo/linpeas`. Used ONLY by `release-on-bump.yml` (per-arch + manifest + verify jobs). Cannot delete tags. `verify-latest-release.yml` deliberately does NOT receive it — its Docker Hub attestation checks run anonymously/read-only, so a compromised step there cannot exfiltrate the push credential.
+    - `DOCKERHUB_TOKEN_RW` — Read, Write on `rvenutolo/linpeas`. Used ONLY by `release-on-bump.yml` (the `image-amd64`, `image-arm64`, and `manifest` jobs). The `verify` job deliberately runs without it — `gh attestation verify` and `cosign verify` read from Sigstore and the GitHub API, so no registry push credential enters that job's env. Cannot delete tags.
     - `DOCKERHUB_TOKEN_DELETE` — Read, Write, Delete on `rvenutolo/linpeas`. Used ONLY by `dockerhub-sync.yml` (`peter-evans/dockerhub-description` needs Delete to PATCH repo metadata).
 
     The `Delete` capability is required by the `peter-evans/dockerhub-description`
@@ -188,6 +191,9 @@ Repository settings knobs the security model depends on (probe-verifiable from `
 - Actions: `sha_pinning_required: true`. Belt-and-braces against Renovate misconfiguration — every `uses:` must be SHA-pinned at GitHub level, not just by Renovate convention. Smoke-tested: unpinned `uses: actions/checkout@v4` was rejected by GitHub with "all actions must be pinned to a full-length commit SHA".
 - Workflow tokens: `default_workflow_permissions: read`, `can_approve_pull_request_reviews: false`. Prevents a compromised workflow from self-approving a PR.
 - `github-pages` environment: `can_admins_bypass: false`.
+
+Not probe-verifiable (manual UI check):
+
 - Account: 2FA enabled on the maintainer account with non-SMS second factor (specifics not recorded).
 
 Any drift on any of the above is treated as a security incident. The `docs/security/settings-posture.md` file is the source of truth and includes copy-pasteable probe commands.
