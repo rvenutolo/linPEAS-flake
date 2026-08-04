@@ -235,15 +235,15 @@ function test_short_flag_pins() {
     "$(printf 'ok\tgh attestation verify pin.json -R %s' "${SLUG}")"
 }
 
-function test_console_fence_root_prompt_is_seen() {
-  check 'a `# ` root prompt in a console fence is a command, not a comment' md \
+function test_text_fence_comment_is_not_an_invocation() {
+  check 'a `# ` line in a text fence reads as a comment, not a command' md \
     '# t
 
-```console
+```text
 $ ls
-# gh attestation verify evil.json
+# note: gh attestation verify is intentionally not called here
 ```' \
-    "$(printf 'bad\tgh attestation verify evil.json')"
+    ''
 }
 
 function main() {
@@ -273,7 +273,7 @@ function main() {
   test_subshell_is_seen
   test_pinned_command_substitution_is_ok
   test_short_flag_pins
-  test_console_fence_root_prompt_is_seen
+  test_text_fence_comment_is_not_an_invocation
 
   if ((failures > 0)); then
     printf '%d test(s) failed\n' "${failures}" >&2

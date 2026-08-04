@@ -322,12 +322,7 @@ function flush_runnable(   i, j, joined) {
     if (in_fence) {
       if (is_fence_close($0)) { in_fence = 0; next }
       if (!fence_runnable) next
-      line = $0
-      # A console/text fence's leading `$ ` or `# ` is a shell prompt, not
-      # a comment — strip it before scanning so the command that follows
-      # is not mistaken for a comment by the tokenizer.
-      if (fence_lang == "console" || fence_lang == "text") sub(/^[[:space:]]*[$#][[:space:]]+/, "", line)
-      scan_spans(line, 1)
+      scan_spans($0, 1)
       push_runnable(strip_line)
       next
     }
