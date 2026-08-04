@@ -69,7 +69,7 @@
       export PATH="${pkgs-unstable.jq}/bin:${pkgs-unstable.gawk}/bin:${treefmtWrapper}/bin:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-treefmt-config.sh --check
     ''}";
-    files = "^(treefmt\\.nix|flake\\.nix|flake\\.lock|docs/reference/treefmt-config\\.md|scripts/refresh-treefmt-config\\.sh)$";
+    files = "^(treefmt\\.nix|flake\\.nix|flake\\.lock|nix/.*\\.nix|docs/reference/treefmt-config\\.md|scripts/refresh-treefmt-config\\.sh)$";
     pass_filenames = false;
     language = "system";
   };
@@ -98,7 +98,7 @@
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
       exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-precommit-table.sh --check
     ''}";
-    files = "^(flake\\.nix|nix/hooks/.*\\.nix|docs/development/git\\.md|scripts/refresh-precommit-table\\.sh)$";
+    files = "^(flake\\.nix|nix/hooks/.*\\.nix|nix/manifests\\.nix|docs/development/git\\.md|scripts/refresh-precommit-table\\.sh)$";
     pass_filenames = false;
     language = "system";
   };
@@ -143,7 +143,7 @@
       export PATH="${pkgs-unstable.jq}/bin:${pkgs-unstable.yq-go}/bin:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-enforcement-matrix.sh --check
     ''}";
-    files = "^(docs/invariant-index\\.md|docs/security/enforcement-matrix\\.md|scripts/check-.*\\.sh|scripts/refresh-enforcement-matrix\\.sh|\\.github/workflows/ci\\.yml|flake\\.nix|nix/hooks/.*\\.nix)$";
+    files = "^(docs/invariant-index\\.md|docs/security/enforcement-matrix\\.md|scripts/check-.*\\.sh|scripts/refresh-enforcement-matrix\\.sh|\\.github/workflows/ci\\.yml|flake\\.nix|nix/hooks/.*\\.nix|nix/manifests\\.nix)$";
     pass_filenames = false;
     language = "system";
   };

@@ -577,7 +577,7 @@ prefix into Check / Refresh / Other sections.
 
 Regenerate the treefmt-config managed block in
 docs/reference/treefmt-config.md from the enabled-formatter manifest
-exposed by `flake.nix` as `devTooling.<system>.treefmtConfig`.
+exposed by `nix/treefmt-config.nix` as `devTooling.<system>.treefmtConfig`.
 
 **Options:**
 
