@@ -29,6 +29,10 @@ BEGIN {
     print "_attestation_invocations.awk: -v mode must be md or other" > "/dev/stderr"
     exit 2
   }
+  carry_open = 0
+  carry_text = ""
+  carry_runnable = 0
+  nrun = 0
 }
 
 # Split `s` into shell words. Fills out[1..n] with word text and
@@ -72,6 +76,14 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L) {
     }
     if (c == "\\") {
       if (i < L) { i++; cur = cur substr(s, i, 1); has = 1 }
+      i++
+      continue
+    }
+    if (c == "`") {
+      # Legacy command substitution in shell, literal payload inside a
+      # longer code span. Either way it delimits words rather than
+      # joining them.
+      if (has) { out[++n] = cur; typ[n] = "w"; cur = ""; has = 0 }
       i++
       continue
     }
@@ -133,6 +145,83 @@ function emit_records(s, mention_ok,   out, typ, n, i, j, extra, rec, pinned) {
   }
 }
 
-# Temporary driver, replaced in Task 5. Treats every input line as a
-# runnable shell line.
-{ emit_records($0, 0) }
+# Buffer a runnable source string for the backslash join in Task 5.
+function push_runnable(s) {
+  runnable_lines[++nrun] = s
+}
+
+# Scan `s` for code spans. A run of N backticks opens a span; the next
+# run of exactly N closes it. A run of any other length inside an open
+# span is literal content, which is what lets a doubled-backtick span
+# carry a single-backtick span as payload.
+#
+# Sets the global `strip_line` to the text outside spans, so a caller
+# processing a runnable line can tokenize it without the quoted
+# occurrences it has already accounted for here.
+#
+# `runnable` records whether the span was opened on a runnable line; see
+# kill_carry.
+function scan_spans(s, runnable,   i, run, L) {
+  strip_line = ""
+  i = 1
+  L = length(s)
+  while (i <= L) {
+    if (substr(s, i, 1) != "`") {
+      if (carry_open > 0) carry_text = carry_text substr(s, i, 1)
+      else strip_line = strip_line substr(s, i, 1)
+      i++
+      continue
+    }
+    run = 0
+    while (i + run <= L && substr(s, i + run, 1) == "`") run++
+    if (carry_open == 0) {
+      carry_open = run
+      carry_text = ""
+      carry_runnable = runnable
+    } else if (run == carry_open) {
+      emit_records(carry_text, 1)
+      carry_open = 0
+      carry_text = ""
+    } else {
+      carry_text = carry_text substr(s, i, run)
+    }
+    i += run
+  }
+  # A span still open at end of line continues onto the next one; the
+  # newline joins as a space.
+  if (carry_open > 0) carry_text = carry_text " "
+}
+
+# An unresolved span dies at a blank line or at EOF — CommonMark forbids
+# a blank line inside a code span. Its text was literal, not a span.
+#
+# Text that came from a runnable line must go back into the runnable
+# stream, or an unterminated backtick would swallow the invocation it
+# contains. Text from a prose line is discarded: prose contributes only
+# completed spans.
+function kill_carry(   t) {
+  if (carry_open == 0) return
+  t = carry_text
+  carry_open = 0
+  carry_text = ""
+  if (carry_runnable) push_runnable(t)
+}
+
+# Temporary driver, replaced in Task 5. Applies span scanning but not
+# the markdown block lexer: `md` treats every line as prose, `other`
+# treats every non-comment line as runnable.
+{
+  if ($0 ~ /^[[:space:]]*$/) kill_carry()
+  if (mode == "md") {
+    scan_spans($0, 0)
+    next
+  }
+  if ($0 ~ /^[[:space:]]*#/) next
+  scan_spans($0, 1)
+  emit_records(strip_line, 0)
+}
+
+END {
+  kill_carry()
+  for (r = 1; r <= nrun; r++) emit_records(runnable_lines[r], 0)
+}

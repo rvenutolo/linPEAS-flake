@@ -2,6 +2,9 @@
 # tests/_attestation_invocations.test.sh
 #
 # Spec-driven unit test for scripts/_attestation_invocations.awk.
+#
+# shellcheck disable=SC2016 # every test input here is literal fixture data:
+# backticks and $ are markdown/shell syntax under test, never expansions.
 set -Eeuo pipefail
 IFS=$'\n\t'
 
@@ -93,6 +96,45 @@ function test_wrong_slug_is_unpinned() {
     "$(printf 'bad\tgh attestation verify pin.json --repo other/repo')"
 }
 
+function test_doubled_backtick_span_is_seen() {
+  check 'a doubled-backtick span is a span, not inter-span text' md \
+    '# t
+
+prose ``gh attestation verify evil.json`` here.' \
+    "$(printf 'bad\tgh attestation verify evil.json')"
+}
+
+function test_span_wrapping_a_single_span_is_seen() {
+  check 'a doubled span wrapping a single span is one span' md \
+    '# t
+
+prose `` `gh attestation verify evil.json` `` here.' \
+    "$(printf 'bad\tgh attestation verify evil.json')"
+}
+
+function test_multi_line_span_is_seen() {
+  check 'a span opened on one line and closed on the next is seen' md \
+    '# t
+
+prose `gh attestation verify
+evil.json` here.' \
+    "$(printf 'bad\tgh attestation verify evil.json')"
+}
+
+function test_unterminated_span_on_runnable_line_still_seen() {
+  check 'an unterminated span on a shell line does not swallow the command' other \
+    'echo `gh attestation verify evil.json' \
+    "$(printf 'bad\tgh attestation verify evil.json')"
+}
+
+function test_bare_triple_in_span_is_a_mention() {
+  check 'a bare command in a span is prose, not an invocation' md \
+    '# t
+
+This page mentions `gh attestation verify` in backticks.' \
+    ''
+}
+
 function main() {
   test_tokenizer_splits_on_whitespace_runs
   test_tokenizer_honors_single_quotes
@@ -103,6 +145,11 @@ function main() {
   test_chained_commands_split_into_two_records
   test_equals_form_pins
   test_wrong_slug_is_unpinned
+  test_doubled_backtick_span_is_seen
+  test_span_wrapping_a_single_span_is_seen
+  test_multi_line_span_is_seen
+  test_unterminated_span_on_runnable_line_still_seen
+  test_bare_triple_in_span_is_a_mention
 
   if ((failures > 0)); then
     printf '%d test(s) failed\n' "${failures}" >&2
