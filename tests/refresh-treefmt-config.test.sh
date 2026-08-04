@@ -22,7 +22,96 @@ function fail() {
 # boundaries (mirrors tests/refresh-precommit-table.test.sh).
 backup=''
 
+# The treefmt-config-fresh hook guards a generated doc. Its pre-commit
+# `files` filter must match every nix module the generator evaluates, or
+# a commit touching only such a module leaves the doc stale with the
+# guard silent on the per-changed-file path. Derived from the tree, not
+# hardcoded: this fails if the config moves to a module outside the
+# filter's `nix/.*\.nix` coverage; a move within `nix/` stays covered.
+function scenario_hook_watches_eval_modules() {
+  local -r freshness="${REPO_ROOT}/nix/hooks/freshness.nix"
+
+  # The attribute the generator evaluates, read out of the generator.
+  local attr
+  attr="$(grep --only-matching --extended-regexp \
+    'devTooling\.\$\{sys\}\.[A-Za-z0-9_]+' "${SCRIPT}" |
+    head --lines=1 | sed 's/.*\.//')"
+  if [[ -z ${attr} ]]; then
+    fail 'no devTooling eval attribute found in the generator'
+    return
+  fi
+
+  # Every tracked nix file naming that attribute, plus one level of the
+  # relative imports those files pull in.
+  local -A modules=()
+  local f
+  while IFS= read -r f; do
+    [[ -z ${f} ]] && continue
+    modules["${f}"]=1
+  done < <(git -C "${REPO_ROOT}" grep --files-with-matches \
+    --fixed-strings -- "${attr}" -- '*.nix')
+
+  local m dir imp rel
+  for m in "${!modules[@]}"; do
+    dir="$(dirname -- "${m}")"
+    while IFS= read -r imp; do
+      [[ -z ${imp} ]] && continue
+      rel="$(realpath --relative-to="${REPO_ROOT}" --canonicalize-missing \
+        -- "${REPO_ROOT}/${dir}/${imp}")"
+      if [[ -f ${REPO_ROOT}/${rel} ]]; then
+        modules["${rel}"]=1
+      fi
+    done < <(grep --only-matching --extended-regexp \
+      '\.\.?/[A-Za-z0-9._/-]+\.nix' "${REPO_ROOT}/${m}" || true)
+  done
+
+  # Guard-the-guard: an empty set means the attribute was renamed or the
+  # grep broke. Fail loud rather than vacuously pass.
+  if [[ ${#modules[@]} -eq 0 ]]; then
+    fail "no nix module defines devTooling.${attr} — derivation broke"
+    return
+  fi
+
+  local files_re
+  files_re="$(awk '
+    /^  treefmt-config-fresh = \{/ { in_block = 1; next }
+    in_block && /^  \};/ { exit }
+    in_block && match($0, /files = "[^"]*"/) {
+      s = substr($0, RSTART, RLENGTH)
+      sub(/^files = "/, "", s)
+      sub(/"$/, "", s)
+      print s
+      exit
+    }
+  ' "${freshness}")"
+  if [[ -z ${files_re} ]]; then
+    fail 'could not extract files filter for treefmt-config-fresh'
+    return
+  fi
+
+  # Nix string literal: "\\." in source is the ERE "\.".
+  local ere
+  ere="$(printf '%s' "${files_re}" | sed 's/\\\\/\\/g')"
+
+  local p uncovered=0
+  while IFS= read -r p; do
+    if ! printf '%s\n' "${p}" |
+      grep --quiet --extended-regexp -- "${ere}"; then
+      printf '  uncovered module: %s\n' "${p}" >&2
+      uncovered=1
+    fi
+  done < <(printf '%s\n' "${!modules[@]}" | sort)
+
+  if ((uncovered)); then
+    fail 'treefmt-config-fresh files filter does not cover every evaluated nix module'
+  else
+    pass 'treefmt-config-fresh files filter covers every evaluated nix module'
+  fi
+}
+
 function main() {
+  scenario_hook_watches_eval_modules
+
   "${SCRIPT}"
   if "${SCRIPT}" --check; then
     pass '--check passes on freshly generated table'

@@ -3,7 +3,7 @@
 #
 # @description Regenerate the treefmt-config managed block in
 # docs/reference/treefmt-config.md from the enabled-formatter manifest
-# exposed by `flake.nix` as `devTooling.<system>.treefmtConfig`.
+# exposed by `nix/treefmt-config.nix` as `devTooling.<system>.treefmtConfig`.
 # @option --check exit 1 if the doc would change; do not mutate the working tree
 
 # Replace the content between <!-- BEGIN treefmt-config --> and <!-- END treefmt-config -->
