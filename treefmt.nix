@@ -94,15 +94,12 @@
     # doc uses `__SCENARIO__` which formatters rewrite to `**SCENARIO**`,
     # breaking the harness sed substitution.
     "tests/fixtures/required-checks/*"
-    # gh-attestation-repo fixtures encode markdown shapes that mdformat
-    # normalizes away: indented code blocks become fences, tilde fences
-    # become backtick fences, and multi-backtick or multi-line code spans
-    # collapse to a single-backtick span. Formatting them would delete the
-    # exact bypass each one exists to catch.
+    # mdformat rewrites these markdown fixtures — collapsing indented blocks
+    # to fences, normalizing tilde fences, and collapsing multi-backtick and
+    # multi-line code spans — which would destroy the shape each one encodes.
     "tests/fixtures/gh-attestation-repo/bad-indented-code.md"
     "tests/fixtures/gh-attestation-repo/bad-tilde-fence.md"
     "tests/fixtures/gh-attestation-repo/bad-doubled-span.md"
-    "tests/fixtures/gh-attestation-repo/bad-nested-span.md"
     "tests/fixtures/gh-attestation-repo/bad-inline-triple.md"
     "tests/fixtures/gh-attestation-repo/bad-multiline-span.md"
     "tests/fixtures/gh-attestation-repo/good-odd-backtick.md"
