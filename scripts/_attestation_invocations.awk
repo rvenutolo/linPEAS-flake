@@ -149,7 +149,7 @@ function emit_records(s, mention_ok,   out, typ, n, i, j, extra, rec, pinned) {
   }
 }
 
-# Buffer a runnable source string for the backslash join in Task 5.
+# Buffer a runnable source string for the backslash join in flush_runnable.
 function push_runnable(s) {
   runnable_lines[++nrun] = s
 }
@@ -285,7 +285,10 @@ function flush_runnable(   i, j, joined) {
   nrun = 0
 }
 
-# Temporary driver, finalized in Task 5.
+# Dispatch each line to the right source treatment: markdown fence and
+# indent state in md mode, comment skip in yml/sh. Runnable lines are
+# span-scanned and buffered for the backslash join; prose contributes
+# only its code spans.
 {
   if ($0 ~ /^[[:space:]]*$/) kill_carry()
 
