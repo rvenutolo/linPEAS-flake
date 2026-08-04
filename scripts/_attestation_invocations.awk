@@ -36,6 +36,7 @@ BEGIN {
   in_fence = 0
   fence_char = ""
   fence_len = 0
+  fence_lang = ""
   fence_runnable = 0
 }
 
@@ -264,7 +265,8 @@ function is_fence_open(line,   t, ch, len, info) {
   if (ch == "`" && index(info, "`") > 0) return 0
   fence_char = ch
   fence_len = len
-  fence_runnable = lang_runnable(normalize_info(info))
+  fence_lang = normalize_info(info)
+  fence_runnable = lang_runnable(fence_lang)
   in_fence = 1
   return 1
 }
@@ -314,7 +316,12 @@ function flush_runnable(   i, j, joined) {
     if (in_fence) {
       if (is_fence_close($0)) { in_fence = 0; next }
       if (!fence_runnable) next
-      scan_spans($0, 1)
+      line = $0
+      # A console/text fence's leading `$ ` or `# ` is a shell prompt, not
+      # a comment — strip it before scanning so the command that follows
+      # is not mistaken for a comment by the tokenizer.
+      if (fence_lang == "console" || fence_lang == "text") sub(/^[[:space:]]*[$#][[:space:]]+/, "", line)
+      scan_spans(line, 1)
       push_runnable(strip_line)
       next
     }
