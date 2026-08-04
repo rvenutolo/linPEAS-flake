@@ -33,6 +33,10 @@ BEGIN {
   carry_text = ""
   carry_runnable = 0
   nrun = 0
+  in_fence = 0
+  fence_char = ""
+  fence_len = 0
+  fence_runnable = 0
 }
 
 # Split `s` into shell words. Fills out[1..n] with word text and
@@ -207,15 +211,88 @@ function kill_carry(   t) {
   if (carry_runnable) push_runnable(t)
 }
 
-# Temporary driver, replaced in Task 5. Applies span scanning but not
-# the markdown block lexer: `md` treats every line as prose, `other`
-# treats every non-comment line as runnable.
+# The fence language: the first word of the info string, with Pandoc-style
+# attribute punctuation stripped. `{.sh}` and `{.bash .numberLines}` are
+# ordinary in generated markdown and must not read as an unknown language.
+function normalize_info(t) {
+  sub(/^[[:space:]]+/, "", t)
+  sub(/[[:space:]].*$/, "", t)
+  sub(/^\{/, "", t)
+  sub(/^\./, "", t)
+  sub(/\}$/, "", t)
+  return t
+}
+
+# sh/bash/shell/console/text and unlabeled fences are shell source.
+# Everything else is a diagram and is skipped entirely.
+function lang_runnable(l) {
+  return (l == "" || l == "sh" || l == "bash" || l == "shell" \
+    || l == "console" || l == "text")
+}
+
+# Does `line` open a fence? Records the fence character and run length so
+# a backtick run cannot close a tilde fence and vice versa.
+function is_fence_open(line,   t, ch, len, info) {
+  if (line !~ /^[[:space:]]*(```|~~~)/) return 0
+  t = line
+  sub(/^[[:space:]]*/, "", t)
+  ch = substr(t, 1, 1)
+  len = 0
+  while (substr(t, len + 1, 1) == ch) len++
+  info = substr(t, len + 1)
+  # CommonMark forbids a backtick in a backtick fence's info string. Without
+  # this, a line-leading inline code span reads as a fence opener and every
+  # later fence on the page is tracked inverted.
+  if (ch == "`" && index(info, "`") > 0) return 0
+  fence_char = ch
+  fence_len = len
+  fence_runnable = lang_runnable(normalize_info(info))
+  in_fence = 1
+  return 1
+}
+
+# Does `line` close the open fence? Same character, a run at least as long
+# as the opener, and nothing but whitespace after it.
+function is_fence_close(line,   t, len) {
+  if (line !~ /^[[:space:]]*(```|~~~)/) return 0
+  t = line
+  sub(/^[[:space:]]*/, "", t)
+  if (substr(t, 1, 1) != fence_char) return 0
+  len = 0
+  while (substr(t, len + 1, 1) == fence_char) len++
+  if (len < fence_len) return 0
+  return (substr(t, len + 1) ~ /^[[:space:]]*$/)
+}
+
+# Temporary driver, finalized in Task 5.
 {
   if ($0 ~ /^[[:space:]]*$/) kill_carry()
+
   if (mode == "md") {
+    if (in_fence) {
+      if (is_fence_close($0)) { in_fence = 0; next }
+      if (!fence_runnable) next
+      scan_spans($0, 1)
+      emit_records(strip_line, 0)
+      next
+    }
+    if (is_fence_open($0)) next
+    # An indented code block. The repo has none today, and only a line
+    # carrying the command outside a span can produce a record, so the
+    # simple rule costs nothing that CommonMark container tracking buys.
+    if ($0 ~ /^(    |\t)/) {
+      scan_spans($0, 1)
+      emit_records(strip_line, 0)
+      next
+    }
+    # Prose. An inline code span is the only runnable shape here.
     scan_spans($0, 0)
     next
   }
+
+  # yml/sh: a comment line is prose whatever it quotes. This skip must
+  # precede the span scan — a comment can carry a backticked command with
+  # an elided argument, which the span rule would read as an invocation.
   if ($0 ~ /^[[:space:]]*#/) next
   scan_spans($0, 1)
   emit_records(strip_line, 0)

@@ -135,6 +135,68 @@ This page mentions `gh attestation verify` in backticks.' \
     ''
 }
 
+function test_tilde_fence_body_is_runnable() {
+  check 'a ~~~sh fence body is shell source' md \
+    '# t
+
+~~~sh
+gh attestation verify evil.json
+~~~' \
+    "$(printf 'bad\tgh attestation verify evil.json')"
+}
+
+function test_attribute_info_string_is_runnable() {
+  check 'a {.sh} info string reads as sh' md \
+    '# t
+
+```{.sh}
+gh attestation verify evil.json
+```' \
+    "$(printf 'bad\tgh attestation verify evil.json')"
+}
+
+function test_indented_code_block_is_runnable() {
+  check 'a 4-space indented line is shell source' md \
+    '# t
+
+prose:
+
+    gh attestation verify evil.json' \
+    "$(printf 'bad\tgh attestation verify evil.json')"
+}
+
+function test_backtick_fence_cannot_close_tilde_fence() {
+  check 'a backtick run does not close a tilde fence' md \
+    '~~~sh
+gh attestation verify evil.json
+```
+gh attestation verify other.json
+~~~' \
+    "$(printf 'bad\tgh attestation verify evil.json\nbad\tgh attestation verify other.json')"
+}
+
+function test_inline_triple_backtick_is_not_a_fence() {
+  check 'a line-leading triple backtick with a backtick info string is a span' md \
+    '# t
+
+```gh attestation verify evil.json```
+
+```sh
+gh attestation verify other.json
+```' \
+    "$(printf 'bad\tgh attestation verify evil.json\nbad\tgh attestation verify other.json')"
+}
+
+function test_diagram_fence_is_skipped() {
+  check 'a mermaid fence is a diagram, not shell source' md \
+    '# t
+
+```mermaid
+gh attestation verify evil.json
+```' \
+    ''
+}
+
 function main() {
   test_tokenizer_splits_on_whitespace_runs
   test_tokenizer_honors_single_quotes
@@ -150,6 +212,12 @@ function main() {
   test_multi_line_span_is_seen
   test_unterminated_span_on_runnable_line_still_seen
   test_bare_triple_in_span_is_a_mention
+  test_tilde_fence_body_is_runnable
+  test_attribute_info_string_is_runnable
+  test_indented_code_block_is_runnable
+  test_backtick_fence_cannot_close_tilde_fence
+  test_inline_triple_backtick_is_not_a_fence
+  test_diagram_fence_is_skipped
 
   if ((failures > 0)); then
     printf '%d test(s) failed\n' "${failures}" >&2
