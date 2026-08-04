@@ -83,6 +83,13 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L) {
       i++
       continue
     }
+    if (c == "(" || c == ")") {
+      # Subshell and command-substitution punctuation. Delimiting words here
+      # is what lets `$(gh attestation verify …)` match the command triple.
+      if (has) { out[++n] = cur; typ[n] = "w"; cur = ""; has = 0 }
+      i++
+      continue
+    }
     if (c == "`") {
       # Legacy command substitution in shell, literal payload inside a
       # longer code span. Either way it delimits words rather than
@@ -192,8 +199,19 @@ function scan_spans(s, runnable,   i, run, L) {
     i += run
   }
   # A span still open at end of line continues onto the next one; the
-  # newline joins as a space.
-  if (carry_open > 0) carry_text = carry_text " "
+  # newline joins as a space. On a runnable line the span cannot be
+  # allowed to keep absorbing: an unterminated backtick would swallow
+  # every following line into text that is later discarded. Return what
+  # it captured to this line's runnable text instead.
+  if (carry_open > 0) {
+    if (runnable) {
+      strip_line = strip_line carry_text
+      carry_open = 0
+      carry_text = ""
+    } else {
+      carry_text = carry_text " "
+    }
+  }
 }
 
 # An unresolved span dies at a blank line or at EOF — CommonMark forbids
