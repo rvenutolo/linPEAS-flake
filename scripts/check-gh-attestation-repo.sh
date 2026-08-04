@@ -17,8 +17,8 @@
 # words, honouring single quotes, double quotes, and backslash escapes.
 # A record runs from the `gh attestation verify` word triple to the next
 # unquoted shell separator or comment, or to the end of the string. The
-# pin must be a word `--repo` whose next word is the slug, or a word
-# `--repo=<slug>`.
+# pin must be a word `--repo` or `-R` whose next word is the slug, or a
+# word `--repo=<slug>` or `-R=<slug>`.
 #
 # Binding the pin to a word position is what keeps text that merely sits
 # near the command from vouching for it: a trailing comment, a chained
@@ -42,10 +42,12 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+readonly REPO_ROOT
 readonly DEFAULT_REPO_SLUG="rvenutolo/linPEAS-flake"
 readonly REPO_SLUG="${REPO_SLUG_OVERRIDE:-${DEFAULT_REPO_SLUG}}"
 readonly NEEDLE="--repo ${REPO_SLUG}"
-readonly AWK_LIB="${AWK_LIB_OVERRIDE:-scripts/_attestation_invocations.awk}"
+readonly AWK_LIB="${AWK_LIB_OVERRIDE:-${REPO_ROOT}/scripts/_attestation_invocations.awk}"
 
 paths=()
 if [[ -n ${PATHS_OVERRIDE:-} ]]; then
