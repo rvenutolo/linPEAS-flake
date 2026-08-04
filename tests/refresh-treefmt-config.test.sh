@@ -26,8 +26,8 @@ backup=''
 # `files` filter must match every nix module the generator evaluates, or
 # a commit touching only such a module leaves the doc stale with the
 # guard silent on the per-changed-file path. Derived from the tree, not
-# hardcoded: if the config moves to another module, this fails until the
-# filter follows.
+# hardcoded: this fails if the config moves to a module outside the
+# filter's `nix/.*\.nix` coverage; a move within `nix/` stays covered.
 function scenario_hook_watches_eval_modules() {
   local -r freshness="${REPO_ROOT}/nix/hooks/freshness.nix"
 
