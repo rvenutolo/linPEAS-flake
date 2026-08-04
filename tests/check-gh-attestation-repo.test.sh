@@ -33,5 +33,10 @@ expect bad-yml-inline.yml 1 "missing"
 expect bad-missing.sh 1 "missing"
 expect bad-wrong-slug.sh 1 "missing"
 expect bad-md-code.md 1 "missing"
+expect good-chain.sh 0 ""
+expect bad-mask-span.md 1 "missing"
+expect bad-chain-unquoted.sh 1 "missing"
+expect bad-span-chain.md 1 "missing"
+expect bad-span-greedy.md 1 "missing"
 
 printf 'all tests passed\n'

@@ -15,11 +15,17 @@
 #
 # Detection has two shapes. Backslash-continued shell invocations:
 # when a runnable line contains `gh attestation verify`, the lint walks
-# forward while the previous line ends with `\`, then checks the joined
-# block for `--repo rvenutolo/linPEAS-flake` (or `--repo=<slug>`).
-# Backtick-quoted spans: a span carrying the command plus at least one
-# further token is an invocation and must pass the pin; a span holding
-# the bare command name is a prose mention and is ignored.
+# forward while the previous line ends with `\`, then splits the joined
+# block into one record per occurrence of the command and checks each
+# record for `--repo rvenutolo/linPEAS-flake` (or `--repo=<slug>`).
+# Backtick-quoted spans: a span is split the same way, and a record
+# carrying the command plus at least one further token is an invocation
+# that must pass the pin; a record holding the bare command name is a
+# prose mention and is ignored.
+#
+# Splitting per occurrence is what keeps one invocation from vouching
+# for another: a pinned command earlier in the line no longer satisfies
+# the check for an unpinned command beside it.
 #
 # Which lines are runnable depends on the file. In markdown, fenced
 # `sh`/`bash`/`shell`/`console`/`text` (or unlabeled) blocks are shell
@@ -60,11 +66,14 @@ else
     'README.md' 'SECURITY.md' 2>/dev/null || true)
 fi
 
-# Emits one logical line per `gh attestation verify` invocation, drawn
-# from two sources: backslash-continued runnable lines, joined into a
-# single string, and backtick spans that classify as invocations — a
-# span carrying the command plus at least one further token. A span
-# holding the bare command name is a prose mention and is skipped.
+# Emits one record per `gh attestation verify` invocation, drawn from
+# two sources: backslash-continued runnable lines, joined and then split
+# at each occurrence of the command, and backtick spans split the same
+# way. A record carrying the command plus at least one further token is
+# an invocation; a record holding the bare command name is a prose
+# mention and is skipped. A runnable line is stored with its spans
+# removed, so a quoted occurrence is accounted for once, by the span
+# scan.
 #
 # Markdown prose lines contribute only their inline spans; markdown
 # fences labeled sh/bash/shell/console/text (or unlabeled) are shell
@@ -78,22 +87,49 @@ extract_invocations() {
   *.md) mode="md" ;;
   esac
   awk -v mode="${mode}" '
-    BEGIN { in_fence = 0; fence_lang = "" }
+    BEGIN { in_fence = 0; fence_lang = ""; CMD = "gh attestation verify" }
 
-    # Emit every backtick span on `s` that parses as an invocation: a
-    # span holding the command plus at least one further non-space
-    # token. A span holding the bare command name is a prose mention.
-    function emit_inline_spans(s,   span, rest) {
+    # Split `s` into one record per occurrence of the command: record i
+    # runs from occurrence i to just before occurrence i+1, or to the end
+    # of the string for the last. Text before the first occurrence is
+    # dropped. Returns the record count, with records in out[1..n].
+    #
+    # index() is a literal left-to-right scan, so a string repeating the
+    # command name cannot re-anchor the split the way a greedy regex can,
+    # and a pinned invocation cannot vouch for an unpinned neighbour.
+    function split_invocations(s, out,   n, i, tail) {
+      n = 0
+      i = index(s, CMD)
+      if (i == 0) return 0
+      s = substr(s, i)
+      while (1) {
+        tail = substr(s, length(CMD) + 1)
+        i = index(tail, CMD)
+        if (i == 0) {
+          out[++n] = s
+          return n
+        }
+        out[++n] = substr(s, 1, length(CMD) + i - 1)
+        s = substr(s, length(CMD) + i)
+      }
+    }
+
+    # Emit every invocation carried by a backtick span on `s`: a record
+    # holding the command plus at least one further non-space token. A
+    # record holding the bare command name is a prose mention.
+    function emit_inline_spans(s,   span, recs, n, k, rec, rest) {
       while (match(s, /`[^`]*`/)) {
         span = substr(s, RSTART + 1, RLENGTH - 2)
         s = substr(s, RSTART + RLENGTH)
-        if (span !~ /gh attestation verify/) continue
-        rest = span
-        sub(/^.*gh attestation verify/, "", rest)
-        sub(/^[[:space:]]+/, "", rest)
-        sub(/[[:space:]]+$/, "", rest)
-        if (rest == "") continue
-        print span
+        n = split_invocations(span, recs)
+        for (k = 1; k <= n; k++) {
+          rec = recs[k]
+          sub(/[[:space:]]+$/, "", rec)
+          rest = substr(rec, length(CMD) + 1)
+          sub(/^[[:space:]]+/, "", rest)
+          if (rest == "") continue
+          print rec
+        }
       }
     }
 
@@ -141,10 +177,13 @@ extract_invocations() {
       emit_inline_spans(line)
       if (line ~ /gh attestation verify/) {
         # The span scan already handled quoted occurrences. Keep the
-        # line only if the command also appears unquoted.
+        # line only if the command also appears unquoted, and keep it
+        # with the spans removed so a pinned span cannot vouch for an
+        # unpinned command beside it.
         stripped = line
         gsub(/`[^`]*`/, "", stripped)
         if (stripped !~ /gh attestation verify/) next
+        line = stripped
       }
       lines[++count] = line
     }
@@ -162,8 +201,12 @@ extract_invocations() {
             joined = joined " " line
           }
         }
-        sub(/^[[:space:]]+/, "", joined)
-        print joined
+        n = split_invocations(joined, recs)
+        for (k = 1; k <= n; k++) {
+          rec = recs[k]
+          sub(/[[:space:]]+$/, "", rec)
+          print rec
+        }
       }
     }
   ' "${file}"
