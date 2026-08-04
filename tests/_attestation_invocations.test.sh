@@ -197,6 +197,20 @@ gh attestation verify evil.json
     ''
 }
 
+function test_backslash_continuation_joins() {
+  check 'a pin on a continuation line satisfies the check' other \
+    "gh attestation verify pin.json \\
+  --repo ${SLUG}" \
+    "$(printf 'ok\tgh attestation verify pin.json --repo %s' "${SLUG}")"
+}
+
+function test_backslash_continuation_without_pin_fails() {
+  check 'a continued invocation with no pin is flagged' other \
+    'gh attestation verify pin.json \
+  --predicate-type https://slsa.dev/provenance/v1' \
+    "$(printf 'bad\tgh attestation verify pin.json --predicate-type https://slsa.dev/provenance/v1')"
+}
+
 function main() {
   test_tokenizer_splits_on_whitespace_runs
   test_tokenizer_honors_single_quotes
@@ -218,6 +232,8 @@ function main() {
   test_backtick_fence_cannot_close_tilde_fence
   test_inline_triple_backtick_is_not_a_fence
   test_diagram_fence_is_skipped
+  test_backslash_continuation_joins
+  test_backslash_continuation_without_pin_fails
 
   if ((failures > 0)); then
     printf '%d test(s) failed\n' "${failures}" >&2

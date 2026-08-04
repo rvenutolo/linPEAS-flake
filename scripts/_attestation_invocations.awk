@@ -264,6 +264,27 @@ function is_fence_close(line,   t, len) {
   return (substr(t, len + 1) ~ /^[[:space:]]*$/)
 }
 
+# Join buffered runnable strings on a trailing backslash, then emit the
+# records each joined string carries.
+#
+# The join runs before tokenizing, so a backslash-newline inside single
+# quotes joins where real shell would keep it literal. That is the
+# permissive direction and cannot hide an invocation.
+function flush_runnable(   i, j, joined) {
+  for (i = 1; i <= nrun; i++) {
+    joined = runnable_lines[i]
+    j = i
+    while (joined ~ /\\[[:space:]]*$/ && j < nrun) {
+      sub(/\\[[:space:]]*$/, "", joined)
+      j++
+      joined = joined " " runnable_lines[j]
+    }
+    i = j
+    emit_records(joined, 0)
+  }
+  nrun = 0
+}
+
 # Temporary driver, finalized in Task 5.
 {
   if ($0 ~ /^[[:space:]]*$/) kill_carry()
@@ -273,7 +294,7 @@ function is_fence_close(line,   t, len) {
       if (is_fence_close($0)) { in_fence = 0; next }
       if (!fence_runnable) next
       scan_spans($0, 1)
-      emit_records(strip_line, 0)
+      push_runnable(strip_line)
       next
     }
     if (is_fence_open($0)) next
@@ -282,7 +303,7 @@ function is_fence_close(line,   t, len) {
     # simple rule costs nothing that CommonMark container tracking buys.
     if ($0 ~ /^(    |\t)/) {
       scan_spans($0, 1)
-      emit_records(strip_line, 0)
+      push_runnable(strip_line)
       next
     }
     # Prose. An inline code span is the only runnable shape here.
@@ -295,10 +316,10 @@ function is_fence_close(line,   t, len) {
   # an elided argument, which the span rule would read as an invocation.
   if ($0 ~ /^[[:space:]]*#/) next
   scan_spans($0, 1)
-  emit_records(strip_line, 0)
+  push_runnable(strip_line)
 }
 
 END {
   kill_carry()
-  for (r = 1; r <= nrun; r++) emit_records(runnable_lines[r], 0)
+  flush_runnable()
 }
