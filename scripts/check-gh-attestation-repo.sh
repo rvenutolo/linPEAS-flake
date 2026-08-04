@@ -88,6 +88,15 @@ for f in "${paths[@]}"; do
     continue
     ;;
   esac
+  # Capture the parser's output so its exit status is checked. Process
+  # substitution hides a non-zero exit from both errexit and pipefail, so
+  # a parser that died partway through this file would have its records
+  # silently truncated — and the zero-records guard below would not fire,
+  # because other files still contribute records.
+  if ! records="$(extract_invocations "${f}")"; then
+    printf '%s: parser failed\n' "${f}" >&2
+    exit 1
+  fi
   while IFS=$'\t' read -r status invocation; do
     [[ -z ${status} ]] && continue
     seen=$((seen + 1))
@@ -96,7 +105,7 @@ for f in "${paths[@]}"; do
     printf '%s: `gh attestation verify` missing `%s`; got: %s\n' \
       "${f}" "${NEEDLE}" "${invocation}" >&2
     failed=$((failed + 1))
-  done < <(extract_invocations "${f}")
+  done <<<"${records}"
 done
 
 # Guard-the-guard: the tracked scan set yields 17 real invocation
