@@ -1,0 +1,9 @@
+name: verify example
+on:
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "a ` b"
+      - run: gh attestation verify x.zip

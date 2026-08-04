@@ -211,6 +211,41 @@ function test_backslash_continuation_without_pin_fails() {
     "$(printf 'bad\tgh attestation verify pin.json --predicate-type https://slsa.dev/provenance/v1')"
 }
 
+function test_command_substitution_is_seen() {
+  check 'a $(...) command substitution is seen, not glued into one word' other \
+    'out=$(gh attestation verify evil.json)' \
+    "$(printf 'bad\tgh attestation verify evil.json')"
+}
+
+function test_subshell_is_seen() {
+  check 'a bare (...) subshell is seen, not glued into one word' other \
+    '(gh attestation verify evil.json)' \
+    "$(printf 'bad\tgh attestation verify evil.json')"
+}
+
+function test_pinned_command_substitution_is_ok() {
+  check 'a pinned invocation inside $(...) is reported ok, not truncated at the paren' other \
+    "out=\$(gh attestation verify \$(basename b.zip) --repo ${SLUG})" \
+    "$(printf 'ok\tgh attestation verify $ basename b.zip --repo %s' "${SLUG}")"
+}
+
+function test_short_flag_pins() {
+  check '-R <slug> satisfies the pin like --repo does' other \
+    "gh attestation verify pin.json -R ${SLUG}" \
+    "$(printf 'ok\tgh attestation verify pin.json -R %s' "${SLUG}")"
+}
+
+function test_console_fence_root_prompt_is_seen() {
+  check 'a `# ` root prompt in a console fence is a command, not a comment' md \
+    '# t
+
+```console
+$ ls
+# gh attestation verify evil.json
+```' \
+    "$(printf 'bad\tgh attestation verify evil.json')"
+}
+
 function main() {
   test_tokenizer_splits_on_whitespace_runs
   test_tokenizer_honors_single_quotes
@@ -234,6 +269,11 @@ function main() {
   test_diagram_fence_is_skipped
   test_backslash_continuation_joins
   test_backslash_continuation_without_pin_fails
+  test_command_substitution_is_seen
+  test_subshell_is_seen
+  test_pinned_command_substitution_is_ok
+  test_short_flag_pins
+  test_console_fence_root_prompt_is_seen
 
   if ((failures > 0)); then
     printf '%d test(s) failed\n' "${failures}" >&2
