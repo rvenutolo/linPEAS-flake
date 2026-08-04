@@ -40,6 +40,15 @@ go.mod
 go.sum
 package-lock.json
 tests/fixtures/check-renovate-config-validator/bad-syntax.json
+tests/fixtures/gh-attestation-repo/bad-doubled-space.sh
+tests/fixtures/gh-attestation-repo/bad-doubled-span.md
+tests/fixtures/gh-attestation-repo/bad-indented-code.md
+tests/fixtures/gh-attestation-repo/bad-inline-triple.md
+tests/fixtures/gh-attestation-repo/bad-multiline-span.md
+tests/fixtures/gh-attestation-repo/bad-nested-span.md
+tests/fixtures/gh-attestation-repo/bad-separator-pin.sh
+tests/fixtures/gh-attestation-repo/bad-tilde-fence.md
+tests/fixtures/gh-attestation-repo/good-odd-backtick.md
 tests/fixtures/harden-runner-first/bad-malformed.yml
 tests/fixtures/job-timeout-minutes/bad-malformed.yml
 tests/fixtures/required-checks/*
