@@ -33,6 +33,7 @@ readonly -a HARNESSES=(
   # it here would be redundant or need inputs this job lacks; the spec-test
   # is the piece that was otherwise executed nowhere.
   'script-docs|_script_docs.test.sh|'
+  'attestation-invocations|_attestation_invocations.test.sh|'
   'apply-patch-tag-pin-rewrite|apply-patch-tag-pin-rewrite.test.sh|'
   'actionlint-shellcheck-active|check-actionlint-shellcheck-active.test.sh|'
   'cron-table|check-cron-table.test.sh|'
