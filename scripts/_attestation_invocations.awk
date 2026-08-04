@@ -144,6 +144,12 @@ function emit_records(s, mention_ok,   out, typ, n, i, j, extra, rec, pinned) {
     pinned = 0
     for (j = i + 3; j <= n; j++) {
       if (typ[j] != "w") break
+      # A second command triple starts a new record. Parens delimit words
+      # without emitting a token, so without this an invocation inside one
+      # substitution would absorb the next one and lend it its pin.
+      if (j + 2 <= n && out[j] == "gh" \
+          && typ[j + 1] == "w" && out[j + 1] == "attestation" \
+          && typ[j + 2] == "w" && out[j + 2] == "verify") break
       rec = rec " " out[j]
       extra++
       if (out[j] == "--repo=" slug || out[j] == "-R=" slug) pinned = 1
@@ -206,7 +212,7 @@ function scan_spans(s, runnable,   i, run, L) {
   # it captured to this line's runnable text instead.
   if (carry_open > 0) {
     if (runnable) {
-      strip_line = strip_line carry_text
+      strip_line = strip_line " " carry_text
       carry_open = 0
       carry_text = ""
     } else {
