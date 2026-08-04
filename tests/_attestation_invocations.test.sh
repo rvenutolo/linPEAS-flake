@@ -57,10 +57,52 @@ function test_tokenizer_honors_double_quotes() {
     "$(printf 'ok\tgh attestation verify pin.json --repo %s' "${SLUG}")"
 }
 
+function test_trailing_comment_does_not_pin() {
+  check 'a pin in a trailing comment does not satisfy the check' other \
+    "gh attestation verify evil.json # --repo ${SLUG}" \
+    "$(printf 'bad\tgh attestation verify evil.json')"
+}
+
+function test_separator_ends_the_record() {
+  check 'a pin after a separator does not satisfy the check' other \
+    "gh attestation verify evil.json; echo \"always pass --repo ${SLUG}\"" \
+    "$(printf 'bad\tgh attestation verify evil.json')"
+}
+
+function test_pin_inside_quoted_argument_does_not_count() {
+  check 'a slug inside a quoted argument is not the pin' other \
+    "gh attestation verify evil.json --predicate \"--repo ${SLUG}\"" \
+    "$(printf 'bad\tgh attestation verify evil.json --predicate --repo %s' "${SLUG}")"
+}
+
+function test_chained_commands_split_into_two_records() {
+  check 'each command in a chain is judged on its own' other \
+    "gh attestation verify a.json --repo ${SLUG} && gh attestation verify b.json" \
+    "$(printf 'ok\tgh attestation verify a.json --repo %s\nbad\tgh attestation verify b.json' "${SLUG}")"
+}
+
+function test_equals_form_pins() {
+  check '--repo=<slug> satisfies the pin' other \
+    "gh attestation verify pin.json --repo=${SLUG}" \
+    "$(printf 'ok\tgh attestation verify pin.json --repo=%s' "${SLUG}")"
+}
+
+function test_wrong_slug_is_unpinned() {
+  check 'a different slug does not satisfy the pin' other \
+    'gh attestation verify pin.json --repo other/repo' \
+    "$(printf 'bad\tgh attestation verify pin.json --repo other/repo')"
+}
+
 function main() {
   test_tokenizer_splits_on_whitespace_runs
   test_tokenizer_honors_single_quotes
   test_tokenizer_honors_double_quotes
+  test_trailing_comment_does_not_pin
+  test_separator_ends_the_record
+  test_pin_inside_quoted_argument_does_not_count
+  test_chained_commands_split_into_two_records
+  test_equals_form_pins
+  test_wrong_slug_is_unpinned
 
   if ((failures > 0)); then
     printf '%d test(s) failed\n' "${failures}" >&2

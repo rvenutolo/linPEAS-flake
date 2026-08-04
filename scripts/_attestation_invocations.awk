@@ -101,23 +101,38 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L) {
   return n
 }
 
-# Temporary driver, replaced in Task 2. Treats every input line as a
-# runnable shell line so the tokenizer can be exercised on its own.
-{
-  n = tokenize($0, w, t)
+# Emit every `gh attestation verify` invocation carried by `s`.
+#
+# A record runs from the command triple to the next separator or comment
+# token, or to the end of the word list. `mention_ok` is 1 for text that
+# came from a code span, where a bare triple with no further word is a
+# prose mention rather than an invocation; it is 0 for text that came
+# from a runnable source line, where a bare triple is an unpinned
+# invocation.
+function emit_records(s, mention_ok,   out, typ, n, i, j, extra, rec, pinned) {
+  n = tokenize(s, out, typ)
   for (i = 1; i + 2 <= n; i++) {
-    if (t[i] != "w" || w[i] != "gh") continue
-    if (t[i + 1] != "w" || w[i + 1] != "attestation") continue
-    if (t[i + 2] != "w" || w[i + 2] != "verify") continue
+    if (typ[i] != "w" || out[i] != "gh") continue
+    if (typ[i + 1] != "w" || out[i + 1] != "attestation") continue
+    if (typ[i + 2] != "w" || out[i + 2] != "verify") continue
     rec = "gh attestation verify"
+    extra = 0
     pinned = 0
     for (j = i + 3; j <= n; j++) {
-      if (t[j] != "w") break
-      rec = rec " " w[j]
-      if (w[j] == "--repo=" slug) pinned = 1
-      else if (w[j] == "--repo" && j < n && t[j + 1] == "w" && w[j + 1] == slug) pinned = 1
+      if (typ[j] != "w") break
+      rec = rec " " out[j]
+      extra++
+      if (out[j] == "--repo=" slug) pinned = 1
+      else if (out[j] == "--repo" && j < n && typ[j + 1] == "w" && out[j + 1] == slug) pinned = 1
     }
+    # Resume scanning at the token that ended this record, so a chained
+    # command is judged on its own arguments.
     i = j - 1
+    if (mention_ok && extra == 0) continue
     print (pinned ? "ok" : "bad") "\t" rec
   }
 }
+
+# Temporary driver, replaced in Task 5. Treats every input line as a
+# runnable shell line.
+{ emit_records($0, 0) }
