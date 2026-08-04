@@ -235,6 +235,19 @@ function test_short_flag_pins() {
     "$(printf 'ok\tgh attestation verify pin.json -R %s' "${SLUG}")"
 }
 
+function test_adjacent_substitutions_split_into_two_records() {
+  check 'a second invocation in the same word run starts a new record' other \
+    "x=\$(gh attestation verify a.zip --repo ${SLUG}) y=\$(gh attestation verify b.zip)" \
+    "$(printf 'ok\tgh attestation verify a.zip --repo %s y=$\nbad\tgh attestation verify b.zip' "${SLUG}")"
+}
+
+function test_multiline_backtick_substitution_is_seen() {
+  check 'a runnable line split by a still-open backtick span is not glued' other \
+    'out=`gh attestation verify a.zip
+`' \
+    "$(printf 'bad\tgh attestation verify a.zip')"
+}
+
 function test_text_fence_comment_is_not_an_invocation() {
   check 'a `# ` line in a text fence reads as a comment, not a command' md \
     '# t
@@ -273,6 +286,8 @@ function main() {
   test_subshell_is_seen
   test_pinned_command_substitution_is_ok
   test_short_flag_pins
+  test_adjacent_substitutions_split_into_two_records
+  test_multiline_backtick_substitution_is_seen
   test_text_fence_comment_is_not_an_invocation
 
   if ((failures > 0)); then
