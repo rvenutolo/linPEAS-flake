@@ -69,6 +69,7 @@ function main() {
   expect bad-carry-swallow.yml 1 "missing"
   expect good-command-subst.sh 0 ""
   expect good-short-flag.sh 0 ""
+  expect good-glued-short-flag.sh 0 ""
   expect bad-adjacent-subst.sh 1 "missing"
   expect bad-carry-glue.yml 1 "missing"
   expect good-text-comment.md 0 ""

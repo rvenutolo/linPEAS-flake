@@ -235,6 +235,18 @@ function test_short_flag_pins() {
     "$(printf 'ok\tgh attestation verify pin.json -R %s' "${SLUG}")"
 }
 
+function test_glued_short_flag_pins() {
+  check '-R<slug> glued satisfies the pin' other \
+    "gh attestation verify pin.json -R${SLUG}" \
+    "$(printf 'ok\tgh attestation verify pin.json -R%s' "${SLUG}")"
+}
+
+function test_glued_short_flag_wrong_slug_is_unpinned() {
+  check '-R<other-slug> glued does not satisfy the pin' other \
+    'gh attestation verify pin.json -Rattacker/evil' \
+    "$(printf 'bad\tgh attestation verify pin.json -Rattacker/evil')"
+}
+
 function test_adjacent_substitutions_split_into_two_records() {
   check 'a second invocation in the same word run starts a new record' other \
     "x=\$(gh attestation verify a.zip --repo ${SLUG}) y=\$(gh attestation verify b.zip)" \
@@ -286,6 +298,8 @@ function main() {
   test_subshell_is_seen
   test_pinned_command_substitution_is_ok
   test_short_flag_pins
+  test_glued_short_flag_pins
+  test_glued_short_flag_wrong_slug_is_unpinned
   test_adjacent_substitutions_split_into_two_records
   test_multiline_backtick_substitution_is_seen
   test_text_fence_comment_is_not_an_invocation
