@@ -46,16 +46,18 @@ BEGIN {
 #   sep  unquoted ; && || | & — a bare & only, never a redirection operator
 #   cmt  unquoted # beginning a word; holds the rest of `s` and is last
 # Returns n.
-function tokenize(s, out, typ,   n, i, c, cur, has, L) {
+function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq) {
   n = 0
   cur = ""
   has = 0
   i = 1
   L = length(s)
+  last_unq = ""
   while (i <= L) {
     c = substr(s, i, 1)
     if (c == " " || c == "\t") {
       if (has) { out[++n] = cur; typ[n] = "w"; cur = ""; has = 0 }
+      last_unq = ""
       i++
       continue
     }
@@ -66,6 +68,7 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L) {
       i++
       while (i <= L && substr(s, i, 1) != "'") { cur = cur substr(s, i, 1); i++ }
       i++
+      last_unq = ""
       continue
     }
     if (c == "\"") {
@@ -77,11 +80,13 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L) {
         i++
       }
       i++
+      last_unq = ""
       continue
     }
     if (c == "\\") {
       if (i < L) { i++; cur = cur substr(s, i, 1); has = 1 }
       i++
+      last_unq = ""
       continue
     }
     if (c == "(" || c == ")") {
@@ -106,13 +111,17 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L) {
       return n
     }
     if (c == "&" && substr(s, i, 2) != "&&" \
-        && (substr(cur, length(cur), 1) == ">" || substr(s, i + 1, 1) == ">")) {
+        && (last_unq == ">" || substr(s, i + 1, 1) == ">")) {
       # A redirection operator, not a command separator: `2>&1`, `>&2`,
       # `2>&-`, `&>f`, `&>>f`. Ending the record at this `&` would truncate
       # it before a pin written after the redirection, reporting a correctly
-      # pinned invocation as unpinned. The `&&` exclusion keeps the logical
-      # operator a separator even when a redirection precedes it.
+      # pinned invocation as unpinned. Only an unquoted `>` makes the
+      # following `&` redirection syntax — a quoted or escaped `>` is
+      # ordinary argument text, so `last_unq` (not the raw last character of
+      # `cur`) is what the left-hand check tracks. The `&&` exclusion keeps
+      # the logical operator a separator even when a redirection precedes it.
       cur = cur c
+      last_unq = c
       has = 1
       i++
       continue
@@ -131,6 +140,7 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L) {
     }
     cur = cur c
     has = 1
+    last_unq = c
     i++
   }
   if (has) { out[++n] = cur; typ[n] = "w" }

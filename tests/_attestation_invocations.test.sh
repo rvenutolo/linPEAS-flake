@@ -96,6 +96,18 @@ function test_and_operator_still_ends_the_record_after_redirection() {
     "$(printf 'bad\tgh attestation verify evil.json 2>&1')"
 }
 
+function test_quoted_gt_before_ampersand_still_separates() {
+  check 'a quoted > does not make the following & redirection syntax' other \
+    "gh attestation verify evil.json --url \">\"& true --repo ${SLUG}" \
+    "$(printf 'bad\tgh attestation verify evil.json --url >')"
+}
+
+function test_escaped_gt_before_ampersand_still_separates() {
+  check 'an escaped > does not make the following & redirection syntax' other \
+    "gh attestation verify evil.json \\>& true --repo ${SLUG}" \
+    "$(printf 'bad\tgh attestation verify evil.json >')"
+}
+
 function test_pin_inside_quoted_argument_does_not_count() {
   check 'a slug inside a quoted argument is not the pin' other \
     "gh attestation verify evil.json --predicate \"--repo ${SLUG}\"" \
@@ -305,6 +317,8 @@ function main() {
   test_ampersand_redirection_does_not_end_the_record
   test_background_ampersand_still_ends_the_record
   test_and_operator_still_ends_the_record_after_redirection
+  test_quoted_gt_before_ampersand_still_separates
+  test_escaped_gt_before_ampersand_still_separates
   test_pin_inside_quoted_argument_does_not_count
   test_chained_commands_split_into_two_records
   test_equals_form_pins
