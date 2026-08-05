@@ -100,6 +100,18 @@ function strip_structural(w) {
   return w
 }
 
+# Does `nc` end the word a just-closed quote sits in? End-of-string and
+# shell separators end it, and so does a structural closer from the
+# enclosing YAML/JSON syntax — the same trailing punctuation
+# strip_structural treats as structure, not word text. Anything else,
+# including another quote or an ordinary character, means the word
+# continues past the quote, so the payload inside is only a fragment of it.
+function ends_word(nc) {
+  return (nc == "" || nc == " " || nc == "\t" || nc == ";" || nc == "|" \
+    || nc == "(" || nc == ")" || nc == "`" \
+    || nc == "]" || nc == "}" || nc == "," || nc == "&")
+}
+
 # Queue a quoted payload for re-parsing as a command source. The queue is
 # drained by the emit_records call whose tokenize pass filled it. `frag` is
 # 1 when the word the payload came from continues past the closing quote —
@@ -151,8 +163,7 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
       # continues past this closing quote — the next character is
       # anything but end-of-string or a boundary that ends a word.
       nc = (i <= L ? substr(s, i, 1) : "")
-      frag = (nc != "" && nc != " " && nc != "\t" && nc != ";" \
-        && nc != "|" && nc != "(" && nc != ")" && nc != "`")
+      frag = !ends_word(nc)
       if (intro) push_payload(pay, frag)
       continue
     }
@@ -169,8 +180,7 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
       i++
       cur = cur pay
       nc = (i <= L ? substr(s, i, 1) : "")
-      frag = (nc != "" && nc != " " && nc != "\t" && nc != ";" \
-        && nc != "|" && nc != "(" && nc != ")" && nc != "`")
+      frag = !ends_word(nc)
       if (intro) push_payload(pay, frag)
       continue
     }
@@ -247,7 +257,14 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
 # prose mention rather than an invocation; it is 0 for text that came
 # from a runnable source line, where a bare triple is an unpinned
 # invocation.
-function emit_records(s, mention_ok,   out, typ, n, i, j, extra, rec, pinned, base, k, cnt, mine, mineok) {
+#
+# `in_fragment` is 1 when `s` itself is only a fragment of the word that
+# carried it — the caller's own quoted region ended mid-word. Every
+# payload drained from a fragment is a fragment too, however whole its own
+# closing quote looks, because it can only ever be part of what its
+# parent was part of. Top-level callers (scan_spans, flush_runnable) are
+# never fragments, so they pass 0.
+function emit_records(s, mention_ok, in_fragment,   out, typ, n, i, j, extra, rec, pinned, base, k, cnt, mine, minefrag) {
   base = npay
   n = tokenize(s, out, typ)
   for (i = 1; i + 2 <= n; i++) {
@@ -281,17 +298,20 @@ function emit_records(s, mention_ok,   out, typ, n, i, j, extra, rec, pinned, ba
   # and preserves the order they appeared in. Every payload is shorter than
   # the string that carried it, so the recursion terminates.
   #
-  # A payload holding only the command triple is a mention whatever its
-  # context, UNLESS the quoted region that carried it ended mid-word: a
-  # fragment cannot be the whole of a quoted argument, so a bare triple in
-  # one is read as an invocation rather than a mention. See push_payload.
+  # A payload is in fragment context when this call already was, or when
+  # its own quoted region ended mid-word — fragment status only ever turns
+  # on going down the recursion, never off, because a fragment's children
+  # can only ever be part of what their parent was part of. A payload
+  # holding only the command triple is a mention unless it is in fragment
+  # context, where a bare triple is read as an invocation rather than a
+  # mention. See push_payload.
   cnt = 0
   for (k = base + 1; k <= npay; k++) {
     mine[++cnt] = payloads[k]
-    mineok[cnt] = (payfrag[k] ? 0 : 1)
+    minefrag[cnt] = (in_fragment || payfrag[k])
   }
   npay = base
-  for (k = 1; k <= cnt; k++) emit_records(mine[k], mineok[k])
+  for (k = 1; k <= cnt; k++) emit_records(mine[k], (minefrag[k] ? 0 : 1), minefrag[k])
 }
 
 # Buffer a runnable source string for the backslash join in flush_runnable.
@@ -328,7 +348,7 @@ function scan_spans(s, runnable,   i, run, L) {
       carry_text = ""
       carry_runnable = runnable
     } else if (run == carry_open) {
-      emit_records(carry_text, 1)
+      emit_records(carry_text, 1, 0)
       carry_open = 0
       carry_text = ""
       # A span delimits words rather than joining them, matching how a
@@ -442,7 +462,7 @@ function flush_runnable(   i, j, joined) {
       joined = joined " " runnable_lines[j]
     }
     i = j
-    emit_records(joined, 0)
+    emit_records(joined, 0, 0)
   }
   nrun = 0
 }
