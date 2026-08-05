@@ -101,6 +101,99 @@ EOF
 EOF
 }
 
+# Same generator, definer, and transposer as write_tree, but the hook
+# entry names its generator script twice — the real house shape a
+# freshness hook uses (`if [[ ! -f scripts/foo.sh ]]; then exit 0; fi;
+# exec bash scripts/foo.sh --check`). ${1}=root, ${2}=files-filter value.
+function write_two_mention_tree() {
+  local -r root="$1" files="$2"
+  mkdir --parents -- "${root}/scripts" "${root}/nix/hooks"
+
+  cat >"${root}/scripts/refresh-fixture-doc.sh" <<'EOF'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+nix eval --json ".#devTooling.${sys}.fixtureAttr"
+EOF
+
+  cat >"${root}/nix/hooks/default.nix" <<'EOF'
+{
+  fixtureAttr = import ./members.nix;
+}
+EOF
+
+  cat >"${root}/nix/hooks/members.nix" <<'EOF'
+{
+  a-hook = { enable = true; };
+}
+EOF
+
+  cat >"${root}/nix/manifests.nix" <<'EOF'
+{
+  config.flake.devTooling = { };
+}
+EOF
+
+  cat >"${root}/nix/hooks/freshness.nix" <<EOF
+{
+  fixture-doc-fresh = {
+    enable = true;
+    name = "fixture-doc-fresh";
+    description = "Fixture generated-doc freshness hook.";
+    entry = "if [[ ! -f scripts/refresh-fixture-doc.sh ]]; then exit 0; fi; exec bash scripts/refresh-fixture-doc.sh --check";
+    files = "${files}";
+    pass_filenames = false;
+    language = "system";
+  };
+}
+EOF
+}
+
+# Same generator and transposer as write_tree, but the defining module
+# names the attribute via a computed key so no module textually contains
+# it in non-comment source. ${1}=root, ${2}=files-filter value.
+function write_hidden_attr_tree() {
+  local -r root="$1" files="$2"
+  mkdir --parents -- "${root}/scripts" "${root}/nix/hooks"
+
+  cat >"${root}/scripts/refresh-fixture-doc.sh" <<'EOF'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+nix eval --json ".#devTooling.${sys}.fixtureAttr"
+EOF
+
+  cat >"${root}/nix/hooks/default.nix" <<'EOF'
+{
+  ${"fixture" + "Attr"} = import ./members.nix;
+}
+EOF
+
+  cat >"${root}/nix/hooks/members.nix" <<'EOF'
+{
+  a-hook = { enable = true; };
+}
+EOF
+
+  cat >"${root}/nix/manifests.nix" <<'EOF'
+{
+  config.flake.devTooling = { };
+}
+EOF
+
+  cat >"${root}/nix/hooks/freshness.nix" <<EOF
+{
+  fixture-doc-fresh = {
+    enable = true;
+    name = "fixture-doc-fresh";
+    description = "Fixture generated-doc freshness hook.";
+    entry = "bash scripts/refresh-fixture-doc.sh --check";
+    files = "${files}";
+    pass_filenames = false;
+    language = "system";
+  };
+}
+EOF
+}
+
 function main() {
   work="$(mktemp --directory)"
 
@@ -140,7 +233,7 @@ function main() {
   expect 'empty: zero devTooling generators trips guard-the-guard' \
     "${work}/empty" 1 'no devTooling-evaluating generator'
 
-  # (g) BAD: nix/manifests.nix transposes devTooling via an attribute-set
+  # (f) BAD: nix/manifests.nix transposes devTooling via an attribute-set
   # assignment (`config.flake = { devTooling = { }; };`) rather than the
   # direct `config.flake.devTooling = ...` form the fixed-string signal
   # matches. Zero modules then match the transposer signal tree-wide, and
@@ -156,7 +249,7 @@ EOF
   expect 'bad: attrset-style transposition trips the transposer guard' \
     "${work}/bad-attrset-transposer" 1 'transposer signal broke'
 
-  # (h) BAD: an empty files filter parses as an empty ERE, which matches
+  # (g) BAD: an empty files filter parses as an empty ERE, which matches
   # every path and would report full coverage for a hook that watches
   # nothing. A second, unrelated hook with a well-formed filter sits
   # alongside it in the same nix/hooks/freshness.nix: with only one hook
@@ -190,7 +283,29 @@ EOF
   expect 'bad: an empty files filter is reported, not treated as covering everything' \
     "${work}/bad-empty-filter" 1 'empty files filter'
 
-  # (f) LIVE: the real tree must satisfy the guard.
+  # (h) BAD: the hook entry names its generator script twice — the real
+  # house shape (`if [[ ! -f scripts/foo.sh ]]; then exit 0; fi; exec bash
+  # scripts/foo.sh --check`). Under the global newline+tab IFS this
+  # collapses into one unsplittable word, so a lookup that does not split
+  # on spaces explicitly misses the generator entirely, the hook's attr
+  # stays empty, and it gets skipped with no output at all — silently
+  # passing even though its filter (below) omits a required module.
+  write_two_mention_tree "${work}/two-mention" '^(nix/manifests\.nix)$'
+  expect 'bad: a hook naming its script twice still catches a missing module' \
+    "${work}/two-mention" 1 'nix/hooks/default.nix'
+
+  # (i) BAD: the defining module names the attribute via a computed key
+  # (`${"fixture" + "Attr"} = ...`), so no module textually contains
+  # "fixtureAttr" in non-comment source even though the attribute is
+  # genuinely defined at eval time. The transposer signal alone would mask
+  # this — every required set still includes the transposing module — so
+  # only a guard keyed on the attribute match specifically can catch it.
+  write_hidden_attr_tree "${work}/hidden-attr" \
+    '^(nix/hooks/.*\.nix|nix/manifests\.nix)$'
+  expect 'bad: a computed attribute name trips the derivation-broke guard' \
+    "${work}/hidden-attr" 1 'derivation broke'
+
+  # (j) LIVE: the real tree must satisfy the guard.
   expect 'live: real tree passes' "${REPO_ROOT}" 0 ''
 
   if [[ ${failures} -gt 0 ]]; then

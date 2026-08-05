@@ -68,9 +68,12 @@ function required_modules() {
       mods["${f}"]=1
     fi
   done
-  # One level of relative imports. The expansion of "${!mods[@]}" is
-  # evaluated once, so keys added inside the loop are not re-walked —
-  # which is what makes this one level rather than a full closure.
+  # One level of relative imports. Walks nix_source rather than the raw
+  # file, consistent with every other signal in this function, so a
+  # commented-out import cannot join the required set. The expansion of
+  # "${!mods[@]}" is evaluated once, so keys added inside the loop are not
+  # re-walked — which is what makes this one level rather than a full
+  # closure.
   local m dir imp rel
   for m in "${!mods[@]}"; do
     dir="$(dirname -- "${m}")"
@@ -81,8 +84,8 @@ function required_modules() {
       if [[ -f ${ROOT}/${rel} ]]; then
         mods["${rel}"]=1
       fi
-    done < <(grep --only-matching --extended-regexp \
-      '\.\.?/[A-Za-z0-9._/-]+\.nix' -- "${ROOT}/${m}" || true)
+    done < <(nix_source "${m}" | grep --only-matching --extended-regexp \
+      '\.\.?/[A-Za-z0-9._/-]+\.nix' || true)
   done
   printf '%s\n' "${!mods[@]}" | sort
 }
@@ -128,9 +131,9 @@ fi
 # tab is unsafe here: an empty `files` value would put two delimiters back
 # to back, and bash's `read` treats tab as IFS whitespace, which collapses
 # adjacent delimiters and silently drops the empty field instead of
-# preserving it — exactly the shape that would let Change 2 below never see
-# an empty filter. \037 carries no such special casing and never appears in
-# a `files` regex or a `scripts/*.sh` path.
+# preserving it — exactly the shape that would let the empty-filter guard
+# below never see an empty filter. \037 carries no such special casing and
+# never appears in a `files` regex or a `scripts/*.sh` path.
 #   <name>\037<files-string>\037<space-separated script basenames>
 function parse_blocks() {
   local nix
@@ -168,23 +171,58 @@ function parse_blocks() {
   done
 }
 
+# Count of nix modules that textually name $1 in non-comment source,
+# ignoring the `flake.devTooling` transposer signal. Used to guard against
+# an attribute the module walk never actually finds, which the transposer
+# signal alone would otherwise mask: `required_modules` always includes
+# every transposer-matching module regardless of `$1`, so its output is
+# never empty once the transposers guard above has already passed.
+function attr_definer_count() {
+  local -r attr="$1"
+  local n=0 f
+  for f in "${nix_modules[@]}"; do
+    if nix_source "${f}" | grep --quiet --fixed-strings -- "${attr}"; then
+      n=$((n + 1))
+    fi
+  done
+  printf '%s' "${n}"
+}
+
 # Step 3 — assert each generator-running hook covers its module set.
 failed=0
 generator_hooks=0
+declare -A claimed_generators=()
 
 while IFS=$'\037' read -r name files scripts; do
   [[ -n ${name} ]] || continue
 
   attr=''
-  for s in ${scripts}; do
+  # Split on spaces explicitly: the global IFS is newline+tab, so a block
+  # naming its script more than once (the house shape is a `[[ ! -f
+  # scripts/foo.sh ]]` guard plus an `exec ... scripts/foo.sh` call) would
+  # otherwise stay one unsplittable word, the generator_attr lookup would
+  # miss it, and the hook would be skipped with no output.
+  IFS=' ' read -r -a script_list <<<"${scripts}"
+  for s in "${script_list[@]}"; do
     if [[ -n ${generator_attr["${s}"]:-} ]]; then
       attr="${generator_attr["${s}"]}"
+      claimed_generators["${s}"]=1
       break
     fi
   done
   [[ -n ${attr} ]] || continue
 
   generator_hooks=$((generator_hooks + 1))
+
+  # Guard-the-guard: an attribute matched by zero modules means the
+  # comment-strip or the module walk broke. Fail loud, not vacuously.
+  # Checked independently of the files filter below, since the module
+  # walk itself is what could be broken.
+  if (($(attr_definer_count "${attr}") == 0)); then
+    printf 'hook %s: no nix module defines %s — derivation broke\n' \
+      "${name}" "${attr}" >&2
+    failed=$((failed + 1))
+  fi
 
   # An empty filter would become an empty ERE, which matches every path and
   # would report full coverage for a hook that watches nothing.
@@ -197,24 +235,14 @@ while IFS=$'\037' read -r name files scripts; do
   # Nix string literal: "\\." in source is the ERE "\.".
   ere="$(printf '%s' "${files}" | sed 's/\\\\/\\/g')"
 
-  module_count=0
   while IFS= read -r p; do
     [[ -z ${p} ]] && continue
-    module_count=$((module_count + 1))
     if ! printf '%s\n' "${p}" | grep --quiet --extended-regexp -- "${ere}"; then
       printf 'hook %s: files filter does not cover %s (evaluates %s)\n' \
         "${name}" "${p}" "${attr}" >&2
       failed=$((failed + 1))
     fi
   done < <(required_modules "${attr}")
-
-  # Guard-the-guard: an attribute with no defining module means the
-  # comment-strip or the module walk broke. Fail loud, not vacuously.
-  if ((module_count == 0)); then
-    printf 'hook %s: no nix module defines %s — derivation broke\n' \
-      "${name}" "${attr}" >&2
-    failed=$((failed + 1))
-  fi
 done < <(parse_blocks)
 
 shopt -u nullglob
@@ -226,6 +254,17 @@ if ((generator_hooks == 0)); then
     "${ROOT}" >&2
   exit 1
 fi
+
+# Guard-the-guard: a generator basename that never got claimed by any hook
+# block means the block parser's script-list split missed it — the lookup
+# above silently returns empty and the hook is skipped with no output.
+for s in "${!generator_attr[@]}"; do
+  if [[ -z ${claimed_generators["${s}"]:-} ]]; then
+    printf 'generator %s (evaluates %s) claimed by no hook block\n' \
+      "${s}" "${generator_attr["${s}"]}" >&2
+    failed=$((failed + 1))
+  fi
+done
 
 if ((failed > 0)); then
   printf '%d freshness hook filter gap(s)\n' "${failed}" >&2

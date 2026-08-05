@@ -98,7 +98,13 @@ while IFS=$'\t' read -r name files scripts; do
   [[ -n ${name} ]] || continue
   # Does this block reference any manifest-reading script?
   references_manifest=0
-  for s in ${scripts}; do
+  # Split on spaces explicitly: the global IFS is newline+tab, so a block
+  # naming its script more than once (the house shape is a `[[ ! -f
+  # scripts/foo.sh ]]` guard plus an `exec ... scripts/foo.sh` call) would
+  # otherwise stay one unsplittable word, the manifest_scripts lookup
+  # would miss it, and the hook would be skipped with no output.
+  IFS=' ' read -r -a script_list <<<"${scripts}"
+  for s in "${script_list[@]}"; do
     if [[ -n ${manifest_scripts["${s}"]:-} ]]; then
       references_manifest=1
       break

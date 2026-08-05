@@ -67,7 +67,10 @@
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-freshness-hook-watches-modules.sh
     ''}";
-    files = "^(nix/.*\\.nix|treefmt\\.nix|scripts/.*\\.sh)$";
+    # The lint reads every nix module in the tree (including flake.nix,
+    # which is not under nix/) plus every scripts/*.sh generator that names
+    # the evaluated attribute, so the filter must cover both.
+    files = "^(.*\\.nix|scripts/.*\\.sh)$";
     pass_filenames = false;
     language = "system";
   };
