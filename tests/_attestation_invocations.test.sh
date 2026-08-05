@@ -493,6 +493,15 @@ function test_fragment_context_propagates_to_nested_payloads() {
     "$(printf 'bad\tgh attestation verify')"
 }
 
+function test_fragment_status_does_not_over_propagate_to_a_clean_child() {
+  check 'a match key whose own quote ends cleanly inside a fragment stays a mention' other \
+    "sh -c \"grep -c 'gh attestation verify' \"\$f" \
+    ''
+  check 'the same shape inside a span stays a mention' md \
+    'Use `sh -c "grep -c '"'"'gh attestation verify'"'"' "$f` here.' \
+    ''
+}
+
 function main() {
   test_tokenizer_splits_on_whitespace_runs
   test_tokenizer_honors_single_quotes
@@ -552,6 +561,7 @@ function main() {
   test_structural_closer_after_a_bare_triple_stays_a_mention
   test_structural_closer_does_not_undo_round_one_detection
   test_fragment_context_propagates_to_nested_payloads
+  test_fragment_status_does_not_over_propagate_to_a_clean_child
 
   if ((failures > 0)); then
     printf '%d test(s) failed\n' "${failures}" >&2
