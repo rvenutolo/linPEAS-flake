@@ -79,6 +79,28 @@ function write_hook() {
 EOF
 }
 
+# Write a fixture nix/hooks/foo.nix whose hook block names its manifest
+# script twice — the house shape every freshness hook uses (a `[[ ! -f
+# scripts/foo.sh ]]` guard plus an `exec ... scripts/foo.sh` call).
+# ${1}=dir, ${2}=files-filter string value.
+function write_hook_two_mention() {
+  local -r dir="$1" files="$2"
+  mkdir --parents -- "${dir}"
+  cat >"${dir}/foo.nix" <<EOF
+{
+  fixture-table-fresh = {
+    enable = true;
+    name = "fixture-table-fresh";
+    description = "Fixture manifest-reading hook.";
+    entry = "if [[ ! -f scripts/refresh-fixture-table.sh ]]; then exit 0; fi; exec bash scripts/refresh-fixture-table.sh --check";
+    files = "${files}";
+    pass_filenames = false;
+    language = "system";
+  };
+}
+EOF
+}
+
 function main() {
   work="$(mktemp --directory)"
 
@@ -95,7 +117,20 @@ function main() {
   expect 'good: files containing nix/hooks passes' \
     "${work}/good/hooks" "${work}/good/scripts" 0 ''
 
-  # (c) EMPTY: no manifest-reading hook at all → guard-the-guard non-zero.
+  # (c) BAD: the hook entry names its manifest-reading script twice (the
+  # real house shape), and files omits nix/hooks. Under the global
+  # newline+tab IFS, splitting the entry's script list without an explicit
+  # space split leaves the two mentions as one unsplittable token, the
+  # manifest_scripts lookup misses it, and the block is skipped with no
+  # output — this case must still fail and name the hook.
+  write_manifest_script "${work}/bad-two-mention/scripts"
+  write_hook_two_mention "${work}/bad-two-mention/hooks" \
+    '^(flake\.nix|docs/development/git\.md)$'
+  expect 'bad: a hook naming its script twice still fails and names the hook' \
+    "${work}/bad-two-mention/hooks" "${work}/bad-two-mention/scripts" 1 \
+    'hook fixture-table-fresh'
+
+  # (d) EMPTY: no manifest-reading hook at all → guard-the-guard non-zero.
   mkdir --parents -- "${work}/empty/scripts" "${work}/empty/hooks"
   cat >"${work}/empty/hooks/bar.nix" <<'EOF'
 {
