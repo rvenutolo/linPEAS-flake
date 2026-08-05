@@ -51,6 +51,16 @@ function extract_scan_globs() {
 # and the lint stays green on a real bypass. Derived from the tracked tree
 # rather than hardcoded: this fails if a class stops being selected.
 function scenario_glob_selects_new_classes() {
+  local globs
+  globs="$(extract_scan_globs)"
+  # Guard-the-guard: zero globs means the markers moved or were renamed.
+  # git ls-files with no pathspec lists the whole repo, so without this the
+  # class checks below would all find a match and pass vacuously.
+  if [[ -z ${globs} ]]; then
+    fail 'SCAN_GLOBS markers yielded no globs — extractor broke'
+    return
+  fi
+
   local selected
   # shellcheck disable=SC2046 # each glob must reach git ls-files as its
   # own pathspec argument; splitting on IFS is the point.
@@ -101,6 +111,13 @@ function scenario_glob_hook_filter_parity() {
   # Nix string literal: "\\." in source is the ERE "\.".
   local ere
   ere="$(printf '%s' "${files_re}" | sed 's/\\\\/\\/g')"
+
+  local globs
+  globs="$(extract_scan_globs)"
+  if [[ -z ${globs} ]]; then
+    fail 'SCAN_GLOBS markers yielded no globs — extractor broke'
+    return
+  fi
 
   local selected
   # shellcheck disable=SC2046 # each glob must reach git ls-files as its
