@@ -94,6 +94,20 @@
     # doc uses `__SCENARIO__` which formatters rewrite to `**SCENARIO**`,
     # breaking the harness sed substitution.
     "tests/fixtures/required-checks/*"
+    # mdformat rewrites these markdown fixtures — collapsing indented blocks
+    # to fences, normalizing tilde fences, and collapsing multi-backtick and
+    # multi-line code spans — which would destroy the shape each one encodes.
+    "tests/fixtures/gh-attestation-repo/bad-indented-code.md"
+    "tests/fixtures/gh-attestation-repo/bad-tilde-fence.md"
+    "tests/fixtures/gh-attestation-repo/bad-doubled-span.md"
+    "tests/fixtures/gh-attestation-repo/bad-inline-triple.md"
+    "tests/fixtures/gh-attestation-repo/bad-multiline-span.md"
+    "tests/fixtures/gh-attestation-repo/good-odd-backtick.md"
+    # shfmt would rewrite these two shell fixtures into the shapes they exist to
+    # prove are NOT caught: it splits a one-line `;` chain across two lines, and
+    # collapses a doubled space between command words.
+    "tests/fixtures/gh-attestation-repo/bad-separator-pin.sh"
+    "tests/fixtures/gh-attestation-repo/bad-doubled-space.sh"
     # Generator-owned changelog. mdformat re-escapes characters that
     # git-cliff renders verbatim, causing a write-back loop between the
     # release-on-bump `changelog` job and any local treefmt run.
