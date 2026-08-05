@@ -347,6 +347,92 @@ gh attestation verify x.zip
     "$(printf 'bad\tgh attestation verify x.zip')"
 }
 
+function test_quoted_run_scalar_is_a_command_source() {
+  check 'a double-quoted run: scalar carries an invocation' other \
+    '- run: "gh attestation verify evil.zip"' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a single-quoted run: scalar carries an invocation' other \
+    "- run: 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a pin inside the quoted scalar satisfies the check' other \
+    "- run: \"gh attestation verify pin.json --repo ${SLUG}\"" \
+    "$(printf 'ok\tgh attestation verify pin.json --repo %s' "${SLUG}")"
+}
+
+function test_eval_and_dash_c_arguments_are_command_sources() {
+  check 'eval of a double-quoted string carries an invocation' other \
+    'eval "gh attestation verify evil.zip"' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'eval of a single-quoted string carries an invocation' other \
+    "eval 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a bash -c argument carries an invocation' other \
+    "bash -c 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a bash -lc argument carries an invocation' other \
+    "bash -lc 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a --command argument carries an invocation' other \
+    'nix develop --command "gh attestation verify evil.zip"' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
+function test_nix_attribute_assignment_is_a_command_source() {
+  check 'a spaced nix entry assignment carries an invocation' other \
+    'entry = "gh attestation verify evil.zip";' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a glued nix entry assignment carries an invocation' other \
+    'entry="gh attestation verify evil.zip";' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a glued yaml run key carries an invocation' other \
+    'run:"gh attestation verify evil.zip"' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
+function test_every_introducer_key_is_recognized() {
+  local key
+  for key in text script command cmd entrypoint shell; do
+    check "the ${key} key carries an invocation" other \
+      "${key} = \"gh attestation verify evil.zip\"" \
+      "$(printf 'bad\tgh attestation verify evil.zip')"
+    check "the ${key}: key carries an invocation" other \
+      "${key}: \"gh attestation verify evil.zip\"" \
+      "$(printf 'bad\tgh attestation verify evil.zip')"
+  done
+}
+
+function test_prose_attribute_is_not_a_command_source() {
+  check 'a description string stays literal word text' other \
+    "description = \"gh attestation verify pins --repo ${SLUG}.\"" \
+    ''
+  check 'an assignment to an unlisted attribute stays literal' other \
+    'foo = "gh attestation verify evil.zip"' \
+    ''
+}
+
+function test_bare_triple_payload_is_a_mention() {
+  check 'a payload holding only the command triple is a mention' other \
+    'eval "gh attestation verify"' \
+    ''
+  check 'a match key passed to a -c flag is a mention' other \
+    'grep -c "gh attestation verify" f' \
+    ''
+}
+
+function test_nested_quoted_payload_is_reparsed() {
+  check 'a quoted eval inside a quoted run: scalar is reached' other \
+    '- run: "eval '"'"'gh attestation verify evil.zip'"'"'"' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
+function test_quoted_command_source_in_a_fence_is_reparsed() {
+  check 'a quoted run: scalar inside a shell fence is reached' md \
+    '```sh
+- run: "gh attestation verify evil.zip"
+```' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
 function main() {
   test_tokenizer_splits_on_whitespace_runs
   test_tokenizer_honors_single_quotes
@@ -391,6 +477,14 @@ function main() {
   test_indented_code_comment_span_is_not_an_invocation
   test_prose_heading_span_is_still_inspected
   test_shell_fence_invocation_still_inspected
+  test_quoted_run_scalar_is_a_command_source
+  test_eval_and_dash_c_arguments_are_command_sources
+  test_nix_attribute_assignment_is_a_command_source
+  test_every_introducer_key_is_recognized
+  test_prose_attribute_is_not_a_command_source
+  test_bare_triple_payload_is_a_mention
+  test_nested_quoted_payload_is_reparsed
+  test_quoted_command_source_in_a_fence_is_reparsed
 
   if ((failures > 0)); then
     printf '%d test(s) failed\n' "${failures}" >&2
