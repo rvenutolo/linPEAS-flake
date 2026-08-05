@@ -2,11 +2,13 @@
 # scripts/check-gh-attestation-repo.sh
 #
 # @description Lint: every `gh attestation verify` invocation across
-# workflows, scripts, and docs passes `--repo rvenutolo/linPEAS-flake`
-# so verification is bound to this repository.
+# workflows, composite actions, scripts, nix modules, the justfile, and
+# docs passes `--repo rvenutolo/linPEAS-flake` so verification is bound
+# to this repository.
 
 # Lint: every `gh attestation verify` invocation across workflows,
-# scripts, and docs passes `--repo rvenutolo/linPEAS-flake`.
+# composite actions, scripts, nix modules, the justfile, and docs passes
+# `--repo rvenutolo/linPEAS-flake`.
 #
 # Without `--repo`, the verifier accepts any attestation Sigstore
 # can find for the artifact digest — including one issued from a
@@ -49,6 +51,31 @@ readonly REPO_SLUG="${REPO_SLUG_OVERRIDE:-${DEFAULT_REPO_SLUG}}"
 readonly NEEDLE="--repo ${REPO_SLUG}"
 readonly AWK_LIB="${AWK_LIB_OVERRIDE:-${REPO_ROOT}/scripts/_attestation_invocations.awk}"
 
+# Every path class that can carry a runnable `gh attestation verify`
+# invocation. Composite action `run:` blocks, justfile recipe bodies, and
+# nix pre-commit `entry` strings are all shell; CHANGELOG.md is markdown
+# excluded from mdformat, so shapes the formatter would normalize survive
+# there. Kept as a named array between markers so
+# tests/check-gh-attestation-repo.test.sh can parse it and assert the
+# pre-commit hook's `files` filter covers everything selected here.
+# BEGIN SCAN_GLOBS
+readonly SCAN_GLOBS=(
+  '.github/workflows/*.yml'
+  '.github/workflows/*.yaml'
+  '.github/actions/**/*.yml'
+  '.github/actions/**/*.yaml'
+  'scripts/*.sh'
+  'docs/**/*.md'
+  'docs/*.md'
+  'README.md'
+  'SECURITY.md'
+  'CHANGELOG.md'
+  'justfile'
+  'nix/**/*.nix'
+  'nix/*.nix'
+)
+# END SCAN_GLOBS
+
 paths=()
 if [[ -n ${PATHS_OVERRIDE:-} ]]; then
   while IFS= read -r p; do
@@ -58,12 +85,7 @@ if [[ -n ${PATHS_OVERRIDE:-} ]]; then
 else
   while IFS= read -r p; do
     paths+=("${p}")
-  done < <(git ls-files \
-    '.github/workflows/*.yml' '.github/workflows/*.yaml' \
-    'scripts/*.sh' \
-    'docs/**/*.md' \
-    'docs/*.md' \
-    'README.md' 'SECURITY.md' 2>/dev/null || true)
+  done < <(git ls-files "${SCAN_GLOBS[@]}" 2>/dev/null || true)
 fi
 
 # Emits one line per invocation: `<status>\t<record>`, where status is

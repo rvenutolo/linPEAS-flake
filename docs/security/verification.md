@@ -337,7 +337,7 @@ procedure lives in
 
 ## gh-attestation-repo invariant<a name="gh-attestation-repo-invariant"></a>
 
-Every `gh attestation verify` invocation across workflows, scripts, and documentation — in fenced shell blocks and in inline code alike — must pass `--repo rvenutolo/linPEAS-flake`. Without the `--repo` pin, Sigstore returns any attestation matching the artifact digest, including one issued from a different repository — a trivial bypass.
+Every `gh attestation verify` invocation across workflows, composite actions, scripts, nix modules, the justfile, and documentation — in fenced shell blocks and in inline code alike — must pass `--repo rvenutolo/linPEAS-flake`. Without the `--repo` pin, Sigstore returns any attestation matching the artifact digest, including one issued from a different repository — a trivial bypass.
 
 Enforced by `scripts/check-gh-attestation-repo.sh`, with parsing in `scripts/_attestation_invocations.awk`. The lint joins backslash-continued shell invocations, then splits every source — runnable lines and backtick spans alike — into shell words, honouring single quotes, double quotes, and backslash escapes, and treating a backtick as a word delimiter rather than part of a word. A record runs from the `gh attestation verify` word triple to the next unquoted shell separator or comment, or to the end of the string. A redirection operator is not a separator — `2>&1`, `>&2`, and `&>f` keep the record open — so a pin written after a redirection still counts, while a bare `&` backgrounds the command and ends the record. The pin satisfies the check only as a word `--repo` or `-R` whose next word is the slug, or a word `--repo=<slug>`, `-R=<slug>`, or `-R<slug>` — the glued short form `gh` itself accepts.
 
