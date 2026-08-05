@@ -7,7 +7,7 @@
 #   awk -v mode=md|other -v slug=<owner/repo> --file <this> <input>
 #
 # Output, one line per record:
-#   ok\t<record>    the record carries --repo/-R <slug> or --repo=/-R=<slug>
+#   ok\t<record>    the record carries --repo/-R <slug>, --repo=/-R=<slug>, or -R<slug>
 #   bad\t<record>   it does not
 #
 # A record is the space-joined shell words of one invocation, running
@@ -43,17 +43,24 @@ BEGIN {
 # Split `s` into shell words. Fills out[1..n] with word text and
 # typ[1..n] with the word kind:
 #   w    ordinary word
-#   sep  unquoted ; && || | &
+#   sep  unquoted ; && || | & — a bare & only, never a redirection operator
 #   cmt  unquoted # beginning a word; holds the rest of `s` and is last
 # Returns n.
-function tokenize(s, out, typ,   n, i, c, cur, has, L) {
+function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq) {
   n = 0
   cur = ""
   has = 0
   i = 1
   L = length(s)
+  last_unq = ""
   while (i <= L) {
     c = substr(s, i, 1)
+    # Rebuilt every pass: only the two paths appending an ordinary unquoted
+    # character set `last_unq`, so quoting, escaping, and every word
+    # boundary leave it empty. Defaulting to empty is what keeps a quoted or
+    # escaped `>` from reading as redirection syntax below.
+    prev_unq = last_unq
+    last_unq = ""
     if (c == " " || c == "\t") {
       if (has) { out[++n] = cur; typ[n] = "w"; cur = ""; has = 0 }
       i++
@@ -105,6 +112,24 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L) {
       typ[n] = "cmt"
       return n
     }
+    if (c == "&" && substr(s, i, 2) != "&&" \
+        && (prev_unq == ">" || substr(s, i + 1, 1) == ">")) {
+      # A redirection operator, not a command separator: `2>&1`, `>&2`,
+      # `2>&-`, `&>f`, `&>>f`. Ending the record at this `&` would truncate
+      # it before a pin written after the redirection, reporting a correctly
+      # pinned invocation as unpinned. Only an unquoted `>` makes the
+      # following `&` redirection syntax — a quoted or escaped `>`, or a `>`
+      # separated from this `&` by a word boundary or a removed code span,
+      # is ordinary argument text, so `prev_unq` (the unquoted-append state
+      # carried from the previous pass, not the raw last character of `cur`)
+      # is what the left-hand check tracks. The `&&` exclusion keeps the
+      # logical operator a separator even when a redirection precedes it.
+      cur = cur c
+      last_unq = c
+      has = 1
+      i++
+      continue
+    }
     if (c == ";" || c == "&" || c == "|") {
       if (has) { out[++n] = cur; typ[n] = "w"; cur = ""; has = 0 }
       if (substr(s, i, 2) == "&&" || substr(s, i, 2) == "||") {
@@ -119,6 +144,7 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L) {
     }
     cur = cur c
     has = 1
+    last_unq = c
     i++
   }
   if (has) { out[++n] = cur; typ[n] = "w" }
@@ -152,7 +178,7 @@ function emit_records(s, mention_ok,   out, typ, n, i, j, extra, rec, pinned) {
           && typ[j + 2] == "w" && out[j + 2] == "verify") break
       rec = rec " " out[j]
       extra++
-      if (out[j] == "--repo=" slug || out[j] == "-R=" slug) pinned = 1
+      if (out[j] == "--repo=" slug || out[j] == "-R=" slug || out[j] == "-R" slug) pinned = 1
       else if ((out[j] == "--repo" || out[j] == "-R") && j < n && typ[j + 1] == "w" && out[j + 1] == slug) pinned = 1
     }
     # Resume scanning at the token that ended this record, so a chained
@@ -200,6 +226,11 @@ function scan_spans(s, runnable,   i, run, L) {
       emit_records(carry_text, 1)
       carry_open = 0
       carry_text = ""
+      # A span delimits words rather than joining them, matching how a
+      # backtick behaves when it reaches the splitter directly. Without the
+      # separator the text on either side of a removed span glues into one
+      # word, which can fuse a redirection onto a following separator.
+      strip_line = strip_line " "
     } else {
       carry_text = carry_text substr(s, i, run)
     }
@@ -311,6 +342,20 @@ function flush_runnable(   i, j, joined) {
   nrun = 0
 }
 
+# A leading `#` makes the line a comment wherever the line is shell source:
+# a script, a workflow, a fenced shell block, an indented code block. The
+# test must precede the span scan — a comment can carry a backticked command
+# with an elided argument, which the span rule would otherwise read as an
+# invocation, blocking documentation that merely describes the command.
+#
+# The cost is that an invocation shown after a root `#` prompt is not
+# inspected. Nothing in the line distinguishes a root prompt from prose, and
+# the miss is preferred to a false positive: a false positive blocks a
+# correct commit, while this gap affects only a shape no tracked doc uses.
+function is_comment(line) {
+  return (line ~ /^[[:space:]]*#/)
+}
+
 # Dispatch each line to the right source treatment: markdown fence and
 # indent state in md mode, comment skip in yml/sh. Runnable lines are
 # span-scanned and buffered for the backslash join; prose contributes
@@ -322,6 +367,7 @@ function flush_runnable(   i, j, joined) {
     if (in_fence) {
       if (is_fence_close($0)) { in_fence = 0; next }
       if (!fence_runnable) next
+      if (is_comment($0)) next
       scan_spans($0, 1)
       push_runnable(strip_line)
       next
@@ -331,19 +377,18 @@ function flush_runnable(   i, j, joined) {
     # carrying the command outside a span can produce a record, so the
     # simple rule costs nothing that CommonMark container tracking buys.
     if ($0 ~ /^(    |\t)/) {
+      if (is_comment($0)) next
       scan_spans($0, 1)
       push_runnable(strip_line)
       next
     }
-    # Prose. An inline code span is the only runnable shape here.
+    # Prose. A `#` here opens a heading, not a comment, so prose keeps its
+    # own treatment: an inline code span is the only runnable shape.
     scan_spans($0, 0)
     next
   }
 
-  # yml/sh: a comment line is prose whatever it quotes. This skip must
-  # precede the span scan — a comment can carry a backticked command with
-  # an elided argument, which the span rule would read as an invocation.
-  if ($0 ~ /^[[:space:]]*#/) next
+  if (is_comment($0)) next
   scan_spans($0, 1)
   push_runnable(strip_line)
 }

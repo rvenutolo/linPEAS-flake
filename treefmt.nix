@@ -98,16 +98,20 @@
     # to fences, normalizing tilde fences, and collapsing multi-backtick and
     # multi-line code spans — which would destroy the shape each one encodes.
     "tests/fixtures/gh-attestation-repo/bad-indented-code.md"
+    "tests/fixtures/gh-attestation-repo/good-indented-comment.md"
     "tests/fixtures/gh-attestation-repo/bad-tilde-fence.md"
     "tests/fixtures/gh-attestation-repo/bad-doubled-span.md"
     "tests/fixtures/gh-attestation-repo/bad-inline-triple.md"
     "tests/fixtures/gh-attestation-repo/bad-multiline-span.md"
     "tests/fixtures/gh-attestation-repo/good-odd-backtick.md"
-    # shfmt would rewrite these two shell fixtures into the shapes they exist to
-    # prove are NOT caught: it splits a one-line `;` chain across two lines, and
-    # collapses a doubled space between command words.
+    # shfmt would rewrite these shell fixtures into shapes they exist to prove
+    # are NOT caught, or out of the shape under test: it splits a one-line `;`
+    # or `&` chain across two lines, collapses a doubled space between command
+    # words, and moves a leading redirection past the flags that follow it.
     "tests/fixtures/gh-attestation-repo/bad-separator-pin.sh"
     "tests/fixtures/gh-attestation-repo/bad-doubled-space.sh"
+    "tests/fixtures/gh-attestation-repo/bad-background-sep.sh"
+    "tests/fixtures/gh-attestation-repo/good-redir-pin.sh"
     # Generator-owned changelog. mdformat re-escapes characters that
     # git-cliff renders verbatim, causing a write-back loop between the
     # release-on-bump `changelog` job and any local treefmt run.

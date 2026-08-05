@@ -246,8 +246,9 @@ request in scripts/\*.sh passes an explicit
 ### scripts/check-gh-attestation-repo.sh
 
 Lint: every `gh attestation verify` invocation across
-workflows, scripts, and docs passes `--repo rvenutolo/linPEAS-flake`
-so verification is bound to this repository.
+workflows, composite actions, scripts, nix modules, the justfile, and
+docs passes `--repo rvenutolo/linPEAS-flake` so verification is bound
+to this repository.
 
 ### scripts/check-harden-runner-block.sh
 

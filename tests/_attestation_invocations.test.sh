@@ -72,6 +72,54 @@ function test_separator_ends_the_record() {
     "$(printf 'bad\tgh attestation verify evil.json')"
 }
 
+function test_fd_redirection_does_not_end_the_record() {
+  check 'N>&M is redirection, not a separator, so a later pin still counts' other \
+    "gh attestation verify a.zip 2>&1 --repo ${SLUG}" \
+    "$(printf 'ok\tgh attestation verify a.zip 2>&1 --repo %s' "${SLUG}")"
+}
+
+function test_ampersand_redirection_does_not_end_the_record() {
+  check '&> is redirection, not a separator, so a later pin still counts' other \
+    "gh attestation verify a.zip &>/dev/null --repo ${SLUG}" \
+    "$(printf 'ok\tgh attestation verify a.zip &>/dev/null --repo %s' "${SLUG}")"
+}
+
+function test_background_ampersand_still_ends_the_record() {
+  check 'a bare & backgrounds the command and ends the record' other \
+    "gh attestation verify evil.json & echo --repo ${SLUG}" \
+    "$(printf 'bad\tgh attestation verify evil.json')"
+}
+
+function test_and_operator_still_ends_the_record_after_redirection() {
+  check '&& after a redirection is still a separator' other \
+    "gh attestation verify evil.json 2>&1 && echo --repo ${SLUG}" \
+    "$(printf 'bad\tgh attestation verify evil.json 2>&1')"
+}
+
+function test_quoted_gt_before_ampersand_still_separates() {
+  check 'a quoted > does not make the following & redirection syntax' other \
+    "gh attestation verify evil.json --url \">\"& true --repo ${SLUG}" \
+    "$(printf 'bad\tgh attestation verify evil.json --url >')"
+}
+
+function test_escaped_gt_before_ampersand_still_separates() {
+  check 'an escaped > does not make the following & redirection syntax' other \
+    "gh attestation verify evil.json \\>& true --repo ${SLUG}" \
+    "$(printf 'bad\tgh attestation verify evil.json >')"
+}
+
+function test_paren_boundary_before_ampersand_still_separates() {
+  check 'a word boundary from parens does not carry > into the next & ' other \
+    "gh attestation verify evil.json --url a>()& true --repo ${SLUG}" \
+    "$(printf 'bad\tgh attestation verify evil.json --url a>')"
+}
+
+function test_removed_span_does_not_glue_redirection_to_separator() {
+  check 'a removed code span separates the words on either side of it' other \
+    'gh attestation verify evil.json --url a>`x`& true --repo rvenutolo/linPEAS-flake' \
+    "$(printf 'bad\tgh attestation verify evil.json --url a>')"
+}
+
 function test_pin_inside_quoted_argument_does_not_count() {
   check 'a slug inside a quoted argument is not the pin' other \
     "gh attestation verify evil.json --predicate \"--repo ${SLUG}\"" \
@@ -235,6 +283,18 @@ function test_short_flag_pins() {
     "$(printf 'ok\tgh attestation verify pin.json -R %s' "${SLUG}")"
 }
 
+function test_glued_short_flag_pins() {
+  check '-R<slug> glued satisfies the pin' other \
+    "gh attestation verify pin.json -R${SLUG}" \
+    "$(printf 'ok\tgh attestation verify pin.json -R%s' "${SLUG}")"
+}
+
+function test_glued_short_flag_wrong_slug_is_unpinned() {
+  check '-R<other-slug> glued does not satisfy the pin' other \
+    'gh attestation verify pin.json -Rattacker/evil' \
+    "$(printf 'bad\tgh attestation verify pin.json -Rattacker/evil')"
+}
+
 function test_adjacent_substitutions_split_into_two_records() {
   check 'a second invocation in the same word run starts a new record' other \
     "x=\$(gh attestation verify a.zip --repo ${SLUG}) y=\$(gh attestation verify b.zip)" \
@@ -259,12 +319,48 @@ $ ls
     ''
 }
 
+function test_shell_fence_comment_span_is_not_an_invocation() {
+  check 'a # line in a sh fence is a comment, spans included' md \
+    '```sh
+# see `gh attestation verify x.zip`
+```' \
+    ''
+}
+
+function test_indented_code_comment_span_is_not_an_invocation() {
+  check 'a # line in an indented code block is a comment, spans included' md \
+    '    # see `gh attestation verify x.zip`' \
+    ''
+}
+
+function test_prose_heading_span_is_still_inspected() {
+  check 'a markdown heading is prose, not a shell comment' md \
+    '# see `gh attestation verify x.zip`' \
+    "$(printf 'bad\tgh attestation verify x.zip')"
+}
+
+function test_shell_fence_invocation_still_inspected() {
+  check 'an uncommented fence line is still an invocation' md \
+    '```sh
+gh attestation verify x.zip
+```' \
+    "$(printf 'bad\tgh attestation verify x.zip')"
+}
+
 function main() {
   test_tokenizer_splits_on_whitespace_runs
   test_tokenizer_honors_single_quotes
   test_tokenizer_honors_double_quotes
   test_trailing_comment_does_not_pin
   test_separator_ends_the_record
+  test_fd_redirection_does_not_end_the_record
+  test_ampersand_redirection_does_not_end_the_record
+  test_background_ampersand_still_ends_the_record
+  test_and_operator_still_ends_the_record_after_redirection
+  test_quoted_gt_before_ampersand_still_separates
+  test_escaped_gt_before_ampersand_still_separates
+  test_paren_boundary_before_ampersand_still_separates
+  test_removed_span_does_not_glue_redirection_to_separator
   test_pin_inside_quoted_argument_does_not_count
   test_chained_commands_split_into_two_records
   test_equals_form_pins
@@ -286,9 +382,15 @@ function main() {
   test_subshell_is_seen
   test_pinned_command_substitution_is_ok
   test_short_flag_pins
+  test_glued_short_flag_pins
+  test_glued_short_flag_wrong_slug_is_unpinned
   test_adjacent_substitutions_split_into_two_records
   test_multiline_backtick_substitution_is_seen
   test_text_fence_comment_is_not_an_invocation
+  test_shell_fence_comment_span_is_not_an_invocation
+  test_indented_code_comment_span_is_not_an_invocation
+  test_prose_heading_span_is_still_inspected
+  test_shell_fence_invocation_still_inspected
 
   if ((failures > 0)); then
     printf '%d test(s) failed\n' "${failures}" >&2
