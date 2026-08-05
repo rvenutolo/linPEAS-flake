@@ -55,8 +55,11 @@ readonly AWK_LIB="${AWK_LIB_OVERRIDE:-${REPO_ROOT}/scripts/_attestation_invocati
 # invocation. Composite action `run:` blocks, justfile recipe bodies, and
 # nix pre-commit `entry` strings are all shell; CHANGELOG.md is markdown
 # excluded from mdformat, so shapes the formatter would normalize survive
-# there. Kept as a named array between markers so
-# tests/check-gh-attestation-repo.test.sh can parse it and assert the
+# there. Root-level `flake.nix` and `treefmt.nix` are named explicitly
+# because they sit outside the `nix/` pathspec and each carries shell
+# inside `''…''` string blocks (formatter options, dev-shell hooks) the
+# same way modules under `nix/` do. Kept as a named array between markers
+# so tests/check-gh-attestation-repo.test.sh can parse it and assert the
 # pre-commit hook's `files` filter covers everything selected here.
 # BEGIN SCAN_GLOBS
 readonly SCAN_GLOBS=(
@@ -73,6 +76,8 @@ readonly SCAN_GLOBS=(
   'justfile'
   'nix/**/*.nix'
   'nix/*.nix'
+  'flake.nix'
+  'treefmt.nix'
 )
 # END SCAN_GLOBS
 

@@ -296,7 +296,7 @@
       export PATH="${pkgs-unstable.gawk}/bin:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-gh-attestation-repo.sh
     ''}";
-    files = "^(\\.github/workflows/.*\\.ya?ml|\\.github/actions/.*\\.ya?ml|scripts/.*\\.sh|scripts/_attestation_invocations\\.awk|docs/.*\\.md|README\\.md|SECURITY\\.md|CHANGELOG\\.md|justfile|nix/.*\\.nix)$";
+    files = "^(\\.github/workflows/.*\\.ya?ml|\\.github/actions/.*\\.ya?ml|scripts/.*\\.sh|scripts/_attestation_invocations\\.awk|docs/.*\\.md|README\\.md|SECURITY\\.md|CHANGELOG\\.md|justfile|nix/.*\\.nix|flake\\.nix|treefmt\\.nix)$";
     pass_filenames = false;
     language = "system";
   };

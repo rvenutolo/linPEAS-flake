@@ -67,7 +67,7 @@ function scenario_glob_selects_new_classes() {
   selected="$(cd "${REPO_ROOT}" && git ls-files $(extract_scan_globs))"
 
   local class missing=0
-  for class in '^\.github/actions/.*\.ya?ml$' '^justfile$' '^CHANGELOG\.md$' '^nix/.*\.nix$'; do
+  for class in '^\.github/actions/.*\.ya?ml$' '^justfile$' '^CHANGELOG\.md$' '^nix/.*\.nix$' '^flake\.nix$' '^treefmt\.nix$'; do
     if ! printf '%s\n' "${selected}" | grep --quiet --extended-regexp -- "${class}"; then
       printf '  no tracked file selected for class: %s\n' "${class}" >&2
       missing=1
