@@ -7,7 +7,7 @@
 #   awk -v mode=md|other -v slug=<owner/repo> --file <this> <input>
 #
 # Output, one line per record:
-#   ok\t<record>    the record carries --repo/-R <slug> or --repo=/-R=<slug>
+#   ok\t<record>    the record carries --repo/-R <slug>, --repo=/-R=<slug>, or -R<slug>
 #   bad\t<record>   it does not
 #
 # A record is the space-joined shell words of one invocation, running
@@ -152,7 +152,7 @@ function emit_records(s, mention_ok,   out, typ, n, i, j, extra, rec, pinned) {
           && typ[j + 2] == "w" && out[j + 2] == "verify") break
       rec = rec " " out[j]
       extra++
-      if (out[j] == "--repo=" slug || out[j] == "-R=" slug) pinned = 1
+      if (out[j] == "--repo=" slug || out[j] == "-R=" slug || out[j] == "-R" slug) pinned = 1
       else if ((out[j] == "--repo" || out[j] == "-R") && j < n && typ[j + 1] == "w" && out[j + 1] == slug) pinned = 1
     }
     # Resume scanning at the token that ended this record, so a chained

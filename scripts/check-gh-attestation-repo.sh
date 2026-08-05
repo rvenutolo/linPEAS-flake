@@ -18,7 +18,7 @@
 # A record runs from the `gh attestation verify` word triple to the next
 # unquoted shell separator or comment, or to the end of the string. The
 # pin must be a word `--repo` or `-R` whose next word is the slug, or a
-# word `--repo=<slug>` or `-R=<slug>`.
+# word `--repo=<slug>`, `-R=<slug>`, or `-R<slug>`.
 #
 # Binding the pin to a word position is what keeps text that merely sits
 # near the command from vouching for it: a trailing comment, a chained
