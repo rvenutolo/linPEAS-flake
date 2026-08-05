@@ -342,6 +342,20 @@ function flush_runnable(   i, j, joined) {
   nrun = 0
 }
 
+# A leading `#` makes the line a comment wherever the line is shell source:
+# a script, a workflow, a fenced shell block, an indented code block. The
+# test must precede the span scan — a comment can carry a backticked command
+# with an elided argument, which the span rule would otherwise read as an
+# invocation, blocking documentation that merely describes the command.
+#
+# The cost is that an invocation shown after a root `#` prompt is not
+# inspected. Nothing in the line distinguishes a root prompt from prose, and
+# the miss is preferred to a false positive: a false positive blocks a
+# correct commit, while this gap affects only a shape no tracked doc uses.
+function is_comment(line) {
+  return (line ~ /^[[:space:]]*#/)
+}
+
 # Dispatch each line to the right source treatment: markdown fence and
 # indent state in md mode, comment skip in yml/sh. Runnable lines are
 # span-scanned and buffered for the backslash join; prose contributes
@@ -353,6 +367,7 @@ function flush_runnable(   i, j, joined) {
     if (in_fence) {
       if (is_fence_close($0)) { in_fence = 0; next }
       if (!fence_runnable) next
+      if (is_comment($0)) next
       scan_spans($0, 1)
       push_runnable(strip_line)
       next
@@ -362,19 +377,18 @@ function flush_runnable(   i, j, joined) {
     # carrying the command outside a span can produce a record, so the
     # simple rule costs nothing that CommonMark container tracking buys.
     if ($0 ~ /^(    |\t)/) {
+      if (is_comment($0)) next
       scan_spans($0, 1)
       push_runnable(strip_line)
       next
     }
-    # Prose. An inline code span is the only runnable shape here.
+    # Prose. A `#` here opens a heading, not a comment, so prose keeps its
+    # own treatment: an inline code span is the only runnable shape.
     scan_spans($0, 0)
     next
   }
 
-  # yml/sh: a comment line is prose whatever it quotes. This skip must
-  # precede the span scan — a comment can carry a backticked command with
-  # an elided argument, which the span rule would read as an invocation.
-  if ($0 ~ /^[[:space:]]*#/) next
+  if (is_comment($0)) next
   scan_spans($0, 1)
   push_runnable(strip_line)
 }
