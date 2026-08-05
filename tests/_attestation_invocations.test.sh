@@ -108,6 +108,18 @@ function test_escaped_gt_before_ampersand_still_separates() {
     "$(printf 'bad\tgh attestation verify evil.json >')"
 }
 
+function test_paren_boundary_before_ampersand_still_separates() {
+  check 'a word boundary from parens does not carry > into the next & ' other \
+    "gh attestation verify evil.json --url a>()& true --repo ${SLUG}" \
+    "$(printf 'bad\tgh attestation verify evil.json --url a>')"
+}
+
+function test_removed_span_does_not_glue_redirection_to_separator() {
+  check 'a removed code span separates the words on either side of it' other \
+    'gh attestation verify evil.json --url a>`x`& true --repo rvenutolo/linPEAS-flake' \
+    "$(printf 'bad\tgh attestation verify evil.json --url a>')"
+}
+
 function test_pin_inside_quoted_argument_does_not_count() {
   check 'a slug inside a quoted argument is not the pin' other \
     "gh attestation verify evil.json --predicate \"--repo ${SLUG}\"" \
@@ -319,6 +331,8 @@ function main() {
   test_and_operator_still_ends_the_record_after_redirection
   test_quoted_gt_before_ampersand_still_separates
   test_escaped_gt_before_ampersand_still_separates
+  test_paren_boundary_before_ampersand_still_separates
+  test_removed_span_does_not_glue_redirection_to_separator
   test_pin_inside_quoted_argument_does_not_count
   test_chained_commands_split_into_two_records
   test_equals_form_pins

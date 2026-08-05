@@ -46,7 +46,7 @@ BEGIN {
 #   sep  unquoted ; && || | & — a bare & only, never a redirection operator
 #   cmt  unquoted # beginning a word; holds the rest of `s` and is last
 # Returns n.
-function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq) {
+function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq) {
   n = 0
   cur = ""
   has = 0
@@ -55,9 +55,14 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq) {
   last_unq = ""
   while (i <= L) {
     c = substr(s, i, 1)
+    # Rebuilt every pass: only the two paths appending an ordinary unquoted
+    # character set `last_unq`, so quoting, escaping, and every word
+    # boundary leave it empty. Defaulting to empty is what keeps a quoted or
+    # escaped `>` from reading as redirection syntax below.
+    prev_unq = last_unq
+    last_unq = ""
     if (c == " " || c == "\t") {
       if (has) { out[++n] = cur; typ[n] = "w"; cur = ""; has = 0 }
-      last_unq = ""
       i++
       continue
     }
@@ -68,7 +73,6 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq) {
       i++
       while (i <= L && substr(s, i, 1) != "'") { cur = cur substr(s, i, 1); i++ }
       i++
-      last_unq = ""
       continue
     }
     if (c == "\"") {
@@ -80,13 +84,11 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq) {
         i++
       }
       i++
-      last_unq = ""
       continue
     }
     if (c == "\\") {
       if (i < L) { i++; cur = cur substr(s, i, 1); has = 1 }
       i++
-      last_unq = ""
       continue
     }
     if (c == "(" || c == ")") {
@@ -111,15 +113,17 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq) {
       return n
     }
     if (c == "&" && substr(s, i, 2) != "&&" \
-        && (last_unq == ">" || substr(s, i + 1, 1) == ">")) {
+        && (prev_unq == ">" || substr(s, i + 1, 1) == ">")) {
       # A redirection operator, not a command separator: `2>&1`, `>&2`,
       # `2>&-`, `&>f`, `&>>f`. Ending the record at this `&` would truncate
       # it before a pin written after the redirection, reporting a correctly
       # pinned invocation as unpinned. Only an unquoted `>` makes the
-      # following `&` redirection syntax — a quoted or escaped `>` is
-      # ordinary argument text, so `last_unq` (not the raw last character of
-      # `cur`) is what the left-hand check tracks. The `&&` exclusion keeps
-      # the logical operator a separator even when a redirection precedes it.
+      # following `&` redirection syntax — a quoted or escaped `>`, or a `>`
+      # separated from this `&` by a word boundary or a removed code span,
+      # is ordinary argument text, so `prev_unq` (the unquoted-append state
+      # carried from the previous pass, not the raw last character of `cur`)
+      # is what the left-hand check tracks. The `&&` exclusion keeps the
+      # logical operator a separator even when a redirection precedes it.
       cur = cur c
       last_unq = c
       has = 1
@@ -222,6 +226,11 @@ function scan_spans(s, runnable,   i, run, L) {
       emit_records(carry_text, 1)
       carry_open = 0
       carry_text = ""
+      # A span delimits words rather than joining them, matching how a
+      # backtick behaves when it reaches the splitter directly. Without the
+      # separator the text on either side of a removed span glues into one
+      # word, which can fuse a redirection onto a following separator.
+      strip_line = strip_line " "
     } else {
       carry_text = carry_text substr(s, i, run)
     }
