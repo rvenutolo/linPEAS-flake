@@ -106,8 +106,32 @@ if ((${#generator_attr[@]} == 0)); then
   exit 1
 fi
 
-# Step 2 — parse every hook block, emitting
-#   <name>\t<files-string>\t<space-separated script basenames>
+# Guard-the-guard: the transposition is what makes the manifest module
+# load-bearing for every generator, so a tree that evaluates devTooling yet has
+# no module assigning `flake.devTooling` means the signal was renamed rather
+# than that no module is required. Failing here beats silently shrinking every
+# required set.
+transposers=0
+for f in "${nix_modules[@]}"; do
+  if nix_source "${f}" | grep --quiet --fixed-strings -- 'flake.devTooling'; then
+    transposers=$((transposers + 1))
+  fi
+done
+if ((transposers == 0)); then
+  printf 'no nix module assigns flake.devTooling in %s — transposer signal broke\n' \
+    "${ROOT}" >&2
+  exit 1
+fi
+
+# Step 2 — parse every hook block, emitting one record per block on its own
+# line, fields separated by an ASCII unit separator (octal \037). A literal
+# tab is unsafe here: an empty `files` value would put two delimiters back
+# to back, and bash's `read` treats tab as IFS whitespace, which collapses
+# adjacent delimiters and silently drops the empty field instead of
+# preserving it — exactly the shape that would let Change 2 below never see
+# an empty filter. \037 carries no such special casing and never appears in
+# a `files` regex or a `scripts/*.sh` path.
+#   <name>\037<files-string>\037<space-separated script basenames>
 function parse_blocks() {
   local nix
   for nix in "${ROOT}"/nix/hooks/*.nix; do
@@ -121,7 +145,7 @@ function parse_blocks() {
         next
       }
       in_block && /^  \};/ {
-        printf "%s\t%s\t%s\n", name, files, scripts
+        printf "%s\037%s\037%s\n", name, files, scripts
         in_block = 0
         next
       }
@@ -148,7 +172,7 @@ function parse_blocks() {
 failed=0
 generator_hooks=0
 
-while IFS=$'\t' read -r name files scripts; do
+while IFS=$'\037' read -r name files scripts; do
   [[ -n ${name} ]] || continue
 
   attr=''
@@ -161,6 +185,14 @@ while IFS=$'\t' read -r name files scripts; do
   [[ -n ${attr} ]] || continue
 
   generator_hooks=$((generator_hooks + 1))
+
+  # An empty filter would become an empty ERE, which matches every path and
+  # would report full coverage for a hook that watches nothing.
+  if [[ -z ${files} ]]; then
+    printf 'hook %s: empty files filter — nothing re-triggers it\n' "${name}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
 
   # Nix string literal: "\\." in source is the ERE "\.".
   ere="$(printf '%s' "${files}" | sed 's/\\\\/\\/g')"

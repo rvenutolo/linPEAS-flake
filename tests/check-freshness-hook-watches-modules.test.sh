@@ -140,6 +140,22 @@ function main() {
   expect 'empty: zero devTooling generators trips guard-the-guard' \
     "${work}/empty" 1 'no devTooling-evaluating generator'
 
+  # (g) BAD: nix/manifests.nix transposes devTooling via an attribute-set
+  # assignment (`config.flake = { devTooling = { }; };`) rather than the
+  # direct `config.flake.devTooling = ...` form the fixed-string signal
+  # matches. Zero modules then match the transposer signal tree-wide, and
+  # the guard-the-guard must fail loud rather than let every required set
+  # silently shrink to exclude the manifest module.
+  write_tree "${work}/bad-attrset-transposer" \
+    '^(nix/hooks/.*\.nix|nix/manifests\.nix)$' plain
+  cat >"${work}/bad-attrset-transposer/nix/manifests.nix" <<'EOF'
+{
+  config.flake = { devTooling = { }; };
+}
+EOF
+  expect 'bad: attrset-style transposition trips the transposer guard' \
+    "${work}/bad-attrset-transposer" 1 'transposer signal broke'
+
   # (f) LIVE: the real tree must satisfy the guard.
   expect 'live: real tree passes' "${REPO_ROOT}" 0 ''
 
