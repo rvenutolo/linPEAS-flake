@@ -156,6 +156,40 @@ EOF
   expect 'bad: attrset-style transposition trips the transposer guard' \
     "${work}/bad-attrset-transposer" 1 'transposer signal broke'
 
+  # (h) BAD: an empty files filter parses as an empty ERE, which matches
+  # every path and would report full coverage for a hook that watches
+  # nothing. A second, unrelated hook with a well-formed filter sits
+  # alongside it in the same nix/hooks/freshness.nix: with only one hook
+  # block, a regression that collapses the empty field would instead trip
+  # the zero-hook-blocks guard-the-guard and this case would pass for the
+  # wrong reason, masking the regression it exists to catch.
+  write_tree "${work}/bad-empty-filter" \
+    '^(nix/hooks/.*\.nix|nix/manifests\.nix)$' plain
+  cat >"${work}/bad-empty-filter/nix/hooks/freshness.nix" <<'EOF'
+{
+  unrelated-hook = {
+    enable = true;
+    name = "unrelated-hook";
+    description = "An unrelated hook with a well-formed filter.";
+    entry = "true";
+    files = "^unrelated\\.txt$";
+    pass_filenames = false;
+    language = "system";
+  };
+  fixture-doc-fresh = {
+    enable = true;
+    name = "fixture-doc-fresh";
+    description = "Fixture generated-doc freshness hook.";
+    entry = "bash scripts/refresh-fixture-doc.sh --check";
+    files = "";
+    pass_filenames = false;
+    language = "system";
+  };
+}
+EOF
+  expect 'bad: an empty files filter is reported, not treated as covering everything' \
+    "${work}/bad-empty-filter" 1 'empty files filter'
+
   # (f) LIVE: the real tree must satisfy the guard.
   expect 'live: real tree passes' "${REPO_ROOT}" 0 ''
 
