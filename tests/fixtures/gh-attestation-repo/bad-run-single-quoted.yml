@@ -1,0 +1,4 @@
+jobs:
+  a:
+    steps:
+      - run: 'gh attestation verify evil.zip'

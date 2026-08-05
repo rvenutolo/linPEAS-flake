@@ -193,6 +193,12 @@ function main() {
   expect good-fence-comment.md 0 ""
   expect good-indented-comment.md 0 ""
   expect good-comment-span.sh 0 ""
+  expect bad-run-quoted.yml 1 "missing"
+  expect bad-run-single-quoted.yml 1 "missing"
+  expect good-run-quoted.yml 0 ""
+  expect bad-eval-quoted.sh 1 "missing"
+  expect bad-eval-single-quoted.sh 1 "missing"
+  expect bad-dash-c-quoted.sh 1 "missing"
 
   if ((failures > 0)); then
     printf '%d test(s) failed\n' "${failures}" >&2

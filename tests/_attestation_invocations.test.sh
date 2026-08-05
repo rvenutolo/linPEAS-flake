@@ -347,6 +347,191 @@ gh attestation verify x.zip
     "$(printf 'bad\tgh attestation verify x.zip')"
 }
 
+function test_quoted_run_scalar_is_a_command_source() {
+  check 'a double-quoted run: scalar carries an invocation' other \
+    '- run: "gh attestation verify evil.zip"' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a single-quoted run: scalar carries an invocation' other \
+    "- run: 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a pin inside the quoted scalar satisfies the check' other \
+    "- run: \"gh attestation verify pin.json --repo ${SLUG}\"" \
+    "$(printf 'ok\tgh attestation verify pin.json --repo %s' "${SLUG}")"
+}
+
+function test_eval_and_dash_c_arguments_are_command_sources() {
+  check 'eval of a double-quoted string carries an invocation' other \
+    'eval "gh attestation verify evil.zip"' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'eval of a single-quoted string carries an invocation' other \
+    "eval 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a bash -c argument carries an invocation' other \
+    "bash -c 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a bash -lc argument carries an invocation' other \
+    "bash -lc 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a --command argument carries an invocation' other \
+    'nix develop --command "gh attestation verify evil.zip"' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
+function test_nix_attribute_assignment_is_a_command_source() {
+  check 'a spaced nix entry assignment carries an invocation' other \
+    'entry = "gh attestation verify evil.zip";' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a glued nix entry assignment carries an invocation' other \
+    'entry="gh attestation verify evil.zip";' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a glued yaml run key carries an invocation' other \
+    'run:"gh attestation verify evil.zip"' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
+function test_every_introducer_key_is_recognized() {
+  local key
+  for key in text script command cmd entrypoint shell; do
+    check "the ${key} key carries an invocation" other \
+      "${key} = \"gh attestation verify evil.zip\"" \
+      "$(printf 'bad\tgh attestation verify evil.zip')"
+    check "the ${key}: key carries an invocation" other \
+      "${key}: \"gh attestation verify evil.zip\"" \
+      "$(printf 'bad\tgh attestation verify evil.zip')"
+  done
+}
+
+function test_prose_attribute_is_not_a_command_source() {
+  check 'a description string stays literal word text' other \
+    "description = \"gh attestation verify pins --repo ${SLUG}.\"" \
+    ''
+  check 'an assignment to an unlisted attribute stays literal' other \
+    'foo = "gh attestation verify evil.zip"' \
+    ''
+}
+
+function test_bare_triple_payload_is_a_mention() {
+  check 'a payload holding only the command triple is a mention' other \
+    'eval "gh attestation verify"' \
+    ''
+  check 'a match key passed to a -c flag is a mention' other \
+    'grep -c "gh attestation verify" f' \
+    ''
+}
+
+function test_nested_quoted_payload_is_reparsed() {
+  check 'a quoted eval inside a quoted run: scalar is reached' other \
+    '- run: "eval '"'"'gh attestation verify evil.zip'"'"'"' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
+function test_quoted_command_source_in_a_fence_is_reparsed() {
+  check 'a quoted run: scalar inside a shell fence is reached' md \
+    '```sh
+- run: "gh attestation verify evil.zip"
+```' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
+function test_fragment_payload_ending_mid_word_is_judged_as_invocation() {
+  check 'an eval payload continuing past its closing quote is not a mention' other \
+    "eval 'gh attestation verify 'x" \
+    "$(printf 'bad\tgh attestation verify')"
+  check 'a -c payload continuing past its closing quote is not a mention' other \
+    "bash -c 'gh attestation verify 'x" \
+    "$(printf 'bad\tgh attestation verify')"
+}
+
+function test_combined_short_flags_are_command_sources() {
+  check 'a -xc combined flag carries an invocation' other \
+    "bash -xc 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a -ec combined flag carries an invocation' other \
+    "bash -ec 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
+function test_bare_key_without_punctuation_is_not_an_introducer() {
+  check 'a bare run subcommand word is not an introducer' other \
+    'npm run "gh attestation verify evil.zip"' \
+    ''
+  check 'a bare shell subcommand word is not an introducer' other \
+    'nix shell "gh attestation verify evil.zip"' \
+    ''
+}
+
+function test_glued_structural_punctuation_does_not_hide_an_introducer() {
+  check 'a run: key inside a yaml flow mapping still introduces' other \
+    '- {run: "gh attestation verify evil.zip"}' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a -c element inside a yaml flow sequence still introduces' other \
+    'entrypoint: ["sh", "-c", "gh attestation verify evil.zip"]' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
+function test_structural_closer_after_a_bare_triple_stays_a_mention() {
+  check 'a bare triple closed by a flow-sequence bracket in a span is a mention' md \
+    'Use `entrypoint: ["sh", "-c", "gh attestation verify"]` here.' \
+    ''
+  check 'a bare triple closed by a flow-mapping brace in a span is a mention' md \
+    '- `{run: "gh attestation verify"}`' \
+    ''
+  check 'a bare triple closed by a backgrounding & stays a mention' other \
+    "eval 'gh attestation verify'&" \
+    ''
+}
+
+function test_structural_closer_does_not_undo_round_one_detection() {
+  check 'a payload with a further word past the flow-sequence bracket still reports' other \
+    'entrypoint: ["sh", "-c", "gh attestation verify evil.zip"]' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
+function test_fragment_context_propagates_to_nested_payloads() {
+  check 'a bare triple nested inside a fragment payload is still an invocation' other \
+    'eval '"'"'bash -c "gh attestation verify "'"'"'"${ART}"' \
+    "$(printf 'bad\tgh attestation verify')"
+}
+
+function test_fragment_status_does_not_over_propagate_to_a_clean_child() {
+  check 'a match key whose own quote ends cleanly inside a fragment stays a mention' other \
+    "sh -c \"grep -c 'gh attestation verify' \"\$f" \
+    ''
+  check 'the same shape inside a span stays a mention' md \
+    'Use `sh -c "grep -c '"'"'gh attestation verify'"'"' "$f` here.' \
+    ''
+}
+
+function test_eval_concatenates_its_arguments_into_one_command() {
+  check 'an eval payload followed by a further word is an invocation' other \
+    'eval "gh attestation verify" evil.zip' \
+    "$(printf 'bad\tgh attestation verify')"
+  check 'an eval payload followed by a further quoted word is an invocation' other \
+    'eval "gh attestation verify" "${ART}"' \
+    "$(printf 'bad\tgh attestation verify')"
+}
+
+function test_eval_dollar_quote_still_introduces() {
+  check 'a $-quoted eval argument still carries an invocation' other \
+    "eval \$'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
+function test_glued_command_equals_form_is_a_command_source() {
+  check 'a --command= argument carries an invocation' other \
+    'bash --command="gh attestation verify evil.zip"' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
+function test_eval_concatenation_rule_does_not_widen_other_introducers() {
+  check 'a match key passed to a -c flag stays a mention under the new eval rule' other \
+    'grep -c "gh attestation verify" f' \
+    ''
+  check 'an eval payload followed by a separator, not a word, stays a mention' other \
+    'eval "gh attestation verify" && echo x' \
+    ''
+}
+
 function main() {
   test_tokenizer_splits_on_whitespace_runs
   test_tokenizer_honors_single_quotes
@@ -391,6 +576,26 @@ function main() {
   test_indented_code_comment_span_is_not_an_invocation
   test_prose_heading_span_is_still_inspected
   test_shell_fence_invocation_still_inspected
+  test_quoted_run_scalar_is_a_command_source
+  test_eval_and_dash_c_arguments_are_command_sources
+  test_nix_attribute_assignment_is_a_command_source
+  test_every_introducer_key_is_recognized
+  test_prose_attribute_is_not_a_command_source
+  test_bare_triple_payload_is_a_mention
+  test_nested_quoted_payload_is_reparsed
+  test_quoted_command_source_in_a_fence_is_reparsed
+  test_fragment_payload_ending_mid_word_is_judged_as_invocation
+  test_combined_short_flags_are_command_sources
+  test_bare_key_without_punctuation_is_not_an_introducer
+  test_glued_structural_punctuation_does_not_hide_an_introducer
+  test_structural_closer_after_a_bare_triple_stays_a_mention
+  test_structural_closer_does_not_undo_round_one_detection
+  test_fragment_context_propagates_to_nested_payloads
+  test_fragment_status_does_not_over_propagate_to_a_clean_child
+  test_eval_concatenates_its_arguments_into_one_command
+  test_eval_dollar_quote_still_introduces
+  test_glued_command_equals_form_is_a_command_source
+  test_eval_concatenation_rule_does_not_widen_other_introducers
 
   if ((failures > 0)); then
     printf '%d test(s) failed\n' "${failures}" >&2
