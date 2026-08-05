@@ -43,7 +43,7 @@ BEGIN {
 # Split `s` into shell words. Fills out[1..n] with word text and
 # typ[1..n] with the word kind:
 #   w    ordinary word
-#   sep  unquoted ; && || | &
+#   sep  unquoted ; && || | & — a bare & only, never a redirection operator
 #   cmt  unquoted # beginning a word; holds the rest of `s` and is last
 # Returns n.
 function tokenize(s, out, typ,   n, i, c, cur, has, L) {
@@ -104,6 +104,18 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L) {
       out[++n] = substr(s, i)
       typ[n] = "cmt"
       return n
+    }
+    if (c == "&" && substr(s, i, 2) != "&&" \
+        && (substr(cur, length(cur), 1) == ">" || substr(s, i + 1, 1) == ">")) {
+      # A redirection operator, not a command separator: `2>&1`, `>&2`,
+      # `2>&-`, `&>f`, `&>>f`. Ending the record at this `&` would truncate
+      # it before a pin written after the redirection, reporting a correctly
+      # pinned invocation as unpinned. The `&&` exclusion keeps the logical
+      # operator a separator even when a redirection precedes it.
+      cur = cur c
+      has = 1
+      i++
+      continue
     }
     if (c == ";" || c == "&" || c == "|") {
       if (has) { out[++n] = cur; typ[n] = "w"; cur = ""; has = 0 }
