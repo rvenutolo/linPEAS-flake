@@ -104,6 +104,7 @@ Hooks (alphabetical):
 | `enforcement-matrix-fresh`          | docs/security/enforcement-matrix.md matches the annotated invariant index and real enforcers.                                        |
 | `flake-show-fresh`                  | flake-show block in docs/reference/flake-outputs.md matches current flake outputs.                                                   |
 | `fork-guard-release`                | Release-grade jobs include github.repository fork guard.                                                                             |
+| `freshness-hook-watches-modules`    | Every devTooling-evaluating freshness hook watches every nix module its generator reads.                                             |
 | `gh-api-version-header`             | Every gh api / api.github.com call in scripts passes an X-GitHub-Api-Version header.                                                 |
 | `gh-attestation-repo`               | gh attestation verify pins --repo rvenutolo/linPEAS-flake.                                                                           |
 | `harden-runner-block`               | Every harden-runner step uses egress-policy: block with non-empty allowed-endpoints.                                                 |

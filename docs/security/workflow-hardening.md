@@ -112,6 +112,18 @@ The guard derives the manifest-reading scripts by content (`preCommitHooks` / `P
 
 Enforced by `scripts/check-manifest-hook-watches-nix.sh`. Wired as the `lint-script-hygiene` CI job (member check `manifest-hook-watches-nix`) and as a pre-commit hook.
 
+## freshness hook watches evaluated modules
+
+Every pre-commit hook whose generator evaluates `devTooling.<system>.<attr>` names, in its `files` filter, every nix module that attribute is defined or transposed by.
+
+A freshness hook regenerates a doc from an evaluated flake attribute and refuses a stale commit. Its `files` regex decides which changed paths re-trigger it on the per-changed-file `git commit` path. When the filter misses a module the generator evaluates, a commit touching only that module leaves the doc stale with the guard silent. The `--all-files` CI mirror still catches the drift, but the local fast-path defense is lost, so the gap surfaces late.
+
+The required module set is derived rather than hardcoded: modules naming the evaluated attribute in non-comment nix source, plus one level of their relative imports, plus modules assigning `flake.devTooling` — the transposition every generator reads through. The second signal is what makes the derivation structural. A module that merely mentions an attribute in a comment is not thereby required, and a module that performs the transposition is required whether or not it names the attribute at all.
+
+The guard is source-parsed rather than `nix eval`-ed: `files` and `entry` are literal in source, and `nix eval` is the known local-commit-path long pole. It fails loud if it finds no `devTooling`-evaluating generator, no hook running one, or an attribute with no defining module — each of which means the derivation broke rather than that the tree is clean.
+
+Enforced by `scripts/check-freshness-hook-watches-modules.sh`. Wired as the `lint-script-hygiene` CI job (member check `freshness-hook-watches-modules`) and as a pre-commit hook.
+
 ## lean lint-shell routing
 
 The batched invariant-lint groups are split across two devShells by closure cost. The light groups — `lint-workflow-security` and `lint-script-hygiene` — run in `devShells.lint`, whose tight closure realizes far faster in CI than the full author shell. `lint-doc-invariants` must stay on `devShells.default`: its `renovate-config-validator` check invokes the `renovate` binary, which pulls the heavy renovate closure that the lean shell deliberately omits. Moving `lint-doc-invariants` to `.#lint` would break that check; moving the light groups back to `.#default` would forfeit the realize saving. A new batched group belongs in `.#lint` only if every tool it needs is in `nix/devshell-lint.nix` `buildInputs`; otherwise it stays on `.#default`.

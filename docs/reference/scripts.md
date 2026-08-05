@@ -237,6 +237,12 @@ Lint: every workflow job holding a guard-required write
 scope (contents/packages/id-token/attestations/actions: write) carries
 a fork-guard `if:` pinning execution to the canonical repo.
 
+### scripts/check-freshness-hook-watches-modules.sh
+
+Lint: every pre-commit hook whose entry runs a generator
+that evaluates `devTooling.<system>.<attr>` names, in its `files`
+regex, every nix module that attribute is defined or transposed by.
+
 ### scripts/check-gh-api-version-header.sh
 
 Lint: every `gh api` invocation and `api.github.com`

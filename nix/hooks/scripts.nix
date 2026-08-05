@@ -53,6 +53,24 @@
     pass_filenames = false;
     language = "system";
   };
+  # Every devTooling-evaluating freshness hook watches every nix module
+  # its generator reads, so a module edit re-triggers the freshness check
+  # on the per-changed-file git commit path. See
+  # docs/security/workflow-hardening.md.
+  freshness-hook-watches-modules = {
+    enable = true;
+    name = "freshness-hook-watches-modules";
+    description = "Every devTooling-evaluating freshness hook watches every nix module its generator reads.";
+    entry = "${pkgs-unstable.writeShellScript "freshness-hook-watches-modules-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-freshness-hook-watches-modules.sh
+    ''}";
+    files = "^(nix/.*\\.nix|treefmt\\.nix|scripts/.*\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Every tool the .#lint lint groups rely on is present on
   # PATH. Keeps devShells.lint buildInputs from silently dropping a
   # tool. See docs/security/workflow-hardening.md.
