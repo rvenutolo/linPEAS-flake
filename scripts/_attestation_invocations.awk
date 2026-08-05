@@ -56,12 +56,28 @@ BEGIN {
 # invocation it carries. Command position separates the two, and it is
 # readable from the text immediately before the opening quote.
 function is_introducer(cur, n, out,   prev) {
+  # Set as a side effect for the caller to read via the global
+  # `intro_kind`: "eval" when the match was specifically the bare word
+  # `eval`, empty otherwise. See push_payload and the drain in
+  # emit_records, which use it to judge an eval payload followed by a
+  # further word as an invocation — eval concatenates its arguments into
+  # one command line, so the artifact can sit outside the quotes.
+  intro_kind = ""
   # A quote glued to its key: `run:"…"`, `entry="…"`, or to a flag inside
   # flow-syntax punctuation: `{run:"…"`, `-c,"…"`. `bare` is 0 here: a
   # glued word with no `:`/`=` is ordinary text, e.g. `npm run"…"` in
   # nobody's syntax, not this key.
   if (cur != "") {
     cur = strip_structural(cur)
+    # `$'…'` (ANSI-C quoting) and `$"…"` (locale quoting) are shell syntax
+    # for the quote itself, not part of the preceding word — a trailing
+    # `$` glued to an introducer, e.g. `eval $'…'`, must not hide it.
+    # Stripping it can empty `cur`, which is what lets this fall through
+    # to the previous-word path below.
+    sub(/\$$/, "", cur)
+  }
+  if (cur != "") {
+    if (cur == "eval") intro_kind = "eval"
     return (introducer_key(cur, 0) || introducer_word(cur))
   }
   prev = (n >= 1 ? strip_structural(out[n]) : "")
@@ -71,6 +87,7 @@ function is_introducer(cur, n, out,   prev) {
   # (no trailing punctuation of its own), which is why this is the only
   # path introducer_key is asked to accept one.
   if (prev == "=") return introducer_key(n >= 2 ? strip_structural(out[n - 1]) : "", 1)
+  if (prev == "eval") intro_kind = "eval"
   return (introducer_key(prev, 0) || introducer_word(prev))
 }
 
@@ -89,9 +106,10 @@ function introducer_key(w, bare) {
 # A command word or flag whose next argument is a command line. The regex
 # covers any short-option cluster ending in `c` (`-c`, `-lc`, `-xc`, `-ec`),
 # since a shell's own option parser does not care which order the letters
-# in a combined cluster arrive in.
+# in a combined cluster arrive in. `--command` accepts an optional trailing
+# `=`, matching the glued form the pin side already accepts on `--repo=`.
 function introducer_word(w) {
-  return (w == "eval" || w ~ /^-[[:alpha:]]*c$/ || w == "--command")
+  return (w == "eval" || w ~ /^-[[:alpha:]]*c$/ || w ~ /^--command=?$/)
 }
 
 # Trims YAML/JSON flow-syntax punctuation that can sit directly against an
@@ -130,10 +148,20 @@ function ends_word(nc) {
 # middle: a payload whose closing quote is followed by more of the
 # enclosing text ended its own word cleanly and is a whole argument
 # regardless of what encloses it. See the drain in emit_records.
-function push_payload(p, frag, at_end) {
+#
+# `kind` is the introducer kind from is_introducer's `intro_kind` ("eval"
+# or empty) and `wordidx` is the position the payload's own word will
+# occupy in the enclosing token list — `n + 1` at the moment the opening
+# quote is reached, since exactly one word is still being built. Together
+# they let the drain in emit_records tell whether a further word follows
+# an eval payload in that list, which is what eval's own argument
+# concatenation turns into part of the same command line.
+function push_payload(p, frag, at_end, kind, wordidx) {
   payloads[++npay] = p
   payfrag[npay] = frag
   payend[npay] = at_end
+  paykind[npay] = kind
+  paywordidx[npay] = wordidx
 }
 
 # Split `s` into shell words. Fills out[1..n] with word text and
@@ -142,7 +170,7 @@ function push_payload(p, frag, at_end) {
 #   sep  unquoted ; && || | & — a bare & only, never a redirection operator
 #   cmt  unquoted # beginning a word; holds the rest of `s` and is last
 # Returns n.
-function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, intro, nc, frag) {
+function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, intro, nc, frag, kind, wordidx) {
   n = 0
   cur = ""
   has = 0
@@ -166,6 +194,8 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
       # Single quotes: everything up to the next quote is literal. An
       # unterminated quote swallows the rest of the string as one word.
       intro = is_introducer(cur, n, out)
+      kind = intro_kind
+      wordidx = n + 1
       has = 1
       i++
       pay = ""
@@ -177,11 +207,13 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
       # anything but end-of-string or a boundary that ends a word.
       nc = (i <= L ? substr(s, i, 1) : "")
       frag = !ends_word(nc)
-      if (intro) push_payload(pay, frag, (nc == ""))
+      if (intro) push_payload(pay, frag, (nc == ""), kind, wordidx)
       continue
     }
     if (c == "\"") {
       intro = is_introducer(cur, n, out)
+      kind = intro_kind
+      wordidx = n + 1
       has = 1
       i++
       pay = ""
@@ -194,7 +226,7 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
       cur = cur pay
       nc = (i <= L ? substr(s, i, 1) : "")
       frag = !ends_word(nc)
-      if (intro) push_payload(pay, frag, (nc == ""))
+      if (intro) push_payload(pay, frag, (nc == ""), kind, wordidx)
       continue
     }
     if (c == "\\") {
@@ -277,7 +309,7 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
 # closing quote looks, because it can only ever be part of what its
 # parent was part of. Top-level callers (scan_spans, flush_runnable) are
 # never fragments, so they pass 0.
-function emit_records(s, mention_ok, in_fragment,   out, typ, n, i, j, extra, rec, pinned, base, k, cnt, mine, minefrag) {
+function emit_records(s, mention_ok, in_fragment,   out, typ, n, i, j, extra, rec, pinned, base, k, cnt, mine, minefrag, forced) {
   base = npay
   n = tokenize(s, out, typ)
   for (i = 1; i + 2 <= n; i++) {
@@ -321,10 +353,21 @@ function emit_records(s, mention_ok, in_fragment,   out, typ, n, i, j, extra, re
   # payload holding only the command triple is a mention unless it is in
   # fragment context, where a bare triple is read as an invocation rather
   # than a mention. See push_payload.
+  #
+  # An `eval` payload is also forced into invocation context when a
+  # further word of this level's own token list follows the word its quote
+  # closed into (checked here, against `typ`, now that this level's own
+  # tokenize call has filled it): `eval` concatenates its arguments into
+  # one command line, so a bare triple quoted alone still runs whatever
+  # word comes after it, unlike `-c`/`--command`, where a following word is
+  # a separate argument to the invoked shell rather than more of the
+  # command. A following separator token does not concatenate and leaves
+  # the payload a mention.
   cnt = 0
   for (k = base + 1; k <= npay; k++) {
     mine[++cnt] = payloads[k]
-    minefrag[cnt] = (payfrag[k] || (in_fragment && payend[k]))
+    forced = (paykind[k] == "eval" && paywordidx[k] + 1 <= n && typ[paywordidx[k] + 1] == "w")
+    minefrag[cnt] = (payfrag[k] || (in_fragment && payend[k]) || forced)
   }
   npay = base
   for (k = 1; k <= cnt; k++) emit_records(mine[k], (minefrag[k] ? 0 : 1), minefrag[k])
