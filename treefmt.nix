@@ -112,7 +112,7 @@
     "tests/fixtures/gh-attestation-repo/bad-doubled-space.sh"
     "tests/fixtures/gh-attestation-repo/bad-background-sep.sh"
     "tests/fixtures/gh-attestation-repo/good-redir-pin.sh"
-    # yamlfmt normalizes the quote style on `run:` scalars, which would
+    # prettier normalizes the quote style on `run:` scalars, which would
     # destroy the single-quote shape these fixtures exist to prove the
     # lint still catches.
     "tests/fixtures/gh-attestation-repo/bad-run-single-quoted.yml"

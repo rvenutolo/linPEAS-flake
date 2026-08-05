@@ -140,7 +140,7 @@ for f in "${paths[@]}"; do
   done <<<"${records}"
 done
 
-# Guard-the-guard: the tracked scan set yields 17 real invocation
+# Guard-the-guard: the tracked scan set yields 18 real invocation
 # records, so extracting none means the parser broke rather than that the
 # repo is clean. Fixtures legitimately yield zero, so this only applies
 # to a real run.
