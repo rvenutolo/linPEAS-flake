@@ -35,7 +35,105 @@ function expect() {
   pass "${fixture}"
 }
 
+# The lint's scan globs, read out of the script between its markers, so
+# the assertions below track the real glob rather than a copy of it.
+# Unquoted on purpose at the call sites: git ls-files takes each glob as
+# a separate pathspec argument, and IFS is newline+tab so a glob
+# containing a space would still split correctly.
+function extract_scan_globs() {
+  sed --quiet \
+    "/^# BEGIN SCAN_GLOBS$/,/^# END SCAN_GLOBS$/{s/^  '\(.*\)'$/\1/p}" \
+    "${SCRIPT}"
+}
+
+# The glob in the lint decides what gets scanned. A path class that can
+# carry a runnable invocation but is named by no glob is never inspected,
+# and the lint stays green on a real bypass. Derived from the tracked tree
+# rather than hardcoded: this fails if a class stops being selected.
+function scenario_glob_selects_new_classes() {
+  local selected
+  # shellcheck disable=SC2046 # each glob must reach git ls-files as its
+  # own pathspec argument; splitting on IFS is the point.
+  selected="$(cd "${REPO_ROOT}" && git ls-files $(extract_scan_globs))"
+
+  local class missing=0
+  for class in '^\.github/actions/.*\.ya?ml$' '^justfile$' '^CHANGELOG\.md$' '^nix/.*\.nix$'; do
+    if ! printf '%s\n' "${selected}" | grep --quiet --extended-regexp -- "${class}"; then
+      printf '  no tracked file selected for class: %s\n' "${class}" >&2
+      missing=1
+    fi
+  done
+
+  if ((missing)); then
+    fail 'scan globs select no file for at least one path class'
+  else
+    pass 'scan globs select every named path class'
+  fi
+}
+
+# The lint and its pre-commit hook must agree on what is in scope. A path
+# the glob selects but the hook filter misses is checked in CI and not on
+# the per-changed-file commit path, so a bypass lands locally green.
+#
+# The containment is one-directional: the hook filter also names
+# scripts/_attestation_invocations.awk so that editing the parser
+# re-triggers the hook, and that file is deliberately not scanned.
+function scenario_glob_hook_filter_parity() {
+  local -r hooks="${REPO_ROOT}/nix/hooks/workflow-security.nix"
+
+  local files_re
+  files_re="$(awk '
+    /^  gh-attestation-repo = \{/ { in_block = 1; next }
+    in_block && /^  \};/ { exit }
+    in_block && match($0, /files = "[^"]*"/) {
+      s = substr($0, RSTART, RLENGTH)
+      sub(/^files = "/, "", s)
+      sub(/"$/, "", s)
+      print s
+      exit
+    }
+  ' "${hooks}")"
+  if [[ -z ${files_re} ]]; then
+    fail 'could not extract files filter for gh-attestation-repo'
+    return
+  fi
+
+  # Nix string literal: "\\." in source is the ERE "\.".
+  local ere
+  ere="$(printf '%s' "${files_re}" | sed 's/\\\\/\\/g')"
+
+  local selected
+  # shellcheck disable=SC2046 # each glob must reach git ls-files as its
+  # own pathspec argument; splitting on IFS is the point.
+  selected="$(cd "${REPO_ROOT}" && git ls-files $(extract_scan_globs))"
+
+  local p uncovered=0 seen=0
+  while IFS= read -r p; do
+    [[ -z ${p} ]] && continue
+    seen=$((seen + 1))
+    if ! printf '%s\n' "${p}" | grep --quiet --extended-regexp -- "${ere}"; then
+      printf '  glob selects a path the hook filter misses: %s\n' "${p}" >&2
+      uncovered=1
+    fi
+  done <<<"${selected}"
+
+  # Guard-the-guard: an empty selection means the marker parse broke.
+  if ((seen == 0)); then
+    fail 'scan globs selected no tracked file — SCAN_GLOBS parse broke'
+    return
+  fi
+
+  if ((uncovered)); then
+    fail 'gh-attestation-repo files filter does not cover every scanned path'
+  else
+    pass 'gh-attestation-repo files filter covers every scanned path'
+  fi
+}
+
 function main() {
+  scenario_glob_selects_new_classes
+  scenario_glob_hook_filter_parity
+
   expect good.sh 0 ""
   expect good-eq.sh 0 ""
   expect good-md-prose.md 0 ""
