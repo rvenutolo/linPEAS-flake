@@ -72,6 +72,30 @@ function test_separator_ends_the_record() {
     "$(printf 'bad\tgh attestation verify evil.json')"
 }
 
+function test_fd_redirection_does_not_end_the_record() {
+  check 'N>&M is redirection, not a separator, so a later pin still counts' other \
+    "gh attestation verify a.zip 2>&1 --repo ${SLUG}" \
+    "$(printf 'ok\tgh attestation verify a.zip 2>&1 --repo %s' "${SLUG}")"
+}
+
+function test_ampersand_redirection_does_not_end_the_record() {
+  check '&> is redirection, not a separator, so a later pin still counts' other \
+    "gh attestation verify a.zip &>/dev/null --repo ${SLUG}" \
+    "$(printf 'ok\tgh attestation verify a.zip &>/dev/null --repo %s' "${SLUG}")"
+}
+
+function test_background_ampersand_still_ends_the_record() {
+  check 'a bare & backgrounds the command and ends the record' other \
+    "gh attestation verify evil.json & echo --repo ${SLUG}" \
+    "$(printf 'bad\tgh attestation verify evil.json')"
+}
+
+function test_and_operator_still_ends_the_record_after_redirection() {
+  check '&& after a redirection is still a separator' other \
+    "gh attestation verify evil.json 2>&1 && echo --repo ${SLUG}" \
+    "$(printf 'bad\tgh attestation verify evil.json 2>&1')"
+}
+
 function test_pin_inside_quoted_argument_does_not_count() {
   check 'a slug inside a quoted argument is not the pin' other \
     "gh attestation verify evil.json --predicate \"--repo ${SLUG}\"" \
@@ -277,6 +301,10 @@ function main() {
   test_tokenizer_honors_double_quotes
   test_trailing_comment_does_not_pin
   test_separator_ends_the_record
+  test_fd_redirection_does_not_end_the_record
+  test_ampersand_redirection_does_not_end_the_record
+  test_background_ampersand_still_ends_the_record
+  test_and_operator_still_ends_the_record_after_redirection
   test_pin_inside_quoted_argument_does_not_count
   test_chained_commands_split_into_two_records
   test_equals_form_pins
