@@ -19,6 +19,11 @@
 #
 # The command is a word triple, never a literal string, so any run of
 # whitespace between the words matches.
+#
+# A quoted region preceded by a command introducer — a key whose value is a
+# command line, the word `eval`, or a flag taking a command argument — is also
+# re-parsed as a command source, so an invocation written inside one pair of
+# quotes does not collapse into a single word. See is_introducer.
 
 BEGIN {
   if (slug == "") {
