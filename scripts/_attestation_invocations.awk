@@ -51,33 +51,64 @@ BEGIN {
 # invocation it carries. Command position separates the two, and it is
 # readable from the text immediately before the opening quote.
 function is_introducer(cur, n, out,   prev) {
-  # A quote glued to its key: `run:"…"`, `entry="…"`.
-  if (cur != "") return introducer_key(cur)
-  prev = (n >= 1 ? out[n] : "")
+  # A quote glued to its key: `run:"…"`, `entry="…"`, or to a flag inside
+  # flow-syntax punctuation: `{run:"…"`, `-c,"…"`. `bare` is 0 here: a
+  # glued word with no `:`/`=` is ordinary text, e.g. `npm run"…"` in
+  # nobody's syntax, not this key.
+  if (cur != "") {
+    cur = strip_structural(cur)
+    return (introducer_key(cur, 0) || introducer_word(cur))
+  }
+  prev = (n >= 1 ? strip_structural(out[n]) : "")
   # A nix attribute assignment: `entry = "…"`. Reading past the `=` to the
   # attribute name is what keeps a prose string such as
-  # `description = "…"` literal word text.
-  if (prev == "=") return introducer_key(n >= 2 ? out[n - 1] : "")
-  return (introducer_key(prev) || introducer_word(prev))
+  # `description = "…"` literal word text. The attribute name is bare here
+  # (no trailing punctuation of its own), which is why this is the only
+  # path introducer_key is asked to accept one.
+  if (prev == "=") return introducer_key(n >= 2 ? strip_structural(out[n - 1]) : "", 1)
+  return (introducer_key(prev, 0) || introducer_word(prev))
 }
 
 # An attribute or mapping key whose value is a command line, in either the
-# YAML `key:` or the nix `key =` form.
-function introducer_key(w) {
+# YAML `key:` or the nix `key =` form. `bare` is 1 only for the nix
+# lookback past an `=`, where the attribute name legitimately carries no
+# trailing punctuation; everywhere else a bare word such as a `run`
+# subcommand argument must not read as this key.
+function introducer_key(w, bare) {
+  if (!bare && w !~ /[:=]$/) return 0
   sub(/[:=]$/, "", w)
   return (w == "run" || w == "entry" || w == "text" || w == "script" \
     || w == "command" || w == "cmd" || w == "entrypoint" || w == "shell")
 }
 
-# A command word or flag whose next argument is a command line.
+# A command word or flag whose next argument is a command line. The regex
+# covers any short-option cluster ending in `c` (`-c`, `-lc`, `-xc`, `-ec`),
+# since a shell's own option parser does not care which order the letters
+# in a combined cluster arrive in.
 function introducer_word(w) {
-  return (w == "eval" || w == "-c" || w == "-lc" || w == "--command")
+  return (w == "eval" || w ~ /^-[[:alpha:]]*c$/ || w == "--command")
+}
+
+# Trims YAML/JSON flow-syntax punctuation that can sit directly against an
+# introducer with no space: a leading `[`, `{`, `(`, `,` opening a flow
+# sequence or mapping entry, or a trailing `]`, `}`, `)`, `,`, `;` closing
+# one. A leading `-` is never stripped — that would turn a `-c` flag into a
+# bare `c` and hide it from introducer_word.
+function strip_structural(w) {
+  sub(/^[[{(,]+/, "", w)
+  sub(/[]}),;]+$/, "", w)
+  return w
 }
 
 # Queue a quoted payload for re-parsing as a command source. The queue is
-# drained by the emit_records call whose tokenize pass filled it.
-function push_payload(p) {
+# drained by the emit_records call whose tokenize pass filled it. `frag` is
+# 1 when the word the payload came from continues past the closing quote —
+# the payload is a fragment of a larger command line, not the whole
+# argument, so a bare command triple in it is still an invocation rather
+# than a mention. See the fragment lookahead in tokenize.
+function push_payload(p, frag) {
   payloads[++npay] = p
+  payfrag[npay] = frag
 }
 
 # Split `s` into shell words. Fills out[1..n] with word text and
@@ -86,7 +117,7 @@ function push_payload(p) {
 #   sep  unquoted ; && || | & — a bare & only, never a redirection operator
 #   cmt  unquoted # beginning a word; holds the rest of `s` and is last
 # Returns n.
-function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, intro) {
+function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, intro, nc, frag) {
   n = 0
   cur = ""
   has = 0
@@ -116,7 +147,13 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
       while (i <= L && substr(s, i, 1) != "'") { pay = pay substr(s, i, 1); i++ }
       i++
       cur = cur pay
-      if (intro) push_payload(pay)
+      # A payload is a fragment, not the whole word, when the word
+      # continues past this closing quote — the next character is
+      # anything but end-of-string or a boundary that ends a word.
+      nc = (i <= L ? substr(s, i, 1) : "")
+      frag = (nc != "" && nc != " " && nc != "\t" && nc != ";" \
+        && nc != "|" && nc != "(" && nc != ")" && nc != "`")
+      if (intro) push_payload(pay, frag)
       continue
     }
     if (c == "\"") {
@@ -131,7 +168,10 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
       }
       i++
       cur = cur pay
-      if (intro) push_payload(pay)
+      nc = (i <= L ? substr(s, i, 1) : "")
+      frag = (nc != "" && nc != " " && nc != "\t" && nc != ";" \
+        && nc != "|" && nc != "(" && nc != ")" && nc != "`")
+      if (intro) push_payload(pay, frag)
       continue
     }
     if (c == "\\") {
@@ -207,7 +247,7 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
 # prose mention rather than an invocation; it is 0 for text that came
 # from a runnable source line, where a bare triple is an unpinned
 # invocation.
-function emit_records(s, mention_ok,   out, typ, n, i, j, extra, rec, pinned, base, k, cnt, mine) {
+function emit_records(s, mention_ok,   out, typ, n, i, j, extra, rec, pinned, base, k, cnt, mine, mineok) {
   base = npay
   n = tokenize(s, out, typ)
   for (i = 1; i + 2 <= n; i++) {
@@ -242,12 +282,16 @@ function emit_records(s, mention_ok,   out, typ, n, i, j, extra, rec, pinned, ba
   # the string that carried it, so the recursion terminates.
   #
   # A payload holding only the command triple is a mention whatever its
-  # context: a quoted string naming no artifact cannot be a verification, and
-  # reading one as an invocation would report a match key as a violation.
+  # context, UNLESS the quoted region that carried it ended mid-word: a
+  # fragment cannot be the whole of a quoted argument, so a bare triple in
+  # one is read as an invocation rather than a mention. See push_payload.
   cnt = 0
-  for (k = base + 1; k <= npay; k++) mine[++cnt] = payloads[k]
+  for (k = base + 1; k <= npay; k++) {
+    mine[++cnt] = payloads[k]
+    mineok[cnt] = (payfrag[k] ? 0 : 1)
+  }
   npay = base
-  for (k = 1; k <= cnt; k++) emit_records(mine[k], 1)
+  for (k = 1; k <= cnt; k++) emit_records(mine[k], mineok[k])
 }
 
 # Buffer a runnable source string for the backslash join in flush_runnable.
