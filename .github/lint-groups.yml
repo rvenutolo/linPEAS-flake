@@ -44,6 +44,7 @@ lint-script-hygiene:
   - bump-script-integrity
   - pre-commit-hooks-sha-parity
   - manifest-hook-watches-nix
+  - freshness-hook-watches-modules
 lint-doc-invariants:
   - orphan-invariants
   - doc-anchors
