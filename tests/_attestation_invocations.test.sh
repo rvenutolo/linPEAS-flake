@@ -433,6 +433,42 @@ function test_quoted_command_source_in_a_fence_is_reparsed() {
     "$(printf 'bad\tgh attestation verify evil.zip')"
 }
 
+function test_fragment_payload_ending_mid_word_is_judged_as_invocation() {
+  check 'an eval payload continuing past its closing quote is not a mention' other \
+    "eval 'gh attestation verify 'x" \
+    "$(printf 'bad\tgh attestation verify')"
+  check 'a -c payload continuing past its closing quote is not a mention' other \
+    "bash -c 'gh attestation verify 'x" \
+    "$(printf 'bad\tgh attestation verify')"
+}
+
+function test_combined_short_flags_are_command_sources() {
+  check 'a -xc combined flag carries an invocation' other \
+    "bash -xc 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a -ec combined flag carries an invocation' other \
+    "bash -ec 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
+function test_bare_key_without_punctuation_is_not_an_introducer() {
+  check 'a bare run subcommand word is not an introducer' other \
+    'npm run "gh attestation verify evil.zip"' \
+    ''
+  check 'a bare shell subcommand word is not an introducer' other \
+    'nix shell "gh attestation verify evil.zip"' \
+    ''
+}
+
+function test_glued_structural_punctuation_does_not_hide_an_introducer() {
+  check 'a run: key inside a yaml flow mapping still introduces' other \
+    '- {run: "gh attestation verify evil.zip"}' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a -c element inside a yaml flow sequence still introduces' other \
+    'entrypoint: ["sh", "-c", "gh attestation verify evil.zip"]' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
 function main() {
   test_tokenizer_splits_on_whitespace_runs
   test_tokenizer_honors_single_quotes
@@ -485,6 +521,10 @@ function main() {
   test_bare_triple_payload_is_a_mention
   test_nested_quoted_payload_is_reparsed
   test_quoted_command_source_in_a_fence_is_reparsed
+  test_fragment_payload_ending_mid_word_is_judged_as_invocation
+  test_combined_short_flags_are_command_sources
+  test_bare_key_without_punctuation_is_not_an_introducer
+  test_glued_structural_punctuation_does_not_hide_an_introducer
 
   if ((failures > 0)); then
     printf '%d test(s) failed\n' "${failures}" >&2
