@@ -118,9 +118,17 @@ function ends_word(nc) {
 # the payload is a fragment of a larger command line, not the whole
 # argument, so a bare command triple in it is still an invocation rather
 # than a mention. See the fragment lookahead in tokenize.
-function push_payload(p, frag) {
+#
+# `at_end` is 1 when the closing quote sits at the very end of the string
+# being tokenized. That is what lets a fragment's own status reach a
+# payload nested at its tail without also reaching one nested in its
+# middle: a payload whose closing quote is followed by more of the
+# enclosing text ended its own word cleanly and is a whole argument
+# regardless of what encloses it. See the drain in emit_records.
+function push_payload(p, frag, at_end) {
   payloads[++npay] = p
   payfrag[npay] = frag
+  payend[npay] = at_end
 }
 
 # Split `s` into shell words. Fills out[1..n] with word text and
@@ -164,7 +172,7 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
       # anything but end-of-string or a boundary that ends a word.
       nc = (i <= L ? substr(s, i, 1) : "")
       frag = !ends_word(nc)
-      if (intro) push_payload(pay, frag)
+      if (intro) push_payload(pay, frag, (nc == ""))
       continue
     }
     if (c == "\"") {
@@ -181,7 +189,7 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
       cur = cur pay
       nc = (i <= L ? substr(s, i, 1) : "")
       frag = !ends_word(nc)
-      if (intro) push_payload(pay, frag)
+      if (intro) push_payload(pay, frag, (nc == ""))
       continue
     }
     if (c == "\\") {
@@ -298,17 +306,20 @@ function emit_records(s, mention_ok, in_fragment,   out, typ, n, i, j, extra, re
   # and preserves the order they appeared in. Every payload is shorter than
   # the string that carried it, so the recursion terminates.
   #
-  # A payload is in fragment context when this call already was, or when
-  # its own quoted region ended mid-word — fragment status only ever turns
-  # on going down the recursion, never off, because a fragment's children
-  # can only ever be part of what their parent was part of. A payload
-  # holding only the command triple is a mention unless it is in fragment
-  # context, where a bare triple is read as an invocation rather than a
-  # mention. See push_payload.
+  # A payload is in fragment context when its own quoted region ended
+  # mid-word (payfrag), or when it sits at the very end of a string that is
+  # itself a fragment (in_fragment && payend). The second case is what
+  # carries fragment status down to a payload nested at a fragment's tail
+  # without also reaching one nested in its middle: a payload whose closing
+  # quote is followed by more of the enclosing text ended its own word
+  # cleanly and is a whole argument regardless of what encloses it. A
+  # payload holding only the command triple is a mention unless it is in
+  # fragment context, where a bare triple is read as an invocation rather
+  # than a mention. See push_payload.
   cnt = 0
   for (k = base + 1; k <= npay; k++) {
     mine[++cnt] = payloads[k]
-    minefrag[cnt] = (in_fragment || payfrag[k])
+    minefrag[cnt] = (payfrag[k] || (in_fragment && payend[k]))
   }
   npay = base
   for (k = 1; k <= cnt; k++) emit_records(mine[k], (minefrag[k] ? 0 : 1), minefrag[k])
