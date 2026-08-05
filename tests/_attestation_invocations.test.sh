@@ -319,6 +319,34 @@ $ ls
     ''
 }
 
+function test_shell_fence_comment_span_is_not_an_invocation() {
+  check 'a # line in a sh fence is a comment, spans included' md \
+    '```sh
+# see `gh attestation verify x.zip`
+```' \
+    ''
+}
+
+function test_indented_code_comment_span_is_not_an_invocation() {
+  check 'a # line in an indented code block is a comment, spans included' md \
+    '    # see `gh attestation verify x.zip`' \
+    ''
+}
+
+function test_prose_heading_span_is_still_inspected() {
+  check 'a markdown heading is prose, not a shell comment' md \
+    '# see `gh attestation verify x.zip`' \
+    "$(printf 'bad\tgh attestation verify x.zip')"
+}
+
+function test_shell_fence_invocation_still_inspected() {
+  check 'an uncommented fence line is still an invocation' md \
+    '```sh
+gh attestation verify x.zip
+```' \
+    "$(printf 'bad\tgh attestation verify x.zip')"
+}
+
 function main() {
   test_tokenizer_splits_on_whitespace_runs
   test_tokenizer_honors_single_quotes
@@ -359,6 +387,10 @@ function main() {
   test_adjacent_substitutions_split_into_two_records
   test_multiline_backtick_substitution_is_seen
   test_text_fence_comment_is_not_an_invocation
+  test_shell_fence_comment_span_is_not_an_invocation
+  test_indented_code_comment_span_is_not_an_invocation
+  test_prose_heading_span_is_still_inspected
+  test_shell_fence_invocation_still_inspected
 
   if ((failures > 0)); then
     printf '%d test(s) failed\n' "${failures}" >&2

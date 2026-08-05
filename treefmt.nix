@@ -98,6 +98,7 @@
     # to fences, normalizing tilde fences, and collapsing multi-backtick and
     # multi-line code spans — which would destroy the shape each one encodes.
     "tests/fixtures/gh-attestation-repo/bad-indented-code.md"
+    "tests/fixtures/gh-attestation-repo/good-indented-comment.md"
     "tests/fixtures/gh-attestation-repo/bad-tilde-fence.md"
     "tests/fixtures/gh-attestation-repo/bad-doubled-span.md"
     "tests/fixtures/gh-attestation-repo/bad-inline-triple.md"

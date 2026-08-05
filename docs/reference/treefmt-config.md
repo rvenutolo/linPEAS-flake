@@ -48,6 +48,7 @@ tests/fixtures/gh-attestation-repo/bad-inline-triple.md
 tests/fixtures/gh-attestation-repo/bad-multiline-span.md
 tests/fixtures/gh-attestation-repo/bad-separator-pin.sh
 tests/fixtures/gh-attestation-repo/bad-tilde-fence.md
+tests/fixtures/gh-attestation-repo/good-indented-comment.md
 tests/fixtures/gh-attestation-repo/good-odd-backtick.md
 tests/fixtures/gh-attestation-repo/good-redir-pin.sh
 tests/fixtures/harden-runner-first/bad-malformed.yml
