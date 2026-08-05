@@ -38,6 +38,46 @@ BEGIN {
   fence_len = 0
   fence_lang = ""
   fence_runnable = 0
+  npay = 0
+}
+
+# Is the quoted region about to be read a command source rather than an
+# argument? `cur` is the partial word built so far, `n` and `out` the words
+# already emitted.
+#
+# A quoted region is ordinarily literal word text, which is right for shell:
+# `"a b"` is one argument. Where the quotes are YAML or nix syntax the payload
+# is a command line instead, and collapsing it into a single word hides the
+# invocation it carries. Command position separates the two, and it is
+# readable from the text immediately before the opening quote.
+function is_introducer(cur, n, out,   prev) {
+  # A quote glued to its key: `run:"…"`, `entry="…"`.
+  if (cur != "") return introducer_key(cur)
+  prev = (n >= 1 ? out[n] : "")
+  # A nix attribute assignment: `entry = "…"`. Reading past the `=` to the
+  # attribute name is what keeps a prose string such as
+  # `description = "…"` literal word text.
+  if (prev == "=") return introducer_key(n >= 2 ? out[n - 1] : "")
+  return (introducer_key(prev) || introducer_word(prev))
+}
+
+# An attribute or mapping key whose value is a command line, in either the
+# YAML `key:` or the nix `key =` form.
+function introducer_key(w) {
+  sub(/[:=]$/, "", w)
+  return (w == "run" || w == "entry" || w == "text" || w == "script" \
+    || w == "command" || w == "cmd" || w == "entrypoint" || w == "shell")
+}
+
+# A command word or flag whose next argument is a command line.
+function introducer_word(w) {
+  return (w == "eval" || w == "-c" || w == "-lc" || w == "--command")
+}
+
+# Queue a quoted payload for re-parsing as a command source. The queue is
+# drained by the emit_records call whose tokenize pass filled it.
+function push_payload(p) {
+  payloads[++npay] = p
 }
 
 # Split `s` into shell words. Fills out[1..n] with word text and
@@ -46,7 +86,7 @@ BEGIN {
 #   sep  unquoted ; && || | & — a bare & only, never a redirection operator
 #   cmt  unquoted # beginning a word; holds the rest of `s` and is last
 # Returns n.
-function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq) {
+function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, intro) {
   n = 0
   cur = ""
   has = 0
@@ -69,21 +109,29 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq) {
     if (c == "'") {
       # Single quotes: everything up to the next quote is literal. An
       # unterminated quote swallows the rest of the string as one word.
+      intro = is_introducer(cur, n, out)
       has = 1
       i++
-      while (i <= L && substr(s, i, 1) != "'") { cur = cur substr(s, i, 1); i++ }
+      pay = ""
+      while (i <= L && substr(s, i, 1) != "'") { pay = pay substr(s, i, 1); i++ }
       i++
+      cur = cur pay
+      if (intro) push_payload(pay)
       continue
     }
     if (c == "\"") {
+      intro = is_introducer(cur, n, out)
       has = 1
       i++
+      pay = ""
       while (i <= L && substr(s, i, 1) != "\"") {
         if (substr(s, i, 1) == "\\" && i < L) i++
-        cur = cur substr(s, i, 1)
+        pay = pay substr(s, i, 1)
         i++
       }
       i++
+      cur = cur pay
+      if (intro) push_payload(pay)
       continue
     }
     if (c == "\\") {
@@ -159,7 +207,8 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq) {
 # prose mention rather than an invocation; it is 0 for text that came
 # from a runnable source line, where a bare triple is an unpinned
 # invocation.
-function emit_records(s, mention_ok,   out, typ, n, i, j, extra, rec, pinned) {
+function emit_records(s, mention_ok,   out, typ, n, i, j, extra, rec, pinned, base, k, cnt, mine) {
+  base = npay
   n = tokenize(s, out, typ)
   for (i = 1; i + 2 <= n; i++) {
     if (typ[i] != "w" || out[i] != "gh") continue
@@ -187,6 +236,18 @@ function emit_records(s, mention_ok,   out, typ, n, i, j, extra, rec, pinned) {
     if (mention_ok && extra == 0) continue
     print (pinned ? "ok" : "bad") "\t" rec
   }
+  # Payloads this call's tokenize pass captured, re-parsed as command sources.
+  # Copying them out before recursing keeps each level draining only its own,
+  # and preserves the order they appeared in. Every payload is shorter than
+  # the string that carried it, so the recursion terminates.
+  #
+  # A payload holding only the command triple is a mention whatever its
+  # context: a quoted string naming no artifact cannot be a verification, and
+  # reading one as an invocation would report a match key as a violation.
+  cnt = 0
+  for (k = base + 1; k <= npay; k++) mine[++cnt] = payloads[k]
+  npay = base
+  for (k = 1; k <= cnt; k++) emit_records(mine[k], 1)
 }
 
 # Buffer a runnable source string for the backslash join in flush_runnable.
