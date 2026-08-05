@@ -469,6 +469,30 @@ function test_glued_structural_punctuation_does_not_hide_an_introducer() {
     "$(printf 'bad\tgh attestation verify evil.zip')"
 }
 
+function test_structural_closer_after_a_bare_triple_stays_a_mention() {
+  check 'a bare triple closed by a flow-sequence bracket in a span is a mention' md \
+    'Use `entrypoint: ["sh", "-c", "gh attestation verify"]` here.' \
+    ''
+  check 'a bare triple closed by a flow-mapping brace in a span is a mention' md \
+    '- `{run: "gh attestation verify"}`' \
+    ''
+  check 'a bare triple closed by a backgrounding & stays a mention' other \
+    "eval 'gh attestation verify'&" \
+    ''
+}
+
+function test_structural_closer_does_not_undo_round_one_detection() {
+  check 'a payload with a further word past the flow-sequence bracket still reports' other \
+    'entrypoint: ["sh", "-c", "gh attestation verify evil.zip"]' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
+function test_fragment_context_propagates_to_nested_payloads() {
+  check 'a bare triple nested inside a fragment payload is still an invocation' other \
+    'eval '"'"'bash -c "gh attestation verify "'"'"'"${ART}"' \
+    "$(printf 'bad\tgh attestation verify')"
+}
+
 function main() {
   test_tokenizer_splits_on_whitespace_runs
   test_tokenizer_honors_single_quotes
@@ -525,6 +549,9 @@ function main() {
   test_combined_short_flags_are_command_sources
   test_bare_key_without_punctuation_is_not_an_introducer
   test_glued_structural_punctuation_does_not_hide_an_introducer
+  test_structural_closer_after_a_bare_triple_stays_a_mention
+  test_structural_closer_does_not_undo_round_one_detection
+  test_fragment_context_propagates_to_nested_payloads
 
   if ((failures > 0)); then
     printf '%d test(s) failed\n' "${failures}" >&2
