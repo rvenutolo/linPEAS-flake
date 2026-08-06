@@ -414,8 +414,8 @@ function test_bare_triple_payload_is_a_mention() {
   check 'a payload holding only the command triple is a mention' other \
     'eval "gh attestation verify"' \
     ''
-  check 'a match key passed to a -c flag is a mention' other \
-    'grep -c "gh attestation verify" f' \
+  check 'a bare triple passed to a shell -c flag is a mention' other \
+    'sh -c "gh attestation verify" f' \
     ''
 }
 
@@ -494,11 +494,11 @@ function test_fragment_context_propagates_to_nested_payloads() {
 }
 
 function test_fragment_status_does_not_over_propagate_to_a_clean_child() {
-  check 'a match key whose own quote ends cleanly inside a fragment stays a mention' other \
-    "sh -c \"grep -c 'gh attestation verify' \"\$f" \
+  check 'a payload whose own quote ends cleanly inside a fragment stays a mention' other \
+    "sh -c \"sh -c 'gh attestation verify' \"\$f" \
     ''
   check 'the same shape inside a span stays a mention' md \
-    'Use `sh -c "grep -c '"'"'gh attestation verify'"'"' "$f` here.' \
+    'Use `sh -c "sh -c '"'"'gh attestation verify'"'"' "$f` here.' \
     ''
 }
 
@@ -524,12 +524,90 @@ function test_glued_command_equals_form_is_a_command_source() {
 }
 
 function test_eval_concatenation_rule_does_not_widen_other_introducers() {
-  check 'a match key passed to a -c flag stays a mention under the new eval rule' other \
-    'grep -c "gh attestation verify" f' \
+  check 'a bare triple passed to a shell -c flag stays a mention under the eval rule' other \
+    'sh -c "gh attestation verify" f' \
     ''
   check 'an eval payload followed by a separator, not a word, stays a mention' other \
     'eval "gh attestation verify" && echo x' \
     ''
+}
+
+function test_short_cluster_without_a_shell_is_not_a_command_source() {
+  check 'a grep -Ec match key is not a command source' other \
+    "grep -Ec 'gh attestation verify evil.zip' log" \
+    ''
+  check 'a grep -vc match key is not a command source' other \
+    'grep -vc "gh attestation verify evil.zip" f' \
+    ''
+  check 'a -c flag with no preceding word is not a command source' other \
+    "-c 'gh attestation verify evil.zip'" \
+    ''
+  check 'a cluster preceded only by flags is not a command source' other \
+    "-x -c 'gh attestation verify evil.zip'" \
+    ''
+  check 'a non-shell named by path is not a command source' other \
+    "/usr/bin/grep -Ec 'gh attestation verify evil.zip' log" \
+    ''
+  check 'a shell in an earlier command does not reach a later cluster' other \
+    "sh -c 'x' ; grep -Ec 'gh attestation verify evil.zip' log" \
+    ''
+}
+
+function test_short_cluster_after_a_shell_is_still_a_command_source() {
+  check 'a shell named by path still introduces a command' other \
+    "/bin/sh -c 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a store-path shell still introduces a command' other \
+    '${pkgs.bash}/bin/bash -c "gh attestation verify evil.zip"' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a shell flag between the shell and its -c does not hide it' other \
+    "bash -x -c 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a shell reached through env still introduces a command' other \
+    "env -i bash -c 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a -c glued to its payload still introduces a command' other \
+    'sh -c"gh attestation verify evil.zip"' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
+function test_shell_separated_from_its_c_flag_is_still_a_command_source() {
+  check 'an option argument between the shell and its -c does not hide it' other \
+    "bash -o pipefail -c 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'an option argument after a combined flag does not hide the shell' other \
+    "bash -euo pipefail -c 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'an operand between the shell and its -c does not hide it' other \
+    "docker run --rm --entrypoint /bin/sh img -c 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
+function test_a_shell_in_a_delimited_command_does_not_reach_a_later_cluster() {
+  check 'a shell inside a command substitution does not reach a later cluster' other \
+    "foo \$(sh -c 'true') grep -Ec 'gh attestation verify evil.zip' log" \
+    ''
+  check 'a shell inside a subshell does not reach a later cluster' other \
+    "(sh -c 'a') grep -Ec 'gh attestation verify evil.zip' log" \
+    ''
+  check 'a shell in one process substitution does not reach the next' other \
+    "diff <(sh -c 'a') <(grep -Ec 'gh attestation verify evil.zip' f)" \
+    ''
+  check 'a shell in an earlier code span does not reach a later cluster' md \
+    'Use ``x `sh -c a` grep -Ec "gh attestation verify evil.zip" log`` here.' \
+    ''
+}
+
+function test_a_delimiter_does_not_hide_a_shell_in_its_own_command() {
+  check 'a shell -c inside a command substitution still introduces' other \
+    '$(bash -c "gh attestation verify evil.zip")' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a shell -c inside a subshell still introduces' other \
+    '(bash -c "gh attestation verify evil.zip")' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a shell -c opening a code span still introduces' md \
+    'Use ``x `bash -c "gh attestation verify evil.zip"` y`` here.' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
 }
 
 function main() {
@@ -596,6 +674,11 @@ function main() {
   test_eval_dollar_quote_still_introduces
   test_glued_command_equals_form_is_a_command_source
   test_eval_concatenation_rule_does_not_widen_other_introducers
+  test_short_cluster_without_a_shell_is_not_a_command_source
+  test_short_cluster_after_a_shell_is_still_a_command_source
+  test_shell_separated_from_its_c_flag_is_still_a_command_source
+  test_a_shell_in_a_delimited_command_does_not_reach_a_later_cluster
+  test_a_delimiter_does_not_hide_a_shell_in_its_own_command
 
   if ((failures > 0)); then
     printf '%d test(s) failed\n' "${failures}" >&2

@@ -199,6 +199,8 @@ function main() {
   expect bad-eval-quoted.sh 1 "missing"
   expect bad-eval-single-quoted.sh 1 "missing"
   expect bad-dash-c-quoted.sh 1 "missing"
+  expect good-short-cluster-match-key.sh 0 ""
+  expect bad-shell-path-dash-c.sh 1 "missing"
 
   if ((failures > 0)); then
     printf '%d test(s) failed\n' "${failures}" >&2

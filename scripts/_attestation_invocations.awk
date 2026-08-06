@@ -55,7 +55,7 @@ BEGIN {
 # is a command line instead, and collapsing it into a single word hides the
 # invocation it carries. Command position separates the two, and it is
 # readable from the text immediately before the opening quote.
-function is_introducer(cur, n, out,   prev) {
+function is_introducer(cur, n, out, typ, cmdstart,   prev) {
   # Set as a side effect for the caller to read via the global
   # `intro_kind`: "eval" when the match was specifically the bare word
   # `eval`, empty otherwise. See push_payload and the drain in
@@ -78,7 +78,8 @@ function is_introducer(cur, n, out,   prev) {
   }
   if (cur != "") {
     if (cur == "eval") intro_kind = "eval"
-    return (introducer_key(cur, 0) || introducer_word(cur))
+    return (introducer_key(cur, 0) \
+      || introducer_word(cur, out, typ, cmdstart, n))
   }
   prev = (n >= 1 ? strip_structural(out[n]) : "")
   # A nix attribute assignment: `entry = "…"`. Reading past the `=` to the
@@ -88,7 +89,8 @@ function is_introducer(cur, n, out,   prev) {
   # path introducer_key is asked to accept one.
   if (prev == "=") return introducer_key(n >= 2 ? strip_structural(out[n - 1]) : "", 1)
   if (prev == "eval") intro_kind = "eval"
-  return (introducer_key(prev, 0) || introducer_word(prev))
+  return (introducer_key(prev, 0) \
+    || introducer_word(prev, out, typ, cmdstart, n - 1))
 }
 
 # An attribute or mapping key whose value is a command line, in either the
@@ -103,13 +105,43 @@ function introducer_key(w, bare) {
     || w == "command" || w == "cmd" || w == "entrypoint" || w == "shell")
 }
 
-# A command word or flag whose next argument is a command line. The regex
-# covers any short-option cluster ending in `c` (`-c`, `-lc`, `-xc`, `-ec`),
-# since a shell's own option parser does not care which order the letters
-# in a combined cluster arrive in. `--command` accepts an optional trailing
-# `=`, matching the glued form the pin side already accepts on `--repo=`.
-function introducer_word(w) {
-  return (w == "eval" || w ~ /^-[[:alpha:]]*c$/ || w ~ /^--command=?$/)
+# A command word or flag whose next argument is a command line. `--command`
+# accepts an optional trailing `=`, matching the glued form the pin side
+# already accepts on `--repo=`. `i` is the index in `out` of the word before
+# `w`, which the cluster arm needs — along with the parallel `typ` kinds and
+# `cmdstart` marks that bound its lookback — and the other two do not.
+function introducer_word(w, out, typ, cmdstart, i) {
+  return (w == "eval" || w ~ /^--command=?$/ \
+    || shell_c_flag(w, out, typ, cmdstart, i))
+}
+
+# A short-option cluster ending in `c` — `-c`, `-ec`, `-lc`, `-xc` —
+# introduces a command line only when it is a shell's own flag. The letters
+# may arrive in any order, since a shell's option parser does not care, so the
+# cluster alone cannot tell `bash -xc` from `grep -Ec`. The command carrying
+# the flag is what separates them: on another program the same cluster takes a
+# pattern, and reading a pattern as a command line fails a correct file.
+# The lookback reads that command's words back to its start, each stripped to
+# its last path component, and any one of them naming a shell makes the
+# cluster an introducer. Reading the whole command rather than only the flags
+# ahead of the cluster is what reaches a shell an option argument or an
+# operand stands in front of, as in `bash -o pipefail -c` and
+# `docker run --entrypoint /bin/sh img -c`. The command's start is a word
+# boundary, not the word list's, and it arrives two ways: a separator token,
+# which the `typ` kind reports, and the punctuation that splits words without
+# emitting a token, which `cmdstart` marks. Stopping at either is what keeps
+# an earlier command's shell from vouching for a later cluster. A word is
+# examined before the scan breaks on it, since the word a delimiter opens is
+# itself command-initial and is where `$(bash -c …)` names its shell.
+function shell_c_flag(w, out, typ, cmdstart, i,   prev) {
+  if (w !~ /^-[[:alpha:]]*c$/) return 0
+  for (; i >= 1 && typ[i] == "w"; i--) {
+    prev = strip_structural(out[i])
+    sub(/^.*\//, "", prev)
+    if (prev ~ /^(bash|sh|dash|ash|zsh|ksh|mksh|busybox|fish)$/) return 1
+    if (cmdstart[i]) break
+  }
+  return 0
 }
 
 # Trims YAML/JSON flow-syntax punctuation that can sit directly against an
@@ -170,7 +202,15 @@ function push_payload(p, frag, at_end, kind, wordidx) {
 #   sep  unquoted ; && || | & — a bare & only, never a redirection operator
 #   cmt  unquoted # beginning a word; holds the rest of `s` and is last
 # Returns n.
-function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, intro, nc, frag, kind, wordidx) {
+#
+# `cmdstart` marks the word indices that begin a command without a separator
+# token recording the boundary: the word after a subshell, command- or
+# process-substitution paren, and the word after a code-span backtick. Those
+# delimiters split words but emit no token of their own, so the word kinds
+# alone cannot tell a lookback where the command it is reading began. It is
+# local because only the introducer lookback consults it, and only while this
+# pass is running.
+function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, intro, nc, frag, kind, wordidx, cmdstart) {
   n = 0
   cur = ""
   has = 0
@@ -193,7 +233,7 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
     if (c == "'") {
       # Single quotes: everything up to the next quote is literal. An
       # unterminated quote swallows the rest of the string as one word.
-      intro = is_introducer(cur, n, out)
+      intro = is_introducer(cur, n, out, typ, cmdstart)
       kind = intro_kind
       wordidx = n + 1
       has = 1
@@ -211,7 +251,7 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
       continue
     }
     if (c == "\"") {
-      intro = is_introducer(cur, n, out)
+      intro = is_introducer(cur, n, out, typ, cmdstart)
       kind = intro_kind
       wordidx = n + 1
       has = 1
@@ -238,6 +278,7 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
       # Subshell and command-substitution punctuation. Delimiting words here
       # is what lets `$(gh attestation verify …)` match the command triple.
       if (has) { out[++n] = cur; typ[n] = "w"; cur = ""; has = 0 }
+      cmdstart[n + 1] = 1
       i++
       continue
     }
@@ -246,6 +287,7 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
       # longer code span. Either way it delimits words rather than
       # joining them.
       if (has) { out[++n] = cur; typ[n] = "w"; cur = ""; has = 0 }
+      cmdstart[n + 1] = 1
       i++
       continue
     }
