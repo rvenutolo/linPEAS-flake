@@ -583,6 +583,33 @@ function test_shell_separated_from_its_c_flag_is_still_a_command_source() {
     "$(printf 'bad\tgh attestation verify evil.zip')"
 }
 
+function test_a_shell_in_a_delimited_command_does_not_reach_a_later_cluster() {
+  check 'a shell inside a command substitution does not reach a later cluster' other \
+    "foo \$(sh -c 'true') grep -Ec 'gh attestation verify evil.zip' log" \
+    ''
+  check 'a shell inside a subshell does not reach a later cluster' other \
+    "(sh -c 'a') grep -Ec 'gh attestation verify evil.zip' log" \
+    ''
+  check 'a shell in one process substitution does not reach the next' other \
+    "diff <(sh -c 'a') <(grep -Ec 'gh attestation verify evil.zip' f)" \
+    ''
+  check 'a shell in an earlier code span does not reach a later cluster' md \
+    'Use ``x `sh -c a` grep -Ec "gh attestation verify evil.zip" log`` here.' \
+    ''
+}
+
+function test_a_delimiter_does_not_hide_a_shell_in_its_own_command() {
+  check 'a shell -c inside a command substitution still introduces' other \
+    '$(bash -c "gh attestation verify evil.zip")' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a shell -c inside a subshell still introduces' other \
+    '(bash -c "gh attestation verify evil.zip")' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a shell -c opening a code span still introduces' md \
+    'Use ``x `bash -c "gh attestation verify evil.zip"` y`` here.' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
 function main() {
   test_tokenizer_splits_on_whitespace_runs
   test_tokenizer_honors_single_quotes
@@ -650,6 +677,8 @@ function main() {
   test_short_cluster_without_a_shell_is_not_a_command_source
   test_short_cluster_after_a_shell_is_still_a_command_source
   test_shell_separated_from_its_c_flag_is_still_a_command_source
+  test_a_shell_in_a_delimited_command_does_not_reach_a_later_cluster
+  test_a_delimiter_does_not_hide_a_shell_in_its_own_command
 
   if ((failures > 0)); then
     printf '%d test(s) failed\n' "${failures}" >&2
