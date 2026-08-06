@@ -78,7 +78,7 @@ function is_introducer(cur, n, out,   prev) {
   }
   if (cur != "") {
     if (cur == "eval") intro_kind = "eval"
-    return (introducer_key(cur, 0) || introducer_word(cur))
+    return (introducer_key(cur, 0) || introducer_word(cur, out, n))
   }
   prev = (n >= 1 ? strip_structural(out[n]) : "")
   # A nix attribute assignment: `entry = "…"`. Reading past the `=` to the
@@ -88,7 +88,7 @@ function is_introducer(cur, n, out,   prev) {
   # path introducer_key is asked to accept one.
   if (prev == "=") return introducer_key(n >= 2 ? strip_structural(out[n - 1]) : "", 1)
   if (prev == "eval") intro_kind = "eval"
-  return (introducer_key(prev, 0) || introducer_word(prev))
+  return (introducer_key(prev, 0) || introducer_word(prev, out, n - 1))
 }
 
 # An attribute or mapping key whose value is a command line, in either the
@@ -103,13 +103,35 @@ function introducer_key(w, bare) {
     || w == "command" || w == "cmd" || w == "entrypoint" || w == "shell")
 }
 
-# A command word or flag whose next argument is a command line. The regex
-# covers any short-option cluster ending in `c` (`-c`, `-lc`, `-xc`, `-ec`),
-# since a shell's own option parser does not care which order the letters
-# in a combined cluster arrive in. `--command` accepts an optional trailing
-# `=`, matching the glued form the pin side already accepts on `--repo=`.
-function introducer_word(w) {
-  return (w == "eval" || w ~ /^-[[:alpha:]]*c$/ || w ~ /^--command=?$/)
+# A command word or flag whose next argument is a command line. `--command`
+# accepts an optional trailing `=`, matching the glued form the pin side
+# already accepts on `--repo=`. `i` is the index in `out` of the word before
+# `w`, which the cluster arm needs and the other two do not.
+function introducer_word(w, out, i) {
+  return (w == "eval" || w ~ /^--command=?$/ || shell_c_flag(w, out, i))
+}
+
+# A short-option cluster ending in `c` — `-c`, `-lc`, `-xc` — introduces a
+# command line only when it is a shell's own flag. The letters may arrive in
+# any order, since a shell's option parser does not care, so the cluster
+# alone cannot tell `bash -xc` from `grep -Ec`. The word carrying the flag
+# is what separates them: on another program the same cluster takes a
+# pattern, and reading a pattern as a command line fails a correct file.
+# The lookback skips the flags the shell carries ahead of its `-c` and
+# reads only the last path component, so `bash -x -c`, `env -i bash -c`,
+# `/bin/sh -c`, and `${pkgs.bash}/bin/bash -c` all resolve to a shell.
+function shell_c_flag(w, out, i,   prev) {
+  if (w !~ /^-[[:alpha:]]*c$/) return 0
+  while (i >= 1) {
+    prev = strip_structural(out[i])
+    if (prev !~ /^-/) break
+    i--
+  }
+  # Exhausting the array leaves `prev` holding a flag word, so the index
+  # must be re-checked rather than `prev` alone.
+  if (i < 1) return 0
+  sub(/^.*\//, "", prev)
+  return (prev ~ /^(bash|sh|dash|ash|zsh|ksh|mksh|busybox|fish)$/)
 }
 
 # Trims YAML/JSON flow-syntax punctuation that can sit directly against an
