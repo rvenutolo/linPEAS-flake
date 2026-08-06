@@ -414,8 +414,8 @@ function test_bare_triple_payload_is_a_mention() {
   check 'a payload holding only the command triple is a mention' other \
     'eval "gh attestation verify"' \
     ''
-  check 'a match key passed to a -c flag is a mention' other \
-    'grep -c "gh attestation verify" f' \
+  check 'a bare triple passed to a shell -c flag is a mention' other \
+    'sh -c "gh attestation verify" f' \
     ''
 }
 
@@ -494,11 +494,11 @@ function test_fragment_context_propagates_to_nested_payloads() {
 }
 
 function test_fragment_status_does_not_over_propagate_to_a_clean_child() {
-  check 'a match key whose own quote ends cleanly inside a fragment stays a mention' other \
-    "sh -c \"grep -c 'gh attestation verify' \"\$f" \
+  check 'a payload whose own quote ends cleanly inside a fragment stays a mention' other \
+    "sh -c \"sh -c 'gh attestation verify' \"\$f" \
     ''
   check 'the same shape inside a span stays a mention' md \
-    'Use `sh -c "grep -c '"'"'gh attestation verify'"'"' "$f` here.' \
+    'Use `sh -c "sh -c '"'"'gh attestation verify'"'"' "$f` here.' \
     ''
 }
 
@@ -524,8 +524,8 @@ function test_glued_command_equals_form_is_a_command_source() {
 }
 
 function test_eval_concatenation_rule_does_not_widen_other_introducers() {
-  check 'a match key passed to a -c flag stays a mention under the new eval rule' other \
-    'grep -c "gh attestation verify" f' \
+  check 'a bare triple passed to a shell -c flag stays a mention under the eval rule' other \
+    'sh -c "gh attestation verify" f' \
     ''
   check 'an eval payload followed by a separator, not a word, stays a mention' other \
     'eval "gh attestation verify" && echo x' \
