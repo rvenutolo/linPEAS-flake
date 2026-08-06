@@ -532,6 +532,36 @@ function test_eval_concatenation_rule_does_not_widen_other_introducers() {
     ''
 }
 
+function test_short_cluster_without_a_shell_is_not_a_command_source() {
+  check 'a grep -Ec match key is not a command source' other \
+    "grep -Ec 'gh attestation verify evil.zip' log" \
+    ''
+  check 'a grep -vc match key is not a command source' other \
+    'grep -vc "gh attestation verify evil.zip" f' \
+    ''
+  check 'a -c flag with no preceding word is not a command source' other \
+    "-c 'gh attestation verify evil.zip'" \
+    ''
+}
+
+function test_short_cluster_after_a_shell_is_still_a_command_source() {
+  check 'a shell named by path still introduces a command' other \
+    "/bin/sh -c 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a store-path shell still introduces a command' other \
+    '${pkgs.bash}/bin/bash -c "gh attestation verify evil.zip"' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a shell flag between the shell and its -c does not hide it' other \
+    "bash -x -c 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a shell reached through env still introduces a command' other \
+    "env -i bash -c 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a -c glued to its payload still introduces a command' other \
+    'sh -c"gh attestation verify evil.zip"' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
 function main() {
   test_tokenizer_splits_on_whitespace_runs
   test_tokenizer_honors_single_quotes
@@ -596,6 +626,8 @@ function main() {
   test_eval_dollar_quote_still_introduces
   test_glued_command_equals_form_is_a_command_source
   test_eval_concatenation_rule_does_not_widen_other_introducers
+  test_short_cluster_without_a_shell_is_not_a_command_source
+  test_short_cluster_after_a_shell_is_still_a_command_source
 
   if ((failures > 0)); then
     printf '%d test(s) failed\n' "${failures}" >&2
