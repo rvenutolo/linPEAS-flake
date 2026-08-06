@@ -542,6 +542,12 @@ function test_short_cluster_without_a_shell_is_not_a_command_source() {
   check 'a -c flag with no preceding word is not a command source' other \
     "-c 'gh attestation verify evil.zip'" \
     ''
+  check 'a cluster preceded only by flags is not a command source' other \
+    "-x -c 'gh attestation verify evil.zip'" \
+    ''
+  check 'a non-shell named by path is not a command source' other \
+    "/usr/bin/grep -Ec 'gh attestation verify evil.zip' log" \
+    ''
 }
 
 function test_short_cluster_after_a_shell_is_still_a_command_source() {
