@@ -55,7 +55,7 @@ BEGIN {
 # is a command line instead, and collapsing it into a single word hides the
 # invocation it carries. Command position separates the two, and it is
 # readable from the text immediately before the opening quote.
-function is_introducer(cur, n, out,   prev) {
+function is_introducer(cur, n, out, typ,   prev) {
   # Set as a side effect for the caller to read via the global
   # `intro_kind`: "eval" when the match was specifically the bare word
   # `eval`, empty otherwise. See push_payload and the drain in
@@ -78,7 +78,7 @@ function is_introducer(cur, n, out,   prev) {
   }
   if (cur != "") {
     if (cur == "eval") intro_kind = "eval"
-    return (introducer_key(cur, 0) || introducer_word(cur, out, n))
+    return (introducer_key(cur, 0) || introducer_word(cur, out, typ, n))
   }
   prev = (n >= 1 ? strip_structural(out[n]) : "")
   # A nix attribute assignment: `entry = "…"`. Reading past the `=` to the
@@ -88,7 +88,7 @@ function is_introducer(cur, n, out,   prev) {
   # path introducer_key is asked to accept one.
   if (prev == "=") return introducer_key(n >= 2 ? strip_structural(out[n - 1]) : "", 1)
   if (prev == "eval") intro_kind = "eval"
-  return (introducer_key(prev, 0) || introducer_word(prev, out, n - 1))
+  return (introducer_key(prev, 0) || introducer_word(prev, out, typ, n - 1))
 }
 
 # An attribute or mapping key whose value is a command line, in either the
@@ -106,32 +106,35 @@ function introducer_key(w, bare) {
 # A command word or flag whose next argument is a command line. `--command`
 # accepts an optional trailing `=`, matching the glued form the pin side
 # already accepts on `--repo=`. `i` is the index in `out` of the word before
-# `w`, which the cluster arm needs and the other two do not.
-function introducer_word(w, out, i) {
-  return (w == "eval" || w ~ /^--command=?$/ || shell_c_flag(w, out, i))
+# `w`, which the cluster arm needs — along with the parallel `typ` kinds that
+# bound its lookback — and the other two do not.
+function introducer_word(w, out, typ, i) {
+  return (w == "eval" || w ~ /^--command=?$/ || shell_c_flag(w, out, typ, i))
 }
 
-# A short-option cluster ending in `c` — `-c`, `-lc`, `-xc` — introduces a
-# command line only when it is a shell's own flag. The letters may arrive in
-# any order, since a shell's option parser does not care, so the cluster
-# alone cannot tell `bash -xc` from `grep -Ec`. The word carrying the flag
-# is what separates them: on another program the same cluster takes a
+# A short-option cluster ending in `c` — `-c`, `-ec`, `-lc`, `-xc` —
+# introduces a command line only when it is a shell's own flag. The letters
+# may arrive in any order, since a shell's option parser does not care, so the
+# cluster alone cannot tell `bash -xc` from `grep -Ec`. The command carrying
+# the flag is what separates them: on another program the same cluster takes a
 # pattern, and reading a pattern as a command line fails a correct file.
-# The lookback skips the flags the shell carries ahead of its `-c` and
-# reads only the last path component, so `bash -x -c`, `env -i bash -c`,
-# `/bin/sh -c`, and `${pkgs.bash}/bin/bash -c` all resolve to a shell.
-function shell_c_flag(w, out, i,   prev) {
+# The lookback reads that command's words back to its start, each stripped to
+# its last path component, and any one of them naming a shell makes the
+# cluster an introducer. Reading the whole command rather than only the flags
+# ahead of the cluster is what reaches a shell an option argument or an
+# operand stands in front of, as in `bash -o pipefail -c` and
+# `docker run --entrypoint /bin/sh img -c`. The command's start is a token
+# boundary, not the word list's: stopping at the first token that is not an
+# ordinary word is what keeps an earlier command's shell from vouching for a
+# later cluster across a separator or a comment.
+function shell_c_flag(w, out, typ, i,   prev) {
   if (w !~ /^-[[:alpha:]]*c$/) return 0
-  while (i >= 1) {
+  for (; i >= 1 && typ[i] == "w"; i--) {
     prev = strip_structural(out[i])
-    if (prev !~ /^-/) break
-    i--
+    sub(/^.*\//, "", prev)
+    if (prev ~ /^(bash|sh|dash|ash|zsh|ksh|mksh|busybox|fish)$/) return 1
   }
-  # Exhausting the array leaves `prev` holding a flag word, so the index
-  # must be re-checked rather than `prev` alone.
-  if (i < 1) return 0
-  sub(/^.*\//, "", prev)
-  return (prev ~ /^(bash|sh|dash|ash|zsh|ksh|mksh|busybox|fish)$/)
+  return 0
 }
 
 # Trims YAML/JSON flow-syntax punctuation that can sit directly against an
@@ -215,7 +218,7 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
     if (c == "'") {
       # Single quotes: everything up to the next quote is literal. An
       # unterminated quote swallows the rest of the string as one word.
-      intro = is_introducer(cur, n, out)
+      intro = is_introducer(cur, n, out, typ)
       kind = intro_kind
       wordidx = n + 1
       has = 1
@@ -233,7 +236,7 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
       continue
     }
     if (c == "\"") {
-      intro = is_introducer(cur, n, out)
+      intro = is_introducer(cur, n, out, typ)
       kind = intro_kind
       wordidx = n + 1
       has = 1
