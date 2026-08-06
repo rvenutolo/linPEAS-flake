@@ -548,6 +548,9 @@ function test_short_cluster_without_a_shell_is_not_a_command_source() {
   check 'a non-shell named by path is not a command source' other \
     "/usr/bin/grep -Ec 'gh attestation verify evil.zip' log" \
     ''
+  check 'a shell in an earlier command does not reach a later cluster' other \
+    "sh -c 'x' ; grep -Ec 'gh attestation verify evil.zip' log" \
+    ''
 }
 
 function test_short_cluster_after_a_shell_is_still_a_command_source() {
@@ -565,6 +568,18 @@ function test_short_cluster_after_a_shell_is_still_a_command_source() {
     "$(printf 'bad\tgh attestation verify evil.zip')"
   check 'a -c glued to its payload still introduces a command' other \
     'sh -c"gh attestation verify evil.zip"' \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
+function test_shell_separated_from_its_c_flag_is_still_a_command_source() {
+  check 'an option argument between the shell and its -c does not hide it' other \
+    "bash -o pipefail -c 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'an option argument after a combined flag does not hide the shell' other \
+    "bash -euo pipefail -c 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'an operand between the shell and its -c does not hide it' other \
+    "docker run --rm --entrypoint /bin/sh img -c 'gh attestation verify evil.zip'" \
     "$(printf 'bad\tgh attestation verify evil.zip')"
 }
 
@@ -634,6 +649,7 @@ function main() {
   test_eval_concatenation_rule_does_not_widen_other_introducers
   test_short_cluster_without_a_shell_is_not_a_command_source
   test_short_cluster_after_a_shell_is_still_a_command_source
+  test_shell_separated_from_its_c_flag_is_still_a_command_source
 
   if ((failures > 0)); then
     printf '%d test(s) failed\n' "${failures}" >&2
