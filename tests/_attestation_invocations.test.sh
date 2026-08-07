@@ -634,6 +634,57 @@ function test_busybox_reaches_the_shell_set_through_its_applet() {
     ''
 }
 
+function test_a_substitution_shell_does_not_vouch_for_a_later_cluster() {
+  check 'a shell alone in a substitution does not vouch for the next cluster' other \
+    "foo \$(sh) -Ec 'gh attestation verify evil.zip' log" \
+    ''
+  check 'a shell alone in a subshell does not vouch for the next cluster' other \
+    "(a sh) -Ec 'gh attestation verify evil.zip' log" \
+    ''
+  check 'a shell in a code span does not vouch for the cluster after it' md \
+    'Use `` `a sh` -Ec "gh attestation verify evil.zip" log `` here.' \
+    ''
+  check 'a process-substitution shell does not vouch for the next cluster' other \
+    "foo <(sh) -Ec 'gh attestation verify evil.zip' log" \
+    ''
+}
+
+function test_a_command_initial_substitution_is_the_command_word() {
+  check 'a substitution standing as the command word introduces its cluster' other \
+    "\$(command -v bash) -c 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a pinned invocation under a command-word substitution passes' other \
+    "\$(command -v bash) -c 'gh attestation verify a.zip --repo ${SLUG}'" \
+    "$(printf 'ok\tgh attestation verify a.zip --repo %s' "${SLUG}")"
+}
+
+function test_a_substitution_between_a_shell_and_its_cluster_is_stepped_over() {
+  check 'a substitution between the shell and its -c does not hide it' other \
+    "sh \$(x) -c 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'an arithmetic expansion between the shell and its -c does not hide it' other \
+    "bash \$((1+1)) -c 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
+function test_a_backtick_command_word_does_not_introduce() {
+  check 'a legacy-substitution command word is not read as a shell' other \
+    '`command -v bash` -c "gh attestation verify evil.zip"' \
+    ''
+}
+
+function test_the_group_skip_respects_sibling_identity_and_nesting() {
+  check 'a sibling group breaks the command-word group identity' other \
+    "\$(a) \$(sh) -Ec 'gh attestation verify evil.zip' log" \
+    ''
+  check 'a substitution nested inside the command-word group is skipped, not read' other \
+    "\$(a \$(sh) b) -Ec 'gh attestation verify evil.zip' log" \
+    ''
+  check 'a shell in the command-word group itself is read directly' other \
+    "\$(sh) \$(a) -Ec 'gh attestation verify evil.zip' log" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+}
+
 function main() {
   test_tokenizer_splits_on_whitespace_runs
   test_tokenizer_honors_single_quotes
@@ -705,6 +756,11 @@ function main() {
   test_a_delimiter_does_not_hide_a_shell_in_its_own_command
   test_su_and_runuser_introduce_a_command
   test_busybox_reaches_the_shell_set_through_its_applet
+  test_a_substitution_shell_does_not_vouch_for_a_later_cluster
+  test_a_command_initial_substitution_is_the_command_word
+  test_a_substitution_between_a_shell_and_its_cluster_is_stepped_over
+  test_a_backtick_command_word_does_not_introduce
+  test_the_group_skip_respects_sibling_identity_and_nesting
 
   if ((failures > 0)); then
     printf '%d test(s) failed\n' "${failures}" >&2

@@ -55,7 +55,7 @@ BEGIN {
 # is a command line instead, and collapsing it into a single word hides the
 # invocation it carries. Command position separates the two, and it is
 # readable from the text immediately before the opening quote.
-function is_introducer(cur, n, out, typ, cmdstart,   prev) {
+function is_introducer(cur, n, out, typ, cmdstart, wdepth, wgroup, gkind, cd,   prev) {
   # Set as a side effect for the caller to read via the global
   # `intro_kind`: "eval" when the match was specifically the bare word
   # `eval`, empty otherwise. See push_payload and the drain in
@@ -79,7 +79,7 @@ function is_introducer(cur, n, out, typ, cmdstart,   prev) {
   if (cur != "") {
     if (cur == "eval") intro_kind = "eval"
     return (introducer_key(cur, 0) \
-      || introducer_word(cur, out, typ, cmdstart, n))
+      || introducer_word(cur, out, typ, cmdstart, wdepth, wgroup, gkind, cd, n))
   }
   prev = (n >= 1 ? strip_structural(out[n]) : "")
   # A nix attribute assignment: `entry = "…"`. Reading past the `=` to the
@@ -90,7 +90,7 @@ function is_introducer(cur, n, out, typ, cmdstart,   prev) {
   if (prev == "=") return introducer_key(n >= 2 ? strip_structural(out[n - 1]) : "", 1)
   if (prev == "eval") intro_kind = "eval"
   return (introducer_key(prev, 0) \
-    || introducer_word(prev, out, typ, cmdstart, n - 1))
+    || introducer_word(prev, out, typ, cmdstart, wdepth, wgroup, gkind, cd, n - 1))
 }
 
 # An attribute or mapping key whose value is a command line, in either the
@@ -110,9 +110,9 @@ function introducer_key(w, bare) {
 # already accepts on `--repo=`. `i` is the index in `out` of the word before
 # `w`, which the cluster arm needs — along with the parallel `typ` kinds and
 # `cmdstart` marks that bound its lookback — and the other two do not.
-function introducer_word(w, out, typ, cmdstart, i) {
+function introducer_word(w, out, typ, cmdstart, wdepth, wgroup, gkind, cd, i) {
   return (w == "eval" || w ~ /^--command=?$/ \
-    || shell_c_flag(w, out, typ, cmdstart, i))
+    || shell_c_flag(w, out, typ, cmdstart, wdepth, wgroup, gkind, cd, i))
 }
 
 # A short-option cluster ending in `c` — `-c`, `-ec`, `-lc`, `-xc` —
@@ -121,8 +121,8 @@ function introducer_word(w, out, typ, cmdstart, i) {
 # cluster alone cannot tell `bash -xc` from `grep -Ec`. The command carrying
 # the flag is what separates them: on another program the same cluster takes a
 # pattern, and reading a pattern as a command line fails a correct file.
-# The lookback reads that command's words back to its start, each stripped to
-# its last path component, and any one of them naming a shell makes the
+# The lookback reads that command's own words back to its start, each
+# checked by names_shell, and any one of them naming a shell makes the
 # cluster an introducer. Reading the whole command rather than only the flags
 # ahead of the cluster is what reaches a shell an option argument or an
 # operand stands in front of, as in `bash -o pipefail -c` and
@@ -133,15 +133,59 @@ function introducer_word(w, out, typ, cmdstart, i) {
 # an earlier command's shell from vouching for a later cluster. A word is
 # examined before the scan breaks on it, since the word a delimiter opens is
 # itself command-initial and is where `$(bash -c …)` names its shell.
-function shell_c_flag(w, out, typ, cmdstart, i,   prev) {
+# A word nested inside a paren group belongs to that group's own command,
+# not the one carrying the cluster, so the lookback steps over the whole
+# group rather than reading through it — except a command substitution
+# group standing as the very first word of the command being read, whose
+# direct words the lookback does examine, since a command substitution
+# there supplies the command word itself: `$(command -v bash) -c …` names
+# its shell through the substitution's own output. A cluster the paren or
+# backtick scan marked command-initial has no preceding word in its own
+# command at all, so it is never an introducer on that basis alone.
+function shell_c_flag(w, out, typ, cmdstart, wdepth, wgroup, gkind, cd, i,   lo, j, g) {
   if (w !~ /^-[[:alpha:]]*c$/) return 0
+  # A cluster marked command-initial follows a subshell close or a code-span
+  # backtick: no word precedes it in its own command, so nothing vouches.
+  # The mark must belong to the depth being read here, not to some deeper
+  # group that happened to close at this same word index — a nested
+  # subshell's close (as inside `$((…))`) stamps a mark too, and it must
+  # not be mistaken for one at the shallower depth this lookback is in.
+  if (cmdstart[i + 1] == cd + 1) return 0
   for (; i >= 1 && typ[i] == "w"; i--) {
-    prev = strip_structural(out[i])
-    sub(/^.*\//, "", prev)
-    if (prev ~ /^(bash|sh|dash|ash|zsh|ksh|mksh|fish|su|runuser)$/) return 1
-    if (cmdstart[i]) break
+    if (wdepth[i] < cd) break
+    if (wdepth[i] > cd) {
+      # A nested group's words belong to a different command. Skip the
+      # group as a unit rather than reading through it.
+      lo = i
+      while (lo > 1 && typ[lo - 1] == "w" && wdepth[lo - 1] > cd) lo--
+      # A command substitution standing as the command's first word IS the
+      # command word — its output becomes the program — so its direct
+      # words are read. Later sibling groups are arguments; process
+      # substitutions resolve to filenames; subshells are other commands.
+      if (lo == 1 || typ[lo - 1] != "w" || wdepth[lo - 1] < cd) {
+        g = 0
+        for (j = lo; j <= i; j++) {
+          if (wdepth[j] != cd + 1) continue
+          if (g == 0) g = wgroup[j]
+          if (wgroup[j] != g || gkind[g] != "s") break
+          if (names_shell(out[j])) return 1
+        }
+      }
+      i = lo
+      continue
+    }
+    if (names_shell(out[i])) return 1
+    if (cmdstart[i] == cd + 1) break
   }
   return 0
+}
+
+# Does `w`, stripped of structural punctuation and to its last path
+# component, name a shell or a wrapper whose own -c takes a command line?
+function names_shell(w) {
+  w = strip_structural(w)
+  sub(/^.*\//, "", w)
+  return (w ~ /^(bash|sh|dash|ash|zsh|ksh|mksh|fish|su|runuser)$/)
 }
 
 # Trims YAML/JSON flow-syntax punctuation that can sit directly against an
@@ -204,19 +248,25 @@ function push_payload(p, frag, at_end, kind, wordidx) {
 # Returns n.
 #
 # `cmdstart` marks the word indices that begin a command without a separator
-# token recording the boundary: the word after a subshell, command- or
-# process-substitution paren, and the word after a code-span backtick. Those
-# delimiters split words but emit no token of their own, so the word kinds
-# alone cannot tell a lookback where the command it is reading began. It is
-# local because only the introducer lookback consults it, and only while this
-# pass is running.
-function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, intro, nc, frag, kind, wordidx, cmdstart) {
+# token recording the boundary: the word after any opening paren and the word
+# after a code-span backtick, always; on the close side, only a subshell's
+# close marks — a substitution's result is a word in the enclosing command,
+# not the start of a new one. Those delimiters split words but emit no token
+# of their own, so the word kinds alone cannot tell a lookback where the
+# command it is reading began. The stored value is the mark's depth plus one,
+# with 0 read as unset, so a lookback at depth `cd` matches only a mark
+# stamped at that same depth and is not misled by one a deeper, already-closed
+# group left behind at the same word index. It is local because only the
+# introducer lookback consults it, and only while this pass is running.
+function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, intro, nc, frag, kind, wordidx, cmdstart, wdepth, wgroup, gkind, gstack, pdepth, gid, mark) {
   n = 0
   cur = ""
   has = 0
   i = 1
   L = length(s)
   last_unq = ""
+  pdepth = 0
+  gid = 0
   while (i <= L) {
     c = substr(s, i, 1)
     # Rebuilt every pass: only the two paths appending an ordinary unquoted
@@ -226,14 +276,14 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
     prev_unq = last_unq
     last_unq = ""
     if (c == " " || c == "\t") {
-      if (has) { out[++n] = cur; typ[n] = "w"; cur = ""; has = 0 }
+      if (has) { out[++n] = cur; typ[n] = "w"; wdepth[n] = pdepth; wgroup[n] = (pdepth > 0 ? gstack[pdepth] : 0); cur = ""; has = 0 }
       i++
       continue
     }
     if (c == "'") {
       # Single quotes: everything up to the next quote is literal. An
       # unterminated quote swallows the rest of the string as one word.
-      intro = is_introducer(cur, n, out, typ, cmdstart)
+      intro = is_introducer(cur, n, out, typ, cmdstart, wdepth, wgroup, gkind, pdepth)
       kind = intro_kind
       wordidx = n + 1
       has = 1
@@ -251,7 +301,7 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
       continue
     }
     if (c == "\"") {
-      intro = is_introducer(cur, n, out, typ, cmdstart)
+      intro = is_introducer(cur, n, out, typ, cmdstart, wdepth, wgroup, gkind, pdepth)
       kind = intro_kind
       wordidx = n + 1
       has = 1
@@ -277,17 +327,52 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
     if (c == "(" || c == ")") {
       # Subshell and command-substitution punctuation. Delimiting words here
       # is what lets `$(gh attestation verify …)` match the command triple.
-      if (has) { out[++n] = cur; typ[n] = "w"; cur = ""; has = 0 }
-      cmdstart[n + 1] = 1
+      # The kind decides what the lookback in shell_c_flag may read: a bare
+      # `(` opens a new command, while `$(` and `<(`/`>(` produce a word in
+      # the enclosing command. The tail of the pending word tells them
+      # apart, and it is still in `cur` because the paren has not flushed
+      # it yet.
+      if (c == "(") {
+        gkind[++gid] = (cur ~ /\$$/ ? "s" : (cur ~ /[<>]$/ ? "p" : "u"))
+        # A bare `(` carries no sigil, so any pending word in front of it is
+        # ordinary text of the command the subshell sits in and keeps that
+        # command's depth. `$(`, `<(`, `>(` end in the sigil that spells the
+        # substitution operator itself, so the word carrying it belongs to
+        # the substitution, not the enclosing command's word list, and is
+        # pushed to the new depth.
+        if (gkind[gid] == "u") {
+          if (has) { out[++n] = cur; typ[n] = "w"; wdepth[n] = pdepth; wgroup[n] = (pdepth > 0 ? gstack[pdepth] : 0); cur = ""; has = 0 }
+          gstack[++pdepth] = gid
+        } else {
+          gstack[++pdepth] = gid
+          if (has) { out[++n] = cur; typ[n] = "w"; wdepth[n] = pdepth; wgroup[n] = gid; cur = ""; has = 0 }
+        }
+        # The mark records the depth it applies to (offset by one so 0 still
+        # reads as unset) — a mark set inside a nested group must not be
+        # mistaken for one at the shallower depth an outer lookback reads.
+        cmdstart[n + 1] = pdepth + 1
+      } else {
+        if (has) { out[++n] = cur; typ[n] = "w"; wdepth[n] = pdepth; wgroup[n] = (pdepth > 0 ? gstack[pdepth] : 0); cur = ""; has = 0 }
+        # Only a subshell's close begins a new command; a substitution's
+        # result is a word in the command that carries it. An unbalanced
+        # close keeps the boundary. The kind is read before the pop, since
+        # popping loses which group is closing; the mark itself is stamped
+        # with the depth the close lands on, after the pop.
+        mark = (pdepth == 0 || gkind[gstack[pdepth]] == "u")
+        if (pdepth > 0) pdepth--
+        if (mark) cmdstart[n + 1] = pdepth + 1
+      }
       i++
       continue
     }
     if (c == "`") {
       # Legacy command substitution in shell, literal payload inside a
       # longer code span. Either way it delimits words rather than
-      # joining them.
-      if (has) { out[++n] = cur; typ[n] = "w"; cur = ""; has = 0 }
-      cmdstart[n + 1] = 1
+      # joining them. A code span bounds commands on both sides, so no
+      # depth change belongs here — see gkind for the substitution/subshell
+      # distinction the paren arm tracks instead.
+      if (has) { out[++n] = cur; typ[n] = "w"; wdepth[n] = pdepth; wgroup[n] = (pdepth > 0 ? gstack[pdepth] : 0); cur = ""; has = 0 }
+      cmdstart[n + 1] = pdepth + 1
       i++
       continue
     }
@@ -316,7 +401,7 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
       continue
     }
     if (c == ";" || c == "&" || c == "|") {
-      if (has) { out[++n] = cur; typ[n] = "w"; cur = ""; has = 0 }
+      if (has) { out[++n] = cur; typ[n] = "w"; wdepth[n] = pdepth; wgroup[n] = (pdepth > 0 ? gstack[pdepth] : 0); cur = ""; has = 0 }
       if (substr(s, i, 2) == "&&" || substr(s, i, 2) == "||") {
         out[++n] = substr(s, i, 2)
         i += 2
@@ -332,7 +417,7 @@ function tokenize(s, out, typ,   n, i, c, cur, has, L, last_unq, prev_unq, pay, 
     last_unq = c
     i++
   }
-  if (has) { out[++n] = cur; typ[n] = "w" }
+  if (has) { out[++n] = cur; typ[n] = "w"; wdepth[n] = pdepth; wgroup[n] = (pdepth > 0 ? gstack[pdepth] : 0) }
   return n
 }
 
