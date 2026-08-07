@@ -142,6 +142,12 @@ Env overrides (test-only):
 CLIFF_TOML_OVERRIDE — path to a fixture cliff.toml instead of
 the repo-root cliff.toml
 
+### scripts/check-commitlint-config-explicit.sh
+
+Lint: every `wagoid/commitlint-github-action` step pins a
+non-empty `configFile:` that resolves to a file on disk, and the merge
+ruleset differs from the strict one only by the two zeroed length rules.
+
 ### scripts/check-cosign-identity-pinned.sh
 
 Lint: every `cosign verify` invocation pins both

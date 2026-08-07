@@ -1,0 +1,20 @@
+name: extra-rule
+on: push
+permissions: {}
+concurrency:
+  group: extra-rule-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  commitlint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed
+        with:
+          configFile: ${{ github.event_name == 'push' && '.commitlintrc.merge.yml' || '.commitlintrc.yml' }}
+      - uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed
+        if: github.event_name == 'pull_request'
+        with:
+          configFile: .commitlintrc.merge.yml

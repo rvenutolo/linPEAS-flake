@@ -32,8 +32,40 @@ Every branch commit must independently satisfy
 - `lint-pr-title` (workflow `pr-title-lint`) — required check; runs against
     the PR title.
 
-The PR title becomes the merge-commit subject (`merge_commit_title=PR_TITLE`);
-the PR body becomes the merge-commit body (`merge_commit_message=PR_BODY`).
+### How the merge commit is composed
+
+GitHub writes the merge-commit message, not the author. The subject is the PR
+title (`merge_commit_title=PR_TITLE`) with `" (#<number>)"` appended. The body
+is the PR body (`merge_commit_message=PR_BODY`), **rewrapped at 72 columns**,
+with fenced code blocks left exactly as written.
+
+That rewrap decides where each rule can be enforced:
+
+- **Subject rules** are checked by `lint-pr-title`, which lints the title with
+    the `" (#<number>)"` suffix attached — the composed string, not the bare
+    title. A title that fits the header limit on its own can still overflow it
+    once the suffix lands, and that failure would appear only on `main`, on a
+    commit no longer amendable.
+- **Body and footer line length** is checked by `commitlint` on the
+    `pull_request` event, against hand-authored branch commits, where the author
+    controls the wrapping.
+- **Body and footer line length is not checked on the merge commit.** No author
+    wrote those lines. Prose is already wrapped to 72 columns by GitHub, so a
+    line can exceed the limit only where GitHub declined to rewrap — inside a
+    code fence, in a table row, or in a single over-long token — all content
+    that must not be wrapped. The `commitlint` job therefore lints `push` to
+    `main` with `.commitlintrc.merge.yml`, which is `.commitlintrc.yml`'s
+    ruleset minus `body-max-line-length` and `footer-max-line-length`.
+
+Both configs must be named explicitly via the action's `configFile` input. The
+input defaults to a file this repo does not have, and the action then falls back
+to a bundled `@commitlint/config-conventional`, so an unset `configFile` makes
+the repo's own config a no-op with no visible symptom.
+`scripts/check-commitlint-config-explicit.sh` pins that shut, along with the
+two configs' agreement on the base preset they extend.
+
+A PR body may contain fenced lines of any length. Prose in a PR body needs no
+manual wrapping — GitHub wraps it.
 
 Allowed types match branch naming. Append `!` after the type for breaking
 changes: `feat!: drop Java 11 support`.
@@ -97,6 +129,7 @@ Hooks (alphabetical):
 | `ci-job-in-summary`                 | ci.yml jobs cross-checked against docs/\_data/ci-check-categories.yml.                                                               |
 | `ci-summary-fresh`                  | README CI summary matches required-checks.md and the category map.                                                                   |
 | `commitlint`                        | Commit message satisfies Conventional Commits (CI parity via .commitlintrc.yml).                                                     |
+| `commitlint-config-explicit`        | Every commitlint action step names an existing configFile; merge ruleset stays minimal.                                              |
 | `cosign-identity-pinned`            | cosign verify pins --certificate-identity[-regexp] + --certificate-oidc-issuer.                                                      |
 | `deadnix`                           | Unused Nix bindings.                                                                                                                 |
 | `editorconfig-checker`              | .editorconfig compliance (charset, line endings, trailing whitespace, final newline).                                                |
