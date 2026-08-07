@@ -1,0 +1,24 @@
+# Commitlint ruleset for merge commits, used by the `commitlint` CI job
+# on `push` to `main`. `.commitlintrc.yml` governs every other context.
+#
+# GitHub composes the merge-commit message itself: the subject from the
+# PR title (`merge_commit_title=PR_TITLE`) and the body from the PR body
+# (`merge_commit_message=PR_BODY`), rewrapped at 72 columns with fenced
+# code left intact. No author writes those lines, so a body or footer
+# line can exceed 100 characters only where GitHub declined to rewrap —
+# fenced code, table rows, or a single token longer than the limit — all
+# content that must not be wrapped. Both length rules are therefore off
+# here. They stay in force in `.commitlintrc.yml`, which gates the
+# hand-authored branch commits on the `pull_request` event and the local
+# `commit-msg` hook.
+#
+# The base preset is named directly rather than extending
+# `.commitlintrc.yml` by relative path: this file is exercised only on
+# `push`, so a resolution failure would surface after a merge, which is
+# the failure mode the split exists to remove. The duplication is pinned
+# by `scripts/check-commitlint-config-explicit.sh`.
+extends:
+  - "@commitlint/config-conventional"
+rules:
+  body-max-line-length: [0]
+  footer-max-line-length: [0]

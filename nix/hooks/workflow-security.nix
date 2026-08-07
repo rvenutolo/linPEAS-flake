@@ -75,6 +75,26 @@
     pass_filenames = false;
     language = "system";
   };
+  # The commitlint action's configFile input defaults to a file this
+  # repo does not have, and the action then falls back to a bundled
+  # preset — an unset configFile silently ignores the repo's own rules.
+  # Also keeps the merge ruleset a strict two-rule relaxation of the
+  # base one. See docs/development/git.md.
+  commitlint-config-explicit = {
+    enable = true;
+    name = "commitlint-config-explicit";
+    description = "Every commitlint action step names an existing configFile; merge ruleset stays minimal.";
+    entry = "${pkgs-unstable.writeShellScript "commitlint-config-explicit-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-commitlint-config-explicit.sh
+    ''}";
+    files = "^(\\.github/workflows/.*\\.ya?ml|\\.commitlintrc\\.yml|\\.commitlintrc\\.merge\\.yml|scripts/check-commitlint-config-explicit\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Binds each job's harden-runner allowed-endpoints list to what its
   # tool inventory actually reaches: forward rules keyed on uses:/run:
   # text, sigstore host-set consistency keyed on hosts (catches a job

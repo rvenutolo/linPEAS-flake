@@ -950,4 +950,24 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      # `configFile` is mandatory, not cosmetic: the input defaults to
+      # `./commitlint.config.mjs`, which this repo does not have, and the
+      # action then falls back to a bundled `@commitlint/config-conventional`
+      # — so an unset `configFile` silently ignores the repo's own config.
+      #
+      # `push` to `main` lints the GitHub-composed merge commit, whose body
+      # and footer no author wrote; `.commitlintrc.merge.yml` drops the two
+      # line-length rules for it. Every other event lints hand-authored
+      # commits under the strict `.commitlintrc.yml`.
       - uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed # v6.2.1
+        with:
+          configFile: ${{ github.event_name == 'push' && '.commitlintrc.merge.yml' || '.commitlintrc.yml' }}
+      # `.commitlintrc.merge.yml` is otherwise loaded only on `push`, where a
+      # malformed file would fail on `main` with no way to amend the commit.
+      # Linting the branch commits under it on `pull_request` proves the
+      # action can load it while the config is still fixable. Branch commits
+      # satisfy the stricter config already, so this step asserts nothing new.
+      - uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed # v6.2.1
+        if: github.event_name == 'pull_request'
+        with:
+          configFile: .commitlintrc.merge.yml
