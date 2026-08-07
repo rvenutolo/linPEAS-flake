@@ -610,6 +610,30 @@ function test_a_delimiter_does_not_hide_a_shell_in_its_own_command() {
     "$(printf 'bad\tgh attestation verify evil.zip')"
 }
 
+function test_su_and_runuser_introduce_a_command() {
+  check 'su -c takes a command line, so its payload is inspected' other \
+    "su -c 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'runuser -c takes a command line, so its payload is inspected' other \
+    "runuser -c 'gh attestation verify evil.zip' nobody" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'a pinned invocation under su -c passes' other \
+    "su -c 'gh attestation verify a.zip --repo ${SLUG}'" \
+    "$(printf 'ok\tgh attestation verify a.zip --repo %s' "${SLUG}")"
+  check 'a pinned invocation under runuser -c passes' other \
+    "runuser -c 'gh attestation verify a.zip --repo ${SLUG}' nobody" \
+    "$(printf 'ok\tgh attestation verify a.zip --repo %s' "${SLUG}")"
+}
+
+function test_busybox_reaches_the_shell_set_through_its_applet() {
+  check 'busybox sh -c is introduced by the sh applet word' other \
+    "busybox sh -c 'gh attestation verify evil.zip'" \
+    "$(printf 'bad\tgh attestation verify evil.zip')"
+  check 'bare busybox -c is not an invocation shape busybox supports' other \
+    "busybox -c 'gh attestation verify evil.zip'" \
+    ''
+}
+
 function main() {
   test_tokenizer_splits_on_whitespace_runs
   test_tokenizer_honors_single_quotes
@@ -679,6 +703,8 @@ function main() {
   test_shell_separated_from_its_c_flag_is_still_a_command_source
   test_a_shell_in_a_delimited_command_does_not_reach_a_later_cluster
   test_a_delimiter_does_not_hide_a_shell_in_its_own_command
+  test_su_and_runuser_introduce_a_command
+  test_busybox_reaches_the_shell_set_through_its_applet
 
   if ((failures > 0)); then
     printf '%d test(s) failed\n' "${failures}" >&2

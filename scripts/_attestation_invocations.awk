@@ -138,7 +138,7 @@ function shell_c_flag(w, out, typ, cmdstart, i,   prev) {
   for (; i >= 1 && typ[i] == "w"; i--) {
     prev = strip_structural(out[i])
     sub(/^.*\//, "", prev)
-    if (prev ~ /^(bash|sh|dash|ash|zsh|ksh|mksh|busybox|fish)$/) return 1
+    if (prev ~ /^(bash|sh|dash|ash|zsh|ksh|mksh|fish|su|runuser)$/) return 1
     if (cmdstart[i]) break
   }
   return 0
