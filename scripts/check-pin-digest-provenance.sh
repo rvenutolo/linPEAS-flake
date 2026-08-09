@@ -46,20 +46,39 @@ function die_op() {
   exit 2
 }
 
+# True if PATH (relative to a scan root) is a pin-scanned file: a
+# workflow YAML directly under .github/workflows/, or an
+# action.yml/action.yaml at ANY depth under .github/actions/ — including
+# zero path segments, i.e. a composite action living directly at
+# .github/actions/action.yml. Single predicate shared by every discovery
+# path below (directory-glob mode, used by both head and BASE_DIR
+# override; git-ls-tree mode, used by real BASE_REF) so the base-side
+# and head-side scans cannot diverge on file shape again: one definition
+# of "what counts as a scanned file," not two independently-maintained
+# ones.
+# @arg $1 path relative to a scan root
+function is_scanned_pin_file() {
+  local -r path="$1"
+  [[ ${path} =~ ^\.github/workflows/[^/]+\.ya?ml$ ]] && return 0
+  [[ ${path} =~ ^\.github/actions/(.*/)?action\.ya?ml$ ]] && return 0
+  return 1
+}
+
 # Emit the scanned file list (paths relative to ROOT) under a real
 # directory root — shared by the head-side scan and the base-side scan
 # when BASE_DIR_OVERRIDE points at a directory instead of a git ref.
+# Lists every YAML file under .github/ and filters through
+# is_scanned_pin_file, the same predicate the git-ls-tree scan below
+# filters through, rather than re-deriving the shape via separate glob
+# patterns per file class.
 # @arg $1 root directory
 function scanned_files_under() {
   local -r root="$1"
-  local f
+  local f rel
   shopt -s nullglob globstar
-  for f in \
-    "${root}"/.github/workflows/*.yml \
-    "${root}"/.github/workflows/*.yaml \
-    "${root}"/.github/actions/**/action.yml \
-    "${root}"/.github/actions/**/action.yaml; do
-    printf '%s\n' "${f#"${root}"/}"
+  for f in "${root}"/.github/**/*.yml "${root}"/.github/**/*.yaml; do
+    rel="${f#"${root}"/}"
+    is_scanned_pin_file "${rel}" && printf '%s\n' "${rel}"
   done
   shopt -u nullglob globstar
   if [[ -f "${root}/${OCTOSCAN_FILE}" ]]; then
@@ -85,11 +104,8 @@ function base_files() {
   fi
   local path
   while IFS= read -r path; do
-    if [[ ${path} =~ ^\.github/workflows/[^/]+\.ya?ml$ ]] ||
-      [[ ${path} =~ ^\.github/actions/.+/action\.ya?ml$ ]]; then
-      printf '%s\n' "${path}"
-    fi
-  done < <(git ls-tree -r --name-only "${BASE_REF}" -- .github/workflows .github/actions 2>/dev/null)
+    is_scanned_pin_file "${path}" && printf '%s\n' "${path}"
+  done < <(git ls-tree -r --name-only "${BASE_REF}" -- .github 2>/dev/null)
   if git cat-file -e "${BASE_REF}:${OCTOSCAN_FILE}" 2>/dev/null; then
     printf '%s\n' "${OCTOSCAN_FILE}"
   fi
