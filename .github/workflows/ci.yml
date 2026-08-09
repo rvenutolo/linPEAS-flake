@@ -647,6 +647,11 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: run doc-invariant lints
+        env:
+          # check-pin-digest-provenance.sh (in this group) probes the
+          # GitHub API only when a floating-major pin digest changes in
+          # the diff; unauthenticated calls rate-limit at 60/hr.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: nix develop --command bash scripts/run-lint-group.sh lint-doc-invariants
 
   doc-freshness:

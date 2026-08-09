@@ -1,0 +1,9 @@
+jobs:
+  a:
+    steps:
+      - uses: step-security/harden-runner@ffffffffffffffffffffffffffffffffffffffff # v2.20.0
+      - uses: actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb # v4.3.1
+      - uses: ./.github/actions/setup-nix
+  b:
+    steps:
+      - uses: step-security/harden-runner@ffffffffffffffffffffffffffffffffffffffff # v2.20.0

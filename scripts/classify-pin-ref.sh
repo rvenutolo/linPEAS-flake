@@ -13,7 +13,9 @@
 # pin matching neither is `drift`. Floating-major tags (`vN`) retarget
 # by design and cannot be judged by a tag-vs-pin comparison, so they
 # are `skip-floating-major` — their integrity rests on the immutable
-# digest pin plus Renovate. See docs/architecture/pin-convention.md.
+# digest pin plus Renovate and the PR-time digest-provenance gate
+# (scripts/check-pin-digest-provenance.sh). See
+# docs/architecture/pin-convention.md.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
