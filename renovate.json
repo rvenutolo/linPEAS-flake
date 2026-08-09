@@ -10,7 +10,7 @@
   "labels": ["dependencies"],
   "packageRules": [
     {
-      "description": "github-actions: pin SHAs and auto-merge after the 7-day quarantine. Per-manager automerge scope ensures a future manager activation (e.g. npm via a new package.json) does NOT inherit automerge.",
+      "description": "github-actions: pin SHAs and auto-merge after the 7-day quarantine. Per-manager automerge scope ensures a future manager activation (e.g. npm via a new package.json) does NOT inherit automerge. A digest-only repoint (SHA moves, version label unchanged) is blocked at PR time by scripts/check-pin-digest-provenance.sh in the lint-doc-invariants group.",
       "matchManagers": ["github-actions"],
       "groupName": "github-actions",
       "pinDigests": true,

@@ -57,3 +57,4 @@ lint-doc-invariants:
   - pin-diff-isolated
   - flake-lock-provenance
   - dockerhub-token-scope-split
+  - pin-digest-provenance

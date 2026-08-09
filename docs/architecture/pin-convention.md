@@ -61,7 +61,10 @@ upstream tagging convention.
     comment names a floating major (`vN`) are excluded from the
     comparison and logged: a deliberately-moving tag cannot be judged by
     tag-vs-pin equality, so their integrity rests on the immutable digest
-    pin plus Renovate currency, not on this audit.
+    pin plus Renovate currency and the PR-time digest-provenance gate
+    (`scripts/check-pin-digest-provenance.sh`), which requires
+    floating-major digest moves to be reachable from the upstream
+    default branch.
 
 - Bump path: Renovate's `helpers:pinGitHubActionDigests` preset.
     Renovate's github-actions manager parses the trailing comment as

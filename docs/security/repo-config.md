@@ -114,3 +114,26 @@ line-adjacency heuristic. A customManager that matches none of its
 declarations silently freezes the dependency outside automation
 coverage; this check fails CI before that can happen. Wired into the
 `renovate-invariants` CI job.
+
+## Pin digest provenance
+
+`scripts/check-pin-digest-provenance.sh` (in the `lint-doc-invariants`
+CI group) diffs every action pin (`uses: <path>@<sha> # <version>`)
+and the octoscan `OCTOSCAN_DIGEST`/`OCTOSCAN_VERSION` pair against
+`origin/main`:
+
+1. A SHA/digest that moves while its version label stays the same is
+    a repointed released tag — the digest-repoint supply-chain class
+    (a force-pushed upstream tag reaches a Renovate digest-only bump
+    that `minimumReleaseAge` cannot delay, because the version's
+    release timestamp is unchanged). Hard fail; auto-merge is blocked
+    until a human investigates and pushes an explicit unblock to the
+    bot branch.
+1. A floating-major pin (`# vN`, no immutable patch tag upstream)
+    legitimately retargets across patches, so its digest moves are
+    instead verified reachable from the upstream default branch via
+    the GitHub compare API — a dangling force-pushed commit fails.
+    API errors fail the job loudly (exit 2), never silently.
+1. Version-label bumps (SHA and comment move together) pass here;
+    they are quarantined by `minimumReleaseAge` and re-checked daily
+    by `ratchet-pin-audit`.

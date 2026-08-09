@@ -148,7 +148,7 @@ jobs:
               # spurious upstream-api-failure on a ref we exclude anyway.
               # Same rule as scripts/classify-pin-ref.sh.
               if [[ "${tag}" =~ ^v[0-9]+$ ]]; then
-                printf 'excluded (floating major): %s@%s — integrity via immutable digest pin + Renovate\n' \
+                printf 'excluded (floating major): %s@%s — integrity via immutable digest pin + Renovate + PR-time digest-provenance gate\n' \
                   "${repo}" "${tag}" >&2
                 continue
               fi

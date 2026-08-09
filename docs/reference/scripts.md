@@ -339,6 +339,18 @@ Lint: exactly one script under `scripts/` writes to
 `release-on-bump.yml` path-filter trigger contract is
 self-enforcing.
 
+### scripts/check-pin-digest-provenance.sh
+
+Lint: a pin digest may not move under an unchanged
+version label. Diffs action pins (`uses: <path>@<sha> # <version>`)
+in workflows/composite actions and the octoscan container digest
+pair against the base ref; a changed SHA/digest whose version
+comment did not change is a repointed released tag (the
+digest-repoint supply-chain class) and fails. Floating-major pins
+(`# vN`) legitimately retarget across patch releases, so instead of
+a hard fail their new commit must be reachable from the upstream
+default branch — a force-pushed dangling commit fails.
+
 ### scripts/check-pre-commit-hooks-sha-parity.sh
 
 Lint: the SHA embedded in `flake.nix`'s

@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Fake gh for check-pin-digest-provenance tests. Behavior selected by
+# GH_STUB_MODE; pattern-matches the argv to pick a response.
+set -Eeuo pipefail
+case "${GH_STUB_MODE:-deny}" in
+  deny)
+    printf 'unexpected gh call in this scenario: %s\n' "$*" >&2
+    exit 97
+    ;;
+  reachable | diverged)
+    case "$*" in
+      *"/git/tags/"*)
+        printf 'gh: Not Found (HTTP 404)\n' >&2
+        exit 1
+        ;;
+      *".default_branch"*)
+        printf 'master\n'
+        ;;
+      *"/compare/"*)
+        if [[ ${GH_STUB_MODE} == reachable ]]; then printf 'behind\n'; else printf 'diverged\n'; fi
+        ;;
+      *)
+        printf 'unexpected gh call: %s\n' "$*" >&2
+        exit 97
+        ;;
+    esac
+    ;;
+  tagobject-reachable)
+    case "$*" in
+      *"/git/tags/"*)
+        printf '9999999999999999999999999999999999999999\n'
+        ;;
+      *".default_branch"*)
+        printf 'master\n'
+        ;;
+      *"/compare/"*)
+        printf 'behind\n'
+        ;;
+      *)
+        printf 'unexpected gh call: %s\n' "$*" >&2
+        exit 97
+        ;;
+    esac
+    ;;
+  api-error)
+    printf 'gh: HTTP 500 upstream boom\n' >&2
+    exit 1
+    ;;
+esac
