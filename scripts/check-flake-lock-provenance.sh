@@ -21,6 +21,15 @@
 # base and head fails. A node add/remove fails only for TOP-LEVEL
 # inputs (root.inputs); transitive node churn is tolerated and logged.
 #
+# Top-level input refs are resolved through `follows` paths before the
+# source-identity comparison: a string ref is the target node id
+# directly; an array ref is a path walked from `root` through each
+# node's `inputs` in turn (cycle-guarded by a depth limit). A ref-shape
+# change that still resolves to the same source passes, while any
+# transition that changes the resolved source — including
+# string-to-array and array-to-array — fails. A ref that cannot be
+# resolved (dangling path element, cycle, empty array) fails closed.
+#
 # CI coupling: the lint-doc-invariants job fetches origin/main before
 # running this check. `actions/checkout` does not create
 # refs/remotes/origin/main on its own. If the base lock cannot be
@@ -77,6 +86,19 @@ def srcid:
   { original: (.original // null),
     flake: (.flake // null),
     locked: ((.locked // {}) | del(.rev, .narHash, .lastModified)) };
+def resolve($lock; $ref; $depth):
+  if $depth > 32 then error("follows depth exceeded")
+  elif ($ref | type) == "string" then $ref
+  elif ($ref | type) == "array" then
+    if ($ref | length) == 0 then error("empty follows path")
+    else reduce $ref[] as $e ("root";
+      . as $cur
+      | ($lock.nodes[$cur] // error("missing node: \($cur)")) as $node
+      | (($node.inputs // {})[$e] // error("dangling follows: \($e) from \($cur)")) as $next
+      | resolve($lock; $next; $depth + 1))
+    end
+  else error("bad input ref type: \($ref | type)")
+  end;
 ($base.nodes.root.inputs // {}) as $bin
 | ($head.nodes.root.inputs // {}) as $hin
 | ($bin | keys) as $bk
@@ -86,10 +108,17 @@ def srcid:
 | [ $bk[]
     | select(. as $n | $hk | index($n))
     | . as $name
-    | $bin[$name] as $bn | $hin[$name] as $hn
-    | select(($bn | type) == "string" and ($hn | type) == "string")
-    | select(($base.nodes[$bn] | srcid) != ($head.nodes[$hn] | srcid))
-    | "FAIL: top-level input repointed: \($name)" ] as $tlrep
+    | $bin[$name] as $bref | $hin[$name] as $href
+    | (try resolve($base; $bref; 0) catch null) as $bnode
+    | (try resolve($head; $href; 0) catch null) as $hnode
+    | if ($bnode == null) or ($hnode == null)
+        or (($base.nodes | has($bnode)) | not)
+        or (($head.nodes | has($hnode)) | not)
+      then "FAIL: top-level input unresolvable: \($name)"
+      elif ($base.nodes[$bnode] | srcid) != ($head.nodes[$hnode] | srcid)
+      then "FAIL: top-level input repointed: \($name)"
+      else empty
+      end ] as $tlrep
 | [ ($base.nodes | keys[])
     | select(. != "root")
     | . as $k
