@@ -46,19 +46,51 @@ function die_op() {
   exit 2
 }
 
+# Emit the scanned file list (paths relative to ROOT) under a real
+# directory root — shared by the head-side scan and the base-side scan
+# when BASE_DIR_OVERRIDE points at a directory instead of a git ref.
+# @arg $1 root directory
+function scanned_files_under() {
+  local -r root="$1"
+  local f
+  shopt -s nullglob globstar
+  for f in \
+    "${root}"/.github/workflows/*.yml \
+    "${root}"/.github/workflows/*.yaml \
+    "${root}"/.github/actions/**/action.yml \
+    "${root}"/.github/actions/**/action.yaml; do
+    printf '%s\n' "${f#"${root}"/}"
+  done
+  shopt -u nullglob globstar
+  if [[ -f "${root}/${OCTOSCAN_FILE}" ]]; then
+    printf '%s\n' "${OCTOSCAN_FILE}"
+  fi
+}
+
 # Emit the head-side scanned file list (paths relative to HEAD_DIR).
 function head_files() {
-  local f
-  shopt -s nullglob
-  for f in \
-    "${HEAD_DIR}"/.github/workflows/*.yml \
-    "${HEAD_DIR}"/.github/workflows/*.yaml \
-    "${HEAD_DIR}"/.github/actions/*/action.yml \
-    "${HEAD_DIR}"/.github/actions/*/action.yaml; do
-    printf '%s\n' "${f#"${HEAD_DIR}"/}"
-  done
-  shopt -u nullglob
-  if [[ -f "${HEAD_DIR}/${OCTOSCAN_FILE}" ]]; then
+  scanned_files_under "${HEAD_DIR}"
+}
+
+# Emit the base-side scanned file list (paths relative to repo root).
+# Deliberately independent of head_files(): a file renamed between base
+# and head must still be discovered under its own (old) base-side path,
+# so the rename is seen as a SHA change on a shared (path, version) key
+# rather than a same-path file swap that base_content() would silently
+# read as "absent in base" and never compare.
+function base_files() {
+  if [[ -n ${BASE_DIR} ]]; then
+    scanned_files_under "${BASE_DIR}"
+    return 0
+  fi
+  local path
+  while IFS= read -r path; do
+    if [[ ${path} =~ ^\.github/workflows/[^/]+\.ya?ml$ ]] ||
+      [[ ${path} =~ ^\.github/actions/.+/action\.ya?ml$ ]]; then
+      printf '%s\n' "${path}"
+    fi
+  done < <(git ls-tree -r --name-only "${BASE_REF}" -- .github/workflows .github/actions 2>/dev/null)
+  if git cat-file -e "${BASE_REF}:${OCTOSCAN_FILE}" 2>/dev/null; then
     printf '%s\n' "${OCTOSCAN_FILE}"
   fi
 }
@@ -94,16 +126,34 @@ function extract_pins() {
     fi
     return 0
   fi
-  local path sha version
+  local path sha version line_num=0 value
   while IFS= read -r line; do
-    if [[ ${line} =~ uses:[[:space:]]+([A-Za-z0-9._/-]+)@([0-9a-f]{40})[[:space:]]*#[[:space:]]*([^[:space:]]+) ]]; then
+    line_num=$((line_num + 1))
+    if [[ ${line} =~ uses:[[:space:]]+([A-Za-z0-9._/-]+)@([0-9a-fA-F]{40})[[:space:]]*#[[:space:]]*([^[:space:]]+) ]]; then
       path="${BASH_REMATCH[1]}"
-      sha="${BASH_REMATCH[2]}"
+      sha="${BASH_REMATCH[2],,}"
       version="${BASH_REMATCH[3]}"
       # Local composite actions have no upstream to repoint.
       [[ ${path} == .* ]] && continue
       printf '%s|%s|%s|%s\n' "${file}" "${path}" "${version}" "${sha}"
+      continue
     fi
+    [[ ${line} =~ ^[[:space:]]*-?[[:space:]]*uses:[[:space:]] ]] || continue
+    # Strict extraction above missed this `uses:` line. Isolate its value
+    # (stripping one layer of surrounding quotes) to tell a local
+    # composite-action ref (no upstream to repoint) from an unrecognized
+    # pin shape — quoted, comment-less, or otherwise not matching the
+    # strict pin regex above. A pin this gate cannot parse is a pin
+    # silently outside its coverage, so that shape must die loud rather
+    # than fall through as a same-value (no-op) comparison.
+    if [[ ${line} =~ uses:[[:space:]]*[\"\']?([^[:space:]\"\']*) ]]; then
+      value="${BASH_REMATCH[1]}"
+    else
+      value=""
+    fi
+    [[ -z ${value} || ${value} == .* ]] && continue
+    [[ ${value} == *@* ]] || continue
+    die_op "unrecognized uses: pin shape at ${file}:${line_num}: ${line}"
   done
   return 0
 }
@@ -159,12 +209,15 @@ if [[ -z ${BASE_DIR} ]]; then
     die_op "cannot resolve ${BASE_REF} (is origin/main fetched?)"
 fi
 
-base_tuples=""
 head_tuples=""
 while IFS= read -r file; do
   head_tuples+="$(extract_pins "${file}" <"${HEAD_DIR}/${file}")"$'\n'
-  base_tuples+="$(extract_pins "${file}" <<<"$(base_content "${file}")")"$'\n'
 done < <(head_files)
+
+base_tuples=""
+while IFS= read -r file; do
+  base_tuples+="$(extract_pins "${file}" <<<"$(base_content "${file}")")"$'\n'
+done < <(base_files)
 
 # The octoscan pair is a load-bearing extraction target: if the file
 # exists in head but the pair is not found, the var block was reshaped
@@ -174,37 +227,40 @@ if [[ -f "${HEAD_DIR}/${OCTOSCAN_FILE}" ]] &&
   die_op "octoscan digest/version pair not found in ${OCTOSCAN_FILE} (extraction shape drift?)"
 fi
 
+# Grouping key is (path, version) — deliberately NOT including the
+# source file. A pin's identity is what it points at, not which file
+# names it; dropping the file lets a rename-plus-repoint (base pin in
+# one file, head pin in another) still land on the same key instead of
+# reading as an independent add + remove that skips the SHA compare.
 keys="$(printf '%s\n%s\n' "${base_tuples}" "${head_tuples}" |
-  awk -F'|' 'NF == 4 { print $1 "|" $2 "|" $3 }' | sort -u)"
+  awk -F'|' 'NF == 4 { print $2 "|" $3 }' | sort -u)"
 
 violations=0
 while IFS= read -r key; do
   [[ -n ${key} ]] || continue
   base_shas="$(awk -F'|' -v k="${key}" \
-    '($1 "|" $2 "|" $3) == k { print $4 }' <<<"${base_tuples}" | sort -u)"
+    '($2 "|" $3) == k { print $4 }' <<<"${base_tuples}" | sort -u)"
   head_shas="$(awk -F'|' -v k="${key}" \
-    '($1 "|" $2 "|" $3) == k { print $4 }' <<<"${head_tuples}" | sort -u)"
+    '($2 "|" $3) == k { print $4 }' <<<"${head_tuples}" | sort -u)"
   # Key only on one side = pin (or version) added/removed — not a
   # repoint. New versions ride minimumReleaseAge + the daily audit.
   [[ -n ${base_shas} && -n ${head_shas} ]] || continue
   [[ ${base_shas} == "${head_shas}" ]] && continue
-  file="${key%%|*}"
-  rest="${key#*|}"
-  path="${rest%%|*}"
-  version="${rest#*|}"
+  path="${key%%|*}"
+  version="${key#*|}"
   if [[ ${version} =~ ^v[0-9]+$ ]]; then
     while IFS= read -r sha; do
       [[ -n ${sha} ]] || continue
       grep --quiet --line-regexp --fixed-strings "${sha}" <<<"${base_shas}" && continue
       if ! check_reachable "${path}" "${sha}"; then
-        printf 'FAIL: floating-major digest %s@%s (%s) in %s not reachable from upstream default branch\n' \
-          "${path}" "${sha}" "${version}" "${file}" >&2
+        printf 'FAIL: floating-major digest %s@%s (%s) not reachable from upstream default branch\n' \
+          "${path}" "${sha}" "${version}" >&2
         violations=1
       fi
     done <<<"${head_shas}"
   else
-    printf 'FAIL: digest repointed under unchanged version: %s (%s) in %s\n' \
-      "${path}" "${version}" "${file}" >&2
+    printf 'FAIL: digest repointed under unchanged version: %s (%s)\n' \
+      "${path}" "${version}" >&2
     violations=1
   fi
 done <<<"${keys}"

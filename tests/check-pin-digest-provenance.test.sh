@@ -59,6 +59,11 @@ function main() {
   run_scenario 'floating repoint tag-object deref passes' 'head-floating-repoint' tagobject-reachable 0 'verified reachable'
   run_scenario 'floating repoint diverged fails' 'head-floating-repoint' diverged 1 'not reachable from upstream default branch'
   run_scenario 'floating repoint api error exits 2' 'head-floating-repoint' api-error 2 ''
+  run_scenario 'quoted pin shape errors' 'head-quoted-pin' deny 2 'unrecognized uses: pin shape'
+  run_scenario 'comment-less pin shape errors' 'head-commentless-pin' deny 2 'unrecognized uses: pin shape'
+  run_scenario 'nested action dir repoint fails' 'head-nested-action-repoint' deny 1 'digest repointed under unchanged version'
+  run_scenario 'uppercase-SHA case-only change passes' 'head-uppercase-sha-same-pin' deny 0 'pin digest provenance OK'
+  run_scenario 'file rename plus repoint fails' 'head-file-rename-repoint' deny 1 'digest repointed under unchanged version'
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2
