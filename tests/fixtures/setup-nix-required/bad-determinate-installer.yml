@@ -1,0 +1,8 @@
+name: bad-determinate-installer
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: DeterminateSystems/nix-installer-action@2f1b1a1c8b4e3d9a7c0e5f6b8d2a4c6e0f1a3b5d # v20.0.0
+      - run: nix build .#foo
