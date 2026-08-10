@@ -68,21 +68,29 @@ node the check compares `original`, the `flake` flag, and the rest of `locked`
 (`type`/`owner`/`repo`/`url`/`ref`/…); `inputs` wiring is excluded so that
 legitimate transitive graph churn is tolerated. Scope is hybrid: a
 source-identity change on any node present in both base and head fails, while a
-node add/remove fails only for a top-level input (`root.inputs`). On a normal
-bump the gate is invisible and the PR auto-merges as before; it fails — pausing
-`gh pr merge --auto` — only on a source repoint, the event worth a human glance.
+node add/remove fails only for a top-level input (the entry node's `inputs`).
+On a normal bump the gate is invisible and the PR auto-merges as before; it
+fails — pausing `gh pr merge --auto` — only on a source repoint, the event
+worth a human glance.
+
+The entry point is each lock's own top-level `.root` field, read from base and
+head independently — not a hardcoded `"root"` node id, since a lock's root
+node can be named anything. A missing or non-string `.root` is an operational
+error. If the base and head root ids differ, the check fails closed before any
+node comparison runs, so a crafted lock cannot repoint `.root` at a decoy node
+to dodge the top-level comparison.
 
 Top-level input refs resolve through `follows` paths before that comparison: a
 string ref names the target node id directly, and an array ref is a path
-walked from `root` through each node's `inputs` in turn, one hop per array
-element, guarded against cycles by a depth ceiling. A ref that cannot be
-resolved — a dangling path element, a cycle, or an empty array — fails closed
-with a distinct `top-level input unresolvable` message rather than comparing
-against nothing. A ref-shape change (string to array, or array to a
-differently-shaped array) whose resolved source identity is unchanged passes
-by design: the gate guards source identity, not `follows`-graph shape, so a
-routine `follows` restructuring that still lands on the same source is not a
-provenance event.
+walked from the lock's root node through each node's `inputs` in turn, one hop
+per array element, guarded against cycles by a depth ceiling. A ref that
+cannot be resolved — a dangling path element, a cycle, or an empty array —
+fails closed with a distinct `top-level input unresolvable` message rather
+than comparing against nothing. A ref-shape change (string to array, or array
+to a differently-shaped array) whose resolved source identity is unchanged
+passes by design: the gate guards source identity, not `follows`-graph shape,
+so a routine `follows` restructuring that still lands on the same source is
+not a provenance event.
 
 The `lint-doc-invariants` job fetches `origin/main` before the check runs
 (`actions/checkout` does not create that ref on its own); if the base lock

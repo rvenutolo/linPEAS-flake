@@ -19,16 +19,26 @@
 #
 # Scope (hybrid): a source-identity change on ANY node present in both
 # base and head fails. A node add/remove fails only for TOP-LEVEL
-# inputs (root.inputs); transitive node churn is tolerated and logged.
+# inputs (the entry node's `inputs`); transitive node churn is
+# tolerated and logged.
+#
+# The entry point is each lock's own top-level `.root` field, not a
+# hardcoded "root" node id — a lock's root node can be named anything.
+# `.root` is read from base and head independently; a missing or
+# non-string `.root` is an operational error (exit 2). If the base and
+# head root ids differ, the check fails closed before any node
+# comparison runs: a crafted lock cannot repoint `.root` at a decoy
+# node to dodge the top-level comparison.
 #
 # Top-level input refs are resolved through `follows` paths before the
 # source-identity comparison: a string ref is the target node id
-# directly; an array ref is a path walked from `root` through each
-# node's `inputs` in turn (cycle-guarded by a depth limit). A ref-shape
-# change that still resolves to the same source passes, while any
-# transition that changes the resolved source — including
-# string-to-array and array-to-array — fails. A ref that cannot be
-# resolved (dangling path element, cycle, empty array) fails closed.
+# directly; an array ref is a path walked from the lock's root node
+# through each node's `inputs` in turn (cycle-guarded by a depth
+# limit). A ref-shape change that still resolves to the same source
+# passes, while any transition that changes the resolved source —
+# including string-to-array and array-to-array — fails. A ref that
+# cannot be resolved (dangling path element, cycle, empty array) fails
+# closed.
 #
 # CI coupling: the lint-doc-invariants job fetches origin/main before
 # running this check. `actions/checkout` does not create
@@ -80,27 +90,39 @@ printf '%s' "${base_json}" | jq -e '.nodes | type == "object"' >/dev/null 2>&1 |
 printf '%s' "${head_json}" | jq -e '.nodes | type == "object"' >/dev/null 2>&1 ||
   die_op "head flake.lock: invalid JSON or .nodes not an object"
 
+base_root="$(printf '%s' "${base_json}" | jq -r 'if (.root | type) == "string" then .root else empty end')"
+[[ -n ${base_root} ]] || die_op "base flake.lock: .root missing or not a string"
+head_root="$(printf '%s' "${head_json}" | jq -r 'if (.root | type) == "string" then .root else empty end')"
+[[ -n ${head_root} ]] || die_op "head flake.lock: .root missing or not a string"
+
+if [[ ${base_root} != "${head_root}" ]]; then
+  printf 'FAIL: root node id changed: %s -> %s\n' "${base_root}" "${head_root}" >&2
+  printf 'flake.lock provenance check FAILED — the lock entry point was repointed.\n' >&2
+  printf 'A routine bump never renames the root node. Review the change.\n' >&2
+  exit 1
+fi
+
 # shellcheck disable=SC2016 # jq program literal; $base/$head are jq args, not shell
 readonly JQ_PROG='
 def srcid:
   { original: (.original // null),
     flake: (.flake // null),
     locked: ((.locked // {}) | del(.rev, .narHash, .lastModified)) };
-def resolve($lock; $ref; $depth):
+def resolve($lock; $origin; $ref; $depth):
   if $depth > 32 then error("follows depth exceeded")
   elif ($ref | type) == "string" then $ref
   elif ($ref | type) == "array" then
     if ($ref | length) == 0 then error("empty follows path")
-    else reduce $ref[] as $e ("root";
+    else reduce $ref[] as $e ($origin;
       . as $cur
       | ($lock.nodes[$cur] // error("missing node: \($cur)")) as $node
       | (($node.inputs // {})[$e] // error("dangling follows: \($e) from \($cur)")) as $next
-      | resolve($lock; $next; $depth + 1))
+      | resolve($lock; $origin; $next; $depth + 1))
     end
   else error("bad input ref type: \($ref | type)")
   end;
-($base.nodes.root.inputs // {}) as $bin
-| ($head.nodes.root.inputs // {}) as $hin
+($base.nodes[$broot].inputs // {}) as $bin
+| ($head.nodes[$hroot].inputs // {}) as $hin
 | ($bin | keys) as $bk
 | ($hin | keys) as $hk
 | [ ($hk - $bk)[] | "FAIL: top-level input added: \(.)" ] as $added
@@ -109,8 +131,8 @@ def resolve($lock; $ref; $depth):
     | select(. as $n | $hk | index($n))
     | . as $name
     | $bin[$name] as $bref | $hin[$name] as $href
-    | (try resolve($base; $bref; 0) catch null) as $bnode
-    | (try resolve($head; $href; 0) catch null) as $hnode
+    | (try resolve($base; $broot; $bref; 0) catch null) as $bnode
+    | (try resolve($head; $hroot; $href; 0) catch null) as $hnode
     | if ($bnode == null) or ($hnode == null)
         or (($base.nodes | has($bnode)) | not)
         or (($head.nodes | has($hnode)) | not)
@@ -120,15 +142,15 @@ def resolve($lock; $ref; $depth):
       else empty
       end ] as $tlrep
 | [ ($base.nodes | keys[])
-    | select(. != "root")
+    | select(. != $broot)
     | . as $k
     | select($head.nodes | has($k))
     | select(($base.nodes[$k] | srcid) != ($head.nodes[$k] | srcid))
     | "FAIL: node repointed: \($k)" ] as $noderep
-| [ ($head.nodes | keys[]) | select(. != "root") | . as $k
+| [ ($head.nodes | keys[]) | select(. != $hroot) | . as $k
     | select(($base.nodes | has($k)) | not)
     | "note: transitive node added (tolerated): \($k)" ] as $tadd
-| [ ($base.nodes | keys[]) | select(. != "root") | . as $k
+| [ ($base.nodes | keys[]) | select(. != $broot) | . as $k
     | select(($head.nodes | has($k)) | not)
     | "note: transitive node removed (tolerated): \($k)" ] as $trem
 | { fails: ($added + $removed + $tlrep + $noderep),
@@ -138,6 +160,8 @@ def resolve($lock; $ref; $depth):
 result="$(jq -n \
   --argjson base "${base_json}" \
   --argjson head "${head_json}" \
+  --arg broot "${base_root}" \
+  --arg hroot "${head_root}" \
   "${JQ_PROG}")"
 
 notes="$(printf '%s' "${result}" | jq -r '.notes[]')"
