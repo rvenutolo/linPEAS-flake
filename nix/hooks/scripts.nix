@@ -19,6 +19,24 @@
     pass_filenames = false;
     language = "system";
   };
+  # No scripts/*.sh feeds a redirection from a yq process substitution
+  # (`< <(yq ...)`) — a procsub's exit status is invisible under
+  # set -Eeuo pipefail, so a yq parse failure fails open instead of
+  # loud. See docs/security/workflow-hardening.md.
+  no-yq-procsub = {
+    enable = true;
+    name = "no-yq-procsub";
+    description = "No scripts/*.sh feeds a redirection from a yq process substitution.";
+    entry = "${pkgs-unstable.writeShellScript "no-yq-procsub-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-no-yq-procsub.sh
+    ''}";
+    files = "^scripts/.*\\.sh$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Every scripts/check-*.sh has tests/check-*.test.sh and
   # vice versa. See docs/security/workflow-hardening.md.
   script-has-test = {

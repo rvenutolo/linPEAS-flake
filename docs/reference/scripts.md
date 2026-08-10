@@ -312,6 +312,18 @@ Lint: ban unpinned `nix run nixpkgs#<pkg>` invocations
 across workflows, scripts, and shell-fenced markdown. Allowed
 alternatives use the repo's own flake or an explicit commit pin.
 
+### scripts/check-no-yq-procsub.sh
+
+Lint: no scripts/\*.sh may feed a redirection from a yq
+process substitution (`< <(yq ...)`). A procsub's exit status is
+invisible to `set -Eeuo pipefail`, so a yq parse failure yields empty
+loop input and the calling check passes wholesale (fail-open). Use
+the capture-into-variable idiom (or a temp file for NUL-delimited
+output) so parse failures abort loudly.
+
+Honors SCRIPTS_DIR_OVERRIDE (default: scripts) for fixtures.
+Exit 0 clean, 1 on any hit, 2 on operational error.
+
 ### scripts/check-orphan-invariants.sh
 
 Lint: docs/invariant-index.md and docs/\*\*/\*.md stay
