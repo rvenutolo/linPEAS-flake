@@ -74,7 +74,7 @@ live in `.claude/CLAUDE.md` (untracked).
 
 ## Install / Runbooks
 
-- **Declared systems evaluate** — every system in `flake.lib.systems` force-evaluates in CI, failing with the system named. → [install/nix.md](install/nix.md) <!-- enforcer: scripts/check-flake-systems-eval.sh; ci: flake-check; hook: - -->
+- **Declared systems evaluate** — every system in `flake.lib.systems` force-evaluates in CI down to each package's derivation, failing with the system named. → [install/nix.md](install/nix.md) <!-- enforcer: scripts/check-flake-systems-eval.sh; ci: flake-check; hook: - -->
 - **OCI image** — `Entrypoint` not `Cmd`; bash+coreutils set. → [install/docker.md](install/docker.md) <!-- enforcer: -; ci: -; hook: - -->
 - **Manifest digest-pinning** — every multi-arch manifest-creating docker command takes its source refs as `@sha256:` digests, never mutable tags. → [install/docker.md](install/docker.md) <!-- enforcer: scripts/check-manifest-digest-pinned.sh; ci: lint-workflow-security; hook: manifest-digest-pinned -->
 - **DOCKERHUB_TOKEN split** — `_RW` vs `_DELETE`, never unsuffixed. → [runbooks/dockerhub-recovery.md](runbooks/dockerhub-recovery.md) <!-- enforcer: scripts/check-dockerhub-token-scope-split.sh; ci: lint-doc-invariants; hook: - -->

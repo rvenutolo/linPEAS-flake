@@ -3,7 +3,9 @@
 #
 # @description Compare two reproducibility-build hash JSON files.
 # Emits a markdown table to GITHUB_STEP_SUMMARY (or stdout if unset)
-# and exits 0 on full match, 1 on any divergence, 2 on bad input.
+# and exits 0 on full match, 1 on any divergence, 2 on bad input. Bad
+# input includes an absent, null, or malformed hash field: two builds
+# that both measured nothing are not a match.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -28,6 +30,46 @@ readonly FIELDS=(
   image_tar_sha256
   image_manifest_digest
 )
+
+# Expected shape per compared field. A present-but-worthless value — an
+# absent key read back as the string `null`, or a measurement step that
+# emitted an error token — must fail as bad input rather than compare
+# equal against the same worthless value in the other build. Two builds
+# that both measured nothing are not a reproducibility proof.
+# @arg $1 field name
+function expected_pattern() {
+  case "$1" in
+  linpeas_nar_hash) printf '%s' '^sha256-[A-Za-z0-9+/=]+$' ;;
+  image_tar_sha256) printf '%s' '^[0-9a-f]{64}$' ;;
+  image_manifest_digest) printf '%s' '^sha256:[0-9a-f]{64}$' ;;
+  *)
+    printf 'ERROR: no expected pattern for field: %s\n' "$1" >&2
+    exit 2
+    ;;
+  esac
+}
+
+for f in "${BUILD_A}" "${BUILD_B}"; do
+  if ! jq --exit-status 'type == "object"' "${f}" >/dev/null 2>&1; then
+    printf 'ERROR: not a JSON object: %s\n' "${f}" >&2
+    exit 2
+  fi
+  for field in "${FIELDS[@]}"; do
+    if ! jq --exit-status --arg k "${field}" \
+      '.[$k] | type == "string" and length > 0 and . != "null"' \
+      "${f}" >/dev/null 2>&1; then
+      printf 'ERROR: %s: field %s is absent, null, or empty\n' "${f}" "${field}" >&2
+      exit 2
+    fi
+    value="$(jq --raw-output --arg k "${field}" '.[$k]' "${f}")"
+    pattern="$(expected_pattern "${field}")"
+    if [[ ! ${value} =~ ${pattern} ]]; then
+      printf 'ERROR: %s: field %s has malformed value: %s\n' "${f}" "${field}" "${value}" >&2
+      exit 2
+    fi
+  done
+done
+unset value pattern field
 
 summary_out="${GITHUB_STEP_SUMMARY:-/dev/stdout}"
 
@@ -54,8 +96,8 @@ mismatches=()
     printf '| Field | Build A | Build B |\n'
     printf '|---|---|---|\n'
     for field in linpeas_store_path image_store_path; do
-      a_val="$(jq -r --arg k "${field}" '.[$k]' "${BUILD_A}")"
-      b_val="$(jq -r --arg k "${field}" '.[$k]' "${BUILD_B}")"
+      a_val="$(jq --raw-output --arg k "${field}" '.[$k] // "(absent)"' "${BUILD_A}")"
+      b_val="$(jq --raw-output --arg k "${field}" '.[$k] // "(absent)"' "${BUILD_B}")"
       printf "| \`%s\` | \`%s\` | \`%s\` |\n" "${field}" "${a_val}" "${b_val}"
     done
     printf '\n'

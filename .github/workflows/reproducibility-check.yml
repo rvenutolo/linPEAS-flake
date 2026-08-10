@@ -55,7 +55,10 @@ jobs:
           set -Eeuo pipefail
           linpeas_path="$(readlink -f result-linpeas)"
           image_path="$(readlink -f result-image)"
-          linpeas_nar_hash="$(nix path-info --json "${linpeas_path}" | jq -r '.[].narHash')"
+          # --exit-status so a `nix path-info --json` shape change fails
+          # here rather than emitting the string "null" into build.json,
+          # where both builds would carry it and compare as a match.
+          linpeas_nar_hash="$(nix path-info --json "${linpeas_path}" | jq --exit-status --raw-output '.[].narHash')"
           image_tar_sha256="$(sha256sum "${image_path}" | awk '{print $1}')"
           case "$(file --brief --mime-type "${image_path}")" in
             application/gzip | application/x-gzip)
@@ -130,7 +133,10 @@ jobs:
           set -Eeuo pipefail
           linpeas_path="$(readlink -f result-linpeas)"
           image_path="$(readlink -f result-image)"
-          linpeas_nar_hash="$(nix path-info --json "${linpeas_path}" | jq -r '.[].narHash')"
+          # --exit-status so a `nix path-info --json` shape change fails
+          # here rather than emitting the string "null" into build.json,
+          # where both builds would carry it and compare as a match.
+          linpeas_nar_hash="$(nix path-info --json "${linpeas_path}" | jq --exit-status --raw-output '.[].narHash')"
           image_tar_sha256="$(sha256sum "${image_path}" | awk '{print $1}')"
           case "$(file --brief --mime-type "${image_path}")" in
             application/gzip | application/x-gzip)

@@ -2,8 +2,10 @@
 # scripts/check-flake-systems-eval.sh
 #
 # @description Assert every system declared in `flake.lib.systems`
-# evaluates. Fails naming the offending system + the real nix error,
-# so a platform drop in a nixpkgs bump is diagnosable at a glance.
+# evaluates, forcing each package's derivation (not just the attribute
+# names) so a package whose value throws is caught. Fails naming the
+# offending system + the real nix error, so a platform drop in a nixpkgs
+# bump is diagnosable at a glance.
 # @option --flake <dir> flake to check (default: repo root)
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -34,7 +36,13 @@ function main() {
   trap 'rm --force -- "${err:-}"' EXIT
   while IFS= read -r sys; do
     log_info "evaluating ${sys}"
-    if ! nix eval --json "${flake}#packages.${sys}" --apply builtins.attrNames >/dev/null 2>"${err}"; then
+    # Map to drvPath rather than attrNames: --json forces the result to
+    # strings, instantiating every package's derivation, so a package
+    # whose value throws is caught. attrNames forces only the attrset
+    # spine and never touches the values.
+    if ! nix eval --json "${flake}#packages.${sys}" \
+      --apply 'ps: builtins.mapAttrs (_: p: p.drvPath) ps' \
+      >/dev/null 2>"${err}"; then
       log_err "system ${sys} failed to evaluate:"
       cat -- "${err}" >&2
       rc=1

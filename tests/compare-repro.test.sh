@@ -102,6 +102,63 @@ function run_missing_input_scenario() {
 
 run_missing_input_scenario
 
+# @description Run a bad-input scenario: the script must exit 2 before
+# writing any summary, with the offending field named on stderr.
+# @arg $1 scenario name
+# @arg $2 fixture subdir
+# @arg $3 expected stderr substring
+function run_bad_input_scenario() {
+  local -r name="$1"
+  local -r fixture_dir="$2"
+  local -r expected_substring="$3"
+
+  local summary_file stderr_file
+  summary_file="$(mktemp)"
+  stderr_file="$(mktemp)"
+
+  local actual_exit=0
+  GITHUB_STEP_SUMMARY="${summary_file}" \
+    "${SCRIPT}" \
+    "${FIXTURES}/${fixture_dir}/build-a.json" \
+    "${FIXTURES}/${fixture_dir}/build-b.json" \
+    >/dev/null 2>"${stderr_file}" || actual_exit=$?
+
+  if [[ ${actual_exit} -ne 2 ]]; then
+    printf 'FAIL: %s — expected exit 2, got %d\n' "${name}" "${actual_exit}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet -- "${expected_substring}" "${stderr_file}"; then
+    printf 'FAIL: %s — stderr missing %q\n' "${name}" "${expected_substring}" >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif [[ -s ${summary_file} ]]; then
+    printf 'FAIL: %s — wrote a summary despite bad input\n' "${name}" >&2
+    cat -- "${summary_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit 2)\n' "${name}"
+  fi
+}
+
+run_bad_input_scenario \
+  'absent hash field is not a match' \
+  'missing-field' \
+  'linpeas_nar_hash'
+
+run_bad_input_scenario \
+  'JSON-null hash field is not a match' \
+  'null-field' \
+  'linpeas_nar_hash'
+
+run_bad_input_scenario \
+  'literal null-string hash field is not a match' \
+  'literal-null-string' \
+  'linpeas_nar_hash'
+
+run_bad_input_scenario \
+  'malformed hash value is not a match' \
+  'bad-shape' \
+  'linpeas_nar_hash'
+
 if [[ ${failures} -gt 0 ]]; then
   printf '\n%d scenario(s) failed.\n' "${failures}" >&2
   exit 1
