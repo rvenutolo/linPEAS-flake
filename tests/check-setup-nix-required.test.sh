@@ -26,9 +26,14 @@ function expect() {
 }
 
 expect good.yml 0 ""
-expect bad-direct-install.yml 1 "direct cachix/install-nix-action"
+expect bad-direct-install.yml 1 \
+  "cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee installs Nix outside the composite"
 expect bad-missing-token.yml 1 "missing github-token"
 expect bad-wrong-token.yml 1 "wrong github-token"
 expect bad-malformed.yml 1 "could not evaluate"
+expect bad-determinate-installer.yml 1 \
+  "DeterminateSystems/nix-installer-action@2f1b1a1c8b4e3d9a7c0e5f6b8d2a4c6e0f1a3b5d installs Nix outside the composite"
+expect bad-quick-install.yml 1 \
+  "nixbuild/nix-quick-install-action@9d1f2e3a4b5c6d7e8f90a1b2c3d4e5f60718293a installs Nix outside the composite"
 
 printf 'all tests passed\n'

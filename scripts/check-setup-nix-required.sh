@@ -2,16 +2,18 @@
 # scripts/check-setup-nix-required.sh
 #
 # @description Lint: every workflow installing Nix goes through the
-# composite `./.github/actions/setup-nix` and passes
+# composite `./.github/actions/setup-nix` — no vendor Nix-installer
+# action directly — and passes
 # `github-token: ${{ secrets.GITHUB_TOKEN }}`.
 
 # Asserts every workflow that installs Nix does so through the
 # composite `./.github/actions/setup-nix` and passes
-# `github-token: ${{ secrets.GITHUB_TOKEN }}`. Direct use of
-# `cachix/install-nix-action` from a workflow is forbidden — that
-# path skips the access-token injection and is the root cause of
-# the recurring HTTP 401 flake-input fetches under runner-IP-pool
-# contention. See docs/security/workflow-hardening.md.
+# `github-token: ${{ secrets.GITHUB_TOKEN }}`. Calling any vendor
+# Nix-installer action directly from a workflow is forbidden — that
+# path skips the composite's authenticated-token injection and its
+# hardening, so flake-input fetches run unauthenticated and hit
+# HTTP 401 under runner-IP-pool contention. See
+# docs/security/workflow-hardening.md.
 #
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures.
 # Exits 0 on full coverage, 1 on any drift, 2 on missing yq.
@@ -25,6 +27,17 @@ readonly FILE_FILTER="${WORKFLOW_FILE_FILTER:-}"
 readonly DIR="${OVERRIDE:-${DEFAULT_DIR}}"
 # shellcheck disable=SC2016  # single quotes intentional: literal string, no expansion wanted
 readonly EXPECTED_TOKEN='${{ secrets.GITHUB_TOKEN }}'
+readonly COMPOSITE="./.github/actions/setup-nix"
+# Nix-installer actions a workflow must not call directly. Matched
+# case-insensitively against the action path (the part before `@`).
+# The installers this covers by name:
+#   cachix/install-nix-action
+#   DeterminateSystems/nix-installer-action
+#   DeterminateSystems/determinate-nix-action
+#   nixbuild/nix-quick-install-action
+# The alternatives are the family patterns those names share, so an
+# unlisted vendor publishing the same kind of action is caught too.
+readonly INSTALLER_RE='install-nix|nix-installer|nix-quick-install|determinate-nix'
 
 if ! command -v yq >/dev/null 2>&1; then
   printf 'yq not found on PATH\n' >&2
@@ -46,7 +59,7 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
     continue
   fi
 
-  # 1) Any direct cachix/install-nix-action use is forbidden.
+  # 1) Any direct Nix-installer action use is forbidden.
   # shellcheck disable=SC2016  # single quotes intentional: yq expression, no bash expansion wanted
   if ! uses_rows="$(yq -r '
     .jobs // {} | to_entries[] |
@@ -60,9 +73,11 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
   fi
   while IFS=$'\t' read -r job step_uses; do
     [[ -z ${step_uses} || ${step_uses} == "null" ]] && continue
-    if [[ ${step_uses} == cachix/install-nix-action* ]]; then
-      printf '%s: job %q: direct cachix/install-nix-action forbidden; use ./.github/actions/setup-nix\n' \
-        "${f}" "${job}" >&2
+    [[ ${step_uses} == "${COMPOSITE}" ]] && continue
+    action_path="${step_uses%%@*}"
+    if [[ ${action_path,,} =~ ${INSTALLER_RE} ]]; then
+      printf '%s: job %q: %s installs Nix outside the composite; use ./.github/actions/setup-nix\n' \
+        "${f}" "${job}" "${step_uses}" >&2
       failed=$((failed + 1))
     fi
   done <<<"${uses_rows}"

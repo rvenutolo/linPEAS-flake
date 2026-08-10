@@ -29,5 +29,10 @@ expect good-prose.md 0 ""
 expect bad-unpinned.sh 1 "unpinned"
 expect bad-fence.md 1 "unpinned"
 expect bad-fence-unlabeled.md 1 "unpinned"
+expect bad-run-flag.sh 1 "nix run --quiet nixpkgs#cosign -- version"
+expect bad-shell-unpinned.sh 1 "nix shell nixpkgs#cosign --command cosign version"
+expect bad-develop-unpinned.sh 1 "nix develop nixpkgs#foo"
+expect bad-build-unpinned.sh 1 "nix build nixpkgs#bar"
+expect bad-trailing-ref.sh 1 "nix shell .#jq nixpkgs#cosign --command cosign version"
 
 printf 'all tests passed\n'

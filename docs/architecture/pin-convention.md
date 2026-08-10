@@ -46,8 +46,9 @@ upstream tagging convention.
 
 - Lint: `scripts/check-patch-tag-pins.sh`, wired as the
     `patch-tag-pins` pre-commit hook (see `nix/hooks/workflow-security.nix`). Fails any PR
-    that introduces or regresses a major-only comment without an
-    exception marker.
+    whose SHA pin lacks an exact patch-tag comment and an exception
+    marker — whether the comment is missing entirely, names no version,
+    or names only a major tag.
 
 - Runtime check: [ratchet-pin-audit](../runbooks/ratchet-pin-audit.md)
     (daily). Patch-tag immutability means the audit stays quiet under
