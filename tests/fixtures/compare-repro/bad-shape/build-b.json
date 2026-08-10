@@ -1,0 +1,7 @@
+{
+  "linpeas_store_path": "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-linpeas",
+  "linpeas_nar_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+  "image_store_path": "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-linpeas-image",
+  "image_tar_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "image_manifest_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+}
