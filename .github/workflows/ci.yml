@@ -637,11 +637,12 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
-      - name: fetch base ref for flake.lock provenance diff
-        # check-flake-lock-provenance.sh (in this group) reads
-        # `git show origin/main:flake.lock`; actions/checkout does not
-        # create refs/remotes/origin/main on its own. Dropping this step
-        # makes the check exit 2 (loud red), never a silent pass.
+      - name: fetch base ref for provenance diffs
+        # check-flake-lock-provenance.sh and check-pin-digest-provenance.sh
+        # (both in this group) read `git show`/`git ls-tree` against
+        # origin/main; actions/checkout does not create
+        # refs/remotes/origin/main on its own. Dropping this step makes
+        # both checks exit 2 (loud red), never a silent pass.
         run: git fetch --no-tags --depth=1 origin main:refs/remotes/origin/main
       - uses: ./.github/actions/setup-nix
         with:

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Fake git for the base-side ls-tree-failure scenario in
+# tests/check-pin-digest-provenance.test.sh. Forwards every
+# subcommand to the real git (resolved via REAL_GIT, captured by the
+# caller before this shim's directory was prepended to PATH) except
+# ls-tree, which is forced to fail — simulating an infrastructure git
+# failure (e.g. a blob-filtered checkout whose lazy fetch is blocked)
+# so load_base_file_list()'s failure-propagation path can be exercised
+# without a real broken checkout.
+set -Eeuo pipefail
+if [[ "${1:-}" == "ls-tree" ]]; then
+  printf 'fatal: simulated ls-tree failure for test\n' >&2
+  exit 128
+fi
+exec "${REAL_GIT}" "$@"

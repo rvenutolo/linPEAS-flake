@@ -126,9 +126,13 @@ and the octoscan `OCTOSCAN_DIGEST`/`OCTOSCAN_VERSION` pair against
     a repointed released tag — the digest-repoint supply-chain class
     (a force-pushed upstream tag reaches a Renovate digest-only bump
     that `minimumReleaseAge` cannot delay, because the version's
-    release timestamp is unchanged). Hard fail; auto-merge is blocked
-    until a human investigates and pushes an explicit unblock to the
-    bot branch.
+    release timestamp is unchanged). Hard fail; auto-merge is blocked.
+    Remediation: verify the upstream release notes explain the
+    re-tag; if legitimate, either push a commit to the bot branch that
+    moves the version label together with the SHA (converting the pin
+    to a version-label bump, which the gate passes) or update the pin
+    to the corrected upstream release. A digest-only change is never
+    merged unreviewed.
 1. A floating-major pin (`# vN`, no immutable patch tag upstream)
     legitimately retargets across patches, so its digest moves are
     instead verified reachable from the upstream default branch via
@@ -137,3 +141,7 @@ and the octoscan `OCTOSCAN_DIGEST`/`OCTOSCAN_VERSION` pair against
 1. Version-label bumps (SHA and comment move together) pass here;
     they are quarantined by `minimumReleaseAge` and re-checked daily
     by `ratchet-pin-audit`.
+1. A self-reference pin — a `uses:` whose owner/repo is this repo's
+    own — is exempt from this gate entirely: it has no upstream
+    release tag to repoint against, since Renovate's pinDigests rule
+    tracks this repo's own main HEAD rather than an upstream tag.
