@@ -73,12 +73,17 @@ On a normal bump the gate is invisible and the PR auto-merges as before; it
 fails — pausing `gh pr merge --auto` — only on a source repoint, the event
 worth a human glance.
 
-The entry point is each lock's own top-level `.root` field, read from base and
-head independently — not a hardcoded `"root"` node id, since a lock's root
-node can be named anything. A missing or non-string `.root` is an operational
-error. If the base and head root ids differ, the check fails closed before any
-node comparison runs, so a crafted lock cannot repoint `.root` at a decoy node
-to dodge the top-level comparison.
+The entry point is each lock's own top-level `.root` field, validated as a
+string independently for base and head — not a hardcoded `"root"` node id,
+since a lock's root node can be named anything. A missing or non-string
+`.root` is an operational error. The base/head root ids are then compared for
+equality entirely inside the `jq` program that also does the node comparison:
+the id is never round-tripped through a shell variable or passed as a `jq`
+`--arg`, so a trailing newline or other control character smuggled into a node
+id is read byte-exact and cannot desync the script's view of the root from
+`nix`'s. If the base and head root ids differ, the check fails closed before
+any node comparison runs, so a crafted lock cannot repoint `.root` at a decoy
+node to dodge the top-level comparison.
 
 Top-level input refs resolve through `follows` paths before that comparison: a
 string ref names the target node id directly, and an array ref is a path

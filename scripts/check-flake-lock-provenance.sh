@@ -24,9 +24,14 @@
 #
 # The entry point is each lock's own top-level `.root` field, not a
 # hardcoded "root" node id — a lock's root node can be named anything.
-# `.root` is read from base and head independently; a missing or
-# non-string `.root` is an operational error (exit 2). If the base and
-# head root ids differ, the check fails closed before any node
+# `.root` is validated as a string independently for base and head
+# (missing or non-string is an operational error, exit 2), then
+# compared for equality entirely inside the jq program via `$base.root`
+# / `$head.root` — the root id is never round-tripped through a shell
+# variable or passed as a jq `--arg`, so it is read byte-exact. A
+# trailing newline or other control character smuggled into a node id
+# cannot desync the shell's view of the root from jq's. If the base
+# and head root ids differ, the check fails closed before any node
 # comparison runs: a crafted lock cannot repoint `.root` at a decoy
 # node to dodge the top-level comparison.
 #
@@ -90,17 +95,17 @@ printf '%s' "${base_json}" | jq -e '.nodes | type == "object"' >/dev/null 2>&1 |
 printf '%s' "${head_json}" | jq -e '.nodes | type == "object"' >/dev/null 2>&1 ||
   die_op "head flake.lock: invalid JSON or .nodes not an object"
 
-base_root="$(printf '%s' "${base_json}" | jq -r 'if (.root | type) == "string" then .root else empty end')"
-[[ -n ${base_root} ]] || die_op "base flake.lock: .root missing or not a string"
-head_root="$(printf '%s' "${head_json}" | jq -r 'if (.root | type) == "string" then .root else empty end')"
-[[ -n ${head_root} ]] || die_op "head flake.lock: .root missing or not a string"
+function root_display() {
+  # Renders `.root` for a human-readable error message ONLY — never
+  # used for the equality decision or passed to jq as an --arg. @json
+  # keeps control characters (e.g. a trailing newline) visible.
+  printf '%s' "$1" | jq -r '.root | @json' 2>/dev/null || printf 'null'
+}
 
-if [[ ${base_root} != "${head_root}" ]]; then
-  printf 'FAIL: root node id changed: %s -> %s\n' "${base_root}" "${head_root}" >&2
-  printf 'flake.lock provenance check FAILED — the lock entry point was repointed.\n' >&2
-  printf 'A routine bump never renames the root node. Review the change.\n' >&2
-  exit 1
-fi
+printf '%s' "${base_json}" | jq -e '(.root | type) == "string"' >/dev/null 2>&1 ||
+  die_op "base flake.lock: .root missing or not a string (got $(root_display "${base_json}"))"
+printf '%s' "${head_json}" | jq -e '(.root | type) == "string"' >/dev/null 2>&1 ||
+  die_op "head flake.lock: .root missing or not a string (got $(root_display "${head_json}"))"
 
 # shellcheck disable=SC2016 # jq program literal; $base/$head are jq args, not shell
 readonly JQ_PROG='
@@ -121,7 +126,18 @@ def resolve($lock; $origin; $ref; $depth):
     end
   else error("bad input ref type: \($ref | type)")
   end;
-($base.nodes[$broot].inputs // {}) as $bin
+# The base/head root-id comparison happens HERE, on $base.root /
+# $head.root as parsed by jq — never on a shell variable. A node id
+# is an arbitrary JSON string; only jq (not a bash `$( )` capture,
+# which strips all trailing newlines) can compare it byte-exact.
+if ($base.root != $head.root) then
+  { fails: ["FAIL: root node id changed: \($base.root) -> \($head.root)"],
+    notes: [],
+    root_mismatch: true }
+else
+($base.root) as $broot
+| ($head.root) as $hroot
+| ($base.nodes[$broot].inputs // {}) as $bin
 | ($head.nodes[$hroot].inputs // {}) as $hin
 | ($bin | keys) as $bk
 | ($hin | keys) as $hk
@@ -154,18 +170,24 @@ def resolve($lock; $origin; $ref; $depth):
     | select(($head.nodes | has($k)) | not)
     | "note: transitive node removed (tolerated): \($k)" ] as $trem
 | { fails: ($added + $removed + $tlrep + $noderep),
-    notes: ($tadd + $trem) }
+    notes: ($tadd + $trem),
+    root_mismatch: false }
+end
 '
 
-result="$(jq -n \
+jq_err_file="$(mktemp)"
+trap 'rm --force -- "${jq_err_file}"' EXIT
+
+if ! result="$(jq -n \
   --argjson base "${base_json}" \
   --argjson head "${head_json}" \
-  --arg broot "${base_root}" \
-  --arg hroot "${head_root}" \
-  "${JQ_PROG}")"
+  "${JQ_PROG}" 2>"${jq_err_file}")"; then
+  die_op "flake.lock comparison failed: $(cat -- "${jq_err_file}")"
+fi
 
 notes="$(printf '%s' "${result}" | jq -r '.notes[]')"
 fails="$(printf '%s' "${result}" | jq -r '.fails[]')"
+root_mismatch="$(printf '%s' "${result}" | jq -r '.root_mismatch')"
 
 if [[ -n ${notes} ]]; then
   printf '%s\n' "${notes}" >&2
@@ -173,8 +195,13 @@ fi
 
 if [[ -n ${fails} ]]; then
   printf '%s\n' "${fails}" >&2
-  printf 'flake.lock provenance check FAILED — an input source identity changed.\n' >&2
-  printf 'A routine bump may only move rev/narHash/lastModified. Review the change.\n' >&2
+  if [[ ${root_mismatch} == "true" ]]; then
+    printf 'flake.lock provenance check FAILED — the lock entry point was repointed.\n' >&2
+    printf 'A routine bump never renames the root node. Review the change.\n' >&2
+  else
+    printf 'flake.lock provenance check FAILED — an input source identity changed.\n' >&2
+    printf 'A routine bump may only move rev/narHash/lastModified. Review the change.\n' >&2
+  fi
   exit 1
 fi
 

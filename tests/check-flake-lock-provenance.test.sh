@@ -15,90 +15,8 @@ readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-flake-lock-provenance"
 
 failures=0
 
-# @arg $1 scenario name
-# @arg $2 head fixture basename
-# @arg $3 expected exit
-# @arg $4 expected stderr/stdout substring (empty skips)
-function run_scenario() {
-  local -r name="$1"
-  local -r head="$2"
-  local -r expected_exit="$3"
-  local -r expected_msg="$4"
-
-  local out_file
-  out_file="$(mktemp)"
-
-  local actual_exit=0
-  BASE_LOCK_FILE="${FIXTURES}/base.lock" \
-    HEAD_LOCK_FILE="${FIXTURES}/${head}" \
-    "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
-
-  if [[ ${actual_exit} -ne ${expected_exit} ]]; then
-    printf 'FAIL: %s — expected exit %d, got %d\n' \
-      "${name}" "${expected_exit}" "${actual_exit}" >&2
-    cat -- "${out_file}" >&2
-    failures=$((failures + 1))
-  elif [[ -n ${expected_msg} ]] &&
-    ! grep --fixed-strings --quiet -- "${expected_msg}" "${out_file}"; then
-    printf 'FAIL: %s — output missing %q\n' "${name}" "${expected_msg}" >&2
-    cat -- "${out_file}" >&2
-    failures=$((failures + 1))
-  else
-    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
-  fi
-
-  rm --force -- "${out_file}"
-}
-
-# @arg $1 scenario name ; missing base => operational error (exit 2)
-function run_missing_base() {
-  local -r name="$1"
-  local out_file
-  out_file="$(mktemp)"
-  local actual_exit=0
-  BASE_LOCK_FILE="${FIXTURES}/does-not-exist.lock" \
-    HEAD_LOCK_FILE="${FIXTURES}/base.lock" \
-    "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
-  if [[ ${actual_exit} -ne 2 ]]; then
-    printf 'FAIL: %s — expected exit 2, got %d\n' "${name}" "${actual_exit}" >&2
-    cat -- "${out_file}" >&2
-    failures=$((failures + 1))
-  else
-    printf 'PASS: %s (exit 2)\n' "${name}"
-  fi
-  rm --force -- "${out_file}"
-}
-
-# @arg $1 scenario name  @arg $2 head fixture  @arg $3 expected exit
-# @arg $4 expected output substring (empty skips)
-# Same as run_scenario but against the follows-shaped base lock.
-function run_follows_scenario() {
-  local -r name="$1" head="$2" expected_exit="$3" expected_msg="$4"
-  local out_file
-  out_file="$(mktemp)"
-  local actual_exit=0
-  BASE_LOCK_FILE="${FIXTURES}/base-follows.lock" \
-    HEAD_LOCK_FILE="${FIXTURES}/${head}" \
-    "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
-  if [[ ${actual_exit} -ne ${expected_exit} ]]; then
-    printf 'FAIL: %s — expected exit %d, got %d\n' \
-      "${name}" "${expected_exit}" "${actual_exit}" >&2
-    cat -- "${out_file}" >&2
-    failures=$((failures + 1))
-  elif [[ -n ${expected_msg} ]] &&
-    ! grep --fixed-strings --quiet -- "${expected_msg}" "${out_file}"; then
-    printf 'FAIL: %s — output missing %q\n' "${name}" "${expected_msg}" >&2
-    cat -- "${out_file}" >&2
-    failures=$((failures + 1))
-  else
-    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
-  fi
-  rm --force -- "${out_file}"
-}
-
 # @arg $1 scenario name  @arg $2 base fixture  @arg $3 head fixture
 # @arg $4 expected exit  @arg $5 expected output substring (empty skips)
-# Same as run_scenario but takes an explicit non-default base fixture.
 function run_pair_scenario() {
   local -r name="$1" base="$2" head="$3" expected_exit="$4" expected_msg="$5"
   local out_file
@@ -119,6 +37,41 @@ function run_pair_scenario() {
     failures=$((failures + 1))
   else
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+  rm --force -- "${out_file}"
+}
+
+# @arg $1 scenario name  @arg $2 head fixture basename  @arg $3 expected exit
+# @arg $4 expected stderr/stdout substring (empty skips)
+# Thin wrapper over run_pair_scenario anchored at the default base lock.
+function run_scenario() {
+  local -r name="$1" head="$2" expected_exit="$3" expected_msg="$4"
+  run_pair_scenario "${name}" 'base.lock' "${head}" "${expected_exit}" "${expected_msg}"
+}
+
+# @arg $1 scenario name  @arg $2 head fixture  @arg $3 expected exit
+# @arg $4 expected output substring (empty skips)
+# Thin wrapper over run_pair_scenario anchored at the follows-shaped base lock.
+function run_follows_scenario() {
+  local -r name="$1" head="$2" expected_exit="$3" expected_msg="$4"
+  run_pair_scenario "${name}" 'base-follows.lock' "${head}" "${expected_exit}" "${expected_msg}"
+}
+
+# @arg $1 scenario name ; missing base => operational error (exit 2)
+function run_missing_base() {
+  local -r name="$1"
+  local out_file
+  out_file="$(mktemp)"
+  local actual_exit=0
+  BASE_LOCK_FILE="${FIXTURES}/does-not-exist.lock" \
+    HEAD_LOCK_FILE="${FIXTURES}/base.lock" \
+    "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
+  if [[ ${actual_exit} -ne 2 ]]; then
+    printf 'FAIL: %s — expected exit 2, got %d\n' "${name}" "${actual_exit}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit 2)\n' "${name}"
   fi
   rm --force -- "${out_file}"
 }
@@ -144,9 +97,9 @@ function main() {
   run_follows_scenario 'dangling follows path fails' 'head-follows-dangling.lock' 1 'unresolvable'
   run_follows_scenario 'cyclic follows fails' 'head-follows-cycle.lock' 1 'unresolvable'
 
-  run_scenario 'decoy renamed root fails' 'head-decoy-root.lock' 1 'root'
-  run_scenario 'head .root missing errors' 'head-root-missing.lock' 2 ''
-  run_scenario 'head .root non-string errors' 'head-root-nonstring.lock' 2 ''
+  run_scenario 'decoy renamed root fails' 'head-decoy-root.lock' 1 'root node id changed'
+  run_scenario 'head .root missing errors' 'head-root-missing.lock' 2 'head flake.lock: .root missing or not a string'
+  run_scenario 'head .root non-string errors' 'head-root-nonstring.lock' 2 'head flake.lock: .root missing or not a string'
   run_pair_scenario 'alt root id routine bump passes' 'base-alt-root.lock' 'head-alt-root-routine.lock' 0 'provenance OK'
 
   if ((failures > 0)); then
