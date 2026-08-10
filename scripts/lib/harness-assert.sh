@@ -60,6 +60,18 @@ function harness_assert_record() {
     cat -- "${file}" >>"${HARNESS_ASSERT_POOL}/${index}.out"
   done
 
+  # Sameness is decided on output with the shared logger's timestamp
+  # prefix removed. Two scenarios emitting one diagnostic differ only by a
+  # clock tick, so a raw byte comparison would call them the same when both
+  # land in one second and different when they straddle the boundary —
+  # making the verdict depend on when the suite runs. Only the prefix
+  # `scripts/lib/log.sh` writes is stripped; any other varying text still
+  # counts as a difference, which flags rather than hides.
+  sed --regexp-extended \
+    's/^\[[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[+-][0-9]{4}\] //' \
+    -- "${HARNESS_ASSERT_POOL}/${index}.out" \
+    >"${HARNESS_ASSERT_POOL}/${index}.norm"
+
   HARNESS_ASSERT_COUNT=$((HARNESS_ASSERT_COUNT + 1))
 }
 
@@ -96,14 +108,16 @@ function harness_assert_verify() {
       [[ ${i} -eq ${j} ]] && continue
       sub_j="$(cat -- "${HARNESS_ASSERT_POOL}/${j}.sub")"
       [[ ${sub_j} == "${sub_i}" ]] && continue
-      # Byte-identical output means the two records observe the same run of
-      # the script — a harness asserting several properties of one
-      # invocation, not two scenarios one substring fails to tell apart. No
-      # substring can separate identical text, so a flag here would describe
-      # harness shape rather than a weak assertion. The census reports how
-      # many distinct outputs the pool holds, so the collapse stays visible.
-      cmp --silent -- "${HARNESS_ASSERT_POOL}/${i}.out" \
-        "${HARNESS_ASSERT_POOL}/${j}.out" && continue
+      # Identical output means no substring can separate the two records —
+      # either they observe one invocation a harness asserts several
+      # properties of, or two fixtures the script answers with the same
+      # diagnostic. Either way a flag would describe harness and fixture
+      # shape rather than a weak assertion, and no narrowing could clear
+      # it. The census reports how many distinct outputs the pool holds, so
+      # the collapse stays visible rather than quietly shrinking the
+      # comparison set.
+      cmp --silent -- "${HARNESS_ASSERT_POOL}/${i}.norm" \
+        "${HARNESS_ASSERT_POOL}/${j}.norm" && continue
       grep --fixed-strings --quiet -- "${sub_i}" \
         "${HARNESS_ASSERT_POOL}/${j}.out" || continue
       name_j="$(cat -- "${HARNESS_ASSERT_POOL}/${j}.name")"
@@ -116,7 +130,7 @@ function harness_assert_verify() {
 
   local distinct
   distinct="$(for ((i = 0; i < HARNESS_ASSERT_COUNT; i++)); do
-    sha256sum <"${HARNESS_ASSERT_POOL}/${i}.out"
+    sha256sum <"${HARNESS_ASSERT_POOL}/${i}.norm"
   done | sort --unique | wc --lines)"
 
   printf 'harness-assert: checked %d substring assertions across %d scenarios (%d distinct outputs)\n' \
