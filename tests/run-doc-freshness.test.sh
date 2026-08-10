@@ -11,12 +11,16 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/run-doc-freshness.sh"
 
 failures=0
 
+# Each mode builds a stub set whose table rows are unique to that mode, so a
+# row-plus-status assertion can only match the run it belongs to.
 # @arg $1 scenario name
-# @arg $2 tests-dir setup mode: all-pass | one-fail | empty
+# @arg $2 tests-dir setup mode: all-pass | one-fail | first-fail | empty
 # @arg $3 expected exit
 # @arg $4 expected stdout substring (empty skips)
 function run_scenario() {
@@ -26,12 +30,26 @@ function run_scenario() {
   tests_dir="${work}/tests"
   mkdir -p "${tests_dir}"
 
-  if [[ ${mode} != empty ]]; then
+  case "${mode}" in
+  all-pass | one-fail)
     printf '#!/usr/bin/env bash\nexit 0\n' >"${tests_dir}/refresh-aaa.test.sh"
     printf '#!/usr/bin/env bash\nexit 0\n' >"${tests_dir}/refresh-ccc.test.sh"
+    # bbb is the only difference between the two modes: it passes under
+    # all-pass and fails under one-fail, so its row isolates the axis.
     if [[ ${mode} == one-fail ]]; then
       printf '#!/usr/bin/env bash\nexit 1\n' >"${tests_dir}/refresh-bbb.test.sh"
+    else
+      printf '#!/usr/bin/env bash\nexit 0\n' >"${tests_dir}/refresh-bbb.test.sh"
     fi
+    ;;
+  first-fail)
+    # The failing harness sorts first, so a zzz row proves the runner kept
+    # going instead of aborting on the first failure.
+    printf '#!/usr/bin/env bash\nexit 1\n' >"${tests_dir}/refresh-aaa.test.sh"
+    printf '#!/usr/bin/env bash\nexit 0\n' >"${tests_dir}/refresh-zzz.test.sh"
+    ;;
+  esac
+  if [[ ${mode} != empty ]]; then
     chmod +x "${tests_dir}"/refresh-*.test.sh
   fi
 
@@ -41,6 +59,7 @@ function run_scenario() {
   TESTS_DIR_OVERRIDE="${tests_dir}" \
     GITHUB_STEP_SUMMARY="${step_file}" \
     "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
+  harness_assert_record "${name}" "${expected_out}" "${out_file}" "${step_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${expected_exit}" "${actual_exit}" >&2
@@ -62,11 +81,13 @@ function run_scenario() {
 }
 
 function main() {
-  run_scenario 'all harnesses pass -> exit 0' 'all-pass' 0 '| refresh-aaa.test.sh |'
-  run_scenario 'one harness fails -> exit 1' 'one-fail' 1 'FAIL'
-  # don't-abort: ccc must still appear in the table after bbb failed
-  run_scenario 'failing harness does not abort the rest' 'one-fail' 1 '| refresh-ccc.test.sh |'
+  run_scenario 'all harnesses pass -> exit 0' 'all-pass' 0 '| refresh-bbb.test.sh | pass |'
+  run_scenario 'one harness fails -> exit 1' 'one-fail' 1 '| refresh-bbb.test.sh | FAIL |'
+  # don't-abort: zzz must still appear in the table after aaa failed
+  run_scenario 'failing harness does not abort the rest' 'first-fail' 1 '| refresh-zzz.test.sh | pass |'
   run_scenario 'empty set -> exit 2' 'empty' 2 ''
+
+  harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then
     printf '\n%d scenario(s) failed\n' "${failures}" >&2

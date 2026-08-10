@@ -9,6 +9,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-renovate-invariants.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/renovate-invariants"
 
@@ -31,6 +33,7 @@ function run_scenario() {
   local actual_exit=0
   RENOVATE_JSON_OVERRIDE="${FIXTURES}/${fixture}" \
     "${SCRIPT}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
+  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' \
@@ -62,6 +65,7 @@ function main() {
     'bad-no-pin-digests.json' 1 'pinDigests'
   run_scenario 'extends missing helpers:pinGitHubActionDigests fails' \
     'bad-no-extends-pin.json' 1 'helpers:pinGitHubActionDigests'
+  harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2

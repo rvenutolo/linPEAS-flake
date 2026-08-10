@@ -6,6 +6,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-run-block-pyflakes-required.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-run-block-pyflakes-required"
 
@@ -23,6 +25,7 @@ function run_scenario() {
   local actual_exit=0
   PYFLAKES_GUARD_SCAN_ROOT_OVERRIDE="${scan_root}" \
     "${SCRIPT}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
+  harness_assert_record "${name}" "${expected_stderr_substr}" "${stderr_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' \
@@ -65,6 +68,8 @@ run_scenario "setup-python action + python-version keys → passes" \
 
 rm -rf -- "${clean_only}" "${with_python}" \
   "${with_inline_python}" "${clean_with_python_keys}"
+
+harness_assert_verify || failures=$((failures + 1))
 
 if [[ ${failures} -ne 0 ]]; then
   printf '\n%d scenario(s) failed.\n' "${failures}" >&2

@@ -11,6 +11,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-pin-digest-provenance.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-pin-digest-provenance"
 
@@ -31,6 +33,7 @@ function run_scenario() {
     BASE_DIR_OVERRIDE="${FIXTURES}/base" \
     HEAD_DIR_OVERRIDE="${FIXTURES}/${head}" \
     "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
+  harness_assert_record "${name}" "${expected_msg}" "${out_file}"
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${expected_exit}" "${actual_exit}" >&2
     cat -- "${out_file}" >&2
@@ -95,6 +98,7 @@ YAML
   local actual_exit=0
   (cd "${repo_dir}" && env -u BASE_DIR_OVERRIDE -u HEAD_DIR_OVERRIDE BASE_REF=main "${SCRIPT}") \
     >"${out_file}" 2>&1 || actual_exit=$?
+  harness_assert_record "${name}" "${expected_msg}" "${out_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${expected_exit}" "${actual_exit}" >&2
@@ -157,6 +161,7 @@ YAML
   ) >"${out_file}" 2>&1 || actual_exit=$?
 
   local -r expected_exit=2 expected_msg='git ls-tree failed'
+  harness_assert_record "${name}" "${expected_msg}" "${out_file}"
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${expected_exit}" "${actual_exit}" >&2
     cat -- "${out_file}" >&2
@@ -174,6 +179,13 @@ YAML
 }
 
 function main() {
+  # A clean pass prints the banner and nothing else, so no pass scenario
+  # owns a fixture-specific token to narrow to. The banner still separates
+  # the pass class from the violation and operational-error classes, which
+  # is the axis every pass scenario here asserts.
+  harness_assert_exempt 'pin digest provenance OK' '*' \
+    'global success banner: the script emits it on every passing run and emits no other output on a clean pass'
+
   run_scenario 'unchanged tree passes' 'base' deny 0 'pin digest provenance OK'
   run_scenario 'semver digest repoint fails' 'head-semver-repoint' deny 1 'digest repointed under unchanged version'
   run_scenario 'version bump passes' 'head-version-bump' deny 0 'pin digest provenance OK'
@@ -197,6 +209,7 @@ function main() {
     'head-floating-repoint' compare-not-found 1 'not reachable from upstream default branch'
   run_git_mode_scenario 'git BASE_REF mode: zero-level composite action repoint fails' 1 'digest repointed under unchanged version'
   run_git_ls_tree_failure_scenario
+  harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2

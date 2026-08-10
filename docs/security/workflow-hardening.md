@@ -114,6 +114,16 @@ The `EXEMPT` list in the script is empty: every harness must be wired to a runne
 
 Enforced by `scripts/check-test-reachable.sh`. Wired as the `lint-script-hygiene` CI job (member check `test-reachable`).
 
+## harness assertion discrimination
+
+Every harness scenario asserts a substring that appears in no sibling scenario's output, and every harness asserting against captured scenario output is wired to the gate that checks it.
+
+A harness proves behavior by grepping one scenario's captured output for a substring. When that substring also appears in a sibling scenario's output — a banner the script prints on the nominal path as well as the failure path, say — the grep matches whether or not the asserted behavior exists, so the harness stays green against a script that never implements it and the regression it was written to catch merges unseen. The gate records each scenario's asserted substring alongside its captured output and, after the run, flags any substring that also occurs in a sibling's output. Scenarios asserting the same substring are mutually exempt, and two records over byte-identical output are treated as one observation of a single run rather than two scenarios a substring fails to separate — the census line reports the distinct-output count so that collapse stays visible. A harness wired to the gate that records nothing fails closed.
+
+`harness_assert_exempt <substring> <other-scenario|*> <rationale>` registers a reviewed exception: the named form where one failure path emits no token another lacks, the `*` form for a banner a script prints across a whole outcome class. The rationale is mandatory so every weakening is reviewable. A harness that asserts produced artifact content — a rewritten workflow file, a generated doc — rather than captured scenario output is listed on the `EXEMPT` array in `tests/_harness_assert_wired.test.sh` with a rationale comment.
+
+Enforced by `scripts/lib/harness-assert.sh`, which runs inside every wired harness, and by `tests/_harness_assert_wired.test.sh`, which asserts the wiring; both are reached by the `harness-group` CI job.
+
 ## manifest-reading hook watches nix/hooks
 
 Every pre-commit hook whose script reads the Nix hook manifest (`nix eval .#devTooling.<system>.preCommitHooks`) includes `nix/hooks` in its `files` filter.

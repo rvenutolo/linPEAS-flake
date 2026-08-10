@@ -6,6 +6,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-actionlint-shellcheck-active.sh"
 
 failures=0
@@ -37,6 +39,7 @@ function run_scenario() {
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
 
+  harness_assert_record "${name}" "${expected_stderr_substr}" "${stderr_file}"
   rm -f -- "${stderr_file}"
 }
 
@@ -53,6 +56,7 @@ function scenario_default_passes() {
   else
     printf 'PASS: default fixture\n'
   fi
+  harness_assert_record 'default fixture' '' "${stderr_file}"
   rm -f -- "${stderr_file}"
 }
 
@@ -137,6 +141,8 @@ YAML
 run_scenario "missing SC2086 → fails" \
   "${clean_fixture}" 1 "SC2086 not found"
 rm -f -- "${clean_fixture}"
+
+harness_assert_verify || failures=$((failures + 1))
 
 if [[ ${failures} -ne 0 ]]; then
   printf '\n%d scenario(s) failed.\n' "${failures}" >&2

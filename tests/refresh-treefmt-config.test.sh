@@ -8,6 +8,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/refresh-treefmt-config.sh"
 readonly DOC="${REPO_ROOT}/docs/reference/treefmt-config.md"
 
@@ -89,6 +91,8 @@ function main() {
     "${ws_backup}" >"${DOC}"
   "${SCRIPT}" --check >/dev/null 2>"${ws_err}" || ws_rc=$?
   cp -- "${ws_backup}" "${DOC}"
+  harness_assert_record 'whitespace-perturbed markers rejected' \
+    'marker missing' "${ws_err}"
   if [[ ${ws_rc} -eq 1 ]] &&
     grep --fixed-strings --quiet -- 'marker missing' "${ws_err}"; then
     pass 'whitespace-perturbed markers rejected (fail-closed, not false-green)'
@@ -97,6 +101,8 @@ function main() {
     cat -- "${ws_err}" >&2
   fi
   rm --force -- "${ws_backup}" "${ws_err}"
+
+  harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then
     printf '%d failure(s)\n' "${failures}" >&2

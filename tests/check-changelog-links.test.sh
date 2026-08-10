@@ -9,6 +9,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-changelog-links.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/changelog-links"
 
@@ -50,6 +52,7 @@ function run_scenario() {
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
 
+  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
   rm --force -- "${stderr_file}"
 }
 
@@ -97,6 +100,8 @@ function main() {
   run_regex_scenario 'distinct adjacent PR links do not match' \
     '- ci: thing ([#190](https://x/pull/190)) ([#233](https://x/pull/233))' \
     'nomatch'
+
+  harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2

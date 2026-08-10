@@ -8,6 +8,8 @@ IFS=$'\n\t'
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-doc-cron-restatement.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-doc-cron-restatement"
 
@@ -50,6 +52,7 @@ function run_scenario() {
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
 
+  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
   rm --force -- "${stderr_file}"
 }
 
@@ -99,6 +102,8 @@ function main() {
     "${FIXTURES}/yaml-suffixed-fails/workflows" \
     "${FIXTURES}/yaml-suffixed-fails" \
     1 'docs/x.md'
+
+  harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2
