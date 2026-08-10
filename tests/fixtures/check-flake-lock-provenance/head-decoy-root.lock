@@ -1,0 +1,25 @@
+{
+  "nodes": {
+    "alpha": {
+      "locked": { "lastModified": 100, "narHash": "sha256-AAA", "owner": "orgA", "repo": "alpha", "rev": "aaa111", "type": "github" },
+      "original": { "owner": "orgA", "ref": "main", "repo": "alpha", "type": "github" }
+    },
+    "beta": {
+      "inputs": { "gamma": "gamma" },
+      "locked": { "lastModified": 200, "narHash": "sha256-BBB", "owner": "orgB", "repo": "beta", "rev": "bbb222", "type": "github" },
+      "original": { "owner": "orgB", "ref": "main", "repo": "beta", "type": "github" }
+    },
+    "evil": {
+      "locked": { "lastModified": 100, "narHash": "sha256-EEE", "owner": "attacker", "repo": "alpha", "rev": "eee111", "type": "github" },
+      "original": { "owner": "attacker", "ref": "main", "repo": "alpha", "type": "github" }
+    },
+    "gamma": {
+      "locked": { "lastModified": 300, "narHash": "sha256-CCC", "owner": "orgC", "repo": "gamma", "rev": "ccc333", "type": "github" },
+      "original": { "owner": "orgC", "repo": "gamma", "type": "github" }
+    },
+    "realroot": { "inputs": { "alpha": "evil", "beta": "beta" } },
+    "root": { "inputs": { "alpha": "alpha", "beta": "beta" } }
+  },
+  "root": "realroot",
+  "version": 7
+}

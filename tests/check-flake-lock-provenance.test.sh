@@ -96,6 +96,33 @@ function run_follows_scenario() {
   rm --force -- "${out_file}"
 }
 
+# @arg $1 scenario name  @arg $2 base fixture  @arg $3 head fixture
+# @arg $4 expected exit  @arg $5 expected output substring (empty skips)
+# Same as run_scenario but takes an explicit non-default base fixture.
+function run_pair_scenario() {
+  local -r name="$1" base="$2" head="$3" expected_exit="$4" expected_msg="$5"
+  local out_file
+  out_file="$(mktemp)"
+  local actual_exit=0
+  BASE_LOCK_FILE="${FIXTURES}/${base}" \
+    HEAD_LOCK_FILE="${FIXTURES}/${head}" \
+    "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
+  if [[ ${actual_exit} -ne ${expected_exit} ]]; then
+    printf 'FAIL: %s — expected exit %d, got %d\n' \
+      "${name}" "${expected_exit}" "${actual_exit}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  elif [[ -n ${expected_msg} ]] &&
+    ! grep --fixed-strings --quiet -- "${expected_msg}" "${out_file}"; then
+    printf 'FAIL: %s — output missing %q\n' "${name}" "${expected_msg}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+  rm --force -- "${out_file}"
+}
+
 function main() {
   run_scenario 'routine bump passes' 'head-routine.lock' 0 'provenance OK'
   run_scenario 'top-level owner change fails' 'head-toplevel-owner.lock' 1 'alpha'
@@ -116,6 +143,11 @@ function main() {
   run_follows_scenario 'string-to-array same source passes' 'head-follows-string-to-array-same.lock' 0 'provenance OK'
   run_follows_scenario 'dangling follows path fails' 'head-follows-dangling.lock' 1 'unresolvable'
   run_follows_scenario 'cyclic follows fails' 'head-follows-cycle.lock' 1 'unresolvable'
+
+  run_scenario 'decoy renamed root fails' 'head-decoy-root.lock' 1 'root'
+  run_scenario 'head .root missing errors' 'head-root-missing.lock' 2 ''
+  run_scenario 'head .root non-string errors' 'head-root-nonstring.lock' 2 ''
+  run_pair_scenario 'alt root id routine bump passes' 'base-alt-root.lock' 'head-alt-root-routine.lock' 0 'provenance OK'
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2
