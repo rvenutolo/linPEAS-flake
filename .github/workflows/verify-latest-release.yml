@@ -194,6 +194,50 @@ jobs:
             printf '%s: :latest matches :%s\n' "${reg}" "${TAG}"
           done
 
+      - name: verify ghcr.io and docker.io serve the same manifest
+        id: verify-cross-registry
+        # Anchors the two registries to ONE content identity. Every other
+        # check in this job proves "signed by us at some point": cosign
+        # and attestation bind a signature to a digest, not to recency,
+        # and `verify-latest-parity` compares tags only WITHIN a
+        # registry. So an attacker holding a Docker Hub push credential
+        # could retag an older release's still-signed digests onto
+        # docker.io `:latest` and `:VERSION` — every check above passes
+        # while docker.io serves a stale linPEAS to every `docker pull`.
+        #
+        # Both registries receive the same nix-built bytes, and each
+        # index is assembled from content-addressed per-arch digests, so
+        # the `:VERSION` index is byte-identical across registries by
+        # construction. Comparing it here makes a one-sided rollback
+        # fail. Index equality implies per-arch equality: the index
+        # enumerates the per-arch digests.
+        #
+        # Residual: a simultaneous rollback of BOTH registries still
+        # passes. That requires ghcr.io push — repo compromise — which is
+        # outside this job's threat model; it exists to catch a
+        # Docker-Hub-only compromise.
+        #
+        # Anonymous `docker buildx imagetools inspect --raw` works on
+        # public repos for both registries — no auth required.
+        env:
+          TAG: ${{ steps.read-tag.outputs.tag }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          ghcr_raw="$(docker buildx imagetools inspect --raw \
+            "ghcr.io/rvenutolo/linpeas:${TAG}")"
+          hub_raw="$(docker buildx imagetools inspect --raw \
+            "docker.io/rvenutolo/linpeas:${TAG}")"
+          ghcr_norm="$(jq --sort-keys . <<<"${ghcr_raw}")"
+          hub_norm="$(jq --sort-keys . <<<"${hub_raw}")"
+          if [[ "${ghcr_norm}" != "${hub_norm}" ]]; then
+            printf 'ghcr.io and docker.io disagree on :%s\n' "${TAG}" >&2
+            printf 'ghcr.io:\n%s\n' "${ghcr_norm}" >&2
+            printf 'docker.io:\n%s\n' "${hub_norm}" >&2
+            exit 1
+          fi
+          printf 'ghcr.io and docker.io serve identical :%s manifests\n' "${TAG}"
+
       - name: cosign verify images (both registries, per-arch + index)
         id: verify-images-cosign
         # Re-uses the per-arch digests resolved by the earlier steps via
@@ -378,6 +422,7 @@ jobs:
           VERIFY_HUB: ${{ steps.verify-hub.outcome }}
           VERIFY_IMAGES_COSIGN: ${{ steps.verify-images-cosign.outcome }}
           VERIFY_LATEST_PARITY: ${{ steps.verify-latest-parity.outcome }}
+          VERIFY_CROSS_REGISTRY: ${{ steps.verify-cross-registry.outcome }}
           VERIFY_PIN: ${{ steps.verify-pin.outcome }}
           VERIFY_UPSTREAM_SRI: ${{ steps.verify-upstream-sri.outcome }}
           VERIFY_BLOB_PIN: ${{ steps.verify-blob-pin.outcome }}
@@ -394,8 +439,9 @@ jobs:
           elif [[ ${DOWNLOAD_ASSETS}       == 'failure' ]]; then reason='release-asset-download-failed'
           elif [[ ${VERIFY_GHCR}           == 'failure' ]]; then reason='ghcr-attest-failed'
           elif [[ ${VERIFY_HUB}            == 'failure' ]]; then reason='hub-attest-failed'
-          elif [[ ${VERIFY_IMAGES_COSIGN}  == 'failure' ]]; then reason='images-cosign-failed'
           elif [[ ${VERIFY_LATEST_PARITY}  == 'failure' ]]; then reason='manifest-tag-drift'
+          elif [[ ${VERIFY_CROSS_REGISTRY} == 'failure' ]]; then reason='cross-registry-manifest-mismatch'
+          elif [[ ${VERIFY_IMAGES_COSIGN}  == 'failure' ]]; then reason='images-cosign-failed'
           elif [[ ${VERIFY_PIN}            == 'failure' ]]; then reason='pin-attest-failed'
           elif [[ ${VERIFY_UPSTREAM_SRI}   == 'failure' ]]; then reason='upstream-sri-drift'
           elif [[ ${VERIFY_BLOB_PIN}        == 'failure' ]]; then reason='pin-blob-sig-failed'
@@ -453,6 +499,17 @@ jobs:
               (incident, account compromise, accidental `docker tag`
               push); also a security signal but lower-confidence than
               SRI drift.
+            - `cross-registry-manifest-mismatch` — **TREAT AS SECURITY
+              INCIDENT.** ghcr.io and docker.io no longer serve the same
+              multi-arch manifest for the current release tag. Both
+              registries receive identical bytes at release time, so a
+              divergence means one registry's tags were rewritten after
+              publication — most likely a Docker Hub push-credential
+              compromise rolling the tag back to an older, still-validly-
+              signed release. Signature and attestation checks cannot
+              catch this: the rolled-back image is genuinely ours. Follow
+              `docs/runbooks/dockerhub-recovery.md`, and treat the Docker
+              Hub token as compromised until proven otherwise.
             - `ghcr-attest-failed` / `hub-attest-failed` /
               `pin-attest-failed` — attestation
               verification failed for one of the per-arch images or
