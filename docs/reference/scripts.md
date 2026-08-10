@@ -150,9 +150,11 @@ ruleset differs from the strict one only by the two zeroed length rules.
 
 ### scripts/check-cosign-identity-pinned.sh
 
-Lint: every `cosign verify` invocation pins both
-`--certificate-identity` (or `-regexp`) and `--certificate-oidc-issuer`
-so verification is bound to a specific signer.
+Lint: every `cosign verify*` invocation (`verify`,
+`verify-blob`, `verify-attestation`, `verify-blob-attestation`) pins
+both `--certificate-identity` (or `-regexp`) and
+`--certificate-oidc-issuer` so verification is bound to a specific
+signer.
 
 ### scripts/check-cron-table.sh
 

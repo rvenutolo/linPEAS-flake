@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # scripts/check-cosign-identity-pinned.sh
 #
-# @description Lint: every `cosign verify` invocation pins both
-# `--certificate-identity` (or `-regexp`) and `--certificate-oidc-issuer`
-# so verification is bound to a specific signer.
+# @description Lint: every `cosign verify*` invocation (`verify`,
+# `verify-blob`, `verify-attestation`, `verify-blob-attestation`) pins
+# both `--certificate-identity` (or `-regexp`) and
+# `--certificate-oidc-issuer` so verification is bound to a specific
+# signer.
 
-# Lint: every `cosign verify` invocation (including the `nix run
-# nixpkgs#cosign -- verify` shape) across workflows, scripts, and
-# shell-fenced markdown blocks pins BOTH:
+# Lint: every cosign verify subcommand — `verify`, `verify-blob`,
+# `verify-attestation`, `verify-blob-attestation`, including the
+# `nix run nixpkgs#cosign -- verify` shape — across workflows, scripts,
+# and shell-fenced markdown blocks pins BOTH:
 #   --certificate-identity (or --certificate-identity-regexp)
 #   --certificate-oidc-issuer
 #
@@ -17,7 +20,8 @@
 # verification to a specific signer.
 #
 # Detection joins backslash-continued shell invocations; ignores prose
-# in backticks; for markdown, only considers fenced blocks tagged
+# in backticks and command names quoted inside message strings; for
+# markdown, only considers fenced blocks tagged
 # sh/bash/shell/console/text (or unlabeled). Skips this script.
 #
 # See docs/security/verification.md.
@@ -28,9 +32,13 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-# Regex matching either `cosign verify` or `cosign -- verify` (the
-# latter is the `nix run nixpkgs#cosign -- verify` shape).
-readonly CMD_REGEX='cosign( --)? verify([[:space:]]|$)'
+# Matches every cosign verify subcommand — `verify`, `verify-blob`,
+# `verify-attestation`, `verify-blob-attestation` — in both the plain
+# and the `nix shell .#cosign --command cosign -- verify` shapes. The
+# generic `-suffix` form fails closed: a future verify subcommand is
+# caught by default, so exempting one is a deliberate reviewed edit
+# rather than a silent hole.
+readonly CMD_REGEX='cosign([[:space:]]+--)?[[:space:]]+verify(-[a-z]+(-[a-z]+)*)?([[:space:]]|$)'
 
 paths=()
 if [[ -n ${PATHS_OVERRIDE:-} ]]; then
@@ -55,7 +63,7 @@ extract_invocations() {
   case "${file}" in
   *.md) mode="md" ;;
   esac
-  awk -v mode="${mode}" -v rx="${CMD_REGEX}" '
+  awk -v mode="${mode}" -v rx="${CMD_REGEX}" -v sq="'" '
     BEGIN { in_fence = 0; fence_lang = "" }
     {
       line = $0
@@ -84,9 +92,15 @@ extract_invocations() {
       if (mode != "md" && line ~ /^[[:space:]]*#/) next
       # Skip yaml step-name lines that happen to mention the command.
       if (mode != "md" && line ~ /^[[:space:]]*-?[[:space:]]*(name|description):/) next
+      # A match inside backticks or inside a shell string literal is
+      # data, not a command: markdown prose in the first case, a printf
+      # or echo message that merely names the command in the second.
+      # Only a match that survives stripping both is an invocation.
       if (line ~ rx) {
         stripped = line
         gsub(/`[^`]*`/, "", stripped)
+        gsub(sq "[^" sq "]*" sq, "", stripped)
+        gsub(/"[^"]*"/, "", stripped)
         if (stripped !~ rx) next
       }
       lines[++count] = line
@@ -136,7 +150,7 @@ for f in "${paths[@]}"; do
     ((has_identity == 0)) && missing+=("--certificate-identity[-regexp]")
     ((has_issuer == 0)) && missing+=("--certificate-oidc-issuer")
     # shellcheck disable=SC2016 # literal backticks in human-readable prose
-    printf '%s: `cosign verify` missing: %s; got: %s\n' \
+    printf '%s: `cosign verify*` missing: %s; got: %s\n' \
       "${f}" "${missing[*]}" "${invocation}" >&2
     failed=$((failed + 1))
   done < <(extract_invocations "${f}")
@@ -144,7 +158,7 @@ done
 
 if ((failed > 0)); then
   # shellcheck disable=SC2016 # literal backticks in human-readable prose
-  printf '%d `cosign verify` invocation(s) missing identity/issuer pin\n' "${failed}" >&2
+  printf '%d `cosign verify*` invocation(s) missing identity/issuer pin\n' "${failed}" >&2
   exit 1
 fi
 exit 0

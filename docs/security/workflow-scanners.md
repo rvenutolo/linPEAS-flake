@@ -132,7 +132,7 @@ re-description.
 | workflow-concurrency         | top-level `concurrency.group` present                                       |
 | workflow-on-branches         | explicit branch scoping on `on:` triggers                                   |
 | nix-run-pinned               | `nix run` invocations pinned through the flake                              |
-| cosign-identity-pinned       | every `cosign verify` pins identity and OIDC issuer                         |
+| cosign-identity-pinned       | every `cosign verify*` subcommand pins identity and OIDC issuer             |
 | settings-posture-drift-check | repo settings vs. the expected hardened posture (daily cron)                |
 
 See the [enforcement matrix](enforcement-matrix.md) for the authoritative

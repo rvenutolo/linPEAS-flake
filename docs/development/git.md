@@ -130,7 +130,7 @@ Hooks (alphabetical):
 | `ci-summary-fresh`                  | README CI summary matches required-checks.md and the category map.                                                                   |
 | `commitlint`                        | Commit message satisfies Conventional Commits (CI parity via .commitlintrc.yml).                                                     |
 | `commitlint-config-explicit`        | Every commitlint action step names an existing configFile; merge ruleset stays minimal.                                              |
-| `cosign-identity-pinned`            | cosign verify pins --certificate-identity[-regexp] + --certificate-oidc-issuer.                                                      |
+| `cosign-identity-pinned`            | cosign verify\* pins --certificate-identity[-regexp] + --certificate-oidc-issuer.                                                    |
 | `deadnix`                           | Unused Nix bindings.                                                                                                                 |
 | `editorconfig-checker`              | .editorconfig compliance (charset, line endings, trailing whitespace, final newline).                                                |
 | `egress-allowlist`                  | Every job's allowed-endpoints list matches its tool inventory and carries no denylisted host.                                        |

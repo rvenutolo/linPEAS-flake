@@ -320,12 +320,12 @@
     pass_filenames = false;
     language = "system";
   };
-  # cosign verify pins identity + OIDC issuer.
+  # cosign verify* pins identity + OIDC issuer.
   # See docs/security/verification.md.
   cosign-identity-pinned = {
     enable = true;
     name = "cosign-identity-pinned";
-    description = "cosign verify pins --certificate-identity[-regexp] + --certificate-oidc-issuer.";
+    description = "cosign verify* pins --certificate-identity[-regexp] + --certificate-oidc-issuer.";
     entry = "${pkgs-unstable.writeShellScript "cosign-identity-pinned-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'
