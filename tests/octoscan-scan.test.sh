@@ -10,6 +10,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/octoscan-scan.sh"
 
 failures=0
@@ -41,6 +43,11 @@ function run_scenario() {
   else
     "${SCRIPT}" "$@" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
   fi
+
+  # Each stream carries its own expected substring and is grepped on its
+  # own, so each is recorded against the file the harness actually greps.
+  harness_assert_record "${name} (stderr)" "${expected_stderr}" "${stderr_file}"
+  harness_assert_record "${name} (stdout)" "${expected_stdout}" "${stdout_file}"
 
   local failed=0
 
@@ -156,6 +163,8 @@ function main() {
   run_scenario 'per-file error mixed with finding -> infra failure not finding' \
     1 '' 'has-finding=false' "PATH=${stub_seq}:${PATH}"
   rm --recursive --force -- "${stub_seq}"
+
+  harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2

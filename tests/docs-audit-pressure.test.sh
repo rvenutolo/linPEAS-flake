@@ -8,6 +8,8 @@ IFS=$'\n\t'
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/docs-audit-pressure.sh"
 
 failures=0
@@ -31,6 +33,7 @@ function run_scenario() {
     WORKFLOWS_DIR_OVERRIDE="${WF_DIR}" \
     LINT_GROUPS_OVERRIDE="${LG_FILE}" \
     "${SCRIPT}" >"${out_file}" 2>/dev/null || actual_exit=$?
+  harness_assert_record "${name}" "${expect_sub}" "${out_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${expected_exit}" "${actual_exit}" >&2
@@ -90,12 +93,16 @@ run_scenario 'non-zero pressure reported' 0 'PRESSURE=1' 'PRESSURE=0'
 run_scenario 'commit subject absent from body' 0 '' 'ci: add publish job'
 
 # --- scenario: lint-group member added ---
+# Each step also reverts the previous step's addition, so every sandbox state
+# renders exactly the identifier its own scenario is about.
+printf 'name: a\njobs:\n  build:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
 printf 'lint-a:\n  - alpha\n  - beta\n' >"${LG_FILE}"
 git -C "${SANDBOX}" add -A
 git -C "${SANDBOX}" commit --quiet -m 'ci: add beta member'
 run_scenario 'lint-group member added is reported' 0 'beta' ''
 
 # --- scenario: malformed job id dropped from body ---
+printf 'lint-a:\n  - alpha\n' >"${LG_FILE}"
 printf 'name: a\njobs:\n  build:\n    runs-on: x\n  "Bad Job":\n    runs-on: x\n' >"${WF_DIR}/a.yml"
 git -C "${SANDBOX}" add -A
 git -C "${SANDBOX}" commit --quiet -m 'ci: add malformed job'
@@ -106,9 +113,11 @@ WF_DIR="${SANDBOX}/nope"
 run_scenario 'missing workflows dir fails loudly' 2 '' ''
 
 # @description Fresh sandbox whose backdated baseline already contains the
-#              job + member that a within-window commit then removes, so the
+#              job + member that within-window commits then remove, so the
 #              removal render paths fire (removals are computed against the
-#              backdated boundary, not the previous commit).
+#              backdated boundary, not the previous commit). The removed ids
+#              differ from the added ids of the other sandbox so a rendered
+#              id names the render path it came from.
 function make_removal_sandbox() {
   SANDBOX="$(mktemp -d)"
   WF_DIR="${SANDBOX}/.github/workflows"
@@ -117,28 +126,32 @@ function make_removal_sandbox() {
   git -C "${SANDBOX}" init --quiet
   git -C "${SANDBOX}" config user.email t@t.t
   git -C "${SANDBOX}" config user.name t
-  printf 'lint-a:\n  - alpha\n  - beta\n' >"${LG_FILE}"
-  printf 'name: a\njobs:\n  build:\n    runs-on: x\n  publish:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
+  printf 'lint-a:\n  - alpha\n  - gamma\n' >"${LG_FILE}"
+  printf 'name: a\njobs:\n  build:\n    runs-on: x\n  oldjob:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
   git -C "${SANDBOX}" add -A
   local -r backdate_ts="$(date -d '90 days ago' '+%s') +0000"
   GIT_AUTHOR_DATE="${backdate_ts}" GIT_COMMITTER_DATE="${backdate_ts}" \
     git -C "${SANDBOX}" commit --quiet -m baseline
-  # Within-window commit removes publish job and beta member.
-  printf 'lint-a:\n  - alpha\n' >"${LG_FILE}"
+  # Within-window commits remove the oldjob job and the gamma member.
   printf 'name: a\njobs:\n  build:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
   git -C "${SANDBOX}" add -A
-  git -C "${SANDBOX}" commit --quiet -m 'ci: remove publish job and beta member'
+  git -C "${SANDBOX}" commit --quiet -m 'ci: remove oldjob job'
+  printf 'lint-a:\n  - alpha\n' >"${LG_FILE}"
+  git -C "${SANDBOX}" add -A
+  git -C "${SANDBOX}" commit --quiet -m 'ci: remove gamma member'
 }
 
 # --- scenario: job + member removed inside window ---
 make_removal_sandbox
 cd "${SANDBOX}"
 run_scenario 'removed job is reported' 0 'Jobs removed:' ''
-run_scenario 'removed job id rendered' 0 'publish' ''
+run_scenario 'removed job id rendered' 0 'oldjob' ''
 run_scenario 'removed member is reported' 0 'Lint-group members removed:' ''
-run_scenario 'removed member id rendered' 0 'beta' ''
+run_scenario 'removed member id rendered' 0 'gamma' ''
 
 cd "${REPO_ROOT}"
+
+harness_assert_verify || failures=$((failures + 1))
 
 if ((failures)); then
   printf '\n%d test(s) failed\n' "${failures}" >&2

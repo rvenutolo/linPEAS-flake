@@ -15,6 +15,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/run-harness-group.sh"
 
 failures=0
@@ -36,10 +38,13 @@ function make_stub() {
 # @arg $6 forbidden marker path for allowed-actions enforce (empty skips)
 # @arg $7 forbidden marker path for settings-posture enforce (empty skips)
 # @arg $8 forbidden marker path for ratchet enforce (empty skips)
+# @arg $9 'skip-record' to keep this run out of the discrimination pool,
+#      for a re-run of a seed another scenario already records (empty records)
 function run_scenario() {
   local -r name="$1" tests_dir="$2" scripts_dir="$3"
   local -r expected_exit="$4" expected_out="$5"
   local -r forbidden_allowed="${6:-}" forbidden_settings="${7:-}" forbidden_ratchet="${8:-}"
+  local -r skip_record="${9:-}"
   local out_file step_file actual_exit=0
   out_file="$(mktemp)"
   step_file="$(mktemp)"
@@ -47,6 +52,9 @@ function run_scenario() {
     SCRIPTS_DIR_OVERRIDE="${scripts_dir}" \
     GITHUB_STEP_SUMMARY="${step_file}" \
     "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
+  if [[ ${skip_record} != 'skip-record' ]]; then
+    harness_assert_record "${name}" "${expected_out}" "${out_file}" "${step_file}"
+  fi
 
   local failed_check=''
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
@@ -117,6 +125,20 @@ function seed() {
 function main() {
   local work forbidden_allowed forbidden_settings
 
+  # The all-pass scenario is distinguished by the absence of any FAIL row,
+  # which no substring can express. Its ratchet-pin-audit pass row does
+  # separate it from the two scenarios that fail that row, but it recurs in
+  # every scenario whose seeded failure is elsewhere. Each such pair is
+  # named so that adding a scenario re-flags rather than silently widening.
+  local exemption_scenario
+  for exemption_scenario in \
+    'settings-posture test fails -> exit 1' \
+    'backfill-image-mode test fails -> exit 1' \
+    'lib-log test fails -> exit 1'; do
+    harness_assert_exempt '| ratchet-pin-audit | pass |' "${exemption_scenario}" \
+      'the runner emits one row per declared harness, so a row this scenario does not perturb reads the same as it does here'
+  done
+
   # Scenario 1: all pass.
   work="$(mktemp -d)"
   forbidden_allowed="${work}/ran-allowed"
@@ -141,9 +163,14 @@ function main() {
   forbidden_allowed="${work}/ran-allowed"
   forbidden_settings="${work}/ran-settings"
   seed "${work}" 0 0 0 1 "${forbidden_allowed}" "${forbidden_settings}"
+  # Same seed as the scenario above, re-run to assert a second property of
+  # that outcome: the harness after the failing one still ran. Its pass row
+  # appears in every scenario that does not perturb allowed-actions-api, so
+  # the row cannot discriminate between runs — the run stays out of the
+  # discrimination pool rather than being exempted row by row.
   run_scenario 'failing harness does not abort the rest' \
     "${work}/tests" "${work}/scripts" 1 '| allowed-actions-api | pass |' \
-    "${forbidden_allowed}" "${forbidden_settings}"
+    "${forbidden_allowed}" "${forbidden_settings}" '' 'skip-record'
   rm --recursive --force -- "${work}"
 
   # Scenario 3: ratchet test passes but its enforce script fails ->
@@ -191,6 +218,8 @@ function main() {
     "${work}/tests" "${work}/scripts" 1 '| lib-log | FAIL |' \
     "${forbidden_allowed}" "${forbidden_settings}"
   rm --recursive --force -- "${work}"
+
+  harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then
     printf '\n%d scenario(s) failed\n' "${failures}" >&2

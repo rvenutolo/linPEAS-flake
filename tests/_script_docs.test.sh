@@ -7,6 +7,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly PARSER="${REPO_ROOT}/scripts/_script_docs.awk"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/refresh-scripts-reference"
 
@@ -43,6 +45,7 @@ function test_no_description_exits_2() {
   stderr_file="$(mktemp)"
   awk --file "${PARSER}" <"${FIXTURES}/no-description.sh" \
     >/dev/null 2>"${stderr_file}" || actual_exit=$?
+  harness_assert_record "${name}" 'missing @description' "${stderr_file}"
   if [[ ${actual_exit} -ne 2 ]]; then
     fail "${name} — expected exit 2, got ${actual_exit}"
     cat -- "${stderr_file}" >&2
@@ -74,6 +77,7 @@ function main() {
   test_full_matches_expected
   test_no_description_exits_2
   test_function_body_description_ignored
+  harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then
     printf '\n%d test(s) failed\n' "${failures}" >&2

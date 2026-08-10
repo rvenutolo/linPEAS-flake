@@ -4,6 +4,8 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 LIB="${REPO_ROOT}/scripts/lib/log.sh"
 failures=0
 pass() { printf 'PASS: %s\n' "$1"; }
@@ -27,6 +29,10 @@ chmod +x "${work}/boom.sh"
 err="$(mktemp)"
 rc=0
 "${work}/boom.sh" >/dev/null 2>"${err}" || rc=$?
+# The two assertions below are an extended-regexp match and a
+# must-not-appear check; neither is a fixed-string assertion the gate can
+# audit, so the scenario contributes its output with no asserted substring.
+harness_assert_record 'ERR trap logs the real non-zero exit code' '' "${err}"
 
 if [[ ${rc} -ne 0 ]] && grep -Eq 'exit [1-9][0-9]*' "${err}"; then
   pass 'ERR trap logs the real non-zero exit code'
@@ -37,6 +43,8 @@ fi
 if grep -q 'exit 0' "${err}"; then
   fail 'trap still logs "exit 0" — the $? clobber is not fixed'
 fi
+
+harness_assert_verify || failures=$((failures + 1))
 
 [[ ${failures} -eq 0 ]] || {
   printf '%d failure(s)\n' "${failures}" >&2

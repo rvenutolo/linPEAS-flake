@@ -11,6 +11,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-test-reachable.sh"
 
 failures=0
@@ -33,6 +35,7 @@ function assert_run() {
     LINT_GROUPS_OVERRIDE="${dir}/lint-groups.yml" \
     WORKFLOWS_DIR_OVERRIDE="${dir}/workflows" \
     "${SCRIPT}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
+  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     fail "${name} — expected exit ${expected_exit}, got ${actual_exit}"
     cat -- "${stderr_file}" >&2
@@ -100,6 +103,8 @@ function main() {
     >"${dir}/workflows/ci.yml"
   assert_run 'reachable via direct workflow invocation' "${dir}" 0 ''
   rm --recursive --force -- "${dir}"
+
+  harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2

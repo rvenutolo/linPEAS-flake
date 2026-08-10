@@ -5,6 +5,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/pr-workflows-no-secrets"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-pr-workflows-no-secrets.sh"
 
@@ -33,6 +35,7 @@ function run_scenario() {
   local actual_exit=0
   WORKFLOWS_DIR_OVERRIDE="${tmpdir}/wfs" \
     "${SCRIPT}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
+  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' \
@@ -78,6 +81,7 @@ function main() {
   # not a silent skip.
   run_scenario 'malformed workflow is a tooling error' \
     'bad-malformed.yml' 2 'could not evaluate'
+  harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2

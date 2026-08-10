@@ -24,6 +24,8 @@ trap 'printf "[%s] %-5s line %s (exit %s): %s\n" \
 # whether invoked from the repo root or from tests/.
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/gen-dashboard-data.sh"
 readonly FIXTURES_DIR="${REPO_ROOT}/tests/fixtures/dashboard-data"
 readonly OUT_FILE="${REPO_ROOT}/docs/_data/dashboard.yml"
@@ -92,6 +94,7 @@ function run_scenario() {
   local exit_code=0
   env "${env_vars[@]}" bash "${SCRIPT}" >/dev/null 2>"${stderr_tmp}" ||
     exit_code=$?
+  harness_assert_record "${name}" "${expected_msg}" "${stderr_tmp}"
 
   if ((exit_code != 1)); then
     printf 'FAIL: %s — expected exit 1, got %d\n' "${name}" "${exit_code}" >&2
@@ -147,6 +150,9 @@ function run_happy_lag_scenario() {
     "PARITY_JSON_OVERRIDE=${FIXTURES_DIR}/good-parity.json" \
     "OUT_FILE_OVERRIDE=${out_tmp}" \
     bash "${SCRIPT}" >/dev/null 2>"${stderr_tmp}" || exit_code=$?
+  harness_assert_record "${name}" \
+    'lag: skipping this-repo release with no upstream match: 20240101-orphan0' \
+    "${stderr_tmp}"
 
   if ((exit_code != 0)); then
     printf 'FAIL: %s — expected exit 0, got %d\n' "${name}" "${exit_code}" >&2
@@ -225,6 +231,7 @@ function run_empty_bump_pr_scenario() {
     "PARITY_JSON_OVERRIDE=${FIXTURES_DIR}/good-parity.json" \
     "OUT_FILE_OVERRIDE=${out_tmp}" \
     bash "${SCRIPT}" >/dev/null 2>"${stderr_tmp}" || exit_code=$?
+  harness_assert_record "${name}" '' "${stderr_tmp}"
 
   if ((exit_code != 0)); then
     printf 'FAIL: %s — expected exit 0, got %d\n' "${name}" "${exit_code}" >&2
@@ -296,6 +303,7 @@ function run_api_error_scenario() {
 
   local exit_code=0
   env "${env_vars[@]}" bash "${SCRIPT}" >/dev/null 2>"${stderr_tmp}" || exit_code=$?
+  harness_assert_record "${name}" "${expected_warn}" "${stderr_tmp}"
 
   if ((exit_code != 0)); then
     printf 'FAIL: %s — expected exit 0, got %d\n' "${name}" "${exit_code}" >&2
@@ -320,9 +328,9 @@ function run_api_error_scenario() {
     return 0
   fi
 
-  # Match on the WARN lines only: the label also appears in this script's
-  # INFO progress lines, so a bare substring search would pass without any
-  # warning ever being emitted.
+  # Match on the WARN lines only: each lookup's label also appears in this
+  # script's INFO progress lines, so the level filter keeps the assertion
+  # pinned to a warning actually having been emitted.
   if ! grep --fixed-strings 'WARN' "${stderr_tmp}" |
     grep --fixed-strings --quiet -- "${expected_warn}"; then
     printf 'FAIL: %s — stderr missing WARN %q\n' "${name}" "${expected_warn}" >&2
@@ -344,6 +352,16 @@ function main() {
     printf 'FAIL: fixtures dir not found at %s\n' "${FIXTURES_DIR}" >&2
     exit 1
   fi
+
+  # Every scenario that gets as far as assembling the dashboard drives the
+  # same this-repo/upstream release fixture pair, so all of them log the
+  # orphan skip. The line separates a run that skips an unmatched release
+  # from one that fails on it — the axis this assertion is about — but it
+  # cannot separate the happy path from its soft-fallback siblings.
+  harness_assert_exempt \
+    'lag: skipping this-repo release with no upstream match: 20240101-orphan0' \
+    '*' \
+    'logged by every scenario driving the shared release fixture pair'
 
   # Scenario 1: bad pin.version regex. Pin URL is shaped correctly so only
   # the regex check trips; nothing else hard-fails first.
@@ -377,19 +395,24 @@ function main() {
   # Scenario 6: this-repo releases/latest returns an API error body. It
   # must degrade to the documented empty release section, never publish a
   # literal "null" tag or a ":null" image ref.
+  # The expected WARN names the degraded lookup *and* the reason: the
+  # lookup label on its own is printed by the INFO progress line of every
+  # scenario, including the ones where that lookup succeeded.
   run_api_error_scenario 'latest-release API error soft-fallback' \
     'LATEST_RELEASE_JSON_OVERRIDE' '.release.latest_tag' '' \
-    'releases/latest'
+    'releases/latest: response is not valid JSON of the expected shape'
 
   # Scenario 7: last-bump-PR search returns an API error body.
   run_api_error_scenario 'bump-PR API error soft-fallback' \
     'BUMP_PR_JSON_OVERRIDE' '.last_bump.pr_number' '0' \
-    'bump PR'
+    'last bump PR: response is not valid JSON of the expected shape'
 
   # Scenario 8: verify-latest-release run lookup returns an API error body.
   run_api_error_scenario 'parity-run API error soft-fallback' \
     'PARITY_JSON_OVERRIDE' '.parity.conclusion' 'unknown' \
-    'parity'
+    'parity run: response is not valid JSON of the expected shape'
+
+  harness_assert_verify || fail_count=$((fail_count + 1))
 
   printf '\n%d passed, %d failed\n' "${pass_count}" "${fail_count}"
   if ((fail_count > 0)); then

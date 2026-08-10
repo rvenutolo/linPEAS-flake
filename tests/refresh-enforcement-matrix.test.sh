@@ -9,6 +9,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/refresh-enforcement-matrix.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/refresh-enforcement-matrix"
 
@@ -40,6 +42,7 @@ function run_scenario() {
   INVARIANT_INDEX_OVERRIDE="${FIXTURES}/${fixture}" \
     MATRIX_OUTPUT_OVERRIDE="${out_file}" \
     "${SCRIPT}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
+  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     fail "${name}: expected exit ${expected_exit}, got ${actual_exit}"
     cat -- "${stderr_file}" >&2
@@ -70,13 +73,13 @@ function main() {
   # Assertion 3: missing required field → exit 2.
   SKIP_REVERSE_CHECK=1 PRECOMMIT_HOOK_NAMES_OVERRIDE="${FIXTURE_HOOKS}" \
     run_scenario 'missing enforcer field fails' \
-    'bad-missing-field.md' 2 'enforcer'
+    'bad-missing-field.md' 2 "annotation missing 'enforcer' field"
 
   # Assertion 4: orphan script (real check-*.sh not referenced) → exit 2.
   # Reverse check intentionally enabled here.
   PRECOMMIT_HOOK_NAMES_OVERRIDE="${FIXTURE_HOOKS}" \
     run_scenario 'orphan check-*.sh fails' \
-    'bad-orphan-script.md' 2 'orphan'
+    'bad-orphan-script.md' 2 'orphan script:'
 
   # Assertion 5: good fixture round-trips against pinned expected output.
   # Inject the hook-name list inline so the fixture round-trip doesn't
@@ -133,6 +136,8 @@ function main() {
     SCRIPTS_DIR_OVERRIDE="${cx_scripts}" \
     MATRIX_OUTPUT_OVERRIDE="${cx_out}" \
     "${SCRIPT}" >/dev/null 2>"${cx_err}" || cx_rc=$?
+  harness_assert_record 'unexempted auxiliary ci job is an orphan' \
+    'orphan ci job: aux-sandbox' "${cx_err}"
   if [[ ${cx_rc} -eq 2 ]] &&
     grep --fixed-strings --quiet -- 'orphan ci job: aux-sandbox' "${cx_err}"; then
     pass 'unexempted auxiliary ci job is reported as an orphan'
@@ -149,6 +154,8 @@ function main() {
     SCRIPTS_DIR_OVERRIDE="${cx_scripts}" \
     MATRIX_OUTPUT_OVERRIDE="${cx_out}" \
     "${SCRIPT}" >/dev/null 2>"${cx_err}" || cx_rc=$?
+  harness_assert_record 'ci-job EXEMPT list clears the orphan job' \
+    '' "${cx_err}"
   if [[ ${cx_rc} -eq 0 ]]; then
     pass 'ci-job EXEMPT list from the sibling clears the orphan job'
   else
@@ -179,6 +186,8 @@ EOF
     MATRIX_OUTPUT_OVERRIDE="${gg_out}" \
     EXEMPT_SOURCE_OVERRIDE="${gg_dir}/exempt-source-stub" \
     "${SCRIPT}" >/dev/null 2>"${gg_err}" || gg_rc=$?
+  harness_assert_record 'unreadable EXEMPT source aborts' \
+    '--print-exempt failed' "${gg_err}"
   if [[ ${gg_rc} -eq 2 ]] &&
     grep --fixed-strings --quiet -- '--print-exempt failed' "${gg_err}"; then
     pass 'unreadable EXEMPT source aborts instead of reading as empty'
@@ -217,6 +226,8 @@ EOF
   else
     fail "treefmt-failure: want nonzero exit + no output written, got exit ${ts_rc}, empty=${ts_empty}"
   fi
+
+  harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then
     printf '%d failure(s)\n' "${failures}" >&2

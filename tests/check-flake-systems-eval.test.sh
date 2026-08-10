@@ -3,6 +3,8 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 SCRIPT="${REPO_ROOT}/scripts/check-flake-systems-eval.sh"
 failures=0
 pass() { printf 'PASS: %s\n' "$1"; }
@@ -41,6 +43,8 @@ else
   fail "expected non-zero + 'bogus-system' named; rc=${rc}"
   cat -- "${err}" >&2
 fi
+harness_assert_record 'guard fails and names the broken system' \
+  'bogus-system' "${err}"
 
 # Assertion 3: a fixture flake whose packages attrset enumerates fine but
 # whose package *value* throws must fail. This is the case attribute-name
@@ -65,13 +69,17 @@ EOF
 err2="$(mktemp)"
 rc2=0
 "${SCRIPT}" --flake "${fix2}" >/dev/null 2>"${err2}" || rc2=$?
-if [[ ${rc2} -ne 0 ]] && grep -q 'x86_64-linux' "${err2}"; then
+if [[ ${rc2} -ne 0 ]] && grep -q 'package broken is not evaluable' "${err2}"; then
   pass 'guard fails on a per-package value throw'
 else
-  fail "expected non-zero + system named on value throw; rc=${rc2}"
+  fail "expected non-zero + the throwing package's message; rc=${rc2}"
   cat -- "${err2}" >&2
 fi
+harness_assert_record 'guard fails on a per-package value throw' \
+  'package broken is not evaluable' "${err2}"
 rm -rf -- "${fix2}" "${err2}"
+
+harness_assert_verify || failures=$((failures + 1))
 
 [[ ${failures} -eq 0 ]] || {
   printf '%d failure(s)\n' "${failures}" >&2

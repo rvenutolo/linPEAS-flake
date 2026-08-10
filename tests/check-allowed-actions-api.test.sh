@@ -9,6 +9,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-allowed-actions-api.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-allowed-actions-api"
 
@@ -48,22 +50,36 @@ function run_scenario() {
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
 
+  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
   rm --force -- "${stderr_file}"
 }
 
 function main() {
+  # The bad-multiple fixture reproduces each single-drift fixture's line
+  # verbatim, so those lines are legitimately shared with it. Each assertion
+  # still separates its scenario from the passing fixture and from every other
+  # single-drift fixture, and bad-multiple asserts its own drift total.
+  local -r multi='multiple drifts surface every one'
+  local -r shared='the multi-drift fixture reproduces this drift line by design'
+  harness_assert_exempt \
+    'patterns_allowed drift: extra on API: attacker/*' "${multi}" "${shared}"
+  harness_assert_exempt \
+    'github_owned_allowed drift: got false, want true' "${multi}" "${shared}"
+  harness_assert_exempt \
+    'verified_allowed drift: got true, want false' "${multi}" "${shared}"
+
   run_scenario 'matching fixtures pass' \
     'good' 0 ''
   run_scenario 'extra vendor on API fails' \
-    'bad-extra-vendor' 1 'attacker/*'
+    'bad-extra-vendor' 1 'patterns_allowed drift: extra on API: attacker/*'
   run_scenario 'vendor missing from API fails' \
-    'bad-missing-vendor' 1 'peter-evans/*'
+    'bad-missing-vendor' 1 'patterns_allowed drift: missing on API: peter-evans/*'
   run_scenario 'github_owned_allowed false fails' \
-    'bad-github-owned-false' 1 'github_owned_allowed drift'
+    'bad-github-owned-false' 1 'github_owned_allowed drift: got false, want true'
   run_scenario 'verified_allowed true fails' \
-    'bad-verified-true' 1 'verified_allowed drift'
-  run_scenario 'multiple drifts surface every one' \
-    'bad-multiple' 1 'attacker/*'
+    'bad-verified-true' 1 'verified_allowed drift: got true, want false'
+  run_scenario "${multi}" \
+    'bad-multiple' 1 '3 allowlist drift(s)'
 
   # bad-multiple must surface every drift (github_owned, verified, extra
   # vendor) in a single run — count drift lines.
@@ -83,7 +99,12 @@ function main() {
     printf 'PASS: bad-multiple surfaces %d drift lines in one run\n' \
       "${drift_lines}"
   fi
+  # Not recorded: this re-runs the fixture the scenario above already
+  # recorded, asserting a second property of the same output rather than a
+  # distinct scenario.
   rm --force -- "${stderr_file}"
+
+  harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2
