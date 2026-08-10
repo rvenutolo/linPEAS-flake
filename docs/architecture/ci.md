@@ -206,6 +206,13 @@ if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclu
     1. `pin.version` must match `[0-9]{8}-[0-9a-f]{7,40}` — hard-fail.
     1. Missing required JSON fields hard-fail with field name; never partial
         YAML.
+    1. This-repo lookups that are allowed to degrade (`releases/latest`, the
+        last-bump PR search, the latest `verify-latest-release` run) are
+        shape-checked before use. `gh api` writes its JSON error body to
+        stdout, so an unchecked error body would publish its missing keys as
+        a literal `"null"` tag or image ref. A failed, unparsable, or
+        wrong-shaped response degrades to the documented empty/`unknown`
+        section and logs a `WARN` naming the lookup.
 
     Tested by `tests/gen-dashboard-data.test.sh` via `dashboard-data-tests`
     required CI job. Fixture-injection env hooks: `PIN_FILE_OVERRIDE`,
