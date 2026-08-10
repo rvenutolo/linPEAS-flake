@@ -29,4 +29,7 @@ expect bad-missing.yml 1 "missing"
 expect bad-true.yml 1 "persist-credentials: true"
 expect bad-string.yml 1 "string"
 
+# A workflow yq cannot parse must fail loud, not empty the scan silently.
+expect bad-malformed.yml 1 "could not evaluate"
+
 printf 'all tests passed\n'

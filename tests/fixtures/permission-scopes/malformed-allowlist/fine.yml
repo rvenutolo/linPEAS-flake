@@ -1,0 +1,9 @@
+name: fine
+permissions: {}
+jobs:
+  reader:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - run: "true"

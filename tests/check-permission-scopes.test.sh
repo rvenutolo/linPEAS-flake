@@ -54,6 +54,21 @@ expect bad-over-grant.yml 1 "contents"
 expect bad-job-not-in-allowlist.yml 1 "writer"
 expect_unfiltered "${FIXTURES}/stale" "${FIXTURES}/stale/allowlist.yml" 1 "stale" bad-stale-allowlist.yml
 
+# A workflow yq cannot parse must fail loud, not empty the forward scan
+# silently.
+expect bad-malformed.yml 1 "could not evaluate"
+
+# Scalar `permissions:` at job level: only read-all is a legitimate
+# scalar value. write-all (and any other scalar) is a violation; the
+# scan must not silently drop it because the scalar breaks the
+# map-shaped yq query.
+expect bad-scalar-writeall.yml 1 "scalar"
+expect good-scalar-readall.yml 0 ""
+
+# An unparsable allowlist file is a precondition failure (tooling
+# error), not a workflow-scan drift — exit 2, not 1.
+expect_unfiltered "${FIXTURES}/malformed-allowlist" "${FIXTURES}/malformed-allowlist/allowlist.yml" 2 "" bad-malformed-allowlist
+
 # Real-tree guard: the committed allowlist must match the live workflows.
 real_exit=0
 "${SCRIPT}" >/dev/null 2>&1 || real_exit=$?

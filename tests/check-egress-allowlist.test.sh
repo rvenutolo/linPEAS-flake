@@ -52,4 +52,7 @@ expect bad-scorecard-missing-osv.yml 1 "api.osv.dev"
 expect bad-scorecard-missing-deps-dev.yml 1 "api.deps.dev"
 expect bad-attestation-verify-missing-tuf.yml 1 "tuf-repo.github.com"
 
+# A workflow yq cannot parse must fail loud, not empty the scan silently.
+expect bad-malformed.yml 1 "could not evaluate"
+
 printf 'all tests passed\n'
