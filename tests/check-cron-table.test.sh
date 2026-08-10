@@ -99,6 +99,12 @@ function main() {
     '/nonexistent/ci.md' \
     2 'missing'
 
+  # .yaml workflow extension: fixed once the discovery glob covers *.yaml too.
+  run_scenario '.yaml workflow with cron absent from table fails' \
+    "${FIXTURES}/bad-yaml-missing-in-table/workflows" \
+    "${FIXTURES}/bad-yaml-missing-in-table/ci.md" \
+    1 'missing-in-table'
+
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2
     exit 1
