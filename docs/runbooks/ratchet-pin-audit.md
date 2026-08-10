@@ -43,10 +43,16 @@ Steps:
     every workflow file that uses the action:
 
     ```shell
-    sed --in-place \
-      's|<repo>@<old-sha>|<repo>@<new-sha>|g' \
-      .github/workflows/*.yml
+    find .github/workflows \
+      \( -name '*.yml' -o -name '*.yaml' \) \
+      -exec sed --in-place \
+        's|<repo>@<old-sha>|<repo>@<new-sha>|g' {} +
     ```
+
+    Both extensions are covered because GitHub Actions runs `*.yaml`
+    workflows identically to `*.yml`, and the audit's own discovery
+    globs both — a `*.yml`-only rewrite would leave a drifted pin in
+    place and the next run would re-file the same issue.
 
     Review the diff, open a PR. (`ratchet update` is not used here
     because our pins use plain `# v3` trailing-comment annotations
@@ -89,7 +95,10 @@ the workflow glob matched zero files.
     a single-file change.
 1. If the workflow glob matched zero files, a refactor moved
     workflows out from under `.github/workflows/`. Adjust the glob
-    in the `audit pins` step.
+    in the `audit pins` step, keeping both `*.yml` and `*.yaml`
+    covered — the audit fails closed on an empty match precisely so
+    a narrowed glob surfaces here rather than passing green over an
+    unscanned tree.
 
 ### `unknown`
 
