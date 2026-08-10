@@ -232,8 +232,10 @@ closure unreviewed.
 ### scripts/check-flake-systems-eval.sh
 
 Assert every system declared in `flake.lib.systems`
-evaluates. Fails naming the offending system + the real nix error,
-so a platform drop in a nixpkgs bump is diagnosable at a glance.
+evaluates, forcing each package's derivation (not just the attribute
+names) so a package whose value throws is caught. Fails naming the
+offending system + the real nix error, so a platform drop in a nixpkgs
+bump is diagnosable at a glance.
 
 **Options:**
 

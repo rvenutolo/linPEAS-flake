@@ -42,6 +42,37 @@ else
   cat -- "${err}" >&2
 fi
 
+# Assertion 3: a fixture flake whose packages attrset enumerates fine but
+# whose package *value* throws must fail. This is the case attribute-name
+# forcing alone cannot see: the spine is intact, only the value is broken.
+fix2="$(mktemp -d)"
+cat >"${fix2}/flake.nix" <<'EOF'
+{
+  outputs = { self }: {
+    lib.systems = [ "x86_64-linux" ];
+    packages."x86_64-linux" = {
+      good = derivation {
+        name = "good";
+        system = "x86_64-linux";
+        builder = "/bin/sh";
+      };
+      broken = throw "package broken is not evaluable";
+    };
+  };
+}
+EOF
+(cd "${fix2}" && git init -q && git add -A)
+err2="$(mktemp)"
+rc2=0
+"${SCRIPT}" --flake "${fix2}" >/dev/null 2>"${err2}" || rc2=$?
+if [[ ${rc2} -ne 0 ]] && grep -q 'x86_64-linux' "${err2}"; then
+  pass 'guard fails on a per-package value throw'
+else
+  fail "expected non-zero + system named on value throw; rc=${rc2}"
+  cat -- "${err2}" >&2
+fi
+rm -rf -- "${fix2}" "${err2}"
+
 [[ ${failures} -eq 0 ]] || {
   printf '%d failure(s)\n' "${failures}" >&2
   exit 1

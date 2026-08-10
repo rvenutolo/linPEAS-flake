@@ -21,8 +21,9 @@
       # Single source of truth for the flake's declared systems. Referenced
       # both as flake-parts' `systems` (drives perSystem) and as
       # `flake.lib.systems` (drives scripts/check-flake-systems-eval.sh,
-      # which force-evaluates each declared system so a broken platform
-      # fails CI by name instead of silently passing `nix flake check`).
+      # which force-evaluates every package derivation of each declared
+      # system so a broken platform fails CI by name instead of silently
+      # passing `nix flake check`).
       systems = [
         "x86_64-linux"
         "aarch64-linux"

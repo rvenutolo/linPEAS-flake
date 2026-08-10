@@ -52,7 +52,7 @@ The flake declares packages for both Linux systems via flake-parts' `perSystem` 
 
 The OCI image (`linpeas-image`) is Linux-only by design — containers run a Linux kernel regardless of host OS.
 
-`flake.lib.systems` is the single source of truth for the declared systems list above. CI's `flake-check` job runs `scripts/check-flake-systems-eval.sh`, which reads `flake.lib.systems` and force-evaluates each declared system's packages, failing with the system named if one breaks. `nix flake check` alone does not force per-system module thunks (e.g. a second nixpkgs input imported per `perSystem`), so a platform that silently stopped evaluating would otherwise pass CI undetected.
+`flake.lib.systems` is the single source of truth for the declared systems list above. CI's `flake-check` job runs `scripts/check-flake-systems-eval.sh`, which reads `flake.lib.systems` and force-evaluates each declared system's packages down to every package's derivation — not just the attribute names — failing with the system named if one breaks. `nix flake check` alone does not force per-system module thunks (e.g. a second nixpkgs input imported per `perSystem`), so a platform that silently stopped evaluating would otherwise pass CI undetected.
 
 ## Pin / version
 
