@@ -136,5 +136,6 @@
     "tests/fixtures/run-block-strict/bad-malformed.yml"
     "tests/fixtures/setup-nix-required/bad-malformed.yml"
     "tests/fixtures/upload-artifact-strict/bad-malformed.yml"
+    "tests/fixtures/pr-workflows-no-secrets/bad-malformed.yml"
   ];
 }

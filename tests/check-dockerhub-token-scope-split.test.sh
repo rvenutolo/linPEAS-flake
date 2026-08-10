@@ -126,6 +126,17 @@ function main() {
     'dockerhub-sync.yml: must consume secrets.DOCKERHUB_TOKEN_DELETE'
   rm --recursive --force -- "${dir}"
 
+  # Unsuffixed secret in a .yaml workflow: fixed once the suffix-check glob
+  # covers *.yaml too.
+  dir="$(mktemp --directory)"
+  write_baseline "${dir}"
+  # shellcheck disable=SC2016 # literal GH Actions ${{ }} expression, not shell expansion
+  printf 'jobs:\n  extra:\n    steps:\n      - env:\n          Y: ${{ secrets.DOCKERHUB_TOKEN }}\n' \
+    >"${dir}/bad-unsuffixed.yaml"
+  assert_run 'unsuffixed token in .yaml workflow fails' "${dir}" 1 \
+    'not authoritative'
+  rm --recursive --force -- "${dir}"
+
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2
     exit 1

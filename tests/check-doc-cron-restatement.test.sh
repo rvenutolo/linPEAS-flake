@@ -94,6 +94,12 @@ function main() {
     "${FIXTURES}/missing-workflows-dir" \
     2 ''
 
+  # .yaml workflow extension: fixed once the discovery glob covers *.yaml too.
+  run_scenario '.yaml-suffixed name with a clock time fails' \
+    "${FIXTURES}/yaml-suffixed-fails/workflows" \
+    "${FIXTURES}/yaml-suffixed-fails" \
+    1 'docs/x.md'
+
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2
     exit 1
