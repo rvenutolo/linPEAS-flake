@@ -45,7 +45,23 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
     continue
   fi
 
+  # Capture yq's output (and exit status) into a variable rather than
+  # feeding the loop from `< <(yq ...)`: a process substitution's exit
+  # status is not propagated under set -Eeuo pipefail, so a yq failure
+  # (unparsable workflow, or a query that errors on a valid-but-odd
+  # shape) would yield empty input and the check would pass silently.
   # shellcheck disable=SC2016 # yq expression: literal $ refs, not shell expansion
+  if ! rows="$(yq eval '
+    .jobs | to_entries[] as $j
+    | $j.value.steps | to_entries[]
+    | select(.value.uses // "" | test("^actions/checkout@"))
+    | $j.key + "|" + (.key | tostring) + "|" + (.value.with."persist-credentials" | tag) + "|" + (.value.with."persist-credentials" | tostring)
+  ' "${f}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  [[ -n ${rows} ]] || continue
   while IFS='|' read -r job idx tag val; do
     [[ -z ${job} ]] && continue
     case "${tag}" in
@@ -75,12 +91,7 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
       failed=$((failed + 1))
       ;;
     esac
-  done < <(yq eval '
-    .jobs | to_entries[] as $j
-    | $j.value.steps | to_entries[]
-    | select(.value.uses // "" | test("^actions/checkout@"))
-    | $j.key + "|" + (.key | tostring) + "|" + (.value.with."persist-credentials" | tag) + "|" + (.value.with."persist-credentials" | tostring)
-  ' "${f}")
+  done <<<"${rows}"
 done
 shopt -u nullglob
 

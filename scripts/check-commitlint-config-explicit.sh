@@ -97,7 +97,27 @@ for f in "${paths[@]}"; do
   "${SELF}" | */"${SELF}") continue ;;
   esac
 
+  # Capture yq's output (and exit status) into a variable rather than
+  # feeding the loop from `< <(yq ...)`: a process substitution's exit
+  # status is not propagated under set -Eeuo pipefail, so a yq failure
+  # (unparsable workflow, or a query that errors on a valid-but-odd
+  # shape) would yield empty input and the check would pass silently.
   # shellcheck disable=SC2016 # yq expression + literal `${{` needle: no shell expansion wanted
+  if ! rows="$(yq eval '
+    .jobs // {} | to_entries[] as $j
+    | $j.value.steps // [] | to_entries[]
+    | select(.value.uses // "" | test("^'"${ACTION_PREFIX}"'"))
+    | $j.key
+      + "|" + (.key | tostring)
+      + "|" + (.value.with | tag)
+      + "|" + (.value.with.configFile | tag)
+      + "|" + (.value.with.configFile // "" | tostring)
+  ' "${f}")"; then
+    fail "$(printf '%s: could not evaluate workflow with yq (malformed?)' "${f}")"
+    continue
+  fi
+  [[ -n ${rows} ]] || continue
+  # shellcheck disable=SC2016 # literal `${{` needle below: no shell expansion wanted
   while IFS='|' read -r job idx with_tag cfg_tag cfg_val; do
     [[ -z ${job} ]] && continue
     # A missing key yields an empty tag; an explicit `with:` with a null
@@ -146,16 +166,7 @@ for f in "${paths[@]}"; do
           "${f}" "${job}" "${idx}" "${ref}" "${base_dir}/${ref}")"
       fi
     done
-  done < <(yq eval '
-    .jobs // {} | to_entries[] as $j
-    | $j.value.steps // [] | to_entries[]
-    | select(.value.uses // "" | test("^'"${ACTION_PREFIX}"'"))
-    | $j.key
-      + "|" + (.key | tostring)
-      + "|" + (.value.with | tag)
-      + "|" + (.value.with.configFile | tag)
-      + "|" + (.value.with.configFile // "" | tostring)
-  ' "${f}")
+  done <<<"${rows}"
 done
 
 # --- Assertions 3 and 4: the two rulesets stay in lockstep. ---

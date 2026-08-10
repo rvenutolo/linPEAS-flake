@@ -86,6 +86,17 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
     continue
   fi
 
+  # Capture yq's output (and exit status) into a variable rather than
+  # feeding the loop from `< <(yq ...)`: a process substitution's exit
+  # status is not propagated under set -Eeuo pipefail, so a yq failure
+  # (unparsable workflow, or a query that errors on a valid-but-odd
+  # shape) would yield empty input and the check would pass silently.
+  if ! rows="$(yq eval '.jobs // {} | keys | .[]' "${f}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  [[ -n ${rows} ]] || continue
   while IFS= read -r job; do
     [[ -z ${job} ]] && continue
     if ! job_needs_fork_guard "${f}" "${job}"; then
@@ -98,7 +109,7 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
         "${f}" "${job}" "${GUARD_NEEDLE}" "${if_clause}" >&2
       failed=$((failed + 1))
     fi
-  done < <(yq eval '.jobs // {} | keys | .[]' "${f}")
+  done <<<"${rows}"
 done
 shopt -u nullglob
 
