@@ -14,9 +14,13 @@ HARNESS_ASSERT_COUNT=0
 declare -a HARNESS_ASSERT_EXEMPTIONS=()
 
 # @description Register a substring as legitimately shared with one named
-# scenario. Use only when the failure path emits no token the nominal path
-# lacks; the rationale is mandatory so the weakening is reviewable.
-# @arg $1 substring  @arg $2 other scenario name  @arg $3 rationale
+# scenario, or with every scenario when the second argument is `*`. Use the
+# wildcard for a global banner a script prints on every run of a whole
+# outcome class: such a substring still separates that class from its
+# opposite, which is the axis the assertion is about. Use the named form
+# when one failure path emits no token another lacks. The rationale is
+# mandatory so the weakening is reviewable.
+# @arg $1 substring  @arg $2 other scenario name or `*`  @arg $3 rationale
 function harness_assert_exempt() {
   local -r substring="$1" other="$2" rationale="$3"
   if [[ -z ${rationale} ]]; then
@@ -59,13 +63,15 @@ function harness_assert_record() {
   HARNESS_ASSERT_COUNT=$((HARNESS_ASSERT_COUNT + 1))
 }
 
-# @description Return 0 if the substring/other-scenario pair is exempt.
+# @description Return 0 if the substring/other-scenario pair is exempt,
+# either by an exact pair or by a `*` wildcard registered for the substring.
 # @arg $1 substring  @arg $2 other scenario name
 function harness_assert_is_exempt() {
   local -r key="$1"$'\037'"$2"
+  local -r wildcard="$1"$'\037''*'
   local entry
   for entry in ${HARNESS_ASSERT_EXEMPTIONS+"${HARNESS_ASSERT_EXEMPTIONS[@]}"}; do
-    [[ ${entry} == "${key}" ]] && return 0
+    [[ ${entry} == "${key}" || ${entry} == "${wildcard}" ]] && return 0
   done
   return 1
 }
@@ -90,6 +96,14 @@ function harness_assert_verify() {
       [[ ${i} -eq ${j} ]] && continue
       sub_j="$(cat -- "${HARNESS_ASSERT_POOL}/${j}.sub")"
       [[ ${sub_j} == "${sub_i}" ]] && continue
+      # Byte-identical output means the two records observe the same run of
+      # the script — a harness asserting several properties of one
+      # invocation, not two scenarios one substring fails to tell apart. No
+      # substring can separate identical text, so a flag here would describe
+      # harness shape rather than a weak assertion. The census reports how
+      # many distinct outputs the pool holds, so the collapse stays visible.
+      cmp --silent -- "${HARNESS_ASSERT_POOL}/${i}.out" \
+        "${HARNESS_ASSERT_POOL}/${j}.out" && continue
       grep --fixed-strings --quiet -- "${sub_i}" \
         "${HARNESS_ASSERT_POOL}/${j}.out" || continue
       name_j="$(cat -- "${HARNESS_ASSERT_POOL}/${j}.name")"
@@ -100,8 +114,13 @@ function harness_assert_verify() {
     done
   done
 
-  printf 'harness-assert: checked %d substring assertions across %d scenarios\n' \
-    "${asserted}" "${HARNESS_ASSERT_COUNT}"
+  local distinct
+  distinct="$(for ((i = 0; i < HARNESS_ASSERT_COUNT; i++)); do
+    sha256sum <"${HARNESS_ASSERT_POOL}/${i}.out"
+  done | sort --unique | wc --lines)"
+
+  printf 'harness-assert: checked %d substring assertions across %d scenarios (%d distinct outputs)\n' \
+    "${asserted}" "${HARNESS_ASSERT_COUNT}" "${distinct}"
 
   rm --recursive --force -- "${HARNESS_ASSERT_POOL}"
   HARNESS_ASSERT_POOL=""

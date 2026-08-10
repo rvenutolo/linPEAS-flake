@@ -110,6 +110,54 @@ harness_assert_verify'
   check 'exemption without a rationale is rejected' 1 'rationale' '
 harness_assert_exempt "x" y ""'
 
+  # A `*` exemption covers a banner every scenario of an outcome class
+  # prints; the substring still separates that class from its opposite.
+  check 'wildcard exemption suppresses every pair' 0 'checked 2' "${SETUP}"'
+harness_assert_exempt "bump PR" "*" "progress label printed on every run"
+harness_assert_record nominal  "wrote dashboard" "${d}/nominal.out"
+harness_assert_record degraded "bump PR"         "${d}/degraded.out"
+harness_assert_verify'
+
+  check 'wildcard exemption is scoped to its own substring' 1 'wrote dashboard' '
+d="$(mktemp -d)"
+printf "wrote dashboard\nbump PR\n" >"${d}/a.out"
+printf "wrote dashboard\n"          >"${d}/b.out"
+harness_assert_exempt "bump PR" "*" "progress label printed on every run"
+harness_assert_record a "bump PR"         "${d}/a.out"
+harness_assert_record b "wrote dashboard" "${d}/b.out"
+harness_assert_verify'
+
+  # Two records over byte-identical output observe one run of the script,
+  # so no substring can separate them and no flag is owed.
+  check 'identical outputs are not compared against each other' 0 'checked 2' '
+d="$(mktemp -d)"
+printf "alpha\nbeta\n" >"${d}/a.out"
+printf "alpha\nbeta\n" >"${d}/b.out"
+harness_assert_record a "alpha" "${d}/a.out"
+harness_assert_record b "beta"  "${d}/b.out"
+harness_assert_verify'
+
+  check 'census reports the distinct-output count' 0 'across 3 scenarios (2 distinct outputs)' '
+d="$(mktemp -d)"
+printf "alpha\nbeta\n" >"${d}/a.out"
+printf "alpha\nbeta\n" >"${d}/b.out"
+printf "gamma\n"       >"${d}/c.out"
+harness_assert_record a "alpha" "${d}/a.out"
+harness_assert_record b "beta"  "${d}/b.out"
+harness_assert_record c "gamma" "${d}/c.out"
+harness_assert_verify'
+
+  # Dedupe must not hide a genuine collision with a third, differing output.
+  check 'identical-output dedupe still flags a differing sibling' 1 'does not discriminate' '
+d="$(mktemp -d)"
+printf "alpha\n"        >"${d}/a.out"
+printf "alpha\n"        >"${d}/b.out"
+printf "alpha carried\n" >"${d}/c.out"
+harness_assert_record a "alpha"   "${d}/a.out"
+harness_assert_record b ""        "${d}/b.out"
+harness_assert_record c "carried" "${d}/c.out"
+harness_assert_verify'
+
   # Multiple recorded streams per scenario.
   check 'second recorded stream is also compared' 1 'does not discriminate' '
 d="$(mktemp -d)"
