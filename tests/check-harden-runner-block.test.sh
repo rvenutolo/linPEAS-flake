@@ -24,6 +24,8 @@ function expect() {
 }
 
 expect good.yml 0 ""
+expect good-literal-endpoints.yml 0 ""
+expect good-folded-endpoints.yml 0 ""
 expect bad-audit.yml 1 "not block"
 expect bad-empty.yml 1 "empty allowed-endpoints"
 expect bad-missing.yml 1 "empty allowed-endpoints"

@@ -39,12 +39,18 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
   # would yield empty input and the check would pass silently. This bites
   # on a valid workflow whose `allowed-endpoints` is a YAML sequence: the
   # string-concat query aborts with "!!seq cannot be added to !!str".
+  #
+  # Newlines in the `allowed-endpoints` value are collapsed to spaces: a
+  # literal block scalar (`allowed-endpoints: |`) carries real newlines,
+  # and the reader below is line-oriented, so an uncollapsed value would
+  # split one step into several bogus records. The check only needs to
+  # know whether the value is non-empty, so the separator is irrelevant.
   # shellcheck disable=SC2016 # $j is a yq variable inside single-quoted yq expression
   if ! rows="$(yq eval '
     .jobs | to_entries[] as $j
     | $j.value.steps[]
     | select(.uses // "" | test("step-security/harden-runner@"))
-    | $j.key + "\t" + (.with."egress-policy" // "null") + "\t" + (.with."allowed-endpoints" // "null")
+    | $j.key + "\t" + (.with."egress-policy" // "null") + "\t" + ((.with."allowed-endpoints" // "null") | sub("\n"; " "))
   ' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed, or non-string allowed-endpoints?)\n' "${f}" >&2
     failed=$((failed + 1))

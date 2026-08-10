@@ -161,7 +161,7 @@ Hooks (alphabetical):
 | `precommit-table-fresh`             | Hook table in docs/development/git.md matches the flake hook manifest.                                                               |
 | `pull-request-target-absent`        | No workflow uses the pull_request_target trigger.                                                                                    |
 | `renovate-config-validator`         | Validate renovate.json against the upstream Renovate config schema.                                                                  |
-| `run-block-strict`                  | Multi-line run: blocks start with set -Eeuo pipefail.                                                                                |
+| `run-block-strict`                  | Block-scalar and newline-carrying run: blocks start with set -Eeuo pipefail.                                                         |
 | `script-has-test`                   | Every scripts/check-*.sh paired with tests/check-*.test.sh.                                                                          |
 | `script-shebang-pipefail`           | Every scripts/\*.sh has portable shebang + set -Eeuo pipefail.                                                                       |
 | `scripts-reference-fresh`           | docs/reference/scripts.md matches in-script annotations.                                                                             |

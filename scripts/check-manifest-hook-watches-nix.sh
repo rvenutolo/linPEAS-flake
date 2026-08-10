@@ -48,9 +48,16 @@ done
 
 # Step 2/3 — parse every hook block in HOOKS_DIR. For each block capture
 # its name, its `files = "...";` string, and every scripts/<name>.sh
-# token referenced anywhere in the block (the entry). Emit one line per
-# block referencing a manifest script:
-#   <name>\t<files-string>\t<space-separated script basenames>
+# token referenced anywhere in the block (the entry). Emit one record per
+# block, fields separated by an ASCII unit separator (octal \037):
+#   <name>\037<files-string>\037<space-separated script basenames>
+# A literal tab is unsafe as the field separator: a block whose `files`
+# value is the empty string puts two delimiters back to back, and bash's
+# `read` treats tab as IFS whitespace, collapsing adjacent delimiters. The
+# script list would slide into the `files` field, the block would look
+# like it references no manifest script, and it would be dropped from the
+# coverage check with no output. \037 carries no such special casing and
+# never appears in a `files` regex or a `scripts/*.sh` path.
 parse_blocks() {
   local nix
   for nix in "${HOOKS_DIR}"/*.nix; do
@@ -66,7 +73,7 @@ parse_blocks() {
       }
       # Block closes on "  };"
       in_block && /^  \};/ {
-        printf "%s\t%s\t%s\n", name, files, scripts
+        printf "%s\037%s\037%s\n", name, files, scripts
         in_block = 0
         next
       }
@@ -94,7 +101,7 @@ parse_blocks() {
 failed=0
 manifest_hook_blocks=0
 
-while IFS=$'\t' read -r name files scripts; do
+while IFS=$'\037' read -r name files scripts; do
   [[ -n ${name} ]] || continue
   # Does this block reference any manifest-reading script?
   references_manifest=0

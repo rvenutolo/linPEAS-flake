@@ -127,12 +127,12 @@
     pass_filenames = false;
     language = "system";
   };
-  # Every multi-line run: block starts with set -Eeuo pipefail.
-  # See docs/security/workflow-hardening.md.
+  # Every block-scalar or newline-carrying run: block starts with
+  # set -Eeuo pipefail. See docs/security/workflow-hardening.md.
   run-block-strict = {
     enable = true;
     name = "run-block-strict";
-    description = "Multi-line run: blocks start with set -Eeuo pipefail.";
+    description = "Block-scalar and newline-carrying run: blocks start with set -Eeuo pipefail.";
     entry = "${pkgs-unstable.writeShellScript "run-block-strict-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'

@@ -1,0 +1,18 @@
+name: good-folded
+on: push
+permissions: {}
+concurrency:
+  group: good-folded-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: folded scalar with strict prelude
+        run: >-
+          set -Eeuo pipefail ;
+          echo one ;
+          echo two
