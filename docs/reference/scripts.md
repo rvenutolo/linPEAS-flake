@@ -675,7 +675,9 @@ GitHub API.
 
 Compare two reproducibility-build hash JSON files.
 Emits a markdown table to GITHUB_STEP_SUMMARY (or stdout if unset)
-and exits 0 on full match, 1 on any divergence, 2 on bad input.
+and exits 0 on full match, 1 on any divergence, 2 on bad input. Bad
+input includes an absent, null, or malformed hash field: two builds
+that both measured nothing are not a match.
 
 ### scripts/docs-audit-pressure.sh
 

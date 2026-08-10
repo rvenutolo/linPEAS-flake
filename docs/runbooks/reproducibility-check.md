@@ -31,6 +31,10 @@ Currently no `--assignee` is set; mismatches rely on default repo notification s
 1. Open `image.html` (or `linpeas.html`) in a browser.
 1. Classify the divergence using the table below, then fix the root cause.
 
+### Bad-input failures (exit 2)
+
+`compare-repro.sh` exits 2 when a hash field is absent, null, or malformed in either build's `build.json`. That is not a divergence — the *measurement* broke, most likely because `nix path-info --json` changed shape and the `measure` step no longer finds `narHash` where it looks. Triage the `measure` step of the failing build job, not the diffoscope output; there is no `repro-diff` artifact to read in this case.
+
 ## Common nondeterminism sources
 
 | Symptom in diffoscope                      | Likely cause                   | Fix                                                                                          |
