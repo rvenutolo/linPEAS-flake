@@ -1,0 +1,19 @@
+{
+  "nodes": {
+    "alpha": {
+      "locked": { "lastModified": 100, "narHash": "sha256-AAA", "owner": "orgA", "repo": "alpha", "rev": "aaa111", "type": "github" },
+      "original": { "owner": "orgA", "ref": "main", "repo": "alpha", "type": "github" }
+    },
+    "gamma": {
+      "locked": { "lastModified": 300, "narHash": "sha256-CCC", "owner": "orgC", "repo": "gamma", "rev": "ccc333", "type": "github" },
+      "original": { "owner": "orgC", "repo": "gamma", "type": "github" }
+    },
+    "mirror": {
+      "locked": { "lastModified": 100, "narHash": "sha256-AAA", "owner": "orgA", "repo": "alpha", "rev": "aaa111", "type": "github" },
+      "original": { "owner": "orgA", "ref": "main", "repo": "alpha", "type": "github" }
+    },
+    "root": { "inputs": { "alpha": "alpha", "beta": ["alpha"], "gamma": "gamma", "mirror": "mirror" } }
+  },
+  "root": "root",
+  "version": 7
+}

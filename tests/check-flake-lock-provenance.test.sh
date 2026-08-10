@@ -69,6 +69,33 @@ function run_missing_base() {
   rm --force -- "${out_file}"
 }
 
+# @arg $1 scenario name  @arg $2 head fixture  @arg $3 expected exit
+# @arg $4 expected output substring (empty skips)
+# Same as run_scenario but against the follows-shaped base lock.
+function run_follows_scenario() {
+  local -r name="$1" head="$2" expected_exit="$3" expected_msg="$4"
+  local out_file
+  out_file="$(mktemp)"
+  local actual_exit=0
+  BASE_LOCK_FILE="${FIXTURES}/base-follows.lock" \
+    HEAD_LOCK_FILE="${FIXTURES}/${head}" \
+    "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
+  if [[ ${actual_exit} -ne ${expected_exit} ]]; then
+    printf 'FAIL: %s — expected exit %d, got %d\n' \
+      "${name}" "${expected_exit}" "${actual_exit}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  elif [[ -n ${expected_msg} ]] &&
+    ! grep --fixed-strings --quiet -- "${expected_msg}" "${out_file}"; then
+    printf 'FAIL: %s — output missing %q\n' "${name}" "${expected_msg}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+  rm --force -- "${out_file}"
+}
+
 function main() {
   run_scenario 'routine bump passes' 'head-routine.lock' 0 'provenance OK'
   run_scenario 'top-level owner change fails' 'head-toplevel-owner.lock' 1 'alpha'
@@ -82,6 +109,13 @@ function main() {
   run_scenario 'top-level rename same source' 'head-toplevel-renamed-same.lock' 0 'provenance OK'
   run_scenario 'top-level rename + repoint fails' 'head-toplevel-renamed-repoint.lock' 1 'alpha'
   run_missing_base 'missing base errors'
+
+  run_follows_scenario 'follows routine bump passes' 'head-follows-routine.lock' 0 'provenance OK'
+  run_follows_scenario 'string-to-array repoint fails' 'head-follows-string-to-array.lock' 1 'gamma'
+  run_follows_scenario 'array-to-array repoint fails' 'head-follows-array-change.lock' 1 'beta'
+  run_follows_scenario 'string-to-array same source passes' 'head-follows-string-to-array-same.lock' 0 'provenance OK'
+  run_follows_scenario 'dangling follows path fails' 'head-follows-dangling.lock' 1 'unresolvable'
+  run_follows_scenario 'cyclic follows fails' 'head-follows-cycle.lock' 1 'unresolvable'
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2
