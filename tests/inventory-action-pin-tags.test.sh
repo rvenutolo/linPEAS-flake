@@ -65,4 +65,31 @@ if ! grep --quiet 'API_FAILURE' "${OUT_APIFAIL}"; then
 fi
 rm -rf -- "${STUB_DIR}" "${OUT_APIFAIL}" "${ERR_APIFAIL}"
 
+# --- action.yaml composite via default scan (no INVENTORY_PATHS_OVERRIDE):
+# fixed once the .github/actions discovery covers action.yaml, not just
+# action.yml. ---
+ACTIONYAML_DIR="$(mktemp --directory)"
+mkdir --parents "${ACTIONYAML_DIR}/.github/actions/sample-yaml"
+cat >"${ACTIONYAML_DIR}/.github/actions/sample-yaml/action.yaml" <<'ACTION_EOF'
+name: sample-yaml
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v5
+ACTION_EOF
+OUT_ACTIONYAML="$(mktemp)"
+(
+  cd "${ACTIONYAML_DIR}" &&
+    INVENTORY_TAG_FIXTURE_DIR="${FIXTURE_DIR}/tag-fixtures" \
+      bash "${SCRIPT}" --output "${OUT_ACTIONYAML}"
+)
+if ! grep --quiet 'action.yaml' "${OUT_ACTIONYAML}"; then
+  printf 'FAIL: action.yaml composite not inventoried via default scan\n' >&2
+  cat -- "${OUT_ACTIONYAML}" >&2
+  rm -rf -- "${ACTIONYAML_DIR}" "${OUT_ACTIONYAML}"
+  exit 1
+fi
+rm -rf -- "${ACTIONYAML_DIR}" "${OUT_ACTIONYAML}"
+printf 'OK   action.yaml composite inventoried via default scan\n'
+
 printf 'all tests passed\n'

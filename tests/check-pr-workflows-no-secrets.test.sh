@@ -68,6 +68,16 @@ function main() {
     'flow-string-pr.yml' 1 'secrets.DOCKERHUB_TOKEN not allowed'
   run_scenario 'flow-seq including pull_request with secret fails' \
     'flow-seq-pr.yml' 1 'secrets.DOCKERHUB_TOKEN not allowed'
+  # .yaml workflow extension: fixed once the discovery glob covers *.yaml too.
+  run_scenario 'pull_request .yaml workflow with non-GITHUB_TOKEN secret fails' \
+    'bad-secret.yaml' 1 'secrets.SUPER_SECRET not allowed'
+  # flow-map `on: { pull_request: {} }`: fixed once detection goes via yq.
+  run_scenario 'flow-map pull_request with non-GITHUB_TOKEN secret fails' \
+    'bad-flowmap.yml' 1 'secrets.SUPER_SECRET not allowed'
+  # Malformed YAML: a workflow yq cannot parse is a loud tooling error,
+  # not a silent skip.
+  run_scenario 'malformed workflow is a tooling error' \
+    'bad-malformed.yml' 2 'could not evaluate'
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2

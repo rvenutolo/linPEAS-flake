@@ -62,6 +62,7 @@ tests/fixtures/harden-runner-first/bad-malformed.yml
 tests/fixtures/job-timeout-minutes/bad-malformed.yml
 tests/fixtures/permission-scopes/bad-malformed.yml
 tests/fixtures/permission-scopes/malformed-allowlist/allowlist.yml
+tests/fixtures/pr-workflows-no-secrets/bad-malformed.yml
 tests/fixtures/required-checks/*
 tests/fixtures/run-block-strict/bad-malformed.yml
 tests/fixtures/scorecard-threshold/malformed.json

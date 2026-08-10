@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # scripts/check-uses-sha-pinned.sh
 #
-# @description Lint: every `uses:` in `.github/workflows/*.yml` and
-# `.github/actions/**/action.yml` ends with a full 40-hex SHA, or is
-# a local path-relative reference.
+# @description Lint: every `uses:` in `.github/workflows/*.yml` (or
+# `.yaml`) and `.github/actions/**/action.yml` (or `.yaml`) ends with a
+# full 40-hex SHA, or is a local path-relative reference.
 
 # Belt-and-braces lint backup to the GitHub-side
 # `sha_pinning_required` setting. Asserts every `uses:` in
-# .github/workflows/*.yml (and composite actions in .github/actions/)
-# ends with a full 40-hex SHA, OR is a local path-relative reference
+# .github/workflows/*.yml|*.yaml (and composite actions in
+# .github/actions/) ends with a full 40-hex SHA, OR is a local
+# path-relative reference
 # (./...) which is intrinsically content-addressed by the checkout.
 #
 # `uses:` values are extracted with yq (YAML-aware), so both block-style
@@ -46,9 +47,10 @@ shopt -s nullglob globstar
 for dir in "${scan_dirs[@]}"; do
   [[ -d ${dir} ]] || continue
   # A single globstar glob: `**` also matches zero segments, so `**/*.yml`
-  # already covers top-level *.yml. A separate `*.yml` would match (and
-  # re-scan) every top-level file a second time, double-counting violations.
-  for f in "${dir}"/**/*.yml; do
+  # (and `**/*.yaml`) already cover top-level *.yml/*.yaml. A separate
+  # `*.yml`/`*.yaml` would match (and re-scan) every top-level file a
+  # second time, double-counting violations.
+  for f in "${dir}"/**/*.yml "${dir}"/**/*.yaml; do
     [[ -f ${f} ]] || continue
     if [[ -n ${FILE_FILTER} && "$(basename "${f}")" != "${FILE_FILTER}" ]]; then
       continue

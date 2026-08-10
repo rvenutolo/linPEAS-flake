@@ -3,7 +3,7 @@
 #
 # @description Lint: ban restating literal workflow cron times in docs.
 # A line that names a workflow (backticked bare name `NAME` or a
-# `NAME.yml` token) AND carries a clock time (HH:MM) restates the
+# `NAME.yml`/`NAME.yaml` token) AND carries a clock time (HH:MM) restates the
 # single source of truth, the schedule table in docs/architecture/ci.md.
 # Such lines must live only in that table; this lint flags them
 # everywhere else (README.md + docs/**, excluding ci.md itself).
@@ -29,13 +29,15 @@ readonly SCAN_ROOT="${SCAN_ROOT_OVERRIDE:-${REPO_ROOT}}"
 readonly TIME_RE='(^|[^0-9])[0-9]{1,2}:[0-9]{2}([^0-9]|$)'
 
 # @description Emit the live workflow-name set: bare basename and the
-#              `.yml`-suffixed form, one per line.
+#              `.yml`/`.yaml`-suffixed form, one per line.
 function workflow_names() {
-  local f base
-  for f in "${WORKFLOWS_DIR}"/*.yml; do
+  local f base bare
+  for f in "${WORKFLOWS_DIR}"/*.yml "${WORKFLOWS_DIR}"/*.yaml; do
     [[ -f ${f} ]] || continue
     base="$(basename "${f}")"
-    printf '%s\n' "${base%.yml}" "${base}"
+    bare="${base%.yaml}"
+    bare="${bare%.yml}"
+    printf '%s\n' "${bare}" "${base}"
   done
 }
 
@@ -89,14 +91,15 @@ function main() {
   }
 
   # Build an alternation of escaped names, then a name pattern that matches
-  # either a backticked bare name (`NAME`) or a `.yml`-suffixed token. The
-  # suffixed form needs a left word boundary so a longer word ending in a
-  # name (e.g. homepages.yml vs pages.yml) is not a false positive; the
-  # backticked form is already delimited by its opening backtick.
+  # either a backticked bare name (`NAME`) or a `.yml`/`.yaml`-suffixed
+  # token. The suffixed form needs a left word boundary so a longer word
+  # ending in a name (e.g. homepages.yml vs pages.yml) is not a false
+  # positive; the backticked form is already delimited by its opening
+  # backtick.
   local alt
   alt="$(escape_ere <"${names_tmp}" | paste -sd '|' -)"
   local name_re
-  name_re="\`(${alt})\`|(^|[^[:alnum:]_-])(${alt})\\.yml"
+  name_re="\`(${alt})\`|(^|[^[:alnum:]_-])(${alt})\\.(yml|yaml)"
 
   local found=0 file lineno text
   while IFS= read -r file; do

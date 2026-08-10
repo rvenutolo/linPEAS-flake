@@ -27,3 +27,11 @@ rules:
     indent-sequences: consistent
   # Multiline strings appear inside `extra_nix_config: |` blocks.
   document-start: disable
+  # prettier's YAML style puts a single space inside non-empty flow-map
+  # braces (`{ pull_request: {} }`) and none inside empty ones; match that
+  # instead of fighting the formatter on every flow-map `on:` block.
+  braces:
+    min-spaces-inside: 1
+    max-spaces-inside: 1
+    min-spaces-inside-empty: 0
+    max-spaces-inside-empty: 0

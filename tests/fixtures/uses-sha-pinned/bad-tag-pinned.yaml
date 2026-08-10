@@ -1,0 +1,7 @@
+name: bad-tag-pinned
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4

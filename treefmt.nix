@@ -136,6 +136,7 @@
     "tests/fixtures/run-block-strict/bad-malformed.yml"
     "tests/fixtures/setup-nix-required/bad-malformed.yml"
     "tests/fixtures/upload-artifact-strict/bad-malformed.yml"
+    "tests/fixtures/pr-workflows-no-secrets/bad-malformed.yml"
     "tests/fixtures/fork-guard-release/bad-malformed.yml"
     "tests/fixtures/auto-merge-decline-gate/bad-malformed.yml"
     "tests/fixtures/checkout-persist-credentials/bad-malformed.yml"

@@ -2,9 +2,10 @@
 # scripts/inventory-action-pin-tags.sh
 #
 # @description Enumerate every SHA-pinned `uses:` in
-# .github/workflows/*.yml and .github/actions/**/action.yml, resolve
-# each pinned SHA to its exact patch tag via `gh api .../tags`, and
-# emit a TSV mapping pin -> patch tag for downstream rewrite tooling.
+# .github/workflows/*.yml|*.yaml and .github/actions/**/action.yml
+# (or action.yaml), resolve each pinned SHA to its exact patch tag via
+# `gh api .../tags`, and emit a TSV mapping pin -> patch tag for
+# downstream rewrite tooling.
 
 # Comments today name floating major tags (e.g. `# v3`); upstream
 # publishers force-move those tags on every release, which fires the
@@ -53,7 +54,7 @@ else
     paths+=("${p}")
   done < <(
     find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) 2>/dev/null || true
-    find .github/actions -type f -name 'action.yml' 2>/dev/null || true
+    find .github/actions -type f \( -name 'action.yml' -o -name 'action.yaml' \) 2>/dev/null || true
   )
 fi
 

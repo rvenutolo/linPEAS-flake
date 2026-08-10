@@ -16,7 +16,9 @@
 # Honors WORKFLOWS_DIR_OVERRIDE (defaults to .github/workflows) so the
 # test harness can point at a temp dir with a single fixture.
 #
-# Exits 0 if every PR-triggered workflow is clean, 1 otherwise.
+# Exits 0 if every PR-triggered workflow is clean, 1 on a secrets
+# violation, 2 on a tooling error (yq missing, or a workflow yq cannot
+# parse).
 set -Eeuo pipefail
 IFS=$'\n\t'
 
@@ -27,62 +29,35 @@ if [[ ! -d ${WORKFLOWS_DIR} ]]; then
   exit 1
 fi
 
+if ! command -v yq >/dev/null 2>&1; then
+  printf 'yq not found on PATH\n' >&2
+  exit 2
+fi
+
 # @description Return 0 if the workflow file is triggered by pull_request
-# or pull_request_target (flow or block form); 1 otherwise.
+# or pull_request_target; 1 otherwise. Handles every `on:` shape yq can
+# parse: scalar, flow/block sequence, and flow/block map (quoted or
+# comment-trailing keys included). Exits 2 on a workflow yq cannot
+# parse — fail closed, never skip-scan.
 # @arg $1 path to workflow YAML
 function is_pr_triggered() {
   local -r file="$1"
-  # POSIX-awk state machine — no gawk extensions:
-  #   - flow form `on: pull_request` / `on: pull_request_target` → match
-  #   - flow-sequence `on: [a, b]` → match if list contains either name
-  #   - block form `on:` followed by indented `pull_request:` /
-  #     `pull_request_target:` keys, or `- pull_request` list entries
-  #   - column-0 non-blank/non-comment line exits the on: block
-  awk '
-    BEGIN { in_on = 0 }
-    { sub(/\r$/, "") }
-
-    /^on:[[:space:]]*$/ {
-      in_on = 1
-      next
-    }
-    /^on:[[:space:]]*(pull_request|pull_request_target)([[:space:]]|$)/ {
-      print "match"; exit 0
-    }
-    /^on:[[:space:]]*\[.*\]/ {
-      line = $0
-      sub(/^[^[]*\[/, "", line)
-      sub(/\].*$/, "", line)
-      gsub(/[[:space:]]/, "", line)
-      n = split(line, arr, ",")
-      for (i = 1; i <= n; i++) {
-        if (arr[i] == "pull_request" || arr[i] == "pull_request_target") {
-          print "match"; exit 0
-        }
-      }
-      next
-    }
-
-    !in_on { next }
-
-    {
-      if ($0 ~ /^[[:space:]]*$/) next
-      if ($0 ~ /^[[:space:]]*#/) next
-
-      # Column-0 non-blank/non-comment line ends the on: block.
-      if ($0 !~ /^[[:space:]]/) {
-        in_on = 0
-        next
-      }
-
-      if ($0 ~ /^[[:space:]]+(pull_request|pull_request_target)[[:space:]]*:/) {
-        print "match"; exit 0
-      }
-      if ($0 ~ /^[[:space:]]+-[[:space:]]+(pull_request|pull_request_target)[[:space:]]*$/) {
-        print "match"; exit 0
-      }
-    }
-  ' "${file}" | grep --quiet '^match$'
+  local triggers
+  # Capture yq's output (and exit status) into a variable rather than
+  # feeding a loop or pipe from a process substitution: a procsub's exit
+  # status is not propagated under set -Eeuo pipefail, so a yq parse
+  # failure would silently exempt the file from scanning.
+  #
+  # mikefarah/yq does not lex `if $t == ... then ... else ... end`
+  # (tested empirically: bare `if true then 1 else 2 end` fails with a
+  # lexer error), so trigger-shape branching is done via three
+  # tag-filtered alternatives unioned by the comma operator instead of a
+  # single conditional.
+  if ! triggers="$(yq eval '(.on | select(tag == "!!str")), (.on | select(tag == "!!seq") | .[]), (.on | select(tag == "!!map") | keys | .[])' "${file}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${file}" >&2
+    exit 2
+  fi
+  grep --extended-regexp --line-regexp --quiet 'pull_request|pull_request_target' <<<"${triggers}"
 }
 
 # @description Scan a PR-triggered workflow for disallowed secrets refs.
@@ -122,7 +97,7 @@ function scan_secrets() {
 
 failed=0
 shopt -s nullglob
-for wf in "${WORKFLOWS_DIR}"/*.yml; do
+for wf in "${WORKFLOWS_DIR}"/*.yml "${WORKFLOWS_DIR}"/*.yaml; do
   if is_pr_triggered "${wf}"; then
     scan_secrets "${wf}"
   fi
