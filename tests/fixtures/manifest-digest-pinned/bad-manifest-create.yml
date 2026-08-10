@@ -1,0 +1,9 @@
+name: bad-manifest-create
+jobs:
+  manifest:
+    steps:
+      - name: create list
+        run: |
+          docker manifest create "ghcr.io/rvenutolo/linpeas:${VERSION}" \
+            "ghcr.io/rvenutolo/linpeas:${VERSION}-amd64" \
+            "ghcr.io/rvenutolo/linpeas:${VERSION}-arm64"

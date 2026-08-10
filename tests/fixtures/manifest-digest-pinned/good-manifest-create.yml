@@ -1,0 +1,9 @@
+name: good-manifest-create
+jobs:
+  manifest:
+    steps:
+      - name: create list
+        run: |
+          docker manifest create "ghcr.io/rvenutolo/linpeas:${VERSION}" \
+            "ghcr.io/rvenutolo/linpeas@sha256:aaaa" \
+            "ghcr.io/rvenutolo/linpeas@sha256:bbbb"

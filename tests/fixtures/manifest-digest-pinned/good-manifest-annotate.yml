@@ -1,0 +1,9 @@
+name: good-manifest-annotate
+jobs:
+  manifest:
+    steps:
+      - name: annotate list
+        run: |
+          docker manifest annotate "ghcr.io/rvenutolo/linpeas:${VERSION}" \
+            "ghcr.io/rvenutolo/linpeas@sha256:aaaa" \
+            --arch arm64 --os linux
