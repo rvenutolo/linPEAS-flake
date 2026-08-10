@@ -106,6 +106,13 @@ the `attribute failure reason` step. Reasons:
     `linpeas.sh` SHA-256 no longer matches the pinned SRI.
 - `manifest-tag-drift` — `:latest` no longer resolves to the same
     manifest as `:VERSION` on ghcr.io or docker.io.
+- `cross-registry-manifest-mismatch` — **security incident.** ghcr.io
+    and docker.io serve different multi-arch manifests for the release
+    tag. Identical bytes are published to both at release time, so a
+    divergence means post-publication tag rewriting on one registry —
+    typically a rollback to an older, still-validly-signed release,
+    which no signature or attestation check can detect. Triage via
+    [dockerhub-recovery.md](../runbooks/dockerhub-recovery.md).
 - `ghcr-attest-failed` / `hub-attest-failed` /
     `pin-attest-failed` — attestation
     verification failed for a specific artifact.
@@ -130,10 +137,11 @@ the `attribute failure reason` step. Reasons:
 - `unknown` — attribution step couldn't match a known failed step
     (bug in the attribute logic itself).
 
-Only `upstream-sri-drift` (and to a lesser extent `manifest-tag-drift`)
-warrant the "treat as security incident" framing. Folding all reasons
-into a single failure body trains the maintainer to skim-read auto-filed
-issues — exactly the wrong reflex when the failure is a real SRI drift.
+Only `upstream-sri-drift` and `cross-registry-manifest-mismatch` (and to
+a lesser extent `manifest-tag-drift`) warrant the "treat as security
+incident" framing. Folding all reasons into a single failure body trains
+the maintainer to skim-read auto-filed issues — exactly the wrong reflex
+when the failure is a real SRI drift or a one-sided registry rollback.
 
 This pattern is the project default for every cron-notify caller: each
 must attribute distinct failure reasons to distinct issue-body wording.
