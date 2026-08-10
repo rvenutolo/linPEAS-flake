@@ -1,0 +1,11 @@
+# tests/fixtures/pr-workflows-no-secrets/bad-flowmap.yml
+name: bad-flowmap
+on: { pull_request: {} }
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: noop
+        env:
+          TOKEN: ${{ secrets.SUPER_SECRET }}
+        run: "true"
