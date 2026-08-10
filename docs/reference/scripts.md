@@ -318,9 +318,10 @@ per-job `permissions:` block in every workflow.
 
 ### scripts/check-nix-run-pinned.sh
 
-Lint: ban unpinned `nix run nixpkgs#<pkg>` invocations
-across workflows, scripts, and shell-fenced markdown. Allowed
-alternatives use the repo's own flake or an explicit commit pin.
+Lint: ban any `nix` invocation against the bare
+`nixpkgs` registry ref across workflows, scripts, and shell-fenced
+markdown. Allowed alternatives use the repo's own flake or an
+explicit commit pin.
 
 ### scripts/check-no-yq-procsub.sh
 
@@ -343,10 +344,12 @@ every non-EXEMPT docs file has an index entry.
 ### scripts/check-patch-tag-pins.sh
 
 Lint: every SHA-pinned `uses:` in workflow / composite
-action files carries an exact patch-tag comment (e.g. `# v1.2.3`)
-rather than a floating major-tag comment (e.g. `# v1`), UNLESS the
-same line also carries an inline `# patch-tag-exception: <reason>`
-marker.
+action files carries an exact patch-tag comment — present, and shaped
+as `# v<major>.<minor>[.<patch>]` with at least two numeric components
+(e.g. `# v1.2.3`). A missing comment, a comment naming no version
+(e.g. `# main`), and a floating major-tag comment (e.g. `# v1`) are
+all violations. The only escape is an inline
+`# patch-tag-exception: <reason>` marker on the same line.
 
 ### scripts/check-permission-scopes.sh
 
@@ -498,7 +501,8 @@ configuration. Manual-UI rows are out of scope.
 ### scripts/check-setup-nix-required.sh
 
 Lint: every workflow installing Nix goes through the
-composite `./.github/actions/setup-nix` and passes
+composite `./.github/actions/setup-nix` — no vendor Nix-installer
+action directly — and passes
 `github-token: ${{ secrets.GITHUB_TOKEN }}`.
 
 ### scripts/check-tag-protection.sh

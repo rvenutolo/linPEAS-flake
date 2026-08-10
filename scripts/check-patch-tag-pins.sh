@@ -2,12 +2,18 @@
 # scripts/check-patch-tag-pins.sh
 #
 # @description Lint: every SHA-pinned `uses:` in workflow / composite
-# action files carries an exact patch-tag comment (e.g. `# v1.2.3`)
-# rather than a floating major-tag comment (e.g. `# v1`), UNLESS the
-# same line also carries an inline `# patch-tag-exception: <reason>`
-# marker.
+# action files carries an exact patch-tag comment — present, and shaped
+# as `# v<major>.<minor>[.<patch>]` with at least two numeric components
+# (e.g. `# v1.2.3`). A missing comment, a comment naming no version
+# (e.g. `# main`), and a floating major-tag comment (e.g. `# v1`) are
+# all violations. The only escape is an inline
+# `# patch-tag-exception: <reason>` marker on the same line.
 
-# Belt-and-braces backstop to the runtime ratchet-pin-audit check.
+# A SHA pin records the commit but not the tag it was resolved from; the
+# trailing comment is the sole record of the intended tag, and the
+# runtime ratchet-pin-audit reads it to detect tag-vs-SHA drift. A pin
+# whose comment is absent or imprecise makes that drift undetectable, so
+# this lint is a belt-and-braces backstop to that runtime check.
 # Defaults scan `.github/workflows/*.yml`|`*.yaml` +
 # `.github/actions/**/action.yml` (or `action.yaml`).
 # Honors LINT_PATHS_OVERRIDE (newline-separated file list) for fixtures.
@@ -30,9 +36,16 @@ else
   )
 fi
 
-# uses: <ref>@<40-hex> # v<N>  where the char after v<N> is space, EOL, or `#`
-# (so `# v3.36.0` is correctly skipped — the `.` after v3 disqualifies).
-readonly RE='uses:[[:space:]]*[^@[:space:]]+@[0-9a-fA-F]{40}[[:space:]]*#[[:space:]]*v[0-9]+([[:space:]]|#|$)'
+# Every `uses: <ref>@<40-hex>` line is in scope, comment or not.
+readonly PIN_RE='uses:[[:space:]]*[^@[:space:]]+@[0-9a-fA-F]{40}'
+# Two or more dot-separated numeric components, so `# v1` and `# v23` do
+# not qualify while `# v1.2.3` and `# v0.24.0` do.
+readonly PATCH_TAG_RE='#[[:space:]]*v[0-9]+(\.[0-9]+)+'
+# The reason must be non-empty: a bare `patch-tag-exception:` explains
+# nothing and does not waive the rule.
+readonly EXCEPTION_RE='patch-tag-exception:[[:space:]]*[^[:space:]]'
+# Used only to pick the message for a line already known to violate.
+readonly VERSION_TOKEN_RE='#.*v[0-9]'
 
 violations=0
 for file in "${paths[@]}"; do
@@ -40,13 +53,18 @@ for file in "${paths[@]}"; do
   ln=0
   while IFS= read -r line; do
     ln=$((ln + 1))
-    [[ ${line} =~ ${RE} ]] || continue
-    # Allow if a non-empty patch-tag-exception marker is on the same line.
-    if [[ ${line} =~ patch-tag-exception:[[:space:]]*[^[:space:]] ]]; then
+    [[ ${line} =~ ${PIN_RE} ]] || continue
+    if [[ ${line} =~ ${PATCH_TAG_RE} ]] || [[ ${line} =~ ${EXCEPTION_RE} ]]; then
       continue
     fi
-    printf '%s:%d: major-tag comment without patch-tag-exception:%s\n' \
-      "${file}" "${ln}" "${line}" >&2
+    if [[ ${line} != *'#'* ]]; then
+      msg='pin carries no version comment'
+    elif [[ ! ${line} =~ ${VERSION_TOKEN_RE} ]]; then
+      msg='pin comment names no version'
+    else
+      msg='pin comment names a major tag, not an exact patch tag'
+    fi
+    printf '%s:%d: %s:%s\n' "${file}" "${ln}" "${msg}" "${line}" >&2
     violations=$((violations + 1))
   done <"${file}"
 done

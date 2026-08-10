@@ -196,15 +196,15 @@ Enforced by `scripts/check-fork-guard-release.sh`. Wired as the `lint-workflow-s
 
 ## nix-run-pinned
 
-No workflow, script, or shell-fenced documentation invokes `nix run nixpkgs#<pkg>` against the bare `nixpkgs` flake reference.
+No workflow, script, or shell-fenced documentation runs any `nix` subcommand — `run`, `shell`, `develop`, `build`, or otherwise — against the bare `nixpkgs` flake reference, with or without intervening flags.
 
-At runtime the bare `nixpkgs` resolves through the user's (or runner's) flake registry — not this repo's `flake.lock`. A step that calls `nix run nixpkgs#cosign` therefore pulls whatever nixpkgs commit the runner's registry happens to point at, bypassing the Renovate-pinned `nixpkgs` input in `flake.lock`. A malicious or compromised nixpkgs revision could ship a backdoored tool.
+At runtime the bare `nixpkgs` resolves through the user's (or runner's) flake registry — not this repo's `flake.lock`. A step that calls `nix run nixpkgs#cosign` therefore pulls whatever nixpkgs commit the runner's registry happens to point at, bypassing the Renovate-pinned `nixpkgs` input in `flake.lock`. A malicious or compromised nixpkgs revision could ship a backdoored tool. The registry lookup is what makes the reference unpinned, so the hazard is identical no matter which subcommand consumes it.
 
 Allowed alternatives:
 
 - `nix shell .#<pkg> --command <pkg> <args>` — uses this repo's own flake outputs, resolved via `flake.lock`. Requires the package to be exposed under `packages.<pkg>` by the flake (see `nix/packages.nix`).
 - `nix run .#<pkg> -- <args>` — same.
-- `nix run nixpkgs/<rev>#<pkg>` — explicit commit-pin (the lint matches the literal `nixpkgs#` token with no `/<rev>` between).
+- `nix run nixpkgs/<rev>#<pkg>` — explicit commit-pin (the lint matches a `nix` command word followed by a bare `nixpkgs#` token, so a `/<rev>` between `nixpkgs` and `#` passes).
 
 `cosign` is exposed under `packages.cosign` so `release-on-bump.yml` and `verify-latest-release.yml` can invoke it via the pinned shape. Future tools follow the same pattern.
 
@@ -215,8 +215,12 @@ Enforced by `scripts/check-nix-run-pinned.sh`. Wired as the `lint-workflow-secur
 {% raw %}
 Every workflow that installs Nix must do so via
 `./.github/actions/setup-nix`, passing
-`github-token: ${{ secrets.GITHUB_TOKEN }}`. Direct use of
-`cachix/install-nix-action` from a workflow is forbidden.
+`github-token: ${{ secrets.GITHUB_TOKEN }}`. Direct use of any
+Nix-installer action from a workflow is forbidden — `cachix/install-nix-action`,
+`DeterminateSystems/nix-installer-action`,
+`DeterminateSystems/determinate-nix-action`, and
+`nixbuild/nix-quick-install-action` are named explicitly, and the lint
+also matches unlisted actions of the same family.
 {% endraw %}
 
 **Why.** Unauthenticated `api.github.com` tarball fetches are capped
