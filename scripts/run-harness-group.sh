@@ -26,6 +26,7 @@ readonly -a HARNESSES=(
   'settings-posture|check-settings-posture.test.sh|'
   'backfill-image-mode|classify-backfill-image-mode.test.sh|'
   'lib-log|lib-log.test.sh|'
+  'harness-assert|lib-harness-assert.test.sh|'
   # Harnesses with no bespoke CI job, lint-group, or refresh-* glob home run
   # here test-only. Any paired enforce script runs in its own workflow or
   # pre-commit hook (e.g. octoscan-scan.sh in octoscan.yml,
