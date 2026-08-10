@@ -8,7 +8,8 @@
 # marker.
 
 # Belt-and-braces backstop to the runtime ratchet-pin-audit check.
-# Defaults scan `.github/workflows/*.yml` + `.github/actions/**/action.yml`.
+# Defaults scan `.github/workflows/*.yml`|`*.yaml` +
+# `.github/actions/**/action.yml` (or `action.yaml`).
 # Honors LINT_PATHS_OVERRIDE (newline-separated file list) for fixtures.
 # Exits 0 on clean; exits 1 with per-violation `file:line:` summary.
 
@@ -24,8 +25,8 @@ else
   while IFS= read -r p; do
     paths+=("${p}")
   done < <(
-    find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) 2>/dev/null
-    find .github/actions -type f -name 'action.yml' 2>/dev/null
+    find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) 2>/dev/null || true
+    find .github/actions -type f \( -name 'action.yml' -o -name 'action.yaml' \) 2>/dev/null || true
   )
 fi
 

@@ -2,9 +2,9 @@
 # scripts/check-cron-table.sh
 #
 # @description Lint: cron schedule table in docs/architecture/ci.md
-# matches cron triggers in .github/workflows/*.yml — set parity, cron
-# string accuracy, and daily arrow-list ordering with strictly
-# increasing UTC times.
+# matches cron triggers in .github/workflows/*.yml (and *.yaml) — set
+# parity, cron string accuracy, and daily arrow-list ordering with
+# strictly increasing UTC times.
 #
 # Exit codes:
 #   0  all checks passed
@@ -26,9 +26,11 @@ readonly DOC_FILE="${DOC_FILE_OVERRIDE:-${REPO_ROOT}/docs/architecture/ci.md}"
 # @description Emit `name<TAB>cron` for each workflow yaml with a cron schedule.
 function workflow_pairs() {
   local f name cron
-  for f in "${WORKFLOWS_DIR}"/*.yml; do
+  for f in "${WORKFLOWS_DIR}"/*.yml "${WORKFLOWS_DIR}"/*.yaml; do
     [[ -f ${f} ]] || continue
-    name="$(basename "${f}" .yml)"
+    name="$(basename "${f}")"
+    name="${name%.yaml}"
+    name="${name%.yml}"
     # defense-in-depth: the main() guard guarantees ≤1 cron line per file.
     cron="$(grep -E '^[[:space:]]*-[[:space:]]*cron:' "${f}" 2>/dev/null |
       head -1 |
@@ -79,7 +81,7 @@ function main() {
   # A workflow with >1 cron line can't be represented in the name-keyed
   # table model; surface the limitation rather than silently dropping lines.
   local f cron_count
-  for f in "${WORKFLOWS_DIR}"/*.yml; do
+  for f in "${WORKFLOWS_DIR}"/*.yml "${WORKFLOWS_DIR}"/*.yaml; do
     [[ -f ${f} ]] || continue
     cron_count="$(grep -Ec '^[[:space:]]*-[[:space:]]*cron:' "${f}" || true)"
     if ((cron_count > 1)); then

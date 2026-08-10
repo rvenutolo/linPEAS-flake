@@ -71,7 +71,7 @@ fi
 
 # Suffix: every secrets.DOCKERHUB_TOKEN* reference must be _RW or _DELETE.
 shopt -s nullglob
-for wf in "${WORKFLOWS_DIR}"/*.yml; do
+for wf in "${WORKFLOWS_DIR}"/*.yml "${WORKFLOWS_DIR}"/*.yaml; do
   while IFS= read -r match; do
     [[ -z ${match} ]] && continue
     if [[ ${match} != 'secrets.DOCKERHUB_TOKEN_RW' &&

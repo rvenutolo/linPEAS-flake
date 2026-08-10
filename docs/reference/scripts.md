@@ -157,9 +157,9 @@ so verification is bound to a specific signer.
 ### scripts/check-cron-table.sh
 
 Lint: cron schedule table in docs/architecture/ci.md
-matches cron triggers in .github/workflows/\*.yml — set parity, cron
-string accuracy, and daily arrow-list ordering with strictly
-increasing UTC times.
+matches cron triggers in .github/workflows/\*.yml (and \*.yaml) — set
+parity, cron string accuracy, and daily arrow-list ordering with
+strictly increasing UTC times.
 
 Exit codes:
 0 all checks passed
@@ -176,7 +176,7 @@ the target file.
 
 Lint: ban restating literal workflow cron times in docs.
 A line that names a workflow (backticked bare name `NAME` or a
-`NAME.yml` token) AND carries a clock time (HH:MM) restates the
+`NAME.yml`/`NAME.yaml` token) AND carries a clock time (HH:MM) restates the
 single source of truth, the schedule table in docs/architecture/ci.md.
 Such lines must live only in that table; this lint flags them
 everywhere else (README.md + docs/\*\*, excluding ci.md itself).
@@ -511,9 +511,9 @@ workflow under `.github/workflows/*.yml` sets
 
 ### scripts/check-uses-sha-pinned.sh
 
-Lint: every `uses:` in `.github/workflows/*.yml` and
-`.github/actions/**/action.yml` ends with a full 40-hex SHA, or is
-a local path-relative reference.
+Lint: every `uses:` in `.github/workflows/*.yml` (or
+`.yaml`) and `.github/actions/**/action.yml` (or `.yaml`) ends with a
+full 40-hex SHA, or is a local path-relative reference.
 
 ### scripts/check-workflow-concurrency.sh
 
@@ -685,9 +685,10 @@ by aggregating pin metadata and live GitHub REST API data.
 ### scripts/inventory-action-pin-tags.sh
 
 Enumerate every SHA-pinned `uses:` in
-.github/workflows/\*.yml and .github/actions/\*\*/action.yml, resolve
-each pinned SHA to its exact patch tag via `gh api .../tags`, and
-emit a TSV mapping pin -> patch tag for downstream rewrite tooling.
+.github/workflows/*.yml|*.yaml and .github/actions/\*\*/action.yml
+(or action.yaml), resolve each pinned SHA to its exact patch tag via
+`gh api .../tags`, and emit a TSV mapping pin -> patch tag for
+downstream rewrite tooling.
 
 ### scripts/octoscan-scan.sh
 
