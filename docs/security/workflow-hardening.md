@@ -172,11 +172,13 @@ Enforced by `scripts/check-ci-job-in-summary.sh`. Wired as the `lint-doc-invaria
 
 ## run-block-strict
 
-Every multi-line `run:` block under `.github/workflows/*.yml` starts with `set -Eeuo pipefail` as its first non-blank, non-comment line.
+Every block-scalar or newline-carrying `run:` block under `.github/workflows/*.yml` starts with `set -Eeuo pipefail` as its first non-blank, non-comment line.
 
-Bash inside Actions `run:` blocks defaults to `-e` off. A failed command in the middle of a multi-line block silently continues, producing wrong results in security-critical jobs (release signing, attestation verify, pin write-back). The strict-mode prelude closes that gap.
+Bash inside Actions `run:` blocks defaults to `-e` off. A failed command in the middle of a block that runs several commands silently continues, producing wrong results in security-critical jobs (release signing, attestation verify, pin write-back). The strict-mode prelude closes that gap.
 
-Single-line `run:` invocations are exempt — they're already a single shell command whose exit status drives the step directly.
+The rule keys off YAML node style (`|`, `>`, and their chomping/indent variants) as well as newlines in the evaluated value. Newline presence alone under-detects: a folded scalar (`run: >-`) spells a `;`-separated command sequence across several source lines but folds to one newline-free string, so a block that plainly runs several commands would otherwise slip past the requirement.
+
+Plain single-line `run:` invocations are exempt — they're already a single shell command whose exit status drives the step directly.
 
 Enforced by `scripts/check-run-block-strict.sh`. Wired as the `lint-workflow-security` CI job (member check `run-block-strict`) and as a pre-commit hook.
 

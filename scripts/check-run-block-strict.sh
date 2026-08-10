@@ -1,24 +1,32 @@
 #!/usr/bin/env bash
 # scripts/check-run-block-strict.sh
 #
-# @description Lint: every multi-line `run:` block under
-# `.github/workflows/*.yml` starts with `set -Eeuo pipefail` as its
-# first non-blank, non-comment line.
+# @description Lint: every block-scalar or newline-carrying `run:`
+# block under `.github/workflows/*.yml` starts with
+# `set -Eeuo pipefail` as its first non-blank, non-comment line.
 
-# Lint: every multi-line `run:` block under
+# Lint: every block-scalar or newline-carrying `run:` block under
 # `.github/workflows/*.yml` starts with `set -Eeuo pipefail` as its
 # first non-blank, non-comment line.
 #
 # Bash inside `run:` blocks defaults to `-e` off. A failed command in
-# the middle of a multi-line block silently continues, producing
-# wrong results in security-critical jobs (release signing,
-# attestation verify, pin write-back). The strict-mode prelude
-# (`-e` aborts on failure, `-E` propagates ERR traps into subshells,
-# `-u` rejects unset variables, `-o pipefail` makes pipelines fail
-# on any stage) closes that gap.
+# the middle of a block that runs several commands silently
+# continues, producing wrong results in security-critical jobs
+# (release signing, attestation verify, pin write-back). The
+# strict-mode prelude (`-e` aborts on failure, `-E` propagates ERR
+# traps into subshells, `-u` rejects unset variables, `-o pipefail`
+# makes pipelines fail on any stage) closes that gap.
 #
-# Threshold: multi-line only. Single-line `run:` invocations are
-# already a single shell command; their exit status drives the step
+# Threshold: block scalar (`|`, `>`, and their chomping/indent
+# variants) OR an evaluated value carrying a newline. Newline
+# presence alone under-detects: a folded scalar (`run: >-`) reads as
+# several `;`-separated commands across several source lines but
+# folds to one newline-free string, so a block that plainly runs a
+# command sequence would otherwise escape the requirement. Node
+# style, which survives folding, catches it.
+#
+# Plain single-line `run:` invocations stay exempt — they are
+# already a single shell command whose exit status drives the step
 # directly. The prelude would just be noise.
 #
 # See docs/security/workflow-hardening.md.
@@ -59,9 +67,11 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
     continue
   fi
 
-  # Enumerate (job, step-index) pairs that have a multi-line run:.
+  # Enumerate (job, step-index) pairs whose run: is a block scalar or
+  # carries a newline. `style` reports `folded` / `literal` for block
+  # scalars and is empty for a plain one-line command.
   # shellcheck disable=SC2016 # yq expression: literal $ refs, not shell expansion
-  if ! rows="$(yq eval '.jobs | to_entries[] as $j | $j.value.steps | to_entries[] | select(.value.run != null and (.value.run | contains("\n"))) | $j.key + "|" + (.key | tostring)' "${f}")"; then
+  if ! rows="$(yq eval '.jobs | to_entries[] as $j | $j.value.steps | to_entries[] | select(.value.run != null and ((.value.run | contains("\n")) or (.value.run | style) == "folded" or (.value.run | style) == "literal")) | $j.key + "|" + (.key | tostring)' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
@@ -73,7 +83,7 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
     if [[ ${first} == "${WANT}"* ]]; then
       continue
     fi
-    printf '%s: job %q step[%s] multi-line run: must start with %q (got %q)\n' \
+    printf '%s: job %q step[%s] run: block must start with %q (got %q)\n' \
       "${f}" "${job}" "${idx}" "${WANT}" "${first}" >&2
     failed=$((failed + 1))
   done <<<"${rows}"
@@ -81,7 +91,7 @@ done
 shopt -u nullglob
 
 if ((failed > 0)); then
-  printf '%d multi-line run: block(s) missing strict-mode prelude\n' "${failed}" >&2
+  printf '%d run: block(s) missing strict-mode prelude\n' "${failed}" >&2
   exit 1
 fi
 exit 0
