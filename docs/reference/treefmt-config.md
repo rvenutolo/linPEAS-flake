@@ -39,7 +39,13 @@ docs/security/trust-model.md
 go.mod
 go.sum
 package-lock.json
+tests/fixtures/auto-merge-decline-gate/bad-malformed.yml
 tests/fixtures/check-renovate-config-validator/bad-syntax.json
+tests/fixtures/checkout-persist-credentials/bad-malformed.yml
+tests/fixtures/ci-job-in-summary/bad-malformed-manifest/lint-groups.yml
+tests/fixtures/commitlint-config-explicit/bad-malformed/ci.yml
+tests/fixtures/egress-allowlist/bad-malformed.yml
+tests/fixtures/fork-guard-release/bad-malformed.yml
 tests/fixtures/gh-attestation-repo/bad-background-sep.sh
 tests/fixtures/gh-attestation-repo/bad-doubled-space.sh
 tests/fixtures/gh-attestation-repo/bad-doubled-span.md
@@ -54,6 +60,8 @@ tests/fixtures/gh-attestation-repo/good-odd-backtick.md
 tests/fixtures/gh-attestation-repo/good-redir-pin.sh
 tests/fixtures/harden-runner-first/bad-malformed.yml
 tests/fixtures/job-timeout-minutes/bad-malformed.yml
+tests/fixtures/permission-scopes/bad-malformed.yml
+tests/fixtures/permission-scopes/malformed-allowlist/allowlist.yml
 tests/fixtures/pr-workflows-no-secrets/bad-malformed.yml
 tests/fixtures/required-checks/*
 tests/fixtures/run-block-strict/bad-malformed.yml

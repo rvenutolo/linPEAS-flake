@@ -1,0 +1,8 @@
+name: bad-scalar-writeall
+permissions: {}
+jobs:
+  writer:
+    permissions: write-all
+    runs-on: ubuntu-latest
+    steps:
+      - run: "true"

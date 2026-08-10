@@ -53,8 +53,8 @@
 #
 # Honors CI_WORKFLOW_OVERRIDE + CATEGORIES_FILE_OVERRIDE +
 # LINT_GROUPS_OVERRIDE + SCRIPTS_DIR_OVERRIDE + EXEMPT_OVERRIDE for
-# fixtures. Exits 0 on full coverage, 1 on any drift, 2 on a usage or
-# missing-tool error.
+# fixtures. Exits 0 on full coverage, 1 on any drift, 2 on a usage,
+# missing-tool, or unparsable-lint-groups-manifest error.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -200,6 +200,18 @@ if [[ ! -f ${LINT_GROUPS_FILE} ]]; then
   printf 'lint-groups manifest not found: %s\n' "${LINT_GROUPS_FILE}" >&2
   exit 1
 fi
+
+# Capture yq's output (and exit status) into a variable rather than
+# feeding the loop from `< <(yq ...)`: a process substitution's exit
+# status is not propagated under set -Eeuo pipefail, so a yq failure
+# would yield empty input and manifest coverage would pass silently. The
+# manifest is a precondition file, not a scanned artifact, so an
+# unparsable manifest is a tooling error (exit 2) like the missing-file
+# guard above.
+if ! basenames_rows="$(yq eval '.[] | .[]' "${LINT_GROUPS_FILE}")"; then
+  printf '%s: could not evaluate lint-groups manifest with yq (malformed?)\n' "${LINT_GROUPS_FILE}" >&2
+  exit 2
+fi
 while IFS= read -r basename; do
   [[ -z ${basename} ]] && continue
   script="${SCRIPTS_DIR}/check-${basename}.sh"
@@ -208,7 +220,7 @@ while IFS= read -r basename; do
       "${LINT_GROUPS_FILE}" "${basename}" "${script}" >&2
     failed=$((failed + 1))
   fi
-done < <(yq eval '.[] | .[]' "${LINT_GROUPS_FILE}")
+done <<<"${basenames_rows}"
 
 if ((failed > 0)); then
   printf '%d ci.yml / categories drift entry/entries\n' "${failed}" >&2

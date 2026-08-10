@@ -31,4 +31,7 @@ expect drop-only-exit1.yml 1 "decline gate"
 expect drop-only-closedmerged.yml 1 "decline gate"
 expect drop-only-jsonstate.yml 1 "decline gate"
 
+# A workflow yq cannot parse must fail loud, not empty the scan silently.
+expect bad-malformed.yml 1 "could not evaluate"
+
 printf 'all tests passed\n'

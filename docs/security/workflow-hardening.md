@@ -82,6 +82,18 @@ The lint accepts longer set lines (e.g. `set -Eeuo pipefail -x`) as long as the 
 
 Enforced by `scripts/check-script-shebang-pipefail.sh`. Wired as the `lint-script-hygiene` CI job (member check `script-shebang-pipefail`) and as a pre-commit hook.
 
+## no-yq-procsub
+
+No `scripts/*.sh` feeds a redirection from a yq process substitution — `done < <(yq eval '.x' "$f")` and its variants.
+
+A process substitution's exit status is invisible to `set -Eeuo pipefail`: the substitution runs in its own subshell, and the shell only ever sees the exit status of the command the redirection feeds (here, the `while`/`done` loop itself), not `yq`'s. If `yq` fails to parse its input, the process substitution produces empty output, the loop simply runs zero iterations, and the calling check exits 0 as if the scan found nothing to flag — a fail-open silently masquerading as a clean pass.
+
+The sanctioned idioms both make a `yq` parse failure abort loudly instead: capture `yq`'s output into a variable first (`hits="$(yq eval '.x' "$f")"`, then iterate with `<<<"${hits}"`) so `set -e` catches a non-zero `yq` exit before the loop ever runs; or, for NUL-delimited output that can't round-trip through `"$(...)"` (command substitution strips embedded NUL bytes), write to a temp file and iterate with `< "${tmp}"`.
+
+The lint skips comment lines (lines whose first non-whitespace character is `#`) so a script is free to document the banned idiom by name — e.g. explaining why it uses the capture idiom instead — without tripping the check on its own documentation.
+
+Enforced by `scripts/check-no-yq-procsub.sh`. Wired as the `lint-script-hygiene` CI job (member check `no-yq-procsub`) and as a pre-commit hook.
+
 ## script-has-test
 
 Every `scripts/check-*.sh` has a matching `tests/check-*.test.sh`, and every `tests/check-*.test.sh` has a matching `scripts/check-*.sh`.

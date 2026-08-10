@@ -1,0 +1,8 @@
+name: good-scalar-readall
+permissions: {}
+jobs:
+  reader:
+    permissions: read-all
+    runs-on: ubuntu-latest
+    steps:
+      - run: "true"

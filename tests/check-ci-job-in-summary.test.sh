@@ -54,6 +54,9 @@ expect good 1 "is not a job" "" "" "not-a-real-job"
 # An EXEMPT entry that is already a category key exempts nothing — the
 # forward loop matches the category map first and never reaches it.
 expect good 1 "already a key" "" "" "foo"
+# A lint-groups manifest yq cannot parse is a tooling error, not drift
+# — it must fail loud (exit 2) rather than silently skip coverage.
+expect good 2 "" "${FIXTURES}/bad-malformed-manifest/lint-groups.yml" ""
 
 # --print-exempt is the shared source of the ci-job exemption list for
 # scripts/refresh-enforcement-matrix.sh. It must exit 0 and emit exactly

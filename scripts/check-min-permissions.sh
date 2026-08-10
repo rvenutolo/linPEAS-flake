@@ -76,6 +76,17 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
   esac
 
   # --- per-job permissions -----------------------------------------
+  # Capture yq's output (and exit status) into a variable rather than
+  # feeding the loop from `< <(yq ...)`: a process substitution's exit
+  # status is not propagated under set -Eeuo pipefail, so a yq failure
+  # (e.g. `jobs:` is not a map) would yield empty input and the per-job
+  # scan would pass silently.
+  if ! rows="$(yq eval '.jobs | to_entries[] | .key + "\t" + (.value.permissions | tag)' "${f}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  [[ -n ${rows} ]] || continue
   while IFS=$'\t' read -r job job_tag; do
     [[ -z ${job} ]] && continue
     case "${job_tag}" in
@@ -94,7 +105,7 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
       failed=$((failed + 1))
       ;;
     esac
-  done < <(yq eval '.jobs | to_entries[] | .key + "\t" + (.value.permissions | tag)' "${f}")
+  done <<<"${rows}"
 done
 shopt -u nullglob
 

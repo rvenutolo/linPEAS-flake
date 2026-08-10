@@ -137,5 +137,13 @@
     "tests/fixtures/setup-nix-required/bad-malformed.yml"
     "tests/fixtures/upload-artifact-strict/bad-malformed.yml"
     "tests/fixtures/pr-workflows-no-secrets/bad-malformed.yml"
+    "tests/fixtures/fork-guard-release/bad-malformed.yml"
+    "tests/fixtures/auto-merge-decline-gate/bad-malformed.yml"
+    "tests/fixtures/checkout-persist-credentials/bad-malformed.yml"
+    "tests/fixtures/egress-allowlist/bad-malformed.yml"
+    "tests/fixtures/permission-scopes/bad-malformed.yml"
+    "tests/fixtures/permission-scopes/malformed-allowlist/allowlist.yml"
+    "tests/fixtures/ci-job-in-summary/bad-malformed-manifest/lint-groups.yml"
+    "tests/fixtures/commitlint-config-explicit/bad-malformed/ci.yml"
   ];
 }

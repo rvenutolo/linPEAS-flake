@@ -1,9 +1,15 @@
 extends: default
 
 # `bad-malformed.yml` fixtures are intentionally unparsable YAML that
-# exercise the parse-failure branch of the workflow-lint checks.
+# exercise the parse-failure branch of the workflow-lint checks. Some
+# harnesses require the malformed content under a name other than
+# `bad-malformed.yml` (a manifest override, an allowlist override, or a
+# per-fixture directory's own `ci.yml`); list those individually.
 ignore: |
   tests/fixtures/**/bad-malformed.yml
+  tests/fixtures/permission-scopes/malformed-allowlist/allowlist.yml
+  tests/fixtures/ci-job-in-summary/bad-malformed-manifest/lint-groups.yml
+  tests/fixtures/commitlint-config-explicit/bad-malformed/ci.yml
 
 rules:
   # Renovate marker comments push lines past the 80-char default; the

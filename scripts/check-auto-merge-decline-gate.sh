@@ -46,6 +46,20 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
     continue
   fi
 
+  # Capture yq's output into a temp file rather than feeding the loop
+  # from `< <(yq ...)`: a process substitution's exit status is not
+  # propagated under set -Eeuo pipefail, so a yq parse failure would
+  # yield empty input and the file would pass wholesale. NUL-delimited
+  # output cannot round-trip through "$(...)" (bash command substitution
+  # strips embedded NUL bytes), hence the temp file.
+  runs_file="$(mktemp)"
+  if ! yq eval -0 '.jobs[].steps[].run // ""' "${f}" >"${runs_file}"; then
+    rm --force -- "${runs_file}"
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+
   # Each step run: scalar, NUL-delimited so multi-line blocks stay
   # intact. `// ""` keeps null runs from emitting the literal "null".
   while IFS= read -r -d '' block; do
@@ -61,7 +75,8 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
     fi
     printf '%s: auto-merge run-block missing CLOSED|MERGED decline gate\n' "${f}" >&2
     failed=$((failed + 1))
-  done < <(yq eval -0 '.jobs[].steps[].run // ""' "${f}")
+  done <"${runs_file}"
+  rm --force -- "${runs_file}"
 done
 shopt -u nullglob
 

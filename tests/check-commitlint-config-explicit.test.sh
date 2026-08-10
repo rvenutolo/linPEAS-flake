@@ -33,4 +33,7 @@ expect missing-path/ci.yml 1 "does not exist"
 expect extra-rule/ci.yml 1 "rules must be exactly"
 expect extends-mismatch/ci.yml 1 "declare different"
 
+# A workflow yq cannot parse must fail loud, not empty the scan silently.
+expect bad-malformed/ci.yml 1 "could not evaluate"
+
 printf 'all tests passed\n'

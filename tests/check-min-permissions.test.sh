@@ -31,4 +31,9 @@ expect bad-job-missing.yml 1 "missing"
 expect bad-top-list.yml 1 "unexpected shape"
 expect bad-job-shape.yml 1 "unexpected shape"
 
+# A jobs map yq cannot traverse (per-job scan) must fail loud, not empty
+# the scan silently. permissions: {} stays parseable so this isolates
+# the per-job process-substitution site rather than the top-level read.
+expect bad-malformed.yml 1 "could not evaluate"
+
 printf 'all tests passed\n'
