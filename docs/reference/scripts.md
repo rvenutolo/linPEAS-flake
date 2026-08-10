@@ -296,6 +296,12 @@ PATH. These groups run inside devShells.lint in CI; this guard turns a
 dropped tool into a named failure instead of a cryptic mid-check error.
 Keep EXPECTED in sync with nix/devshell-lint.nix buildInputs.
 
+### scripts/check-manifest-digest-pinned.sh
+
+Lint: every multi-arch manifest-creating docker command
+references its SOURCE images by immutable digest, never by a mutable
+tag.
+
 ### scripts/check-manifest-hook-watches-nix.sh
 
 Lint: every pre-commit hook whose entry runs a

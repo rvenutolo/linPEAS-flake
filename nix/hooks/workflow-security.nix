@@ -336,6 +336,23 @@
     pass_filenames = false;
     language = "system";
   };
+  # Multi-arch manifest creation references sources by digest, not tag.
+  # See docs/install/docker.md.
+  manifest-digest-pinned = {
+    enable = true;
+    name = "manifest-digest-pinned";
+    description = "docker manifest/imagetools create sources are digest-pinned.";
+    entry = "${pkgs-unstable.writeShellScript "manifest-digest-pinned-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${pkgs-unstable.gawk}/bin:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-manifest-digest-pinned.sh
+    ''}";
+    files = "^(\\.github/workflows/.*\\.ya?ml|\\.github/actions/.*\\.ya?ml|scripts/.*\\.sh|docs/.*\\.md|README\\.md)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Ban unpinned nix run nixpkgs#<pkg> invocations.
   # See docs/security/workflow-hardening.md.
   nix-run-pinned = {

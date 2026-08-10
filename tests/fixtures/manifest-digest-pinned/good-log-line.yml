@@ -1,0 +1,7 @@
+name: good-log-line
+jobs:
+  manifest:
+    steps:
+      - name: log success
+        run: |
+          printf 'docker buildx imagetools create ok\n'

@@ -1,0 +1,10 @@
+name: good-digest-literal
+jobs:
+  manifest:
+    steps:
+      - name: create index
+        run: |
+          docker buildx imagetools create \
+            --tag "ghcr.io/rvenutolo/linpeas:1.2.3" \
+            "ghcr.io/rvenutolo/linpeas@sha256:aaaa" \
+            "ghcr.io/rvenutolo/linpeas@sha256:bbbb"

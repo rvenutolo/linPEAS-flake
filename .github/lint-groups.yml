@@ -32,6 +32,7 @@ lint-workflow-security:
   - nix-run-pinned
   - gh-attestation-repo
   - cosign-identity-pinned
+  - manifest-digest-pinned
   - commitlint-config-explicit
   - run-block-strict
   - auto-merge-decline-gate

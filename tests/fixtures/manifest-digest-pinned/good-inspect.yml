@@ -1,0 +1,8 @@
+name: good-inspect
+jobs:
+  verify:
+    steps:
+      - name: inspect index
+        run: |
+          docker buildx imagetools inspect --raw \
+            "ghcr.io/rvenutolo/linpeas:${TAG}"

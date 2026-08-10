@@ -1,0 +1,10 @@
+name: bad-nondigest-var
+jobs:
+  manifest:
+    steps:
+      - name: create index
+        run: |
+          docker buildx imagetools create \
+            --tag "ghcr.io/rvenutolo/linpeas:${VERSION}" \
+            "ghcr.io/rvenutolo/linpeas@${AMD64_REF}" \
+            "ghcr.io/rvenutolo/linpeas@${ARM64_REF}"
