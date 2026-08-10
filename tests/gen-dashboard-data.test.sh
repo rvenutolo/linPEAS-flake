@@ -258,6 +258,83 @@ function run_empty_bump_pr_scenario() {
   pass_count=$((pass_count + 1))
 }
 
+# @description Run an API-error soft-fallback scenario. `gh api` writes
+# its JSON error body to stdout, so a failed this-repo lookup arrives as
+# a non-empty non-null string. Per hard-fail rule #2 that must degrade to
+# the documented empty/"unknown" section — never publish the error body's
+# missing keys as data. Asserts exit 0, the documented fallback value, no
+# literal null anywhere in the output, and a WARN naming the lookup.
+# @arg $1 scenario name
+# @arg $2 override var name to point at the 404 body
+# @arg $3 yq path that must read back as the documented fallback
+# @arg $4 expected fallback value at that path
+# @arg $5 expected stderr substring (the WARN)
+function run_api_error_scenario() {
+  local -r name="$1"
+  local -r override_var="$2"
+  local -r yq_path="$3"
+  local -r expected_value="$4"
+  local -r expected_warn="$5"
+
+  local out_tmp stderr_tmp
+  out_tmp="$(mktemp)"
+  stderr_tmp="$(mktemp)"
+  # shellcheck disable=SC2064  # capture paths at trap-set time
+  trap "rm --force -- '${out_tmp}' '${stderr_tmp}'" RETURN
+
+  local -a env_vars=(
+    "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json"
+    "UPSTREAM_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-upstream-release.json"
+    "LATEST_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-latest-release.json"
+    "THIS_REPO_RELEASES_JSON_OVERRIDE=${FIXTURES_DIR}/good-this-repo-releases.json"
+    "UPSTREAM_RELEASES_JSON_OVERRIDE=${FIXTURES_DIR}/good-upstream-releases.json"
+    "BUMP_PR_JSON_OVERRIDE=${FIXTURES_DIR}/good-bump-pr.json"
+    "PARITY_JSON_OVERRIDE=${FIXTURES_DIR}/good-parity.json"
+    "OUT_FILE_OVERRIDE=${out_tmp}"
+    "${override_var}=${FIXTURES_DIR}/api-error-404.json"
+  )
+
+  local exit_code=0
+  env "${env_vars[@]}" bash "${SCRIPT}" >/dev/null 2>"${stderr_tmp}" || exit_code=$?
+
+  if ((exit_code != 0)); then
+    printf 'FAIL: %s — expected exit 0, got %d\n' "${name}" "${exit_code}" >&2
+    sed 's/^/    /' "${stderr_tmp}" >&2
+    fail_count=$((fail_count + 1))
+    return 0
+  fi
+
+  local actual
+  actual="$(yq eval "${yq_path}" "${out_tmp}")"
+  if [[ ${actual} != "${expected_value}" && ${actual} != '""' ]]; then
+    printf 'FAIL: %s — expected %s == %q, got %q\n' \
+      "${name}" "${yq_path}" "${expected_value}" "${actual}" >&2
+    fail_count=$((fail_count + 1))
+    return 0
+  fi
+
+  if grep --quiet 'null' "${out_tmp}"; then
+    printf 'FAIL: %s — output contains a literal null\n' "${name}" >&2
+    grep --line-number 'null' "${out_tmp}" >&2
+    fail_count=$((fail_count + 1))
+    return 0
+  fi
+
+  # Match on the WARN lines only: the label also appears in this script's
+  # INFO progress lines, so a bare substring search would pass without any
+  # warning ever being emitted.
+  if ! grep --fixed-strings 'WARN' "${stderr_tmp}" |
+    grep --fixed-strings --quiet -- "${expected_warn}"; then
+    printf 'FAIL: %s — stderr missing WARN %q\n' "${name}" "${expected_warn}" >&2
+    sed 's/^/    /' "${stderr_tmp}" >&2
+    fail_count=$((fail_count + 1))
+    return 0
+  fi
+
+  printf 'PASS: %s\n' "${name}"
+  pass_count=$((pass_count + 1))
+}
+
 function main() {
   if [[ ! -f ${SCRIPT} ]]; then
     printf 'FAIL: script not found at %s\n' "${SCRIPT}" >&2
@@ -296,6 +373,23 @@ function main() {
   # Search-API failure must degrade to an empty last-bump section (exit 0),
   # per hard-fail rule #2, not crash the whole generator.
   run_empty_bump_pr_scenario
+
+  # Scenario 6: this-repo releases/latest returns an API error body. It
+  # must degrade to the documented empty release section, never publish a
+  # literal "null" tag or a ":null" image ref.
+  run_api_error_scenario 'latest-release API error soft-fallback' \
+    'LATEST_RELEASE_JSON_OVERRIDE' '.release.latest_tag' '' \
+    'releases/latest'
+
+  # Scenario 7: last-bump-PR search returns an API error body.
+  run_api_error_scenario 'bump-PR API error soft-fallback' \
+    'BUMP_PR_JSON_OVERRIDE' '.last_bump.pr_number' '0' \
+    'bump PR'
+
+  # Scenario 8: verify-latest-release run lookup returns an API error body.
+  run_api_error_scenario 'parity-run API error soft-fallback' \
+    'PARITY_JSON_OVERRIDE' '.parity.conclusion' 'unknown' \
+    'parity'
 
   printf '\n%d passed, %d failed\n' "${pass_count}" "${fail_count}"
   if ((fail_count > 0)); then

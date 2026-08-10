@@ -18,6 +18,10 @@
 #      surfaced). This-repo lookups (releases/latest, last bump PR, latest
 #      verify-latest-release run) soft-fall-back to empty/"unknown" so a
 #      brand-new repo or transient API hiccup does not block the build.
+#      A lookup that returns a JSON API error body is a degraded lookup,
+#      not data: `gh api` writes that body to stdout, so it must be
+#      shape-checked before use or the site publishes its missing keys as
+#      a literal "null". Each degradation logs a WARN naming the lookup.
 #   3. Missing required JSON field    -> exit 1 with field name; no partial
 #                                        yaml written.
 #   4. pin.version must match         -> [0-9]{8}-[0-9a-f]{7,40}
@@ -67,6 +71,41 @@ function fetch_or_override() {
   else
     gh api --header 'X-GitHub-Api-Version: 2022-11-28' -- "${api_path}"
   fi
+}
+
+# @description Fetch a this-repo lookup that is allowed to degrade. `gh
+# api` writes its JSON error body to stdout, so a failed lookup arrives
+# as a non-empty, non-null string that would otherwise be read as data —
+# publishing a literal "null" tag or ref to the site. Emits the body only
+# when the fetch succeeded, parsed as JSON, and carries the shape the
+# caller needs; otherwise emits nothing and logs a WARN naming the
+# degraded lookup, so a persistently broken lookup is visible in the
+# build log instead of rendering as a permanent "unknown".
+# @arg $1 override env-var name
+# @arg $2 gh api path used when the override is unset
+# @arg $3 jq expression asserting the required shape
+# @arg $4 human label for the WARN line
+function fetch_soft() {
+  local -r override_var="$1"
+  local -r api_path="$2"
+  local -r shape="$3"
+  local -r label="$4"
+
+  local body rc=0
+  body="$(fetch_or_override "${override_var}" "${api_path}" 2>/dev/null)" || rc=$?
+  if ((rc != 0)); then
+    log WARN "${label}: lookup failed (exit ${rc}); using fallback"
+    return 0
+  fi
+  if [[ -z ${body} ]]; then
+    log WARN "${label}: empty response; using fallback"
+    return 0
+  fi
+  if ! jq --exit-status "${shape}" <<<"${body}" >/dev/null 2>&1; then
+    log WARN "${label}: response is not valid JSON of the expected shape; using fallback"
+    return 0
+  fi
+  printf '%s' "${body}"
 }
 
 function main() {
@@ -134,8 +173,10 @@ function main() {
 
   log_info 'gathering this-repo release data'
   local latest_release latest_tag image_ref
-  latest_release="$(fetch_or_override LATEST_RELEASE_JSON_OVERRIDE \
-    "repos/${THIS_REPO}/releases/latest" 2>/dev/null || true)"
+  latest_release="$(fetch_soft LATEST_RELEASE_JSON_OVERRIDE \
+    "repos/${THIS_REPO}/releases/latest" \
+    '.tag_name | type == "string" and length > 0' \
+    'releases/latest')"
   if [[ -z ${latest_release} || ${latest_release} == 'null' ]]; then
     latest_tag=''
     image_ref=''
@@ -156,9 +197,10 @@ function main() {
 
   log_info 'gathering last bump PR'
   local bump_pr_json bump_pr_url bump_pr_number bump_pr_merged_at
-  bump_pr_json="$(fetch_or_override BUMP_PR_JSON_OVERRIDE \
-    "search/issues?q=repo:${THIS_REPO}+is:pr+is:merged+in:title+chore%3A+bump+linpeas&sort=updated&order=desc&per_page=1" ||
-    true)"
+  bump_pr_json="$(fetch_soft BUMP_PR_JSON_OVERRIDE \
+    "search/issues?q=repo:${THIS_REPO}+is:pr+is:merged+in:title+chore%3A+bump+linpeas&sort=updated&order=desc&per_page=1" \
+    'has("items")' \
+    'last bump PR')"
   # A swallowed Search-API failure (the `|| true` above) yields an empty
   # string, not `{"items":[]}`. jq on empty input emits nothing — the `// 0`
   # default never fires (zero inputs, not a null value) — so bump_pr_number
@@ -177,9 +219,10 @@ function main() {
 
   log_info 'gathering parity-check run'
   local parity_json parity_conclusion parity_checked_at parity_run_url
-  parity_json="$(fetch_or_override PARITY_JSON_OVERRIDE \
+  parity_json="$(fetch_soft PARITY_JSON_OVERRIDE \
     "repos/${THIS_REPO}/actions/workflows/verify-latest-release.yml/runs?per_page=1" \
-    2>/dev/null || true)"
+    'has("workflow_runs")' \
+    'parity run')"
   if [[ -z ${parity_json} ]]; then
     parity_conclusion='unknown'
     parity_checked_at=''
