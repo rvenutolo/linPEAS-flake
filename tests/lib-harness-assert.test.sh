@@ -137,6 +137,25 @@ harness_assert_record a "alpha" "${d}/a.out"
 harness_assert_record b "beta"  "${d}/b.out"
 harness_assert_verify'
 
+  # Two scenarios emitting one diagnostic differ only by the logger'"'"'s
+  # timestamp. Comparing raw bytes would make the verdict depend on whether
+  # the two runs landed in the same second.
+  check 'log timestamps do not make two identical outputs differ' 0 'checked 2' '
+d="$(mktemp -d)"
+printf "[2026-01-02T03:04:05-0500] ERROR BEGIN marker missing from doc.md\n" >"${d}/a.out"
+printf "[2026-01-02T03:04:06-0500] ERROR BEGIN marker missing from doc.md\n" >"${d}/b.out"
+harness_assert_record a "BEGIN marker missing" "${d}/a.out"
+harness_assert_record b "marker missing"       "${d}/b.out"
+harness_assert_verify'
+
+  check 'a difference beyond the timestamp still flags' 1 'does not discriminate' '
+d="$(mktemp -d)"
+printf "[2026-01-02T03:04:05-0500] ERROR BEGIN marker missing from doc.md\n" >"${d}/a.out"
+printf "[2026-01-02T03:04:06-0500] ERROR BEGIN marker missing from other.md\n" >"${d}/b.out"
+harness_assert_record a "BEGIN marker missing" "${d}/a.out"
+harness_assert_record b "marker missing from other.md" "${d}/b.out"
+harness_assert_verify'
+
   check 'census reports the distinct-output count' 0 'across 3 scenarios (2 distinct outputs)' '
 d="$(mktemp -d)"
 printf "alpha\nbeta\n" >"${d}/a.out"
