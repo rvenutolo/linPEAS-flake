@@ -28,5 +28,13 @@ expect bad-no-identity.sh 1 "certificate-identity"
 expect bad-no-issuer.sh 1 "certificate-oidc-issuer"
 expect bad-bare.sh 1 "certificate-identity"
 expect bad-fence.md 1 "certificate-identity"
+expect good-verify-blob.sh 0 ""
+expect good-verify-boundary.sh 0 ""
+expect good-log-line.sh 0 ""
+expect bad-verify-blob.sh 1 "certificate-identity"
+expect bad-verify-blob-no-issuer.sh 1 "certificate-oidc-issuer"
+expect bad-verify-attestation.sh 1 "certificate-identity"
+expect bad-verify-blob-attestation.sh 1 "certificate-identity"
+expect bad-verify-blob-fence.md 1 "certificate-identity"
 
 printf 'all tests passed\n'

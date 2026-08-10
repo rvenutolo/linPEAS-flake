@@ -355,7 +355,7 @@ The uniform comment rule means an invocation shown after a root `#` prompt is no
 
 ## cosign-identity-pinned invariant<a name="cosign-identity-pinned-invariant"></a>
 
-Every `cosign verify` invocation across workflows, scripts, and shell-fenced documentation must pin BOTH `--certificate-identity` (or `--certificate-identity-regexp`) AND `--certificate-oidc-issuer`. The `nix run nixpkgs#cosign -- verify` shape is recognized as well.
+Every `cosign verify*` invocation (`verify`, `verify-blob`, `verify-attestation`, `verify-blob-attestation`) across workflows, scripts, and shell-fenced documentation must pin BOTH `--certificate-identity` (or `--certificate-identity-regexp`) AND `--certificate-oidc-issuer`. The `nix run nixpkgs#cosign -- verify` shape is recognized as well.
 
 Without identity pinning, cosign accepts any keyless Sigstore signature for the artifact digest — including one minted by a different workflow, branch, or OIDC issuer. The two flags bind verification to a specific signer chain.
 
