@@ -9,6 +9,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-tag-protection.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/tag-protection"
 
@@ -31,6 +33,7 @@ function run_scenario() {
   local actual_exit=0
   RULESET_JSON_OVERRIDE="${FIXTURES}/${fixture}" \
     "${SCRIPT}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
+  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' \
@@ -68,6 +71,7 @@ function main() {
     'bad-name-drift.json' 1 'name drift'
   run_scenario 'wrong target fails' \
     'bad-target-drift.json' 1 'target drift'
+  harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2

@@ -3,6 +3,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/inventory-action-pin-tags.sh"
 readonly FIXTURE_DIR="${REPO_ROOT}/tests/fixtures/inventory-action-pin-tags"
 readonly EXPECTED="${FIXTURE_DIR}/expected.tsv"
@@ -16,6 +18,7 @@ cd "${REPO_ROOT}"
 INVENTORY_PATHS_OVERRIDE="${INPUT}" \
   INVENTORY_TAG_FIXTURE_DIR="${FIXTURE_DIR}/tag-fixtures" \
   bash "${SCRIPT}" --output "${OUT}"
+harness_assert_record 'inventory output matches expected fixture' '' "${OUT}"
 
 if ! diff -u "${EXPECTED}" "${OUT}"; then
   printf 'FAIL: inventory output diverged from expected fixture\n' >&2
@@ -27,6 +30,7 @@ OUT_NOPATCH="$(mktemp)"
 INVENTORY_PATHS_OVERRIDE="tests/fixtures/inventory-action-pin-tags/nopatch-workflow.yml" \
   INVENTORY_TAG_FIXTURE_DIR="${FIXTURE_DIR}/tag-fixtures" \
   bash "${SCRIPT}" --output "${OUT_NOPATCH}"
+harness_assert_record 'NO_PATCH_TAG row emitted' 'NO_PATCH_TAG' "${OUT_NOPATCH}"
 if ! grep --quiet 'NO_PATCH_TAG' "${OUT_NOPATCH}"; then
   printf 'FAIL: NO_PATCH_TAG row not emitted\n' >&2
   cat -- "${OUT_NOPATCH}" >&2
@@ -45,6 +49,9 @@ api_exit=0
 PATH="${STUB_DIR}:${PATH}" \
   INVENTORY_PATHS_OVERRIDE="tests/fixtures/inventory-action-pin-tags/apifail-workflow.yml" \
   bash "${SCRIPT}" --output "${OUT_APIFAIL}" 2>"${ERR_APIFAIL}" || api_exit=$?
+harness_assert_record 'API failure stderr message' \
+  'inventory: one or more API failures' "${ERR_APIFAIL}"
+harness_assert_record 'API_FAILURE row emitted' 'API_FAILURE' "${OUT_APIFAIL}"
 if ((api_exit != 1)); then
   printf 'FAIL: API failure should exit 1, got %d\n' "${api_exit}" >&2
   cat -- "${ERR_APIFAIL}" >&2
@@ -83,6 +90,8 @@ OUT_ACTIONYAML="$(mktemp)"
     INVENTORY_TAG_FIXTURE_DIR="${FIXTURE_DIR}/tag-fixtures" \
       bash "${SCRIPT}" --output "${OUT_ACTIONYAML}"
 )
+harness_assert_record 'action.yaml composite inventoried via default scan' \
+  'action.yaml' "${OUT_ACTIONYAML}"
 if ! grep --quiet 'action.yaml' "${OUT_ACTIONYAML}"; then
   printf 'FAIL: action.yaml composite not inventoried via default scan\n' >&2
   cat -- "${OUT_ACTIONYAML}" >&2
@@ -91,5 +100,7 @@ if ! grep --quiet 'action.yaml' "${OUT_ACTIONYAML}"; then
 fi
 rm -rf -- "${ACTIONYAML_DIR}" "${OUT_ACTIONYAML}"
 printf 'OK   action.yaml composite inventoried via default scan\n'
+
+harness_assert_verify || exit 1
 
 printf 'all tests passed\n'

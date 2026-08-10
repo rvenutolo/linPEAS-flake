@@ -5,6 +5,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-dockerhub-token-scope-split.sh"
 
 failures=0
@@ -52,6 +54,7 @@ function assert_run() {
   else
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
+  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
   rm --force -- "${stderr_file}"
 }
 
@@ -114,7 +117,7 @@ function main() {
   printf '      - env:\n          Y: ${{ secrets.DOCKERHUB_TOKEN }}\n' \
     >>"${dir}/release-on-bump.yml"
   assert_run 'unsuffixed token fails' "${dir}" 1 \
-    'secrets.DOCKERHUB_TOKEN '
+    'release-on-bump.yml: secrets.DOCKERHUB_TOKEN is not authoritative'
   rm --recursive --force -- "${dir}"
 
   # Producer removed — positive assertion catches the silent no-op.
@@ -134,8 +137,10 @@ function main() {
   printf 'jobs:\n  extra:\n    steps:\n      - env:\n          Y: ${{ secrets.DOCKERHUB_TOKEN }}\n' \
     >"${dir}/bad-unsuffixed.yaml"
   assert_run 'unsuffixed token in .yaml workflow fails' "${dir}" 1 \
-    'not authoritative'
+    'bad-unsuffixed.yaml: secrets.DOCKERHUB_TOKEN is not authoritative'
   rm --recursive --force -- "${dir}"
+
+  harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2

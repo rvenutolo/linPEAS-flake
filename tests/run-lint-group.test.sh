@@ -11,6 +11,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/run-lint-group.sh"
 
 failures=0
@@ -28,11 +30,16 @@ function run_scenario() {
   manifest="${work}/lint-groups.yml"
   mkdir -p "${scripts_dir}" "${tests_dir}"
 
-  # Two passing checks + one failing, to prove don't-abort-on-fail.
+  # Every group owns at least one check no other group lists, so a
+  # row-plus-status assertion can only match the group it belongs to.
   printf '#!/usr/bin/env bash\nexit 0\n' >"${scripts_dir}/check-aaa.sh"
   printf '#!/usr/bin/env bash\nexit 1\n' >"${scripts_dir}/check-bbb.sh"
   printf '#!/usr/bin/env bash\nexit 0\n' >"${scripts_dir}/check-ccc.sh"
+  printf '#!/usr/bin/env bash\nexit 1\n' >"${scripts_dir}/check-fff.sh"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"${scripts_dir}/check-zzz.sh"
   chmod +x "${scripts_dir}"/check-*.sh
+  # demo-first-fail puts its failing check first, so a zzz row proves the
+  # runner kept going instead of aborting on the first failure.
   cat >"${manifest}" <<YAML
 demo-all-pass:
   - aaa
@@ -40,7 +47,9 @@ demo-all-pass:
 demo-one-fail:
   - aaa
   - bbb
-  - ccc
+demo-first-fail:
+  - fff
+  - zzz
 demo-missing:
   - aaa
   - nope
@@ -54,6 +63,7 @@ YAML
     TESTS_DIR_OVERRIDE="${tests_dir}" \
     GITHUB_STEP_SUMMARY="${step_file}" \
     "${SCRIPT}" "${group}" >"${out_file}" 2>&1 || actual_exit=$?
+  harness_assert_record "${name}" "${expected_out}" "${out_file}" "${step_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${expected_exit}" "${actual_exit}" >&2
@@ -99,6 +109,8 @@ function run_test_gate_scenario() {
     TESTS_DIR_OVERRIDE="${tests_dir}" \
     GITHUB_STEP_SUMMARY="${step_file}" \
     "${SCRIPT}" demo-testfail >"${out_file}" 2>&1 || actual_exit=$?
+  harness_assert_record 'failing check test skips the check script' \
+    '| ttt | FAIL |' "${out_file}" "${step_file}"
 
   if [[ ${actual_exit} -ne 1 ]]; then
     printf 'FAIL: failing test -> expected exit 1, got %d\n' "${actual_exit}" >&2
@@ -118,13 +130,15 @@ function run_test_gate_scenario() {
 }
 
 function main() {
-  run_scenario 'all checks pass -> exit 0' 'demo-all-pass' 0 '| aaa |'
-  run_scenario 'one check fails -> exit 1' 'demo-one-fail' 1 'FAIL'
-  # don't-abort: ccc must still appear in the table after bbb failed
-  run_scenario 'failing check does not abort the rest' 'demo-one-fail' 1 '| ccc |'
-  run_scenario 'missing script -> exit 1' 'demo-missing' 1 'FAIL'
+  run_scenario 'all checks pass -> exit 0' 'demo-all-pass' 0 '| ccc | pass |'
+  run_scenario 'one check fails -> exit 1' 'demo-one-fail' 1 '| bbb | FAIL |'
+  # don't-abort: zzz must still appear in the table after fff failed
+  run_scenario 'failing check does not abort the rest' 'demo-first-fail' 1 '| zzz | pass |'
+  run_scenario 'missing script -> exit 1' 'demo-missing' 1 '| nope | FAIL |'
   run_scenario 'unknown group -> exit 2' 'no-such-group' 2 ''
   run_test_gate_scenario
+
+  harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then
     printf '\n%d scenario(s) failed\n' "${failures}" >&2

@@ -9,6 +9,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-renovate-markers-matched.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/renovate-markers"
 
@@ -32,6 +34,7 @@ function run_scenario() {
   RENOVATE_JSON_OVERRIDE="${FIXTURES}/${fixture}/renovate.json" \
     SCAN_ROOT="${FIXTURES}/${fixture}" \
     "${SCRIPT}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
+  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' \
@@ -58,6 +61,7 @@ function run_live_tree() {
   stderr_file="$(mktemp)"
   local actual_exit=0
   "${SCRIPT}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
+  harness_assert_record 'live tree' '' "${stderr_file}"
   if [[ ${actual_exit} -ne 0 ]]; then
     printf 'FAIL: live tree has dead renovate markers (exit %d)\n' "${actual_exit}" >&2
     cat -- "${stderr_file}" >&2
@@ -80,6 +84,7 @@ function main() {
   run_scenario 'all install-URL prefix variants covered' \
     'prefix-variants' 0 ''
   run_live_tree
+  harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then
     printf '\n%d scenario(s) failed\n' "${failures}" >&2

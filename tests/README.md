@@ -51,6 +51,15 @@ Then defines a single `expect` function that takes
 with environment overrides pointing it at the fixture, and asserts
 on exit code + stderr.
 
+A scenario's expected substring must not appear in any sibling
+scenario's output. A substring the nominal path also prints matches
+whether or not the asserted behavior exists, so the assertion proves
+nothing. Harnesses source `scripts/lib/harness-assert.sh`, call
+`harness_assert_record <scenario> <substring> <output-file>...` after
+each script invocation, and end `main` with
+`harness_assert_verify || failures=$((failures + 1))`. The gate fails
+the harness on any substring that does not discriminate.
+
 Environment-variable overrides scoped to test invocation:
 
 | Variable                         | Script                         | Purpose                           |
@@ -83,7 +92,18 @@ canonical list before writing a new test.
     expect bad-new-mode.yml 1 "stderr substring identifying the failure"
     ```
 
-1. Run `bash tests/<script-name>.test.sh` locally to verify.
+1. Record the scenario with the discrimination gate, if the harness's
+    scenario runner does not already do it for every `expect` line:
+
+    ```bash
+    harness_assert_record 'bad-new-mode' "${expected_stderr}" "${stderr_file}"
+    ```
+
+1. Run `bash tests/<script-name>.test.sh` locally to verify. A
+    `does not discriminate` line means the chosen substring also
+    appears in another scenario's output — pick a token unique to the
+    failure path (typically the level tag plus the label rather than
+    the bare label) and re-run.
 
 1. Make sure `_typos.toml` still excludes `tests/fixtures/**` —
     fixture content is often intentionally malformed.
@@ -95,6 +115,14 @@ canonical list before writing a new test.
     harnesses' shape (env-var overrides, `expect` function).
 1. Create `tests/fixtures/<script-name>/` with at least one `good`
     and one `bad-*` fixture.
+1. Wire the harness to the discrimination gate: source
+    `scripts/lib/harness-assert.sh`, call `harness_assert_record` for
+    every scenario, and call `harness_assert_verify` at the end of
+    `main`. A harness that asserts produced artifact content — a
+    rewritten workflow file, a generated doc — rather than captured
+    scenario output belongs on the `EXEMPT` array in
+    `tests/_harness_assert_wired.test.sh` with a rationale comment
+    instead.
 1. Register the harness so it actually runs: add its basename to
     `.github/lint-groups.yml` if the `check-<name>.sh` + `test.sh`
     pair belongs to a lint group, add it to the `HARNESSES` array in

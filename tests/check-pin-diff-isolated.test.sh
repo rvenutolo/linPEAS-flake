@@ -9,6 +9,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-pin-diff-isolated.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-pin-diff-isolated"
 
@@ -30,6 +32,7 @@ function run_scenario() {
   local actual_exit=0
   SCRIPTS_DIR_OVERRIDE="${FIXTURES}/${fixture_dir}" \
     "${SCRIPT}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
+  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' \
@@ -59,6 +62,7 @@ function main() {
     'bad-wrong-writer' 1 'unexpected writer'
   run_scenario 'no writer fails' \
     'bad-no-writer' 1 'no script under'
+  harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2

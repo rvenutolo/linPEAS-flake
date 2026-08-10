@@ -9,6 +9,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-settings-posture.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-settings-posture"
 
@@ -33,6 +35,7 @@ function run_scenario() {
     ACTIONS_WORKFLOW_PERMS_JSON_OVERRIDE="${FIXTURES}/${fixture_dir}/actions-workflow-perms.json" \
     ENV_GITHUB_PAGES_JSON_OVERRIDE="${FIXTURES}/${fixture_dir}/env-github-pages.json" \
     "${SCRIPT}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
+  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' \
@@ -54,12 +57,21 @@ function run_scenario() {
 }
 
 function main() {
+  # The bad-multiple fixture deliberately drifts default_workflow_permissions
+  # alongside two other settings, so the single-setting fixture's drift line is
+  # byte-identical to one of the three lines bad-multiple emits. The assertion
+  # still separates this scenario from the passing fixture and from every other
+  # single-drift fixture.
+  harness_assert_exempt 'default_workflow_permissions drift: got write, want read' \
+    'multiple simultaneous drifts surface all' \
+    'the multi-drift fixture includes this same drift by design'
+
   run_scenario 'matching fixtures pass' \
     'good' 0 ''
   run_scenario 'secret-scanning disabled fails' \
     'bad-secret-scanning-off' 1 'secret_scanning.status drift'
   run_scenario 'default workflow permissions write fails' \
-    'bad-default-perms-write' 1 'default_workflow_permissions drift'
+    'bad-default-perms-write' 1 'default_workflow_permissions drift: got write, want read'
   run_scenario 'github-pages env can_admins_bypass true fails' \
     'bad-admins-bypass' 1 'environments.github-pages.can_admins_bypass drift'
   run_scenario 'multiple simultaneous drifts surface all' \
@@ -94,6 +106,8 @@ function main() {
       "${drift_lines}"
   fi
   rm --force -- "${stderr_file}"
+
+  harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2

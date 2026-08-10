@@ -9,6 +9,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-scorecard-threshold.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/scorecard-threshold"
 
@@ -30,6 +32,7 @@ function run_scenario() {
 
   local actual_exit=0
   "${SCRIPT}" <"${FIXTURES}/${fixture}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
+  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' \
@@ -55,7 +58,7 @@ function main() {
     'all-10.json' 0 ''
 
   run_scenario 'one check at 9 → exit 1, names offender' \
-    'one-9.json' 1 'Maintained'
+    'one-9.json' 1 'Maintained: 9'
 
   run_scenario 'multi-low → exit 1, names all offenders' \
     'multi-low.json' 1 'Webhooks'
@@ -65,6 +68,8 @@ function main() {
 
   run_scenario 'empty stdin → exit 1 (no silent no-op)' \
     'empty.json' 1 'stdin was empty'
+
+  harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then
     printf '%d scenario(s) FAILED\n' "${failures}" >&2

@@ -10,6 +10,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-flake-lock-provenance.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-flake-lock-provenance"
 
@@ -38,6 +40,7 @@ function run_pair_scenario() {
   else
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
+  harness_assert_record "${name}" "${expected_msg}" "${out_file}"
   rm --force -- "${out_file}"
 }
 
@@ -73,34 +76,51 @@ function run_missing_base() {
   else
     printf 'PASS: %s (exit 2)\n' "${name}"
   fi
+  harness_assert_record "${name}" '' "${out_file}"
   rm --force -- "${out_file}"
 }
 
 function main() {
+  # A top-level input whose resolved source changed reports the same
+  # `top-level input repointed` line whether or not its node was also
+  # renamed; the rename shows only in the tolerated add/remove notes, which
+  # the rename-without-repoint fixture emits too. So no token separates the
+  # rename+repoint fixture from the plain owner/type repoints — those two
+  # are pinned to the `node repointed` line they alone emit, and this pair
+  # is exempted.
+  harness_assert_exempt 'FAIL: top-level input repointed: alpha' \
+    'top-level owner change fails' \
+    'the top-level repoint diagnostic names the input, not the node rename that accompanies it here'
+  harness_assert_exempt 'FAIL: top-level input repointed: alpha' \
+    'top-level type change fails' \
+    'the top-level repoint diagnostic names the input, not the node rename that accompanies it here'
+
   run_scenario 'routine bump passes' 'head-routine.lock' 0 'provenance OK'
-  run_scenario 'top-level owner change fails' 'head-toplevel-owner.lock' 1 'alpha'
-  run_scenario 'top-level type change fails' 'head-toplevel-type.lock' 1 'alpha'
-  run_scenario 'top-level input added fails' 'head-toplevel-added.lock' 1 'added'
-  run_scenario 'top-level input removed fails' 'head-toplevel-removed.lock' 1 'removed'
-  run_scenario 'transitive repoint fails' 'head-transitive-repoint.lock' 1 'gamma'
+  run_scenario 'top-level owner change fails' 'head-toplevel-owner.lock' 1 'FAIL: node repointed: alpha'
+  run_scenario 'top-level type change fails' 'head-toplevel-type.lock' 1 'FAIL: node repointed: alpha'
+  run_scenario 'top-level input added fails' 'head-toplevel-added.lock' 1 'FAIL: top-level input added: delta'
+  run_scenario 'top-level input removed fails' 'head-toplevel-removed.lock' 1 'FAIL: top-level input removed: beta'
+  run_scenario 'transitive repoint fails' 'head-transitive-repoint.lock' 1 'FAIL: node repointed: gamma'
   run_scenario 'transitive node added tolerated' 'head-transitive-added.lock' 0 'provenance OK'
   run_scenario 'transitive node removed tolerated' 'head-transitive-removed.lock' 0 'provenance OK'
   run_scenario 'garbage head json errors' 'head-garbage.lock' 2 ''
   run_scenario 'top-level rename same source' 'head-toplevel-renamed-same.lock' 0 'provenance OK'
-  run_scenario 'top-level rename + repoint fails' 'head-toplevel-renamed-repoint.lock' 1 'alpha'
+  run_scenario 'top-level rename + repoint fails' 'head-toplevel-renamed-repoint.lock' 1 'FAIL: top-level input repointed: alpha'
   run_missing_base 'missing base errors'
 
   run_follows_scenario 'follows routine bump passes' 'head-follows-routine.lock' 0 'provenance OK'
-  run_follows_scenario 'string-to-array repoint fails' 'head-follows-string-to-array.lock' 1 'gamma'
-  run_follows_scenario 'array-to-array repoint fails' 'head-follows-array-change.lock' 1 'beta'
+  run_follows_scenario 'string-to-array repoint fails' 'head-follows-string-to-array.lock' 1 'FAIL: top-level input repointed: gamma'
+  run_follows_scenario 'array-to-array repoint fails' 'head-follows-array-change.lock' 1 'FAIL: top-level input repointed: beta'
   run_follows_scenario 'string-to-array same source passes' 'head-follows-string-to-array-same.lock' 0 'provenance OK'
-  run_follows_scenario 'dangling follows path fails' 'head-follows-dangling.lock' 1 'unresolvable'
-  run_follows_scenario 'cyclic follows fails' 'head-follows-cycle.lock' 1 'unresolvable'
+  run_follows_scenario 'dangling follows path fails' 'head-follows-dangling.lock' 1 'FAIL: top-level input unresolvable: beta'
+  run_follows_scenario 'cyclic follows fails' 'head-follows-cycle.lock' 1 'FAIL: top-level input unresolvable: beta'
 
-  run_scenario 'decoy renamed root fails' 'head-decoy-root.lock' 1 'root node id changed'
-  run_scenario 'head .root missing errors' 'head-root-missing.lock' 2 'head flake.lock: .root missing or not a string'
-  run_scenario 'head .root non-string errors' 'head-root-nonstring.lock' 2 'head flake.lock: .root missing or not a string'
+  run_scenario 'decoy renamed root fails' 'head-decoy-root.lock' 1 'FAIL: root node id changed: root -> realroot'
+  run_scenario 'head .root missing errors' 'head-root-missing.lock' 2 'head flake.lock: .root missing or not a string (got null)'
+  run_scenario 'head .root non-string errors' 'head-root-nonstring.lock' 2 'head flake.lock: .root missing or not a string (got {"bogus":1})'
   run_pair_scenario 'alt root id routine bump passes' 'base-alt-root.lock' 'head-alt-root-routine.lock' 0 'provenance OK'
+
+  harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2

@@ -9,6 +9,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-protect-main.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-protect-main"
 
@@ -32,6 +34,7 @@ function run_scenario() {
     MIRROR_JSON_OVERRIDE="${FIXTURES}/${fixture_dir}/mirror.json" \
     DOC_TABLE_OVERRIDE="${FIXTURES}/${fixture_dir}/required-checks.md" \
     "${SCRIPT}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
+  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' \
@@ -94,6 +97,8 @@ function main() {
     MIRROR_JSON_OVERRIDE="${FIXTURES}/good/mirror.json" \
     DOC_TABLE_OVERRIDE="${FIXTURES}/good/required-checks.md" \
     "${SCRIPT}" >/dev/null 2>"${stderr_file}" || no_op_exit=$?
+  harness_assert_record 'no-op-ruleset guard' 'no ruleset named protect-main' \
+    "${stderr_file}"
   if [[ ${no_op_exit} -ne 1 ]]; then
     printf 'FAIL: no-op-ruleset guard — expected exit 1, got %d\n' "${no_op_exit}" >&2
     cat -- "${stderr_file}" >&2
@@ -106,6 +111,7 @@ function main() {
     printf 'PASS: no-op-ruleset guard fires on empty ruleset id\n'
   fi
   rm --recursive --force -- "${gh_stub_dir}" "${stderr_file}"
+  harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2

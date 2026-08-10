@@ -12,6 +12,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/refresh-flake-show.sh"
 readonly DOC="${REPO_ROOT}/docs/reference/flake-outputs.md"
 
@@ -53,6 +55,7 @@ function main() {
     { print }
   ' "${BACKUP}" >"${DOC}"
   "${SCRIPT}" --check >/dev/null 2>"${stderr_file}" || actual_exit=$?
+  harness_assert_record 'stale block detected' 'is stale' "${stderr_file}"
   if [[ ${actual_exit} -eq 1 ]] &&
     grep --fixed-strings --quiet -- 'is stale' "${stderr_file}"; then
     pass 'stale block detected (--check exit 1 + stale message)'
@@ -70,6 +73,8 @@ function main() {
   grep --invert-match --fixed-strings -- '<!-- BEGIN flake-show -->' \
     "${BACKUP}" >"${DOC}"
   "${SCRIPT}" --check >/dev/null 2>"${stderr_file}" || actual_exit=$?
+  harness_assert_record 'missing BEGIN marker detected' \
+    'BEGIN marker missing' "${stderr_file}"
   if [[ ${actual_exit} -eq 1 ]] &&
     grep --fixed-strings --quiet -- 'BEGIN marker missing' "${stderr_file}"; then
     pass 'missing BEGIN marker detected (--check exit 1 + marker message)'
@@ -99,6 +104,8 @@ function main() {
     -e 's/^<!-- END flake-show -->$/<!-- END flake-show --> /' \
     "${BACKUP}" >"${DOC}"
   "${SCRIPT}" --check >/dev/null 2>"${stderr_file}" || actual_exit=$?
+  harness_assert_record 'whitespace-perturbed markers rejected' \
+    'marker missing' "${stderr_file}"
   if [[ ${actual_exit} -eq 1 ]] &&
     grep --fixed-strings --quiet -- 'marker missing' "${stderr_file}"; then
     pass 'whitespace-perturbed markers rejected (fail-closed, not false-green)'
@@ -166,6 +173,8 @@ function main() {
       fi
     fi
   fi
+
+  harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then
     printf '%d failure(s)\n' "${failures}" >&2
