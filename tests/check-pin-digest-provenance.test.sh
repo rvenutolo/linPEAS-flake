@@ -113,6 +113,66 @@ YAML
   rm --recursive --force -- "${repo_dir}"
 }
 
+# Exercises the base-side git-failure path in real BASE_REF mode: a
+# `git` PATH shim (tests/fixtures/.../git-shim-ls-tree-fail/git) that
+# fails only `ls-tree` and forwards everything else to the real git.
+# Proves load_base_file_list() dies loud (exit 2) instead of the base
+# file list silently resolving empty, which would turn every base pin
+# into a one-sided key (add/remove) that passes.
+function run_git_ls_tree_failure_scenario() {
+  local -r name='git BASE_REF mode: ls-tree failure dies loud, not a silent pass'
+  local repo_dir out_file real_git
+  repo_dir="$(mktemp --directory)"
+  out_file="$(mktemp)"
+  real_git="$(command -v git)"
+
+  git -C "${repo_dir}" init --quiet --initial-branch=main
+  git -C "${repo_dir}" config user.email test@example.com
+  git -C "${repo_dir}" config user.name test
+  mkdir --parents "${repo_dir}/.github/workflows"
+  cat >"${repo_dir}/.github/workflows/wf.yml" <<'YAML'
+jobs:
+  a:
+    steps:
+      - uses: actions/checkout@2222222222222222222222222222222222222222 # v4.3.1
+YAML
+  git -C "${repo_dir}" add -A
+  git -C "${repo_dir}" commit --quiet -m base
+  # Repoint under an unchanged version comment — irrelevant to this
+  # scenario's assertion (exit 2 fires before any comparison happens),
+  # but keeps the tree shape consistent with run_git_mode_scenario.
+  cat >"${repo_dir}/.github/workflows/wf.yml" <<'YAML'
+jobs:
+  a:
+    steps:
+      - uses: actions/checkout@3333333333333333333333333333333333333333 # v4.3.1
+YAML
+
+  local actual_exit=0
+  (
+    cd "${repo_dir}" &&
+      REAL_GIT="${real_git}" \
+        PATH="${FIXTURES}/git-shim-ls-tree-fail:${PATH}" \
+        env -u BASE_DIR_OVERRIDE -u HEAD_DIR_OVERRIDE BASE_REF=main "${SCRIPT}"
+  ) >"${out_file}" 2>&1 || actual_exit=$?
+
+  local -r expected_exit=2 expected_msg='git ls-tree failed'
+  if [[ ${actual_exit} -ne ${expected_exit} ]]; then
+    printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${expected_exit}" "${actual_exit}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet -- "${expected_msg}" "${out_file}"; then
+    printf 'FAIL: %s — output missing %q\n' "${name}" "${expected_msg}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+
+  rm --force -- "${out_file}"
+  rm --recursive --force -- "${repo_dir}"
+}
+
 function main() {
   run_scenario 'unchanged tree passes' 'base' deny 0 'pin digest provenance OK'
   run_scenario 'semver digest repoint fails' 'head-semver-repoint' deny 1 'digest repointed under unchanged version'
@@ -131,7 +191,12 @@ function main() {
   run_scenario 'nested action dir repoint fails' 'head-nested-action-repoint' deny 1 'digest repointed under unchanged version'
   run_scenario 'uppercase-SHA case-only change passes' 'head-uppercase-sha-same-pin' deny 0 'pin digest provenance OK'
   run_scenario 'file rename plus repoint fails' 'head-file-rename-repoint' deny 1 'digest repointed under unchanged version'
+  run_scenario 'self-reference pin repoint under unchanged comment passes' \
+    'head-self-reference-repoint' deny 0 'pin digest provenance OK'
+  run_scenario 'floating repoint compare-API 404 fails as violation, not exit 2' \
+    'head-floating-repoint' compare-not-found 1 'not reachable from upstream default branch'
   run_git_mode_scenario 'git BASE_REF mode: zero-level composite action repoint fails' 1 'digest repointed under unchanged version'
+  run_git_ls_tree_failure_scenario
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2

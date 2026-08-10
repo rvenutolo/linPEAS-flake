@@ -72,6 +72,18 @@ node add/remove fails only for a top-level input (`root.inputs`). On a normal
 bump the gate is invisible and the PR auto-merges as before; it fails — pausing
 `gh pr merge --auto` — only on a source repoint, the event worth a human glance.
 
+Top-level input refs resolve through `follows` paths before that comparison: a
+string ref names the target node id directly, and an array ref is a path
+walked from `root` through each node's `inputs` in turn, one hop per array
+element, guarded against cycles by a depth ceiling. A ref that cannot be
+resolved — a dangling path element, a cycle, or an empty array — fails closed
+with a distinct `top-level input unresolvable` message rather than comparing
+against nothing. A ref-shape change (string to array, or array to a
+differently-shaped array) whose resolved source identity is unchanged passes
+by design: the gate guards source identity, not `follows`-graph shape, so a
+routine `follows` restructuring that still lands on the same source is not a
+provenance event.
+
 The `lint-doc-invariants` job fetches `origin/main` before the check runs
 (`actions/checkout` does not create that ref on its own); if the base lock
 cannot be resolved the check exits non-zero rather than passing silently.

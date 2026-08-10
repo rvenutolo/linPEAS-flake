@@ -1,0 +1,4 @@
+jobs:
+  a:
+    steps:
+      - uses: rvenutolo/linPEAS-flake/.github/actions/notify-workflow-result@1111111111111111111111111111111111111111 # self-reference; Renovate pinDigests bumps SHA

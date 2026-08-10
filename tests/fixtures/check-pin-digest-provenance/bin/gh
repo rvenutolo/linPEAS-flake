@@ -46,4 +46,23 @@ case "${GH_STUB_MODE:-deny}" in
     printf 'gh: HTTP 500 upstream boom\n' >&2
     exit 1
     ;;
+  compare-not-found)
+    case "$*" in
+      *"/git/tags/"*)
+        printf 'gh: Not Found (HTTP 404)\n' >&2
+        exit 1
+        ;;
+      *".default_branch"*)
+        printf 'master\n'
+        ;;
+      *"/compare/"*)
+        printf 'gh: Not Found (HTTP 404) {"message":"Not Found"}\n' >&2
+        exit 1
+        ;;
+      *)
+        printf 'unexpected gh call: %s\n' "$*" >&2
+        exit 97
+        ;;
+    esac
+    ;;
 esac

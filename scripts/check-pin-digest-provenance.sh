@@ -40,6 +40,11 @@ readonly HEAD_DIR="${HEAD_DIR_OVERRIDE:-.}"
 readonly OCTOSCAN_FILE="scripts/octoscan-scan.sh"
 readonly OCTOSCAN_IMAGE="ghcr.io/synacktiv/octoscan"
 readonly GH_API_VERSION_HEADER="X-GitHub-Api-Version: 2022-11-28"
+# Mirrors the self_repo skip in ratchet-pin-audit.yml: a `uses:` pin
+# whose owner/repo is this repo has no upstream release tag to
+# repoint against — Renovate's pinDigests rule tracks this repo's own
+# main HEAD, not an upstream tag.
+readonly SELF_REPO="${GITHUB_REPOSITORY:-rvenutolo/linPEAS-flake}"
 
 function die_op() {
   printf 'pin-digest-provenance: %s\n' "$1" >&2
@@ -62,6 +67,20 @@ function is_scanned_pin_file() {
   [[ ${path} =~ ^\.github/workflows/[^/]+\.ya?ml$ ]] && return 0
   [[ ${path} =~ ^\.github/actions/(.*/)?action\.ya?ml$ ]] && return 0
   return 1
+}
+
+# True if a `uses:` path's owner/repo segment is this repo itself — a
+# self-reference pin (e.g. an absolute-slug invocation of one of this
+# repo's own composite actions). Such a pin tracks this repo's own
+# main HEAD, not an upstream release tag, so it has no comparable
+# version label and no upstream to repoint against.
+# @arg $1 uses path (owner/repo[/subpath])
+function is_self_reference() {
+  local -r path="$1"
+  local -a parts
+  IFS=/ read -ra parts <<<"${path}"
+  ((${#parts[@]} >= 2)) || return 1
+  [[ "${parts[0]}/${parts[1]}" == "${SELF_REPO}" ]]
 }
 
 # Emit the scanned file list (paths relative to ROOT) under a real
@@ -91,6 +110,36 @@ function head_files() {
   scanned_files_under "${HEAD_DIR}"
 }
 
+# Base-side scanned file list, resolved once via git ls-tree and cached
+# here so base_files() and base_content() cannot diverge on what "is in
+# base" — a file this set says is absent gets a benign empty read, a
+# file it says is present gets a die_op if git show then fails.
+declare -A BASE_FILE_SET=()
+declare -i BASE_FILE_SET_LOADED=0
+
+# Resolve the base-side scanned file list once via a single
+# `git ls-tree`, filtered through is_scanned_pin_file (the same
+# predicate scanned_files_under() applies to the head-side glob) plus
+# the octoscan file. An ls-tree failure (an unfetched origin/main, a
+# blob-filtered checkout whose lazy fetch is blocked, ...) dies loud
+# instead of yielding an empty list — an empty base list would make
+# every base pin read as "absent", which turns a real repoint into a
+# one-sided key (add/remove), which passes.
+function load_base_file_list() {
+  ((BASE_FILE_SET_LOADED)) && return 0
+  local raw path
+  if ! raw="$(git ls-tree -r --name-only "${BASE_REF}" 2>&1)"; then
+    die_op "git ls-tree failed for ${BASE_REF}: ${raw}"
+  fi
+  while IFS= read -r path; do
+    [[ -n ${path} ]] || continue
+    if is_scanned_pin_file "${path}" || [[ ${path} == "${OCTOSCAN_FILE}" ]]; then
+      BASE_FILE_SET["${path}"]=1
+    fi
+  done <<<"${raw}"
+  BASE_FILE_SET_LOADED=1
+}
+
 # Emit the base-side scanned file list (paths relative to repo root).
 # Deliberately independent of head_files(): a file renamed between base
 # and head must still be discovered under its own (old) base-side path,
@@ -102,25 +151,33 @@ function base_files() {
     scanned_files_under "${BASE_DIR}"
     return 0
   fi
+  load_base_file_list
   local path
-  while IFS= read -r path; do
-    is_scanned_pin_file "${path}" && printf '%s\n' "${path}"
-  done < <(git ls-tree -r --name-only "${BASE_REF}" -- .github 2>/dev/null)
-  if git cat-file -e "${BASE_REF}:${OCTOSCAN_FILE}" 2>/dev/null; then
-    printf '%s\n' "${OCTOSCAN_FILE}"
-  fi
+  for path in "${!BASE_FILE_SET[@]}"; do
+    printf '%s\n' "${path}"
+  done
 }
 
-# Print base content of a file; empty output when absent in base.
+# Print base content of a file; empty output when absent in base. A
+# file base_files() already proved present that then fails `git show`
+# dies loud (die_op) rather than silently reading as absent — absent
+# and read-failure are different operational facts and must never
+# collapse to the same "pass" outcome.
 # @arg $1 file path relative to repo root
 function base_content() {
   local -r file="$1"
   if [[ -n ${BASE_DIR} ]]; then
     [[ -f "${BASE_DIR}/${file}" ]] || return 0
     cat -- "${BASE_DIR}/${file}"
-  else
-    git show "${BASE_REF}:${file}" 2>/dev/null || true
+    return 0
   fi
+  load_base_file_list
+  [[ -n ${BASE_FILE_SET[${file}]+set} ]] || return 0
+  local content
+  if ! content="$(git show "${BASE_REF}:${file}" 2>&1)"; then
+    die_op "git show failed for ${BASE_REF}:${file}: ${content}"
+  fi
+  printf '%s' "${content}"
 }
 
 # Emit `file|path|version|sha` tuples for one file's content on stdin.
@@ -151,6 +208,9 @@ function extract_pins() {
       version="${BASH_REMATCH[3]}"
       # Local composite actions have no upstream to repoint.
       [[ ${path} == .* ]] && continue
+      # Self-reference pins have no upstream tag either; skip before
+      # the shape guard below ever sees this line (see is_self_reference).
+      is_self_reference "${path}" && continue
       printf '%s|%s|%s|%s\n' "${file}" "${path}" "${version}" "${sha}"
       continue
     fi
@@ -202,9 +262,15 @@ function check_reachable() {
   [[ -n ${default_branch} && ${default_branch} != null ]] ||
     die_op "empty default branch for ${owner_repo}"
   local status
-  status="$(gh api --header "${GH_API_VERSION_HEADER}" \
-    "repos/${owner_repo}/compare/${default_branch}...${commit}" --jq '.status' 2>&1)" ||
+  # A 404 here means the commit is unknown to the upstream repo at
+  # all — the GC'd-dangling-commit signature this probe exists to
+  # catch — so it is the violation itself (not reachable), not an
+  # operational failure. Any other API error still dies loud.
+  if ! status="$(gh api --header "${GH_API_VERSION_HEADER}" \
+    "repos/${owner_repo}/compare/${default_branch}...${commit}" --jq '.status' 2>&1)"; then
+    grep --quiet --ignore-case 'Not Found' <<<"${status}" && return 1
     die_op "compare API failed for ${owner_repo} ${default_branch}...${commit}: ${status}"
+  fi
   case "${status}" in
   identical | behind)
     printf 'note: floating-major pin %s@%s verified reachable from %s (%s)\n' \
@@ -223,6 +289,13 @@ function check_reachable() {
 if [[ -z ${BASE_DIR} ]]; then
   git rev-parse --verify --quiet "${BASE_REF}^{commit}" >/dev/null ||
     die_op "cannot resolve ${BASE_REF} (is origin/main fetched?)"
+  # Resolved here, synchronously, in the main shell — not inside the
+  # `< <(base_files)` process substitution below. A die_op inside a
+  # process substitution's subshell only kills that subshell; the
+  # parent `while read` loop would see a closed pipe and continue as
+  # if base_files() had simply produced no output, which is exactly
+  # the silent-pass shape this ordering exists to avoid.
+  load_base_file_list
 fi
 
 head_tuples=""
@@ -232,7 +305,17 @@ done < <(head_files)
 
 base_tuples=""
 while IFS= read -r file; do
-  base_tuples+="$(extract_pins "${file}" <<<"$(base_content "${file}")")"$'\n'
+  # base_content() is captured on its own line, as a single-level
+  # command substitution assigned directly in this loop body (which
+  # runs in the main shell, not the `< <(base_files)` producer
+  # subshell). Nesting it as `<<<"$(base_content ...)"` inside the
+  # `$(extract_pins ...)` substitution below would run it in its own
+  # throwaway subshell whose exit status nothing ever inspects — a
+  # die_op there would print its message and vanish, and extract_pins
+  # would just see empty stdin and return 0. Keeping it a standalone
+  # assignment lets its exit status (and set -Eeuo pipefail) propagate.
+  base_file_content="$(base_content "${file}")"
+  base_tuples+="$(extract_pins "${file}" <<<"${base_file_content}")"$'\n'
 done < <(base_files)
 
 # The octoscan pair is a load-bearing extraction target: if the file
