@@ -57,6 +57,13 @@ function main() {
   run_scenario 'broken first link among multiple on one line fails' \
     'bad-multi-link' 'source.md' 1 \
     '[anchor-miss] source.md:3: #nonexistent not found in docs/target.md (available: good-heading)'
+  run_scenario 'heading inside a code fence is not a slug source' \
+    'bad-fenced-heading' 'source.md' 1 \
+    '[anchor-miss] source.md:3: #fenced-phantom not found in docs/target.md (available: fence-target)'
+  run_scenario 'underscore is preserved in the slug' \
+    'good-underscore' 'source.md' 0 ''
+  run_scenario 'apostrophe is deleted from the slug' \
+    'good-apostrophe' 'source.md' 0 ''
 
   harness_assert_verify || failures=$((failures + 1))
 
