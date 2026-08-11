@@ -95,6 +95,9 @@ readonly RE_CAUSAL='(prior to|previously|Migration note|was reshaped|Tightened f
 # kind so a caller can tell which marker is dangling.
 # @arg $1 file path to the source file
 # @arg $2 src_rel source path relative to REPO_ROOT (for the error message)
+# @arg $3 stats_dir directory each pass writes its region tallies into:
+#   `code` holds `<lines> <fence-lines> <spans>`, `gen` holds
+#   `<generated-block-lines>`
 # @stdout the file with exempt regions replaced by blank lines
 # @stderr `src_rel: unterminated code fence` if a fence is never closed,
 #   `src_rel: unterminated generated block` if a BEGIN lacks an END
@@ -102,22 +105,30 @@ readonly RE_CAUSAL='(prior to|previously|Migration note|was reshaped|Tightened f
 function strip_exempt() {
   local -r file="$1"
   local -r src_rel="$2"
+  local -r stats_dir="$3"
+  # Each pass tallies the regions it blanked and hands them back through a
+  # file: the passes are an awk pipeline, so a counter cannot survive as a
+  # shell variable. The tallies feed the run's scope summary, which is the
+  # only thing distinguishing a doc the lint read in full from one it
+  # mostly skipped as exempt.
   # Pass one: code. Every branch emits exactly one line per input line.
-  awk -v src_rel="${src_rel}" '
+  awk -v src_rel="${src_rel}" -v stats="${stats_dir}/code" '
     {
       line = $0
       # Fenced code blocks (backtick or tilde): blank the fences and
       # everything between them.
       if (line ~ /^[[:space:]]*(```|~~~)/) {
         in_fence = !in_fence
+        fenced++
         print ""
         next
       }
-      if (in_fence) { print ""; next }
+      if (in_fence) { fenced++; print ""; next }
       # Inline `code` spans: blank span contents in place. Repeatedly
       # replace the shortest backtick-delimited run with same-width
       # spaces so column-free line content (and the line itself) survive.
       while (match(line, /`[^`]*`/)) {
+        spans++
         pad = ""
         for (i = 0; i < RLENGTH; i++) pad = pad " "
         line = substr(line, 1, RSTART - 1) pad substr(line, RSTART + RLENGTH)
@@ -125,6 +136,7 @@ function strip_exempt() {
       print line
     }
     END {
+      printf("%d %d %d\n", NR, fenced, spans) > stats
       if (in_fence) {
         printf "%s: unterminated code fence\n", src_rel > "/dev/stderr"
         exit 1
@@ -132,17 +144,19 @@ function strip_exempt() {
     }
   ' "${file}" |
     # Pass two: generated blocks, over pass one's code-free output.
-    awk -v src_rel="${src_rel}" '
+    awk -v src_rel="${src_rel}" -v stats="${stats_dir}/gen" '
     {
-      if ($0 ~ /<!--[[:space:]]*BEGIN[[:space:]]/) { in_gen = 1; print ""; next }
+      if ($0 ~ /<!--[[:space:]]*BEGIN[[:space:]]/) { in_gen = 1; gen++; print ""; next }
       if (in_gen) {
         if ($0 ~ /<!--[[:space:]]*END[[:space:]]/) { in_gen = 0 }
+        gen++
         print ""
         next
       }
       print
     }
     END {
+      printf("%d\n", gen) > stats
       if (in_gen) {
         printf "%s: unterminated generated block\n", src_rel > "/dev/stderr"
         exit 1
@@ -261,11 +275,18 @@ function main() {
   rm --force -- "${sources_tmp}"
 
   blocking_hits=0
+  local scanned=0 allowlisted=0 lines=0 fenced=0 spans=0 gen=0
+  local f_lines f_fenced f_spans f_gen
+  local stats_dir
+  stats_dir="$(mktemp -d)"
 
   local src_rel src_abs stripped
   for src_rel in "${sources[@]}"; do
     [[ -z ${src_rel} ]] && continue
-    is_allowlisted "${src_rel}" && continue
+    if is_allowlisted "${src_rel}"; then
+      allowlisted=$((allowlisted + 1))
+      continue
+    fi
     src_abs="${REPO_ROOT}/${src_rel}"
     [[ -f ${src_abs} ]] || continue
 
@@ -273,10 +294,20 @@ function main() {
     # An unterminated code fence or generated block is a fatal doc
     # defect: fail loud rather than let strip_exempt blank to EOF and
     # hide violations.
-    if ! strip_exempt "${src_abs}" "${src_rel}" >"${stripped}"; then
+    if ! strip_exempt "${src_abs}" "${src_rel}" "${stats_dir}" >"${stripped}"; then
       rm --force -- "${stripped}"
+      rm --recursive --force -- "${stats_dir}"
       exit 1
     fi
+    scanned=$((scanned + 1))
+    # The tally files are space-separated; the script-wide IFS is not, so
+    # read with a field separator of its own.
+    IFS=' ' read -r f_lines f_fenced f_spans <"${stats_dir}/code"
+    IFS=' ' read -r f_gen <"${stats_dir}/gen"
+    lines=$((lines + f_lines))
+    fenced=$((fenced + f_fenced))
+    spans=$((spans + f_spans))
+    gen=$((gen + f_gen))
 
     if [[ ${ADVISORY} -eq 1 ]]; then
       scan_advisory "${src_rel}" "${stripped}"
@@ -290,6 +321,14 @@ function main() {
 
     rm --force -- "${stripped}"
   done
+  rm --recursive --force -- "${stats_dir}"
+
+  # A clean run has nothing to say about findings, which leaves an
+  # operator unable to tell prose the lint read from prose it skipped —
+  # an allowlisted path, or a file that is mostly fenced code. State the
+  # scope instead: what was read, what was set aside, and why.
+  printf 'ephemeral-refs: scanned %d source(s), %d line(s); skipped %d allowlisted; exempted %d code-fence line(s), %d inline code span(s), %d generated-block line(s)\n' \
+    "${scanned}" "${lines}" "${allowlisted}" "${fenced}" "${spans}" "${gen}"
 
   if [[ ${ADVISORY} -eq 1 ]]; then
     exit 0
