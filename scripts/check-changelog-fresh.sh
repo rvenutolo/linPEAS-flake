@@ -92,6 +92,24 @@ else
   fi
 fi
 
+# @description Emit every release tag visible from HEAD, one per line.
+# Failure-tolerant: with no tags or no repository the set is empty, which
+# excludes nothing and therefore compares everything.
+function visible_tags() {
+  git tag --merged HEAD 2>/dev/null || true
+}
+
+# The commit that last touched the compared changelog, and whether git could
+# resolve that history at all. Both states exclude nothing, but they are not
+# the same finding: a path git cannot read here is not the file this
+# repository tracks, while a path with no commit yet is the file with no
+# history. The summary names which one held, so a pass that excluded nothing
+# says why.
+changelog_commit_status=0
+changelog_commit="$(git log -1 --format=%H -- "${CHANGELOG}" 2>/dev/null)" ||
+  changelog_commit_status=$?
+readonly changelog_commit changelog_commit_status
+
 # @description Release tags that cannot yet appear in the committed changelog.
 # A tag whose commit is not an ancestor of the most recent CHANGELOG.md commit
 # was created after the changelog was last written, so its section could not
@@ -104,9 +122,8 @@ fi
 # confirmed ancestor nor a confirmed non-ancestor, so it does not exclude —
 # only a confirmed non-ancestor (exit 1) does.
 function excluded_tags() {
-  local last_cl tag status
-  last_cl="$(git log -1 --format=%H -- "${CHANGELOG}" 2>/dev/null || true)"
-  if [[ -z ${last_cl} ]]; then
+  local tag status
+  if [[ -z ${changelog_commit} ]]; then
     return 0
   fi
   while IFS= read -r tag; do
@@ -114,11 +131,12 @@ function excluded_tags() {
       continue
     fi
     status=0
-    git merge-base --is-ancestor "${tag}^{commit}" "${last_cl}" 2>/dev/null || status=$?
+    git merge-base --is-ancestor "${tag}^{commit}" "${changelog_commit}" 2>/dev/null ||
+      status=$?
     if [[ ${status} -eq 1 ]]; then
       printf '%s\n' "${tag}"
     fi
-  done < <(git tag --merged HEAD 2>/dev/null || true)
+  done < <(visible_tags)
 }
 
 # @description Emit a file's comparable released portion: everything from the
@@ -148,24 +166,73 @@ function released() {
 }
 
 excluded="$(excluded_tags)"
+readonly excluded
+
+# @description Emit the tag of every released section in scope on either side
+# of the comparison, one per line, sorted and de-duplicated.
+function compared_sections() {
+  {
+    released "${CHANGELOG}" "${excluded}"
+    released "${tmp}" "${excluded}"
+  } | sed --quiet --regexp-extended 's/^## \[([^]]*)\].*/\1/p' | sort --unique
+}
+
+# @description Print why the release window excluded no tag. These four states
+# are the whole domain of the exclusion rule and each sends an operator
+# somewhere different: an unreadable history means the file being compared is
+# not the one this repository tracks; no visible tag means a fetch that dropped
+# them, which reduces this check to comparing nothing; the rest is the ordinary
+# case where every release already has its changelog commit.
+function exclusion_reason() {
+  if ((changelog_commit_status != 0)); then
+    printf 'the compared changelog has no readable history in this repository'
+  elif [[ -z ${changelog_commit} ]]; then
+    printf 'no commit has touched the compared changelog yet'
+  elif [[ -z "$(visible_tags)" ]]; then
+    printf 'no release tag is visible from HEAD'
+  else
+    printf 'every visible release tag predates the last commit to the compared changelog'
+  fi
+}
+
+# @description Print what the comparison covered: the released sections in
+# scope, the release tags visible from HEAD, and either the tags the release
+# window excluded or why it excluded none. A bare verdict says only that two
+# files agreed — not whether anything was compared, which is what a clone
+# without tags or a changelog outside this work tree silently reduces this
+# check to, on both the passing and the failing path.
+function print_scope() {
+  local sections tags
+  local -a section_list=()
+  sections="$(compared_sections)"
+  tags="$(visible_tags)"
+  if [[ -n ${sections} ]]; then
+    mapfile -t section_list <<<"${sections}"
+  fi
+  printf 'Compared %d released section(s): %s\n' "${#section_list[@]}" \
+    "$(printf '%s' "${sections:-none}" | tr '\n' ' ')"
+  printf 'Release tags visible from HEAD: %s\n' \
+    "$(printf '%s' "${tags:-none}" | tr '\n' ' ')"
+  if [[ -n ${excluded} ]]; then
+    printf '\nExcluded (no CHANGELOG.md commit after these tags yet): %s\n' \
+      "$(printf '%s' "${excluded}" | tr '\n' ' ')"
+  else
+    printf '\nExcluded: none — %s\n' "$(exclusion_reason)"
+  fi
+}
 
 if ! diff <(released "${CHANGELOG}" "${excluded}") <(released "${tmp}" "${excluded}") >/dev/null; then
   printf 'CHANGELOG.md released sections are stale vs a fresh git-cliff regen.\n' >&2
   printf 'A release shipped without the changelog job landing its update.\n' >&2
   printf 'Regenerate and commit:\n' >&2
   printf '  nix shell .#git-cliff --command git-cliff --config cliff.toml --output CHANGELOG.md\n' >&2
-  if [[ -n ${excluded} ]]; then
-    printf '\nExcluded (no CHANGELOG.md commit after these tags yet): %s\n' \
-      "$(printf '%s' "${excluded}" | tr '\n' ' ')" >&2
-  fi
+  printf '\n' >&2
+  print_scope >&2
   printf '\n--- committed vs regenerated (released sections only) ---\n' >&2
   diff <(released "${CHANGELOG}" "${excluded}") <(released "${tmp}" "${excluded}") >&2 || true
   exit 1
 fi
 
 printf 'CHANGELOG.md released sections match a fresh git-cliff regeneration\n'
-if [[ -n ${excluded} ]]; then
-  printf '\nExcluded (no CHANGELOG.md commit after these tags yet): %s\n' \
-    "$(printf '%s' "${excluded}" | tr '\n' ' ')"
-fi
+print_scope
 exit 0
