@@ -7,3 +7,4 @@ jobs:
   b:
     steps:
       - uses: step-security/harden-runner@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa # v2.19.3
+      - uses: inert-one/action@1010101010101010101010101010101010101010 # v1.0.0

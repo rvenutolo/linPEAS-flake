@@ -7,3 +7,6 @@ jobs:
       - uses: actions/upload-artifact@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee # v4.6.2
   b:
     steps:
+      - uses: inert-four/action@4040404040404040404040404040404040404040 # v1.0.0
+      - uses: inert-five/action@5050505050505050505050505050505050505050 # v1.0.0
+      - uses: inert-six/action@6060606060606060606060606060606060606060 # v1.0.0

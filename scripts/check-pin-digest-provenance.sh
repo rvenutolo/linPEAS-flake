@@ -299,8 +299,10 @@ if [[ -z ${BASE_DIR} ]]; then
 fi
 
 head_tuples=""
+head_file_count=0
 while IFS= read -r file; do
   head_tuples+="$(extract_pins "${file}" <"${HEAD_DIR}/${file}")"$'\n'
+  head_file_count=$((head_file_count + 1))
 done < <(head_files)
 
 base_tuples=""
@@ -370,4 +372,10 @@ if ((violations != 0)); then
   exit 1
 fi
 
-printf 'pin digest provenance OK\n'
+# The pass banner reports the work done, not just the verdict. A clean
+# run that scanned nothing and a clean run that scanned the whole tree
+# are the same verdict but very different facts, and the counts are what
+# separates them in a CI log.
+head_pin_count="$(awk --field-separator='|' 'NF == 4' <<<"${head_tuples}" | wc --lines)"
+printf 'pin digest provenance OK: %d pin(s) across %d file(s)\n' \
+  "${head_pin_count}" "${head_file_count}"
