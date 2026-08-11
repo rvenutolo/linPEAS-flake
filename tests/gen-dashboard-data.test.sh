@@ -130,6 +130,9 @@ function run_scenario() {
 #   - lag.recent length == 2 (the orphan release is skipped, not failed)
 #   - skipped tag appears in stderr log
 #   - lag_hours values match the expected timestamp arithmetic
+# The release fixture pair is this scenario's own, carrying an orphan tag
+# no other fixture uses, so the orphan-skip line asserted here belongs to
+# this scenario rather than to every scenario that assembles a dashboard.
 # @noargs
 function run_happy_lag_scenario() {
   local -r name='happy-path bump-lag pairing'
@@ -144,14 +147,14 @@ function run_happy_lag_scenario() {
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
     "UPSTREAM_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-upstream-release.json" \
     "LATEST_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-latest-release.json" \
-    "THIS_REPO_RELEASES_JSON_OVERRIDE=${FIXTURES_DIR}/good-this-repo-releases.json" \
-    "UPSTREAM_RELEASES_JSON_OVERRIDE=${FIXTURES_DIR}/good-upstream-releases.json" \
+    "THIS_REPO_RELEASES_JSON_OVERRIDE=${FIXTURES_DIR}/happy-lag-this-repo-releases.json" \
+    "UPSTREAM_RELEASES_JSON_OVERRIDE=${FIXTURES_DIR}/happy-lag-upstream-releases.json" \
     "BUMP_PR_JSON_OVERRIDE=${FIXTURES_DIR}/good-bump-pr.json" \
     "PARITY_JSON_OVERRIDE=${FIXTURES_DIR}/good-parity.json" \
     "OUT_FILE_OVERRIDE=${out_tmp}" \
     bash "${SCRIPT}" >/dev/null 2>"${stderr_tmp}" || exit_code=$?
   harness_assert_record "${name}" \
-    'lag: skipping this-repo release with no upstream match: 20240101-orphan0' \
+    'lag: skipping this-repo release with no upstream match: 20240101-lagorphan' \
     "${stderr_tmp}"
 
   if ((exit_code != 0)); then
@@ -171,7 +174,7 @@ function run_happy_lag_scenario() {
   fi
 
   if ! grep --quiet --fixed-strings -- \
-    'lag: skipping this-repo release with no upstream match: 20240101-orphan0' \
+    'lag: skipping this-repo release with no upstream match: 20240101-lagorphan' \
     "${stderr_tmp}"; then
     printf 'FAIL: %s — stderr missing orphan-skip log line\n' "${name}" >&2
     printf '  stderr was:\n' >&2
@@ -314,7 +317,7 @@ function run_api_error_scenario() {
 
   local actual
   actual="$(yq eval "${yq_path}" "${out_tmp}")"
-  if [[ ${actual} != "${expected_value}" && ${actual} != '""' ]]; then
+  if [[ ${actual} != "${expected_value}" ]]; then
     printf 'FAIL: %s — expected %s == %q, got %q\n' \
       "${name}" "${yq_path}" "${expected_value}" "${actual}" >&2
     fail_count=$((fail_count + 1))
@@ -352,16 +355,6 @@ function main() {
     printf 'FAIL: fixtures dir not found at %s\n' "${FIXTURES_DIR}" >&2
     exit 1
   fi
-
-  # Every scenario that gets as far as assembling the dashboard drives the
-  # same this-repo/upstream release fixture pair, so all of them log the
-  # orphan skip. The line separates a run that skips an unmatched release
-  # from one that fails on it — the axis this assertion is about — but it
-  # cannot separate the happy path from its soft-fallback siblings.
-  harness_assert_exempt \
-    'lag: skipping this-repo release with no upstream match: 20240101-orphan0' \
-    '*' \
-    'logged by every scenario driving the shared release fixture pair'
 
   # Scenario 1: bad pin.version regex. Pin URL is shaped correctly so only
   # the regex check trips; nothing else hard-fails first.
