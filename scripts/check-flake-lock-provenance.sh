@@ -143,6 +143,17 @@ def srcid:
   { original: (.original // null),
     flake: (.flake // null),
     locked: ((.locked // {}) | del(.rev, .narHash, .lastModified)) };
+# Names the leaf fields that differ between two srcid projections, so a
+# repoint says which property moved rather than only that one did. Paths
+# are dot-joined and sorted, and an absent side renders as `(absent)` so
+# an added or dropped field is distinguishable from a changed value.
+# `srcid` already drops rev/narHash/lastModified, so a routine bump never
+# reaches here and the message stays stable across bumps.
+def srcdiff($a; $b):
+  [ ((([$a | paths(scalars)]) + ([$b | paths(scalars)])) | unique)[] as $p
+    | select(($a | getpath($p)) != ($b | getpath($p)))
+    | "\($p | join(".")): \(($a | getpath($p)) // "(absent)") -> \(($b | getpath($p)) // "(absent)")" ]
+  | sort | join(", ");
 # Nesting ceiling and total step budget — see the header for what each
 # one bounds and why depth alone is not enough.
 def follows_depth_ceiling: 32;
@@ -240,7 +251,7 @@ else
     | . as $k
     | select($head.nodes | has($k))
     | select(($base.nodes[$k] | srcid) != ($head.nodes[$k] | srcid))
-    | "FAIL: node repointed: \($k)" ] as $noderep
+    | "FAIL: node repointed: \($k) (\(srcdiff($base.nodes[$k] | srcid; $head.nodes[$k] | srcid)))" ] as $noderep
 | [ ($head.nodes | keys[]) | select(. != $hroot) | . as $k
     | select(($base.nodes | has($k)) | not)
     | "note: transitive node added (tolerated): \($k)" ] as $tadd

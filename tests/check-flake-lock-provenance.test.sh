@@ -108,8 +108,10 @@ function main() {
     'the top-level repoint diagnostic names the input, not the node rename that accompanies it here'
 
   run_scenario 'routine bump passes' 'head-routine.lock' 0 'provenance OK'
-  run_scenario 'top-level owner change fails' 'head-toplevel-owner.lock' 1 'FAIL: node repointed: alpha'
-  run_scenario 'top-level type change fails' 'head-toplevel-type.lock' 1 'FAIL: node repointed: alpha'
+  run_scenario 'top-level owner change fails' 'head-toplevel-owner.lock' 1 \
+    'FAIL: node repointed: alpha (original.owner: orgA -> evil)'
+  run_scenario 'top-level type change fails' 'head-toplevel-type.lock' 1 \
+    'FAIL: node repointed: alpha (locked.type: github -> git)'
   run_scenario 'top-level input added fails' 'head-toplevel-added.lock' 1 'FAIL: top-level input added: delta'
   run_scenario 'top-level input removed fails' 'head-toplevel-removed.lock' 1 'FAIL: top-level input removed: beta'
   run_scenario 'transitive repoint fails' 'head-transitive-repoint.lock' 1 'FAIL: node repointed: gamma'
