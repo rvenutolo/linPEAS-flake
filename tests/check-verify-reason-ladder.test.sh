@@ -30,13 +30,16 @@ function expect() {
   local -r want_exit="$3"
   local -r want_msg="$4"
 
-  local stderr_file
+  local stderr_file stdout_file outcome_file
   stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
 
   local got_exit=0
   VERIFY_WORKFLOW_OVERRIDE="${FIXTURES}/${scenario}/${workflow}" \
     VERIFICATION_DOC_OVERRIDE="${FIXTURES}/${scenario}/verification.md" \
-    "${SCRIPT}" >/dev/null 2>"${stderr_file}" || got_exit=$?
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || got_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
 
   if [[ ${got_exit} -ne ${want_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' \
@@ -54,8 +57,9 @@ function expect() {
     printf 'PASS: %s (exit %d)\n' "${scenario}" "${got_exit}"
   fi
 
-  harness_assert_record "${scenario}" "${want_msg}" "${stderr_file}"
-  rm --force -- "${stderr_file}"
+  harness_assert_record "${scenario}" "${want_msg}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
 }
 
 function main() {

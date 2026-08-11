@@ -28,14 +28,18 @@ function fail() {
 # @arg $1 name  @arg $2 dir  @arg $3 expected exit  @arg $4 stderr substring
 function assert_run() {
   local -r name="$1" dir="$2" expected_exit="$3" expected_stderr="$4"
-  local stderr_file actual_exit=0
+  local stderr_file stdout_file outcome_file actual_exit=0
   stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
   TESTS_DIR_OVERRIDE="${dir}/tests" \
     HARNESS_RUNNER_OVERRIDE="${dir}/run-harness-group.sh" \
     LINT_GROUPS_OVERRIDE="${dir}/lint-groups.yml" \
     WORKFLOWS_DIR_OVERRIDE="${dir}/workflows" \
-    "${SCRIPT}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
-  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${expected_stderr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     fail "${name} — expected exit ${expected_exit}, got ${actual_exit}"
     cat -- "${stderr_file}" >&2
@@ -46,7 +50,7 @@ function assert_run() {
   else
     pass "${name} (exit ${actual_exit})"
   fi
-  rm --force -- "${stderr_file}"
+  rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
 }
 
 # @description Scaffold a scenario dir with empty tests/workflows and an empty
