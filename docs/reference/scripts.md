@@ -326,9 +326,10 @@ tag.
 
 ### scripts/check-manifest-hook-watches-nix.sh
 
-Lint: every pre-commit hook whose entry runs a
-manifest-reading script (one referencing the flake hook manifest)
-includes `nix/hooks` in its `files` regex.
+Lint: every pre-commit hook that reaches the flake hook
+manifest — by running a manifest-reading script, or by building a flake
+attribute a manifest-reading module assigns — includes `nix/hooks` in
+its `files` regex.
 
 ### scripts/check-min-permissions.sh
 

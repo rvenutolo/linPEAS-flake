@@ -12,7 +12,10 @@
 # stale locally with the guard silent — CI's --all-files mirror still
 # catches it, but the local fast-path defense is lost.
 #
-# The required module set is derived, not hardcoded:
+# Two hook shapes reach a flake attribute, and both are subjects here.
+#
+# A hook whose entry runs a `scripts/*.sh` generator: the required module
+# set is derived, not hardcoded:
 #
 #   - modules naming the evaluated attribute in non-comment nix source
 #     (where it is defined), plus one level of their relative imports;
@@ -22,6 +25,17 @@
 # The second signal is why a module that merely mentions the attribute in
 # a comment cannot be what makes it required: the transposition is
 # structural, a comment is not.
+#
+# A hook whose entry evaluates a flake attribute directly (`nix build
+# ".#<ns>.${system}.<leaf>"`) carries no generator token at all, so the
+# script-keyed lookup skips it and its filter may omit every source the
+# attribute reads. Its required set is the flake expression and its lock,
+# every nix module that *assigns* the attribute, and one level of the
+# relative path references out of those modules. A bare mention of the
+# leaf is deliberately not enough — the hook block naming the attribute in
+# its own entry is not a source of it — and the reference walk is not
+# restricted to `*.nix`, because a module that embeds a script by path
+# depends on that script's contents.
 #
 # Source-parsed rather than `nix eval`-ed: `files` and `entry` are literal
 # in source, and `nix eval` is the known local-commit-path long pole — no
@@ -180,7 +194,16 @@ fi
 # preserving it — exactly the shape that would let the empty-filter guard
 # below never see an empty filter. \037 carries no such special casing and
 # never appears in a `files` regex or a `scripts/*.sh` path.
-#   <name>\037<files-string>\037<space-separated script basenames>
+#   <name>\037<files-string>\037<space-separated script basenames>\037
+#   <attr-namespace>\037<attr-leaf>\037<attr-reference-seen>
+#
+# The attrpath a hook entry names carries a `${…system…}` interpolation
+# mid-path, so its namespace is the first dot-separated component and its
+# leaf is the last. The trailing flag is set by a deliberately looser
+# pattern — any `.#` followed by an interpolation — so a reformat that
+# defeats the precise extraction still reports the block as naming an
+# attribute, which is what lets the caller tell a broken parser apart from
+# a tree that simply has no attribute-evaluating hook.
 #
 # An `awk` fault is returned explicitly rather than left to errexit: the
 # caller captures this function in a command substitution inside an `if`
@@ -196,10 +219,14 @@ function parse_blocks() {
         in_block = 1
         files = ""
         scripts = ""
+        attr_ns = ""
+        attr_leaf = ""
+        attr_seen = ""
         next
       }
       in_block && /^  \};/ {
-        printf "%s\037%s\037%s\n", name, files, scripts
+        printf "%s\037%s\037%s\037%s\037%s\037%s\n", \
+          name, files, scripts, attr_ns, attr_leaf, attr_seen
         in_block = 0
         next
       }
@@ -209,6 +236,18 @@ function parse_blocks() {
           sub(/^files = "/, "", s)
           sub(/"$/, "", s)
           files = s
+        }
+        if (attr_leaf == "" &&
+            match($0, /\.#[A-Za-z0-9_-]+\.\$\{[^}]*system[^}]*\}\.[A-Za-z0-9_-]+/)) {
+          ref = substr($0, RSTART, RLENGTH)
+          sub(/^\.#/, "", ref)
+          attr_ns = ref
+          sub(/\..*$/, "", attr_ns)
+          attr_leaf = ref
+          sub(/^.*\./, "", attr_leaf)
+        }
+        if (match($0, /\.#[^" \t]*\$\{/)) {
+          attr_seen = "1"
         }
         line = $0
         while (match(line, /scripts\/[A-Za-z0-9._-]+\.sh/)) {
@@ -239,9 +278,95 @@ function attr_definer_count() {
   printf '%s' "${n}"
 }
 
-# Step 3 — assert each generator-running hook covers its module set.
+# Every nix module that assigns the flake attribute `$1.$2` in non-comment
+# source, one per line. Matched on the assignment shape rather than on a
+# bare mention of the leaf: the hook block that evaluates the attribute
+# names it in its own entry, and a hook is not a source of the attribute
+# it builds.
+function attr_assigners() {
+  local -r ns="$1"
+  local -r leaf="$2"
+  local f
+  for f in "${nix_modules[@]}"; do
+    if grep --quiet --extended-regexp -- "${ns}\.${leaf}[[:space:]]*=" \
+      <<<"${nix_src["${f}"]}"; then
+      printf '%s\n' "${f}"
+    fi
+  done
+}
+
+# Every file a directly-evaluated flake attribute is built from, one per
+# line, given its assigning modules as a newline-separated list in $1.
+#
+# `flake.nix` and `flake.lock` are unconditional: every flake evaluation
+# reads the expression and its lock, and a lock bump changes the packages
+# the attribute resolves to without touching a single module.
+#
+# The reference walk accepts any extension, not just `.nix`. A module that
+# embeds a script with `${../scripts/foo.sh}` depends on that script's
+# contents exactly as much as on an imported module, and a `.nix`-only
+# walk would drop it from the required set.
+function attr_source_paths() {
+  local -r assigners="$1"
+  local -A paths=()
+  paths['flake.nix']=1
+  paths['flake.lock']=1
+  local m dir ref rel refs status
+  while IFS= read -r m; do
+    [[ -z ${m} ]] && continue
+    paths["${m}"]=1
+    dir="$(dirname -- "${m}")"
+    status=0
+    refs="$(grep --only-matching --extended-regexp \
+      '\.\.?/[A-Za-z0-9._/-]+' <<<"${nix_src["${m}"]}")" || status=$?
+    # A module with no relative references is ordinary and grep reports it
+    # as status 1, so only a higher status is a scan that broke rather than
+    # one that found nothing. No fixture drives this branch: grep reads a
+    # here-string built from memory against a literal pattern, so it has no
+    # I/O or compile error left to hit.
+    if ((status > 1)); then
+      printf 'freshness-hook-watches-modules: path-reference scan of %s failed\n' \
+        "${m}" >&2
+      return 1
+    fi
+    while IFS= read -r ref; do
+      [[ -z ${ref} ]] && continue
+      rel="$(realpath --relative-to="${ROOT}" --canonicalize-missing \
+        -- "${ROOT}/${dir}/${ref}")"
+      if [[ -f ${ROOT}/${rel} ]]; then
+        paths["${rel}"]=1
+      fi
+    done <<<"${refs}"
+  done <<<"${assigners}"
+  printf '%s\n' "${!paths[@]}" | sort
+}
+
+# Report every path in the derived set `$4` that the hook's `files` value
+# `$2` fails to match, naming the hook `$1` and what makes the path
+# required (`$3`). Increments the shared failure count.
+function assert_filter_covers() {
+  local -r name="$1"
+  local -r files="$2"
+  local -r subject="$3"
+  local -r derived="$4"
+  # Nix string literal: "\\." in source is the ERE "\.".
+  local ere p
+  ere="$(printf '%s' "${files}" | sed 's/\\\\/\\/g')"
+  while IFS= read -r p; do
+    [[ -z ${p} ]] && continue
+    if ! printf '%s\n' "${p}" | grep --quiet --extended-regexp -- "${ere}"; then
+      printf 'hook %s: files filter does not cover %s (%s)\n' \
+        "${name}" "${p}" "${subject}" >&2
+      failed=$((failed + 1))
+    fi
+  done <<<"${derived}"
+}
+
+# Step 3 — assert each subject hook covers the source set it depends on.
 failed=0
 generator_hooks=0
+attribute_hooks=0
+attr_reference_blocks=0
 declare -A claimed_generators=()
 
 # Capture the parser's records and check its status before consuming them:
@@ -257,8 +382,12 @@ if ! blocks="$(parse_blocks)"; then
   exit 2
 fi
 
-while IFS=$'\037' read -r name files scripts; do
+while IFS=$'\037' read -r name files scripts attr_ns attr_leaf attr_seen; do
   [[ -n ${name} ]] || continue
+
+  if [[ ${attr_seen} == '1' ]]; then
+    attr_reference_blocks=$((attr_reference_blocks + 1))
+  fi
 
   attr=''
   # Split on spaces explicitly: the global IFS is newline+tab, so a block
@@ -274,18 +403,49 @@ while IFS=$'\037' read -r name files scripts; do
       break
     fi
   done
-  [[ -n ${attr} ]] || continue
 
-  generator_hooks=$((generator_hooks + 1))
+  # A block is a subject of either class, or of neither. The two are
+  # checked independently rather than as an either/or, so a hook that both
+  # runs a generator and builds an attribute answers for both source sets.
+  [[ -n ${attr} || -n ${attr_leaf} ]] || continue
 
-  # Guard-the-guard: an attribute matched by zero modules means the
-  # comment-strip or the module walk broke. Fail loud, not vacuously.
-  # Checked independently of the files filter below, since the module
-  # walk itself is what could be broken.
-  if (($(attr_definer_count "${attr}") == 0)); then
-    printf 'hook %s: no nix module defines %s — derivation broke\n' \
-      "${name}" "${attr}" >&2
-    failed=$((failed + 1))
+  assigners=''
+  if [[ -n ${attr} ]]; then
+    generator_hooks=$((generator_hooks + 1))
+
+    # Guard-the-guard: an attribute matched by zero modules means the
+    # comment-strip or the module walk broke. Fail loud, not vacuously.
+    # Checked independently of the files filter below, since the module
+    # walk itself is what could be broken.
+    if (($(attr_definer_count "${attr}") == 0)); then
+      printf 'hook %s: no nix module defines %s — derivation broke\n' \
+        "${name}" "${attr}" >&2
+      failed=$((failed + 1))
+    fi
+  fi
+
+  if [[ -n ${attr_leaf} ]]; then
+    attribute_hooks=$((attribute_hooks + 1))
+
+    # Capture the assigner scan and check its status before consuming it,
+    # for the same reason every other producer here is captured: an empty
+    # list is a meaningful answer, so a scan that gave up would read as one.
+    if ! assigners="$(attr_assigners "${attr_ns}" "${attr_leaf}")"; then
+      printf 'freshness-hook-watches-modules: assigner scan for %s.%s failed\n' \
+        "${attr_ns}" "${attr_leaf}" >&2
+      exit 2
+    fi
+
+    # Guard-the-guard: a hook builds an attribute something must assign, so
+    # zero assigning modules means the assignment-shape match stopped
+    # matching rather than that the attribute has no nix source. Left
+    # unguarded the required set would shrink to the two flake files, which
+    # every plausible filter already covers.
+    if [[ -z ${assigners} ]]; then
+      printf 'hook %s: no nix module assigns %s.%s — assigner scan broke\n' \
+        "${name}" "${attr_ns}" "${attr_leaf}" >&2
+      failed=$((failed + 1))
+    fi
   fi
 
   # An empty filter would become an empty ERE, which matches every path and
@@ -296,30 +456,34 @@ while IFS=$'\037' read -r name files scripts; do
     continue
   fi
 
-  # Nix string literal: "\\." in source is the ERE "\.".
-  ere="$(printf '%s' "${files}" | sed 's/\\\\/\\/g')"
-
-  # Capture the derived set and check its status before consuming it: a
-  # derivation that gives up part way emits nothing, and an empty set reads
-  # as a hook whose filter already covers every module it must. No fixture
-  # drives this guard, because every producer inside `required_modules`
-  # reads memory rather than the tree — each module's source is read and
-  # status-checked up front — so the only status it can return is the one
-  # its own inner guard raises.
-  if ! required="$(required_modules "${attr}")"; then
-    printf 'freshness-hook-watches-modules: required-module derivation for %s failed\n' \
-      "${attr}" >&2
-    exit 2
+  if [[ -n ${attr} ]]; then
+    # Capture the derived set and check its status before consuming it: a
+    # derivation that gives up part way emits nothing, and an empty set reads
+    # as a hook whose filter already covers every module it must. No fixture
+    # drives this guard, because every producer inside `required_modules`
+    # reads memory rather than the tree — each module's source is read and
+    # status-checked up front — so the only status it can return is the one
+    # its own inner guard raises.
+    if ! required="$(required_modules "${attr}")"; then
+      printf 'freshness-hook-watches-modules: required-module derivation for %s failed\n' \
+        "${attr}" >&2
+      exit 2
+    fi
+    assert_filter_covers "${name}" "${files}" "evaluates ${attr}" "${required}"
   fi
 
-  while IFS= read -r p; do
-    [[ -z ${p} ]] && continue
-    if ! printf '%s\n' "${p}" | grep --quiet --extended-regexp -- "${ere}"; then
-      printf 'hook %s: files filter does not cover %s (evaluates %s)\n' \
-        "${name}" "${p}" "${attr}" >&2
-      failed=$((failed + 1))
+  if [[ -n ${attr_leaf} ]]; then
+    # Same capture-then-check shape: the source set for a directly-built
+    # attribute is never legitimately empty, so a producer that gave up
+    # would otherwise report full coverage.
+    if ! required="$(attr_source_paths "${assigners}")"; then
+      printf 'freshness-hook-watches-modules: source derivation for %s.%s failed\n' \
+        "${attr_ns}" "${attr_leaf}" >&2
+      exit 2
     fi
-  done <<<"${required}"
+    assert_filter_covers "${name}" "${files}" \
+      "builds ${attr_ns}.${attr_leaf}" "${required}"
+  fi
 done <<<"${blocks}"
 
 shopt -u nullglob
@@ -328,6 +492,19 @@ shopt -u nullglob
 # parser broke (a reformat changed the block shape).
 if ((generator_hooks == 0)); then
   printf 'no devTooling-evaluating hook blocks found in %s/nix/hooks — block parser likely broke\n' \
+    "${ROOT}" >&2
+  exit 1
+fi
+
+# Guard-the-guard: a block whose entry names a flake attribute must yield an
+# attribute subject. Conditional on a block actually naming one, because a
+# tree with no such hook is legitimate and a flat "at least one must exist"
+# rule would make every fixture grow one. The loose reference flag and the
+# precise attrpath extraction come from the same parse, so the two
+# disagreeing is exactly the reformat that would otherwise drop the subject
+# and report coverage for a filter nothing checked.
+if ((attr_reference_blocks > 0 && attribute_hooks == 0)); then
+  printf 'no attribute subject derived from a hook entry naming one in %s/nix/hooks — attrpath parser likely broke\n' \
     "${ROOT}" >&2
   exit 1
 fi

@@ -194,6 +194,70 @@ EOF
 EOF
 }
 
+# A tree carrying both hook classes: the write_tree generator hook with a
+# filter that already covers its module set, plus a second hook whose entry
+# builds a flake attribute directly — the shape the real `lint-shell-tools`
+# hook uses, which names no generator script at all and so is invisible to
+# the script-keyed lookup.
+#
+# ${1}=root, ${2}=the attribute hook's files-filter value, ${3}=the attrpath
+# leaf its entry names. An empty leaf truncates the attrpath at the system
+# interpolation: the entry still visibly names a flake attribute, but the
+# precise attrpath match finds nothing, which is the parser regression the
+# guard-the-guard exists for.
+function write_attr_tree() {
+  local -r root="$1" attr_files="$2" leaf="$3"
+  write_tree "${root}" '^(nix/hooks/.*\.nix|nix/manifests\.nix)$' plain
+
+  printf '{\n  description = "fixture flake";\n}\n' >"${root}/flake.nix"
+  printf '{\n  "nodes": { },\n  "version": 7\n}\n' >"${root}/flake.lock"
+
+  cat >"${root}/scripts/fixture-attr-tool.sh" <<'EOF'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+printf 'fixture attribute tool\n'
+EOF
+
+  # Assigns the attribute and embeds a non-nix file by relative path. The
+  # embedded script is a genuine source of the attribute, so a `.nix`-only
+  # reference walk would drop it from the required set.
+  cat >"${root}/nix/attr-source.nix" <<'EOF'
+{
+  perSystem =
+    { pkgs, ... }:
+    {
+      checks.fixtureCheck = pkgs.runCommandLocal "fixture-check" { } ''
+        bash ${../scripts/fixture-attr-tool.sh}
+        touch "$out"
+      '';
+    };
+}
+EOF
+
+  cat >"${root}/nix/hooks/freshness.nix" <<EOF
+{
+  fixture-doc-fresh = {
+    enable = true;
+    name = "fixture-doc-fresh";
+    description = "Fixture generated-doc freshness hook.";
+    entry = "bash scripts/refresh-fixture-doc.sh --check";
+    files = "^(nix/hooks/.*\\\\.nix|nix/manifests\\\\.nix)\$";
+    pass_filenames = false;
+    language = "system";
+  };
+  fixture-attr-check = {
+    enable = true;
+    name = "fixture-attr-check";
+    description = "Fixture hook that builds a flake attribute directly.";
+    entry = "nix build --no-link .#checks.\${pkgs.stdenv.hostPlatform.system}.${leaf}";
+    files = "${attr_files}";
+    pass_filenames = false;
+    language = "system";
+  };
+}
+EOF
+}
+
 function main() {
   work="$(mktemp --directory)"
 
@@ -328,6 +392,48 @@ EOF
   mkdir --parents -- "${work}/unreadable-module/nix/unreadable.nix"
   expect 'tooling: a directory named *.nix is reported, not scored as empty source' \
     "${work}/unreadable-module" 2 'comment-strip of nix/unreadable.nix failed'
+
+  # (m) GOOD: a hook whose entry builds a flake attribute directly, with a
+  # filter naming every source that attribute is derived from — the flake
+  # expression, its lock, the module assigning the attribute, and the
+  # non-nix file that module embeds by relative path.
+  write_attr_tree "${work}/attr-good" \
+    '^(flake\\.nix|flake\\.lock|nix/attr-source\\.nix|scripts/fixture-attr-tool\\.sh)$' \
+    fixtureCheck
+  expect 'good: an attribute-building hook covering every source passes' \
+    "${work}/attr-good" 0 ''
+
+  # (n) BAD: the same hook, with the embedded non-nix source dropped from
+  # its filter. Editing scripts/fixture-attr-tool.sh then changes what the
+  # attribute builds without re-triggering the hook that builds it. A lint
+  # that only recognises generator-script hooks skips this block entirely
+  # and reports full coverage.
+  write_attr_tree "${work}/attr-missing-source" \
+    '^(flake\\.nix|flake\\.lock|nix/attr-source\\.nix)$' \
+    fixtureCheck
+  expect 'bad: an attribute-building hook missing an embedded source fails' \
+    "${work}/attr-missing-source" 1 'scripts/fixture-attr-tool.sh'
+
+  # (o) BAD: the entry names an attribute no module assigns. The required
+  # set then collapses to the two flake files, which almost any filter
+  # already covers, so the run would report coverage for an attribute the
+  # scan never located. Only a guard keyed on the assigner count catches it.
+  write_attr_tree "${work}/attr-unassigned" \
+    '^(flake\\.nix|flake\\.lock)$' \
+    missingCheck
+  expect 'bad: an attribute no module assigns trips the assigner guard' \
+    "${work}/attr-unassigned" 1 'no nix module assigns checks.missingCheck'
+
+  # (p) BAD: the entry still visibly names a flake attribute, but the
+  # attrpath stops at the system interpolation so the precise match finds
+  # no leaf. Discovery yields no attribute subject and the hook is skipped
+  # with no output — indistinguishable from a tree that has no such hook,
+  # which is why the guard is conditional on a block naming one.
+  write_attr_tree "${work}/attr-unparsed" \
+    '^(flake\\.nix|flake\\.lock|nix/attr-source\\.nix|scripts/fixture-attr-tool\\.sh)$' \
+    ''
+  expect 'bad: an unparsable attrpath in a hook entry trips the parser guard' \
+    "${work}/attr-unparsed" 1 'no attribute subject derived'
 
   # (l) LIVE: the real tree must satisfy the guard.
   expect 'live: real tree passes' "${REPO_ROOT}" 0 ''

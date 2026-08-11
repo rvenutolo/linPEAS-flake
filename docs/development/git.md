@@ -137,7 +137,7 @@ Hooks (alphabetical):
 | `enforcement-matrix-fresh`          | docs/security/enforcement-matrix.md matches the annotated invariant index and real enforcers.                                        |
 | `flake-show-fresh`                  | flake-show block in docs/reference/flake-outputs.md matches current flake outputs.                                                   |
 | `fork-guard-release`                | Release-grade jobs include github.repository fork guard.                                                                             |
-| `freshness-hook-watches-modules`    | Every devTooling-evaluating freshness hook watches every nix module its generator reads.                                             |
+| `freshness-hook-watches-modules`    | Every flake-evaluating freshness hook watches every source its evaluation reads.                                                     |
 | `gh-api-version-header`             | Every gh api / api.github.com call in scripts passes an X-GitHub-Api-Version header.                                                 |
 | `gh-attestation-repo`               | gh attestation verify pins --repo rvenutolo/linPEAS-flake.                                                                           |
 | `harden-runner-block`               | Every harden-runner step uses egress-policy: block with non-empty allowed-endpoints.                                                 |
@@ -146,7 +146,7 @@ Hooks (alphabetical):
 | `just-recipes-fresh`                | just-recipes blocks in README.md and docs/reference/just-recipes.md match the justfile.                                              |
 | `lint-shell-tools`                  | devShells.lint declares every tool the .#lint lint groups need.                                                                      |
 | `manifest-digest-pinned`            | docker manifest/imagetools create sources are digest-pinned.                                                                         |
-| `manifest-hook-watches-nix`         | Every manifest-reading freshness hook watches nix/hooks in its files filter.                                                         |
+| `manifest-hook-watches-nix`         | Every hook reaching the Nix hook manifest watches nix/hooks in its files filter.                                                     |
 | `markdownlint`                      | Markdown style + structure.                                                                                                          |
 | `min-permissions`                   | Top-level workflow permissions empty; each job declares its own scopes.                                                              |
 | `nix-run-pinned`                    | No unpinned nix run nixpkgs#<pkg>; use nix shell .#<pkg> or pin a rev.                                                               |

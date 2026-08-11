@@ -55,32 +55,36 @@
     pass_filenames = false;
     language = "system";
   };
-  # Every manifest-reading freshness hook watches nix/hooks in its
-  # files filter, so a hook-definition edit re-triggers the freshness
-  # check on the per-changed-file git commit path. See
+  # Every hook that reaches the Nix hook manifest — through the script its
+  # entry runs or through a flake attribute its entry evaluates — watches
+  # nix/hooks in its files filter, so a hook-definition edit re-triggers the
+  # freshness check on the per-changed-file git commit path. See
   # docs/security/workflow-hardening.md.
   manifest-hook-watches-nix = {
     enable = true;
     name = "manifest-hook-watches-nix";
-    description = "Every manifest-reading freshness hook watches nix/hooks in its files filter.";
+    description = "Every hook reaching the Nix hook manifest watches nix/hooks in its files filter.";
     entry = "${pkgs-unstable.writeShellScript "manifest-hook-watches-nix-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-manifest-hook-watches-nix.sh
     ''}";
-    files = "^(nix/hooks/.*\\.nix|scripts/.*\\.sh)$";
+    # Resolving an attribute-evaluating hook's subject reads every nix module
+    # in the tree to find the one that assigns the attribute, so a module
+    # outside nix/hooks can flip this lint's verdict and must re-trigger it.
+    files = "^(.*\\.nix|scripts/.*\\.sh)$";
     pass_filenames = false;
     language = "system";
   };
-  # Every devTooling-evaluating freshness hook watches every nix module
-  # its generator reads, so a module edit re-triggers the freshness check
-  # on the per-changed-file git commit path. See
+  # Every flake-evaluating freshness hook watches every source its
+  # evaluation reads, so an edit to one re-triggers the freshness check on
+  # the per-changed-file git commit path. See
   # docs/security/workflow-hardening.md.
   freshness-hook-watches-modules = {
     enable = true;
     name = "freshness-hook-watches-modules";
-    description = "Every devTooling-evaluating freshness hook watches every nix module its generator reads.";
+    description = "Every flake-evaluating freshness hook watches every source its evaluation reads.";
     entry = "${pkgs-unstable.writeShellScript "freshness-hook-watches-modules-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'

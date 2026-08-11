@@ -148,25 +148,29 @@ The ratchet covers every harness, including those asserting by other means than 
 
 Enforced by `tests/_harness_assert_wired.test.sh`, reached by the `harness-group` CI job.
 
-## manifest-reading hook watches nix/hooks
+## manifest-reaching hook watches nix/hooks
 
-Every pre-commit hook whose script reads the Nix hook manifest (`nix eval .#devTooling.<system>.preCommitHooks`) includes `nix/hooks` in its `files` filter.
+Every pre-commit hook that reaches the Nix hook manifest (`nix eval .#devTooling.<system>.preCommitHooks`) includes `nix/hooks` in its `files` filter. A hook reaches it either through the script its entry runs, or through a flake attribute its entry evaluates whose assigning module reads the manifest.
 
 A freshness hook regenerates or validates a generated doc from the manifest. When its `files` filter omits `nix/hooks`, a commit that edits only a hook definition under `nix/hooks/*.nix` changes the manifest but does not re-trigger the hook on the per-changed-file `git commit` path, so a stale generated doc can be committed locally. The `--all-files` CI mirror still catches the drift, but the local fast-path defense is lost. Tying every manifest-reader's filter to `nix/hooks` keeps the local and CI paths in agreement.
 
-The guard derives the manifest-reading scripts by content (`preCommitHooks` / `PRECOMMIT_HOOK_NAMES`), not a hardcoded list, then asserts each referencing hook's `files` filter contains `nix/hooks`. It fails loud if it finds zero manifest-reading hooks, catching a parser break from a hook-file reformat.
+The guard derives its subjects by content, not from a hardcoded list. A script subject is any `scripts/*.sh` naming `preCommitHooks` or `PRECOMMIT_HOOK_NAMES`; an attribute subject is a hook entry naming a flake attribute, and it qualifies when a module assigning that attribute names either token. Each qualifying hook's `files` filter must then contain `nix/hooks`. The guard fails loud when it finds no subjects of either class, and when a hook entry names a flake attribute that subject discovery did not pick up — both mean a parser break from a hook-file reformat rather than a clean tree.
 
 Enforced by `scripts/check-manifest-hook-watches-nix.sh`. Wired as the `lint-script-hygiene` CI job (member check `manifest-hook-watches-nix`) and as a pre-commit hook.
 
-## freshness hook watches evaluated modules
+## freshness hook watches evaluated sources
 
-Every pre-commit hook whose generator evaluates `devTooling.<system>.<attr>` names, in its `files` filter, every nix module that attribute is defined or transposed by.
+Every pre-commit hook whose entry evaluates a flake attribute names, in its `files` filter, every source that evaluation reads. Two hook shapes evaluate one: a generator script the entry runs, which reads `devTooling.<system>.<attr>`, and an entry that evaluates an attribute directly with `nix build` or `nix eval`, naming no script at all.
 
 A freshness hook regenerates a doc from an evaluated flake attribute and refuses a stale commit. Its `files` regex decides which changed paths re-trigger it on the per-changed-file `git commit` path. When the filter misses a module the generator evaluates, a commit touching only that module leaves the doc stale with the guard silent. The `--all-files` CI mirror still catches the drift, but the local fast-path defense is lost, so the gap surfaces late.
 
-The required module set is derived rather than hardcoded: modules naming the evaluated attribute in non-comment nix source, plus one level of their relative imports, plus modules assigning `flake.devTooling` — the transposition every generator reads through. The second signal is what makes the derivation structural. A module that merely mentions an attribute in a comment is not thereby required, and a module that performs the transposition is required whether or not it names the attribute at all.
+The required source set is derived rather than hardcoded, per shape.
 
-The guard is source-parsed rather than `nix eval`-ed: `files` and `entry` are literal in source, and `nix eval` is the known local-commit-path long pole. It fails loud if it finds no `devTooling`-evaluating generator, no hook running one, or an attribute with no defining module — each of which means the derivation broke rather than that the tree is clean.
+For a generator subject: modules naming the evaluated attribute in non-comment nix source, plus one level of their relative imports, plus modules assigning `flake.devTooling` — the transposition every generator reads through. The second signal is what makes the derivation structural. A module that merely mentions an attribute in a comment is not thereby required, and a module that performs the transposition is required whether or not it names the attribute at all.
+
+For an attribute subject: `flake.nix` and `flake.lock`, since any flake evaluation reads both and a lock bump changes the packages the attribute resolves to; every module assigning the attribute, matched on the assignment shape so that merely naming the leaf does not qualify a module that is not a source of it; and one level of the relative paths those modules reference, of any extension — a module embedding `${../scripts/foo.sh}` genuinely depends on that script.
+
+The guard is source-parsed rather than `nix eval`-ed: `files` and `entry` are literal in source, and `nix eval` is the known local-commit-path long pole. It fails loud if it finds no `devTooling`-evaluating generator, no hook running one, an attribute with no defining or assigning module, or a hook entry naming a flake attribute that subject discovery did not pick up — each of which means the derivation broke rather than that the tree is clean.
 
 Enforced by `scripts/check-freshness-hook-watches-modules.sh`. Wired as the `lint-script-hygiene` CI job (member check `freshness-hook-watches-modules`) and as a pre-commit hook.
 
