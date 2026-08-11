@@ -63,15 +63,18 @@ function harness_assert_record() {
     cat -- "${file}" >>"${HARNESS_ASSERT_POOL}/${index}.out"
   done
 
-  # Sameness is decided on output with the shared logger's timestamp
-  # prefix removed. Two scenarios emitting one diagnostic differ only by a
-  # clock tick, so a raw byte comparison would call them the same when both
-  # land in one second and different when they straddle the boundary —
-  # making the verdict depend on when the suite runs. Only the prefix
-  # `scripts/lib/log.sh` writes is stripped; any other varying text still
-  # counts as a difference, which flags rather than hides.
+  # Sameness is decided on output with clock-derived text removed: the
+  # shared logger's timestamp prefix, and the elapsed-seconds cell of a
+  # markdown summary row. Both vary with when the suite runs rather than
+  # with what the script did, so a raw byte comparison would call two
+  # scenarios the same when they land in one second and different when
+  # they straddle the boundary — making the census depend on the clock.
+  # The patterns are anchored to exactly those two shapes; any other
+  # varying text still counts as a difference, which flags rather than
+  # hides.
   sed --regexp-extended \
-    's/^\[[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[+-][0-9]{4}\] //' \
+    -e 's/^\[[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[+-][0-9]{4}\] //' \
+    -e 's/\| [0-9]+s \|/| <duration>s |/g' \
     -- "${HARNESS_ASSERT_POOL}/${index}.out" \
     >"${HARNESS_ASSERT_POOL}/${index}.norm"
 
