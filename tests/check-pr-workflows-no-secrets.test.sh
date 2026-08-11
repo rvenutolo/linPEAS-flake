@@ -26,16 +26,20 @@ function run_scenario() {
 
   local tmpdir
   tmpdir="$(mktemp --directory)"
-  local stderr_file
+  local stderr_file stdout_file outcome_file
   stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
 
   mkdir --parents "${tmpdir}/wfs"
   cp -- "${FIXTURES}/${fixture}" "${tmpdir}/wfs/${fixture}"
 
   local actual_exit=0
   WORKFLOWS_DIR_OVERRIDE="${tmpdir}/wfs" \
-    "${SCRIPT}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
-  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${expected_stderr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' \
@@ -53,7 +57,8 @@ function run_scenario() {
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
 
-  rm --recursive --force -- "${tmpdir}" "${stderr_file}"
+  rm --recursive --force -- "${tmpdir}" "${stderr_file}" \
+    "${stdout_file}" "${outcome_file}"
 }
 
 function main() {

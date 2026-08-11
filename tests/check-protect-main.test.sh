@@ -26,15 +26,19 @@ function run_scenario() {
   local -r expected_exit="$3"
   local -r expected_stderr="$4"
 
-  local stderr_file
+  local stderr_file stdout_file outcome_file
   stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
 
   local actual_exit=0
   RULESET_JSON_OVERRIDE="${FIXTURES}/${fixture_dir}/live.json" \
     MIRROR_JSON_OVERRIDE="${FIXTURES}/${fixture_dir}/mirror.json" \
     DOC_TABLE_OVERRIDE="${FIXTURES}/${fixture_dir}/required-checks.md" \
-    "${SCRIPT}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
-  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${expected_stderr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' \
@@ -52,7 +56,7 @@ function run_scenario() {
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
 
-  rm --force -- "${stderr_file}"
+  rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
 }
 
 function main() {
@@ -97,17 +101,20 @@ function main() {
   # sets RULESET_JSON_OVERRIDE. Exercise it directly: stub `gh` to return
   # an empty ruleset list (empty id) and run the live path with only the
   # mirror + doc overrides.
-  local gh_stub_dir stderr_file no_op_exit=0
+  local gh_stub_dir stderr_file stdout_file outcome_file no_op_exit=0
   gh_stub_dir="$(mktemp --directory)"
   stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
   printf '#!/usr/bin/env bash\nprintf ""\n' >"${gh_stub_dir}/gh"
   chmod +x "${gh_stub_dir}/gh"
   PATH="${gh_stub_dir}:${PATH}" \
     MIRROR_JSON_OVERRIDE="${FIXTURES}/good/mirror.json" \
     DOC_TABLE_OVERRIDE="${FIXTURES}/good/required-checks.md" \
-    "${SCRIPT}" >/dev/null 2>"${stderr_file}" || no_op_exit=$?
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || no_op_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${no_op_exit}" >"${outcome_file}"
   harness_assert_record 'no-op-ruleset guard' 'no ruleset named protect-main' \
-    "${stderr_file}"
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
   if [[ ${no_op_exit} -ne 1 ]]; then
     printf 'FAIL: no-op-ruleset guard — expected exit 1, got %d\n' "${no_op_exit}" >&2
     cat -- "${stderr_file}" >&2
@@ -119,7 +126,8 @@ function main() {
   else
     printf 'PASS: no-op-ruleset guard fires on empty ruleset id\n'
   fi
-  rm --recursive --force -- "${gh_stub_dir}" "${stderr_file}"
+  rm --recursive --force -- "${gh_stub_dir}" "${stderr_file}" \
+    "${stdout_file}" "${outcome_file}"
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
