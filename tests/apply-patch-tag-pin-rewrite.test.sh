@@ -139,4 +139,66 @@ if [[ ${missing_err} != *"abort (file missing)"* ]]; then
   exit 1
 fi
 
+# --- Test 7: final OK row lacking a trailing newline is still applied ---
+# An inventory truncated mid-write keeps every byte of its last row but
+# loses the terminating newline. That row is real work and must be
+# applied, not silently dropped.
+cp "${BEFORE}" "${WORK}/eof-ok.yml"
+INV_EOF_OK="${WORK}/eof-ok-inventory.tsv"
+{
+  printf 'file\tline\tref\tpinned_sha\tcurrent_comment\ttarget_comment\tstatus\n'
+  printf '%s\t4\tgithub/codeql-action/init\t03e4368ac7daa2bd82b3e85262f3bf87ee112f57\tv3\tv3.36.0\tOK\n' \
+    "${WORK}/eof-ok.yml"
+  # Deliberately unterminated: the final row carries no trailing newline.
+  printf '%s\t5\tgithub/codeql-action/analyze\t03e4368ac7daa2bd82b3e85262f3bf87ee112f57\tv3\tv3.36.0\tOK' \
+    "${WORK}/eof-ok.yml"
+} >"${INV_EOF_OK}"
+
+bash "${SCRIPT}" --inventory "${INV_EOF_OK}" 2>/dev/null
+
+if ! grep --fixed-strings --quiet \
+  'analyze@03e4368ac7daa2bd82b3e85262f3bf87ee112f57 # v3.36.0' \
+  "${WORK}/eof-ok.yml"; then
+  printf 'FAIL: unterminated final OK row was dropped instead of applied\n' >&2
+  exit 1
+fi
+if ! diff -u "${EXPECTED}" "${WORK}/eof-ok.yml"; then
+  printf 'FAIL: unterminated-final-row rewrite did not match expected-after.yml\n' >&2
+  exit 1
+fi
+
+# --- Test 8: final API_FAILURE row lacking a trailing newline aborts ---
+# The abort-before-mutation contract must not depend on the inventory's
+# last byte being a newline.
+cp "${BEFORE}" "${WORK}/eof-apifail.yml"
+EOF_APIFAIL_SNAPSHOT="${WORK}/eof-apifail.snapshot"
+cp "${WORK}/eof-apifail.yml" "${EOF_APIFAIL_SNAPSHOT}"
+
+INV_EOF_APIFAIL="${WORK}/eof-apifail-inventory.tsv"
+{
+  printf 'file\tline\tref\tpinned_sha\tcurrent_comment\ttarget_comment\tstatus\n'
+  printf '%s\t4\tgithub/codeql-action/init\t03e4368ac7daa2bd82b3e85262f3bf87ee112f57\tv3\tv3.36.0\tOK\n' \
+    "${WORK}/eof-apifail.yml"
+  # Deliberately unterminated: the final row carries no trailing newline.
+  printf '%s\t5\tgithub/codeql-action/analyze\t03e4368ac7daa2bd82b3e85262f3bf87ee112f57\tv3\t\tAPI_FAILURE' \
+    "${WORK}/eof-apifail.yml"
+} >"${INV_EOF_APIFAIL}"
+
+eof_apifail_exit=0
+eof_apifail_err="$(bash "${SCRIPT}" --inventory "${INV_EOF_APIFAIL}" 2>&1)" ||
+  eof_apifail_exit=$?
+if ((eof_apifail_exit == 0)); then
+  printf 'FAIL: unterminated final API_FAILURE row should have caused non-zero exit\n' >&2
+  exit 1
+fi
+if [[ ${eof_apifail_err} != *"abort (api failure in inventory): ${WORK}/eof-apifail.yml:5"* ]]; then
+  printf 'FAIL: unterminated-final-row api-failure abort missing message\n  got: %s\n' \
+    "${eof_apifail_err}" >&2
+  exit 1
+fi
+if ! diff -u "${EOF_APIFAIL_SNAPSHOT}" "${WORK}/eof-apifail.yml"; then
+  printf 'FAIL: eof-apifail.yml was mutated despite unterminated-final-row api-failure abort\n' >&2
+  exit 1
+fi
+
 printf 'all tests passed\n'

@@ -107,9 +107,20 @@ honors `.gitignore` so build outputs stay out.
 The script has two modes. The default pass is **blocking** (exit 1 on any
 hit, printing `file:line: [class] token` to stderr). The `--advisory`
 pass is **warn-only** — it prints `[advisory] file:line: phrase` and
-always exits 0. The pre-commit hook `check-ephemeral-refs` runs the
-blocking pass first, then the advisory pass; the CI `lint-doc-invariants`
-group runs the blocking pass. Only the blocking pass gates a merge.
+exits 0 for every hit it finds. The pre-commit hook
+`check-ephemeral-refs` runs the blocking pass first, then the advisory
+pass; the CI `lint-doc-invariants` group runs the blocking pass. Only
+the blocking pass gates a merge on a *hit*.
+
+**A malformed doc fails both modes.** Stripping runs ahead of the mode
+branch, and an exempt region that never closes — an unterminated
+generated block, or an unbalanced code fence — blanks everything after
+it to end of file. That is indistinguishable in the output from a clean
+document, so both cases abort with a named diagnostic
+(`unterminated generated block` / `unterminated code fence`) and a
+non-zero exit rather than scanning a file whose remainder has been
+silently exempted. Advisory mode inherits that abort: it suppresses
+findings, not defects.
 
 ### Blocking classes
 

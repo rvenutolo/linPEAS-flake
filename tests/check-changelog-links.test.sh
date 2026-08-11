@@ -93,6 +93,12 @@ function main() {
   run_scenario 'missing cliff.toml fails' \
     '/nonexistent/cliff.toml' 1 'cliff.toml not found'
 
+  # A config git-cliff cannot run is a broken toolchain, not a malformed
+  # regeneration. It must carry the tooling exit code and a diagnostic naming
+  # the generator, so a red check is not read as a real content violation.
+  run_scenario 'git-cliff failing on its config exits tooling code' \
+    "${FIXTURES}/bad-unparsable-template.toml" 2 'git-cliff regeneration failed'
+
   run_regex_scenario 'identical adjacent PR links match' \
     '- ci: thing ([#190](https://x/pull/190)) ([#190](https://x/pull/190))' \
     'match'

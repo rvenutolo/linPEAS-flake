@@ -35,8 +35,13 @@
 # number from the `(#N)` subject suffix, so no GitHub token is required. Needs
 # full history + tags (fetch-depth: 0) so every release tag is visible.
 #
-# Exits 0 when released sections are fresh, 1 when stale (or CHANGELOG
-# missing), 2 when nix is not on PATH.
+# Exits 0 when released sections are fresh, 1 when stale (or CHANGELOG /
+# cliff config missing), 2 when the tooling itself fails: nix absent from
+# PATH, or the pinned git-cliff exiting non-zero. A generator that cannot run
+# says nothing about whether the committed changelog is fresh, so it must not
+# borrow the staleness code — that sends a maintainer to regenerate a
+# changelog that was never the problem. git-cliff's own stderr is passed
+# through rather than silenced, so the reason is visible in the job log.
 #
 # Env overrides (test-only):
 #   CHANGELOG_OVERRIDE  — committed changelog path (default CHANGELOG.md)
@@ -72,8 +77,19 @@ else
     printf 'cliff.toml not found: %s\n' "${CLIFF_TOML}" >&2
     exit 1
   fi
+  # Only stdout is discarded — the regeneration lands in ${tmp}. stderr carries
+  # git-cliff's and nix's own explanation of a failure and must reach the log.
+  cliff_status=0
   nix shell "${REPO_ROOT}#git-cliff" --command \
-    git-cliff --config "${CLIFF_TOML}" --output "${tmp}" >/dev/null 2>&1
+    git-cliff --config "${CLIFF_TOML}" --output "${tmp}" >/dev/null ||
+    cliff_status=$?
+  if ((cliff_status != 0)); then
+    printf 'git-cliff regeneration failed (exit %d) with config: %s\n' \
+      "${cliff_status}" "${CLIFF_TOML}" >&2
+    printf 'The generator could not run, so freshness was never evaluated.\n' >&2
+    printf 'Fix the generator or its config; do not regenerate CHANGELOG.md.\n' >&2
+    exit 2
+  fi
 fi
 
 # @description Release tags that cannot yet appear in the committed changelog.

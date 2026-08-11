@@ -1,0 +1,10 @@
+# Fixture: syntactically valid TOML that git-cliff itself refuses to run. The
+# body template holds an unterminated Tera tag, so the generator aborts before
+# writing any output. Exercises the tooling-failure path, which must surface as
+# a tooling failure rather than as a stale changelog.
+#
+# The breakage lives in the template rather than in the TOML syntax because
+# taplo formats every `*.toml` in the tree, fixtures included; a file that does
+# not parse as TOML would fail the formatter instead of the check under test.
+[changelog]
+body = "{% if unterminated %}"

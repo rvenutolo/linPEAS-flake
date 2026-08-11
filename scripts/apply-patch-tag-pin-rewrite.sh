@@ -52,7 +52,11 @@ declare -a pending_new=()
 applied=0
 skipped=0
 
-while IFS= read -r raw_line; do
+# `read` returns non-zero on a final line with no trailing newline, so the
+# `[[ -n ]]` fallback is what keeps a truncated inventory's last row from
+# being silently dropped — dropping it would apply the earlier OK rows and
+# report success while skipping an unvalidated row or an API_FAILURE abort.
+while IFS= read -r raw_line || [[ -n ${raw_line} ]]; do
   # `read` with IFS=$'\t' collapses consecutive tabs (tab is whitespace
   # in IFS), so an empty `target_comment` would merge with `status`.
   # Split manually via parameter expansion to preserve empty fields.
