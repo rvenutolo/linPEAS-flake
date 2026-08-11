@@ -15,7 +15,12 @@
 #
 # Exits 0 when both invariants hold.
 # Exits 1 on any violation (duplicate links, lost preprocessor, missing file).
-# Exits 2 when nix is not on PATH.
+# Exits 2 when the tooling itself fails: nix absent from PATH, or the pinned
+# git-cliff exiting non-zero. A generator that cannot run produces no output to
+# validate, so it must not borrow the violation code — that reads as a
+# malformed regeneration and sends a maintainer after a cliff.toml assertion
+# that never fired. git-cliff's own stderr is passed through rather than
+# silenced, so the reason is visible in the job log.
 #
 # Env overrides (test-only):
 #   CLIFF_TOML_OVERRIDE — path to a fixture cliff.toml instead of
@@ -42,8 +47,19 @@ tmp="$(mktemp)"
 # shellcheck disable=SC2064
 trap "rm --force -- '${tmp}'" EXIT
 
+# Only stdout is discarded — the regeneration lands in ${tmp}. stderr carries
+# git-cliff's and nix's own explanation of a failure and must reach the log.
+cliff_status=0
 nix shell "${REPO_ROOT}#git-cliff" --command \
-  git-cliff --config "${CLIFF_TOML}" --output "${tmp}" >/dev/null 2>&1
+  git-cliff --config "${CLIFF_TOML}" --output "${tmp}" >/dev/null ||
+  cliff_status=$?
+if ((cliff_status != 0)); then
+  printf 'git-cliff regeneration failed (exit %d) with config: %s\n' \
+    "${cliff_status}" "${CLIFF_TOML}" >&2
+  printf 'The generator could not run, so its output was never validated.\n' >&2
+  printf 'Fix the generator or its config; no link assertion has failed.\n' >&2
+  exit 2
+fi
 
 status=0
 

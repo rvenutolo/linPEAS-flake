@@ -21,7 +21,9 @@
 # Scanning pipeline (per file): blank fenced ``` code blocks, blank
 # inline `code` spans, then blank generated BEGIN/END blocks — all in
 # place so reported line numbers stay accurate against the original
-# file — then match the remaining prose.
+# file — then match the remaining prose. An unterminated fence or
+# generated block exempts every line below it, so it aborts the run
+# (exit 1) rather than scanning what is left.
 #
 # Sources scanned: every Markdown path git reports for the repo — both
 # committed files and uncommitted, unignored ones — minus the file
@@ -86,19 +88,22 @@ readonly RE_CAUSAL='(prior to|previously|Migration note|was reshaped|Tightened f
 # sees prose, a BEGIN marker a doc quotes inside code is documentation
 # rather than a block opener, so it can neither raise a phantom
 # unterminated-block error nor blank the prose that follows it.
-# A generated BEGIN with no matching END would otherwise blank every
-# line to EOF, silently hiding any violation below it — an unterminated
-# marker is a doc defect, so fail loud (exit 1) instead.
+# An opening fence with no closing fence, or a generated BEGIN with no
+# matching END, would otherwise blank every line to EOF, silently hiding
+# any violation below it — either unterminated region is a doc defect, so
+# fail loud (exit 1) instead. The two diagnostics name their own region
+# kind so a caller can tell which marker is dangling.
 # @arg $1 file path to the source file
 # @arg $2 src_rel source path relative to REPO_ROOT (for the error message)
 # @stdout the file with exempt regions replaced by blank lines
-# @stderr `src_rel: unterminated generated block` if a BEGIN lacks an END
-# @exitcode 0 on clean strip, 1 on unterminated generated block
+# @stderr `src_rel: unterminated code fence` if a fence is never closed,
+#   `src_rel: unterminated generated block` if a BEGIN lacks an END
+# @exitcode 0 on clean strip, 1 on either unterminated region
 function strip_exempt() {
   local -r file="$1"
   local -r src_rel="$2"
   # Pass one: code. Every branch emits exactly one line per input line.
-  awk '
+  awk -v src_rel="${src_rel}" '
     {
       line = $0
       # Fenced code blocks (backtick or tilde): blank the fences and
@@ -118,6 +123,12 @@ function strip_exempt() {
         line = substr(line, 1, RSTART - 1) pad substr(line, RSTART + RLENGTH)
       }
       print line
+    }
+    END {
+      if (in_fence) {
+        printf "%s: unterminated code fence\n", src_rel > "/dev/stderr"
+        exit 1
+      }
     }
   ' "${file}" |
     # Pass two: generated blocks, over pass one's code-free output.
@@ -259,8 +270,9 @@ function main() {
     [[ -f ${src_abs} ]] || continue
 
     stripped="$(mktemp)"
-    # An unterminated generated block is a fatal doc defect: fail loud
-    # rather than let strip_exempt blank to EOF and hide violations.
+    # An unterminated code fence or generated block is a fatal doc
+    # defect: fail loud rather than let strip_exempt blank to EOF and
+    # hide violations.
     if ! strip_exempt "${src_abs}" "${src_rel}" >"${stripped}"; then
       rm --force -- "${stripped}"
       exit 1

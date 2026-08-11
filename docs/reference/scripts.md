@@ -81,8 +81,13 @@ nix-run-pinned invariant. Offline and deterministic: git-cliff parses the PR
 number from the `(#N)` subject suffix, so no GitHub token is required. Needs
 full history + tags (fetch-depth: 0) so every release tag is visible.
 
-Exits 0 when released sections are fresh, 1 when stale (or CHANGELOG
-missing), 2 when nix is not on PATH.
+Exits 0 when released sections are fresh, 1 when stale (or CHANGELOG /
+cliff config missing), 2 when the tooling itself fails: nix absent from
+PATH, or the pinned git-cliff exiting non-zero. A generator that cannot run
+says nothing about whether the committed changelog is fresh, so it must not
+borrow the staleness code — that sends a maintainer to regenerate a
+changelog that was never the problem. git-cliff's own stderr is passed
+through rather than silenced, so the reason is visible in the job log.
 
 Env overrides (test-only):
 CHANGELOG_OVERRIDE — committed changelog path (default CHANGELOG.md)
@@ -106,7 +111,12 @@ an unpinned `nix run nixpkgs#git-cliff`, per the nix-run-pinned invariant.
 
 Exits 0 when both invariants hold.
 Exits 1 on any violation (duplicate links, lost preprocessor, missing file).
-Exits 2 when nix is not on PATH.
+Exits 2 when the tooling itself fails: nix absent from PATH, or the pinned
+git-cliff exiting non-zero. A generator that cannot run produces no output to
+validate, so it must not borrow the violation code — that reads as a
+malformed regeneration and sends a maintainer after a cliff.toml assertion
+that never fired. git-cliff's own stderr is passed through rather than
+silenced, so the reason is visible in the job log.
 
 Env overrides (test-only):
 CLIFF_TOML_OVERRIDE — path to a fixture cliff.toml instead of

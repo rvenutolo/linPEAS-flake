@@ -108,6 +108,10 @@ regeneration. It runs offline — git-cliff parses the PR number from the
 `(#N)` subject suffix, so no token is needed — as the required
 `changelog-links` CI job on every PR.
 
+Exit 1 means an assertion failed. Exit 2 means git-cliff could not run,
+so there was no output to assert on — chase the generator or its config,
+not the link template.
+
 ## Freshness guard
 
 `scripts/check-changelog-fresh.sh` regenerates the changelog from the
@@ -118,11 +122,17 @@ to a released section — is caught rather than accruing silently.
 
 Only released sections are compared: the `## Unreleased` section
 legitimately changes with every merged commit, so diffing it would force a
-changelog regen on every PR. When it fails, regenerate and commit:
+changelog regen on every PR. When it exits 1, regenerate and commit:
 
 ```sh
 nix shell .#git-cliff --command git-cliff --config cliff.toml --output CHANGELOG.md
 ```
+
+Exit 2 means something else entirely: the generator itself failed, so
+freshness was never evaluated. Read git-cliff's error on stderr and fix
+the generator or `cliff.toml` — regenerating is the wrong move, because
+the committed changelog was never the subject of the failure. Both
+changelog checks separate the two codes for exactly this reason.
 
 ### Release-window exclusion
 
