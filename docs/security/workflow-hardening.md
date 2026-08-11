@@ -120,9 +120,21 @@ Every harness scenario asserts a substring that appears in no sibling scenario's
 
 A harness proves behavior by grepping one scenario's captured output for a substring. When that substring also appears in a sibling scenario's output — a banner the script prints on the nominal path as well as the failure path, say — the grep matches whether or not the asserted behavior exists, so the harness stays green against a script that never implements it and the regression it was written to catch merges unseen. The gate records each scenario's asserted substring alongside its captured output and, after the run, flags any substring that also occurs in a sibling's output. Scenarios asserting the same substring are mutually exempt, and two records over byte-identical output are treated as one observation of a single run rather than two scenarios a substring fails to separate — the census line reports the distinct-output count so that collapse stays visible. A harness wired to the gate that records nothing fails closed.
 
-`harness_assert_exempt <substring> <other-scenario|*> <rationale>` registers a reviewed exception: the named form where one failure path emits no token another lacks, the `*` form for a banner a script prints across a whole outcome class. The rationale is mandatory so every weakening is reviewable. A harness that asserts produced artifact content — a rewritten workflow file, a generated doc — rather than captured scenario output is listed on the `EXEMPT` array in `tests/_harness_assert_wired.test.sh` with a rationale comment.
+`harness_assert_exempt <substring> <other-scenario|*> <rationale>` registers a reviewed exception: the named form where one failure path emits no token another lacks, the `*` form for a banner a script prints across a whole outcome class. The rationale is mandatory so every weakening is reviewable, and the number of live registrations is held at zero — see [harness exemption ratchet](#harness-exemption-ratchet). A harness that asserts produced artifact content — a rewritten workflow file, a generated doc — rather than captured scenario output is listed on the `EXEMPT` array in `tests/_harness_assert_wired.test.sh` with a rationale comment.
 
 Enforced by `scripts/lib/harness-assert.sh`, which runs inside every wired harness, and by `tests/_harness_assert_wired.test.sh`, which asserts the wiring; both are reached by the `harness-group` CI job.
+
+## harness exemption ratchet
+
+No harness registers a discrimination exemption, and a harness counts as wired to the gate only when it calls the verification function rather than naming it.
+
+An exemption is sound at the moment it is written and silent afterwards. The shared banner it excuses gains a distinguishing token, or the sibling scenario it names is deleted, and the registration stays behind — accepting a substring that no longer needs accepting, in the one place built to notice that. Holding the count at zero prices the escape hatch at an edit to the ratchet itself, which is the review moment a weakened assertion deserves. `harness_assert_exempt` stays in `scripts/lib/harness-assert.sh` with its spec-test coverage so a genuinely shared banner keeps a relief valve; reaching for it means saying so in the same change.
+
+Wiring is scored on a call because the gate reads harness source text. A header comment naming `harness_assert_verify`, or a commented-out call left in place, otherwise satisfies the check while nothing runs — the failure mode the gate exists to catch, reproduced inside the gate. Whole-line comments are blanked before matching, and the verify token must open a statement, optionally behind `if`, `||`, or `&&`. A trailing comment on a code line survives the blanking; the statement-anchored patterns reject it regardless, since the token is not the first word on its line.
+
+The ratchet covers every harness, including those asserting by other means than the quiet-grep idiom, because an exemption registered by a harness outside the wiring gate's scope weakens the same library. `tests/lib-harness-assert.test.sh` is the one exclusion, on the `EXEMPT` array: the gate library's own spec test must not be gated by the library it tests, and its generated library-driving snippets are indistinguishable from live calls to any textual rule.
+
+Enforced by `tests/_harness_assert_wired.test.sh`, reached by the `harness-group` CI job.
 
 ## manifest-reading hook watches nix/hooks
 
