@@ -1,0 +1,11 @@
+name: composite-bad-missing
+description: "Composite action whose multi-line run: block omits the strict-mode prelude."
+
+runs:
+  using: composite
+  steps:
+    - name: multi-line missing strict
+      shell: bash
+      run: |
+        echo one
+        echo two
