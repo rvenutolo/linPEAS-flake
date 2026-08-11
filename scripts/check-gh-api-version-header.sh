@@ -44,8 +44,17 @@ if [[ ! -d ${SCRIPTS_DIR} ]]; then
   exit 2
 fi
 
-# @description Scan a single shell file for offending statements.
-# Prints `file:line: <statement preview>` to stderr for each.
+# Scope tallies behind the clean-path summary: how many files the glob
+# reached, how many statements were held to the header rule, and how many
+# API mentions were set aside because they sit in a comment.
+scanned=0
+verified=0
+commented=0
+self_excluded='none'
+
+# @description Scan a single shell file for offending statements, and add
+# its statements to the scope tallies. Prints
+# `file:line: <statement preview>` to stderr for each offender.
 # Returns 0 on clean, 1 on any offender.
 # @arg $1 path to .sh file
 function scan_file() {
@@ -54,26 +63,34 @@ function scan_file() {
   # before searching. POSIX-awk: collect a line that ends in `\` (after
   # optional trailing whitespace) into a buffer; emit the joined line
   # tagged with the original starting line number.
-  local offenders
-  offenders="$(
+  local records
+  records="$(
     awk '
       function flush() {
         if (buf == "") return
-        # Skip pure-comment statements.
         stripped = buf
         sub(/^[[:space:]]+/, "", stripped)
-        if (substr(stripped, 1, 1) == "#") { buf = ""; start = 0; return }
         # Look for API call markers.
-        if (buf ~ /(^|[[:space:]])gh[[:space:]]+api([[:space:]]|$)/ ||
-            buf ~ /api\.github\.com/) {
+        is_call = (buf ~ /(^|[[:space:]])gh[[:space:]]+api([[:space:]]|$)/ ||
+                   buf ~ /api\.github\.com/)
+        # A comment naming an API call is a mention, not a call. Report
+        # it as set aside so the caller can say why a file with API text
+        # in it contributed no verified call site.
+        if (substr(stripped, 1, 1) == "#") {
+          if (is_call) printf "comment:%d:\n", start
+          buf = ""; start = 0; return
+        }
+        if (is_call) {
           # Require an explicit version header somewhere in the
           # statement.
-          if (buf !~ /X-GitHub-Api-Version/) {
+          if (buf ~ /X-GitHub-Api-Version/) {
+            printf "header:%d:\n", start
+          } else {
             # Trim to one-line preview for the error message.
             preview = buf
             gsub(/[[:space:]]+/, " ", preview)
             if (length(preview) > 120) preview = substr(preview, 1, 117) "..."
-            printf "%d: %s\n", start, preview
+            printf "offender:%d: %s\n", start, preview
           }
         }
         buf = ""; start = 0
@@ -96,18 +113,28 @@ function scan_file() {
     ' "${file}"
   )"
 
-  if [[ -z ${offenders} ]]; then
-    return 0
-  fi
+  scanned=$((scanned + 1))
 
+  local offenders=0
+  local entry kind rest lineno preview
   while IFS= read -r entry; do
     [[ -z ${entry} ]] && continue
-    local lineno="${entry%%:*}"
-    local preview="${entry#*: }"
-    printf '%s:%s: missing X-GitHub-Api-Version header: %s\n' \
-      "${file}" "${lineno}" "${preview}" >&2
-  done <<<"${offenders}"
-  return 1
+    kind="${entry%%:*}"
+    rest="${entry#*:}"
+    case ${kind} in
+    header) verified=$((verified + 1)) ;;
+    comment) commented=$((commented + 1)) ;;
+    offender)
+      offenders=$((offenders + 1))
+      lineno="${rest%%:*}"
+      preview="${rest#*: }"
+      printf '%s:%s: missing X-GitHub-Api-Version header: %s\n' \
+        "${file}" "${lineno}" "${preview}" >&2
+      ;;
+    esac
+  done <<<"${records}"
+
+  ((offenders == 0))
 }
 
 failed=0
@@ -115,6 +142,7 @@ shopt -s nullglob
 for sh in "${SCRIPTS_DIR}"/*.sh; do
   base="${sh##*/}"
   if [[ ${base} == "${SELF_BASENAME}" ]]; then
+    self_excluded="${base}"
     continue
   fi
   scan_file "${sh}" || failed=$((failed + 1))
@@ -127,4 +155,13 @@ if ((failed > 0)); then
   printf 'Add `--header '\''X-GitHub-Api-Version: 2022-11-28'\''` (or matching API version) to each call.\n' >&2
   exit 1
 fi
+
+# A clean run reports the scope it covered, not just the verdict: a tree
+# whose API calls all carry the header and a tree whose only API text
+# sits in comments both pass, and the counts are what tell an operator
+# which one the run actually saw. The self-exclusion is named because a
+# file this lint never reads is the one place a regression could hide.
+printf '%s: scanned %d script(s); %d API call site(s) carry an explicit header; %d comment mention(s) skipped; self-excluded: %s\n' \
+  'gh-api-version-header' "${scanned}" "${verified}" "${commented}" \
+  "${self_excluded}"
 exit 0
