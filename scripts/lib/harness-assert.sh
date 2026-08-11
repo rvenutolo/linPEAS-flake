@@ -47,7 +47,10 @@ function harness_assert_record() {
 
   local -r index="${HARNESS_ASSERT_COUNT}"
   printf '%s' "${scenario}" >"${HARNESS_ASSERT_POOL}/${index}.name"
-  printf '%s' "${substring}" >"${HARNESS_ASSERT_POOL}/${index}.sub"
+  : >"${HARNESS_ASSERT_POOL}/${index}.sub"
+  if [[ -n ${substring} ]]; then
+    printf '%s\n' "${substring}" >"${HARNESS_ASSERT_POOL}/${index}.sub"
+  fi
   : >"${HARNESS_ASSERT_POOL}/${index}.out"
 
   local file
@@ -75,6 +78,37 @@ function harness_assert_record() {
   HARNESS_ASSERT_COUNT=$((HARNESS_ASSERT_COUNT + 1))
 }
 
+# @description Attach another asserted substring to the most recent
+# record. Use when one invocation asserts several properties of its
+# output: recording that invocation once per property makes those records
+# byte-identical siblings, which the pairwise rule cannot separate and
+# the census scores as collapsed coverage. Each attached substring is
+# held to the same rule as the record's own.
+# @arg $1 substring
+function harness_assert_also() {
+  local -r substring="$1"
+  if [[ ${HARNESS_ASSERT_COUNT} -eq 0 ]]; then
+    printf 'harness-assert: harness_assert_also called before any record\n' >&2
+    return 1
+  fi
+  if [[ -z ${substring} ]]; then
+    printf 'harness-assert: harness_assert_also needs a substring\n' >&2
+    return 1
+  fi
+  printf '%s\n' "${substring}" \
+    >>"${HARNESS_ASSERT_POOL}/$((HARNESS_ASSERT_COUNT - 1)).sub"
+}
+
+# @description Return 0 if the record at the given index asserts the
+# given substring. Membership is a whole-line match against the record's
+# substring list, so one substring being another's prefix does not count
+# as the same assertion.
+# @arg $1 substring  @arg $2 record index
+function harness_assert_declares() {
+  grep --fixed-strings --line-regexp --quiet -- "$1" \
+    "${HARNESS_ASSERT_POOL}/${2}.sub"
+}
+
 # @description Return 0 if the substring/other-scenario pair is exempt,
 # either by an exact pair or by a `*` wildcard registered for the substring.
 # @arg $1 substring  @arg $2 other scenario name
@@ -98,34 +132,34 @@ function harness_assert_verify() {
   fi
 
   local flagged=0 asserted=0
-  local i j sub_i sub_j name_i name_j
+  local i j sub_i name_i name_j
   for ((i = 0; i < HARNESS_ASSERT_COUNT; i++)); do
-    sub_i="$(cat -- "${HARNESS_ASSERT_POOL}/${i}.sub")"
-    [[ -z ${sub_i} ]] && continue
-    asserted=$((asserted + 1))
     name_i="$(cat -- "${HARNESS_ASSERT_POOL}/${i}.name")"
-    for ((j = 0; j < HARNESS_ASSERT_COUNT; j++)); do
-      [[ ${i} -eq ${j} ]] && continue
-      sub_j="$(cat -- "${HARNESS_ASSERT_POOL}/${j}.sub")"
-      [[ ${sub_j} == "${sub_i}" ]] && continue
-      # Identical output means no substring can separate the two records —
-      # either they observe one invocation a harness asserts several
-      # properties of, or two fixtures the script answers with the same
-      # diagnostic. Either way a flag would describe harness and fixture
-      # shape rather than a weak assertion, and no narrowing could clear
-      # it. The census reports how many distinct outputs the pool holds, so
-      # the collapse stays visible rather than quietly shrinking the
-      # comparison set.
-      cmp --silent -- "${HARNESS_ASSERT_POOL}/${i}.norm" \
-        "${HARNESS_ASSERT_POOL}/${j}.norm" && continue
-      grep --fixed-strings --quiet -- "${sub_i}" \
-        "${HARNESS_ASSERT_POOL}/${j}.out" || continue
-      name_j="$(cat -- "${HARNESS_ASSERT_POOL}/${j}.name")"
-      harness_assert_is_exempt "${sub_i}" "${name_j}" && continue
-      printf 'harness-assert: %s asserts %s which also appears in the output of %s — the assertion does not discriminate\n' \
-        "${name_i}" "${sub_i@Q}" "${name_j}" >&2
-      flagged=$((flagged + 1))
-    done
+    while IFS= read -r sub_i; do
+      [[ -z ${sub_i} ]] && continue
+      asserted=$((asserted + 1))
+      for ((j = 0; j < HARNESS_ASSERT_COUNT; j++)); do
+        [[ ${i} -eq ${j} ]] && continue
+        harness_assert_declares "${sub_i}" "${j}" && continue
+        # Identical output means no substring can separate the two records —
+        # either they observe one invocation a harness asserts several
+        # properties of, or two fixtures the script answers with the same
+        # diagnostic. Either way a flag would describe harness and fixture
+        # shape rather than a weak assertion, and no narrowing could clear
+        # it. The census reports how many distinct outputs the pool holds, so
+        # the collapse stays visible rather than quietly shrinking the
+        # comparison set.
+        cmp --silent -- "${HARNESS_ASSERT_POOL}/${i}.norm" \
+          "${HARNESS_ASSERT_POOL}/${j}.norm" && continue
+        grep --fixed-strings --quiet -- "${sub_i}" \
+          "${HARNESS_ASSERT_POOL}/${j}.out" || continue
+        name_j="$(cat -- "${HARNESS_ASSERT_POOL}/${j}.name")"
+        harness_assert_is_exempt "${sub_i}" "${name_j}" && continue
+        printf 'harness-assert: %s asserts %s which also appears in the output of %s — the assertion does not discriminate\n' \
+          "${name_i}" "${sub_i@Q}" "${name_j}" >&2
+        flagged=$((flagged + 1))
+      done
+    done <"${HARNESS_ASSERT_POOL}/${i}.sub"
   done
 
   local distinct

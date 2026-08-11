@@ -187,6 +187,27 @@ harness_assert_record a ""       "${d}/a.out" "${d}/a.err"
 harness_assert_record b "parity" "${d}/b.err"
 harness_assert_verify'
 
+  # One invocation asserting several properties is one record. Recording
+  # it once per property would make those records byte-identical
+  # siblings, which no substring can separate.
+  check 'attached substring is checked against siblings' 1 'does not discriminate' "${SETUP}"'
+harness_assert_record nominal  "wrote dashboard" "${d}/nominal.out"
+harness_assert_also   "bump PR"
+harness_assert_record degraded "WARN degraded lookup" "${d}/degraded.out"
+harness_assert_verify'
+
+  check 'attached substring counts as an assertion' 0 'checked 3 substring assertions across 2 scenarios' '
+d="$(mktemp -d)"
+printf "alpha\nbeta\n" >"${d}/a.out"
+printf "gamma\n"       >"${d}/b.out"
+harness_assert_record a "alpha" "${d}/a.out"
+harness_assert_also   "beta"
+harness_assert_record b "gamma" "${d}/b.out"
+harness_assert_verify'
+
+  check 'also before any record fails closed' 1 'called before any record' '
+harness_assert_also "orphan"'
+
   # Fail-closed cases.
   check 'verify with no records fails closed' 1 'no scenarios recorded' '
 harness_assert_verify'
