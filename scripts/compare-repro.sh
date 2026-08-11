@@ -105,7 +105,14 @@ mismatches=()
   if [[ ${#mismatches[@]} -eq 0 ]]; then
     printf '**Result:** MATCH — builds are reproducible.\n'
   else
-    printf '**Result:** MISMATCH in: %s\n' "${mismatches[*]}"
+    # `${mismatches[*]}` would join on the first character of IFS, which
+    # this script sets to a newline, splitting a multi-field verdict
+    # across lines. Build the list with an explicit separator instead.
+    # The terminating period closes the list, matching the MATCH verdict
+    # and keeping a single-field verdict from reading as the opening of a
+    # longer one.
+    printf -v mismatch_list '%s ' "${mismatches[@]}"
+    printf '**Result:** MISMATCH in: %s.\n' "${mismatch_list% }"
     if [[ -n ${GITHUB_SERVER_URL:-} && -n ${GITHUB_REPOSITORY:-} ]]; then
       printf '\nSee runbook: [%s](%s/%s/blob/main/%s)\n' \
         'docs/runbooks/reproducibility-check.md' \
