@@ -54,7 +54,12 @@ let
       description = "Linux Privilege Escalation Awesome Script (LinPEAS) from peass-ng";
       homepage = "https://github.com/peass-ng/PEASS-ng";
       license = licenses.mit;
-      platforms = platforms.unix;
+      # Linux-only: the flake declares only x86_64-linux / aarch64-linux, and
+      # `overlays.default` indexes `self.packages.${hostPlatform.system}`, so
+      # any other system aborts evaluation with a missing attribute. Claiming
+      # `platforms.unix` would make `lib.meta.availableOn` report true on
+      # darwin and hand the user an eval abort instead of an honest skip.
+      platforms = platforms.linux;
       mainProgram = "linpeas";
       maintainers = [
         {

@@ -77,7 +77,11 @@
         buildPhase = ''
           runHook preBuild
           if [ ! -f docs/_data/dashboard.yml ]; then
-            echo "ERROR: docs/_data/dashboard.yml missing. Run 'just site-data' first or use 'just site-dev'." >&2
+            printf '%s\n' \
+              "ERROR: docs/_data/dashboard.yml is not in this build's source." \
+              "It is gitignored, so a git-ref build ('nix build .#site') never sees it:" \
+              "the flake source excludes it no matter how often the generator is run." \
+              "Build via the path: ref instead — 'just site' — or preview with 'just site-dev'." >&2
             exit 1
           fi
           mkdocs build --strict --site-dir $out/share/site
