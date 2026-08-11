@@ -24,10 +24,16 @@ function fail() {
 
 # @description Run the guard against a scenario dir. Expects a `${dir}/tests`
 # harness dir; optional `${dir}/run-harness-group.sh`, `${dir}/lint-groups.yml`,
-# `${dir}/workflows/`. Asserts exit code and (on failure) a stderr substring.
+# `${dir}/workflows/`. Asserts exit code, (on failure) a stderr substring, and
+# (on the clean path) the summary line naming the runner that reached the
+# harness. The runner tally is what separates the clean scenarios: each
+# exercises a different reachability mechanism, and without it every clean run
+# is the same observable outcome.
 # @arg $1 name  @arg $2 dir  @arg $3 expected exit  @arg $4 stderr substring
+# @arg $5 stdout substring (empty skips the check)
 function assert_run() {
   local -r name="$1" dir="$2" expected_exit="$3" expected_stderr="$4"
+  local -r expected_stdout="${5:-}"
   local stderr_file stdout_file outcome_file actual_exit=0
   stderr_file="$(mktemp)"
   stdout_file="$(mktemp)"
@@ -40,6 +46,9 @@ function assert_run() {
   printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
   harness_assert_record "${name}" "${expected_stderr}" \
     "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  if [[ -n ${expected_stdout} ]]; then
+    harness_assert_also "${expected_stdout}"
+  fi
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     fail "${name} — expected exit ${expected_exit}, got ${actual_exit}"
     cat -- "${stderr_file}" >&2
@@ -47,6 +56,10 @@ function assert_run() {
     ! grep --fixed-strings --quiet -- "${expected_stderr}" "${stderr_file}"; then
     fail "${name} — stderr missing '${expected_stderr}'"
     cat -- "${stderr_file}" >&2
+  elif [[ -n ${expected_stdout} ]] &&
+    ! grep --fixed-strings --quiet -- "${expected_stdout}" "${stdout_file}"; then
+    fail "${name} — stdout missing '${expected_stdout}'"
+    cat -- "${stdout_file}" >&2
   else
     pass "${name} (exit ${actual_exit})"
   fi
@@ -71,7 +84,8 @@ function main() {
   scaffold "${dir}"
   : >"${dir}/tests/foo.test.sh"
   printf "readonly -a HARNESSES=(\n  'foo|foo.test.sh|'\n)\n" >"${dir}/run-harness-group.sh"
-  assert_run 'reachable via HARNESSES array' "${dir}" 0 ''
+  assert_run 'reachable via HARNESSES array' "${dir}" 0 '' \
+    'run-harness-group.sh HARNESSES array: 1'
   rm --recursive --force -- "${dir}"
 
   # 2. Orphan reachable by nothing -> exit 1, named.
@@ -89,14 +103,16 @@ function main() {
   scaffold "${dir}"
   : >"${dir}/tests/check-bar.test.sh"
   printf 'lint-x:\n  - bar\n' >"${dir}/lint-groups.yml"
-  assert_run 'reachable via lint-groups member' "${dir}" 0 ''
+  assert_run 'reachable via lint-groups member' "${dir}" 0 '' \
+    'run-lint-group.sh lint-groups member: 1'
   rm --recursive --force -- "${dir}"
 
   # 4. Reachable via the refresh-*.test.sh name convention.
   dir="$(mktemp --directory)"
   scaffold "${dir}"
   : >"${dir}/tests/refresh-baz.test.sh"
-  assert_run 'reachable via refresh-* glob' "${dir}" 0 ''
+  assert_run 'reachable via refresh-* glob' "${dir}" 0 '' \
+    'run-doc-freshness.sh refresh-* glob: 1'
   rm --recursive --force -- "${dir}"
 
   # 5. Reachable via a direct workflow invocation.
@@ -105,7 +121,8 @@ function main() {
   : >"${dir}/tests/qux.test.sh"
   printf 'jobs:\n  x:\n    steps:\n      - run: bash tests/qux.test.sh\n' \
     >"${dir}/workflows/ci.yml"
-  assert_run 'reachable via direct workflow invocation' "${dir}" 0 ''
+  assert_run 'reachable via direct workflow invocation' "${dir}" 0 '' \
+    'direct workflow invocation: 1'
   rm --recursive --force -- "${dir}"
 
   harness_assert_verify || failures=$((failures + 1))
