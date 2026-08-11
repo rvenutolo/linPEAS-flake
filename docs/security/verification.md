@@ -11,6 +11,7 @@ Step-by-step procedure to verify a release of this wrapper. None of this trusts 
 - [Bump-script integrity guards](#bump-script-integrity-guards)
 - [verify-latest-release upstream parity](#verify-latest-release-upstream-parity)
 - [verify-latest-release failure attribution](#verify-latest-release-failure-attribution)
+  - [Ladder coverage is linted](#ladder-coverage-is-linted)
 - [Gitleaks secret scanning](#gitleaks-secret-scanning)
 - [Dependency review](#dependency-review)
 - [OCI image CVE scan (Trivy)](#oci-image-cve-scan-trivy)
@@ -146,6 +147,28 @@ when the failure is a real SRI drift or a one-sided registry rollback.
 This pattern is the project default for every cron-notify caller: each
 must attribute distinct failure reasons to distinct issue-body wording.
 Alert fatigue is a security risk.
+
+### Ladder coverage is linted<a name="ladder-coverage-is-linted"></a>
+
+The step ids, the attribution step's `env:` block, the `elif` ladder,
+and the reason list above are four hand-synced copies of one set.
+`scripts/check-verify-reason-ladder.sh` binds them: every `id:`-carrying
+step in the `verify` job is referenced by a `steps.<id>.outcome` entry
+in the attribution `env:`, every such env var is read by the ladder,
+every `reason` token the ladder emits appears in the list above, and the
+ladder's branch order matches the steps' execution order — the order the
+"first failed step wins" rule depends on.
+
+Without that binding, a step added without a ladder branch reports
+`unknown`, whose documented meaning is a bug in the attribution logic —
+so a real verification failure would be auto-filed as a self-diagnosed
+tooling bug, and the triage reflex would be wrong for exactly the case
+that matters.
+
+A step that legitimately carries an `id:` without being a verification
+outcome is excluded with a `# reason-ladder-exempt: <reason>` comment on
+the same line as its `id:`. An empty rationale is drift, not an
+exemption.
 
 ## Gitleaks secret scanning<a name="gitleaks-secret-scanning"></a>
 

@@ -1,0 +1,291 @@
+#!/usr/bin/env bash
+# scripts/check-verify-reason-ladder.sh
+#
+# @description Lint: the `attribute failure reason` step of
+# `verify-latest-release.yml` covers every id-carrying step of the
+# `verify` job, reads every env var it declares, documents every reason
+# token it emits, and walks the ladder in step-execution order.
+
+# The notify job turns the `reason` token into triage wording. A
+# verification step whose `id:` never reaches the attribution ladder
+# makes a real failure surface as `reason=unknown`, which the notify
+# body documents as "a bug in the attribution logic itself" — so a
+# genuine tamper signal is filed as a self-diagnosed tooling bug and the
+# maintainer's first reflex is to go fix the lint instead of the
+# incident. The reason list in the verification doc is a third copy of
+# the same mapping and drifts the same way.
+#
+# Four assertions:
+#
+#   1. Coverage — every step of the `verify` job carrying an `id:`,
+#      except the attribution step itself, is referenced by a
+#      `${{ steps.<id>.outcome }}` expression among the attribution
+#      step's `env:` values.
+#   2. Ladder use — every env var NAME the attribution step declares is
+#      named somewhere in that step's `run:` body. An env entry no
+#      branch reads is a step whose failure the ladder cannot attribute.
+#   3. Docs parity — every `reason='<token>'` the ladder assigns, other
+#      than the initial `reason='ok'`, appears literally in the
+#      verification doc.
+#   4. Order — the order in which env var names are first tested in the
+#      ladder matches the execution order of the steps they map to. The
+#      ladder's contract is "the first failed step wins", which holds
+#      only while it walks in execution order: a step that fails leaves
+#      every later step `skipped`, so testing a later step first
+#      attributes nothing, but testing an EARLIER step later means an
+#      earlier failure is shadowed by whichever branch is reached first.
+#
+# Escape hatch: a step whose `id:` line also carries a
+# `# reason-ladder-exempt: <reason>` comment is excluded from assertion
+# 1. The marker must sit on the SAME LINE as the `id:` key — detection
+# is a raw-text scan of that line, so a marker on its own line, on the
+# `name:` line, or anywhere else in the step is not seen. The rationale
+# after the colon must be non-empty.
+#
+# See docs/security/verification.md.
+#
+# Env overrides (test-only):
+#   VERIFY_WORKFLOW_OVERRIDE  — alternate workflow path
+#   VERIFICATION_DOC_OVERRIDE — alternate verification doc path
+#
+# Exit codes:
+#   0  all four assertions hold
+#   1  drift detected (details printed to stderr)
+#   2  missing yq / missing input file / unparsable workflow
+
+set -Eeuo pipefail
+IFS=$'\n\t'
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+readonly REPO_ROOT
+
+readonly WORKFLOW="${VERIFY_WORKFLOW_OVERRIDE:-${REPO_ROOT}/.github/workflows/verify-latest-release.yml}"
+readonly DOC="${VERIFICATION_DOC_OVERRIDE:-${REPO_ROOT}/docs/security/verification.md}"
+
+# The step whose `id:` names the attribution ladder. Excluded from the
+# coverage assertion — it is the attributor, never an attributed step.
+readonly ATTRIBUTE_ID='attribute'
+
+# Same-line escape-hatch marker.
+readonly EXEMPT_MARKER='reason-ladder-exempt:'
+
+if ! command -v yq >/dev/null 2>&1; then
+  printf 'yq not found on PATH\n' >&2
+  exit 2
+fi
+
+[[ -f ${WORKFLOW} ]] || {
+  printf 'missing workflow %s\n' "${WORKFLOW}" >&2
+  exit 2
+}
+[[ -f ${DOC} ]] || {
+  printf 'missing verification doc %s\n' "${DOC}" >&2
+  exit 2
+}
+
+# --- workflow extraction ---------------------------------------------
+# Capture yq's output (and exit status) into a variable rather than
+# feeding a loop from `< <(yq ...)`: a process substitution's exit
+# status is not propagated under `set -Eeuo pipefail`, so an unparsable
+# workflow would yield empty input and every assertion below would pass
+# over nothing.
+if ! step_ids="$(yq eval '.jobs.verify.steps[] | select(has("id")) | .id' "${WORKFLOW}")"; then
+  printf '%s: could not evaluate workflow with yq (malformed?)\n' "${WORKFLOW}" >&2
+  exit 2
+fi
+if [[ -z ${step_ids} ]]; then
+  printf '%s: could not evaluate any id-carrying step in the verify job\n' "${WORKFLOW}" >&2
+  exit 2
+fi
+
+if ! env_rows="$(yq eval \
+  ".jobs.verify.steps[] | select(.id == \"${ATTRIBUTE_ID}\") | .env | to_entries[] | .key + \"\t\" + .value" \
+  "${WORKFLOW}")"; then
+  printf '%s: could not evaluate the attribution step env block with yq\n' "${WORKFLOW}" >&2
+  exit 2
+fi
+if [[ -z ${env_rows} ]]; then
+  printf '%s: could not evaluate an env block on the %q step\n' \
+    "${WORKFLOW}" "${ATTRIBUTE_ID}" >&2
+  exit 2
+fi
+
+if ! ladder_body="$(yq eval \
+  ".jobs.verify.steps[] | select(.id == \"${ATTRIBUTE_ID}\") | .run" \
+  "${WORKFLOW}")"; then
+  printf '%s: could not evaluate the attribution step run body with yq\n' "${WORKFLOW}" >&2
+  exit 2
+fi
+if [[ -z ${ladder_body} || ${ladder_body} == 'null' ]]; then
+  printf '%s: could not evaluate a run body on the %q step\n' \
+    "${WORKFLOW}" "${ATTRIBUTE_ID}" >&2
+  exit 2
+fi
+
+drift=0
+
+# --- step order ------------------------------------------------------
+# yq emits sequence entries in document order, so the position of an id
+# in this list is its execution order within the job.
+declare -A STEP_INDEX=()
+steps=()
+while IFS= read -r id; do
+  [[ -z ${id} ]] && continue
+  STEP_INDEX["${id}"]="${#steps[@]}"
+  steps+=("${id}")
+done <<<"${step_ids}"
+
+# --- escape hatch ----------------------------------------------------
+# Raw-text scan: the marker is a YAML comment, so it is gone by the time
+# yq has parsed the document. Only a marker on the `id:` line itself
+# counts, which keeps the exemption visually attached to the step it
+# exempts.
+declare -A EXEMPT=()
+while IFS=$'\t' read -r id rationale; do
+  [[ -z ${id} ]] && continue
+  if [[ -z ${rationale} ]]; then
+    printf '%s: reason-ladder-exempt marker on step id %q carries no rationale\n' \
+      "${WORKFLOW}" "${id}" >&2
+    drift=1
+    continue
+  fi
+  EXEMPT["${id}"]=1
+done < <(awk -v marker="${EXEMPT_MARKER}" '
+  $0 ~ ("^[[:space:]]*id:[[:space:]]*[^[:space:]#]+[[:space:]]*#.*" marker) {
+    line = $0
+    sub(/^[[:space:]]*id:[[:space:]]*/, "", line)
+    id = line
+    sub(/[[:space:]]*#.*$/, "", id)
+    rationale = line
+    sub(("^.*" marker "[[:space:]]*"), "", rationale)
+    sub(/[[:space:]]+$/, "", rationale)
+    printf "%s\t%s\n", id, rationale
+  }
+' "${WORKFLOW}")
+
+# --- attribution env block -------------------------------------------
+# env var NAME -> the step id its `${{ steps.<id>.outcome }}` value
+# names. A value naming no step outcome maps to the empty string; it is
+# still subject to assertion 2.
+declare -A ENV_STEP=()
+env_names=()
+declare -A REFERENCED=()
+while IFS=$'\t' read -r name value; do
+  [[ -z ${name} ]] && continue
+  env_names+=("${name}")
+  ref=''
+  if [[ ${value} =~ steps\.([A-Za-z0-9_-]+)\.outcome ]]; then
+    ref="${BASH_REMATCH[1]}"
+    REFERENCED["${ref}"]=1
+  fi
+  ENV_STEP["${name}"]="${ref}"
+done <<<"${env_rows}"
+
+# --- assertion 1: coverage -------------------------------------------
+for id in "${steps[@]}"; do
+  [[ ${id} == "${ATTRIBUTE_ID}" ]] && continue
+  [[ -n ${EXEMPT[${id}]:-} ]] && continue
+  if [[ -z ${REFERENCED[${id}]:-} ]]; then
+    printf '%s: step id %q has no steps.<id>.outcome entry in the attribution env\n' \
+      "${WORKFLOW}" "${id}" >&2
+    drift=1
+  fi
+done
+
+# --- assertion 2: ladder use -----------------------------------------
+# Boundary-aware so `READ_TAG` is not satisfied by a `READ_TAG_EXTRA`
+# occurrence. Env var names are shell identifiers, so they carry no
+# regex metacharacters.
+for name in "${env_names[@]}"; do
+  if ! grep --extended-regexp --quiet -- \
+    "(^|[^A-Za-z0-9_])${name}([^A-Za-z0-9_]|$)" <<<"${ladder_body}"; then
+    printf '%s: attribution env var %q is never read by the reason ladder\n' \
+      "${WORKFLOW}" "${name}" >&2
+    drift=1
+  fi
+done
+
+# --- assertion 3: docs parity ----------------------------------------
+# `reason='ok'` is the no-failure initializer, not an attributed
+# outcome, so the doc is not expected to carry it.
+reason_tokens=()
+while IFS= read -r assignment; do
+  [[ -z ${assignment} ]] && continue
+  token="${assignment#reason=\'}"
+  token="${token%\'}"
+  reason_tokens+=("${token}")
+done < <(grep --only-matching --extended-regexp -- \
+  "reason='[^']*'" <<<"${ladder_body}" || true)
+
+if ((${#reason_tokens[@]} > 0)) && [[ ${reason_tokens[0]} == 'ok' ]]; then
+  reason_tokens=("${reason_tokens[@]:1}")
+fi
+
+for token in ${reason_tokens+"${reason_tokens[@]}"}; do
+  if ! grep --fixed-strings --quiet -- "${token}" "${DOC}"; then
+    printf '%s: reason token %q is not documented in %s\n' \
+      "${WORKFLOW}" "${token}" "${DOC}" >&2
+    drift=1
+  fi
+done
+
+# --- assertion 4: ladder order ---------------------------------------
+# First textual occurrence of each env var name in the run body, in
+# reading order, is where the ladder tests it.
+names_file="$(mktemp)"
+body_file="$(mktemp)"
+# shellcheck disable=SC2064 # expand the paths now, while they are in scope
+trap "rm --force -- '${names_file}' '${body_file}'" EXIT
+printf '%s\n' "${env_names[@]}" >"${names_file}"
+printf '%s\n' "${ladder_body}" >"${body_file}"
+
+ladder_order=()
+while IFS= read -r name; do
+  [[ -z ${name} ]] && continue
+  ladder_order+=("${name}")
+done < <(awk '
+  NR == FNR { name[++n] = $0; next }
+  {
+    for (i = 1; i <= n; i++) {
+      if (i in seen) continue
+      if (match($0, "(^|[^A-Za-z0-9_])" name[i] "([^A-Za-z0-9_]|$)")) {
+        seen[i] = 1
+        printf "%d\t%d\t%s\n", FNR, RSTART, name[i]
+      }
+    }
+  }
+' "${names_file}" "${body_file}" | sort --key=1,1n --key=2,2n | cut --fields=3)
+
+prev_name=''
+prev_index=-1
+for name in ${ladder_order+"${ladder_order[@]}"}; do
+  ref="${ENV_STEP[${name}]}"
+  # An env value naming no step, or naming one the verify job does not
+  # define, carries no execution position to order against. Say so
+  # rather than skipping silently: an unresolvable reference is drift in
+  # its own right.
+  if [[ -z ${ref} ]]; then
+    continue
+  fi
+  if [[ -z ${STEP_INDEX[${ref}]:-} ]]; then
+    printf '%s: attribution env var %q references step id %q, which the verify job does not define\n' \
+      "${WORKFLOW}" "${name}" "${ref}" >&2
+    drift=1
+    continue
+  fi
+  index="${STEP_INDEX[${ref}]}"
+  if ((prev_index >= 0 && index < prev_index)); then
+    printf '%s: ladder tests %q before %q, but the steps run in the opposite order\n' \
+      "${WORKFLOW}" "${prev_name}" "${name}" >&2
+    drift=1
+  fi
+  prev_name="${name}"
+  prev_index="${index}"
+done
+
+if ((drift)); then
+  exit 1
+fi
+printf 'check-verify-reason-ladder: ok (%d id-carrying steps, %d env entries, %d reason tokens)\n' \
+  "${#steps[@]}" "${#env_names[@]}" "${#reason_tokens[@]}"
+exit 0

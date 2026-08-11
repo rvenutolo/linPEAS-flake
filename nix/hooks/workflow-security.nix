@@ -75,6 +75,27 @@
     pass_filenames = false;
     language = "system";
   };
+  # The release-verify job's step ids, its attribution env block, the
+  # reason ladder, and the documented reason list are four copies of one
+  # set. A step added without a ladder branch reports `unknown`, whose
+  # documented meaning is a bug in the attribution logic — so a real
+  # verification failure would be auto-filed as a tooling bug. See
+  # docs/security/verification.md.
+  verify-reason-ladder = {
+    enable = true;
+    name = "verify-reason-ladder";
+    description = "Every verify-job step id is mapped to a documented reason token, in execution order.";
+    entry = "${pkgs-unstable.writeShellScript "verify-reason-ladder-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-verify-reason-ladder.sh
+    ''}";
+    files = "^(\\.github/workflows/verify-latest-release\\.yml|docs/security/verification\\.md|scripts/check-verify-reason-ladder\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # The commitlint action's configFile input defaults to a file this
   # repo does not have, and the action then falls back to a bundled
   # preset — an unset configFile silently ignores the repo's own rules.

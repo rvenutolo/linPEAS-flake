@@ -197,7 +197,7 @@
       ${pkgs-unstable.bash}/bin/bash scripts/check-ephemeral-refs.sh
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-ephemeral-refs.sh --advisory
     ''}";
-    files = "^(README\\.md|docs/.*\\.md|scripts/check-ephemeral-refs\\.sh)$";
+    files = "^(README\\.md|CONTRIBUTING\\.md|SECURITY\\.md|\\.github/PULL_REQUEST_TEMPLATE\\.md|docs/.*\\.md|tests/README\\.md|scripts/check-ephemeral-refs\\.sh)$";
     pass_filenames = false;
     language = "system";
   };

@@ -58,6 +58,45 @@ function run_scenario() {
   rm --force -- "${stderr_file}"
 }
 
+# @description Assert that the source enumeration reaches Markdown
+# outside `README.md` and `docs/`, and that `.claude/` prose stays
+# allowlisted. Deliberately omits EPHEMERAL_REFS_SOURCES_OVERRIDE: that
+# variable short-circuits the enumeration this scenario is about, so
+# only the root override may be set. The `.claude/` fixture file sits
+# under `commands/` because contributor ignore rules commonly exclude
+# direct children of `.claude/`, and an ignored file is neither
+# committable nor enumerable.
+function run_scope_scenario() {
+  local -r name='enumeration reaches SECURITY.md and skips .claude'
+  local -r expected_stderr='SECURITY.md:3: [issue-ref] #456'
+
+  local stderr_file
+  stderr_file="$(mktemp)"
+
+  local actual_exit=0
+  EPHEMERAL_REFS_ROOT_OVERRIDE="${FIXTURES}/scope" \
+    "${SCRIPT}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
+
+  if [[ ${actual_exit} -ne 1 ]]; then
+    printf 'FAIL: %s — expected exit 1, got %d\n' "${name}" "${actual_exit}" >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet -- "${expected_stderr}" "${stderr_file}"; then
+    printf 'FAIL: %s — stderr missing %q\n' "${name}" "${expected_stderr}" >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif grep --fixed-strings --quiet -- 'notes.md' "${stderr_file}"; then
+    printf 'FAIL: %s — .claude prose was scanned\n' "${name}" >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+
+  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
+  rm --force -- "${stderr_file}"
+}
+
 # @description Assert that banned shapes inside a tilde (`~~~`) code
 # fence are stripped. The fixture is built at runtime in a temp dir so
 # the Markdown formatter cannot normalize the tilde fence to backticks.
@@ -87,7 +126,7 @@ function run_tilde_scenario() {
 function main() {
   run_scenario 'good prose passes' 'good' 'source.md' '' 0 ''
   run_scenario 'bare issue ref fails' \
-    'bad-issue-ref' 'source.md' '' 1 '[issue-ref]'
+    'bad-issue-ref' 'source.md' '' 1 'source.md:3: [issue-ref] #123'
   run_scenario 'prose date fails' \
     'bad-date' 'source.md' '' 1 '[date]'
   run_scenario 'planning label fails' \
@@ -106,12 +145,20 @@ function main() {
   # An unterminated generated block must fail loud, not blank to EOF.
   run_scenario 'unterminated generated block errors' \
     'bad-unterminated-genblock' 'source.md' '' 1 'unterminated generated block'
+  # A BEGIN marker a doc quotes in prose is documentation, not a block
+  # opener: the violation below it must still report, and no
+  # unterminated-block error may fire.
+  run_scenario 'inline BEGIN mention does not open a block' \
+    'inline-begin-mention' 'source.md' '' 1 'source.md:5: [issue-ref] #654'
+  run_scenario 'fenced BEGIN/END mention does not open a block' \
+    'fenced-begin-mention' 'source.md' '' 1 'source.md:11: [issue-ref] #789'
   run_scenario 'literal .claude path fails' \
     'bad-claude-path' 'source.md' '' 1 '[claude-path]'
   run_scenario 'code-span/block banned shapes pass' \
     'exempt-codeblock' 'source.md' '' 0 ''
   run_scenario 'generated-block banned shapes pass' \
     'exempt-genblock' 'source.md' '' 0 ''
+  run_scope_scenario
   run_tilde_scenario
   run_scenario 'causal phrase passes blocking pass' \
     'advisory' 'source.md' '' 0 ''

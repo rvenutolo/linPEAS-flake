@@ -214,10 +214,11 @@ carries any sigstore host at all, and carries no denylisted host.
 
 ### scripts/check-ephemeral-refs.sh
 
-Lint: tracked Markdown prose must carry no ephemeral
-references — PR/issue refs, prose dates, planning/review-pass labels,
-or literal .claude/ paths. Default mode blocks (exit 1); --advisory
-mode warns on fuzzy causal-history phrases and always exits 0.
+Lint: every Markdown file in the repo must carry no
+ephemeral references — PR/issue refs, prose dates, planning/review-pass
+labels, or literal .claude/ paths. Default mode blocks (exit 1);
+--advisory mode warns on fuzzy causal-history phrases and always
+exits 0.
 
 ### scripts/check-flake-lock-provenance.sh
 
@@ -540,6 +541,13 @@ workflow under `.github/workflows/*.yml` sets
 Lint: every `uses:` in `.github/workflows/*.yml` (or
 `.yaml`) and `.github/actions/**/action.yml` (or `.yaml`) ends with a
 full 40-hex SHA, or is a local path-relative reference.
+
+### scripts/check-verify-reason-ladder.sh
+
+Lint: the `attribute failure reason` step of
+`verify-latest-release.yml` covers every id-carrying step of the
+`verify` job, reads every env var it declares, documents every reason
+token it emits, and walks the ladder in step-execution order.
 
 ### scripts/check-workflow-concurrency.sh
 

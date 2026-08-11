@@ -1,0 +1,7 @@
+name: fixture-verify
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs: [this is not: valid yaml
