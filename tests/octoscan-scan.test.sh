@@ -21,15 +21,17 @@ failures=0
 # @arg $2 expected exit code (0 or 1)
 # @arg $3 expected stderr substring (empty skips the check)
 # @arg $4 expected stdout substring (empty skips the check)
-# @arg $5 env override string passed to `env` (e.g. "PATH=/nonexistent"), or empty
-# @arg $6... arguments forwarded to the script
+# @arg $5 expected stdout classification substring (empty skips the check)
+# @arg $6 env override string passed to `env` (e.g. "PATH=/nonexistent"), or empty
+# @arg $7... arguments forwarded to the script
 function run_scenario() {
   local -r name="$1"
   local -r expected_exit="$2"
   local -r expected_stderr="$3"
   local -r expected_stdout="$4"
-  local -r env_override="$5"
-  shift 5
+  local -r expected_class="$5"
+  local -r env_override="$6"
+  shift 6
 
   local stdout_file stderr_file outcome_file
   stdout_file="$(mktemp)"
@@ -55,6 +57,9 @@ function run_scenario() {
   if [[ -n ${expected_stderr} ]]; then
     harness_assert_also "${expected_stderr}"
   fi
+  if [[ -n ${expected_class} ]]; then
+    harness_assert_also "${expected_class}"
+  fi
 
   local failed=0
 
@@ -77,6 +82,14 @@ function run_scenario() {
   if [[ -n ${expected_stdout} ]] &&
     ! grep --fixed-strings --quiet -- "${expected_stdout}" "${stdout_file}"; then
     printf 'FAIL: %s — stdout missing %q\n' "${name}" "${expected_stdout}" >&2
+    printf 'stdout was:\n' >&2
+    cat -- "${stdout_file}" >&2
+    failed=1
+  fi
+
+  if [[ -n ${expected_class} ]] &&
+    ! grep --fixed-strings --quiet -- "${expected_class}" "${stdout_file}"; then
+    printf 'FAIL: %s — stdout missing classification %q\n' "${name}" "${expected_class}" >&2
     printf 'stdout was:\n' >&2
     cat -- "${stdout_file}" >&2
     failed=1
@@ -127,11 +140,11 @@ SEQ
 
 function main() {
   run_scenario 'unknown argument exits 1' \
-    1 'unknown argument' '' '' \
+    1 'unknown argument' '' '' '' \
     --bogus
 
   run_scenario '--sarif without path exits 1' \
-    1 'requires a path' '' '' \
+    1 'requires a path' '' '' '' \
     --sarif
 
   # Build a PATH that excludes any directory containing the real docker binary
@@ -143,7 +156,8 @@ function main() {
     [[ -x "${dir}/docker" ]] || no_docker_path="${no_docker_path:+${no_docker_path}:}${dir}"
   done <<<"${PATH}:"
   run_scenario 'missing docker exits 1 with SKIP hint and has-finding=false' \
-    1 'SKIP=octoscan' 'has-finding=false' "PATH=${no_docker_path}"
+    1 'SKIP=octoscan' 'has-finding=false' \
+    'classification=infra-failure (docker unavailable)' "PATH=${no_docker_path}"
 
   # has-finding / exit-code contract, docker return stubbed:
   #   scan rc 0 -> has-finding=false, exit 0
@@ -154,21 +168,28 @@ function main() {
   stub2="$(make_docker_stub 2)"
   stub3="$(make_docker_stub 3)"
   run_scenario 'octoscan clean -> has-finding=false exit 0' \
-    0 '' 'has-finding=false' "PATH=${stub0}:${PATH}"
+    0 '' 'has-finding=false' 'classification=clean' "PATH=${stub0}:${PATH}"
   run_scenario 'octoscan finding -> has-finding=true exit 1' \
-    1 '' 'has-finding=true' "PATH=${stub2}:${PATH}"
+    1 '' 'has-finding=true' 'classification=findings' "PATH=${stub2}:${PATH}"
+  # has-finding=false + exit 1 is also what a clean-but-broken run prints, so
+  # the classification is what says the scanner never analyzed the files.
   run_scenario 'octoscan tool error -> has-finding=false exit 1' \
-    1 '' 'has-finding=false' "PATH=${stub3}:${PATH}"
+    1 '' 'has-finding=false' \
+    'classification=infra-failure (no findings recorded)' "PATH=${stub3}:${PATH}"
   rm --recursive --force -- "${stub0}" "${stub2}" "${stub3}"
 
   # A per-file scanner error (rc 1 = file never analyzed) mixed with a finding
   # (rc 2) must classify as an infra failure — has-finding=false, exit 1 — so
   # the errored file routes to the infra-failure path and is re-examined, not
-  # hidden behind the finding and reported clean.
+  # hidden behind the finding and reported clean. The exit code and
+  # has-finding line are identical to the all-errored run above; only the
+  # classification says findings were recorded from an incomplete scan.
   local stub_seq
   stub_seq="$(make_docker_stub_seq)"
   run_scenario 'per-file error mixed with finding -> infra failure not finding' \
-    1 '' 'has-finding=false' "PATH=${stub_seq}:${PATH}"
+    1 '' 'has-finding=false' \
+    'classification=infra-failure (findings recorded but incomplete)' \
+    "PATH=${stub_seq}:${PATH}"
   rm --recursive --force -- "${stub_seq}"
 
   harness_assert_verify || failures=$((failures + 1))

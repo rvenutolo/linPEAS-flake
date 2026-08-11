@@ -83,17 +83,35 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# @description Print the diagnostic line that names why the run ended as it
+# did, and how much of the workflow directory was actually analyzed.
+# `has-finding=false` plus a non-zero exit is printed by every failure mode
+# — docker absent, jq absent, a scanner error with no finding, a scanner
+# error alongside findings — so `has-finding=` alone tells an operator only
+# that the run is not a finding, never which branch produced it. The
+# classification names that branch; the scope states how many workflow files
+# reached the scanner, which is what says whether a "no findings" verdict
+# covered the directory or covered nothing.
+# @arg $1 scope sentence
+# @arg $2 classification
+function print_summary() {
+  printf 'octoscan-scan: %s; classification=%s\n' "$1" "$2"
+}
+
 if ! command -v docker >/dev/null 2>&1; then
   printf 'octoscan pre-commit hook requires docker.\n' >&2
   printf 'Install docker, or skip the hook for one commit with:\n' >&2
   printf '  SKIP=octoscan git commit ...\n' >&2
   printf 'has-finding=false\n'
+  print_summary 'no workflow file scanned' 'infra-failure (docker unavailable)'
   exit 1
 fi
 
 if [[ -n ${sarif_out} ]] && ! command -v jq >/dev/null 2>&1; then
   printf 'octoscan-scan.sh requires jq for --sarif aggregation.\n' >&2
   printf 'has-finding=false\n'
+  print_summary 'no workflow file scanned' \
+    'infra-failure (jq unavailable for --sarif aggregation)'
   exit 1
 fi
 
@@ -106,6 +124,7 @@ shopt -u nullglob
 
 if [[ ${#workflows[@]} -eq 0 ]]; then
   printf 'has-finding=false\n'
+  print_summary 'no workflow file under .github/workflows' 'nothing-to-scan'
   exit 0
 fi
 
@@ -118,8 +137,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-any_error=0
-any_finding=0
+n_clean=0
+n_finding=0
+n_error=0
 for wf in "${workflows[@]}"; do
   rel="${wf#"${repo_root}/"}"
   file_rc=0
@@ -143,18 +163,20 @@ for wf in "${workflows[@]}"; do
       --ignore "${IGNORE_PATTERN}" || file_rc=$?
   fi
   # octoscan per-file exit codes: 0 clean, 2 finding, anything else (1, …) a
-  # scanner error — the file was never analyzed. Track "any error" separately
-  # from "any finding": a max-of-codes reduction would let a finding (2)
-  # outrank an error (1) and misclassify a mixed run as a clean finding,
-  # silently dropping the errored file.
+  # scanner error — the file was never analyzed. Tally each outcome
+  # separately: a max-of-codes reduction would let a finding (2) outrank an
+  # error (1) and misclassify a mixed run as a clean finding, silently
+  # dropping the errored file. The per-outcome counts are also what the
+  # summary line reports, so an operator reading "no findings" can see how
+  # many files that verdict actually covered.
   case "${file_rc}" in
-  0) ;;
-  2) any_finding=1 ;;
-  *) any_error=1 ;;
+  0) n_clean=$((n_clean + 1)) ;;
+  2) n_finding=$((n_finding + 1)) ;;
+  *) n_error=$((n_error + 1)) ;;
   esac
 done
 
-if [[ -n ${sarif_out} && ${any_error} -eq 0 ]]; then
+if [[ -n ${sarif_out} && ${n_error} -eq 0 ]]; then
   # Aggregate only when no file errored, so a file that never analyzed cannot
   # be silently absent from the merged SARIF and reported clean. The first
   # SARIF carries the driver + rules manifest (identical across invocations of
@@ -166,19 +188,32 @@ if [[ -n ${sarif_out} && ${any_error} -eq 0 ]]; then
   ' "${per_file_sarifs[@]}" >"${sarif_out}"
 fi
 
+printf -v scanned 'scanned %d workflow file(s): %d clean, %d with findings, %d errored' \
+  "${#workflows[@]}" "${n_clean}" "${n_finding}" "${n_error}"
+
 # Error outranks finding: a file that never analyzed is an infra failure even
 # when another file produced a finding, so it routes to the infra-failure path
 # (has-finding=false, exit 1) and is re-examined rather than reported clean.
-if ((any_error > 0)); then
+if ((n_error > 0)); then
   # Truncated/partial SARIF is worse than missing SARIF; drop it so downstream
   # consumers (CI upload-sarif) skip cleanly instead of uploading garbage.
   [[ -n ${sarif_out} ]] && rm -f -- "${sarif_out}"
   printf 'has-finding=false\n'
+  # Whether findings were also recorded changes what an operator does next: a
+  # re-scan of an all-errored run starts from nothing, while a mixed run has
+  # real findings to triage plus files still unexamined.
+  if ((n_finding > 0)); then
+    print_summary "${scanned}" 'infra-failure (findings recorded but incomplete)'
+  else
+    print_summary "${scanned}" 'infra-failure (no findings recorded)'
+  fi
   exit 1
-elif ((any_finding > 0)); then
+elif ((n_finding > 0)); then
   printf 'has-finding=true\n'
+  print_summary "${scanned}" 'findings'
   exit 1
 else
   printf 'has-finding=false\n'
+  print_summary "${scanned}" 'clean'
   exit 0
 fi
