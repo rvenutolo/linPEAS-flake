@@ -29,12 +29,24 @@ readonly SCAN_ROOT="${SCAN_ROOT_OVERRIDE:-${REPO_ROOT}}"
 # Clock-time pattern: HH:MM not embedded in a longer run of digits.
 readonly TIME_RE='(^|[^0-9])[0-9]{1,2}:[0-9]{2}([^0-9]|$)'
 
-# @description Emit the live workflow-name set: bare basename and the
-#              `.yml`/`.yaml`-suffixed form, one per line.
-function workflow_names() {
-  local f base bare
+# @description Emit the live workflow file paths (`*.yml`, `*.yaml`), one per
+#              line. Kept separate from the name set so the summary can report
+#              how many workflows the scan was held against, rather than the
+#              larger count of name forms each one contributes.
+function workflow_files() {
+  local f
   for f in "${WORKFLOWS_DIR}"/*.yml "${WORKFLOWS_DIR}"/*.yaml; do
     [[ -f ${f} ]] || continue
+    printf '%s\n' "${f}"
+  done
+}
+
+# @description Emit the live workflow-name set: bare basename and the
+#              `.yml`/`.yaml`-suffixed form, one per line.
+# @arg $@ workflow file paths
+function workflow_names() {
+  local f base bare
+  for f in "$@"; do
     base="$(basename "${f}")"
     bare="${base%.yaml}"
     bare="${bare%.yml}"
@@ -84,7 +96,17 @@ function main() {
   names_tmp="$(mktemp)"
   # shellcheck disable=SC2064
   trap "rm --force -- '${names_tmp}'" EXIT
-  workflow_names | sort -u >"${names_tmp}"
+
+  local wf_out
+  if ! wf_out="$(workflow_files)"; then
+    printf 'doc-cron-restatement: workflow_files failed\n' >&2
+    exit 2
+  fi
+  local -a wf_paths=()
+  if [[ -n ${wf_out} ]]; then
+    mapfile -t wf_paths <<<"${wf_out}"
+  fi
+  workflow_names ${wf_paths[@]+"${wf_paths[@]}"} | sort -u >"${names_tmp}"
 
   [[ -s ${names_tmp} ]] || {
     printf 'no workflow yaml files under %s\n' "${WORKFLOWS_DIR}" >&2
@@ -103,6 +125,11 @@ function main() {
   name_re="\`(${alt})\`|(^|[^[:alnum:]_-])(${alt})\\.(yml|yaml)"
 
   local found=0 file lineno text files_out lines_out
+  # Scope tallies for the summary line. `timed` counts the lines that reached
+  # the workflow-name test at all: a clean verdict over zero timed lines
+  # proves nothing about the name test, so an operator wants the two apart.
+  # `readme_skipped` is the evidence behind the ci-summary exemption.
+  local -i docs=0 lines=0 timed=0 kept=0 readme_total=0 readme_skipped=0
 
   # Capture-then-check both producers so a failure is a loud tooling fault
   # rather than an empty read that scores files clean.
@@ -130,17 +157,54 @@ function main() {
     fi
     # A file the producer emitted nothing for yields one empty record here,
     # which carries no line number and so is not a line to score.
+    kept=0
     while IFS=$'\t' read -r lineno text; do
       [[ -n ${lineno} ]] || continue
-      if [[ ${text} =~ ${TIME_RE} ]] && [[ ${text} =~ ${name_re} ]]; then
-        printf '%s:%s: %s\n' "${file}" "${lineno}" "${text}" >&2
-        found=1
+      kept=$((kept + 1))
+      if [[ ${text} =~ ${TIME_RE} ]]; then
+        timed=$((timed + 1))
+        if [[ ${text} =~ ${name_re} ]]; then
+          printf '%s:%s: %s\n' "${file}" "${lineno}" "${text}" >&2
+          found=1
+        fi
       fi
     done <<<"${lines_out}"
+    docs=$((docs + 1))
+    lines=$((lines + kept))
+    if [[ "$(basename "${file}")" == 'README.md' ]]; then
+      # Same producer class as `readable_lines`, so the same fault applies:
+      # a path awk cannot open must be loud, not scored as a zero-line file.
+      if ! readme_total="$(awk 'END { print FNR }' "${file}")"; then
+        printf 'doc-cron-restatement: line count failed for %s\n' "${file}" >&2
+        exit 2
+      fi
+      readme_skipped=$((readme_skipped + readme_total - kept))
+    fi
   done <<<"${files_out}"
 
   if ((found)); then exit 1; fi
-  printf 'check-doc-cron-restatement: ok\n'
+
+  # Name the exemptions that fired, with the evidence behind each: both of
+  # them silently drop input, so a clean verdict that rested on one is only
+  # auditable if the run says so.
+  local -a exemptions=()
+  if [[ -f "${SCAN_ROOT}/docs/architecture/ci.md" ]]; then
+    exemptions+=('docs/architecture/ci.md excluded')
+  fi
+  if ((readme_skipped > 0)); then
+    exemptions+=("README ci-summary block (${readme_skipped} line(s) skipped)")
+  fi
+  local exempt_desc='none' e
+  for e in ${exemptions[@]+"${exemptions[@]}"}; do
+    if [[ ${exempt_desc} == 'none' ]]; then
+      exempt_desc="${e}"
+    else
+      exempt_desc="${exempt_desc}, ${e}"
+    fi
+  done
+
+  printf 'check-doc-cron-restatement: ok — scanned %d doc(s), %d line(s) against %d workflow(s); %d line(s) carried a clock time; exemptions applied: %s\n' \
+    "${docs}" "${lines}" "${#wf_paths[@]}" "${timed}" "${exempt_desc}"
 }
 
 main "$@"

@@ -15,18 +15,24 @@ readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-doc-cron-restatement"
 
 failures=0
 
-# @description Run the script with fixture overrides; assert exit code and stderr.
+# @description Run the script with fixture overrides; assert exit code, stderr,
+# and — on the clean path — the summary line naming the scope scanned and the
+# exemptions that fired. The exemption names are what separate the clean
+# scenarios: two of them pass only because an exemption skipped the
+# restatement, and without naming it every clean run is the same outcome.
 # @arg $1 scenario name
 # @arg $2 workflows directory under FIXTURES/<scenario>/
 # @arg $3 scan root under FIXTURES/<scenario>/
 # @arg $4 expected exit code (0, 1, or 2)
 # @arg $5 expected stderr substring (empty string skips the check)
+# @arg $6 expected stdout substring (empty string skips the check)
 function run_scenario() {
   local -r name="$1"
   local -r workflows_dir="$2"
   local -r scan_root="$3"
   local -r expected_exit="$4"
   local -r expected_stderr="$5"
+  local -r expected_stdout="${6:-}"
 
   local stderr_file stdout_file outcome_file
   stderr_file="$(mktemp)"
@@ -51,12 +57,21 @@ function run_scenario() {
     printf 'stderr was:\n' >&2
     cat -- "${stderr_file}" >&2
     failures=$((failures + 1))
+  elif [[ -n ${expected_stdout} ]] &&
+    ! grep --fixed-strings --quiet -- "${expected_stdout}" "${stdout_file}"; then
+    printf 'FAIL: %s — stdout missing %q\n' "${name}" "${expected_stdout}" >&2
+    printf 'stdout was:\n' >&2
+    cat -- "${stdout_file}" >&2
+    failures=$((failures + 1))
   else
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
 
   harness_assert_record "${name}" "${expected_stderr}" \
     "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  if [[ -n ${expected_stdout} ]]; then
+    harness_assert_also "${expected_stdout}"
+  fi
   rm --force -- "${outcome_file}" "${stdout_file}" "${stderr_file}"
 }
 
@@ -71,25 +86,33 @@ function main() {
     "${FIXTURES}/yml-suffixed-fails" \
     1 'docs/x.md'
 
+  # No line reaches the workflow-name test, so the clock-time tally is zero
+  # and no exemption fires.
   run_scenario 'cadence word without a clock time passes' \
     "${FIXTURES}/cadence-only-passes/workflows" \
     "${FIXTURES}/cadence-only-passes" \
-    0 ''
+    0 '' \
+    'ok — scanned 1 doc(s), 1 line(s) against 1 workflow(s); 0 line(s) carried a clock time; exemptions applied: none'
 
+  # A line does carry a clock time and still passes, so the tally is one:
+  # the pass came from the name test, not from an empty working set.
   run_scenario 'bare common word near a time does not false-positive' \
     "${FIXTURES}/bare-common-word-passes/workflows" \
     "${FIXTURES}/bare-common-word-passes" \
-    0 ''
+    0 '' \
+    'ok — scanned 1 doc(s), 1 line(s) against 1 workflow(s); 1 line(s) carried a clock time; exemptions applied: none'
 
   run_scenario 'restatement inside ci.md is exempt' \
     "${FIXTURES}/ci-md-exempt/workflows" \
     "${FIXTURES}/ci-md-exempt" \
-    0 ''
+    0 '' \
+    'ok — scanned 0 doc(s), 0 line(s) against 1 workflow(s); 0 line(s) carried a clock time; exemptions applied: docs/architecture/ci.md excluded'
 
   run_scenario 'README ci-summary block is exempt' \
     "${FIXTURES}/readme-block-exempt/workflows" \
     "${FIXTURES}/readme-block-exempt" \
-    0 ''
+    0 '' \
+    'ok — scanned 1 doc(s), 4 line(s) against 1 workflow(s); 0 line(s) carried a clock time; exemptions applied: README ci-summary block (5 line(s) skipped)'
 
   run_scenario 'README restatement outside the ci-summary block fails' \
     "${FIXTURES}/readme-outside-block-fails/workflows" \
