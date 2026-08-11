@@ -133,6 +133,16 @@ for f in "${paths[@]}"; do
     continue
     ;;
   esac
+  # Capture before consuming so an awk failure fails the lint loudly
+  # instead of scoring the file clean. No input reaching here can
+  # actually trip it: the `-f` guard above admits only regular files,
+  # so the directory-for-a-file shape that makes awk exit non-zero is
+  # filtered out before extraction. The guard stays because the
+  # enumeration and the extractor are free to change independently.
+  if ! invocations="$(extract_invocations "${f}")"; then
+    printf 'cosign-identity-pinned: extract_invocations failed for %s\n' "${f}" >&2
+    exit 2
+  fi
   while IFS= read -r invocation; do
     [[ -z ${invocation} ]] && continue
     has_identity=0
@@ -153,7 +163,7 @@ for f in "${paths[@]}"; do
     printf '%s: `cosign verify*` missing: %s; got: %s\n' \
       "${f}" "${missing[*]}" "${invocation}" >&2
     failed=$((failed + 1))
-  done < <(extract_invocations "${f}")
+  done <<<"${invocations}"
 done
 
 if ((failed > 0)); then

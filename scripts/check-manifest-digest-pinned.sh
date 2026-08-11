@@ -231,10 +231,22 @@ for f in "${paths[@]}"; do
     continue
     ;;
   esac
+  # Capture-then-check so an `awk` failure is a loud tooling fault rather
+  # than an empty read that scores the file clean. No input this script
+  # can receive reaches that branch: the `-f` gate above rejects
+  # directories, symlinks to directories, and missing paths — the only
+  # `PATHS_OVERRIDE` entries that could upset the producer — and gawk,
+  # which the hook puts on PATH, treats a directory argument as a warning
+  # and exits 0 regardless. The guard covers whatever the producer comes
+  # to run, so it stays.
+  if ! out="$(extract_invocations "${f}")"; then
+    printf 'manifest-digest-pinned: extract_invocations failed for %s\n' "${f}" >&2
+    exit 2
+  fi
   while IFS= read -r invocation; do
     [[ -z ${invocation} ]] && continue
     check_invocation "${f}" "${invocation}"
-  done < <(extract_invocations "${f}")
+  done <<<"${out}"
 done
 
 if ((failed > 0)); then

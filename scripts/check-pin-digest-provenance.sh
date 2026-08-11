@@ -306,36 +306,61 @@ function check_reachable() {
 if [[ -z ${BASE_DIR} ]]; then
   git rev-parse --verify --quiet "${BASE_REF}^{commit}" >/dev/null ||
     die_op "cannot resolve ${BASE_REF} (is origin/main fetched?)"
-  # Resolved here, synchronously, in the main shell — not inside the
-  # `< <(base_files)` process substitution below. A die_op inside a
-  # process substitution's subshell only kills that subshell; the
-  # parent `while read` loop would see a closed pipe and continue as
-  # if base_files() had simply produced no output, which is exactly
-  # the silent-pass shape this ordering exists to avoid.
+  # Resolved here, synchronously, in the main shell, before any pin is
+  # compared. base_content() reads BASE_FILE_SET for every file it is
+  # asked about, so the set has to be populated by the time the base
+  # loop below runs; resolving it up front also means a `git ls-tree`
+  # failure surfaces once, as an operational error on its own, rather
+  # than as a per-file symptom partway through a comparison.
   load_base_file_list
 fi
 
+# Producers are captured and status-checked rather than piped in through
+# a process substitution, whose exit status the consuming loop cannot
+# see: a producer that died would read as a producer that found nothing,
+# and an empty scan is a clean verdict here.
+#
+# No failure fixture accompanies this call site: head_files() is a
+# pure-bash glob over HEAD_DIR that runs no external command, and it
+# returns 0 for every tree HEAD_DIR_OVERRIDE can point it at — a missing
+# directory, an unreadable one, a plain file, or a directory standing
+# where a workflow YAML belongs. The guard is here for whatever the
+# producer comes to run, not for a reachable failure today.
 head_tuples=""
 head_file_count=0
+if ! head_file_list="$(head_files)"; then
+  die_op 'head_files failed'
+fi
 while IFS= read -r file; do
+  [[ -n ${file} ]] || continue
   head_tuples+="$(extract_pins "${file}" <"${HEAD_DIR}/${file}")"$'\n'
   head_file_count=$((head_file_count + 1))
-done < <(head_files)
+done <<<"${head_file_list}"
 
+# No failure fixture accompanies this call site either. Under BASE_DIR
+# base_files() is the same pure-bash glob as head_files(); without it,
+# the only command that can fail is the `git ls-tree` inside
+# load_base_file_list(), which the main-shell preload above — guarded on
+# the identical BASE_DIR condition — has already run and cached, so
+# base_files() invokes git zero times and a broken checkout has exited 2
+# before this line is reached.
 base_tuples=""
+if ! base_file_list="$(base_files)"; then
+  die_op 'base_files failed'
+fi
 while IFS= read -r file; do
+  [[ -n ${file} ]] || continue
   # base_content() is captured on its own line, as a single-level
-  # command substitution assigned directly in this loop body (which
-  # runs in the main shell, not the `< <(base_files)` producer
-  # subshell). Nesting it as `<<<"$(base_content ...)"` inside the
-  # `$(extract_pins ...)` substitution below would run it in its own
+  # command substitution assigned directly in this loop body, which runs
+  # in the main shell. Nesting it as `<<<"$(base_content ...)"` inside
+  # the `$(extract_pins ...)` substitution below would run it in its own
   # throwaway subshell whose exit status nothing ever inspects — a
   # die_op there would print its message and vanish, and extract_pins
   # would just see empty stdin and return 0. Keeping it a standalone
   # assignment lets its exit status (and set -Eeuo pipefail) propagate.
   base_file_content="$(base_content "${file}")"
   base_tuples+="$(extract_pins "${file}" <<<"${base_file_content}")"$'\n'
-done < <(base_files)
+done <<<"${base_file_list}"
 
 # The octoscan pair is a load-bearing extraction target: if the file
 # exists in head but the pair is not found, the var block was reshaped

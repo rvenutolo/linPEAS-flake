@@ -204,7 +204,8 @@ everywhere else (README.md + docs/\*\*, excluding ci.md itself).
 Exit codes:
 0 no restatements found
 1 restatement(s) found (details printed to stderr)
-2 missing/empty .github/workflows directory
+2 the check could not run: missing/empty .github/workflows directory,
+or a producer that lists or reads the doc files failed
 
 ### scripts/check-dockerhub-token-scope-split.sh
 
@@ -325,9 +326,10 @@ tag.
 
 ### scripts/check-manifest-hook-watches-nix.sh
 
-Lint: every pre-commit hook whose entry runs a
-manifest-reading script (one referencing the flake hook manifest)
-includes `nix/hooks` in its `files` regex.
+Lint: every pre-commit hook that reaches the flake hook
+manifest — by running a manifest-reading script, or by building a flake
+attribute a manifest-reading module assigns — includes `nix/hooks` in
+its `files` regex.
 
 ### scripts/check-min-permissions.sh
 
@@ -342,16 +344,28 @@ Lint: ban any `nix` invocation against the bare
 markdown. Allowed alternatives use the repo's own flake or an
 explicit commit pin.
 
-### scripts/check-no-parser-procsub.sh
+### scripts/check-no-opaque-procsub.sh
 
-Lint: no scripts/\*.sh may feed a redirection from a yq or
-jq process substitution (`< <(yq ...)`, `< <(jq ...)`). A procsub's
-exit status is invisible to `set -Eeuo pipefail`, so a parse or query
-failure yields empty loop input and the consumer scores that emptiness
-as data — either passing wholesale (fail-open) or reporting a
-substantive violation the input never showed (a tooling fault
-misdiagnosed as drift). Use the capture-into-variable idiom (or a temp
-file for NUL-delimited output) so failures abort loudly.
+Lint: no scripts/\*.sh may feed a redirection from a
+process substitution whose producer's exit status is opaque to the
+consumer. A substitution runs in its own subshell, so `set -Eeuo pipefail` only ever sees the status of the command the redirection
+feeds — never the producer's. A failed producer hands the consumer
+empty output to score as data: either a clean pass that flags nothing
+(fail-open) or a substantive violation the input never showed (a
+tooling fault misdiagnosed as drift). Two producer shapes are banned:
+
+1. Parser producer — `< <(yq ...)`, `< <(jq ...)`.
+1. Function producer — `< <(f)`, `< <(f "$x")`, where `f` is a
+    function the same file defines. The ban is by producer name, not
+    by producer body, so the rule stays decidable in a single textual
+    pass and holds for whatever commands the function comes to run.
+
+`diff <(...) <(...)` stays legal: diff consumes both substitutions as
+file arguments and its own exit status is what the caller acts on, so
+no status is lost.
+
+Use the capture-into-variable idiom (or a temp file for NUL-delimited
+output) so a producer failure aborts loudly.
 
 Honors SCRIPTS_DIR_OVERRIDE (default: scripts) for fixtures.
 Exit 0 clean, 1 on any hit, 2 on operational error.

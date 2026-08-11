@@ -82,24 +82,29 @@ The lint accepts longer set lines (e.g. `set -Eeuo pipefail -x`) as long as the 
 
 Enforced by `scripts/check-script-shebang-pipefail.sh`. Wired as the `lint-script-hygiene` CI job (member check `script-shebang-pipefail`) and as a pre-commit hook.
 
-## no-parser-procsub
+## no-opaque-procsub
 
-No `scripts/*.sh` feeds a redirection from a yq or jq process substitution — `done < <(yq eval '.x' "$f")`, `mapfile -t rules < <(jq --raw-output '.rules[].type' <<<"${json}")`, and their variants.
+No `scripts/*.sh` feeds a redirection from a process substitution whose producer's exit status is opaque to the consumer. Two producer shapes are banned:
 
-A process substitution's exit status is invisible to `set -Eeuo pipefail`: the substitution runs in its own subshell, and the shell only ever sees the exit status of the command the redirection feeds (here, the `while`/`done` loop or `mapfile`), not the parser's. When the parser fails, the substitution produces empty output and the consumer scores that emptiness as data. Which way that lands depends on what the consumer does with an empty result, and both landings are wrong:
+- **Parser producer** — `done < <(yq eval '.x' "$f")`, `mapfile -t rules < <(jq --raw-output '.rules[].type' <<<"${json}")`, and their variants.
+- **Function producer** — `done < <(parse_blocks)`, `done < <(readable_lines "${file}")`, and their variants, where the producer is a function the same file defines.
+
+A process substitution's exit status is invisible to `set -Eeuo pipefail`: the substitution runs in its own subshell, and the shell only ever sees the exit status of the command the redirection feeds (here, the `while`/`done` loop or `mapfile`), not the producer's. When the producer fails, the substitution produces empty output and the consumer scores that emptiness as data. Which way that lands depends on what the consumer does with an empty result, and both landings are wrong:
 
 - A scan loop exits 0 as if it found nothing to flag — a fail-open masquerading as a clean pass.
-- An assertion loop reports the substantive violation that an empty result implies — a missing ruleset rule, a dead dependency marker — sending the operator to fix input that was never wrong, while the parse fault itself is reported only as stray stderr.
+- An assertion loop reports the substantive violation that an empty result implies — a missing ruleset rule, a dead dependency marker — sending the operator to fix input that was never wrong, while the producer fault itself is reported only as stray stderr.
 
-The sanctioned idioms make the failure abort loudly instead: capture the parser's output into a variable first (`hits="$(yq eval '.x' "$f")"`, then iterate with `<<<"${hits}"`) so `set -e` catches a non-zero exit before the loop ever runs; or, for NUL-delimited output that can't round-trip through `"$(...)"` (command substitution strips embedded NUL bytes), write to a temp file and iterate with `< "${tmp}"`. A capture that is legitimately empty needs an explicit `[[ -n … ]]` guard, since a bare here-string feeds one empty line rather than zero.
+A function producer is banned by name, not by body. The lint collects the function names a file defines from its column-0 definition lines (`name() {`, `function name() {`, `function name {`) and flags any redirection-feeding substitution whose first token is one of them. Reading the producer's body would make the verdict depend on which commands a helper happens to run today; banning the shape keeps the rule decidable in a single textual pass and keeps it true when the helper grows a `git`, `find`, or `nix` call.
+
+The sanctioned idioms make the failure abort loudly instead: capture the producer's output into a variable first (`hits="$(yq eval '.x' "$f")"`, then iterate with `<<<"${hits}"`) so `set -e` catches a non-zero exit before the loop ever runs; or, for NUL-delimited output that can't round-trip through `"$(...)"` (command substitution strips embedded NUL bytes), write to a temp file and iterate with `< "${tmp}"`. A capture that is legitimately empty needs an explicit `[[ -n … ]]` guard, since a bare here-string feeds one empty line rather than zero.
 
 A tooling failure caught this way exits 2, keeping exit 1 for the drift the check exists to report.
 
-The ban covers redirections only. `diff <(jq …) <(jq …)` stays legal: `diff` consumes both substitutions as file arguments and its own status is what the script acts on.
+The ban covers redirections only. `diff <(jq …) <(jq …)` and `diff <(expected_keys) <(actual_keys)` stay legal: `diff` consumes both substitutions as file arguments and its own status is what the script acts on.
 
-The lint skips comment lines (lines whose first non-whitespace character is `#`) so a script is free to document the banned idiom by name — e.g. explaining why it uses the capture idiom instead — without tripping the check on its own documentation.
+The lint skips comment lines (lines whose first non-whitespace character is `#`) so a script is free to document either banned idiom by name — e.g. explaining why it uses the capture idiom instead — without tripping the check on its own documentation.
 
-Enforced by `scripts/check-no-parser-procsub.sh`. Wired as the `lint-script-hygiene` CI job (member check `no-parser-procsub`) and as a pre-commit hook.
+Enforced by `scripts/check-no-opaque-procsub.sh`. Wired as the `lint-script-hygiene` CI job (member check `no-opaque-procsub`) and as a pre-commit hook.
 
 ## script-has-test
 
@@ -143,25 +148,29 @@ The ratchet covers every harness, including those asserting by other means than 
 
 Enforced by `tests/_harness_assert_wired.test.sh`, reached by the `harness-group` CI job.
 
-## manifest-reading hook watches nix/hooks
+## manifest-reaching hook watches nix/hooks
 
-Every pre-commit hook whose script reads the Nix hook manifest (`nix eval .#devTooling.<system>.preCommitHooks`) includes `nix/hooks` in its `files` filter.
+Every pre-commit hook that reaches the Nix hook manifest (`nix eval .#devTooling.<system>.preCommitHooks`) includes `nix/hooks` in its `files` filter. A hook reaches it either through the script its entry runs, or through a flake attribute its entry evaluates whose assigning module reads the manifest.
 
 A freshness hook regenerates or validates a generated doc from the manifest. When its `files` filter omits `nix/hooks`, a commit that edits only a hook definition under `nix/hooks/*.nix` changes the manifest but does not re-trigger the hook on the per-changed-file `git commit` path, so a stale generated doc can be committed locally. The `--all-files` CI mirror still catches the drift, but the local fast-path defense is lost. Tying every manifest-reader's filter to `nix/hooks` keeps the local and CI paths in agreement.
 
-The guard derives the manifest-reading scripts by content (`preCommitHooks` / `PRECOMMIT_HOOK_NAMES`), not a hardcoded list, then asserts each referencing hook's `files` filter contains `nix/hooks`. It fails loud if it finds zero manifest-reading hooks, catching a parser break from a hook-file reformat.
+The guard derives its subjects by content, not from a hardcoded list. A script subject is any `scripts/*.sh` naming `preCommitHooks` or `PRECOMMIT_HOOK_NAMES`; an attribute subject is a hook entry naming a flake attribute, and it qualifies when a module assigning that attribute names either token. Each qualifying hook's `files` filter must then contain `nix/hooks`. The guard fails loud when it finds no subjects of either class, and when a hook entry names a flake attribute that subject discovery did not pick up — both mean a parser break from a hook-file reformat rather than a clean tree.
 
 Enforced by `scripts/check-manifest-hook-watches-nix.sh`. Wired as the `lint-script-hygiene` CI job (member check `manifest-hook-watches-nix`) and as a pre-commit hook.
 
-## freshness hook watches evaluated modules
+## freshness hook watches evaluated sources
 
-Every pre-commit hook whose generator evaluates `devTooling.<system>.<attr>` names, in its `files` filter, every nix module that attribute is defined or transposed by.
+Every pre-commit hook whose entry evaluates a flake attribute names, in its `files` filter, every source that evaluation reads. Two hook shapes evaluate one: a generator script the entry runs, which reads `devTooling.<system>.<attr>`, and an entry that evaluates an attribute directly with `nix build` or `nix eval`, naming no script at all.
 
 A freshness hook regenerates a doc from an evaluated flake attribute and refuses a stale commit. Its `files` regex decides which changed paths re-trigger it on the per-changed-file `git commit` path. When the filter misses a module the generator evaluates, a commit touching only that module leaves the doc stale with the guard silent. The `--all-files` CI mirror still catches the drift, but the local fast-path defense is lost, so the gap surfaces late.
 
-The required module set is derived rather than hardcoded: modules naming the evaluated attribute in non-comment nix source, plus one level of their relative imports, plus modules assigning `flake.devTooling` — the transposition every generator reads through. The second signal is what makes the derivation structural. A module that merely mentions an attribute in a comment is not thereby required, and a module that performs the transposition is required whether or not it names the attribute at all.
+The required source set is derived rather than hardcoded, per shape.
 
-The guard is source-parsed rather than `nix eval`-ed: `files` and `entry` are literal in source, and `nix eval` is the known local-commit-path long pole. It fails loud if it finds no `devTooling`-evaluating generator, no hook running one, or an attribute with no defining module — each of which means the derivation broke rather than that the tree is clean.
+For a generator subject: modules naming the evaluated attribute in non-comment nix source, plus one level of their relative imports, plus modules assigning `flake.devTooling` — the transposition every generator reads through. The second signal is what makes the derivation structural. A module that merely mentions an attribute in a comment is not thereby required, and a module that performs the transposition is required whether or not it names the attribute at all.
+
+For an attribute subject: `flake.nix` and `flake.lock`, since any flake evaluation reads both and a lock bump changes the packages the attribute resolves to; every module assigning the attribute, matched on the assignment shape so that merely naming the leaf does not qualify a module that is not a source of it; and one level of the relative paths those modules reference, of any extension — a module embedding `${../scripts/foo.sh}` genuinely depends on that script.
+
+The guard is source-parsed rather than `nix eval`-ed: `files` and `entry` are literal in source, and `nix eval` is the known local-commit-path long pole. It fails loud if it finds no `devTooling`-evaluating generator, no hook running one, an attribute with no defining or assigning module, or a hook entry naming a flake attribute that subject discovery did not pick up — each of which means the derivation broke rather than that the tree is clean.
 
 Enforced by `scripts/check-freshness-hook-watches-modules.sh`. Wired as the `lint-script-hygiene` CI job (member check `freshness-hook-watches-modules`) and as a pre-commit hook.
 

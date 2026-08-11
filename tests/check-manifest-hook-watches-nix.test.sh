@@ -106,6 +106,38 @@ EOF
 # whose files filter is the empty string. The covered block keeps the
 # guard-the-guard quiet, so a clean exit can only mean the empty-filter
 # block went unevaluated. ${1}=dir.
+# A manifest-reading hook whose filter contains the text `nix/hooks` in a
+# pattern that matches no path under that directory, paired with a covered
+# sibling so guard-the-guard stays quiet and a clean exit can only mean the
+# decoy was accepted. ${1}=dir.
+function write_hook_names_not_matches() {
+  local -r dir="$1"
+  mkdir --parents -- "${dir}"
+  cat >"${dir}/foo.nix" <<'EOF'
+{
+  fixture-table-fresh = {
+    enable = true;
+    name = "fixture-table-fresh";
+    description = "Fixture manifest-reading hook watching nix/hooks.";
+    entry = "bash scripts/refresh-fixture-table.sh --check";
+    files = "^(flake\.nix|nix/hooks/.*\.nix)$";
+    pass_filenames = false;
+    language = "system";
+  };
+
+  fixture-decoy-filter-fresh = {
+    enable = true;
+    name = "fixture-decoy-filter-fresh";
+    description = "Fixture manifest-reading hook whose filter only names nix/hooks.";
+    entry = "bash scripts/refresh-fixture-table.sh --check";
+    files = "^docs/nix/hooks-notes\.md$";
+    pass_filenames = false;
+    language = "system";
+  };
+}
+EOF
+}
+
 function write_hook_empty_files() {
   local -r dir="$1"
   mkdir --parents -- "${dir}"
@@ -127,6 +159,75 @@ function write_hook_empty_files() {
     description = "Fixture manifest-reading hook with an empty files filter.";
     entry = "bash scripts/refresh-fixture-table.sh --check";
     files = "";
+    pass_filenames = false;
+    language = "system";
+  };
+}
+EOF
+}
+
+# Write the nix module a fixture attribute-evaluating hook builds from.
+# ${1}=tree root, ${2}=`manifest` for a module that reads the flake hook
+# manifest, anything else for one that does not. Both assign the same
+# attribute, so the pair isolates the manifest reference as the only thing
+# that makes the hook owe a `nix/hooks` filter entry.
+function write_attr_module() {
+  local -r root="$1" mode="$2"
+  mkdir --parents -- "${root}/nix"
+  if [[ ${mode} == 'manifest' ]]; then
+    cat >"${root}/nix/attr-source.nix" <<'EOF'
+{
+  perSystem =
+    { config, pkgs, ... }:
+    {
+      checks.fixtureCheck = pkgs.runCommandLocal "fixture-check" { } ''
+        printf '%s' '${builtins.toJSON config.devTooling.preCommitHooks}' >"$out"
+      '';
+    };
+}
+EOF
+  else
+    cat >"${root}/nix/attr-source.nix" <<'EOF'
+{
+  perSystem =
+    { pkgs, ... }:
+    {
+      checks.fixtureCheck = pkgs.runCommandLocal "fixture-check" { } ''
+        printf 'fixture attribute' >"$out"
+      '';
+    };
+}
+EOF
+  fi
+}
+
+# Write a fixture tree carrying a hook that builds a flake attribute
+# directly — the shape the real attribute-evaluating hook uses, which names
+# no `scripts/*.sh` at all and so is invisible to the script-keyed lookup.
+#
+# ${1}=tree root, ${2}=the attribute hook's files-filter value, ${3}=the
+# assigning module's mode, as `write_attr_module` takes it, ${4}=`companion`
+# to add a covered manifest-reading script hook alongside. The companion
+# keeps the subject-count guard quiet on its own, so a clean exit can only
+# mean the attribute hook went unevaluated; omitting it leaves a tree whose
+# only subject is the attribute hook, which is what a subject count that
+# spans both classes has to accept.
+function write_attr_tree() {
+  local -r root="$1" files="$2" mode="$3" companion="$4"
+  mkdir --parents -- "${root}/scripts" "${root}/hooks"
+  write_attr_module "${root}" "${mode}"
+  if [[ ${companion} == 'companion' ]]; then
+    write_manifest_script "${root}/scripts"
+    write_hook "${root}/hooks" '^(flake\.nix|nix/hooks/.*\.nix)$'
+  fi
+  cat >"${root}/hooks/attr.nix" <<EOF
+{
+  fixture-attr-check = {
+    enable = true;
+    name = "fixture-attr-check";
+    description = "Fixture hook that builds a flake attribute directly.";
+    entry = "nix build --no-link .#checks.\${pkgs.stdenv.hostPlatform.system}.fixtureCheck";
+    files = "${files}";
     pass_filenames = false;
     language = "system";
   };
@@ -177,6 +278,16 @@ function main() {
     "${work}/bad-empty-files/hooks" "${work}/bad-empty-files/scripts" 1 \
     'hook fixture-empty-filter-fresh: files filter missing nix/hooks'
 
+  # (d2) BAD: a filter that names nix/hooks inside a pattern that can never
+  # match a path under it. Coverage is decided by matching the regex, so a
+  # filter is judged on the paths it re-triggers on rather than on the text
+  # it happens to contain.
+  write_manifest_script "${work}/bad-names-not-matches/scripts"
+  write_hook_names_not_matches "${work}/bad-names-not-matches/hooks"
+  expect 'bad: a filter naming nix/hooks without matching it is reported' \
+    "${work}/bad-names-not-matches/hooks" "${work}/bad-names-not-matches/scripts" 1 \
+    'hook fixture-decoy-filter-fresh: files filter missing nix/hooks'
+
   # (e) EMPTY: no manifest-reading hook at all → guard-the-guard non-zero.
   mkdir --parents -- "${work}/empty/scripts" "${work}/empty/hooks"
   cat >"${work}/empty/hooks/bar.nix" <<'EOF'
@@ -192,7 +303,38 @@ function main() {
 }
 EOF
   expect 'empty: zero manifest hooks trips guard-the-guard' \
-    "${work}/empty/hooks" "${work}/empty/scripts" 1 'no manifest-reading hook blocks found'
+    "${work}/empty/hooks" "${work}/empty/scripts" 1 \
+    'no manifest-reading or attribute-building hook blocks found'
+
+  # (f) BAD: a hook whose entry builds a flake attribute directly, where the
+  # module assigning that attribute reads the hook manifest. Editing a hook
+  # definition then changes what the attribute builds, yet the filter never
+  # re-triggers the hook that builds it. A lint keyed only on script tokens
+  # skips this block entirely, and the covered companion hook keeps the
+  # subject-count guard quiet, so it reports full coverage.
+  write_attr_tree "${work}/attr-bad" '^(flake\.nix|nix/attr-source\.nix)$' \
+    manifest companion
+  expect 'bad: an attribute-building hook reaching the manifest needs nix/hooks' \
+    "${work}/attr-bad/hooks" "${work}/attr-bad/scripts" 1 \
+    'hook fixture-attr-check: files filter missing nix/hooks (builds checks.fixtureCheck, assigned by nix/attr-source.nix which reads the hook manifest)'
+
+  # (g) GOOD: the same hook with nix/hooks in its filter.
+  write_attr_tree "${work}/attr-good" \
+    '^(flake\.nix|nix/hooks/.*\.nix|nix/attr-source\.nix)$' manifest companion
+  expect 'good: an attribute-building hook watching nix/hooks passes' \
+    "${work}/attr-good/hooks" "${work}/attr-good/scripts" 0 ''
+
+  # (h) GOOD: an attribute hook standing alone, whose assigning module reads
+  # no manifest. Two things must hold at once: the manifest never decides
+  # what this attribute builds, so no nix/hooks entry is owed — the shape the
+  # repo's own attribute-evaluating hook has, and without it a rule demanding
+  # nix/hooks of every attribute-building hook would look correct — and the
+  # attribute hook is the tree's only subject, so a subject count that still
+  # recognised the script class alone would trip its guard here.
+  write_attr_tree "${work}/attr-plain" '^(flake\.nix|nix/attr-source\.nix)$' \
+    plain alone
+  expect 'good: a lone attribute-building hook whose sources skip the manifest passes' \
+    "${work}/attr-plain/hooks" "${work}/attr-plain/scripts" 0 ''
 
   if [[ ${failures} -gt 0 ]]; then
     printf '\n%d test(s) failed\n' "${failures}" >&2
