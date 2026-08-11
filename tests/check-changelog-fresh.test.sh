@@ -6,15 +6,20 @@
 # exist and which commit last touched CHANGELOG.md. Driving that from the live
 # repository would make the cases depend on whether a release is in flight.
 #
-# REGEN_OVERRIDE supplies the "fresh git-cliff regeneration" side, so no case
-# invokes nix or git-cliff.
+# REGEN_OVERRIDE supplies the "fresh git-cliff regeneration" side, so the
+# comparison cases invoke neither nix nor git-cliff. The one case that must see
+# the generator fail deliberately omits it, and runs against the real
+# repository so `.#git-cliff` resolves.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-changelog-fresh.sh"
+readonly FIXTURES="${REPO_ROOT}/tests/fixtures/changelog-fresh"
 
 failures=0
 function pass() { printf 'PASS: %s\n' "$1"; }
@@ -95,22 +100,54 @@ function merge_no_ff() {
 # @arg $5 optional CHANGELOG_OVERRIDE path
 function run_case() {
   local -r name="$1" dir="$2" regen="$3" want="$4" override="${5:-}"
-  local got=0
+  local got=0 stderr_file
+  stderr_file="$(mktemp)"
   if [[ -n ${override} ]]; then
     (
       cd "${dir}" &&
         CHANGELOG_OVERRIDE="${override}" REGEN_OVERRIDE="${regen}" "${SCRIPT}"
-    ) >/dev/null 2>&1 || got=$?
+    ) >/dev/null 2>"${stderr_file}" || got=$?
   else
     (
       cd "${dir}" && REGEN_OVERRIDE="${regen}" "${SCRIPT}"
-    ) >/dev/null 2>&1 || got=$?
+    ) >/dev/null 2>"${stderr_file}" || got=$?
   fi
   if [[ ${got} -eq ${want} ]]; then
     pass "${name} (exit ${got})"
   else
     fail "${name} — expected exit ${want}, got ${got}"
   fi
+  harness_assert_record "${name}" '' "${stderr_file}"
+  rm --force -- "${stderr_file}"
+}
+
+# @description Run the script against the real repository with a cliff config
+# the generator itself rejects, so git-cliff — not the comparison — is what
+# fails. REGEN_OVERRIDE is deliberately unset: this is the only case that has
+# to reach the generator. Asserts both the exit code and that the diagnostic
+# reaches stderr rather than being swallowed.
+# @arg $1 name  @arg $2 cliff config path  @arg $3 expected exit
+# @arg $4 expected stderr substring
+function run_tooling_case() {
+  local -r name="$1" config="$2" want="$3" expected_stderr="$4"
+  local got=0 stderr_file
+  stderr_file="$(mktemp)"
+  (
+    cd "${REPO_ROOT}" && CLIFF_TOML_OVERRIDE="${config}" "${SCRIPT}"
+  ) >/dev/null 2>"${stderr_file}" || got=$?
+  if [[ ${got} -ne ${want} ]]; then
+    fail "${name} — expected exit ${want}, got ${got}"
+    printf 'stderr was:\n' >&2
+    cat -- "${stderr_file}" >&2
+  elif ! grep --fixed-strings --quiet -- "${expected_stderr}" "${stderr_file}"; then
+    fail "${name} — stderr missing ${expected_stderr@Q}"
+    printf 'stderr was:\n' >&2
+    cat -- "${stderr_file}" >&2
+  else
+    pass "${name} (exit ${got})"
+  fi
+  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
+  rm --force -- "${stderr_file}"
 }
 
 # @description Write the changelog content files used by the cases.
@@ -347,6 +384,16 @@ function main() {
   cp -- "${content}/t1-only.md" "${no_commit}/CHANGELOG.md"
   run_case 'no CHANGELOG.md commit in history -> no exclusion -> exit 1' \
     "${no_commit}" "${content}/both.md" 1
+
+  # --- Case: the generator itself fails ----------------------------------
+  # A git-cliff that cannot run says nothing about whether the committed
+  # changelog is fresh. Reporting it as staleness sends a maintainer to
+  # regenerate a changelog that was never the problem, so it carries its own
+  # exit code and a diagnostic that names the generator and the config.
+  run_tooling_case 'git-cliff failing on its config exits tooling code' \
+    "${FIXTURES}/bad-unparsable-template.toml" 2 'git-cliff regeneration failed'
+
+  harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2

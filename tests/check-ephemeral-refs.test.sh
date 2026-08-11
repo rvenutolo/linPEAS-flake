@@ -13,17 +13,17 @@ readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-ephemeral-refs"
 
 failures=0
 
-# @description Run the lint against one fixture and assert its exit code
-# plus a stderr substring.
+# @description Run the lint against one source under an arbitrary repo
+# root and assert its exit code plus a stderr substring.
 # @arg $1 name human-readable scenario name
-# @arg $2 fixture_dir fixture directory under FIXTURES (used as REPO_ROOT)
-# @arg $3 source_rel source file relative to the fixture REPO_ROOT
+# @arg $2 root absolute path used as REPO_ROOT for the run
+# @arg $3 source_rel source file relative to root
 # @arg $4 mode extra flag passed to the script (empty or "--advisory")
 # @arg $5 expected_exit expected exit status
 # @arg $6 expected_stderr stderr substring that must be present (empty to skip)
-function run_scenario() {
+function run_scenario_root() {
   local -r name="$1"
-  local -r fixture_dir="$2"
+  local -r root="$2"
   local -r source_rel="$3"
   local -r mode="$4"
   local -r expected_exit="$5"
@@ -36,7 +36,7 @@ function run_scenario() {
   [[ -n ${mode} ]] && args+=("${mode}")
 
   local actual_exit=0
-  EPHEMERAL_REFS_ROOT_OVERRIDE="${FIXTURES}/${fixture_dir}" \
+  EPHEMERAL_REFS_ROOT_OVERRIDE="${root}" \
     EPHEMERAL_REFS_SOURCES_OVERRIDE="${source_rel}" \
     "${SCRIPT}" "${args[@]}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
 
@@ -56,6 +56,17 @@ function run_scenario() {
 
   harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
   rm --force -- "${stderr_file}"
+}
+
+# @description Run the lint against one checked-in fixture directory.
+# @arg $1 name human-readable scenario name
+# @arg $2 fixture_dir fixture directory under FIXTURES (used as REPO_ROOT)
+# @arg $3 source_rel source file relative to the fixture REPO_ROOT
+# @arg $4 mode extra flag passed to the script (empty or "--advisory")
+# @arg $5 expected_exit expected exit status
+# @arg $6 expected_stderr stderr substring that must be present (empty to skip)
+function run_scenario() {
+  run_scenario_root "$1" "${FIXTURES}/$2" "$3" "$4" "$5" "$6"
 }
 
 # @description Assert that the source enumeration reaches Markdown
@@ -123,6 +134,24 @@ function run_tilde_scenario() {
   rm --recursive --force -- "${tmp_root}"
 }
 
+# @description Assert that an opening code fence with no closing fence
+# fails loud rather than blanking every line below it — the same
+# end-of-input treatment an unterminated generated block gets. The
+# fixture is built at runtime in a temp dir because the Markdown
+# formatter closes a dangling fence, which is the exact shape under test.
+function run_unterminated_fence_scenario() {
+  local tmp_root
+  tmp_root="$(mktemp -d)"
+  mkdir --parents "${tmp_root}/docs"
+  printf '# t\n\n```\ncode\n\nA blocking ref #321 sits below an unclosed fence.\n' \
+    >"${tmp_root}/docs/unclosed.md"
+
+  run_scenario_root 'unterminated code fence errors' "${tmp_root}" \
+    'docs/unclosed.md' '' 1 'unterminated code fence'
+
+  rm --recursive --force -- "${tmp_root}"
+}
+
 function main() {
   run_scenario 'good prose passes' 'good' 'source.md' '' 0 ''
   run_scenario 'bare issue ref fails' \
@@ -145,6 +174,9 @@ function main() {
   # An unterminated generated block must fail loud, not blank to EOF.
   run_scenario 'unterminated generated block errors' \
     'bad-unterminated-genblock' 'source.md' '' 1 'unterminated generated block'
+  # An unterminated code fence gets the same treatment: exempting every
+  # line below it must be an error, not a silent pass.
+  run_unterminated_fence_scenario
   # A BEGIN marker a doc quotes in prose is documentation, not a block
   # opener: the violation below it must still report, and no
   # unterminated-block error may fire.
