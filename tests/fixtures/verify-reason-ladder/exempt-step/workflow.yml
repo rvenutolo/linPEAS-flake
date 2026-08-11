@@ -1,0 +1,62 @@
+name: fixture-verify
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      reason: ${{ steps.attribute.outputs.reason }}
+    steps:
+      - name: step alpha
+        id: step-alpha
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          printf 'alpha\n'
+
+      - name: step bravo
+        id: step-bravo
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          printf 'bravo\n'
+
+      - name: step charlie
+        id: step-charlie
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          printf 'charlie\n'
+
+      - name: step delta
+        id: step-delta # reason-ladder-exempt: setup step, never a verification outcome
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          printf 'delta\n'
+
+      - name: attribute failure reason
+        id: attribute
+        if: always()
+        env:
+          STEP_ALPHA: ${{ steps.step-alpha.outcome }}
+          STEP_BRAVO: ${{ steps.step-bravo.outcome }}
+          STEP_CHARLIE: ${{ steps.step-charlie.outcome }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          reason='ok'
+          if [[ ${STEP_ALPHA} == 'failure' ]]; then
+            reason='alpha-failed'
+          elif [[ ${STEP_BRAVO} == 'failure' ]]; then
+            reason='bravo-failed'
+          elif [[ ${STEP_CHARLIE} == 'failure' ]]; then
+            reason='charlie-failed'
+          fi
+          printf 'reason=%s\n' "${reason}" >> "${GITHUB_OUTPUT}"

@@ -90,12 +90,19 @@ source of truth).
 
 ## Ephemeral-reference lint
 
-`scripts/check-ephemeral-refs.sh` gates tracked Markdown prose against
+`scripts/check-ephemeral-refs.sh` gates Markdown prose against
 "ephemeral references": tokens that describe what a doc *replaced* or
 which plan, review pass, ticket, date, or PR introduced it, rather than
 the CURRENT state of the repo. Tracked docs are the durable home for
 behavior; history is recovered from `git log` and PR threads, so it must
 not leak into prose.
+
+Scope is every Markdown file in the repo, minus the allowlist below —
+`README.md`, `CONTRIBUTING.md`, `SECURITY.md`, the PR template,
+`tests/README.md`, and everything under `docs/`. Enumeration runs
+through `git ls-files --cached --others --exclude-standard`, so it
+covers files a commit is about to introduce as well as tracked ones, and
+honors `.gitignore` so build outputs stay out.
 
 The script has two modes. The default pass is **blocking** (exit 1 on any
 hit, printing `file:line: [class] token` to stderr). The `--advisory`
@@ -130,9 +137,11 @@ Fuzzy causal-history phrases surface as advisories, never blockers:
 ### Exemptions
 
 - **File allowlist (skipped entirely):** `CHANGELOG.md`,
-    `docs/releases.md`, and everything under `tests/fixtures/**`. The first
-    two structurally list PR refs and dates; fixtures carry intentional
-    static data.
+    `docs/releases.md`, everything under `tests/fixtures/**`, and
+    everything under `.claude/**`. The first two structurally list PR
+    refs and dates; fixtures carry intentional static data; `.claude/`
+    holds Claude tooling rather than user-facing prose, so its
+    workflow-phase and label vocabulary is not an ephemeral reference.
 - **Structural stripping:** generated auto-blocks (the `BEGIN`/`END`
     HTML-comment marker pairs), fenced code blocks, and inline code spans
     are blanked in place (preserving line count) before matching. Stable

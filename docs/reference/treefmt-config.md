@@ -68,6 +68,7 @@ tests/fixtures/run-block-strict/bad-malformed.yml
 tests/fixtures/scorecard-threshold/malformed.json
 tests/fixtures/setup-nix-required/bad-malformed.yml
 tests/fixtures/upload-artifact-strict/bad-malformed.yml
+tests/fixtures/verify-reason-ladder/malformed/bad-malformed.yml
 ```
 
 <!-- END treefmt-config -->

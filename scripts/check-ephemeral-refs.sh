@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # scripts/check-ephemeral-refs.sh
 #
-# @description Lint: tracked Markdown prose must carry no ephemeral
-# references — PR/issue refs, prose dates, planning/review-pass labels,
-# or literal .claude/ paths. Default mode blocks (exit 1); --advisory
-# mode warns on fuzzy causal-history phrases and always exits 0.
+# @description Lint: every Markdown file in the repo must carry no
+# ephemeral references — PR/issue refs, prose dates, planning/review-pass
+# labels, or literal .claude/ paths. Default mode blocks (exit 1);
+# --advisory mode warns on fuzzy causal-history phrases and always
+# exits 0.
 
-# Lint: ban "ephemeral references" from tracked Markdown prose. Tracked
-# docs describe the CURRENT state of the repo, not what they replaced or
-# which plan/PR/date introduced them.
+# Lint: ban "ephemeral references" from the repo's Markdown prose.
+# Tracked docs describe the CURRENT state of the repo, not what they
+# replaced or which plan/PR/date introduced them.
 #
 # Modes:
 #   default     — blocking. Scan prose for high-precision banned shapes,
@@ -17,15 +18,17 @@
 #   --advisory  — warn-only. Print `[advisory] file:line: phrase` for
 #                 fuzzy causal-history phrases, always exit 0.
 #
-# Scanning pipeline (per file): blank generated BEGIN/END blocks, blank
-# fenced ``` code blocks, blank inline `code` spans — all in place so
-# reported line numbers stay accurate against the original file — then
-# match the remaining prose.
+# Scanning pipeline (per file): blank fenced ``` code blocks, blank
+# inline `code` spans, then blank generated BEGIN/END blocks — all in
+# place so reported line numbers stay accurate against the original
+# file — then match the remaining prose.
 #
-# Sources scanned: README.md + tracked docs/**/*.md, minus the file
-# allowlist (CHANGELOG.md, docs/releases.md, tests/fixtures/**). Those
-# structurally list PR refs + dates in prose. .claude/CLAUDE.md is
-# intentionally untracked; the reviewable spec lives in
+# Sources scanned: every Markdown path git reports for the repo — both
+# committed files and uncommitted, unignored ones — minus the file
+# allowlist (CHANGELOG.md, docs/releases.md, tests/fixtures/**,
+# .claude/**). The first two structurally list PR refs + dates in prose;
+# fixtures carry the banned shapes as data; .claude/ holds Claude tooling
+# rather than user-facing prose. The reviewable spec lives in
 # docs/development/linting.md.
 #
 # Env overrides (test-only):
@@ -76,8 +79,13 @@ readonly RE_CAUSAL='(prior to|previously|Migration note|was reshaped|Tightened f
 
 # @description Blank ephemeral-exempt regions in place, preserving line
 # count so downstream line numbers match the original file. Blanks
-# generated <!-- BEGIN x -->/<!-- END x --> blocks (and their fences),
+# generated <!-- BEGIN x -->/<!-- END x --> blocks (and their markers),
 # fenced ``` code blocks (and their fences), and inline `code` spans.
+# Runs as two passes: the first blanks code (fences and inline spans),
+# the second blanks generated blocks. Because the second pass only ever
+# sees prose, a BEGIN marker a doc quotes inside code is documentation
+# rather than a block opener, so it can neither raise a phantom
+# unterminated-block error nor blank the prose that follows it.
 # A generated BEGIN with no matching END would otherwise blank every
 # line to EOF, silently hiding any violation below it — an unterminated
 # marker is a doc defect, so fail loud (exit 1) instead.
@@ -89,17 +97,10 @@ readonly RE_CAUSAL='(prior to|previously|Migration note|was reshaped|Tightened f
 function strip_exempt() {
   local -r file="$1"
   local -r src_rel="$2"
-  awk -v src_rel="${src_rel}" '
+  # Pass one: code. Every branch emits exactly one line per input line.
+  awk '
     {
       line = $0
-      # Generated BEGIN/END blocks: blank the markers and everything
-      # between them.
-      if (line ~ /<!--[[:space:]]*BEGIN[[:space:]]/) { in_gen = 1; print ""; next }
-      if (in_gen) {
-        if (line ~ /<!--[[:space:]]*END[[:space:]]/) { in_gen = 0 }
-        print ""
-        next
-      }
       # Fenced code blocks (backtick or tilde): blank the fences and
       # everything between them.
       if (line ~ /^[[:space:]]*(```|~~~)/) {
@@ -118,13 +119,25 @@ function strip_exempt() {
       }
       print line
     }
+  ' "${file}" |
+    # Pass two: generated blocks, over pass one's code-free output.
+    awk -v src_rel="${src_rel}" '
+    {
+      if ($0 ~ /<!--[[:space:]]*BEGIN[[:space:]]/) { in_gen = 1; print ""; next }
+      if (in_gen) {
+        if ($0 ~ /<!--[[:space:]]*END[[:space:]]/) { in_gen = 0 }
+        print ""
+        next
+      }
+      print
+    }
     END {
       if (in_gen) {
         printf "%s: unterminated generated block\n", src_rel > "/dev/stderr"
         exit 1
       }
     }
-  ' "${file}"
+  '
 }
 
 # @description Scan one stripped source for a blocking class and print
@@ -189,25 +202,33 @@ function scan_advisory() {
   rm --force -- "${tmp}"
 }
 
+# @description Enumerate every Markdown source to scan, relative to
+# REPO_ROOT. The invariant covers all Markdown prose in the repo, not one
+# directory, so enumeration is git's rather than a hand-kept path list.
+# @stdout one source path per line, sorted
 function resolve_sources() {
   if [[ -n ${EPHEMERAL_REFS_SOURCES_OVERRIDE:-} ]]; then
     printf '%s\n' "${EPHEMERAL_REFS_SOURCES_OVERRIDE}"
     return 0
   fi
-  {
-    [[ -f ${REPO_ROOT}/README.md ]] && printf 'README.md\n'
-    [[ -d ${REPO_ROOT}/docs ]] &&
-      (cd "${REPO_ROOT}" && find docs -type f -name '*.md' 2>/dev/null | sort)
-  }
+  # `--cached` covers tracked Markdown. `--others --exclude-standard`
+  # adds Markdown that is not committed yet but is not ignored either —
+  # exactly the files a commit is about to introduce, so a new doc is
+  # gated by the same run that introduces it. Honoring the ignore rules
+  # keeps build outputs and dependency trees out of the scan.
+  (cd "${REPO_ROOT}" && git ls-files --cached --others --exclude-standard -- '*.md' 2>/dev/null | sort)
 }
 
 # @description True when the given source path is on the skip-entirely
-# file allowlist (CHANGELOG.md, docs/releases.md, tests/fixtures/**).
+# file allowlist (CHANGELOG.md, docs/releases.md, tests/fixtures/**,
+# .claude/**).
 # @arg $1 src_rel source path relative to REPO_ROOT
 function is_allowlisted() {
   local -r src_rel="$1"
   case "${src_rel}" in
-  CHANGELOG.md | docs/releases.md | tests/fixtures/*)
+  # `.claude/` holds Claude tooling rather than user-facing prose, so its
+  # workflow-phase and label vocabulary is not an ephemeral reference.
+  CHANGELOG.md | docs/releases.md | tests/fixtures/* | .claude/*)
     return 0
     ;;
   esac
@@ -217,7 +238,13 @@ function is_allowlisted() {
 function main() {
   local sources_tmp
   sources_tmp="$(mktemp)"
-  resolve_sources >"${sources_tmp}"
+  # An enumeration that cannot run leaves nothing to scan, which would
+  # otherwise read as a clean tree. Say why the run stopped.
+  if ! resolve_sources >"${sources_tmp}"; then
+    rm --force -- "${sources_tmp}"
+    printf 'cannot enumerate Markdown sources under %s\n' "${REPO_ROOT}" >&2
+    exit 1
+  fi
   local -a sources=()
   mapfile -t sources <"${sources_tmp}"
   rm --force -- "${sources_tmp}"
