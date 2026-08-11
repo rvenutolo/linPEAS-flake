@@ -172,9 +172,13 @@ Enforced by `scripts/check-ci-job-in-summary.sh`. Wired as the `lint-doc-invaria
 
 ## run-block-strict
 
-Every block-scalar or newline-carrying `run:` block under `.github/workflows/*.yml` starts with `set -Eeuo pipefail` as its first non-blank, non-comment line.
+Every block-scalar or newline-carrying `run:` block under `.github/workflows/*.yml` (or `.yaml`) and `.github/actions/**/action.yml` (or `.yaml`) starts with `set -Eeuo pipefail` as its first non-blank, non-comment line.
 
 Bash inside Actions `run:` blocks defaults to `-e` off. A failed command in the middle of a block that runs several commands silently continues, producing wrong results in security-critical jobs (release signing, attestation verify, pin write-back). The strict-mode prelude closes that gap.
+
+Composite actions are covered for the same reason, and the exposure is larger there: a composite runs inside every job that calls it, so one block that swallows a failure swallows it across the whole workflow set. Composite steps hang off `runs.steps` instead of `jobs.<id>.steps`, so the lint reads both document shapes and names which one a violation came from (`job <id> step[n]` versus `composite step[n]`).
+
+Adding the prelude to an existing block is a behavior change, not a formality: a command whose non-zero exit the block previously ignored will abort the step under `-e`. Blocks that tolerate failure by design — retry loops, optional probes — must keep the tolerated command in a context that consumes its status (an `if` condition, a `||` fallback) and say so, rather than relying on `-e` being absent.
 
 The rule keys off YAML node style (`|`, `>`, and their chomping/indent variants) as well as newlines in the evaluated value. Newline presence alone under-detects: a folded scalar (`run: >-`) spells a `;`-separated command sequence across several source lines but folds to one newline-free string, so a block that plainly runs several commands would otherwise slip past the requirement.
 

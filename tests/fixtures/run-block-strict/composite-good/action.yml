@@ -1,0 +1,15 @@
+name: composite-good
+description: "Composite action whose multi-line run: block carries the strict-mode prelude."
+
+runs:
+  using: composite
+  steps:
+    - name: multi-line good
+      shell: bash
+      run: |
+        set -Eeuo pipefail
+        echo one
+        echo two
+    - name: single line ok
+      shell: bash
+      run: echo single
