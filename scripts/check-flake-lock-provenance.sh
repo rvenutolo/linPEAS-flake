@@ -52,6 +52,11 @@
 #     than 32 levels deep is reported `unresolvable` even though nothing
 #     about it is malformed. Real locks nest a handful of levels; a lock
 #     that trips this needs the ceiling raised, not a lint bypass.
+#     Both cases report `unresolvable (follows path exceeds nesting
+#     ceiling)`: the resolver carries no visited set, so a cycle and an
+#     over-deep legal chain are the same observation to it, and the
+#     message names the bound that stopped it rather than asserting a
+#     diagnosis it cannot make.
 #   * Step budget (4096): total resolve steps across every top-level ref
 #     of BOTH locks. The ceiling caps nesting depth but not branching
 #     width, and a ref is re-resolved per path element — so depth alone
@@ -64,7 +69,11 @@
 #     every link of it is itself a top-level ref.
 #
 # A ref that cannot be resolved (dangling path element, cycle, empty
-# array, over-deep chain, exhausted budget) fails closed.
+# array, over-deep chain, exhausted budget) fails closed, reporting which
+# of the three the resolver observed: a missing node or malformed path
+# element is `unresolvable (follows path names no such node)`, the two
+# bounds report themselves, and the bare `unresolvable` is reserved for
+# an error the resolver did not raise itself.
 #
 # CI coupling: the lint-doc-invariants job fetches origin/main before
 # running this check. `actions/checkout` does not create
@@ -134,6 +143,17 @@ def srcid:
   { original: (.original // null),
     flake: (.flake // null),
     locked: ((.locked // {}) | del(.rev, .narHash, .lastModified)) };
+# Names the leaf fields that differ between two srcid projections, so a
+# repoint says which property moved rather than only that one did. Paths
+# are dot-joined and sorted, and an absent side renders as `(absent)` so
+# an added or dropped field is distinguishable from a changed value.
+# `srcid` already drops rev/narHash/lastModified, so a routine bump never
+# reaches here and the message stays stable across bumps.
+def srcdiff($a; $b):
+  [ ((([$a | paths(scalars)]) + ([$b | paths(scalars)])) | unique)[] as $p
+    | select(($a | getpath($p)) != ($b | getpath($p)))
+    | "\($p | join(".")): \(($a | getpath($p)) // "(absent)") -> \(($b | getpath($p)) // "(absent)")" ]
+  | sort | join(", ");
 # Nesting ceiling and total step budget — see the header for what each
 # one bounds and why depth alone is not enough.
 def follows_depth_ceiling: 32;
@@ -148,35 +168,39 @@ def inputs_of($node):
   end;
 # Resolves one input ref to a node id, threading the remaining step
 # budget through every recursion. Returns { node, left }; raises
-# { budget, left } so a caught failure still reports the steps it spent
-# and the budget stays global rather than per-ref.
+# { budget, reason, left } so a caught failure still reports the steps it
+# spent and which bound or malformation stopped it, and the budget stays
+# global rather than per-ref.
 def resolve($lock; $origin; $ref; $depth; $left):
-  if $left <= 0 then error({ budget: true, left: 0 })
+  if $left <= 0 then error({ budget: true, reason: "budget", left: 0 })
   else ($left - 1) as $rem
   | if $depth > follows_depth_ceiling
-    then error({ budget: false, left: $rem })
+    then error({ budget: false, reason: "ceiling", left: $rem })
     elif ($ref | type) == "string" then { node: $ref, left: $rem }
     elif ($ref | type) == "array" then
-      if ($ref | length) == 0 then error({ budget: false, left: $rem })
+      if ($ref | length) == 0 then error({ budget: false, reason: "nonode", left: $rem })
       else reduce $ref[] as $e ({ node: $origin, left: $rem };
         . as $st
-        | if ($e | type) != "string" then error({ budget: false, left: $st.left }) else . end
-        | ($lock.nodes[$st.node] // error({ budget: false, left: $st.left })) as $node
-        | (inputs_of($node)[$e] // error({ budget: false, left: $st.left })) as $next
+        | if ($e | type) != "string" then error({ budget: false, reason: "nonode", left: $st.left }) else . end
+        | ($lock.nodes[$st.node] // error({ budget: false, reason: "nonode", left: $st.left })) as $node
+        | (inputs_of($node)[$e] // error({ budget: false, reason: "nonode", left: $st.left })) as $next
         | resolve($lock; $origin; $next; $depth + 1; $st.left))
       end
-    else error({ budget: false, left: $rem })
+    else error({ budget: false, reason: "nonode", left: $rem })
     end
   end;
-# Never-raising wrapper: on failure the node is null and `exhausted`
-# says whether the step budget ran out. An error value that is not one
-# of ours cannot report what it spent, so it forfeits the rest of the
-# budget — every later ref then fails closed too.
+# Never-raising wrapper: on failure the node is null, `exhausted` says
+# whether the step budget ran out, and `reason` names what the resolver
+# observed. An error value that is not one of ours cannot report what it
+# spent, so it forfeits the rest of the budget — every later ref then
+# fails closed too — and reports `unknown`, which keeps its message
+# generic rather than claiming a diagnosis the resolver did not make.
 def try_resolve($lock; $origin; $ref; $left):
-  try (resolve($lock; $origin; $ref; 0; $left) + { exhausted: false })
+  try (resolve($lock; $origin; $ref; 0; $left) + { exhausted: false, reason: "ok" })
   catch (if (type == "object") and has("left")
-         then { node: null, left: .left, exhausted: (.budget == true) }
-         else { node: null, left: 0, exhausted: false }
+         then { node: null, left: .left, exhausted: (.budget == true),
+                reason: (.reason // "unknown") }
+         else { node: null, left: 0, exhausted: false, reason: "unknown" }
          end);
 # The base/head root-id comparison happens HERE, on $base.root /
 # $head.root as parsed by jq — never on a shell variable. A node id
@@ -211,9 +235,17 @@ else
           elif ($bres.node == null) or ($hres.node == null)
             or (($base.nodes | has($bres.node)) | not)
             or (($head.nodes | has($hres.node)) | not)
-          then ["FAIL: top-level input unresolvable: \($name)"]
+          then (if ([$bres.reason, $hres.reason] | any(. == "ceiling"))
+                then ["FAIL: top-level input unresolvable (follows path exceeds nesting ceiling): \($name)"]
+                elif ([$bres.reason, $hres.reason] | any(. == "unknown"))
+                then ["FAIL: top-level input unresolvable: \($name)"]
+                else ["FAIL: top-level input unresolvable (follows path names no such node): \($name)"]
+                end)
           elif ($base.nodes[$bres.node] | srcid) != ($head.nodes[$hres.node] | srcid)
-          then ["FAIL: top-level input repointed: \($name)"]
+          then ["FAIL: top-level input repointed: \($name)"
+                + (if $bres.node != $hres.node
+                   then " (\($bres.node) -> \($hres.node))"
+                   else "" end)]
           else []
           end)) })
    | .fails) as $tlrep
@@ -222,7 +254,7 @@ else
     | . as $k
     | select($head.nodes | has($k))
     | select(($base.nodes[$k] | srcid) != ($head.nodes[$k] | srcid))
-    | "FAIL: node repointed: \($k)" ] as $noderep
+    | "FAIL: node repointed: \($k) (\(srcdiff($base.nodes[$k] | srcid; $head.nodes[$k] | srcid)))" ] as $noderep
 | [ ($head.nodes | keys[]) | select(. != $hroot) | . as $k
     | select(($base.nodes | has($k)) | not)
     | "note: transitive node added (tolerated): \($k)" ] as $tadd

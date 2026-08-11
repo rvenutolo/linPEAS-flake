@@ -93,23 +93,11 @@ function run_missing_base() {
 }
 
 function main() {
-  # A top-level input whose resolved source changed reports the same
-  # `top-level input repointed` line whether or not its node was also
-  # renamed; the rename shows only in the tolerated add/remove notes, which
-  # the rename-without-repoint fixture emits too. So no token separates the
-  # rename+repoint fixture from the plain owner/type repoints — those two
-  # are pinned to the `node repointed` line they alone emit, and this pair
-  # is exempted.
-  harness_assert_exempt 'FAIL: top-level input repointed: alpha' \
-    'top-level owner change fails' \
-    'the top-level repoint diagnostic names the input, not the node rename that accompanies it here'
-  harness_assert_exempt 'FAIL: top-level input repointed: alpha' \
-    'top-level type change fails' \
-    'the top-level repoint diagnostic names the input, not the node rename that accompanies it here'
-
   run_scenario 'routine bump passes' 'head-routine.lock' 0 'provenance OK'
-  run_scenario 'top-level owner change fails' 'head-toplevel-owner.lock' 1 'FAIL: node repointed: alpha'
-  run_scenario 'top-level type change fails' 'head-toplevel-type.lock' 1 'FAIL: node repointed: alpha'
+  run_scenario 'top-level owner change fails' 'head-toplevel-owner.lock' 1 \
+    'FAIL: node repointed: alpha (original.owner: orgA -> evil)'
+  run_scenario 'top-level type change fails' 'head-toplevel-type.lock' 1 \
+    'FAIL: node repointed: alpha (locked.type: github -> git)'
   run_scenario 'top-level input added fails' 'head-toplevel-added.lock' 1 'FAIL: top-level input added: delta'
   run_scenario 'top-level input removed fails' 'head-toplevel-removed.lock' 1 'FAIL: top-level input removed: beta'
   run_scenario 'transitive repoint fails' 'head-transitive-repoint.lock' 1 'FAIL: node repointed: gamma'
@@ -117,15 +105,18 @@ function main() {
   run_scenario 'transitive node removed tolerated' 'head-transitive-removed.lock' 0 'provenance OK'
   run_scenario 'garbage head json errors' 'head-garbage.lock' 2 ''
   run_scenario 'top-level rename same source' 'head-toplevel-renamed-same.lock' 0 'provenance OK'
-  run_scenario 'top-level rename + repoint fails' 'head-toplevel-renamed-repoint.lock' 1 'FAIL: top-level input repointed: alpha'
+  run_scenario 'top-level rename + repoint fails' 'head-toplevel-renamed-repoint.lock' 1 \
+    'FAIL: top-level input repointed: alpha (alpha -> alpha_2)'
   run_missing_base 'missing base errors'
 
   run_follows_scenario 'follows routine bump passes' 'head-follows-routine.lock' 0 'provenance OK'
   run_follows_scenario 'string-to-array repoint fails' 'head-follows-string-to-array.lock' 1 'FAIL: top-level input repointed: gamma'
   run_follows_scenario 'array-to-array repoint fails' 'head-follows-array-change.lock' 1 'FAIL: top-level input repointed: beta'
   run_follows_scenario 'string-to-array same source passes' 'head-follows-string-to-array-same.lock' 0 'provenance OK'
-  run_follows_scenario 'dangling follows path fails' 'head-follows-dangling.lock' 1 'FAIL: top-level input unresolvable: beta'
-  run_follows_scenario 'cyclic follows fails' 'head-follows-cycle.lock' 1 'FAIL: top-level input unresolvable: beta'
+  run_follows_scenario 'dangling follows path fails' 'head-follows-dangling.lock' 1 \
+    'FAIL: top-level input unresolvable (follows path names no such node): beta'
+  run_follows_scenario 'cyclic follows fails' 'head-follows-cycle.lock' 1 \
+    'FAIL: top-level input unresolvable (follows path exceeds nesting ceiling): beta'
 
   # Each `bN` input is a two-element path through `bN+1`, so a naive
   # resolver that re-walks every element costs 2^N for a lock under 1 KiB.

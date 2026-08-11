@@ -88,6 +88,18 @@ function main() {
     } >>"${GITHUB_STEP_SUMMARY}"
   fi
 
+  # The table alone says only what each harness did, so an all-pass run is
+  # recognizable only by the absence of a FAIL row — nothing a reader (or a
+  # log grep) can match on. The tally states the outcome positively, and
+  # carries the failure count so that "everything passed" is one fixed
+  # token rather than a number that moves whenever a harness is declared.
+  local passed=0 row
+  for row in "${rows[@]}"; do
+    [[ ${row} == *'| FAIL |'* ]] || passed=$((passed + 1))
+  done
+  printf 'harness-group: %d/%d harnesses passed, %d failed\n' \
+    "${passed}" "${#rows[@]}" "$((${#rows[@]} - passed))"
+
   exit "${failed}"
 }
 
