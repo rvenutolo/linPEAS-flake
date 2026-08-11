@@ -72,7 +72,7 @@ function scan_file() {
         sub(/^[[:space:]]+/, "", stripped)
         # Look for API call markers.
         is_call = (buf ~ /(^|[[:space:]])gh[[:space:]]+api([[:space:]]|$)/ ||
-                   buf ~ /api\.github\.com/)
+          buf ~ /api\.github\.com/)
         # A comment naming an API call is a mention, not a call. Report
         # it as set aside so the caller can say why a file with API text
         # in it contributed no verified call site.
