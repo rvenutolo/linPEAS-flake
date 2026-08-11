@@ -93,20 +93,6 @@ function run_missing_base() {
 }
 
 function main() {
-  # A top-level input whose resolved source changed reports the same
-  # `top-level input repointed` line whether or not its node was also
-  # renamed; the rename shows only in the tolerated add/remove notes, which
-  # the rename-without-repoint fixture emits too. So no token separates the
-  # rename+repoint fixture from the plain owner/type repoints — those two
-  # are pinned to the `node repointed` line they alone emit, and this pair
-  # is exempted.
-  harness_assert_exempt 'FAIL: top-level input repointed: alpha' \
-    'top-level owner change fails' \
-    'the top-level repoint diagnostic names the input, not the node rename that accompanies it here'
-  harness_assert_exempt 'FAIL: top-level input repointed: alpha' \
-    'top-level type change fails' \
-    'the top-level repoint diagnostic names the input, not the node rename that accompanies it here'
-
   run_scenario 'routine bump passes' 'head-routine.lock' 0 'provenance OK'
   run_scenario 'top-level owner change fails' 'head-toplevel-owner.lock' 1 \
     'FAIL: node repointed: alpha (original.owner: orgA -> evil)'
@@ -119,7 +105,8 @@ function main() {
   run_scenario 'transitive node removed tolerated' 'head-transitive-removed.lock' 0 'provenance OK'
   run_scenario 'garbage head json errors' 'head-garbage.lock' 2 ''
   run_scenario 'top-level rename same source' 'head-toplevel-renamed-same.lock' 0 'provenance OK'
-  run_scenario 'top-level rename + repoint fails' 'head-toplevel-renamed-repoint.lock' 1 'FAIL: top-level input repointed: alpha'
+  run_scenario 'top-level rename + repoint fails' 'head-toplevel-renamed-repoint.lock' 1 \
+    'FAIL: top-level input repointed: alpha (alpha -> alpha_2)'
   run_missing_base 'missing base errors'
 
   run_follows_scenario 'follows routine bump passes' 'head-follows-routine.lock' 0 'provenance OK'

@@ -242,7 +242,10 @@ else
                 else ["FAIL: top-level input unresolvable (follows path names no such node): \($name)"]
                 end)
           elif ($base.nodes[$bres.node] | srcid) != ($head.nodes[$hres.node] | srcid)
-          then ["FAIL: top-level input repointed: \($name)"]
+          then ["FAIL: top-level input repointed: \($name)"
+                + (if $bres.node != $hres.node
+                   then " (\($bres.node) -> \($hres.node))"
+                   else "" end)]
           else []
           end)) })
    | .fails) as $tlrep
