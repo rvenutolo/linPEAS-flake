@@ -31,9 +31,10 @@ function run_scenario() {
   local -r env_override="$5"
   shift 5
 
-  local stdout_file stderr_file
+  local stdout_file stderr_file outcome_file
   stdout_file="$(mktemp)"
   stderr_file="$(mktemp)"
+  outcome_file="$(mktemp)"
 
   local actual_exit=0
   if [[ -n ${env_override} ]]; then
@@ -43,11 +44,17 @@ function run_scenario() {
   else
     "${SCRIPT}" "$@" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
   fi
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
 
-  # Each stream carries its own expected substring and is grepped on its
-  # own, so each is recorded against the file the harness actually greps.
-  harness_assert_record "${name} (stderr)" "${expected_stderr}" "${stderr_file}"
-  harness_assert_record "${name} (stdout)" "${expected_stdout}" "${stdout_file}"
+  # One run is one scenario. Its record is the whole observable outcome —
+  # exit code, stdout, stderr — carrying the substring expected of each
+  # stream. Recording the run once per stream would make those two records
+  # byte-identical siblings, which no substring can separate.
+  harness_assert_record "${name}" "${expected_stdout}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  if [[ -n ${expected_stderr} ]]; then
+    harness_assert_also "${expected_stderr}"
+  fi
 
   local failed=0
 
@@ -81,7 +88,7 @@ function run_scenario() {
     failures=$((failures + 1))
   fi
 
-  rm --force -- "${stdout_file}" "${stderr_file}"
+  rm --force -- "${stdout_file}" "${stderr_file}" "${outcome_file}"
 }
 
 # @description Make a temp dir whose `docker` stub exits with a fixed code,
