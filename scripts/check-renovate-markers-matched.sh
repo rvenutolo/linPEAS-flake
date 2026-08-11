@@ -138,26 +138,55 @@ else
 fi
 
 fail=0
+live=''
 for rel in "${files[@]}"; do
   file="${SCAN_ROOT}/${rel}"
   # Only files carrying a real renovate marker need coverage.
   if ! grep --quiet --perl-regexp -- "${MARKER_RE}" "${file}"; then
     continue
   fi
-  covered=0
+  # A marker dies two ways, and they call for different edits to
+  # renovate.json: no managerFilePattern brings the file into any
+  # manager's scope, or a manager does scope it but none of that
+  # manager's matchStrings matches a line. Collecting the scoping
+  # managers separately from the covering one lets the diagnostic name
+  # which of the two happened instead of leaving the operator to bisect
+  # the config.
+  covering=-1
+  scoping=''
   for ((i = 0; i < num_managers; i++)); do
-    if file_pattern_matches "${i}" "${rel}" &&
-      match_string_hits_file "${i}" "${file}"; then
-      covered=1
+    file_pattern_matches "${i}" "${rel}" || continue
+    scoping+="${scoping:+, }customManagers[${i}]"
+    if match_string_hits_file "${i}" "${file}"; then
+      covering="${i}"
       break
     fi
   done
-  if [[ ${covered} -eq 0 ]]; then
-    while IFS= read -r lineno; do
-      printf 'dead renovate marker: %s:%s\n' "${rel}" "${lineno}" >&2
-    done < <(grep --line-number --perl-regexp -- "${MARKER_RE}" "${file}" | cut --delimiter=: --fields=1)
-    fail=1
+  if [[ ${covering} -ge 0 ]]; then
+    live+="${live:+, }${rel} by customManagers[${covering}]"
+    continue
   fi
+  if [[ -z ${scoping} ]]; then
+    reason='no managerFilePattern scopes this path'
+  else
+    reason="scoped by ${scoping} but no matchString matches a line"
+  fi
+  while IFS= read -r lineno; do
+    printf 'dead renovate marker: %s:%s (%s)\n' "${rel}" "${lineno}" "${reason}" >&2
+  done < <(grep --line-number --perl-regexp -- "${MARKER_RE}" "${file}" | cut --delimiter=: --fields=1)
+  fail=1
 done
+
+# A silent exit 0 cannot be told apart from a run that found no markers at
+# all — a scan whose file list quietly went empty looks exactly like a
+# healthy tree. Name every marked file and the manager that kept it live so
+# the pass states what it verified.
+if [[ ${fail} -eq 0 ]]; then
+  if [[ -z ${live} ]]; then
+    printf 'renovate markers: none found\n'
+  else
+    printf 'renovate markers: all live; matched %s\n' "${live}"
+  fi
+fi
 
 exit "${fail}"
