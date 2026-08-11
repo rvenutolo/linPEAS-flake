@@ -74,8 +74,13 @@ harness_assert_record nominal  "wrote dashboard"        "${d}/nominal.out"
 harness_assert_record degraded "WARN degraded lookup"   "${d}/degraded.out"
 harness_assert_verify'
 
-  # Two bad-* fixtures legitimately sharing one diagnostic.
+  # Two bad-* fixtures sharing one diagnostic: the substring each asserts
+  # is the substring the other declares, so the pairwise rule has nothing
+  # to say about it. The pool collapses to one outcome, which is what the
+  # parity exemption here is for, so the case reads the pairwise rule
+  # alone.
   check 'identical substrings do not flag each other' 0 'checked 2' '
+harness_assert_parity_exempt a b "pool constructed to exercise the pairwise rule"
 d="$(mktemp -d)"
 printf "marker missing\n" >"${d}/a.out"
 printf "marker missing\n" >"${d}/b.out"
@@ -131,6 +136,7 @@ harness_assert_verify'
   # timestamp. Comparing raw bytes would make the verdict depend on whether
   # the two runs landed in the same second, so the census would flap.
   check 'log timestamps do not make two identical outputs differ' 0 'across 2 scenarios (1 distinct outputs)' '
+harness_assert_parity_exempt a b "pool constructed to exercise timestamp normalization"
 d="$(mktemp -d)"
 printf "[2026-01-02T03:04:05-0500] ERROR BEGIN marker missing from doc.md\n" >"${d}/a.out"
 printf "[2026-01-02T03:04:06-0500] ERROR BEGIN marker missing from doc.md\n" >"${d}/b.out"
@@ -147,6 +153,7 @@ harness_assert_record b "marker missing from other.md" "${d}/b.out"
 harness_assert_verify'
 
   check 'census reports the distinct-output count' 0 'across 3 scenarios (2 distinct outputs)' '
+harness_assert_parity_exempt a b "pool constructed to exercise the distinct-output count"
 d="$(mktemp -d)"
 printf "alpha\nbeta\n" >"${d}/a.out"
 printf "alpha\nbeta\n" >"${d}/b.out"
@@ -199,8 +206,12 @@ harness_assert_verify'
 harness_assert_also "orphan"'
 
   # Identical output with differing assertions: neither substring can
-  # separate the two, and the pairwise rule skips the pair by design.
+  # separate the two, and the pairwise rule skips the pair by design. The
+  # parity exemption is what a harness registers for such a pair, and the
+  # rule below is the guarantee that still holds once parity has excused
+  # it — so these two cases prove the rules compose.
   check 'identical output with differing assertions is flagged' 1 'assert different substrings' '
+harness_assert_parity_exempt a b "pool constructed to exercise the identical-output rule"
 d="$(mktemp -d)"
 printf "alpha beta\n" >"${d}/a.out"
 printf "alpha beta\n" >"${d}/b.out"
@@ -209,6 +220,7 @@ harness_assert_record b "beta"  "${d}/b.out"
 harness_assert_verify'
 
   check 'identical output where one asserts nothing is flagged' 1 'assert different substrings' '
+harness_assert_parity_exempt a b "pool constructed to exercise the identical-output rule"
 d="$(mktemp -d)"
 printf "alpha beta\n" >"${d}/a.out"
 printf "alpha beta\n" >"${d}/b.out"
@@ -217,6 +229,7 @@ harness_assert_record b ""      "${d}/b.out"
 harness_assert_verify'
 
   check 'identical output with identical assertions still passes' 0 'checked 2' '
+harness_assert_parity_exempt a b "pool constructed to exercise the identical-output rule"
 d="$(mktemp -d)"
 printf "marker missing\n" >"${d}/a.out"
 printf "marker missing\n" >"${d}/b.out"
@@ -225,12 +238,53 @@ harness_assert_record b "marker missing" "${d}/b.out"
 harness_assert_verify'
 
   check 'census names the scenarios sharing an output' 0 "sharing one output: 'a', 'b'" '
+harness_assert_parity_exempt a b "pool constructed to exercise the census naming"
 d="$(mktemp -d)"
 printf "same\n" >"${d}/a.out"
 printf "same\n" >"${d}/b.out"
 harness_assert_record a "" "${d}/a.out"
 harness_assert_record b "" "${d}/b.out"
 harness_assert_verify'
+
+  # Parity: two scenarios whose whole observable outcome is the same
+  # verify one thing between them, so matching assertions do not rescue
+  # the pair — the second scenario adds no evidence the first lacks.
+  check 'two scenarios sharing one outcome are flagged' 1 'share one observable outcome' '
+d="$(mktemp -d)"
+printf "marker missing\n" >"${d}/a.out"
+printf "marker missing\n" >"${d}/b.out"
+harness_assert_record a "marker missing" "${d}/a.out"
+harness_assert_record b "marker missing" "${d}/b.out"
+harness_assert_verify'
+
+  check 'the parity diagnostic offers merging as a way out' 1 'harness_assert_also' '
+d="$(mktemp -d)"
+printf "marker missing\n" >"${d}/a.out"
+printf "marker missing\n" >"${d}/b.out"
+harness_assert_record a "marker missing" "${d}/a.out"
+harness_assert_record b "marker missing" "${d}/b.out"
+harness_assert_verify'
+
+  check 'parity exemption suppresses the named pair' 0 'checked 2' '
+harness_assert_parity_exempt a b "the fixtures differ in an input the script never reads"
+d="$(mktemp -d)"
+printf "marker missing\n" >"${d}/a.out"
+printf "marker missing\n" >"${d}/b.out"
+harness_assert_record a "marker missing" "${d}/a.out"
+harness_assert_record b "marker missing" "${d}/b.out"
+harness_assert_verify'
+
+  check 'parity exemption for a different pair does not suppress' 1 'share one observable outcome' '
+harness_assert_parity_exempt a c "unrelated pair"
+d="$(mktemp -d)"
+printf "marker missing\n" >"${d}/a.out"
+printf "marker missing\n" >"${d}/b.out"
+harness_assert_record a "marker missing" "${d}/a.out"
+harness_assert_record b "marker missing" "${d}/b.out"
+harness_assert_verify'
+
+  check 'parity exemption without a rationale is rejected' 1 'rationale' '
+harness_assert_parity_exempt a b ""'
 
   # Fail-closed cases.
   check 'verify with no records fails closed' 1 'no scenarios recorded' '
