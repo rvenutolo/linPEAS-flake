@@ -3,6 +3,33 @@
   treefmtWrapper,
   ...
 }:
+let
+  # Union of every hard requirement the scripts/ generators behind these
+  # hooks declare with `require_tool`, exported by every hook in this file
+  # rather than per-hook subsets. One shared prelude means a generator that
+  # adds a `require_tool` needs no hook edit here, and a commit made from a
+  # shell outside the devShell resolves the same pinned binaries the
+  # devShell does instead of whatever the host happens to ship.
+  #
+  # `git` and `nix` stay ambient on purpose: the hooks run under the user's
+  # git, and pinning nix inside a hook would shadow the host daemon client.
+  #
+  # treefmt must be the store-baked wrapper. The generators format the doc
+  # they compare against, so an ambient treefmt — different formatter
+  # versions, none of this repo's baked config — makes `--check` report
+  # drift that is not there or pass a doc that is stale.
+  toolPath = pkgs-unstable.lib.makeBinPath [
+    pkgs-unstable.coreutils
+    pkgs-unstable.diffutils
+    pkgs-unstable.gawk
+    pkgs-unstable.gnugrep
+    pkgs-unstable.gnused
+    pkgs-unstable.jq
+    pkgs-unstable.just
+    pkgs-unstable.yq-go
+    treefmtWrapper
+  ];
+in
 {
   # Refuse to commit if the flake-show block in docs/reference/flake-outputs.md
   # is stale. Invokes refresh-flake-show.sh in --check mode — never mutates the
@@ -28,6 +55,7 @@
       if [[ ! -f scripts/refresh-flake-show.sh || ! -f docs/reference/flake-outputs.md ]]; then
         exit 0
       fi
+      export PATH="${toolPath}:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-flake-show.sh --check
     ''}";
     files = "^(flake\\.nix|flake\\.lock|linpeas-pin\\.json|nix/.*\\.nix|docs/reference/flake-outputs\\.md|scripts/refresh-flake-show\\.sh)$";
@@ -46,7 +74,7 @@
       set -Eeuo pipefail
       IFS=$'\n\t'
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-      export PATH="${pkgs-unstable.just}/bin:$PATH"
+      export PATH="${toolPath}:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-just-recipes.sh --check
     ''}";
     files = "^(justfile|README\\.md|docs/reference/just-recipes\\.md|scripts/refresh-just-recipes\\.sh)$";
@@ -66,7 +94,7 @@
       if [[ ! -f scripts/refresh-treefmt-config.sh || ! -f docs/reference/treefmt-config.md ]]; then
         exit 0
       fi
-      export PATH="${pkgs-unstable.jq}/bin:${pkgs-unstable.gawk}/bin:${treefmtWrapper}/bin:$PATH"
+      export PATH="${toolPath}:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-treefmt-config.sh --check
     ''}";
     files = "^(treefmt\\.nix|flake\\.nix|flake\\.lock|nix/.*\\.nix|docs/reference/treefmt-config\\.md|scripts/refresh-treefmt-config\\.sh)$";
@@ -81,7 +109,7 @@
       set -Eeuo pipefail
       IFS=$'\n\t'
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-      export PATH="${pkgs-unstable.jq}/bin:${pkgs-unstable.gawk}/bin:${treefmtWrapper}/bin:$PATH"
+      export PATH="${toolPath}:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-scripts-reference.sh --check
     ''}";
     files = "^(scripts/.*\\.sh|scripts/_script_docs\\.awk|docs/reference/scripts\\.md)$";
@@ -96,6 +124,7 @@
       set -Eeuo pipefail
       IFS=$'\n\t'
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${toolPath}:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-precommit-table.sh --check
     ''}";
     files = "^(flake\\.nix|nix/hooks/.*\\.nix|nix/manifests\\.nix|docs/development/git\\.md|scripts/refresh-precommit-table\\.sh)$";
@@ -110,7 +139,7 @@
       set -Eeuo pipefail
       IFS=$'\n\t'
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-      export PATH="${pkgs-unstable.jq}/bin:${pkgs-unstable.yq-go}/bin:${treefmtWrapper}/bin:$PATH"
+      export PATH="${toolPath}:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-ci-dag.sh --check
     ''}";
     files = "^(\\.github/workflows/ci\\.yml|docs/_data/ci-check-categories\\.yml|docs/architecture/ci-dag\\.md|scripts/refresh-ci-dag\\.sh)$";
@@ -125,7 +154,7 @@
       set -Eeuo pipefail
       IFS=$'\n\t'
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-      export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+      export PATH="${toolPath}:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-ci-summary.sh --check
     ''}";
     files = "^(README\\.md|docs/security/required-checks\\.md|docs/_data/ci-check-categories\\.yml|scripts/refresh-ci-summary\\.sh)$";
@@ -140,7 +169,7 @@
       set -Eeuo pipefail
       IFS=$'\n\t'
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-      export PATH="${pkgs-unstable.jq}/bin:${pkgs-unstable.yq-go}/bin:$PATH"
+      export PATH="${toolPath}:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-enforcement-matrix.sh --check
     ''}";
     files = "^(docs/invariant-index\\.md|docs/security/enforcement-matrix\\.md|scripts/check-.*\\.sh|scripts/refresh-enforcement-matrix\\.sh|\\.github/workflows/ci\\.yml|flake\\.nix|nix/hooks/.*\\.nix|nix/manifests\\.nix)$";
@@ -158,6 +187,7 @@
       set -Eeuo pipefail
       IFS=$'\n\t'
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${toolPath}:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-orphan-invariants.sh
     ''}";
     files = "^(docs/invariant-index\\.md|docs/.*\\.md|scripts/check-orphan-invariants\\.sh)$";
@@ -175,6 +205,7 @@
       set -Eeuo pipefail
       IFS=$'\n\t'
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${toolPath}:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-doc-anchors.sh
     ''}";
     files = "^(README\\.md|docs/.*\\.md|scripts/check-doc-anchors\\.sh)$";
@@ -194,6 +225,7 @@
       set -Eeuo pipefail
       IFS=$'\n\t'
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${toolPath}:$PATH"
       ${pkgs-unstable.bash}/bin/bash scripts/check-ephemeral-refs.sh
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-ephemeral-refs.sh --advisory
     ''}";
@@ -213,6 +245,7 @@
       set -Eeuo pipefail
       IFS=$'\n\t'
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${toolPath}:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-cron-table.sh
     ''}";
     files = "^(\\.github/workflows/.*\\.ya?ml|docs/architecture/ci\\.md|scripts/check-cron-table\\.sh)$";
@@ -230,6 +263,7 @@
       set -Eeuo pipefail
       IFS=$'\n\t'
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${toolPath}:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-doc-cron-restatement.sh
     ''}";
     files = "^(README\\.md|docs/.*\\.md|\\.github/workflows/.*\\.ya?ml|scripts/check-doc-cron-restatement\\.sh)$";
