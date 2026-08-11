@@ -42,11 +42,22 @@ runs:
       # slow resolver into a red build.
       shell: bash
       run: |
+        set -Eeuo pipefail
+        # A failing probe is the expected state while the resolver is cold, so
+        # the lookup is deliberately run as an `if` condition: a condition's
+        # exit status is consumed by the branch and never trips `-e`, leaving
+        # the loop free to retry. Keep the probe in a condition — a bare
+        # `host ...` line would abort the step on the first cold lookup.
         for _ in $(seq 1 30); do
-          if host cache.nixos.org >/dev/null 2>&1; then exit 0; fi
+          if host cache.nixos.org >/dev/null 2>&1; then
+            exit 0
+          fi
           sleep 1
         done
         echo '::warning::cache.nixos.org did not resolve within 30s; proceeding and relying on nix download retries' >&2
+        # Exhausting the retries is a warning, not a failure; say so explicitly
+        # rather than inheriting the exit status of the preceding echo.
+        exit 0
     - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 # patch-tag-exception: pinned SHA is the v31 annotated-tag object, not a release commit; cachix publishes only floating major tags (v31 retargets across patches) so there is no immutable patch tag to ratchet to
       with:
         install_url: ${{ inputs.install-url }}

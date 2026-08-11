@@ -483,7 +483,8 @@ Exits 0 on clean, 1 if any python invocation found.
 ### scripts/check-run-block-strict.sh
 
 Lint: every block-scalar or newline-carrying `run:`
-block under `.github/workflows/*.yml` starts with
+block under `.github/workflows/*.yml` (or `.yaml`) and
+`.github/actions/**/action.yml` (or `.yaml`) starts with
 `set -Eeuo pipefail` as its first non-blank, non-comment line.
 
 ### scripts/check-scorecard-threshold.sh

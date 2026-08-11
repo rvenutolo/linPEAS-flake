@@ -127,12 +127,13 @@
     pass_filenames = false;
     language = "system";
   };
-  # Every block-scalar or newline-carrying run: block starts with
-  # set -Eeuo pipefail. See docs/security/workflow-hardening.md.
+  # Every block-scalar or newline-carrying run: block, in a workflow job
+  # or a .github/actions composite, starts with set -Eeuo pipefail.
+  # See docs/security/workflow-hardening.md.
   run-block-strict = {
     enable = true;
     name = "run-block-strict";
-    description = "Block-scalar and newline-carrying run: blocks start with set -Eeuo pipefail.";
+    description = "Block-scalar and newline-carrying run: blocks in workflows and composite actions start with set -Eeuo pipefail.";
     entry = "${pkgs-unstable.writeShellScript "run-block-strict-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'
@@ -140,7 +141,7 @@
       export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-run-block-strict.sh
     ''}";
-    files = "^(\\.github/workflows/.*\\.ya?ml|scripts/check-run-block-strict\\.sh)$";
+    files = "^(\\.github/workflows/.*\\.ya?ml|\\.github/actions/.*/action\\.ya?ml|scripts/check-run-block-strict\\.sh)$";
     pass_filenames = false;
     language = "system";
   };
