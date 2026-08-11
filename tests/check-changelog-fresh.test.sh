@@ -383,8 +383,12 @@ function main() {
   commit_changelog "${outside}" "${content}/t1-only.md"
   commit_other "${outside}" 'work-2'
   tag_head "${outside}" '20260726-bbbbbbbb'
+  # The summary must name which of the exclusion rule's states held: a path
+  # whose history git cannot read here and a path no commit has touched both
+  # exclude nothing, and without the reason the two are one observation.
   run_case 'changelog outside the repo -> no exclusion -> exit 1' \
-    "${outside}" "${content}/both.md" 1 "${content}/t1-only.md"
+    "${outside}" "${content}/both.md" 1 "${content}/t1-only.md" \
+    'Excluded: none — the compared changelog has no readable history in this repository'
 
   # --- Case: no CHANGELOG.md commit in history ---------------------------
   # The file exists on disk but was never committed. The ancestry query cannot
@@ -399,7 +403,8 @@ function main() {
   tag_head "${no_commit}" '20260726-bbbbbbbb'
   cp -- "${content}/t1-only.md" "${no_commit}/CHANGELOG.md"
   run_case 'no CHANGELOG.md commit in history -> no exclusion -> exit 1' \
-    "${no_commit}" "${content}/both.md" 1
+    "${no_commit}" "${content}/both.md" 1 '' \
+    'Excluded: none — no commit has touched the compared changelog yet'
 
   # --- Case: the generator itself fails ----------------------------------
   # A git-cliff that cannot run says nothing about whether the committed

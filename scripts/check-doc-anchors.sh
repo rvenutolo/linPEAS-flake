@@ -108,6 +108,27 @@ function headings_of() {
     sed --regexp-extended 's/.*name="([^"]+)".*/\1/' || true
 }
 
+# @description Count the headings in a file whose slug loses characters to
+# the delete step. Those are exactly the slugs where mkdocs-material's
+# separator-collapsing slugify can disagree with GFM, so a clean run is
+# worth more when it says how much of it rested on them.
+# @arg $1 file
+function lossy_heading_count() {
+  local -r f="$1"
+  local body count
+  if [[ ! -f ${f} ]]; then
+    printf '0\n'
+    return 0
+  fi
+  body="$(without_fences "${f}")"
+  # Trailing whitespace is trimmed before slugging, so it is not a deletion.
+  count="$(printf '%s\n' "${body}" |
+    grep --extended-regexp '^#+[[:space:]]+.+' |
+    sed --regexp-extended 's/^#+[[:space:]]+//; s/<[^>]+>//g; s/[[:space:]]+$//' |
+    grep --count --extended-regexp '[^A-Za-z0-9 _-]' || true)"
+  printf '%s\n' "${count:-0}"
+}
+
 if [[ -n ${DOC_ANCHOR_SOURCES_OVERRIDE:-} ]]; then
   mapfile -t SOURCES < <(printf '%s\n' "${DOC_ANCHOR_SOURCES_OVERRIDE}")
 else
@@ -122,10 +143,20 @@ fi
 
 failures=0
 
+# Scope tallies for the summary line, plus a per-target cache so a target
+# linked many times is slugged once.
+declare -A anchor_cache=()
+sources_scanned=0
+links_checked=0
+targets_scanned=0
+anchors_total=0
+lossy_total=0
+
 for src_rel in "${SOURCES[@]}"; do
   [[ -z ${src_rel} ]] && continue
   src_abs="${REPO_ROOT}/${src_rel}"
   [[ -f ${src_abs} ]] || continue
+  sources_scanned=$((sources_scanned + 1))
   src_dir="$(dirname -- "${src_abs}")"
 
   while IFS= read -r match; do
@@ -152,7 +183,18 @@ for src_rel in "${SOURCES[@]}"; do
     if [[ ! -f ${target_abs} ]]; then
       continue
     fi
-    local_headings="$(headings_of "${target_abs}")"
+    if [[ -z ${anchor_cache[${target_abs}]+set} ]]; then
+      anchor_cache["${target_abs}"]="$(headings_of "${target_abs}")"
+      targets_scanned=$((targets_scanned + 1))
+      target_anchors=0
+      if [[ -n ${anchor_cache[${target_abs}]} ]]; then
+        target_anchors="$(printf '%s\n' "${anchor_cache[${target_abs}]}" | wc -l)"
+      fi
+      anchors_total=$((anchors_total + target_anchors))
+      lossy_total=$((lossy_total + $(lossy_heading_count "${target_abs}")))
+    fi
+    local_headings="${anchor_cache[${target_abs}]}"
+    links_checked=$((links_checked + 1))
     if ! printf '%s\n' "${local_headings}" | grep --fixed-strings --line-regexp --quiet -- "${anchor}"; then
       available="$(printf '%s\n' "${local_headings}" | paste -sd, -)"
       printf '[anchor-miss] %s:%s: #%s not found in %s (available: %s)\n' \
@@ -175,4 +217,7 @@ if [[ ${failures} -gt 0 ]]; then
   printf '\n%d failure(s)\n' "${failures}" >&2
   exit 1
 fi
+printf 'check-doc-anchors: ok — %d anchor link(s) in %d source file(s) resolved against %d anchor(s) in %d target file(s); %d heading(s) required character deletion\n' \
+  "${links_checked}" "${sources_scanned}" "${anchors_total}" \
+  "${targets_scanned}" "${lossy_total}"
 exit 0
