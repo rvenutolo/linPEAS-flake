@@ -127,25 +127,15 @@ harness_assert_record a "bump PR"         "${d}/a.out"
 harness_assert_record b "wrote dashboard" "${d}/b.out"
 harness_assert_verify'
 
-  # Two records over byte-identical output observe one run of the script,
-  # so no substring can separate them and no flag is owed.
-  check 'identical outputs are not compared against each other' 0 'checked 2' '
-d="$(mktemp -d)"
-printf "alpha\nbeta\n" >"${d}/a.out"
-printf "alpha\nbeta\n" >"${d}/b.out"
-harness_assert_record a "alpha" "${d}/a.out"
-harness_assert_record b "beta"  "${d}/b.out"
-harness_assert_verify'
-
   # Two scenarios emitting one diagnostic differ only by the logger'"'"'s
   # timestamp. Comparing raw bytes would make the verdict depend on whether
-  # the two runs landed in the same second.
-  check 'log timestamps do not make two identical outputs differ' 0 'checked 2' '
+  # the two runs landed in the same second, so the census would flap.
+  check 'log timestamps do not make two identical outputs differ' 0 'across 2 scenarios (1 distinct outputs)' '
 d="$(mktemp -d)"
 printf "[2026-01-02T03:04:05-0500] ERROR BEGIN marker missing from doc.md\n" >"${d}/a.out"
 printf "[2026-01-02T03:04:06-0500] ERROR BEGIN marker missing from doc.md\n" >"${d}/b.out"
 harness_assert_record a "BEGIN marker missing" "${d}/a.out"
-harness_assert_record b "marker missing"       "${d}/b.out"
+harness_assert_record b "BEGIN marker missing" "${d}/b.out"
 harness_assert_verify'
 
   check 'a difference beyond the timestamp still flags' 1 'does not discriminate' '
@@ -162,7 +152,7 @@ printf "alpha\nbeta\n" >"${d}/a.out"
 printf "alpha\nbeta\n" >"${d}/b.out"
 printf "gamma\n"       >"${d}/c.out"
 harness_assert_record a "alpha" "${d}/a.out"
-harness_assert_record b "beta"  "${d}/b.out"
+harness_assert_record b "alpha" "${d}/b.out"
 harness_assert_record c "gamma" "${d}/c.out"
 harness_assert_verify'
 
@@ -207,6 +197,40 @@ harness_assert_verify'
 
   check 'also before any record fails closed' 1 'called before any record' '
 harness_assert_also "orphan"'
+
+  # Identical output with differing assertions: neither substring can
+  # separate the two, and the pairwise rule skips the pair by design.
+  check 'identical output with differing assertions is flagged' 1 'assert different substrings' '
+d="$(mktemp -d)"
+printf "alpha beta\n" >"${d}/a.out"
+printf "alpha beta\n" >"${d}/b.out"
+harness_assert_record a "alpha" "${d}/a.out"
+harness_assert_record b "beta"  "${d}/b.out"
+harness_assert_verify'
+
+  check 'identical output where one asserts nothing is flagged' 1 'assert different substrings' '
+d="$(mktemp -d)"
+printf "alpha beta\n" >"${d}/a.out"
+printf "alpha beta\n" >"${d}/b.out"
+harness_assert_record a "alpha" "${d}/a.out"
+harness_assert_record b ""      "${d}/b.out"
+harness_assert_verify'
+
+  check 'identical output with identical assertions still passes' 0 'checked 2' '
+d="$(mktemp -d)"
+printf "marker missing\n" >"${d}/a.out"
+printf "marker missing\n" >"${d}/b.out"
+harness_assert_record a "marker missing" "${d}/a.out"
+harness_assert_record b "marker missing" "${d}/b.out"
+harness_assert_verify'
+
+  check 'census names the scenarios sharing an output' 0 "sharing one output: 'a', 'b'" '
+d="$(mktemp -d)"
+printf "same\n" >"${d}/a.out"
+printf "same\n" >"${d}/b.out"
+harness_assert_record a "" "${d}/a.out"
+harness_assert_record b "" "${d}/b.out"
+harness_assert_verify'
 
   # Fail-closed cases.
   check 'verify with no records fails closed' 1 'no scenarios recorded' '

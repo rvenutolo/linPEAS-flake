@@ -125,9 +125,12 @@ function harness_assert_is_exempt() {
   return 1
 }
 
-# @description Apply the pairwise rule to everything recorded, print the
-# census, and drop the pool. Exit 1 if any asserted substring also occurs
-# in a sibling scenario's output, or if nothing was recorded at all.
+# @description Apply the pairwise rule and the identical-output rule to
+# everything recorded, print the census, and drop the pool. Exit 1 if any
+# asserted substring also occurs in a sibling scenario's output, if two
+# records share one output while asserting different substrings, or if
+# nothing was recorded at all. The census names every group of scenarios
+# sharing one output before reporting the counts.
 function harness_assert_verify() {
   if [[ ${HARNESS_ASSERT_COUNT} -eq 0 ]]; then
     printf 'harness-assert: no scenarios recorded — the harness is wired to the gate but never calls harness_assert_record\n' >&2
@@ -144,14 +147,12 @@ function harness_assert_verify() {
       for ((j = 0; j < HARNESS_ASSERT_COUNT; j++)); do
         [[ ${i} -eq ${j} ]] && continue
         harness_assert_declares "${sub_i}" "${j}" && continue
-        # Identical output means no substring can separate the two records —
-        # either they observe one invocation a harness asserts several
-        # properties of, or two fixtures the script answers with the same
-        # diagnostic. Either way a flag would describe harness and fixture
-        # shape rather than a weak assertion, and no narrowing could clear
-        # it. The census reports how many distinct outputs the pool holds, so
-        # the collapse stays visible rather than quietly shrinking the
-        # comparison set.
+        # Identical output means no substring can separate the two records,
+        # so naming one of them as the weak assertion picks a side of a pair
+        # the gate cannot tell apart, and no narrowing could clear it. The
+        # identical-output rule below judges such records as a group instead,
+        # and the census names the group, so the collapse stays visible
+        # rather than quietly shrinking the comparison set.
         cmp --silent -- "${HARNESS_ASSERT_POOL}/${i}.norm" \
           "${HARNESS_ASSERT_POOL}/${j}.norm" && continue
         grep --fixed-strings --quiet -- "${sub_i}" \
@@ -165,10 +166,52 @@ function harness_assert_verify() {
     done <"${HARNESS_ASSERT_POOL}/${i}.sub"
   done
 
-  local distinct
-  distinct="$(for ((i = 0; i < HARNESS_ASSERT_COUNT; i++)); do
-    sha256sum <"${HARNESS_ASSERT_POOL}/${i}.norm"
-  done | sort --unique | wc --lines)"
+  # Records whose normalized output is byte-identical are one observation
+  # as far as this gate can see. Group them: the earliest record with a
+  # given output leads its group, and every later record matching it joins.
+  local -a group_of=()
+  for ((i = 0; i < HARNESS_ASSERT_COUNT; i++)); do
+    sort --unique -- "${HARNESS_ASSERT_POOL}/${i}.sub" \
+      >"${HARNESS_ASSERT_POOL}/${i}.set"
+    group_of[i]=${i}
+    for ((j = 0; j < i; j++)); do
+      if cmp --silent -- "${HARNESS_ASSERT_POOL}/${i}.norm" \
+        "${HARNESS_ASSERT_POOL}/${j}.norm"; then
+        group_of[i]=${group_of[j]}
+        break
+      fi
+    done
+  done
+
+  # Every member of such a group must claim the same set of substrings.
+  # When one member asserts a substring another does not, the pool credits
+  # that assertion to output the other member never had to produce: the
+  # substring cannot tell the two apart, so the assertion holds whether or
+  # not the scenario it names behaves differently. Either the records
+  # observe one invocation — then they are one record carrying several
+  # substrings via `harness_assert_also` — or the scenarios really differ
+  # and the harness must record output that shows it.
+  local distinct=0 names members
+  for ((i = 0; i < HARNESS_ASSERT_COUNT; i++)); do
+    [[ ${group_of[i]} -eq ${i} ]] || continue
+    distinct=$((distinct + 1))
+    name_i="$(cat -- "${HARNESS_ASSERT_POOL}/${i}.name")"
+    names="" members=0
+    for ((j = i; j < HARNESS_ASSERT_COUNT; j++)); do
+      [[ ${group_of[j]} -eq ${i} ]] || continue
+      members=$((members + 1))
+      name_j="$(cat -- "${HARNESS_ASSERT_POOL}/${j}.name")"
+      names+="${names:+, }${name_j@Q}"
+      [[ ${j} -eq ${i} ]] && continue
+      cmp --silent -- "${HARNESS_ASSERT_POOL}/${i}.set" \
+        "${HARNESS_ASSERT_POOL}/${j}.set" && continue
+      printf 'harness-assert: %s and %s produce identical output but assert different substrings — neither assertion discriminates them\n' \
+        "${name_i@Q}" "${name_j@Q}" >&2
+      flagged=$((flagged + 1))
+    done
+    [[ ${members} -gt 1 ]] || continue
+    printf 'harness-assert: scenarios sharing one output: %s\n' "${names}"
+  done
 
   printf 'harness-assert: checked %d substring assertions across %d scenarios (%d distinct outputs)\n' \
     "${asserted}" "${HARNESS_ASSERT_COUNT}" "${distinct}"
