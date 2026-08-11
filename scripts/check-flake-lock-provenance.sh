@@ -38,12 +38,33 @@
 # Top-level input refs are resolved through `follows` paths before the
 # source-identity comparison: a string ref is the target node id
 # directly; an array ref is a path walked from the lock's root node
-# through each node's `inputs` in turn (cycle-guarded by a depth
-# limit). A ref-shape change that still resolves to the same source
-# passes, while any transition that changes the resolved source —
-# including string-to-array and array-to-array — fails. A ref that
-# cannot be resolved (dangling path element, cycle, empty array) fails
-# closed.
+# through each node's `inputs` in turn. A ref-shape change that still
+# resolves to the same source passes, while any transition that changes
+# the resolved source — including string-to-array and array-to-array —
+# fails.
+#
+# Resolution is bounded twice, and both bounds fail closed — an
+# unresolvable ref is always a reported failure, never a silent pass.
+#
+#   * Nesting ceiling (32): each nested array ref costs one level, so a
+#     cycle runs out of levels and stops. The ceiling is also a hard
+#     chain-length limit on LEGAL locks: a `follows` chain nested more
+#     than 32 levels deep is reported `unresolvable` even though nothing
+#     about it is malformed. Real locks nest a handful of levels; a lock
+#     that trips this needs the ceiling raised, not a lint bypass.
+#   * Step budget (4096): total resolve steps across every top-level ref
+#     of BOTH locks. The ceiling caps nesting depth but not branching
+#     width, and a ref is re-resolved per path element — so depth alone
+#     leaves cost exponential in lock size, and a sub-kilobyte crafted
+#     lock can burn a CI runner. Exhausting the budget reports
+#     `unresolvable (follows step budget exhausted)`, naming the bound
+#     rather than implying the lock is malformed. It is sized to clear
+#     the worst legal cost with room to spare: a chain sitting at the
+#     nesting ceiling costs on the order of 560 steps per lock, since
+#     every link of it is itself a top-level ref.
+#
+# A ref that cannot be resolved (dangling path element, cycle, empty
+# array, over-deep chain, exhausted budget) fails closed.
 #
 # CI coupling: the lint-doc-invariants job fetches origin/main before
 # running this check. `actions/checkout` does not create
@@ -113,19 +134,50 @@ def srcid:
   { original: (.original // null),
     flake: (.flake // null),
     locked: ((.locked // {}) | del(.rev, .narHash, .lastModified)) };
-def resolve($lock; $origin; $ref; $depth):
-  if $depth > 32 then error("follows depth exceeded")
-  elif ($ref | type) == "string" then $ref
-  elif ($ref | type) == "array" then
-    if ($ref | length) == 0 then error("empty follows path")
-    else reduce $ref[] as $e ($origin;
-      . as $cur
-      | ($lock.nodes[$cur] // error("missing node: \($cur)")) as $node
-      | (($node.inputs // {})[$e] // error("dangling follows: \($e) from \($cur)")) as $next
-      | resolve($lock; $origin; $next; $depth + 1))
-    end
-  else error("bad input ref type: \($ref | type)")
+# Nesting ceiling and total step budget — see the header for what each
+# one bounds and why depth alone is not enough.
+def follows_depth_ceiling: 32;
+def follows_step_budget: 4096;
+# `inputs` of a node, or {} when the node or its `inputs` is not an
+# object. A crafted lock may put any JSON there; yielding {} turns that
+# into a dangling-path failure instead of a raw jq type error.
+def inputs_of($node):
+  if ($node | type) == "object" and (($node.inputs | type) == "object")
+  then $node.inputs
+  else {}
   end;
+# Resolves one input ref to a node id, threading the remaining step
+# budget through every recursion. Returns { node, left }; raises
+# { budget, left } so a caught failure still reports the steps it spent
+# and the budget stays global rather than per-ref.
+def resolve($lock; $origin; $ref; $depth; $left):
+  if $left <= 0 then error({ budget: true, left: 0 })
+  else ($left - 1) as $rem
+  | if $depth > follows_depth_ceiling
+    then error({ budget: false, left: $rem })
+    elif ($ref | type) == "string" then { node: $ref, left: $rem }
+    elif ($ref | type) == "array" then
+      if ($ref | length) == 0 then error({ budget: false, left: $rem })
+      else reduce $ref[] as $e ({ node: $origin, left: $rem };
+        . as $st
+        | if ($e | type) != "string" then error({ budget: false, left: $st.left }) else . end
+        | ($lock.nodes[$st.node] // error({ budget: false, left: $st.left })) as $node
+        | (inputs_of($node)[$e] // error({ budget: false, left: $st.left })) as $next
+        | resolve($lock; $origin; $next; $depth + 1; $st.left))
+      end
+    else error({ budget: false, left: $rem })
+    end
+  end;
+# Never-raising wrapper: on failure the node is null and `exhausted`
+# says whether the step budget ran out. An error value that is not one
+# of ours cannot report what it spent, so it forfeits the rest of the
+# budget — every later ref then fails closed too.
+def try_resolve($lock; $origin; $ref; $left):
+  try (resolve($lock; $origin; $ref; 0; $left) + { exhausted: false })
+  catch (if (type == "object") and has("left")
+         then { node: null, left: .left, exhausted: (.budget == true) }
+         else { node: null, left: 0, exhausted: false }
+         end);
 # The base/head root-id comparison happens HERE, on $base.root /
 # $head.root as parsed by jq — never on a shell variable. A node id
 # is an arbitrary JSON string; only jq (not a bash `$( )` capture,
@@ -143,20 +195,28 @@ else
 | ($hin | keys) as $hk
 | [ ($hk - $bk)[] | "FAIL: top-level input added: \(.)" ] as $added
 | [ ($bk - $hk)[] | "FAIL: top-level input removed: \(.)" ] as $removed
-| [ $bk[]
-    | select(. as $n | $hk | index($n))
-    | . as $name
-    | $bin[$name] as $bref | $hin[$name] as $href
-    | (try resolve($base; $broot; $bref; 0) catch null) as $bnode
-    | (try resolve($head; $hroot; $href; 0) catch null) as $hnode
-    | if ($bnode == null) or ($hnode == null)
-        or (($base.nodes | has($bnode)) | not)
-        or (($head.nodes | has($hnode)) | not)
-      then "FAIL: top-level input unresolvable: \($name)"
-      elif ($base.nodes[$bnode] | srcid) != ($head.nodes[$hnode] | srcid)
-      then "FAIL: top-level input repointed: \($name)"
-      else empty
-      end ] as $tlrep
+| [ $bk[] | select(. as $n | $hk | index($n)) ] as $common
+# One fold over the shared top-level inputs, carrying the step budget
+# left over from the previous input — base and head both draw on it, so
+# the whole comparison costs a bounded number of resolve steps no
+# matter how the locks branch.
+| (reduce $common[] as $name ({ left: follows_step_budget, fails: [] };
+    . as $acc
+    | try_resolve($base; $broot; $bin[$name]; $acc.left) as $bres
+    | try_resolve($head; $hroot; $hin[$name]; $bres.left) as $hres
+    | { left: $hres.left,
+        fails: ($acc.fails + (
+          if ($bres.exhausted or $hres.exhausted)
+          then ["FAIL: top-level input unresolvable (follows step budget exhausted): \($name)"]
+          elif ($bres.node == null) or ($hres.node == null)
+            or (($base.nodes | has($bres.node)) | not)
+            or (($head.nodes | has($hres.node)) | not)
+          then ["FAIL: top-level input unresolvable: \($name)"]
+          elif ($base.nodes[$bres.node] | srcid) != ($head.nodes[$hres.node] | srcid)
+          then ["FAIL: top-level input repointed: \($name)"]
+          else []
+          end)) })
+   | .fails) as $tlrep
 | [ ($base.nodes | keys[])
     | select(. != $broot)
     | . as $k

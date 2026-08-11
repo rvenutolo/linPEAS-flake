@@ -15,6 +15,13 @@ source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-flake-lock-provenance.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-flake-lock-provenance"
 
+# Every scenario runs under a wall-clock bound. The check resolves
+# `follows` refs, and an unbounded resolver turns a small crafted lock
+# into minutes of CPU; without this the suite would hang instead of
+# reporting which fixture is slow. `timeout` reports 124 on a kill, so a
+# blown bound surfaces as an exit-code mismatch naming the scenario.
+readonly SCENARIO_TIMEOUT_SECS=20
+
 failures=0
 
 # @arg $1 scenario name  @arg $2 base fixture  @arg $3 head fixture
@@ -26,8 +33,13 @@ function run_pair_scenario() {
   local actual_exit=0
   BASE_LOCK_FILE="${FIXTURES}/${base}" \
     HEAD_LOCK_FILE="${FIXTURES}/${head}" \
-    "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
-  if [[ ${actual_exit} -ne ${expected_exit} ]]; then
+    timeout "${SCENARIO_TIMEOUT_SECS}" "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
+  if [[ ${actual_exit} -eq 124 && ${expected_exit} -ne 124 ]]; then
+    printf 'FAIL: %s — killed after %ds; the check did not finish\n' \
+      "${name}" "${SCENARIO_TIMEOUT_SECS}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  elif [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' \
       "${name}" "${expected_exit}" "${actual_exit}" >&2
     cat -- "${out_file}" >&2
@@ -114,6 +126,17 @@ function main() {
   run_follows_scenario 'string-to-array same source passes' 'head-follows-string-to-array-same.lock' 0 'provenance OK'
   run_follows_scenario 'dangling follows path fails' 'head-follows-dangling.lock' 1 'FAIL: top-level input unresolvable: beta'
   run_follows_scenario 'cyclic follows fails' 'head-follows-cycle.lock' 1 'FAIL: top-level input unresolvable: beta'
+
+  # Each `bN` input is a two-element path through `bN+1`, so a naive
+  # resolver that re-walks every element costs 2^N for a lock under 1 KiB.
+  # The step budget must stop it well inside the scenario timeout.
+  run_pair_scenario 'branching follows exhausts step budget' \
+    'base-follows-branching.lock' 'base-follows-branching.lock' 1 \
+    'FAIL: top-level input unresolvable (follows step budget exhausted): b1'
+  # A legal chain sitting exactly at the nesting ceiling: bounding total
+  # work must not shorten how deep a legitimate `follows` chain may go.
+  run_pair_scenario 'deep legal follows chain resolves' \
+    'base-follows-deep.lock' 'base-follows-deep.lock' 0 'provenance OK'
 
   run_scenario 'decoy renamed root fails' 'head-decoy-root.lock' 1 'FAIL: root node id changed: root -> realroot'
   run_scenario 'head .root missing errors' 'head-root-missing.lock' 2 'head flake.lock: .root missing or not a string (got null)'
