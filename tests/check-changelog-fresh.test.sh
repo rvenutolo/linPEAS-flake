@@ -291,6 +291,22 @@ function main() {
   run_case 'unreleased-only difference ignored -> exit 0' \
     "${unreleased}" "${content}/t1-only-alt-unreleased.md" 0
 
+  # The two release-window cases below produce one observable outcome, and
+  # nothing the script honestly emits separates them: it sees the same visible
+  # tag set, resolves the same changelog commit, reaches the same ancestry
+  # verdict, excludes the same tag and compares the same sections in both.
+  # They differ only in whether the newest tag points at HEAD — a fact the
+  # exclusion rule never consults, because it is keyed on the resolved
+  # changelog commit rather than on HEAD. The second case still earns its
+  # place: it refutes a `--points-at HEAD` implementation that the first would
+  # pass. Separating them would mean printing the compared changelog's path,
+  # which discriminates by fixture identity rather than by behavior and would
+  # blind this gate for every other case in this harness.
+  harness_assert_parity_exempt \
+    'release window, newest tag at HEAD -> exit 0' \
+    'release window, HEAD past the tag -> exit 0' \
+    'every input the script reads is identical; they differ only in whether the newest tag points at HEAD, which the check deliberately never consults'
+
   # --- Case: release window, newest tag at HEAD --------------------------
   # T2 was just created and its changelog commit has not landed. The
   # regeneration renders T2's section; the committed file cannot carry it yet.
