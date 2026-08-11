@@ -90,15 +90,19 @@ function run_scenario() {
   local snapshot
   snapshot="$(snapshot_out_file)"
 
-  local stderr_tmp
+  local stderr_tmp stdout_tmp outcome_tmp
   stderr_tmp="$(mktemp)"
-  # shellcheck disable=SC2064  # capture $stderr_tmp at trap-set time
-  trap "rm --force -- '${stderr_tmp}'" RETURN
+  stdout_tmp="$(mktemp)"
+  outcome_tmp="$(mktemp)"
+  # shellcheck disable=SC2064  # capture the paths at trap-set time
+  trap "rm --force -- '${stderr_tmp}' '${stdout_tmp}' '${outcome_tmp}'" RETURN
 
   local exit_code=0
-  env "${env_vars[@]}" bash "${SCRIPT}" >/dev/null 2>"${stderr_tmp}" ||
+  env "${env_vars[@]}" bash "${SCRIPT}" >"${stdout_tmp}" 2>"${stderr_tmp}" ||
     exit_code=$?
-  harness_assert_record "${name}" "${expected_msg}" "${stderr_tmp}"
+  printf 'harness-assert-outcome: exit=%d\n' "${exit_code}" >"${outcome_tmp}"
+  harness_assert_record "${name}" "${expected_msg}" \
+    "${outcome_tmp}" "${stdout_tmp}" "${stderr_tmp}"
 
   if ((exit_code != want_exit)); then
     printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${want_exit}" "${exit_code}" >&2
@@ -140,11 +144,13 @@ function run_scenario() {
 # @noargs
 function run_happy_lag_scenario() {
   local -r name='happy-path bump-lag pairing'
-  local out_tmp stderr_tmp
+  local out_tmp stderr_tmp stdout_tmp outcome_tmp
   out_tmp="$(mktemp)"
   stderr_tmp="$(mktemp)"
+  stdout_tmp="$(mktemp)"
+  outcome_tmp="$(mktemp)"
   # shellcheck disable=SC2064  # capture paths at trap-set time
-  trap "rm --force -- '${out_tmp}' '${stderr_tmp}'" RETURN
+  trap "rm --force -- '${out_tmp}' '${stderr_tmp}' '${stdout_tmp}' '${outcome_tmp}'" RETURN
 
   local exit_code=0
   env \
@@ -156,10 +162,11 @@ function run_happy_lag_scenario() {
     "BUMP_PR_JSON_OVERRIDE=${FIXTURES_DIR}/good-bump-pr.json" \
     "PARITY_JSON_OVERRIDE=${FIXTURES_DIR}/good-parity.json" \
     "OUT_FILE_OVERRIDE=${out_tmp}" \
-    bash "${SCRIPT}" >/dev/null 2>"${stderr_tmp}" || exit_code=$?
+    bash "${SCRIPT}" >"${stdout_tmp}" 2>"${stderr_tmp}" || exit_code=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${exit_code}" >"${outcome_tmp}"
   harness_assert_record "${name}" \
     'lag: skipping this-repo release with no upstream match: 20240101-lagorphan' \
-    "${stderr_tmp}"
+    "${outcome_tmp}" "${stdout_tmp}" "${stderr_tmp}"
 
   if ((exit_code != 0)); then
     printf 'FAIL: %s — expected exit 0, got %d\n' "${name}" "${exit_code}" >&2
@@ -219,13 +226,15 @@ function run_happy_lag_scenario() {
 # @noargs
 function run_empty_bump_pr_scenario() {
   local -r name='empty bump_pr_json soft-fallback'
-  local out_tmp stderr_tmp empty_bump
+  local out_tmp stderr_tmp stdout_tmp outcome_tmp empty_bump
   out_tmp="$(mktemp)"
   stderr_tmp="$(mktemp)"
+  stdout_tmp="$(mktemp)"
+  outcome_tmp="$(mktemp)"
   empty_bump="$(mktemp)"
   : >"${empty_bump}"
   # shellcheck disable=SC2064  # capture paths at trap-set time
-  trap "rm --force -- '${out_tmp}' '${stderr_tmp}' '${empty_bump}'" RETURN
+  trap "rm --force -- '${out_tmp}' '${stderr_tmp}' '${stdout_tmp}' '${outcome_tmp}' '${empty_bump}'" RETURN
 
   local exit_code=0
   env \
@@ -237,8 +246,10 @@ function run_empty_bump_pr_scenario() {
     "BUMP_PR_JSON_OVERRIDE=${empty_bump}" \
     "PARITY_JSON_OVERRIDE=${FIXTURES_DIR}/good-parity.json" \
     "OUT_FILE_OVERRIDE=${out_tmp}" \
-    bash "${SCRIPT}" >/dev/null 2>"${stderr_tmp}" || exit_code=$?
-  harness_assert_record "${name}" '' "${stderr_tmp}"
+    bash "${SCRIPT}" >"${stdout_tmp}" 2>"${stderr_tmp}" || exit_code=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${exit_code}" >"${outcome_tmp}"
+  harness_assert_record "${name}" '' \
+    "${outcome_tmp}" "${stdout_tmp}" "${stderr_tmp}"
 
   if ((exit_code != 0)); then
     printf 'FAIL: %s — expected exit 0, got %d\n' "${name}" "${exit_code}" >&2
@@ -290,11 +301,13 @@ function run_api_error_scenario() {
   local -r expected_value="$4"
   local -r expected_warn="$5"
 
-  local out_tmp stderr_tmp
+  local out_tmp stderr_tmp stdout_tmp outcome_tmp
   out_tmp="$(mktemp)"
   stderr_tmp="$(mktemp)"
+  stdout_tmp="$(mktemp)"
+  outcome_tmp="$(mktemp)"
   # shellcheck disable=SC2064  # capture paths at trap-set time
-  trap "rm --force -- '${out_tmp}' '${stderr_tmp}'" RETURN
+  trap "rm --force -- '${out_tmp}' '${stderr_tmp}' '${stdout_tmp}' '${outcome_tmp}'" RETURN
 
   local -a env_vars=(
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json"
@@ -309,8 +322,10 @@ function run_api_error_scenario() {
   )
 
   local exit_code=0
-  env "${env_vars[@]}" bash "${SCRIPT}" >/dev/null 2>"${stderr_tmp}" || exit_code=$?
-  harness_assert_record "${name}" "${expected_warn}" "${stderr_tmp}"
+  env "${env_vars[@]}" bash "${SCRIPT}" >"${stdout_tmp}" 2>"${stderr_tmp}" || exit_code=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${exit_code}" >"${outcome_tmp}"
+  harness_assert_record "${name}" "${expected_warn}" \
+    "${outcome_tmp}" "${stdout_tmp}" "${stderr_tmp}"
 
   if ((exit_code != 0)); then
     printf 'FAIL: %s — expected exit 0, got %d\n' "${name}" "${exit_code}" >&2

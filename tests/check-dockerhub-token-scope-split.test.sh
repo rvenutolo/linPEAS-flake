@@ -35,11 +35,14 @@ function write_baseline() {
 # @arg $4 expected stderr substring (empty skips the check)
 function assert_run() {
   local -r name="$1" dir="$2" expected_exit="$3" expected_stderr="$4"
-  local stderr_file
+  local stderr_file stdout_file outcome_file
   stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
   local actual_exit=0
-  WORKFLOWS_DIR_OVERRIDE="${dir}" "${SCRIPT}" >/dev/null 2>"${stderr_file}" ||
+  WORKFLOWS_DIR_OVERRIDE="${dir}" "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" ||
     actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' \
@@ -54,8 +57,9 @@ function assert_run() {
   else
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
-  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
-  rm --force -- "${stderr_file}"
+  harness_assert_record "${name}" "${expected_stderr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  rm --force -- "${outcome_file}" "${stdout_file}" "${stderr_file}"
 }
 
 function main() {

@@ -36,13 +36,20 @@ function fail() {
 # run_scenario <name> <fixture> <expected_exit> <expected_stderr_substring>
 function run_scenario() {
   local -r name="$1" fixture="$2" expected_exit="$3" expected_stderr="$4"
-  local stderr_file out_file actual_exit=0
+  local stderr_file stdout_file outcome_file out_file actual_exit=0
   stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
   out_file="$(mktemp)"
   INVARIANT_INDEX_OVERRIDE="${FIXTURES}/${fixture}" \
     MATRIX_OUTPUT_OVERRIDE="${out_file}" \
-    "${SCRIPT}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
-  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  # The record is the whole observable outcome — exit code, stdout, stderr —
+  # so a scenario that differs from a sibling only in how it ended still
+  # reads as a distinct observation.
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${expected_stderr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     fail "${name}: expected exit ${expected_exit}, got ${actual_exit}"
     cat -- "${stderr_file}" >&2
@@ -53,7 +60,7 @@ function run_scenario() {
   else
     pass "${name} (exit ${actual_exit})"
   fi
-  rm --force -- "${stderr_file}" "${out_file}"
+  rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}" "${out_file}"
 }
 
 function main() {
@@ -126,18 +133,21 @@ function main() {
   # it. The fixture index uses the `-` sentinel in all three fields and
   # the scripts dir is empty, leaving the ci-job column as the only
   # orphan source.
-  local cx_scripts cx_out cx_err cx_rc=0
+  local cx_scripts cx_out cx_err cx_stdout cx_outcome cx_rc=0
   cx_scripts="$(mktemp --directory)"
   cx_out="$(mktemp)"
   cx_err="$(mktemp)"
+  cx_stdout="$(mktemp)"
+  cx_outcome="$(mktemp)"
   PRECOMMIT_HOOK_NAMES_OVERRIDE='shellcheck' \
     INVARIANT_INDEX_OVERRIDE="${FIXTURES}/exempt-coupling/index.md" \
     CI_YML_OVERRIDE="${FIXTURES}/exempt-coupling/ci.yml" \
     SCRIPTS_DIR_OVERRIDE="${cx_scripts}" \
     MATRIX_OUTPUT_OVERRIDE="${cx_out}" \
-    "${SCRIPT}" >/dev/null 2>"${cx_err}" || cx_rc=$?
+    "${SCRIPT}" >"${cx_stdout}" 2>"${cx_err}" || cx_rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${cx_rc}" >"${cx_outcome}"
   harness_assert_record 'unexempted auxiliary ci job is an orphan' \
-    'orphan ci job: aux-sandbox' "${cx_err}"
+    'orphan ci job: aux-sandbox' "${cx_outcome}" "${cx_stdout}" "${cx_err}"
   if [[ ${cx_rc} -eq 2 ]] &&
     grep --fixed-strings --quiet -- 'orphan ci job: aux-sandbox' "${cx_err}"; then
     pass 'unexempted auxiliary ci job is reported as an orphan'
@@ -153,9 +163,10 @@ function main() {
     CI_YML_OVERRIDE="${FIXTURES}/exempt-coupling/ci.yml" \
     SCRIPTS_DIR_OVERRIDE="${cx_scripts}" \
     MATRIX_OUTPUT_OVERRIDE="${cx_out}" \
-    "${SCRIPT}" >/dev/null 2>"${cx_err}" || cx_rc=$?
+    "${SCRIPT}" >"${cx_stdout}" 2>"${cx_err}" || cx_rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${cx_rc}" >"${cx_outcome}"
   harness_assert_record 'ci-job EXEMPT list clears the orphan job' \
-    '' "${cx_err}"
+    '' "${cx_outcome}" "${cx_stdout}" "${cx_err}"
   if [[ ${cx_rc} -eq 0 ]]; then
     pass 'ci-job EXEMPT list from the sibling clears the orphan job'
   else
@@ -163,12 +174,12 @@ function main() {
     cat -- "${cx_err}" >&2
   fi
   rm --recursive --force -- "${cx_scripts}"
-  rm --force -- "${cx_out}" "${cx_err}"
+  rm --force -- "${cx_out}" "${cx_err}" "${cx_stdout}" "${cx_outcome}"
 
   # Assertion 8: an unreadable EXEMPT source aborts instead of standing in
   # for an empty list. A stub sibling that rejects --print-exempt is the
   # shape a renamed or dropped mode takes at the call site.
-  local gg_dir gg_scripts gg_out gg_err gg_rc=0
+  local gg_dir gg_scripts gg_out gg_err gg_stdout gg_outcome gg_rc=0
   gg_dir="$(mktemp --directory)"
   gg_scripts="$(mktemp --directory)"
   cat >"${gg_dir}/exempt-source-stub" <<'EOF'
@@ -179,15 +190,18 @@ EOF
   chmod +x "${gg_dir}/exempt-source-stub"
   gg_out="$(mktemp)"
   gg_err="$(mktemp)"
+  gg_stdout="$(mktemp)"
+  gg_outcome="$(mktemp)"
   PRECOMMIT_HOOK_NAMES_OVERRIDE='shellcheck' \
     INVARIANT_INDEX_OVERRIDE="${FIXTURES}/exempt-coupling/index.md" \
     CI_YML_OVERRIDE="${FIXTURES}/exempt-coupling/ci.yml" \
     SCRIPTS_DIR_OVERRIDE="${gg_scripts}" \
     MATRIX_OUTPUT_OVERRIDE="${gg_out}" \
     EXEMPT_SOURCE_OVERRIDE="${gg_dir}/exempt-source-stub" \
-    "${SCRIPT}" >/dev/null 2>"${gg_err}" || gg_rc=$?
+    "${SCRIPT}" >"${gg_stdout}" 2>"${gg_err}" || gg_rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${gg_rc}" >"${gg_outcome}"
   harness_assert_record 'unreadable EXEMPT source aborts' \
-    '--print-exempt failed' "${gg_err}"
+    '--print-exempt failed' "${gg_outcome}" "${gg_stdout}" "${gg_err}"
   if [[ ${gg_rc} -eq 2 ]] &&
     grep --fixed-strings --quiet -- '--print-exempt failed' "${gg_err}"; then
     pass 'unreadable EXEMPT source aborts instead of reading as empty'
@@ -196,7 +210,7 @@ EOF
     cat -- "${gg_err}" >&2
   fi
   rm --recursive --force -- "${gg_dir}" "${gg_scripts}"
-  rm --force -- "${gg_out}" "${gg_err}"
+  rm --force -- "${gg_out}" "${gg_err}" "${gg_stdout}" "${gg_outcome}"
 
   # Swallowed-treefmt scenario: a failing treefmt must abort the generator
   # (nonzero exit) and must NOT write the unformatted matrix into place. With

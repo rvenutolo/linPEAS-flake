@@ -29,8 +29,10 @@ function run_scenario_root() {
   local -r expected_exit="$5"
   local -r expected_stderr="$6"
 
-  local stderr_file
+  local stderr_file stdout_file outcome_file
   stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
 
   local -a args=()
   [[ -n ${mode} ]] && args+=("${mode}")
@@ -38,7 +40,8 @@ function run_scenario_root() {
   local actual_exit=0
   EPHEMERAL_REFS_ROOT_OVERRIDE="${root}" \
     EPHEMERAL_REFS_SOURCES_OVERRIDE="${source_rel}" \
-    "${SCRIPT}" "${args[@]}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
+    "${SCRIPT}" "${args[@]}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' \
@@ -54,8 +57,9 @@ function run_scenario_root() {
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
 
-  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
-  rm --force -- "${stderr_file}"
+  harness_assert_record "${name}" "${expected_stderr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  rm --force -- "${outcome_file}" "${stdout_file}" "${stderr_file}"
 }
 
 # @description Run the lint against one checked-in fixture directory.
@@ -81,12 +85,15 @@ function run_scope_scenario() {
   local -r name='enumeration reaches SECURITY.md and skips .claude'
   local -r expected_stderr='SECURITY.md:3: [issue-ref] #456'
 
-  local stderr_file
+  local stderr_file stdout_file outcome_file
   stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
 
   local actual_exit=0
   EPHEMERAL_REFS_ROOT_OVERRIDE="${FIXTURES}/scope" \
-    "${SCRIPT}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
 
   if [[ ${actual_exit} -ne 1 ]]; then
     printf 'FAIL: %s — expected exit 1, got %d\n' "${name}" "${actual_exit}" >&2
@@ -104,8 +111,9 @@ function run_scope_scenario() {
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
 
-  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
-  rm --force -- "${stderr_file}"
+  harness_assert_record "${name}" "${expected_stderr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  rm --force -- "${outcome_file}" "${stdout_file}" "${stderr_file}"
 }
 
 # @description Assert that banned shapes inside a tilde (`~~~`) code

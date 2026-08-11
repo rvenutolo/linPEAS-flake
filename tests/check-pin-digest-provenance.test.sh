@@ -25,15 +25,18 @@ failures=0
 # @arg $5 expected output substring (empty skips)
 function run_scenario() {
   local -r name="$1" head="$2" stub_mode="$3" expected_exit="$4" expected_msg="$5"
-  local out_file
+  local out_file outcome_file
   out_file="$(mktemp)"
+  outcome_file="$(mktemp)"
   local actual_exit=0
   PATH="${FIXTURES}/bin:${PATH}" \
     GH_STUB_MODE="${stub_mode}" \
     BASE_DIR_OVERRIDE="${FIXTURES}/base" \
     HEAD_DIR_OVERRIDE="${FIXTURES}/${head}" \
     "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
-  harness_assert_record "${name}" "${expected_msg}" "${out_file}"
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${expected_msg}" \
+    "${outcome_file}" "${out_file}"
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${expected_exit}" "${actual_exit}" >&2
     cat -- "${out_file}" >&2
@@ -46,7 +49,7 @@ function run_scenario() {
   else
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
-  rm --force -- "${out_file}"
+  rm --force -- "${out_file}" "${outcome_file}"
 }
 
 # Exercises real git BASE_REF mode end to end — every run_scenario call
@@ -64,9 +67,10 @@ function run_scenario() {
 # @arg $3 expected output substring (empty skips)
 function run_git_mode_scenario() {
   local -r name="$1" expected_exit="$2" expected_msg="$3"
-  local repo_dir out_file
+  local repo_dir out_file outcome_file
   repo_dir="$(mktemp --directory)"
   out_file="$(mktemp)"
+  outcome_file="$(mktemp)"
 
   git -C "${repo_dir}" init --quiet --initial-branch=main
   git -C "${repo_dir}" config user.email test@example.com
@@ -98,7 +102,9 @@ YAML
   local actual_exit=0
   (cd "${repo_dir}" && env -u BASE_DIR_OVERRIDE -u HEAD_DIR_OVERRIDE BASE_REF=main "${SCRIPT}") \
     >"${out_file}" 2>&1 || actual_exit=$?
-  harness_assert_record "${name}" "${expected_msg}" "${out_file}"
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${expected_msg}" \
+    "${outcome_file}" "${out_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${expected_exit}" "${actual_exit}" >&2
@@ -113,7 +119,7 @@ YAML
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
 
-  rm --force -- "${out_file}"
+  rm --force -- "${out_file}" "${outcome_file}"
   rm --recursive --force -- "${repo_dir}"
 }
 
@@ -125,9 +131,10 @@ YAML
 # into a one-sided key (add/remove) that passes.
 function run_git_ls_tree_failure_scenario() {
   local -r name='git BASE_REF mode: ls-tree failure dies loud, not a silent pass'
-  local repo_dir out_file real_git
+  local repo_dir out_file outcome_file real_git
   repo_dir="$(mktemp --directory)"
   out_file="$(mktemp)"
+  outcome_file="$(mktemp)"
   real_git="$(command -v git)"
 
   git -C "${repo_dir}" init --quiet --initial-branch=main
@@ -159,9 +166,11 @@ YAML
         PATH="${FIXTURES}/git-shim-ls-tree-fail:${PATH}" \
         env -u BASE_DIR_OVERRIDE -u HEAD_DIR_OVERRIDE BASE_REF=main "${SCRIPT}"
   ) >"${out_file}" 2>&1 || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
 
   local -r expected_exit=2 expected_msg='git ls-tree failed'
-  harness_assert_record "${name}" "${expected_msg}" "${out_file}"
+  harness_assert_record "${name}" "${expected_msg}" \
+    "${outcome_file}" "${out_file}"
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${expected_exit}" "${actual_exit}" >&2
     cat -- "${out_file}" >&2
@@ -174,7 +183,7 @@ YAML
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
 
-  rm --force -- "${out_file}"
+  rm --force -- "${out_file}" "${outcome_file}"
   rm --recursive --force -- "${repo_dir}"
 }
 

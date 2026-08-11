@@ -23,7 +23,7 @@ failures=0
 # @arg $4 expected stdout substring (empty skips)
 function run_scenario() {
   local -r name="$1" group="$2" expected_exit="$3" expected_out="$4"
-  local out_file step_file work scripts_dir tests_dir manifest
+  local outcome_file out_file step_file work scripts_dir tests_dir manifest
   work="$(mktemp -d)"
   scripts_dir="${work}/scripts"
   tests_dir="${work}/tests"
@@ -55,6 +55,7 @@ demo-missing:
   - nope
 YAML
 
+  outcome_file="$(mktemp)"
   out_file="$(mktemp)"
   step_file="$(mktemp)"
   local actual_exit=0
@@ -63,7 +64,11 @@ YAML
     TESTS_DIR_OVERRIDE="${tests_dir}" \
     GITHUB_STEP_SUMMARY="${step_file}" \
     "${SCRIPT}" "${group}" >"${out_file}" 2>&1 || actual_exit=$?
-  harness_assert_record "${name}" "${expected_out}" "${out_file}" "${step_file}"
+  # The exit code is part of what the run observably did, so it is recorded
+  # alongside the streams rather than being checked only below.
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${expected_out}" \
+    "${outcome_file}" "${out_file}" "${step_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${expected_exit}" "${actual_exit}" >&2
@@ -81,13 +86,13 @@ YAML
   else
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
-  rm --recursive --force -- "${work}" "${out_file}" "${step_file}"
+  rm --recursive --force -- "${work}" "${outcome_file}" "${out_file}" "${step_file}"
 }
 
 # @description Prove a failing check *.test.sh skips its check script and
 #              marks the row FAIL (the runner gates each check on its test).
 function run_test_gate_scenario() {
-  local work scripts_dir tests_dir manifest out_file step_file sentinel
+  local work scripts_dir tests_dir manifest outcome_file out_file step_file sentinel
   work="$(mktemp -d)"
   scripts_dir="${work}/scripts"
   tests_dir="${work}/tests"
@@ -101,6 +106,7 @@ function run_test_gate_scenario() {
   chmod +x "${scripts_dir}"/check-*.sh "${tests_dir}"/check-*.test.sh
   printf 'demo-testfail:\n  - ttt\n' >"${manifest}"
 
+  outcome_file="$(mktemp)"
   out_file="$(mktemp)"
   step_file="$(mktemp)"
   local actual_exit=0
@@ -109,8 +115,11 @@ function run_test_gate_scenario() {
     TESTS_DIR_OVERRIDE="${tests_dir}" \
     GITHUB_STEP_SUMMARY="${step_file}" \
     "${SCRIPT}" demo-testfail >"${out_file}" 2>&1 || actual_exit=$?
+  # The exit code is part of what the run observably did, so it is recorded
+  # alongside the streams rather than being checked only below.
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
   harness_assert_record 'failing check test skips the check script' \
-    '| ttt | FAIL |' "${out_file}" "${step_file}"
+    '| ttt | FAIL |' "${outcome_file}" "${out_file}" "${step_file}"
 
   if [[ ${actual_exit} -ne 1 ]]; then
     printf 'FAIL: failing test -> expected exit 1, got %d\n' "${actual_exit}" >&2
@@ -126,7 +135,7 @@ function run_test_gate_scenario() {
   else
     printf 'PASS: failing check test skips the check script and marks it FAIL\n'
   fi
-  rm --recursive --force -- "${work}" "${out_file}" "${step_file}"
+  rm --recursive --force -- "${work}" "${outcome_file}" "${out_file}" "${step_file}"
 }
 
 function main() {

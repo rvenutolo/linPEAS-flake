@@ -26,16 +26,21 @@ function run_scenario() {
   local -r expected_exit="$3"
   local -r expected_substring="$4"
 
-  local summary_file
+  local summary_file stdout_file stderr_file outcome_file
   summary_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  stderr_file="$(mktemp)"
+  outcome_file="$(mktemp)"
 
   local actual_exit=0
   GITHUB_STEP_SUMMARY="${summary_file}" \
     "${SCRIPT}" \
     "${FIXTURES}/${fixture_dir}/build-a.json" \
     "${FIXTURES}/${fixture_dir}/build-b.json" \
-    >/dev/null 2>&1 || actual_exit=$?
-  harness_assert_record "${name}" "${expected_substring}" "${summary_file}"
+    >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${expected_substring}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}" "${summary_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' \
@@ -52,6 +57,9 @@ function run_scenario() {
   else
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
+
+  rm --force -- "${summary_file}" "${stdout_file}" "${stderr_file}" \
+    "${outcome_file}"
 }
 
 # Every summary tabulates all three field names and the word MATCH inside
@@ -91,12 +99,16 @@ run_scenario \
 
 # Custom scenario: missing input file → exit 2
 function run_missing_input_scenario() {
-  local stderr_file
+  local stderr_file stdout_file outcome_file
   stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
   local actual_exit=0
   "${SCRIPT}" "${FIXTURES}/nonexistent-a.json" "${FIXTURES}/nonexistent-b.json" \
-    >/dev/null 2>"${stderr_file}" || actual_exit=$?
-  harness_assert_record 'missing-input' 'does not exist' "${stderr_file}"
+    >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record 'missing-input' 'does not exist' \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
   if [[ ${actual_exit} -ne 2 ]]; then
     printf 'FAIL: missing-input — expected exit 2, got %d\n' "${actual_exit}" >&2
     failures=$((failures + 1))
@@ -107,6 +119,8 @@ function run_missing_input_scenario() {
   else
     printf 'PASS: missing-input → exit 2\n'
   fi
+
+  rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
 }
 
 run_missing_input_scenario
@@ -121,18 +135,21 @@ function run_bad_input_scenario() {
   local -r fixture_dir="$2"
   local -r expected_substring="$3"
 
-  local summary_file stderr_file
+  local summary_file stderr_file stdout_file outcome_file
   summary_file="$(mktemp)"
   stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
 
   local actual_exit=0
   GITHUB_STEP_SUMMARY="${summary_file}" \
     "${SCRIPT}" \
     "${FIXTURES}/${fixture_dir}/build-a.json" \
     "${FIXTURES}/${fixture_dir}/build-b.json" \
-    >/dev/null 2>"${stderr_file}" || actual_exit=$?
+    >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
   harness_assert_record "${name}" "${expected_substring}" \
-    "${stderr_file}" "${summary_file}"
+    "${outcome_file}" "${stdout_file}" "${stderr_file}" "${summary_file}"
 
   if [[ ${actual_exit} -ne 2 ]]; then
     printf 'FAIL: %s — expected exit 2, got %d\n' "${name}" "${actual_exit}" >&2
@@ -148,6 +165,9 @@ function run_bad_input_scenario() {
   else
     printf 'PASS: %s (exit 2)\n' "${name}"
   fi
+
+  rm --force -- "${summary_file}" "${stderr_file}" "${stdout_file}" \
+    "${outcome_file}"
 }
 
 # The diagnostic must name both the offending file and the offending

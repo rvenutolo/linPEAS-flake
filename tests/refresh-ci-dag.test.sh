@@ -134,16 +134,19 @@ EOF
   # into the doc rather than writing it from scratch, so a missing doc
   # means the check could not run — exit 1 would tell the operator the
   # doc is stale and to regenerate it, which reads nothing.
-  local missing_doc missing_err missing_rc=0
+  local missing_doc missing_err missing_out missing_outcome missing_rc=0
   missing_doc="$(mktemp --directory)/absent-ci-dag.md"
   missing_err="$(mktemp)"
+  missing_out="$(mktemp)"
+  missing_outcome="$(mktemp)"
   CI_WORKFLOW_OVERRIDE="${FIXTURES}/no-needs/ci.yml" \
     CATEGORIES_FILE_OVERRIDE="${FIXTURES}/categories.yml" \
     DOC_OVERRIDE="${missing_doc}" \
-    "${SCRIPT}" --check >/dev/null 2>"${missing_err}" || missing_rc=$?
+    "${SCRIPT}" --check >"${missing_out}" 2>"${missing_err}" || missing_rc=$?
   rmdir -- "$(dirname -- "${missing_doc}")"
+  printf 'harness-assert-outcome: exit=%d\n' "${missing_rc}" >"${missing_outcome}"
   harness_assert_record 'absent input doc rejected' \
-    'not found' "${missing_err}"
+    'not found' "${missing_outcome}" "${missing_out}" "${missing_err}"
   if [[ ${missing_rc} -eq 2 ]] &&
     grep --fixed-strings --quiet -- 'not found' "${missing_err}"; then
     pass 'absent input doc exits 2 (could not run, not drift)'
@@ -151,23 +154,26 @@ EOF
     fail "missing-doc guard: expected exit 2 + 'not found', got exit ${missing_rc}"
     cat -- "${missing_err}" >&2
   fi
-  rm --force -- "${missing_err}"
+  rm --force -- "${missing_err}" "${missing_out}" "${missing_outcome}"
 
   # Markers the anchored awk splice cannot match (trailing whitespace on both
   # markers) must be rejected by the guard, not silently emitted unchanged.
   # An unanchored guard grep false-greens here; the anchored guard fails
   # closed with a marker-missing message.
-  local ws_backup ws_err ws_rc=0
+  local ws_backup ws_err ws_out ws_outcome ws_rc=0
   ws_backup="$(mktemp)"
   ws_err="$(mktemp)"
+  ws_out="$(mktemp)"
+  ws_outcome="$(mktemp)"
   cp -- "${DOC}" "${ws_backup}"
   sed -e 's/^<!-- BEGIN ci-dag -->$/<!-- BEGIN ci-dag --> /' \
     -e 's/^<!-- END ci-dag -->$/<!-- END ci-dag --> /' \
     "${ws_backup}" >"${DOC}"
-  "${SCRIPT}" --check >/dev/null 2>"${ws_err}" || ws_rc=$?
+  "${SCRIPT}" --check >"${ws_out}" 2>"${ws_err}" || ws_rc=$?
   cp -- "${ws_backup}" "${DOC}"
+  printf 'harness-assert-outcome: exit=%d\n' "${ws_rc}" >"${ws_outcome}"
   harness_assert_record 'whitespace-perturbed markers rejected' \
-    'marker missing' "${ws_err}"
+    'marker missing' "${ws_outcome}" "${ws_out}" "${ws_err}"
   if [[ ${ws_rc} -eq 1 ]] &&
     grep --fixed-strings --quiet -- 'marker missing' "${ws_err}"; then
     pass 'whitespace-perturbed markers rejected (fail-closed, not false-green)'
@@ -175,7 +181,7 @@ EOF
     fail "whitespace marker guard: expected exit 1 + 'marker missing', got exit ${ws_rc}"
     cat -- "${ws_err}" >&2
   fi
-  rm --force -- "${ws_backup}" "${ws_err}"
+  rm --force -- "${ws_backup}" "${ws_err}" "${ws_out}" "${ws_outcome}"
 
   # A jq failure at the job-key read must abort with its own message
   # rather than render a graph missing every node. No workflow input
@@ -185,10 +191,12 @@ EOF
   # filter and execs the real jq otherwise. A blanket-failing stub would
   # trip the dangling-needs jq first and green for the wrong reason,
   # which is why the assertion checks the message and not just the code.
-  local stub_dir jq_err real_jq jq_rc=0
+  local stub_dir jq_err jq_out jq_outcome real_jq jq_rc=0
   real_jq="$(command -v jq)"
   stub_dir="$(mktemp --directory)"
   jq_err="$(mktemp)"
+  jq_out="$(mktemp)"
+  jq_outcome="$(mktemp)"
   cat >"${stub_dir}/jq" <<EOF
 #!/usr/bin/env bash
 for arg in "\$@"; do
@@ -209,12 +217,13 @@ EOF
     CI_WORKFLOW_OVERRIDE="${FIXTURES}/no-needs/ci.yml" \
     CATEGORIES_FILE_OVERRIDE="${FIXTURES}/categories.yml" \
     DOC_OVERRIDE="${tmpdoc}" \
-    "${SCRIPT}" --check >/dev/null 2>"${jq_err}" || jq_rc=$?
+    "${SCRIPT}" --check >"${jq_out}" 2>"${jq_err}" || jq_rc=$?
   rm --force -- "${tmpdoc}"
   tmpdoc=''
   rm --recursive --force -- "${stub_dir}"
+  printf 'harness-assert-outcome: exit=%d\n' "${jq_rc}" >"${jq_outcome}"
   harness_assert_record 'jq job-key read failure aborts' \
-    'could not read job keys with jq' "${jq_err}"
+    'could not read job keys with jq' "${jq_outcome}" "${jq_out}" "${jq_err}"
   if [[ ${jq_rc} -eq 2 ]] && grep --fixed-strings --quiet -- \
     'could not read job keys with jq' "${jq_err}"; then
     pass 'jq failure at job-key read exits 2 with its own message'
@@ -222,7 +231,7 @@ EOF
     fail "jq job-key guard: expected exit 2 + 'could not read job keys with jq', got exit ${jq_rc}"
     cat -- "${jq_err}" >&2
   fi
-  rm --force -- "${jq_err}"
+  rm --force -- "${jq_err}" "${jq_out}" "${jq_outcome}"
 
   harness_assert_verify || failures=$((failures + 1))
 

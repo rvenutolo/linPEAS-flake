@@ -45,15 +45,20 @@ function run_scenario() {
   local -r expected_exit="$4" expected_out="$5"
   local -r forbidden_allowed="${6:-}" forbidden_settings="${7:-}" forbidden_ratchet="${8:-}"
   local -r skip_record="${9:-}"
-  local out_file step_file actual_exit=0
+  local outcome_file out_file step_file actual_exit=0
+  outcome_file="$(mktemp)"
   out_file="$(mktemp)"
   step_file="$(mktemp)"
   TESTS_DIR_OVERRIDE="${tests_dir}" \
     SCRIPTS_DIR_OVERRIDE="${scripts_dir}" \
     GITHUB_STEP_SUMMARY="${step_file}" \
     "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
+  # The exit code is part of what the run observably did, so it is recorded
+  # alongside the streams rather than being checked only below.
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
   if [[ ${skip_record} != 'skip-record' ]]; then
-    harness_assert_record "${name}" "${expected_out}" "${out_file}" "${step_file}"
+    harness_assert_record "${name}" "${expected_out}" \
+      "${outcome_file}" "${out_file}" "${step_file}"
   fi
 
   local failed_check=''
@@ -78,7 +83,7 @@ function run_scenario() {
   else
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
-  rm --force -- "${out_file}" "${step_file}"
+  rm --force -- "${outcome_file}" "${out_file}" "${step_file}"
 }
 
 # Seeds the five exact harness names in the runner's HARNESSES list. Exit
