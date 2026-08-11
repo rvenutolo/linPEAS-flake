@@ -125,27 +125,13 @@ function seed() {
 function main() {
   local work forbidden_allowed forbidden_settings
 
-  # The all-pass scenario is distinguished by the absence of any FAIL row,
-  # which no substring can express. Its ratchet-pin-audit pass row does
-  # separate it from the two scenarios that fail that row, but it recurs in
-  # every scenario whose seeded failure is elsewhere. Each such pair is
-  # named so that adding a scenario re-flags rather than silently widening.
-  local exemption_scenario
-  for exemption_scenario in \
-    'settings-posture test fails -> exit 1' \
-    'backfill-image-mode test fails -> exit 1' \
-    'lib-log test fails -> exit 1'; do
-    harness_assert_exempt '| ratchet-pin-audit | pass |' "${exemption_scenario}" \
-      'the runner emits one row per declared harness, so a row this scenario does not perturb reads the same as it does here'
-  done
-
   # Scenario 1: all pass.
   work="$(mktemp -d)"
   forbidden_allowed="${work}/ran-allowed"
   forbidden_settings="${work}/ran-settings"
   seed "${work}" 0 0 0 0 "${forbidden_allowed}" "${forbidden_settings}"
   run_scenario 'all harnesses pass -> exit 0' \
-    "${work}/tests" "${work}/scripts" 0 '| ratchet-pin-audit | pass |' \
+    "${work}/tests" "${work}/scripts" 0 'harnesses passed, 0 failed' \
     "${forbidden_allowed}" "${forbidden_settings}"
   rm --recursive --force -- "${work}"
 
