@@ -261,23 +261,40 @@ function check_reachable() {
     die_op "default-branch lookup failed for ${owner_repo}: ${default_branch}"
   [[ -n ${default_branch} && ${default_branch} != null ]] ||
     die_op "empty default branch for ${owner_repo}"
+  # A pin that named an annotated-tag object resolved through one more
+  # hop than a pin that named a commit directly. Both paths name
+  # themselves, because a note that is silent about the direct path is a
+  # prefix of the deref one and the two become indistinguishable.
+  local deref_note=' via direct commit pin'
+  if [[ ${commit} != "${sha}" ]]; then
+    deref_note=" via tag object ${commit}"
+  fi
   local status
   # A 404 here means the commit is unknown to the upstream repo at
   # all — the GC'd-dangling-commit signature this probe exists to
   # catch — so it is the violation itself (not reachable), not an
-  # operational failure. Any other API error still dies loud.
+  # operational failure. Any other API error still dies loud. The note
+  # names that mode: a commit upstream has never held and a commit it
+  # holds off its default branch are different findings, and a caller
+  # reading only the FAIL line cannot tell them apart.
   if ! status="$(gh api --header "${GH_API_VERSION_HEADER}" \
     "repos/${owner_repo}/compare/${default_branch}...${commit}" --jq '.status' 2>&1)"; then
-    grep --quiet --ignore-case 'Not Found' <<<"${status}" && return 1
+    if grep --quiet --ignore-case 'Not Found' <<<"${status}"; then
+      printf 'note: floating-major pin %s@%s unknown to %s: compare API reports no such commit%s\n' \
+        "${path}" "${sha}" "${owner_repo}" "${deref_note}" >&2
+      return 1
+    fi
     die_op "compare API failed for ${owner_repo} ${default_branch}...${commit}: ${status}"
   fi
   case "${status}" in
   identical | behind)
-    printf 'note: floating-major pin %s@%s verified reachable from %s (%s)\n' \
-      "${path}" "${sha}" "${default_branch}" "${status}" >&2
+    printf 'note: floating-major pin %s@%s verified reachable from %s (%s)%s\n' \
+      "${path}" "${sha}" "${default_branch}" "${status}" "${deref_note}" >&2
     return 0
     ;;
   ahead | diverged)
+    printf 'note: floating-major pin %s@%s is known to %s but sits off %s (%s)%s\n' \
+      "${path}" "${sha}" "${owner_repo}" "${default_branch}" "${status}" "${deref_note}" >&2
     return 1
     ;;
   *)
@@ -360,8 +377,14 @@ while IFS= read -r key; do
       fi
     done <<<"${head_shas}"
   else
-    printf 'FAIL: digest repointed under unchanged version: %s (%s)\n' \
-      "${path}" "${version}" >&2
+    # Naming the digests that moved makes the line answer "which SHA is
+    # this now" without a second lookup, and keeps two repoints of the
+    # same path and version — the same key reached by different routes —
+    # from reporting identically.
+    printf 'FAIL: digest repointed under unchanged version: %s (%s): %s -> %s\n' \
+      "${path}" "${version}" \
+      "$(paste --serial --delimiters=, <<<"${base_shas}")" \
+      "$(paste --serial --delimiters=, <<<"${head_shas}")" >&2
     violations=1
   fi
 done <<<"${keys}"

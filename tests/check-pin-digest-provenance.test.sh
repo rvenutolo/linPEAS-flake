@@ -179,35 +179,49 @@ YAML
 }
 
 function main() {
-  # A clean pass prints the banner and nothing else, so no pass scenario
-  # owns a fixture-specific token to narrow to. The banner still separates
-  # the pass class from the violation and operational-error classes, which
-  # is the axis every pass scenario here asserts.
-  harness_assert_exempt 'pin digest provenance OK' '*' \
-    'global success banner: the script emits it on every passing run and emits no other output on a clean pass'
-
-  run_scenario 'unchanged tree passes' 'base' deny 0 'pin digest provenance OK'
-  run_scenario 'semver digest repoint fails' 'head-semver-repoint' deny 1 'digest repointed under unchanged version'
-  run_scenario 'version bump passes' 'head-version-bump' deny 0 'pin digest provenance OK'
-  run_scenario 'multi-instance uniform bump passes' 'head-multi-instance-bump' deny 0 'pin digest provenance OK'
-  run_scenario 'pin add/remove passes' 'head-added-removed' deny 0 'pin digest provenance OK'
-  run_scenario 'octoscan digest-only repoint fails' 'head-octoscan-digest-only' deny 1 'digest repointed under unchanged version'
-  run_scenario 'octoscan lockstep bump passes' 'head-octoscan-lockstep' deny 0 'pin digest provenance OK'
+  # Each passing scenario asserts the count-bearing pass banner its own
+  # fixture produces. The counts are what make a pass scenario
+  # self-identifying: the fixtures carry deliberately distinct pin and
+  # file inventories, so a scenario silently driving the wrong tree fails
+  # on the numbers rather than matching a sibling's banner.
+  run_scenario 'unchanged tree passes' 'base' deny 0 \
+    'pin digest provenance OK: 16 pin(s) across 5 file(s)'
+  run_scenario 'semver digest repoint fails' 'head-semver-repoint' deny 1 \
+    'digest repointed under unchanged version: actions/checkout (v4.3.1): bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb -> dddddddddddddddddddddddddddddddddddddddd'
+  run_scenario 'version bump passes' 'head-version-bump' deny 0 \
+    'pin digest provenance OK: 6 pin(s) across 3 file(s)'
+  run_scenario 'multi-instance uniform bump passes' 'head-multi-instance-bump' deny 0 \
+    'pin digest provenance OK: 7 pin(s) across 3 file(s)'
+  run_scenario 'pin add/remove passes' 'head-added-removed' deny 0 \
+    'pin digest provenance OK: 8 pin(s) across 3 file(s)'
+  run_scenario 'octoscan digest-only repoint fails' 'head-octoscan-digest-only' deny 1 \
+    'digest repointed under unchanged version: ghcr.io/synacktiv/octoscan (v0.1.7): sha256:1111111111111111111111111111111111111111111111111111111111111111 -> sha256:2222222222222222222222222222222222222222222222222222222222222222'
+  run_scenario 'octoscan lockstep bump passes' 'head-octoscan-lockstep' deny 0 \
+    'pin digest provenance OK: 9 pin(s) across 3 file(s)'
   run_scenario 'octoscan shape drift errors' 'head-octoscan-shape' deny 2 'octoscan digest/version pair not found'
-  run_scenario 'floating repoint reachable passes' 'head-floating-repoint' reachable 0 'verified reachable'
-  run_scenario 'floating repoint tag-object deref passes' 'head-floating-repoint' tagobject-reachable 0 'verified reachable'
-  run_scenario 'floating repoint diverged fails' 'head-floating-repoint' diverged 1 'not reachable from upstream default branch'
+  run_scenario 'floating repoint reachable passes' 'head-floating-repoint' reachable 0 \
+    'verified reachable from master (behind) via direct commit pin'
+  run_scenario 'floating repoint tag-object deref passes' 'head-floating-repoint' tagobject-reachable 0 \
+    'via tag object'
+  run_scenario 'floating repoint diverged fails' 'head-floating-repoint' diverged 1 \
+    'but sits off master (diverged)'
   run_scenario 'floating repoint api error exits 2' 'head-floating-repoint' api-error 2 ''
   run_scenario 'quoted pin shape errors' 'head-quoted-pin' deny 2 'unrecognized uses: pin shape'
   run_scenario 'comment-less pin shape errors' 'head-commentless-pin' deny 2 'unrecognized uses: pin shape'
-  run_scenario 'nested action dir repoint fails' 'head-nested-action-repoint' deny 1 'digest repointed under unchanged version'
-  run_scenario 'uppercase-SHA case-only change passes' 'head-uppercase-sha-same-pin' deny 0 'pin digest provenance OK'
-  run_scenario 'file rename plus repoint fails' 'head-file-rename-repoint' deny 1 'digest repointed under unchanged version'
+  run_scenario 'nested action dir repoint fails' 'head-nested-action-repoint' deny 1 \
+    'digest repointed under unchanged version: actions/setup-node (v4.0.0): 3333333333333333333333333333333333333333 -> 4444444444444444444444444444444444444444'
+  run_scenario 'uppercase-SHA case-only change passes' 'head-uppercase-sha-same-pin' deny 0 \
+    'pin digest provenance OK: 6 pin(s) across 4 file(s)'
+  run_scenario 'file rename plus repoint fails' 'head-file-rename-repoint' deny 1 \
+    'digest repointed under unchanged version: actions/checkout (v4.3.1): bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb -> 5555555555555555555555555555555555555555'
   run_scenario 'self-reference pin repoint under unchanged comment passes' \
-    'head-self-reference-repoint' deny 0 'pin digest provenance OK'
+    'head-self-reference-repoint' deny 0 \
+    'pin digest provenance OK: 6 pin(s) across 5 file(s)'
   run_scenario 'floating repoint compare-API 404 fails as violation, not exit 2' \
-    'head-floating-repoint' compare-not-found 1 'not reachable from upstream default branch'
-  run_git_mode_scenario 'git BASE_REF mode: zero-level composite action repoint fails' 1 'digest repointed under unchanged version'
+    'head-floating-repoint' compare-not-found 1 \
+    'compare API reports no such commit'
+  run_git_mode_scenario 'git BASE_REF mode: zero-level composite action repoint fails' 1 \
+    'digest repointed under unchanged version: actions/setup-node (v4.0.0): 1111111111111111111111111111111111111111 -> 3333333333333333333333333333333333333333'
   run_git_ls_tree_failure_scenario
   harness_assert_verify || failures=$((failures + 1))
 
