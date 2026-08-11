@@ -55,18 +55,7 @@ function run_scenario() {
 }
 
 function main() {
-  # The bad-multiple fixture reproduces each single-drift fixture's line
-  # verbatim, so those lines are legitimately shared with it. Each assertion
-  # still separates its scenario from the passing fixture and from every other
-  # single-drift fixture, and bad-multiple asserts its own drift total.
   local -r multi='multiple drifts surface every one'
-  local -r shared='the multi-drift fixture reproduces this drift line by design'
-  harness_assert_exempt \
-    'patterns_allowed drift: extra on API: attacker/*' "${multi}" "${shared}"
-  harness_assert_exempt \
-    'github_owned_allowed drift: got false, want true' "${multi}" "${shared}"
-  harness_assert_exempt \
-    'verified_allowed drift: got true, want false' "${multi}" "${shared}"
 
   run_scenario 'matching fixtures pass' \
     'good' 0 ''
@@ -82,7 +71,11 @@ function main() {
     'bad-multiple' 1 '3 allowlist drift(s)'
 
   # bad-multiple must surface every drift (github_owned, verified, extra
-  # vendor) in a single run — count drift lines.
+  # vendor) in a single run — count drift lines. Its offending value for
+  # each key differs from the single-drift fixture covering that key, so
+  # no single-drift assertion can be satisfied by this fixture's output:
+  # the booleans arrive absent (the script reads them as `null`) rather
+  # than flipped, and the unlisted vendor pattern is its own.
   local stderr_file
   stderr_file="$(mktemp)"
   SELECTED_ACTIONS_JSON_OVERRIDE="${FIXTURES}/bad-multiple/selected-actions.json" \

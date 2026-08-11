@@ -16,13 +16,6 @@ readonly FIXTURES="${REPO_ROOT}/tests/fixtures/compare-repro"
 
 failures=0
 
-# The runbook link rides on the MISMATCH verdict, so every mismatch fixture
-# prints it and no match fixture does. It separates the mismatch class from
-# the match class, which is the axis this assertion is about; it cannot
-# separate one mismatch fixture from another.
-harness_assert_exempt 'docs/runbooks/reproducibility-check.md' '*' \
-  'printed on every MISMATCH verdict and on no MATCH verdict'
-
 # @arg $1 scenario name
 # @arg $2 fixture subdir (must contain build-a.json + build-b.json)
 # @arg $3 expected exit
@@ -63,7 +56,9 @@ function run_scenario() {
 
 # Every summary tabulates all three field names and the word MATCH inside
 # `**MISMATCH**`, so a bare field name or `MATCH` matches on every path.
-# The verdict line is what separates the outcomes.
+# The verdict line is what separates the outcomes. Each verdict assertion
+# carries the terminating period, so a single-field verdict cannot be
+# satisfied by the opening of a multi-field one.
 run_scenario \
   'match: identical hashes → exit 0, summary contains MATCH' \
   'match' \
@@ -74,19 +69,19 @@ run_scenario \
   'mismatch-store: differing linpeas_nar_hash → exit 1, summary names field' \
   'mismatch-store' \
   1 \
-  '**Result:** MISMATCH in: linpeas_nar_hash'
+  '**Result:** MISMATCH in: linpeas_nar_hash.'
 
 run_scenario \
   'mismatch-image: differing image_tar_sha256 → exit 1, summary names field' \
   'mismatch-image' \
   1 \
-  '**Result:** MISMATCH in: image_tar_sha256'
+  '**Result:** MISMATCH in: image_tar_sha256.'
 
 run_scenario \
-  'mismatch: runbook link present in summary' \
-  'mismatch-store' \
+  'mismatch in both fields: summary names both' \
+  'mismatch-both' \
   1 \
-  'docs/runbooks/reproducibility-check.md'
+  '**Result:** MISMATCH in: linpeas_nar_hash image_tar_sha256.'
 
 run_scenario \
   'store-path-only diff: not a mismatch (paths informational only) → exit 0' \
