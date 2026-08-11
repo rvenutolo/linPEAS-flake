@@ -53,28 +53,39 @@ readonly -a HARNESSES=(
 )
 
 function main() {
-  local failed=0
+  local failed=0 passed=0
   local -a rows=()
-  local entry name test_rel enforce_rel start end secs status rc
+  local entry name test_rel enforce_rel start end secs status rc stage
   for entry in "${HARNESSES[@]}"; do
     IFS='|' read -r name test_rel enforce_rel <<<"${entry}"
     rc=0
+    stage=''
     start="$(date +%s)"
     if [[ ! -f "${TESTS_DIR}/${test_rel}" ]]; then
       printf '::error::missing test harness: %s/%s\n' "${TESTS_DIR}" "${test_rel}" >&2
       rc=1
+      stage='missing'
     else
       bash "${TESTS_DIR}/${test_rel}" || rc=$?
-      if [[ ${rc} -eq 0 && -n ${enforce_rel} ]]; then
+      if [[ ${rc} -ne 0 ]]; then
+        stage='test'
+      elif [[ -n ${enforce_rel} ]]; then
         bash "${SCRIPTS_DIR}/${enforce_rel}" || rc=$?
+        [[ ${rc} -eq 0 ]] || stage='enforce'
       fi
     fi
     end="$(date +%s)"
     secs=$((end - start))
     if [[ ${rc} -eq 0 ]]; then
       status='pass'
+      passed=$((passed + 1))
     else
-      status='FAIL'
+      # A bare FAIL leaves the reader unable to tell a harness whose spec
+      # test failed from one whose live enforce script failed after a
+      # passing test — different code, different fix, and the enforce stage
+      # only runs at all when the test stage passed. The cell names the
+      # stage that set rc so the row points at the thing to open.
+      status="FAIL (${stage})"
       failed=1
     fi
     rows+=("$(printf '| %s | %s | %ds |' "${name}" "${status}" "${secs}")")
@@ -93,10 +104,8 @@ function main() {
   # log grep) can match on. The tally states the outcome positively, and
   # carries the failure count so that "everything passed" is one fixed
   # token rather than a number that moves whenever a harness is declared.
-  local passed=0 row
-  for row in "${rows[@]}"; do
-    [[ ${row} == *'| FAIL |'* ]] || passed=$((passed + 1))
-  done
+  # The count comes from the loop's own verdict rather than from re-reading
+  # the rendered rows, so widening a status cell cannot silently change it.
   printf 'harness-group: %d/%d harnesses passed, %d failed\n' \
     "${passed}" "${#rows[@]}" "$((${#rows[@]} - passed))"
 
