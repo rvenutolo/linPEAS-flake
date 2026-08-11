@@ -35,8 +35,11 @@ cat >"${fix}/flake.nix" <<'EOF'
 EOF
 (cd "${fix}" && git init -q && git add -A)
 err="$(mktemp)"
+out="$(mktemp)"
+outcome="$(mktemp)"
 rc=0
-"${SCRIPT}" --flake "${fix}" >/dev/null 2>"${err}" || rc=$?
+"${SCRIPT}" --flake "${fix}" >"${out}" 2>"${err}" || rc=$?
+printf 'harness-assert-outcome: exit=%d\n' "${rc}" >"${outcome}"
 if [[ ${rc} -ne 0 ]] && grep -q 'bogus-system' "${err}"; then
   pass 'guard fails and names the broken system'
 else
@@ -44,7 +47,7 @@ else
   cat -- "${err}" >&2
 fi
 harness_assert_record 'guard fails and names the broken system' \
-  'bogus-system' "${err}"
+  'bogus-system' "${outcome}" "${out}" "${err}"
 
 # Assertion 3: a fixture flake whose packages attrset enumerates fine but
 # whose package *value* throws must fail. This is the case attribute-name
@@ -67,8 +70,11 @@ cat >"${fix2}/flake.nix" <<'EOF'
 EOF
 (cd "${fix2}" && git init -q && git add -A)
 err2="$(mktemp)"
+out2="$(mktemp)"
+outcome2="$(mktemp)"
 rc2=0
-"${SCRIPT}" --flake "${fix2}" >/dev/null 2>"${err2}" || rc2=$?
+"${SCRIPT}" --flake "${fix2}" >"${out2}" 2>"${err2}" || rc2=$?
+printf 'harness-assert-outcome: exit=%d\n' "${rc2}" >"${outcome2}"
 if [[ ${rc2} -ne 0 ]] && grep -q 'package broken is not evaluable' "${err2}"; then
   pass 'guard fails on a per-package value throw'
 else
@@ -76,8 +82,8 @@ else
   cat -- "${err2}" >&2
 fi
 harness_assert_record 'guard fails on a per-package value throw' \
-  'package broken is not evaluable' "${err2}"
-rm -rf -- "${fix2}" "${err2}"
+  'package broken is not evaluable' "${outcome2}" "${out2}" "${err2}"
+rm -rf -- "${fix2}" "${err2}" "${out2}" "${outcome2}"
 
 harness_assert_verify || failures=$((failures + 1))
 
