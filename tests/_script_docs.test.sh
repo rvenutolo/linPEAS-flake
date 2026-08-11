@@ -41,11 +41,17 @@ function test_full_matches_expected() {
 
 function test_no_description_exits_2() {
   local -r name='no-description.sh exits 2 with stderr "missing @description"'
-  local stderr_file actual_exit=0
+  local outcome_file stdout_file stderr_file actual_exit=0
+  outcome_file="$(mktemp)"
+  stdout_file="$(mktemp)"
   stderr_file="$(mktemp)"
   awk --file "${PARSER}" <"${FIXTURES}/no-description.sh" \
-    >/dev/null 2>"${stderr_file}" || actual_exit=$?
-  harness_assert_record "${name}" 'missing @description' "${stderr_file}"
+    >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  # The exit code is part of what the run observably did, so it is recorded
+  # alongside the streams rather than being checked only below.
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" 'missing @description' \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
   if [[ ${actual_exit} -ne 2 ]]; then
     fail "${name} — expected exit 2, got ${actual_exit}"
     cat -- "${stderr_file}" >&2
@@ -56,7 +62,7 @@ function test_no_description_exits_2() {
   else
     pass "${name}"
   fi
-  rm --force -- "${stderr_file}"
+  rm --force -- "${outcome_file}" "${stdout_file}" "${stderr_file}"
 }
 
 function test_function_body_description_ignored() {
