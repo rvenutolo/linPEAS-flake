@@ -84,6 +84,7 @@ function scan_secrets() {
     while IFS= read -r token; do
       [[ -z ${token} ]] && continue
       if [[ ${token} == 'secrets.GITHUB_TOKEN' ]]; then
+        allowed=$((allowed + 1))
         continue
       fi
       printf '%s:%s: %s not allowed in PR-triggered workflow\n' \
@@ -96,10 +97,21 @@ function scan_secrets() {
 }
 
 failed=0
+# Scope tallies behind the clean-path summary. Most of this directory is
+# out of scope by design, so a pass has to say how much of it the rule
+# was actually applied to.
+examined=0
+scanned=0
+skipped=0
+allowed=0
 shopt -s nullglob
 for wf in "${WORKFLOWS_DIR}"/*.yml "${WORKFLOWS_DIR}"/*.yaml; do
+  examined=$((examined + 1))
   if is_pr_triggered "${wf}"; then
+    scanned=$((scanned + 1))
     scan_secrets "${wf}"
+  else
+    skipped=$((skipped + 1))
   fi
 done
 shopt -u nullglob
@@ -108,4 +120,13 @@ if ((failed > 0)); then
   printf '%d violation(s) found\n' "${failed}" >&2
   exit 1
 fi
+
+# A workflow that was read and carried no disallowed secret and a
+# workflow that was never read because no PR trigger put it in scope both
+# leave this lint silent. Say which happened: an operator reading a green
+# run needs to know whether the rule was applied or the file was out of
+# scope, and a trigger change that quietly moves a workflow out of scope
+# shows up here as a scanned count that dropped.
+printf '%s: examined %d workflow(s): %d scanned as PR-triggered, %d skipped as not PR-triggered; %d secrets.GITHUB_TOKEN reference(s) allowed\n' \
+  'pr-workflows-no-secrets' "${examined}" "${scanned}" "${skipped}" "${allowed}"
 exit 0
