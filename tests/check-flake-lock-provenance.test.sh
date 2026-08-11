@@ -28,12 +28,14 @@ failures=0
 # @arg $4 expected exit  @arg $5 expected output substring (empty skips)
 function run_pair_scenario() {
   local -r name="$1" base="$2" head="$3" expected_exit="$4" expected_msg="$5"
-  local out_file
+  local out_file outcome_file
   out_file="$(mktemp)"
+  outcome_file="$(mktemp)"
   local actual_exit=0
   BASE_LOCK_FILE="${FIXTURES}/${base}" \
     HEAD_LOCK_FILE="${FIXTURES}/${head}" \
     timeout "${SCENARIO_TIMEOUT_SECS}" "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
   if [[ ${actual_exit} -eq 124 && ${expected_exit} -ne 124 ]]; then
     printf 'FAIL: %s — killed after %ds; the check did not finish\n' \
       "${name}" "${SCENARIO_TIMEOUT_SECS}" >&2
@@ -52,8 +54,8 @@ function run_pair_scenario() {
   else
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
-  harness_assert_record "${name}" "${expected_msg}" "${out_file}"
-  rm --force -- "${out_file}"
+  harness_assert_record "${name}" "${expected_msg}" "${outcome_file}" "${out_file}"
+  rm --force -- "${outcome_file}" "${out_file}"
 }
 
 # @arg $1 scenario name  @arg $2 head fixture basename  @arg $3 expected exit
@@ -75,12 +77,14 @@ function run_follows_scenario() {
 # @arg $1 scenario name ; missing base => operational error (exit 2)
 function run_missing_base() {
   local -r name="$1"
-  local out_file
+  local out_file outcome_file
   out_file="$(mktemp)"
+  outcome_file="$(mktemp)"
   local actual_exit=0
   BASE_LOCK_FILE="${FIXTURES}/does-not-exist.lock" \
     HEAD_LOCK_FILE="${FIXTURES}/base.lock" \
     "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
   if [[ ${actual_exit} -ne 2 ]]; then
     printf 'FAIL: %s — expected exit 2, got %d\n' "${name}" "${actual_exit}" >&2
     cat -- "${out_file}" >&2
@@ -88,8 +92,8 @@ function run_missing_base() {
   else
     printf 'PASS: %s (exit 2)\n' "${name}"
   fi
-  harness_assert_record "${name}" '' "${out_file}"
-  rm --force -- "${out_file}"
+  harness_assert_record "${name}" '' "${outcome_file}" "${out_file}"
+  rm --force -- "${outcome_file}" "${out_file}"
 }
 
 function main() {
