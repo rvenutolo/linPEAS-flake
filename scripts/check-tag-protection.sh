@@ -120,12 +120,35 @@ for required in "${REQUIRED_RULES[@]}"; do
 done
 
 # Pattern: accept the canonical regex OR the documented fallback glob.
+# Which of the two matched is the difference between a ruleset scoped to
+# pin-version tags and one blanket-protecting every tag in the repo, so
+# record it rather than collapsing both to a bare pass. The canonical
+# pattern is reported when a ruleset carries both.
 include_patterns="$(jq --raw-output '.conditions.ref_name.include[]' <<<"${ruleset_json}")"
-if ! grep --quiet --fixed-strings -- "${EXPECTED_PATTERN_REGEX}" <<<"${include_patterns}" &&
-  ! grep --quiet --fixed-strings -- "${FALLBACK_PATTERN_GLOB}" <<<"${include_patterns}"; then
+if grep --quiet --fixed-strings -- "${EXPECTED_PATTERN_REGEX}" <<<"${include_patterns}"; then
+  ref_match="pin-version pattern ${EXPECTED_PATTERN_REGEX}"
+elif grep --quiet --fixed-strings -- "${FALLBACK_PATTERN_GLOB}" <<<"${include_patterns}"; then
+  ref_match="fallback glob ${FALLBACK_PATTERN_GLOB}"
+else
   printf 'ref_name.include does not contain expected pattern\n  have: %s\n  want one of: %s | %s\n' \
     "${include_patterns}" "${EXPECTED_PATTERN_REGEX}" "${FALLBACK_PATTERN_GLOB}" >&2
   exit 1
 fi
+
+# An empty capture must stay a zero count: `wc -l <<<""` counts the
+# here-string's own trailing newline and would report one pattern where
+# the ruleset has none.
+include_count=0
+if [[ -n ${include_patterns} ]]; then
+  include_count="$(wc -l <<<"${include_patterns}")"
+fi
+
+# A bare pass tells an operator nothing about the posture that was
+# accepted: a ruleset carrying extra rules, or one falling back to
+# blanket tag protection, passes exactly like the canonical posture.
+# State what was verified, and name which ref pattern carried the match.
+printf 'tag-protection: %s verified — %d rule(s) in the ruleset, %d bypass actor(s), %d include pattern(s); ref match: %s\n' \
+  "${EXPECTED_NAME}" "${#actual_rules[@]}" "${bypass_count}" \
+  "${include_count}" "${ref_match}"
 
 exit 0

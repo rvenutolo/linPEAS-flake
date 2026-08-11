@@ -61,11 +61,28 @@ function run_scenario() {
       "${outcome_file}" "${out_file}" "${step_file}"
   fi
 
+  # The tally line is the token a reader or a log grep matches on, so it has
+  # to agree with the table it summarizes. Counting FAIL rows out of the
+  # rendered table derives the expectation independently of however the
+  # runner arrives at its own count, which is what catches a tally that
+  # counts rows by matching a status cell the runner has since widened.
+  local table_failed tally_line tally_failed
+  table_failed="$(grep --count --extended-regexp '^\| [^|]+ \| FAIL' -- "${out_file}" || true)"
+  tally_line="$(grep --extended-regexp \
+    '^harness-group: [0-9]+/[0-9]+ harnesses passed, [0-9]+ failed$' \
+    -- "${out_file}" || true)"
+  tally_failed="${tally_line##*, }"
+  tally_failed="${tally_failed% failed}"
+
   local failed_check=''
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     failed_check="expected exit ${expected_exit}, got ${actual_exit}"
   elif [[ -n ${expected_out} ]] && ! grep --fixed-strings --quiet -- "${expected_out}" "${out_file}"; then
     failed_check="stdout missing '${expected_out}'"
+  elif [[ -z ${tally_line} ]]; then
+    failed_check='stdout missing the harness-group tally line'
+  elif [[ ${tally_failed} != "${table_failed}" ]]; then
+    failed_check="tally claims ${tally_failed} failed, table shows ${table_failed} FAIL row(s)"
   elif ! grep --fixed-strings --quiet -- '### harness-group' "${step_file}"; then
     failed_check='GITHUB_STEP_SUMMARY missing table header'
   elif [[ -n ${forbidden_allowed} && -e ${forbidden_allowed} ]]; then
@@ -146,7 +163,7 @@ function main() {
   forbidden_settings="${work}/ran-settings"
   seed "${work}" 0 0 0 1 "${forbidden_allowed}" "${forbidden_settings}"
   run_scenario 'settings-posture test fails -> exit 1' \
-    "${work}/tests" "${work}/scripts" 1 '| settings-posture | FAIL |' \
+    "${work}/tests" "${work}/scripts" 1 '| settings-posture | FAIL (test) |' \
     "${forbidden_allowed}" "${forbidden_settings}"
   rm --recursive --force -- "${work}"
 
@@ -164,25 +181,29 @@ function main() {
     "${forbidden_allowed}" "${forbidden_settings}" '' 'skip-record'
   rm --recursive --force -- "${work}"
 
-  # Scenario 3: ratchet test passes but its enforce script fails ->
-  # row FAIL, proving the enforce script ran.
+  # Scenario 3: ratchet test passes but its enforce script fails -> the row
+  # names the enforce stage, proving the enforce script ran. Scenario 4 is
+  # the same harness failing at the test stage; the stage-named cell is the
+  # only thing that separates the two runs, so asserting it here is what
+  # keeps "enforce ran" and "enforce was skipped" distinct observations.
   work="$(mktemp -d)"
   forbidden_allowed="${work}/ran-allowed"
   forbidden_settings="${work}/ran-settings"
   seed "${work}" 0 1 0 0 "${forbidden_allowed}" "${forbidden_settings}"
   run_scenario 'ratchet enforce script runs and can fail the row' \
-    "${work}/tests" "${work}/scripts" 1 '| ratchet-pin-audit | FAIL |' \
+    "${work}/tests" "${work}/scripts" 1 '| ratchet-pin-audit | FAIL (enforce) |' \
     "${forbidden_allowed}" "${forbidden_settings}"
   rm --recursive --force -- "${work}"
 
-  # Scenario 4: ratchet TEST fails -> enforce must NOT run.
+  # Scenario 4: ratchet TEST fails -> enforce must NOT run, and the row
+  # names the test stage rather than the enforce stage it never reached.
   work="$(mktemp -d)"
   forbidden_allowed="${work}/ran-allowed"
   forbidden_settings="${work}/ran-settings"
   local forbidden_ratchet="${work}/ran-ratchet-enforce"
   seed "${work}" 1 0 0 0 "${forbidden_allowed}" "${forbidden_settings}" "${forbidden_ratchet}"
   run_scenario 'ratchet test fails -> enforce skipped, row FAIL' \
-    "${work}/tests" "${work}/scripts" 1 '| ratchet-pin-audit | FAIL |' \
+    "${work}/tests" "${work}/scripts" 1 '| ratchet-pin-audit | FAIL (test) |' \
     "${forbidden_allowed}" "${forbidden_settings}" "${forbidden_ratchet}"
   rm --recursive --force -- "${work}"
 
@@ -194,7 +215,7 @@ function main() {
   forbidden_settings="${work}/ran-settings"
   seed "${work}" 0 0 0 0 "${forbidden_allowed}" "${forbidden_settings}" "" 1
   run_scenario 'backfill-image-mode test fails -> exit 1' \
-    "${work}/tests" "${work}/scripts" 1 '| backfill-image-mode | FAIL |' \
+    "${work}/tests" "${work}/scripts" 1 '| backfill-image-mode | FAIL (test) |' \
     "${forbidden_allowed}" "${forbidden_settings}"
   rm --recursive --force -- "${work}"
 
@@ -206,7 +227,7 @@ function main() {
   forbidden_settings="${work}/ran-settings"
   seed "${work}" 0 0 0 0 "${forbidden_allowed}" "${forbidden_settings}" "" 0 1
   run_scenario 'lib-log test fails -> exit 1' \
-    "${work}/tests" "${work}/scripts" 1 '| lib-log | FAIL |' \
+    "${work}/tests" "${work}/scripts" 1 '| lib-log | FAIL (test) |' \
     "${forbidden_allowed}" "${forbidden_settings}"
   rm --recursive --force -- "${work}"
 

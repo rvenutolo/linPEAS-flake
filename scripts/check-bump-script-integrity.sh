@@ -34,6 +34,7 @@ if [[ ! -f ${BUMP_SCRIPT} ]]; then
 fi
 
 failed=0
+declare -a matched=()
 
 # @description Emit a guard failure and set the failure flag.
 # @arg $1 guard label (the test asserts on a substring of this).
@@ -59,6 +60,8 @@ readonly URL_PREFIX_COMPARE='!= "${expected_url_prefix}"'
 if ! grep --fixed-strings --quiet -- "${URL_PREFIX_LITERAL}" "${BUMP_SCRIPT}" ||
   ! grep --fixed-strings --quiet -- "${URL_PREFIX_COMPARE}" "${BUMP_SCRIPT}"; then
   fail_guard 'asset url prefix'
+else
+  matched+=('asset url prefix')
 fi
 
 # Guard 2 — .digest cross-check. Require the sha256: digest-prefix
@@ -66,6 +69,8 @@ fi
 if ! grep --fixed-strings --quiet 'sha256:' "${BUMP_SCRIPT}" ||
   ! grep --fixed-strings --quiet 'sha256sum' "${BUMP_SCRIPT}"; then
   fail_guard 'digest cross-check'
+else
+  matched+=('digest cross-check')
 fi
 
 # Guard 3 — atomic pin write. Require mktemp + an mv rename into the
@@ -89,17 +94,34 @@ guard3_truncating_with_space="${gt} ${dq}${target_ref}${dq}"
 readonly gt dq target_name target_ref guard3_mv_pattern \
   guard3_truncating_no_space guard3_truncating_with_space
 
+guard3_ok=1
 if ! grep --fixed-strings --quiet 'mktemp' "${BUMP_SCRIPT}" ||
   ! grep --fixed-strings --quiet -- "${guard3_mv_pattern}" "${BUMP_SCRIPT}"; then
   fail_guard 'atomic pin write'
+  guard3_ok=0
 fi
 if grep --fixed-strings --quiet -- "${guard3_truncating_no_space}" "${BUMP_SCRIPT}" ||
   grep --fixed-strings --quiet -- "${guard3_truncating_with_space}" "${BUMP_SCRIPT}"; then
   fail_guard 'atomic pin write (truncating redirect into pin file)'
+  guard3_ok=0
+fi
+if ((guard3_ok == 1)); then
+  matched+=('atomic pin write')
 fi
 
 if ((failed > 0)); then
   printf '\nscripts/bump-linpeas.sh is missing a Bump-script integrity guard (see docs/security/verification.md).\n' >&2
   exit 1
 fi
+
+# A pass says which file was read and which guards were found in it. The
+# override that lets the harness point this lint at a stand-in also lets
+# a misconfigured caller verify the wrong file and still report success,
+# so the scanned path belongs in the verdict alongside the guard set.
+guard_desc=''
+for guard in ${matched[@]+"${matched[@]}"}; do
+  guard_desc+="${guard_desc:+, }${guard}"
+done
+printf '%s: %s — guards matched: %s\n' \
+  'bump-script-integrity' "${BUMP_SCRIPT#"${REPO_ROOT}"/}" "${guard_desc}"
 exit 0
