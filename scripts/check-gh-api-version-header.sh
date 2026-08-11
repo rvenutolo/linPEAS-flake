@@ -21,6 +21,11 @@
 #
 # Honors SCRIPTS_DIR_OVERRIDE for the test harness (defaults to
 # scripts/, repo-relative).
+#
+# Exits 0 when every call carries the header, 1 on any offender, 2 when
+# the scan could not run because the scripts directory is missing. A
+# directory that was never scanned holds no offenders, so it must not
+# borrow the violation code.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -36,7 +41,7 @@ readonly SELF_BASENAME='check-gh-api-version-header.sh'
 
 if [[ ! -d ${SCRIPTS_DIR} ]]; then
   printf 'scripts dir not found: %s\n' "${SCRIPTS_DIR}" >&2
-  exit 1
+  exit 2
 fi
 
 # @description Scan a single shell file for offending statements.

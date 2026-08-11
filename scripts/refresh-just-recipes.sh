@@ -4,7 +4,8 @@
 # @description Regenerate the just-recipes managed block in
 # README.md and docs/reference/just-recipes.md from the current
 # `just` recipe list.
-# @option --check exit 1 if either doc would change; do not mutate the working tree
+# @option --check exit 1 if either doc would change; exit 2 if either doc
+# is missing; do not mutate the working tree
 
 # Replace the content between the BEGIN/END just-recipes markers in
 # both README.md (bash-comment markers) and
@@ -14,6 +15,7 @@
 # Usage:
 #   scripts/refresh-just-recipes.sh            # mutate both docs in place
 #   scripts/refresh-just-recipes.sh --check    # exit 1 if either doc would change;
+#                                              #   exit 2 if a doc is missing;
 #                                              #   do NOT mutate the working tree
 
 set -Eeuo pipefail
@@ -137,9 +139,12 @@ function main() {
     fence="${wrap_fence[${idx}]}"
     rel="${doc#"${repo_root}/"}"
 
+    # The doc is spliced, not written from scratch, so its absence is a
+    # could-not-run condition rather than drift: exit 2 so the caller sends
+    # the operator to the missing file instead of to a regenerate-and-commit.
     if [[ ! -f ${doc} ]]; then
       log_err "${rel} not found"
-      exit 1
+      exit 2
     fi
     if ! grep --quiet --fixed-strings --line-regexp -- "${begin_marker}" "${doc}"; then
       log_err "BEGIN marker missing from ${rel}"

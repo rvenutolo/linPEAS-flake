@@ -19,7 +19,7 @@ failures=0
 # @description Run the script with a fixture; assert exit code and stderr.
 # @arg $1 scenario name
 # @arg $2 fixture filename under FIXTURES
-# @arg $3 expected exit code (0 or 1)
+# @arg $3 expected exit code (0 intact, 1 drift, 2 tooling error)
 # @arg $4 expected stderr substring (empty string skips the check)
 function run_scenario() {
   local -r name="$1"
@@ -65,6 +65,10 @@ function main() {
     'bad-no-pin-digests.json' 1 'pinDigests'
   run_scenario 'extends missing helpers:pinGitHubActionDigests fails' \
     'bad-no-extends-pin.json' 1 'helpers:pinGitHubActionDigests'
+  # No config read means no invariant was checked; that is a missing
+  # input, not a dropped invariant.
+  run_scenario 'absent config is a tooling error' \
+    'no-such-config.json' 2 'renovate config not found'
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then

@@ -4,7 +4,9 @@
 # @description Regenerate the treefmt-config managed block in
 # docs/reference/treefmt-config.md from the enabled-formatter manifest
 # exposed by `nix/treefmt-config.nix` as `devTooling.<system>.treefmtConfig`.
-# @option --check exit 1 if the doc would change; do not mutate the working tree
+# @option --check exit 1 if the doc would change; exit 2 if the check
+# cannot run (doc missing, or nix eval fails); do not mutate the working
+# tree
 
 # Replace the content between <!-- BEGIN treefmt-config --> and <!-- END treefmt-config -->
 # in docs/reference/treefmt-config.md with the current set of enabled treefmt
@@ -14,6 +16,7 @@
 # Usage:
 #   scripts/refresh-treefmt-config.sh            # mutate docs/reference/treefmt-config.md in place
 #   scripts/refresh-treefmt-config.sh --check    # exit 1 if the doc would change;
+#                                                #   exit 2 if it cannot run;
 #                                                #   do NOT mutate the working tree
 
 set -Eeuo pipefail
@@ -80,9 +83,12 @@ function main() {
   trap 'exit 143' TERM
   trap 'exit 129' HUP
 
+  # The doc is spliced, not written from scratch, so its absence is a
+  # could-not-run condition rather than drift: exit 2 so the caller sends
+  # the operator to the missing file instead of to a regenerate-and-commit.
   if [[ ! -f ${doc} ]]; then
     log_err "${doc} not found"
-    exit 1
+    exit 2
   fi
   if ! grep --quiet '^<!-- BEGIN treefmt-config -->$' "${doc}"; then
     log_err 'BEGIN marker missing from docs/reference/treefmt-config.md'
@@ -113,7 +119,7 @@ function main() {
   if ! nix eval --json ".#devTooling.${sys}.treefmtConfig" >"${cfg_file}" 2>"${raw_err}"; then
     log_err 'nix eval failed:'
     cat -- "${raw_err}" >&2
-    exit 1
+    exit 2
   fi
 
   # Render the block: header row, separator, one row per formatter sorted by

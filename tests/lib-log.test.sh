@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # tests/lib-log.test.sh — proves scripts/lib/log.sh reports the real
-# exit code (the date-substitution $? clobber is fixed).
+# exit code (the date-substitution $? clobber is fixed) and that
+# require_tool reports an absent tool as a could-not-run condition.
 set -Eeuo pipefail
 IFS=$'\n\t'
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -43,6 +44,33 @@ fi
 if grep -q 'exit 0' "${err}"; then
   fail 'trap still logs "exit 0" — the $? clobber is not fixed'
 fi
+
+# require_tool must exit 2, not 1: an absent tool means the caller could
+# not run at all. A caller reserving exit 1 for a violation it found — a
+# freshness hook's "the doc is stale, regenerate and commit" — would
+# otherwise send the operator to regenerate a doc over a missing binary.
+cat >"${work}/needs_tool.sh" <<EOF
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=\$'\n\t'
+source "${LIB}"
+require_tool definitely-not-a-real-tool-xyz
+EOF
+chmod +x "${work}/needs_tool.sh"
+
+tool_err="$(mktemp)"
+tool_rc=0
+"${work}/needs_tool.sh" >/dev/null 2>"${tool_err}" || tool_rc=$?
+harness_assert_record 'require_tool reports an absent tool' \
+  'missing required tool' "${tool_err}"
+if [[ ${tool_rc} -eq 2 ]] &&
+  grep --fixed-strings --quiet -- 'missing required tool' "${tool_err}"; then
+  pass 'require_tool exits 2 with a missing-tool message'
+else
+  fail "require_tool: expected exit 2 + 'missing required tool', got exit ${tool_rc}"
+  cat -- "${tool_err}" >&2
+fi
+rm --force -- "${tool_err}"
 
 harness_assert_verify || failures=$((failures + 1))
 

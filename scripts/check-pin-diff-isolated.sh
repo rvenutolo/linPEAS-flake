@@ -23,6 +23,9 @@
 #      (`scripts/bump-linpeas.sh`).
 #
 # Exits 0 on match, 1 on drift. Fixture overrides honored.
+# Exits 2 when the scripts directory to scan is absent: with nothing to
+# scan there is no writer to count, and reporting that as "no script
+# writes the pin" would blame the tree for a missing input.
 #
 # Env overrides (test-only):
 #   SCRIPTS_DIR_OVERRIDE — path to scripts directory to scan
@@ -38,7 +41,7 @@ readonly EXPECTED_WRITER='bump-linpeas.sh'
 
 if [[ ! -d ${SCRIPTS_DIR} ]]; then
   printf 'scripts dir not found: %s\n' "${SCRIPTS_DIR}" >&2
-  exit 1
+  exit 2
 fi
 
 # Two-phase detection. A script is a candidate writer iff:

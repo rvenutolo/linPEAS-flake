@@ -34,6 +34,9 @@ expect bad-job-permissions.yml 1 "permissions must be exactly { contents: read }
 expect bad-persist-credentials.yml 1 "set persist-credentials: false"
 expect bad-job-timeout.yml 1 "timeout-minutes missing"
 expect bad-schedule.yml 1 "on: must include a schedule sequence"
+# An absent workflow file is a missing input: no invariant was read, so
+# it must not be counted as a failed one.
+expect no-such-workflow.yml 2 "workflow not found at"
 
 # --- classify-pin-ref.sh verdict tests -------------------------------
 # Pure classifier: <tag> <pinned> <ref_object_sha> <ref_object_type>

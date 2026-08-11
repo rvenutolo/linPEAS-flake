@@ -19,7 +19,7 @@ failures=0
 # @description Run the script with a fixture; assert exit code and stderr.
 # @arg $1 scenario name
 # @arg $2 fixture filename under FIXTURES (empty string means no file / missing)
-# @arg $3 expected exit code (0 or 1)
+# @arg $3 expected exit code (0 clean, 1 drift, 2 could not run)
 # @arg $4 expected stderr substring (empty string skips the check)
 function run_scenario() {
   local -r name="$1"
@@ -61,8 +61,10 @@ function main() {
   run_scenario 'semver tag_pattern fails' \
     "${FIXTURES}/bad-semver-cliff.toml" 1 'tag_pattern drift in'
 
-  run_scenario 'missing cliff.toml fails' \
-    '/nonexistent/cliff.toml' 1 'cliff.toml not found'
+  # A config that was never read cannot have drifted: the could-not-run
+  # code, not the drift code the absent-key case below carries.
+  run_scenario 'missing cliff.toml exits tooling code' \
+    '/nonexistent/cliff.toml' 2 'cliff.toml not found'
 
   run_scenario 'cliff.toml without tag_pattern key fails' \
     "${FIXTURES}/bad-no-key-cliff.toml" 1 'tag_pattern key absent'

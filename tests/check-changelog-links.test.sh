@@ -90,8 +90,11 @@ function main() {
   run_scenario 'missing scorecard preprocessor fails' \
     "${FIXTURES}/bad-no-preprocessor.toml" 1 '15-check allowlist'
 
-  run_scenario 'missing cliff.toml fails' \
-    '/nonexistent/cliff.toml' 1 'cliff.toml not found'
+  # A config that is not there produces no regeneration to assert on, so it
+  # carries the tooling exit code rather than reading as a violation of the
+  # link invariants.
+  run_scenario 'missing cliff.toml exits tooling code' \
+    '/nonexistent/cliff.toml' 2 'cliff.toml not found'
 
   # A config git-cliff cannot run is a broken toolchain, not a malformed
   # regeneration. It must carry the tooling exit code and a diagnostic naming

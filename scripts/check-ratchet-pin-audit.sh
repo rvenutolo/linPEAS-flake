@@ -13,7 +13,10 @@
 #
 # WORKFLOW_PATH_OVERRIDE points at an alternate workflow file
 # (used by tests/check-ratchet-pin-audit.test.sh fixtures).
-# Exits 0 on full coverage, 1 on any drift.
+# Exits 0 on full coverage, 1 on any drift, 2 when the check cannot run
+# — yq absent from PATH, or the workflow file itself missing. With no
+# workflow to parse there is no invariant to score, and counting that as
+# a failed invariant would report drift in a file the check never read.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -35,11 +38,11 @@ fail() {
   failed=$((failed + 1))
 }
 
-# 1. File exists.
+# 1. File exists. Absent input, not a failed invariant — every check
+# below reads this file, so there is nothing to score.
 if [[ ! -f ${WORKFLOW} ]]; then
-  fail "workflow not found at ${WORKFLOW}"
-  printf '%d invariant(s) failed\n' "${failed}" >&2
-  exit 1
+  printf 'workflow not found at %s\n' "${WORKFLOW}" >&2
+  exit 2
 fi
 
 # 2. Top-level permissions is exactly the empty map.

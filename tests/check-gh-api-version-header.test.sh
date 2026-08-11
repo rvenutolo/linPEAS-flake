@@ -63,6 +63,10 @@ function main() {
     'good-comment-only' 0 ''
   run_scenario 'api.github.com request without header fails' \
     'bad-apigithub' 1 'missing X-GitHub-Api-Version'
+  # A directory that is not there was never scanned, so it holds no
+  # offenders: the could-not-run code, not a violation report.
+  run_scenario 'missing scripts dir could not run' \
+    'does-not-exist' 2 'scripts dir not found'
 
   # Self-scan: the live scripts/ dir must lint clean. Guards against
   # any future script regressing on the X-GitHub-Api-Version header.

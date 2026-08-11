@@ -98,8 +98,10 @@ function merge_no_ff() {
 # @description Run the script with the working directory inside a fixture repo.
 # @arg $1 name  @arg $2 repo dir  @arg $3 regen file  @arg $4 expected exit
 # @arg $5 optional CHANGELOG_OVERRIDE path
+# @arg $6 optional expected stderr substring (empty skips the check)
 function run_case() {
   local -r name="$1" dir="$2" regen="$3" want="$4" override="${5:-}"
+  local -r expected_stderr="${6:-}"
   local got=0 stderr_file
   stderr_file="$(mktemp)"
   if [[ -n ${override} ]]; then
@@ -112,20 +114,26 @@ function run_case() {
       cd "${dir}" && REGEN_OVERRIDE="${regen}" "${SCRIPT}"
     ) >/dev/null 2>"${stderr_file}" || got=$?
   fi
-  if [[ ${got} -eq ${want} ]]; then
-    pass "${name} (exit ${got})"
-  else
+  if [[ ${got} -ne ${want} ]]; then
     fail "${name} — expected exit ${want}, got ${got}"
+  elif [[ -n ${expected_stderr} ]] &&
+    ! grep --fixed-strings --quiet -- "${expected_stderr}" "${stderr_file}"; then
+    fail "${name} — stderr missing ${expected_stderr@Q}"
+    printf 'stderr was:\n' >&2
+    cat -- "${stderr_file}" >&2
+  else
+    pass "${name} (exit ${got})"
   fi
-  harness_assert_record "${name}" '' "${stderr_file}"
+  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
   rm --force -- "${stderr_file}"
 }
 
 # @description Run the script against the real repository with a cliff config
-# the generator itself rejects, so git-cliff — not the comparison — is what
-# fails. REGEN_OVERRIDE is deliberately unset: this is the only case that has
-# to reach the generator. Asserts both the exit code and that the diagnostic
-# reaches stderr rather than being swallowed.
+# the comparison never gets past — one the generator itself rejects, or one
+# that is not there at all — so the config, not the committed changelog, is
+# what fails. REGEN_OVERRIDE is deliberately unset: these are the only cases
+# that reach the cliff-config path. Asserts both the exit code and that the
+# diagnostic reaches stderr rather than being swallowed.
 # @arg $1 name  @arg $2 cliff config path  @arg $3 expected exit
 # @arg $4 expected stderr substring
 function run_tooling_case() {
@@ -392,6 +400,17 @@ function main() {
   # exit code and a diagnostic that names the generator and the config.
   run_tooling_case 'git-cliff failing on its config exits tooling code' \
     "${FIXTURES}/bad-unparsable-template.toml" 2 'git-cliff regeneration failed'
+
+  # --- Case: an input the comparison reads is missing --------------------
+  # Neither side of the diff can be built without cliff.toml and CHANGELOG.md.
+  # Freshness was never evaluated, so these carry the could-not-run code:
+  # reporting staleness would send a maintainer to regenerate a changelog that
+  # is not what broke.
+  run_tooling_case 'missing cliff.toml exits tooling code' \
+    '/nonexistent/cliff.toml' 2 'cliff.toml not found'
+  run_case 'missing CHANGELOG.md -> exit 2' \
+    "${fresh}" "${content}/both.md" 2 "${root}/does-not-exist.md" \
+    'CHANGELOG not found'
 
   harness_assert_verify || failures=$((failures + 1))
 

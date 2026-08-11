@@ -59,6 +59,10 @@ function main() {
     'bad-no-digest.sh' 1 'digest'
   run_scenario 'truncating pin write fails' \
     'bad-truncating-write.sh' 1 'atomic'
+  # An unreadable bump script was never scanned, so no guard verdict
+  # exists: the could-not-run code, not a missing-guard report.
+  run_scenario 'missing bump script could not run' \
+    'does-not-exist.sh' 2 'bump script not found'
 
   # Live self-scan: the real bump script must retain all guards.
   local stderr_file

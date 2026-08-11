@@ -51,6 +51,10 @@ function main() {
     'bad-orphan-link' 1 '[orphan-link]'
   run_scenario 'unreferenced doc fails' \
     'bad-unreferenced-doc' 1 '[unreferenced-doc]'
+  # An absent index is a missing input, not a docs/index divergence: the
+  # tooling code keeps it out of the drift bucket.
+  run_scenario 'absent index is a tooling error' \
+    'no-such-fixture' 2 'invariant index not found'
 
   harness_assert_verify || failures=$((failures + 1))
 

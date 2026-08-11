@@ -7,7 +7,10 @@
 # and gen-dashboard-data.sh.
 #
 # Exits 0 when tag_pattern exactly matches the canonical value.
-# Exits 1 on any failure (missing file, missing key, wrong value).
+# Exits 1 on drift (missing key, wrong value).
+# Exits 2 when the check could not run: yq absent from PATH, or cliff.toml
+# missing. A config that was never read cannot have drifted, so it must not
+# borrow the drift code.
 #
 # Env overrides (test-only):
 #   CLIFF_TOML_OVERRIDE — path to a fixture cliff.toml instead of
@@ -29,7 +32,7 @@ fi
 
 if [[ ! -f ${CLIFF_TOML} ]]; then
   printf 'cliff.toml not found: %s\n' "${CLIFF_TOML}" >&2
-  exit 1
+  exit 2
 fi
 
 actual="$(yq eval '.git.tag_pattern' "${CLIFF_TOML}")"

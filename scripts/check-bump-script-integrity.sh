@@ -15,6 +15,11 @@
 #
 # Honors BUMP_SCRIPT_OVERRIDE for the test harness (defaults to
 # scripts/bump-linpeas.sh, repo-relative).
+#
+# Exits 0 when every guard is present, 1 when one is missing, 2 when the
+# bump script itself cannot be read. An unreadable input was never
+# scanned, so reporting it as a dropped guard sends a maintainer to
+# re-add code that is still there.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -25,7 +30,7 @@ readonly BUMP_SCRIPT="${BUMP_SCRIPT_OVERRIDE:-${REPO_ROOT}/scripts/bump-linpeas.
 
 if [[ ! -f ${BUMP_SCRIPT} ]]; then
   printf 'bump script not found: %s\n' "${BUMP_SCRIPT}" >&2
-  exit 1
+  exit 2
 fi
 
 failed=0

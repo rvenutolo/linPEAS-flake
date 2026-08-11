@@ -40,8 +40,9 @@ expect bad-orphan-category 1 "does not match any job"
 expect bad-missing-manifest-check 1 "lint-groups basename" \
   "${FIXTURES}/bad-missing-manifest-check/lint-groups.yml" \
   "${FIXTURES}/bad-missing-manifest-check/scripts"
-# A missing manifest is a hard infrastructure error, not drift (exit 1).
-expect good 1 "manifest not found" \
+# A missing manifest is a hard infrastructure error, not drift: nothing was
+# cross-checked, so it carries the could-not-run code (exit 2).
+expect good 2 "manifest not found" \
   "${FIXTURES}/bad-missing-manifest-check/does-not-exist.yml" \
   "${FIXTURES}/bad-missing-manifest-check/scripts"
 # An unmapped auxiliary job with no EXEMPT entry fails — the exemption in
@@ -57,6 +58,28 @@ expect good 1 "already a key" "" "" "foo"
 # A lint-groups manifest yq cannot parse is a tooling error, not drift
 # — it must fail loud (exit 2) rather than silently skip coverage.
 expect good 2 "" "${FIXTURES}/bad-malformed-manifest/lint-groups.yml" ""
+
+# The two files the cross-check reads are inputs, not findings: absent, the
+# lint has compared nothing and must not report drift.
+expect does-not-exist 2 "ci workflow not found"
+
+missing_categories_exit=0
+missing_categories_stderr="$(env \
+  "WORKFLOWS_DIR_OVERRIDE=${FIXTURES}/good" \
+  "CI_WORKFLOW_OVERRIDE=${FIXTURES}/good/ci.yml" \
+  "CATEGORIES_FILE_OVERRIDE=${FIXTURES}/good/does-not-exist.yml" \
+  "${SCRIPT}" 2>&1 >/dev/null)" || missing_categories_exit=$?
+if [[ ${missing_categories_exit} != 2 ]]; then
+  printf 'FAIL missing-categories: exit %s, want 2\n  stderr: %s\n' \
+    "${missing_categories_exit}" "${missing_categories_stderr}" >&2
+  exit 1
+fi
+if [[ ${missing_categories_stderr} != *"categories file not found"* ]]; then
+  printf 'FAIL missing-categories: stderr missing %q\n  got: %s\n' \
+    "categories file not found" "${missing_categories_stderr}" >&2
+  exit 1
+fi
+printf 'OK   missing-categories\n'
 
 # --print-exempt is the shared source of the ci-job exemption list for
 # scripts/refresh-enforcement-matrix.sh. It must exit 0 and emit exactly

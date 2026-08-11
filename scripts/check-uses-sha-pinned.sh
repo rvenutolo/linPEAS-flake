@@ -18,14 +18,16 @@
 # fails closed — the file's references cannot be verified.
 #
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures.
-# Exits 0 on full coverage, 1 on any drift.
+# Exits 0 on full coverage, 1 on any drift, 2 when the lint could not run
+# because yq is absent from PATH. Nothing was scanned in that case, so it
+# must not borrow the drift code.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
 
 if ! command -v yq >/dev/null 2>&1; then
   printf 'check-uses-sha-pinned: yq not found on PATH\n' >&2
-  exit 1
+  exit 2
 fi
 
 readonly DEFAULT_DIRS=(.github/workflows .github/actions)

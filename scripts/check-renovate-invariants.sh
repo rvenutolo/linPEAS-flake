@@ -13,7 +13,9 @@
 #   4. github-actions packageRule sets pinDigests: true
 #
 # Honors RENOVATE_JSON_OVERRIDE for fixture testing.
-# Exits 0 on intact invariants, 1 on drift.
+# Exits 0 on intact invariants, 1 on drift, 2 when the config file is
+# absent — no invariant was read, so reporting one as dropped would send
+# a maintainer after a setting nobody touched.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -25,7 +27,7 @@ readonly path="${RENOVATE_JSON_OVERRIDE:-${DEFAULT_PATH}}"
 
 if [[ ! -f ${path} ]]; then
   printf 'renovate config not found: %s\n' "${path}" >&2
-  exit 1
+  exit 2
 fi
 
 # 1. extends includes helpers:pinGitHubActionDigests

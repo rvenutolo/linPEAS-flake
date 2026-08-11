@@ -13,7 +13,12 @@
 # Env overrides (test-only):
 #   ACTIONLINT_SMOKE_FIXTURE_OVERRIDE — alternate fixture path
 #
-# Exits 0 on clean, 1 on any failure.
+# Exits 0 on clean, 1 when the canary fires (shellcheck no longer
+# reaches `run:` blocks), 2 when the canary could not run at all: the
+# fixture is missing or actionlint is absent from PATH. A canary that
+# never ran says nothing about the integration, so it must not borrow
+# the failure code — that sends a maintainer after a wiring regression
+# that has not happened.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -26,12 +31,12 @@ readonly RUNBOOK="docs/actionlint-embedded-linters.md"
 
 if [[ ! -f ${FIXTURE} ]]; then
   printf 'ERROR: fixture not found: %s\n' "${FIXTURE}" >&2
-  exit 1
+  exit 2
 fi
 
 if ! command -v actionlint >/dev/null 2>&1; then
   printf 'ERROR: actionlint not on PATH. Run inside the devShell.\n' >&2
-  exit 1
+  exit 2
 fi
 
 output_file="$(mktemp)"

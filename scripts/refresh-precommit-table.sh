@@ -4,7 +4,8 @@
 # @description Regenerate the precommit-table managed block in
 # docs/development/git.md from the current pre-commit hook manifest
 # in the flake.
-# @option --check exit 1 if the doc would change; do not mutate the working tree
+# @option --check exit 1 if the doc would change; exit 2 if the doc is
+# missing; do not mutate the working tree
 
 # Replace the content between <!-- BEGIN precommit-table --> and <!-- END precommit-table -->
 # in docs/development/git.md with the current pre-commit hook manifest from the flake.
@@ -12,6 +13,7 @@
 # Usage:
 #   scripts/refresh-precommit-table.sh            # mutate docs/development/git.md in place
 #   scripts/refresh-precommit-table.sh --check    # exit 1 if the doc would change;
+#                                                 #   exit 2 if the doc is missing;
 #                                                 #   do NOT mutate the working tree
 
 set -Eeuo pipefail
@@ -70,9 +72,12 @@ function main() {
   doc="${repo_root}/docs/development/git.md"
   readonly repo_root doc
 
+  # The doc is spliced, not written from scratch, so its absence is a
+  # could-not-run condition rather than drift: exit 2 so the caller sends
+  # the operator to the missing file instead of to a regenerate-and-commit.
   if [[ ! -f ${doc} ]]; then
     log_err "${doc} not found"
-    exit 1
+    exit 2
   fi
   if ! grep --quiet '^<!-- BEGIN precommit-table -->$' "${doc}"; then
     log_err 'BEGIN marker missing from docs/development/git.md'

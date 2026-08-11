@@ -20,6 +20,11 @@
 #   DOCS_ROOT_OVERRIDE       — alternate docs/ root
 #
 # Exits 0 on clean, 1 on any failure. All failures reported.
+# Exits 2 when the check cannot run at all — the index or the docs root
+# is absent, so neither half of the lockstep can be evaluated. A missing
+# input must not borrow the drift code: that reads as a substantive
+# docs/index divergence and sends a maintainer after content nobody
+# changed.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -47,11 +52,11 @@ readonly EXEMPT=(
 
 if [[ ! -f ${INDEX} ]]; then
   printf 'invariant index not found: %s\n' "${INDEX}" >&2
-  exit 1
+  exit 2
 fi
 if [[ ! -d ${DOCS_ROOT} ]]; then
   printf 'docs root not found: %s\n' "${DOCS_ROOT}" >&2
-  exit 1
+  exit 2
 fi
 
 failures=0

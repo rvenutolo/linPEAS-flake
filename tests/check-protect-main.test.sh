@@ -87,6 +87,10 @@ function main() {
   run_scenario 'non-array rules is a tooling error' \
     'bad-rules-wrong-type' 2 \
     'protect-main ruleset: could not read .rules[].type'
+  # Absent inputs are read failures, not posture drift: with no mirror
+  # there is nothing to compare the live ruleset against.
+  run_scenario 'absent mirror is a tooling error' \
+    'no-such-fixture' 2 'mirror file not found'
 
   # The no-op-ruleset guard (fetch_ruleset hard-fails when the live
   # ruleset id is empty) is unreachable through run_scenario, which always

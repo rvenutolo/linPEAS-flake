@@ -20,7 +20,7 @@ failures=0
 # stderr substring.
 # @arg $1 scenario name
 # @arg $2 fixture subdir under FIXTURES
-# @arg $3 expected exit code (0 or 1)
+# @arg $3 expected exit code (0 pass, 1 drift, 2 tooling error)
 # @arg $4 expected stderr substring (empty skips the check)
 function run_scenario() {
   local -r name="$1"
@@ -65,6 +65,10 @@ function main() {
     'bad-no-url' 1 'no github:cachix/git-hooks.nix'
   run_scenario 'missing lock node fails' \
     'bad-no-lock-node' 1 'no nodes'
+  # An absent input file yields no SHA to compare, so it cannot be
+  # reported as a parity drift.
+  run_scenario 'absent input files are a tooling error' \
+    'no-such-fixture' 2 'flake.nix not found'
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then

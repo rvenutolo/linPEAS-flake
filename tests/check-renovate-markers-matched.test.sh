@@ -89,6 +89,10 @@ function main() {
     'bad-file-patterns-type' 2 'could not read customManagers[0].managerFilePatterns'
   run_scenario 'non-array matchStrings is a tooling error' \
     'bad-match-strings-type' 2 'could not read customManagers[0].matchStrings'
+  # An absent config leaves every marker unjudged; calling that a dead
+  # marker would blame the markers for a missing input.
+  run_scenario 'absent config is a tooling error' \
+    'no-such-fixture' 2 'renovate config not found'
   run_live_tree
   harness_assert_verify || failures=$((failures + 1))
 

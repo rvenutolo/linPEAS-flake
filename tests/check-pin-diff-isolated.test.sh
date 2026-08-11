@@ -62,6 +62,10 @@ function main() {
     'bad-wrong-writer' 1 'unexpected writer'
   run_scenario 'no writer fails' \
     'bad-no-writer' 1 'no script under'
+  # Nothing to scan is a missing input, not a missing writer — the two
+  # must not share an exit code.
+  run_scenario 'absent scripts dir is a tooling error' \
+    'no-such-fixture' 2 'scripts dir not found'
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then

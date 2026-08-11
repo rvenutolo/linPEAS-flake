@@ -16,9 +16,9 @@
 #
 # Honors RENOVATE_JSON_OVERRIDE (config path) and SCAN_ROOT (tree root) for
 # fixture testing. Exits 0 when every marker is live, 1 on any dead marker,
-# 2 on a tooling error — jq cannot read a customManager's declarations, so
-# no verdict about the markers is available and reporting one would blame a
-# marker for a config-shape problem.
+# 2 on a tooling error — the config file is absent, or jq cannot read a
+# customManager's declarations, so no verdict about the markers is available
+# and reporting one would blame a marker for a config-shape problem.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -38,7 +38,7 @@ readonly MARKER_RE='#\s*renovate:\s*datasource=\S+\s+depName='
 
 if [[ ! -f ${RENOVATE_JSON} ]]; then
   printf 'renovate config not found: %s\n' "${RENOVATE_JSON}" >&2
-  exit 1
+  exit 2
 fi
 
 num_managers="$(jq '.customManagers // [] | length' "${RENOVATE_JSON}")"

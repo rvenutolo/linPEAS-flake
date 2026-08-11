@@ -38,7 +38,7 @@ function log_err() { log ERROR "$*"; }
 
 if ! command -v check-jsonschema >/dev/null 2>&1; then
   log_err 'check-jsonschema not on PATH'
-  exit 1
+  exit 2
 fi
 
 repo_root="$(git rev-parse --show-toplevel)"

@@ -130,6 +130,29 @@ EOF
     fail "unknown arg exit was ${rc3}, want 2"
   fi
 
+  # Scenario 7: an absent input doc exits 2, not 1. The generator splices
+  # into the doc rather than writing it from scratch, so a missing doc
+  # means the check could not run — exit 1 would tell the operator the
+  # doc is stale and to regenerate it, which reads nothing.
+  local missing_doc missing_err missing_rc=0
+  missing_doc="$(mktemp --directory)/absent-ci-dag.md"
+  missing_err="$(mktemp)"
+  CI_WORKFLOW_OVERRIDE="${FIXTURES}/no-needs/ci.yml" \
+    CATEGORIES_FILE_OVERRIDE="${FIXTURES}/categories.yml" \
+    DOC_OVERRIDE="${missing_doc}" \
+    "${SCRIPT}" --check >/dev/null 2>"${missing_err}" || missing_rc=$?
+  rmdir -- "$(dirname -- "${missing_doc}")"
+  harness_assert_record 'absent input doc rejected' \
+    'not found' "${missing_err}"
+  if [[ ${missing_rc} -eq 2 ]] &&
+    grep --fixed-strings --quiet -- 'not found' "${missing_err}"; then
+    pass 'absent input doc exits 2 (could not run, not drift)'
+  else
+    fail "missing-doc guard: expected exit 2 + 'not found', got exit ${missing_rc}"
+    cat -- "${missing_err}" >&2
+  fi
+  rm --force -- "${missing_err}"
+
   # Markers the anchored awk splice cannot match (trailing whitespace on both
   # markers) must be rejected by the guard, not silently emitted unchanged.
   # An unanchored guard grep false-greens here; the anchored guard fails

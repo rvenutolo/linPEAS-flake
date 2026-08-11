@@ -53,6 +53,19 @@ if [[ ${flow_exit} != 1 || ${flow_err} != *"not SHA-pinned"* ]]; then
 fi
 printf 'OK   flow-style unpinned rejected\n'
 
+# Without yq nothing is scanned, so the lint has found no unpinned ref and
+# must not report drift. Run through an absolute bash with an empty PATH:
+# the script is reached, its own tool guard is what fires.
+bash_abs="$(command -v bash)"
+noyq_exit=0
+noyq_err="$(env --unset=BASH_ENV PATH=/nonexistent \
+  "${bash_abs}" "${SCRIPT}" 2>&1 >/dev/null)" || noyq_exit=$?
+if [[ ${noyq_exit} != 2 || ${noyq_err} != *"yq not found on PATH"* ]]; then
+  printf 'FAIL yq-absent: exit %s (want 2)\n  stderr: %s\n' "${noyq_exit}" "${noyq_err}" >&2
+  exit 1
+fi
+printf 'OK   yq absent exits tooling code\n'
+
 # A single-violation top-level file must report exactly one violation line;
 # the file-list glob must not match (and re-scan) a top-level *.yml twice.
 count="$(WORKFLOWS_DIR_OVERRIDE="${FIXTURES}" WORKFLOW_FILE_FILTER=bad-tag.yml \

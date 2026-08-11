@@ -22,6 +22,9 @@
 #
 # Exits 0 on match, 1 on drift. Fixture overrides honored for the
 # test harness.
+# Exits 2 when either input file is absent — neither SHA can be read, so
+# there is no parity verdict to give. Borrowing the drift code there
+# would send a maintainer chasing a divergence the inputs never showed.
 #
 # Env overrides (test-only):
 #   FLAKE_NIX_OVERRIDE  — path to flake.nix to read
@@ -37,11 +40,11 @@ readonly FLAKE_LOCK="${FLAKE_LOCK_OVERRIDE:-${REPO_ROOT}/flake.lock}"
 
 if [[ ! -f ${FLAKE_NIX} ]]; then
   printf 'flake.nix not found: %s\n' "${FLAKE_NIX}" >&2
-  exit 1
+  exit 2
 fi
 if [[ ! -f ${FLAKE_LOCK} ]]; then
   printf 'flake.lock not found: %s\n' "${FLAKE_LOCK}" >&2
-  exit 1
+  exit 2
 fi
 
 # Extract the SHA from the pre-commit-hooks input URL in flake.nix.
