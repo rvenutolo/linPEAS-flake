@@ -122,10 +122,16 @@ readonly changelog_commit changelog_commit_status
 # confirmed ancestor nor a confirmed non-ancestor, so it does not exclude —
 # only a confirmed non-ancestor (exit 1) does.
 function excluded_tags() {
-  local tag status
+  local tag status tags
   if [[ -z ${changelog_commit} ]]; then
     return 0
   fi
+  # Captured rather than fed through a process substitution: a redirection
+  # discards its producer's status, so a producer that stopped early would
+  # arrive as an empty tag set and exclude nothing — a looser verdict wearing
+  # a clean exit. No status check is owed here because `visible_tags` absorbs
+  # its own failure and yields the empty set by design.
+  tags="$(visible_tags)"
   while IFS= read -r tag; do
     if [[ -z ${tag} ]]; then
       continue
@@ -136,7 +142,7 @@ function excluded_tags() {
     if [[ ${status} -eq 1 ]]; then
       printf '%s\n' "${tag}"
     fi
-  done < <(visible_tags)
+  done <<<"${tags}"
 }
 
 # @description Emit a file's comparable released portion: everything from the
