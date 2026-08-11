@@ -13,9 +13,25 @@
 # (.claude/CLAUDE.md is intentionally untracked, so CI cannot scan it.
 # The pre-commit hook will scan it locally if present.)
 #
-# Slug algorithm (ASCII; matches GFM and mkdocs-material default):
-#   1. Lowercase. 2. Replace non [a-z0-9] with '-'. 3. Collapse '-'.
-#   4. Trim '-'.
+# Slug algorithm — GFM (github-slugger), ASCII scope:
+#   1. Trim surrounding whitespace, then lowercase.
+#   2. PRESERVE letters, digits, '_' and '-'. DELETE every other
+#      character outright — apostrophes, periods, parentheses, '+', '&',
+#      backticks and non-ASCII punctuation such as em dashes and arrows
+#      leave nothing behind, so "the image's" slugs to "the-images".
+#   3. Replace each remaining space with '-'. Runs are NOT collapsed, so
+#      "release + tag" slugs to "release--tag".
+# Deleting rather than substituting is what makes step 3 safe: trailing
+# punctuation cannot produce a trailing '-', so no trimming is needed.
+#
+# Headings inside fenced code blocks are not headings — a shell comment
+# in a ```bash block would otherwise mint a phantom slug that vouches for
+# a link GitHub cannot resolve. Fenced blocks are dropped before slugs
+# and explicit anchors are collected.
+#
+# mkdocs-material's toc slugify collapses separator runs, so it can
+# disagree with GFM on such a heading. Those headings carry an explicit
+# `<a name="...">` anchor, which this lint accepts as a target too.
 #
 # Env overrides (test-only):
 #   DOC_ANCHOR_ROOT_OVERRIDE — alternate REPO_ROOT
@@ -35,17 +51,50 @@ function slug() {
   s="${s#"${s%%[![:space:]]*}"}"
   s="${s%"${s##*[![:space:]]}"}"
   s="$(printf '%s' "${s}" | tr '[:upper:]' '[:lower:]')"
-  s="$(printf '%s' "${s}" | sed --regexp-extended 's/[^a-z0-9]+/-/g; s/^-+|-+$//g')"
+  s="$(printf '%s' "${s}" | sed --regexp-extended 's/[^a-z0-9 _-]+//g; s/ /-/g')"
   printf '%s\n' "${s}"
+}
+
+# @description Echo a file with every fenced code block removed. Fence
+# rules follow CommonMark: an opening fence is 3+ backticks or tildes
+# indented at most 3 spaces, and only a run of the same character at
+# least as long, with nothing after it, closes it. An unterminated fence
+# swallows the rest of the file, which is what a renderer does too.
+# @arg $1 file
+function without_fences() {
+  awk '
+    {
+      if (match($0, /^ ? ? ?(```+|~~~+)/)) {
+        marker = substr($0, RSTART, RLENGTH)
+        sub(/^ +/, "", marker)
+        if (!in_fence) {
+          in_fence = 1
+          fence_char = substr(marker, 1, 1)
+          fence_len = length(marker)
+          next
+        }
+        if (substr(marker, 1, 1) == fence_char &&
+            length(marker) >= fence_len &&
+            substr($0, RSTART + RLENGTH) ~ /^[ \t]*$/) {
+          in_fence = 0
+          next
+        }
+      }
+      if (!in_fence) { print }
+    }
+  ' "$1"
 }
 
 function headings_of() {
   local -r f="$1"
   [[ -f ${f} ]] || return 0
+  local body
+  body="$(without_fences "${f}")"
   # Heading-derived slugs. Strip inline HTML (e.g. `<a name="...">`
   # anchors written by mdformat-toc) before slugging so the computed
   # slug matches the GFM/mkdocs auto-slug, which ignores HTML tags.
-  grep --extended-regexp '^#+[[:space:]]+.+' "${f}" |
+  printf '%s\n' "${body}" |
+    grep --extended-regexp '^#+[[:space:]]+.+' |
     sed --regexp-extended 's/^#+[[:space:]]+//; s/<[^>]+>//g' |
     while IFS= read -r heading; do
       slug "${heading}"
@@ -53,8 +102,9 @@ function headings_of() {
   # Explicit `<a name="..."></a>` anchors are also valid targets.
   # mdformat-toc writes these next to every in-range heading so its
   # TOC fragments resolve regardless of the slug algorithm in use.
-  grep --extended-regexp --only-matching \
-    '<a[[:space:]]+name="[^"]+"' "${f}" 2>/dev/null |
+  printf '%s\n' "${body}" |
+    grep --extended-regexp --only-matching \
+      '<a[[:space:]]+name="[^"]+"' |
     sed --regexp-extended 's/.*name="([^"]+)".*/\1/' || true
 }
 
