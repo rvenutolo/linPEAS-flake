@@ -90,8 +90,12 @@ string ref names the target node id directly, and an array ref is a path
 walked from the lock's root node through each node's `inputs` in turn, one hop
 per array element, guarded against cycles by a depth ceiling. A ref that
 cannot be resolved — a dangling path element, a cycle, or an empty array —
-fails closed with a distinct `top-level input unresolvable` message rather
-than comparing against nothing. A ref-shape change (string to array, or array
+fails closed with a `top-level input unresolvable` message rather than
+comparing against nothing, and the message names what the resolver observed:
+`follows path names no such node`, `follows path exceeds nesting ceiling`, or
+`follows step budget exhausted`. A cycle and a legal chain deeper than the
+ceiling report the same way, because the resolver carries no visited set and
+cannot tell them apart. A ref-shape change (string to array, or array
 to a differently-shaped array) whose resolved source identity is unchanged
 passes by design: the gate guards source identity, not `follows`-graph shape,
 so a routine `follows` restructuring that still lands on the same source is

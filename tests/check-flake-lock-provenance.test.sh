@@ -124,8 +124,10 @@ function main() {
   run_follows_scenario 'string-to-array repoint fails' 'head-follows-string-to-array.lock' 1 'FAIL: top-level input repointed: gamma'
   run_follows_scenario 'array-to-array repoint fails' 'head-follows-array-change.lock' 1 'FAIL: top-level input repointed: beta'
   run_follows_scenario 'string-to-array same source passes' 'head-follows-string-to-array-same.lock' 0 'provenance OK'
-  run_follows_scenario 'dangling follows path fails' 'head-follows-dangling.lock' 1 'FAIL: top-level input unresolvable: beta'
-  run_follows_scenario 'cyclic follows fails' 'head-follows-cycle.lock' 1 'FAIL: top-level input unresolvable: beta'
+  run_follows_scenario 'dangling follows path fails' 'head-follows-dangling.lock' 1 \
+    'FAIL: top-level input unresolvable (follows path names no such node): beta'
+  run_follows_scenario 'cyclic follows fails' 'head-follows-cycle.lock' 1 \
+    'FAIL: top-level input unresolvable (follows path exceeds nesting ceiling): beta'
 
   # Each `bN` input is a two-element path through `bN+1`, so a naive
   # resolver that re-walks every element costs 2^N for a lock under 1 KiB.
