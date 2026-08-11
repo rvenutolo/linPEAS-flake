@@ -24,11 +24,15 @@
 # comment describing the gate cannot stand in for being wired to it.
 #
 # Every harness is also held to zero discrimination exemptions, so
-# weakening an assertion means editing this gate under review.
+# weakening an assertion means editing this gate under review. Parity
+# exemptions are held to a named allowlist for the same reason: a
+# collapse the gate cannot separate is legible only while it is small
+# enough to name.
 #
 # Honors TESTS_DIR_OVERRIDE for fixtures. Exits 0 when every
-# output-asserting harness is wired and no harness registers an
-# exemption, 1 otherwise.
+# output-asserting harness is wired, no harness registers a
+# discrimination exemption, and every parity exemption comes from an
+# allowlisted harness; 1 otherwise.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -57,8 +61,25 @@ readonly GATE_VERIFY_CALL='^[[:space:]]*(if[[:space:]]+|(\|\||&&)[[:space:]]+)*h
 # assertion deserves.
 readonly GATE_EXEMPT_CALL='^[[:space:]]*harness_assert_exempt([[:space:]]|$)'
 
-# Harness basenames excluded from both the wiring verdict and the
-# exemption ratchet. Most read produced artifact content instead of
+# The parity escape hatch excuses two scenarios whose whole observable
+# outcome is the same. It cannot be held at zero, because a scenario can
+# exercise a distinction its subject deliberately never observes, and no
+# honest output separates such a pair. It is held to a named list
+# instead: the harnesses below may register one, and any other harness
+# that does fails this gate, so a second collapse is an edit here under
+# review. The pattern is anchored to a statement so a header comment
+# describing the hatch cannot stand in for reaching for it, and it does
+# not match `harness_assert_exempt`, which stays at zero above.
+readonly GATE_PARITY_EXEMPT_CALL='^[[:space:]]*harness_assert_parity_exempt([[:space:]]|$)'
+
+# Harness basenames permitted to register a parity exemption. Each entry
+# carries the reason its collapsed pair admits no separating output.
+readonly -a PARITY_EXEMPT_ALLOWED=(
+  'check-changelog-fresh.test.sh' # the two release-window scenarios feed the script identical inputs and differ only in whether the newest tag points at HEAD, which the exclusion rule never consults
+)
+
+# Harness basenames excluded from the wiring verdict and from both
+# exemption ratchets. Most read produced artifact content instead of
 # captured scenario output, so they have no sibling scenarios for the
 # gate to compare. Each entry carries the reason it is out of scope.
 readonly -a EXEMPT=(
@@ -79,22 +100,25 @@ function without_comments() {
   sed --regexp-extended 's/^[[:space:]]*#.*$//' -- "$1"
 }
 
-# @description Return 0 if the harness basename is on the EXEMPT list.
-# @arg $1 harness basename
-function is_exempt() {
+# @description Return 0 if the harness basename appears in the remaining
+# arguments.
+# @arg $1 harness basename  @arg $@ list of basenames
+function is_in_list() {
   local -r name="$1"
+  shift
   local e
-  for e in "${EXEMPT[@]}"; do
+  for e in "$@"; do
     [[ ${name} == "${e}" ]] && return 0
   done
   return 1
 }
 
 function main() {
-  local unwired=0 wired=0 exempting=0 f base state stripped
+  local unwired=0 wired=0 exempting=0 parity_named=0 parity_stray=0
+  local f base state stripped
   for f in "${TESTS_DIR}"/*.test.sh; do
     base="$(basename -- "${f}")"
-    is_exempt "${base}" && continue
+    is_in_list "${base}" "${EXEMPT[@]}" && continue
 
     # Matching runs against the comment-blanked text held in a variable
     # rather than a pipe, so a harness larger than the pipe buffer cannot
@@ -107,6 +131,19 @@ function main() {
       printf 'harness-assert-wired: %s registers a discrimination exemption\n' \
         "${base}" >&2
       exempting=$((exempting + 1))
+    fi
+
+    # The parity ratchet covers every harness for the same reason: a
+    # collapsed pair excused by a harness the wiring gate never reaches
+    # still costs the same coverage.
+    if grep --extended-regexp --quiet -- "${GATE_PARITY_EXEMPT_CALL}" <<<"${stripped}"; then
+      if is_in_list "${base}" "${PARITY_EXEMPT_ALLOWED[@]}"; then
+        parity_named=$((parity_named + 1))
+      else
+        printf 'harness-assert-wired: %s registers a parity exemption and is not on the reviewed allowlist\n' \
+          "${base}" >&2
+        parity_stray=$((parity_stray + 1))
+      fi
     fi
 
     grep --extended-regexp --quiet -- "${ASSERT_IDIOM}" "${f}" || continue
@@ -142,12 +179,19 @@ function main() {
       "${exempting}" >&2
   fi
 
-  if ((unwired > 0 || exempting > 0)); then
+  if ((parity_stray > 0)); then
+    printf 'harness-assert-wired: %d harness(es) register a parity exemption off the reviewed allowlist; naming a collapse is what keeps it reviewable\n' \
+      "${parity_stray}" >&2
+  fi
+
+  if ((unwired > 0 || exempting > 0 || parity_stray > 0)); then
     exit 1
   fi
 
   printf 'harness-assert-wired: %d output-asserting harness(es) wired to the gate\n' \
     "${wired}"
+  printf 'harness-assert-wired: %d harness(es) register a parity exemption, each on the reviewed allowlist\n' \
+    "${parity_named}"
   printf '\nall tests passed\n'
   exit 0
 }
