@@ -103,7 +103,7 @@ The Pages workflow (`pages.yml`) is **not** in the required set. Its `build` job
 flowchart TD
   trigger["pages.yml<br/>push to main /<br/>PR / release / cron / dispatch"]
   data["bash scripts/gen-dashboard-data.sh"]
-  build["nix build .#site"]
+  build["nix build 'path:$(pwd)#site'<br/>(path: ref — git ref hides the<br/>gitignored dashboard.yml)"]
   smoke[{% raw %}"smoke: index.html exists<br/>+ no raw {{ }} in dashboard.html"{% endraw %}]
   isPR{"event == pull_request?"}
   deploy["actions/deploy-pages<br/>OIDC, github-pages env"]
