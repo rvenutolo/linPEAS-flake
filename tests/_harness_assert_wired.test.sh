@@ -23,8 +23,12 @@
 # before matching and the verify token must open a statement, so a header
 # comment describing the gate cannot stand in for being wired to it.
 #
+# Every harness is also held to zero discrimination exemptions, so
+# weakening an assertion means editing this gate under review.
+#
 # Honors TESTS_DIR_OVERRIDE for fixtures. Exits 0 when every
-# output-asserting harness is wired, 1 otherwise.
+# output-asserting harness is wired and no harness registers an
+# exemption, 1 otherwise.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -47,10 +51,16 @@ readonly GATE_VERIFY='harness_assert_verify'
 # copied header comment cannot stand in for the call it describes.
 readonly GATE_VERIFY_CALL='^[[:space:]]*(if[[:space:]]+|(\|\||&&)[[:space:]]+)*harness_assert_verify([[:space:]]|$)'
 
-# Harness basenames excluded from the wiring verdict. Most read produced
-# artifact content instead of captured scenario output, so they have no
-# sibling scenarios for the gate to compare. Each entry carries the
-# reason it is out of scope.
+# The gate's escape hatch is held at zero. `harness_assert_exempt` stays
+# available in the library for a genuinely shared banner, but registering
+# one means editing this rule, which is the review moment a weakened
+# assertion deserves.
+readonly GATE_EXEMPT_CALL='^[[:space:]]*harness_assert_exempt([[:space:]]|$)'
+
+# Harness basenames excluded from both the wiring verdict and the
+# exemption ratchet. Most read produced artifact content instead of
+# captured scenario output, so they have no sibling scenarios for the
+# gate to compare. Each entry carries the reason it is out of scope.
 readonly -a EXEMPT=(
   'apply-patch-tag-pin-rewrite.test.sh' # asserts produced artifact content rather than captured scenario output: greps the rewritten workflow file
   'check-gh-attestation-repo.test.sh'   # asserts produced artifact content rather than captured scenario output: greps a selected-paths list variable
@@ -81,7 +91,7 @@ function is_exempt() {
 }
 
 function main() {
-  local unwired=0 wired=0 f base state stripped
+  local unwired=0 wired=0 exempting=0 f base state stripped
   for f in "${TESTS_DIR}"/*.test.sh; do
     base="$(basename -- "${f}")"
     is_exempt "${base}" && continue
@@ -90,6 +100,14 @@ function main() {
     # rather than a pipe, so a harness larger than the pipe buffer cannot
     # lose a match to the reader closing the pipe early.
     stripped="$(without_comments "${f}")"
+
+    # The escape-hatch ratchet covers every harness, including those that
+    # assert by other means than a quiet grep.
+    if grep --extended-regexp --quiet -- "${GATE_EXEMPT_CALL}" <<<"${stripped}"; then
+      printf 'harness-assert-wired: %s registers a discrimination exemption\n' \
+        "${base}" >&2
+      exempting=$((exempting + 1))
+    fi
 
     grep --extended-regexp --quiet -- "${ASSERT_IDIOM}" "${f}" || continue
 
@@ -117,6 +135,14 @@ function main() {
   if ((unwired > 0)); then
     printf 'harness-assert-wired: %d harness(es) grep captured output without the discrimination gate\n' \
       "${unwired}" >&2
+  fi
+
+  if ((exempting > 0)); then
+    printf 'harness-assert-wired: %d harness(es) register a discrimination exemption; the escape hatch is held at zero\n' \
+      "${exempting}" >&2
+  fi
+
+  if ((unwired > 0 || exempting > 0)); then
     exit 1
   fi
 
