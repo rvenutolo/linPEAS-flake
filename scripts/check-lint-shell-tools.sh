@@ -5,7 +5,7 @@
 # groups (lint-workflow-security, lint-script-hygiene) rely on is present on
 # PATH. These groups run inside devShells.lint in CI; this guard turns a
 # dropped tool into a named failure instead of a cryptic mid-check error.
-# Keep EXPECTED in sync with nix/devshell-lint.nix buildInputs.
+# Keep EXPECTED in sync with the lintTools list in nix/devshell-lint.nix.
 
 set -Eeuo pipefail
 IFS=$'\n\t'

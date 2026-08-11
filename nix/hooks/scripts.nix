@@ -19,10 +19,11 @@
     pass_filenames = false;
     language = "system";
   };
-  # No scripts/*.sh feeds a redirection from a yq process substitution
-  # (`< <(yq ...)`) — a procsub's exit status is invisible under
-  # set -Eeuo pipefail, so a yq parse failure fails open instead of
-  # loud. See docs/security/workflow-hardening.md.
+  # No scripts/*.sh feeds a redirection from a yq or jq process
+  # substitution (`< <(yq ...)`, `< <(jq ...)`) — a procsub's exit status
+  # is invisible under set -Eeuo pipefail, so a parse failure hands the
+  # consumer an empty result to score as data instead of failing loud.
+  # See docs/security/workflow-hardening.md.
   no-parser-procsub = {
     enable = true;
     name = "no-parser-procsub";
@@ -92,20 +93,28 @@
     pass_filenames = false;
     language = "system";
   };
-  # Every tool the .#lint lint groups rely on is present on
-  # PATH. Keeps devShells.lint buildInputs from silently dropping a
-  # tool. See docs/security/workflow-hardening.md.
+  # The tool list devShells.lint declares still covers every tool the
+  # .#lint lint groups rely on. Builds checks.lint-shell-tools, which runs
+  # the guard with PATH set to exactly that list — running the guard
+  # against the committer's ambient PATH cannot see a dropped package,
+  # since devShells.default carries every expected tool too.
+  # See docs/security/workflow-hardening.md.
   lint-shell-tools = {
     enable = true;
     name = "lint-shell-tools";
-    description = "Every tool the .#lint lint groups need is on PATH.";
+    description = "devShells.lint declares every tool the .#lint lint groups need.";
     entry = "${pkgs-unstable.writeShellScript "lint-shell-tools-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'
+      # No-op when running inside a nix build sandbox — the
+      # `checks.pre-commit` derivation runs every hook, and `nix build`
+      # cannot run in the sandbox (no daemon, restricted PATH). The check
+      # is a flake check, so `nix flake check` covers that path anyway.
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-      exec ${pkgs-unstable.bash}/bin/bash scripts/check-lint-shell-tools.sh
+      exec nix build --no-link \
+        ".#checks.${pkgs-unstable.stdenv.hostPlatform.system}.lint-shell-tools"
     ''}";
-    files = "^(scripts/check-lint-shell-tools\\.sh|nix/devshell-lint\\.nix)$";
+    files = "^(scripts/check-lint-shell-tools\\.sh|nix/devshell-lint\\.nix|flake\\.nix|flake\\.lock)$";
     pass_filenames = false;
     language = "system";
   };

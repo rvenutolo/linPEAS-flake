@@ -19,10 +19,12 @@ block between the markers by hand.
 │   ├───aarch64-linux
 │   │   ├───formatting: derivation 'treefmt-check'
 │   │   ├───linpeas-build: derivation 'linpeas-20260803-00785084'
+│   │   ├───lint-shell-tools: derivation 'check-lint-shell-tools'
 │   │   └───pre-commit: derivation 'pre-commit-run'
 │   └───x86_64-linux
 │       ├───formatting: derivation 'treefmt-check'
 │       ├───linpeas-build: derivation 'linpeas-20260803-00785084'
+│       ├───lint-shell-tools: derivation 'check-lint-shell-tools'
 │       └───pre-commit: derivation 'pre-commit-run'
 ├───devShells
 │   ├───aarch64-linux
