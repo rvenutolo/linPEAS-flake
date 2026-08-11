@@ -19,7 +19,7 @@ failures=0
 # @description Run the script against a fixture dir; assert exit + stderr.
 # @arg $1 scenario name
 # @arg $2 fixture dir name under FIXTURES
-# @arg $3 expected exit code (0 or 1)
+# @arg $3 expected exit code (0 live, 1 dead marker, 2 tooling error)
 # @arg $4 expected stderr substring (empty string skips the check)
 function run_scenario() {
   local -r name="$1"
@@ -83,6 +83,12 @@ function main() {
     'dead-path' 1 'dead renovate marker'
   run_scenario 'all install-URL prefix variants covered' \
     'prefix-variants' 0 ''
+  run_scenario 'empty managerFilePatterns covers nothing' \
+    'empty-file-patterns' 1 'dead renovate marker'
+  run_scenario 'non-array managerFilePatterns is a tooling error' \
+    'bad-file-patterns-type' 2 'could not read customManagers[0].managerFilePatterns'
+  run_scenario 'non-array matchStrings is a tooling error' \
+    'bad-match-strings-type' 2 'could not read customManagers[0].matchStrings'
   run_live_tree
   harness_assert_verify || failures=$((failures + 1))
 

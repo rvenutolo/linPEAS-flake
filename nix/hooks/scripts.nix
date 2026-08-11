@@ -23,15 +23,15 @@
   # (`< <(yq ...)`) — a procsub's exit status is invisible under
   # set -Eeuo pipefail, so a yq parse failure fails open instead of
   # loud. See docs/security/workflow-hardening.md.
-  no-yq-procsub = {
+  no-parser-procsub = {
     enable = true;
-    name = "no-yq-procsub";
-    description = "No scripts/*.sh feeds a redirection from a yq process substitution.";
-    entry = "${pkgs-unstable.writeShellScript "no-yq-procsub-hook" ''
+    name = "no-parser-procsub";
+    description = "No scripts/*.sh feeds a redirection from a yq or jq process substitution.";
+    entry = "${pkgs-unstable.writeShellScript "no-parser-procsub-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-      exec ${pkgs-unstable.bash}/bin/bash scripts/check-no-yq-procsub.sh
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-no-parser-procsub.sh
     ''}";
     files = "^scripts/.*\\.sh$";
     pass_filenames = false;

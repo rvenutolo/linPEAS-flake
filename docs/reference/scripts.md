@@ -334,14 +334,16 @@ Lint: ban any `nix` invocation against the bare
 markdown. Allowed alternatives use the repo's own flake or an
 explicit commit pin.
 
-### scripts/check-no-yq-procsub.sh
+### scripts/check-no-parser-procsub.sh
 
-Lint: no scripts/\*.sh may feed a redirection from a yq
-process substitution (`< <(yq ...)`). A procsub's exit status is
-invisible to `set -Eeuo pipefail`, so a yq parse failure yields empty
-loop input and the calling check passes wholesale (fail-open). Use
-the capture-into-variable idiom (or a temp file for NUL-delimited
-output) so parse failures abort loudly.
+Lint: no scripts/\*.sh may feed a redirection from a yq or
+jq process substitution (`< <(yq ...)`, `< <(jq ...)`). A procsub's
+exit status is invisible to `set -Eeuo pipefail`, so a parse or query
+failure yields empty loop input and the consumer scores that emptiness
+as data — either passing wholesale (fail-open) or reporting a
+substantive violation the input never showed (a tooling fault
+misdiagnosed as drift). Use the capture-into-variable idiom (or a temp
+file for NUL-delimited output) so failures abort loudly.
 
 Honors SCRIPTS_DIR_OVERRIDE (default: scripts) for fixtures.
 Exit 0 clean, 1 on any hit, 2 on operational error.
@@ -452,7 +454,10 @@ file is consumed by a live manager handles both without a line-adjacency
 heuristic.
 
 Honors RENOVATE_JSON_OVERRIDE (config path) and SCAN_ROOT (tree root) for
-fixture testing. Exits 0 when every marker is live, 1 on any dead marker.
+fixture testing. Exits 0 when every marker is live, 1 on any dead marker,
+2 on a tooling error — jq cannot read a customManager's declarations, so
+no verdict about the markers is available and reporting one would blame a
+marker for a config-shape problem.
 
 ### scripts/check-required-checks-no-paths.sh
 

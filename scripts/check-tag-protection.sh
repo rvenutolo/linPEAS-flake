@@ -17,6 +17,11 @@
 #     OR a strict superset (refs/tags/** is the documented fallback).
 #
 # Exits 0 on match, 1 on drift. Logs the specific drift to stderr.
+# Exits 2 when the ruleset JSON cannot be read at all — e.g. `.rules` is
+# present but is not an array, so `.rules[].type` errors. A tooling fault
+# must not borrow the drift code: that reads as a substantive ruleset
+# change and sends a maintainer after a rule nobody removed. An absent
+# `.rules` is not a tooling fault — it is an empty rule list, i.e. drift.
 #
 # Honors RULESET_JSON_OVERRIDE for the test harness — points at a fixture
 # instead of hitting the live API.
@@ -82,7 +87,24 @@ if ((bypass_count != 0)); then
 fi
 
 # Required rules: each must appear in .rules[].type.
-mapfile -t actual_rules < <(jq --raw-output '.rules[].type' <<<"${ruleset_json}")
+#
+# Capture jq's output (and exit status) into a variable rather than feeding
+# mapfile from `< <(jq ...)`: a process substitution's exit status is
+# invisible to `set -Eeuo pipefail`, so a jq error on an unexpected ruleset
+# shape would yield an empty rule list and be reported as a missing rule —
+# a tooling fault wearing the costume of substantive drift. `.rules // []`
+# keeps an absent `.rules` an empty list (drift, exit 1); anything jq
+# cannot iterate is a tooling fault (exit 2).
+if ! rule_types="$(jq --raw-output '.rules // [] | .[].type' <<<"${ruleset_json}")"; then
+  printf 'release-tag-protection ruleset: could not read .rules[].type (unexpected shape)\n' >&2
+  exit 2
+fi
+actual_rules=()
+# An empty capture must stay an empty array: `mapfile <<<""` would yield one
+# empty-string element and misreport the have-list.
+if [[ -n ${rule_types} ]]; then
+  mapfile -t actual_rules <<<"${rule_types}"
+fi
 for required in "${REQUIRED_RULES[@]}"; do
   found=0
   for actual in "${actual_rules[@]}"; do

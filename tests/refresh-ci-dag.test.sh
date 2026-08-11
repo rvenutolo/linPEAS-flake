@@ -154,6 +154,53 @@ EOF
   fi
   rm --force -- "${ws_backup}" "${ws_err}"
 
+  # A jq failure at the job-key read must abort with its own message
+  # rather than render a graph missing every node. No workflow input
+  # reaches that call — the yq extract and the dangling-needs jq both
+  # read the same job map first and fail earlier — so the guard is
+  # exercised with a jq stub that fails only for the bare `keys[]`
+  # filter and execs the real jq otherwise. A blanket-failing stub would
+  # trip the dangling-needs jq first and green for the wrong reason,
+  # which is why the assertion checks the message and not just the code.
+  local stub_dir jq_err real_jq jq_rc=0
+  real_jq="$(command -v jq)"
+  stub_dir="$(mktemp --directory)"
+  jq_err="$(mktemp)"
+  cat >"${stub_dir}/jq" <<EOF
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  if [[ \${arg} == 'keys[]' ]]; then
+    printf 'stub jq: refusing the bare keys[] filter\n' >&2
+    exit 9
+  fi
+done
+exec ${real_jq} "\$@"
+EOF
+  chmod +x -- "${stub_dir}/jq"
+  tmpdoc="$(mktemp --suffix=.md)"
+  cat >"${tmpdoc}" <<'EOF'
+<!-- BEGIN ci-dag -->
+<!-- END ci-dag -->
+EOF
+  PATH="${stub_dir}:${PATH}" \
+    CI_WORKFLOW_OVERRIDE="${FIXTURES}/no-needs/ci.yml" \
+    CATEGORIES_FILE_OVERRIDE="${FIXTURES}/categories.yml" \
+    DOC_OVERRIDE="${tmpdoc}" \
+    "${SCRIPT}" --check >/dev/null 2>"${jq_err}" || jq_rc=$?
+  rm --force -- "${tmpdoc}"
+  tmpdoc=''
+  rm --recursive --force -- "${stub_dir}"
+  harness_assert_record 'jq job-key read failure aborts' \
+    'could not read job keys with jq' "${jq_err}"
+  if [[ ${jq_rc} -eq 2 ]] && grep --fixed-strings --quiet -- \
+    'could not read job keys with jq' "${jq_err}"; then
+    pass 'jq failure at job-key read exits 2 with its own message'
+  else
+    fail "jq job-key guard: expected exit 2 + 'could not read job keys with jq', got exit ${jq_rc}"
+    cat -- "${jq_err}" >&2
+  fi
+  rm --force -- "${jq_err}"
+
   harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then

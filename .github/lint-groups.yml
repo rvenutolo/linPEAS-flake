@@ -48,7 +48,7 @@ lint-script-hygiene:
   - pre-commit-hooks-sha-parity
   - manifest-hook-watches-nix
   - freshness-hook-watches-modules
-  - no-yq-procsub
+  - no-parser-procsub
 lint-doc-invariants:
   - orphan-invariants
   - doc-anchors
