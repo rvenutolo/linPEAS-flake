@@ -25,12 +25,15 @@ function run_scenario() {
   local -r expected_exit="$3"
   local -r expected_stderr="$4"
 
-  local stderr_file
+  local stderr_file stdout_file outcome_file
   stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
 
   local actual_exit=0
   BUMP_SCRIPT_OVERRIDE="${FIXTURES}/${fixture}" \
-    "${SCRIPT}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' \
@@ -46,8 +49,9 @@ function run_scenario() {
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
 
-  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
-  rm --force -- "${stderr_file}"
+  harness_assert_record "${name}" "${expected_stderr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  rm --force -- "${outcome_file}" "${stdout_file}" "${stderr_file}"
 }
 
 function main() {
@@ -65,10 +69,13 @@ function main() {
     'does-not-exist.sh' 2 'bump script not found'
 
   # Live self-scan: the real bump script must retain all guards.
-  local stderr_file
+  local stderr_file stdout_file outcome_file
   stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
   local actual_exit=0
-  "${SCRIPT}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
+  "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
   if ((actual_exit != 0)); then
     printf 'FAIL: live scripts/bump-linpeas.sh is missing a guard:\n' >&2
     cat -- "${stderr_file}" >&2
@@ -76,8 +83,9 @@ function main() {
   else
     printf 'PASS: live scripts/bump-linpeas.sh retains all guards\n'
   fi
-  harness_assert_record 'live bump script self-scan' '' "${stderr_file}"
-  rm --force -- "${stderr_file}"
+  harness_assert_record 'live bump script self-scan' '' \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  rm --force -- "${outcome_file}" "${stdout_file}" "${stderr_file}"
 
   harness_assert_verify || failures=$((failures + 1))
 

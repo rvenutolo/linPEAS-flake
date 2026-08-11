@@ -18,12 +18,15 @@ function run_scenario() {
   local -r expected_exit="$3"
   local -r expected_stderr_substr="$4"
 
-  local stderr_file
+  local stderr_file stdout_file outcome_file
   stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
 
   local actual_exit=0
   ACTIONLINT_SMOKE_FIXTURE_OVERRIDE="${fixture_override}" \
-    "${SCRIPT}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' \
@@ -39,16 +42,20 @@ function run_scenario() {
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
 
-  harness_assert_record "${name}" "${expected_stderr_substr}" "${stderr_file}"
-  rm -f -- "${stderr_file}"
+  harness_assert_record "${name}" "${expected_stderr_substr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  rm -f -- "${outcome_file}" "${stdout_file}" "${stderr_file}"
 }
 
 # Default fixture (unset override) — must pass.
 function scenario_default_passes() {
-  local stderr_file
+  local stderr_file stdout_file outcome_file
   stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
   local actual_exit=0
-  "${SCRIPT}" >/dev/null 2>"${stderr_file}" || actual_exit=$?
+  "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
   if [[ ${actual_exit} -ne 0 ]]; then
     printf 'FAIL: default fixture — expected exit 0, got %d\n' "${actual_exit}" >&2
     cat -- "${stderr_file}" >&2
@@ -56,8 +63,9 @@ function scenario_default_passes() {
   else
     printf 'PASS: default fixture\n'
   fi
-  harness_assert_record 'default fixture' '' "${stderr_file}"
-  rm -f -- "${stderr_file}"
+  harness_assert_record 'default fixture' '' \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  rm -f -- "${outcome_file}" "${stdout_file}" "${stderr_file}"
 }
 
 scenario_default_passes

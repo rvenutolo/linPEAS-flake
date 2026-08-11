@@ -102,18 +102,21 @@ function merge_no_ff() {
 function run_case() {
   local -r name="$1" dir="$2" regen="$3" want="$4" override="${5:-}"
   local -r expected_stderr="${6:-}"
-  local got=0 stderr_file
+  local got=0 stderr_file stdout_file outcome_file
   stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
   if [[ -n ${override} ]]; then
     (
       cd "${dir}" &&
         CHANGELOG_OVERRIDE="${override}" REGEN_OVERRIDE="${regen}" "${SCRIPT}"
-    ) >/dev/null 2>"${stderr_file}" || got=$?
+    ) >"${stdout_file}" 2>"${stderr_file}" || got=$?
   else
     (
       cd "${dir}" && REGEN_OVERRIDE="${regen}" "${SCRIPT}"
-    ) >/dev/null 2>"${stderr_file}" || got=$?
+    ) >"${stdout_file}" 2>"${stderr_file}" || got=$?
   fi
+  printf 'harness-assert-outcome: exit=%d\n' "${got}" >"${outcome_file}"
   if [[ ${got} -ne ${want} ]]; then
     fail "${name} — expected exit ${want}, got ${got}"
   elif [[ -n ${expected_stderr} ]] &&
@@ -124,8 +127,9 @@ function run_case() {
   else
     pass "${name} (exit ${got})"
   fi
-  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
-  rm --force -- "${stderr_file}"
+  harness_assert_record "${name}" "${expected_stderr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  rm --force -- "${outcome_file}" "${stdout_file}" "${stderr_file}"
 }
 
 # @description Run the script against the real repository with a cliff config
@@ -138,11 +142,14 @@ function run_case() {
 # @arg $4 expected stderr substring
 function run_tooling_case() {
   local -r name="$1" config="$2" want="$3" expected_stderr="$4"
-  local got=0 stderr_file
+  local got=0 stderr_file stdout_file outcome_file
   stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
   (
     cd "${REPO_ROOT}" && CLIFF_TOML_OVERRIDE="${config}" "${SCRIPT}"
-  ) >/dev/null 2>"${stderr_file}" || got=$?
+  ) >"${stdout_file}" 2>"${stderr_file}" || got=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${got}" >"${outcome_file}"
   if [[ ${got} -ne ${want} ]]; then
     fail "${name} — expected exit ${want}, got ${got}"
     printf 'stderr was:\n' >&2
@@ -154,8 +161,9 @@ function run_tooling_case() {
   else
     pass "${name} (exit ${got})"
   fi
-  harness_assert_record "${name}" "${expected_stderr}" "${stderr_file}"
-  rm --force -- "${stderr_file}"
+  harness_assert_record "${name}" "${expected_stderr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  rm --force -- "${outcome_file}" "${stdout_file}" "${stderr_file}"
 }
 
 # @description Write the changelog content files used by the cases.
