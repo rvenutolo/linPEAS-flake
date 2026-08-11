@@ -13,12 +13,20 @@ readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-doc-anchors"
 
 failures=0
 
+# @description Run the lint over a fixture root; assert exit code, stderr, and
+# — on the clean path — the summary line naming what was resolved. The tally
+# of slugs that lost characters is what separates the clean scenarios: they
+# exercise different arms of the slug algorithm, and every one of them
+# otherwise ends in the same silent success.
+# @arg $1 name  @arg $2 fixture dir  @arg $3 source rel path
+# @arg $4 expected exit  @arg $5 stderr substring  @arg $6 stdout substring
 function run_scenario() {
   local -r name="$1"
   local -r fixture_dir="$2"
   local -r source_rel="$3"
   local -r expected_exit="$4"
   local -r expected_stderr="$5"
+  local -r expected_stdout="${6:-}"
 
   local stderr_file stdout_file outcome_file
   stderr_file="$(mktemp)"
@@ -41,17 +49,28 @@ function run_scenario() {
     printf 'FAIL: %s — stderr missing %q\n' "${name}" "${expected_stderr}" >&2
     cat -- "${stderr_file}" >&2
     failures=$((failures + 1))
+  elif [[ -n ${expected_stdout} ]] &&
+    ! grep --fixed-strings --quiet -- "${expected_stdout}" "${stdout_file}"; then
+    printf 'FAIL: %s — stdout missing %q\n' "${name}" "${expected_stdout}" >&2
+    cat -- "${stdout_file}" >&2
+    failures=$((failures + 1))
   else
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
 
   harness_assert_record "${name}" "${expected_stderr}" \
     "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  if [[ -n ${expected_stdout} ]]; then
+    harness_assert_also "${expected_stdout}"
+  fi
   rm --force -- "${outcome_file}" "${stdout_file}" "${stderr_file}"
 }
 
 function main() {
-  run_scenario 'good links pass' 'good' 'source.md' 0 ''
+  # Two links, one cross-file and one same-file, so two target files are
+  # resolved and neither heading loses a character to slugging.
+  run_scenario 'good links pass' 'good' 'source.md' 0 '' \
+    'ok — 2 anchor link(s) in 1 source file(s) resolved against 3 anchor(s) in 2 target file(s); 0 heading(s) required character deletion'
   run_scenario 'cross-file anchor miss fails' \
     'bad-anchor-miss' 'source.md' 1 \
     '[anchor-miss] source.md:3: #nonexistent-section not found in docs/target.md'
@@ -64,10 +83,15 @@ function main() {
   run_scenario 'heading inside a code fence is not a slug source' \
     'bad-fenced-heading' 'source.md' 1 \
     '[anchor-miss] source.md:3: #fenced-phantom not found in docs/target.md (available: fence-target)'
+  # `_` survives the delete step, so no heading is counted lossy.
   run_scenario 'underscore is preserved in the slug' \
-    'good-underscore' 'source.md' 0 ''
+    'good-underscore' 'source.md' 0 '' \
+    'ok — 1 anchor link(s) in 1 source file(s) resolved against 2 anchor(s) in 1 target file(s); 0 heading(s) required character deletion'
+  # The apostrophe is deleted, so exactly one of the target's two headings
+  # slugs lossily — the arm where GFM and mkdocs-material can disagree.
   run_scenario 'apostrophe is deleted from the slug' \
-    'good-apostrophe' 'source.md' 0 ''
+    'good-apostrophe' 'source.md' 0 '' \
+    'ok — 1 anchor link(s) in 1 source file(s) resolved against 2 anchor(s) in 1 target file(s); 1 heading(s) required character deletion'
 
   harness_assert_verify || failures=$((failures + 1))
 
