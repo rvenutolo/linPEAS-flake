@@ -167,24 +167,28 @@ def inputs_of($node):
   else {}
   end;
 # Resolves one input ref to a node id, threading the remaining step
-# budget through every recursion. Returns { node, left }; raises
-# { budget, reason, left } so a caught failure still reports the steps it
-# spent and which bound or malformation stopped it, and the budget stays
-# global rather than per-ref.
+# budget through every recursion. Returns { node, left, depth }, where
+# `depth` is the deepest nesting level the walk reached — the headroom
+# left under the ceiling is what tells an operator whether a legal lock
+# is about to need the ceiling raised. Raises { budget, reason, left } so
+# a caught failure still reports the steps it spent and which bound or
+# malformation stopped it, and the budget stays global rather than
+# per-ref.
 def resolve($lock; $origin; $ref; $depth; $left):
   if $left <= 0 then error({ budget: true, reason: "budget", left: 0 })
   else ($left - 1) as $rem
   | if $depth > follows_depth_ceiling
     then error({ budget: false, reason: "ceiling", left: $rem })
-    elif ($ref | type) == "string" then { node: $ref, left: $rem }
+    elif ($ref | type) == "string" then { node: $ref, left: $rem, depth: $depth }
     elif ($ref | type) == "array" then
       if ($ref | length) == 0 then error({ budget: false, reason: "nonode", left: $rem })
-      else reduce $ref[] as $e ({ node: $origin, left: $rem };
+      else reduce $ref[] as $e ({ node: $origin, left: $rem, depth: $depth };
         . as $st
         | if ($e | type) != "string" then error({ budget: false, reason: "nonode", left: $st.left }) else . end
         | ($lock.nodes[$st.node] // error({ budget: false, reason: "nonode", left: $st.left })) as $node
         | (inputs_of($node)[$e] // error({ budget: false, reason: "nonode", left: $st.left })) as $next
-        | resolve($lock; $origin; $next; $depth + 1; $st.left))
+        | resolve($lock; $origin; $next; $depth + 1; $st.left) as $sub
+        | $sub + { depth: ([$sub.depth, $st.depth] | max) })
       end
     else error({ budget: false, reason: "nonode", left: $rem })
     end
@@ -194,13 +198,14 @@ def resolve($lock; $origin; $ref; $depth; $left):
 # observed. An error value that is not one of ours cannot report what it
 # spent, so it forfeits the rest of the budget — every later ref then
 # fails closed too — and reports `unknown`, which keeps its message
-# generic rather than claiming a diagnosis the resolver did not make.
+# generic rather than claiming a diagnosis the resolver did not make. A
+# failed walk reports depth 0: it reached no depth worth vouching for.
 def try_resolve($lock; $origin; $ref; $left):
   try (resolve($lock; $origin; $ref; 0; $left) + { exhausted: false, reason: "ok" })
   catch (if (type == "object") and has("left")
          then { node: null, left: .left, exhausted: (.budget == true),
-                reason: (.reason // "unknown") }
-         else { node: null, left: 0, exhausted: false, reason: "unknown" }
+                reason: (.reason // "unknown"), depth: 0 }
+         else { node: null, left: 0, exhausted: false, reason: "unknown", depth: 0 }
          end);
 # The base/head root-id comparison happens HERE, on $base.root /
 # $head.root as parsed by jq — never on a shell variable. A node id
@@ -209,6 +214,7 @@ def try_resolve($lock; $origin; $ref; $left):
 if ($base.root != $head.root) then
   { fails: ["FAIL: root node id changed: \($base.root) -> \($head.root)"],
     notes: [],
+    summary: "",
     root_mismatch: true }
 else
 ($base.root) as $broot
@@ -224,11 +230,12 @@ else
 # left over from the previous input — base and head both draw on it, so
 # the whole comparison costs a bounded number of resolve steps no
 # matter how the locks branch.
-| (reduce $common[] as $name ({ left: follows_step_budget, fails: [] };
+| (reduce $common[] as $name ({ left: follows_step_budget, fails: [], depth: 0 };
     . as $acc
     | try_resolve($base; $broot; $bin[$name]; $acc.left) as $bres
     | try_resolve($head; $hroot; $hin[$name]; $bres.left) as $hres
     | { left: $hres.left,
+        depth: ([$acc.depth, $bres.depth, $hres.depth] | max),
         fails: ($acc.fails + (
           if ($bres.exhausted or $hres.exhausted)
           then ["FAIL: top-level input unresolvable (follows step budget exhausted): \($name)"]
@@ -248,7 +255,8 @@ else
                    else "" end)]
           else []
           end)) })
-   | .fails) as $tlrep
+   ) as $tlacc
+| ($tlacc.fails) as $tlrep
 | [ ($base.nodes | keys[])
     | select(. != $broot)
     | . as $k
@@ -261,8 +269,19 @@ else
 | [ ($base.nodes | keys[]) | select(. != $broot) | . as $k
     | select(($head.nodes | has($k)) | not)
     | "note: transitive node removed (tolerated): \($k)" ] as $trem
+# Scope of the clean verdict. A ref counts as resolved through `follows`
+# when either side states it as a path, since that is the side the
+# resolver had to walk. The entry point is rendered with @json so a node
+# id carrying control characters stays visible and stays on one line.
+| ([ $common[] | . as $n
+     | select((($bin[$n] | type) == "array") or (($hin[$n] | type) == "array")) ]
+   | length) as $viafollows
+| ([ ($base.nodes | keys[]) | . as $k
+     | select($k != $broot) | select($head.nodes | has($k)) ]
+   | length) as $shared
 | { fails: ($added + $removed + $tlrep + $noderep),
     notes: ($tadd + $trem),
+    summary: ("entry \($base.root | @json); top-level inputs resolved: \($common | length) (\($viafollows) via follows, max depth \($tlacc.depth)); shared nodes compared: \($shared); transitive churn tolerated: \($tadd | length) added, \($trem | length) removed"),
     root_mismatch: false }
 end
 '
@@ -280,6 +299,7 @@ fi
 notes="$(printf '%s' "${result}" | jq -r '.notes[]')"
 fails="$(printf '%s' "${result}" | jq -r '.fails[]')"
 root_mismatch="$(printf '%s' "${result}" | jq -r '.root_mismatch')"
+summary="$(printf '%s' "${result}" | jq -r '.summary')"
 
 if [[ -n ${notes} ]]; then
   printf '%s\n' "${notes}" >&2
@@ -297,4 +317,4 @@ if [[ -n ${fails} ]]; then
   exit 1
 fi
 
-printf 'flake.lock provenance OK\n'
+printf 'flake.lock provenance OK: %s\n' "${summary}"

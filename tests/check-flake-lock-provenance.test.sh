@@ -97,7 +97,12 @@ function run_missing_base() {
 }
 
 function main() {
-  run_scenario 'routine bump passes' 'head-routine.lock' 0 'provenance OK'
+  # Every clean scenario asserts the whole summary line rather than the bare
+  # `provenance OK`. The eight of them resolve different graphs — different
+  # entry-point ids, follows depths, and tolerated transitive churn — and the
+  # verdict alone renders all of that as the same observable outcome.
+  run_scenario 'routine bump passes' 'head-routine.lock' 0 \
+    'provenance OK: entry "root"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 3; transitive churn tolerated: 0 added, 0 removed'
   run_scenario 'top-level owner change fails' 'head-toplevel-owner.lock' 1 \
     'FAIL: node repointed: alpha (original.owner: orgA -> evil)'
   run_scenario 'top-level type change fails' 'head-toplevel-type.lock' 1 \
@@ -105,18 +110,23 @@ function main() {
   run_scenario 'top-level input added fails' 'head-toplevel-added.lock' 1 'FAIL: top-level input added: delta'
   run_scenario 'top-level input removed fails' 'head-toplevel-removed.lock' 1 'FAIL: top-level input removed: beta'
   run_scenario 'transitive repoint fails' 'head-transitive-repoint.lock' 1 'FAIL: node repointed: gamma'
-  run_scenario 'transitive node added tolerated' 'head-transitive-added.lock' 0 'provenance OK'
-  run_scenario 'transitive node removed tolerated' 'head-transitive-removed.lock' 0 'provenance OK'
+  run_scenario 'transitive node added tolerated' 'head-transitive-added.lock' 0 \
+    'provenance OK: entry "root"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 3; transitive churn tolerated: 1 added, 0 removed'
+  run_scenario 'transitive node removed tolerated' 'head-transitive-removed.lock' 0 \
+    'provenance OK: entry "root"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 2; transitive churn tolerated: 0 added, 1 removed'
   run_scenario 'garbage head json errors' 'head-garbage.lock' 2 ''
-  run_scenario 'top-level rename same source' 'head-toplevel-renamed-same.lock' 0 'provenance OK'
+  run_scenario 'top-level rename same source' 'head-toplevel-renamed-same.lock' 0 \
+    'provenance OK: entry "root"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 2; transitive churn tolerated: 1 added, 1 removed'
   run_scenario 'top-level rename + repoint fails' 'head-toplevel-renamed-repoint.lock' 1 \
     'FAIL: top-level input repointed: alpha (alpha -> alpha_2)'
   run_missing_base 'missing base errors'
 
-  run_follows_scenario 'follows routine bump passes' 'head-follows-routine.lock' 0 'provenance OK'
+  run_follows_scenario 'follows routine bump passes' 'head-follows-routine.lock' 0 \
+    'provenance OK: entry "root"; top-level inputs resolved: 4 (1 via follows, max depth 1); shared nodes compared: 3; transitive churn tolerated: 0 added, 0 removed'
   run_follows_scenario 'string-to-array repoint fails' 'head-follows-string-to-array.lock' 1 'FAIL: top-level input repointed: gamma'
   run_follows_scenario 'array-to-array repoint fails' 'head-follows-array-change.lock' 1 'FAIL: top-level input repointed: beta'
-  run_follows_scenario 'string-to-array same source passes' 'head-follows-string-to-array-same.lock' 0 'provenance OK'
+  run_follows_scenario 'string-to-array same source passes' 'head-follows-string-to-array-same.lock' 0 \
+    'provenance OK: entry "root"; top-level inputs resolved: 4 (2 via follows, max depth 1); shared nodes compared: 2; transitive churn tolerated: 0 added, 1 removed'
   run_follows_scenario 'dangling follows path fails' 'head-follows-dangling.lock' 1 \
     'FAIL: top-level input unresolvable (follows path names no such node): beta'
   run_follows_scenario 'cyclic follows fails' 'head-follows-cycle.lock' 1 \
@@ -129,14 +139,20 @@ function main() {
     'base-follows-branching.lock' 'base-follows-branching.lock' 1 \
     'FAIL: top-level input unresolvable (follows step budget exhausted): b1'
   # A legal chain sitting exactly at the nesting ceiling: bounding total
-  # work must not shorten how deep a legitimate `follows` chain may go.
+  # work must not shorten how deep a legitimate `follows` chain may go. The
+  # reported max depth is the evidence, and it is what tells an operator how
+  # much headroom the ceiling still has.
   run_pair_scenario 'deep legal follows chain resolves' \
-    'base-follows-deep.lock' 'base-follows-deep.lock' 0 'provenance OK'
+    'base-follows-deep.lock' 'base-follows-deep.lock' 0 \
+    'provenance OK: entry "root"; top-level inputs resolved: 33 (32 via follows, max depth 32); shared nodes compared: 1; transitive churn tolerated: 0 added, 0 removed'
 
   run_scenario 'decoy renamed root fails' 'head-decoy-root.lock' 1 'FAIL: root node id changed: root -> realroot'
   run_scenario 'head .root missing errors' 'head-root-missing.lock' 2 'head flake.lock: .root missing or not a string (got null)'
   run_scenario 'head .root non-string errors' 'head-root-nonstring.lock' 2 'head flake.lock: .root missing or not a string (got {"bogus":1})'
-  run_pair_scenario 'alt root id routine bump passes' 'base-alt-root.lock' 'head-alt-root-routine.lock' 0 'provenance OK'
+  # Naming the entry point is what separates this from the plain routine
+  # bump: the two resolve identically shaped graphs under different root ids.
+  run_pair_scenario 'alt root id routine bump passes' 'base-alt-root.lock' 'head-alt-root-routine.lock' 0 \
+    'provenance OK: entry "top"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 3; transitive churn tolerated: 0 added, 0 removed'
 
   harness_assert_verify || failures=$((failures + 1))
 
