@@ -48,16 +48,20 @@ function run_scenario() {
     esac
   done
 
-  local out_file actual_exit=0
+  local out_file err_file outcome_file actual_exit=0
   out_file="$(mktemp)"
+  err_file="$(mktemp)"
+  outcome_file="$(mktemp)"
 
   WINDOW_DAYS_OVERRIDE="${WINDOW_DAYS:-31}" \
     WORKFLOWS_DIR_OVERRIDE="${WF_DIR}" \
     LINT_GROUPS_OVERRIDE="${LG_FILE}" \
-    "${SCRIPT}" >"${out_file}" 2>/dev/null || actual_exit=$?
+    "${SCRIPT}" >"${out_file}" 2>"${err_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
 
   local sub
-  harness_assert_record "${name}" "${expect_subs[0]-}" "${out_file}"
+  harness_assert_record "${name}" "${expect_subs[0]-}" \
+    "${outcome_file}" "${out_file}" "${err_file}"
   for sub in "${expect_subs[@]:1}"; do
     harness_assert_also "${sub}"
   done

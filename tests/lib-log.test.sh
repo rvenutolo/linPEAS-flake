@@ -28,12 +28,16 @@ EOF
 chmod +x "${work}/boom.sh"
 
 err="$(mktemp)"
+out="$(mktemp)"
+outcome="$(mktemp)"
 rc=0
-"${work}/boom.sh" >/dev/null 2>"${err}" || rc=$?
+"${work}/boom.sh" >"${out}" 2>"${err}" || rc=$?
+printf 'harness-assert-outcome: exit=%d\n' "${rc}" >"${outcome}"
 # The two assertions below are an extended-regexp match and a
 # must-not-appear check; neither is a fixed-string assertion the gate can
 # audit, so the scenario contributes its output with no asserted substring.
-harness_assert_record 'ERR trap logs the real non-zero exit code' '' "${err}"
+harness_assert_record 'ERR trap logs the real non-zero exit code' '' \
+  "${outcome}" "${out}" "${err}"
 
 if [[ ${rc} -ne 0 ]] && grep -Eq 'exit [1-9][0-9]*' "${err}"; then
   pass 'ERR trap logs the real non-zero exit code'
@@ -59,10 +63,13 @@ EOF
 chmod +x "${work}/needs_tool.sh"
 
 tool_err="$(mktemp)"
+tool_out="$(mktemp)"
+tool_outcome="$(mktemp)"
 tool_rc=0
-"${work}/needs_tool.sh" >/dev/null 2>"${tool_err}" || tool_rc=$?
+"${work}/needs_tool.sh" >"${tool_out}" 2>"${tool_err}" || tool_rc=$?
+printf 'harness-assert-outcome: exit=%d\n' "${tool_rc}" >"${tool_outcome}"
 harness_assert_record 'require_tool reports an absent tool' \
-  'missing required tool' "${tool_err}"
+  'missing required tool' "${tool_outcome}" "${tool_out}" "${tool_err}"
 if [[ ${tool_rc} -eq 2 ]] &&
   grep --fixed-strings --quiet -- 'missing required tool' "${tool_err}"; then
   pass 'require_tool exits 2 with a missing-tool message'
@@ -70,7 +77,7 @@ else
   fail "require_tool: expected exit 2 + 'missing required tool', got exit ${tool_rc}"
   cat -- "${tool_err}" >&2
 fi
-rm --force -- "${tool_err}"
+rm --force -- "${tool_err}" "${tool_out}" "${tool_outcome}"
 
 harness_assert_verify || failures=$((failures + 1))
 
