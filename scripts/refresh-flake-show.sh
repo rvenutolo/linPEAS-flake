@@ -3,7 +3,9 @@
 #
 # @description Regenerate the flake-show managed block in
 # docs/reference/flake-outputs.md from `nix flake show --all-systems`.
-# @option --check exit 1 if the doc would change; do not mutate the working tree
+# @option --check exit 1 if the doc would change; exit 2 if the check
+# cannot run (doc missing, or nix flake show fails); do not mutate the
+# working tree
 
 # Replace the content between <!-- BEGIN flake-show --> and <!-- END flake-show -->
 # in docs/reference/flake-outputs.md with the current `nix flake show --all-systems`
@@ -12,6 +14,7 @@
 # Usage:
 #   scripts/refresh-flake-show.sh            # mutate docs/reference/flake-outputs.md in place
 #   scripts/refresh-flake-show.sh --check    # exit 1 if the doc would change;
+#                                            #   exit 2 if it cannot run;
 #                                            #   do NOT mutate the working tree
 
 set -Eeuo pipefail
@@ -42,9 +45,12 @@ function main() {
   doc="${repo_root}/docs/reference/flake-outputs.md"
   readonly repo_root doc
 
+  # The doc is spliced, not written from scratch, so its absence is a
+  # could-not-run condition rather than drift: exit 2 so the caller sends
+  # the operator to the missing file instead of to a regenerate-and-commit.
   if [[ ! -f ${doc} ]]; then
     log_err "${doc} not found"
-    exit 1
+    exit 2
   fi
   if ! grep --quiet '^<!-- BEGIN flake-show -->$' "${doc}"; then
     log_err 'BEGIN marker missing from docs/reference/flake-outputs.md'
@@ -83,7 +89,7 @@ function main() {
     >"${raw_show}" 2>"${raw_err}"; then
     log_err 'nix flake show failed:'
     cat -- "${raw_err}" >&2
-    exit 1
+    exit 2
   fi
   # Strip ANSI color escapes AND the leading flake-URL header line. The URL
   # contains a per-commit rev (in CI) and a per-checkout absolute path (locally),

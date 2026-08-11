@@ -35,11 +35,13 @@
 #     (absent normalized to null; a stripped/repointed id is drift)
 #
 # Exits 0 on match, 1 on drift. Logs the specific drift to stderr.
-# Exits 2 when the ruleset JSON cannot be read at all — e.g. `.rules` is
-# present but is not an array, so `.rules[].type` errors. A tooling fault
-# must not borrow the drift code: that reads as a substantive ruleset
-# change and sends a maintainer after a rule nobody removed. An absent
-# `.rules` is not a tooling fault — it is an empty rule list, i.e. drift.
+# Exits 2 when the check cannot run: an input file is absent (the
+# in-tree mirror or the required-checks doc), or the ruleset JSON cannot
+# be read at all — e.g. `.rules` is present but is not an array, so
+# `.rules[].type` errors. A tooling fault must not borrow the drift code:
+# that reads as a substantive ruleset change and sends a maintainer after
+# a rule nobody removed. An absent `.rules` is not a tooling fault — it
+# is an empty rule list, i.e. drift.
 #
 # Env overrides (test-only):
 #   RULESET_JSON_OVERRIDE — path to a fixture JSON for the live ruleset
@@ -84,11 +86,11 @@ function fetch_ruleset() {
 
 if [[ ! -f ${MIRROR_FILE} ]]; then
   printf 'mirror file not found: %s\n' "${MIRROR_FILE}" >&2
-  exit 1
+  exit 2
 fi
 if [[ ! -f ${DOC_FILE} ]]; then
   printf 'required-checks doc not found: %s\n' "${DOC_FILE}" >&2
-  exit 1
+  exit 2
 fi
 
 mirror_json="$(cat -- "${MIRROR_FILE}")"

@@ -5,7 +5,8 @@
 # docs/reference/scripts.md from in-script shdoc-style annotations
 # parsed by scripts/_script_docs.awk. Groups entries by basename
 # prefix into Check / Refresh / Other sections.
-# @option --check exit 1 if drift; do not mutate the working tree
+# @option --check exit 1 if drift; exit 2 if the doc or the awk parser is
+# missing; do not mutate the working tree
 
 # Env overrides (test-only):
 #   SCRIPTS_DIR_OVERRIDE — alternate scripts/ root (for fixture tests)
@@ -110,9 +111,12 @@ function main() {
   awk_parser="${repo_root}/scripts/_script_docs.awk"
   readonly scripts_dir doc awk_parser
 
+  # An absent input is a could-not-run condition, not drift: exit 2 so the
+  # caller sends the operator to the missing file rather than to a
+  # regenerate-and-commit that has nothing to read.
   if [[ ! -f ${doc} ]]; then
     log_err "${doc} not found; run without --check to bootstrap (after creating the skeleton)"
-    exit 1
+    exit 2
   fi
   if ! grep --quiet '^<!-- BEGIN scripts-reference -->$' "${doc}"; then
     log_err 'BEGIN marker missing from docs/reference/scripts.md'
@@ -124,7 +128,7 @@ function main() {
   fi
   if [[ ! -f ${awk_parser} ]]; then
     log_err "${awk_parser} not found"
-    exit 1
+    exit 2
   fi
 
   trap cleanup EXIT

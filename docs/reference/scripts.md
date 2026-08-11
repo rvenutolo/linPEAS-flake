@@ -24,7 +24,12 @@ docs/actionlint-embedded-linters.md.
 Env overrides (test-only):
 ACTIONLINT_SMOKE_FIXTURE_OVERRIDE — alternate fixture path
 
-Exits 0 on clean, 1 on any failure.
+Exits 0 on clean, 1 when the canary fires (shellcheck no longer
+reaches `run:` blocks), 2 when the canary could not run at all: the
+fixture is missing or actionlint is absent from PATH. A canary that
+never ran says nothing about the integration, so it must not borrow
+the failure code — that sends a maintainer after a wiring regression
+that has not happened.
 
 ### scripts/check-allowed-actions-api.sh
 
@@ -81,11 +86,11 @@ nix-run-pinned invariant. Offline and deterministic: git-cliff parses the PR
 number from the `(#N)` subject suffix, so no GitHub token is required. Needs
 full history + tags (fetch-depth: 0) so every release tag is visible.
 
-Exits 0 when released sections are fresh, 1 when stale (or CHANGELOG /
-cliff config missing), 2 when the tooling itself fails: nix absent from
-PATH, or the pinned git-cliff exiting non-zero. A generator that cannot run
-says nothing about whether the committed changelog is fresh, so it must not
-borrow the staleness code — that sends a maintainer to regenerate a
+Exits 0 when released sections are fresh, 1 when stale, 2 when the check
+could not run: nix absent from PATH, the pinned git-cliff exiting non-zero,
+or an input file (CHANGELOG.md, cliff.toml) missing. A comparison that never
+happened says nothing about whether the committed changelog is fresh, so it
+must not borrow the staleness code — that sends a maintainer to regenerate a
 changelog that was never the problem. git-cliff's own stderr is passed
 through rather than silenced, so the reason is visible in the job log.
 
@@ -110,13 +115,13 @@ git-cliff is invoked only via the flake-pinned `.#git-cliff` output, never
 an unpinned `nix run nixpkgs#git-cliff`, per the nix-run-pinned invariant.
 
 Exits 0 when both invariants hold.
-Exits 1 on any violation (duplicate links, lost preprocessor, missing file).
-Exits 2 when the tooling itself fails: nix absent from PATH, or the pinned
-git-cliff exiting non-zero. A generator that cannot run produces no output to
-validate, so it must not borrow the violation code — that reads as a
-malformed regeneration and sends a maintainer after a cliff.toml assertion
-that never fired. git-cliff's own stderr is passed through rather than
-silenced, so the reason is visible in the job log.
+Exits 1 on any violation (duplicate links, lost preprocessor).
+Exits 2 when the check could not run: nix absent from PATH, cliff.toml
+missing, or the pinned git-cliff exiting non-zero. A generator that cannot
+run produces no output to validate, so it must not borrow the violation code
+— that reads as a malformed regeneration and sends a maintainer after a
+cliff.toml assertion that never fired. git-cliff's own stderr is passed
+through rather than silenced, so the reason is visible in the job log.
 
 Env overrides (test-only):
 CLIFF_TOML_OVERRIDE — path to a fixture cliff.toml instead of
@@ -146,7 +151,10 @@ bump-linpeas.sh, flake.nix, stale-pin-check.yml, release-on-bump.yml,
 and gen-dashboard-data.sh.
 
 Exits 0 when tag_pattern exactly matches the canonical value.
-Exits 1 on any failure (missing file, missing key, wrong value).
+Exits 1 on drift (missing key, wrong value).
+Exits 2 when the check could not run: yq absent from PATH, or cliff.toml
+missing. A config that was never read cannot have drifted, so it must not
+borrow the drift code.
 
 Env overrides (test-only):
 CLIFF_TOML_OVERRIDE — path to a fixture cliff.toml instead of
@@ -430,7 +438,10 @@ per-tool linters miss. Complements scripts/check-renovate-invariants.sh,
 which asserts repo-policy invariants on top of a valid schema.
 
 Honors RENOVATE_JSON_OVERRIDE for fixture testing.
-Exits 0 on a valid config, 1 on any validation error.
+Exits 0 on a valid config, 1 on any validation error, 2 when the check
+cannot run — the config file is absent, or the validator itself is not
+on PATH. Neither says anything about the config's validity, so neither
+may borrow the rejection code.
 
 ### scripts/check-renovate-invariants.sh
 
@@ -455,9 +466,9 @@ heuristic.
 
 Honors RENOVATE_JSON_OVERRIDE (config path) and SCAN_ROOT (tree root) for
 fixture testing. Exits 0 when every marker is live, 1 on any dead marker,
-2 on a tooling error — jq cannot read a customManager's declarations, so
-no verdict about the markers is available and reporting one would blame a
-marker for a config-shape problem.
+2 on a tooling error — the config file is absent, or jq cannot read a
+customManager's declarations, so no verdict about the markers is available
+and reporting one would blame a marker for a config-shape problem.
 
 ### scripts/check-required-checks-no-paths.sh
 
@@ -587,7 +598,7 @@ docs/\_data/ci-check-categories.yml map.
 
 **Options:**
 
-- `--check` — exit 1 if the doc would change; exit 2 if ci.yml has
+- `--check` — exit 1 if the doc would change; exit 2 if an input file
 
 ### scripts/refresh-ci-summary.sh
 
@@ -596,7 +607,7 @@ from required-checks.md plus the ci-check-categories.yml map.
 
 **Options:**
 
-- `--check` — exit 1 if README.md would change; do not mutate the working tree
+- `--check` — exit 1 if README.md would change; exit 2 if an input
 
 ### scripts/refresh-enforcement-matrix.sh
 
@@ -615,7 +626,7 @@ docs/reference/flake-outputs.md from `nix flake show --all-systems`.
 
 **Options:**
 
-- `--check` — exit 1 if the doc would change; do not mutate the working tree
+- `--check` — exit 1 if the doc would change; exit 2 if the check
 
 ### scripts/refresh-just-recipes.sh
 
@@ -625,7 +636,7 @@ README.md and docs/reference/just-recipes.md from the current
 
 **Options:**
 
-- `--check` — exit 1 if either doc would change; do not mutate the working tree
+- `--check` — exit 1 if either doc would change; exit 2 if either doc
 
 ### scripts/refresh-precommit-table.sh
 
@@ -635,7 +646,7 @@ in the flake.
 
 **Options:**
 
-- `--check` — exit 1 if the doc would change; do not mutate the working tree
+- `--check` — exit 1 if the doc would change; exit 2 if the doc is
 
 ### scripts/refresh-scripts-reference.sh
 
@@ -646,7 +657,7 @@ prefix into Check / Refresh / Other sections.
 
 **Options:**
 
-- `--check` — exit 1 if drift; do not mutate the working tree
+- `--check` — exit 1 if drift; exit 2 if the doc or the awk parser is
 
 ### scripts/refresh-treefmt-config.sh
 
@@ -656,7 +667,7 @@ exposed by `nix/treefmt-config.nix` as `devTooling.<system>.treefmtConfig`.
 
 **Options:**
 
-- `--check` — exit 1 if the doc would change; do not mutate the working tree
+- `--check` — exit 1 if the doc would change; exit 2 if the check
 
 ## Other
 
@@ -677,6 +688,13 @@ on semver dots or path slashes.
 
 Default inventory path: ${TMPDIR:-/tmp}/action-pin-inventory.tsv
 Override with --inventory PATH.
+
+Exits 0 on a completed run, 1 when the inventory is rejected (API
+failure row, unknown status, missing target file, stale line content),
+2 when the run cannot start at all — an unknown argument, or an
+inventory file that is not there to read. Nothing was inspected in that
+case, so the rejection code would misreport an unread inventory as a
+rejected one.
 
 ### scripts/bump-linpeas.sh
 

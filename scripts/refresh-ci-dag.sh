@@ -4,8 +4,9 @@
 # @description Regenerate the ci-dag managed block in
 # docs/architecture/ci-dag.md from .github/workflows/ci.yml plus the
 # docs/_data/ci-check-categories.yml map.
-# @option --check exit 1 if the doc would change; exit 2 if ci.yml has
-# needs: references to non-existent jobs, or if a tool fails to read them
+# @option --check exit 1 if the doc would change; exit 2 if an input file
+# is missing, if ci.yml has needs: references to non-existent jobs, or if
+# a tool fails to read them
 
 # Replace the content between <!-- BEGIN ci-dag --> and <!-- END ci-dag -->
 # in docs/architecture/ci-dag.md with a mermaid `flowchart TD` of the
@@ -16,8 +17,9 @@
 # Usage:
 #   scripts/refresh-ci-dag.sh           # mutate the doc in place
 #   scripts/refresh-ci-dag.sh --check   # exit 1 if doc would change;
-#                                       # exit 2 on dangling needs: or on
-#                                       # a tool failure reading the jobs
+#                                       # exit 2 on a missing input file,
+#                                       # dangling needs:, or a tool
+#                                       # failure reading the jobs
 #
 # Env overrides (for tests):
 #   CI_WORKFLOW_OVERRIDE      path to ci.yml
@@ -67,17 +69,20 @@ function main() {
   doc="${DOC_OVERRIDE:-${repo_root}/docs/architecture/ci-dag.md}"
   readonly repo_root workflow cat_map doc
 
+  # An absent input is a could-not-run condition, not drift: exit 2 so the
+  # caller sends the operator to the missing file rather than to a
+  # regenerate-and-commit that has nothing to read.
   if [[ ! -f ${workflow} ]]; then
     log_err "${workflow} not found"
-    exit 1
+    exit 2
   fi
   if [[ ! -f ${cat_map} ]]; then
     log_err "${cat_map} not found"
-    exit 1
+    exit 2
   fi
   if [[ ! -f ${doc} ]]; then
     log_err "${doc} not found"
-    exit 1
+    exit 2
   fi
   if ! grep --quiet '^<!-- BEGIN ci-dag -->$' "${doc}"; then
     log_err "BEGIN marker missing from ${doc}"

@@ -3,7 +3,8 @@
 #
 # @description Regenerate the ci-summary managed block in README.md
 # from required-checks.md plus the ci-check-categories.yml map.
-# @option --check exit 1 if README.md would change; do not mutate the working tree
+# @option --check exit 1 if README.md would change; exit 2 if an input
+# file is missing; do not mutate the working tree
 
 # Replace the content between <!-- BEGIN ci-summary --> and <!-- END ci-summary -->
 # in README.md with a categorized bullet list generated from two sources:
@@ -15,6 +16,7 @@
 # Usage:
 #   scripts/refresh-ci-summary.sh            # mutate README.md in place
 #   scripts/refresh-ci-summary.sh --check    # exit 1 if the doc would change;
+#                                            #   exit 2 if an input is missing;
 #                                            #   do NOT mutate the working tree
 
 set -Eeuo pipefail
@@ -51,17 +53,20 @@ function main() {
   required_checks_doc="${repo_root}/docs/security/required-checks.md"
   readonly repo_root doc cat_map required_checks_doc
 
+  # An absent input is a could-not-run condition, not drift: exit 2 so the
+  # caller sends the operator to the missing file rather than to a
+  # regenerate-and-commit that has nothing to read.
   if [[ ! -f ${doc} ]]; then
     log_err "${doc} not found"
-    exit 1
+    exit 2
   fi
   if [[ ! -f ${cat_map} ]]; then
     log_err "${cat_map} not found"
-    exit 1
+    exit 2
   fi
   if [[ ! -f ${required_checks_doc} ]]; then
     log_err "${required_checks_doc} not found"
-    exit 1
+    exit 2
   fi
   if ! grep --quiet '^<!-- BEGIN ci-summary -->$' "${doc}"; then
     log_err 'BEGIN marker missing from README.md'

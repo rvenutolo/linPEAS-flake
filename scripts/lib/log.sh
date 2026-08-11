@@ -15,13 +15,18 @@ function log() {
 function log_info() { log INFO "$*"; }
 function log_err() { log ERROR "$*"; }
 
-# @description Verify a required CLI tool is on PATH; exit 1 if missing.
+# @description Verify a required CLI tool is on PATH; exit 2 if missing.
+# Exit 2 means "could not run", which is what an absent tool is; exit 1
+# stays reserved for a violation the caller found. A freshness hook's
+# caller reads exit 1 as "the doc is stale, run the generator and commit",
+# so a missing jq reported as 1 sends the operator to regenerate a doc
+# instead of to install jq.
 # @arg $1 tool name
 function require_tool() {
   local -r tool="$1"
   if ! command -v "${tool}" >/dev/null 2>&1; then
     log_err "missing required tool: ${tool}"
-    exit 1
+    exit 2
   fi
 }
 

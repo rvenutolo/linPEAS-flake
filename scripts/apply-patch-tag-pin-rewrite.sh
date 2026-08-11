@@ -16,6 +16,13 @@
 #
 # Default inventory path: ${TMPDIR:-/tmp}/action-pin-inventory.tsv
 # Override with --inventory PATH.
+#
+# Exits 0 on a completed run, 1 when the inventory is rejected (API
+# failure row, unknown status, missing target file, stale line content),
+# 2 when the run cannot start at all — an unknown argument, or an
+# inventory file that is not there to read. Nothing was inspected in that
+# case, so the rejection code would misreport an unread inventory as a
+# rejected one.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -36,7 +43,7 @@ done
 
 [[ -f ${INVENTORY} ]] || {
   printf 'inventory not found: %s\n' "${INVENTORY}" >&2
-  exit 1
+  exit 2
 }
 
 # Pass 1: validate. Build a list of pending OK rewrites and reject up

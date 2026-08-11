@@ -69,6 +69,11 @@ function main() {
     'bad-verified-true' 1 'verified_allowed drift: got true, want false'
   run_scenario "${multi}" \
     'bad-multiple' 1 '3 allowlist drift(s)'
+  # Without the doc there is no expected side to compare against, so the
+  # comparison never happens: the could-not-run code, not a drift report
+  # that would point at the live API state.
+  run_scenario 'missing allowlist doc could not run' \
+    'does-not-exist' 2 'allowed-actions doc not found'
 
   # bad-multiple must surface every drift (github_owned, verified, extra
   # vendor) in a single run — count drift lines. Its offending value for

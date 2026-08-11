@@ -53,8 +53,11 @@
 #
 # Honors CI_WORKFLOW_OVERRIDE + CATEGORIES_FILE_OVERRIDE +
 # LINT_GROUPS_OVERRIDE + SCRIPTS_DIR_OVERRIDE + EXEMPT_OVERRIDE for
-# fixtures. Exits 0 on full coverage, 1 on any drift, 2 on a usage,
-# missing-tool, or unparsable-lint-groups-manifest error.
+# fixtures. Exits 0 on full coverage, 1 on any drift, 2 when the lint
+# could not run: a usage error, a missing tool, or an input file
+# (ci.yml, the category map, the lint-groups manifest) missing or
+# unparsable. Nothing was cross-checked in that case, so it must not
+# borrow the drift code.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -121,11 +124,11 @@ if ! command -v yq >/dev/null 2>&1; then
 fi
 if [[ ! -f ${CI_FILE} ]]; then
   printf 'ci workflow not found: %s\n' "${CI_FILE}" >&2
-  exit 1
+  exit 2
 fi
 if [[ ! -f ${CATEGORIES_FILE} ]]; then
   printf 'categories file not found: %s\n' "${CATEGORIES_FILE}" >&2
-  exit 1
+  exit 2
 fi
 
 ci_jobs_file="$(mktemp)"
@@ -195,10 +198,11 @@ done <"${cat_keys_file}"
 # silently dropping off the merge gate once its job is folded into a
 # grouped lint job.
 # A missing manifest is a load-bearing infrastructure error, not drift —
-# fail hard like the CI_FILE / CATEGORIES_FILE preamble guards above.
+# it carries the could-not-run code, like the CI_FILE / CATEGORIES_FILE
+# preamble guards above.
 if [[ ! -f ${LINT_GROUPS_FILE} ]]; then
   printf 'lint-groups manifest not found: %s\n' "${LINT_GROUPS_FILE}" >&2
-  exit 1
+  exit 2
 fi
 
 # Capture yq's output (and exit status) into a variable rather than

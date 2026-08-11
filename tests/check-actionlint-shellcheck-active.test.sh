@@ -142,6 +142,12 @@ run_scenario "missing SC2086 → fails" \
   "${clean_fixture}" 1 "SC2086 not found"
 rm -f -- "${clean_fixture}"
 
+# An absent fixture leaves the canary unable to observe anything. That is a
+# broken environment, not a wiring regression, so it carries the
+# could-not-run code rather than the canary's failure code.
+run_scenario "missing fixture → could not run" \
+  '/nonexistent/actionlint-shellcheck-smoke.yml' 2 "fixture not found"
+
 harness_assert_verify || failures=$((failures + 1))
 
 if [[ ${failures} -ne 0 ]]; then

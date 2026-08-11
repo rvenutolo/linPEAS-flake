@@ -16,8 +16,12 @@
 # call the newly-allowed vendor. This script closes that gap by
 # probing the API directly.
 #
-# Exits 0 on full match, 1 on any drift. Logs the specific drift to
-# stderr.
+# Exits 0 on full match, 1 on any drift, 2 when the comparison could not
+# be made at all: the allowlist doc is missing, or its canonical fenced
+# block yields no patterns. Without the doc there is no expected side to
+# compare against, so reporting drift would send a maintainer to the
+# live API state when the doc is what needs fixing. Logs the specific
+# drift to stderr.
 #
 # Env overrides (test-only):
 #   SELECTED_ACTIONS_JSON_OVERRIDE — path to fixture JSON for
@@ -42,7 +46,7 @@ function extract_doc_patterns() {
   local -r doc="$1"
   if [[ ! -f ${doc} ]]; then
     printf 'allowed-actions doc not found: %s\n' "${doc}" >&2
-    exit 1
+    exit 2
   fi
   # POSIX-awk: emit lines between the first ```text fence and the
   # matching close fence after the "## Allowlist (canonical)" heading.
@@ -87,7 +91,7 @@ doc_patterns_sorted="$(extract_doc_patterns "${DOC_FILE}" | LC_ALL=C sort --uniq
 if [[ -z ${doc_patterns_sorted} ]]; then
   printf 'extracted empty allowlist from %s — check fenced-block markers\n' \
     "${DOC_FILE}" >&2
-  exit 1
+  exit 2
 fi
 
 selected_json="$(fetch_selected_actions)"

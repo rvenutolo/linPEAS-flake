@@ -8,7 +8,10 @@
 #   which asserts repo-policy invariants on top of a valid schema.
 #
 # Honors RENOVATE_JSON_OVERRIDE for fixture testing.
-# Exits 0 on a valid config, 1 on any validation error.
+# Exits 0 on a valid config, 1 on any validation error, 2 when the check
+# cannot run — the config file is absent, or the validator itself is not
+# on PATH. Neither says anything about the config's validity, so neither
+# may borrow the rejection code.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -20,12 +23,12 @@ readonly path="${RENOVATE_JSON_OVERRIDE:-${DEFAULT_PATH}}"
 
 if [[ ! -f ${path} ]]; then
   printf 'renovate config not found: %s\n' "${path}" >&2
-  exit 1
+  exit 2
 fi
 
 if ! command -v renovate-config-validator >/dev/null 2>&1; then
   printf 'renovate-config-validator not on PATH; enter the devshell first\n' >&2
-  exit 1
+  exit 2
 fi
 
 # --strict: warnings and migrations become errors.

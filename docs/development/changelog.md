@@ -108,9 +108,10 @@ regeneration. It runs offline — git-cliff parses the PR number from the
 `(#N)` subject suffix, so no token is needed — as the required
 `changelog-links` CI job on every PR.
 
-Exit 1 means an assertion failed. Exit 2 means git-cliff could not run,
-so there was no output to assert on — chase the generator or its config,
-not the link template.
+Exit 1 means an assertion failed. Exit 2 means the check could not run —
+git-cliff failed, nix is absent, or `cliff.toml` is missing — so there was
+no output to assert on. Chase the generator or its config, not the link
+template.
 
 ## Freshness guard
 
@@ -128,11 +129,13 @@ changelog regen on every PR. When it exits 1, regenerate and commit:
 nix shell .#git-cliff --command git-cliff --config cliff.toml --output CHANGELOG.md
 ```
 
-Exit 2 means something else entirely: the generator itself failed, so
-freshness was never evaluated. Read git-cliff's error on stderr and fix
-the generator or `cliff.toml` — regenerating is the wrong move, because
-the committed changelog was never the subject of the failure. Both
-changelog checks separate the two codes for exactly this reason.
+Exit 2 means something else entirely: the check could not run, so freshness
+was never evaluated. Either the generator itself failed, or an input it
+reads — `CHANGELOG.md`, `cliff.toml`, nix on `PATH` — was absent. Read the
+error on stderr and fix the generator, its config, or the environment —
+regenerating is the wrong move, because the committed changelog was never
+the subject of the failure. Both changelog checks separate the two codes
+for exactly this reason.
 
 ### Release-window exclusion
 

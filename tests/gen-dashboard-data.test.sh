@@ -10,7 +10,8 @@
 #   3. required field non-empty / non-null (require_field)
 #
 # Each scenario asserts:
-#   - exit code 1
+#   - exit code 1 for a rejected input, 2 when the script could not run
+#     at all (a missing input artifact or tool)
 #   - expected diagnostic substring on stderr
 #   - no partial dashboard.yml was written (file does not appear; if a
 #     pre-existing file is on disk, its mtime is unchanged)
@@ -76,11 +77,14 @@ function assert_out_file_unchanged() {
 # substring, and that no partial output file was written.
 # @arg $1 scenario name (printed on PASS/FAIL line)
 # @arg $2 expected stderr substring
+# @arg $3 expected exit code — 1 for a rejected input, 2 when the script
+#         could not run at all (missing input artifact or tool)
 # @arg $@ remaining args: env-var assignments forwarded to the env command
 function run_scenario() {
   local -r name="$1"
   local -r expected_msg="$2"
-  shift 2
+  local -r want_exit="$3"
+  shift 3
   local -a env_vars=("$@")
 
   local snapshot
@@ -96,8 +100,8 @@ function run_scenario() {
     exit_code=$?
   harness_assert_record "${name}" "${expected_msg}" "${stderr_tmp}"
 
-  if ((exit_code != 1)); then
-    printf 'FAIL: %s — expected exit 1, got %d\n' "${name}" "${exit_code}" >&2
+  if ((exit_code != want_exit)); then
+    printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${want_exit}" "${exit_code}" >&2
     printf '  stderr was:\n' >&2
     sed 's/^/    /' "${stderr_tmp}" >&2
     fail_count=$((fail_count + 1))
@@ -359,21 +363,27 @@ function main() {
   # Scenario 1: bad pin.version regex. Pin URL is shaped correctly so only
   # the regex check trips; nothing else hard-fails first.
   run_scenario 'bad pin.version regex' \
-    'pin.version does not match expected format' \
+    'pin.version does not match expected format' 1 \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/bad-version-pin.json"
 
   # Scenario 2: bad pin.url prefix. Pin version is well-formed
   # so the regex check passes; the URL prefix check then trips.
   run_scenario 'bad pin.url prefix' \
-    'pin.url outside expected upstream prefix' \
+    'pin.url outside expected upstream prefix' 1 \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/bad-pin-url.json"
 
   # Scenario 3: missing required upstream field (tag_name). Pin is good so
   # we reach the upstream-release fetch and trip require_field on tag_name.
   run_scenario 'missing required field upstream_release.tag_name' \
-    'required field missing: upstream_release.tag_name' \
+    'required field missing: upstream_release.tag_name' 1 \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
     "UPSTREAM_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/missing-tag-upstream-release.json"
+
+  # Scenario 3b: the pin file itself is absent. The script never runs, so
+  # this is exit 2 (fix the environment) rather than a rejected input.
+  run_scenario 'absent pin file cannot be read' \
+    'linpeas-pin-absent.json not found' 2 \
+    "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/linpeas-pin-absent.json"
 
   # Scenario 4: happy-path bump-lag pairing. Two of three this-repo releases
   # match upstream entries; the third is older than the upstream window and

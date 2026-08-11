@@ -14,13 +14,13 @@
 # an unpinned `nix run nixpkgs#git-cliff`, per the nix-run-pinned invariant.
 #
 # Exits 0 when both invariants hold.
-# Exits 1 on any violation (duplicate links, lost preprocessor, missing file).
-# Exits 2 when the tooling itself fails: nix absent from PATH, or the pinned
-# git-cliff exiting non-zero. A generator that cannot run produces no output to
-# validate, so it must not borrow the violation code — that reads as a
-# malformed regeneration and sends a maintainer after a cliff.toml assertion
-# that never fired. git-cliff's own stderr is passed through rather than
-# silenced, so the reason is visible in the job log.
+# Exits 1 on any violation (duplicate links, lost preprocessor).
+# Exits 2 when the check could not run: nix absent from PATH, cliff.toml
+# missing, or the pinned git-cliff exiting non-zero. A generator that cannot
+# run produces no output to validate, so it must not borrow the violation code
+# — that reads as a malformed regeneration and sends a maintainer after a
+# cliff.toml assertion that never fired. git-cliff's own stderr is passed
+# through rather than silenced, so the reason is visible in the job log.
 #
 # Env overrides (test-only):
 #   CLIFF_TOML_OVERRIDE — path to a fixture cliff.toml instead of
@@ -40,7 +40,7 @@ fi
 
 if [[ ! -f ${CLIFF_TOML} ]]; then
   printf 'cliff.toml not found: %s\n' "${CLIFF_TOML}" >&2
-  exit 1
+  exit 2
 fi
 
 tmp="$(mktemp)"

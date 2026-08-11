@@ -13,7 +13,7 @@
 # build time via mkdocs-macros-plugin `include_yaml`.
 #
 # Hard-fail rules (security-critical):
-#   1. Any required CLI tool missing  -> exit 1.
+#   1. Any required CLI tool missing  -> exit 2 (see rule 7).
 #   2. Upstream peass-ng releases/latest non-200 -> exit 1 (curl/gh error
 #      surfaced). This-repo lookups (releases/latest, last bump PR, latest
 #      verify-latest-release run) soft-fall-back to empty/"unknown" so a
@@ -28,6 +28,10 @@
 #   5. pin.url must start with        -> https://github.com/peass-ng/
 #                                        PEASS-ng/releases/download/
 #   6. Atomic write: mktemp + mv; never `>` redirect to the final path.
+#   7. Inputs the generator cannot even read — a required CLI tool absent
+#      from PATH, or a missing pin file — exit 2, not 1. Those say
+#      nothing about the pin's contents, and exit 1 is reserved for data
+#      that was read and found bad.
 #
 # Exits 0 on success.
 
@@ -126,7 +130,7 @@ function main() {
 
   if [[ ! -f ${pin_file} ]]; then
     log_err "${pin_file} not found"
-    exit 1
+    exit 2
   fi
 
   mkdir --parents "$(dirname -- "${out_file}")"

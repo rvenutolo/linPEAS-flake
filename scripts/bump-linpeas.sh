@@ -5,7 +5,10 @@
 
 # Exits 0 with no changes if the pin is already current.
 # Exits 0 with file changes if a bump was made.
-# Exits non-zero on any error.
+# Exits 1 on a bump error — an upstream tag or asset that fails
+# validation, a digest mismatch.
+# Exits 2 when the bump cannot start: a required tool is absent from
+# PATH, or the pin file it reads and rewrites is not there.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -28,7 +31,7 @@ function main() {
 
   if [[ ! -f ${pin_file} ]]; then
     log_err "${pin_file} not found"
-    exit 1
+    exit 2
   fi
 
   local current_version

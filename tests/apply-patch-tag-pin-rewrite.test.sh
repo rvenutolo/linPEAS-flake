@@ -201,4 +201,22 @@ if ! diff -u "${EOF_APIFAIL_SNAPSHOT}" "${WORK}/eof-apifail.yml"; then
   exit 1
 fi
 
+# --- Test 9: an inventory that is not there is a tooling error ---
+# Every abort above rejects an inventory the script read. An inventory it
+# could not read at all is a different failure: exit 2 keeps it out of the
+# rejection bucket, so an operator is not sent hunting for a bad row in a
+# file that was never opened.
+INV_ABSENT="${WORK}/no-such-inventory.tsv"
+absent_exit=0
+absent_err="$(bash "${SCRIPT}" --inventory "${INV_ABSENT}" 2>&1)" || absent_exit=$?
+if ((absent_exit != 2)); then
+  printf 'FAIL: absent inventory should exit 2, got %d\n  stderr: %s\n' \
+    "${absent_exit}" "${absent_err}" >&2
+  exit 1
+fi
+if [[ ${absent_err} != *"inventory not found"* ]]; then
+  printf 'FAIL: absent-inventory message missing\n  got: %s\n' "${absent_err}" >&2
+  exit 1
+fi
+
 printf 'all tests passed\n'

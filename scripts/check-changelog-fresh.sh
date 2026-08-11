@@ -35,11 +35,11 @@
 # number from the `(#N)` subject suffix, so no GitHub token is required. Needs
 # full history + tags (fetch-depth: 0) so every release tag is visible.
 #
-# Exits 0 when released sections are fresh, 1 when stale (or CHANGELOG /
-# cliff config missing), 2 when the tooling itself fails: nix absent from
-# PATH, or the pinned git-cliff exiting non-zero. A generator that cannot run
-# says nothing about whether the committed changelog is fresh, so it must not
-# borrow the staleness code — that sends a maintainer to regenerate a
+# Exits 0 when released sections are fresh, 1 when stale, 2 when the check
+# could not run: nix absent from PATH, the pinned git-cliff exiting non-zero,
+# or an input file (CHANGELOG.md, cliff.toml) missing. A comparison that never
+# happened says nothing about whether the committed changelog is fresh, so it
+# must not borrow the staleness code — that sends a maintainer to regenerate a
 # changelog that was never the problem. git-cliff's own stderr is passed
 # through rather than silenced, so the reason is visible in the job log.
 #
@@ -59,7 +59,7 @@ readonly REGEN="${REGEN_OVERRIDE:-}"
 
 if [[ ! -f ${CHANGELOG} ]]; then
   printf 'CHANGELOG not found: %s\n' "${CHANGELOG}" >&2
-  exit 1
+  exit 2
 fi
 
 tmp="$(mktemp)"
@@ -75,7 +75,7 @@ else
   fi
   if [[ ! -f ${CLIFF_TOML} ]]; then
     printf 'cliff.toml not found: %s\n' "${CLIFF_TOML}" >&2
-    exit 1
+    exit 2
   fi
   # Only stdout is discarded — the regeneration lands in ${tmp}. stderr carries
   # git-cliff's and nix's own explanation of a failure and must reach the log.
