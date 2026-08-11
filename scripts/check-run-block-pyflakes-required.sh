@@ -37,10 +37,6 @@ else
   )
 fi
 
-if [[ ${#files[@]} -eq 0 ]]; then
-  exit 0
-fi
-
 # Heuristic: look for python/python3/pip used as an *invoked
 # command* in a GitHub Actions YAML file. The token must appear
 # in a command-position context — either right after `run:` on a
@@ -61,17 +57,36 @@ fi
 # env assignments, optionally followed by an absolute or
 # relative-path prefix (`/usr/bin/`, `./venv/bin/`, etc.).
 violations=0
+run_blocks=0
+python_lines=0
 cmd_prefix='((sudo|env|time|nice)[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((/|\./|\.\./)[^[:space:]]*/)?'
 pattern="(run:[[:space:]]+${cmd_prefix}|^[[:space:]]*([|>-][[:space:]]+)?${cmd_prefix})(python3?|pip3?)([[:space:]]|\$)"
+# A `run:` key, either as its own mapping key or opening a step in a
+# sequence. Counting these reports how much command text the guard
+# actually had in front of it.
+run_block_pattern='^[[:space:]]*(-[[:space:]]+)?run:([[:space:]]|$)'
 for f in "${files[@]}"; do
+  # grep --count prints 0 and exits 1 on no match; `|| true` keeps the
+  # zero and keeps us alive under `set -e`.
+  run_blocks=$((run_blocks + $(grep --count --extended-regexp -- \
+    "${run_block_pattern}" "${f}" || true)))
   # grep exits 1 when no lines match; the `if` guard keeps us
   # alive under `set -e`. A single invocation captures both the
   # presence check and the matched lines.
   if matches="$(grep -nE "${pattern}" -- "${f}")"; then
     printf 'FOUND python invocation in %s:\n%s\n\n' "${f}" "${matches}" >&2
     violations=$((violations + 1))
+    python_lines=$((python_lines + $(wc -l <<<"${matches}")))
   fi
 done
+
+# A passing run is silent about how much it looked at, so a scan root
+# whose workflows are all `uses:` steps reads exactly like one full of
+# shell that happens to avoid python — and a scan that matched no files
+# at all reads like both. State the breadth covered: files read, command
+# blocks in them, and the python invocations among those.
+printf 'run-block-pyflakes: scanned %d workflow file(s), %d run: block(s); %d python invocation(s)\n' \
+  "${#files[@]}" "${run_blocks}" "${python_lines}"
 
 if [[ ${violations} -gt 0 ]]; then
   printf 'FAIL: %d workflow file(s) invoke python in run: blocks,\n' \
