@@ -305,7 +305,31 @@ EOF
   expect 'bad: a computed attribute name trips the derivation-broke guard' \
     "${work}/hidden-attr" 1 'derivation broke'
 
-  # (j) LIVE: the real tree must satisfy the guard.
+  # (j) TOOLING: the root the scan is pointed at does not exist, so the
+  # module scan emits nothing. An empty module list is indistinguishable
+  # from a tree in which no module assigns `flake.devTooling`, so an
+  # unchecked scan reports a substantive signal break for what is only a
+  # root that is not there. The scan's status must be checked before its
+  # output is consumed, and the verdict must be "could not run" (2) rather
+  # than a coverage verdict.
+  expect 'tooling: an absent root is reported as a failed module scan' \
+    "${work}/absent-root" 2 'nix module scan under'
+
+  # (k) TOOLING: a path matching `*.nix` that is a directory reaches the
+  # comment stripper, which cannot read it. Matched through a
+  # `sed | grep` pipeline the failure vanishes: under `pipefail` the failed
+  # `sed` and the `grep` that consequently found nothing return grep's 1,
+  # the module scores as mentioning neither the attribute nor the
+  # transposer, and the run reports full coverage over a tree it never
+  # read. Every other module here is well-formed, so nothing but the read
+  # guard can produce a non-zero verdict.
+  write_tree "${work}/unreadable-module" \
+    '^(nix/hooks/.*\.nix|nix/manifests\.nix)$' plain
+  mkdir --parents -- "${work}/unreadable-module/nix/unreadable.nix"
+  expect 'tooling: a directory named *.nix is reported, not scored as empty source' \
+    "${work}/unreadable-module" 2 'comment-strip of nix/unreadable.nix failed'
+
+  # (l) LIVE: the real tree must satisfy the guard.
   expect 'live: real tree passes' "${REPO_ROOT}" 0 ''
 
   if [[ ${failures} -gt 0 ]]; then

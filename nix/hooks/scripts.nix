@@ -19,20 +19,21 @@
     pass_filenames = false;
     language = "system";
   };
-  # No scripts/*.sh feeds a redirection from a yq or jq process
-  # substitution (`< <(yq ...)`, `< <(jq ...)`) — a procsub's exit status
-  # is invisible under set -Eeuo pipefail, so a parse failure hands the
-  # consumer an empty result to score as data instead of failing loud.
-  # See docs/security/workflow-hardening.md.
-  no-parser-procsub = {
+  # No scripts/*.sh feeds a redirection from a process substitution whose
+  # producer's status is opaque: `< <(yq ...)`, `< <(jq ...)`, or
+  # `< <(f ...)` for a function the same file defines. A substitution's
+  # exit status is invisible under set -Eeuo pipefail, so a producer
+  # failure hands the consumer an empty result to score as data instead
+  # of failing loud. See docs/security/workflow-hardening.md.
+  no-opaque-procsub = {
     enable = true;
-    name = "no-parser-procsub";
-    description = "No scripts/*.sh feeds a redirection from a yq or jq process substitution.";
-    entry = "${pkgs-unstable.writeShellScript "no-parser-procsub-hook" ''
+    name = "no-opaque-procsub";
+    description = "No scripts/*.sh feeds a redirection from a yq, jq, or same-file function process substitution.";
+    entry = "${pkgs-unstable.writeShellScript "no-opaque-procsub-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-      exec ${pkgs-unstable.bash}/bin/bash scripts/check-no-parser-procsub.sh
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-no-opaque-procsub.sh
     ''}";
     files = "^scripts/.*\\.sh$";
     pass_filenames = false;

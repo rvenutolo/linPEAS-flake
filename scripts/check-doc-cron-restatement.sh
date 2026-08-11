@@ -11,7 +11,8 @@
 # Exit codes:
 #   0  no restatements found
 #   1  restatement(s) found (details printed to stderr)
-#   2  missing/empty .github/workflows directory
+#   2  the check could not run: missing/empty .github/workflows directory,
+#      or a producer that lists or reads the doc files failed
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -101,16 +102,42 @@ function main() {
   local name_re
   name_re="\`(${alt})\`|(^|[^[:alnum:]_-])(${alt})\\.(yml|yaml)"
 
-  local found=0 file lineno text
+  local found=0 file lineno text files_out lines_out
+
+  # Capture-then-check both producers so a failure is a loud tooling fault
+  # rather than an empty read that scores files clean.
+  #
+  # `scan_files` has no reachable failure: `find` runs only behind a `-d`
+  # gate on its starting point, `pipefail` carries a `find` error through
+  # `sort` so the capture would see one, and the error `find` can still
+  # raise is an unreadable directory — which cannot happen where the check
+  # derivation runs as root. The guard stays because it covers whatever
+  # the producer comes to run.
+  if ! files_out="$(scan_files)"; then
+    printf 'doc-cron-restatement: scan_files failed\n' >&2
+    exit 2
+  fi
+
   while IFS= read -r file; do
     [[ -n ${file} ]] || continue
+    # `readable_lines` does have a reachable failure: a doc filename
+    # holding a newline splits across this newline-delimited handoff into
+    # two paths that do not exist, and `awk` exits non-zero on a path it
+    # cannot open. Unscannable input is a tooling fault, not a clean file.
+    if ! lines_out="$(readable_lines "${file}")"; then
+      printf 'doc-cron-restatement: readable_lines failed for %s\n' "${file}" >&2
+      exit 2
+    fi
+    # A file the producer emitted nothing for yields one empty record here,
+    # which carries no line number and so is not a line to score.
     while IFS=$'\t' read -r lineno text; do
+      [[ -n ${lineno} ]] || continue
       if [[ ${text} =~ ${TIME_RE} ]] && [[ ${text} =~ ${name_re} ]]; then
         printf '%s:%s: %s\n' "${file}" "${lineno}" "${text}" >&2
         found=1
       fi
-    done < <(readable_lines "${file}")
-  done < <(scan_files)
+    done <<<"${lines_out}"
+  done <<<"${files_out}"
 
   if ((found)); then exit 1; fi
   printf 'check-doc-cron-restatement: ok\n'

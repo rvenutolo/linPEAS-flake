@@ -28,7 +28,8 @@
 # reason to add another eval-bound hook.
 #
 # Honors ROOT_OVERRIDE for fixtures (default: the repo root). Exits 0 on
-# full coverage, 1 on any uncovered module.
+# full coverage, 1 on any uncovered module, 2 when a producer the
+# derivation depends on could not run.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -41,19 +42,49 @@ shopt -s nullglob
 # Every tracked-shaped nix module under ROOT. Test fixtures are excluded:
 # they contain deliberately malformed modules that would pollute the
 # derivation.
+#
+# The scan's status is checked before its output is consumed. A scan that
+# never reaches the tree — ROOT is absent, or is not a directory — emits
+# nothing, and an empty module list reads downstream as "no module assigns
+# flake.devTooling", reporting a broken transposer signal for a tree that
+# is simply not there.
+if ! module_scan="$(cd "${ROOT}" && find . -name '*.nix' \
+  -not -path './tests/fixtures/*' -not -path './.git/*' -printf '%P\n' | sort)"; then
+  printf 'freshness-hook-watches-modules: nix module scan under %s failed\n' \
+    "${ROOT}" >&2
+  exit 2
+fi
+
 nix_modules=()
 while IFS= read -r m; do
   [[ -z ${m} ]] && continue
   nix_modules+=("${m}")
-done < <(cd "${ROOT}" && find . -name '*.nix' \
-  -not -path './tests/fixtures/*' -not -path './.git/*' -printf '%P\n' | sort)
+done <<<"${module_scan}"
 
 # Nix source with comments removed. A `#` inside a string over-strips the
-# rest of that line, which can only shrink the derived set; the
-# guard-the-guard below is what catches a stripper that breaks outright.
+# rest of that line, which can only shrink the derived set; the read guard
+# below is what catches a stripper that breaks outright.
 function nix_source() {
   sed 's/#.*$//' -- "${ROOT}/$1"
 }
+
+# Every module's comment-stripped source, read once up front and keyed by
+# module path. Every signal below matches against this map rather than
+# re-reading through a `nix_source | grep` pipeline, because such a
+# pipeline cannot report a read failure: under `pipefail` a failed `sed`
+# alongside a `grep` that found nothing returns grep's 1, so a module the
+# stripper could not read scores exactly like a module that does not
+# mention the token. A path matching `*.nix` that is a directory or a
+# dangling symlink is precisely that case, and it would shrink every
+# derived set with no output at all.
+declare -A nix_src=()
+for m in "${nix_modules[@]}"; do
+  if ! nix_src["${m}"]="$(nix_source "${m}")"; then
+    printf 'freshness-hook-watches-modules: comment-strip of %s failed — module unreadable\n' \
+      "${m}" >&2
+    exit 2
+  fi
+done
 
 # Every module the generator for `$1` depends on, one per line.
 function required_modules() {
@@ -61,22 +92,38 @@ function required_modules() {
   local -A mods=()
   local f
   for f in "${nix_modules[@]}"; do
-    if nix_source "${f}" | grep --quiet --fixed-strings -- "${attr}"; then
+    if grep --quiet --fixed-strings -- "${attr}" <<<"${nix_src["${f}"]}"; then
       mods["${f}"]=1
     fi
-    if nix_source "${f}" | grep --quiet --fixed-strings -- 'flake.devTooling'; then
+    if grep --quiet --fixed-strings -- 'flake.devTooling' <<<"${nix_src["${f}"]}"; then
       mods["${f}"]=1
     fi
   done
-  # One level of relative imports. Walks nix_source rather than the raw
-  # file, consistent with every other signal in this function, so a
-  # commented-out import cannot join the required set. The expansion of
+  # One level of relative imports. Walks the comment-stripped source rather
+  # than the raw file, consistent with every other signal in this function,
+  # so a commented-out import cannot join the required set. The expansion of
   # "${!mods[@]}" is evaluated once, so keys added inside the loop are not
   # re-walked — which is what makes this one level rather than a full
-  # closure.
-  local m dir imp rel
+  # closure, and which is also why every key here is still a module the
+  # read loop above has already stored.
+  local m dir imp rel imports status
   for m in "${!mods[@]}"; do
     dir="$(dirname -- "${m}")"
+    status=0
+    imports="$(grep --only-matching --extended-regexp \
+      '\.\.?/[A-Za-z0-9._/-]+\.nix' <<<"${nix_src["${m}"]}")" || status=$?
+    # A module with no imports is the common case and grep reports it as
+    # status 1, so only a higher status is a scan that broke rather than
+    # one that found nothing. Returning here rather than swallowing the
+    # status keeps a broken scan from quietly shrinking the required set.
+    # No fixture drives this branch: grep reads a here-string built from
+    # memory against a literal pattern, so it has no I/O or compile error
+    # left to hit.
+    if ((status > 1)); then
+      printf 'freshness-hook-watches-modules: import scan of %s failed\n' \
+        "${m}" >&2
+      return 1
+    fi
     while IFS= read -r imp; do
       [[ -z ${imp} ]] && continue
       rel="$(realpath --relative-to="${ROOT}" --canonicalize-missing \
@@ -84,8 +131,7 @@ function required_modules() {
       if [[ -f ${ROOT}/${rel} ]]; then
         mods["${rel}"]=1
       fi
-    done < <(nix_source "${m}" | grep --only-matching --extended-regexp \
-      '\.\.?/[A-Za-z0-9._/-]+\.nix' || true)
+    done <<<"${imports}"
   done
   printf '%s\n' "${!mods[@]}" | sort
 }
@@ -116,7 +162,7 @@ fi
 # required set.
 transposers=0
 for f in "${nix_modules[@]}"; do
-  if nix_source "${f}" | grep --quiet --fixed-strings -- 'flake.devTooling'; then
+  if grep --quiet --fixed-strings -- 'flake.devTooling' <<<"${nix_src["${f}"]}"; then
     transposers=$((transposers + 1))
   fi
 done
@@ -135,6 +181,11 @@ fi
 # below never see an empty filter. \037 carries no such special casing and
 # never appears in a `files` regex or a `scripts/*.sh` path.
 #   <name>\037<files-string>\037<space-separated script basenames>
+#
+# An `awk` fault is returned explicitly rather than left to errexit: the
+# caller captures this function in a command substitution inside an `if`
+# condition, where errexit is suppressed, so a bare non-zero `awk` would
+# leave the function returning 0 with a short block list.
 function parse_blocks() {
   local nix
   for nix in "${ROOT}"/nix/hooks/*.nix; do
@@ -167,7 +218,7 @@ function parse_blocks() {
           line = substr(line, RSTART + RLENGTH)
         }
       }
-    ' "${nix}"
+    ' "${nix}" || return 1
   done
 }
 
@@ -181,7 +232,7 @@ function attr_definer_count() {
   local -r attr="$1"
   local n=0 f
   for f in "${nix_modules[@]}"; do
-    if nix_source "${f}" | grep --quiet --fixed-strings -- "${attr}"; then
+    if grep --quiet --fixed-strings -- "${attr}" <<<"${nix_src["${f}"]}"; then
       n=$((n + 1))
     fi
   done
@@ -192,6 +243,19 @@ function attr_definer_count() {
 failed=0
 generator_hooks=0
 declare -A claimed_generators=()
+
+# Capture the parser's records and check its status before consuming them:
+# a producer whose status the loop never sees turns a broken parse into a
+# smaller hook set, which reads as coverage rather than as a fault. No
+# fixture drives this guard, because nothing the script can be handed makes
+# the parser fail: only a regular file reaches `awk` (the `-f` test drops
+# directories, dangling symlinks, and fifos named `*.nix`), and this awk
+# program does no I/O of its own, so a readable regular file always parses.
+# The guard exists so a future producer change cannot fail silently.
+if ! blocks="$(parse_blocks)"; then
+  printf 'freshness-hook-watches-modules: hook block parse failed\n' >&2
+  exit 2
+fi
 
 while IFS=$'\037' read -r name files scripts; do
   [[ -n ${name} ]] || continue
@@ -235,6 +299,19 @@ while IFS=$'\037' read -r name files scripts; do
   # Nix string literal: "\\." in source is the ERE "\.".
   ere="$(printf '%s' "${files}" | sed 's/\\\\/\\/g')"
 
+  # Capture the derived set and check its status before consuming it: a
+  # derivation that gives up part way emits nothing, and an empty set reads
+  # as a hook whose filter already covers every module it must. No fixture
+  # drives this guard, because every producer inside `required_modules`
+  # reads memory rather than the tree — each module's source is read and
+  # status-checked up front — so the only status it can return is the one
+  # its own inner guard raises.
+  if ! required="$(required_modules "${attr}")"; then
+    printf 'freshness-hook-watches-modules: required-module derivation for %s failed\n' \
+      "${attr}" >&2
+    exit 2
+  fi
+
   while IFS= read -r p; do
     [[ -z ${p} ]] && continue
     if ! printf '%s\n' "${p}" | grep --quiet --extended-regexp -- "${ere}"; then
@@ -242,8 +319,8 @@ while IFS=$'\037' read -r name files scripts; do
         "${name}" "${p}" "${attr}" >&2
       failed=$((failed + 1))
     fi
-  done < <(required_modules "${attr}")
-done < <(parse_blocks)
+  done <<<"${required}"
+done <<<"${blocks}"
 
 shopt -u nullglob
 

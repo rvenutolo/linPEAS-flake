@@ -24,7 +24,8 @@
 # so an empty result means a reformat broke the block parser.
 #
 # Honors HOOKS_DIR_OVERRIDE + SCRIPTS_DIR_OVERRIDE for fixtures
-# (default `nix/hooks`, `scripts`). Exits 0 on full coverage, 1 on drift.
+# (default `nix/hooks`, `scripts`). Exits 0 on full coverage, 1 on drift,
+# 2 if the hook-block parser could not run.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -58,6 +59,11 @@ done
 # like it references no manifest script, and it would be dropped from the
 # coverage check with no output. \037 carries no such special casing and
 # never appears in a `files` regex or a `scripts/*.sh` path.
+#
+# An `awk` fault is returned explicitly rather than left to errexit: the
+# caller captures this function in a command substitution inside an `if`
+# condition, and errexit is suppressed there, so a bare non-zero `awk`
+# would leave the function returning 0 with a short block list.
 parse_blocks() {
   local nix
   for nix in "${HOOKS_DIR}"/*.nix; do
@@ -94,12 +100,25 @@ parse_blocks() {
           line = substr(line, RSTART + RLENGTH)
         }
       }
-    ' "${nix}"
+    ' "${nix}" || return 1
   done
 }
 
 failed=0
 manifest_hook_blocks=0
+
+# Capture the parser's records and check its status before consuming them:
+# a producer whose exit status the loop never sees turns a broken parse
+# into a smaller hook set, which reads as coverage rather than as a fault.
+# No fixture drives this guard, because nothing the script can be handed
+# makes the parser fail: only a regular file reaches `awk` (the `-f` test
+# drops directories, dangling symlinks, and fifos named `*.nix`), and this
+# awk program does no I/O of its own, so a readable regular file always
+# parses. The guard exists so a future producer change cannot fail silently.
+if ! blocks="$(parse_blocks)"; then
+  printf 'manifest-hook-watches-nix: parse_blocks failed\n' >&2
+  exit 2
+fi
 
 while IFS=$'\037' read -r name files scripts; do
   [[ -n ${name} ]] || continue
@@ -125,7 +144,7 @@ while IFS=$'\037' read -r name files scripts; do
     printf 'hook %s: files filter missing nix/hooks\n' "${name}" >&2
     failed=$((failed + 1))
   fi
-done < <(parse_blocks)
+done <<<"${blocks}"
 
 shopt -u nullglob
 

@@ -82,24 +82,29 @@ The lint accepts longer set lines (e.g. `set -Eeuo pipefail -x`) as long as the 
 
 Enforced by `scripts/check-script-shebang-pipefail.sh`. Wired as the `lint-script-hygiene` CI job (member check `script-shebang-pipefail`) and as a pre-commit hook.
 
-## no-parser-procsub
+## no-opaque-procsub
 
-No `scripts/*.sh` feeds a redirection from a yq or jq process substitution — `done < <(yq eval '.x' "$f")`, `mapfile -t rules < <(jq --raw-output '.rules[].type' <<<"${json}")`, and their variants.
+No `scripts/*.sh` feeds a redirection from a process substitution whose producer's exit status is opaque to the consumer. Two producer shapes are banned:
 
-A process substitution's exit status is invisible to `set -Eeuo pipefail`: the substitution runs in its own subshell, and the shell only ever sees the exit status of the command the redirection feeds (here, the `while`/`done` loop or `mapfile`), not the parser's. When the parser fails, the substitution produces empty output and the consumer scores that emptiness as data. Which way that lands depends on what the consumer does with an empty result, and both landings are wrong:
+- **Parser producer** — `done < <(yq eval '.x' "$f")`, `mapfile -t rules < <(jq --raw-output '.rules[].type' <<<"${json}")`, and their variants.
+- **Function producer** — `done < <(parse_blocks)`, `done < <(readable_lines "${file}")`, and their variants, where the producer is a function the same file defines.
+
+A process substitution's exit status is invisible to `set -Eeuo pipefail`: the substitution runs in its own subshell, and the shell only ever sees the exit status of the command the redirection feeds (here, the `while`/`done` loop or `mapfile`), not the producer's. When the producer fails, the substitution produces empty output and the consumer scores that emptiness as data. Which way that lands depends on what the consumer does with an empty result, and both landings are wrong:
 
 - A scan loop exits 0 as if it found nothing to flag — a fail-open masquerading as a clean pass.
-- An assertion loop reports the substantive violation that an empty result implies — a missing ruleset rule, a dead dependency marker — sending the operator to fix input that was never wrong, while the parse fault itself is reported only as stray stderr.
+- An assertion loop reports the substantive violation that an empty result implies — a missing ruleset rule, a dead dependency marker — sending the operator to fix input that was never wrong, while the producer fault itself is reported only as stray stderr.
 
-The sanctioned idioms make the failure abort loudly instead: capture the parser's output into a variable first (`hits="$(yq eval '.x' "$f")"`, then iterate with `<<<"${hits}"`) so `set -e` catches a non-zero exit before the loop ever runs; or, for NUL-delimited output that can't round-trip through `"$(...)"` (command substitution strips embedded NUL bytes), write to a temp file and iterate with `< "${tmp}"`. A capture that is legitimately empty needs an explicit `[[ -n … ]]` guard, since a bare here-string feeds one empty line rather than zero.
+A function producer is banned by name, not by body. The lint collects the function names a file defines from its column-0 definition lines (`name() {`, `function name() {`, `function name {`) and flags any redirection-feeding substitution whose first token is one of them. Reading the producer's body would make the verdict depend on which commands a helper happens to run today; banning the shape keeps the rule decidable in a single textual pass and keeps it true when the helper grows a `git`, `find`, or `nix` call.
+
+The sanctioned idioms make the failure abort loudly instead: capture the producer's output into a variable first (`hits="$(yq eval '.x' "$f")"`, then iterate with `<<<"${hits}"`) so `set -e` catches a non-zero exit before the loop ever runs; or, for NUL-delimited output that can't round-trip through `"$(...)"` (command substitution strips embedded NUL bytes), write to a temp file and iterate with `< "${tmp}"`. A capture that is legitimately empty needs an explicit `[[ -n … ]]` guard, since a bare here-string feeds one empty line rather than zero.
 
 A tooling failure caught this way exits 2, keeping exit 1 for the drift the check exists to report.
 
-The ban covers redirections only. `diff <(jq …) <(jq …)` stays legal: `diff` consumes both substitutions as file arguments and its own status is what the script acts on.
+The ban covers redirections only. `diff <(jq …) <(jq …)` and `diff <(expected_keys) <(actual_keys)` stay legal: `diff` consumes both substitutions as file arguments and its own status is what the script acts on.
 
-The lint skips comment lines (lines whose first non-whitespace character is `#`) so a script is free to document the banned idiom by name — e.g. explaining why it uses the capture idiom instead — without tripping the check on its own documentation.
+The lint skips comment lines (lines whose first non-whitespace character is `#`) so a script is free to document either banned idiom by name — e.g. explaining why it uses the capture idiom instead — without tripping the check on its own documentation.
 
-Enforced by `scripts/check-no-parser-procsub.sh`. Wired as the `lint-script-hygiene` CI job (member check `no-parser-procsub`) and as a pre-commit hook.
+Enforced by `scripts/check-no-opaque-procsub.sh`. Wired as the `lint-script-hygiene` CI job (member check `no-opaque-procsub`) and as a pre-commit hook.
 
 ## script-has-test
 

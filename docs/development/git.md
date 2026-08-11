@@ -152,7 +152,7 @@ Hooks (alphabetical):
 | `nix-run-pinned`                    | No unpinned nix run nixpkgs#<pkg>; use nix shell .#<pkg> or pin a rev.                                                               |
 | `nixfmt`                            | Nix file formatting.                                                                                                                 |
 | `nixpkgs-hammering`                 | nixpkgs idiom checker for the linpeas derivation.                                                                                    |
-| `no-parser-procsub`                 | No scripts/\*.sh feeds a redirection from a yq or jq process substitution.                                                           |
+| `no-opaque-procsub`                 | No scripts/\*.sh feeds a redirection from a yq, jq, or same-file function process substitution.                                      |
 | `octoscan`                          | synacktiv/octoscan workflow vulnerability scanner.                                                                                   |
 | `patch-tag-pins`                    | SHA-pinned uses: comments name exact patch tag (vX.Y.Z), not major (vX).                                                             |
 | `permission-scopes`                 | Per-job GITHUB_TOKEN write scopes are allowlisted in .github/permission-scopes.yml.                                                  |
