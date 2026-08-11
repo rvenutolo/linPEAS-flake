@@ -82,17 +82,23 @@ function main() {
   # markers) must be rejected by the guard, not silently emitted unchanged.
   # An unanchored guard grep false-greens here; the anchored guard fails
   # closed with a marker-missing message.
-  local ws_backup ws_err ws_rc=0
+  local ws_backup ws_err ws_out ws_outcome ws_rc=0
   ws_backup="$(mktemp)"
   ws_err="$(mktemp)"
+  ws_out="$(mktemp)"
+  ws_outcome="$(mktemp)"
   cp -- "${DOC}" "${ws_backup}"
   sed -e 's/^<!-- BEGIN treefmt-config -->$/<!-- BEGIN treefmt-config --> /' \
     -e 's/^<!-- END treefmt-config -->$/<!-- END treefmt-config --> /' \
     "${ws_backup}" >"${DOC}"
-  "${SCRIPT}" --check >/dev/null 2>"${ws_err}" || ws_rc=$?
+  "${SCRIPT}" --check >"${ws_out}" 2>"${ws_err}" || ws_rc=$?
   cp -- "${ws_backup}" "${DOC}"
+  # The record is the whole observable outcome — exit code, stdout, stderr —
+  # so a scenario that differs from a sibling only in how it ended still
+  # reads as a distinct observation.
+  printf 'harness-assert-outcome: exit=%d\n' "${ws_rc}" >"${ws_outcome}"
   harness_assert_record 'whitespace-perturbed markers rejected' \
-    'marker missing' "${ws_err}"
+    'marker missing' "${ws_outcome}" "${ws_out}" "${ws_err}"
   if [[ ${ws_rc} -eq 1 ]] &&
     grep --fixed-strings --quiet -- 'marker missing' "${ws_err}"; then
     pass 'whitespace-perturbed markers rejected (fail-closed, not false-green)'
@@ -100,7 +106,7 @@ function main() {
     fail "whitespace marker guard: expected exit 1 + 'marker missing', got exit ${ws_rc}"
     cat -- "${ws_err}" >&2
   fi
-  rm --force -- "${ws_backup}" "${ws_err}"
+  rm --force -- "${ws_backup}" "${ws_err}" "${ws_out}" "${ws_outcome}"
 
   harness_assert_verify || failures=$((failures + 1))
 

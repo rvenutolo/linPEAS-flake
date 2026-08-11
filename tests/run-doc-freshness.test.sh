@@ -25,7 +25,7 @@ failures=0
 # @arg $4 expected stdout substring (empty skips)
 function run_scenario() {
   local -r name="$1" mode="$2" expected_exit="$3" expected_out="$4"
-  local work tests_dir out_file step_file
+  local work tests_dir out_file step_file outcome_file
   work="$(mktemp -d)"
   tests_dir="${work}/tests"
   mkdir -p "${tests_dir}"
@@ -55,11 +55,17 @@ function run_scenario() {
 
   out_file="$(mktemp)"
   step_file="$(mktemp)"
+  outcome_file="$(mktemp)"
   local actual_exit=0
   TESTS_DIR_OVERRIDE="${tests_dir}" \
     GITHUB_STEP_SUMMARY="${step_file}" \
     "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
-  harness_assert_record "${name}" "${expected_out}" "${out_file}" "${step_file}"
+  # The record is the whole observable outcome. Both streams already land in
+  # one file here, so the record is the exit code, that combined stream, and
+  # the step summary the runner wrote.
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${expected_out}" \
+    "${outcome_file}" "${out_file}" "${step_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${expected_exit}" "${actual_exit}" >&2
@@ -77,7 +83,7 @@ function run_scenario() {
   else
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
-  rm --recursive --force -- "${work}" "${out_file}" "${step_file}"
+  rm --recursive --force -- "${work}" "${out_file}" "${step_file}" "${outcome_file}"
 }
 
 function main() {

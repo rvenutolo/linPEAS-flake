@@ -36,7 +36,10 @@ function fail() {
 }
 
 function main() {
-  local stderr_file actual_exit
+  # Each record is the whole observable outcome — exit code, stdout, stderr
+  # — so a scenario that differs from a sibling only in how it ended still
+  # reads as a distinct observation.
+  local stderr_file stdout_file outcome_file actual_exit
 
   # Assertion 1: committed doc is fresh — --check exits 0 (round-trip).
   if "${SCRIPT}" --check >/dev/null 2>&1; then
@@ -49,13 +52,17 @@ function main() {
   # the END marker (inside the managed block) so the committed doc
   # diverges from the freshly generated block; expect exit 1 + message.
   stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
   actual_exit=0
   awk '
     /^<!-- END flake-show -->$/ { print "CORRUPTED-BY-HARNESS" }
     { print }
   ' "${BACKUP}" >"${DOC}"
-  "${SCRIPT}" --check >/dev/null 2>"${stderr_file}" || actual_exit=$?
-  harness_assert_record 'stale block detected' 'is stale' "${stderr_file}"
+  "${SCRIPT}" --check >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record 'stale block detected' 'is stale' \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
   if [[ ${actual_exit} -eq 1 ]] &&
     grep --fixed-strings --quiet -- 'is stale' "${stderr_file}"; then
     pass 'stale block detected (--check exit 1 + stale message)'
@@ -64,17 +71,20 @@ function main() {
     cat -- "${stderr_file}" >&2
   fi
   cp -- "${BACKUP}" "${DOC}"
-  rm --force -- "${stderr_file}"
+  rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
 
   # Assertion 3: missing BEGIN marker → exit 1 + marker message. The
   # guard fires before any nix eval.
   stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
   actual_exit=0
   grep --invert-match --fixed-strings -- '<!-- BEGIN flake-show -->' \
     "${BACKUP}" >"${DOC}"
-  "${SCRIPT}" --check >/dev/null 2>"${stderr_file}" || actual_exit=$?
+  "${SCRIPT}" --check >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
   harness_assert_record 'missing BEGIN marker detected' \
-    'BEGIN marker missing' "${stderr_file}"
+    'BEGIN marker missing' "${outcome_file}" "${stdout_file}" "${stderr_file}"
   if [[ ${actual_exit} -eq 1 ]] &&
     grep --fixed-strings --quiet -- 'BEGIN marker missing' "${stderr_file}"; then
     pass 'missing BEGIN marker detected (--check exit 1 + marker message)'
@@ -83,7 +93,7 @@ function main() {
     cat -- "${stderr_file}" >&2
   fi
   cp -- "${BACKUP}" "${DOC}"
-  rm --force -- "${stderr_file}"
+  rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
 
   # Assertion 4: the generator no longer discards nix stderr.
   if grep -Eq 'nix flake show .*2>[[:space:]]*/dev/null' "${SCRIPT}"; then
@@ -103,12 +113,15 @@ function main() {
   # BEGIN guard and produce the same diagnostic as the missing-BEGIN
   # scenario above, leaving the END guard unexercised.
   stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
   actual_exit=0
   sed -e 's/^<!-- END flake-show -->$/<!-- END flake-show --> /' \
     "${BACKUP}" >"${DOC}"
-  "${SCRIPT}" --check >/dev/null 2>"${stderr_file}" || actual_exit=$?
+  "${SCRIPT}" --check >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
   harness_assert_record 'whitespace-perturbed END marker rejected' \
-    'END marker missing' "${stderr_file}"
+    'END marker missing' "${outcome_file}" "${stdout_file}" "${stderr_file}"
   if [[ ${actual_exit} -eq 1 ]] &&
     grep --fixed-strings --quiet -- 'END marker missing' "${stderr_file}"; then
     pass 'whitespace-perturbed END marker rejected (fail-closed, not false-green)'
@@ -117,7 +130,7 @@ function main() {
     cat -- "${stderr_file}" >&2
   fi
   cp -- "${BACKUP}" "${DOC}"
-  rm --force -- "${stderr_file}"
+  rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
 
   # Assertion 6: the flake-show-fresh pre-commit hook must watch every
   # nix module flake.nix imports. The flake outputs this generator reads

@@ -114,17 +114,23 @@ function main() {
   # anchored guard fails closed with a marker-missing message.
   backup="$(mktemp)"
   ws_err="$(mktemp)"
+  ws_out="$(mktemp)"
+  ws_outcome="$(mktemp)"
   cp -- "${DOC}" "${backup}"
   sed -e 's/^<!-- BEGIN ci-summary -->$/<!-- BEGIN ci-summary --> /' \
     -e 's/^<!-- END ci-summary -->$/<!-- END ci-summary --> /' \
     "${backup}" >"${DOC}"
   local rc4=0
-  "${SCRIPT}" --check >/dev/null 2>"${ws_err}" || rc4=$?
+  "${SCRIPT}" --check >"${ws_out}" 2>"${ws_err}" || rc4=$?
   cp -- "${backup}" "${DOC}"
   rm --force -- "${backup}"
   backup=''
+  # The record is the whole observable outcome — exit code, stdout, stderr —
+  # so a scenario that differs from a sibling only in how it ended still
+  # reads as a distinct observation.
+  printf 'harness-assert-outcome: exit=%d\n' "${rc4}" >"${ws_outcome}"
   harness_assert_record 'whitespace-perturbed markers rejected' \
-    'marker missing' "${ws_err}"
+    'marker missing' "${ws_outcome}" "${ws_out}" "${ws_err}"
   if [[ ${rc4} -eq 1 ]] &&
     grep --fixed-strings --quiet -- 'marker missing' "${ws_err}"; then
     pass 'whitespace-perturbed markers rejected (fail-closed, not false-green)'
@@ -132,7 +138,7 @@ function main() {
     fail "whitespace marker guard: expected exit 1 + 'marker missing', got exit ${rc4}"
     cat -- "${ws_err}" >&2
   fi
-  rm --force -- "${ws_err}"
+  rm --force -- "${ws_err}" "${ws_out}" "${ws_outcome}"
 
   harness_assert_verify || failures=$((failures + 1))
 
