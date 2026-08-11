@@ -57,15 +57,6 @@ function run_scenario() {
 }
 
 function main() {
-  # The bad-multiple fixture deliberately drifts default_workflow_permissions
-  # alongside two other settings, so the single-setting fixture's drift line is
-  # byte-identical to one of the three lines bad-multiple emits. The assertion
-  # still separates this scenario from the passing fixture and from every other
-  # single-drift fixture.
-  harness_assert_exempt 'default_workflow_permissions drift: got write, want read' \
-    'multiple simultaneous drifts surface all' \
-    'the multi-drift fixture includes this same drift by design'
-
   run_scenario 'matching fixtures pass' \
     'good' 0 ''
   run_scenario 'secret-scanning disabled fails' \
