@@ -19,7 +19,7 @@ failures=0
 # @description Run the script with a fixture; assert exit code and stderr.
 # @arg $1 scenario name
 # @arg $2 fixture filename under FIXTURES
-# @arg $3 expected exit code (0 or 1)
+# @arg $3 expected exit code (0 pass, 1 drift, 2 tooling error)
 # @arg $4 expected stderr substring (empty string skips the check)
 function run_scenario() {
   local -r name="$1"
@@ -57,8 +57,11 @@ function run_scenario() {
 function main() {
   run_scenario 'good ruleset passes' \
     'good-ruleset.json' 0 ''
+  # Asserted through the have-list: the bare `missing rule: deletion` prefix
+  # also opens the empty-rules diagnostic below, so it cannot tell a ruleset
+  # that dropped one rule from one that reports no rules at all.
   run_scenario 'missing deletion rule fails' \
-    'bad-no-deletion-rule.json' 1 'missing rule: deletion'
+    'bad-no-deletion-rule.json' 1 'missing rule: deletion (have: update'
   run_scenario 'disabled enforcement fails' \
     'bad-disabled.json' 1 'enforcement drift:'
   run_scenario 'wrong include pattern fails' \
@@ -71,6 +74,11 @@ function main() {
     'bad-name-drift.json' 1 'name drift'
   run_scenario 'wrong target fails' \
     'bad-target-drift.json' 1 'target drift'
+  run_scenario 'empty rules list is drift, not a tooling error' \
+    'bad-rules-empty.json' 1 'missing rule: deletion (have: )'
+  run_scenario 'non-array rules is a tooling error' \
+    'bad-rules-wrong-type.json' 2 \
+    'release-tag-protection ruleset: could not read .rules[].type'
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then

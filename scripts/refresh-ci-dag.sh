@@ -5,7 +5,7 @@
 # docs/architecture/ci-dag.md from .github/workflows/ci.yml plus the
 # docs/_data/ci-check-categories.yml map.
 # @option --check exit 1 if the doc would change; exit 2 if ci.yml has
-# needs: references to non-existent jobs
+# needs: references to non-existent jobs, or if a tool fails to read them
 
 # Replace the content between <!-- BEGIN ci-dag --> and <!-- END ci-dag -->
 # in docs/architecture/ci-dag.md with a mermaid `flowchart TD` of the
@@ -16,7 +16,8 @@
 # Usage:
 #   scripts/refresh-ci-dag.sh           # mutate the doc in place
 #   scripts/refresh-ci-dag.sh --check   # exit 1 if doc would change;
-#                                       # exit 2 on dangling needs:
+#                                       # exit 2 on dangling needs: or on
+#                                       # a tool failure reading the jobs
 #
 # Env overrides (for tests):
 #   CI_WORKFLOW_OVERRIDE      path to ci.yml
@@ -119,21 +120,37 @@ function main() {
     exit 2
   fi
 
+  # Capture jq's output (and exit status) into a variable rather than
+  # feeding the loop from `< <(jq ... | sort)`: a process substitution's
+  # exit status is not propagated under set -Eeuo pipefail, and a
+  # trailing pipe masks it further, so a jq failure would yield empty
+  # loop input and render a silently truncated graph.
+  local job_keys
+  if ! job_keys="$(jq --raw-output 'keys[]' "${jobs_file}")"; then
+    log_err "${workflow}: could not read job keys with jq (malformed job map?)"
+    exit 2
+  fi
+  job_keys="$(sort <<<"${job_keys}")"
+
   # Build the category lookup file: lines of "<job><TAB><classKey>",
   # sorted by job. Jobs absent from the map (or whose category isn't in
-  # CAT_TO_CLASS) fall through to "aux".
+  # CAT_TO_CLASS) fall through to "aux". A workflow with no jobs at all
+  # yields an empty capture; the guard keeps that from entering the loop
+  # as one empty-string iteration.
   {
     local job cat cls
-    while IFS= read -r job; do
-      [[ -z ${job} ]] && continue
-      cat="$(yq ".\"${job}\" // \"\"" "${cat_map}")"
-      if [[ -z ${cat} || ${cat} == 'null' ]]; then
-        cls='aux'
-      else
-        cls="${CAT_TO_CLASS[${cat}]:-aux}"
-      fi
-      printf '%s\t%s\n' "${job}" "${cls}"
-    done < <(jq --raw-output 'keys[]' "${jobs_file}" | sort)
+    if [[ -n ${job_keys} ]]; then
+      while IFS= read -r job; do
+        [[ -z ${job} ]] && continue
+        cat="$(yq ".\"${job}\" // \"\"" "${cat_map}")"
+        if [[ -z ${cat} || ${cat} == 'null' ]]; then
+          cls='aux'
+        else
+          cls="${CAT_TO_CLASS[${cat}]:-aux}"
+        fi
+        printf '%s\t%s\n' "${job}" "${cls}"
+      done <<<"${job_keys}"
+    fi
   } >"${cats_file}"
 
   # Render the block.

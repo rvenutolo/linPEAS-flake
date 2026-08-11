@@ -3,8 +3,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
-readonly SCRIPT="${REPO_ROOT}/scripts/check-no-yq-procsub.sh"
-readonly FIXTURES="${REPO_ROOT}/tests/fixtures/no-yq-procsub"
+readonly SCRIPT="${REPO_ROOT}/scripts/check-no-parser-procsub.sh"
+readonly FIXTURES="${REPO_ROOT}/tests/fixtures/no-parser-procsub"
 
 function expect() {
   local -r dir_override="$1" want_exit="$2" want_msg="$3" label="$4"
@@ -25,7 +25,8 @@ function expect() {
   printf 'OK   %s\n' "${label}"
 }
 
-expect "${FIXTURES}/bad" 1 "process substitution" "bad"
+expect "${FIXTURES}/bad" 1 "done < <(yq eval" "bad-yq"
+expect "${FIXTURES}/bad-jq" 1 "done < <(jq --raw-output" "bad-jq"
 expect "${FIXTURES}/good" 0 "" "good"
 expect "" 0 "" "real scripts/"
 

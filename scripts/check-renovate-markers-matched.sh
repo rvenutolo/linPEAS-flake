@@ -15,7 +15,10 @@
 # heuristic.
 #
 # Honors RENOVATE_JSON_OVERRIDE (config path) and SCAN_ROOT (tree root) for
-# fixture testing. Exits 0 when every marker is live, 1 on any dead marker.
+# fixture testing. Exits 0 when every marker is live, 1 on any dead marker,
+# 2 on a tooling error — jq cannot read a customManager's declarations, so
+# no verdict about the markers is available and reporting one would blame a
+# marker for a config-shape problem.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -49,7 +52,25 @@ readonly num_managers
 # @arg $2 repo-relative file path
 function file_pattern_matches() {
   local -r idx="$1" rel="$2"
-  local pat
+  local patterns pat
+
+  # Capture jq's output (and exit status) into a variable rather than feeding
+  # the loop from `< <(jq ...)`: a process substitution's exit status is not
+  # propagated under set -Eeuo pipefail, so a jq failure (managerFilePatterns
+  # holding a string instead of an array, say) would yield empty input, the
+  # function would answer "no match", and every marked file would be reported
+  # as a dead marker — sending the operator to fix markers that are fine.
+  if ! patterns="$(jq -r ".customManagers[${idx}].managerFilePatterns // [] | .[]" "${RENOVATE_JSON}")"; then
+    printf 'renovate config: could not read customManagers[%s].managerFilePatterns\n' "${idx}" >&2
+    exit 2
+  fi
+
+  # No patterns at all. Returning here keeps the empty capture from becoming
+  # one empty-string iteration of the `<<<` loop below.
+  if [[ -z ${patterns} ]]; then
+    return 1
+  fi
+
   while IFS= read -r pat; do
     [[ -z ${pat} ]] && continue
     pat="${pat#/}"
@@ -57,7 +78,7 @@ function file_pattern_matches() {
     if printf '%s' "${rel}" | grep --quiet --perl-regexp -- "${pat}"; then
       return 0
     fi
-  done < <(jq -r ".customManagers[${idx}].managerFilePatterns // [] | .[]" "${RENOVATE_JSON}")
+  done <<<"${patterns}"
   return 1
 }
 
@@ -69,13 +90,28 @@ function file_pattern_matches() {
 # @arg $2 absolute file path
 function match_string_hits_file() {
   local -r idx="$1" file="$2"
-  local ms
+  local strings ms
+
+  # Same capture-into-a-variable reason as file_pattern_matches: a process
+  # substitution would swallow jq's exit status and turn a config-shape error
+  # into a false "dead marker" verdict.
+  if ! strings="$(jq -r ".customManagers[${idx}].matchStrings // [] | .[]" "${RENOVATE_JSON}")"; then
+    printf 'renovate config: could not read customManagers[%s].matchStrings\n' "${idx}" >&2
+    exit 2
+  fi
+
+  # No match strings at all. Returning here keeps the empty capture from
+  # becoming one empty-string iteration of the `<<<` loop below.
+  if [[ -z ${strings} ]]; then
+    return 1
+  fi
+
   while IFS= read -r ms; do
     [[ -z ${ms} ]] && continue
     if grep --quiet --perl-regexp -- "${ms}" "${file}"; then
       return 0
     fi
-  done < <(jq -r ".customManagers[${idx}].matchStrings // [] | .[]" "${RENOVATE_JSON}")
+  done <<<"${strings}"
   return 1
 }
 

@@ -18,7 +18,7 @@ failures=0
 
 # @arg $1 scenario name
 # @arg $2 fixture subdir
-# @arg $3 expected exit
+# @arg $3 expected exit (0 pass, 1 drift, 2 tooling error)
 # @arg $4 expected stderr substring (empty skips)
 function run_scenario() {
   local -r name="$1"
@@ -82,6 +82,11 @@ function main() {
     'bad-target-drift' 1 'target drift'
   run_scenario 'ref_name include drift fails' \
     'bad-ref-name-drift' 1 'conditions.ref_name.include drift'
+  run_scenario 'empty rules list is drift, not a tooling error' \
+    'bad-rules-empty' 1 'missing rule: deletion (have: )'
+  run_scenario 'non-array rules is a tooling error' \
+    'bad-rules-wrong-type' 2 \
+    'protect-main ruleset: could not read .rules[].type'
 
   # The no-op-ruleset guard (fetch_ruleset hard-fails when the live
   # ruleset id is empty) is unreachable through run_scenario, which always

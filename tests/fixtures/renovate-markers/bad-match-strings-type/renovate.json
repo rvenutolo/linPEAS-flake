@@ -1,0 +1,9 @@
+{
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^app\\.yml$/"],
+      "matchStrings": "app:v(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+    }
+  ]
+}
