@@ -15,16 +15,38 @@ readonly SCRIPT="${REPO_ROOT}/scripts/docs-audit-pressure.sh"
 failures=0
 
 # @description Build a throwaway git repo with workflows + lint-groups, run
-#              the script against it, assert exit code and stdout contents.
+#              the script against it ONCE, and record that invocation as a
+#              single scenario carrying every asserted substring. Running the
+#              script again per asserted property would produce byte-identical
+#              sibling records, which no substring can separate. A substring
+#              that must be ABSENT asserts nothing about the output, so it
+#              stays a local check and contributes no record.
 # @arg $1 scenario name
 # @arg $2 expected exit code
-# @arg $3 expected stdout substring (empty skips)
-# @arg $4 substring that must NOT appear in stdout (empty skips)
+# @arg $@ `--expect <substring>` (must appear in stdout) and
+#         `--forbid <substring>` (must not appear), each repeatable
 function run_scenario() {
   local -r name="$1"
   local -r expected_exit="$2"
-  local -r expect_sub="$3"
-  local -r forbid_sub="$4"
+  shift 2
+
+  local -a expect_subs=() forbid_subs=()
+  while (($#)); do
+    case "$1" in
+    --expect)
+      expect_subs+=("$2")
+      shift 2
+      ;;
+    --forbid)
+      forbid_subs+=("$2")
+      shift 2
+      ;;
+    *)
+      printf 'FAIL: %s — run_scenario got unknown argument %q\n' "${name}" "$1" >&2
+      exit 1
+      ;;
+    esac
+  done
 
   local out_file actual_exit=0
   out_file="$(mktemp)"
@@ -33,7 +55,12 @@ function run_scenario() {
     WORKFLOWS_DIR_OVERRIDE="${WF_DIR}" \
     LINT_GROUPS_OVERRIDE="${LG_FILE}" \
     "${SCRIPT}" >"${out_file}" 2>/dev/null || actual_exit=$?
-  harness_assert_record "${name}" "${expect_sub}" "${out_file}"
+
+  local sub
+  harness_assert_record "${name}" "${expect_subs[0]-}" "${out_file}"
+  for sub in "${expect_subs[@]:1}"; do
+    harness_assert_also "${sub}"
+  done
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${expected_exit}" "${actual_exit}" >&2
@@ -41,18 +68,22 @@ function run_scenario() {
     failures=$((failures + 1))
     return
   fi
-  if [[ -n ${expect_sub} ]] && ! grep --fixed-strings --quiet -- "${expect_sub}" "${out_file}"; then
-    printf 'FAIL: %s — stdout missing %q\n' "${name}" "${expect_sub}" >&2
-    cat -- "${out_file}" >&2
-    failures=$((failures + 1))
-    return
-  fi
-  if [[ -n ${forbid_sub} ]] && grep --fixed-strings --quiet -- "${forbid_sub}" "${out_file}"; then
-    printf 'FAIL: %s — stdout must not contain %q\n' "${name}" "${forbid_sub}" >&2
-    cat -- "${out_file}" >&2
-    failures=$((failures + 1))
-    return
-  fi
+  for sub in "${expect_subs[@]}"; do
+    if ! grep --fixed-strings --quiet -- "${sub}" "${out_file}"; then
+      printf 'FAIL: %s — stdout missing %q\n' "${name}" "${sub}" >&2
+      cat -- "${out_file}" >&2
+      failures=$((failures + 1))
+      return
+    fi
+  done
+  for sub in "${forbid_subs[@]}"; do
+    if grep --fixed-strings --quiet -- "${sub}" "${out_file}"; then
+      printf 'FAIL: %s — stdout must not contain %q\n' "${name}" "${sub}" >&2
+      cat -- "${out_file}" >&2
+      failures=$((failures + 1))
+      return
+    fi
+  done
   printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
 }
 
@@ -80,17 +111,17 @@ function make_sandbox() {
 # --- scenario: quiet window -> pressure 0 ---
 make_sandbox
 cd "${SANDBOX}"
-run_scenario 'quiet window reports zero pressure' 0 'PRESSURE=0' ''
+run_scenario 'quiet window reports zero pressure' 0 --expect 'PRESSURE=0'
 
 # --- scenario: job added inside window ---
+# One report renders the added job, raises the pressure count, and keeps the
+# commit subject out of the body, so one invocation asserts all three.
 printf 'name: a\njobs:\n  build:\n    runs-on: x\n  publish:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
 git -C "${SANDBOX}" add -A
 git -C "${SANDBOX}" commit --quiet -m 'ci: add publish job'
-run_scenario 'job added is reported' 0 'publish' ''
-run_scenario 'non-zero pressure reported' 0 'PRESSURE=1' 'PRESSURE=0'
-
-# --- scenario: commit subjects never leak into the body ---
-run_scenario 'commit subject absent from body' 0 '' 'ci: add publish job'
+run_scenario 'job added is reported with non-zero pressure' 0 \
+  --expect 'publish' --expect 'PRESSURE=1' \
+  --forbid 'PRESSURE=0' --forbid 'ci: add publish job'
 
 # --- scenario: lint-group member added ---
 # Each step also reverts the previous step's addition, so every sandbox state
@@ -99,18 +130,18 @@ printf 'name: a\njobs:\n  build:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
 printf 'lint-a:\n  - alpha\n  - beta\n' >"${LG_FILE}"
 git -C "${SANDBOX}" add -A
 git -C "${SANDBOX}" commit --quiet -m 'ci: add beta member'
-run_scenario 'lint-group member added is reported' 0 'beta' ''
+run_scenario 'lint-group member added is reported' 0 --expect 'beta'
 
 # --- scenario: malformed job id dropped from body ---
 printf 'lint-a:\n  - alpha\n' >"${LG_FILE}"
 printf 'name: a\njobs:\n  build:\n    runs-on: x\n  "Bad Job":\n    runs-on: x\n' >"${WF_DIR}/a.yml"
 git -C "${SANDBOX}" add -A
 git -C "${SANDBOX}" commit --quiet -m 'ci: add malformed job'
-run_scenario 'malformed job id dropped from body' 0 '' 'Bad Job'
+run_scenario 'malformed job id dropped from body' 0 --forbid 'Bad Job'
 
 # --- scenario: missing workflows dir -> exit 2 ---
 WF_DIR="${SANDBOX}/nope"
-run_scenario 'missing workflows dir fails loudly' 2 '' ''
+run_scenario 'missing workflows dir fails loudly' 2
 
 # @description Fresh sandbox whose backdated baseline already contains the
 #              job + member that within-window commits then remove, so the
@@ -142,12 +173,13 @@ function make_removal_sandbox() {
 }
 
 # --- scenario: job + member removed inside window ---
+# One report carries both removal sections and both removed identifiers, so
+# one invocation asserts each heading and the id rendered beneath it.
 make_removal_sandbox
 cd "${SANDBOX}"
-run_scenario 'removed job is reported' 0 'Jobs removed:' ''
-run_scenario 'removed job id rendered' 0 'oldjob' ''
-run_scenario 'removed member is reported' 0 'Lint-group members removed:' ''
-run_scenario 'removed member id rendered' 0 'gamma' ''
+run_scenario 'removed job and member are reported' 0 \
+  --expect 'Jobs removed:' --expect 'oldjob' \
+  --expect 'Lint-group members removed:' --expect 'gamma'
 
 cd "${REPO_ROOT}"
 
