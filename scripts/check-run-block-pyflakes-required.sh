@@ -15,26 +15,57 @@
 #   PYFLAKES_GUARD_SCAN_ROOT_OVERRIDE — alternate directory tree
 #     containing workflow/action YAML files (overrides the default
 #     repo-root .github/ scan).
+#   LINT_ALLOW_EMPTY_SCAN — set to 1 to accept an empty scan set.
 #
-# Exits 0 on clean, 1 if any python invocation found.
+# Exits 0 on clean, 1 if any python invocation found, 2 when the scan set
+# could not be enumerated or came back empty.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly RUNBOOK="docs/actionlint-embedded-linters.md"
 
+# The enumeration is captured rather than piped straight into `mapfile`,
+# which reports the status of `mapfile` and never of `find`. A scan root
+# that is not there makes `find` exit 1 with no paths on stdout, and the
+# breadth line below then states `scanned 0 workflow file(s)` at exit 0 —
+# a report of how little was read, printed as though it were a verdict on
+# what was read. Both a failed producer and an empty one are could-not-run
+# here, so each gets its own diagnostic.
+declare -a files=()
+scan_out=""
 if [[ -n ${PYFLAKES_GUARD_SCAN_ROOT_OVERRIDE:-} ]]; then
-  mapfile -t files < <(
-    find "${PYFLAKES_GUARD_SCAN_ROOT_OVERRIDE}" \
-      -type f \( -name '*.yml' -o -name '*.yaml' \) -print
-  )
+  scan_root="${PYFLAKES_GUARD_SCAN_ROOT_OVERRIDE}"
+  if ! scan_out="$(find "${scan_root}" \
+    -type f \( -name '*.yml' -o -name '*.yaml' \) -print)"; then
+    printf 'run-block-pyflakes: find failed enumerating %s\n' "${scan_root}" >&2
+    exit 2
+  fi
 else
   repo_root="$(git rev-parse --show-toplevel)"
-  mapfile -t files < <(
-    find "${repo_root}/.github/workflows" \
-      "${repo_root}/.github/actions" \
-      -type f \( -name '*.yml' -o -name '*.yaml' \) -print 2>/dev/null
-  )
+  scan_root="${repo_root}/.github"
+  # Each root is scanned only when it is there, so a repo carrying
+  # workflows and no composite actions is not a tooling failure.
+  for root in "${repo_root}/.github/workflows" "${repo_root}/.github/actions"; do
+    [[ -d ${root} ]] || continue
+    if ! root_out="$(find "${root}" \
+      -type f \( -name '*.yml' -o -name '*.yaml' \) -print)"; then
+      printf 'run-block-pyflakes: find failed enumerating %s\n' "${root}" >&2
+      exit 2
+    fi
+    scan_out+="${root_out}"$'\n'
+  done
+fi
+# An empty capture read by `<<<` still yields one empty line, so blank
+# entries are dropped here and the count below is of real paths.
+while IFS= read -r scanned_path; do
+  [[ -z ${scanned_path} ]] && continue
+  files+=("${scanned_path}")
+done <<<"${scan_out}"
+if ((${#files[@]} == 0)) && [[ -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
+  printf 'run-block-pyflakes: enumerated 0 workflow file(s) under %s — with nothing read the guard has no verdict to give; set LINT_ALLOW_EMPTY_SCAN=1 if this scan root is deliberately empty\n' \
+    "${scan_root}" >&2
+  exit 2
 fi
 
 # Heuristic: look for python/python3/pip used as an *invoked
