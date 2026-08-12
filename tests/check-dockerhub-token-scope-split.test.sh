@@ -144,6 +144,31 @@ function main() {
     'bad-unsuffixed.yaml: secrets.DOCKERHUB_TOKEN is not authoritative'
   rm --recursive --force -- "${dir}"
 
+  # A workflow the suffix scan listed but grep could not read. grep exits 2
+  # there, and scoring that as "this file names no DOCKERHUB_TOKEN" clears
+  # the file of every suffix violation it carries. The lever needs a
+  # permission bit, so it reproduces only where the run is not privileged
+  # enough to read a mode-000 file; the guard is what makes the failure
+  # legible wherever it does reproduce.
+  dir="$(mktemp --directory)"
+  write_baseline "${dir}"
+  # shellcheck disable=SC2016 # literal GH Actions ${{ }} expression, not shell expansion
+  printf '      - env:\n          Y: ${{ secrets.DOCKERHUB_TOKEN }}\n' \
+    >>"${dir}/release-on-bump.yml"
+  chmod 000 -- "${dir}/release-on-bump.yml"
+  assert_run 'unreadable workflow is a could-not-run' "${dir}" 2 \
+    'grep failed reading'
+  chmod 644 -- "${dir}/release-on-bump.yml"
+  rm --recursive --force -- "${dir}"
+
+  # A workflows dir that is there but holds no YAML leaves the suffix scan
+  # with nothing to read, and the run would otherwise exit 0 having asserted
+  # nothing about any suffix.
+  dir="$(mktemp --directory)"
+  assert_run 'workflows dir with no YAML is a could-not-run' "${dir}" 2 \
+    'holds 0 workflow file(s)'
+  rm --recursive --force -- "${dir}"
+
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
