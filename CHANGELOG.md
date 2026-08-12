@@ -6,6 +6,11 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## Unreleased
+
+### Fixes
+- Correct a frozen changelog typo and spell-check PR titles ([#669](https://github.com/rvenutolo/linPEAS-flake/pull/669))
+
 ## [20260811-05318383] - 2026-08-12
 
 ### CI
@@ -50,7 +55,7 @@ repo is not on a semver track.
 - Force package values in declared-systems guard ([#613](https://github.com/rvenutolo/linPEAS-flake/pull/613))
 - Catch one-sided registry rollback in weekly verify ([#612](https://github.com/rvenutolo/linPEAS-flake/pull/612))
 - Pin identity on every cosign verify subcommand ([#610](https://github.com/rvenutolo/linPEAS-flake/pull/610))
-- Fail loud on unparseable YAML in workflow lints; ban yq procsub idiom ([#606](https://github.com/rvenutolo/linPEAS-flake/pull/606))
+- Fail loud on unparsable YAML in workflow lints; ban yq procsub idiom ([#606](https://github.com/rvenutolo/linPEAS-flake/pull/606))
 - Scan .yaml workflows and all on: shapes in enforcement lints ([#605](https://github.com/rvenutolo/linPEAS-flake/pull/605))
 - Honor lock .root field in flake.lock provenance gate ([#604](https://github.com/rvenutolo/linPEAS-flake/pull/604))
 - Harden pin digest gate and document follows resolution ([#601](https://github.com/rvenutolo/linPEAS-flake/pull/601))
