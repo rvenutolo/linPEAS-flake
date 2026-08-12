@@ -102,14 +102,10 @@ for f in "${paths[@]}"; do
   esac
 
   # Walk lines via awk, capture hits, then attribute to file with $f.
-  # Use process substitution so the read loop runs in the parent shell
-  # and the failed counter survives.
-  while IFS= read -r hit; do
-    # shellcheck disable=SC2016 # literal backticks in human-readable prose
-    printf '%s: unpinned bare `nixpkgs#<pkg>` flake ref; got: %s\n' \
-      "${f}" "${hit}" >&2
-    failed=$((failed + 1))
-  done < <(awk -v mode="${mode}" -v rx="${BAD_REGEX}" '
+  # The capture is what makes awk's exit status reach this shell: fed
+  # through a process substitution instead, a dead awk would hand the
+  # loop an empty stream and the file would score as clean.
+  if ! hits="$(awk -v mode="${mode}" -v rx="${BAD_REGEX}" '
     BEGIN { in_fence = 0; fence_lang = "" }
     {
       line = $0
@@ -144,7 +140,17 @@ for f in "${paths[@]}"; do
         }
       }
     }
-  ' "${f}")
+  ' "${f}")"; then
+    printf '%s: awk failed scanning %s for flake refs\n' "${0##*/}" "${f}" >&2
+    exit 2
+  fi
+  while IFS= read -r hit; do
+    [[ -z ${hit} ]] && continue
+    # shellcheck disable=SC2016 # literal backticks in human-readable prose
+    printf '%s: unpinned bare `nixpkgs#<pkg>` flake ref; got: %s\n' \
+      "${f}" "${hit}" >&2
+    failed=$((failed + 1))
+  done <<<"${hits}"
 done
 
 if ((failed > 0)); then

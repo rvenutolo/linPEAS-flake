@@ -141,16 +141,10 @@ done <<<"${step_ids}"
 # counts, which keeps the exemption visually attached to the step it
 # exempts.
 declare -A EXEMPT=()
-while IFS=$'\t' read -r id rationale; do
-  [[ -z ${id} ]] && continue
-  if [[ -z ${rationale} ]]; then
-    printf '%s: reason-ladder-exempt marker on step id %q carries no rationale\n' \
-      "${WORKFLOW}" "${id}" >&2
-    drift=1
-    continue
-  fi
-  EXEMPT["${id}"]=1
-done < <(awk -v marker="${EXEMPT_MARKER}" '
+# The scan is captured so awk's exit status reaches this shell: a process
+# substitution runs in its own subshell, so a dead awk would hand the loop
+# an empty stream and every exemption marker in the file would go unread.
+if ! exempt_rows="$(awk -v marker="${EXEMPT_MARKER}" '
   $0 ~ ("^[[:space:]]*id:[[:space:]]*[^[:space:]#]+[[:space:]]*#.*" marker) {
     line = $0
     sub(/^[[:space:]]*id:[[:space:]]*/, "", line)
@@ -161,7 +155,21 @@ done < <(awk -v marker="${EXEMPT_MARKER}" '
     sub(/[[:space:]]+$/, "", rationale)
     printf "%s\t%s\n", id, rationale
   }
-' "${WORKFLOW}")
+' "${WORKFLOW}")"; then
+  printf '%s: awk failed scanning for reason-ladder-exempt markers\n' \
+    "${WORKFLOW}" >&2
+  exit 2
+fi
+while IFS=$'\t' read -r id rationale; do
+  [[ -z ${id} ]] && continue
+  if [[ -z ${rationale} ]]; then
+    printf '%s: reason-ladder-exempt marker on step id %q carries no rationale\n' \
+      "${WORKFLOW}" "${id}" >&2
+    drift=1
+    continue
+  fi
+  EXEMPT["${id}"]=1
+done <<<"${exempt_rows}"
 
 # --- attribution env block -------------------------------------------
 # env var NAME -> the step id its `${{ steps.<id>.outcome }}` value
@@ -250,13 +258,24 @@ done
 # `reason='ok'` is the no-failure initializer, not an attributed
 # outcome, so the doc is not expected to carry it.
 reason_tokens=()
+# grep's status is read three ways here for the same reason it is above:
+# no assignment in the body (1) is data, but a grep that could not run
+# (2) fed through a process substitution would empty this list and the
+# parity assertion would pass having compared nothing.
+reason_status=0
+reason_matches="$(grep --only-matching --extended-regexp -- \
+  "reason='[^']*'" <<<"${ladder_body}")" || reason_status=$?
+if ((reason_status > 1)); then
+  printf '%s: grep failed extracting reason tokens from the ladder body\n' \
+    "${WORKFLOW}" >&2
+  exit 2
+fi
 while IFS= read -r assignment; do
   [[ -z ${assignment} ]] && continue
   token="${assignment#reason=\'}"
   token="${token%\'}"
   reason_tokens+=("${token}")
-done < <(grep --only-matching --extended-regexp -- \
-  "reason='[^']*'" <<<"${ladder_body}" || true)
+done <<<"${reason_matches}"
 
 if ((${#reason_tokens[@]} > 0)) && [[ ${reason_tokens[0]} == 'ok' ]]; then
   reason_tokens=("${reason_tokens[@]:1}")
