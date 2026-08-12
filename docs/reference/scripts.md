@@ -389,19 +389,14 @@ explicit commit pin.
 
 ### scripts/check-no-opaque-procsub.sh
 
-Lint: no scripts/\*.sh may feed a redirection from a
-process substitution whose producer's exit status is opaque to the
-consumer. A substitution runs in its own subshell, so `set -Eeuo pipefail` only ever sees the status of the command the redirection
+Lint: no scripts/\*.sh feeds a redirection from a process
+substitution. A substitution runs in its own subshell, so `set -Eeuo pipefail` only ever sees the status of the command the redirection
 feeds — never the producer's. A failed producer hands the consumer
 empty output to score as data: either a clean pass that flags nothing
 (fail-open) or a substantive violation the input never showed (a
-tooling fault misdiagnosed as drift). Two producer shapes are banned:
-
-1. Parser producer — `< <(yq ...)`, `< <(jq ...)`.
-1. Function producer — `< <(f)`, `< <(f "$x")`, where `f` is a
-    function the same file defines. The ban is by producer name, not
-    by producer body, so the rule stays decidable in a single textual
-    pass and holds for whatever commands the function comes to run.
+tooling fault misdiagnosed as drift). That property holds for whatever
+the producer is, so the rule does not ask: every `< <(...)` is a hit,
+with no exemption.
 
 `diff <(...) <(...)` stays legal: diff consumes both substitutions as
 file arguments and its own exit status is what the caller acts on, so
