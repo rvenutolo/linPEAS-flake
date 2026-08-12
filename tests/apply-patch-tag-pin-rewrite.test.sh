@@ -223,4 +223,67 @@ if [[ ${absent_err} != *"inventory not found"* ]]; then
   exit 1
 fi
 
+# --- Test 10: an inventory that exists but cannot be read is a tooling error ---
+# Existence and readability are different questions, and only the first is
+# asked before the rows are pulled. An unreadable inventory carrying the very
+# API_FAILURE row that aborts a readable run instead completed at exit 0
+# reporting `done: 0 applied, 0 skipped` — the rejection never happened and
+# nothing said so.
+cp "${BEFORE}" "${WORK}/unreadable.yml"
+INV_UNREADABLE="${WORK}/unreadable-inventory.tsv"
+{
+  printf 'file\tline\tref\tpinned_sha\tcurrent_comment\ttarget_comment\tstatus\n'
+  printf '%s\t4\tgithub/codeql-action/init\t03e4368ac7daa2bd82b3e85262f3bf87ee112f57\tv3\t\tAPI_FAILURE\n' \
+    "${WORK}/unreadable.yml"
+} >"${INV_UNREADABLE}"
+chmod 000 "${INV_UNREADABLE}"
+unreadable_exit=0
+unreadable_err="$(bash "${SCRIPT}" --inventory "${INV_UNREADABLE}" 2>&1)" || unreadable_exit=$?
+chmod 644 "${INV_UNREADABLE}"
+if ((unreadable_exit != 2)); then
+  printf 'FAIL: unreadable inventory should exit 2, got %d\n  stderr: %s\n' \
+    "${unreadable_exit}" "${unreadable_err}" >&2
+  exit 1
+fi
+if [[ ${unreadable_err} != *"inventory not readable"* ]]; then
+  printf 'FAIL: unreadable-inventory message missing\n  got: %s\n' "${unreadable_err}" >&2
+  exit 1
+fi
+
+# --- Test 11: an inventory with a header and no rows is a tooling error ---
+# A readable inventory that enumerated nothing produces the same completed
+# run an inventory of genuinely-compliant pins does, so the row count is
+# asserted rather than reported.
+INV_HEADER_ONLY="${WORK}/header-only-inventory.tsv"
+printf 'file\tline\tref\tpinned_sha\tcurrent_comment\ttarget_comment\tstatus\n' \
+  >"${INV_HEADER_ONLY}"
+header_only_exit=0
+header_only_err="$(bash "${SCRIPT}" --inventory "${INV_HEADER_ONLY}" 2>&1)" || header_only_exit=$?
+if ((header_only_exit != 2)); then
+  printf 'FAIL: header-only inventory should exit 2, got %d\n  stderr: %s\n' \
+    "${header_only_exit}" "${header_only_err}" >&2
+  exit 1
+fi
+if [[ ${header_only_err} != *"inventory carries no rows"* ]]; then
+  printf 'FAIL: header-only-inventory message missing\n  got: %s\n' "${header_only_err}" >&2
+  exit 1
+fi
+
+# --- Test 12: an empty inventory is accepted with the opt-in set ---
+# The breadth assertion fires on every run, so a caller that means to apply
+# an empty inventory says so rather than being told to stop.
+allow_empty_exit=0
+allow_empty_out="$(LINT_ALLOW_EMPTY_SCAN=1 bash "${SCRIPT}" \
+  --inventory "${INV_HEADER_ONLY}" 2>&1)" || allow_empty_exit=$?
+if ((allow_empty_exit != 0)); then
+  printf 'FAIL: header-only inventory with the opt-in should exit 0, got %d\n  output: %s\n' \
+    "${allow_empty_exit}" "${allow_empty_out}" >&2
+  exit 1
+fi
+if [[ ${allow_empty_out} != *"done: 0 applied, 0 skipped"* ]]; then
+  printf 'FAIL: opt-in empty run did not report a completed run\n  got: %s\n' \
+    "${allow_empty_out}" >&2
+  exit 1
+fi
+
 printf 'all tests passed\n'
