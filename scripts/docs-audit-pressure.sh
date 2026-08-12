@@ -60,7 +60,8 @@ function job_ids_at() {
   # enumeration asserts that itself via enumerate_into before the
   # YAML-extension filter below asserts it again on the filtered set.
   local -a tree_paths=()
-  enumerate_into tree_paths git ls-tree --name-only -z -r "${ref}" -- "${WORKFLOWS_DIR}"
+  enumerate_into tree_paths "git ls-tree ${WORKFLOWS_DIR} at ${ref}" \
+    git ls-tree --name-only -z -r "${ref}" -- "${WORKFLOWS_DIR}"
   local -a workflow_paths=()
   for path in "${tree_paths[@]}"; do
     [[ ${path} =~ \.ya?ml$ ]] || continue

@@ -60,6 +60,6 @@ function expect_empty_scan() {
   printf 'OK   empty-scan\n'
 }
 
-expect_empty_scan 2 "enumerated 0 files via git"
+expect_empty_scan 2 "enumerated 0 files via git ls-files"
 
 printf 'all tests passed\n'

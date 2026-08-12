@@ -66,7 +66,7 @@ if [[ -n ${PATHS_OVERRIDE:-} ]]; then
     paths+=("${p}")
   done <<<"${PATHS_OVERRIDE}"
 else
-  enumerate_into paths git ls-files -z -- \
+  enumerate_into paths 'git ls-files' git ls-files -z -- \
     '.github/workflows/*.yml' '.github/workflows/*.yaml' \
     '.github/actions/*.yml' '.github/actions/*.yaml' \
     '.github/actions/**/*.yml' '.github/actions/**/*.yaml' \

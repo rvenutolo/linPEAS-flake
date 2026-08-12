@@ -93,7 +93,7 @@ if [[ -n ${PATHS_OVERRIDE:-} ]]; then
     paths+=("${p}")
   done <<<"${PATHS_OVERRIDE}"
 else
-  enumerate_into paths git ls-files -z -- "${SCAN_GLOBS[@]}"
+  enumerate_into paths 'git ls-files' git ls-files -z -- "${SCAN_GLOBS[@]}"
 fi
 
 # Emits one line per invocation: `<status>\t<record>`, where status is

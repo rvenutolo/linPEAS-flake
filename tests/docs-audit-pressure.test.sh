@@ -166,12 +166,14 @@ run_scenario 'missing workflows dir fails loudly' 2
 # would render that as no jobs added and no jobs removed, and the summary
 # would report PRESSURE=0 — a metric that measured nothing, printed like
 # one that measured no drift. enumerate_into's breadth assertion is what
-# turns that empty list into a loud failure instead.
+# turns that empty list into a loud failure instead, and the caller
+# passes a label carrying the workflows dir and the ref it queried so the
+# diagnostic keeps naming both, the way the pre-enumerate_into message did.
 WF_DIR="${SANDBOX}/.github/untracked-workflows"
 mkdir -p "${WF_DIR}"
 printf 'name: a\njobs:\n  build:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
 run_scenario 'workflows dir tracked at no ref fails loudly' 2 \
-  --expect-err 'enumerated 0 files via git'
+  --expect-err "enumerated 0 files via git ls-tree ${WF_DIR} at"
 
 # @description Fresh sandbox whose backdated baseline already contains the
 #              job + member that within-window commits then remove, so the

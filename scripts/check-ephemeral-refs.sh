@@ -271,7 +271,7 @@ function main() {
       sources+=("${src}")
     done <<<"${EPHEMERAL_REFS_SOURCES_OVERRIDE}"
   else
-    enumerate_into sources ephemeral_refs_git_sources
+    enumerate_into sources 'git ls-files' ephemeral_refs_git_sources
   fi
 
   blocking_hits=0

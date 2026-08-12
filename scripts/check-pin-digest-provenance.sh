@@ -131,7 +131,7 @@ function load_base_file_list() {
   ((BASE_FILE_SET_LOADED)) && return 0
   local path
   local -a tree_paths=()
-  enumerate_into tree_paths git ls-tree -r --name-only -z "${BASE_REF}"
+  enumerate_into tree_paths "git ls-tree ${BASE_REF}" git ls-tree -r --name-only -z "${BASE_REF}"
   for path in "${tree_paths[@]}"; do
     if is_scanned_pin_file "${path}" || [[ ${path} == "${OCTOSCAN_FILE}" ]]; then
       BASE_FILE_SET["${path}"]=1

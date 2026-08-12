@@ -19,13 +19,25 @@
 # function exists to check, and is banned repo-wide for that reason. The
 # temp file is removed on every return path instead of under a trap,
 # because traps are global in bash and callers install their own.
+# The read loop's `|| [[ -n ${__enum_item} ]]` clause keeps a final
+# record that has no trailing NUL: `read -r -d ''` reports that record as
+# a failure even though it populated the variable, so a loop keyed only
+# on read's exit status silently drops the last path of a truncated or
+# malformed producer — the exact silent-drop failure this library exists
+# to end. `git ls-files -z` and `find -print0` both terminate every
+# record including the last, so this only fires on a broken producer.
 # @arg $1 name of the array to fill
+# @arg $2 human-readable label naming the producer, used verbatim in both
+#   diagnostics below. Callers supply this rather than it being derived
+#   from argv[0]: argv[0] of `git ls-files -z ...` is just `git`, and a
+#   same-file wrapper function's name is even less informative to an
+#   operator reading the message.
 # @arg $@ the producer command and its arguments
 # @exitcode 2 the producer failed, or the scan set was empty while
 #   LINT_ALLOW_EMPTY_SCAN was unset
 function enumerate_into() {
-  local -r __enum_target="$1"
-  shift
+  local -r __enum_target="$1" __enum_label="$2"
+  shift 2
   # Named distinctly so a caller passing a plainly-named array cannot
   # collide with the nameref, which bash rejects as a circular reference.
   local -n __enum_out_ref="${__enum_target}"
@@ -35,12 +47,12 @@ function enumerate_into() {
   __enum_tmp="$(mktemp)"
   if ! "$@" >"${__enum_tmp}"; then
     rm --force -- "${__enum_tmp}"
-    printf '%s: %s failed enumerating the scan set\n' "${0##*/}" "$1" >&2
+    printf '%s: %s failed enumerating the scan set\n' "${0##*/}" "${__enum_label}" >&2
     exit 2
   fi
 
   local __enum_item
-  while IFS= read -r -d '' __enum_item; do
+  while IFS= read -r -d '' __enum_item || [[ -n ${__enum_item} ]]; do
     [[ -n ${__enum_item} ]] || continue
     __enum_out_ref+=("${__enum_item}")
   done <"${__enum_tmp}"
@@ -48,7 +60,7 @@ function enumerate_into() {
 
   if ((${#__enum_out_ref[@]} == 0)) && [[ -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
     printf '%s: enumerated 0 files via %s — a real tree cannot have an empty scan set; set LINT_ALLOW_EMPTY_SCAN=1 if this is deliberate\n' \
-      "${0##*/}" "$1" >&2
+      "${0##*/}" "${__enum_label}" >&2
     exit 2
   fi
 }

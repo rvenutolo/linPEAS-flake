@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # tests/lib-enumerate.test.sh — proves scripts/lib/enumerate.sh turns a
 # NUL-delimited producer into an array with no line-oriented data loss,
-# and that producer failure and an empty scan set are both surfaced as
-# exit 2 rather than silently accepted as an empty result.
+# that producer failure and an empty scan set are both surfaced as exit 2
+# rather than silently accepted as an empty result, and that a final
+# record missing its trailing NUL is kept rather than dropped.
 set -Eeuo pipefail
 IFS=$'\n\t'
 
@@ -61,7 +62,7 @@ function run_scenario() {
 run_scenario 'ok-multiple' 'size=3' '
 function stub_emit_three() { printf "%s\0" alpha beta gamma; }
 declare -a out=()
-enumerate_into out stub_emit_three
+enumerate_into out "stub_emit_three" stub_emit_three
 printf "size=%d\n" "${#out[@]}"
 declare -p out
 '
@@ -79,7 +80,7 @@ fi
 run_scenario 'ok-newline-name' 'size=1' '
 function stub_emit_newline() { printf "line-one\nline-two\0"; }
 declare -a out=()
-enumerate_into out stub_emit_newline
+enumerate_into out "stub_emit_newline" stub_emit_newline
 printf "size=%d\n" "${#out[@]}"
 declare -p out
 '
@@ -92,24 +93,25 @@ else
   cat -- "${work}/ok-newline-name.out" "${work}/ok-newline-name.err" >&2
 fi
 
-# 3. producer-fails — a non-zero producer exit is exit 2, naming argv[0].
+# 3. producer-fails — a non-zero producer exit is exit 2, naming the
+# caller-supplied label.
 # shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
-run_scenario 'producer-fails' 'stub_producer_fail failed enumerating the scan set' '
+run_scenario 'producer-fails' 'stub producer label failed enumerating the scan set' '
 # Body in parens: a function defined with `()` runs its body in a
 # subshell, so this `exit` ends only the producer, not the harness
 # process calling it via `"$@"` — a plain `{ }` body would `exit` the
 # whole enumerate_into caller instead of merely failing the producer.
 function stub_producer_fail() ( printf "partial\0"; exit 1 )
 declare -a out=()
-enumerate_into out stub_producer_fail
+enumerate_into out "stub producer label" stub_producer_fail
 printf "size=%d\n" "${#out[@]}"
 '
 if [[ ${rc} -eq 2 ]] &&
-  grep --fixed-strings --quiet -- 'stub_producer_fail failed enumerating the scan set' \
+  grep --fixed-strings --quiet -- 'stub producer label failed enumerating the scan set' \
     "${work}/producer-fails.err"; then
-  pass 'producer-fails: a failing producer is exit 2, stderr names it'
+  pass 'producer-fails: a failing producer is exit 2, stderr names the caller label'
 else
-  fail "producer-fails: expected exit 2 + producer name in stderr, got exit ${rc}"
+  fail "producer-fails: expected exit 2 + caller label in stderr, got exit ${rc}"
   cat -- "${work}/producer-fails.out" "${work}/producer-fails.err" >&2
 fi
 
@@ -119,7 +121,7 @@ fi
 run_scenario 'empty-scan' 'LINT_ALLOW_EMPTY_SCAN=1 if this is deliberate' '
 function stub_empty() { :; }
 declare -a out=()
-enumerate_into out stub_empty
+enumerate_into out "stub_empty" stub_empty
 printf "size=%d\n" "${#out[@]}"
 '
 if [[ ${rc} -eq 2 ]] &&
@@ -138,7 +140,7 @@ run_scenario 'empty-scan-allowed' 'size=0' '
 function stub_empty() { :; }
 export LINT_ALLOW_EMPTY_SCAN=1
 declare -a out=()
-enumerate_into out stub_empty
+enumerate_into out "stub_empty" stub_empty
 printf "size=%d\n" "${#out[@]}"
 declare -p out
 '
@@ -156,7 +158,7 @@ fi
 run_scenario 'trailing-nul' 'size=2' '
 function stub_trailing_nul() { printf "%s\0%s\0\0" one two; }
 declare -a out=()
-enumerate_into out stub_trailing_nul
+enumerate_into out "stub_trailing_nul" stub_trailing_nul
 printf "size=%d\n" "${#out[@]}"
 declare -p out
 '
@@ -167,6 +169,33 @@ if [[ ${rc} -eq 0 ]] &&
 else
   fail "trailing-nul: expected a two-element array with no phantom third, got exit ${rc}"
   cat -- "${work}/trailing-nul.out" "${work}/trailing-nul.err" >&2
+fi
+
+# 7. unterminated-last-record — a producer's final record with no
+# trailing NUL (a truncated or malformed producer; `git ls-files -z` and
+# `find -print0` always terminate every record, including the last) is
+# kept rather than dropped. `read -r -d ''` reports such a record as a
+# read failure even though it populated the variable, so a loop keyed
+# only on read's exit status silently skips it — the exact silent-drop
+# failure this library exists to end. Four elements (not a size already
+# used by another scenario above) so this scenario's own asserted
+# substring cannot be satisfied by a sibling's output.
+# shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
+run_scenario 'unterminated-last-record' '[0]="wolf" [1]="fox" [2]="owl" [3]="hare"' '
+function stub_unterminated() { printf "%s\0%s\0%s\0%s" wolf fox owl hare; }
+declare -a out=()
+enumerate_into out "stub_unterminated" stub_unterminated
+printf "size=%d\n" "${#out[@]}"
+declare -p out
+'
+if [[ ${rc} -eq 0 ]] &&
+  grep --fixed-strings --quiet -- 'size=4' "${work}/unterminated-last-record.out" &&
+  grep --fixed-strings --quiet -- '[0]="wolf" [1]="fox" [2]="owl" [3]="hare"' \
+    "${work}/unterminated-last-record.out"; then
+  pass 'unterminated-last-record: a NUL-less final record is kept, not dropped, exit 0'
+else
+  fail "unterminated-last-record: expected a four-element array including the unterminated final record, got exit ${rc}"
+  cat -- "${work}/unterminated-last-record.out" "${work}/unterminated-last-record.err" >&2
 fi
 
 harness_assert_verify || failures=$((failures + 1))

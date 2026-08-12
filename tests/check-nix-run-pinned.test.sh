@@ -58,7 +58,7 @@ function expect_empty_scan() {
   printf 'OK   empty-scan\n'
 }
 
-expect_empty_scan 2 "enumerated 0 files via git"
+expect_empty_scan 2 "enumerated 0 files via git ls-files"
 
 # @description Prove the NUL-safe enumeration fix directly: a workflow
 # filename with an embedded newline, holding an unpinned `nix run
