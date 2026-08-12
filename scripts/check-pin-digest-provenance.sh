@@ -30,6 +30,9 @@
 #   BASE_REF          — git ref for base content (default: origin/main)
 #   BASE_DIR_OVERRIDE — read base files from this dir instead of git show
 #   HEAD_DIR_OVERRIDE — read head files from this dir (default: .)
+#
+# LINT_ALLOW_EMPTY_SCAN=1 accepts an empty base-tree scan set (an
+# operator escape hatch, not test-only).
 
 set -Eeuo pipefail
 IFS=$'\n\t'

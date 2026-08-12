@@ -39,10 +39,11 @@
 #
 # See docs/security/verification.md.
 #
-# Honors PATHS_OVERRIDE for fixtures (newline-separated file list).
-# REPO_SLUG_OVERRIDE swaps the required slug. AWK_LIB_OVERRIDE points at
-# a different parser.
-# Exits 0 on full coverage, 1 on any drift.
+# Honors PATHS_OVERRIDE for fixtures (newline-separated file list), and
+# LINT_ALLOW_EMPTY_SCAN=1 to accept an empty scan set. REPO_SLUG_OVERRIDE
+# swaps the required slug. AWK_LIB_OVERRIDE points at a different parser.
+# Exits 0 on full coverage, 1 on any drift, 2 when the scan set could not
+# be enumerated.
 
 set -Eeuo pipefail
 IFS=$'\n\t'

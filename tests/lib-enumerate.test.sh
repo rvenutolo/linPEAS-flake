@@ -15,8 +15,8 @@ readonly LIB="${REPO_ROOT}/scripts/lib/enumerate.sh"
 
 failures=0
 rc=0
-work="$(mktemp -d)"
-trap 'rm -rf -- "${work}"' EXIT
+work="$(mktemp --directory)"
+trap 'rm --recursive --force -- "${work}"' EXIT
 
 function pass() { printf 'PASS: %s\n' "$1"; }
 function fail() {
@@ -196,6 +196,28 @@ if [[ ${rc} -eq 0 ]] &&
 else
   fail "unterminated-last-record: expected a four-element array including the unterminated final record, got exit ${rc}"
   cat -- "${work}/unterminated-last-record.out" "${work}/unterminated-last-record.err" >&2
+fi
+
+# 8. mktemp-fails — an unwritable TMPDIR makes the guarded `mktemp` call
+# report a could-not-run (exit 2) rather than letting mktemp's own exit
+# status (1) leak through `set -Eeuo pipefail` as the calling script's
+# exit code — a could-not-run reported as "ran and found a violation"
+# inside the one function whose job is making sure that never happens.
+# shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
+run_scenario 'mktemp-fails' 'cannot create a temp file for the stub_never_runs scan set' '
+export TMPDIR="/nonexistent-tmpdir-enumerate-test"
+function stub_never_runs() { printf "%s\0" ignored; }
+declare -a out=()
+enumerate_into out "stub_never_runs" stub_never_runs
+printf "size=%d\n" "${#out[@]}"
+'
+if [[ ${rc} -eq 2 ]] &&
+  grep --fixed-strings --quiet -- 'cannot create a temp file for the stub_never_runs scan set' \
+    "${work}/mktemp-fails.err"; then
+  pass 'mktemp-fails: an unwritable TMPDIR is exit 2, stderr names the failure'
+else
+  fail "mktemp-fails: expected exit 2 + temp-file failure message, got exit ${rc}"
+  cat -- "${work}/mktemp-fails.out" "${work}/mktemp-fails.err" >&2
 fi
 
 harness_assert_verify || failures=$((failures + 1))

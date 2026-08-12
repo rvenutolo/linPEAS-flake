@@ -4,8 +4,11 @@
 # @description Lint: every Markdown file in the repo must carry no
 # ephemeral references — PR/issue refs, prose dates, planning/review-pass
 # labels, or literal .claude/ paths. Default mode blocks (exit 1);
-# --advisory mode warns on fuzzy causal-history phrases and always
-# exits 0.
+# --advisory mode suppresses findings, not defects: it warns on fuzzy
+# causal-history phrases and exits 0 on those, but a could-not-run
+# (unterminated fence/block, failed source enumeration) still exits
+# non-zero the same as the default pass.
+# @option --advisory suppress findings, not defects: warn on fuzzy causal-history phrases and exit 0 for those, but still exit 1 on an unterminated fence/generated block and 2 on a failed source enumeration
 
 # Lint: ban "ephemeral references" from the repo's Markdown prose.
 # Tracked docs describe the CURRENT state of the repo, not what they
@@ -15,8 +18,10 @@
 #   default     — blocking. Scan prose for high-precision banned shapes,
 #                 print `file:line: [class] token` to stderr, exit 1 on
 #                 any hit.
-#   --advisory  — warn-only. Print `[advisory] file:line: phrase` for
-#                 fuzzy causal-history phrases, always exit 0.
+#   --advisory  — warn-only for hits. Print `[advisory] file:line: phrase`
+#                 for fuzzy causal-history phrases and exit 0 for those,
+#                 but a could-not-run is a defect, not a finding: it
+#                 still exits non-zero the same as the default pass.
 #
 # Scanning pipeline (per file): blank fenced ``` code blocks, blank
 # inline `code` spans, then blank generated BEGIN/END blocks — all in
@@ -38,7 +43,13 @@
 #   EPHEMERAL_REFS_SOURCES_OVERRIDE — newline-separated list of source
 #     files relative to REPO_ROOT.
 #
-# Exits 0 on clean (and always in --advisory), 1 on any blocking match.
+# LINT_ALLOW_EMPTY_SCAN=1 accepts an empty scan set (an operator escape
+# hatch, not test-only).
+#
+# Exits 0 on clean in either mode; 1 on a blocking match (default mode
+# only — --advisory exits 0 on the same finding) or an unterminated
+# fence/generated block (both modes); 2 if the Markdown source set could
+# not be enumerated (both modes).
 
 set -Eeuo pipefail
 IFS=$'\n\t'

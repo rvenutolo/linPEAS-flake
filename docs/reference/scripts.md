@@ -239,8 +239,14 @@ carries any sigstore host at all, and carries no denylisted host.
 Lint: every Markdown file in the repo must carry no
 ephemeral references — PR/issue refs, prose dates, planning/review-pass
 labels, or literal .claude/ paths. Default mode blocks (exit 1);
---advisory mode warns on fuzzy causal-history phrases and always
-exits 0.
+--advisory mode suppresses findings, not defects: it warns on fuzzy
+causal-history phrases and exits 0 on those, but a could-not-run
+(unterminated fence/block, failed source enumeration) still exits
+non-zero the same as the default pass.
+
+**Options:**
+
+- `--advisory` — suppress findings, not defects: warn on fuzzy causal-history phrases and exit 0 for those, but still exit 1 on an unterminated fence/generated block and 2 on a failed source enumeration
 
 ### scripts/check-flake-lock-provenance.sh
 

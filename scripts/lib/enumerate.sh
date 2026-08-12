@@ -19,6 +19,11 @@
 # function exists to check, and is banned repo-wide for that reason. The
 # temp file is removed on every return path instead of under a trap,
 # because traps are global in bash and callers install their own.
+# The `mktemp` call is guarded rather than left to `set -Eeuo pipefail`:
+# an unwritable `TMPDIR` makes `mktemp` exit non-zero, and an unguarded
+# failed assignment kills the calling script with mktemp's own exit
+# status (1) — a could-not-run reported as "ran and found a violation"
+# inside the one function whose job is making sure that never happens.
 # The read loop's `|| [[ -n ${__enum_item} ]]` clause keeps a final
 # record that has no trailing NUL: `read -r -d ''` reports that record as
 # a failure even though it populated the variable, so a loop keyed only
@@ -44,7 +49,11 @@ function enumerate_into() {
   __enum_out_ref=()
 
   local __enum_tmp
-  __enum_tmp="$(mktemp)"
+  __enum_tmp="$(mktemp)" || {
+    printf '%s: cannot create a temp file for the %s scan set\n' \
+      "${0##*/}" "${__enum_label}" >&2
+    exit 2
+  }
   if ! "$@" >"${__enum_tmp}"; then
     rm --force -- "${__enum_tmp}"
     printf '%s: %s failed enumerating the scan set\n' "${0##*/}" "${__enum_label}" >&2
