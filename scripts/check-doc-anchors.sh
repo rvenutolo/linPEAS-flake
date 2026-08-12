@@ -37,8 +37,11 @@
 #   DOC_ANCHOR_ROOT_OVERRIDE — alternate REPO_ROOT
 #   DOC_ANCHOR_SOURCES_OVERRIDE — newline-separated list of source
 #     files relative to REPO_ROOT.
+#   LINT_ALLOW_EMPTY_SCAN — set to 1 to accept a run that scanned no
+#     source file and checked no link.
 #
-# Exits 0 on clean, 1 on any failure.
+# Exits 0 on clean, 1 on any failure, 2 when the sources could not be
+# enumerated, a source could not be read, or the run covered nothing.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -129,16 +132,39 @@ function lossy_heading_count() {
   printf '%s\n' "${count:-0}"
 }
 
+declare -a SOURCES=()
 if [[ -n ${DOC_ANCHOR_SOURCES_OVERRIDE:-} ]]; then
   mapfile -t SOURCES < <(printf '%s\n' "${DOC_ANCHOR_SOURCES_OVERRIDE}")
 else
-  mapfile -t SOURCES < <(
-    {
-      [[ -f ${REPO_ROOT}/.claude/CLAUDE.md ]] && printf '.claude/CLAUDE.md\n'
-      [[ -f ${REPO_ROOT}/README.md ]] && printf 'README.md\n'
-      (cd "${REPO_ROOT}" && find docs -type f -name '*.md' 2>/dev/null | sort)
-    }
-  )
+  # The docs enumeration is captured with its status checked, and the
+  # trailing `sort` is applied to the capture rather than to a pipe, so
+  # neither `mapfile` nor `sort` stands between a failed `find` and this
+  # shell. Both would report their own success while handing the loop
+  # below an empty list, and an empty list here produces the same
+  # affirmative `ok` line a fully clean run produces — so a docs tree the
+  # lint could not read would vouch for every anchor in it.
+  sources_out=""
+  if [[ -f ${REPO_ROOT}/.claude/CLAUDE.md ]]; then
+    sources_out+='.claude/CLAUDE.md'$'\n'
+  fi
+  if [[ -f ${REPO_ROOT}/README.md ]]; then
+    sources_out+='README.md'$'\n'
+  fi
+  if [[ -d ${REPO_ROOT}/docs ]]; then
+    if ! docs_out="$(cd "${REPO_ROOT}" && find docs -type f -name '*.md')"; then
+      printf '%s: find failed enumerating %s/docs\n' "${0##*/}" "${REPO_ROOT}" >&2
+      exit 2
+    fi
+    if [[ -n ${docs_out} ]]; then
+      sources_out+="$(sort <<<"${docs_out}")"$'\n'
+    fi
+  fi
+  # An empty capture read by `<<<` still yields one empty line, so blank
+  # entries are dropped here and the tallies below count real files.
+  while IFS= read -r source_rel; do
+    [[ -z ${source_rel} ]] && continue
+    SOURCES+=("${source_rel}")
+  done <<<"${sources_out}"
 fi
 
 failures=0
@@ -159,7 +185,26 @@ for src_rel in "${SOURCES[@]}"; do
   sources_scanned=$((sources_scanned + 1))
   src_dir="$(dirname -- "${src_abs}")"
 
+  # `--only-matching` emits one line per link (with its line number), so a
+  # line carrying several anchor links is checked link-by-link. Without it,
+  # the greedy target extraction below would keep only the last `](...)` on
+  # the line and skip every earlier link.
+  #
+  # grep separates "no links in this file" (1) from "could not read this
+  # file" (2), and only the first is data. Collapsing them credits an
+  # unreadable file with having no anchor links while still counting it in
+  # sources_scanned, so neither the verdict nor the tally moves.
+  links_rc=0
+  links_out="$(grep --line-number --only-matching --extended-regexp \
+    '\[[^]]+\]\([^)]*#[^)]+\)' -- "${src_abs}")" || links_rc=$?
+  if ((links_rc > 1)); then
+    printf '%s: grep failed reading %s for anchor links\n' \
+      "${0##*/}" "${src_rel}" >&2
+    exit 2
+  fi
+
   while IFS= read -r match; do
+    [[ -z ${match} ]] && continue
     lineno="${match%%:*}"
     rest="${match#*:}"
     target="$(printf '%s' "${rest}" |
@@ -203,20 +248,33 @@ for src_rel in "${SOURCES[@]}"; do
         "${available}" >&2
       failures=$((failures + 1))
     fi
-  done < <(
-    # `--only-matching` emits one line per link (with its line number),
-    # so a line carrying several anchor links is checked link-by-link.
-    # Without it, the greedy target extraction below would keep only the
-    # last `](...)` on the line and skip every earlier link.
-    grep --line-number --only-matching --extended-regexp \
-      '\[[^]]+\]\([^)]*#[^)]+\)' "${src_abs}" || true
-  )
+  done <<<"${links_out}"
 done
 
 if [[ ${failures} -gt 0 ]]; then
   printf '\n%d failure(s)\n' "${failures}" >&2
   exit 1
 fi
+
+# The `ok` line below is the same line whether the run resolved every anchor
+# in the tree or resolved none because it read nothing, so the tallies it
+# reports are also the floor it has to clear. Each floor names the tally that
+# came back zero, because the two say different things about what went wrong:
+# no source file means the enumeration never reached the docs, while sources
+# with no link between them means the link extraction did.
+if [[ -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
+  if ((sources_scanned == 0)); then
+    printf '%s: scanned 0 source file(s) under %s — an unread tree reports the same ok line a clean one does; set LINT_ALLOW_EMPTY_SCAN=1 if this root is deliberately empty\n' \
+      "${0##*/}" "${REPO_ROOT}" >&2
+    exit 2
+  fi
+  if ((links_checked == 0)); then
+    printf '%s: checked 0 anchor link(s) across %d source file(s) — an unread tree reports the same ok line a clean one does; set LINT_ALLOW_EMPTY_SCAN=1 if these sources deliberately carry no anchor link\n' \
+      "${0##*/}" "${sources_scanned}" >&2
+    exit 2
+  fi
+fi
+
 printf 'check-doc-anchors: ok — %d anchor link(s) in %d source file(s) resolved against %d anchor(s) in %d target file(s); %d heading(s) required character deletion\n' \
   "${links_checked}" "${sources_scanned}" "${anchors_total}" \
   "${targets_scanned}" "${lossy_total}"
