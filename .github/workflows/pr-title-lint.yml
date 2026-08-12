@@ -1,11 +1,13 @@
 name: pr-title-lint
 
-# Enforces Conventional Commits on PR titles. The repo's merge-commit
-# subject is the PR title (`merge_commit_title=PR_TITLE`) with
+# Enforces Conventional Commits and spelling on PR titles. The repo's
+# merge-commit subject is the PR title (`merge_commit_title=PR_TITLE`) with
 # " (#<number>)" appended, so that composed string is what lands on `main`
 # and must satisfy the same `commitlint` rules as branch commits. The job
 # lints the title with the suffix attached, which is the only form the
-# header-length rule can be checked against before the merge happens.
+# header-length rule can be checked against before the merge happens. That
+# same composed string is also what `git-cliff` renders into the
+# changelog, so the job spell-checks it too.
 
 on:
   pull_request:
@@ -67,3 +69,12 @@ jobs:
           # amendable. Lint the composed subject instead.
           printf '%s (#%s)\n' "${PR_TITLE}" "${PR_NUMBER}" |
             nix develop --command commitlint --config .commitlintrc.yml
+          # The title is also the text git-cliff renders into the changelog,
+          # where a typo is frozen: correcting it there needs a render-time
+          # rewrite in cliff.toml, because the subject itself is immutable
+          # signed history. Spell-check it while it is still editable.
+          # typos exits 2 on a finding. That collides with this repo's
+          # exit-2 = could-not-run convention but does not mean it; only
+          # the non-zero status matters here.
+          printf '%s (#%s)\n' "${PR_TITLE}" "${PR_NUMBER}" |
+            nix develop --command typos -
