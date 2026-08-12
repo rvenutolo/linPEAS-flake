@@ -220,7 +220,8 @@ workflows that only push images, and no unsuffixed secrets.DOCKERHUB_TOKEN
 may exist — only \_RW and \_DELETE are authoritative.
 
 Honors WORKFLOWS_DIR_OVERRIDE (defaults to .github/workflows) so the test
-harness can point at a temp dir. Exits 0 if the split holds, 1 otherwise.
+harness can point at a temp dir. Exits 0 if the split holds, 1 on a
+violation, 2 when the workflows dir is not there to read.
 
 ### scripts/check-egress-allowlist.sh
 
@@ -746,11 +747,12 @@ Default inventory path: ${TMPDIR:-/tmp}/action-pin-inventory.tsv
 Override with --inventory PATH.
 
 Exits 0 on a completed run, 1 when the inventory is rejected (API
-failure row, unknown status, missing target file, stale line content),
-2 when the run cannot start at all — an unknown argument, or an
-inventory file that is not there to read. Nothing was inspected in that
-case, so the rejection code would misreport an unread inventory as a
-rejected one.
+failure row, unknown status, stale line content), 2 when a file the run
+needs is not there to read — an unknown argument, an inventory file
+that is absent, or a recorded target file that is absent. Nothing was
+inspected in those cases, so the rejection code would misreport an
+unread file as a rejected one; a stale line, by contrast, is read
+before it is judged.
 
 ### scripts/bump-linpeas.sh
 
@@ -830,11 +832,15 @@ scripts/octoscan-scan.sh --sarif <path> # SARIF output to <path>
 
 Exit codes:
 0 — scan clean
-1 — findings present, OR real error (docker missing,
-image pull failure, scanner internal error). The caller
-must distinguish via the `has-finding` line printed to
-stdout (`has-finding=true|false`) — same contract the CI
-workflow already exposes via `$GITHUB_OUTPUT`.
+1 — findings present, OR the scanner ran and errored (image pull
+failure, scanner internal error). The caller must distinguish
+via the `has-finding` line printed to stdout
+(`has-finding=true|false`) — same contract the CI workflow
+already exposes via `$GITHUB_OUTPUT`.
+2 — the scan could not start: a tool it needs is absent, so no
+workflow file was read. Still fails the hook and the job; only
+the diagnosis differs, and it now matches the `infra-failure`
+classification this script already prints for the case.
 
 Per-file iteration: octoscan v0.1.7 directory-target mode silently
 returns exit 0 with empty SARIF even when a single-file invocation
