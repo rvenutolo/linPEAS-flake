@@ -311,7 +311,7 @@ brace, so an exit that merely sits a few lines below an availability
 test is not attributed to it. Many checks here read a marker or a
 field out of a file that exists and report its absence as the finding
 — those exits belong to the search that came back empty, not to the
-guard above them, and a line-window scan mis-assigns exactly those.
+guard above them, and a line-window scan attributes exactly those to the wrong guard.
 
 A test that mixes an availability predicate with another predicate
 under `||` is not a hit: that branch is reachable without the input
