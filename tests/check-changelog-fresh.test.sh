@@ -228,6 +228,35 @@ EOF
 - The older release
 EOF
 
+  # Three released sections, newest first.
+  cat >"${c}/three.md" <<'EOF'
+# Changelog
+
+## Unreleased
+
+### Features
+
+- A pending feature
+
+## [20260801-cccccccc] - 2026-08-01
+
+### Features
+
+- The newest release
+
+## [20260726-bbbbbbbb] - 2026-07-26
+
+### Features
+
+- The middle release
+
+## [20260715-aaaaaaaa] - 2026-07-15
+
+### Fixes
+
+- The older release
+EOF
+
   # No released sections at all.
   cat >"${c}/none.md" <<'EOF'
 # Changelog
@@ -291,22 +320,6 @@ function main() {
   run_case 'unreleased-only difference ignored -> exit 0' \
     "${unreleased}" "${content}/t1-only-alt-unreleased.md" 0
 
-  # The two release-window cases below produce one observable outcome, and
-  # nothing the script honestly emits separates them: it sees the same visible
-  # tag set, resolves the same changelog commit, reaches the same ancestry
-  # verdict, excludes the same tag and compares the same sections in both.
-  # They differ only in whether the newest tag points at HEAD — a fact the
-  # exclusion rule never consults, because it is keyed on the resolved
-  # changelog commit rather than on HEAD. The second case still earns its
-  # place: it refutes a `--points-at HEAD` implementation that the first would
-  # pass. Separating them would mean printing the compared changelog's path,
-  # which discriminates by fixture identity rather than by behavior and would
-  # blind this gate for every other case in this harness.
-  harness_assert_parity_exempt \
-    'release window, newest tag at HEAD -> exit 0' \
-    'release window, HEAD past the tag -> exit 0' \
-    'every input the script reads is identical; they differ only in whether the newest tag points at HEAD, which the check deliberately never consults'
-
   # --- Case: release window, newest tag at HEAD --------------------------
   # T2 was just created and its changelog commit has not landed. The
   # regeneration renders T2's section; the committed file cannot carry it yet.
@@ -320,12 +333,20 @@ function main() {
   run_case 'release window, newest tag at HEAD -> exit 0' \
     "${window}" "${content}/both.md" 0
 
-  # --- Case: release window, HEAD past the tag ---------------------------
-  # Exercises the ancestry relationship the exclusion is keyed on, via linear
-  # history: the tag is an ancestor of HEAD but no CHANGELOG.md commit has
-  # landed since. This is the relationship that keeps unrelated PRs unblocked
-  # on a required check; see the merge-commit case below for the same
-  # relationship reproduced through an actual merge ref.
+  # --- Case: two releases stacked in the window, HEAD past both ----------
+  # Releases can stack up faster than their changelog commits land, so the
+  # window holds more than one tag at a time. Both T2 and T3 were created
+  # after the last CHANGELOG.md commit, so neither is an ancestor of it and
+  # both are excluded; T1 is an ancestor, is compared, and matches. HEAD sits
+  # on a further commit past both tags, so no tag points at HEAD.
+  #
+  # That shape pins the exclusion rule from two sides at once. An exclusion
+  # keyed on the tag pointing at HEAD excludes nothing here, compares all
+  # three sections, and goes red. An exclusion that drops only the newest
+  # visible tag still compares T2, whose section the committed file cannot
+  # carry, and goes red as well. Only the ancestry test against the resolved
+  # changelog commit yields exit 0. That ancestry relationship is exercised
+  # through an actual merge ref by the merge-commit case below.
   local window_past="${root}/window-past"
   init_repo "${window_past}"
   commit_other "${window_past}" 'work-1'
@@ -334,8 +355,10 @@ function main() {
   commit_other "${window_past}" 'work-2'
   tag_head "${window_past}" '20260726-bbbbbbbb'
   commit_other "${window_past}" 'work-3'
-  run_case 'release window, HEAD past the tag -> exit 0' \
-    "${window_past}" "${content}/both.md" 0
+  tag_head "${window_past}" '20260801-cccccccc'
+  commit_other "${window_past}" 'work-4'
+  run_case 'two releases stacked in the window, HEAD past both -> exit 0' \
+    "${window_past}" "${content}/three.md" 0
 
   # --- Case: changelog PR's own merge ref, T2 section still missing ------
   # Reproduces the actual history shape CI evaluates on a pull request: a real
