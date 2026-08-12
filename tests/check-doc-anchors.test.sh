@@ -103,6 +103,14 @@ function main() {
     'good-apostrophe' 'source.md' 0 '' \
     'ok — 1 anchor link(s) in 1 source file(s) resolved against 2 anchor(s) in 1 target file(s); 1 heading(s) required character deletion'
 
+  # The fixture carries only the stranded link, so nothing else in the run
+  # could account for the failure. A link whose target .md is missing is
+  # skipped before it is counted, so the tally moves no more than the
+  # verdict does and the strand is invisible either way.
+  run_scenario 'link to a missing target file fails' \
+    'bad-stranded-link' 'source.md' 1 \
+    '[stranded-link] source.md:7: docs/renamed-away.md#some-section links to docs/renamed-away.md, which does not exist'
+
   # The default source enumeration, pointed at a root with no docs tree and
   # no README. The clean scenarios above all end in the same `ok` line, and
   # so does a run that read nothing, so the floor is on the tallies that

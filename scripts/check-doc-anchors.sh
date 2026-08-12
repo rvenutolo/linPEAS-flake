@@ -226,6 +226,16 @@ for src_rel in "${SOURCES[@]}"; do
       target_abs="${src_abs}"
     fi
     if [[ ! -f ${target_abs} ]]; then
+      # A link whose target `.md` is not in the tree resolves to nothing
+      # when the doc renders, and it is the anchor check that is closest to
+      # noticing: it has already resolved the path. Skipping it left the
+      # link neither validated nor counted, so a rename that strands a link
+      # moved neither the verdict nor the tally, and the skip is per-link —
+      # invisible even in a run that fails over some other link.
+      printf '[stranded-link] %s:%s: %s links to %s, which does not exist\n' \
+        "${src_rel}" "${lineno}" "${target}" \
+        "$(realpath --relative-to="${REPO_ROOT}" --canonicalize-missing -- "${target_abs}")" >&2
+      failures=$((failures + 1))
       continue
     fi
     if [[ -z ${anchor_cache[${target_abs}]+set} ]]; then
