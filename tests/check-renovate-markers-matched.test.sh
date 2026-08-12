@@ -103,6 +103,41 @@ function run_live_tree() {
   rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
 }
 
+# @description Run the script against the live repo with an unreadable
+# git index. `git ls-files` exits 0 and emits nothing in that state, so a
+# status check alone still scores the tree clean; only the breadth
+# assertion turns the empty scan set into a verdict.
+function run_broken_index() {
+  local -r expected_stderr='enumerated 0 tracked files via git ls-files'
+
+  local stderr_file stdout_file outcome_file index_dir
+  stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  index_dir="$(mktemp --directory)"
+  local actual_exit=0
+  GIT_INDEX_FILE="${index_dir}/absent.idx" \
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  rm --recursive --force -- "${index_dir}"
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record 'live tree enumeration empty' "${expected_stderr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  if [[ ${actual_exit} -ne 2 ]]; then
+    printf 'FAIL: live tree enumeration empty — expected exit 2, got %d\n' \
+      "${actual_exit}" >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet -- "${expected_stderr}" "${stderr_file}"; then
+    printf 'FAIL: live tree enumeration empty — stderr missing %q\n' \
+      "${expected_stderr}" >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: live tree enumeration empty (exit %d)\n' "${actual_exit}"
+  fi
+  rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
+}
+
 function main() {
   # The clean scenarios differ only in which manager matched which file,
   # so each asserts the summary entry naming its own pair.
@@ -132,7 +167,14 @@ function main() {
   # marker would blame the markers for a missing input.
   run_scenario 'absent config is a tooling error' \
     'no-such-fixture' 2 'renovate config not found'
+  # A scan root holding nothing but its own renovate.json makes `find`
+  # exit 0 with no output — the shape a status check cannot see. Without
+  # the breadth assertion the run prints the no-markers summary and
+  # passes, which is what a tree whose markers all died looks like too.
+  run_scenario 'fixture scan tree enumerates nothing' \
+    'empty-scan-tree' 2 'enumerated 0 files via find under'
   run_live_tree
+  run_broken_index
   harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then

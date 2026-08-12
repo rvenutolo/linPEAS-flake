@@ -15,10 +15,12 @@
 # heuristic.
 #
 # Honors RENOVATE_JSON_OVERRIDE (config path) and SCAN_ROOT (tree root) for
-# fixture testing. Exits 0 when every marker is live, 1 on any dead marker,
-# 2 on a tooling error — the config file is absent, or jq cannot read a
-# customManager's declarations, so no verdict about the markers is available
-# and reporting one would blame a marker for a config-shape problem.
+# fixture testing, and LINT_ALLOW_EMPTY_SCAN=1 to accept an empty scan set.
+# Exits 0 when every marker is live, 1 on any dead marker, 2 on a tooling
+# error — the config file is absent, the file enumeration failed or came
+# back empty, or jq cannot read a customManager's declarations — so no
+# verdict about the markers is available and reporting one would blame a
+# marker for a config-shape problem.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -122,19 +124,53 @@ function match_string_hits_file() {
 #     (holds the regex strings), and this script (its comments illustrate the
 #     marker shape with a depName example).
 #   - Fixture scan (SCAN_ROOT overridden): every file under SCAN_ROOT.
+#
+# Both branches capture their producer and then assert the scan set is
+# non-empty. The same capture-then-check reasoning the two jq helpers
+# above carry applies to the enumeration, and the enumeration needs one
+# assertion beyond it: `git ls-files` against an unreadable index exits 0
+# and prints nothing, so a status check passes while nothing is scanned.
+# An empty scan set is the state that makes every marker in the tree look
+# absent rather than dead, so it is a tooling fault, not a verdict.
 declare -a files=()
 if [[ ${SCAN_ROOT} == "${REPO_ROOT}" ]]; then
-  mapfile -t files < <(
-    git -C "${REPO_ROOT}" ls-files -- . \
-      ':!:tests/fixtures/**' \
-      ':!:renovate.json' \
-      ':!:scripts/check-renovate-markers-matched.sh'
-  )
+  if ! tracked="$(git -C "${REPO_ROOT}" ls-files -- . \
+    ':!:tests/fixtures/**' \
+    ':!:renovate.json' \
+    ':!:scripts/check-renovate-markers-matched.sh')"; then
+    printf '%s: git ls-files failed enumerating the tracked tree\n' "${0##*/}" >&2
+    exit 2
+  fi
+  # An empty capture read by `<<<` still yields one empty line, so blank
+  # entries are dropped here and the count below is of real paths.
+  while IFS= read -r tracked_rel; do
+    [[ -z ${tracked_rel} ]] && continue
+    files+=("${tracked_rel}")
+  done <<<"${tracked}"
+  if ((${#files[@]} == 0)) && [[ -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
+    printf '%s: enumerated 0 tracked files via git ls-files — a real tree cannot have an empty scan set; set LINT_ALLOW_EMPTY_SCAN=1 if this is deliberate\n' \
+      "${0##*/}" >&2
+    exit 2
+  fi
 else
+  # NUL-delimited output cannot survive a shell variable, so the fixture
+  # branch captures to a temp file and reads its status from `find`.
+  scan_list="$(mktemp)"
+  readonly scan_list
+  trap 'rm --force -- "${scan_list}"' EXIT
+  if ! find "${SCAN_ROOT}" -type f ! -name renovate.json -print0 >"${scan_list}"; then
+    printf '%s: find failed enumerating %s\n' "${0##*/}" "${SCAN_ROOT}" >&2
+    exit 2
+  fi
   abs=""
   while IFS= read -r -d '' abs; do
     files+=("${abs#"${SCAN_ROOT}"/}")
-  done < <(find "${SCAN_ROOT}" -type f ! -name renovate.json -print0)
+  done <"${scan_list}"
+  if ((${#files[@]} == 0)) && [[ -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
+    printf '%s: enumerated 0 files via find under %s — set LINT_ALLOW_EMPTY_SCAN=1 if this scan root is deliberately empty\n' \
+      "${0##*/}" "${SCAN_ROOT}" >&2
+    exit 2
+  fi
 fi
 
 fail=0
