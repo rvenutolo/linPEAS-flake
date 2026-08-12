@@ -65,6 +65,9 @@ function expect() {
 function main() {
   expect 'good' 'workflow.yml' 0 ''
 
+  expect 'bad-env-key-regex' 'workflow.yml' 1 \
+    'is not a shell identifier'
+
   expect 'bad-missing-env' 'workflow.yml' 1 \
     'has no steps.<id>.outcome entry'
 
