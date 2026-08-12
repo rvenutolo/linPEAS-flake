@@ -23,7 +23,7 @@
 # test is not attributed to it. Many checks here read a marker or a
 # field out of a file that exists and report its absence as the finding
 # — those exits belong to the search that came back empty, not to the
-# guard above them, and a line-window scan mis-assigns exactly those.
+# guard above them, and a line-window scan attributes exactly those to the wrong guard.
 #
 # A test that mixes an availability predicate with another predicate
 # under `||` is not a hit: that branch is reachable without the input
@@ -96,10 +96,10 @@ function avail_present(t) {
 # through an availability predicate: each `||` alternative must carry
 # one, and one conjunct of an `&&` chain carrying it is enough, because
 # the whole chain then requires it.
-function pure(t, absent,   nd, D, i, nc, C, j, ok, all) {
-  nd = split(t, D, /\|\|/)
+function pure(t, absent,   ndisj, D, i, nc, C, j, ok, all) {
+  ndisj = split(t, D, /\|\|/)
   all = 1
-  for (i = 1; i <= nd; i++) {
+  for (i = 1; i <= ndisj; i++) {
     nc = split(D[i], C, /&&/)
     ok = 0
     for (j = 1; j <= nc; j++) {
