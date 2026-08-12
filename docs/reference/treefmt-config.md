@@ -67,6 +67,8 @@ tests/fixtures/required-checks/*
 tests/fixtures/run-block-strict/bad-malformed.yml
 tests/fixtures/scorecard-threshold/malformed.json
 tests/fixtures/setup-nix-required/bad-malformed.yml
+tests/fixtures/tag-protection/bad-empty-payload.json
+tests/fixtures/tag-protection/bad-not-json.json
 tests/fixtures/upload-artifact-strict/bad-malformed.yml
 tests/fixtures/verify-reason-ladder/malformed/bad-malformed.yml
 ```

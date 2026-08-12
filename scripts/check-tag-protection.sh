@@ -17,11 +17,15 @@
 #     OR a strict superset (refs/tags/** is the documented fallback).
 #
 # Exits 0 on match, 1 on drift. Logs the specific drift to stderr.
-# Exits 2 when the ruleset JSON cannot be read at all — e.g. `.rules` is
-# present but is not an array, so `.rules[].type` errors. A tooling fault
-# must not borrow the drift code: that reads as a substantive ruleset
-# change and sends a maintainer after a rule nobody removed. An absent
-# `.rules` is not a tooling fault — it is an empty rule list, i.e. drift.
+# Exits 2 when the ruleset payload cannot be read as a ruleset at all: an
+# unreadable source, an empty payload, one that is not JSON, one whose top
+# level is not an object, or one carrying a wrong-typed field this lint
+# reads. The diagnostic names the offending field and the payload source.
+# A tooling fault must not borrow the drift code: that reads as a
+# substantive ruleset change and sends a maintainer after a rule nobody
+# removed. Absence is the exception — an absent `.rules` is an empty rule
+# list and an absent `.bypass_actors` is "no actor may bypass", both of
+# which are posture claims this lint judges (drift or pass), not faults.
 #
 # Honors RULESET_JSON_OVERRIDE for the test harness — points at a fixture
 # instead of hitting the live API.
@@ -58,7 +62,58 @@ function fetch_ruleset() {
     "/repos/${THIS_REPO}/rulesets/${id}"
 }
 
+# The payload this lint reads is either a fixture path or the ruleset API's
+# response, and every read below assumes a shape neither source guarantees.
+# Name the source in every could-not-run diagnostic: an operator who sees one
+# needs to know which payload was wrong before anything else. The source is
+# named by kind rather than by path, so a fixture's identity never reaches the
+# output the census-parity gate compares.
+if [[ -n ${RULESET_JSON_OVERRIDE:-} ]]; then
+  payload_source='RULESET_JSON_OVERRIDE'
+  if [[ ! -r ${RULESET_JSON_OVERRIDE} ]]; then
+    printf 'release-tag-protection ruleset: payload from %s is not readable\n' "${payload_source}" >&2
+    exit 2
+  fi
+else
+  payload_source="/repos/${THIS_REPO}/rulesets"
+fi
+readonly payload_source
+
 ruleset_json="$(fetch_ruleset)"
+
+# One shape gate in front of every read, rather than a guard per read: a read
+# added later is then total by construction instead of depending on its author
+# remembering the convention. Absence is not uniformly a fault — GitHub returns
+# `rules: []` for a ruleset carrying no rules, so an absent `.rules` stays an
+# empty rule list (drift, exit 1), and an absent `.bypass_actors` stays "no
+# actor may bypass". A repository ruleset always carries `conditions.ref_name`,
+# so its absence means this is not a ruleset detail response at all.
+# jq reads empty input as no input at all and exits 0, so emptiness is checked
+# here rather than in the program below.
+if [[ -z ${ruleset_json//[[:space:]]/} ]]; then
+  printf 'release-tag-protection ruleset: empty payload from %s\n' "${payload_source}" >&2
+  exit 2
+fi
+if ! shape_error="$(jq --raw-output '
+  if type != "object" then "payload is \(type), want object"
+  elif (.name | type) != "string" then ".name is \(.name | type), want string"
+  elif (.target | type) != "string" then ".target is \(.target | type), want string"
+  elif (.enforcement | type) != "string" then ".enforcement is \(.enforcement | type), want string"
+  elif has("bypass_actors") and (.bypass_actors | type) != "array" then ".bypass_actors is \(.bypass_actors | type), want array"
+  elif has("rules") and (.rules | type) != "array" then ".rules is \(.rules | type), want array"
+  elif (.conditions | type) != "object" then ".conditions is \(.conditions | type), want object"
+  elif (.conditions.ref_name | type) != "object" then ".conditions.ref_name is \(.conditions.ref_name | type), want object"
+  elif (.conditions.ref_name.include | type) != "array" then ".conditions.ref_name.include is \(.conditions.ref_name.include | type), want array"
+  else empty
+  end' <<<"${ruleset_json}" 2>/dev/null)"; then
+  printf 'release-tag-protection ruleset: payload from %s is not valid JSON\n' "${payload_source}" >&2
+  exit 2
+fi
+if [[ -n ${shape_error} ]]; then
+  printf 'release-tag-protection ruleset: unexpected payload shape from %s: %s\n' \
+    "${payload_source}" "${shape_error}" >&2
+  exit 2
+fi
 
 name="$(jq --raw-output .name <<<"${ruleset_json}")"
 target="$(jq --raw-output .target <<<"${ruleset_json}")"
