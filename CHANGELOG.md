@@ -6,6 +6,74 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20260811-05318383] - 2026-08-12
+
+### CI
+- Enforce freshness hook module coverage as a lint ([#560](https://github.com/rvenutolo/linPEAS-flake/pull/560))
+
+### Chores
+- Bump linpeas to 20260811-05318383 ([#665](https://github.com/rvenutolo/linPEAS-flake/pull/665))
+- Update flake.lock ([#570](https://github.com/rvenutolo/linPEAS-flake/pull/570))
+
+### Documentation
+- Cover both workflow extensions in ratchet runbook ([#618](https://github.com/rvenutolo/linPEAS-flake/pull/618))
+- Record the console-fence root-prompt limitation ([#558](https://github.com/rvenutolo/linPEAS-flake/pull/558))
+- Fix audit findings and make just verify complete ([#548](https://github.com/rvenutolo/linPEAS-flake/pull/548))
+
+### Features
+- Lint that could-not-run guards exit 2, not 1 ([#662](https://github.com/rvenutolo/linPEAS-flake/pull/662))
+- Report the scope each remaining lint verified ([#652](https://github.com/rvenutolo/linPEAS-flake/pull/652))
+- Report the scope each lint actually verified ([#650](https://github.com/rvenutolo/linPEAS-flake/pull/650))
+- Lint the release-verify reason ladder; widen doc scan ([#626](https://github.com/rvenutolo/linPEAS-flake/pull/626))
+- Enforce digest-pinned multi-arch manifest sources ([#611](https://github.com/rvenutolo/linPEAS-flake/pull/611))
+- Gate digest repoints on the Renovate auto-merge path ([#599](https://github.com/rvenutolo/linPEAS-flake/pull/599))
+
+### Fixes
+- Assert enumeration breadth in eight find/grep/tail producers ([#663](https://github.com/rvenutolo/linPEAS-flake/pull/663))
+- Assert enumeration breadth in the git ls-files lints ([#661](https://github.com/rvenutolo/linPEAS-flake/pull/661))
+- Validate attribution env key names before regex use ([#659](https://github.com/rvenutolo/linPEAS-flake/pull/659))
+- Close two lint blind spots — opaque procsubs and attribute-evaluating hooks ([#644](https://github.com/rvenutolo/linPEAS-flake/pull/644))
+- Score a could-not-run condition as tooling, not as a finding ([#642](https://github.com/rvenutolo/linPEAS-flake/pull/642))
+- Declare the real platform surface and a usable site remedy ([#639](https://github.com/rvenutolo/linPEAS-flake/pull/639))
+- Pin hook tool paths and check the declared lint shell ([#638](https://github.com/rvenutolo/linPEAS-flake/pull/638))
+- Score a jq read failure as tooling, not as drift ([#637](https://github.com/rvenutolo/linPEAS-flake/pull/637))
+- Score harness wiring on calls, and hold exemptions at zero ([#634](https://github.com/rvenutolo/linPEAS-flake/pull/634))
+- Make collided harness diagnostics distinguishable ([#633](https://github.com/rvenutolo/linPEAS-flake/pull/633))
+- Match GFM slugs and bound follows-resolution work ([#631](https://github.com/rvenutolo/linPEAS-flake/pull/631))
+- Apply the run-block prelude rule to composite actions ([#630](https://github.com/rvenutolo/linPEAS-flake/pull/630))
+- Fail loudly where three checks failed silently ([#629](https://github.com/rvenutolo/linPEAS-flake/pull/629))
+- Widen three enforcers to the rules they enforce ([#625](https://github.com/rvenutolo/linPEAS-flake/pull/625))
+- Parse block-scalar and empty-field YAML shapes in three lints ([#624](https://github.com/rvenutolo/linPEAS-flake/pull/624))
+- Decide assertion-gate sameness without the log timestamp ([#623](https://github.com/rvenutolo/linPEAS-flake/pull/623))
+- Treat API error bodies as degraded dashboard lookups ([#615](https://github.com/rvenutolo/linPEAS-flake/pull/615))
+- Reject absent or malformed hashes in repro compare ([#614](https://github.com/rvenutolo/linPEAS-flake/pull/614))
+- Force package values in declared-systems guard ([#613](https://github.com/rvenutolo/linPEAS-flake/pull/613))
+- Catch one-sided registry rollback in weekly verify ([#612](https://github.com/rvenutolo/linPEAS-flake/pull/612))
+- Pin identity on every cosign verify subcommand ([#610](https://github.com/rvenutolo/linPEAS-flake/pull/610))
+- Fail loud on unparseable YAML in workflow lints; ban yq procsub idiom ([#606](https://github.com/rvenutolo/linPEAS-flake/pull/606))
+- Scan .yaml workflows and all on: shapes in enforcement lints ([#605](https://github.com/rvenutolo/linPEAS-flake/pull/605))
+- Honor lock .root field in flake.lock provenance gate ([#604](https://github.com/rvenutolo/linPEAS-flake/pull/604))
+- Harden pin digest gate and document follows resolution ([#601](https://github.com/rvenutolo/linPEAS-flake/pull/601))
+- Close follows-array repoint bypass in flake.lock provenance gate ([#600](https://github.com/rvenutolo/linPEAS-flake/pull/600))
+- Extend and scope the shell set for -c introducers ([#569](https://github.com/rvenutolo/linPEAS-flake/pull/569))
+- Gate the merge-commit message where it is still fixable ([#568](https://github.com/rvenutolo/linPEAS-flake/pull/568))
+- Scope the short-option c command introducer to shells ([#565](https://github.com/rvenutolo/linPEAS-flake/pull/565))
+- Detect gh attestation verify inside quoted command sources ([#562](https://github.com/rvenutolo/linPEAS-flake/pull/562))
+- Attestation lint pin forms, comment consistency, and scan paths ([#559](https://github.com/rvenutolo/linPEAS-flake/pull/559))
+- Bind the gh attestation verify --repo pin to its own command ([#555](https://github.com/rvenutolo/linPEAS-flake/pull/555))
+- Close same-line masking and freshness-filter coverage gaps ([#552](https://github.com/rvenutolo/linPEAS-flake/pull/552))
+- Close four lint-guard inspection gaps ([#549](https://github.com/rvenutolo/linPEAS-flake/pull/549))
+
+### Refactor
+- Ban every process substitution feeding a redirection ([#664](https://github.com/rvenutolo/linPEAS-flake/pull/664))
+
+### Tests
+- Hold every harness at census parity ([#654](https://github.com/rvenutolo/linPEAS-flake/pull/654))
+- Record the whole observable outcome in every harness ([#648](https://github.com/rvenutolo/linPEAS-flake/pull/648))
+- Name collapsed scenario groups and gate what they hide ([#647](https://github.com/rvenutolo/linPEAS-flake/pull/647))
+- Retire the harness assertion-discrimination exemptions ([#632](https://github.com/rvenutolo/linPEAS-flake/pull/632))
+- Gate harness assertions on cross-scenario discrimination ([#617](https://github.com/rvenutolo/linPEAS-flake/pull/617))
+
 ## [20260803-00785084] - 2026-08-03
 
 ### Chores
