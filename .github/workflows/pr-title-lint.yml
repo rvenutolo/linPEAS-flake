@@ -67,3 +67,11 @@ jobs:
           # amendable. Lint the composed subject instead.
           printf '%s (#%s)\n' "${PR_TITLE}" "${PR_NUMBER}" |
             nix develop --command commitlint --config .commitlintrc.yml
+          # The title is also the text git-cliff renders into the changelog,
+          # where a typo is frozen: correcting it there needs a render-time
+          # rewrite in cliff.toml, because the subject itself is immutable
+          # signed history. Spell-check it while it is still editable.
+          # typos exits 2 on a finding, which is not this repo's
+          # could-not-run code — only the non-zero status matters here.
+          printf '%s (#%s)\n' "${PR_TITLE}" "${PR_NUMBER}" |
+            nix develop --command typos -
