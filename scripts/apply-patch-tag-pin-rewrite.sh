@@ -18,11 +18,12 @@
 # Override with --inventory PATH.
 #
 # Exits 0 on a completed run, 1 when the inventory is rejected (API
-# failure row, unknown status, missing target file, stale line content),
-# 2 when the run cannot start at all — an unknown argument, or an
-# inventory file that is not there to read. Nothing was inspected in that
-# case, so the rejection code would misreport an unread inventory as a
-# rejected one.
+# failure row, unknown status, stale line content), 2 when a file the run
+# needs is not there to read — an unknown argument, an inventory file
+# that is absent, or a recorded target file that is absent. Nothing was
+# inspected in those cases, so the rejection code would misreport an
+# unread file as a rejected one; a stale line, by contrast, is read
+# before it is judged.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -100,7 +101,7 @@ while IFS= read -r raw_line || [[ -n ${raw_line} ]]; do
 
   [[ -f ${file} ]] || {
     printf 'abort (file missing): %s\n' "${file}" >&2
-    exit 1
+    exit 2
   }
 
   expected_substr="${ref}@${sha} # ${current}"

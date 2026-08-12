@@ -12,7 +12,8 @@
 # may exist — only _RW and _DELETE are authoritative.
 #
 # Honors WORKFLOWS_DIR_OVERRIDE (defaults to .github/workflows) so the test
-# harness can point at a temp dir. Exits 0 if the split holds, 1 otherwise.
+# harness can point at a temp dir. Exits 0 if the split holds, 1 on a
+# violation, 2 when the workflows dir is not there to read.
 set -Eeuo pipefail
 IFS=$'\n\t'
 
@@ -21,7 +22,7 @@ readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-.github/workflows}"
 if [[ ! -d ${WORKFLOWS_DIR} ]]; then
   printf 'dockerhub-token-scope-split lint: workflows dir %s missing\n' \
     "${WORKFLOWS_DIR}" >&2
-  exit 1
+  exit 2
 fi
 
 readonly RELEASE_WF="${WORKFLOWS_DIR}/release-on-bump.yml"

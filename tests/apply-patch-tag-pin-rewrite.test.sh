@@ -130,8 +130,12 @@ INV_MISSING="${WORK}/missing-inventory.tsv"
 } >"${INV_MISSING}"
 missing_exit=0
 missing_err="$(bash "${SCRIPT}" --inventory "${INV_MISSING}" 2>&1)" || missing_exit=$?
-if ((missing_exit == 0)); then
-  printf 'FAIL: missing target file should have caused non-zero exit\n' >&2
+# A recorded file that is not there was never read, so the run has no
+# verdict about its pin comments: that is a could-not-run, not a rejected
+# inventory row, and the two must not share an exit code.
+if ((missing_exit != 2)); then
+  printf 'FAIL: missing target file should have exited 2, got %d\n' \
+    "${missing_exit}" >&2
   exit 1
 fi
 if [[ ${missing_err} != *"abort (file missing)"* ]]; then

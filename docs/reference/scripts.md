@@ -220,7 +220,8 @@ workflows that only push images, and no unsuffixed secrets.DOCKERHUB_TOKEN
 may exist — only \_RW and \_DELETE are authoritative.
 
 Honors WORKFLOWS_DIR_OVERRIDE (defaults to .github/workflows) so the test
-harness can point at a temp dir. Exits 0 if the split holds, 1 otherwise.
+harness can point at a temp dir. Exits 0 if the split holds, 1 on a
+violation, 2 when the workflows dir is not there to read.
 
 ### scripts/check-egress-allowlist.sh
 
@@ -285,6 +286,46 @@ Lint: every `gh attestation verify` invocation across
 workflows, composite actions, scripts, nix modules, the justfile, and
 docs passes `--repo rvenutolo/linPEAS-flake` so verification is bound
 to this repository.
+
+### scripts/check-guard-exit-code.sh
+
+Lint: no scripts/\*.sh may exit 1 out of a guard whose
+test is only an availability check. The exit codes separate what the
+operator has to do about a run: 2 means the check could not run (a
+required tool is absent, an input is missing, unreadable or
+malformed), 1 means it ran and found a violation, 0 means clean. An
+absent tool reported as 1 sends the operator hunting for drift in
+content the check never read, and a hook or job that reports both the
+same way makes a broken environment indistinguishable from a broken
+repo.
+
+A hit is a conditional whose test is PURELY an availability predicate
+and whose branch body exits 1:
+
+if ! command -v X if ! require_tool X
+if \[[ ! -f|-r|-e|-d|-s P ]\] \[[ -f P ]\] || { ... }
+
+Matching is branch-scoped rather than proximity-based: the branch body
+is walked from its opening keyword to the matching `fi` or closing
+brace, so an exit that merely sits a few lines below an availability
+test is not attributed to it. Many checks here read a marker or a
+field out of a file that exists and report its absence as the finding
+— those exits belong to the search that came back empty, not to the
+guard above them, and a line-window scan attributes exactly those to the wrong guard.
+
+A test that mixes an availability predicate with another predicate
+under `||` is not a hit: that branch is reachable without the input
+being absent, so absence there is half of a content verdict rather
+than a could-not-run.
+
+Escape hatch: `# exit-code-exempt: <rationale>` on the exit line, for
+a guard whose missing input genuinely IS the finding. The marker has
+to open the comment, so prose naming it exempts nothing, and the
+rationale has to be non-empty. A clean run prints the exemption count,
+so the exempt set is stated rather than open-ended.
+
+Honors SCRIPTS_DIR_OVERRIDE (default: scripts) for fixtures.
+Exit 0 clean, 1 on any hit, 2 on operational error.
 
 ### scripts/check-harden-runner-block.sh
 
@@ -706,11 +747,12 @@ Default inventory path: ${TMPDIR:-/tmp}/action-pin-inventory.tsv
 Override with --inventory PATH.
 
 Exits 0 on a completed run, 1 when the inventory is rejected (API
-failure row, unknown status, missing target file, stale line content),
-2 when the run cannot start at all — an unknown argument, or an
-inventory file that is not there to read. Nothing was inspected in that
-case, so the rejection code would misreport an unread inventory as a
-rejected one.
+failure row, unknown status, stale line content), 2 when a file the run
+needs is not there to read — an unknown argument, an inventory file
+that is absent, or a recorded target file that is absent. Nothing was
+inspected in those cases, so the rejection code would misreport an
+unread file as a rejected one; a stale line, by contrast, is read
+before it is judged.
 
 ### scripts/bump-linpeas.sh
 
@@ -790,11 +832,15 @@ scripts/octoscan-scan.sh --sarif <path> # SARIF output to <path>
 
 Exit codes:
 0 — scan clean
-1 — findings present, OR real error (docker missing,
-image pull failure, scanner internal error). The caller
-must distinguish via the `has-finding` line printed to
-stdout (`has-finding=true|false`) — same contract the CI
-workflow already exposes via `$GITHUB_OUTPUT`.
+1 — findings present, OR the scanner ran and errored (image pull
+failure, scanner internal error). The caller must distinguish
+via the `has-finding` line printed to stdout
+(`has-finding=true|false`) — same contract the CI workflow
+already exposes via `$GITHUB_OUTPUT`.
+2 — the scan could not start: a tool it needs is absent, so no
+workflow file was read. Still fails the hook and the job; only
+the diagnosis differs, and it now matches the `infra-failure`
+classification this script already prints for the case.
 
 Per-file iteration: octoscan v0.1.7 directory-target mode silently
 returns exit 0 with empty SARIF even when a single-file invocation

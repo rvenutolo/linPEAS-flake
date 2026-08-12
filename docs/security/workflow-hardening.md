@@ -106,6 +106,28 @@ The lint skips comment lines (lines whose first non-whitespace character is `#`)
 
 Enforced by `scripts/check-no-opaque-procsub.sh`. Wired as the `lint-script-hygiene` CI job (member check `no-opaque-procsub`) and as a pre-commit hook.
 
+## guard-exit-code
+
+No `scripts/*.sh` exits 1 out of a guard whose test is only an availability check. The three exit codes separate what the operator has to do about a run:
+
+- **2** — the check could not run: a required tool is absent, or an input is missing, unreadable or malformed. Nothing was inspected, so there is no verdict about the repo.
+- **1** — the check ran and found a violation. The repo needs fixing.
+- **0** — clean.
+
+Reporting an absent tool as 1 sends the operator hunting for drift in content the check never read, and a hook or job that reports both the same way makes a broken environment indistinguishable from a broken repo. Exit 2 still fails the hook and the job, so the verdict is unchanged and only the diagnosis improves.
+
+A hit is a conditional whose test is *purely* an availability predicate and whose branch body exits 1 — `if ! command -v X`, `if ! require_tool X`, `if [[ ! -f|-r|-e|-d|-s PATH ]]`, or the brace-group form `[[ -f PATH ]] || { … }`.
+
+Matching is branch-scoped rather than proximity-based. The lint walks the branch body from its opening keyword to the matching `fi` or closing brace, so an exit that merely sits a few lines below an availability test is not attributed to it. That distinction carries the rule: several checks here read a marker or a field out of a file that exists and report its absence as the finding — a doc that lost its managed `BEGIN`/`END` markers, a `flake.nix` missing its pinned hooks SHA URL, a `cliff.toml` missing `tag_pattern`. Those exits belong to the search that came back empty, not to the guard above them, and a line-window scan attributes exactly those to the wrong guard.
+
+A test that mixes an availability predicate with another predicate under `||` — `[[ ! -f ${out} ]] || ! cmp --silent -- "${out}" "${tmp}"` — is not a hit. That branch is reachable without anything being absent, so absence there is half of a content verdict rather than a could-not-run. An `&&` chain carrying an availability predicate *is* a hit, because the whole chain then requires the thing to be absent.
+
+The escape hatch is `# exit-code-exempt: <rationale>` on the exit line, for a guard whose missing input genuinely is the finding. The marker has to open the comment, so prose naming it exempts nothing, and the rationale has to be non-empty — a marker with an empty rationale is its own diagnostic rather than a silent pass. A clean run prints the exemption count, so the exempt set is stated rather than open-ended.
+
+Whole-line comments are blanked before matching, so a script may document the banned shape by name without tripping the check on its own documentation.
+
+Enforced by `scripts/check-guard-exit-code.sh`. Wired as the `lint-script-hygiene` CI job (member check `guard-exit-code`).
+
 ## script-has-test
 
 Every `scripts/check-*.sh` has a matching `tests/check-*.test.sh`, and every `tests/check-*.test.sh` has a matching `scripts/check-*.sh`.

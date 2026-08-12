@@ -155,8 +155,8 @@ function main() {
   while IFS= read -r -d ':' dir || [[ -n ${dir} ]]; do
     [[ -x "${dir}/docker" ]] || no_docker_path="${no_docker_path:+${no_docker_path}:}${dir}"
   done <<<"${PATH}:"
-  run_scenario 'missing docker exits 1 with SKIP hint and has-finding=false' \
-    1 'SKIP=octoscan' 'has-finding=false' \
+  run_scenario 'missing docker exits 2 with SKIP hint and has-finding=false' \
+    2 'SKIP=octoscan' 'has-finding=false' \
     'classification=infra-failure (docker unavailable)' "PATH=${no_docker_path}"
 
   # has-finding / exit-code contract, docker return stubbed:
