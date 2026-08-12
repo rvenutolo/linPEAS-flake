@@ -42,6 +42,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 
 REPO_ROOT="${EPHEMERAL_REFS_ROOT_OVERRIDE:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)}"
 readonly REPO_ROOT
@@ -227,21 +229,21 @@ function scan_advisory() {
   rm --force -- "${tmp}"
 }
 
-# @description Enumerate every Markdown source to scan, relative to
-# REPO_ROOT. The invariant covers all Markdown prose in the repo, not one
-# directory, so enumeration is git's rather than a hand-kept path list.
-# @stdout one source path per line, sorted
-function resolve_sources() {
-  if [[ -n ${EPHEMERAL_REFS_SOURCES_OVERRIDE:-} ]]; then
-    printf '%s\n' "${EPHEMERAL_REFS_SOURCES_OVERRIDE}"
-    return 0
-  fi
-  # `--cached` covers tracked Markdown. `--others --exclude-standard`
-  # adds Markdown that is not committed yet but is not ignored either —
-  # exactly the files a commit is about to introduce, so a new doc is
-  # gated by the same run that introduces it. Honoring the ignore rules
-  # keeps build outputs and dependency trees out of the scan.
-  (cd "${REPO_ROOT}" && git ls-files --cached --others --exclude-standard -- '*.md' 2>/dev/null | sort)
+# @description NUL-delimited Markdown source producer for
+# `enumerate_into`, relative to REPO_ROOT. The invariant covers all
+# Markdown prose in the repo, not one directory, so enumeration is git's
+# rather than a hand-kept path list. `--cached` covers tracked Markdown.
+# `--others --exclude-standard` adds Markdown that is not committed yet
+# but is not ignored either — exactly the files a commit is about to
+# introduce, so a new doc is gated by the same run that introduces it.
+# Honoring the ignore rules keeps build outputs and dependency trees out
+# of the scan. Sorted (NUL-delimited) so diagnostics report in a stable
+# order.
+# @stdout NUL-delimited source paths, sorted
+# shellcheck disable=SC2329 # invoked indirectly, by name, via enumerate_into
+function ephemeral_refs_git_sources() {
+  (cd "${REPO_ROOT}" && git ls-files --cached --others --exclude-standard -z -- '*.md') |
+    sort --zero-terminated
 }
 
 # @description True when the given source path is on the skip-entirely
@@ -261,18 +263,16 @@ function is_allowlisted() {
 }
 
 function main() {
-  local sources_tmp
-  sources_tmp="$(mktemp)"
-  # An enumeration that cannot run leaves nothing to scan, which would
-  # otherwise read as a clean tree. Say why the run stopped.
-  if ! resolve_sources >"${sources_tmp}"; then
-    rm --force -- "${sources_tmp}"
-    printf 'cannot enumerate Markdown sources under %s\n' "${REPO_ROOT}" >&2
-    exit 1
-  fi
   local -a sources=()
-  mapfile -t sources <"${sources_tmp}"
-  rm --force -- "${sources_tmp}"
+  if [[ -n ${EPHEMERAL_REFS_SOURCES_OVERRIDE:-} ]]; then
+    local src
+    while IFS= read -r src; do
+      [[ -z ${src} ]] && continue
+      sources+=("${src}")
+    done <<<"${EPHEMERAL_REFS_SOURCES_OVERRIDE}"
+  else
+    enumerate_into sources ephemeral_refs_git_sources
+  fi
 
   blocking_hits=0
   local scanned=0 allowlisted=0 lines=0 fenced=0 spans=0 gen=0

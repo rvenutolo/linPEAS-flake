@@ -162,14 +162,16 @@ WF_DIR="${SANDBOX}/nope"
 run_scenario 'missing workflows dir fails loudly' 2
 
 # --- scenario: workflows dir present on disk but tracked at no ref ---
-# `git ls-tree` answers with an empty list, which the job diff renders as no
-# jobs added and no jobs removed, and the summary reports as PRESSURE=0 —
-# a metric that measured nothing, printed like one that measured no drift.
+# `git ls-tree` answers with an empty list. Left unchecked, the job diff
+# would render that as no jobs added and no jobs removed, and the summary
+# would report PRESSURE=0 — a metric that measured nothing, printed like
+# one that measured no drift. enumerate_into's breadth assertion is what
+# turns that empty list into a loud failure instead.
 WF_DIR="${SANDBOX}/.github/untracked-workflows"
 mkdir -p "${WF_DIR}"
 printf 'name: a\njobs:\n  build:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
 run_scenario 'workflows dir tracked at no ref fails loudly' 2 \
-  --expect-err 'enumerated 0 workflow file(s)'
+  --expect-err 'enumerated 0 files via git'
 
 # @description Fresh sandbox whose backdated baseline already contains the
 #              job + member that within-window commits then remove, so the

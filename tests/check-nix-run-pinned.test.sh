@@ -58,6 +58,48 @@ function expect_empty_scan() {
   printf 'OK   empty-scan\n'
 }
 
-expect_empty_scan 2 "enumerated 0 files via git ls-files"
+expect_empty_scan 2 "enumerated 0 files via git"
+
+# @description Prove the NUL-safe enumeration fix directly: a workflow
+# filename with an embedded newline, holding an unpinned `nix run
+# nixpkgs#jq`, used to slip past this lint entirely. `git ls-files`
+# (without `-z`) C-quotes such a name onto one newline-escaped line, so a
+# line-oriented `while read` handoff reads it as one bogus path that then
+# fails the loop's `[[ -f ]]` gate — the violation is enumerated right out
+# of the scan. Built in a throwaway repo under the harness temp directory
+# rather than a committed fixture: a committed newline filename would
+# itself be rejected by check-path-hygiene.sh and is hostile to
+# `git checkout`.
+function expect_newline_workflow_name() {
+  local -r name='newline-workflow-name'
+  local repo_dir evil_name got_exit=0 got_stderr
+  repo_dir="$(mktemp --directory)"
+  mkdir --parents "${repo_dir}/.github/workflows"
+  printf 'name: clean\njobs:\n  a:\n    steps:\n      - run: echo ok\n' \
+    >"${repo_dir}/.github/workflows/clean.yml"
+  evil_name="$(printf 'ev\nil').yml"
+  printf 'name: evil\njobs:\n  a:\n    steps:\n      - run: nix run nixpkgs#jq\n' \
+    >"${repo_dir}/.github/workflows/${evil_name}"
+  git -C "${repo_dir}" init --quiet
+  git -C "${repo_dir}" config user.email t@t.t
+  git -C "${repo_dir}" config user.name t
+  git -C "${repo_dir}" add --all
+
+  got_stderr="$(cd "${repo_dir}" && "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  rm --recursive --force -- "${repo_dir}"
+
+  if [[ ${got_exit} != 1 ]]; then
+    printf 'FAIL %s: exit %s, want 1\n  stderr: %s\n' "${name}" "${got_exit}" "${got_stderr}" >&2
+    return 1
+  fi
+  if [[ ${got_stderr} != *'nixpkgs#jq'* ]]; then
+    printf 'FAIL %s: stderr missing violation for the newline-named workflow\n  got: %s\n' \
+      "${name}" "${got_stderr}" >&2
+    return 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+
+expect_newline_workflow_name
 
 printf 'all tests passed\n'
