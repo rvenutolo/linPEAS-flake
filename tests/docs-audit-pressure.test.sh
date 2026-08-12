@@ -187,13 +187,13 @@ function make_non_yaml_workflow_sandbox() {
   SANDBOX="$(mktemp --directory)"
   WF_DIR="${SANDBOX}/.github/workflows"
   LG_FILE="${SANDBOX}/.github/lint-groups.yml"
-  mkdir -p "${WF_DIR}"
+  mkdir --parents "${WF_DIR}"
   git -C "${SANDBOX}" init --quiet
   git -C "${SANDBOX}" config user.email t@t.t
   git -C "${SANDBOX}" config user.name t
   printf 'lint-a:\n  - alpha\n' >"${LG_FILE}"
   printf 'not a workflow\n' >"${WF_DIR}/README.txt"
-  git -C "${SANDBOX}" add -A
+  git -C "${SANDBOX}" add --all
   git -C "${SANDBOX}" commit --quiet -m baseline
 }
 make_non_yaml_workflow_sandbox
