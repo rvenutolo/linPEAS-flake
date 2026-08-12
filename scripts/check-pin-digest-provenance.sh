@@ -30,9 +30,14 @@
 #   BASE_REF          — git ref for base content (default: origin/main)
 #   BASE_DIR_OVERRIDE — read base files from this dir instead of git show
 #   HEAD_DIR_OVERRIDE — read head files from this dir (default: .)
+#
+# LINT_ALLOW_EMPTY_SCAN=1 accepts an empty base-tree scan set (an
+# operator escape hatch, not test-only).
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 
 readonly BASE_REF="${BASE_REF:-origin/main}"
 readonly BASE_DIR="${BASE_DIR_OVERRIDE:-}"
@@ -127,16 +132,14 @@ declare -i BASE_FILE_SET_LOADED=0
 # one-sided key (add/remove), which passes.
 function load_base_file_list() {
   ((BASE_FILE_SET_LOADED)) && return 0
-  local raw path
-  if ! raw="$(git ls-tree -r --name-only "${BASE_REF}" 2>&1)"; then
-    die_op "git ls-tree failed for ${BASE_REF}: ${raw}"
-  fi
-  while IFS= read -r path; do
-    [[ -n ${path} ]] || continue
+  local path
+  local -a tree_paths=()
+  enumerate_into tree_paths "git ls-tree ${BASE_REF}" git ls-tree -r --name-only -z "${BASE_REF}"
+  for path in "${tree_paths[@]}"; do
     if is_scanned_pin_file "${path}" || [[ ${path} == "${OCTOSCAN_FILE}" ]]; then
       BASE_FILE_SET["${path}"]=1
     fi
-  done <<<"${raw}"
+  done
   BASE_FILE_SET_LOADED=1
 }
 

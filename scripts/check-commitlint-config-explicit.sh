@@ -50,6 +50,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 
 readonly ACTION_PREFIX="wagoid/commitlint-github-action"
 readonly BASE_CONFIG=".commitlintrc.yml"
@@ -68,28 +70,8 @@ if [[ -n ${PATHS_OVERRIDE:-} ]]; then
     paths+=("${p}")
   done <<<"${PATHS_OVERRIDE}"
 else
-  # The capture-then-check note on the yq call below applies here too, and
-  # the enumeration needs one more assertion on top of it: `git ls-files`
-  # against an unreadable index exits 0 and prints nothing, so a status
-  # check passes while the scan set is empty and every workflow running
-  # the action against an implicit config goes unexamined. Asserting the
-  # scan set is non-empty is what catches that.
-  if ! paths_out="$(git ls-files \
-    '.github/workflows/*.yml' '.github/workflows/*.yaml')"; then
-    printf '%s: git ls-files failed enumerating the scan set\n' "${0##*/}" >&2
-    exit 2
-  fi
-  # An empty capture read by `<<<` still yields one empty line, so blank
-  # entries are dropped here and the count below is of real paths.
-  while IFS= read -r p; do
-    [[ -z ${p} ]] && continue
-    paths+=("${p}")
-  done <<<"${paths_out}"
-  if ((${#paths[@]} == 0)) && [[ -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
-    printf '%s: enumerated 0 files via git ls-files — a real tree cannot have an empty scan set; set LINT_ALLOW_EMPTY_SCAN=1 if this is deliberate\n' \
-      "${0##*/}" >&2
-    exit 2
-  fi
+  enumerate_into paths 'git ls-files' git ls-files -z -- \
+    '.github/workflows/*.yml' '.github/workflows/*.yaml'
 fi
 
 # Base directory the two config files and every referenced configFile

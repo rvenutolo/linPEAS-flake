@@ -162,14 +162,44 @@ WF_DIR="${SANDBOX}/nope"
 run_scenario 'missing workflows dir fails loudly' 2
 
 # --- scenario: workflows dir present on disk but tracked at no ref ---
-# `git ls-tree` answers with an empty list, which the job diff renders as no
-# jobs added and no jobs removed, and the summary reports as PRESSURE=0 —
-# a metric that measured nothing, printed like one that measured no drift.
+# `git ls-tree` answers with an empty list. Left unchecked, the job diff
+# would render that as no jobs added and no jobs removed, and the summary
+# would report PRESSURE=0 — a metric that measured nothing, printed like
+# one that measured no drift. enumerate_into's breadth assertion is what
+# turns that empty list into a loud failure instead. The caller passes a
+# label carrying the workflows dir and the ref it queried, so an operator
+# reading the diagnostic can tell which directory and which ref came back
+# empty without re-deriving them from the invocation.
 WF_DIR="${SANDBOX}/.github/untracked-workflows"
 mkdir -p "${WF_DIR}"
 printf 'name: a\njobs:\n  build:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
 run_scenario 'workflows dir tracked at no ref fails loudly' 2 \
-  --expect-err 'enumerated 0 workflow file(s)'
+  --expect-err "enumerated 0 files via git ls-tree ${WF_DIR} at"
+
+# --- scenario: workflows dir tracked at ref but holds no YAML file ---
+# `git ls-tree` returns a non-empty list (README.txt), so
+# enumerate_into's own raw-breadth guard is satisfied and does not fire.
+# The YAML-extension filter downstream then narrows that list to zero,
+# and its own retained breadth check is what catches this branch —
+# distinct from the raw-empty case above, which enumerate_into itself
+# catches before the filter ever runs.
+function make_non_yaml_workflow_sandbox() {
+  SANDBOX="$(mktemp --directory)"
+  WF_DIR="${SANDBOX}/.github/workflows"
+  LG_FILE="${SANDBOX}/.github/lint-groups.yml"
+  mkdir --parents "${WF_DIR}"
+  git -C "${SANDBOX}" init --quiet
+  git -C "${SANDBOX}" config user.email t@t.t
+  git -C "${SANDBOX}" config user.name t
+  printf 'lint-a:\n  - alpha\n' >"${LG_FILE}"
+  printf 'not a workflow\n' >"${WF_DIR}/README.txt"
+  git -C "${SANDBOX}" add --all
+  git -C "${SANDBOX}" commit --quiet -m baseline
+}
+make_non_yaml_workflow_sandbox
+cd "${SANDBOX}"
+run_scenario 'workflows dir tracked with no yaml file fails loudly' 2 \
+  --expect-err "enumerated 0 workflow file(s) under ${WF_DIR} at"
 
 # @description Fresh sandbox whose backdated baseline already contains the
 #              job + member that within-window commits then remove, so the

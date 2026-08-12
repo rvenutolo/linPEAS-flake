@@ -24,6 +24,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 
 readonly WINDOW_DAYS="${WINDOW_DAYS_OVERRIDE:-31}"
 readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-.github/workflows}"
@@ -49,26 +51,22 @@ function boundary_ref() {
 # @arg $1 git ref
 function job_ids_at() {
   local -r ref="$1"
-  local tree_paths path
-  # `git ls-tree` on a ref or a path it cannot resolve exits 128, and the
-  # trailing pipe leaves this shell reading the status of `grep` instead.
+  local path
   # An enumeration that comes back empty — failed, or pointed at a path the
   # ref never tracked — produces an empty id set, which the diff below
   # renders as "no jobs added, no jobs removed" and the summary reports as
   # zero drift pressure. A metric that says zero because it measured
-  # nothing is the one reading this function must not emit.
-  if ! tree_paths="$(git ls-tree --name-only -r "${ref}" -- "${WORKFLOWS_DIR}")"; then
-    printf 'git ls-tree failed enumerating %s at %s\n' "${WORKFLOWS_DIR}" "${ref}" >&2
-    return 2
-  fi
+  # nothing is the one reading this function must not emit; the raw
+  # enumeration asserts that itself via enumerate_into before the
+  # YAML-extension filter below asserts it again on the filtered set.
+  local -a tree_paths=()
+  enumerate_into tree_paths "git ls-tree ${WORKFLOWS_DIR} at ${ref}" \
+    git ls-tree --name-only -z -r "${ref}" -- "${WORKFLOWS_DIR}"
   local -a workflow_paths=()
-  # An empty capture read by `<<<` still yields one empty line, so blank
-  # entries are dropped here and the count below is of real paths.
-  while IFS= read -r path; do
-    [[ -n ${path} ]] || continue
+  for path in "${tree_paths[@]}"; do
     [[ ${path} =~ \.ya?ml$ ]] || continue
     workflow_paths+=("${path}")
-  done <<<"${tree_paths}"
+  done
   if ((${#workflow_paths[@]} == 0)) && [[ -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
     printf 'enumerated 0 workflow file(s) under %s at %s; set LINT_ALLOW_EMPTY_SCAN=1 if that ref is deliberately empty\n' \
       "${WORKFLOWS_DIR}" "${ref}" >&2

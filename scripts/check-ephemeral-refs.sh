@@ -4,8 +4,11 @@
 # @description Lint: every Markdown file in the repo must carry no
 # ephemeral references — PR/issue refs, prose dates, planning/review-pass
 # labels, or literal .claude/ paths. Default mode blocks (exit 1);
-# --advisory mode warns on fuzzy causal-history phrases and always
-# exits 0.
+# --advisory mode suppresses findings, not defects: it warns on fuzzy
+# causal-history phrases and exits 0 on those, but a could-not-run
+# (unterminated fence/block, failed source enumeration) still exits
+# non-zero the same as the default pass.
+# @option --advisory suppress findings, not defects: warn on fuzzy causal-history phrases and exit 0 for those, but still exit 1 on an unterminated fence/generated block and 2 on a failed source enumeration
 
 # Lint: ban "ephemeral references" from the repo's Markdown prose.
 # Tracked docs describe the CURRENT state of the repo, not what they
@@ -15,8 +18,10 @@
 #   default     — blocking. Scan prose for high-precision banned shapes,
 #                 print `file:line: [class] token` to stderr, exit 1 on
 #                 any hit.
-#   --advisory  — warn-only. Print `[advisory] file:line: phrase` for
-#                 fuzzy causal-history phrases, always exit 0.
+#   --advisory  — warn-only for hits. Print `[advisory] file:line: phrase`
+#                 for fuzzy causal-history phrases and exit 0 for those,
+#                 but a could-not-run is a defect, not a finding: it
+#                 still exits non-zero the same as the default pass.
 #
 # Scanning pipeline (per file): blank fenced ``` code blocks, blank
 # inline `code` spans, then blank generated BEGIN/END blocks — all in
@@ -38,10 +43,18 @@
 #   EPHEMERAL_REFS_SOURCES_OVERRIDE — newline-separated list of source
 #     files relative to REPO_ROOT.
 #
-# Exits 0 on clean (and always in --advisory), 1 on any blocking match.
+# LINT_ALLOW_EMPTY_SCAN=1 accepts an empty scan set (an operator escape
+# hatch, not test-only).
+#
+# Exits 0 on clean in either mode; 1 on a blocking match (default mode
+# only — --advisory exits 0 on the same finding) or an unterminated
+# fence/generated block (both modes); 2 if the Markdown source set could
+# not be enumerated (both modes).
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 
 REPO_ROOT="${EPHEMERAL_REFS_ROOT_OVERRIDE:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)}"
 readonly REPO_ROOT
@@ -227,21 +240,21 @@ function scan_advisory() {
   rm --force -- "${tmp}"
 }
 
-# @description Enumerate every Markdown source to scan, relative to
-# REPO_ROOT. The invariant covers all Markdown prose in the repo, not one
-# directory, so enumeration is git's rather than a hand-kept path list.
-# @stdout one source path per line, sorted
-function resolve_sources() {
-  if [[ -n ${EPHEMERAL_REFS_SOURCES_OVERRIDE:-} ]]; then
-    printf '%s\n' "${EPHEMERAL_REFS_SOURCES_OVERRIDE}"
-    return 0
-  fi
-  # `--cached` covers tracked Markdown. `--others --exclude-standard`
-  # adds Markdown that is not committed yet but is not ignored either —
-  # exactly the files a commit is about to introduce, so a new doc is
-  # gated by the same run that introduces it. Honoring the ignore rules
-  # keeps build outputs and dependency trees out of the scan.
-  (cd "${REPO_ROOT}" && git ls-files --cached --others --exclude-standard -- '*.md' 2>/dev/null | sort)
+# @description NUL-delimited Markdown source producer for
+# `enumerate_into`, relative to REPO_ROOT. The invariant covers all
+# Markdown prose in the repo, not one directory, so enumeration is git's
+# rather than a hand-kept path list. `--cached` covers tracked Markdown.
+# `--others --exclude-standard` adds Markdown that is not committed yet
+# but is not ignored either — exactly the files a commit is about to
+# introduce, so a new doc is gated by the same run that introduces it.
+# Honoring the ignore rules keeps build outputs and dependency trees out
+# of the scan. Sorted (NUL-delimited) so diagnostics report in a stable
+# order.
+# @stdout NUL-delimited source paths, sorted
+# shellcheck disable=SC2329 # invoked indirectly, by name, via enumerate_into
+function ephemeral_refs_git_sources() {
+  (cd "${REPO_ROOT}" && git ls-files --cached --others --exclude-standard -z -- '*.md') |
+    sort --zero-terminated
 }
 
 # @description True when the given source path is on the skip-entirely
@@ -261,18 +274,16 @@ function is_allowlisted() {
 }
 
 function main() {
-  local sources_tmp
-  sources_tmp="$(mktemp)"
-  # An enumeration that cannot run leaves nothing to scan, which would
-  # otherwise read as a clean tree. Say why the run stopped.
-  if ! resolve_sources >"${sources_tmp}"; then
-    rm --force -- "${sources_tmp}"
-    printf 'cannot enumerate Markdown sources under %s\n' "${REPO_ROOT}" >&2
-    exit 1
-  fi
   local -a sources=()
-  mapfile -t sources <"${sources_tmp}"
-  rm --force -- "${sources_tmp}"
+  if [[ -n ${EPHEMERAL_REFS_SOURCES_OVERRIDE:-} ]]; then
+    local src
+    while IFS= read -r src; do
+      [[ -z ${src} ]] && continue
+      sources+=("${src}")
+    done <<<"${EPHEMERAL_REFS_SOURCES_OVERRIDE}"
+  else
+    enumerate_into sources 'git ls-files' ephemeral_refs_git_sources
+  fi
 
   blocking_hits=0
   local scanned=0 allowlisted=0 lines=0 fenced=0 spans=0 gen=0

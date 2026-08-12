@@ -33,6 +33,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 
 # Matches every cosign verify subcommand — `verify`, `verify-blob`,
 # `verify-attestation`, `verify-blob-attestation` — in both the plain
@@ -49,32 +51,12 @@ if [[ -n ${PATHS_OVERRIDE:-} ]]; then
     paths+=("${p}")
   done <<<"${PATHS_OVERRIDE}"
 else
-  # Capture-then-check, for the reason the extractor guard below states —
-  # but the enumeration needs a second assertion the extractor does not.
-  # `git ls-files` against an unreadable index exits 0 and prints nothing,
-  # so its status says the run was fine while the scan set is empty and
-  # every unpinned invocation in the tree goes unreported. Asserting the
-  # scan set is non-empty is what makes that visible.
-  if ! paths_out="$(git ls-files \
+  enumerate_into paths 'git ls-files' git ls-files -z -- \
     '.github/workflows/*.yml' '.github/workflows/*.yaml' \
     'scripts/*.sh' \
     'docs/**/*.md' \
     'docs/*.md' \
-    'README.md' 'SECURITY.md')"; then
-    printf '%s: git ls-files failed enumerating the scan set\n' "${0##*/}" >&2
-    exit 2
-  fi
-  # An empty capture read by `<<<` still yields one empty line, so blank
-  # entries are dropped here and the count below is of real paths.
-  while IFS= read -r p; do
-    [[ -z ${p} ]] && continue
-    paths+=("${p}")
-  done <<<"${paths_out}"
-  if ((${#paths[@]} == 0)) && [[ -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
-    printf '%s: enumerated 0 files via git ls-files — a real tree cannot have an empty scan set; set LINT_ALLOW_EMPTY_SCAN=1 if this is deliberate\n' \
-      "${0##*/}" >&2
-    exit 2
-  fi
+    'README.md' 'SECURITY.md'
 fi
 
 extract_invocations() {

@@ -168,7 +168,7 @@ YAML
   ) >"${out_file}" 2>&1 || actual_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
 
-  local -r expected_exit=2 expected_msg='git ls-tree failed'
+  local -r expected_exit=2 expected_msg='git ls-tree main failed enumerating the scan set'
   harness_assert_record "${name}" "${expected_msg}" \
     "${outcome_file}" "${out_file}"
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then

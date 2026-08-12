@@ -120,7 +120,11 @@ document, so both cases abort with a named diagnostic
 (`unterminated generated block` / `unterminated code fence`) and a
 non-zero exit rather than scanning a file whose remainder has been
 silently exempted. Advisory mode inherits that abort: it suppresses
-findings, not defects.
+findings, not defects. The same holds for the source enumeration itself:
+a producer that fails, or comes back with no Markdown files to read,
+exits 2 in either mode (`LINT_ALLOW_EMPTY_SCAN=1` accepts a genuinely
+empty scan set) rather than a scan that read nothing reading as a scan
+that found nothing wrong.
 
 ### Blocking classes
 
