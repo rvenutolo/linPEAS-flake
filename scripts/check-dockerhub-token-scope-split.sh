@@ -12,8 +12,10 @@
 # may exist — only _RW and _DELETE are authoritative.
 #
 # Honors WORKFLOWS_DIR_OVERRIDE (defaults to .github/workflows) so the test
-# harness can point at a temp dir. Exits 0 if the split holds, 1 on a
-# violation, 2 when the workflows dir is not there to read.
+# harness can point at a temp dir, and LINT_ALLOW_EMPTY_SCAN=1 to accept a
+# workflows dir holding no YAML. Exits 0 if the split holds, 1 on a
+# violation, 2 when the workflows dir is not there to read, holds no
+# workflow to read, or holds one that could not be read.
 set -Eeuo pipefail
 IFS=$'\n\t'
 
@@ -72,17 +74,39 @@ fi
 
 # Suffix: every secrets.DOCKERHUB_TOKEN* reference must be _RW or _DELETE.
 shopt -s nullglob
-for wf in "${WORKFLOWS_DIR}"/*.yml "${WORKFLOWS_DIR}"/*.yaml; do
+declare -a workflow_files=("${WORKFLOWS_DIR}"/*.yml "${WORKFLOWS_DIR}"/*.yaml)
+shopt -u nullglob
+# A workflows dir that exists but holds no YAML leaves this whole check with
+# nothing to read, and the run then exits 0 having asserted nothing about
+# any suffix. That is a could-not-run, not a clean split.
+if ((${#workflow_files[@]} == 0)) && [[ -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
+  printf 'dockerhub-token-scope-split lint: %s holds 0 workflow file(s); set LINT_ALLOW_EMPTY_SCAN=1 if that is deliberate\n' \
+    "${WORKFLOWS_DIR}" >&2
+  exit 2
+fi
+for wf in ${workflow_files+"${workflow_files[@]}"}; do
+  # grep separates "this workflow names no DOCKERHUB_TOKEN" (1) from "this
+  # workflow could not be read" (2). Only the first is a finding about
+  # content; scoring the second the same way clears an unreadable workflow
+  # of every suffix violation it carries.
+  matches_rc=0
+  matches="$(grep --extended-regexp --only-matching -- \
+    'secrets\.DOCKERHUB_TOKEN[A-Za-z0-9_]*' "${wf}")" || matches_rc=$?
+  if ((matches_rc > 1)); then
+    printf 'dockerhub-token-scope-split lint: grep failed reading %s\n' \
+      "${wf}" >&2
+    exit 2
+  fi
+  [[ -z ${matches} ]] && continue
+  matches="$(sort --unique <<<"${matches}")"
   while IFS= read -r match; do
     [[ -z ${match} ]] && continue
     if [[ ${match} != 'secrets.DOCKERHUB_TOKEN_RW' &&
       ${match} != 'secrets.DOCKERHUB_TOKEN_DELETE' ]]; then
       violation "${wf}: ${match} is not authoritative (only _RW and _DELETE variants are allowed)"
     fi
-  done < <(grep --extended-regexp --only-matching \
-    'secrets\.DOCKERHUB_TOKEN[A-Za-z0-9_]*' "${wf}" | sort --unique)
+  done <<<"${matches}"
 done
-shopt -u nullglob
 
 # Positive: producers must exist and consume their scoped token (guards the
 # absence checks from passing trivially when a producer is deleted/renamed).

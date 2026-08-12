@@ -15,9 +15,12 @@
 # parsed from YAML — never commit subjects or other free text, which would
 # render as arbitrary markdown in the resulting issue.
 #
+# Honors LINT_ALLOW_EMPTY_SCAN=1 to accept a ref whose workflows dir holds
+# no YAML.
+#
 # Exit codes:
 #   0  success (body on stdout, PRESSURE=<n> as the final line)
-#   2  missing inputs / parse error
+#   2  missing inputs / parse error / nothing enumerated to measure
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -46,13 +49,35 @@ function boundary_ref() {
 # @arg $1 git ref
 function job_ids_at() {
   local -r ref="$1"
-  local path
+  local tree_paths path
+  # `git ls-tree` on a ref or a path it cannot resolve exits 128, and the
+  # trailing pipe leaves this shell reading the status of `grep` instead.
+  # An enumeration that comes back empty — failed, or pointed at a path the
+  # ref never tracked — produces an empty id set, which the diff below
+  # renders as "no jobs added, no jobs removed" and the summary reports as
+  # zero drift pressure. A metric that says zero because it measured
+  # nothing is the one reading this function must not emit.
+  if ! tree_paths="$(git ls-tree --name-only -r "${ref}" -- "${WORKFLOWS_DIR}")"; then
+    printf 'git ls-tree failed enumerating %s at %s\n' "${WORKFLOWS_DIR}" "${ref}" >&2
+    return 2
+  fi
+  local -a workflow_paths=()
+  # An empty capture read by `<<<` still yields one empty line, so blank
+  # entries are dropped here and the count below is of real paths.
   while IFS= read -r path; do
     [[ -n ${path} ]] || continue
+    [[ ${path} =~ \.ya?ml$ ]] || continue
+    workflow_paths+=("${path}")
+  done <<<"${tree_paths}"
+  if ((${#workflow_paths[@]} == 0)) && [[ -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
+    printf 'enumerated 0 workflow file(s) under %s at %s; set LINT_ALLOW_EMPTY_SCAN=1 if that ref is deliberately empty\n' \
+      "${WORKFLOWS_DIR}" "${ref}" >&2
+    return 2
+  fi
+  for path in ${workflow_paths+"${workflow_paths[@]}"}; do
     git show "${ref}:${path}" 2>/dev/null |
       yq --exit-status '.jobs | keys | .[]' - 2>/dev/null || true
-  done < <(git ls-tree --name-only -r "${ref}" -- "${WORKFLOWS_DIR}" | grep -E '\.ya?ml$' || true) |
-    tr -d '"' | sort -u
+  done | tr -d '"' | sort -u
 }
 
 # @description Print a path relative to the repo root. `git show ref:path`
@@ -125,9 +150,17 @@ function main() {
       -- "${WORKFLOWS_DIR}" scripts "${LINT_GROUPS}" 2>/dev/null | wc -l | tr -d ' '
   )"
 
+  # The two id sets are resolved into variables before they are compared:
+  # a `job_ids_at` failure inside `comm <(…)` would exit its own subshell
+  # and leave `comm` diffing an empty set at exit 0, which is the fail-open
+  # the function's own status check exists to prevent.
+  local base_jobs head_jobs
+  base_jobs="$(job_ids_at "${base}")" || exit 2
+  head_jobs="$(job_ids_at HEAD)" || exit 2
+
   local jobs_added jobs_removed members_added members_removed
-  jobs_added="$(comm -13 <(job_ids_at "${base}") <(job_ids_at HEAD) | only_valid_ids)"
-  jobs_removed="$(comm -23 <(job_ids_at "${base}") <(job_ids_at HEAD) | only_valid_ids)"
+  jobs_added="$(comm -13 <(printf '%s\n' "${base_jobs}") <(printf '%s\n' "${head_jobs}") | only_valid_ids)"
+  jobs_removed="$(comm -23 <(printf '%s\n' "${base_jobs}") <(printf '%s\n' "${head_jobs}") | only_valid_ids)"
   members_added="$(comm -13 <(members_at "${base}") <(members_at HEAD) | only_valid_ids)"
   members_removed="$(comm -23 <(members_at "${base}") <(members_at HEAD) | only_valid_ids)"
 

@@ -103,8 +103,20 @@ run_scenario "setup-python action + python-version keys → passes" \
   "${clean_with_python_keys}" 0 "" \
   "$(summary 1 1 0)"
 
+# A scan root that is not there makes `find` exit 1 having printed nothing,
+# which the breadth line would otherwise report as `scanned 0 workflow
+# file(s)` at exit 0 — a count of what was read, standing in for a verdict.
+run_scenario "missing scan root is a could-not-run" \
+  "${clean_only}/absent" 2 "find failed enumerating" ""
+
+# An existing scan root holding no YAML reaches the same zero breadth by a
+# different route, so it gets its own diagnostic rather than sharing one.
+empty_root="$(mktemp -d)"
+run_scenario "empty scan root is a could-not-run" \
+  "${empty_root}" 2 "enumerated 0 workflow file(s)" ""
+
 rm -rf -- "${clean_only}" "${with_python}" \
-  "${with_inline_python}" "${clean_with_python_keys}"
+  "${with_inline_python}" "${clean_with_python_keys}" "${empty_root}"
 
 harness_assert_verify || failures=$((failures + 1))
 

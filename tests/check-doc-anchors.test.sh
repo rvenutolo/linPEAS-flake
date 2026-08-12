@@ -18,7 +18,12 @@ failures=0
 # of slugs that lost characters is what separates the clean scenarios: they
 # exercise different arms of the slug algorithm, and every one of them
 # otherwise ends in the same silent success.
-# @arg $1 name  @arg $2 fixture dir  @arg $3 source rel path
+#
+# An absolute path in $2 is used as the root as given, so a scenario can
+# drive a scratch tree that no fixture directory could hold. An empty $3
+# leaves DOC_ANCHOR_SOURCES_OVERRIDE unset, which is what puts the lint's
+# own source enumeration — rather than a handed-in list — under test.
+# @arg $1 name  @arg $2 fixture dir or absolute root  @arg $3 source rel path
 # @arg $4 expected exit  @arg $5 stderr substring  @arg $6 stdout substring
 function run_scenario() {
   local -r name="$1"
@@ -28,13 +33,18 @@ function run_scenario() {
   local -r expected_stderr="$5"
   local -r expected_stdout="${6:-}"
 
+  local root="${FIXTURES}/${fixture_dir}"
+  if [[ ${fixture_dir} == /* ]]; then
+    root="${fixture_dir}"
+  fi
+
   local stderr_file stdout_file outcome_file
   stderr_file="$(mktemp)"
   stdout_file="$(mktemp)"
   outcome_file="$(mktemp)"
 
   local actual_exit=0
-  DOC_ANCHOR_ROOT_OVERRIDE="${FIXTURES}/${fixture_dir}" \
+  DOC_ANCHOR_ROOT_OVERRIDE="${root}" \
     DOC_ANCHOR_SOURCES_OVERRIDE="${source_rel}" \
     "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
@@ -92,6 +102,41 @@ function main() {
   run_scenario 'apostrophe is deleted from the slug' \
     'good-apostrophe' 'source.md' 0 '' \
     'ok — 1 anchor link(s) in 1 source file(s) resolved against 2 anchor(s) in 1 target file(s); 1 heading(s) required character deletion'
+
+  # The fixture carries only the stranded link, so nothing else in the run
+  # could account for the failure. A link whose target .md is missing is
+  # skipped before it is counted, so the tally moves no more than the
+  # verdict does and the strand is invisible either way.
+  run_scenario 'link to a missing target file fails' \
+    'bad-stranded-link' 'source.md' 1 \
+    '[stranded-link] source.md:7: docs/renamed-away.md#some-section links to docs/renamed-away.md, which does not exist'
+
+  # The default source enumeration, pointed at a root with no docs tree and
+  # no README. The clean scenarios above all end in the same `ok` line, and
+  # so does a run that read nothing, so the floor is on the tallies that
+  # line reports rather than on the enumeration alone.
+  local empty_root
+  empty_root="$(mktemp --directory)"
+  run_scenario 'root with no sources is a could-not-run' \
+    "${empty_root}" '' 2 \
+    'scanned 0 source file(s)'
+  rm --recursive --force -- "${empty_root}"
+
+  # Sources the run did read, none of which carries an anchor link. Same
+  # zero breadth, different cause, so the diagnostic names the other tally.
+  run_scenario 'sources with no anchor link are a could-not-run' \
+    'no-anchor-links' 'source.md' 2 \
+    'checked 0 anchor link(s) across 1 source file(s)'
+
+  # A source the enumeration listed but grep could not read. grep exits 2
+  # there; scored as "no anchor links in this file" it leaves the file
+  # counted in sources_scanned and every link in it unchecked.
+  local unreadable_src="${FIXTURES}/unreadable-source/source.md"
+  chmod 000 -- "${unreadable_src}"
+  run_scenario 'unreadable source is a could-not-run' \
+    'unreadable-source' 'source.md' 2 \
+    'grep failed reading source.md for anchor links'
+  chmod 644 -- "${unreadable_src}"
 
   harness_assert_verify || failures=$((failures + 1))
 

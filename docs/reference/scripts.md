@@ -220,8 +220,10 @@ workflows that only push images, and no unsuffixed secrets.DOCKERHUB_TOKEN
 may exist — only \_RW and \_DELETE are authoritative.
 
 Honors WORKFLOWS_DIR_OVERRIDE (defaults to .github/workflows) so the test
-harness can point at a temp dir. Exits 0 if the split holds, 1 on a
-violation, 2 when the workflows dir is not there to read.
+harness can point at a temp dir, and LINT_ALLOW_EMPTY_SCAN=1 to accept a
+workflows dir holding no YAML. Exits 0 if the split holds, 1 on a
+violation, 2 when the workflows dir is not there to read, holds no
+workflow to read, or holds one that could not be read.
 
 ### scripts/check-egress-allowlist.sh
 
@@ -550,8 +552,10 @@ Env overrides (test-only):
 PYFLAKES_GUARD_SCAN_ROOT_OVERRIDE — alternate directory tree
 containing workflow/action YAML files (overrides the default
 repo-root .github/ scan).
+LINT_ALLOW_EMPTY_SCAN — set to 1 to accept an empty scan set.
 
-Exits 0 on clean, 1 if any python invocation found.
+Exits 0 on clean, 1 if any python invocation found, 2 when the scan set
+could not be enumerated or came back empty.
 
 ### scripts/check-run-block-strict.sh
 
@@ -746,13 +750,15 @@ on semver dots or path slashes.
 Default inventory path: ${TMPDIR:-/tmp}/action-pin-inventory.tsv
 Override with --inventory PATH.
 
+Honors LINT_ALLOW_EMPTY_SCAN=1 to accept an inventory carrying no rows.
+
 Exits 0 on a completed run, 1 when the inventory is rejected (API
 failure row, unknown status, stale line content), 2 when a file the run
 needs is not there to read — an unknown argument, an inventory file
-that is absent, or a recorded target file that is absent. Nothing was
-inspected in those cases, so the rejection code would misreport an
-unread file as a rejected one; a stale line, by contrast, is read
-before it is judged.
+that is absent or unreadable, an inventory with no rows in it, or a
+recorded target file that is absent. Nothing was inspected in those
+cases, so the rejection code would misreport an unread file as a
+rejected one; a stale line, by contrast, is read before it is judged.
 
 ### scripts/bump-linpeas.sh
 
@@ -801,9 +807,12 @@ Body contents are restricted to integers and shape-validated identifiers
 parsed from YAML — never commit subjects or other free text, which would
 render as arbitrary markdown in the resulting issue.
 
+Honors LINT_ALLOW_EMPTY_SCAN=1 to accept a ref whose workflows dir holds
+no YAML.
+
 Exit codes:
 0 success (body on stdout, PRESSURE=<n> as the final line)
-2 missing inputs / parse error
+2 missing inputs / parse error / nothing enumerated to measure
 
 ### scripts/gen-dashboard-data.sh
 

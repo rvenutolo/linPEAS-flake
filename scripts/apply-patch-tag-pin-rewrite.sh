@@ -17,13 +17,15 @@
 # Default inventory path: ${TMPDIR:-/tmp}/action-pin-inventory.tsv
 # Override with --inventory PATH.
 #
+# Honors LINT_ALLOW_EMPTY_SCAN=1 to accept an inventory carrying no rows.
+#
 # Exits 0 on a completed run, 1 when the inventory is rejected (API
 # failure row, unknown status, stale line content), 2 when a file the run
 # needs is not there to read — an unknown argument, an inventory file
-# that is absent, or a recorded target file that is absent. Nothing was
-# inspected in those cases, so the rejection code would misreport an
-# unread file as a rejected one; a stale line, by contrast, is read
-# before it is judged.
+# that is absent or unreadable, an inventory with no rows in it, or a
+# recorded target file that is absent. Nothing was inspected in those
+# cases, so the rejection code would misreport an unread file as a
+# rejected one; a stale line, by contrast, is read before it is judged.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -60,11 +62,32 @@ declare -a pending_new=()
 applied=0
 skipped=0
 
+# The rows are captured with their status checked instead of being piped in
+# from a substitution, whose status this shell never sees. `[[ -f ]]` above
+# answers whether the inventory exists, not whether it can be read, so a
+# readable-bit failure leaves `tail` exiting non-zero with nothing on stdout
+# — and an inventory that produces no rows completes as `done: 0 applied, 0
+# skipped` at exit 0, the same report a genuinely empty inventory earns. An
+# API_FAILURE row that would have aborted the run at exit 1 disappears that
+# way. Both the failed read and the empty result are could-not-run.
+if ! inventory_rows="$(tail --lines=+2 -- "${INVENTORY}")"; then
+  printf 'inventory not readable: %s\n' "${INVENTORY}" >&2
+  exit 2
+fi
+if [[ -z ${inventory_rows} ]] && [[ -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
+  printf 'inventory carries no rows: %s; set LINT_ALLOW_EMPTY_SCAN=1 if an empty inventory is deliberate\n' \
+    "${INVENTORY}" >&2
+  exit 2
+fi
+
 # `read` returns non-zero on a final line with no trailing newline, so the
 # `[[ -n ]]` fallback is what keeps a truncated inventory's last row from
 # being silently dropped — dropping it would apply the earlier OK rows and
 # report success while skipping an unvalidated row or an API_FAILURE abort.
 while IFS= read -r raw_line || [[ -n ${raw_line} ]]; do
+  # A capture read by `<<<` still yields one line when it is empty, and an
+  # empty line parses into an empty status that no case arm should judge.
+  [[ -z ${raw_line} ]] && continue
   # `read` with IFS=$'\t' collapses consecutive tabs (tab is whitespace
   # in IFS), so an empty `target_comment` would merge with `status`.
   # Split manually via parameter expansion to preserve empty fields.
@@ -124,7 +147,7 @@ while IFS= read -r raw_line || [[ -n ${raw_line} ]]; do
   pending_lines+=("${line}")
   pending_old+=("${expected_substr}")
   pending_new+=("${new_substr}")
-done < <(tail --lines=+2 "${INVENTORY}")
+done <<<"${inventory_rows}"
 
 # Pass 2: apply. Validation already passed for every entry, so the awk
 # splice cannot legitimately fail; treat any failure here as a hard

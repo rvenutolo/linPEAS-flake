@@ -22,8 +22,10 @@
 #   API_FAILURE    — `gh api` call to list tags failed
 #
 # Honors INVENTORY_PATHS_OVERRIDE (newline-separated paths) for
-# fixture-driven tests. Default scan: .github/workflows + .github/actions.
-# Exits 0 if every row is OK / NO_PATCH_TAG; exits 1 on any API_FAILURE.
+# fixture-driven tests, and LINT_ALLOW_EMPTY_SCAN=1 to accept an empty scan
+# set. Default scan: .github/workflows + .github/actions.
+# Exits 0 if every row is OK / NO_PATCH_TAG; exits 1 on any API_FAILURE;
+# exits 2 when the scan set could not be enumerated or came back empty.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -50,12 +52,39 @@ if [[ -n ${INVENTORY_PATHS_OVERRIDE:-} ]]; then
     [[ -n ${p} ]] && paths+=("${p}")
   done <<<"${INVENTORY_PATHS_OVERRIDE}"
 else
+  # Each root is scanned only when it is there, because a repo may carry
+  # workflows and no composite actions (or the reverse). Both roots yielding
+  # nothing is the fault worth catching: the run still writes a header-only
+  # TSV at exit 0, which the rewrite tool downstream reads as "no pins to
+  # rewrite" rather than as an inventory that was never taken.
+  scan_out=""
+  if [[ -d .github/workflows ]]; then
+    if ! workflow_paths="$(find .github/workflows -maxdepth 1 -type f \
+      \( -name '*.yml' -o -name '*.yaml' \))"; then
+      printf '%s: find failed enumerating .github/workflows\n' "${0##*/}" >&2
+      exit 2
+    fi
+    scan_out+="${workflow_paths}"$'\n'
+  fi
+  if [[ -d .github/actions ]]; then
+    if ! action_paths="$(find .github/actions -type f \
+      \( -name 'action.yml' -o -name 'action.yaml' \))"; then
+      printf '%s: find failed enumerating .github/actions\n' "${0##*/}" >&2
+      exit 2
+    fi
+    scan_out+="${action_paths}"$'\n'
+  fi
+  # An empty capture read by `<<<` still yields one empty line, so blank
+  # entries are dropped here and the count below is of real paths.
   while IFS= read -r p; do
+    [[ -z ${p} ]] && continue
     paths+=("${p}")
-  done < <(
-    find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) 2>/dev/null || true
-    find .github/actions -type f \( -name 'action.yml' -o -name 'action.yaml' \) 2>/dev/null || true
-  )
+  done <<<"${scan_out}"
+  if ((${#paths[@]} == 0)) && [[ -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
+    printf '%s: enumerated 0 workflow / composite-action file(s) under .github — an inventory with no rows cannot be told apart from a tree with no pins; set LINT_ALLOW_EMPTY_SCAN=1 if this is deliberate\n' \
+      "${0##*/}" >&2
+    exit 2
+  fi
 fi
 
 declare -A tag_cache

@@ -88,6 +88,26 @@ else
   printf 'OK   action.yaml composite (exit %d)\n' "${got_exit}"
 fi
 
+# Default scan against a cwd holding no `.github` at all. Both find roots
+# are relative, so this is what a lint invoked from the wrong directory
+# sees: zero files enumerated. Scored as data that is a silent exit 0 over
+# every pin in the repo, so it has to be a could-not-run instead.
+EMPTY_SCAN_DIR="$(mktemp --directory)"
+empty_scan_exit=0
+empty_scan_stderr="$(cd "${EMPTY_SCAN_DIR}" && bash "${SCRIPT}" 2>&1)" || empty_scan_exit=$?
+rm --recursive --force -- "${EMPTY_SCAN_DIR}"
+if ((empty_scan_exit != 2)); then
+  printf 'FAIL empty scan set: exit %d, want 2\n  got: %s\n' \
+    "${empty_scan_exit}" "${empty_scan_stderr}" >&2
+  failures=$((failures + 1))
+elif [[ ${empty_scan_stderr} != *"enumerated 0 workflow / composite-action file(s)"* ]]; then
+  printf 'FAIL empty scan set: stderr missing the breadth diagnostic\n  got: %s\n' \
+    "${empty_scan_stderr}" >&2
+  failures=$((failures + 1))
+else
+  printf 'OK   empty scan set (exit %d)\n' "${empty_scan_exit}"
+fi
+
 if ((failures > 0)); then
   printf '%d test(s) failed\n' "${failures}" >&2
   exit 1

@@ -23,18 +23,23 @@ failures=0
 #              stays a local check and contributes no record.
 # @arg $1 scenario name
 # @arg $2 expected exit code
-# @arg $@ `--expect <substring>` (must appear in stdout) and
+# @arg $@ `--expect <substring>` (must appear in stdout),
+#         `--expect-err <substring>` (must appear in stderr) and
 #         `--forbid <substring>` (must not appear), each repeatable
 function run_scenario() {
   local -r name="$1"
   local -r expected_exit="$2"
   shift 2
 
-  local -a expect_subs=() forbid_subs=()
+  local -a expect_subs=() expect_err_subs=() forbid_subs=()
   while (($#)); do
     case "$1" in
     --expect)
       expect_subs+=("$2")
+      shift 2
+      ;;
+    --expect-err)
+      expect_err_subs+=("$2")
       shift 2
       ;;
     --forbid)
@@ -60,9 +65,10 @@ function run_scenario() {
   printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
 
   local sub
-  harness_assert_record "${name}" "${expect_subs[0]-}" \
+  local -a all_subs=("${expect_subs[@]}" "${expect_err_subs[@]}")
+  harness_assert_record "${name}" "${all_subs[0]-}" \
     "${outcome_file}" "${out_file}" "${err_file}"
-  for sub in "${expect_subs[@]:1}"; do
+  for sub in "${all_subs[@]:1}"; do
     harness_assert_also "${sub}"
   done
 
@@ -76,6 +82,14 @@ function run_scenario() {
     if ! grep --fixed-strings --quiet -- "${sub}" "${out_file}"; then
       printf 'FAIL: %s — stdout missing %q\n' "${name}" "${sub}" >&2
       cat -- "${out_file}" >&2
+      failures=$((failures + 1))
+      return
+    fi
+  done
+  for sub in "${expect_err_subs[@]}"; do
+    if ! grep --fixed-strings --quiet -- "${sub}" "${err_file}"; then
+      printf 'FAIL: %s — stderr missing %q\n' "${name}" "${sub}" >&2
+      cat -- "${err_file}" >&2
       failures=$((failures + 1))
       return
     fi
@@ -146,6 +160,16 @@ run_scenario 'malformed job id dropped from body' 0 --forbid 'Bad Job'
 # --- scenario: missing workflows dir -> exit 2 ---
 WF_DIR="${SANDBOX}/nope"
 run_scenario 'missing workflows dir fails loudly' 2
+
+# --- scenario: workflows dir present on disk but tracked at no ref ---
+# `git ls-tree` answers with an empty list, which the job diff renders as no
+# jobs added and no jobs removed, and the summary reports as PRESSURE=0 —
+# a metric that measured nothing, printed like one that measured no drift.
+WF_DIR="${SANDBOX}/.github/untracked-workflows"
+mkdir -p "${WF_DIR}"
+printf 'name: a\njobs:\n  build:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
+run_scenario 'workflows dir tracked at no ref fails loudly' 2 \
+  --expect-err 'enumerated 0 workflow file(s)'
 
 # @description Fresh sandbox whose backdated baseline already contains the
 #              job + member that within-window commits then remove, so the
