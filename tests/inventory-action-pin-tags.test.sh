@@ -147,6 +147,38 @@ rm --recursive --force -- "${ACTIONYAML_DIR}" "${OUT_ACTIONYAML}" \
   "${STDOUT_ACTIONYAML}" "${STDERR_ACTIONYAML}" "${OUTCOME_ACTIONYAML}"
 printf 'OK   action.yaml composite inventoried via default scan\n'
 
+# --- empty scan set: default scan from a cwd holding no `.github` ---
+# The run still writes a well-formed TSV; it just has no rows. Downstream
+# that reads as "no pins to rewrite" rather than as an inventory that was
+# never taken, so an empty enumeration is a could-not-run.
+EMPTY_SCAN_DIR="$(mktemp --directory)"
+OUT_EMPTY="$(mktemp)"
+STDOUT_EMPTY="$(mktemp)"
+STDERR_EMPTY="$(mktemp)"
+OUTCOME_EMPTY="$(mktemp)"
+empty_exit=0
+(
+  cd "${EMPTY_SCAN_DIR}" &&
+    bash "${SCRIPT}" --output "${OUT_EMPTY}"
+) >"${STDOUT_EMPTY}" 2>"${STDERR_EMPTY}" || empty_exit=$?
+printf 'harness-assert-outcome: exit=%d\n' "${empty_exit}" >"${OUTCOME_EMPTY}"
+harness_assert_record 'empty scan set is a could-not-run' \
+  'enumerated 0 workflow / composite-action file(s)' \
+  "${OUTCOME_EMPTY}" "${STDOUT_EMPTY}" "${STDERR_EMPTY}" "${OUT_EMPTY}"
+if ((empty_exit != 2)) ||
+  ! grep --fixed-strings --quiet \
+    'enumerated 0 workflow / composite-action file(s)' "${STDERR_EMPTY}"; then
+  printf 'FAIL: empty scan set should exit 2 with the breadth diagnostic (exit %d)\n' \
+    "${empty_exit}" >&2
+  cat -- "${STDERR_EMPTY}" >&2
+  rm --recursive --force -- "${EMPTY_SCAN_DIR}" "${OUT_EMPTY}" \
+    "${STDOUT_EMPTY}" "${STDERR_EMPTY}" "${OUTCOME_EMPTY}"
+  exit 1
+fi
+rm --recursive --force -- "${EMPTY_SCAN_DIR}" "${OUT_EMPTY}" \
+  "${STDOUT_EMPTY}" "${STDERR_EMPTY}" "${OUTCOME_EMPTY}"
+printf 'OK   empty scan set is a could-not-run\n'
+
 harness_assert_verify || exit 1
 
 printf 'all tests passed\n'
