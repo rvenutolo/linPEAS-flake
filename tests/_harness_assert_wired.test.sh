@@ -74,9 +74,7 @@ readonly GATE_PARITY_EXEMPT_CALL='^[[:space:]]*harness_assert_parity_exempt([[:s
 
 # Harness basenames permitted to register a parity exemption. Each entry
 # carries the reason its collapsed pair admits no separating output.
-readonly -a PARITY_EXEMPT_ALLOWED=(
-  'check-changelog-fresh.test.sh' # the two release-window scenarios feed the script identical inputs and differ only in whether the newest tag points at HEAD, which the exclusion rule never consults
-)
+readonly -a PARITY_EXEMPT_ALLOWED=()
 
 # Harness basenames excluded from the wiring verdict and from both
 # exemption ratchets. Most read produced artifact content instead of
