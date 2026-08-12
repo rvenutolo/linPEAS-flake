@@ -207,9 +207,22 @@ for rel in "${files[@]}"; do
   else
     reason="scoped by ${scoping} but no matchString matches a line"
   fi
+  # Captured rather than fed through a process substitution, whose
+  # subshell would keep a grep that could not read the file from ever
+  # reaching this shell: the marker positions would go silently missing
+  # from a diagnostic that exists to name them.
+  lineno_status=0
+  lineno_rows="$(grep --line-number --perl-regexp -- "${MARKER_RE}" "${file}" |
+    cut --delimiter=: --fields=1)" || lineno_status=$?
+  if ((lineno_status > 1)); then
+    printf '%s: grep failed locating renovate markers in %s\n' \
+      "${0##*/}" "${rel}" >&2
+    exit 2
+  fi
   while IFS= read -r lineno; do
+    [[ -z ${lineno} ]] && continue
     printf 'dead renovate marker: %s:%s (%s)\n' "${rel}" "${lineno}" "${reason}" >&2
-  done < <(grep --line-number --perl-regexp -- "${MARKER_RE}" "${file}" | cut --delimiter=: --fields=1)
+  done <<<"${lineno_rows}"
   fail=1
 done
 

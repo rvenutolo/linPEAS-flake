@@ -2,8 +2,6 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-# Both definition shapes appear here so the name collection is exercised
-# with and without the `function` keyword.
 function expected_keys() {
   jq --raw-output 'keys[]' expected.json
 }

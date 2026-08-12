@@ -91,9 +91,19 @@ if [[ -n ${PATHS_OVERRIDE:-} ]]; then
     paths+=("${p}")
   done <<<"${PATHS_OVERRIDE}"
 else
+  # Capture the enumeration so git's exit status is checked. A process
+  # substitution runs in its own subshell, so the redirection only ever
+  # sees the status of the loop it feeds; a git that could not read the
+  # index would hand the loop an empty scan set to score as data.
+  if ! paths_out="$(git ls-files "${SCAN_GLOBS[@]}" 2>/dev/null)"; then
+    printf '%s: git ls-files failed enumerating the scan globs\n' \
+      "${0##*/}" >&2
+    exit 2
+  fi
   while IFS= read -r p; do
+    [[ -z ${p} ]] && continue
     paths+=("${p}")
-  done < <(git ls-files "${SCAN_GLOBS[@]}" 2>/dev/null || true)
+  done <<<"${paths_out}"
 fi
 
 # Emits one line per invocation: `<status>\t<record>`, where status is

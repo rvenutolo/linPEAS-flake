@@ -34,15 +34,18 @@ function expect() {
   printf 'OK   %s\n' "${label}"
 }
 
-readonly PARSER_DIAG='parser process substitution feeds a redirection (yq/jq exit status lost under pipefail)'
-readonly FUNC_DIAG='function process substitution feeds a redirection (same-file producer exit status lost under pipefail)'
+readonly HIT_DIAG='process substitution feeds a redirection (producer exit status lost to its subshell)'
 
-expect "${FIXTURES}/bad" 1 "bad-yq" "${PARSER_DIAG}" "done < <(yq eval"
-expect "${FIXTURES}/bad-jq" 1 "bad-jq" "${PARSER_DIAG}" "done < <(jq --raw-output"
-expect "${FIXTURES}/bad-func" 1 "bad-func" "${FUNC_DIAG}" "done < <(collect_files"
+# One banned scenario is enough: the ban is on the shape, so a fixture per
+# producer kind would restate the same outcome. This one uses a producer
+# that is neither a parser nor a function the file defines, which is the
+# part of the rule a shape-specific ban would miss.
+expect "${FIXTURES}/bad" 1 "banned-procsub" "${HIT_DIAG}" "done < <(find"
+# The capture idiom, alongside a comment that spells the banned form out:
+# only live code is a hit.
 expect "${FIXTURES}/good" 0 "good"
 # `diff` takes both substitutions as file arguments and its own status is
-# what the caller acts on, so a function-fed pair here is not a hit.
+# what the caller acts on, so a pair fed to it is not a hit.
 expect "${FIXTURES}/good-diff" 0 "good-diff"
 expect "" 0 "real scripts/"
 

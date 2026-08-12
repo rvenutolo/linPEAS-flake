@@ -58,7 +58,15 @@ fi
 readonly LITERAL_REGEX='(^|[[:space:]])(mv|cp|tee)[[:space:]].*linpeas-pin\.json|>[[:space:]]*"?[^"[:space:]]*linpeas-pin\.json'
 readonly VAR_REGEX='(^|[[:space:]])(mv|cp|tee)[[:space:]].*\$\{?(pin_file|PIN_FILE|pin_path|PIN_PATH)\}?|>[[:space:]]*"?\$\{?(pin_file|PIN_FILE|pin_path|PIN_PATH)\}?'
 
-mapfile -t writer_files < <(
+# The enumeration is captured rather than piped into `mapfile` through a
+# process substitution: a substitution runs in its own subshell, so its
+# producer's status never reaches this shell and a grep that could not
+# read the tree would look exactly like a tree with no writer in it.
+# The trailing `grep --invert-match` legitimately exits 1 when it filters
+# every candidate away, so status 1 means "no writers" and only a higher
+# status is a could-not-run.
+writers_status=0
+writers_out="$(
   {
     grep --recursive --files-with-matches --extended-regexp \
       --include='*.sh' "${LITERAL_REGEX}" "${SCRIPTS_DIR}" 2>/dev/null || true
@@ -73,7 +81,19 @@ mapfile -t writer_files < <(
     done |
     grep --invert-match --line-regexp 'check-pin-diff-isolated\.sh' |
     sort -u
-)
+)" || writers_status=$?
+if ((writers_status > 1)); then
+  printf 'could not enumerate pin writers under %s\n' "${SCRIPTS_DIR}" >&2
+  exit 2
+fi
+
+# An empty capture read by `<<<` still yields one empty line, so blank
+# entries are dropped here and the count below reflects real writers.
+writer_files=()
+while IFS= read -r writer; do
+  [[ -z ${writer} ]] && continue
+  writer_files+=("${writer}")
+done <<<"${writers_out}"
 
 if ((${#writer_files[@]} == 0)); then
   printf 'no script under %s writes to %s — expected exactly %s\n' \

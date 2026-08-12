@@ -23,19 +23,36 @@ if [[ ! -f ${doc} ]]; then
   exit 2
 fi
 
+# @description Read the doc's table rows matching an awk pattern, take
+# column 4, dedupe, and load the result into the `workflows` array. The
+# pipeline is captured rather than fed to `mapfile` through a process
+# substitution, whose subshell would swallow a dead awk and leave the
+# lint reporting an empty table as a clean one.
+# @arg $1 awk program
+function load_workflows() {
+  local rows
+  if ! rows="$(awk -F'|' "$1" "${doc}" | sort --unique)"; then
+    printf 'required-checks-no-paths lint: could not read the workflow table in %s\n' "${doc}" >&2
+    exit 2
+  fi
+  workflows=()
+  # An empty capture read by `<<<` still yields one line, so the array
+  # would gain a phantom entry and the emptiness test below would never
+  # fire.
+  if [[ -n ${rows} ]]; then
+    mapfile -t workflows <<<"${rows}"
+  fi
+}
+
 # Parse markdown table column 4 (`.github/workflows/<file>`) — dedupe.
-mapfile -t workflows < <(
-  awk -F'|' '/^\|[[:space:]]*\.github\/workflows\// {gsub(/[[:space:]]+/, "", $4); print $4}' \
-    "${doc}" | sort --unique
-)
+# shellcheck disable=SC2016 # awk program: `$4` is an awk field, not a shell expansion
+load_workflows '/^\|[[:space:]]*\.github\/workflows\// {gsub(/[[:space:]]+/, "", $4); print $4}'
 
 if ((${#workflows[@]} == 0)); then
   # Tests reference fixtures under tests/fixtures/required-checks/ — accept
   # that form too. Parse any row whose 4th column ends in `.yml`.
-  mapfile -t workflows < <(
-    awk -F'|' '/\.yml[[:space:]]*\|/ {gsub(/[[:space:]]+/, "", $4); print $4}' \
-      "${doc}" | sort --unique
-  )
+  # shellcheck disable=SC2016 # awk program: `$4` is an awk field, not a shell expansion
+  load_workflows '/\.yml[[:space:]]*\|/ {gsub(/[[:space:]]+/, "", $4); print $4}'
 fi
 
 if ((${#workflows[@]} == 0)); then

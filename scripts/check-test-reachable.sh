@@ -63,14 +63,31 @@ function is_exempt() {
 # lint-group member with no test); that is harmless — only existing harnesses
 # are checked against this set.
 function reachable_set() {
+  # Every enumeration below is captured before it is read. A process
+  # substitution runs in its own subshell, so the loop it feeds only ever
+  # sees its own status: a grep that could not read a runner would look
+  # like a runner that reaches nothing, and every harness it wires would
+  # be reported unreachable. `grep` exit 1 is a real answer here — a
+  # runner may legitimately match no line — so only a higher status is a
+  # could-not-run.
+  local rows status
+
   # 1. run-harness-group.sh HARNESSES array, field 2 (the .test.sh filename).
   if [[ -f ${HARNESS_RUNNER} ]]; then
     local entry
+    status=0
+    rows="$(grep -E "^[[:space:]]*'[^']+\|[^']+\.test\.sh\|[^']*'" "${HARNESS_RUNNER}")" ||
+      status=$?
+    if ((status > 1)); then
+      printf 'grep failed reading %s for harness entries\n' "${HARNESS_RUNNER}" >&2
+      exit 2
+    fi
     while IFS= read -r entry; do
+      [[ -z ${entry} ]] && continue
       entry="${entry#*\'}"
       entry="${entry%%\'*}"
       printf '%s|%s\n' "${MECH_HARNESS_GROUP}" "$(cut -d'|' -f2 <<<"${entry}")"
-    done < <(grep -E "^[[:space:]]*'[^']+\|[^']+\.test\.sh\|[^']*'" "${HARNESS_RUNNER}")
+    done <<<"${rows}"
   fi
 
   # 2. tests/refresh-*.test.sh — name-convention glob in run-doc-freshness.sh.
@@ -82,23 +99,38 @@ function reachable_set() {
   # 3. lint-groups.yml members -> check-<name>.test.sh (run by run-lint-group).
   if [[ -f ${LINT_GROUPS} ]]; then
     local name
+    status=0
+    rows="$(grep -E '^[[:space:]]*-[[:space:]]+[^[:space:]]+' "${LINT_GROUPS}" |
+      sed -E 's/^[[:space:]]*-[[:space:]]+//')" || status=$?
+    if ((status > 1)); then
+      printf 'grep failed reading %s for group members\n' "${LINT_GROUPS}" >&2
+      exit 2
+    fi
     while IFS= read -r name; do
+      [[ -z ${name} ]] && continue
       printf '%s|check-%s.test.sh\n' "${MECH_LINT_GROUPS}" "${name}"
-    done < <(grep -E '^[[:space:]]*-[[:space:]]+[^[:space:]]+' "${LINT_GROUPS}" |
-      sed -E 's/^[[:space:]]*-[[:space:]]+//')
+    done <<<"${rows}"
   fi
 
   # 4. Direct `tests/<x>.test.sh` invocations in any workflow file. Guard the
   # glob explicitly (nullglob makes an empty match vanish, which would leave
-  # grep reading stdin) and tolerate a no-match (grep exit 1 under set -e).
+  # grep reading stdin).
   local -a wf_files=("${WORKFLOWS_DIR}"/*.yml)
   if ((${#wf_files[@]} > 0)); then
     local hit
-    while IFS= read -r hit; do
-      printf '%s|%s\n' "${MECH_WORKFLOW}" "${hit}"
-    done < <(grep --no-filename --only-matching --extended-regexp \
+    status=0
+    rows="$(grep --no-filename --only-matching --extended-regexp \
       'tests/[A-Za-z0-9_.-]+\.test\.sh' "${wf_files[@]}" |
-      sed 's#tests/##' || true)
+      sed 's#tests/##')" || status=$?
+    if ((status > 1)); then
+      printf 'grep failed reading %s for direct harness invocations\n' \
+        "${WORKFLOWS_DIR}" >&2
+      exit 2
+    fi
+    while IFS= read -r hit; do
+      [[ -z ${hit} ]] && continue
+      printf '%s|%s\n' "${MECH_WORKFLOW}" "${hit}"
+    done <<<"${rows}"
   fi
 }
 

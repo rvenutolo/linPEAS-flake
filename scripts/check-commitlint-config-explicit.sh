@@ -163,10 +163,23 @@ for f in "${paths[@]}"; do
       if [[ ${cfg_val} =~ \&\&[[:space:]]*\'([^\']*)\'[[:space:]]*\|\|[[:space:]]*\'([^\']*)\' ]]; then
         refs+=("${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}")
       else
+        # Captured rather than fed through a process substitution, whose
+        # subshell would hide a broken pipeline behind an empty ref list
+        # and turn a tooling fault into the "names no quoted config path"
+        # verdict below. No quoted string is a real answer (status 1);
+        # only a higher status is a could-not-run.
+        quoted_status=0
+        quoted_refs="$(grep -o "'[^']*'" <<<"${cfg_val}" |
+          sed "s/^'//;s/'\$//")" || quoted_status=$?
+        if ((quoted_status > 1)); then
+          printf '%s: could not extract quoted config paths from %q\n' \
+            "${f}" "${cfg_val}" >&2
+          exit 2
+        fi
         while IFS= read -r q; do
           [[ -z ${q} ]] && continue
           refs+=("${q}")
-        done < <(grep -o "'[^']*'" <<<"${cfg_val}" | sed "s/^'//;s/'\$//" || true)
+        done <<<"${quoted_refs}"
       fi
       if ((${#refs[@]} == 0)); then
         # shellcheck disable=SC2016 # literal backticks in human-readable prose
