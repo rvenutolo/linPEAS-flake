@@ -16,8 +16,10 @@
 # this lint is a belt-and-braces backstop to that runtime check.
 # Defaults scan `.github/workflows/*.yml`|`*.yaml` +
 # `.github/actions/**/action.yml` (or `action.yaml`).
-# Honors LINT_PATHS_OVERRIDE (newline-separated file list) for fixtures.
-# Exits 0 on clean; exits 1 with per-violation `file:line:` summary.
+# Honors LINT_PATHS_OVERRIDE (newline-separated file list) for fixtures,
+# and LINT_ALLOW_EMPTY_SCAN=1 to accept an empty scan set.
+# Exits 0 on clean; exits 1 with per-violation `file:line:` summary; exits 2
+# when the scan set could not be enumerated or came back empty.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -28,12 +30,44 @@ if [[ -n ${LINT_PATHS_OVERRIDE:-} ]]; then
     [[ -n ${p} ]] && paths+=("${p}")
   done <<<"${LINT_PATHS_OVERRIDE}"
 else
+  # Each root is scanned only when it is there, because a repo may carry
+  # workflows and no composite actions (or the reverse), so one root being
+  # absent is not itself a fault. What is a fault is BOTH roots yielding
+  # nothing: `find` against a missing root exits 1 having printed no paths,
+  # and a discarded status makes a cwd with no `.github` at all read exactly
+  # like a tree whose every pin already carries an exact patch tag — every
+  # pin in the repo then goes unread behind an exit 0. The breadth assertion
+  # below is what separates those two, so it is the assertion that matters
+  # here; the per-root status checks only keep a readable root's failure
+  # from being scored as "no files".
+  scan_out=""
+  if [[ -d .github/workflows ]]; then
+    if ! workflow_paths="$(find .github/workflows -maxdepth 1 -type f \
+      \( -name '*.yml' -o -name '*.yaml' \))"; then
+      printf '%s: find failed enumerating .github/workflows\n' "${0##*/}" >&2
+      exit 2
+    fi
+    scan_out+="${workflow_paths}"$'\n'
+  fi
+  if [[ -d .github/actions ]]; then
+    if ! action_paths="$(find .github/actions -type f \
+      \( -name 'action.yml' -o -name 'action.yaml' \))"; then
+      printf '%s: find failed enumerating .github/actions\n' "${0##*/}" >&2
+      exit 2
+    fi
+    scan_out+="${action_paths}"$'\n'
+  fi
+  # An empty capture read by `<<<` still yields one empty line, so blank
+  # entries are dropped here and the count below is of real paths.
   while IFS= read -r p; do
+    [[ -z ${p} ]] && continue
     paths+=("${p}")
-  done < <(
-    find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) 2>/dev/null || true
-    find .github/actions -type f \( -name 'action.yml' -o -name 'action.yaml' \) 2>/dev/null || true
-  )
+  done <<<"${scan_out}"
+  if ((${#paths[@]} == 0)) && [[ -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
+    printf '%s: enumerated 0 workflow / composite-action file(s) under .github — a tree with pins to check cannot have an empty scan set; set LINT_ALLOW_EMPTY_SCAN=1 if this is deliberate\n' \
+      "${0##*/}" >&2
+    exit 2
+  fi
 fi
 
 # Every `uses: <ref>@<40-hex>` line is in scope, comment or not.
