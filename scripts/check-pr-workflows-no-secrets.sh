@@ -17,8 +17,8 @@
 # test harness can point at a temp dir with a single fixture.
 #
 # Exits 0 if every PR-triggered workflow is clean, 1 on a secrets
-# violation, 2 on a tooling error (yq missing, or a workflow yq cannot
-# parse).
+# violation, 2 on a tooling error (workflows dir missing, yq missing, or
+# a workflow yq cannot parse).
 set -Eeuo pipefail
 IFS=$'\n\t'
 
@@ -26,7 +26,7 @@ readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-.github/workflows}"
 
 if [[ ! -d ${WORKFLOWS_DIR} ]]; then
   printf 'pr-workflows-no-secrets lint: workflows dir %s missing\n' "${WORKFLOWS_DIR}" >&2
-  exit 1
+  exit 2
 fi
 
 if ! command -v yq >/dev/null 2>&1; then
