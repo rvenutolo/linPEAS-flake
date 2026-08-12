@@ -11,7 +11,8 @@
 # would create the auto-merge path-filter trap (skipped checks merging with
 # zero coverage on path-narrow PRs).
 #
-# Exits 0 if every listed workflow is clean, 1 otherwise.
+# Exits 0 if every listed workflow is clean, 1 on a path filter, 2 when
+# the doc that names the workflows is not there to read.
 set -Eeuo pipefail
 IFS=$'\n\t'
 
@@ -19,7 +20,7 @@ readonly doc='docs/security/required-checks.md'
 
 if [[ ! -f ${doc} ]]; then
   printf 'required-checks-no-paths lint: %s missing\n' "${doc}" >&2
-  exit 1
+  exit 2
 fi
 
 # Parse markdown table column 4 (`.github/workflows/<file>`) — dedupe.
