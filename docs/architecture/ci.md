@@ -64,13 +64,13 @@ Self-enforcing invariant gates:
 
 Doc-quality + conventional-commit gates (all alphabetical):
 
-| Job                                        | What it enforces                                                                                                  |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `commitlint`                               | Every branch commit independently satisfies [Conventional Commits](https://www.conventionalcommits.org).          |
-| `editorconfig`                             | `.editorconfig` compliance (charset, line endings, trailing whitespace, final newline).                           |
-| `lint-pr-title` (workflow `pr-title-lint`) | PR title independently satisfies Conventional Commits. The PR title is used verbatim as the merge-commit subject. |
-| `markdownlint`                             | Markdown style + structure.                                                                                       |
-| `typos`                                    | Spell-check across the repo.                                                                                      |
+| Job                                        | What it enforces                                                                                                                                    |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `commitlint`                               | Every branch commit independently satisfies [Conventional Commits](https://www.conventionalcommits.org).                                            |
+| `editorconfig`                             | `.editorconfig` compliance (charset, line endings, trailing whitespace, final newline).                                                             |
+| `lint-pr-title` (workflow `pr-title-lint`) | PR title independently satisfies Conventional Commits and is spell-checked with `typos`. The PR title is used verbatim as the merge-commit subject. |
+| `markdownlint`                             | Markdown style + structure.                                                                                                                         |
+| `typos`                                    | Spell-check across the repo.                                                                                                                        |
 
 ## Merge policy
 

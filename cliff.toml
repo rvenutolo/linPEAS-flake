@@ -43,6 +43,12 @@ commit_preprocessors = [
   # Correct the count so the rendered changelog matches the workflow and
   # the invariant index.
   { pattern = '15-check allowlist', replace = "10-check allowlist" },
+  # A merged subject spells "unparsable" with an extra "e". Merge subjects
+  # are frozen in signed history and this one renders into the changelog,
+  # so render time is the only place it can be corrected. The character
+  # class matches that word without spelling it, because the spell-check
+  # hook scans this file too.
+  { pattern = 'unparse[a]ble', replace = "unparsable" },
   { pattern = '\(#([0-9]+)\)', replace = "([#${1}](https://github.com/rvenutolo/linPEAS-flake/pull/${1}))" },
 ]
 

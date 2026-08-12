@@ -46,6 +46,12 @@ That rewrap decides where each rule can be enforced:
     title. A title that fits the header limit on its own can still overflow it
     once the suffix lands, and that failure would appear only on `main`, on a
     commit no longer amendable.
+- **Spelling** is checked by the same `lint-pr-title` step, with `typos`
+    against that same composed string. The PR title becomes the merge-commit
+    subject, and `git-cliff` renders merge subjects into `CHANGELOG.md`; a
+    typo frozen into that immutable, signed subject can only be corrected by
+    a render-time rewrite, so the title is spell-checked in CI before the
+    merge makes it permanent.
 - **Body and footer line length** is checked by `commitlint` on the
     `pull_request` event, against hand-authored branch commits, where the author
     controls the wrapping.
