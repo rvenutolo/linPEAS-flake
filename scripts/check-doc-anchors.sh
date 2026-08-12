@@ -134,7 +134,7 @@ function lossy_heading_count() {
 
 declare -a SOURCES=()
 if [[ -n ${DOC_ANCHOR_SOURCES_OVERRIDE:-} ]]; then
-  mapfile -t SOURCES < <(printf '%s\n' "${DOC_ANCHOR_SOURCES_OVERRIDE}")
+  mapfile -t SOURCES <<<"${DOC_ANCHOR_SOURCES_OVERRIDE}"
 else
   # The docs enumeration is captured with its status checked, and the
   # trailing `sort` is applied to the capture rather than to a pipe, so

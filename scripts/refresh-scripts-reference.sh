@@ -148,12 +148,19 @@ function main() {
   local -a scripts
   scripts=("${scripts_dir}"/*.sh)
   shopt -u nullglob
-  # Sort by basename for deterministic output.
+  # Sort by basename for deterministic output. The sort is captured with
+  # its status checked rather than piped into `mapfile` through a process
+  # substitution, whose subshell would hide a failed sort behind an empty
+  # list and regenerate the reference with every script missing from it.
   local -a sorted
+  local sorted_out
+  sorted=()
   if [[ ${#scripts[@]} -gt 0 ]]; then
-    mapfile -t sorted < <(printf '%s\n' "${scripts[@]}" | sort)
-  else
-    sorted=()
+    if ! sorted_out="$(printf '%s\n' "${scripts[@]}" | sort)"; then
+      log_err "could not sort the script list under ${scripts_dir}"
+      exit 2
+    fi
+    mapfile -t sorted <<<"${sorted_out}"
   fi
 
   for script in "${sorted[@]}"; do
