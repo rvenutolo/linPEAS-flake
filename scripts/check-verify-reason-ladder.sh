@@ -170,8 +170,26 @@ done < <(awk -v marker="${EXEMPT_MARKER}" '
 declare -A ENV_STEP=()
 env_names=()
 declare -A REFERENCED=()
+bad_env_name=0
 while IFS=$'\t' read -r name value; do
   [[ -z ${name} ]] && continue
+  # Both remaining assertions interpolate this name verbatim into a
+  # regex — an ERE in assertion 2, a gawk dynamic regex in assertion 4 —
+  # so a name carrying a regex metacharacter is matched as a pattern
+  # rather than as the literal it is meant to be. The two engines
+  # disagree about malformed patterns: a name such as `A{1` is lenient
+  # in GNU grep but fatal in gawk, which kills the producer feeding
+  # assertion 4 and leaves that assertion checking nothing at all while
+  # the lint still prints its affirmative banner. Requiring a shell
+  # identifier makes both interpolations literal by construction. A
+  # GitHub Actions env key is a shell identifier in any workflow that
+  # can read it, so a non-conforming key is drift, not a tooling fault.
+  if [[ ! ${name} =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+    printf '%s: attribution env key %q is not a shell identifier; attribution env names must match ^[A-Za-z_][A-Za-z0-9_]*$\n' \
+      "${WORKFLOW}" "${name}" >&2
+    bad_env_name=1
+    continue
+  fi
   env_names+=("${name}")
   ref=''
   if [[ ${value} =~ steps\.([A-Za-z0-9_-]+)\.outcome ]]; then
@@ -180,6 +198,12 @@ while IFS=$'\t' read -r name value; do
   fi
   ENV_STEP["${name}"]="${ref}"
 done <<<"${env_rows}"
+
+# Stop here rather than folding this into `drift`: every assertion below
+# would be interpolating the rejected name into a regex.
+if ((bad_env_name)); then
+  exit 1
+fi
 
 # --- assertion 1: coverage -------------------------------------------
 for id in "${steps[@]}"; do
@@ -194,15 +218,32 @@ done
 
 # --- assertion 2: ladder use -----------------------------------------
 # Boundary-aware so `READ_TAG` is not satisfied by a `READ_TAG_EXTRA`
-# occurrence. Env var names are shell identifiers, so they carry no
-# regex metacharacters.
+# occurrence. The name is safe to interpolate into the ERE because the
+# identifier check above already rejected every name that could carry a
+# regex metacharacter.
+#
+# grep's status is read three ways rather than as a boolean: exit 2 means
+# grep itself could not run the search, and scoring that as "no match"
+# reports a step the ladder does read as unread — a tooling fault filed
+# as workflow drift.
 for name in "${env_names[@]}"; do
-  if ! grep --extended-regexp --quiet -- \
-    "(^|[^A-Za-z0-9_])${name}([^A-Za-z0-9_]|$)" <<<"${ladder_body}"; then
+  read_status=0
+  grep --extended-regexp --quiet -- \
+    "(^|[^A-Za-z0-9_])${name}([^A-Za-z0-9_]|$)" <<<"${ladder_body}" ||
+    read_status=$?
+  case "${read_status}" in
+  0) ;;
+  1)
     printf '%s: attribution env var %q is never read by the reason ladder\n' \
       "${WORKFLOW}" "${name}" >&2
     drift=1
-  fi
+    ;;
+  *)
+    printf '%s: grep failed searching the ladder body for env var %q\n' \
+      "${WORKFLOW}" "${name}" >&2
+    exit 2
+    ;;
+  esac
 done
 
 # --- assertion 3: docs parity ----------------------------------------
@@ -234,16 +275,25 @@ done
 # reading order, is where the ladder tests it.
 names_file="$(mktemp)"
 body_file="$(mktemp)"
+# awk reads an operand whose first path component is an identifier
+# followed by `=` as a variable assignment, not as a file: it then finds
+# no file operand at all, reads stdin, and exits 0 having emitted
+# nothing. `mktemp` honors TMPDIR, so a relative TMPDIR is enough to put
+# a `=` in the leading component. An absolute path always starts with
+# `/`, which no assignment can, so the operand can only be read as a
+# file.
+[[ ${names_file} == /* ]] || names_file="${PWD}/${names_file}"
+[[ ${body_file} == /* ]] || body_file="${PWD}/${body_file}"
 # shellcheck disable=SC2064 # expand the paths now, while they are in scope
 trap "rm --force -- '${names_file}' '${body_file}'" EXIT
 printf '%s\n' "${env_names[@]}" >"${names_file}"
 printf '%s\n' "${ladder_body}" >"${body_file}"
 
-ladder_order=()
-while IFS= read -r name; do
-  [[ -z ${name} ]] && continue
-  ladder_order+=("${name}")
-done < <(awk '
+# Capture the pipeline rather than feeding the loop from `< <(...)`, for
+# the same reason the yq reads above are captured: a substitution's exit
+# status never reaches the consumer, so a dead awk hands the loop an
+# empty stream and this assertion silently checks nothing.
+if ! ladder_order_rows="$(awk '
   NR == FNR { name[++n] = $0; next }
   {
     for (i = 1; i <= n; i++) {
@@ -254,7 +304,17 @@ done < <(awk '
       }
     }
   }
-' "${names_file}" "${body_file}" | sort --key=1,1n --key=2,2n | cut --fields=3)
+' "${names_file}" "${body_file}" | sort --key=1,1n --key=2,2n | cut --fields=3)"; then
+  printf '%s: awk failed scanning the ladder body for env var first use\n' \
+    "${WORKFLOW}" >&2
+  exit 2
+fi
+
+ladder_order=()
+while IFS= read -r name; do
+  [[ -z ${name} ]] && continue
+  ladder_order+=("${name}")
+done <<<"${ladder_order_rows}"
 
 prev_name=''
 prev_index=-1
