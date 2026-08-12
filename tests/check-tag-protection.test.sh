@@ -106,9 +106,37 @@ function main() {
     'bad-target-drift.json' 1 'target drift'
   run_scenario 'empty rules list is drift, not a tooling error' \
     'bad-rules-empty.json' 1 'missing rule: deletion (have: )'
+  # Two layers reject a malformed `.rules`, so both need a scenario. The
+  # up-front shape gate rejects a `.rules` that is not an array at all. An
+  # array holding non-objects passes that gate, and the capture guard around
+  # `.rules[].type` is the only thing that catches it — which is why that
+  # guard stays even though the gate stands in front of it.
   run_scenario 'non-array rules is a tooling error' \
     'bad-rules-wrong-type.json' 2 \
+    'unexpected payload shape from RULESET_JSON_OVERRIDE: .rules is string, want array'
+  run_scenario 'rules holding non-objects is a tooling error' \
+    'bad-rules-non-object-items.json' 2 \
     'release-tag-protection ruleset: could not read .rules[].type'
+  # A malformed payload is a could-not-run, not drift: every read below the
+  # gate assumes a shape neither the API nor a fixture guarantees, and a
+  # tooling fault reported as drift sends a maintainer after posture nobody
+  # changed. Each scenario names the field the gate rejected, so the five
+  # outcomes stay distinct.
+  run_scenario 'ruleset without include patterns is a tooling error' \
+    'bad-no-include-patterns.json' 2 \
+    'unexpected payload shape from RULESET_JSON_OVERRIDE: .conditions.ref_name.include is null, want array'
+  run_scenario 'non-array bypass_actors is a tooling error' \
+    'bad-bypass-actors-wrong-type.json' 2 \
+    'unexpected payload shape from RULESET_JSON_OVERRIDE: .bypass_actors is object, want array'
+  run_scenario 'payload that is not JSON is a tooling error' \
+    'bad-not-json.json' 2 \
+    'payload from RULESET_JSON_OVERRIDE is not valid JSON'
+  run_scenario 'empty payload is a tooling error' \
+    'bad-empty-payload.json' 2 \
+    'empty payload from RULESET_JSON_OVERRIDE'
+  run_scenario 'unreadable payload path is a tooling error' \
+    'does-not-exist.json' 2 \
+    'payload from RULESET_JSON_OVERRIDE is not readable'
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then

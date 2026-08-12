@@ -128,6 +128,13 @@
     # JSON to exercise the parse-error branch of the threshold check;
     # prettier refuses to format invalid JSON.
     "tests/fixtures/scorecard-threshold/malformed.json"
+    # tag-protection payload-shape fixtures are intentionally not
+    # well-formed ruleset JSON, to exercise the not-JSON and empty-payload
+    # branches of the lint's shape gate; prettier refuses to format invalid
+    # JSON, and it would strip the blank fixture to zero bytes, erasing the
+    # whitespace-only content the emptiness check is measured against.
+    "tests/fixtures/tag-protection/bad-not-json.json"
+    "tests/fixtures/tag-protection/bad-empty-payload.json"
     # `bad-malformed.yml` fixtures are intentionally unparsable YAML that
     # exercise the parse-failure branch of the workflow-lint checks;
     # prettier refuses to format invalid YAML.
