@@ -49,6 +49,7 @@ lint-script-hygiene:
   - manifest-hook-watches-nix
   - freshness-hook-watches-modules
   - no-opaque-procsub
+  - guard-exit-code
 lint-doc-invariants:
   - orphan-invariants
   - doc-anchors

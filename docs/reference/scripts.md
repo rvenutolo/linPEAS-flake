@@ -286,6 +286,46 @@ workflows, composite actions, scripts, nix modules, the justfile, and
 docs passes `--repo rvenutolo/linPEAS-flake` so verification is bound
 to this repository.
 
+### scripts/check-guard-exit-code.sh
+
+Lint: no scripts/\*.sh may exit 1 out of a guard whose
+test is only an availability check. The exit codes separate what the
+operator has to do about a run: 2 means the check could not run (a
+required tool is absent, an input is missing, unreadable or
+malformed), 1 means it ran and found a violation, 0 means clean. An
+absent tool reported as 1 sends the operator hunting for drift in
+content the check never read, and a hook or job that reports both the
+same way makes a broken environment indistinguishable from a broken
+repo.
+
+A hit is a conditional whose test is PURELY an availability predicate
+and whose branch body exits 1:
+
+if ! command -v X if ! require_tool X
+if \[[ ! -f|-r|-e|-d|-s P ]\] \[[ -f P ]\] || { ... }
+
+Matching is branch-scoped rather than proximity-based: the branch body
+is walked from its opening keyword to the matching `fi` or closing
+brace, so an exit that merely sits a few lines below an availability
+test is not attributed to it. Many checks here read a marker or a
+field out of a file that exists and report its absence as the finding
+— those exits belong to the search that came back empty, not to the
+guard above them, and a line-window scan mis-assigns exactly those.
+
+A test that mixes an availability predicate with another predicate
+under `||` is not a hit: that branch is reachable without the input
+being absent, so absence there is half of a content verdict rather
+than a could-not-run.
+
+Escape hatch: `# exit-code-exempt: <rationale>` on the exit line, for
+a guard whose missing input genuinely IS the finding. The marker has
+to open the comment, so prose naming it exempts nothing, and the
+rationale has to be non-empty. A clean run prints the exemption count,
+so the exempt set is stated rather than open-ended.
+
+Honors SCRIPTS_DIR_OVERRIDE (default: scripts) for fixtures.
+Exit 0 clean, 1 on any hit, 2 on operational error.
+
 ### scripts/check-harden-runner-block.sh
 
 Lint: every step-security/harden-runner step uses
