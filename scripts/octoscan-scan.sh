@@ -13,11 +13,15 @@
 #
 # Exit codes:
 #   0 — scan clean
-#   1 — findings present, OR real error (docker missing,
-#       image pull failure, scanner internal error). The caller
-#       must distinguish via the `has-finding` line printed to
-#       stdout (`has-finding=true|false`) — same contract the CI
-#       workflow already exposes via `$GITHUB_OUTPUT`.
+#   1 — findings present, OR the scanner ran and errored (image pull
+#       failure, scanner internal error). The caller must distinguish
+#       via the `has-finding` line printed to stdout
+#       (`has-finding=true|false`) — same contract the CI workflow
+#       already exposes via `$GITHUB_OUTPUT`.
+#   2 — the scan could not start: a tool it needs is absent, so no
+#       workflow file was read. Still fails the hook and the job; only
+#       the diagnosis differs, and it now matches the `infra-failure`
+#       classification this script already prints for the case.
 #
 # Per-file iteration: octoscan v0.1.7 directory-target mode silently
 # returns exit 0 with empty SARIF even when a single-file invocation
@@ -104,7 +108,7 @@ if ! command -v docker >/dev/null 2>&1; then
   printf '  SKIP=octoscan git commit ...\n' >&2
   printf 'has-finding=false\n'
   print_summary 'no workflow file scanned' 'infra-failure (docker unavailable)'
-  exit 1
+  exit 2
 fi
 
 if [[ -n ${sarif_out} ]] && ! command -v jq >/dev/null 2>&1; then
@@ -112,7 +116,7 @@ if [[ -n ${sarif_out} ]] && ! command -v jq >/dev/null 2>&1; then
   printf 'has-finding=false\n'
   print_summary 'no workflow file scanned' \
     'infra-failure (jq unavailable for --sarif aggregation)'
-  exit 1
+  exit 2
 fi
 
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || printf '%s' "$PWD")"
