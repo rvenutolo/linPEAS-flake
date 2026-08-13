@@ -139,6 +139,18 @@ A hit is reported with the offending path rendered through `${path@Q}`: the path
 
 Enforced by `scripts/check-path-hygiene.sh`. Wired as the `lint-script-hygiene` CI job (member check `path-hygiene`).
 
+## awk-operand-explicit
+
+Every `awk` invocation in `scripts/*.sh` that carries a file operand spells that operand `"$(awk_path "${var}")"`.
+
+`awk` reads a command-line operand shaped `name=value` as a variable assignment rather than a filename. Given one, it finds no file operand, reads stdin instead, and exits 0 having scanned nothing — so a relative path whose first path component contains `=` (e.g. `a=b/file.sh`) silently scores as an empty file rather than failing loud. `--` is no defense: POSIX makes operand-assignment parsing independent of it, and gawk treats a `--` placed after the program as a filename rather than an end-of-options marker. `scripts/lib/awk-path.sh`'s `awk_path()` neutralizes the hazard by prefixing a relative path with `./` (conditionally — an absolute path is returned unchanged, since a `./` ahead of one resolves as a different, relative path); this lint is what keeps every future `awk` call wrapped, rather than trusting a one-time sweep of the existing call sites to hold forever.
+
+Detection parses each script's shell syntax tree via `shfmt --to-json` — the same `mvdan.cc/sh` parser `shfmt` and `treefmt` already run over this repo — rather than matching text, because a textual rule drifts the moment a script's formatting moves an operand onto another line, inside a multi-line awk program, or beside a sibling operand. For every `awk` call, the argument list is walked following awk's own flags-then-program-then-operands grammar (`-v`, `-F`, `-f`/`--file`, `--field-separator`, `--assign`, `--source`, `--`, and their attached forms) to separate flags and the program from the operands that follow. `-f`/`--file`'s own value and an inline program argument are never operands and are excluded from the walk. Every operand that survives must be exactly one double-quoted word wrapping a single command substitution that calls `awk_path`; anything else is a violation.
+
+Not operands, and therefore never reach the walk: stdin redirections (`awk 'prog' <"${f}"`) and here-strings (`awk 'prog' <<<"${v}"`) — a redirection attaches to the enclosing statement, not the command's own argument list, so a call fed one has zero operand arguments to inspect — and pipeline input (`producer | awk 'prog'`), for the same reason.
+
+Enforced by `scripts/check-awk-operand-explicit.sh`. Wired as the `lint-script-hygiene` CI job (member check `awk-operand-explicit`).
+
 ## script-has-test
 
 Every `scripts/check-*.sh` has a matching `tests/check-*.test.sh`, and every `tests/check-*.test.sh` has a matching `scripts/check-*.sh`.

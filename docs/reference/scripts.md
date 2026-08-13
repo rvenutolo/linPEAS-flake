@@ -44,6 +44,45 @@ with `--auto` must also carry the decline gate (a `gh pr view --json state` quer
 maintainer-closed (declined) or already-merged PR is never silently
 resurrected by an auto-merging update workflow.
 
+### scripts/check-awk-operand-explicit.sh
+
+Lint: every `awk` invocation in scripts/\*.sh that
+carries a file operand must spell that operand
+`"$(awk_path "${var}")"`. `awk` reads an operand shaped
+`name=value` as a variable assignment rather than a filename; it
+then finds no file operand, reads stdin, and exits 0 having scanned
+nothing — so a relative path whose first component contains `=`
+scores as an empty file instead of failing loud.
+`scripts/lib/awk-path.sh`'s `awk_path()` closes that for a wrapped
+operand; this lint is the backstop that keeps every future `awk`
+call wrapped too, rather than trusting a one-time sweep to hold
+forever.
+
+Detection parses each script's shell syntax tree via `shfmt --to-json` (the same mvdan.cc/sh parser `shfmt` and `treefmt`
+already run over this repo) rather than matching text: a textual
+rule would drift the moment a script's formatting moves an operand
+onto another line, inside a multi-line awk program, or next to a
+sibling operand. For every `awk` CallExpr, the argument list is
+walked following awk's own flags-then-program-then-operands
+grammar (`-v`, `-F`, `-f`/`--file`, `--field-separator`,
+`--assign`, `--source`, `--`, and their attached forms) to find the
+program argument and every argument after it; `-f`/`--file`'s own
+value and the inline program text are excluded from the operand
+list, since neither was ever a file operand. Each surviving operand
+must be exactly one double-quoted word wrapping a single command
+substitution that calls `awk_path` — anything else is a violation.
+
+Not operands, and therefore never reach the walk above: stdin
+redirections and here-strings (a redirection attaches to the
+enclosing statement, not the command's argument list, so an `awk`
+call fed one has zero operand arguments to inspect) and pipeline
+input (same — the producer feeds stdin, not an argument).
+
+Honors PATHS_OVERRIDE (newline-separated file list) for fixtures,
+and LINT_ALLOW_EMPTY_SCAN=1 to accept an empty scan set.
+Exit 0 clean, 1 on any unwrapped operand, 2 when the scan set could
+not be enumerated or a file could not be parsed.
+
 ### scripts/check-bump-script-integrity.sh
 
 Lint: scripts/bump-linpeas.sh retains its three
