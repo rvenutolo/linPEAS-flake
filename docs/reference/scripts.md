@@ -430,6 +430,15 @@ as `# v<major>.<minor>[.<patch>]` with at least two numeric components
 all violations. The only escape is an inline
 `# patch-tag-exception: <reason>` marker on the same line.
 
+### scripts/check-path-hygiene.sh
+
+Lint: no path tracked in this repo, nor any untracked
+path a commit is about to introduce, may contain a byte in the
+0x01-0x1F control range or DEL (0x7F). A newline defeats every
+line-oriented path handoff in this repo's own tooling, and a tab
+corrupts the tab-separated inventories those handoffs produce just as
+surely, so both stay in scope alongside the rest of the control range.
+
 ### scripts/check-permission-scopes.sh
 
 Per-job GITHUB_TOKEN write-scope allowlist lint for

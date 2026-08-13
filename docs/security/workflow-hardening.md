@@ -125,6 +125,20 @@ Whole-line comments are blanked before matching, so a script may document the ba
 
 Enforced by `scripts/check-guard-exit-code.sh`. Wired as the `lint-script-hygiene` CI job (member check `guard-exit-code`).
 
+## path-hygiene
+
+No path git reports for the tree — tracked, or untracked and not ignored — may carry a byte in the 0x01-0x1F control range or DEL (0x7F).
+
+A path is the one shell datum whose byte space includes the newline delimiter. A filename carrying one reads as two records to any line-oriented consumer: `git ls-files` (without `-z`) C-quotes it onto a single output line, `find` (without `-print0`) splits it across two, and either way a downstream `[[ -f ]]` gate can skip a file that exists while the scan that produced the list still reports a plausible count. `scripts/lib/enumerate.sh` closes this for every converted producer/consumer pair by reading NUL-delimited output; this lint closes it for every consumer the conversion cannot reach, by refusing to let a name in that class exist in the tree at all.
+
+Tab (0x09) is in scope for the same reason, one level down: several of this repo's own inventories — the harness discrimination census, the enforcement-matrix table — are tab-separated, so a tab inside a path corrupts those exactly as a newline corrupts a line-oriented handoff. Both bytes fall inside the 0x01-0x1F range the lint bans, so no special-casing is needed to cover either one.
+
+The scan covers `git ls-files --cached --others --exclude-standard`: tracked paths plus untracked-but-not-ignored ones. The untracked half matters for the reason `check-ephemeral-refs.sh` scans the same way — a file a commit is about to introduce is gated by the same run that introduces it, not by whichever run happens to follow the commit that adds it.
+
+A hit is reported with the offending path rendered through `${path@Q}`: the path is otherwise attacker-controlled text passed straight to this lint's own diagnostic output, and `@Q` renders every control byte in it as a `$'...'` escape sequence rather than printing it raw, so a crafted name cannot forge a fake report line into the lint's own output.
+
+Enforced by `scripts/check-path-hygiene.sh`. Wired as the `lint-script-hygiene` CI job (member check `path-hygiene`).
+
 ## script-has-test
 
 Every `scripts/check-*.sh` has a matching `tests/check-*.test.sh`, and every `tests/check-*.test.sh` has a matching `scripts/check-*.sh`.

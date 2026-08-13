@@ -50,6 +50,7 @@ lint-script-hygiene:
   - freshness-hook-watches-modules
   - no-opaque-procsub
   - guard-exit-code
+  - path-hygiene
 lint-doc-invariants:
   - orphan-invariants
   - doc-anchors
