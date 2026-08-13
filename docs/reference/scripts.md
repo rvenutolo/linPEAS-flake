@@ -420,8 +420,8 @@ to this repository.
 
 ### scripts/check-guard-exit-code.sh
 
-Lint: no scripts/\*.sh may exit 1 out of a guard whose
-test is only an availability check. The exit codes separate what the
+Lint: no script anywhere under `scripts/` may exit 1 out
+of a guard whose test is only an availability check. The exit codes separate what the
 operator has to do about a run: 2 means the check could not run (a
 required tool is absent, an input is missing, unreadable or
 malformed), 1 means it ran and found a violation, 0 means clean. An
@@ -454,6 +454,12 @@ a guard whose missing input genuinely IS the finding. The marker has
 to open the comment, so prose naming it exempts nothing, and the
 rationale has to be non-empty. A clean run prints the exemption count,
 so the exempt set is stated rather than open-ended.
+
+The scan recurses. The shared libraries under `scripts/lib/` decide
+which exit code their callers report — `enumerate_into` is where a
+could-not-run enumeration becomes exit 2 for every lint that uses it —
+so a scan stopping at the top level would vouch for the code that
+settles the very convention this lint enforces.
 
 Honors SCRIPTS_DIR_OVERRIDE (default: scripts) for fixtures.
 Exit 0 clean, 1 on any hit, 2 on operational error.
@@ -518,8 +524,8 @@ explicit commit pin.
 
 ### scripts/check-no-opaque-procsub.sh
 
-Lint: no scripts/\*.sh feeds a redirection from a process
-substitution. A substitution runs in its own subshell, so `set -Eeuo pipefail` only ever sees the status of the command the redirection
+Lint: no script anywhere under `scripts/` feeds a
+redirection from a process substitution. A substitution runs in its own subshell, so `set -Eeuo pipefail` only ever sees the status of the command the redirection
 feeds — never the producer's. A failed producer hands the consumer
 empty output to score as data: either a clean pass that flags nothing
 (fail-open) or a substantive violation the input never showed (a
@@ -533,6 +539,11 @@ no status is lost.
 
 Use the capture-into-variable idiom (or a temp file for NUL-delimited
 output) so a producer failure aborts loudly.
+
+The scan recurses. A shared library under `scripts/lib/` runs inside
+whichever caller sources it, so a lost producer status there is lost
+for every script in the tree at once — the widest blast radius the
+banned shape has, and the one a top-level-only glob never reads.
 
 Honors SCRIPTS_DIR_OVERRIDE (default: scripts) for fixtures.
 Exit 0 clean, 1 on any hit, 2 on operational error.
@@ -710,9 +721,10 @@ list.
 
 ### scripts/check-script-shebang-pipefail.sh
 
-Lint: every `scripts/*.sh` starts with
-`#!/usr/bin/env bash` (exact first line) and contains
-`set -Eeuo pipefail` somewhere in the file.
+Lint: every executable script under `scripts/` starts
+with `#!/usr/bin/env bash` (exact first line) and contains
+`set -Eeuo pipefail` somewhere in the file; every sourced library
+under `scripts/lib/` satisfies the inverse.
 
 ### scripts/check-settings-posture.sh
 

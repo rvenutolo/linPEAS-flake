@@ -74,17 +74,23 @@ Enforced by `scripts/check-auto-merge-decline-gate.sh`. Wired as the `lint-workf
 
 ## script-shebang-pipefail
 
-Every file under `scripts/*.sh` starts with `#!/usr/bin/env bash` (exact first line) and contains `set -Eeuo pipefail` somewhere in the file.
+Every executable under `scripts/` starts with `#!/usr/bin/env bash` (exact first line) and contains `set -Eeuo pipefail` somewhere in the file.
 
 A script that silently swallows a failure can corrupt `linpeas-pin.json`, skip a security check, or leave a stale build artifact behind. `set -Eeuo pipefail` plus a portable shebang are the hardening minimum: `-e` aborts on any command failure, `-E` propagates ERR traps into subshells, `-u` rejects unset variables, `-o pipefail` makes a pipeline fail when any stage fails (not just the last).
 
 The lint accepts longer set lines (e.g. `set -Eeuo pipefail -x`) as long as the exact `-Eeuo pipefail` token is present.
 
+The scan recurses, and a file under a `lib/` component is held to the inverse rule instead. A sourced library runs inside whichever shell sources it, so the executable rule is not merely unnecessary there — it is wrong. A library that sets `set -Eeuo pipefail` itself overrides whatever the caller chose, and a shebang advertises a file meant to be run rather than sourced. So a library must carry a `shellcheck shell=` directive (with no shebang, nothing else states the dialect), must not open with a shebang, and must not carry a shell-option line of its own. Each of the three failures prints its own message naming the half that broke.
+
+Classification is by path, not by content: "no shebang means library" would excuse exactly the executable that forgot one, which is half of what this lint exists to catch.
+
+Recursion matters because the shared libraries under `scripts/lib/` are where a single defect reaches every caller at once — `enumerate_into` alone decides whether a failed enumeration becomes exit 2 for every lint that uses it.
+
 Enforced by `scripts/check-script-shebang-pipefail.sh`. Wired as the `lint-script-hygiene` CI job (member check `script-shebang-pipefail`) and as a pre-commit hook.
 
 ## no-opaque-procsub
 
-No `scripts/*.sh` feeds a redirection from a process substitution — `done < <(yq eval '.x' "$f")`, `mapfile -t rules < <(jq --raw-output '.rules[].type' <<<"${json}")`, `done < <(find . -name '*.sh')`, `done < <(parse_blocks)` and every variant of the shape. There is no exemption marker and no allowlist.
+No script anywhere under `scripts/`, sourced libraries included, feeds a redirection from a process substitution — `done < <(yq eval '.x' "$f")`, `mapfile -t rules < <(jq --raw-output '.rules[].type' <<<"${json}")`, `done < <(find . -name '*.sh')`, `done < <(parse_blocks)` and every variant of the shape. There is no exemption marker and no allowlist.
 
 A process substitution's exit status is invisible to `set -Eeuo pipefail`: the substitution runs in its own subshell, and the shell only ever sees the exit status of the command the redirection feeds (here, the `while`/`done` loop or `mapfile`), not the producer's. When the producer fails, the substitution produces empty output and the consumer scores that emptiness as data. Which way that lands depends on what the consumer does with an empty result, and both landings are wrong:
 
@@ -105,7 +111,7 @@ Enforced by `scripts/check-no-opaque-procsub.sh`. Wired as the `lint-script-hygi
 
 ## guard-exit-code
 
-No `scripts/*.sh` exits 1 out of a guard whose test is only an availability check. The three exit codes separate what the operator has to do about a run:
+No script anywhere under `scripts/`, sourced libraries included, exits 1 out of a guard whose test is only an availability check. The three exit codes separate what the operator has to do about a run:
 
 - **2** — the check could not run: a required tool is absent, or an input is missing, unreadable or malformed. Nothing was inspected, so there is no verdict about the repo.
 - **1** — the check ran and found a violation. The repo needs fixing.
