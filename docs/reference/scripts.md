@@ -62,15 +62,30 @@ Detection parses each script's shell syntax tree via `shfmt --to-json` (the same
 already run over this repo) rather than matching text: a textual
 rule would drift the moment a script's formatting moves an operand
 onto another line, inside a multi-line awk program, or next to a
-sibling operand. For every `awk` CallExpr, the argument list is
-walked following awk's own flags-then-program-then-operands
-grammar (`-v`, `-F`, `-f`/`--file`, `--field-separator`,
-`--assign`, `--source`, `--`, and their attached forms) to find the
-program argument and every argument after it; `-f`/`--file`'s own
-value and the inline program text are excluded from the operand
-list, since neither was ever a file operand. Each surviving operand
-must be exactly one double-quoted word wrapping a single command
-substitution that calls `awk_path` — anything else is a violation.
+sibling operand. The scan also recognizes `gawk`/`mawk`/`nawk`, an
+absolute or relative path ending in one of those basenames (e.g.
+`/usr/bin/awk`), a `command`-prefixed invocation, and a
+statically-quoted `"awk"`/`'awk'` word — not just the bare `awk`
+literal — since a future call site is under no obligation to spell
+the command the same way every existing one does.
+
+For every such call, the argument list is walked following awk's
+own flags-then-program-then-operands grammar: `-v`, `-F`,
+`-f`/`--file`, `--field-separator`, `--assign`, `--source`, `--`,
+and their attached forms (`-F'\t'`, `--field-separator=x`,
+`-fprog.awk`, `--file=prog.awk`) are all recognized as flags
+regardless of whether a program was already supplied, so a
+legally-repeated `-f a.awk -f b.awk` is not misread as two
+operands. `-f`/`--file`/`--source` supply the program text (a
+repeated one concatenates, which is legal), so any of them marks
+the program as already established; `--assign` does not. Only the
+first non-flag word establishes the inline program (when none of
+`-f`/`--file`/`--source` already has); every non-flag word after
+that is an operand. `-f`/`--file`'s own value and the program text
+itself are excluded from the operand list, since neither was ever a
+file operand. Each surviving operand must be exactly one
+double-quoted word wrapping a single command substitution that
+calls `awk_path` — anything else is a violation.
 
 Not operands, and therefore never reach the walk above: stdin
 redirections and here-strings (a redirection attaches to the
@@ -78,10 +93,22 @@ enclosing statement, not the command's argument list, so an `awk`
 call fed one has zero operand arguments to inspect) and pipeline
 input (same — the producer feeds stdin, not an argument).
 
+The total operand count checked across the run is itself asserted
+nonzero (unless LINT_ALLOW_EMPTY_SCAN=1): a parser regression that
+silently drops every operand from its accounting — e.g. an
+attached-flag word reclassified as a no-op instead of as the
+operand-bearing word it actually is — would otherwise still print a
+clean "0 violations" and exit 0. See the assertion below for why
+LINT_ALLOW_EMPTY_SCAN, rather than a dedicated variable, is the
+right opt-out.
+
 Honors PATHS_OVERRIDE (newline-separated file list) for fixtures,
-and LINT_ALLOW_EMPTY_SCAN=1 to accept an empty scan set.
-Exit 0 clean, 1 on any unwrapped operand, 2 when the scan set could
-not be enumerated or a file could not be parsed.
+and LINT_ALLOW_EMPTY_SCAN=1 to accept a run whose operand tally (or
+whose enumerated file count) comes back zero.
+Exit 0 clean, 1 on any unwrapped operand, 2 when a required tool is
+absent, the scan set could not be enumerated (or came back with a
+zero operand tally), a named path does not exist, or a file could
+not be parsed as shell.
 
 ### scripts/check-bump-script-integrity.sh
 

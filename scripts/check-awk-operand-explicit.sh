@@ -18,15 +18,30 @@
 # already run over this repo) rather than matching text: a textual
 # rule would drift the moment a script's formatting moves an operand
 # onto another line, inside a multi-line awk program, or next to a
-# sibling operand. For every `awk` CallExpr, the argument list is
-# walked following awk's own flags-then-program-then-operands
-# grammar (`-v`, `-F`, `-f`/`--file`, `--field-separator`,
-# `--assign`, `--source`, `--`, and their attached forms) to find the
-# program argument and every argument after it; `-f`/`--file`'s own
-# value and the inline program text are excluded from the operand
-# list, since neither was ever a file operand. Each surviving operand
-# must be exactly one double-quoted word wrapping a single command
-# substitution that calls `awk_path` — anything else is a violation.
+# sibling operand. The scan also recognizes `gawk`/`mawk`/`nawk`, an
+# absolute or relative path ending in one of those basenames (e.g.
+# `/usr/bin/awk`), a `command`-prefixed invocation, and a
+# statically-quoted `"awk"`/`'awk'` word — not just the bare `awk`
+# literal — since a future call site is under no obligation to spell
+# the command the same way every existing one does.
+#
+# For every such call, the argument list is walked following awk's
+# own flags-then-program-then-operands grammar: `-v`, `-F`,
+# `-f`/`--file`, `--field-separator`, `--assign`, `--source`, `--`,
+# and their attached forms (`-F'\t'`, `--field-separator=x`,
+# `-fprog.awk`, `--file=prog.awk`) are all recognized as flags
+# regardless of whether a program was already supplied, so a
+# legally-repeated `-f a.awk -f b.awk` is not misread as two
+# operands. `-f`/`--file`/`--source` supply the program text (a
+# repeated one concatenates, which is legal), so any of them marks
+# the program as already established; `--assign` does not. Only the
+# first non-flag word establishes the inline program (when none of
+# `-f`/`--file`/`--source` already has); every non-flag word after
+# that is an operand. `-f`/`--file`'s own value and the program text
+# itself are excluded from the operand list, since neither was ever a
+# file operand. Each surviving operand must be exactly one
+# double-quoted word wrapping a single command substitution that
+# calls `awk_path` — anything else is a violation.
 #
 # Not operands, and therefore never reach the walk above: stdin
 # redirections and here-strings (a redirection attaches to the
@@ -34,15 +49,36 @@
 # call fed one has zero operand arguments to inspect) and pipeline
 # input (same — the producer feeds stdin, not an argument).
 #
+# The total operand count checked across the run is itself asserted
+# nonzero (unless LINT_ALLOW_EMPTY_SCAN=1): a parser regression that
+# silently drops every operand from its accounting — e.g. an
+# attached-flag word reclassified as a no-op instead of as the
+# operand-bearing word it actually is — would otherwise still print a
+# clean "0 violations" and exit 0. See the assertion below for why
+# LINT_ALLOW_EMPTY_SCAN, rather than a dedicated variable, is the
+# right opt-out.
+#
 # Honors PATHS_OVERRIDE (newline-separated file list) for fixtures,
-# and LINT_ALLOW_EMPTY_SCAN=1 to accept an empty scan set.
-# Exit 0 clean, 1 on any unwrapped operand, 2 when the scan set could
-# not be enumerated or a file could not be parsed.
+# and LINT_ALLOW_EMPTY_SCAN=1 to accept a run whose operand tally (or
+# whose enumerated file count) comes back zero.
+# Exit 0 clean, 1 on any unwrapped operand, 2 when a required tool is
+# absent, the scan set could not be enumerated (or came back with a
+# zero operand tally), a named path does not exist, or a file could
+# not be parsed as shell.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
 # shellcheck source=scripts/lib/enumerate.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
+# shellcheck source=scripts/lib/log.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
+
+# A missing `shfmt` or `jq` must be diagnosed as itself, not folded into
+# the per-file "could not parse" message below: that message is reserved
+# for a file that genuinely fails to parse as shell once both tools are
+# known to be present.
+require_tool shfmt
+require_tool jq
 
 # @description NUL-delimited scripts/*.sh producer for `enumerate_into`.
 # @stdout NUL-delimited paths
@@ -79,6 +115,13 @@ fi
 # merely starts with the flag name is attached.
 # shellcheck disable=SC2016 # jq program literal; $-prefixed names are jq variables, not shell
 readonly JQ_PROG='
+# The known awk option names. A word is a "bare" instance of one of
+# these only when the word is exactly one `Lit` part matching the name
+# verbatim (e.g. the two-word form `-v` then `mode=1`); any other word
+# that merely starts with the name (a `Lit`-plus-more word like
+# `-F"\t"`, or a longer literal like `-fprog.awk` or
+# `--field-separator=x`) is an "attached" instance carrying its own
+# value, and consumes nothing further.
 def flag_class:
   . as $w
   | (($w.Parts // [])[0]) as $first
@@ -96,7 +139,12 @@ def flag_class:
               else {name: $exact[0], consumes: false}
               end
             else
-              ($flags | map(select($lit != . and ($lit | startswith(.))))) as $prefix
+              # `. as $fl` rebinds `.` inside the `select` predicate to
+              # each candidate flag name in turn, so `startswith($fl)`
+              # tests the flag name against `$lit` — not `$lit` against
+              # itself, which is what an unbound `startswith(.)` here
+              # would silently always satisfy.
+              ($flags | map(select(. as $fl | $lit != $fl and ($lit | startswith($fl))))) as $prefix
               | if ($prefix | length) > 0
                 then {name: $prefix[0], consumes: false}
                 else {name: "unknown", consumes: false}
@@ -105,12 +153,33 @@ def flag_class:
         end
     end;
 
+# Walks one awk calls argument words (everything after the command
+# word itself) into its list of file operands. `-f`/`--file`/`--source`
+# each supply program text — a repeated one legally concatenates onto
+# the program, so any of them marks the program "already supplied"
+# without ending flag recognition: the next word is still checked
+# against `flag_class` before falling through to "this is an operand".
+# Only once a word is neither `--` nor a recognized flag does the walk
+# decide it: the first such word is the inline program if none of
+# `-f`/`--file`/`--source` supplied one yet, and every one after that
+# is an operand.
+#
+# `--` is special-cased further, because its own meaning depends on
+# whether the program has already been supplied: while flags are still
+# being read (`prog` false), `--` ends option parsing as usual — the
+# word right after it is read as the program, not as another flag
+# (`awk -- "${prog}" <"${f}"` is a real site in this repo). Once the
+# program is already established, `awk-path.sh`s header documents that
+# gawk treats a further `--` as an ordinary filename rather than as an
+# option terminator — so a `--` seen with `prog` already true is folded
+# back into "this is an operand" instead of ending anything.
 def classify_operands:
   def go(arr; eo; prog; ops):
     if (arr | length) == 0 then ops
     else
       (arr[0]) as $w
-      | (if (eo or prog) then null else ($w | flag_class) end) as $cls
+      | (if eo then null else ($w | flag_class) end) as $cls0
+      | (if ($cls0 != null and $cls0.name == "--" and prog) then null else $cls0 end) as $cls
       | if $cls == null then
           if prog
           then go(arr[1:]; eo; prog; ops + [$w])
@@ -119,7 +188,8 @@ def classify_operands:
         elif $cls.name == "--" then
           go(arr[1:]; true; prog; ops)
         else
-          (if ($cls.name == "-f" or $cls.name == "--file") then true else prog end) as $newprog
+          (if ($cls.name == "-f" or $cls.name == "--file" or $cls.name == "--source")
+            then true else prog end) as $newprog
           | (if $cls.consumes then arr[2:] else arr[1:] end) as $rest
           | go($rest; eo; $newprog; ops)
         end
@@ -152,15 +222,52 @@ def is_wrapped:
         end
     end;
 
+# Extracts a word as plain text only when it is unambiguously static:
+# a bare literal (`awk`), a shell-single-quoted literal, or a
+# double-quoted literal with no interpolation (`"awk"`). Anything that
+# involves a parameter expansion, command substitution, or more than
+# one part returns null rather than a guessed value, so a variable that
+# happens to hold the text "awk" at runtime is never mistaken for the
+# command word.
+def literal_word_text:
+  (.Parts // []) as $p
+  | if ($p | length) != 1 then null
+    else
+      $p[0] as $part
+      | if $part.Type == "Lit" then $part.Value
+        elif $part.Type == "SglQuoted" then ($part.Value // null)
+        elif $part.Type == "DblQuoted"
+          and (($part.Parts // []) | length) == 1
+          and ($part.Parts[0].Type == "Lit")
+        then $part.Parts[0].Value
+        else null
+        end
+    end;
+
+# True for a word naming an awk implementation directly (`awk`, `gawk`,
+# `mawk`, `nawk`) or via a path ending in one of those basenames (e.g.
+# `/usr/bin/awk`), however the word is spelled per `literal_word_text`.
+def is_awk_word:
+  literal_word_text as $t
+  | $t != null and (($t | split("/") | last) as $base
+      | $base == "awk" or $base == "gawk" or $base == "mawk" or $base == "nawk");
+
+# Index of the awk word itself within a CallExpr Args array: 0
+# normally, or 1 when Args[0] is a literal `command` prefix
+# (`command awk ...`).
+def prog_index:
+  ((.Args[0] // {}) | literal_word_text) as $t
+  | if $t == "command" then 1 else 0 end;
+
 def is_awk_call:
   (.Type == "CallExpr")
-  and (((.Args // []) | length) > 0)
-  and (((((.Args[0].Parts // []) | .[0])) as $fp | $fp != null and $fp.Type == "Lit" and $fp.Value == "awk"))
-  and (((.Args[0].Parts // []) | length) == 1);
+  and (((.Args // []) | length) > prog_index)
+  and ((.Args[prog_index]) | is_awk_word);
 
 [.. | objects | select(is_awk_call)] as $calls
 | $calls[]
-| (.Args[1:] | classify_operands) as $ops
+| (prog_index) as $pi
+| (.Args[($pi + 1):] | classify_operands) as $ops
 | $ops[]
 | "\(if (is_wrapped) then 1 else 0 end)\t\(.Pos.Line)\t\(.Pos.Col)"
 '
@@ -169,12 +276,19 @@ scanned=0
 checked=0
 failed=0
 for f in "${paths[@]}"; do
-  [[ -f ${f} ]] || continue
+  # A path `git ls-files` enumerated always exists; a path named by
+  # `PATHS_OVERRIDE` is operator input, and one naming a file that is
+  # not there is a could-not-run, not a file to quietly drop from the
+  # scan set.
+  if [[ ! -f ${f} ]]; then
+    printf '%s: named in the scan set but not found\n' "${f}" >&2
+    exit 2
+  fi
   scanned=$((scanned + 1))
 
   ast_json=""
   if ! ast_json="$(shfmt --to-json <"${f}" 2>/dev/null)"; then
-    printf '%s: could not parse as shell for AST inspection\n' "${f}" >&2
+    printf '%s: shfmt could not parse this file as shell for AST inspection\n' "${f}" >&2
     exit 2
   fi
 
@@ -199,6 +313,26 @@ done
 if ((failed > 0)); then
   printf '%d awk file operand(s) not wrapped in awk_path\n' "${failed}" >&2
   exit 1
+fi
+
+# `checked` coming back 0 says nothing about whether the scripts really
+# carry no awk operand or whether the walk above silently misclassified
+# every one of them as a flag value or a program instead — a
+# misclassification that "0 operand(s) checked, 0 violations" hides,
+# because that is the same line a genuinely clean run prints.
+# LINT_ALLOW_EMPTY_SCAN is the
+# opt-out rather than a dedicated variable: `check-doc-anchors.sh`
+# already uses this same variable to gate two different zero-breadth
+# conditions in one script (0 files scanned, then 0 anchor links found
+# among files that were), so a zero operand tally is a third instance
+# of the identical shape — enumeration succeeded, but the count of the
+# thing this lint verifies came back zero — and reuses the same signal
+# rather than minting a new one for what is the same kind of "prove
+# this is deliberate" gate.
+if [[ -z ${LINT_ALLOW_EMPTY_SCAN:-} ]] && ((checked == 0)); then
+  printf '%s: checked 0 awk file operand(s) across %d file(s) scanned — an unread tree reports the same clean line a genuinely operand-free one does; set LINT_ALLOW_EMPTY_SCAN=1 if these scripts deliberately carry no awk file operand\n' \
+    "${0##*/}" "${scanned}" >&2
+  exit 2
 fi
 
 printf 'awk-operand-explicit: %d file(s) scanned, %d operand(s) checked, 0 violations\n' \

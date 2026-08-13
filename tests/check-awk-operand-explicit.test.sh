@@ -81,6 +81,63 @@ expect bad-multiline-program.sh 1 'bad-multiline-program.sh:10:3: awk file opera
 # assertion that only checked the file name and the "1 violation" tally.
 expect bad-second-operand.sh 1 'bad-second-operand.sh:9:30: awk file operand not spelled'
 
+# These four exercise the classifier shapes an earlier version of
+# flag_class misjudged: an attached -f/--file value (a word that is
+# not an *exact* flag-name match still has to be told apart from one
+# that merely starts with a flag name — a jq `.` rebinding bug made
+# every such word classify as -v and get silently absorbed), --source
+# (which supplies the program text and so must mark it supplied, or
+# the real operand after it gets read as the program instead), and a
+# legally repeated -f (which must still recognize the second -f as a
+# flag rather than stop recognizing flags once any program is
+# supplied — the fix for the first three shapes would otherwise turn
+# a legal two-program-file call into two false positives).
+expect bad-attached-f-flag.sh 1 'bad-attached-f-flag.sh:6:16: awk file operand not spelled'
+expect bad-attached-file-flag.sh 1 'bad-attached-file-flag.sh:6:21: awk file operand not spelled'
+expect bad-source-flag.sh 1 'bad-source-flag.sh:6:32: awk file operand not spelled'
+
+# @description bad-repeated-f-flag.sh must yield exactly one violation
+# (the trailing bare operand), not the three the pre-fix classifier
+# reported for a legally-repeated -f (two of them false positives, on
+# -f itself and on b.awk). The registered assertion is the
+# file:line:col diagnostic, which discriminates this scenario from
+# every sibling bad-* fixture; the violation *count* is checked
+# separately (by counting matching diagnostic lines rather than
+# registering the shared "N awk file operand(s)..." tally text, which
+# every single-violation bad-* fixture also emits and so cannot
+# discriminate) because the count is what a regression back to
+# over-flagging would actually break — a check that only looked for
+# "a violation exists" would not catch it.
+function expect_bad_repeated_f_flag() {
+  local -r name='bad-repeated-f-flag.sh'
+  local out_file err_file outcome_file got_exit=0 diag_count
+  out_file="$(mktemp)"
+  err_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  PATHS_OVERRIDE="${FIXTURES}/bad-repeated-f-flag.sh" \
+    "${SCRIPT}" >"${out_file}" 2>"${err_file}" || got_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" 'bad-repeated-f-flag.sh:6:23: awk file operand not spelled' \
+    "${outcome_file}" "${out_file}" "${err_file}"
+
+  diag_count="$(grep --fixed-strings --count -- ': awk file operand not spelled' "${err_file}")"
+  if [[ ${got_exit} != 1 ]]; then
+    fail "$(printf '%s: exit %s, want 1' "${name}" "${got_exit}")"
+    cat -- "${err_file}" >&2
+  elif [[ ${diag_count} != 1 ]]; then
+    fail "$(printf '%s: %s violation diagnostic line(s), want exactly 1' "${name}" "${diag_count}")"
+    cat -- "${err_file}" >&2
+  elif ! grep --fixed-strings --quiet -- 'bad-repeated-f-flag.sh:6:23: awk file operand not spelled' "${err_file}"; then
+    fail "$(printf '%s: stderr missing the trailing-operand diagnostic' "${name}")"
+    cat -- "${err_file}" >&2
+  else
+    pass "${name}"
+  fi
+  rm --force -- "${out_file}" "${err_file}" "${outcome_file}"
+}
+
+expect_bad_repeated_f_flag
+
 # @description Drive the enumeration itself, not a fixture: with
 # PATHS_OVERRIDE unset the script enumerates via `git ls-files`, and an
 # unreadable index makes that producer exit 0 with no output — a
@@ -133,13 +190,13 @@ function expect_unparsable_shell() {
     "${SCRIPT}" >"${out_file}" 2>"${err_file}" || got_exit=$?
   rm --force -- "${bad_file}"
   printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
-  harness_assert_record "${name}" 'could not parse as shell for AST inspection' \
+  harness_assert_record "${name}" 'shfmt could not parse this file as shell for AST inspection' \
     "${outcome_file}" "${out_file}" "${err_file}"
 
   if [[ ${got_exit} != 2 ]]; then
     fail "$(printf '%s: exit %s, want 2' "${name}" "${got_exit}")"
     cat -- "${err_file}" >&2
-  elif ! grep --fixed-strings --quiet -- 'could not parse as shell for AST inspection' "${err_file}"; then
+  elif ! grep --fixed-strings --quiet -- 'shfmt could not parse this file as shell for AST inspection' "${err_file}"; then
     fail "$(printf '%s: stderr missing the parse-failure diagnostic' "${name}")"
     cat -- "${err_file}" >&2
   else
