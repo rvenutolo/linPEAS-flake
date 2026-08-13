@@ -309,6 +309,18 @@ function main() {
   run_unparsable_shell_scenario
   run_no_comments_scenario
 
+  # Nix sources reach the same class regexes through a full-line comment
+  # matcher. The second scenario is the one that keeps the embedded shell
+  # in a Nix string block in scope: its comment sits inside `''…''`, and
+  # a matcher that stopped at the string boundary would report the file
+  # clean.
+  run_scenario 'nix comment blocking ref fails' \
+    'nix-comment' 'source.nix' '' 1 'source.nix:2: [issue-ref] #123' \
+    "$(summary 0 0 1 4 1 0 0 0 0)"
+  run_scenario 'nix embedded shell comment is scanned' \
+    'nix-embedded-shell' 'source.nix' '' 1 'source.nix:4: [issue-ref] #456' \
+    "$(summary 0 0 1 7 1 0 0 0 0)"
+
   harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then

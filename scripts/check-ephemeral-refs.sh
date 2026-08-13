@@ -1,21 +1,23 @@
 #!/usr/bin/env bash
 # scripts/check-ephemeral-refs.sh
 #
-# @description Lint: every Markdown file and shell script in the repo
-# must carry no ephemeral references — PR/issue refs, prose dates,
-# planning/review-pass labels, or literal `.claude/` paths. Markdown is
-# read as prose; shell is read as comments only, lifted from the
-# `shfmt` syntax tree. Default mode blocks (exit 1); --advisory mode
+# @description Lint: every Markdown file, shell script and Nix source in
+# the repo must carry no ephemeral references — PR/issue refs, prose
+# dates, planning/review-pass labels, or literal `.claude/` paths.
+# Markdown is read as prose; shell is read as comments only, lifted from
+# the `shfmt` syntax tree; Nix is read as full-line comments only.
+# Default mode blocks (exit 1); --advisory mode
 # suppresses findings, not defects: it warns on fuzzy causal-history
 # phrases and exits 0 on those, but a could-not-run (unterminated
-# fence/block, unparsable shell, a scan covering shell that extracted
-# no comments, failed source enumeration) still exits non-zero the same
-# as the default pass.
-# @option --advisory suppress findings, not defects: warn on fuzzy causal-history phrases and exit 0 for those, but still exit 1 on an unterminated fence/generated block and 2 on a failed source enumeration, an unparsable shell source, or a shell scan that extracted no comments
+# fence/block, unparsable shell, a scan covering shell or Nix that
+# extracted no comments, failed source enumeration) still exits
+# non-zero the same as the default pass.
+# @option --advisory suppress findings, not defects: warn on fuzzy causal-history phrases and exit 0 for those, but still exit 1 on an unterminated fence/generated block and 2 on a failed source enumeration, an unparsable shell source, or a shell/Nix scan that extracted no comments
 
 # Lint: ban "ephemeral references" from the repo's Markdown prose and
-# shell comments. Tracked files describe the CURRENT state of the repo,
-# not what they replaced or which plan/PR/date introduced them.
+# from its shell and Nix comments. Tracked files describe the CURRENT
+# state of the repo, not what they replaced or which plan/PR/date
+# introduced them.
 #
 # Modes:
 #   default     — blocking. Scan prose for high-precision banned shapes,
@@ -42,15 +44,21 @@
 #     or a heredoc body is out of scope by construction rather than by
 #     a regex that has to guess. A source the parser rejects is a
 #     could-not-run (exit 2), not a clean read.
+#   Nix — only comments that start their own line are read. No
+#     comment-preserving Nix parser is in this toolchain, and without
+#     one a trailing `#` cannot be told from a `#` inside a string, so
+#     the matcher gives up the trailing case to keep the full-line case
+#     exact. A `''…''` block is embedded shell, and the `#` lines in it
+#     are comments the scan is meant to read.
 #
-# Both extractors emit one line per source line, so a hit's line number
-# is the original file's. Backtick `code spans` inside a shell comment
-# are blanked before matching, the same exemption inline code already
-# gets in Markdown: a comment naming a banned shape as an example is
+# Every extractor emits one line per source line, so a hit's line number
+# is the original file's. Backtick `code spans` inside a comment are
+# blanked before matching, the same exemption inline code already gets
+# in Markdown: a comment naming a banned shape as an example is
 # documentation, not a reference.
 #
-# Sources scanned: every Markdown and shell path git reports for the
-# repo — both committed files and uncommitted, unignored ones — minus
+# Sources scanned: every Markdown, shell and Nix path git reports for
+# the repo — both committed files and uncommitted, unignored ones — minus
 # the file allowlist (`CHANGELOG.md`, `docs/releases.md`,
 # `tests/fixtures/**`, `.claude/**`). The first two structurally list PR
 # refs + dates in prose; fixtures carry the banned shapes as data;
@@ -62,14 +70,15 @@
 #   EPHEMERAL_REFS_SOURCES_OVERRIDE — newline-separated list of source
 #     files relative to REPO_ROOT.
 #
-# LINT_ALLOW_EMPTY_SCAN=1 accepts an empty scan set, and a shell scan
-# that extracted no comments (an operator escape hatch, not test-only).
+# LINT_ALLOW_EMPTY_SCAN=1 accepts an empty scan set, and a shell/Nix
+# scan that extracted no comments (an operator escape hatch, not
+# test-only).
 #
 # Exits 0 on clean in either mode; 1 on a blocking match (default mode
 # only — --advisory exits 0 on the same finding) or an unterminated
 # fence/generated block (both modes); 2 if the source set could not be
 # enumerated, a shell source could not be parsed, or a scan covering
-# shell extracted no comments at all (both modes).
+# shell or Nix extracted no comments at all (both modes).
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -293,6 +302,37 @@ function extract_shell_comments() {
   return "${rc}"
 }
 
+# @description Emit one line per source line, carrying that line's Nix
+# comment text where a full-line `#` comment sits and a blank line
+# everywhere else, so a hit's reported line number matches the original
+# file. Nix has no comment-preserving parser in this toolchain, so the
+# matcher is deliberately conservative: only a comment that starts its
+# line is read, because a trailing `#` cannot be told from a `#` inside a
+# string without one. The `''…''` blocks in this repo's Nix are embedded
+# shell, and their `#` lines are genuine comments — reading them is the
+# point, not a side effect.
+# @arg $1 file path to the source file
+# @arg $2 stats_dir directory this pass writes `comments` into as
+#   `<comment-count> <line-count>`
+# @stdout the line-count-preserving comment stream
+function extract_nix_comments() {
+  local -r file="$1"
+  local -r stats_dir="$2"
+  awk -v stats="${stats_dir}/comments" '
+    {
+      if ($0 ~ /^[[:space:]]*#/) {
+        line = $0
+        sub(/^[[:space:]]*#/, "", line)
+        print line
+        count++
+        next
+      }
+      print ""
+    }
+    END { printf("%d %d\n", count, NR) > stats }
+  ' "$(awk_path "${file}")"
+}
+
 # @description Blank backtick code spans in place, preserving line count,
 # and tally them. A comment that names a banned token as an example — the
 # class regexes in this very file, an allowlist entry, a scan-scope note
@@ -382,8 +422,9 @@ function scan_advisory() {
 }
 
 # @description NUL-delimited source producer for `enumerate_into`,
-# relative to REPO_ROOT. The invariant covers all Markdown prose and all
-# shell comments in the repo, not one directory, so enumeration is git's
+# relative to REPO_ROOT. The invariant covers all Markdown prose and
+# every shell and Nix comment in the repo, not one directory, so
+# enumeration is git's
 # rather than a hand-kept path list. `--cached` covers tracked sources.
 # `--others --exclude-standard` adds sources that are not committed yet
 # but are not ignored either — exactly the files a commit is about to
@@ -394,7 +435,7 @@ function scan_advisory() {
 # @stdout NUL-delimited source paths, sorted
 # shellcheck disable=SC2329 # invoked indirectly, by name, via enumerate_into
 function ephemeral_refs_git_sources() {
-  (cd "${REPO_ROOT}" && git ls-files --cached --others --exclude-standard -z -- '*.md' '*.sh') |
+  (cd "${REPO_ROOT}" && git ls-files --cached --others --exclude-standard -z -- '*.md' '*.sh' '*.nix') |
     sort --zero-terminated
 }
 
@@ -491,6 +532,20 @@ function main() {
       blank_code_spans "${raw}" "${stats_dir}" >"${stripped}"
       rm --force -- "${raw}"
       shell_sources=$((shell_sources + 1))
+      IFS=' ' read -r f_comments f_lines <"${stats_dir}/comments"
+      IFS=' ' read -r f_spans <"${stats_dir}/spans"
+      comments=$((comments + f_comments))
+      lines=$((lines + f_lines))
+      spans=$((spans + f_spans))
+      ;;
+    nix)
+      # No parse-failure branch: the matcher is a line scan, so there is
+      # no parser to reject the source.
+      raw="$(mktemp)"
+      extract_nix_comments "${src_abs}" "${stats_dir}" >"${raw}"
+      blank_code_spans "${raw}" "${stats_dir}" >"${stripped}"
+      rm --force -- "${raw}"
+      nix_sources=$((nix_sources + 1))
       IFS=' ' read -r f_comments f_lines <"${stats_dir}/comments"
       IFS=' ' read -r f_spans <"${stats_dir}/spans"
       comments=$((comments + f_comments))
