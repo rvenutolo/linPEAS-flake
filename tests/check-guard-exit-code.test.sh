@@ -81,6 +81,12 @@ function main() {
     'bad-exemption-no-rationale' 1 'marker carries no rationale'
   run_scenario 'guards already exiting 2 pass' \
     'good-clean' 0 '2 script(s) scanned, 0 exemption(s)'
+  # The violation sits under lib/ beside a clean top-level script, so a
+  # scan that stops at the root still reads a file and reports nothing.
+  # The asserted path is what discriminates this from the tool-guard
+  # scenario above, whose guard text a shared-library guard repeats.
+  run_scenario 'a guard under lib/ is reached by the scan' \
+    'bad-lib' 1 'bad-lib/scripts/lib/needs-shfmt.sh:10: exits 1 inside a guard'
   # Nothing to scan is a missing input, not a clean tree — the two must
   # not share an exit code.
   run_scenario 'absent scripts dir is a tooling error' \

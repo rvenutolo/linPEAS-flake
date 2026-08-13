@@ -47,6 +47,10 @@ expect "${FIXTURES}/good" 0 "good"
 # `diff` takes both substitutions as file arguments and its own status is
 # what the caller acts on, so a pair fed to it is not a hit.
 expect "${FIXTURES}/good-diff" 0 "good-diff"
+# The banned shape sits in a sourced library beside a clean top-level
+# script: the scan has to descend to find it, and the clean sibling is
+# what makes a root-only scan report success rather than nothing at all.
+expect "${FIXTURES}/bad-lib" 1 "banned-procsub-under-lib" "${HIT_DIAG}" "bad-lib/lib/reads.sh"
 expect "" 0 "real scripts/"
 
 printf 'all tests passed\n'

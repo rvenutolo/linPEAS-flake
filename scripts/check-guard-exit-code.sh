@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # scripts/check-guard-exit-code.sh
 #
-# @description Lint: no scripts/*.sh may exit 1 out of a guard whose
-# test is only an availability check. The exit codes separate what the
+# @description Lint: no script anywhere under `scripts/` may exit 1 out
+# of a guard whose test is only an availability check. The exit codes separate what the
 # operator has to do about a run: 2 means the check could not run (a
 # required tool is absent, an input is missing, unreadable or
 # malformed), 1 means it ran and found a violation, 0 means clean. An
@@ -35,6 +35,12 @@
 # to open the comment, so prose naming it exempts nothing, and the
 # rationale has to be non-empty. A clean run prints the exemption count,
 # so the exempt set is stated rather than open-ended.
+#
+# The scan recurses. The shared libraries under `scripts/lib/` decide
+# which exit code their callers report — `enumerate_into` is where a
+# could-not-run enumeration becomes exit 2 for every lint that uses it —
+# so a scan stopping at the top level would vouch for the code that
+# settles the very convention this lint enforces.
 #
 # Honors SCRIPTS_DIR_OVERRIDE (default: scripts) for fixtures.
 # Exit 0 clean, 1 on any hit, 2 on operational error.
@@ -241,8 +247,8 @@ BEGIN {
 failed=0
 exempted=0
 scanned=0
-shopt -s nullglob
-for f in "${DIR}"/*.sh; do
+shopt -s nullglob globstar
+for f in "${DIR}"/**/*.sh; do
   scanned=$((scanned + 1))
   # Captured rather than piped so a scanner failure aborts the run
   # instead of handing this loop an empty stream to score as clean.
@@ -267,7 +273,7 @@ for f in "${DIR}"/*.sh; do
     esac
   done <<<"${findings}"
 done
-shopt -u nullglob
+shopt -u nullglob globstar
 
 if ((failed > 0)); then
   printf '%d could-not-run guard(s) on the wrong side of the exit-code convention\n' "${failed}" >&2
