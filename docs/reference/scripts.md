@@ -306,6 +306,57 @@ blob host alongside ghcr.io, carries a complete Docker Hub pull host set
 Hub registry host at all, carries a complete sigstore host set if it
 carries any sigstore host at all, and carries no denylisted host.
 
+### scripts/check-enumerate-helper-required.sh
+
+Lint: every filesystem enumeration in a repo script runs
+through `enumerate_into` (scripts/lib/enumerate.sh). A producer —
+`find`, `git ls-files`, `git ls-tree` — may appear only as an argument
+to the helper, inside a function the helper is handed by name, or
+behind an inline `# enumerate-exempt: <rationale>` marker.
+
+The property being protected is scan breadth, not producer status. A
+producer that fails is the easy half; the hard half is a producer that
+succeeds and enumerates nothing: `GIT_INDEX_FILE=/nonexistent git ls-files` exits 0 and prints not one path, which every status check in
+the world reads as a clean tree. A lint that scans an empty set finds
+no violations and exits 0 — off, and green. So breadth has to be
+asserted rather than inferred, and `enumerate_into` is where that
+assertion lives: routing every enumeration through it makes the
+assertion structural instead of something each call site has to
+remember.
+
+That is what makes this rule decidable in one pass. Associating an
+enumeration with a cardinality test written an arbitrary distance
+later is not something a textual rule can do; asking whether a
+producer is an argument to the helper is local to one call expression.
+
+Detection parses each script's syntax tree via `shfmt --to-json` (the
+mvdan.cc/sh parser `shfmt` and `treefmt` already run over this repo)
+rather than matching text, because three shapes here name the banned
+commands without running them and a textual rule would need a
+special case for each: this file's own prose, the label string every
+compliant call site passes (`enumerate_into paths 'git ls-files' git ls-files -z …`), and heredocs documenting the idiom. None of them is a
+command node, so none of them is a hit.
+
+A `git` invocation's subcommand is found by walking past the global
+flags (`-C <dir>`, `-c <k>=<v>`, `--git-dir=…`) rather than by reading
+the word right after `git`: the one hand-rolled enumeration this lint
+was written against spelled it `git -C "${ROOT}" ls-files`.
+
+The count of producer calls classified is itself asserted nonzero
+(unless LINT_ALLOW_EMPTY_SCAN=1). A grammar that silently recognized
+no producers would report "0 violations" and exit 0 — the same clean
+line a genuinely producer-free tree prints — leaving this gate off
+while green, which is the exact failure it exists to prevent one level
+down.
+
+Honors PATHS_OVERRIDE (newline-separated file list) for fixtures, and
+LINT_ALLOW_EMPTY_SCAN=1 to accept a run whose producer tally (or whose
+enumerated file count) comes back zero.
+Exit 0 clean, 1 on a producer outside the helper or an exemption
+marker with no rationale, 2 when a required tool is absent, the scan
+set could not be enumerated (or classified nothing), a named path does
+not exist, or a file could not be parsed as shell.
+
 ### scripts/check-ephemeral-refs.sh
 
 Lint: every Markdown file in the repo must carry no

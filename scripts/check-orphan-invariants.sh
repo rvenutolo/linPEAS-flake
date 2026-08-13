@@ -93,6 +93,10 @@ done <"${referenced_file}"
 # rejects any tracked path containing a control character, so no docs/*.md
 # path this walk can find carries a newline for `find`'s line-oriented
 # output — or this `sed | sort` pipe — to split.
+# enumerate-exempt: the listing is a `diff` operand, so diff's own status
+# is what this script acts on, and the sorted newline-delimited form is
+# what diff needs; check-path-hygiene.sh rejects control characters in
+# tracked paths, so no path this walk can find splits across the handoff.
 (cd "${DOCS_ROOT}" && find . -type f -name '*.md' | sed 's|^\./||' | sort) >"${all_docs}"
 
 while IFS= read -r rel; do

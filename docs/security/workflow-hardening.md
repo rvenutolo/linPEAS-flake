@@ -161,6 +161,20 @@ The total operand count checked across a run is itself asserted nonzero, unless 
 
 Enforced by `scripts/check-awk-operand-explicit.sh`. Wired as the `lint-script-hygiene` CI job (member check `awk-operand-explicit`).
 
+## enumerate-helper-required
+
+Every filesystem enumeration in a repo script runs through `enumerate_into` (`scripts/lib/enumerate.sh`). A producer — `find`, `git ls-files`, `git ls-tree` — may appear in exactly three positions: as an argument to the helper, inside a function the helper is handed by name, or behind an inline `# enumerate-exempt: <rationale>` marker whose rationale is non-empty (an empty one is drift, not an exemption, exactly as the sibling exit-code and patch-tag markers treat it).
+
+The property being protected is scan **breadth**, not producer status. A producer that fails is the easy half; the hard half is a producer that succeeds and enumerates nothing. `GIT_INDEX_FILE=/nonexistent git ls-files` exits 0 and prints not one path — which every status check reads as a clean tree. A lint handed an empty scan set finds no violations and exits 0: off, and green. So breadth has to be asserted rather than inferred, and the helper is where that assertion lives; routing every enumeration through it makes the assertion structural instead of something each call site has to remember.
+
+That is also what makes the rule decidable in one pass. Associating an enumeration with a cardinality test written an arbitrary distance later is not something a textual rule can do. Asking whether a producer is an argument to the helper is local to a single call expression.
+
+Detection parses each script's syntax tree via `shfmt --to-json` rather than matching text, because three shapes name these commands without running them and a textual rule would need a special case for each: the lint's own prose, the label string every compliant call site passes (`enumerate_into paths 'git ls-files' git ls-files -z …`), and heredocs documenting the idiom. None is a command node, so none is a hit. A `git` invocation's subcommand is found by walking past the global flags (`-C <dir>`, `-c <k>=<v>`), not by reading the word straight after `git`.
+
+The count of producer calls classified is itself asserted nonzero unless `LINT_ALLOW_EMPTY_SCAN=1`. A grammar that stopped recognizing producers would report "0 violations" and exit 0 — the same line a genuinely enumeration-free tree prints — leaving this gate off while green, which is the exact failure it exists to prevent one level down.
+
+Enforced by `scripts/check-enumerate-helper-required.sh`. Wired as the `lint-script-hygiene` CI job (member check `enumerate-helper-required`).
+
 ## script-has-test
 
 Every `scripts/check-*.sh` has a matching `tests/check-*.test.sh`, and every `tests/check-*.test.sh` has a matching `scripts/check-*.sh`.
