@@ -5,14 +5,15 @@
 # the repo must carry no ephemeral references — PR/issue refs, prose
 # dates, planning/review-pass labels, or literal `.claude/` paths.
 # Markdown is read as prose; shell is read as comments only, lifted from
-# the `shfmt` syntax tree; Nix is read as full-line comments only.
+# the `shfmt` syntax tree; Nix is read as the comments that start their
+# own line, both `#` line comments and `/* */` block comments.
 # Default mode blocks (exit 1); --advisory mode
 # suppresses findings, not defects: it warns on fuzzy causal-history
 # phrases and exits 0 on those, but a could-not-run (unterminated
-# fence/block, unparsable shell, a scan covering shell or Nix that
-# extracted no comments, failed source enumeration) still exits
-# non-zero the same as the default pass.
-# @option --advisory suppress findings, not defects: warn on fuzzy causal-history phrases and exit 0 for those, but still exit 1 on an unterminated fence/generated block and 2 on a failed source enumeration, an unparsable shell source, or a shell/Nix scan that extracted no comments
+# fence/generated block/Nix block comment, unparsable shell, a shell
+# scan or a Nix scan that extracted no comments, failed source
+# enumeration) still exits non-zero the same as the default pass.
+# @option --advisory suppress findings, not defects: warn on fuzzy causal-history phrases and exit 0 for those, but still exit 1 on an unterminated fence/generated block/Nix block comment and 2 on a failed source enumeration, an unparsable shell source, a shell scan that extracted no comments, or a Nix scan that extracted no comments
 
 # Lint: ban "ephemeral references" from the repo's Markdown prose and
 # from its shell and Nix comments. Tracked files describe the CURRENT
@@ -44,12 +45,16 @@
 #     or a heredoc body is out of scope by construction rather than by
 #     a regex that has to guess. A source the parser rejects is a
 #     could-not-run (exit 2), not a clean read.
-#   Nix — only comments that start their own line are read. No
-#     comment-preserving Nix parser is in this toolchain, and without
-#     one a trailing `#` cannot be told from a `#` inside a string, so
-#     the matcher gives up the trailing case to keep the full-line case
-#     exact. A `''…''` block is embedded shell, and the `#` lines in it
-#     are comments the scan is meant to read.
+#   Nix — only comments that start their own line are read, `#` line
+#     comments and `/* */` block comments alike. No comment-preserving
+#     Nix parser is in this toolchain, and without one a trailing `#`
+#     or a mid-line `/*` cannot be told from the same characters inside
+#     a string, so the matcher gives up the mid-line case to keep the
+#     line-start case exact. A `''…''` block is a string to Nix, and the
+#     `#` lines in one are comments the scan is meant to read. A block
+#     comment that never closes leaves every line below it claimed as
+#     comment text, so it aborts the run (exit 1) rather than report
+#     against a file it is reading wrong.
 #
 # Every extractor emits one line per source line, so a hit's line number
 # is the original file's. Backtick `code spans` inside a comment are
@@ -70,15 +75,16 @@
 #   EPHEMERAL_REFS_SOURCES_OVERRIDE — newline-separated list of source
 #     files relative to REPO_ROOT.
 #
-# LINT_ALLOW_EMPTY_SCAN=1 accepts an empty scan set, and a shell/Nix
+# LINT_ALLOW_EMPTY_SCAN=1 accepts an empty scan set, and a shell or Nix
 # scan that extracted no comments (an operator escape hatch, not
 # test-only).
 #
 # Exits 0 on clean in either mode; 1 on a blocking match (default mode
 # only — --advisory exits 0 on the same finding) or an unterminated
-# fence/generated block (both modes); 2 if the source set could not be
-# enumerated, a shell source could not be parsed, or a scan covering
-# shell or Nix extracted no comments at all (both modes).
+# fence/generated block/Nix block comment (both modes); 2 if the source
+# set could not be enumerated, a shell source could not be parsed, or a
+# scan covering shell extracted no shell comments or a scan covering Nix
+# extracted no Nix comments (both modes).
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -232,9 +238,12 @@ function language_of() {
 # out of the `shfmt --to-json` syntax tree rather than a `#` regex: a
 # regex cannot tell a comment from a hash inside a string literal, or
 # from a Markdown heading inside a heredoc, and this repo's own test
-# fixtures carry both. A shebang arrives as a comment node whose text
-# opens with `!`; it is dropped by that test rather than by a line
-# number, so a shebang-shaped comment further down is still read.
+# fixtures carry both. The comment node at line 1, column 1 is the
+# shebang and is dropped; every other node is kept, including one whose
+# text opens with `!`, because a `#!`-shaped comment below the first
+# line is prose like any other. A node that does start line 1 without
+# opening at column 1 is an indented comment rather than a shebang, so
+# it is read.
 # @arg $1 file path to the source file
 # @arg $2 src_rel source path relative to REPO_ROOT (for the error message)
 # @arg $3 stats_dir directory this pass writes `comments` into as
@@ -262,13 +271,14 @@ function extract_shell_comments() {
   # read as blank while still exiting 0. Source line numbers start at
   # one, so row zero can never collide with a real comment.
   printf '0\t\n' >"${pairs_file}"
-  # `<line>\t<text>`, one row per comment node. The text has no leading
-  # hash — shfmt strips it — so the class regexes see the prose alone.
+  # `<line>\t<text>`, one row per comment node. The hash shfmt strips
+  # from `.Text` is put back, because a reference written flush against
+  # the hash (`#123 …`) is invisible to the class regexes without it.
   if ! jq --raw-output '
       .. | objects
       | select(has("Text") and has("Hash"))
-      | select(.Text | startswith("!") | not)
-      | "\(.Hash.Line)\t\(.Text)"
+      | select((.Hash.Line == 1 and .Hash.Col == 1) | not)
+      | "\(.Hash.Line)\t#\(.Text)"
     ' <<<"${ast}" >>"${pairs_file}"; then
     printf '%s: comment extraction failed\n' "${src_rel}" >&2
     rm --force -- "${pairs_file}"
@@ -303,33 +313,84 @@ function extract_shell_comments() {
 }
 
 # @description Emit one line per source line, carrying that line's Nix
-# comment text where a full-line `#` comment sits and a blank line
-# everywhere else, so a hit's reported line number matches the original
-# file. Nix has no comment-preserving parser in this toolchain, so the
-# matcher is deliberately conservative: only a comment that starts its
-# line is read, because a trailing `#` cannot be told from a `#` inside a
-# string without one. The `''…''` blocks in this repo's Nix are embedded
-# shell, and their `#` lines are genuine comments — reading them is the
-# point, not a side effect.
+# comment text where a comment that starts its own line sits and a blank
+# line everywhere else, so a hit's reported line number matches the
+# original file. Both Nix comment forms are read: a `#` line comment, and
+# a `/* … */` block comment across however many lines it spans. Nix has
+# no comment-preserving parser in this toolchain, so the matcher is
+# deliberately conservative about where a comment may open: a trailing
+# `#` cannot be told from a `#` inside a string, and a mid-line `/*`
+# cannot be told from the `/*` in a glob such as a quoted `dir/*` path,
+# which this repo's Nix holds several of. Requiring the opener to start
+# its line keeps both forms exact. Only the opener is anchored — the
+# closing `*/` is honored wherever it falls on a line. The `''…''` blocks
+# in this repo's Nix carry embedded shell, and their `#` lines are
+# genuine comments — reading them is the point, not a side effect.
+# An unterminated block comment is a fatal read error, not a quirk: the
+# state machine has no way back out, so every line below the opener is
+# handed on as comment text and the run reports against code — a stable
+# header literal in a Nix string surfaces as a prose date. Fail loud
+# instead, the same treatment the Markdown path gives an unterminated
+# fence, and for the same reason: a source the extractor is reading
+# wrong must not produce a verdict of any kind.
 # @arg $1 file path to the source file
-# @arg $2 stats_dir directory this pass writes `comments` into as
+# @arg $2 src_rel source path relative to REPO_ROOT (for the error message)
+# @arg $3 stats_dir directory this pass writes `comments` into as
 #   `<comment-count> <line-count>`
 # @stdout the line-count-preserving comment stream
+# @stderr `src_rel: unterminated Nix block comment` if a `/*` never closes
+# @exitcode 0 on clean read, 1 on an unterminated block comment
 function extract_nix_comments() {
   local -r file="$1"
-  local -r stats_dir="$2"
-  awk -v stats="${stats_dir}/comments" '
+  local -r src_rel="$2"
+  local -r stats_dir="$3"
+  awk -v src_rel="${src_rel}" -v stats="${stats_dir}/comments" '
     {
-      if ($0 ~ /^[[:space:]]*#/) {
-        line = $0
-        sub(/^[[:space:]]*#/, "", line)
+      line = $0
+      # Inside a block comment every line is comment text until the
+      # closing delimiter; whatever follows that delimiter is code.
+      if (in_block) {
+        close_at = index(line, "*/")
+        if (close_at > 0) {
+          in_block = 0
+          line = substr(line, 1, close_at - 1)
+        }
+        print line
+        count++
+        next
+      }
+      # A block comment opening its own line. The one-line form closes on
+      # the same line, so test for the delimiter before latching.
+      if (line ~ /^[[:space:]]*\/\*/) {
+        sub(/^[[:space:]]*\/\*/, "", line)
+        close_at = index(line, "*/")
+        if (close_at > 0) {
+          line = substr(line, 1, close_at - 1)
+        } else {
+          in_block = 1
+        }
+        print line
+        count++
+        next
+      }
+      # A `#` line comment. Only the indent is stripped: a reference
+      # written flush against the hash (`#123 …`) is invisible to the
+      # class regexes once the hash is gone.
+      if (line ~ /^[[:space:]]*#/) {
+        sub(/^[[:space:]]*/, "", line)
         print line
         count++
         next
       }
       print ""
     }
-    END { printf("%d %d\n", count, NR) > stats }
+    END {
+      printf("%d %d\n", count, NR) > stats
+      if (in_block) {
+        printf "%s: unterminated Nix block comment\n", src_rel > "/dev/stderr"
+        exit 1
+      }
+    }
   ' "$(awk_path "${file}")"
 }
 
@@ -374,8 +435,12 @@ function scan_class() {
   local -r class="$3"
   local -r regex="$4"
 
+  # `--binary-files=text`: a source carrying a NUL byte anywhere makes
+  # grep report `binary file matches` on stderr and print nothing on
+  # stdout, which reads here as a clean file. Force the text path so a
+  # stray NUL cannot exempt every line around it.
   local matches
-  matches="$(grep --line-number --extended-regexp --only-matching -- "${regex}" "${stripped}" || true)"
+  matches="$(grep --line-number --extended-regexp --only-matching --binary-files=text -- "${regex}" "${stripped}" || true)"
   [[ -z ${matches} ]] && return 0
 
   local match lineno token
@@ -404,8 +469,11 @@ function scan_advisory() {
   local -r src_rel="$1"
   local -r stripped="$2"
 
+  # `--binary-files=text` for the same reason the blocking pass forces
+  # it: a NUL byte otherwise turns a whole source into one stderr line
+  # that carries no findings.
   local matches
-  matches="$(grep --line-number --extended-regexp --only-matching --ignore-case -- "${RE_CAUSAL}" "${stripped}" || true)"
+  matches="$(grep --line-number --extended-regexp --only-matching --ignore-case --binary-files=text -- "${RE_CAUSAL}" "${stripped}" || true)"
   [[ -z ${matches} ]] && return 0
 
   local match lineno phrase
@@ -480,7 +548,13 @@ function main() {
 
   blocking_hits=0
   local md_sources=0 shell_sources=0 nix_sources=0
-  local allowlisted=0 lines=0 comments=0 fenced=0 spans=0 gen=0
+  # Comments are tallied per language, never summed into one counter.
+  # The two corpora differ by an order of magnitude, so a shared total
+  # stays comfortably positive when one extractor stops matching
+  # entirely — the breadth assertion below would then pass on the
+  # strength of the other language's comments alone.
+  local allowlisted=0 lines=0 shell_comments=0 nix_comments=0
+  local fenced=0 spans=0 gen=0
   local f_lines f_fenced f_spans f_gen f_comments
   local stats_dir
   stats_dir="$(mktemp -d)"
@@ -534,21 +608,26 @@ function main() {
       shell_sources=$((shell_sources + 1))
       IFS=' ' read -r f_comments f_lines <"${stats_dir}/comments"
       IFS=' ' read -r f_spans <"${stats_dir}/spans"
-      comments=$((comments + f_comments))
+      shell_comments=$((shell_comments + f_comments))
       lines=$((lines + f_lines))
       spans=$((spans + f_spans))
       ;;
     nix)
-      # No parse-failure branch: the matcher is a line scan, so there is
-      # no parser to reject the source.
+      # An unterminated block comment leaves the extractor reading code
+      # as comment text, so it is a fatal defect on this path exactly as
+      # an unterminated fence is on the Markdown one.
       raw="$(mktemp)"
-      extract_nix_comments "${src_abs}" "${stats_dir}" >"${raw}"
+      if ! extract_nix_comments "${src_abs}" "${src_rel}" "${stats_dir}" >"${raw}"; then
+        rm --force -- "${raw}" "${stripped}"
+        rm --recursive --force -- "${stats_dir}"
+        exit 1
+      fi
       blank_code_spans "${raw}" "${stats_dir}" >"${stripped}"
       rm --force -- "${raw}"
       nix_sources=$((nix_sources + 1))
       IFS=' ' read -r f_comments f_lines <"${stats_dir}/comments"
       IFS=' ' read -r f_spans <"${stats_dir}/spans"
-      comments=$((comments + f_comments))
+      nix_comments=$((nix_comments + f_comments))
       lines=$((lines + f_lines))
       spans=$((spans + f_spans))
       ;;
@@ -574,17 +653,28 @@ function main() {
   # scope instead: what was read, what was set aside, and why. The
   # per-language source counts are what catches a run that has stopped
   # seeing one language while still exiting 0.
-  printf 'ephemeral-refs: scanned %d markdown, %d shell, %d nix source(s), %d line(s), %d comment(s); skipped %d allowlisted; exempted %d code-fence line(s), %d inline code span(s), %d generated-block line(s)\n' \
+  printf 'ephemeral-refs: scanned %d markdown, %d shell, %d nix source(s), %d line(s), %d shell comment(s), %d nix comment(s); skipped %d allowlisted; exempted %d code-fence line(s), %d inline code span(s), %d generated-block line(s)\n' \
     "${md_sources}" "${shell_sources}" "${nix_sources}" "${lines}" \
-    "${comments}" "${allowlisted}" "${fenced}" "${spans}" "${gen}"
+    "${shell_comments}" "${nix_comments}" "${allowlisted}" "${fenced}" \
+    "${spans}" "${gen}"
 
   # A gate that reads no comments has not found a clean tree, it has
   # stopped reading: assert the count rather than infer it from a clean
   # exit, the same rule the enumeration helper applies to file counts.
-  if [[ $((shell_sources + nix_sources)) -gt 0 && ${comments} -eq 0 &&
+  # Each language answers for its own corpus, because the repo's shell
+  # comments outnumber its Nix comments better than ten to one — a joint
+  # total would stay far from zero with the Nix extractor matching
+  # nothing at all.
+  if [[ ${shell_sources} -gt 0 && ${shell_comments} -eq 0 &&
     -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
-    printf 'no comments extracted from %d shell/nix source(s)\n' \
-      "$((shell_sources + nix_sources))" >&2
+    printf 'no comments extracted from %d shell source(s)\n' \
+      "${shell_sources}" >&2
+    exit 2
+  fi
+  if [[ ${nix_sources} -gt 0 && ${nix_comments} -eq 0 &&
+    -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
+    printf 'no comments extracted from %d nix source(s)\n' \
+      "${nix_sources}" >&2
     exit 2
   fi
 
