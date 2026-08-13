@@ -47,6 +47,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 
 readonly DEFAULT_HOOKS_DIR="nix/hooks"
 readonly DEFAULT_SCRIPTS_DIR="scripts"
@@ -70,18 +72,21 @@ readonly MODULE_ROOT="${module_root}"
 # never reaches the tree emits nothing, and an empty module list reads
 # downstream as "no module assigns the attribute", which scores an
 # attribute-evaluating hook as reaching no manifest at all.
-if ! module_scan="$(cd "${MODULE_ROOT}" && find . -name '*.nix' \
-  -not -path './tests/fixtures/*' -not -path './.git/*' -printf '%P\n' | sort)"; then
-  printf 'manifest-hook-watches-nix: nix module scan under %s failed\n' \
-    "${MODULE_ROOT}" >&2
-  exit 2
-fi
+#
+# The `cd` is what makes the emitted paths relative to MODULE_ROOT, so it is
+# kept inside this same-file wrapper rather than folded into the `find`
+# invocation directly: a function invoked as a command is not a process
+# substitution feeding a redirection, which is the shape
+# check-no-opaque-procsub.sh bans.
+# shellcheck disable=SC2329 # invoked indirectly, by name, via enumerate_into
+function manifest_hook_module_scan() {
+  (cd "${MODULE_ROOT}" && find . -name '*.nix' \
+    -not -path './tests/fixtures/*' -not -path './.git/*' -printf '%P\0') |
+    sort --zero-terminated
+}
 
 nix_modules=()
-while IFS= read -r m; do
-  [[ -z ${m} ]] && continue
-  nix_modules+=("${m}")
-done <<<"${module_scan}"
+enumerate_into nix_modules "nix module scan under ${MODULE_ROOT}" manifest_hook_module_scan
 
 # Every module's comment-stripped source, read once up front and keyed by
 # module path. Both attribute-class signals match against this map rather
@@ -201,39 +206,47 @@ parse_blocks() {
   done
 }
 
-# Every nix module that assigns the flake attribute `$1.$2` in non-comment
-# source, one per line. Matched on the assignment shape rather than on a
-# bare mention of the leaf: the hook block that evaluates the attribute
-# names it in its own entry, and a hook is not a source of the attribute
-# it builds.
+# Fill the array named `$1` with every nix module that assigns the flake
+# attribute `$2.$3` in non-comment source. Matched on the assignment shape
+# rather than on a bare mention of the leaf: the hook block that evaluates
+# the attribute names it in its own entry, and a hook is not a source of
+# the attribute it builds.
+#
+# The result is written into a caller-named array, not printed and
+# recaptured through a newline-joined string: a module path carrying an
+# embedded newline is one element in `nix_modules` (courtesy of
+# `enumerate_into`), and joining it into text for `manifest_reading_assigner`
+# to re-split would fracture it right back into two nonexistent lookup
+# keys into `nix_src` — the exact bug this conversion exists to close.
 function attr_assigners() {
-  local -r ns="$1"
-  local -r leaf="$2"
+  local -n __attr_assigners_out="$1"
+  local -r ns="$2"
+  local -r leaf="$3"
+  __attr_assigners_out=()
   local f
   for f in "${nix_modules[@]}"; do
     if grep --quiet --extended-regexp -- "${ns}\.${leaf}[[:space:]]*=" \
       <<<"${nix_src["${f}"]}"; then
-      printf '%s\n' "${f}"
+      __attr_assigners_out+=("${f}")
     fi
   done
+  return 0
 }
 
-# The first module in the newline-separated assigner list `$1` that
-# references the flake hook manifest in non-comment source, or nothing.
-# One such module is enough: it makes a manifest edit change what the
-# attribute builds, which is exactly what the `nix/hooks` filter entry has
-# to re-trigger on.
+# The first module in the assigner array named `$1` that references the
+# flake hook manifest in non-comment source, or nothing. One such module is
+# enough: it makes a manifest edit change what the attribute builds, which
+# is exactly what the `nix/hooks` filter entry has to re-trigger on.
 function manifest_reading_assigner() {
-  local -r assigners="$1"
+  local -n __mra_assigners="$1"
   local f
-  while IFS= read -r f; do
-    [[ -z ${f} ]] && continue
+  for f in "${__mra_assigners[@]}"; do
     if grep --quiet --extended-regexp 'preCommitHooks|PRECOMMIT_HOOK_NAMES' \
       <<<"${nix_src["${f}"]}"; then
       printf '%s' "${f}"
       return 0
     fi
-  done <<<"${assigners}"
+  done
 }
 
 # Does a hook's `files` regex re-trigger it on a hook-definition edit?
@@ -254,7 +267,9 @@ function filter_covers_hooks_dir() {
 }
 
 failed=0
+total_blocks=0
 subject_blocks=0
+script_subject_blocks=0
 attribute_blocks=0
 attr_reference_blocks=0
 
@@ -273,6 +288,7 @@ fi
 
 while IFS=$'\037' read -r name files scripts attr_ns attr_leaf attr_seen; do
   [[ -n ${name} ]] || continue
+  total_blocks=$((total_blocks + 1))
 
   if [[ ${attr_seen} == '1' ]]; then
     attr_reference_blocks=$((attr_reference_blocks + 1))
@@ -298,19 +314,15 @@ while IFS=$'\037' read -r name files scripts attr_ns attr_leaf attr_seen; do
   if [[ -n ${attr_leaf} ]]; then
     attribute_blocks=$((attribute_blocks + 1))
 
-    # Capture the assigner scan and check its status before consuming it,
-    # for the same reason the block parser is captured: an empty list is a
-    # meaningful answer here, so a scan that gave up would read as one.
-    if ! assigners="$(attr_assigners "${attr_ns}" "${attr_leaf}")"; then
-      printf 'manifest-hook-watches-nix: assigner scan for %s.%s failed\n' \
-        "${attr_ns}" "${attr_leaf}" >&2
-      exit 2
-    fi
-    if ! manifest_assigner="$(manifest_reading_assigner "${assigners}")"; then
-      printf 'manifest-hook-watches-nix: manifest-token scan of the modules assigning %s.%s failed\n' \
-        "${attr_ns}" "${attr_leaf}" >&2
-      exit 2
-    fi
+    # The assigner list is threaded through as an array, not printed and
+    # recaptured through a command substitution: an empty or
+    # every-element-unmatched result is a meaningful answer here (not a
+    # scan that gave up), and `attr_assigners` always returns 0, so there
+    # is no producer status left to lose by calling it directly.
+    # shellcheck disable=SC2034 # written and read via attr_assigners'/manifest_reading_assigner's nameref, not a direct expansion here
+    assigners=()
+    attr_assigners assigners "${attr_ns}" "${attr_leaf}"
+    manifest_assigner="$(manifest_reading_assigner assigners)"
   fi
 
   # A block is a subject of either class, or of neither. The two are
@@ -319,6 +331,9 @@ while IFS=$'\037' read -r name files scripts attr_ns attr_leaf attr_seen; do
   # is reported once per reason it must watch `nix/hooks`.
   if ((references_manifest)) || [[ -n ${attr_leaf} ]]; then
     subject_blocks=$((subject_blocks + 1))
+  fi
+  if ((references_manifest)); then
+    script_subject_blocks=$((script_subject_blocks + 1))
   fi
 
   covers_hooks_dir=1
@@ -365,4 +380,12 @@ if ((failed > 0)); then
   printf '%d manifest-reaching hook(s) missing nix/hooks in files filter\n' "${failed}" >&2
   exit 1
 fi
+
+# A clean run is otherwise silent about how much it checked, which reads
+# identically whether it verified a script-referencing hook, an
+# attribute-building one, or nothing at all. State the breadth covered:
+# hook blocks parsed (and how many were script-referencing vs.
+# attribute-building subjects), and nix modules scanned to resolve them.
+printf 'manifest-hook-watches-nix: ok — %d hook block(s) scanned (%d script-referencing, %d attribute-building), %d nix module(s) scanned\n' \
+  "${total_blocks}" "${script_subject_blocks}" "${attribute_blocks}" "${#nix_modules[@]}"
 exit 0

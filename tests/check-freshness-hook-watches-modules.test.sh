@@ -10,6 +10,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-freshness-hook-watches-modules.sh"
 
 failures=0
@@ -25,21 +27,34 @@ trap cleanup EXIT
 
 function expect() {
   local -r name="$1" root="$2" want_exit="$3" want_msg="$4"
-  local got_exit=0 got_stderr
-  got_stderr="$(ROOT_OVERRIDE="${root}" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+
+  local stdout_file stderr_file outcome_file
+  stdout_file="$(mktemp)"
+  stderr_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+
+  local got_exit=0
+  ROOT_OVERRIDE="${root}" \
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || got_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${want_msg}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+
+  local got_stderr
+  got_stderr="$(cat -- "${stderr_file}")"
   if [[ ${got_exit} != "${want_exit}" ]]; then
     printf 'FAIL %s: exit %s, want %s\n  stderr: %s\n' \
       "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" >&2
     failures=$((failures + 1))
-    return
-  fi
-  if [[ -n ${want_msg} && ${got_stderr} != *"${want_msg}"* ]]; then
+  elif [[ -n ${want_msg} && ${got_stderr} != *"${want_msg}"* ]]; then
     printf 'FAIL %s: stderr missing %q\n  got: %s\n' \
       "${name}" "${want_msg}" "${got_stderr}" >&2
     failures=$((failures + 1))
-    return
+  else
+    printf 'PASS: %s (exit %s)\n' "${name}" "${got_exit}"
   fi
-  printf 'PASS: %s (exit %s)\n' "${name}" "${got_exit}"
+
+  rm --force -- "${stdout_file}" "${stderr_file}" "${outcome_file}"
 }
 
 # Build a miniature repo: a generator evaluating devTooling.<sys>.fixtureAttr,
@@ -135,10 +150,10 @@ EOF
 
   cat >"${root}/nix/hooks/freshness.nix" <<EOF
 {
-  fixture-doc-fresh = {
+  fixture-doc-fresh-twice = {
     enable = true;
-    name = "fixture-doc-fresh";
-    description = "Fixture generated-doc freshness hook.";
+    name = "fixture-doc-fresh-twice";
+    description = "Fixture generated-doc freshness hook naming its script twice.";
     entry = "if [[ ! -f scripts/refresh-fixture-doc.sh ]]; then exit 0; fi; exec bash scripts/refresh-fixture-doc.sh --check";
     files = "${files}";
     pass_filenames = false;
@@ -278,7 +293,7 @@ function main() {
   write_tree "${work}/bad-definer" \
     '^(nix/manifests\.nix)$' plain
   expect 'bad: filter missing the defining module fails' \
-    "${work}/bad-definer" 1 'nix/hooks/default.nix'
+    "${work}/bad-definer" 1 'hook fixture-doc-fresh: files filter does not cover nix/hooks/default.nix'
 
   # (d) BAD: the transposing module names the attribute only in a comment.
   # It is still required, because the transposition — not the mention — is
@@ -356,7 +371,7 @@ EOF
   # passing even though its filter (below) omits a required module.
   write_two_mention_tree "${work}/two-mention" '^(nix/manifests\.nix)$'
   expect 'bad: a hook naming its script twice still catches a missing module' \
-    "${work}/two-mention" 1 'nix/hooks/default.nix'
+    "${work}/two-mention" 1 'hook fixture-doc-fresh-twice: files filter does not cover nix/hooks/default.nix'
 
   # (i) BAD: the defining module names the attribute via a computed key
   # (`${"fixture" + "Attr"} = ...`), so no module textually contains
@@ -367,7 +382,7 @@ EOF
   write_hidden_attr_tree "${work}/hidden-attr" \
     '^(nix/hooks/.*\.nix|nix/manifests\.nix)$'
   expect 'bad: a computed attribute name trips the derivation-broke guard' \
-    "${work}/hidden-attr" 1 'derivation broke'
+    "${work}/hidden-attr" 1 'no nix module defines fixtureAttr'
 
   # (j) TOOLING: the root the scan is pointed at does not exist, so the
   # module scan emits nothing. An empty module list is indistinguishable
@@ -377,7 +392,7 @@ EOF
   # output is consumed, and the verdict must be "could not run" (2) rather
   # than a coverage verdict.
   expect 'tooling: an absent root is reported as a failed module scan' \
-    "${work}/absent-root" 2 'nix module scan under'
+    "${work}/absent-root" 2 'failed enumerating the scan set'
 
   # (k) TOOLING: a path matching `*.nix` that is a directory reaches the
   # comment stripper, which cannot read it. Matched through a
@@ -437,6 +452,63 @@ EOF
 
   # (l) LIVE: the real tree must satisfy the guard.
   expect 'live: real tree passes' "${REPO_ROOT}" 0 ''
+
+  # (q) BAD: an extra module assigning the same directly-built attribute is
+  # named with an embedded newline. `attr_source_paths` and
+  # `assert_filter_covers` thread the derived source set through as an
+  # array, so the module survives as one element and the hook reports
+  # exactly the one real gap rather than two fabricated, nonexistent ones.
+  # Built at run time rather than checked in because treefmt walks
+  # tests/fixtures and its exclude list cannot express a path containing a
+  # newline.
+  write_attr_tree "${work}/newline-module" \
+    '^(flake\\.nix|flake\\.lock|nix/attr-source\\.nix|scripts/fixture-attr-tool\\.sh)$' \
+    fixtureCheck
+  cat >"${work}/newline-module/nix/$(printf 'ev\nil.nix')" <<'EOF'
+{
+  perSystem =
+    { pkgs, ... }:
+    {
+      checks.fixtureCheck = pkgs.runCommandLocal "fixture-check-2" { } ''
+        touch "$out"
+      '';
+    };
+}
+EOF
+  # Anchored to the joined path, not to `does not cover nix/ev` alone: the
+  # unfixed script's second fabricated line also reads
+  # "does not cover nix/ev (builds ...)", so that substring is not proof —
+  # it matches both the fixed and the unfixed script (and "1 freshness
+  # hook filter gap(s)" collides with every other single-violation
+  # scenario in this harness). Only the fixed script emits the module's
+  # embedded newline immediately followed by its second half and "(builds"
+  # on the very next byte, with nothing in between — the unfixed script's
+  # "nix/ev" is followed by a space and "(builds" on the SAME line, never
+  # by a newline then "il.nix (builds".
+  expect 'bad: a newline-named extra assigner reports one real gap, not two fabricated ones' \
+    "${work}/newline-module" 1 $'nix/ev\nil.nix (builds'
+
+  # (r) TOOLING: ROOT holds no *.nix file at all. Distinct from the
+  # absent-root case in that ROOT exists and is readable — the scan
+  # reaches the tree and comes back with nothing to derive a subject set
+  # from, which is a could-not-run (2), not "no devTooling-evaluating
+  # hook blocks found" (1, the guard-the-guard for a parser that broke
+  # over a tree that does carry modules).
+  mkdir --parents -- "${work}/empty-modules/scripts"
+  expect 'tooling: ROOT with no nix module is a could-not-run' \
+    "${work}/empty-modules" 2 'enumerated 0 files via nix module scan under'
+
+  # A mention of the evaluated attribute behind a `#` and no mention at all
+  # both leave the transposer as the sole uncovered module — the
+  # comment-only fixture exists to prove the transposition (not the
+  # mention) is what is required, and a correct guard reports the identical
+  # gap either way.
+  harness_assert_parity_exempt \
+    'bad: filter missing the transposing module fails' \
+    'bad: comment-only mention does not excuse the transposer' \
+    'both leave nix/manifests.nix as the only uncovered module; a mention behind a comment changes nothing a correct guard derives, so the reported gap is identical by design'
+
+  harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then
     printf '\n%d test(s) failed\n' "${failures}" >&2

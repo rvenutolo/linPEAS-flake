@@ -47,6 +47,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 
 root="${ROOT_OVERRIDE:-$(git rev-parse --show-toplevel)}"
 readonly ROOT="${root}"
@@ -62,18 +64,21 @@ shopt -s nullglob
 # nothing, and an empty module list reads downstream as "no module assigns
 # flake.devTooling", reporting a broken transposer signal for a tree that
 # is simply not there.
-if ! module_scan="$(cd "${ROOT}" && find . -name '*.nix' \
-  -not -path './tests/fixtures/*' -not -path './.git/*' -printf '%P\n' | sort)"; then
-  printf 'freshness-hook-watches-modules: nix module scan under %s failed\n' \
-    "${ROOT}" >&2
-  exit 2
-fi
+#
+# The `cd` is what makes the emitted paths relative to ROOT, so it is kept
+# inside this same-file wrapper rather than folded into the `find`
+# invocation directly: a function invoked as a command is not a process
+# substitution feeding a redirection, which is the shape
+# check-no-opaque-procsub.sh bans.
+# shellcheck disable=SC2329 # invoked indirectly, by name, via enumerate_into
+function freshness_module_scan() {
+  (cd "${ROOT}" && find . -name '*.nix' \
+    -not -path './tests/fixtures/*' -not -path './.git/*' -printf '%P\0') |
+    sort --zero-terminated
+}
 
 nix_modules=()
-while IFS= read -r m; do
-  [[ -z ${m} ]] && continue
-  nix_modules+=("${m}")
-done <<<"${module_scan}"
+enumerate_into nix_modules "nix module scan under ${ROOT}" freshness_module_scan
 
 # Nix source with comments removed. A `#` inside a string over-strips the
 # rest of that line, which can only shrink the derived set; the read guard
@@ -100,9 +105,34 @@ for m in "${nix_modules[@]}"; do
   fi
 done
 
-# Every module the generator for `$1` depends on, one per line.
+# Fill the array named `$1` with the keys of the associative array named
+# `$2`, sorted. Sorted through a NUL-delimited temp file rather than a
+# newline-joined `sort` pipe: a key here is a module or source path threaded
+# in from `enumerate_into`, so it may carry an embedded newline, and joining
+# it into text to sort it would fracture it right back into two paths
+# neither `assert_filter_covers` nor a human reader could attribute to the
+# real file. The temp file (not a `< <(…)` process substitution) is what
+# `check-no-opaque-procsub.sh` requires: that lint bans a process
+# substitution feeding a redirection outright.
+function sorted_keys_into() {
+  local -n __sk_out="$1"
+  local -n __sk_map="$2"
+  local tmp p
+  tmp="$(mktemp)" || return 1
+  printf '%s\0' "${!__sk_map[@]}" | sort --zero-terminated >"${tmp}"
+  __sk_out=()
+  while IFS= read -r -d '' p || [[ -n ${p} ]]; do
+    [[ -n ${p} ]] || continue
+    __sk_out+=("${p}")
+  done <"${tmp}"
+  rm --force -- "${tmp}"
+}
+
+# Fill the array named `$1` with every module the generator for `$2`
+# depends on.
 function required_modules() {
-  local -r attr="$1"
+  local -r out_name="$1"
+  local -r attr="$2"
   local -A mods=()
   local f
   for f in "${nix_modules[@]}"; do
@@ -147,7 +177,7 @@ function required_modules() {
       fi
     done <<<"${imports}"
   done
-  printf '%s\n' "${!mods[@]}" | sort
+  sorted_keys_into "${out_name}" mods
 }
 
 # Step 1 — derive generator basename -> evaluated attribute.
@@ -278,25 +308,36 @@ function attr_definer_count() {
   printf '%s' "${n}"
 }
 
-# Every nix module that assigns the flake attribute `$1.$2` in non-comment
-# source, one per line. Matched on the assignment shape rather than on a
-# bare mention of the leaf: the hook block that evaluates the attribute
-# names it in its own entry, and a hook is not a source of the attribute
-# it builds.
+# Fill the array named `$1` with every nix module that assigns the flake
+# attribute `$2.$3` in non-comment source. Matched on the assignment shape
+# rather than on a bare mention of the leaf: the hook block that evaluates
+# the attribute names it in its own entry, and a hook is not a source of
+# the attribute it builds.
+#
+# The result is written into a caller-named array, not printed and
+# recaptured through a newline-joined string: a module path carrying an
+# embedded newline is one element in `nix_modules` (courtesy of
+# `enumerate_into`), and joining it into text for a caller to re-split
+# would fracture it right back into two nonexistent lookup keys into
+# `nix_src` — the exact bug this conversion exists to close.
 function attr_assigners() {
-  local -r ns="$1"
-  local -r leaf="$2"
+  local -n __attr_assigners_out="$1"
+  local -r ns="$2"
+  local -r leaf="$3"
+  __attr_assigners_out=()
   local f
   for f in "${nix_modules[@]}"; do
     if grep --quiet --extended-regexp -- "${ns}\.${leaf}[[:space:]]*=" \
       <<<"${nix_src["${f}"]}"; then
-      printf '%s\n' "${f}"
+      __attr_assigners_out+=("${f}")
     fi
   done
+  return 0
 }
 
-# Every file a directly-evaluated flake attribute is built from, one per
-# line, given its assigning modules as a newline-separated list in $1.
+# Fill the array named `$1` with every file a directly-evaluated flake
+# attribute is built from, given its assigning modules as the array named
+# `$2`.
 #
 # `flake.nix` and `flake.lock` are unconditional: every flake evaluation
 # reads the expression and its lock, and a lock bump changes the packages
@@ -307,13 +348,14 @@ function attr_assigners() {
 # contents exactly as much as on an imported module, and a `.nix`-only
 # walk would drop it from the required set.
 function attr_source_paths() {
-  local -r assigners="$1"
+  local -r out_name="$1"
+  local -n __asp_assigners="$2"
+  # shellcheck disable=SC2034 # read via sorted_keys_into's nameref, not a direct expansion here
   local -A paths=()
   paths['flake.nix']=1
   paths['flake.lock']=1
   local m dir ref rel refs status
-  while IFS= read -r m; do
-    [[ -z ${m} ]] && continue
+  for m in "${__asp_assigners[@]}"; do
     paths["${m}"]=1
     dir="$(dirname -- "${m}")"
     status=0
@@ -334,36 +376,43 @@ function attr_source_paths() {
       rel="$(realpath --relative-to="${ROOT}" --canonicalize-missing \
         -- "${ROOT}/${dir}/${ref}")"
       if [[ -f ${ROOT}/${rel} ]]; then
+        # shellcheck disable=SC2034 # read via sorted_keys_into's nameref, not a direct expansion here
         paths["${rel}"]=1
       fi
     done <<<"${refs}"
-  done <<<"${assigners}"
-  printf '%s\n' "${!paths[@]}" | sort
+  done
+  sorted_keys_into "${out_name}" paths
 }
 
-# Report every path in the derived set `$4` that the hook's `files` value
-# `$2` fails to match, naming the hook `$1` and what makes the path
+# Report every path in the derived set named `$4` that the hook's `files`
+# value `$2` fails to match, naming the hook `$1` and what makes the path
 # required (`$3`). Increments the shared failure count.
 function assert_filter_covers() {
   local -r name="$1"
   local -r files="$2"
   local -r subject="$3"
-  local -r derived="$4"
+  local -n __afc_derived="$4"
   # Nix string literal: "\\." in source is the ERE "\.".
   local ere p
   ere="$(printf '%s' "${files}" | sed 's/\\\\/\\/g')"
-  while IFS= read -r p; do
-    [[ -z ${p} ]] && continue
+  for p in "${__afc_derived[@]}"; do
+    # `grep` is line-oriented, so this match cannot itself see a `p` whose
+    # embedded newline splits it across two lines as one contiguous path.
+    # Relying on no tracked `*.nix` carrying one is not quite blanket
+    # coverage: `check-path-hygiene.sh` enumerates with `--exclude-standard`,
+    # so a gitignored newline-named `*.nix` under the scan root is invisible
+    # to it while `nix_modules` (a plain filesystem walk) still picks it up.
     if ! printf '%s\n' "${p}" | grep --quiet --extended-regexp -- "${ere}"; then
       printf 'hook %s: files filter does not cover %s (%s)\n' \
         "${name}" "${p}" "${subject}" >&2
       failed=$((failed + 1))
     fi
-  done <<<"${derived}"
+  done
 }
 
 # Step 3 — assert each subject hook covers the source set it depends on.
 failed=0
+total_blocks=0
 generator_hooks=0
 attribute_hooks=0
 attr_reference_blocks=0
@@ -384,6 +433,7 @@ fi
 
 while IFS=$'\037' read -r name files scripts attr_ns attr_leaf attr_seen; do
   [[ -n ${name} ]] || continue
+  total_blocks=$((total_blocks + 1))
 
   if [[ ${attr_seen} == '1' ]]; then
     attr_reference_blocks=$((attr_reference_blocks + 1))
@@ -409,7 +459,7 @@ while IFS=$'\037' read -r name files scripts attr_ns attr_leaf attr_seen; do
   # runs a generator and builds an attribute answers for both source sets.
   [[ -n ${attr} || -n ${attr_leaf} ]] || continue
 
-  assigners=''
+  assigners=()
   if [[ -n ${attr} ]]; then
     generator_hooks=$((generator_hooks + 1))
 
@@ -427,21 +477,19 @@ while IFS=$'\037' read -r name files scripts attr_ns attr_leaf attr_seen; do
   if [[ -n ${attr_leaf} ]]; then
     attribute_hooks=$((attribute_hooks + 1))
 
-    # Capture the assigner scan and check its status before consuming it,
-    # for the same reason every other producer here is captured: an empty
-    # list is a meaningful answer, so a scan that gave up would read as one.
-    if ! assigners="$(attr_assigners "${attr_ns}" "${attr_leaf}")"; then
-      printf 'freshness-hook-watches-modules: assigner scan for %s.%s failed\n' \
-        "${attr_ns}" "${attr_leaf}" >&2
-      exit 2
-    fi
+    # The assigner list is threaded through as an array, not printed and
+    # recaptured through a command substitution: an empty or
+    # every-element-unmatched result is a meaningful answer here (not a
+    # scan that gave up), and `attr_assigners` always returns 0, so there
+    # is no producer status left to lose by calling it directly.
+    attr_assigners assigners "${attr_ns}" "${attr_leaf}"
 
     # Guard-the-guard: a hook builds an attribute something must assign, so
     # zero assigning modules means the assignment-shape match stopped
     # matching rather than that the attribute has no nix source. Left
     # unguarded the required set would shrink to the two flake files, which
     # every plausible filter already covers.
-    if [[ -z ${assigners} ]]; then
+    if ((${#assigners[@]} == 0)); then
       printf 'hook %s: no nix module assigns %s.%s — assigner scan broke\n' \
         "${name}" "${attr_ns}" "${attr_leaf}" >&2
       failed=$((failed + 1))
@@ -457,32 +505,37 @@ while IFS=$'\037' read -r name files scripts attr_ns attr_leaf attr_seen; do
   fi
 
   if [[ -n ${attr} ]]; then
-    # Capture the derived set and check its status before consuming it: a
-    # derivation that gives up part way emits nothing, and an empty set reads
-    # as a hook whose filter already covers every module it must. No fixture
-    # drives this guard, because every producer inside `required_modules`
-    # reads memory rather than the tree — each module's source is read and
-    # status-checked up front — so the only status it can return is the one
-    # its own inner guard raises.
-    if ! required="$(required_modules "${attr}")"; then
+    # Fill the derived set as an array and check the producer's status
+    # before consuming it: a derivation that gives up part way emits
+    # nothing, and an empty set reads as a hook whose filter already covers
+    # every module it must. No fixture drives this guard, because every
+    # producer inside `required_modules` reads memory rather than the tree
+    # — each module's source is read and status-checked up front — so the
+    # only status it can return is the one its own inner guard raises (or a
+    # `mktemp` failure inside the NUL-sort helper).
+    # shellcheck disable=SC2034 # written by required_modules' nameref, read via assert_filter_covers' nameref, not a direct expansion here
+    required=()
+    if ! required_modules required "${attr}"; then
       printf 'freshness-hook-watches-modules: required-module derivation for %s failed\n' \
         "${attr}" >&2
       exit 2
     fi
-    assert_filter_covers "${name}" "${files}" "evaluates ${attr}" "${required}"
+    assert_filter_covers "${name}" "${files}" "evaluates ${attr}" required
   fi
 
   if [[ -n ${attr_leaf} ]]; then
     # Same capture-then-check shape: the source set for a directly-built
     # attribute is never legitimately empty, so a producer that gave up
     # would otherwise report full coverage.
-    if ! required="$(attr_source_paths "${assigners}")"; then
+    # shellcheck disable=SC2034 # written by attr_source_paths' nameref, read via assert_filter_covers' nameref, not a direct expansion here
+    required=()
+    if ! attr_source_paths required assigners; then
       printf 'freshness-hook-watches-modules: source derivation for %s.%s failed\n' \
         "${attr_ns}" "${attr_leaf}" >&2
       exit 2
     fi
     assert_filter_covers "${name}" "${files}" \
-      "builds ${attr_ns}.${attr_leaf}" "${required}"
+      "builds ${attr_ns}.${attr_leaf}" required
   fi
 done <<<"${blocks}"
 
@@ -524,4 +577,12 @@ if ((failed > 0)); then
   printf '%d freshness hook filter gap(s)\n' "${failed}" >&2
   exit 1
 fi
+
+# A clean run is otherwise silent about how much it checked, which reads
+# identically whether it verified a generator-running hook, an
+# attribute-building one, or nothing at all. State the breadth covered:
+# hook blocks parsed (and how many were generator-running vs.
+# attribute-building subjects), and nix modules scanned to resolve them.
+printf 'freshness-hook-watches-modules: ok — %d hook block(s) scanned (%d generator-running, %d attribute-building), %d nix module(s) scanned\n' \
+  "${total_blocks}" "${generator_hooks}" "${attribute_hooks}" "${#nix_modules[@]}"
 exit 0

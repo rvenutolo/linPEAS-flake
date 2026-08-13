@@ -49,6 +49,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 # shellcheck source=scripts/lib/log.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 install_err_trap
 
 # Temp files removed by the EXIT trap. Declared at script scope, not main-local:
@@ -59,7 +61,6 @@ repo_root=""
 ref_scripts=""
 ref_jobs=""
 ref_hooks=""
-real_scripts=""
 ci_exempt_file=""
 tsv=""
 hook_names=""
@@ -68,7 +69,7 @@ tmp_out=""
 fmt_target=""
 
 function cleanup() {
-  rm --force -- "${ref_scripts}" "${ref_jobs}" "${ref_hooks}" "${real_scripts}" "${ci_exempt_file}" "${tsv}" "${hook_names}" "${ci_jobs}" "${tmp_out}" "${fmt_target}"
+  rm --force -- "${ref_scripts}" "${ref_jobs}" "${ref_hooks}" "${ci_exempt_file}" "${tsv}" "${hook_names}" "${ci_jobs}" "${tmp_out}" "${fmt_target}"
   if [[ -n ${repo_root} ]]; then
     local stray
     shopt -s nullglob
@@ -405,13 +406,12 @@ function collect_referenced() {
 function cross_check_reverse() {
   local -r tsv="$1" scripts_dir="$2" ci_jobs_file="$3" hook_names_file="$4" sibling="$5"
   local -i failed=0
-  # ref_scripts, ref_jobs, ref_hooks, real_scripts, ci_exempt_file are
-  # script-scoped (declared at top) so the EXIT trap can clean them up;
-  # do not redeclare them local here or the trap would see empty values.
+  # ref_scripts, ref_jobs, ref_hooks, ci_exempt_file are script-scoped
+  # (declared at top) so the EXIT trap can clean them up; do not redeclare
+  # them local here or the trap would see empty values.
   ref_scripts="$(mktemp)"
   ref_jobs="$(mktemp)"
   ref_hooks="$(mktemp)"
-  real_scripts="$(mktemp)"
   ci_exempt_file="$(mktemp)"
   # collect_referenced runs in a subshell pipe; use a temp helper instead.
   # Build reference lists inline.
@@ -436,14 +436,24 @@ function cross_check_reverse() {
       printf '%s\n' "${v}"
     done | sort --unique >"${ref_hooks}"
 
-  # All real check-*.sh under scripts/, basename stem only.
-  find "${scripts_dir}" -maxdepth 1 -type f -name 'check-*.sh' -printf '%f\n' |
-    sed 's/\.sh$//' | sort --unique >"${real_scripts}"
+  # All real check-*.sh under scripts/, basename stem only. Threaded as an
+  # array end to end, never serialized to a newline-delimited file: a
+  # fixture script named with an embedded newline is one element of
+  # `real_names` courtesy of `enumerate_into`, and writing it out with
+  # `printf '%s\n'` before reading it back would fracture it right back
+  # into two bogus stems the orphan-script loop below would score
+  # independently. LINT_ALLOW_EMPTY_SCAN is forced because a fixture
+  # scripts dir may legitimately hold none: the orphan-script comparison
+  # against ref_scripts already treats "found nothing" as "nothing to
+  # report" rather than as a tooling fault.
+  local -a real_names=()
+  LINT_ALLOW_EMPTY_SCAN=1 enumerate_into real_names "find ${scripts_dir}" \
+    find "${scripts_dir}" -maxdepth 1 -type f -name 'check-*.sh' -printf '%f\0'
 
   # Orphan scripts: in real, not in ref, not in SCRIPT_EXEMPT.
-  local stem
-  while IFS= read -r stem; do
-    [[ -z ${stem} ]] && continue
+  local rn stem
+  for rn in ${real_names+"${real_names[@]}"}; do
+    stem="${rn%.sh}"
     if grep --quiet --fixed-strings --line-regexp -- "${stem}" "${ref_scripts}"; then
       continue
     fi
@@ -452,7 +462,7 @@ function cross_check_reverse() {
     fi
     log_err "orphan script: ${stem}.sh has no enforcer: reference in invariant index"
     failed=$((failed + 1))
-  done <"${real_scripts}"
+  done
 
   # Orphan ci jobs: real job not in ref, not in sibling EXEMPT list.
   load_ci_jobs_exempt "${ci_exempt_file}" "${sibling}"
@@ -486,8 +496,7 @@ function cross_check_reverse() {
     failed=$((failed + 1))
   done <"${hook_names_file}"
 
-  rm --force -- "${ref_scripts}" "${ref_jobs}" "${ref_hooks}" \
-    "${real_scripts}" "${ci_exempt_file}"
+  rm --force -- "${ref_scripts}" "${ref_jobs}" "${ref_hooks}" "${ci_exempt_file}"
   if ((failed > 0)); then
     exit 2
   fi
