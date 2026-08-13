@@ -129,6 +129,18 @@ The escape hatch is `# exit-code-exempt: <rationale>` on the exit line, for a gu
 
 Whole-line comments are blanked before matching, so a script may document the banned shape by name without tripping the check on its own documentation.
 
+### Bare temp-file creation
+
+The same lint bans a second shape, which lands on the wrong side of the same convention one level down: a bare `mktemp` anywhere under `scripts/`.
+
+An unwritable or absent `TMPDIR` makes `mktemp` exit 1. Under `set -Eeuo pipefail` an unguarded `tmp="$(mktemp)"` propagates that status, so the script dies with 1 — the code reserved for "this repo carries a violation". A pre-commit hook or CI job reads that as a stale tree and sends the operator to edit content the check never read, when what actually happened is that the machine could not hand the script a scratch file.
+
+Every creation therefore routes through `make_temp` (`scripts/lib/temp.sh`), which passes its arguments to `mktemp` verbatim, prints the created path, and on failure prints `<script>: cannot create a temp file (TMPDIR=<dir>)` and exits **2**. Exiting from inside the command substitution propagates through the enclosing assignment, so a call site needs no guard of its own.
+
+A hit is the command in *command position* — after line start, `$(`, a pipe, a `;`, a `!`, a `{`, an `&`, or a `then`/`do`/`else` keyword, with an optional `command` prefix. A bare `(` is deliberately not an introducer, so a parenthetical such as "atomic (mktemp + mv) pin write" is not a hit; neither is a trailing comment, a string operand, or a whole-line comment naming the command. The rule is switched off for `scripts/lib/temp.sh` alone, by basename — that library holds the one sanctioned invocation, and every other rule in this lint still reads it.
+
+The escape hatch is the same `# exit-code-exempt: <rationale>` marker, on the creation line, for a call whose failure genuinely is the finding. Both rules share one marker implementation, so an empty rationale is a diagnostic on either of them rather than a silent pass, and both feed the same exemption tally a clean run prints.
+
 Enforced by `scripts/check-guard-exit-code.sh`. Wired as the `lint-script-hygiene` CI job (member check `guard-exit-code`).
 
 ## path-hygiene

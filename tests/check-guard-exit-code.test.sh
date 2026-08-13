@@ -91,6 +91,24 @@ function main() {
   # not share an exit code.
   run_scenario 'absent scripts dir is a tooling error' \
     'no-such-fixture' 2 'scripts dir not found'
+  # An unguarded temp-file creation is the same class one level down: an
+  # unwritable TMPDIR makes the tool exit 1, which the caller reports as
+  # a violation of content the run never read.
+  run_scenario 'a bare temp-file creation is a hit' \
+    'bad-bare-mktemp' 1 'bad-bare-mktemp/scripts/take-temp.sh:8: creates a temp file with a bare mktemp'
+  # Each fixture below scans a different number of files so that no two
+  # clean scenarios share the summary line, which is their whole output.
+  run_scenario 'every guarded-helper form passes' \
+    'good-make-temp' 0 '3 script(s) scanned, 0 exemption(s)'
+  run_scenario 'rationale-bearing temp-file exemptions are counted' \
+    'good-mktemp-exempted' 0 '1 script(s) scanned, 2 exemption(s)'
+  run_scenario 'temp-file exemption without a rationale is a hit' \
+    'bad-mktemp-no-rationale' 1 'exit-code-exempt marker on a bare mktemp carries no rationale'
+  # Command position, not word presence: a whole-line comment, a
+  # parenthetical, a trailing comment and a string operand all name the
+  # command without running it.
+  run_scenario 'prose naming the temp-file command is not a hit' \
+    'good-mktemp-prose' 0 '4 script(s) scanned, 0 exemption(s)'
 
   harness_assert_verify || failures=$((failures + 1))
 

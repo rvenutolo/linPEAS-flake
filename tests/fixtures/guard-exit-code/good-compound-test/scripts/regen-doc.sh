@@ -6,7 +6,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly output_file='docs/generated.md'
-tmp_out="$(mktemp)"
+tmp_out="$(make_temp)"
 readonly tmp_out
 
 printf 'generated\n' >"${tmp_out}"

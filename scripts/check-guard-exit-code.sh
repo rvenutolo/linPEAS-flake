@@ -2,7 +2,8 @@
 # scripts/check-guard-exit-code.sh
 #
 # @description Lint: no script anywhere under `scripts/` may exit 1 out
-# of a guard whose test is only an availability check. The exit codes separate what the
+# of a guard whose test is only an availability check, and none may
+# create a temp file with a bare `mktemp`. The exit codes separate what the
 # operator has to do about a run: 2 means the check could not run (a
 # required tool is absent, an input is missing, unreadable or
 # malformed), 1 means it ran and found a violation, 0 means clean. An
@@ -30,8 +31,21 @@
 # being absent, so absence there is half of a content verdict rather
 # than a could-not-run.
 #
-# Escape hatch: `# exit-code-exempt: <rationale>` on the exit line, for
-# a guard whose missing input genuinely IS the finding. The marker has
+# The second rule covers the same class one level down. An unwritable
+# `TMPDIR` makes `mktemp` exit 1, and an unguarded `x="$(mktemp)"` under
+# `set -e` kills the caller with that same 1 — so a machine that cannot
+# hand the script a scratch file reports as a repo carrying a violation.
+# Every creation therefore routes through `make_temp`
+# (`scripts/lib/temp.sh`), which reports the failure as exit 2; that
+# library holds the one sanctioned bare invocation and is the only file
+# this rule skips. Matching is by command position — line start, a
+# command substitution, a pipe, a separator, a negation, a group
+# opening, or a loop/branch keyword — so prose naming the command,
+# including a parenthetical, is not a hit.
+#
+# Escape hatch: `# exit-code-exempt: <rationale>`, on the exit line of a
+# guard whose missing input genuinely IS the finding, or on the line of a
+# bare temp-file creation whose failure IS the finding. The marker has
 # to open the comment, so prose naming it exempts nothing, and the
 # rationale has to be non-empty. A clean run prints the exemption count,
 # so the exempt set is stated rather than open-ended.
@@ -120,24 +134,44 @@ function pure(t, absent,   ndisj, D, i, nc, C, j, ok, all) {
   return all
 }
 
-function report(kind, ln, detail) {
-  printf "%s\t%d\t%d\t%s\n", kind, ln, guard_line, detail
+function report(kind, ln, detail, gline) {
+  printf "%s\t%d\t%d\t%s\n", kind, ln, gline, detail
 }
 
-function scan_exit(ln, text,   rest) {
-  if (text !~ /(^|[;&|(){} \t])exit[ \t]+1([ \t]*[;#)]|[ \t]*$)/) return
+# Route one flagged line through the exit-code-exempt marker: a marker
+# carrying a rationale is tallied as an exemption, an empty one is its
+# own finding, and an unmarked line is the hit. Both rules below share
+# this, so the marker means the same thing wherever it sits and neither
+# rule can drift into honoring an empty rationale on its own.
+function classify(hitkind, norkind, ln, detail, text, gline,   rest) {
   if (text ~ /#[ \t]*exit-code-exempt:/) {
     rest = text
     sub(/^.*#[ \t]*exit-code-exempt:[ \t]*/, "", rest)
     rest = trim(rest)
     if (rest == "") {
-      report("norationale", ln, guard_text)
+      report(norkind, ln, detail, gline)
     } else {
-      report("exempt", ln, rest)
+      report("exempt", ln, rest, gline)
     }
     return
   }
-  report("hit", ln, guard_text)
+  report(hitkind, ln, detail, gline)
+}
+
+function scan_exit(ln, text) {
+  if (text !~ /(^|[;&|(){} \t])exit[ \t]+1([ \t]*[;#)]|[ \t]*$)/) return
+  classify("hit", "norationale", ln, guard_text, text, guard_line)
+}
+
+# A bare temp-file creation, matched in command position. The introducer
+# set is line start, a command substitution, a pipe, a separator, a
+# negation, a group opening, or a loop/branch keyword — deliberately not
+# a bare paren, so a parenthetical naming the command in prose is not a
+# hit. The command name itself is spelled as a character class, like
+# every other pattern here, so this program never matches its own text.
+function scan_temp(ln, text) {
+  if (text !~ /(^|[$][(]|[|;!{&]|[ \t]then[ \t]|[ \t]do[ \t]|[ \t]else[ \t])[ \t]*(command[ \t]+)?[m]ktemp([ \t)|;&]|$)/) return
+  classify("baretemp", "temp_norationale", ln, trim(text), text, ln)
 }
 
 # Enter the branch body of an accumulated `if` condition, but only when
@@ -187,6 +221,10 @@ BEGIN {
   # Whole-line comments are blanked, keeping the line count intact, so a
   # header that names a banned shape is not read as that shape.
   if (line ~ /^[ \t]*#/) line = ""
+
+  # Scanned ahead of the branch-tracking modes below, each of which
+  # consumes its line, so a creation inside a guard body is still seen.
+  if (sanctioned != 1) scan_temp(FNR, line)
 
   if (mode == "cond") {
     cond = cond " " line
@@ -250,9 +288,17 @@ scanned=0
 shopt -s nullglob globstar
 for f in "${DIR}"/**/*.sh; do
   scanned=$((scanned + 1))
+  # `scripts/lib/temp.sh` holds the one sanctioned bare invocation in the
+  # tree — the guarded helper every other site routes through — so the
+  # bare-creation rule is switched off for it by basename while every
+  # other rule here still reads the file.
+  sanctioned=0
+  if [[ ${f##*/} == 'temp.sh' ]]; then
+    sanctioned=1
+  fi
   # Captured rather than piped so a scanner failure aborts the run
   # instead of handing this loop an empty stream to score as clean.
-  findings="$(awk -- "${SCANNER}" <"${f}")"
+  findings="$(awk -v sanctioned="${sanctioned}" -- "${SCANNER}" <"${f}")"
   [[ -z ${findings} ]] && continue
   while IFS=$'\t' read -r kind exit_line guard_line detail; do
     [[ -z ${kind} ]] && continue
@@ -267,6 +313,16 @@ for f in "${DIR}"/**/*.sh; do
         "${f}" "${exit_line}" "${guard_line}" "${detail}" >&2
       failed=$((failed + 1))
       ;;
+    baretemp)
+      printf '%s:%s: creates a temp file with a bare mktemp (%s); an unwritable TMPDIR makes that tool exit 1, so the failure arrives as a finding about content the run never read — route it through make_temp from scripts/lib/temp.sh\n' \
+        "${f}" "${exit_line}" "${detail}" >&2
+      failed=$((failed + 1))
+      ;;
+    temp_norationale)
+      printf '%s:%s: exit-code-exempt marker on a bare mktemp carries no rationale (%s); the call stays a hit until the marker says why a temp file this script cannot create is the finding\n' \
+        "${f}" "${exit_line}" "${detail}" >&2
+      failed=$((failed + 1))
+      ;;
     exempt)
       exempted=$((exempted + 1))
       ;;
@@ -276,7 +332,7 @@ done
 shopt -u nullglob globstar
 
 if ((failed > 0)); then
-  printf '%d could-not-run guard(s) on the wrong side of the exit-code convention\n' "${failed}" >&2
+  printf '%d site(s) reporting a could-not-run on the wrong side of the exit-code convention\n' "${failed}" >&2
   exit 1
 fi
 

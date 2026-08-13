@@ -426,7 +426,8 @@ to this repository.
 ### scripts/check-guard-exit-code.sh
 
 Lint: no script anywhere under `scripts/` may exit 1 out
-of a guard whose test is only an availability check. The exit codes separate what the
+of a guard whose test is only an availability check, and none may
+create a temp file with a bare `mktemp`. The exit codes separate what the
 operator has to do about a run: 2 means the check could not run (a
 required tool is absent, an input is missing, unreadable or
 malformed), 1 means it ran and found a violation, 0 means clean. An
@@ -454,8 +455,21 @@ under `||` is not a hit: that branch is reachable without the input
 being absent, so absence there is half of a content verdict rather
 than a could-not-run.
 
-Escape hatch: `# exit-code-exempt: <rationale>` on the exit line, for
-a guard whose missing input genuinely IS the finding. The marker has
+The second rule covers the same class one level down. An unwritable
+`TMPDIR` makes `mktemp` exit 1, and an unguarded `x="$(mktemp)"` under
+`set -e` kills the caller with that same 1 — so a machine that cannot
+hand the script a scratch file reports as a repo carrying a violation.
+Every creation therefore routes through `make_temp`
+(`scripts/lib/temp.sh`), which reports the failure as exit 2; that
+library holds the one sanctioned bare invocation and is the only file
+this rule skips. Matching is by command position — line start, a
+command substitution, a pipe, a separator, a negation, a group
+opening, or a loop/branch keyword — so prose naming the command,
+including a parenthetical, is not a hit.
+
+Escape hatch: `# exit-code-exempt: <rationale>`, on the exit line of a
+guard whose missing input genuinely IS the finding, or on the line of a
+bare temp-file creation whose failure IS the finding. The marker has
 to open the comment, so prose naming it exempts nothing, and the
 rationale has to be non-empty. A clean run prints the exemption count,
 so the exempt set is stated rather than open-ended.
