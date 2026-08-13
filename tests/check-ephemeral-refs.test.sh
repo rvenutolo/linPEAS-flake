@@ -15,13 +15,14 @@ failures=0
 
 # @description Render the scope summary the lint prints on stdout, so a
 # scenario states the sources and exempt regions it expects the run to
-# have covered rather than repeating the format string six times.
-# @arg $1 sources scanned  @arg $2 lines read  @arg $3 allowlisted skipped
-# @arg $4 code-fence lines  @arg $5 inline code spans
-# @arg $6 generated-block lines
+# have covered rather than repeating the format string once per scenario.
+# @arg $1 markdown sources  @arg $2 shell sources  @arg $3 nix sources
+# @arg $4 lines read  @arg $5 comments extracted  @arg $6 allowlisted skipped
+# @arg $7 code-fence lines  @arg $8 inline code spans
+# @arg $9 generated-block lines
 function summary() {
-  printf 'ephemeral-refs: scanned %d source(s), %d line(s); skipped %d allowlisted; exempted %d code-fence line(s), %d inline code span(s), %d generated-block line(s)' \
-    "$1" "$2" "$3" "$4" "$5" "$6"
+  printf 'ephemeral-refs: scanned %d markdown, %d shell, %d nix source(s), %d line(s), %d comment(s); skipped %d allowlisted; exempted %d code-fence line(s), %d inline code span(s), %d generated-block line(s)' \
+    "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9"
 }
 
 # @description Run the lint against one source under an arbitrary repo
@@ -108,7 +109,7 @@ function run_scope_scenario() {
   local -r name='enumeration reaches SECURITY.md and skips .claude'
   local -r expected_stderr='SECURITY.md:3: [issue-ref] #456'
   local expected_stdout
-  expected_stdout="$(summary 2 6 1 0 0 0)"
+  expected_stdout="$(summary 2 0 0 6 0 1 0 0 0)"
   readonly expected_stdout
 
   local stderr_file stdout_file outcome_file
@@ -191,6 +192,39 @@ function run_unterminated_fence_scenario() {
   rm --recursive --force -- "${tmp_root}"
 }
 
+# @description Assert that a source `shfmt` cannot parse is a
+# could-not-run rather than a clean read. Built at runtime: a broken
+# script committed under `tests/fixtures/` would fail the formatter and
+# the shell-hygiene lints that scan the fixture trees.
+function run_unparsable_shell_scenario() {
+  local tmp_root
+  tmp_root="$(mktemp -d)"
+  mkdir --parents "${tmp_root}/scripts"
+  printf '#!/usr/bin/env bash\n# ref #123 below a broken construct\nif [[ -f x ]; then\n' \
+    >"${tmp_root}/scripts/broken.sh"
+
+  run_scenario_root 'unparsable shell source is a could-not-run' \
+    "${tmp_root}" 'scripts/broken.sh' '' 2 'could not parse this file as shell'
+
+  rm --recursive --force -- "${tmp_root}"
+}
+
+# @description Assert that a shell source set yielding zero comments
+# exits 2 rather than reporting a clean tree: a gate that reads nothing
+# has stopped reading, which a clean exit code cannot distinguish from a
+# gate that read everything and found nothing.
+function run_no_comments_scenario() {
+  local tmp_root
+  tmp_root="$(mktemp -d)"
+  mkdir --parents "${tmp_root}/scripts"
+  printf 'echo hello\necho world\n' >"${tmp_root}/scripts/bare.sh"
+
+  run_scenario_root 'shell source set with no comments is a could-not-run' \
+    "${tmp_root}" 'scripts/bare.sh' '' 2 'no comments extracted'
+
+  rm --recursive --force -- "${tmp_root}"
+}
+
 function main() {
   # A clean run is silent about its findings by construction, so every
   # scenario asserts the scope summary too: how much prose the scan
@@ -198,25 +232,25 @@ function main() {
   # output. That is what separates a doc the lint found clean from a doc
   # the lint mostly skipped.
   run_scenario 'good prose passes' 'good' 'source.md' '' 0 '' \
-    "$(summary 1 10 0 0 2 0)"
+    "$(summary 1 0 0 10 0 0 0 2 0)"
   run_scenario 'bare issue ref fails' \
     'bad-issue-ref' 'source.md' '' 1 'source.md:3: [issue-ref] #123' \
-    "$(summary 1 3 0 0 0 0)"
+    "$(summary 1 0 0 3 0 0 0 0 0)"
   run_scenario 'prose date fails' \
-    'bad-date' 'source.md' '' 1 '[date]' "$(summary 1 3 0 0 0 0)"
+    'bad-date' 'source.md' '' 1 '[date]' "$(summary 1 0 0 3 0 0 0 0 0)"
   run_scenario 'planning label fails' \
-    'bad-planning' 'source.md' '' 1 '[planning]' "$(summary 1 3 0 0 0 0)"
+    'bad-planning' 'source.md' '' 1 '[planning]' "$(summary 1 0 0 3 0 0 0 0 0)"
   run_scenario 'review-pass label fails' \
-    'bad-review' 'source.md' '' 1 '[review]' "$(summary 1 3 0 0 0 0)"
+    'bad-review' 'source.md' '' 1 '[review]' "$(summary 1 0 0 3 0 0 0 0 0)"
   # Enumerated shapes that legitimately start a match must still report.
   run_scenario 'standalone planning shapes still match' \
-    'planning-shapes' 'source.md' '' 1 '[planning]' "$(summary 1 5 0 0 0 0)"
+    'planning-shapes' 'source.md' '' 1 '[planning]' "$(summary 1 0 0 5 0 0 0 0 0)"
   run_scenario 'standalone review shapes still match' \
-    'review-shapes' 'source.md' '' 1 '[review]' "$(summary 1 5 0 0 0 0)"
+    'review-shapes' 'source.md' '' 1 '[review]' "$(summary 1 0 0 5 0 0 0 0 0)"
   # Mid-word matches (`UTF-8` -> `F-8`, `ID5:` -> `D5:`) must not be smuggled
   # back into the blocking gate by the bare planning/review shapes.
   run_scenario 'encoding shapes are not planning/review labels' \
-    'false-positive-shapes' 'source.md' '' 0 '' "$(summary 1 5 0 0 0 0)"
+    'false-positive-shapes' 'source.md' '' 0 '' "$(summary 1 0 0 5 0 0 0 0 0)"
   # An unterminated generated block must fail loud, not blank to EOF.
   # The run aborts mid-scan, so no scope summary is owed.
   run_scenario 'unterminated generated block errors' \
@@ -230,22 +264,50 @@ function main() {
   # quoted marker is counted as a code span, never as a generated block.
   run_scenario 'inline BEGIN mention does not open a block' \
     'inline-begin-mention' 'source.md' '' 1 'source.md:5: [issue-ref] #654' \
-    "$(summary 1 5 0 0 1 0)"
+    "$(summary 1 0 0 5 0 0 0 1 0)"
   run_scenario 'fenced BEGIN/END mention does not open a block' \
     'fenced-begin-mention' 'source.md' '' 1 'source.md:11: [issue-ref] #789' \
-    "$(summary 1 11 0 5 0 0)"
+    "$(summary 1 0 0 11 0 0 5 0 0)"
   run_scenario 'literal .claude path fails' \
-    'bad-claude-path' 'source.md' '' 1 '[claude-path]' "$(summary 1 3 0 0 0 0)"
+    'bad-claude-path' 'source.md' '' 1 '[claude-path]' "$(summary 1 0 0 3 0 0 0 0 0)"
   run_scenario 'code-span/block banned shapes pass' \
-    'exempt-codeblock' 'source.md' '' 0 '' "$(summary 1 10 0 4 2 0)"
+    'exempt-codeblock' 'source.md' '' 0 '' "$(summary 1 0 0 10 0 0 4 2 0)"
   run_scenario 'generated-block banned shapes pass' \
-    'exempt-genblock' 'source.md' '' 0 '' "$(summary 1 9 0 0 0 5)"
+    'exempt-genblock' 'source.md' '' 0 '' "$(summary 1 0 0 9 0 0 0 0 5)"
   run_scope_scenario
   run_tilde_scenario
   run_scenario 'causal phrase passes blocking pass' \
-    'advisory' 'source.md' '' 0 '' "$(summary 1 3 0 0 0 0)"
+    'advisory' 'source.md' '' 0 '' "$(summary 1 0 0 3 0 0 0 0 0)"
   run_scenario 'causal phrase prints in advisory mode' \
-    'advisory' 'source.md' '--advisory' 0 '[advisory]' "$(summary 1 3 0 0 0 0)"
+    'advisory' 'source.md' '--advisory' 0 '[advisory] source.md:3:' \
+    "$(summary 1 0 0 3 0 0 0 0 0)"
+
+  # Shell sources reach the same class regexes through a comment
+  # extractor rather than through `strip_exempt`, so each scenario below
+  # states both the verdict and the comment count behind it: a verdict
+  # backed by zero comments is a gate that stopped reading.
+  run_scenario 'shell comment blocking ref fails' \
+    'shell-blocking' 'source.sh' '' 1 'source.sh:3: [issue-ref] #123' \
+    "$(summary 0 1 0 4 2 0 0 0 0)"
+  run_scenario 'shell comment causal phrase passes blocking pass' \
+    'shell-causal' 'source.sh' '' 0 '' "$(summary 0 1 0 3 1 0 0 0 0)"
+  run_scenario 'shell comment causal phrase prints in advisory mode' \
+    'shell-causal' 'source.sh' '--advisory' 0 '[advisory] source.sh:2:' \
+    "$(summary 0 1 0 3 1 0 0 0 0)"
+  # The two false-positive guards below pass against the pre-widening
+  # lint as well; they exist to hold the AST extractor to its promise
+  # that a hash inside code is not a comment, not to prove the widening.
+  run_scenario 'shell string literals are not comments' \
+    'shell-literal' 'source.sh' '' 0 '' "$(summary 0 1 0 5 1 0 0 0 0)"
+  run_scenario 'shell heredoc body is not comments' \
+    'shell-heredoc' 'source.sh' '' 0 '' "$(summary 0 1 0 7 1 0 0 0 0)"
+  run_scenario 'shell trailing comment is scanned' \
+    'shell-trailing' 'source.sh' '' 1 'source.sh:3: [issue-ref] #321' \
+    "$(summary 0 1 0 3 2 0 0 0 0)"
+  run_scenario 'shell comment code spans are exempt' \
+    'shell-backtick' 'source.sh' '' 0 '' "$(summary 0 1 0 3 1 0 0 5 0)"
+  run_unparsable_shell_scenario
+  run_no_comments_scenario
 
   harness_assert_verify || failures=$((failures + 1))
 
