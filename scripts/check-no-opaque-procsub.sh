@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # scripts/check-no-opaque-procsub.sh
 #
-# @description Lint: no scripts/*.sh feeds a redirection from a process
-# substitution. A substitution runs in its own subshell, so `set -Eeuo
+# @description Lint: no script anywhere under `scripts/` feeds a
+# redirection from a process substitution. A substitution runs in its own subshell, so `set -Eeuo
 # pipefail` only ever sees the status of the command the redirection
 # feeds — never the producer's. A failed producer hands the consumer
 # empty output to score as data: either a clean pass that flags nothing
@@ -17,6 +17,11 @@
 #
 # Use the capture-into-variable idiom (or a temp file for NUL-delimited
 # output) so a producer failure aborts loudly.
+#
+# The scan recurses. A shared library under `scripts/lib/` runs inside
+# whichever caller sources it, so a lost producer status there is lost
+# for every script in the tree at once — the widest blast radius the
+# banned shape has, and the one a top-level-only glob never reads.
 #
 # Honors SCRIPTS_DIR_OVERRIDE (default: scripts) for fixtures.
 # Exit 0 clean, 1 on any hit, 2 on operational error.
@@ -39,8 +44,8 @@ readonly REDIR_PATTERN='<[[:space:]]+<[(]'
 readonly COMMENT_LINE='^[0-9]+:[[:space:]]*#'
 
 failed=0
-shopt -s nullglob
-for f in "${DIR}"/*.sh; do
+shopt -s nullglob globstar
+for f in "${DIR}"/**/*.sh; do
   # grep's status is read three ways rather than as a boolean: no hit in
   # this file (1) is the clean answer, but a grep that could not read the
   # file (2) scored as "no hit" would vouch for a file nothing examined.
@@ -58,7 +63,7 @@ for f in "${DIR}"/*.sh; do
     failed=$((failed + 1))
   done <<<"${hits}"
 done
-shopt -u nullglob
+shopt -u nullglob globstar
 
 if ((failed > 0)); then
   printf '%d opaque process-substitution site(s) found\n' "${failed}" >&2
