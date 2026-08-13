@@ -89,11 +89,11 @@ function main() {
   fi
 
   local tmpfile pin_tmp
-  # Declare `pin_tmp` early so the EXIT trap can reference it even if the
-  # second `mktemp` (below) never runs. Previously the trap only
-  # covered `tmpfile`, leaving a leftover `linpeas-pin.json.XXXXXX` in the
-  # working tree on partial failure between `mktemp --tmpdir=...` and the
-  # final `mv`.
+  # Declare `pin_tmp` early so the EXIT trap can reference it even when
+  # the second `mktemp` (below) never runs: without the early
+  # declaration a partial failure between `mktemp --tmpdir=...` and the
+  # final `mv` leaves a stray `linpeas-pin.json.XXXXXX` in the working
+  # tree.
   pin_tmp=''
   tmpfile="$(mktemp)"
   # Use :- defaults so the trap (fires after main() returns) does not trip

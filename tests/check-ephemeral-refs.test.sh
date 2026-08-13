@@ -213,7 +213,7 @@ function main() {
     'planning-shapes' 'source.md' '' 1 '[planning]' "$(summary 1 5 0 0 0 0)"
   run_scenario 'standalone review shapes still match' \
     'review-shapes' 'source.md' '' 1 '[review]' "$(summary 1 5 0 0 0 0)"
-  # Mid-word matches (UTF-8 -> F-8, ID5: -> D5:) must not be smuggled
+  # Mid-word matches (`UTF-8` -> `F-8`, `ID5:` -> `D5:`) must not be smuggled
   # back into the blocking gate by the bare planning/review shapes.
   run_scenario 'encoding shapes are not planning/review labels' \
     'false-positive-shapes' 'source.md' '' 0 '' "$(summary 1 5 0 0 0 0)"

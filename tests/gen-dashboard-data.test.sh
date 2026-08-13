@@ -214,7 +214,7 @@ function run_happy_lag_scenario() {
 
 # @description Run the empty-bump-PR soft-fallback scenario. A transient
 # Search-API failure yields an empty bump_pr_json (the fetch carries a
-# trailing `|| true`). Per the script's hard-fail rule #2, a this-repo
+# trailing `|| true`). Per the script's hard-fail rule 2, a this-repo
 # lookup failure must soft-fall-back to an empty section, not crash the
 # build. Drives every other input from the happy fixtures and points
 # BUMP_PR_JSON_OVERRIDE at an empty file, then asserts:
@@ -285,7 +285,7 @@ function run_empty_bump_pr_scenario() {
 
 # @description Run an API-error soft-fallback scenario. `gh api` writes
 # its JSON error body to stdout, so a failed this-repo lookup arrives as
-# a non-empty non-null string. Per hard-fail rule #2 that must degrade to
+# a non-empty non-null string. Per hard-fail rule 2 that must degrade to
 # the documented empty/"unknown" section — never publish the error body's
 # missing keys as data. Asserts exit 0, the documented fallback value, no
 # literal null anywhere in the output, and a WARN naming the lookup.
@@ -407,7 +407,7 @@ function main() {
 
   # Scenario 5: empty bump_pr_json soft-fallback. A transient last-bump-PR
   # Search-API failure must degrade to an empty last-bump section (exit 0),
-  # per hard-fail rule #2, not crash the whole generator.
+  # per hard-fail rule 2, not crash the whole generator.
   run_empty_bump_pr_scenario
 
   # Scenario 6: this-repo releases/latest returns an API error body. It

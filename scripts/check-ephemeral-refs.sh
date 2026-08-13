@@ -3,7 +3,7 @@
 #
 # @description Lint: every Markdown file in the repo must carry no
 # ephemeral references — PR/issue refs, prose dates, planning/review-pass
-# labels, or literal .claude/ paths. Default mode blocks (exit 1);
+# labels, or literal `.claude/` paths. Default mode blocks (exit 1);
 # --advisory mode suppresses findings, not defects: it warns on fuzzy
 # causal-history phrases and exits 0 on those, but a could-not-run
 # (unterminated fence/block, failed source enumeration) still exits
@@ -32,11 +32,11 @@
 #
 # Sources scanned: every Markdown path git reports for the repo — both
 # committed files and uncommitted, unignored ones — minus the file
-# allowlist (CHANGELOG.md, docs/releases.md, tests/fixtures/**,
-# .claude/**). The first two structurally list PR refs + dates in prose;
-# fixtures carry the banned shapes as data; .claude/ holds Claude tooling
-# rather than user-facing prose. The reviewable spec lives in
-# docs/development/linting.md.
+# allowlist (`CHANGELOG.md`, `docs/releases.md`, `tests/fixtures/**`,
+# `.claude/**`). The first two structurally list PR refs + dates in
+# prose; fixtures carry the banned shapes as data; `.claude/` holds
+# Claude tooling rather than user-facing prose. The reviewable spec
+# lives in docs/development/linting.md.
 #
 # Env overrides (test-only):
 #   EPHEMERAL_REFS_ROOT_OVERRIDE    — alternate REPO_ROOT
@@ -260,8 +260,8 @@ function ephemeral_refs_git_sources() {
 }
 
 # @description True when the given source path is on the skip-entirely
-# file allowlist (CHANGELOG.md, docs/releases.md, tests/fixtures/**,
-# .claude/**).
+# file allowlist (`CHANGELOG.md`, `docs/releases.md`,
+# `tests/fixtures/**`, `.claude/**`).
 # @arg $1 src_rel source path relative to REPO_ROOT
 function is_allowlisted() {
   local -r src_rel="$1"

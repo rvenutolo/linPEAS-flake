@@ -214,7 +214,7 @@ in
   };
   # Asserts tracked Markdown prose carries no ephemeral references
   # (PR/issue refs, prose dates, planning/review-pass labels, literal
-  # .claude/ paths). Runs the blocking pass first (gates the commit),
+  # `.claude/` paths). Runs the blocking pass first (gates the commit),
   # then the --advisory pass for fuzzy causal-history phrases (never
   # gates — always exits 0).
   check-ephemeral-refs = {

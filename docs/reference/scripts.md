@@ -361,7 +361,7 @@ not exist, or a file could not be parsed as shell.
 
 Lint: every Markdown file in the repo must carry no
 ephemeral references — PR/issue refs, prose dates, planning/review-pass
-labels, or literal .claude/ paths. Default mode blocks (exit 1);
+labels, or literal `.claude/` paths. Default mode blocks (exit 1);
 --advisory mode suppresses findings, not defects: it warns on fuzzy
 causal-history phrases and exits 0 on those, but a could-not-run
 (unterminated fence/block, failed source enumeration) still exits

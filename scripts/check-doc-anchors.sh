@@ -10,7 +10,7 @@
 # in the target.
 #
 # Sources scanned: docs/invariant-index.md, README.md, docs/**/*.md.
-# (.claude/CLAUDE.md is intentionally untracked, so CI cannot scan it.
+# (`.claude/CLAUDE.md` is intentionally untracked, so CI cannot scan it.
 # The pre-commit hook will scan it locally if present.)
 #
 # Slug algorithm — GFM (github-slugger), ASCII scope:
@@ -169,7 +169,7 @@ else
     # a fully clean run produces — so a docs tree the lint could not read
     # would vouch for every anchor in it. LINT_ALLOW_EMPTY_SCAN is forced
     # for this call alone because a repo may legitimately carry README.md
-    # or .claude/CLAUDE.md as its only source and no docs/ tree at all —
+    # or `.claude/CLAUDE.md` as its only source and no docs/ tree at all —
     # the combined-SOURCES breadth check below (unchanged) is what still
     # catches every root coming back empty.
     docs_paths=()

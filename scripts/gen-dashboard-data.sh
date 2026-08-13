@@ -210,7 +210,7 @@ function main() {
   # default never fires (zero inputs, not a null value) — so bump_pr_number
   # would be "" and `--argjson bump_pr_number ""` aborts the assembly jq.
   # Degrade to the documented empty last-bump section instead, matching the
-  # latest_release / parity_json soft-fallbacks (hard-fail rule #2).
+  # latest_release / parity_json soft-fallbacks (hard-fail rule 2).
   if [[ -z ${bump_pr_json} ]]; then
     bump_pr_url=''
     bump_pr_number=0
