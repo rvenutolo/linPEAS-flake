@@ -475,8 +475,18 @@ EOF
     };
 }
 EOF
+  # Anchored to the joined path, not to `does not cover nix/ev` alone: the
+  # unfixed script's second fabricated line also reads
+  # "does not cover nix/ev (builds ...)", so that substring is not proof —
+  # it matches both the fixed and the unfixed script (and "1 freshness
+  # hook filter gap(s)" collides with every other single-violation
+  # scenario in this harness). Only the fixed script emits the module's
+  # embedded newline immediately followed by its second half and "(builds"
+  # on the very next byte, with nothing in between — the unfixed script's
+  # "nix/ev" is followed by a space and "(builds" on the SAME line, never
+  # by a newline then "il.nix (builds".
   expect 'bad: a newline-named extra assigner reports one real gap, not two fabricated ones' \
-    "${work}/newline-module" 1 'does not cover nix/ev'
+    "${work}/newline-module" 1 $'nix/ev\nil.nix (builds'
 
   # (r) TOOLING: ROOT holds no *.nix file at all. Distinct from the
   # absent-root case in that ROOT exists and is readable — the scan

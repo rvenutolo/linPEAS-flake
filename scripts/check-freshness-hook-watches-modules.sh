@@ -396,6 +396,12 @@ function assert_filter_covers() {
   local ere p
   ere="$(printf '%s' "${files}" | sed 's/\\\\/\\/g')"
   for p in "${__afc_derived[@]}"; do
+    # `grep` is line-oriented, so this match cannot itself see a `p` whose
+    # embedded newline splits it across two lines as one contiguous path.
+    # Relying on no tracked `*.nix` carrying one is not quite blanket
+    # coverage: `check-path-hygiene.sh` enumerates with `--exclude-standard`,
+    # so a gitignored newline-named `*.nix` under the scan root is invisible
+    # to it while `nix_modules` (a plain filesystem walk) still picks it up.
     if ! printf '%s\n' "${p}" | grep --quiet --extended-regexp -- "${ere}"; then
       printf 'hook %s: files filter does not cover %s (%s)\n' \
         "${name}" "${p}" "${subject}" >&2

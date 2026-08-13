@@ -104,11 +104,12 @@ function main() {
   fi
   local -a wf_paths=()
   # A newline-delimited handoff (rather than an array threaded straight
-  # from `workflow_files`) is safe here because every path this glob can
-  # emit is a tracked `.github/workflows/*.yml`|`*.yaml` file, and
-  # `check-path-hygiene.sh` rejects any tracked path containing a control
-  # character — no name `workflow_files` can find carries a newline for
-  # this handoff to split.
+  # from `workflow_files`) is safe here: at the default WORKFLOWS_DIR, every
+  # path this glob can emit is a tracked `.github/workflows/*.yml`|`*.yaml`
+  # file, and `check-path-hygiene.sh` rejects any tracked path containing a
+  # control character; under WORKFLOWS_DIR_OVERRIDE (test-only, and never
+  # itself git-tracked) every fixture names its workflow with a plain ASCII
+  # literal, so no caller of this handoff constructs a newline-bearing name.
   if [[ -n ${wf_out} ]]; then
     mapfile -t wf_paths <<<"${wf_out}"
   fi
