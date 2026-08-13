@@ -28,5 +28,11 @@ expect good-with-flags.sh 0 ""
 expect bad-shebang.sh 1 "first line"
 expect bad-no-pipefail.sh 1 "missing"
 expect bad-weak-set.sh 1 "missing"
+# The library half of the rule. Each violation names which half it broke,
+# so no two of these three collapse onto one message.
+expect good-lib.sh 0 ""
+expect bad-lib-shebang.sh 1 "opens with a shebang"
+expect bad-lib-sets-options.sh 1 "sets its own shell options"
+expect bad-lib-no-directive.sh 1 "carries no shellcheck shell= directive"
 
 printf 'all tests passed\n'

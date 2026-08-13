@@ -670,9 +670,10 @@ list.
 
 ### scripts/check-script-shebang-pipefail.sh
 
-Lint: every `scripts/*.sh` starts with
-`#!/usr/bin/env bash` (exact first line) and contains
-`set -Eeuo pipefail` somewhere in the file.
+Lint: every executable script under `scripts/` starts
+with `#!/usr/bin/env bash` (exact first line) and contains
+`set -Eeuo pipefail` somewhere in the file; every sourced library
+under `scripts/lib/` satisfies the inverse.
 
 ### scripts/check-settings-posture.sh
 
