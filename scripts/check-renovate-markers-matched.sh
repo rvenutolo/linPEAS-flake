@@ -134,6 +134,10 @@ function match_string_hits_file() {
 # absent rather than dead, so it is a tooling fault, not a verdict.
 declare -a files=()
 if [[ ${SCAN_ROOT} == "${REPO_ROOT}" ]]; then
+  # enumerate-exempt: this branch already asserts producer status and
+  # scan breadth inline, and the empty-scan diagnostic it prints is the
+  # text its harness pins; routing it through the helper would reword
+  # that could-not-run message without changing any verdict.
   if ! tracked="$(git -C "${REPO_ROOT}" ls-files -- . \
     ':!:tests/fixtures/**' \
     ':!:renovate.json' \
@@ -158,6 +162,9 @@ else
   scan_list="$(mktemp)"
   readonly scan_list
   trap 'rm --force -- "${scan_list}"' EXIT
+  # enumerate-exempt: same as the branch above — status and breadth are
+  # asserted here already, and this branch's own empty-scan diagnostic is
+  # pinned by its harness scenario.
   if ! find "${SCAN_ROOT}" -type f ! -name renovate.json -print0 >"${scan_list}"; then
     printf '%s: find failed enumerating %s\n' "${0##*/}" "${SCAN_ROOT}" >&2
     exit 2
