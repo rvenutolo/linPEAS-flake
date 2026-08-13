@@ -47,6 +47,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 # shellcheck source=scripts/lib/enumerate.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
+# shellcheck source=scripts/lib/awk-path.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 
 REPO_ROOT="${DOC_ANCHOR_ROOT_OVERRIDE:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)}"
 readonly REPO_ROOT
@@ -87,7 +89,7 @@ function without_fences() {
       }
       if (!in_fence) { print }
     }
-  ' "$1"
+  ' "$(awk_path "$1")"
 }
 
 function headings_of() {

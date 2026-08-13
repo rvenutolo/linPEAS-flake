@@ -35,6 +35,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 # shellcheck source=scripts/lib/enumerate.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
+# shellcheck source=scripts/lib/awk-path.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 
 # Matches every cosign verify subcommand — `verify`, `verify-blob`,
 # `verify-attestation`, `verify-blob-attestation` — in both the plain
@@ -124,7 +126,7 @@ extract_invocations() {
         print joined
       }
     }
-  ' "${file}"
+  ' "$(awk_path "${file}")"
 }
 
 failed=0

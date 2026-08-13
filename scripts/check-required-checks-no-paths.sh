@@ -15,6 +15,8 @@
 # the doc that names the workflows is not there to read.
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/awk-path.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 
 readonly doc='docs/security/required-checks.md'
 
@@ -31,7 +33,7 @@ fi
 # @arg $1 awk program
 function load_workflows() {
   local rows
-  if ! rows="$(awk -F'|' "$1" "${doc}" | sort --unique)"; then
+  if ! rows="$(awk -F'|' "$1" "$(awk_path "${doc}")" | sort --unique)"; then
     printf 'required-checks-no-paths lint: could not read the workflow table in %s\n' "${doc}" >&2
     exit 2
   fi

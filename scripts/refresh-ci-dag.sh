@@ -30,6 +30,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 # shellcheck source=scripts/lib/log.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
+# shellcheck source=scripts/lib/awk-path.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 install_err_trap
 
 # Category display name -> mermaid classDef key. Any job whose category
@@ -171,7 +173,7 @@ function main() {
     printf '  classDef aux fill:#eeeeee,stroke:#616161\n'
     printf '\n'
     # Node declarations: one per job, alphabetical by job.
-    awk -F'\t' '{ printf "  %s:::%s\n", $1, $2 }' "${cats_file}"
+    awk -F'\t' '{ printf "  %s:::%s\n", $1, $2 }' "$(awk_path "${cats_file}")"
     # Edges: "<need> --> <job>", sorted by (job, need).
     local edges
     edges="$(jq --raw-output '
@@ -202,7 +204,7 @@ function main() {
       next
     }
     !skip { print }
-  ' "${doc}" >"${doc_new}"
+  ' "$(awk_path "${doc}")" >"${doc_new}"
 
   if [[ ${check_only} == 'true' ]]; then
     if ! cmp --silent -- "${doc}" "${doc_new}"; then

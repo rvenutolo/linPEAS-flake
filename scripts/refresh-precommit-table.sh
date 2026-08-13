@@ -20,6 +20,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 # shellcheck source=scripts/lib/log.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
+# shellcheck source=scripts/lib/awk-path.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 install_err_trap
 
 # Temp files removed by the EXIT trap. Declared at script scope, not main-local:
@@ -167,7 +169,7 @@ function main() {
       next
     }
     !skip { print }
-  ' "${doc}" >"${doc_new}"
+  ' "$(awk_path "${doc}")" >"${doc_new}"
 
   # Run treefmt over the regenerated doc so the comparison target matches
   # what the formatter chain (mdformat-gfm) would produce on commit. Without

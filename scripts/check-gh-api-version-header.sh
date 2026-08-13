@@ -29,6 +29,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/awk-path.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || printf '.')"
 readonly REPO_ROOT
@@ -110,7 +112,7 @@ function scan_file() {
         flush()
       }
       END { flush() }
-    ' "${file}"
+    ' "$(awk_path "${file}")"
   )"
 
   scanned=$((scanned + 1))

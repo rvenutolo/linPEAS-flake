@@ -55,6 +55,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/awk-path.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
@@ -155,7 +157,7 @@ if ! exempt_rows="$(awk -v marker="${EXEMPT_MARKER}" '
     sub(/[[:space:]]+$/, "", rationale)
     printf "%s\t%s\n", id, rationale
   }
-' "${WORKFLOW}")"; then
+' "$(awk_path "${WORKFLOW}")")"; then
   printf '%s: awk failed scanning for reason-ladder-exempt markers\n' \
     "${WORKFLOW}" >&2
   exit 2
@@ -323,7 +325,7 @@ if ! ladder_order_rows="$(awk '
       }
     }
   }
-' "${names_file}" "${body_file}" | sort --key=1,1n --key=2,2n | cut --fields=3)"; then
+' "$(awk_path "${names_file}")" "$(awk_path "${body_file}")" | sort --key=1,1n --key=2,2n | cut --fields=3)"; then
   printf '%s: awk failed scanning the ladder body for env var first use\n' \
     "${WORKFLOW}" >&2
   exit 2

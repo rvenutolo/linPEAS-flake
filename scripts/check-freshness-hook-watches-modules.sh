@@ -49,6 +49,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 # shellcheck source=scripts/lib/enumerate.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
+# shellcheck source=scripts/lib/awk-path.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 
 root="${ROOT_OVERRIDE:-$(git rev-parse --show-toplevel)}"
 readonly ROOT="${root}"
@@ -287,7 +289,7 @@ function parse_blocks() {
           line = substr(line, RSTART + RLENGTH)
         }
       }
-    ' "${nix}" || return 1
+    ' "$(awk_path "${nix}")" || return 1
   done
 }
 
