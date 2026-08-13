@@ -28,6 +28,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || printf '.')"
 readonly REPO_ROOT
@@ -43,7 +45,7 @@ if [[ ! -f ${CLIFF_TOML} ]]; then
   exit 2
 fi
 
-tmp="$(mktemp)"
+tmp="$(make_temp)"
 # shellcheck disable=SC2064
 trap "rm --force -- '${tmp}'" EXIT
 

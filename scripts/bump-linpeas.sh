@@ -14,6 +14,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 # shellcheck source=scripts/lib/log.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 install_err_trap
 
 function main() {
@@ -90,12 +92,12 @@ function main() {
 
   local tmpfile pin_tmp
   # Declare `pin_tmp` early so the EXIT trap can reference it even when
-  # the second `mktemp` (below) never runs: without the early
-  # declaration a partial failure between `mktemp --tmpdir=...` and the
+  # the second `make_temp` (below) never runs: without the early
+  # declaration a partial failure between `make_temp --tmpdir=...` and the
   # final `mv` leaves a stray `linpeas-pin.json.XXXXXX` in the working
   # tree.
   pin_tmp=''
-  tmpfile="$(mktemp)"
+  tmpfile="$(make_temp)"
   # Use :- defaults so the trap (fires after main() returns) does not trip
   # set -u when these locals have gone out of scope.
   trap 'rm --force -- "${tmpfile:-}" "${pin_tmp:-}"' EXIT
@@ -145,8 +147,8 @@ function main() {
   # Atomic replace: write to a sibling temp file then rename. Avoids
   # leaving a truncated pin file behind on SIGKILL / runner termination.
   # `pin_tmp` was declared at the top of `main` so the EXIT trap also
-  # cleans up this temp on failure between `mktemp` and `mv`.
-  pin_tmp="$(mktemp --tmpdir="$(dirname -- "${pin_file}")" linpeas-pin.json.XXXXXX)"
+  # cleans up this temp on failure between `make_temp` and `mv`.
+  pin_tmp="$(make_temp --tmpdir="$(dirname -- "${pin_file}")" linpeas-pin.json.XXXXXX)"
   printf '%s\n' "${new_pin}" >"${pin_tmp}"
   mv -- "${pin_tmp}" "${pin_file}"
   log_info "bumped ${current_version} -> ${new_tag}"

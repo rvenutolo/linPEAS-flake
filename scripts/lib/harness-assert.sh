@@ -11,6 +11,9 @@
 # named. Source after `set -Eeuo pipefail`.
 # shellcheck shell=bash
 
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/temp.sh"
+
 HARNESS_ASSERT_POOL=""
 HARNESS_ASSERT_COUNT=0
 declare -a HARNESS_ASSERT_EXEMPTIONS=()
@@ -62,7 +65,7 @@ function harness_assert_record() {
   shift 2
 
   if [[ -z ${HARNESS_ASSERT_POOL} ]]; then
-    HARNESS_ASSERT_POOL="$(mktemp -d)"
+    HARNESS_ASSERT_POOL="$(make_temp --directory)"
   fi
 
   local -r index="${HARNESS_ASSERT_COUNT}"

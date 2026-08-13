@@ -7,5 +7,5 @@ asset_url='https://github.com/peass-ng/PEASS-ng/releases/download/x/linpeas.sh'
 pin_file='/tmp/example-linpeas-pin.json'
 expected_url_prefix='https://github.com/peass-ng/PEASS-ng/releases/download/'
 [[ ${asset_url} != "${expected_url_prefix}"* ]] && exit 1
-pin_tmp="$(mktemp)"
+pin_tmp="$(make_temp)"
 mv -- "${pin_tmp}" "${pin_file}"

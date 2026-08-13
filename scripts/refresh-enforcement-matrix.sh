@@ -53,6 +53,8 @@ source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 # shellcheck source=scripts/lib/awk-path.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 install_err_trap
 
 # Temp files removed by the EXIT trap. Declared at script scope, not main-local:
@@ -411,10 +413,10 @@ function cross_check_reverse() {
   # ref_scripts, ref_jobs, ref_hooks, ci_exempt_file are script-scoped
   # (declared at top) so the EXIT trap can clean them up; do not redeclare
   # them local here or the trap would see empty values.
-  ref_scripts="$(mktemp)"
-  ref_jobs="$(mktemp)"
-  ref_hooks="$(mktemp)"
-  ci_exempt_file="$(mktemp)"
+  ref_scripts="$(make_temp)"
+  ref_jobs="$(make_temp)"
+  ref_hooks="$(make_temp)"
+  ci_exempt_file="$(make_temp)"
   # collect_referenced runs in a subshell pipe; use a temp helper instead.
   # Build reference lists inline.
   awk -F'\t' '{ print $3 }' "$(awk_path "${tsv}")" | tr ',' '\n' |
@@ -604,10 +606,10 @@ function parse_and_render() {
   # tsv, hook_names, ci_jobs, tmp_out are script-scoped (declared at top) so
   # the EXIT trap can clean them up; do not redeclare them local here.
   local sibling
-  tsv="$(mktemp)"
-  hook_names="$(mktemp)"
-  ci_jobs="$(mktemp)"
-  tmp_out="$(mktemp)"
+  tsv="$(make_temp)"
+  hook_names="$(make_temp)"
+  ci_jobs="$(make_temp)"
+  tmp_out="$(make_temp)"
   sibling="${EXEMPT_SOURCE_OVERRIDE:-$(git rev-parse --show-toplevel)/scripts/check-ci-job-in-summary.sh}"
 
   parse_index "${index_file}" "${tsv}"
@@ -628,7 +630,7 @@ function parse_and_render() {
     # remove the in-repo .md temp; do not redeclare it local here.
     local fmt_root
     fmt_root="$(git rev-parse --show-toplevel)"
-    fmt_target="$(mktemp "${fmt_root}/.refresh-enforcement-matrix-XXXXXX.md")"
+    fmt_target="$(make_temp "${fmt_root}/.refresh-enforcement-matrix-XXXXXX.md")"
     cp -- "${tmp_out}" "${fmt_target}"
     # No `|| true`: a treefmt/mdformat failure must abort under set -e before
     # the unformatted render is moved back into place, matching the sibling
@@ -678,7 +680,7 @@ function main() {
   require_tool treefmt
 
   # repo_root is script-scoped (declared above) so the EXIT trap's sweep
-  # can find the in-repo .md temp; assign it before any mktemp runs.
+  # can find the in-repo .md temp; assign it before any `make_temp` runs.
   repo_root="$(git rev-parse --show-toplevel)"
   local index_file output_file ci_yml scripts_dir
   index_file="${INVARIANT_INDEX_OVERRIDE:-${repo_root}/docs/invariant-index.md}"

@@ -22,6 +22,8 @@ IFS=$'\n\t'
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
 # shellcheck source=scripts/lib/awk-path.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 install_err_trap
 
 # Temp files removed by the EXIT trap. Declared at script scope, not main-local:
@@ -90,7 +92,8 @@ function main() {
     exit 1
   fi
 
-  # Set cleanup traps before the first mktemp so any temp created below is
+  # Set cleanup traps before the first `make_temp` so any temp created below
+  # is
   # removed on exit or signal. The signal handlers force exit, which
   # re-triggers the EXIT trap so cleanup runs exactly once. A bare
   # `trap cleanup INT` would run the handler then RESUME, so Ctrl-C would not
@@ -100,14 +103,14 @@ function main() {
   trap 'exit 143' TERM
   trap 'exit 129' HUP
 
-  hooks_file="$(mktemp)"
-  block_file="$(mktemp)"
-  doc_new="$(mktemp)"
+  hooks_file="$(make_temp)"
+  block_file="$(make_temp)"
+  doc_new="$(make_temp)"
   # treefmt walks up to find flake.nix as projectRootFile, so the formatted
   # tmp file must live inside the repo. Hidden name + .md extension so
   # treefmt's mdformat picks it up; .gitignore keeps it untracked if a crash
   # bypasses the EXIT trap.
-  doc_fmt="$(mktemp "${repo_root}/.refresh-precommit-XXXXXX.md")"
+  doc_fmt="$(make_temp "${repo_root}/.refresh-precommit-XXXXXX.md")"
 
   local sys
   sys="$(nix eval --impure --raw --expr 'builtins.currentSystem')"

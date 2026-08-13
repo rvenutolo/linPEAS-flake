@@ -221,6 +221,47 @@ function run_no_comments_scenario() {
   rm --recursive --force -- "${tmp_root}"
 }
 
+# @description Assert that a temp area the lint cannot write is a
+# could-not-run rather than a finding. Every source the scan reads is
+# staged through a temp file, and an unguarded assignment from `mktemp`
+# under `set -Eeuo pipefail` kills the run with mktemp's own status 1 —
+# the code that means "this file carries a banned reference". A hook
+# reading that sends the operator to edit prose the scan never opened.
+# TMPDIR is set on the lint's own environment only, so the harness keeps
+# a working temp area for the capture files below.
+function run_unwritable_tmpdir_scenario() {
+  local -r name='unwritable TMPDIR is a could-not-run'
+  local -r expected_stderr='cannot create a temp file (TMPDIR=/nonexistent-temp-root-probe)'
+
+  local stderr_file stdout_file outcome_file
+  stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+
+  local actual_exit=0
+  TMPDIR='/nonexistent-temp-root-probe' \
+    EPHEMERAL_REFS_ROOT_OVERRIDE="${FIXTURES}/good" \
+    EPHEMERAL_REFS_SOURCES_OVERRIDE='source.md' \
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+
+  if [[ ${actual_exit} -ne 2 ]]; then
+    printf 'FAIL: %s — expected exit 2, got %d\n' "${name}" "${actual_exit}" >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet -- "${expected_stderr}" "${stderr_file}"; then
+    printf 'FAIL: %s — stderr missing %q\n' "${name}" "${expected_stderr}" >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+
+  harness_assert_record "${name}" "${expected_stderr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  rm --force -- "${outcome_file}" "${stdout_file}" "${stderr_file}"
+}
+
 # @description Assert that the breadth rule holds each language to its
 # own corpus. A Nix source set yielding zero comments must exit 2 on the
 # strength of the Nix tally alone — a joint shell+Nix total lets the
@@ -366,6 +407,7 @@ function main() {
   run_unparsable_shell_scenario
   run_no_comments_scenario
   run_source_pair_scenario
+  run_unwritable_tmpdir_scenario
 
   # Nix sources reach the same class regexes through a line-start comment
   # matcher covering both comment forms. The embedded-shell scenario is

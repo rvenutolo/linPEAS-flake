@@ -56,6 +56,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 
 OCTOSCAN_DIGEST="sha256:3368f42651f9ca0d7a7cd08de3b734476046d17ffa0b2b0c6c55acef556300db"
 OCTOSCAN_VERSION="v0.1.7"
@@ -148,7 +150,7 @@ for wf in "${workflows[@]}"; do
   rel="${wf#"${repo_root}/"}"
   file_rc=0
   if [[ -n ${sarif_out} ]]; then
-    tmp_sarif="$(mktemp)"
+    tmp_sarif="$(make_temp)"
     per_file_sarifs+=("${tmp_sarif}")
     docker run --rm \
       -v "${repo_root}:/src:ro" \

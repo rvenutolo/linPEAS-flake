@@ -20,6 +20,8 @@ IFS=$'\n\t'
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 # shellcheck source=scripts/lib/awk-path.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
@@ -95,7 +97,7 @@ function main() {
   }
 
   local names_tmp
-  names_tmp="$(mktemp)"
+  names_tmp="$(make_temp)"
   # shellcheck disable=SC2064
   trap "rm --force -- '${names_tmp}'" EXIT
 

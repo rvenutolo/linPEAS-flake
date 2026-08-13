@@ -27,6 +27,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 
 readonly DEFAULT_DIR=".github/workflows"
 readonly OVERRIDE="${WORKFLOWS_DIR_OVERRIDE:-}"
@@ -52,7 +54,7 @@ for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
   # yield empty input and the file would pass wholesale. NUL-delimited
   # output cannot round-trip through "$(...)" (bash command substitution
   # strips embedded NUL bytes), hence the temp file.
-  runs_file="$(mktemp)"
+  runs_file="$(make_temp)"
   if ! yq eval -0 '.jobs[].steps[].run // ""' "${f}" >"${runs_file}"; then
     rm --force -- "${runs_file}"
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2

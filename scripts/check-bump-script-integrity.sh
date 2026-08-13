@@ -73,8 +73,13 @@ else
   matched+=('digest cross-check')
 fi
 
-# Guard 3 — atomic pin write. Require mktemp + an mv rename into the
-# pin file, and reject a truncating redirect into the pin file.
+# Guard 3 — atomic pin write. Require the guarded temp-file helper
+# `make_temp` + an mv rename into the pin file, and reject a truncating
+# redirect into the pin file. The helper is the required token rather
+# than a bare `mktemp`, because an unguarded `mktemp` that cannot write
+# kills the bump mid-flight with the status a caller reads as a finding,
+# and the helper's name is the only thing in source that tells the two
+# apart.
 #
 # The three search patterns below are assembled from parts, with
 # names that avoid the substring "pin_file"/"PIN_FILE", rather than
@@ -95,7 +100,7 @@ readonly gt dq target_name target_ref guard3_mv_pattern \
   guard3_truncating_no_space guard3_truncating_with_space
 
 guard3_ok=1
-if ! grep --fixed-strings --quiet 'mktemp' "${BUMP_SCRIPT}" ||
+if ! grep --fixed-strings --quiet 'make_temp' "${BUMP_SCRIPT}" ||
   ! grep --fixed-strings --quiet -- "${guard3_mv_pattern}" "${BUMP_SCRIPT}"; then
   fail_guard 'atomic pin write'
   guard3_ok=0

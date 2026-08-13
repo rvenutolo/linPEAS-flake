@@ -32,6 +32,8 @@ IFS=$'\n\t'
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
 # shellcheck source=scripts/lib/awk-path.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 install_err_trap
 
 # Category display name -> mermaid classDef key. Any job whose category
@@ -96,10 +98,10 @@ function main() {
   fi
 
   local jobs_file cats_file block_file doc_new
-  jobs_file="$(mktemp)"
-  cats_file="$(mktemp)"
-  block_file="$(mktemp)"
-  doc_new="$(mktemp)"
+  jobs_file="$(make_temp)"
+  cats_file="$(make_temp)"
+  block_file="$(make_temp)"
+  doc_new="$(make_temp)"
   trap 'rm --force -- "${jobs_file:-}" "${cats_file:-}" "${block_file:-}" "${doc_new:-}"' EXIT
 
   # Extract {job: [needs...]} as JSON. Normalize `needs:` to a list:

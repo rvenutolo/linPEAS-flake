@@ -24,6 +24,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
 readonly REPO_ROOT
@@ -159,7 +161,7 @@ if [[ ${SCAN_ROOT} == "${REPO_ROOT}" ]]; then
 else
   # NUL-delimited output cannot survive a shell variable, so the fixture
   # branch captures to a temp file and reads its status from `find`.
-  scan_list="$(mktemp)"
+  scan_list="$(make_temp)"
   readonly scan_list
   trap 'rm --force -- "${scan_list}"' EXIT
   # enumerate-exempt: same as the branch above — status and breadth are

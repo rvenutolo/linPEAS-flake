@@ -9,5 +9,5 @@ pin_file='/tmp/example-linpeas-pin.json'
 [[ ${asset_digest} != sha256:* ]] && exit 1
 actual_sha_line="$(sha256sum "${tmpfile}")"
 printf '%s\n' "${actual_sha_line}" >/dev/null
-pin_tmp="$(mktemp)"
+pin_tmp="$(make_temp)"
 mv -- "${pin_tmp}" "${pin_file}"

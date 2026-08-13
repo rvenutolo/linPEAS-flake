@@ -16,6 +16,7 @@
 # @arg $@ passed through to `mktemp` verbatim
 # @stdout the created path
 # @exitcode 2 the temp file or directory could not be created
+# shellcheck disable=SC2120 # every call site passes zero or more mktemp args; the pass-through is the point
 function make_temp() {
   command mktemp "$@" || {
     printf '%s: cannot create a temp file (TMPDIR=%s)\n' \

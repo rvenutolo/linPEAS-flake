@@ -9,6 +9,9 @@
 # Source after `set -Eeuo pipefail`.
 # shellcheck shell=bash
 
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/temp.sh"
+
 # @description Run a NUL-emitting enumeration into an array, asserting
 # both that the producer succeeded and that it found something. Breadth
 # is asserted rather than inferred, because a producer that exits 0 with
@@ -19,7 +22,7 @@
 # function exists to check, and is banned repo-wide for that reason. The
 # temp file is removed on every return path instead of under a trap,
 # because traps are global in bash and callers install their own.
-# The `mktemp` call is guarded rather than left to `set -Eeuo pipefail`:
+# The temp file comes from `make_temp`, not from a bare `mktemp`:
 # an unwritable `TMPDIR` makes `mktemp` exit non-zero, and an unguarded
 # failed assignment kills the calling script with mktemp's own exit
 # status (1) — a could-not-run reported as "ran and found a violation"
@@ -49,11 +52,7 @@ function enumerate_into() {
   __enum_out_ref=()
 
   local __enum_tmp
-  __enum_tmp="$(mktemp)" || {
-    printf '%s: cannot create a temp file for the %s scan set\n' \
-      "${0##*/}" "${__enum_label}" >&2
-    exit 2
-  }
+  __enum_tmp="$(make_temp)"
   if ! "$@" >"${__enum_tmp}"; then
     rm --force -- "${__enum_tmp}"
     printf '%s: %s failed enumerating the scan set\n' "${0##*/}" "${__enum_label}" >&2

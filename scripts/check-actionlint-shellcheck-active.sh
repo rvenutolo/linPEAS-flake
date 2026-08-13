@@ -22,6 +22,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
@@ -39,7 +41,7 @@ if ! command -v actionlint >/dev/null 2>&1; then
   exit 2
 fi
 
-output_file="$(mktemp)"
+output_file="$(make_temp)"
 trap 'rm -f -- "${output_file}"' EXIT
 
 # actionlint exits non-zero when it surfaces findings; that's the

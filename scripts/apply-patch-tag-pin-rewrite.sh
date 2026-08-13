@@ -31,6 +31,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 # shellcheck source=scripts/lib/awk-path.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 
 INVENTORY="${TMPDIR:-/tmp}/action-pin-inventory.tsv"
 while [[ $# -gt 0 ]]; do
@@ -160,7 +162,7 @@ for i in "${!pending_files[@]}"; do
   old="${pending_old[${i}]}"
   new="${pending_new[${i}]}"
 
-  tmp="$(mktemp)"
+  tmp="$(make_temp)"
   if ! awk -v ln="${line}" -v old="${old}" -v new="${new}" '
     NR==ln {
       pos = index($0, old)

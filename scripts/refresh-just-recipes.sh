@@ -24,6 +24,8 @@ IFS=$'\n\t'
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
 # shellcheck source=scripts/lib/awk-path.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 install_err_trap
 
 function main() {
@@ -70,8 +72,8 @@ function main() {
   )
 
   local block_file doc_new
-  block_file="$(mktemp)"
-  doc_new="$(mktemp)"
+  block_file="$(make_temp)"
+  doc_new="$(make_temp)"
   trap 'rm --force -- "${block_file:-}" "${doc_new:-}"' EXIT
 
   # Generate the recipe block once — content is identical between outputs;

@@ -21,6 +21,8 @@
 # a workflow yq cannot parse).
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 
 readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-.github/workflows}"
 
@@ -66,7 +68,7 @@ function is_pr_triggered() {
 function scan_secrets() {
   local -r file="$1"
   local tmp
-  tmp="$(mktemp)"
+  tmp="$(make_temp)"
   grep --extended-regexp --line-number \
     '\$\{\{[[:space:]]*secrets\.[A-Za-z0-9_]+[[:space:]]*\}\}' \
     "${file}" >"${tmp}" || true
@@ -77,7 +79,7 @@ function scan_secrets() {
     local lineno="${line%%:*}"
     local rest="${line#*:}"
     local tokens_file
-    tokens_file="$(mktemp)"
+    tokens_file="$(make_temp)"
     grep --extended-regexp --only-matching \
       'secrets\.[A-Za-z0-9_]+' >"${tokens_file}" <<<"${rest}" || true
     local token
