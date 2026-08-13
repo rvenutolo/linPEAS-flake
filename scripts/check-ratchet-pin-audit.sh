@@ -6,10 +6,10 @@
 # typed reason tokens in the notify body, ratchet in the
 # nix/devshell.nix devShell — so future edits cannot silently weaken it.
 
-# Lint: assert ratchet-pin-audit.yml retains the structural
-# invariants documented in the design spec
-# (.claude/specs/2026-05-25-ratchet-pin-audit-design.md). See the
-# 10-item "Hardening invariants" list in that doc.
+# Lint: assert ratchet-pin-audit.yml retains the ten structural
+# hardening invariants this script enforces — each one is asserted
+# below and named in its own diagnostic, so the assertions are the
+# specification.
 #
 # WORKFLOW_PATH_OVERRIDE points at an alternate workflow file
 # (used by tests/check-ratchet-pin-audit.test.sh fixtures).

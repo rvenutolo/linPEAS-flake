@@ -359,17 +359,22 @@ not exist, or a file could not be parsed as shell.
 
 ### scripts/check-ephemeral-refs.sh
 
-Lint: every Markdown file in the repo must carry no
-ephemeral references — PR/issue refs, prose dates, planning/review-pass
-labels, or literal .claude/ paths. Default mode blocks (exit 1);
---advisory mode suppresses findings, not defects: it warns on fuzzy
-causal-history phrases and exits 0 on those, but a could-not-run
-(unterminated fence/block, failed source enumeration) still exits
-non-zero the same as the default pass.
+Lint: every Markdown file, shell script and Nix source in
+the repo must carry no ephemeral references — PR/issue refs, prose
+dates, planning/review-pass labels, or literal `.claude/` paths.
+Markdown is read as prose; shell is read as comments only, lifted from
+the `shfmt` syntax tree; Nix is read as the comments that start their
+own line, both `#` line comments and `/* */` block comments.
+Default mode blocks (exit 1); --advisory mode
+suppresses findings, not defects: it warns on fuzzy causal-history
+phrases and exits 0 on those, but a could-not-run (unterminated
+fence/generated block/Nix block comment, unparsable shell, a shell
+scan or a Nix scan that extracted no comments, failed source
+enumeration) still exits non-zero the same as the default pass.
 
 **Options:**
 
-- `--advisory` — suppress findings, not defects: warn on fuzzy causal-history phrases and exit 0 for those, but still exit 1 on an unterminated fence/generated block and 2 on a failed source enumeration
+- `--advisory` — suppress findings, not defects: warn on fuzzy causal-history phrases and exit 0 for those, but still exit 1 on an unterminated fence/generated block/Nix block comment and 2 on a failed source enumeration, an unparsable shell source, a shell scan that extracted no comments, or a Nix scan that extracted no comments
 
 ### scripts/check-flake-lock-provenance.sh
 

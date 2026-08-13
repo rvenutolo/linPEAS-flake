@@ -18,6 +18,12 @@ let
   # they compare against, so an ambient treefmt — different formatter
   # versions, none of this repo's baked config — makes `--check` report
   # drift that is not there or pass a doc that is stale.
+  #
+  # `shfmt` is listed in its own right even though the treefmt wrapper also
+  # carries one: the wrapper reaches its formatters internally, so a script
+  # invoking `shfmt` as a bare command — the ephemeral-reference lint reads
+  # shell comments out of `shfmt --to-json` — resolves nothing without this
+  # entry.
   toolPath = pkgs-unstable.lib.makeBinPath [
     pkgs-unstable.coreutils
     pkgs-unstable.diffutils
@@ -26,6 +32,7 @@ let
     pkgs-unstable.gnused
     pkgs-unstable.jq
     pkgs-unstable.just
+    pkgs-unstable.shfmt
     pkgs-unstable.yq-go
     treefmtWrapper
   ];
@@ -212,15 +219,17 @@ in
     pass_filenames = false;
     language = "system";
   };
-  # Asserts tracked Markdown prose carries no ephemeral references
-  # (PR/issue refs, prose dates, planning/review-pass labels, literal
-  # .claude/ paths). Runs the blocking pass first (gates the commit),
-  # then the --advisory pass for fuzzy causal-history phrases (never
-  # gates — always exits 0).
+  # Asserts Markdown prose and the comments in every shell and Nix
+  # source carry no ephemeral references (PR/issue refs, prose dates,
+  # planning/review-pass labels, literal `.claude/` paths). Shell
+  # comments are lifted from the `shfmt` syntax tree, which is why
+  # `shfmt` is on the shared tool path. Runs the blocking pass first
+  # (gates the commit), then the --advisory pass for fuzzy
+  # causal-history phrases (never gates — always exits 0).
   check-ephemeral-refs = {
     enable = true;
     name = "check-ephemeral-refs";
-    description = "Tracked Markdown prose carries no ephemeral references (PR/issue refs, prose dates, planning/review labels, literal .claude/ paths).";
+    description = "Markdown prose and shell/Nix comments carry no ephemeral references (PR/issue refs, prose dates, planning/review labels, literal .claude/ paths).";
     entry = "${pkgs-unstable.writeShellScript "check-ephemeral-refs-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'
@@ -229,7 +238,17 @@ in
       ${pkgs-unstable.bash}/bin/bash scripts/check-ephemeral-refs.sh
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-ephemeral-refs.sh --advisory
     ''}";
-    files = "^(README\\.md|CONTRIBUTING\\.md|SECURITY\\.md|\\.github/PULL_REQUEST_TEMPLATE\\.md|docs/.*\\.md|tests/README\\.md|scripts/check-ephemeral-refs\\.sh)$";
+    files = "^(README\\.md|CONTRIBUTING\\.md|SECURITY\\.md|\\.github/PULL_REQUEST_TEMPLATE\\.md|docs/.*\\.md|tests/README\\.md|scripts/.*\\.sh|tests/.*\\.sh|nix/.*\\.nix|flake\\.nix|treefmt\\.nix)$";
+    # `tests/.*\.sh` above reaches the fixture trees, which the lint
+    # skips outright — staging one would buy a full-tree scan that
+    # cannot report on the file that triggered it. Keep the trigger
+    # aligned with the lint's own allowlist.
+    excludes = [ "^tests/fixtures/" ];
+    # The advisory pass always exits 0, and pre-commit shows a passing
+    # hook's output only when the hook is verbose. Without this the
+    # second invocation is a silent no-op that costs a scan per commit
+    # and surfaces nothing an author could act on.
+    verbose = true;
     pass_filenames = false;
     language = "system";
   };
