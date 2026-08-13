@@ -239,6 +239,16 @@ in
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-ephemeral-refs.sh --advisory
     ''}";
     files = "^(README\\.md|CONTRIBUTING\\.md|SECURITY\\.md|\\.github/PULL_REQUEST_TEMPLATE\\.md|docs/.*\\.md|tests/README\\.md|scripts/.*\\.sh|tests/.*\\.sh|nix/.*\\.nix|flake\\.nix|treefmt\\.nix)$";
+    # `tests/.*\.sh` above reaches the fixture trees, which the lint
+    # skips outright — staging one would buy a full-tree scan that
+    # cannot report on the file that triggered it. Keep the trigger
+    # aligned with the lint's own allowlist.
+    excludes = [ "^tests/fixtures/" ];
+    # The advisory pass always exits 0, and pre-commit shows a passing
+    # hook's output only when the hook is verbose. Without this the
+    # second invocation is a silent no-op that costs a scan per commit
+    # and surfaces nothing an author could act on.
+    verbose = true;
     pass_filenames = false;
     language = "system";
   };
