@@ -29,13 +29,19 @@
 # own flags-then-program-then-operands grammar: `-v`, `-F`,
 # `-f`/`--file`, `--field-separator`, `--assign`, `--source`, `--`,
 # and their attached forms (`-F'\t'`, `--field-separator=x`,
-# `-fprog.awk`, `--file=prog.awk`) are all recognized as flags
-# regardless of whether a program was already supplied, so a
-# legally-repeated `-f a.awk -f b.awk` is not misread as two
-# operands. `-f`/`--file`/`--source` supply the program text (a
-# repeated one concatenates, which is legal), so any of them marks
-# the program as already established; `--assign` does not. Only the
-# first non-flag word establishes the inline program (when none of
+# `-fprog.awk`, `--file=prog.awk`) are all recognized as flags while
+# no program has been supplied yet. `-f`, `--file`, and `--source`
+# supply the program text (a repeated one concatenates, which is
+# legal), so any of them marks the program as already established
+# without ending flag recognition — a legally-repeated
+# `-f a.awk -f b.awk` is not misread as two operands; `--field-separator`
+# and `--assign` keep being read as flags too once a program is
+# established. `-v`, `-F`, and `--` behave differently once a program
+# is already established: gawk (measured directly) then reads any of
+# the three as an ordinary filename rather than as a flag, bare or
+# attached, so the walk folds a further `-v`/`-F`/`--` back into "this
+# is an operand" instead of treating it as one. Only the first
+# non-flag word establishes the inline program (when none of
 # `-f`/`--file`/`--source` already has); every non-flag word after
 # that is an operand. `-f`/`--file`'s own value and the program text
 # itself are excluded from the operand list, since neither was ever a
@@ -164,22 +170,27 @@ def flag_class:
 # `-f`/`--file`/`--source` supplied one yet, and every one after that
 # is an operand.
 #
-# `--` is special-cased further, because its own meaning depends on
-# whether the program has already been supplied: while flags are still
-# being read (`prog` false), `--` ends option parsing as usual — the
-# word right after it is read as the program, not as another flag
-# (`awk -- "${prog}" <"${f}"` is a real site in this repo). Once the
-# program is already established, `awk-path.sh`s header documents that
-# gawk treats a further `--` as an ordinary filename rather than as an
-# option terminator — so a `--` seen with `prog` already true is folded
-# back into "this is an operand" instead of ending anything.
+# `--`, `-v`, and `-F` are special-cased further, because their
+# meaning depends on whether the program has already been supplied:
+# while flags are still being read (`prog` false), each behaves as
+# documented — `--` ends option parsing, `-v`/`-F` take a value. Once
+# the program is already established, gawk (measured directly: a
+# post-program `-v`, bare or attached, fails with `cannot open file
+# '-v'`; likewise `-F`) reads a further `--`/`-v`/`-F` as an ordinary
+# filename instead of as a flag — `awk-path.sh`s header documents the
+# `--` half of this, and it holds identically for `-v`/`-F`. `-f`,
+# `--file`, and `--source` are not folded the same way: unlike `-v`/
+# `-F`, a repeated one legally keeps supplying program text (see
+# above), so they stay flags with `prog` already true.
 def classify_operands:
   def go(arr; eo; prog; ops):
     if (arr | length) == 0 then ops
     else
       (arr[0]) as $w
       | (if eo then null else ($w | flag_class) end) as $cls0
-      | (if ($cls0 != null and $cls0.name == "--" and prog) then null else $cls0 end) as $cls
+      | (if ($cls0 != null and prog and
+          ($cls0.name == "--" or $cls0.name == "-v" or $cls0.name == "-F"))
+        then null else $cls0 end) as $cls
       | if $cls == null then
           if prog
           then go(arr[1:]; eo; prog; ops + [$w])

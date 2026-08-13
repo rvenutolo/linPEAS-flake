@@ -73,13 +73,19 @@ For every such call, the argument list is walked following awk's
 own flags-then-program-then-operands grammar: `-v`, `-F`,
 `-f`/`--file`, `--field-separator`, `--assign`, `--source`, `--`,
 and their attached forms (`-F'\t'`, `--field-separator=x`,
-`-fprog.awk`, `--file=prog.awk`) are all recognized as flags
-regardless of whether a program was already supplied, so a
-legally-repeated `-f a.awk -f b.awk` is not misread as two
-operands. `-f`/`--file`/`--source` supply the program text (a
-repeated one concatenates, which is legal), so any of them marks
-the program as already established; `--assign` does not. Only the
-first non-flag word establishes the inline program (when none of
+`-fprog.awk`, `--file=prog.awk`) are all recognized as flags while
+no program has been supplied yet. `-f`, `--file`, and `--source`
+supply the program text (a repeated one concatenates, which is
+legal), so any of them marks the program as already established
+without ending flag recognition — a legally-repeated
+`-f a.awk -f b.awk` is not misread as two operands; `--field-separator`
+and `--assign` keep being read as flags too once a program is
+established. `-v`, `-F`, and `--` behave differently once a program
+is already established: gawk (measured directly) then reads any of
+the three as an ordinary filename rather than as a flag, bare or
+attached, so the walk folds a further `-v`/`-F`/`--` back into "this
+is an operand" instead of treating it as one. Only the first
+non-flag word establishes the inline program (when none of
 `-f`/`--file`/`--source` already has); every non-flag word after
 that is an operand. `-f`/`--file`'s own value and the program text
 itself are excluded from the operand list, since neither was ever a

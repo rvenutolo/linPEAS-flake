@@ -81,33 +81,30 @@ expect bad-multiline-program.sh 1 'bad-multiline-program.sh:10:3: awk file opera
 # assertion that only checked the file name and the "1 violation" tally.
 expect bad-second-operand.sh 1 'bad-second-operand.sh:9:30: awk file operand not spelled'
 
-# These four exercise the classifier shapes an earlier version of
-# flag_class misjudged: an attached -f/--file value (a word that is
-# not an *exact* flag-name match still has to be told apart from one
-# that merely starts with a flag name — a jq `.` rebinding bug made
-# every such word classify as -v and get silently absorbed), --source
-# (which supplies the program text and so must mark it supplied, or
-# the real operand after it gets read as the program instead), and a
-# legally repeated -f (which must still recognize the second -f as a
-# flag rather than stop recognizing flags once any program is
-# supplied — the fix for the first three shapes would otherwise turn
-# a legal two-program-file call into two false positives).
+# These four exercise flag_class's attached-vs-exact distinction and
+# classify_operands's program-supplying rules directly: an attached
+# -f/--file value (a word that is not an *exact* flag-name match must
+# still be told apart from one that merely starts with a flag name, so
+# its trailing operand is not silently absorbed as a flag), --source
+# (which supplies the program text, so the real operand after it must
+# not be read as the program instead), and a legally repeated -f
+# (recognizing the second -f as a flag rather than as an operand, since
+# flag recognition does not stop once a program is already supplied).
 expect bad-attached-f-flag.sh 1 'bad-attached-f-flag.sh:6:16: awk file operand not spelled'
 expect bad-attached-file-flag.sh 1 'bad-attached-file-flag.sh:6:21: awk file operand not spelled'
 expect bad-source-flag.sh 1 'bad-source-flag.sh:6:32: awk file operand not spelled'
 
 # @description bad-repeated-f-flag.sh must yield exactly one violation
-# (the trailing bare operand), not the three the pre-fix classifier
-# reported for a legally-repeated -f (two of them false positives, on
-# -f itself and on b.awk). The registered assertion is the
-# file:line:col diagnostic, which discriminates this scenario from
+# (the trailing bare operand): a legally-repeated `-f a.awk -f b.awk`
+# supplies two program files, neither of which is a file operand, so
+# only the word after them may be flagged. The registered assertion is
+# the file:line:col diagnostic, which discriminates this scenario from
 # every sibling bad-* fixture; the violation *count* is checked
 # separately (by counting matching diagnostic lines rather than
 # registering the shared "N awk file operand(s)..." tally text, which
 # every single-violation bad-* fixture also emits and so cannot
-# discriminate) because the count is what a regression back to
-# over-flagging would actually break — a check that only looked for
-# "a violation exists" would not catch it.
+# discriminate) because a check that only looks for "a violation
+# exists" would not catch over-flagging on -f or b.awk.
 function expect_bad_repeated_f_flag() {
   local -r name='bad-repeated-f-flag.sh'
   local out_file err_file outcome_file got_exit=0 diag_count
@@ -137,6 +134,46 @@ function expect_bad_repeated_f_flag() {
 }
 
 expect_bad_repeated_f_flag
+
+# @description The operand-count breadth assertion is its own scan set,
+# not the file-enumeration one `empty-scan` below drives: `git
+# ls-files`/`PATHS_OVERRIDE` can enumerate a nonzero, real file, and the
+# lint can still find zero operands to check within it (here,
+# good-stdin.sh's only awk call is stdin-fed). That must be a
+# could-not-run rather than the same clean summary a genuinely
+# nonzero-operand run prints, unless the operator states the zero is
+# deliberate.
+run_expect 'zero-operand-scan' "${FIXTURES}/good-stdin.sh" 2 \
+  'checked 0 awk file operand(s) across 1 file(s) scanned'
+
+# @description Same scan set, opted out via LINT_ALLOW_EMPTY_SCAN=1:
+# proves the release path the header documents actually turns the same
+# input exit 0, rather than the opt-out only existing in prose.
+function expect_zero_operand_scan_allowed() {
+  local -r name='zero-operand-scan-allowed'
+  local out_file err_file outcome_file got_exit=0
+  out_file="$(mktemp)"
+  err_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  LINT_ALLOW_EMPTY_SCAN=1 PATHS_OVERRIDE="${FIXTURES}/good-stdin.sh" \
+    "${SCRIPT}" >"${out_file}" 2>"${err_file}" || got_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" '1 file(s) scanned, 0 operand(s) checked, 0 violations' \
+    "${outcome_file}" "${out_file}" "${err_file}"
+
+  if [[ ${got_exit} != 0 ]]; then
+    fail "$(printf '%s: exit %s, want 0' "${name}" "${got_exit}")"
+    cat -- "${err_file}" >&2
+  elif ! grep --fixed-strings --quiet -- '1 file(s) scanned, 0 operand(s) checked, 0 violations' "${out_file}"; then
+    fail "$(printf '%s: stdout missing the clean summary' "${name}")"
+    cat -- "${out_file}" >&2
+  else
+    pass "${name}"
+  fi
+  rm --force -- "${out_file}" "${err_file}" "${outcome_file}"
+}
+
+expect_zero_operand_scan_allowed
 
 # @description Drive the enumeration itself, not a fixture: with
 # PATHS_OVERRIDE unset the script enumerates via `git ls-files`, and an
