@@ -61,6 +61,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 
 readonly DEFAULT_CI=".github/workflows/ci.yml"
 readonly DEFAULT_CATEGORIES="docs/_data/ci-check-categories.yml"
@@ -131,8 +133,8 @@ if [[ ! -f ${CATEGORIES_FILE} ]]; then
   exit 2
 fi
 
-ci_jobs_file="$(mktemp)"
-cat_keys_file="$(mktemp)"
+ci_jobs_file="$(make_temp)"
+cat_keys_file="$(make_temp)"
 trap 'rm --force -- "${ci_jobs_file}" "${cat_keys_file}"' EXIT
 
 yq eval '.jobs | keys | .[]' "${CI_FILE}" | sort --unique >"${ci_jobs_file}"
@@ -175,7 +177,7 @@ done
 # ci.yml vs other workflows, so the reverse check is: any entry that
 # is NOT a job in some workflow file is a drift signal. Build the
 # full job set across all workflows once.
-all_jobs_file="$(mktemp)"
+all_jobs_file="$(make_temp)"
 trap 'rm --force -- "${ci_jobs_file}" "${cat_keys_file}" "${all_jobs_file}"' EXIT
 shopt -s nullglob
 for f in "${WORKFLOWS_DIR}"/*.yml "${WORKFLOWS_DIR}"/*.yaml; do

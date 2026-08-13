@@ -57,6 +57,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 # shellcheck source=scripts/lib/awk-path.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
@@ -294,12 +296,12 @@ done
 # --- assertion 4: ladder order ---------------------------------------
 # First textual occurrence of each env var name in the run body, in
 # reading order, is where the ladder tests it.
-names_file="$(mktemp)"
-body_file="$(mktemp)"
+names_file="$(make_temp)"
+body_file="$(make_temp)"
 # awk reads an operand whose first path component is an identifier
 # followed by `=` as a variable assignment, not as a file: it then finds
 # no file operand at all, reads stdin, and exits 0 having emitted
-# nothing. `mktemp` honors TMPDIR, so a relative TMPDIR is enough to put
+# nothing. `make_temp` honors TMPDIR, so a relative TMPDIR is enough to put
 # a `=` in the leading component. An absolute path always starts with
 # `/`, which no assignment can, so the operand can only be read as a
 # file.

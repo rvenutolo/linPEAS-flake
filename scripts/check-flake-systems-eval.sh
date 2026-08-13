@@ -11,6 +11,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 # shellcheck source=scripts/lib/log.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 install_err_trap
 
 function main() {
@@ -32,7 +34,7 @@ function main() {
   fi
 
   local rc=0 sys err
-  err="$(mktemp)"
+  err="$(make_temp)"
   trap 'rm --force -- "${err:-}"' EXIT
   while IFS= read -r sys; do
     log_info "evaluating ${sys}"

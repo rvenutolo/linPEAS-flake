@@ -89,6 +89,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 
 readonly BASE_REF="${BASE_REF:-origin/main}"
 
@@ -286,7 +288,7 @@ else
 end
 '
 
-jq_err_file="$(mktemp)"
+jq_err_file="$(make_temp)"
 trap 'rm --force -- "${jq_err_file}"' EXIT
 
 if ! result="$(jq -n \

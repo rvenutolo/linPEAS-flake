@@ -17,6 +17,8 @@ IFS=$'\n\t'
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
 # shellcheck source=scripts/lib/awk-path.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 install_err_trap
 
 # Temp files removed by the EXIT trap. Declared at script scope, not main-local:
@@ -138,11 +140,11 @@ function main() {
   trap 'exit 143' TERM
   trap 'exit 129' HUP
 
-  block_file="$(mktemp)"
-  doc_new="$(mktemp)"
-  check_bucket="$(mktemp)"
-  refresh_bucket="$(mktemp)"
-  other_bucket="$(mktemp)"
+  block_file="$(make_temp)"
+  doc_new="$(make_temp)"
+  check_bucket="$(make_temp)"
+  refresh_bucket="$(make_temp)"
+  other_bucket="$(make_temp)"
 
   # Walk scripts in sorted order, skipping `_*.sh` helpers.
   local script name json bucket
@@ -222,7 +224,7 @@ function main() {
   # Run treefmt over the regenerated doc so the comparison target
   # matches what the formatter chain (mdformat-gfm) produces on commit.
   # treefmt needs flake.nix as project root, so the temp must live in-repo.
-  fmt_target="$(mktemp "${repo_root}/.refresh-scripts-reference-XXXXXX.md")"
+  fmt_target="$(make_temp "${repo_root}/.refresh-scripts-reference-XXXXXX.md")"
   cp -- "${doc_new}" "${fmt_target}"
   # No `|| true`: a treefmt/mdformat failure must abort under set -e before the
   # unformatted splice is moved into place, matching the sibling generators

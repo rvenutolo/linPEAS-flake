@@ -14,6 +14,6 @@ expected_url_prefix='https://github.com/peass-ng/PEASS-ng/releases/download/'
 [[ ${asset_digest} != sha256:* ]] && exit 1
 actual_sha_line="$(sha256sum "${tmpfile}")"
 printf '%s\n' "${actual_sha_line}" >/dev/null
-pin_tmp="$(mktemp)"
+pin_tmp="$(make_temp)"
 printf '%s\n' "${new_pin}" >"${pin_tmp}"
 mv -- "${pin_tmp}" "${pin_file}"

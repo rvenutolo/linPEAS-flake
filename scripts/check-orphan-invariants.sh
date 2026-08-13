@@ -28,6 +28,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
 readonly REPO_ROOT
@@ -61,8 +63,8 @@ fi
 
 failures=0
 
-referenced_file="$(mktemp)"
-all_docs="$(mktemp)"
+referenced_file="$(make_temp)"
+all_docs="$(make_temp)"
 trap 'rm -f "${referenced_file}" "${all_docs}"' EXIT
 
 # Extract paths from markdown links of the form [text](path) where

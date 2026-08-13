@@ -198,13 +198,13 @@ else
   cat -- "${work}/unterminated-last-record.out" "${work}/unterminated-last-record.err" >&2
 fi
 
-# 8. mktemp-fails — an unwritable TMPDIR makes the guarded `mktemp` call
+# 8. mktemp-fails — an unwritable TMPDIR makes the temp-file helper
 # report a could-not-run (exit 2) rather than letting mktemp's own exit
 # status (1) leak through `set -Eeuo pipefail` as the calling script's
 # exit code — a could-not-run reported as "ran and found a violation"
 # inside the one function whose job is making sure that never happens.
 # shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
-run_scenario 'mktemp-fails' 'cannot create a temp file for the stub_never_runs scan set' '
+run_scenario 'mktemp-fails' 'cannot create a temp file (TMPDIR=/nonexistent-tmpdir-enumerate-test)' '
 export TMPDIR="/nonexistent-tmpdir-enumerate-test"
 function stub_never_runs() { printf "%s\0" ignored; }
 declare -a out=()
@@ -212,7 +212,7 @@ enumerate_into out "stub_never_runs" stub_never_runs
 printf "size=%d\n" "${#out[@]}"
 '
 if [[ ${rc} -eq 2 ]] &&
-  grep --fixed-strings --quiet -- 'cannot create a temp file for the stub_never_runs scan set' \
+  grep --fixed-strings --quiet -- 'cannot create a temp file (TMPDIR=/nonexistent-tmpdir-enumerate-test)' \
     "${work}/mktemp-fails.err"; then
   pass 'mktemp-fails: an unwritable TMPDIR is exit 2, stderr names the failure'
 else

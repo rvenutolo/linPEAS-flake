@@ -51,6 +51,8 @@ IFS=$'\n\t'
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 # shellcheck source=scripts/lib/awk-path.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 
 root="${ROOT_OVERRIDE:-$(git rev-parse --show-toplevel)}"
 readonly ROOT="${root}"
@@ -120,7 +122,7 @@ function sorted_keys_into() {
   local -n __sk_out="$1"
   local -n __sk_map="$2"
   local tmp p
-  tmp="$(mktemp)" || return 1
+  tmp="$(make_temp)" || return 1
   printf '%s\0' "${!__sk_map[@]}" | sort --zero-terminated >"${tmp}"
   __sk_out=()
   while IFS= read -r -d '' p || [[ -n ${p} ]]; do
@@ -514,7 +516,7 @@ while IFS=$'\037' read -r name files scripts attr_ns attr_leaf attr_seen; do
     # producer inside `required_modules` reads memory rather than the tree
     # — each module's source is read and status-checked up front — so the
     # only status it can return is the one its own inner guard raises (or a
-    # `mktemp` failure inside the NUL-sort helper).
+    # `make_temp` failure inside the NUL-sort helper).
     # shellcheck disable=SC2034 # written by required_modules' nameref, read via assert_filter_covers' nameref, not a direct expansion here
     required=()
     if ! required_modules required "${attr}"; then

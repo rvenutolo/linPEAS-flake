@@ -23,6 +23,8 @@ IFS=$'\n\t'
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
 # shellcheck source=scripts/lib/awk-path.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 install_err_trap
 
 function main() {
@@ -64,9 +66,9 @@ function main() {
   fi
 
   local flake_show_file block_file doc_new
-  flake_show_file="$(mktemp)"
-  block_file="$(mktemp)"
-  doc_new="$(mktemp)"
+  flake_show_file="$(make_temp)"
+  block_file="$(make_temp)"
+  doc_new="$(make_temp)"
   # Use :- defaults so the trap (which fires after main() returns) does not
   # trip set -u when these locals have already gone out of scope.
   trap 'rm --force -- "${flake_show_file:-}" "${block_file:-}" "${doc_new:-}"' EXIT
@@ -78,8 +80,8 @@ function main() {
   # nix flake show emits ANSI color escapes regardless of NO_COLOR / TTY
   # detection; sed strips them so the rendered README stays plain text.
   local raw_show raw_err
-  raw_show="$(mktemp)"
-  raw_err="$(mktemp)"
+  raw_show="$(make_temp)"
+  raw_err="$(make_temp)"
   trap 'rm --force -- "${flake_show_file:-}" "${block_file:-}" "${doc_new:-}" "${raw_show:-}" "${raw_err:-}"' EXIT
   # The renderer is pinned to this repo's flake.lock nix rather than
   # ambient `nix`: implementations differ in how they render the output

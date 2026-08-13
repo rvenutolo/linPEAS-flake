@@ -25,6 +25,8 @@ IFS=$'\n\t'
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
 # shellcheck source=scripts/lib/awk-path.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 install_err_trap
 
 # Temp files removed by the EXIT trap. Declared at script scope, not main-local:
@@ -77,7 +79,8 @@ function main() {
   repo_root="$(git rev-parse --show-toplevel)"
   doc="${repo_root}/docs/reference/treefmt-config.md"
   readonly repo_root doc
-  # Set before the mktemps so even a failed mktemp triggers the sibling sweep.
+  # Set before the temp files are made so even a failed `make_temp` triggers
+  # the sibling sweep.
   # Signal handlers force exit (they do not on their own), which re-triggers the
   # EXIT trap so cleanup runs on Ctrl-C / SIGTERM / SIGHUP too.
   trap cleanup EXIT
@@ -101,15 +104,15 @@ function main() {
     exit 1
   fi
 
-  cfg_file="$(mktemp)"
-  raw_err="$(mktemp)"
-  block_file="$(mktemp)"
-  doc_new="$(mktemp)"
+  cfg_file="$(make_temp)"
+  raw_err="$(make_temp)"
+  block_file="$(make_temp)"
+  doc_new="$(make_temp)"
   # treefmt walks up to find flake.nix as projectRootFile, so the formatted
   # tmp file must live inside the repo. Hidden name + .md extension so
   # treefmt's mdformat picks it up; .gitignore keeps it untracked if a crash
   # bypasses the EXIT trap.
-  doc_fmt="$(mktemp "${repo_root}/.refresh-treefmt-config-XXXXXX.md")"
+  doc_fmt="$(make_temp "${repo_root}/.refresh-treefmt-config-XXXXXX.md")"
 
   local sys
   sys="$(nix eval --impure --raw --expr 'builtins.currentSystem')"

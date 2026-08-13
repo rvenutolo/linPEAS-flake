@@ -15,6 +15,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 # shellcheck source=scripts/lib/awk-path.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
@@ -94,9 +96,9 @@ function main() {
   done
 
   local wf_tmp tbl_tmp arrow_tmp
-  wf_tmp="$(mktemp)"
-  tbl_tmp="$(mktemp)"
-  arrow_tmp="$(mktemp)"
+  wf_tmp="$(make_temp)"
+  tbl_tmp="$(make_temp)"
+  arrow_tmp="$(make_temp)"
   # shellcheck disable=SC2064
   trap "rm --force -- '${wf_tmp}' '${tbl_tmp}' '${arrow_tmp}'" EXIT
 

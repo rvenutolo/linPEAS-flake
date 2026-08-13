@@ -27,6 +27,7 @@ readonly -a HARNESSES=(
   'backfill-image-mode|classify-backfill-image-mode.test.sh|'
   'lib-log|lib-log.test.sh|'
   'lib-enumerate|lib-enumerate.test.sh|'
+  'lib-temp|lib-temp.test.sh|'
   'lib-awk-path|lib-awk-path.test.sh|'
   'harness-assert|lib-harness-assert.test.sh|'
   'harness-assert-wired|_harness_assert_wired.test.sh|'

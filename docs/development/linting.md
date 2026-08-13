@@ -251,6 +251,30 @@ generic `<2-3 uppercase letters>-<digits>` ticket shape is intentionally
 literals such as `SHA-256` and `UTF-8`; only the enumerated
 planning/review labels above are matched.
 
+## Guarded temp-file creation
+
+`scripts/check-guard-exit-code.sh` bans a bare `mktemp` anywhere under
+`scripts/`. An unwritable `TMPDIR` makes `mktemp` exit 1, and under
+`set -Eeuo pipefail` an unguarded `tmp="$(mktemp)"` hands that 1 to the
+caller — the code that means "the repo carries a violation", for a run
+that inspected nothing. Scratch files come from `make_temp`
+(`scripts/lib/temp.sh`) instead, which passes its arguments through
+verbatim and exits **2** when the file cannot be created:
+
+```bash
+tmp="$(make_temp)"
+work="$(make_temp --directory)"
+probe="$(make_temp --tmpdir="${dir}" probe.XXXXXX)"
+```
+
+Matching is by command position, so prose naming the command — a
+comment, a parenthetical, a string operand — is never a hit. The one
+sanctioned bare invocation lives in `scripts/lib/temp.sh`, which the rule
+skips by basename. A call whose failure genuinely is the finding opts out
+with an inline `# exit-code-exempt: <rationale>`; the rationale must be
+non-empty, and a clean run prints the exemption count. Full rationale:
+[Workflow hardening → guard-exit-code](../security/workflow-hardening.md#guard-exit-code).
+
 ## Treefmt YAML quote gotcha
 
 Prettier rewrites single-quoted YAML scalars to double-quoted. Run

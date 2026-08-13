@@ -94,6 +94,8 @@ source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 # shellcheck source=scripts/lib/log.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 
 REPO_ROOT="${EPHEMERAL_REFS_ROOT_OVERRIDE:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)}"
 readonly REPO_ROOT
@@ -263,7 +265,7 @@ function extract_shell_comments() {
   fi
 
   local pairs_file
-  pairs_file="$(mktemp)"
+  pairs_file="$(make_temp)"
   # Row zero is a sentinel that keeps this file non-empty for a source
   # carrying no comments at all. `awk`'s two-operand `NR == FNR` split
   # reads an empty first operand as no operand, then mistakes the second
@@ -445,7 +447,7 @@ function scan_class() {
 
   local match lineno token
   local tmp
-  tmp="$(mktemp)"
+  tmp="$(make_temp)"
   printf '%s\n' "${matches}" >"${tmp}"
   while IFS= read -r match; do
     [[ -z ${match} ]] && continue
@@ -478,7 +480,7 @@ function scan_advisory() {
 
   local match lineno phrase
   local tmp
-  tmp="$(mktemp)"
+  tmp="$(make_temp)"
   printf '%s\n' "${matches}" >"${tmp}"
   while IFS= read -r match; do
     [[ -z ${match} ]] && continue
@@ -557,7 +559,7 @@ function main() {
   local fenced=0 spans=0 gen=0
   local f_lines f_fenced f_spans f_gen f_comments
   local stats_dir
-  stats_dir="$(mktemp -d)"
+  stats_dir="$(make_temp --directory)"
 
   local src_rel src_abs stripped lang raw
   for src_rel in "${sources[@]}"; do
@@ -573,7 +575,7 @@ function main() {
     # read, so it is skipped rather than guessed at.
     [[ ${lang} == 'other' ]] && continue
 
-    stripped="$(mktemp)"
+    stripped="$(make_temp)"
     case "${lang}" in
     md)
       # An unterminated code fence or generated block is a fatal doc
@@ -597,7 +599,7 @@ function main() {
     sh)
       # A source the parser rejects is a could-not-run: reporting it as
       # clean would hide every comment in it behind an exit 0.
-      raw="$(mktemp)"
+      raw="$(make_temp)"
       if ! extract_shell_comments "${src_abs}" "${src_rel}" "${stats_dir}" >"${raw}"; then
         rm --force -- "${raw}" "${stripped}"
         rm --recursive --force -- "${stats_dir}"
@@ -616,7 +618,7 @@ function main() {
       # An unterminated block comment leaves the extractor reading code
       # as comment text, so it is a fatal defect on this path exactly as
       # an unterminated fence is on the Markdown one.
-      raw="$(mktemp)"
+      raw="$(make_temp)"
       if ! extract_nix_comments "${src_abs}" "${src_rel}" "${stats_dir}" >"${raw}"; then
         rm --force -- "${raw}" "${stripped}"
         rm --recursive --force -- "${stats_dir}"

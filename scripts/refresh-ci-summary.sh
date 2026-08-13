@@ -25,6 +25,8 @@ IFS=$'\n\t'
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
 # shellcheck source=scripts/lib/awk-path.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 install_err_trap
 
 function main() {
@@ -80,10 +82,10 @@ function main() {
   fi
 
   local contexts_file map_keys_file block_file doc_new
-  contexts_file="$(mktemp)"
-  map_keys_file="$(mktemp)"
-  block_file="$(mktemp)"
-  doc_new="$(mktemp)"
+  contexts_file="$(make_temp)"
+  map_keys_file="$(make_temp)"
+  block_file="$(make_temp)"
+  doc_new="$(make_temp)"
   trap 'rm --force -- "${contexts_file:-}" "${map_keys_file:-}" "${block_file:-}" "${doc_new:-}"' EXIT
 
   # Extract required context names from the table (first column, skip header and separator rows).
@@ -129,7 +131,7 @@ function main() {
     # Emit "category TAB context" pairs sorted by category then context,
     # then group by category to render each bullet.
     local pairs_file
-    pairs_file="$(mktemp)"
+    pairs_file="$(make_temp)"
     # Append pairs_file to the outer trap so it's cleaned up too.
     trap 'rm --force -- "${contexts_file:-}" "${map_keys_file:-}" "${block_file:-}" "${doc_new:-}" "${pairs_file:-}"' EXIT
     yq 'to_entries | .[] | .value + "\t" + .key' "${cat_map}" | sort >"${pairs_file}"

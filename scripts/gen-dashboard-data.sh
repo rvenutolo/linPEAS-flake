@@ -27,7 +27,7 @@
 #   4. pin.version must match         -> [0-9]{8}-[0-9a-f]{7,40}
 #   5. pin.url must start with        -> https://github.com/peass-ng/
 #                                        PEASS-ng/releases/download/
-#   6. Atomic write: mktemp + mv; never `>` redirect to the final path.
+#   6. Atomic write: make_temp + mv; never `>` redirect to the final path.
 #   7. Inputs the generator cannot even read — a required CLI tool absent
 #      from PATH, or a missing pin file — exit 2, not 1. Those say
 #      nothing about the pin's contents, and exit 1 is reserved for data
@@ -39,6 +39,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 # shellcheck source=scripts/lib/log.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
+# shellcheck source=scripts/lib/temp.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 install_err_trap
 
 # @description Verify a JSON-extracted field is non-empty and not 'null';
@@ -241,7 +243,7 @@ function main() {
   generated_at="$(date --utc --iso-8601=seconds)"
 
   log_info "assembling ${out_file}"
-  out_tmp="$(mktemp --tmpdir="$(dirname -- "${out_file}")" dashboard.yml.XXXXXX)"
+  out_tmp="$(make_temp --tmpdir="$(dirname -- "${out_file}")" dashboard.yml.XXXXXX)"
   # The EXIT trap captures the literal path at trap-set time (single-quoted
   # would defer expansion and ${out_tmp} may have gone out of scope by then).
   # shellcheck disable=SC2064
