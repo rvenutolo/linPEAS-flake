@@ -90,19 +90,23 @@ source of truth).
 
 ## Ephemeral-reference lint
 
-`scripts/check-ephemeral-refs.sh` gates Markdown prose against
-"ephemeral references": tokens that describe what a doc *replaced* or
-which plan, review pass, ticket, date, or PR introduced it, rather than
-the CURRENT state of the repo. Tracked docs are the durable home for
-behavior; history is recovered from `git log` and PR threads, so it must
-not leak into prose.
+`scripts/check-ephemeral-refs.sh` gates Markdown prose — and the
+comments in every shell and Nix source — against "ephemeral references":
+tokens that describe what a file *replaced* or which plan, review pass,
+ticket, date, or PR introduced it, rather than the CURRENT state of the
+repo. Tracked files are the durable home for behavior; history is
+recovered from `git log` and PR threads, so it must not leak into prose
+or into a comment.
 
-Scope is every Markdown file in the repo, minus the allowlist below —
-`README.md`, `CONTRIBUTING.md`, `SECURITY.md`, the PR template,
-`tests/README.md`, and everything under `docs/`. Enumeration runs
-through `git ls-files --cached --others --exclude-standard`, so it
-covers files a commit is about to introduce as well as tracked ones, and
-honors `.gitignore` so build outputs stay out.
+Scope is every Markdown, shell and Nix source in the repo, minus the
+file allowlist below. A source's extension is the whole classifier:
+`.md` is read as prose, `.sh` as shell comments, `.nix` as Nix comments,
+and any other extension is skipped rather than guessed at — so a shell
+library without a `.sh` suffix, and shell embedded in a workflow `run:`
+block, are out of scope by construction. Enumeration runs through
+`git ls-files --cached --others --exclude-standard`, so it covers files
+a commit is about to introduce as well as tracked ones, and honors
+`.gitignore` so build outputs stay out.
 
 The script has two modes. The default pass is **blocking** (exit 1 on any
 hit, printing `file:line: [class] token` to stderr). The `--advisory`
@@ -121,10 +125,10 @@ document, so both cases abort with a named diagnostic
 non-zero exit rather than scanning a file whose remainder has been
 silently exempted. Advisory mode inherits that abort: it suppresses
 findings, not defects. The same holds for the source enumeration itself:
-a producer that fails, or comes back with no Markdown files to read,
-exits 2 in either mode (`LINT_ALLOW_EMPTY_SCAN=1` accepts a genuinely
-empty scan set) rather than a scan that read nothing reading as a scan
-that found nothing wrong.
+a producer that fails, or comes back with no sources to read, exits 2 in
+either mode (`LINT_ALLOW_EMPTY_SCAN=1` accepts a genuinely empty scan
+set) rather than a scan that read nothing reading as a scan that found
+nothing wrong.
 
 ### Blocking classes
 
@@ -165,6 +169,40 @@ Fuzzy causal-history phrases surface as advisories, never blockers:
     are therefore exempt without any per-literal allowlist. This is why
     every example token on this page is wrapped in backticks: a code span
     is invisible to the scanner, so the doc passes its own gate.
+
+### Comment extraction
+
+Extracted text reaches one shared set of class regexes whatever language
+it came from; what differs is how it is extracted. Every extractor emits
+one line per source line, so a reported line number is the original
+file's.
+
+- **Shell comments come out of the `shfmt --to-json` syntax tree**, not
+    out of a `#` regex. A hash inside a string literal, a heredoc body
+    carrying generated changelog prose, and the lint's own class regexes
+    are out of scope by construction rather than by a matcher that has to
+    guess which hash is code.
+- **A shebang is dropped by its leading `!`**, not by its line number, so
+    a comment shaped like a shebang further down the file is still read.
+- **Nix uses a full-line `#` matcher.** No comment-preserving Nix parser
+    is in this toolchain, and without one a trailing `#` cannot be told
+    from a `#` inside a string, so the matcher gives up the trailing case
+    to keep the full-line case exact. The `''…''` blocks under
+    `nix/hooks/` are embedded shell, and the `#` lines inside them are
+    genuine comments the scan is meant to read.
+- **Backtick code spans inside a comment are exempt**, the same rule
+    inline code already gets in Markdown: a comment naming a banned shape
+    as an example — an allowlist entry, a scan-scope note, one of the
+    class regexes — is documentation rather than a reference.
+
+Two further could-not-run cases follow from this. A shell source `shfmt`
+cannot parse exits 2 with a named diagnostic, rather than being skipped
+or read as clean. And a run that covered shell or Nix sources yet
+extracted zero comments exits 2: a gate that has stopped reading is
+indistinguishable, by exit code alone, from a gate that read everything
+and found nothing, so breadth is asserted rather than inferred.
+`LINT_ALLOW_EMPTY_SCAN=1` accepts that too — the same operator escape
+hatch an empty source set has.
 
 ### v1 decision
 
