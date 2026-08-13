@@ -49,6 +49,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 # shellcheck source=scripts/lib/log.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 install_err_trap
 
 # Temp files removed by the EXIT trap. Declared at script scope, not main-local:
@@ -437,8 +439,17 @@ function cross_check_reverse() {
     done | sort --unique >"${ref_hooks}"
 
   # All real check-*.sh under scripts/, basename stem only.
-  find "${scripts_dir}" -maxdepth 1 -type f -name 'check-*.sh' -printf '%f\n' |
-    sed 's/\.sh$//' | sort --unique >"${real_scripts}"
+  # LINT_ALLOW_EMPTY_SCAN is forced because a fixture scripts dir may
+  # legitimately hold none: the orphan-script comparison against
+  # ref_scripts already treats "found nothing" as "nothing to report"
+  # rather than as a tooling fault.
+  local -a real_names=()
+  LINT_ALLOW_EMPTY_SCAN=1 enumerate_into real_names "find ${scripts_dir}" \
+    find "${scripts_dir}" -maxdepth 1 -type f -name 'check-*.sh' -printf '%f\0'
+  local rn
+  for rn in ${real_names+"${real_names[@]}"}; do
+    printf '%s\n' "${rn%.sh}"
+  done | sort --unique >"${real_scripts}"
 
   # Orphan scripts: in real, not in ref, not in SCRIPT_EXEMPT.
   local stem

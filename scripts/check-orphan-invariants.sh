@@ -88,7 +88,11 @@ while IFS= read -r rel; do
   fi
 done <"${referenced_file}"
 
-# Reverse check. Walk docs/ as docs-relative paths.
+# Reverse check. Walk docs/ as docs-relative paths. Newline-delimited here
+# rather than NUL-delimited is safe because scripts/check-path-hygiene.sh
+# rejects any tracked path containing a control character, so no docs/*.md
+# path this walk can find carries a newline for `find`'s line-oriented
+# output — or this `sed | sort` pipe — to split.
 (cd "${DOCS_ROOT}" && find . -type f -name '*.md' | sed 's|^\./||' | sort) >"${all_docs}"
 
 while IFS= read -r rel; do

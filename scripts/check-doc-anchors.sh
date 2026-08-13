@@ -45,6 +45,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 
 REPO_ROOT="${DOC_ANCHOR_ROOT_OVERRIDE:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)}"
 readonly REPO_ROOT
@@ -132,39 +134,46 @@ function lossy_heading_count() {
   printf '%s\n' "${count:-0}"
 }
 
+# @description Emit every docs/**/*.md path, NUL-delimited and sorted,
+# relative to REPO_ROOT. The `cd` is what makes the emitted paths
+# repo-relative (`docs/...` rather than an absolute path), so it is kept
+# inside this same-file wrapper rather than folded into the `find`
+# invocation directly: a function invoked as a command is not a process
+# substitution feeding a redirection, which is the shape
+# check-no-opaque-procsub.sh bans.
+# shellcheck disable=SC2329 # invoked indirectly, by name, via enumerate_into
+function doc_anchor_docs_scan() {
+  (cd "${REPO_ROOT}" && find docs -type f -name '*.md' -print0) |
+    sort --zero-terminated
+}
+
 declare -a SOURCES=()
 if [[ -n ${DOC_ANCHOR_SOURCES_OVERRIDE:-} ]]; then
   mapfile -t SOURCES <<<"${DOC_ANCHOR_SOURCES_OVERRIDE}"
 else
-  # The docs enumeration is captured with its status checked, and the
-  # trailing `sort` is applied to the capture rather than to a pipe, so
-  # neither `mapfile` nor `sort` stands between a failed `find` and this
-  # shell. Both would report their own success while handing the loop
-  # below an empty list, and an empty list here produces the same
-  # affirmative `ok` line a fully clean run produces — so a docs tree the
-  # lint could not read would vouch for every anchor in it.
-  sources_out=""
+  # SOURCES is built by appending arrays, never by joining paths into a
+  # newline-delimited string and re-splitting it: a docs/ path carrying an
+  # embedded newline survives `enumerate_into` as one array element, and a
+  # join-then-`read`-split round trip would fracture it right back into two
+  # nonexistent paths — the exact bug this conversion exists to close.
   if [[ -f ${REPO_ROOT}/.claude/CLAUDE.md ]]; then
-    sources_out+='.claude/CLAUDE.md'$'\n'
+    SOURCES+=('.claude/CLAUDE.md')
   fi
   if [[ -f ${REPO_ROOT}/README.md ]]; then
-    sources_out+='README.md'$'\n'
+    SOURCES+=('README.md')
   fi
   if [[ -d ${REPO_ROOT}/docs ]]; then
-    if ! docs_out="$(cd "${REPO_ROOT}" && find docs -type f -name '*.md')"; then
-      printf '%s: find failed enumerating %s/docs\n' "${0##*/}" "${REPO_ROOT}" >&2
-      exit 2
-    fi
-    if [[ -n ${docs_out} ]]; then
-      sources_out+="$(sort <<<"${docs_out}")"$'\n'
-    fi
+    # An empty docs/ tree here would produce the same affirmative `ok` line
+    # a fully clean run produces — so a docs tree the lint could not read
+    # would vouch for every anchor in it. LINT_ALLOW_EMPTY_SCAN is forced
+    # for this call alone because a repo may legitimately carry README.md
+    # or .claude/CLAUDE.md as its only source and no docs/ tree at all —
+    # the combined-SOURCES breadth check below (unchanged) is what still
+    # catches every root coming back empty.
+    docs_paths=()
+    LINT_ALLOW_EMPTY_SCAN=1 enumerate_into docs_paths 'find docs' doc_anchor_docs_scan
+    SOURCES+=(${docs_paths+"${docs_paths[@]}"})
   fi
-  # An empty capture read by `<<<` still yields one empty line, so blank
-  # entries are dropped here and the tallies below count real files.
-  while IFS= read -r source_rel; do
-    [[ -z ${source_rel} ]] && continue
-    SOURCES+=("${source_rel}")
-  done <<<"${sources_out}"
 fi
 
 failures=0

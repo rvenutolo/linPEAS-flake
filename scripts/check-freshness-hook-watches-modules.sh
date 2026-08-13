@@ -47,6 +47,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 
 root="${ROOT_OVERRIDE:-$(git rev-parse --show-toplevel)}"
 readonly ROOT="${root}"
@@ -62,18 +64,21 @@ shopt -s nullglob
 # nothing, and an empty module list reads downstream as "no module assigns
 # flake.devTooling", reporting a broken transposer signal for a tree that
 # is simply not there.
-if ! module_scan="$(cd "${ROOT}" && find . -name '*.nix' \
-  -not -path './tests/fixtures/*' -not -path './.git/*' -printf '%P\n' | sort)"; then
-  printf 'freshness-hook-watches-modules: nix module scan under %s failed\n' \
-    "${ROOT}" >&2
-  exit 2
-fi
+#
+# The `cd` is what makes the emitted paths relative to ROOT, so it is kept
+# inside this same-file wrapper rather than folded into the `find`
+# invocation directly: a function invoked as a command is not a process
+# substitution feeding a redirection, which is the shape
+# check-no-opaque-procsub.sh bans.
+# shellcheck disable=SC2329 # invoked indirectly, by name, via enumerate_into
+function freshness_module_scan() {
+  (cd "${ROOT}" && find . -name '*.nix' \
+    -not -path './tests/fixtures/*' -not -path './.git/*' -printf '%P\0') |
+    sort --zero-terminated
+}
 
 nix_modules=()
-while IFS= read -r m; do
-  [[ -z ${m} ]] && continue
-  nix_modules+=("${m}")
-done <<<"${module_scan}"
+enumerate_into nix_modules "nix module scan under ${ROOT}" freshness_module_scan
 
 # Nix source with comments removed. A `#` inside a string over-strips the
 # rest of that line, which can only shrink the derived set; the read guard

@@ -29,6 +29,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 
 OUTPUT="${TMPDIR:-/tmp}/action-pin-inventory.tsv"
 while [[ $# -gt 0 ]]; do
@@ -57,29 +59,23 @@ else
   # nothing is the fault worth catching: the run still writes a header-only
   # TSV at exit 0, which the rewrite tool downstream reads as "no pins to
   # rewrite" rather than as an inventory that was never taken.
-  scan_out=""
+  # LINT_ALLOW_EMPTY_SCAN is forced on each per-root call below so that one
+  # root being present-but-empty does not itself abort the run; the breadth
+  # check after the loop is what still catches BOTH roots yielding nothing.
   if [[ -d .github/workflows ]]; then
-    if ! workflow_paths="$(find .github/workflows -maxdepth 1 -type f \
-      \( -name '*.yml' -o -name '*.yaml' \))"; then
-      printf '%s: find failed enumerating .github/workflows\n' "${0##*/}" >&2
-      exit 2
-    fi
-    scan_out+="${workflow_paths}"$'\n'
+    workflow_paths=()
+    LINT_ALLOW_EMPTY_SCAN=1 enumerate_into workflow_paths 'find .github/workflows' \
+      find .github/workflows -maxdepth 1 -type f \
+      \( -name '*.yml' -o -name '*.yaml' \) -print0
+    paths+=(${workflow_paths+"${workflow_paths[@]}"})
   fi
   if [[ -d .github/actions ]]; then
-    if ! action_paths="$(find .github/actions -type f \
-      \( -name 'action.yml' -o -name 'action.yaml' \))"; then
-      printf '%s: find failed enumerating .github/actions\n' "${0##*/}" >&2
-      exit 2
-    fi
-    scan_out+="${action_paths}"$'\n'
+    action_paths=()
+    LINT_ALLOW_EMPTY_SCAN=1 enumerate_into action_paths 'find .github/actions' \
+      find .github/actions -type f \
+      \( -name 'action.yml' -o -name 'action.yaml' \) -print0
+    paths+=(${action_paths+"${action_paths[@]}"})
   fi
-  # An empty capture read by `<<<` still yields one empty line, so blank
-  # entries are dropped here and the count below is of real paths.
-  while IFS= read -r p; do
-    [[ -z ${p} ]] && continue
-    paths+=("${p}")
-  done <<<"${scan_out}"
   if ((${#paths[@]} == 0)) && [[ -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
     printf '%s: enumerated 0 workflow / composite-action file(s) under .github — an inventory with no rows cannot be told apart from a tree with no pins; set LINT_ALLOW_EMPTY_SCAN=1 if this is deliberate\n' \
       "${0##*/}" >&2

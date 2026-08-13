@@ -107,7 +107,7 @@ run_scenario "setup-python action + python-version keys → passes" \
 # which the breadth line would otherwise report as `scanned 0 workflow
 # file(s)` at exit 0 — a count of what was read, standing in for a verdict.
 run_scenario "missing scan root is a could-not-run" \
-  "${clean_only}/absent" 2 "find failed enumerating" ""
+  "${clean_only}/absent" 2 "failed enumerating the scan set" ""
 
 # An existing scan root holding no YAML reaches the same zero breadth by a
 # different route, so it gets its own diagnostic rather than sharing one.

@@ -10,6 +10,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-freshness-hook-watches-modules.sh"
 
 failures=0
@@ -25,21 +27,34 @@ trap cleanup EXIT
 
 function expect() {
   local -r name="$1" root="$2" want_exit="$3" want_msg="$4"
-  local got_exit=0 got_stderr
-  got_stderr="$(ROOT_OVERRIDE="${root}" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+
+  local stdout_file stderr_file outcome_file
+  stdout_file="$(mktemp)"
+  stderr_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+
+  local got_exit=0
+  ROOT_OVERRIDE="${root}" \
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || got_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${want_msg}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+
+  local got_stderr
+  got_stderr="$(cat -- "${stderr_file}")"
   if [[ ${got_exit} != "${want_exit}" ]]; then
     printf 'FAIL %s: exit %s, want %s\n  stderr: %s\n' \
       "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" >&2
     failures=$((failures + 1))
-    return
-  fi
-  if [[ -n ${want_msg} && ${got_stderr} != *"${want_msg}"* ]]; then
+  elif [[ -n ${want_msg} && ${got_stderr} != *"${want_msg}"* ]]; then
     printf 'FAIL %s: stderr missing %q\n  got: %s\n' \
       "${name}" "${want_msg}" "${got_stderr}" >&2
     failures=$((failures + 1))
-    return
+  else
+    printf 'PASS: %s (exit %s)\n' "${name}" "${got_exit}"
   fi
-  printf 'PASS: %s (exit %s)\n' "${name}" "${got_exit}"
+
+  rm --force -- "${stdout_file}" "${stderr_file}" "${outcome_file}"
 }
 
 # Build a miniature repo: a generator evaluating devTooling.<sys>.fixtureAttr,
@@ -367,7 +382,7 @@ EOF
   write_hidden_attr_tree "${work}/hidden-attr" \
     '^(nix/hooks/.*\.nix|nix/manifests\.nix)$'
   expect 'bad: a computed attribute name trips the derivation-broke guard' \
-    "${work}/hidden-attr" 1 'derivation broke'
+    "${work}/hidden-attr" 1 'no nix module defines fixtureAttr'
 
   # (j) TOOLING: the root the scan is pointed at does not exist, so the
   # module scan emits nothing. An empty module list is indistinguishable
@@ -437,6 +452,45 @@ EOF
 
   # (l) LIVE: the real tree must satisfy the guard.
   expect 'live: real tree passes' "${REPO_ROOT}" 0 ''
+
+  # A clean run emits no output by design, so a fixture exercising the
+  # generator-hook discovery path, a fixture exercising the
+  # attribute-hook discovery path, and the live repo tree are three
+  # indistinguishable outcomes even though each satisfies the guard
+  # through a different required-module derivation.
+  harness_assert_parity_exempt \
+    'good: filter covering every derived module passes' \
+    'good: an attribute-building hook covering every source passes' \
+    'both are a silent exit 0; the generator-hook and attribute-hook required-set derivations leave no trace once the filter already covers what each needs'
+  harness_assert_parity_exempt \
+    'good: filter covering every derived module passes' \
+    'live: real tree passes' \
+    'both are a silent exit 0; the live tree exercises the same generator-hook path as the fixture with no separate diagnostic to tell them apart'
+  harness_assert_parity_exempt \
+    'good: an attribute-building hook covering every source passes' \
+    'live: real tree passes' \
+    'both are a silent exit 0; a clean attribute-hook fixture and the live tree carry no output that could distinguish them'
+
+  # A mention of the evaluated attribute behind a `#` and no mention at all
+  # both leave the transposer as the sole uncovered module — the
+  # comment-only fixture exists to prove the transposition (not the
+  # mention) is what is required, and a correct guard reports the identical
+  # gap either way.
+  harness_assert_parity_exempt \
+    'bad: filter missing the transposing module fails' \
+    'bad: comment-only mention does not excuse the transposer' \
+    'both leave nix/manifests.nix as the only uncovered module; a mention behind a comment changes nothing a correct guard derives, so the reported gap is identical by design'
+
+  # The two-mention entry names its generator script twice under the same
+  # `^(nix/manifests\.nix)$` filter scenario (c) already uses; once the
+  # split finds the script token at all, the required-set derivation and
+  # the reported gap are the same as the single-mention case.
+  harness_assert_parity_exempt \
+    'bad: filter missing the defining module fails' \
+    'bad: a hook naming its script twice still catches a missing module' \
+    'both leave nix/hooks/default.nix as the only uncovered module under the identical filter; the script-list split under test only diverges on whether the token is found at all, not on what a found token reports'
+
+  harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then
     printf '\n%d test(s) failed\n' "${failures}" >&2

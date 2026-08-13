@@ -10,6 +10,8 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# shellcheck source=scripts/lib/harness-assert.sh
+source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-manifest-hook-watches-nix.sh"
 
 failures=0
@@ -24,27 +26,40 @@ function cleanup() {
 trap cleanup EXIT
 
 # Run the guard against a fixture pair, asserting exit code and (when
-# non-empty) a required stderr substring.
+# non-empty) a required stderr substring; records the run's whole
+# observable outcome for the cross-scenario discrimination gate.
 function expect() {
   local -r name="$1" hooks_dir="$2" scripts_dir="$3"
   local -r want_exit="$4" want_msg="$5"
-  local got_exit=0 got_stderr
-  got_stderr="$(HOOKS_DIR_OVERRIDE="${hooks_dir}" \
+
+  local stdout_file stderr_file outcome_file
+  stdout_file="$(mktemp)"
+  stderr_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+
+  local got_exit=0
+  HOOKS_DIR_OVERRIDE="${hooks_dir}" \
     SCRIPTS_DIR_OVERRIDE="${scripts_dir}" \
-    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || got_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${want_msg}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+
+  local got_stderr
+  got_stderr="$(cat -- "${stderr_file}")"
   if [[ ${got_exit} != "${want_exit}" ]]; then
     printf 'FAIL %s: exit %s, want %s\n  stderr: %s\n' \
       "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" >&2
     failures=$((failures + 1))
-    return
-  fi
-  if [[ -n ${want_msg} && ${got_stderr} != *"${want_msg}"* ]]; then
+  elif [[ -n ${want_msg} && ${got_stderr} != *"${want_msg}"* ]]; then
     printf 'FAIL %s: stderr missing %q\n  got: %s\n' \
       "${name}" "${want_msg}" "${got_stderr}" >&2
     failures=$((failures + 1))
-    return
+  else
+    printf 'PASS: %s (exit %s)\n' "${name}" "${got_exit}"
   fi
-  printf 'PASS: %s (exit %s)\n' "${name}" "${got_exit}"
+
+  rm --force -- "${stdout_file}" "${stderr_file}" "${outcome_file}"
 }
 
 # Write a fixture scripts/ dir containing a manifest-reading script.
@@ -335,6 +350,38 @@ EOF
     plain alone
   expect 'good: a lone attribute-building hook whose sources skip the manifest passes' \
     "${work}/attr-plain/hooks" "${work}/attr-plain/scripts" 0 ''
+
+  # A silent exit 0 carries no output naming which subject class it
+  # verified — the guard prints nothing on success by design — so a clean
+  # run over a script-referencing hook and a clean run over either shape of
+  # attribute-building hook are indistinguishable outcomes even though the
+  # three fixtures exercise disjoint discovery paths (Step 1 script lookup
+  # vs Step 2/3 attrpath parse, with or without a manifest-reading
+  # assigner).
+  harness_assert_parity_exempt \
+    'good: files containing nix/hooks passes' \
+    'good: an attribute-building hook watching nix/hooks passes' \
+    'both are a silent exit 0; the script-lookup and attrpath-parse paths that produced it are not distinguishable from an empty diagnostic stream'
+  harness_assert_parity_exempt \
+    'good: files containing nix/hooks passes' \
+    'good: a lone attribute-building hook whose sources skip the manifest passes' \
+    'both are a silent exit 0; the script-lookup and attrpath-parse paths that produced it are not distinguishable from an empty diagnostic stream'
+  harness_assert_parity_exempt \
+    'good: an attribute-building hook watching nix/hooks passes' \
+    'good: a lone attribute-building hook whose sources skip the manifest passes' \
+    'both are a silent exit 0; whether the assigning module reads the hook manifest changes nothing observable when the filter already covers what the block needs'
+
+  # The single-mention and double-mention hook entries name the same
+  # offending hook for the same single reason, so the reported violation
+  # text is necessarily identical — the difference under test is in the
+  # Step 2 script-list split (IFS=' ' vs the global newline+tab IFS), which
+  # has no observable trace once both splits land on the same script token.
+  harness_assert_parity_exempt \
+    'bad: files missing nix/hooks fails and names hook' \
+    'bad: a hook naming its script twice still fails and names the hook' \
+    'both report the same single hook for the same single reason; the script-list split under test only diverges on whether the token is found at all, not on what a found token reports'
+
+  harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then
     printf '\n%d test(s) failed\n' "${failures}" >&2

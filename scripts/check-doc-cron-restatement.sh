@@ -16,6 +16,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
@@ -60,15 +62,13 @@ function escape_ere() {
   sed -E 's/[][(){}.^$*+?|\\/]/\\&/g'
 }
 
-# @description List doc files to scan (README.md + docs/**.md), excluding
-#              docs/architecture/ci.md, one path per line.
-function scan_files() {
-  [[ -f "${SCAN_ROOT}/README.md" ]] && printf '%s\n' "${SCAN_ROOT}/README.md"
-  if [[ -d "${SCAN_ROOT}/docs" ]]; then
-    find "${SCAN_ROOT}/docs" -type f -name '*.md' \
-      ! -path "${SCAN_ROOT}/docs/architecture/ci.md" |
-      sort
-  fi
+# @description Emit every docs/**/*.md path under SCAN_ROOT, excluding
+#              docs/architecture/ci.md, NUL-delimited and sorted.
+# shellcheck disable=SC2329 # invoked indirectly, by name, via enumerate_into
+function doc_cron_docs_scan() {
+  find "${SCAN_ROOT}/docs" -type f -name '*.md' \
+    ! -path "${SCAN_ROOT}/docs/architecture/ci.md" -print0 |
+    sort --zero-terminated
 }
 
 # @description Strip the README ci-summary block (BEGIN..END inclusive) so its
@@ -124,33 +124,34 @@ function main() {
   local name_re
   name_re="\`(${alt})\`|(^|[^[:alnum:]_-])(${alt})\\.(yml|yaml)"
 
-  local found=0 file lineno text files_out lines_out
+  local found=0 file lineno text lines_out
   # Scope tallies for the summary line. `timed` counts the lines that reached
   # the workflow-name test at all: a clean verdict over zero timed lines
   # proves nothing about the name test, so an operator wants the two apart.
   # `readme_skipped` is the evidence behind the ci-summary exemption.
   local -i docs=0 lines=0 timed=0 kept=0 readme_total=0 readme_skipped=0
 
-  # Capture-then-check both producers so a failure is a loud tooling fault
-  # rather than an empty read that scores files clean.
-  #
-  # `scan_files` has no reachable failure: `find` runs only behind a `-d`
-  # gate on its starting point, `pipefail` carries a `find` error through
-  # `sort` so the capture would see one, and the error `find` can still
-  # raise is an unreadable directory — which cannot happen where the check
-  # derivation runs as root. The guard stays because it covers whatever
-  # the producer comes to run.
-  if ! files_out="$(scan_files)"; then
-    printf 'doc-cron-restatement: scan_files failed\n' >&2
-    exit 2
+  # The file list is built by appending arrays, never by joining paths into
+  # a newline-delimited string and re-splitting it: a docs/ path carrying
+  # an embedded newline survives `enumerate_into` as one array element, and
+  # a join-then-`read`-split round trip would fracture it right back into
+  # two nonexistent paths. LINT_ALLOW_EMPTY_SCAN is forced on the docs/
+  # call alone because a repo may legitimately carry README.md as its only
+  # scanned doc and no docs/ tree at all.
+  local -a files=()
+  if [[ -f "${SCAN_ROOT}/README.md" ]]; then
+    files+=("${SCAN_ROOT}/README.md")
+  fi
+  if [[ -d "${SCAN_ROOT}/docs" ]]; then
+    local -a docs_files=()
+    LINT_ALLOW_EMPTY_SCAN=1 enumerate_into docs_files 'find docs' doc_cron_docs_scan
+    files+=(${docs_files+"${docs_files[@]}"})
   fi
 
-  while IFS= read -r file; do
-    [[ -n ${file} ]] || continue
-    # `readable_lines` does have a reachable failure: a doc filename
-    # holding a newline splits across this newline-delimited handoff into
-    # two paths that do not exist, and `awk` exits non-zero on a path it
-    # cannot open. Unscannable input is a tooling fault, not a clean file.
+  for file in ${files+"${files[@]}"}; do
+    # `readable_lines` does have a reachable failure: a doc path awk
+    # cannot open (permissions, a dangling symlink) is a tooling fault, not
+    # a clean file.
     if ! lines_out="$(readable_lines "${file}")"; then
       printf 'doc-cron-restatement: readable_lines failed for %s\n' "${file}" >&2
       exit 2
@@ -180,7 +181,7 @@ function main() {
       fi
       readme_skipped=$((readme_skipped + readme_total - kept))
     fi
-  done <<<"${files_out}"
+  done
 
   if ((found)); then exit 1; fi
 

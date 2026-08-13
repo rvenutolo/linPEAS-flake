@@ -47,6 +47,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 
 readonly DEFAULT_HOOKS_DIR="nix/hooks"
 readonly DEFAULT_SCRIPTS_DIR="scripts"
@@ -70,18 +72,21 @@ readonly MODULE_ROOT="${module_root}"
 # never reaches the tree emits nothing, and an empty module list reads
 # downstream as "no module assigns the attribute", which scores an
 # attribute-evaluating hook as reaching no manifest at all.
-if ! module_scan="$(cd "${MODULE_ROOT}" && find . -name '*.nix' \
-  -not -path './tests/fixtures/*' -not -path './.git/*' -printf '%P\n' | sort)"; then
-  printf 'manifest-hook-watches-nix: nix module scan under %s failed\n' \
-    "${MODULE_ROOT}" >&2
-  exit 2
-fi
+#
+# The `cd` is what makes the emitted paths relative to MODULE_ROOT, so it is
+# kept inside this same-file wrapper rather than folded into the `find`
+# invocation directly: a function invoked as a command is not a process
+# substitution feeding a redirection, which is the shape
+# check-no-opaque-procsub.sh bans.
+# shellcheck disable=SC2329 # invoked indirectly, by name, via enumerate_into
+function manifest_hook_module_scan() {
+  (cd "${MODULE_ROOT}" && find . -name '*.nix' \
+    -not -path './tests/fixtures/*' -not -path './.git/*' -printf '%P\0') |
+    sort --zero-terminated
+}
 
 nix_modules=()
-while IFS= read -r m; do
-  [[ -z ${m} ]] && continue
-  nix_modules+=("${m}")
-done <<<"${module_scan}"
+enumerate_into nix_modules "nix module scan under ${MODULE_ROOT}" manifest_hook_module_scan
 
 # Every module's comment-stripped source, read once up front and keyed by
 # module path. Both attribute-class signals match against this map rather

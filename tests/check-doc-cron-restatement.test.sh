@@ -130,11 +130,10 @@ function main() {
     "${FIXTURES}/yaml-suffixed-fails" \
     1 'docs/x.md'
 
-  # A doc filename holding a newline splits across the script's
-  # newline-delimited file handoff into two paths that do not exist, so the
-  # line producer cannot open either and the restatement below goes
-  # unscanned. That must be a tooling fault, not a clean verdict. Built at
-  # run time rather than checked in because treefmt walks tests/fixtures and
+  # A doc filename holding a newline is one path, and `enumerate_into`
+  # carries it through the scan as one array element, so the restatement
+  # inside it is found and reported like any other file's. Built at run
+  # time rather than checked in because treefmt walks tests/fixtures and
   # its exclude list cannot express a path containing a newline.
   local split_root
   split_root="$(mktemp --directory)"
@@ -143,10 +142,10 @@ function main() {
     >"${split_root}/workflows/pages.yml"
   printf 'The pages.yml workflow runs at 03:17 UTC.\n' \
     >"${split_root}/docs/$(printf 'split\nname').md"
-  run_scenario 'unopenable doc path exits 2 rather than scoring it clean' \
+  run_scenario 'newline-doc-name restatement is found, not split into two missing paths' \
     "${split_root}/workflows" \
     "${split_root}" \
-    2 'readable_lines failed for'
+    1 'docs/split'
   rm --recursive --force -- "${split_root}"
 
   harness_assert_verify || failures=$((failures + 1))
