@@ -51,6 +51,8 @@ IFS=$'\n\t'
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
 # shellcheck source=scripts/lib/enumerate.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
+# shellcheck source=scripts/lib/awk-path.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 install_err_trap
 
 # Temp files removed by the EXIT trap. Declared at script scope, not main-local:
@@ -389,7 +391,7 @@ function cross_check_forward() {
 # $4 = basename-only ('1' to strip dir, '0' to keep)
 function collect_referenced() {
   local -r tsv="$1" idx="$2" out="$3" basename_only="$4"
-  awk -v IDX="${idx}" -F'\t' '{ print $IDX }' "${tsv}" |
+  awk -v IDX="${idx}" -F'\t' '{ print $IDX }' "$(awk_path "${tsv}")" |
     tr ',' '\n' |
     while IFS= read -r v; do
       v="$(trim "${v}")"
@@ -415,7 +417,7 @@ function cross_check_reverse() {
   ci_exempt_file="$(mktemp)"
   # collect_referenced runs in a subshell pipe; use a temp helper instead.
   # Build reference lists inline.
-  awk -F'\t' '{ print $3 }' "${tsv}" | tr ',' '\n' |
+  awk -F'\t' '{ print $3 }' "$(awk_path "${tsv}")" | tr ',' '\n' |
     while IFS= read -r v; do
       v="$(trim "${v}")"
       [[ -z ${v} || ${v} == "-" ]] && continue
@@ -423,13 +425,13 @@ function cross_check_reverse() {
       v="${v%.sh}"
       printf '%s\n' "${v}"
     done | sort --unique >"${ref_scripts}"
-  awk -F'\t' '{ print $4 }' "${tsv}" | tr ',' '\n' |
+  awk -F'\t' '{ print $4 }' "$(awk_path "${tsv}")" | tr ',' '\n' |
     while IFS= read -r v; do
       v="$(trim "${v}")"
       [[ -z ${v} || ${v} == "-" ]] && continue
       printf '%s\n' "${v}"
     done | sort --unique >"${ref_jobs}"
-  awk -F'\t' '{ print $5 }' "${tsv}" | tr ',' '\n' |
+  awk -F'\t' '{ print $5 }' "$(awk_path "${tsv}")" | tr ',' '\n' |
     while IFS= read -r v; do
       v="$(trim "${v}")"
       [[ -z ${v} || ${v} == "-" ]] && continue

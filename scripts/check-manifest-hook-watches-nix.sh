@@ -49,6 +49,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 # shellcheck source=scripts/lib/enumerate.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
+# shellcheck source=scripts/lib/awk-path.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 
 readonly DEFAULT_HOOKS_DIR="nix/hooks"
 readonly DEFAULT_SCRIPTS_DIR="scripts"
@@ -202,7 +204,7 @@ parse_blocks() {
           line = substr(line, RSTART + RLENGTH)
         }
       }
-    ' "${nix}" || return 1
+    ' "$(awk_path "${nix}")" || return 1
   done
 }
 

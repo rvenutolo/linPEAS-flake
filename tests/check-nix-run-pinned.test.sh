@@ -159,6 +159,46 @@ function expect_newline_workflow_name() {
 
 expect_newline_workflow_name
 
+# @description `awk` reads a file operand whose text is `name=value` as a
+# variable assignment rather than a filename: fed a relative path whose
+# first component contains `=`, it finds no file operand, reads stdin
+# (empty here), and exits 0 having scanned nothing — so a violating file
+# at such a path would score as clean. Built in a throwaway directory
+# under the harness temp directory, `cd`'d into so PATHS_OVERRIDE can
+# carry the hazard shape as a genuinely relative path, rather than a
+# committed fixture: a directory segment named with `=` is legal on
+# disk but an unusual thing to commit for a single scenario.
+function expect_relative_override_with_equals() {
+  local -r name='relative-override-with-equals'
+  local work got_exit=0
+  local out_file err_file outcome_file
+  work="$(mktemp --directory)"
+  out_file="$(mktemp)"
+  err_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  mkdir --parents "${work}/a=b"
+  printf 'run: nix run nixpkgs#ripgrep -- --version\n' >"${work}/a=b/bad.sh"
+
+  (cd "${work}" && PATHS_OVERRIDE="a=b/bad.sh" "${SCRIPT}") \
+    >"${out_file}" 2>"${err_file}" || got_exit=$?
+  rm --recursive --force -- "${work}"
+  printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" 'a=b/bad.sh' "${outcome_file}" "${out_file}" "${err_file}"
+
+  if [[ ${got_exit} != 1 ]]; then
+    fail "$(printf '%s: exit %s, want 1' "${name}" "${got_exit}")"
+    cat -- "${err_file}" >&2
+  elif ! grep --fixed-strings --quiet -- 'a=b/bad.sh' "${err_file}"; then
+    fail "$(printf '%s: stderr missing violation for the equals-first-component path' "${name}")"
+    cat -- "${err_file}" >&2
+  else
+    pass "${name}"
+  fi
+  rm --force -- "${out_file}" "${err_file}" "${outcome_file}"
+}
+
+expect_relative_override_with_equals
+
 harness_assert_verify || failures=$((failures + 1))
 
 if ((failures > 0)); then

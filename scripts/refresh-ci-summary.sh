@@ -23,6 +23,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 # shellcheck source=scripts/lib/log.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
+# shellcheck source=scripts/lib/awk-path.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 install_err_trap
 
 function main() {
@@ -91,7 +93,7 @@ function main() {
     ctx = $2
     gsub(/ /, "", ctx)
     print ctx
-  }' "${required_checks_doc}" |
+  }' "$(awk_path "${required_checks_doc}")" |
     sort --unique >"${contexts_file}"
 
   # Extract keys from the category map.
@@ -148,7 +150,7 @@ function main() {
       END {
         if (prev_cat != "") printf ".\n"
       }
-    ' "${pairs_file}"
+    ' "$(awk_path "${pairs_file}")"
     printf '\n'
     printf '<!-- END ci-summary -->\n'
   } >"${block_file}"
@@ -168,7 +170,7 @@ function main() {
       next
     }
     !skip { print }
-  ' "${doc}" >"${doc_new}"
+  ' "$(awk_path "${doc}")" >"${doc_new}"
 
   if [[ ${check_only} == 'true' ]]; then
     # cmp short-circuits on first byte difference and supports --silent across

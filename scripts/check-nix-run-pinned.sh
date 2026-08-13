@@ -40,6 +40,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 # shellcheck source=scripts/lib/enumerate.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
+# shellcheck source=scripts/lib/awk-path.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 
 # The bad pattern: a `nix` command word, then anything, then a bare
 # `nixpkgs#` ref standing on its own token boundary. The leading
@@ -122,7 +124,7 @@ for f in "${paths[@]}"; do
         }
       }
     }
-  ' "${f}")"; then
+  ' "$(awk_path "${f}")")"; then
     printf '%s: awk failed scanning %s for flake refs\n' "${0##*/}" "${f}" >&2
     exit 2
   fi

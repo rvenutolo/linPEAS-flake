@@ -44,6 +44,78 @@ with `--auto` must also carry the decline gate (a `gh pr view --json state` quer
 maintainer-closed (declined) or already-merged PR is never silently
 resurrected by an auto-merging update workflow.
 
+### scripts/check-awk-operand-explicit.sh
+
+Lint: every `awk` invocation in scripts/\*.sh that
+carries a file operand must spell that operand
+`"$(awk_path "${var}")"`. `awk` reads an operand shaped
+`name=value` as a variable assignment rather than a filename; it
+then finds no file operand, reads stdin, and exits 0 having scanned
+nothing — so a relative path whose first component contains `=`
+scores as an empty file instead of failing loud.
+`scripts/lib/awk-path.sh`'s `awk_path()` closes that for a wrapped
+operand; this lint is the backstop that keeps every future `awk`
+call wrapped too, rather than trusting a one-time sweep to hold
+forever.
+
+Detection parses each script's shell syntax tree via `shfmt --to-json` (the same mvdan.cc/sh parser `shfmt` and `treefmt`
+already run over this repo) rather than matching text: a textual
+rule would drift the moment a script's formatting moves an operand
+onto another line, inside a multi-line awk program, or next to a
+sibling operand. The scan also recognizes `gawk`/`mawk`/`nawk`, an
+absolute or relative path ending in one of those basenames (e.g.
+`/usr/bin/awk`), a `command`-prefixed invocation, and a
+statically-quoted `"awk"`/`'awk'` word — not just the bare `awk`
+literal — since a future call site is under no obligation to spell
+the command the same way every existing one does.
+
+For every such call, the argument list is walked following awk's
+own flags-then-program-then-operands grammar: `-v`, `-F`,
+`-f`/`--file`, `--field-separator`, `--assign`, `--source`, `--`,
+and their attached forms (`-F'\t'`, `--field-separator=x`,
+`-fprog.awk`, `--file=prog.awk`) are all recognized as flags while
+no program has been supplied yet. `-f`, `--file`, and `--source`
+supply the program text (a repeated one concatenates, which is
+legal), so any of them marks the program as already established
+without ending flag recognition — a legally-repeated
+`-f a.awk -f b.awk` is not misread as two operands; `--field-separator`
+and `--assign` keep being read as flags too once a program is
+established. `-v`, `-F`, and `--` behave differently once a program
+is already established: gawk (measured directly) then reads any of
+the three as an ordinary filename rather than as a flag, bare or
+attached, so the walk folds a further `-v`/`-F`/`--` back into "this
+is an operand" instead of treating it as one. Only the first
+non-flag word establishes the inline program (when none of
+`-f`/`--file`/`--source` already has); every non-flag word after
+that is an operand. `-f`/`--file`'s own value and the program text
+itself are excluded from the operand list, since neither was ever a
+file operand. Each surviving operand must be exactly one
+double-quoted word wrapping a single command substitution that
+calls `awk_path` — anything else is a violation.
+
+Not operands, and therefore never reach the walk above: stdin
+redirections and here-strings (a redirection attaches to the
+enclosing statement, not the command's argument list, so an `awk`
+call fed one has zero operand arguments to inspect) and pipeline
+input (same — the producer feeds stdin, not an argument).
+
+The total operand count checked across the run is itself asserted
+nonzero (unless LINT_ALLOW_EMPTY_SCAN=1): a parser regression that
+silently drops every operand from its accounting — e.g. an
+attached-flag word reclassified as a no-op instead of as the
+operand-bearing word it actually is — would otherwise still print a
+clean "0 violations" and exit 0. See the assertion below for why
+LINT_ALLOW_EMPTY_SCAN, rather than a dedicated variable, is the
+right opt-out.
+
+Honors PATHS_OVERRIDE (newline-separated file list) for fixtures,
+and LINT_ALLOW_EMPTY_SCAN=1 to accept a run whose operand tally (or
+whose enumerated file count) comes back zero.
+Exit 0 clean, 1 on any unwrapped operand, 2 when a required tool is
+absent, the scan set could not be enumerated (or came back with a
+zero operand tally), a named path does not exist, or a file could
+not be parsed as shell.
+
 ### scripts/check-bump-script-integrity.sh
 
 Lint: scripts/bump-linpeas.sh retains its three

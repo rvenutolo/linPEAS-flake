@@ -38,6 +38,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 # shellcheck source=scripts/lib/enumerate.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
+# shellcheck source=scripts/lib/awk-path.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 
 # Whitespace is matched as [[:space:]]+ rather than a literal space so
 # the pattern survives an shfmt reflow of a scanned script.
@@ -141,7 +143,7 @@ extract_invocations() {
         print joined
       }
     }
-  ' "${file}"
+  ' "$(awk_path "${file}")"
 }
 
 # Reduce a joined invocation to its source refs and report any that is

@@ -31,6 +31,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/awk-path.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 
 readonly THIS_REPO='rvenutolo/linPEAS-flake'
 
@@ -59,7 +61,7 @@ function extract_doc_patterns() {
       sub(/[[:space:]]+$/, "")
       if (length($0) > 0) print $0
     }
-  ' "${doc}"
+  ' "$(awk_path "${doc}")"
 }
 
 # @description Fetch live API state or override fixture.

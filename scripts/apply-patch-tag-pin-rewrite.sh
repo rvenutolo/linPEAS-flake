@@ -29,6 +29,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/awk-path.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 
 INVENTORY="${TMPDIR:-/tmp}/action-pin-inventory.tsv"
 while [[ $# -gt 0 ]]; do
@@ -137,7 +139,7 @@ while IFS= read -r raw_line || [[ -n ${raw_line} ]]; do
       exit 0
     }
     END { if (NR < ln) { exit 1 } }
-  ' "${file}"; then
+  ' "$(awk_path "${file}")"; then
     printf "abort (stale inventory at %s:%s): expected '%s' on line\n" \
       "${file}" "${line}" "${expected_substr}" >&2
     exit 1
@@ -167,7 +169,7 @@ for i in "${!pending_files[@]}"; do
       next
     }
     { print }
-  ' "${file}" >"${tmp}"; then
+  ' "$(awk_path "${file}")" >"${tmp}"; then
     rm --force "${tmp}"
     printf 'abort (rewrite failed at %s:%s)\n' "${file}" "${line}" >&2
     exit 1

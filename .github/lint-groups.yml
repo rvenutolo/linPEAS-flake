@@ -51,6 +51,7 @@ lint-script-hygiene:
   - no-opaque-procsub
   - guard-exit-code
   - path-hygiene
+  - awk-operand-explicit
 lint-doc-invariants:
   - orphan-invariants
   - doc-anchors

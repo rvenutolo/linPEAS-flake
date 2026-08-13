@@ -31,6 +31,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 # shellcheck source=scripts/lib/enumerate.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
+# shellcheck source=scripts/lib/awk-path.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 
 OUTPUT="${TMPDIR:-/tmp}/action-pin-inventory.tsv"
 while [[ $# -gt 0 ]]; do
@@ -165,7 +167,7 @@ for file in "${paths[@]}"; do
   done <"${file}"
 done
 
-if awk -F'\t' 'NR>1 && $7=="API_FAILURE" {found=1} END {exit !found}' "${OUTPUT}"; then
+if awk -F'\t' 'NR>1 && $7=="API_FAILURE" {found=1} END {exit !found}' "$(awk_path "${OUTPUT}")"; then
   printf 'inventory: one or more API failures; see %s\n' "${OUTPUT}" >&2
   exit 1
 fi

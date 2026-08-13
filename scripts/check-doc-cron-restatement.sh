@@ -18,6 +18,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 # shellcheck source=scripts/lib/enumerate.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
+# shellcheck source=scripts/lib/awk-path.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
@@ -80,9 +82,9 @@ function readable_lines() {
       /<!-- BEGIN ci-summary -->/ { skip = 1 }
       !skip { print FNR "\t" $0 }
       /<!-- END ci-summary -->/   { skip = 0 }
-    ' "${file}"
+    ' "$(awk_path "${file}")"
   else
-    awk '{ print FNR "\t" $0 }' "${file}"
+    awk '{ print FNR "\t" $0 }' "$(awk_path "${file}")"
   fi
 }
 
@@ -182,7 +184,7 @@ function main() {
     if [[ "$(basename "${file}")" == 'README.md' ]]; then
       # Same producer class as `readable_lines`, so the same fault applies:
       # a path awk cannot open must be loud, not scored as a zero-line file.
-      if ! readme_total="$(awk 'END { print FNR }' "${file}")"; then
+      if ! readme_total="$(awk 'END { print FNR }' "$(awk_path "${file}")")"; then
         printf 'doc-cron-restatement: line count failed for %s\n' "${file}" >&2
         exit 2
       fi

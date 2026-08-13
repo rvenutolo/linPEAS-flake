@@ -49,6 +49,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 # shellcheck source=scripts/lib/enumerate.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
+# shellcheck source=scripts/lib/awk-path.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
@@ -105,7 +107,7 @@ function extract_invocations() {
   case "${file}" in
   *.md) mode="md" ;;
   esac
-  awk -v mode="${mode}" -v slug="${REPO_SLUG}" --file "${AWK_LIB}" "${file}"
+  awk -v mode="${mode}" -v slug="${REPO_SLUG}" --file "${AWK_LIB}" "$(awk_path "${file}")"
 }
 
 failed=0

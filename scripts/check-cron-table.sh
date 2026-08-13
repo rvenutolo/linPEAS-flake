@@ -13,6 +13,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/awk-path.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
@@ -49,7 +51,7 @@ function table_pairs() {
         printf "%s\t%s\n", m[1], m[2]
       }
     }
-  ' "${DOC_FILE}"
+  ' "$(awk_path "${DOC_FILE}")"
 }
 
 # @description Emit `name<TAB>HH:MM` for each entry in the arrow list of the
@@ -65,7 +67,7 @@ function arrow_pairs() {
       }
       exit
     }
-  ' "${DOC_FILE}"
+  ' "$(awk_path "${DOC_FILE}")"
 }
 
 function main() {

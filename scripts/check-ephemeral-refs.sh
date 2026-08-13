@@ -55,6 +55,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 # shellcheck source=scripts/lib/enumerate.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
+# shellcheck source=scripts/lib/awk-path.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 
 REPO_ROOT="${EPHEMERAL_REFS_ROOT_OVERRIDE:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)}"
 readonly REPO_ROOT
@@ -155,7 +157,7 @@ function strip_exempt() {
         exit 1
       }
     }
-  ' "${file}" |
+  ' "$(awk_path "${file}")" |
     # Pass two: generated blocks, over pass one's code-free output.
     awk -v src_rel="${src_rel}" -v stats="${stats_dir}/gen" '
     {

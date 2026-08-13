@@ -51,6 +51,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/awk-path.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 
 readonly EXPECTED_NAME='protect-main'
 readonly EXPECTED_TARGET='branch'
@@ -115,7 +117,7 @@ doc_contexts="$(awk --field-separator='|' '
     gsub(/^[ \t]+|[ \t]+$/, "", cell)
     if (cell != "Context" && cell !~ /^-+$/ && cell != "") { print cell }
   }
-' "${DOC_FILE}" | jq --raw-input . | jq --slurp --compact-output 'sort | unique')"
+' "$(awk_path "${DOC_FILE}")" | jq --raw-input . | jq --slurp --compact-output 'sort | unique')"
 
 if [[ ${doc_contexts} != "${mirror_contexts}" ]]; then
   printf 'doc-table drift between required-checks.md and in-tree mirror:\n' >&2
