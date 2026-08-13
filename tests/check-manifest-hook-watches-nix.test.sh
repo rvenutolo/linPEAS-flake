@@ -103,10 +103,10 @@ function write_hook_two_mention() {
   mkdir --parents -- "${dir}"
   cat >"${dir}/foo.nix" <<EOF
 {
-  fixture-table-fresh = {
+  fixture-table-fresh-twice = {
     enable = true;
-    name = "fixture-table-fresh";
-    description = "Fixture manifest-reading hook.";
+    name = "fixture-table-fresh-twice";
+    description = "Fixture manifest-reading hook naming its script twice.";
     entry = "if [[ ! -f scripts/refresh-fixture-table.sh ]]; then exit 0; fi; exec bash scripts/refresh-fixture-table.sh --check";
     files = "${files}";
     pass_filenames = false;
@@ -258,7 +258,7 @@ function main() {
   write_manifest_script "${work}/bad/scripts"
   write_hook "${work}/bad/hooks" '^(flake\.nix|docs/development/git\.md)$'
   expect 'bad: files missing nix/hooks fails and names hook' \
-    "${work}/bad/hooks" "${work}/bad/scripts" 1 'hook fixture-table-fresh'
+    "${work}/bad/hooks" "${work}/bad/scripts" 1 'hook fixture-table-fresh:'
 
   # (b) GOOD: same hook whose files includes nix/hooks → exit 0.
   write_manifest_script "${work}/good/scripts"
@@ -277,7 +277,7 @@ function main() {
     '^(flake\.nix|docs/development/git\.md)$'
   expect 'bad: a hook naming its script twice still fails and names the hook' \
     "${work}/bad-two-mention/hooks" "${work}/bad-two-mention/scripts" 1 \
-    'hook fixture-table-fresh'
+    'hook fixture-table-fresh-twice'
 
   # (d) BAD: a manifest-reading hook whose files filter is the empty string
   # still omits nix/hooks, so it must be reported by name. A record whose
@@ -351,35 +351,56 @@ EOF
   expect 'good: a lone attribute-building hook whose sources skip the manifest passes' \
     "${work}/attr-plain/hooks" "${work}/attr-plain/scripts" 0 ''
 
-  # A silent exit 0 carries no output naming which subject class it
-  # verified — the guard prints nothing on success by design — so a clean
-  # run over a script-referencing hook and a clean run over either shape of
-  # attribute-building hook are indistinguishable outcomes even though the
-  # three fixtures exercise disjoint discovery paths (Step 1 script lookup
-  # vs Step 2/3 attrpath parse, with or without a manifest-reading
-  # assigner).
-  harness_assert_parity_exempt \
-    'good: files containing nix/hooks passes' \
-    'good: an attribute-building hook watching nix/hooks passes' \
-    'both are a silent exit 0; the script-lookup and attrpath-parse paths that produced it are not distinguishable from an empty diagnostic stream'
-  harness_assert_parity_exempt \
-    'good: files containing nix/hooks passes' \
-    'good: a lone attribute-building hook whose sources skip the manifest passes' \
-    'both are a silent exit 0; the script-lookup and attrpath-parse paths that produced it are not distinguishable from an empty diagnostic stream'
-  harness_assert_parity_exempt \
-    'good: an attribute-building hook watching nix/hooks passes' \
-    'good: a lone attribute-building hook whose sources skip the manifest passes' \
-    'both are a silent exit 0; whether the assigning module reads the hook manifest changes nothing observable when the filter already covers what the block needs'
+  # (i) BAD: the sole module assigning the attribute is named with an
+  # embedded newline. `attr_assigners` and `manifest_reading_assigner` used
+  # to round-trip the assigner list through a newline-joined string, which
+  # fractured this one module into two nonexistent lookup keys and let a
+  # hook that genuinely reaches the manifest score as clean. Threaded as an
+  # array, the module survives as one element and the hook is correctly
+  # reported as missing nix/hooks. Built at run time rather than checked in
+  # because treefmt walks tests/fixtures and its exclude list cannot
+  # express a path containing a newline.
+  mkdir --parents -- "${work}/newline-module/scripts" "${work}/newline-module/hooks" \
+    "${work}/newline-module/nix"
+  cat >"${work}/newline-module/nix/$(printf 'ev\nil.nix')" <<'EOF'
+{
+  # Reads devTooling.<system>.preCommitHooks.
+  perSystem =
+    { config, pkgs, ... }:
+    {
+      checks.fixtureCheck = pkgs.runCommandLocal "fixture-check" { } ''
+        printf '%s' '${builtins.toJSON config.devTooling.preCommitHooks}' >"$out"
+      '';
+    };
+}
+EOF
+  cat >"${work}/newline-module/hooks/attr.nix" <<'EOF'
+{
+  fixture-attr-check = {
+    enable = true;
+    name = "fixture-attr-check";
+    description = "Fixture hook that builds a flake attribute directly.";
+    entry = "nix build --no-link .#checks.${pkgs.stdenv.hostPlatform.system}.fixtureCheck";
+    files = "^(flake\.nix)$";
+    pass_filenames = false;
+    language = "system";
+  };
+}
+EOF
+  expect 'bad: a newline-named sole assigner is still found, not fractured into unbound lookups' \
+    "${work}/newline-module/hooks" "${work}/newline-module/scripts" 1 \
+    'assigned by nix/ev'
 
-  # The single-mention and double-mention hook entries name the same
-  # offending hook for the same single reason, so the reported violation
-  # text is necessarily identical — the difference under test is in the
-  # Step 2 script-list split (IFS=' ' vs the global newline+tab IFS), which
-  # has no observable trace once both splits land on the same script token.
-  harness_assert_parity_exempt \
-    'bad: files missing nix/hooks fails and names hook' \
-    'bad: a hook naming its script twice still fails and names the hook' \
-    'both report the same single hook for the same single reason; the script-list split under test only diverges on whether the token is found at all, not on what a found token reports'
+  # (j) TOOLING: MODULE_ROOT holds no *.nix file at all. Distinct from the
+  # absent-root case in that MODULE_ROOT exists and is readable — the scan
+  # reaches the tree and comes back with nothing to derive a subject set
+  # from, which is a could-not-run (2), not "no manifest-reading or
+  # attribute-building hook blocks found" (1, the guard-the-guard for a
+  # parser that broke over a tree that does carry modules).
+  mkdir --parents -- "${work}/empty-modules/scripts"
+  expect 'tooling: MODULE_ROOT with no nix module is a could-not-run' \
+    "${work}/empty-modules/hooks" "${work}/empty-modules/scripts" 2 \
+    'enumerated 0 files via nix module scan under'
 
   harness_assert_verify || failures=$((failures + 1))
 

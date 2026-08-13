@@ -150,10 +150,10 @@ EOF
 
   cat >"${root}/nix/hooks/freshness.nix" <<EOF
 {
-  fixture-doc-fresh = {
+  fixture-doc-fresh-twice = {
     enable = true;
-    name = "fixture-doc-fresh";
-    description = "Fixture generated-doc freshness hook.";
+    name = "fixture-doc-fresh-twice";
+    description = "Fixture generated-doc freshness hook naming its script twice.";
     entry = "if [[ ! -f scripts/refresh-fixture-doc.sh ]]; then exit 0; fi; exec bash scripts/refresh-fixture-doc.sh --check";
     files = "${files}";
     pass_filenames = false;
@@ -293,7 +293,7 @@ function main() {
   write_tree "${work}/bad-definer" \
     '^(nix/manifests\.nix)$' plain
   expect 'bad: filter missing the defining module fails' \
-    "${work}/bad-definer" 1 'nix/hooks/default.nix'
+    "${work}/bad-definer" 1 'hook fixture-doc-fresh: files filter does not cover nix/hooks/default.nix'
 
   # (d) BAD: the transposing module names the attribute only in a comment.
   # It is still required, because the transposition — not the mention — is
@@ -371,7 +371,7 @@ EOF
   # passing even though its filter (below) omits a required module.
   write_two_mention_tree "${work}/two-mention" '^(nix/manifests\.nix)$'
   expect 'bad: a hook naming its script twice still catches a missing module' \
-    "${work}/two-mention" 1 'nix/hooks/default.nix'
+    "${work}/two-mention" 1 'hook fixture-doc-fresh-twice: files filter does not cover nix/hooks/default.nix'
 
   # (i) BAD: the defining module names the attribute via a computed key
   # (`${"fixture" + "Attr"} = ...`), so no module textually contains
@@ -392,7 +392,7 @@ EOF
   # output is consumed, and the verdict must be "could not run" (2) rather
   # than a coverage verdict.
   expect 'tooling: an absent root is reported as a failed module scan' \
-    "${work}/absent-root" 2 'nix module scan under'
+    "${work}/absent-root" 2 'failed enumerating the scan set'
 
   # (k) TOOLING: a path matching `*.nix` that is a directory reaches the
   # comment stripper, which cannot read it. Matched through a
@@ -453,23 +453,40 @@ EOF
   # (l) LIVE: the real tree must satisfy the guard.
   expect 'live: real tree passes' "${REPO_ROOT}" 0 ''
 
-  # A clean run emits no output by design, so a fixture exercising the
-  # generator-hook discovery path, a fixture exercising the
-  # attribute-hook discovery path, and the live repo tree are three
-  # indistinguishable outcomes even though each satisfies the guard
-  # through a different required-module derivation.
-  harness_assert_parity_exempt \
-    'good: filter covering every derived module passes' \
-    'good: an attribute-building hook covering every source passes' \
-    'both are a silent exit 0; the generator-hook and attribute-hook required-set derivations leave no trace once the filter already covers what each needs'
-  harness_assert_parity_exempt \
-    'good: filter covering every derived module passes' \
-    'live: real tree passes' \
-    'both are a silent exit 0; the live tree exercises the same generator-hook path as the fixture with no separate diagnostic to tell them apart'
-  harness_assert_parity_exempt \
-    'good: an attribute-building hook covering every source passes' \
-    'live: real tree passes' \
-    'both are a silent exit 0; a clean attribute-hook fixture and the live tree carry no output that could distinguish them'
+  # (q) BAD: an extra module assigning the same directly-built attribute is
+  # named with an embedded newline. `attr_source_paths` and
+  # `assert_filter_covers` thread the derived source set through as an
+  # array, so the module survives as one element and the hook reports
+  # exactly the one real gap rather than two fabricated, nonexistent ones.
+  # Built at run time rather than checked in because treefmt walks
+  # tests/fixtures and its exclude list cannot express a path containing a
+  # newline.
+  write_attr_tree "${work}/newline-module" \
+    '^(flake\\.nix|flake\\.lock|nix/attr-source\\.nix|scripts/fixture-attr-tool\\.sh)$' \
+    fixtureCheck
+  cat >"${work}/newline-module/nix/$(printf 'ev\nil.nix')" <<'EOF'
+{
+  perSystem =
+    { pkgs, ... }:
+    {
+      checks.fixtureCheck = pkgs.runCommandLocal "fixture-check-2" { } ''
+        touch "$out"
+      '';
+    };
+}
+EOF
+  expect 'bad: a newline-named extra assigner reports one real gap, not two fabricated ones' \
+    "${work}/newline-module" 1 'does not cover nix/ev'
+
+  # (r) TOOLING: ROOT holds no *.nix file at all. Distinct from the
+  # absent-root case in that ROOT exists and is readable — the scan
+  # reaches the tree and comes back with nothing to derive a subject set
+  # from, which is a could-not-run (2), not "no devTooling-evaluating
+  # hook blocks found" (1, the guard-the-guard for a parser that broke
+  # over a tree that does carry modules).
+  mkdir --parents -- "${work}/empty-modules/scripts"
+  expect 'tooling: ROOT with no nix module is a could-not-run' \
+    "${work}/empty-modules" 2 'enumerated 0 files via nix module scan under'
 
   # A mention of the evaluated attribute behind a `#` and no mention at all
   # both leave the transposer as the sole uncovered module — the
@@ -480,15 +497,6 @@ EOF
     'bad: filter missing the transposing module fails' \
     'bad: comment-only mention does not excuse the transposer' \
     'both leave nix/manifests.nix as the only uncovered module; a mention behind a comment changes nothing a correct guard derives, so the reported gap is identical by design'
-
-  # The two-mention entry names its generator script twice under the same
-  # `^(nix/manifests\.nix)$` filter scenario (c) already uses; once the
-  # split finds the script token at all, the required-set derivation and
-  # the reported gap are the same as the single-mention case.
-  harness_assert_parity_exempt \
-    'bad: filter missing the defining module fails' \
-    'bad: a hook naming its script twice still catches a missing module' \
-    'both leave nix/hooks/default.nix as the only uncovered module under the identical filter; the script-list split under test only diverges on whether the token is found at all, not on what a found token reports'
 
   harness_assert_verify || failures=$((failures + 1))
 

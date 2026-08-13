@@ -75,8 +75,7 @@ readonly GATE_PARITY_EXEMPT_CALL='^[[:space:]]*harness_assert_parity_exempt([[:s
 # Harness basenames permitted to register a parity exemption. Each entry
 # carries the reason its collapsed pair admits no separating output.
 readonly -a PARITY_EXEMPT_ALLOWED=(
-  'check-manifest-hook-watches-nix.test.sh'      # the guard prints nothing on a clean exit 0, so distinct hook-discovery paths that all pass are indistinguishable outcomes; same for two distinct violating fixtures that trip the same single-hook message
-  'check-freshness-hook-watches-modules.test.sh' # the guard prints nothing on a clean exit 0, so distinct required-module derivations that all pass are indistinguishable outcomes; same for two distinct fixtures whose required-set derivation converges on the identical reported gap
+  'check-freshness-hook-watches-modules.test.sh' # a mention of the evaluated attribute behind a comment and no mention at all leave the identical required-module gap: the transposition, not the mention, is what is required, so a correct guard derives and reports the same gap either way
 )
 
 # Harness basenames excluded from the wiring verdict and from both

@@ -138,11 +138,11 @@ function main() {
     'grep failed reading source.md for anchor links'
   chmod 644 -- "${unreadable_src}"
 
-  # A docs/ filename holding a newline splits across `find`'s
-  # newline-delimited handoff into two paths that neither resolve to a real
-  # file, so the doc — and the broken anchor link inside it — goes
-  # unscanned while an unrelated README.md keeps the run's tallies
-  # nonzero. Built at runtime rather than checked in because treefmt walks
+  # A docs/ filename holding a newline is one path, and `enumerate_into`
+  # carries it through the scan as one array element, so the broken anchor
+  # inside it is found and reported like any other file's — alongside an
+  # unrelated README.md that keeps the run's tallies nonzero regardless.
+  # Built at runtime rather than checked in because treefmt walks
   # tests/fixtures and its exclude list cannot express a path containing a
   # newline.
   local newline_root
