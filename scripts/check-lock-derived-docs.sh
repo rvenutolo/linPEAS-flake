@@ -81,31 +81,50 @@ if ! blocks="$(parse_hooks)"; then
   exit 2
 fi
 
+failed=0
+
 # Generator keyed by the hook block that declares the lock a trigger.
 declare -A hook_generators=()
 total_blocks=0
+lock_triggered=0
 while IFS=$'\037' read -r name files scripts; do
   [[ -n ${name} ]] || continue
   total_blocks=$((total_blocks + 1))
   # Nix string literal: "\\." in source is the ERE "\.".
   ere="$(printf '%s' "${files}" | sed 's/\\\\/\\/g')"
   printf '%s\n' 'flake.lock' | grep --quiet --extended-regexp -- "${ere}" || continue
+  lock_triggered=$((lock_triggered + 1))
   # Split on spaces explicitly: the global IFS is newline+tab, so a block
   # naming its generator more than once would otherwise stay one
   # unsplittable word and match no generator shape at all.
   IFS=' ' read -r -a script_list <<<"${scripts}"
+  generator=''
   for s in "${script_list[@]}"; do
     [[ ${s} == scripts/refresh-*.sh ]] || continue
-    hook_generators["${s}"]="${name}"
+    generator="${s}"
     break
   done
+  # The block's two declarations disagree: its trigger regex says a lock
+  # bump can staleness this doc, but nothing in the block names a generator
+  # the bumper could run. Dropping such a block would take it out of both
+  # directions of the set comparison at once, so the hook the bumper
+  # regenerates nothing for would read as agreement.
+  if [[ -z ${generator} ]]; then
+    printf 'lock-derived-docs: hook %s declares flake.lock a trigger but names no scripts/refresh-*.sh generator\n' \
+      "${name}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  hook_generators["${generator}"]="${name}"
 done <<<"${blocks}"
 
 # Guard-the-guard: this repo has lock-derived docs, so an empty match set
 # means the block parser or the regex unescape broke rather than that
 # nothing is lock-derived. An empty-at-exit-0 producer reads exactly like
-# full agreement.
-if ((${#hook_generators[@]} == 0)); then
+# full agreement. Counted on blocks matched, not generators collected, so
+# a matched block whose generator is missing stays the drift reported just
+# above rather than masquerading as a broken parser.
+if ((lock_triggered == 0)); then
   printf 'lock-derived-docs: no freshness hook declares flake.lock a trigger in %s — parser likely broke\n' \
     "${HOOKS}" >&2
   exit 2
@@ -126,8 +145,6 @@ if ! committable_raw="$(workflow_list COMMITTABLE_PATHS)"; then
   printf 'lock-derived-docs: could not parse %s\n' "${WORKFLOW}" >&2
   exit 2
 fi
-
-failed=0
 
 declare -A workflow_generators=()
 while IFS= read -r g; do
@@ -181,5 +198,5 @@ fi
 # identically whether it compared a real pair of sets or two empty ones.
 # State the breadth covered.
 printf 'lock-derived-docs: ok — %d hook block(s) scanned, %d lock-triggered, %d committable path(s)\n' \
-  "${total_blocks}" "${#hook_generators[@]}" "${committable_count}"
+  "${total_blocks}" "${lock_triggered}" "${committable_count}"
 exit 0

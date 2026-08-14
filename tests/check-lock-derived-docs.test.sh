@@ -92,9 +92,14 @@ EOF
 # a hook outside the lock-triggered set is neither required in the
 # workflow list nor checked for an on-disk generator.
 #
+# alpha-fresh's entry line is a parameter so a scenario can give a
+# lock-triggered hook a body that names no generator at all.
+#
 # ${1}=root  ${2}=alpha-fresh trigger regex  ${3}=beta-fresh trigger regex
+# ${4}=alpha-fresh entry line (default: runs its own generator)
 function write_hooks() {
   local -r root="$1" alpha_files="$2" beta_files="$3"
+  local -r alpha_entry="${4:-exec bash scripts/refresh-alpha.sh --check}"
   mkdir --parents -- "${root}/nix/hooks"
 
   cat >"${root}/nix/hooks/freshness.nix" <<EOF
@@ -103,7 +108,7 @@ function write_hooks() {
     enable = true;
     name = "alpha-fresh";
     entry = "\${pkgs.writeShellScript "alpha-fresh" ''
-      exec bash scripts/refresh-alpha.sh --check
+      ${alpha_entry}
     ''}";
     files = "${alpha_files}";
     pass_filenames = false;
@@ -165,11 +170,13 @@ EOF
 #
 # ${1}=root  ${2}=alpha-fresh regex  ${3}=beta-fresh regex
 # ${4}=generator list body  ${5}=committable list body
+# ${6}=alpha-fresh entry line (default: runs its own generator)
 function write_tree() {
   local -r root="$1" alpha_files="$2" beta_files="$3"
   local -r generators="$4" committable="$5"
+  local -r alpha_entry="${6:-exec bash scripts/refresh-alpha.sh --check}"
   write_generators "${root}"
-  write_hooks "${root}" "${alpha_files}" "${beta_files}"
+  write_hooks "${root}" "${alpha_files}" "${beta_files}" "${alpha_entry}"
   write_workflow "${root}" "${generators}" "${committable}"
 }
 
@@ -235,7 +242,21 @@ function main() {
   expect 'bad: an empty committable list fails' \
     "${work}/empty-committable" 1 'COMMITTABLE_PATHS is empty'
 
-  # (g) TOOLING: no hook declares flake.lock a trigger at all. This repo
+  # (g) BAD: a hook declares flake.lock a trigger but its block names no
+  # generator, so the two halves of one declaration disagree. Neither
+  # direction of the set comparison can see such a hook — it contributes
+  # no generator to require of the workflow, and requires none of it — so
+  # left unreported it is a bump that regenerates nothing for a doc the
+  # freshness gate will still hold to the new lock.
+  write_tree "${work}/hook-without-generator" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '' \
+    '    flake.lock' \
+    'exec bash scripts/verify-alpha.sh --check'
+  expect 'bad: a lock-triggered hook naming no generator fails' \
+    "${work}/hook-without-generator" 1 \
+    'hook alpha-fresh declares flake.lock a trigger but names no'
+
+  # (h) TOOLING: no hook declares flake.lock a trigger at all. This repo
   # has lock-derived docs, so an empty match set means the block parser or
   # the regex unescape broke — and an empty-at-exit-0 producer reads
   # exactly like full agreement. The verdict must be could-not-run (2),
@@ -246,7 +267,7 @@ function main() {
   expect 'tooling: zero lock-triggered hooks is a could-not-run' \
     "${work}/no-lock-triggered-hook" 2 'no freshness hook declares'
 
-  # (h) TOOLING: the freshness module is absent, so the hook side of the
+  # (i) TOOLING: the freshness module is absent, so the hook side of the
   # comparison has no source. Reporting that as agreement would vouch for
   # a set nothing was read from.
   write_generators "${work}/freshness-absent"
@@ -255,14 +276,14 @@ function main() {
   expect 'tooling: an absent freshness module is a could-not-run' \
     "${work}/freshness-absent" 2 'nix/hooks/freshness.nix not found'
 
-  # (i) TOOLING: the bump workflow is absent, so the workflow side has no
+  # (j) TOOLING: the bump workflow is absent, so the workflow side has no
   # source.
   write_generators "${work}/workflow-absent"
   write_hooks "${work}/workflow-absent" "${LOCK_ALPHA}" "${NOLOCK_BETA}"
   expect 'tooling: an absent bump workflow is a could-not-run' \
     "${work}/workflow-absent" 2 'update-flake-lock.yml not found'
 
-  # (j) TOOLING: the workflow exists but does not parse. An unparsable
+  # (k) TOOLING: the workflow exists but does not parse. An unparsable
   # file yields no list entries, which would otherwise score as a workflow
   # that runs no generator — a finding about content the lint never read.
   write_tree "${work}/workflow-unparsable" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
@@ -273,7 +294,7 @@ function main() {
   expect 'tooling: an unparsable bump workflow is a could-not-run' \
     "${work}/workflow-unparsable" 2 'could not parse'
 
-  # (k) LIVE: the real tree must satisfy the lint.
+  # (l) LIVE: the real tree must satisfy the lint.
   expect 'live: real tree agrees' "${REPO_ROOT}" 0 ''
 
   harness_assert_verify || failures=$((failures + 1))
