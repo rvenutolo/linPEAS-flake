@@ -42,7 +42,7 @@ block between the markers by hand.
 │   └───default: Nixpkgs overlay
 └───packages
     ├───aarch64-linux
-    │   ├───cosign: package 'cosign-3.1.1'
+    │   ├───cosign: package 'cosign-3.1.3'
     │   ├───default: package 'linpeas-20260811-05318383'
     │   ├───git-cliff: package 'git-cliff-2.13.1'
     │   ├───linpeas: package 'linpeas-20260811-05318383'
@@ -50,7 +50,7 @@ block between the markers by hand.
     │   ├───nix: package 'nix-2.34.8'
     │   └───site: package 'linpeas-flake-site-20260811-05318383'
     └───x86_64-linux
-        ├───cosign: package 'cosign-3.1.1'
+        ├───cosign: package 'cosign-3.1.3'
         ├───default: package 'linpeas-20260811-05318383'
         ├───git-cliff: package 'git-cliff-2.13.1'
         ├───linpeas: package 'linpeas-20260811-05318383'
