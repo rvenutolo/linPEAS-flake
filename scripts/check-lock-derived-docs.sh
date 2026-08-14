@@ -23,11 +23,12 @@ IFS=$'\n\t'
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
 # shellcheck source=scripts/lib/awk-path.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 
 root="${ROOT_OVERRIDE:-$(git rev-parse --show-toplevel)}"
 readonly ROOT="${root}"
 readonly HOOKS="${ROOT}/nix/hooks/freshness.nix"
-readonly WORKFLOW="${ROOT}/.github/workflows/update-flake-lock.yml"
 
 require_tool yq
 require_tool awk
@@ -35,10 +36,6 @@ require_tool grep
 
 if [[ ! -f ${HOOKS} ]]; then
   printf 'lock-derived-docs: %s not found\n' "${HOOKS}" >&2
-  exit 2
-fi
-if [[ ! -f ${WORKFLOW} ]]; then
-  printf 'lock-derived-docs: %s not found\n' "${WORKFLOW}" >&2
   exit 2
 fi
 
@@ -130,63 +127,138 @@ if ((lock_triggered == 0)); then
   exit 2
 fi
 
-# One workflow-level env list, as a newline-separated body. A `//` default
-# keeps an absent key distinct from a file that does not parse: the former
-# is an empty list this lint reports on, the latter is a could-not-run.
-function workflow_list() {
-  yq --exit-status ".env.${1} // \"\"" -- "${WORKFLOW}"
+# Subject discovery. A workflow that writes a flake.lock owns
+# regenerating what that lock derives, so the subject set is every
+# workflow carrying a lock update in a run block — not a list of names a
+# new workflow would have to be added to by hand.
+declare -a workflow_files=()
+glob_into workflow_files '.github/workflows YAML' \
+  "${ROOT}/.github/workflows/*.yml" "${ROOT}/.github/workflows/*.yaml"
+
+# Three facts from one parse. Reading the whole directory costs a fifth
+# of a second, so no textual pre-filter stands between this lint and the
+# syntax tree: a pre-filter would also be unsound against a folded run
+# scalar whose source splits the phrase across lines and whose evaluated
+# value joins it back together.
+function workflow_facts() {
+  yq '[
+      ([.jobs[]?.steps[]?.run // ""] | map(select(test("nix flake update"))) | length > 0),
+      ((.env.LOCK_DERIVED_GENERATORS // "") != ""),
+      ((.env.COMMITTABLE_PATHS // "") != "")
+    ] | map(tostring) | join(",")' -- "$1"
 }
 
-if ! generators_raw="$(workflow_list LOCK_DERIVED_GENERATORS)"; then
-  printf 'lock-derived-docs: could not parse %s\n' "${WORKFLOW}" >&2
-  exit 2
-fi
-if ! committable_raw="$(workflow_list COMMITTABLE_PATHS)"; then
-  printf 'lock-derived-docs: could not parse %s\n' "${WORKFLOW}" >&2
-  exit 2
-fi
+# One workflow-level env list, as a newline-separated body. Only read for
+# a workflow whose fact line already reported the key non-empty, so an
+# empty result here is a parse fault rather than an absent key.
+function workflow_list() {
+  yq --exit-status ".env.${2} // \"\"" -- "$1"
+}
 
-declare -A workflow_generators=()
-while IFS= read -r g; do
-  [[ -n ${g} ]] || continue
-  workflow_generators["${g}"]=1
-  if [[ ! -x ${ROOT}/${g} ]]; then
-    printf 'lock-derived-docs: %s is listed in LOCK_DERIVED_GENERATORS but is not an executable generator\n' \
-      "${g}" >&2
-    failed=$((failed + 1))
+declare -a lock_writing=()
+workflows_scanned=0
+committable_total=0
+for wf in "${workflow_files[@]}"; do
+  workflows_scanned=$((workflows_scanned + 1))
+  rel="${wf#"${ROOT}/"}"
+  if ! facts="$(workflow_facts "${wf}")"; then
+    printf 'lock-derived-docs: could not parse %s\n' "${rel}" >&2
+    exit 2
   fi
-done <<<"${generators_raw}"
+  IFS=',' read -r writes_lock has_generators has_committable <<<"${facts}"
 
-for g in "${!hook_generators[@]}"; do
-  if [[ -z ${workflow_generators["${g}"]:-} ]]; then
-    printf 'lock-derived-docs: hook %s declares flake.lock a trigger, but %s is absent from LOCK_DERIVED_GENERATORS\n' \
-      "${hook_generators["${g}"]}" "${g}" >&2
+  if [[ ${writes_lock} != 'true' ]]; then
+    # The reverse direction: lists that outlived the step they bounded.
+    # Nothing downstream reads them, so left unreported they are config
+    # that looks like a guarantee and is not one.
+    if [[ ${has_generators} == 'true' || ${has_committable} == 'true' ]]; then
+      printf 'lock-derived-docs: %s declares a lock-derived env list but runs no flake-lock update\n' \
+        "${rel}" >&2
+      failed=$((failed + 1))
+    fi
+    continue
+  fi
+
+  lock_writing+=("${rel}")
+
+  if [[ ${has_generators} != 'true' ]]; then
+    printf 'lock-derived-docs: %s writes flake.lock but declares no LOCK_DERIVED_GENERATORS\n' \
+      "${rel}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+
+  if ! generators_raw="$(workflow_list "${wf}" LOCK_DERIVED_GENERATORS)"; then
+    printf 'lock-derived-docs: could not parse %s\n' "${rel}" >&2
+    exit 2
+  fi
+
+  # Cleared by name before the re-declaration, belt and braces: a map that
+  # carried over would let the second subject inherit the first's
+  # generator set and score a gap it never closed, and no diagnostic this
+  # lint prints would say so.
+  unset workflow_generators
+  declare -A workflow_generators=()
+  while IFS= read -r g; do
+    [[ -n ${g} ]] || continue
+    workflow_generators["${g}"]=1
+    if [[ ! -x ${ROOT}/${g} ]]; then
+      printf 'lock-derived-docs: %s is listed in LOCK_DERIVED_GENERATORS in %s but is not an executable generator\n' \
+        "${g}" "${rel}" >&2
+      failed=$((failed + 1))
+    fi
+  done <<<"${generators_raw}"
+
+  for g in "${!hook_generators[@]}"; do
+    if [[ -z ${workflow_generators["${g}"]:-} ]]; then
+      printf 'lock-derived-docs: hook %s declares flake.lock a trigger, but %s is absent from LOCK_DERIVED_GENERATORS in %s\n' \
+        "${hook_generators["${g}"]}" "${g}" "${rel}" >&2
+      failed=$((failed + 1))
+    fi
+  done
+
+  for g in "${!workflow_generators[@]}"; do
+    if [[ -z ${hook_generators["${g}"]:-} ]]; then
+      printf 'lock-derived-docs: %s is in LOCK_DERIVED_GENERATORS in %s, but no lock-triggered hook runs it\n' \
+        "${g}" "${rel}" >&2
+      failed=$((failed + 1))
+    fi
+  done
+
+  if [[ ${has_committable} != 'true' ]]; then
+    printf 'lock-derived-docs: COMMITTABLE_PATHS in %s is empty — it could commit nothing\n' \
+      "${rel}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+
+  if ! committable_raw="$(workflow_list "${wf}" COMMITTABLE_PATHS)"; then
+    printf 'lock-derived-docs: could not parse %s\n' "${rel}" >&2
+    exit 2
+  fi
+
+  lock_listed='false'
+  while IFS= read -r p; do
+    [[ -n ${p} ]] || continue
+    committable_total=$((committable_total + 1))
+    [[ ${p} == 'flake.lock' ]] && lock_listed='true'
+  done <<<"${committable_raw}"
+
+  if [[ ${lock_listed} != 'true' ]]; then
+    printf 'lock-derived-docs: COMMITTABLE_PATHS in %s omits flake.lock — it could not commit the lock it writes\n' \
+      "${rel}" >&2
     failed=$((failed + 1))
   fi
 done
 
-for g in "${!workflow_generators[@]}"; do
-  if [[ -z ${hook_generators["${g}"]:-} ]]; then
-    printf 'lock-derived-docs: %s is in LOCK_DERIVED_GENERATORS, but no lock-triggered hook runs it\n' \
-      "${g}" >&2
-    failed=$((failed + 1))
-  fi
-done
-
-lock_listed='false'
-committable_count=0
-while IFS= read -r p; do
-  [[ -n ${p} ]] || continue
-  committable_count=$((committable_count + 1))
-  [[ ${p} == 'flake.lock' ]] && lock_listed='true'
-done <<<"${committable_raw}"
-
-if ((committable_count == 0)); then
-  printf 'lock-derived-docs: COMMITTABLE_PATHS is empty — the bump could commit nothing\n' >&2
-  failed=$((failed + 1))
-elif [[ ${lock_listed} != 'true' ]]; then
-  printf 'lock-derived-docs: COMMITTABLE_PATHS omits flake.lock — the bump could not commit the lock it writes\n' >&2
-  failed=$((failed + 1))
+# Guard-the-guard, sibling of the zero-lock-triggered-hooks check above.
+# An empty subject set reads exactly like full agreement, so a discovery
+# expression that stopped matching must fail loud rather than vouch for a
+# set nothing was read from.
+if ((${#lock_writing[@]} == 0)); then
+  printf 'lock-derived-docs: no workflow runs a flake-lock update under %s — discovery likely broke\n' \
+    "${ROOT}/.github/workflows" >&2
+  exit 2
 fi
 
 if ((failed > 0)); then
@@ -195,8 +267,9 @@ if ((failed > 0)); then
 fi
 
 # A clean run is otherwise silent about how much it checked, which reads
-# identically whether it compared a real pair of sets or two empty ones.
-# State the breadth covered.
-printf 'lock-derived-docs: ok — %d hook block(s) scanned, %d lock-triggered, %d committable path(s)\n' \
-  "${total_blocks}" "${lock_triggered}" "${committable_count}"
+# identically whether it compared real sets or two empty ones. State the
+# breadth covered, on both halves of the comparison.
+printf 'lock-derived-docs: ok — %d hook block(s) scanned, %d lock-triggered, %d workflow(s) scanned, %d lock-writing, %d committable path(s)\n' \
+  "${total_blocks}" "${lock_triggered}" "${workflows_scanned}" \
+  "${#lock_writing[@]}" "${committable_total}"
 exit 0
