@@ -304,7 +304,9 @@ carries the hosts its tool inventory actually reaches, carries the ghcr
 blob host alongside ghcr.io, carries a complete Docker Hub pull host set
 (and the push host too, if it logs in or pushes) if it carries any Docker
 Hub registry host at all, carries a complete sigstore host set if it
-carries any sigstore host at all, and carries no denylisted host.
+carries any sigstore host at all, matches the declared notify egress set
+if the job runs the notify-workflow-result composite, and carries no
+denylisted host.
 
 ### scripts/check-enumerate-helper-required.sh
 

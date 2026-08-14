@@ -6,7 +6,9 @@
 # blob host alongside ghcr.io, carries a complete Docker Hub pull host set
 # (and the push host too, if it logs in or pushes) if it carries any Docker
 # Hub registry host at all, carries a complete sigstore host set if it
-# carries any sigstore host at all, and carries no denylisted host.
+# carries any sigstore host at all, matches the declared notify egress set
+# if the job runs the notify-workflow-result composite, and carries no
+# denylisted host.
 
 # Binds each job's `allowed-endpoints` list to what the job's tooling actually
 # reaches. Hand-authored allowlists rot silently: a tool version bumps, a URL
@@ -15,7 +17,7 @@
 # finally exercised, which can be months later. A `connection refused` against
 # a healthy public host is harden-runner's block signature, not an outage.
 #
-# Five assertions per job:
+# Six assertions per job:
 #
 #   1. Forward rules, keyed on `uses:` and on `run:` text:
 #        github/codeql-action/init  -> release-assets.githubusercontent.com
@@ -108,6 +110,45 @@
 #   5. Reverse check: a denylist of hosts nothing in this repo justifies.
 #      Junk entries defeat allowlist review.
 #
+#   6. Notify-composite parity. Every job that runs the
+#      notify-workflow-result composite is bound to the host set declared
+#      in `.github/actions/notify-workflow-result/egress-allowlist.txt`,
+#      which is the single source of truth — the list lives beside the
+#      composite whose network behavior it describes, so adding an API
+#      call to a new host edits the declaration and the composite in one
+#      place. `#` comments and blank lines in it are ignored.
+#
+#      Discovery is by property, not by name: a subject is any job with a
+#      step whose `uses:` names notify-workflow-result, which covers the
+#      `./.github/actions/...` form, the SHA-pinned self-reference (used
+#      where a `pull_request` event must not run a PR branch's copy of the
+#      composite), and the next notify job nobody has written yet. No
+#      job-name list and no workflow-path list means a new notify job is
+#      governed on the day it is written rather than on the day someone
+#      remembers to widen a lint.
+#
+#      Two branches, keyed on whether the job does anything beyond
+#      notifying:
+#        pure shape (the job's `uses:` set is exactly harden-runner,
+#          actions/checkout and the composite): the allowlist must EQUAL
+#          the declared set. A host the shape cannot reach is dropped
+#          rather than tolerated, since an unreachable host in a
+#          copy-pasted list is how the list stops describing the job.
+#        extended shape (any other step, including a bare `run:`): the
+#          allowlist must be a SUPERSET of the declared set. A future
+#          notify job that computes its body is not forced to edit this
+#          lint to land, and the extra hosts it carries are still
+#          governed by assertions 1-5.
+#
+#      Breadth is asserted rather than inferred: the run reports how many
+#      notify jobs it discovered, and finding none on an unfiltered scan
+#      is a broken discovery predicate reported as a could-not-run, not a
+#      clean tree. `WORKFLOW_FILE_FILTER` suppresses that guard because
+#      the fixture harness scans one file at a time and almost every
+#      fixture legitimately holds no notify job;
+#      `LINT_ALLOW_EMPTY_SCAN=1` suppresses it for a deliberately empty
+#      scan root.
+#
 # KNOWN BLIND SPOT: detection reads the workflow file only, one level deep. A
 # job that reaches cosign through `scripts/*.sh` or `just` is invisible to the
 # `run:`-text sign/verify rules. Assertion 4's "neither detected" branch
@@ -123,8 +164,11 @@
 # tooling shaped differently — `skopeo copy`, `crane push`, `regctl`, or a
 # wrapped script — which would silently under-guard the write path.
 #
-# Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures.
-# Exits 0 clean, 1 on any drift, 2 if yq is missing.
+# Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures, and
+# LINT_ALLOW_EMPTY_SCAN for a deliberately empty scan root.
+# Exits 0 clean, 1 on any drift, 2 if yq is missing, if the declaration
+# file is missing or empty, or if an unfiltered scan discovers no notify
+# job at all.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -164,12 +208,42 @@ readonly -a DENYLIST=(
   'install.determinate.systems'
 )
 
+readonly NOTIFY_COMPOSITE='notify-workflow-result'
+readonly DECLARATION_REL=".github/actions/${NOTIFY_COMPOSITE}/egress-allowlist.txt"
+
+# Resolved against this script's own location rather than the scan root:
+# the fixture harness repoints the scan root at tests/fixtures, and the
+# declaration a fixture run must be measured against is always the real one
+# beside the composite it describes.
+SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+readonly SCRIPT_DIR
+readonly DECLARATION="${SCRIPT_DIR}/../${DECLARATION_REL}"
+
 if ! command -v yq >/dev/null 2>&1; then
   printf 'yq not found on PATH\n' >&2
   exit 2
 fi
 
+declare -a DECLARED=()
+if [[ -r ${DECLARATION} ]]; then
+  # `|| [[ -n ... ]]` keeps a final line with no trailing newline, which
+  # read reports as a failure even after populating the variable.
+  while IFS= read -r decl_line || [[ -n ${decl_line} ]]; do
+    decl_line="${decl_line%%#*}"
+    decl_line="${decl_line//[[:space:]]/}"
+    [[ -n ${decl_line} ]] || continue
+    DECLARED+=("${decl_line}")
+  done <"${DECLARATION}"
+fi
+if ((${#DECLARED[@]} == 0)); then
+  printf '%s: read 0 host(s) from %s — the notify egress parity rule has nothing to compare against, so a job carrying any list at all would score clean\n' \
+    "${0##*/}" "${DECLARATION_REL}" >&2
+  exit 2
+fi
+readonly DECLARED
+
 failed=0
+notify_jobs=0
 
 function fail() {
   printf '%s\n' "$1" >&2
@@ -369,6 +443,46 @@ for f in "${workflow_files[@]}"; do
       done
     done <<<"${endpoints}"
 
+    # --- Assertion 6: notify-composite egress parity ---------------------
+
+    if [[ ${uses} == *"${NOTIFY_COMPOSITE}"* ]]; then
+      notify_jobs=$((notify_jobs + 1))
+
+      # A step carrying no `uses:` — a `run:` step — arrives from yq as an
+      # empty line, so it falls through to the default arm and widens the
+      # job to the extended shape. That is the intent: a job doing work
+      # beyond notifying may reach hosts this declaration does not name.
+      pure_shape=1
+      while IFS= read -r u; do
+        case "${u}" in
+        *"step-security/harden-runner@"*) ;;
+        *"actions/checkout@"*) ;;
+        *"${NOTIFY_COMPOSITE}"*) ;;
+        *) pure_shape=0 ;;
+        esac
+      done <<<"${uses}"
+
+      for h in "${DECLARED[@]}"; do
+        has_host "${endpoints}" "${h%%:*}" ||
+          fail "${f}: job '${job}' runs the ${NOTIFY_COMPOSITE} composite but does not allowlist ${h}, which ${DECLARATION_REL} declares every such job reaches"
+      done
+
+      if ((pure_shape == 1)); then
+        while IFS= read -r e; do
+          [[ -z ${e} ]] && continue
+          declared_host=0
+          for h in "${DECLARED[@]}"; do
+            if [[ ${e%%:*} == "${h%%:*}" ]]; then
+              declared_host=1
+            fi
+          done
+          if ((declared_host == 0)); then
+            fail "${f}: job '${job}' runs the ${NOTIFY_COMPOSITE} composite and nothing else, yet allowlists ${e%%:*}, which ${DECLARATION_REL} does not declare; no step in that shape reaches it"
+          fi
+        done <<<"${endpoints}"
+      fi
+    fi
+
   done <<<"${job_rows}"
 done
 shopt -u nullglob
@@ -377,4 +491,17 @@ if ((failed > 0)); then
   printf '%d egress-allowlist violation(s)\n' "${failed}" >&2
   exit 1
 fi
+
+# A discovery predicate that matches nothing reports the same clean exit a
+# tree with no drift does, so the breadth the notify rule claims to have
+# checked is asserted instead. The file filter is the one legitimate way to
+# reach zero: the fixture harness scans one workflow at a time and almost
+# every fixture holds no notify job at all.
+if ((notify_jobs == 0)) && [[ -z ${FILE_FILTER} && -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
+  printf '%s: found 0 notify job(s) under %s — a predicate matching nothing reports the same ok line a clean tree does; set LINT_ALLOW_EMPTY_SCAN=1 if this root deliberately runs no notify composite\n' \
+    "${0##*/}" "${DIR}" >&2
+  exit 2
+fi
+
+printf '%d notify job(s) checked against the declared egress allowlist\n' "${notify_jobs}"
 exit 0
