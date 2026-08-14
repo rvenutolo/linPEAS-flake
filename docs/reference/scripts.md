@@ -542,6 +542,12 @@ PATH. These groups run inside devShells.lint in CI; this guard turns a
 dropped tool into a named failure instead of a cryptic mid-check error.
 Keep EXPECTED in sync with the lintTools list in nix/devshell-lint.nix.
 
+### scripts/check-lock-derived-docs.sh
+
+Lint: the flake-lock bump workflow runs a generator for
+every freshness hook that declares `flake.lock` a trigger, and commits
+the lock itself.
+
 ### scripts/check-manifest-digest-pinned.sh
 
 Lint: every multi-arch manifest-creating docker command
