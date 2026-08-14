@@ -66,3 +66,4 @@ lint-doc-invariants:
   - flake-lock-provenance
   - dockerhub-token-scope-split
   - pin-digest-provenance
+  - size-label-ignores

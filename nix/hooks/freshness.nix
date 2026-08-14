@@ -223,6 +223,26 @@ in
     pass_filenames = false;
     language = "system";
   };
+  # Asserts the size-label action's ignore list holds exactly the paths
+  # the generators declare they own. A generator output missing from the
+  # list inflates every PR that regenerates it; an entry for a file
+  # nothing writes scores that file's hand edits at zero.
+  # See docs/development/labeling.md.
+  size-label-ignores = {
+    enable = true;
+    name = "size-label-ignores";
+    description = "The size-label ignore list matches what the generators declare they write.";
+    entry = "${pkgs-unstable.writeShellScript "size-label-ignores-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${toolPath}:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-size-label-ignores.sh
+    ''}";
+    files = "^(\\.github/workflows/labeler\\.yml|scripts/.*\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Asserts Markdown prose and the comments in every shell, Nix and
   # YAML source carry no ephemeral references (PR/issue refs, prose
   # dates, planning/review-pass labels, literal `.claude/` paths). Shell

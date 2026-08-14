@@ -173,6 +173,7 @@ Hooks (alphabetical):
 | `script-shebang-pipefail`           | Every scripts/\*.sh has portable shebang + set -Eeuo pipefail.                                                                                         |
 | `scripts-reference-fresh`           | docs/reference/scripts.md matches in-script annotations.                                                                                               |
 | `shellcheck`                        | Shell-script static analysis.                                                                                                                          |
+| `size-label-ignores`                | The size-label ignore list matches what the generators declare they write.                                                                             |
 | `statix`                            | Nix anti-pattern lint.                                                                                                                                 |
 | `treefmt`                           | Multi-language formatter aggregator (shfmt, prettier, etc).                                                                                            |
 | `treefmt-config-fresh`              | treefmt-config block in docs/reference/treefmt-config.md matches the evaluated treefmt config.                                                         |
