@@ -9,7 +9,7 @@ name: scorecard-drift-check
 #
 #   Pinned-Dependencies, Signed-Releases, SBOM, Vulnerabilities,
 #   Security-Policy, Dependency-Update-Tool, License, Webhooks,
-#   Binary-Artifacts, Packaging
+#   Binary-Artifacts, Packaging, Maintained
 #
 # Dropped from default check set as not applicable to a solo repo:
 # Code-Review, Contributors, CII-Best-Practices, Fuzzing,
@@ -30,12 +30,6 @@ name: scorecard-drift-check
 # which is not itself a required gate). SAST additionally scores a
 # rolling percentage of merged PRs carrying a registered SAST run,
 # so it cannot be driven to 10 by any in-repo change.
-#
-# Dropped temporarily (re-add after 2026-08-14, 90 days post repo
-# creation 2026-05-16): Maintained — fires "Repository was created
-# within the last 90 days" every run until the new-repo heuristic
-# clears. Re-enable once the 90-day window passes; the check is
-# genuinely useful long-term (catches abandoned-repo drift).
 #
 # Binary source: `nix develop --command scorecard` resolves through
 # flake.lock-pinned nixpkgs-unstable — same pin model as zizmor and
@@ -96,7 +90,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: scorecard --checks=<curated 10> → check-scorecard-threshold.sh
+      - name: scorecard --checks=<curated 11> → check-scorecard-threshold.sh
         id: probe
         # SCORECARD_PAT rotation: docs/runbooks/scorecard-pat-rotation.md
         # SCORECARD_EXPERIMENTAL=1 unlocks the SBOM and Webhooks checks
@@ -121,16 +115,18 @@ jobs:
           # problems and is the pattern the upstream scorecard-action
           # composite uses internally.
           # This list and the job's allowed-endpoints are coupled: each
-          # check reaches its own datasets. The curated ten reach
+          # check reaches its own datasets. The curated eleven reach
           # api.securityscorecards.dev, api.osv.dev, and api.deps.dev,
-          # which the egress lint requires. Adding a check back means
+          # which the egress lint requires; Maintained reads commit and
+          # issue activity through api.github.com, already allowlisted
+          # as repo infrastructure. Adding a check back means
           # adding the host it queries — CII-Best-Practices needs
           # www.bestpractices.dev, which is absent because that check
           # is not run. A missing host surfaces as a blocked-egress
           # failure, not a wrong score.
           nix develop --command scorecard \
             --repo="github.com/${REPO}" \
-            --checks=Pinned-Dependencies,Signed-Releases,SBOM,Vulnerabilities,Security-Policy,Dependency-Update-Tool,License,Webhooks,Binary-Artifacts,Packaging \
+            --checks=Pinned-Dependencies,Signed-Releases,SBOM,Vulnerabilities,Security-Policy,Dependency-Update-Tool,License,Webhooks,Binary-Artifacts,Packaging,Maintained \
             --format=json \
             --show-details \
             --output=results.json
