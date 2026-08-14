@@ -9,7 +9,13 @@ readonly FIXTURES="${REPO_ROOT}/tests/fixtures/script-has-test"
 function expect() {
   local -r fixture="$1" want_exit="$2" want_msg="$3"
   local got_exit=0 got_stderr
-  got_stderr="$(SCRIPTS_DIR_OVERRIDE="${FIXTURES}/${fixture}/scripts" \
+  # Each fixture populates only the side its scenario is about, so the
+  # other scan root is deliberately empty here. The breadth assertion both
+  # roots carry against the real tree is held by
+  # tests/glob-scan-breadth.test.sh, which points each one at an empty
+  # directory on purpose.
+  got_stderr="$(LINT_ALLOW_EMPTY_SCAN=1 \
+    SCRIPTS_DIR_OVERRIDE="${FIXTURES}/${fixture}/scripts" \
     TESTS_DIR_OVERRIDE="${FIXTURES}/${fixture}/tests" \
     "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
   if [[ ${got_exit} != "${want_exit}" ]]; then

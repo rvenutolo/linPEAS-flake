@@ -21,6 +21,8 @@
 # a workflow yq cannot parse).
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 # shellcheck source=scripts/lib/temp.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 
@@ -107,7 +109,10 @@ scanned=0
 skipped=0
 allowed=0
 shopt -s nullglob
-for wf in "${WORKFLOWS_DIR}"/*.yml "${WORKFLOWS_DIR}"/*.yaml; do
+declare -a workflow_files=()
+glob_into workflow_files 'workflow YAML' \
+  "${WORKFLOWS_DIR}/*.yml" "${WORKFLOWS_DIR}/*.yaml"
+for wf in "${workflow_files[@]}"; do
   examined=$((examined + 1))
   if is_pr_triggered "${wf}"; then
     scanned=$((scanned + 1))

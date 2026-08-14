@@ -29,6 +29,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 # shellcheck source=scripts/lib/awk-path.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 
@@ -141,7 +143,9 @@ function scan_file() {
 
 failed=0
 shopt -s nullglob
-for sh in "${SCRIPTS_DIR}"/*.sh; do
+declare -a repo_scripts=()
+glob_into repo_scripts 'repo shell scripts' "${SCRIPTS_DIR}/*.sh"
+for sh in "${repo_scripts[@]}"; do
   base="${sh##*/}"
   if [[ ${base} == "${SELF_BASENAME}" ]]; then
     self_excluded="${base}"

@@ -26,6 +26,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 
 readonly DEFAULT_SCRIPTS_DIR="scripts"
 readonly DEFAULT_TESTS_DIR="tests"
@@ -52,7 +54,9 @@ failed=0
 shopt -s nullglob
 
 # Forward: every scripts/check-*.sh needs tests/<base>.test.sh
-for f in "${SCRIPTS_DIR}"/check-*.sh; do
+declare -a check_scripts=()
+glob_into check_scripts 'check scripts' "${SCRIPTS_DIR}/check-*.sh"
+for f in "${check_scripts[@]}"; do
   [[ -f ${f} ]] || continue
   base="$(basename "${f}" .sh)"
   if is_exempt "${base}"; then
@@ -66,7 +70,9 @@ for f in "${SCRIPTS_DIR}"/check-*.sh; do
 done
 
 # Reverse: every tests/check-*.test.sh needs scripts/<base>.sh
-for t in "${TESTS_DIR}"/check-*.test.sh; do
+declare -a check_harnesses=()
+glob_into check_harnesses 'check-script test harnesses' "${TESTS_DIR}/check-*.test.sh"
+for t in "${check_harnesses[@]}"; do
   [[ -f ${t} ]] || continue
   base="$(basename "${t}" .test.sh)"
   if is_exempt "${base}"; then

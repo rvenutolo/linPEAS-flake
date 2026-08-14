@@ -25,6 +25,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 
 readonly DEFAULT_DIR=".github/workflows"
 readonly OVERRIDE="${WORKFLOWS_DIR_OVERRIDE:-}"
@@ -38,7 +40,9 @@ fi
 
 failed=0
 shopt -s nullglob
-for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
+declare -a workflow_files=()
+glob_into workflow_files 'workflow YAML' "${DIR}/*.yml" "${DIR}/*.yaml"
+for f in "${workflow_files[@]}"; do
   [[ -f ${f} ]] || continue
   if [[ -n ${FILE_FILTER} && "$(basename "${f}")" != "${FILE_FILTER}" ]]; then
     continue

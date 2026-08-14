@@ -17,6 +17,8 @@
 # 0 if every harness is reachable, 1 otherwise.
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 shopt -s nullglob
 
 readonly TESTS_DIR="${TESTS_DIR_OVERRIDE:-tests}"
@@ -92,7 +94,9 @@ function reachable_set() {
 
   # 2. tests/refresh-*.test.sh — name-convention glob in run-doc-freshness.sh.
   local f
-  for f in "${TESTS_DIR}"/refresh-*.test.sh; do
+  local -a refresh_harnesses=()
+  glob_into refresh_harnesses 'doc-freshness harnesses' "${TESTS_DIR}/refresh-*.test.sh"
+  for f in "${refresh_harnesses[@]}"; do
     printf '%s|%s\n' "${MECH_REFRESH_GLOB}" "$(basename -- "${f}")"
   done
 
@@ -155,7 +159,9 @@ function main() {
   names="$(cut -d'|' -f2- <<<"${reachable}")"
 
   local failed=0 checked=0 f base
-  for f in "${TESTS_DIR}"/*.test.sh; do
+  local -a harnesses=()
+  glob_into harnesses 'test harnesses' "${TESTS_DIR}/*.test.sh"
+  for f in "${harnesses[@]}"; do
     base="$(basename -- "${f}")"
     is_exempt "${base}" && continue
     checked=$((checked + 1))

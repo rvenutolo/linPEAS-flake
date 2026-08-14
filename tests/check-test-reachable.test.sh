@@ -38,7 +38,13 @@ function assert_run() {
   stderr_file="$(mktemp)"
   stdout_file="$(mktemp)"
   outcome_file="$(mktemp)"
-  TESTS_DIR_OVERRIDE="${dir}/tests" \
+  # A fixture tree holds only the harnesses a scenario needs, so a scan
+  # root the scenario does not exercise is deliberately empty here. The
+  # breadth assertion those roots carry against the real tree is held by
+  # tests/glob-scan-breadth.test.sh, which points each one at an empty
+  # directory on purpose.
+  LINT_ALLOW_EMPTY_SCAN=1 \
+    TESTS_DIR_OVERRIDE="${dir}/tests" \
     HARNESS_RUNNER_OVERRIDE="${dir}/run-harness-group.sh" \
     LINT_GROUPS_OVERRIDE="${dir}/lint-groups.yml" \
     WORKFLOWS_DIR_OVERRIDE="${dir}/workflows" \

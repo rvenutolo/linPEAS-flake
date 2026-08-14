@@ -41,7 +41,12 @@ readonly TIME_RE='(^|[^0-9])[0-9]{1,2}:[0-9]{2}([^0-9]|$)'
 #              larger count of name forms each one contributes.
 function workflow_files() {
   local f
-  for f in "${WORKFLOWS_DIR}"/*.yml "${WORKFLOWS_DIR}"/*.yaml; do
+  local -a workflow_files=()
+  glob_into workflow_files 'workflow YAML' \
+    "${WORKFLOWS_DIR}/*.yml" "${WORKFLOWS_DIR}/*.yaml"
+  # The `-f` gate stays: this scan holds files, and a directory named
+  # `foo.yml` matches the pattern the same way a file does.
+  for f in "${workflow_files[@]}"; do
     [[ -f ${f} ]] || continue
     printf '%s\n' "${f}"
   done
