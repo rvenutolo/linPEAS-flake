@@ -544,9 +544,9 @@ Keep EXPECTED in sync with the lintTools list in nix/devshell-lint.nix.
 
 ### scripts/check-lock-derived-docs.sh
 
-Lint: the flake-lock bump workflow runs a generator for
-every freshness hook that declares `flake.lock` a trigger, and commits
-the lock itself.
+Lint: every workflow that writes a flake.lock runs a
+generator for each freshness hook that declares `flake.lock` a
+trigger, and commits the lock itself.
 
 ### scripts/check-manifest-digest-pinned.sh
 

@@ -110,7 +110,7 @@ next contributor PR).
     Surfaces as `nix flake check` failures unrelated to any
     workflow change. See "Interaction between the three pins" below.
 
-Step 4 of the step-by-step below contains the same surface as a
+Step 5 of the step-by-step below contains the same surface as a
 symptom → fix lookup table; use this section to anticipate before
 the PR arrives, and the table to triage after CI fails.
 
@@ -198,7 +198,22 @@ git status
 git add <whatever-the-formatter-touched>
 ```
 
-### 4. Check expected side-effect classes
+### 4. Regenerate the lock-derived docs
+
+Several tracked docs are generated from evaluated flake state, so the
+refreshed lock can leave them stale. Run each generator named in the
+lock-writing workflow's `LOCK_DERIVED_GENERATORS` list and commit the
+changed docs alongside the lock:
+
+```bash
+nix develop --command bash scripts/refresh-flake-show.sh
+nix develop --command bash scripts/refresh-treefmt-config.sh
+```
+
+See [Lock-derived docs travel with the lock](#lock-derived-docs-travel-with-the-lock)
+for what asserts that list.
+
+### 5. Check expected side-effect classes
 
 Use the table as a checklist for any nixpkgs bump:
 
@@ -208,13 +223,13 @@ Use the table as a checklist for any nixpkgs bump:
 | `mkdocs-macros` strictness | `nix build "path:$(pwd)#site"` aborts on a `&#123;&#123; ... &#125;&#125;` literal inside a code block                                                           | wrap the offending block in `&#123;% raw %&#125;...&#123;% endraw %&#125;` (mirrors the convention in `docs/architecture/ci.md`)                     |
 | `zizmor` major version     | `nix flake check` fails on a workflow finding the older version did not surface                                                                                  | fix the workflow or, as a last resort, adjust `--min-severity` in `nix/hooks/linters.nix` (do not raise above `low` without a security-review entry) |
 | `mkdocs --strict`          | Build fails on a new plugin warning                                                                                                                              | fix forward; pin the misbehaving plugin only as a last resort and document the pin reason in the same PR                                             |
-| linpeas-image base layers  | `image-cve-scan-trivy` / `image-cve-scan-grype` SARIF changes (next weekly scan or manual dispatch); `image-smoke` could surface `command not found` regressions | smoke test locally (step 6) — adjust `buildEnv.paths` in `nix/image.nix` only if a required tool genuinely disappeared from nixpkgs                  |
+| linpeas-image base layers  | `image-cve-scan-trivy` / `image-cve-scan-grype` SARIF changes (next weekly scan or manual dispatch); `image-smoke` could surface `command not found` regressions | smoke test locally (step 8) — adjust `buildEnv.paths` in `nix/image.nix` only if a required tool genuinely disappeared from nixpkgs                  |
 
 `cachix/git-hooks.nix` bumps in isolation usually only hit the `zizmor`
 row and only when the pre-commit-hooks repo changes hook versions in
 lock-step.
 
-### 5. Build everything
+### 6. Build everything
 
 ```bash
 nix build .#linpeas --print-build-logs
@@ -226,7 +241,7 @@ The `path:$(pwd)#site` form is required for the `site` derivation —
 it bypasses the git filter so the gitignored `docs/_data/dashboard.yml`
 is visible to the build.
 
-### 6. Run all test suites
+### 7. Run all test suites
 
 ```bash
 nix develop --command bash tests/gen-dashboard-data.test.sh
@@ -240,7 +255,7 @@ nix develop --command bash tests/check-uses-sha-pinned.test.sh
 All six must exit 0. If any fail, do **not** disable the test — debug
 the regression. The lint scripts encode binding security invariants.
 
-### 7. Image smoke
+### 8. Image smoke
 
 ```bash
 nix build .#linpeas-image --out-link result-image
@@ -257,7 +272,7 @@ new nixpkgs. Compare `pkgs.buildEnv.paths` in `nix/image.nix` against the
 missing tool's package name — usually a rename. Update the path list
 in the same PR.
 
-### 8. Run `flake check`
+### 9. Run `flake check`
 
 ```bash
 nix flake check --print-build-logs 2>&1 | tail -30
@@ -269,7 +284,7 @@ bump: `actionlint`, `deadnix`, `nixfmt`, `treefmt`, `shellcheck`,
 The full, generated list is in
 [Git workflow → Pre-commit hooks](../development/git.md#pre-commit-hooks).
 
-### 9. Commit the refresh
+### 10. Commit the refresh
 
 ```bash
 git add flake.lock <any-side-effect-files>
@@ -280,7 +295,7 @@ git push
 `treefmt` is wired as a pre-commit hook — it will run on every staged
 file change. If it rewrites something, re-stage and commit.
 
-### 10. Wait for CI, merge
+### 11. Wait for CI, merge
 
 Watch the PR's required checks. If everything is green, merge-commit
 through the GitHub UI or `gh pr merge <num> --merge --delete-branch`.
@@ -291,7 +306,7 @@ Commits (`commitlint` is a required check) and be signed
 merge-commit subject and must itself satisfy Conventional Commits
 (`lint-pr-title` is a required check).
 
-### 11. Post-merge
+### 12. Post-merge
 
 For `NixOS/nixpkgs` bumps specifically:
 
@@ -404,20 +419,26 @@ Several docs in this repo are generated from evaluated flake state, so a
 file — `docs/reference/flake-outputs.md` embeds the package versions
 `nix flake show` renders, and a `nixpkgs` bump moves them.
 
-`update-flake-lock.yml` therefore regenerates that set alongside the lock
-it writes, and commits each changed file as its own signed commit. The
-set is declared in two workflow-level `env` lists:
-`LOCK_DERIVED_GENERATORS` names the generators the bump runs, and
+Every workflow that writes a lock therefore regenerates that set
+alongside it and commits each changed file as its own signed commit.
+Two workflows do: `update-flake-lock.yml`, which opens the weekly bump
+PR, and `renovate-flake-lock-refresh.yml`, which refreshes the lock on a
+Renovate flake-input PR. Each declares the set in two workflow-level
+`env` lists: `LOCK_DERIVED_GENERATORS` names the generators it runs, and
 `COMMITTABLE_PATHS` bounds what the credentialed job is allowed to
 commit — the compute job holds no write credential, so that list, not the
 artifact it uploads, is the trust boundary.
 
 `scripts/check-lock-derived-docs.sh` asserts the two stay in agreement
-with the hooks that declare the dependency: every freshness hook whose
-`files` regex names `flake.lock` must have its generator in
+with the hooks that declare the dependency. It discovers its subjects
+rather than naming them: every workflow carrying a lock update in a `run`
+block must declare both lists, every freshness hook whose `files` regex
+names `flake.lock` must have its generator in that workflow's
 `LOCK_DERIVED_GENERATORS`, and every entry there must be backed by such a
 hook. A hook that names `flake.lock` a trigger while naming no generator
 fails the same way — the two halves of one declaration disagreeing is
-drift, not a hook the lint may quietly ignore. Adding a lock-derived
-generator without teaching the bumper to run it fails the lint rather
-than surfacing later as a bump PR that cannot merge.
+drift, not a hook the lint may quietly ignore. A workflow declaring the
+lists while running no lock update fails too: the lists outlived the step
+they bounded, and nothing reads them. Adding a lock-derived generator
+without teaching every lock-writing workflow to run it fails the lint
+rather than surfacing later as a PR that cannot merge.

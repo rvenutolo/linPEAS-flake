@@ -138,35 +138,52 @@ function write_hooks() {
 EOF
 }
 
-# The bump workflow, carrying the two env lists the lint reads. Both
-# arguments are whole indented YAML block-scalar bodies, so a scenario can
-# hand either one an empty body.
+# A workflow the lint may discover. Both list bodies are whole indented
+# YAML block-scalar bodies, so a scenario can hand either one an empty
+# body; an empty body means the key is written with no entries. Passing
+# the literal string 'omit' for a body leaves the key out entirely, which
+# is a different shape from an empty one.
 #
-# ${1}=root  ${2}=LOCK_DERIVED_GENERATORS body  ${3}=COMMITTABLE_PATHS body
+# ${1}=root  ${2}=workflow file name  ${3}=lock-writing (true|false)
+# ${4}=LOCK_DERIVED_GENERATORS body   ${5}=COMMITTABLE_PATHS body
 function write_workflow() {
-  local -r root="$1" generators="$2" committable="$3"
+  local -r root="$1" wf_name="$2" lock_writing="$3"
+  local -r generators="$4" committable="$5"
   mkdir --parents -- "${root}/.github/workflows"
 
-  cat >"${root}/.github/workflows/update-flake-lock.yml" <<EOF
-name: update-flake-lock
+  local env_block=''
+  if [[ ${generators} != 'omit' ]]; then
+    env_block+="  LOCK_DERIVED_GENERATORS: |"$'\n'"${generators}"$'\n'
+  fi
+  if [[ ${committable} != 'omit' ]]; then
+    env_block+="  COMMITTABLE_PATHS: |"$'\n'"${committable}"$'\n'
+  fi
+  if [[ -n ${env_block} ]]; then
+    env_block="env:"$'\n'"${env_block}"
+  fi
+
+  local run_line='          true'
+  if [[ ${lock_writing} == 'true' ]]; then
+    run_line='          nix flake update'
+  fi
+
+  cat >"${root}/.github/workflows/${wf_name}" <<EOF
+name: ${wf_name%.yml}
 on:
   workflow_dispatch:
 permissions: {}
-env:
-  LOCK_DERIVED_GENERATORS: |
-${generators}
-  COMMITTABLE_PATHS: |
-${committable}
-jobs:
-  compute-lock:
+${env_block}jobs:
+  compute:
     runs-on: ubuntu-latest
     steps:
-      - run: true
+      - run: |
+${run_line}
 EOF
 }
 
 # A whole miniature repo: the generators, the freshness module, and the
-# bump workflow the two must agree with.
+# bump workflow the two must agree with. A scenario needing a second
+# discovered subject calls `write_workflow` again on the same root.
 #
 # ${1}=root  ${2}=alpha-fresh regex  ${3}=beta-fresh regex
 # ${4}=generator list body  ${5}=committable list body
@@ -177,7 +194,8 @@ function write_tree() {
   local -r alpha_entry="${6:-exec bash scripts/refresh-alpha.sh --check}"
   write_generators "${root}"
   write_hooks "${root}" "${alpha_files}" "${beta_files}" "${alpha_entry}"
-  write_workflow "${root}" "${generators}" "${committable}"
+  write_workflow "${root}" 'update-flake-lock.yml' 'true' \
+    "${generators}" "${committable}"
 }
 
 function main() {
@@ -202,7 +220,7 @@ function main() {
     '    flake.lock'
   expect 'bad: a lock-triggered hook whose generator the bumper skips fails' \
     "${work}/missing-from-workflow" 1 \
-    'scripts/refresh-alpha.sh is absent from LOCK_DERIVED_GENERATORS'
+    'scripts/refresh-alpha.sh is absent from LOCK_DERIVED_GENERATORS in .github/workflows/update-flake-lock.yml'
 
   # (c) BAD: the workflow runs a generator no lock-triggered hook backs.
   # The entry is stale — nothing declares its doc lock-derived — and the
@@ -212,7 +230,7 @@ function main() {
     '    flake.lock'
   expect 'bad: a workflow entry no lock-triggered hook backs fails' \
     "${work}/stale-workflow-entry" 1 \
-    'scripts/refresh-beta.sh is in LOCK_DERIVED_GENERATORS, but no lock-triggered hook runs it'
+    'scripts/refresh-beta.sh is in LOCK_DERIVED_GENERATORS in .github/workflows/update-flake-lock.yml, but no lock-triggered hook runs it'
 
   # (d) BAD: a listed generator that is not on disk. The bump would fail
   # mid-run with no doc regenerated, so the path is asserted here rather
@@ -222,7 +240,7 @@ function main() {
     '    flake.lock'
   expect 'bad: a listed generator missing from disk fails' \
     "${work}/generator-absent" 1 \
-    'scripts/refresh-missing.sh is listed in LOCK_DERIVED_GENERATORS but is not an executable generator'
+    'scripts/refresh-missing.sh is listed in LOCK_DERIVED_GENERATORS in .github/workflows/update-flake-lock.yml but is not an executable generator'
 
   # (e) BAD: the committable allowlist omits the one file the bump always
   # writes. The credentialed job commits nothing outside that list, so the
@@ -231,7 +249,8 @@ function main() {
     '    scripts/refresh-alpha.sh' \
     '    docs/reference/alpha.md'
   expect 'bad: a committable list without flake.lock fails' \
-    "${work}/no-lock-in-committable" 1 'COMMITTABLE_PATHS omits flake.lock'
+    "${work}/no-lock-in-committable" 1 \
+    'COMMITTABLE_PATHS in .github/workflows/update-flake-lock.yml omits flake.lock'
 
   # (f) BAD: an empty committable allowlist. Distinct from (e) in that
   # nothing at all is committable, which would leave the bump opening a PR
@@ -240,7 +259,8 @@ function main() {
     '    scripts/refresh-alpha.sh' \
     ''
   expect 'bad: an empty committable list fails' \
-    "${work}/empty-committable" 1 'COMMITTABLE_PATHS is empty'
+    "${work}/empty-committable" 1 \
+    'COMMITTABLE_PATHS in .github/workflows/update-flake-lock.yml is empty'
 
   # (g) BAD: a hook declares flake.lock a trigger but its block names no
   # generator, so the two halves of one declaration disagree. Neither
@@ -271,17 +291,17 @@ function main() {
   # comparison has no source. Reporting that as agreement would vouch for
   # a set nothing was read from.
   write_generators "${work}/freshness-absent"
-  write_workflow "${work}/freshness-absent" \
+  write_workflow "${work}/freshness-absent" 'update-flake-lock.yml' 'true' \
     '    scripts/refresh-alpha.sh' '    flake.lock'
   expect 'tooling: an absent freshness module is a could-not-run' \
     "${work}/freshness-absent" 2 'nix/hooks/freshness.nix not found'
 
-  # (j) TOOLING: the bump workflow is absent, so the workflow side has no
-  # source.
+  # (j) TOOLING: no workflow files at all, so the workflow side of the
+  # comparison has no source. glob_into owns this verdict.
   write_generators "${work}/workflow-absent"
   write_hooks "${work}/workflow-absent" "${LOCK_ALPHA}" "${NOLOCK_BETA}"
-  expect 'tooling: an absent bump workflow is a could-not-run' \
-    "${work}/workflow-absent" 2 'update-flake-lock.yml not found'
+  expect 'tooling: an absent workflow directory is a could-not-run' \
+    "${work}/workflow-absent" 2 'matched 0 files'
 
   # (k) TOOLING: the workflow exists but does not parse. An unparsable
   # file yields no list entries, which would otherwise score as a workflow
@@ -291,11 +311,72 @@ function main() {
     '    flake.lock'
   printf ': [ this is not yaml\n' \
     >"${work}/workflow-unparsable/.github/workflows/update-flake-lock.yml"
-  expect 'tooling: an unparsable bump workflow is a could-not-run' \
-    "${work}/workflow-unparsable" 2 'could not parse'
+  expect 'tooling: an unparsable workflow is a could-not-run' \
+    "${work}/workflow-unparsable" 2 \
+    'could not parse .github/workflows/update-flake-lock.yml'
 
   # (l) LIVE: the real tree must satisfy the lint.
   expect 'live: real tree agrees' "${REPO_ROOT}" 0 ''
+
+  # (m) GOOD: two lock-writing workflows, both agreeing. Proves a second
+  # subject is discovered and checked rather than skipped once the first
+  # one scores clean.
+  write_tree "${work}/two-agree" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md'
+  write_workflow "${work}/two-agree" 'renovate-refresh.yml' 'true' \
+    '    scripts/refresh-alpha.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md'
+  expect 'agree: two lock-writing workflows both matching the hook set' \
+    "${work}/two-agree" 0 ''
+
+  # (n) BAD: a second workflow writes a lock but declares no generator
+  # list at all. This is the whole defect class — a lock-writing workflow
+  # that never learned it owns the docs its lock derives.
+  write_tree "${work}/sibling-undeclared" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md'
+  write_workflow "${work}/sibling-undeclared" 'renovate-refresh.yml' 'true' \
+    'omit' 'omit'
+  expect 'bad: a lock-writing workflow declaring no generator list fails' \
+    "${work}/sibling-undeclared" 1 \
+    '.github/workflows/renovate-refresh.yml writes flake.lock but declares no LOCK_DERIVED_GENERATORS'
+
+  # (o) BAD: the first workflow agrees and the sibling omits a generator
+  # the hooks require. Attribution must name the sibling; the compliant
+  # workflow must not absorb the finding.
+  write_tree "${work}/sibling-gap" "${LOCK_ALPHA}" "${LOCK_BETA}" \
+    $'    scripts/refresh-alpha.sh\n    scripts/refresh-beta.sh' \
+    '    flake.lock'
+  write_workflow "${work}/sibling-gap" 'renovate-refresh.yml' 'true' \
+    '    scripts/refresh-alpha.sh' \
+    '    flake.lock'
+  expect 'bad: a per-workflow generator gap names the offending workflow' \
+    "${work}/sibling-gap" 1 \
+    'scripts/refresh-beta.sh is absent from LOCK_DERIVED_GENERATORS in .github/workflows/renovate-refresh.yml'
+
+  # (p) BAD: a workflow declares the lists but runs no lock update. Dead
+  # config: the lists outlived the step they bounded, and nothing else in
+  # the lint would ever look at them again.
+  write_tree "${work}/dead-config" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md'
+  write_workflow "${work}/dead-config" 'stale-lists.yml' 'false' \
+    '    scripts/refresh-alpha.sh' \
+    '    flake.lock'
+  expect 'bad: a workflow declaring the lists but writing no lock fails' \
+    "${work}/dead-config" 1 \
+    '.github/workflows/stale-lists.yml declares a lock-derived env list but runs no flake-lock update'
+
+  # (q) TOOLING: workflows exist and none writes a lock. An empty subject
+  # set reads exactly like full agreement, so the discovery expression
+  # going blind must fail loud rather than vouch for a set nothing was
+  # read from. Sibling of the zero-lock-triggered-hooks guard.
+  write_generators "${work}/no-lock-writer"
+  write_hooks "${work}/no-lock-writer" "${LOCK_ALPHA}" "${NOLOCK_BETA}"
+  write_workflow "${work}/no-lock-writer" 'ci.yml' 'false' 'omit' 'omit'
+  expect 'tooling: zero lock-writing workflows is a could-not-run' \
+    "${work}/no-lock-writer" 2 'no workflow runs a flake-lock update'
 
   harness_assert_verify || failures=$((failures + 1))
 

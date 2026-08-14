@@ -16,12 +16,14 @@ name: renovate-flake-lock-refresh
 #      author is the `renovate[bot]` App, confirms it touches
 #      `flake.nix`, and maps the PR title to a flake input name.
 #   2. `compute-refresh` — checks out the PR branch, runs
-#      `nix flake update <name>`, uploads the resulting
-#      `flake.lock` as a job-scoped artifact. No write credentials.
+#      `nix flake update <name>`, regenerates the docs that lock
+#      derives, asserts nothing outside `COMMITTABLE_PATHS` was
+#      written, and uploads the result as a job-scoped artifact.
+#      No write credentials.
 #   3. `push-refresh` — downloads the artifact, mints an App
 #      installation token (`linpeas-flake-bumper` GitHub App), and
-#      commits the refreshed `flake.lock` to the PR branch via
-#      REST `PUT /contents`. GitHub web-flow-signs the commit because
+#      commits each changed committable path to the PR branch via
+#      REST `PUT /contents`. GitHub web-flow-signs the commits because
 #      the request is authenticated by an App installation token, so
 #      `required_signatures` on `protect-main` is satisfied if the PR
 #      later merges.
@@ -50,6 +52,23 @@ on:
     types: [completed]
 
 permissions: {}
+
+# Docs this repo generates from evaluated flake state: a lock refresh
+# can make them stale without touching any other tracked file, so the
+# refresh regenerates them alongside the lock it writes. The set is
+# asserted against the freshness hooks that declare `flake.lock` a
+# trigger by scripts/check-lock-derived-docs.sh.
+env:
+  LOCK_DERIVED_GENERATORS: |
+    scripts/refresh-flake-show.sh
+    scripts/refresh-treefmt-config.sh
+  # Every path push-refresh is allowed to commit. compute-refresh holds
+  # no write credential, so this list — not the artifact it uploads — is
+  # what bounds the file set a refresh can land on the PR branch.
+  COMMITTABLE_PATHS: |
+    flake.lock
+    docs/reference/flake-outputs.md
+    docs/reference/treefmt-config.md
 
 concurrency:
   # Branch-scoped: unrelated Renovate PRs can refresh in parallel,
@@ -232,12 +251,49 @@ jobs:
           else
             printf 'changed=true\n' >> "${GITHUB_OUTPUT}"
           fi
+      - name: regenerate lock-derived docs
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          while IFS= read -r gen; do
+            [[ -n "${gen}" ]] || continue
+            printf 'running %s\n' "${gen}"
+            nix develop --command bash "${gen}"
+          done <<< "${LOCK_DERIVED_GENERATORS}"
+      - name: assert writes stay inside the committable set
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          allowed="$(mktemp)"
+          changed="$(mktemp)"
+          trap 'rm --force -- "${allowed}" "${changed}"' EXIT
+          printf '%s' "${COMMITTABLE_PATHS}" | grep --invert-match '^$' | sort > "${allowed}"
+          # Captured to a file rather than piped or process-substituted in:
+          # a redirection from a substitution runs the producer in its own
+          # subshell, so a `git diff` that failed would hand the loop empty
+          # output to score as "nothing written outside the allowlist" —
+          # the one answer this assertion must never give for free.
+          git diff --name-only > "${changed}"
+          status=0
+          while IFS= read -r path; do
+            [[ -n "${path}" ]] || continue
+            if ! grep --quiet --line-regexp --fixed-strings -- "${path}" "${allowed}"; then
+              printf 'generator wrote %s, which is not in COMMITTABLE_PATHS\n' "${path}" >&2
+              status=1
+            fi
+          done < "${changed}"
+          exit "${status}"
       - name: upload refreshed lock
         if: steps.diff.outputs.changed == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: flake-lock-refreshed
-          path: flake.lock
+          path: |
+            flake.lock
+            docs/reference/flake-outputs.md
+            docs/reference/treefmt-config.md
           retention-days: 1
           if-no-files-found: error
 
@@ -279,7 +335,21 @@ jobs:
           # Defense-in-depth vs a compromised compute-refresh emitting
           # garbage in place of valid Nix lockfile JSON.
           jq -e '.nodes | type == "object"' flake.lock >/dev/null
-      - name: commit refreshed flake.lock to PR branch
+          # A generated doc that arrives without its managed-block markers
+          # is garbage from a broken generator. Reject it before anything
+          # is pushed, rather than committing a doc that the freshness
+          # gate will then fail on inside the PR.
+          for doc in docs/reference/flake-outputs.md docs/reference/treefmt-config.md; do
+            if ! grep --quiet -- '<!-- BEGIN ' "${doc}"; then
+              printf '%s has no managed-block BEGIN marker - aborting\n' "${doc}" >&2
+              exit 1
+            fi
+            if ! grep --quiet -- '<!-- END ' "${doc}"; then
+              printf '%s has no managed-block END marker - aborting\n' "${doc}" >&2
+              exit 1
+            fi
+          done
+      - name: commit refreshed lock and derived docs to PR branch
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPO: ${{ github.repository }}
@@ -290,36 +360,56 @@ jobs:
           IFS=$'\n\t'
           api_header="X-GitHub-Api-Version: 2022-11-28"
 
-          # Fetch the current flake.lock blob SHA on the PR branch.
-          branch_lock_sha=$(gh api \
-            --header "${api_header}" \
-            "repos/${REPO}/contents/flake.lock?ref=${HEAD_BRANCH}" \
-            --jq .sha)
+          # One signed commit per changed committable path, authenticated
+          # as the linpeas-flake-bumper App so GitHub web-flow-signs each
+          # one. Each PUT names the file's current blob SHA on the PR
+          # branch. This job has no checkout, so the base SHA comes from
+          # the contents API rather than from a local ref. flake.lock goes
+          # first, so a partial failure leaves the lock without its docs —
+          # which the freshness gate then reports — rather than docs
+          # describing an absent lock.
+          committed=0
+          while IFS= read -r path; do
+            [[ -n "${path}" ]] || continue
+            if [[ ! -f "${path}" ]]; then
+              printf 'skipping %s: not in artifact\n' "${path}"
+              continue
+            fi
+            branch_sha="$(gh api \
+              --header "${api_header}" \
+              "repos/${REPO}/contents/${path}?ref=${HEAD_BRANCH}" \
+              --jq .sha)"
+            # Loop-breaker idempotency: when the branch already carries
+            # byte-identical content, committing again would churn against
+            # the second ci pass.
+            if [[ "$(git hash-object -- "${path}")" == "${branch_sha}" ]]; then
+              printf 'skipping %s: already current on %s\n' "${path}" "${HEAD_BRANCH}"
+              continue
+            fi
+            msg="chore(flake): update ${path} for ${INPUT_NAME} lock refresh"
+            if [[ "${path}" == 'flake.lock' ]]; then
+              msg="chore(flake): refresh flake.lock for ${INPUT_NAME}"
+            fi
+            content_b64="$(base64 --wrap=0 "${path}")"
+            gh api --method PUT \
+              --header "${api_header}" \
+              "repos/${REPO}/contents/${path}" \
+              --field message="${msg}" \
+              --field content="${content_b64}" \
+              --field sha="${branch_sha}" \
+              --field branch="${HEAD_BRANCH}" >/dev/null
+            printf 'committed %s to %s\n' "${path}" "${HEAD_BRANCH}"
+            committed=$((committed + 1))
+          done <<< "${COMMITTABLE_PATHS}"
 
-          # Loop-breaker idempotency: compute the git blob SHA of our
-          # refreshed flake.lock and compare. If equal, the branch
-          # already carries the same lockfile - bail without committing
-          # to avoid a churn loop with the second ci pass.
-          our_lock_sha=$(git hash-object flake.lock)
-          if [[ "${our_lock_sha}" == "${branch_lock_sha}" ]]; then
-            printf 'flake.lock on %s already matches refreshed copy; nothing to commit\n' \
+          # Zero commits is the steady state of the second ci pass and of a
+          # concurrent run that already pushed, so it is a clean exit rather
+          # than the abort the weekly bumper uses — that one has proven its
+          # lock differs from the base branch before it reaches this point.
+          if ((committed == 0)); then
+            printf 'nothing to commit: %s already carries the refreshed lock and docs\n' \
               "${HEAD_BRANCH}"
-            exit 0
           fi
-
-          lock_b64=$(base64 --wrap=0 flake.lock)
-
-          # Commit. Authenticated as the linpeas-flake-bumper App, so
-          # GitHub web-flow-signs the resulting commit.
-          gh api --method PUT \
-            --header "${api_header}" \
-            "repos/${REPO}/contents/flake.lock" \
-            --field message="chore(flake): refresh flake.lock for ${INPUT_NAME}" \
-            --field content="${lock_b64}" \
-            --field sha="${branch_lock_sha}" \
-            --field branch="${HEAD_BRANCH}" >/dev/null
-
-          printf 'committed flake.lock refresh to %s\n' "${HEAD_BRANCH}"
 
   notify:
     name: notify
@@ -365,7 +455,9 @@ jobs:
             - push-refresh: `${{ needs.push-refresh.result }}`
 
             Manual fallback runbook: `docs/architecture/flake-input-bumps.md`
-            steps 1-3 (checkout PR, `nix flake update <name>`,
-            `nix fmt`).
+            steps 1-4 (checkout PR, `nix flake update <name>`, `nix fmt`,
+            regenerate the docs named in this workflow's
+            `LOCK_DERIVED_GENERATORS`), committing the regenerated docs
+            alongside the lock.
           label-description: renovate-flake-lock-refresh workflow failure
           github-token: ${{ secrets.GITHUB_TOKEN }}

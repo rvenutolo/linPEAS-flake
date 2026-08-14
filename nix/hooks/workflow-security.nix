@@ -431,15 +431,15 @@
     pass_filenames = false;
     language = "system";
   };
-  # Asserts the flake-lock bump workflow runs a generator for every
-  # freshness hook that names `flake.lock` a trigger. A lock-derived doc
-  # the bumper skips reaches the bump PR stale, and the freshness gate
-  # then blocks a PR no human is meant to touch.
+  # Asserts every workflow that writes a flake.lock runs a generator for
+  # each freshness hook that names `flake.lock` a trigger. A lock-derived
+  # doc a lock-writing workflow skips reaches its PR stale, and the
+  # freshness gate then blocks a branch the automation owns.
   # See docs/architecture/flake-input-bumps.md.
   lock-derived-docs = {
     enable = true;
     name = "lock-derived-docs";
-    description = "The flake-lock bumper regenerates every doc a lock bump can staleness.";
+    description = "Every lock-writing workflow regenerates the docs a lock bump can staleness.";
     entry = "${pkgs-unstable.writeShellScript "lock-derived-docs-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'
@@ -447,7 +447,7 @@
       export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-lock-derived-docs.sh
     ''}";
-    files = "^(nix/hooks/freshness\\.nix|\\.github/workflows/update-flake-lock\\.yml|scripts/check-lock-derived-docs\\.sh)$";
+    files = "^(nix/hooks/freshness\\.nix|\\.github/workflows/.*\\.ya?ml|scripts/check-lock-derived-docs\\.sh)$";
     pass_filenames = false;
     language = "system";
   };
