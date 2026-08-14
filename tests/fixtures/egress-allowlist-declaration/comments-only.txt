@@ -1,0 +1,8 @@
+# A declaration that names no host. Every line here is a comment or blank, so
+# the parser reads zero entries out of a file that exists and is readable —
+# the case an existence check alone scores as a present declaration.
+
+#   api.github.com   commented out rather than declared
+#   github.com       likewise
+
+# Nothing below this line either.

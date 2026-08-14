@@ -164,8 +164,14 @@
 # tooling shaped differently — `skopeo copy`, `crane push`, `regctl`, or a
 # wrapped script — which would silently under-guard the write path.
 #
-# Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures, and
-# LINT_ALLOW_EMPTY_SCAN for a deliberately empty scan root.
+# Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures,
+# LINT_ALLOW_EMPTY_SCAN for a deliberately empty scan root, and
+# NOTIFY_EGRESS_DECLARATION_OVERRIDE for an alternate notify egress
+# declaration. That last one is what makes the declaration guard testable:
+# the default declaration path resolves from this script's own location, so
+# without it no fixture can present a tree whose declaration is absent or
+# names no host, and assertion 6's could-not-run branch is reachable only by
+# hand.
 # Exits 0 clean, 1 on any drift, 2 if yq is missing, if the declaration
 # file is missing or empty, or if an unfiltered scan discovers no notify
 # job at all.
@@ -217,7 +223,12 @@ readonly DECLARATION_REL=".github/actions/${NOTIFY_COMPOSITE}/egress-allowlist.t
 # beside the composite it describes.
 SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 readonly SCRIPT_DIR
-readonly DECLARATION="${SCRIPT_DIR}/../${DECLARATION_REL}"
+readonly DECLARATION="${NOTIFY_EGRESS_DECLARATION_OVERRIDE:-${SCRIPT_DIR}/../${DECLARATION_REL}}"
+
+# Diagnostics naming the declaration use the path this run actually resolved.
+# Printing the repo-relative constant under the override would point an
+# operator at a file the run never opened.
+readonly DECLARATION_LABEL="${NOTIFY_EGRESS_DECLARATION_OVERRIDE:-${DECLARATION_REL}}"
 
 if ! command -v yq >/dev/null 2>&1; then
   printf 'yq not found on PATH\n' >&2
@@ -237,7 +248,7 @@ if [[ -r ${DECLARATION} ]]; then
 fi
 if ((${#DECLARED[@]} == 0)); then
   printf '%s: read 0 host(s) from %s — the notify egress parity rule has nothing to compare against, so a job carrying any list at all would score clean\n' \
-    "${0##*/}" "${DECLARATION_REL}" >&2
+    "${0##*/}" "${DECLARATION_LABEL}" >&2
   exit 2
 fi
 readonly DECLARED
@@ -464,7 +475,7 @@ for f in "${workflow_files[@]}"; do
 
       for h in "${DECLARED[@]}"; do
         has_host "${endpoints}" "${h%%:*}" ||
-          fail "${f}: job '${job}' runs the ${NOTIFY_COMPOSITE} composite but does not allowlist ${h}, which ${DECLARATION_REL} declares every such job reaches"
+          fail "${f}: job '${job}' runs the ${NOTIFY_COMPOSITE} composite but does not allowlist ${h}, which ${DECLARATION_LABEL} declares every such job reaches"
       done
 
       if ((pure_shape == 1)); then
@@ -477,7 +488,7 @@ for f in "${workflow_files[@]}"; do
             fi
           done
           if ((declared_host == 0)); then
-            fail "${f}: job '${job}' runs the ${NOTIFY_COMPOSITE} composite and nothing else, yet allowlists ${e%%:*}, which ${DECLARATION_REL} does not declare; no step in that shape reaches it"
+            fail "${f}: job '${job}' runs the ${NOTIFY_COMPOSITE} composite and nothing else, yet allowlists ${e%%:*}, which ${DECLARATION_LABEL} does not declare; no step in that shape reaches it"
           fi
         done <<<"${endpoints}"
       fi
