@@ -7,6 +7,23 @@ on:
 
 permissions: {}
 
+# Docs this repo generates from evaluated flake state: a lock bump can
+# make them stale without touching any other tracked file, so the bumper
+# regenerates them alongside the lock it writes. The set is asserted
+# against the freshness hooks that declare `flake.lock` a trigger by
+# scripts/check-lock-derived-docs.sh.
+env:
+  LOCK_DERIVED_GENERATORS: |
+    scripts/refresh-flake-show.sh
+    scripts/refresh-treefmt-config.sh
+  # Every path push-and-merge is allowed to commit. compute-lock holds no
+  # write credential, so this list — not the artifact it uploads — is what
+  # bounds the file set a bump PR can carry.
+  COMMITTABLE_PATHS: |
+    flake.lock
+    docs/reference/flake-outputs.md
+    docs/reference/treefmt-config.md
+
 concurrency:
   group: update-flake-lock
   cancel-in-progress: false
@@ -63,12 +80,51 @@ jobs:
             printf 'changed=true\n' >> "${GITHUB_OUTPUT}"
           fi
 
+      - name: regenerate lock-derived docs
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          while IFS= read -r gen; do
+            [[ -n "${gen}" ]] || continue
+            printf 'running %s\n' "${gen}"
+            nix develop --command bash "${gen}"
+          done <<< "${LOCK_DERIVED_GENERATORS}"
+
+      - name: assert writes stay inside the committable set
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          allowed="$(mktemp)"
+          changed="$(mktemp)"
+          trap 'rm --force -- "${allowed}" "${changed}"' EXIT
+          printf '%s' "${COMMITTABLE_PATHS}" | grep --invert-match '^$' | sort > "${allowed}"
+          # Captured to a file rather than piped or process-substituted in:
+          # a redirection from a substitution runs the producer in its own
+          # subshell, so a `git diff` that failed would hand the loop empty
+          # output to score as "nothing written outside the allowlist" —
+          # the one answer this assertion must never give for free.
+          git diff --name-only > "${changed}"
+          status=0
+          while IFS= read -r path; do
+            [[ -n "${path}" ]] || continue
+            if ! grep --quiet --line-regexp --fixed-strings -- "${path}" "${allowed}"; then
+              printf 'generator wrote %s, which is not in COMMITTABLE_PATHS\n' "${path}" >&2
+              status=1
+            fi
+          done < "${changed}"
+          exit "${status}"
+
       - name: upload lock artifact
         if: steps.diff.outputs.changed == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: flake-lock-result
-          path: flake.lock
+          path: |
+            flake.lock
+            docs/reference/flake-outputs.md
+            docs/reference/treefmt-config.md
           retention-days: 1
           if-no-files-found: error
 
@@ -113,8 +169,9 @@ jobs:
           client-id: ${{ vars.BUMP_APP_CLIENT_ID }}
           private-key: ${{ secrets.BUMP_APP_PRIVATE_KEY }}
           # Least-privilege scope: token only needs to write file contents
-          # (PUT /contents for flake.lock) and open/merge the update PR.
-          # No other installation scopes are needed.
+          # (PUT /contents for each path in COMMITTABLE_PATHS) and
+          # open/merge the update PR. No other installation scopes are
+          # needed.
           permission-contents: write
           permission-pull-requests: write
 
@@ -129,8 +186,22 @@ jobs:
           # JSON shape check: flake.lock must be valid JSON with a "nodes" object.
           # Defense-in-depth vs a compromised compute-lock writing garbage.
           jq -e '.nodes | type == "object"' flake.lock >/dev/null
+          # A generated doc that arrives without its managed-block markers
+          # is garbage from a broken generator. Reject it before anything
+          # is pushed, rather than committing a doc that the freshness
+          # gate will then fail on inside the PR.
+          for doc in docs/reference/flake-outputs.md docs/reference/treefmt-config.md; do
+            if ! grep --quiet -- '<!-- BEGIN ' "${doc}"; then
+              printf '%s has no managed-block BEGIN marker - aborting\n' "${doc}" >&2
+              exit 1
+            fi
+            if ! grep --quiet -- '<!-- END ' "${doc}"; then
+              printf '%s has no managed-block END marker - aborting\n' "${doc}" >&2
+              exit 1
+            fi
+          done
 
-      - name: open PR with signed commit via REST PUT /contents
+      - name: open PR with signed commits via REST PUT /contents
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPO: ${{ github.repository }}
@@ -168,10 +239,9 @@ jobs:
             ;;
           esac
 
-          # Resolve main HEAD sha + flake.lock blob sha on main.
+          # Resolve main HEAD sha.
           base_sha="$(gh api "repos/${REPO}/git/refs/heads/main" \
             --jq .object.sha --header "${api_header}")"
-          lock_blob_sha="$(git rev-parse "origin/main:flake.lock")"
 
           if [[ "${open_pr}" == true ]]; then
             # Rebase the open PR's branch onto main HEAD. protect-main sets
@@ -200,14 +270,49 @@ jobs:
               --header "${api_header}" >/dev/null
           fi
 
-          # Commit: flake.lock. Web-flow signs this commit.
-          lock_b64="$(base64 --wrap=0 flake.lock)"
-          gh api --method PUT "repos/${REPO}/contents/flake.lock" \
-            --field message="chore: update flake.lock" \
-            --field content="${lock_b64}" \
-            --field sha="${lock_blob_sha}" \
-            --field branch="${branch}" \
-            --header "${api_header}" >/dev/null
+          # One signed commit per changed allowlisted path. Each PUT names
+          # the file's blob SHA on main: the commits touch disjoint paths,
+          # so an earlier commit in this loop never invalidates a later
+          # file's base SHA. flake.lock goes first, so a partial failure
+          # leaves the lock without its docs — which the freshness gate
+          # then reports — rather than docs describing an absent lock.
+          committed=0
+          while IFS= read -r path; do
+            [[ -n "${path}" ]] || continue
+            if [[ ! -f "${path}" ]]; then
+              printf 'skipping %s: not in artifact\n' "${path}"
+              continue
+            fi
+            blob_sha="$(git rev-parse "origin/main:${path}")"
+            if [[ "$(git hash-object -- "${path}")" == "${blob_sha}" ]]; then
+              printf 'skipping %s: identical to main\n' "${path}"
+              continue
+            fi
+            # The lock's own commit keeps the PR title's wording so the PR
+            # and its first commit agree.
+            msg="chore: update ${path} for flake.lock bump"
+            if [[ "${path}" == 'flake.lock' ]]; then
+              msg='chore: update flake.lock'
+            fi
+            content_b64="$(base64 --wrap=0 "${path}")"
+            gh api --method PUT "repos/${REPO}/contents/${path}" \
+              --field message="${msg}" \
+              --field content="${content_b64}" \
+              --field sha="${blob_sha}" \
+              --field branch="${branch}" \
+              --header "${api_header}" >/dev/null
+            printf 'committed %s\n' "${path}"
+            committed=$((committed + 1))
+          done <<< "${COMMITTABLE_PATHS}"
+
+          # The sanity check already proved flake.lock differs from main,
+          # so a zero-commit walk means the loop's skip logic swallowed
+          # every path. Aborting beats opening an empty PR that auto-merge
+          # would then land as a no-op.
+          if ((committed == 0)); then
+            printf 'no files committed - aborting\n' >&2
+            exit 1
+          fi
 
           if [[ "${open_pr}" == false ]]; then
             body="$(mktemp)"

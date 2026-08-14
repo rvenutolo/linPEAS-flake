@@ -396,3 +396,28 @@ ci → refresh → ci cycle.
 
 Not in required-checks. Lockfile refresh on a PR cannot block the
 PR's own merge gate (chicken-and-egg).
+
+## Lock-derived docs travel with the lock
+
+Several docs in this repo are generated from evaluated flake state, so a
+`flake.lock` bump can make them stale without touching any other tracked
+file — `docs/reference/flake-outputs.md` embeds the package versions
+`nix flake show` renders, and a `nixpkgs` bump moves them.
+
+`update-flake-lock.yml` therefore regenerates that set alongside the lock
+it writes, and commits each changed file as its own signed commit. The
+set is declared in two workflow-level `env` lists:
+`LOCK_DERIVED_GENERATORS` names the generators the bump runs, and
+`COMMITTABLE_PATHS` bounds what the credentialed job is allowed to
+commit — the compute job holds no write credential, so that list, not the
+artifact it uploads, is the trust boundary.
+
+`scripts/check-lock-derived-docs.sh` asserts the two stay in agreement
+with the hooks that declare the dependency: every freshness hook whose
+`files` regex names `flake.lock` must have its generator in
+`LOCK_DERIVED_GENERATORS`, and every entry there must be backed by such a
+hook. A hook that names `flake.lock` a trigger while naming no generator
+fails the same way — the two halves of one declaration disagreeing is
+drift, not a hook the lint may quietly ignore. Adding a lock-derived
+generator without teaching the bumper to run it fails the lint rather
+than surfacing later as a bump PR that cannot merge.

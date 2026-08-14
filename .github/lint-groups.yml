@@ -38,6 +38,7 @@ lint-workflow-security:
   - auto-merge-decline-gate
   - egress-allowlist
   - verify-reason-ladder
+  - lock-derived-docs
 lint-script-hygiene:
   - script-shebang-pipefail
   - script-has-test
