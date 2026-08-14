@@ -1,0 +1,10 @@
+name: yaml-quoted-hash-fixture
+
+# A plain comment, so the extractor has something to report and the
+# clean verdict below is a scan rather than a skip.
+on:
+  workflow_dispatch:
+
+env:
+  ANCHOR: "#123 is data here, not a comment"
+  TRAILER: value # trailing text with #456 is not read

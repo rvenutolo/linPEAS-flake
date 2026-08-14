@@ -1,26 +1,29 @@
 #!/usr/bin/env bash
 # scripts/check-ephemeral-refs.sh
 #
-# @description Lint: every Markdown file, shell script and Nix source in
-# the repo must carry no ephemeral references — PR/issue refs, prose
-# dates, planning/review-pass labels, or literal `.claude/` paths.
+# @description Lint: every Markdown file, shell script, Nix source and
+# YAML source in the repo must carry no ephemeral references — PR/issue
+# refs, prose dates, planning/review-pass labels, or literal `.claude/`
+# paths.
 # Markdown is read as prose; shell is read as comments only, lifted from
 # the `shfmt` syntax tree; Nix is read as the comments that start their
-# own line, both `#` line comments and `/* */` block comments.
+# own line, both `#` line comments and `/* */` block comments; YAML is
+# read as the `#` comments that start their own line, block scalars
+# included.
 # Only the sources whose raw text carries a candidate token are
 # extracted; the rest are set aside and reported as such.
 # Default mode blocks (exit 1); --advisory mode
 # suppresses findings, not defects: it warns on fuzzy causal-history
 # phrases and exits 0 on those, but a could-not-run (unterminated
 # fence/generated block/Nix block comment, unparsable shell, a shell
-# scan or a Nix scan that extracted no comments, a failed candidate
+# scan, a Nix scan or a YAML scan that extracted no comments, a failed candidate
 # scan, a structural pass that read fewer sources than were set aside
 # for it, a class regex that fails its own canary, failed source
 # enumeration) still exits non-zero the same as the default pass.
-# @option --advisory suppress findings, not defects: warn on fuzzy causal-history phrases and exit 0 for those, but still exit 1 on an unterminated fence/generated block/Nix block comment and 2 on a failed source enumeration, a failed candidate scan, a class regex that fails its canary, a structural pass that read fewer sources than were set aside, an unparsable shell source, a shell scan that extracted no comments, or a Nix scan that extracted no comments
+# @option --advisory suppress findings, not defects: warn on fuzzy causal-history phrases and exit 0 for those, but still exit 1 on an unterminated fence/generated block/Nix block comment and 2 on a failed source enumeration, a failed candidate scan, a class regex that fails its canary, a structural pass that read fewer sources than were set aside, an unparsable shell source, a shell scan that extracted no comments, a Nix scan that extracted no comments, or a YAML scan that extracted no comments
 
 # Lint: ban "ephemeral references" from the repo's Markdown prose and
-# from its shell and Nix comments. Tracked files describe the CURRENT
+# from its shell, Nix and YAML comments. Tracked files describe the CURRENT
 # state of the repo, not what they replaced or which plan/PR/date
 # introduced them.
 #
@@ -86,6 +89,12 @@
 #     or a heredoc body is out of scope by construction rather than by
 #     a regex that has to guess. A source the parser rejects is a
 #     could-not-run (exit 2), not a clean read.
+#   YAML — only `#` comments that start their own line are read, for
+#     the reason the Nix matcher gives. A `#` line inside a `run:` block
+#     scalar is read the same as any other: those blocks are embedded
+#     shell, and they hold a population no YAML parser can reach, since
+#     to one the whole block is a single string. There is no multi-line
+#     region to leave open, so this extractor has no could-not-run.
 #   Nix — only comments that start their own line are read, `#` line
 #     comments and `/* */` block comments alike. No comment-preserving
 #     Nix parser is in this toolchain, and without one a trailing `#`
@@ -103,7 +112,7 @@
 # in Markdown: a comment naming a banned shape as an example is
 # documentation, not a reference.
 #
-# Sources scanned: every Markdown, shell and Nix path git reports for
+# Sources scanned: every Markdown, shell, Nix and YAML path git reports for
 # the repo — both committed files and uncommitted, unignored ones — minus
 # the file allowlist (`CHANGELOG.md`, `docs/releases.md`,
 # `tests/fixtures/**`, `.claude/**`). The first two structurally list PR
@@ -116,9 +125,9 @@
 #   EPHEMERAL_REFS_SOURCES_OVERRIDE — newline-separated list of source
 #     files relative to REPO_ROOT.
 #
-# LINT_ALLOW_EMPTY_SCAN=1 accepts an empty scan set, and a shell or Nix
-# scan that extracted no comments (an operator escape hatch, not
-# test-only).
+# LINT_ALLOW_EMPTY_SCAN=1 accepts an empty scan set, and a shell, Nix or
+# YAML scan that extracted no comments (an operator escape hatch, not
+# test-only). It never accepts a class regex that fails its canary.
 #
 # Exits 0 on clean in either mode; 1 on a blocking match (default mode
 # only — --advisory exits 0 on the same finding) or an unterminated
@@ -127,8 +136,8 @@
 # source, a class regex fails its canary, the structural pass read
 # fewer sources than the candidate pass set aside for it, a shell
 # source could not be parsed, or a scan that parsed shell extracted no
-# shell comments or a scan that parsed Nix extracted no Nix comments
-# (both modes).
+# shell comments, a scan that parsed Nix extracted no Nix comments, or
+# a scan that parsed YAML extracted no YAML comments (both modes).
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -331,6 +340,7 @@ function language_of() {
   *.md) printf 'md\n' ;;
   *.sh) printf 'sh\n' ;;
   *.nix) printf 'nix\n' ;;
+  *.yml | *.yaml) printf 'yaml\n' ;;
   *) printf 'other\n' ;;
   esac
 }
@@ -659,6 +669,49 @@ function extract_nix_comments() {
   ' "$(awk_path "${file}")"
 }
 
+# @description Emit one line per source line, carrying that line's YAML
+# comment text where a comment that starts its own line sits and a blank
+# line everywhere else, so a hit's reported line number matches the
+# original file. YAML has one comment form and no block form, and the
+# opener is required to start its line for the reason the Nix matcher
+# requires it: a trailing `#` cannot be told from a `#` inside a quoted
+# scalar without a parser, and this repo's workflows carry both
+# `${{ }}` expressions and shell fragments full of them.
+# A `#` line inside a `run:` block scalar is read the same as any other.
+# That is deliberate rather than incidental: those blocks are embedded
+# shell, their `#` lines are genuine comments, and they are where a
+# third of this repo's YAML comments live — including violations no
+# comment-node reader can see, because to a YAML parser the whole block
+# is one string. The cost is that a `#` line inside a block scalar that
+# is *not* shell would be read as a comment; the tree has no such block
+# today, and a banned token quoted in backticks is exempt either way.
+# Nothing here can fail: there is no multi-line region to leave open, so
+# unlike the Markdown and Nix paths this extractor has no could-not-run.
+# @arg $1 file path to the source file
+# @arg $2 stats_dir directory this pass writes `comments` into as
+#   `<comment-count> <line-count>`
+# @stdout the line-count-preserving comment stream
+function extract_yaml_comments() {
+  local -r file="$1"
+  local -r stats_dir="$2"
+  awk -v stats="${stats_dir}/comments" '
+    {
+      line = $0
+      # Only the indent is stripped: a reference written flush against
+      # the hash (`#123 …`) is invisible to the class regexes once the
+      # hash is gone.
+      if (line ~ /^[[:space:]]*#/) {
+        sub(/^[[:space:]]*/, "", line)
+        print line
+        count++
+        next
+      }
+      print ""
+    }
+    END { printf("%d %d\n", count, NR) > stats }
+  ' "$(awk_path "${file}")"
+}
+
 # @description Blank backtick code spans in place, preserving line count,
 # and tally them. A comment that names a banned token as an example — the
 # class regexes in this very file, an allowlist entry, a scan-scope note
@@ -764,7 +817,7 @@ function scan_advisory() {
 # @stdout NUL-delimited source paths, sorted
 # shellcheck disable=SC2329 # invoked indirectly, by name, via enumerate_into
 function ephemeral_refs_git_sources() {
-  (cd "${REPO_ROOT}" && git ls-files --cached --others --exclude-standard -z -- '*.md' '*.sh' '*.nix') |
+  (cd "${REPO_ROOT}" && git ls-files --cached --others --exclude-standard -z -- '*.md' '*.sh' '*.nix' '*.yml' '*.yaml') |
     sort --zero-terminated
 }
 
@@ -813,14 +866,15 @@ function main() {
   assert_class_canaries
 
   blocking_hits=0
-  local md_sources=0 shell_sources=0 nix_sources=0
-  local md_parsed=0 shell_parsed=0 nix_parsed=0
+  local md_sources=0 shell_sources=0 nix_sources=0 yaml_sources=0
+  local md_parsed=0 shell_parsed=0 nix_parsed=0 yaml_parsed=0
   # Comments are tallied per language, never summed into one counter.
   # The two corpora differ by an order of magnitude, so a shared total
   # stays comfortably positive when one extractor stops matching
   # entirely — the breadth assertion below would then pass on the
   # strength of the other language's comments alone.
-  local allowlisted=0 prefiltered=0 lines=0 shell_comments=0 nix_comments=0
+  local allowlisted=0 prefiltered=0 lines=0
+  local shell_comments=0 nix_comments=0 yaml_comments=0
   local fenced=0 spans=0 gen=0
   local f_lines f_fenced f_spans f_gen f_comments
 
@@ -858,6 +912,7 @@ function main() {
     md) md_sources=$((md_sources + 1)) ;;
     sh) shell_sources=$((shell_sources + 1)) ;;
     nix) nix_sources=$((nix_sources + 1)) ;;
+    yaml) yaml_sources=$((yaml_sources + 1)) ;;
     esac
     scan_rel+=("${src_rel}")
     scan_op+=("${op_prefix}${src_rel}")
@@ -990,6 +1045,18 @@ function main() {
       lines=$((lines + f_lines))
       spans=$((spans + f_spans))
       ;;
+    yaml)
+      # No failure path: the matcher holds no multi-line state, so there
+      # is no region it can be left reading wrong.
+      extract_yaml_comments "${src_abs}" "${WORK_DIR}" >"${raw}"
+      blank_code_spans "${raw}" "${WORK_DIR}" >"${stripped}"
+      yaml_parsed=$((yaml_parsed + 1))
+      IFS=' ' read -r f_comments f_lines <"${WORK_DIR}/comments"
+      IFS=' ' read -r f_spans <"${WORK_DIR}/spans"
+      yaml_comments=$((yaml_comments + f_comments))
+      lines=$((lines + f_lines))
+      spans=$((spans + f_spans))
+      ;;
     esac
 
     if [[ ${ADVISORY} -eq 1 ]]; then
@@ -1011,10 +1078,11 @@ function main() {
   # enumerated, how much of it was parsed, and what was exempted. The
   # per-language source counts are what catches a run that has stopped
   # seeing one language while still exiting 0.
-  printf 'ephemeral-refs: scanned %d markdown, %d shell, %d nix source(s); parsed %d candidate(s), pre-filtered %d; %d line(s), %d shell comment(s), %d nix comment(s); skipped %d allowlisted; exempted %d code-fence line(s), %d inline code span(s), %d generated-block line(s)\n' \
-    "${md_sources}" "${shell_sources}" "${nix_sources}" \
-    "$((md_parsed + shell_parsed + nix_parsed))" "${prefiltered}" "${lines}" \
-    "${shell_comments}" "${nix_comments}" "${allowlisted}" "${fenced}" \
+  printf 'ephemeral-refs: scanned %d markdown, %d shell, %d nix, %d yaml source(s); parsed %d candidate(s), pre-filtered %d; %d line(s), %d shell comment(s), %d nix comment(s), %d yaml comment(s); skipped %d allowlisted; exempted %d code-fence line(s), %d inline code span(s), %d generated-block line(s)\n' \
+    "${md_sources}" "${shell_sources}" "${nix_sources}" "${yaml_sources}" \
+    "$((md_parsed + shell_parsed + nix_parsed + yaml_parsed))" "${prefiltered}" \
+    "${lines}" "${shell_comments}" "${nix_comments}" "${yaml_comments}" \
+    "${allowlisted}" "${fenced}" \
     "${spans}" "${gen}"
 
   # A gate that reads no comments has not found a clean tree, it has
@@ -1036,6 +1104,12 @@ function main() {
     -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
     printf 'no comments extracted from %d nix source(s)\n' \
       "${nix_parsed}" >&2
+    exit 2
+  fi
+  if [[ ${yaml_parsed} -gt 0 && ${yaml_comments} -eq 0 &&
+    -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
+    printf 'no comments extracted from %d yaml source(s)\n' \
+      "${yaml_parsed}" >&2
     exit 2
   fi
 

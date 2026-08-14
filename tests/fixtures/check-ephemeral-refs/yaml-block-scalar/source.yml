@@ -1,0 +1,13 @@
+name: yaml-block-scalar-fixture
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          set -Eeuo pipefail
+          # The retry was added in #456 after a flaky run.
+          echo probe

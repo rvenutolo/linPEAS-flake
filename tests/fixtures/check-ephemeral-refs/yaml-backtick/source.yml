@@ -1,0 +1,5 @@
+name: yaml-backtick-fixture
+
+# A comment quoting `#123` as an example is documentation.
+on:
+  workflow_dispatch:

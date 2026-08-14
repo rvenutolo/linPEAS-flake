@@ -57,10 +57,10 @@ jobs:
           IFS=$'\n\t'
           # commitlint resolves via flake.lock-pinned nixpkgs-unstable
           # — same binary the local pre-commit `commitlint` hook uses.
-          # Replaces npm install of unpinned @commitlint/cli +
-          # @commitlint/config-conventional, which scorecard's
-          # Pinned-Dependencies check flagged as npmCommand not pinned
-          # by hash (drift run 2026-05-28, issue #261).
+          # An npm install of @commitlint/cli +
+          # @commitlint/config-conventional would not be pinned by hash,
+          # which is what scorecard's Pinned-Dependencies check scores.
+          # Resolving through the lock keeps that check at 10.
           # GitHub appends " (#<number>)" to the PR title when it composes
           # the merge-commit subject, so the title alone is not the string
           # that lands. Linting the title bare leaves a window where a title
