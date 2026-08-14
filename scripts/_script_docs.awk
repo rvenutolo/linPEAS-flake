@@ -3,7 +3,8 @@
 # Read one bash script on stdin; emit JSON describing its shdoc-style
 # header annotations. Stops at the first non-comment, non-blank line
 # so that function-body `@description` annotations are ignored.
-# Recognized tags: @description, @arg, @option, @example.
+# Recognized tags: @description, @arg, @option, @example, and the
+# non-rendering @generates / @generates-block declarations.
 # Exit 2 if @description is absent.
 
 BEGIN {
@@ -67,6 +68,12 @@ in_header && /^#[[:space:]]+@[A-Za-z]+/ {
   } else if (tag == "example") {
     state = "example"
     # rest (if any) ignored; example body is the following indented lines
+  } else if (tag == "generates" || tag == "generates-block") {
+    # Declared for scripts/check-size-label-ignores.sh, which reads these
+    # tags straight from the script source. They carry no rendered output,
+    # so they are recognized and dropped rather than reported unknown —
+    # a tag this repo requires must not also be one this parser warns about.
+    state = ""
   } else {
     print "warning: unknown tag @" tag > "/dev/stderr"
     state = ""

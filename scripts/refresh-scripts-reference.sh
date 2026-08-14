@@ -5,6 +5,7 @@
 # docs/reference/scripts.md from in-script shdoc-style annotations
 # parsed by scripts/_script_docs.awk. Groups entries by basename
 # prefix into Check / Refresh / Other sections.
+# @generates docs/reference/scripts.md
 # @option --check exit 1 if drift; exit 2 if the doc or the awk parser is
 # missing; do not mutate the working tree
 

@@ -4,6 +4,7 @@
 # @description Regenerate the precommit-table managed block in
 # docs/development/git.md from the current pre-commit hook manifest
 # in the flake.
+# @generates-block docs/development/git.md
 # @option --check exit 1 if the doc would change; exit 2 if the doc is
 # missing; do not mutate the working tree
 

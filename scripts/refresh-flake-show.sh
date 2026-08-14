@@ -3,6 +3,7 @@
 #
 # @description Regenerate the flake-show managed block in
 # docs/reference/flake-outputs.md from `nix flake show --all-systems`.
+# @generates docs/reference/flake-outputs.md
 # @option --check exit 1 if the doc would change; exit 2 if the check
 # cannot run (doc missing, or nix flake show fails); do not mutate the
 # working tree

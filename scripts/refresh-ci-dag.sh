@@ -4,6 +4,7 @@
 # @description Regenerate the ci-dag managed block in
 # docs/architecture/ci-dag.md from .github/workflows/ci.yml plus the
 # docs/_data/ci-check-categories.yml map.
+# @generates docs/architecture/ci-dag.md
 # @option --check exit 1 if the doc would change; exit 2 if an input file
 # is missing, if ci.yml has needs: references to non-existent jobs, or if
 # a tool fails to read them

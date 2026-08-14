@@ -34,15 +34,33 @@ auto-regenerations do not inflate PR size. The ignore list is supplied
 to `pascalgn/size-label-action` via the `IGNORED` env var inline in
 the workflow file.
 
-**Invariant:** when a new *wholly* generator-owned file is added to the
-repo, its path must be added to the ignore list in the same PR. Drift
-allows a regeneration to mask a legitimately-large change behind a
-spuriously-small size label.
+Ownership is declared at the generator, in the header annotation block
+`scripts/_script_docs.awk` reads:
 
-Files that carry a generated block inside otherwise hand-written prose
-(`docs/development/git.md`) stay off the list on purpose: ignoring them
-wholesale would also drop hand-edits to the surrounding prose from the
-size count, which is the same failure in the opposite direction.
+| Annotation                | Meaning                                              | On the ignore list |
+| ------------------------- | ---------------------------------------------------- | ------------------ |
+| `@generates <path>`       | the script owns that file's content                  | required           |
+| `@generates-block <path>` | the script splices a block into a hand-authored file | forbidden          |
+
+No generator writes a whole file — each splices a `<!-- BEGIN x -->`
+block into a doc that also carries hand-authored prose — so which side
+of the line a doc falls on is a judgment. Recording it at the generator
+keeps that judgment reviewable next to the code that makes it, where a
+coverage threshold would be a magic number that moves as the prose
+around the block grows. Files carrying a block inside hand-written
+prose (`docs/development/git.md`, `README.md`) stay off the list on
+purpose: ignoring them wholesale would also drop hand-edits to the
+surrounding prose from the size count, which is the same failure in the
+opposite direction.
+
+**Invariant:** every `@generates` path is on the ignore list, no
+`@generates-block` path is, and every remaining entry is one of the
+exemptions `scripts/check-size-label-ignores.sh` names — `CHANGELOG.md`
+(git-cliff renders it from commit history), `flake.lock` (nix writes
+it), and `tests/fixtures/**` (fixture trees are authored as data, not
+as reviewable change). Drift in one direction lets a regeneration mask
+a legitimately-large change behind a spuriously-small size label; drift
+in the other scores a hand-authored file's every edit at zero.
 
 ### Label bootstrap
 

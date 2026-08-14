@@ -793,6 +793,13 @@ composite `./.github/actions/setup-nix` — no vendor Nix-installer
 action directly — and passes
 `github-token: ${{ secrets.GITHUB_TOKEN }}`.
 
+### scripts/check-size-label-ignores.sh
+
+Lint: the size-label action's `IGNORED` list holds exactly
+the files this repo's generators declare they own — every `@generates`
+path is on the list, no `@generates-block` path is, and every other
+entry is one of this lint's declared exemptions.
+
 ### scripts/check-tag-protection.sh
 
 Lint: the live `release-tag-protection` ruleset

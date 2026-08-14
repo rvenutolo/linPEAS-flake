@@ -1,0 +1,10 @@
+name: bad-generates-missing
+on:
+  workflow_dispatch: {}
+jobs:
+  size:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7
+        env:
+          IGNORED: "CHANGELOG.md"

@@ -4,6 +4,8 @@
 # @description Regenerate the just-recipes managed block in
 # README.md and docs/reference/just-recipes.md from the current
 # `just` recipe list.
+# @generates docs/reference/just-recipes.md
+# @generates-block README.md
 # @option --check exit 1 if either doc would change; exit 2 if either doc
 # is missing; do not mutate the working tree
 
