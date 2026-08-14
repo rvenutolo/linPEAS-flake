@@ -79,10 +79,36 @@ function test_function_body_description_ignored() {
   fi
 }
 
+# A tag this repo requires must not be one the parser calls unknown, and a
+# tag nothing defines must still be reported. Both halves matter: recognizing
+# the declarations by widening the unknown-tag arm itself would silence real
+# typos too.
+function test_generates_tags_recognized_but_bogus_still_warns() {
+  local -r name='@generates declarations are silent; an undefined tag still warns'
+  local declared_stderr bogus_stderr stderr_file
+  stderr_file="$(make_temp)"
+  declared_stderr="$(printf '%s\n' '#!/usr/bin/env bash' '# @description x' \
+    '# @generates docs/a.md' '# @generates-block README.md' 'true' |
+    awk --file "${PARSER}" 2>&1 >/dev/null)"
+  bogus_stderr="$(printf '%s\n' '#!/usr/bin/env bash' '# @description x' \
+    '# @bogus y' 'true' | awk --file "${PARSER}" 2>&1 >/dev/null)"
+  printf 'declared-tags-stderr: %s\nundefined-tag-stderr: %s\n' \
+    "${declared_stderr}" "${bogus_stderr}" >"${stderr_file}"
+  harness_assert_record "${name}" 'unknown tag @bogus' "${stderr_file}"
+  if [[ -n ${declared_stderr} ]]; then
+    fail "${name} — declaration tags warned: ${declared_stderr}"
+  elif [[ ${bogus_stderr} != *"unknown tag @bogus"* ]]; then
+    fail "${name} — undefined tag no longer reported: ${bogus_stderr}"
+  else
+    pass "${name}"
+  fi
+}
+
 function main() {
   test_full_matches_expected
   test_no_description_exits_2
   test_function_body_description_ignored
+  test_generates_tags_recognized_but_bogus_still_warns
   harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then
