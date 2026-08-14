@@ -455,9 +455,9 @@ jobs:
             - push-refresh: `${{ needs.push-refresh.result }}`
 
             Manual fallback runbook: `docs/architecture/flake-input-bumps.md`
-            steps 1-3 (checkout PR, `nix flake update <name>`,
-            `nix fmt`), then regenerate the lock-derived docs listed in
-            this workflow's `LOCK_DERIVED_GENERATORS` and commit them
+            steps 1-4 (checkout PR, `nix flake update <name>`, `nix fmt`,
+            regenerate the docs named in this workflow's
+            `LOCK_DERIVED_GENERATORS`), committing the regenerated docs
             alongside the lock.
           label-description: renovate-flake-lock-refresh workflow failure
           github-token: ${{ secrets.GITHUB_TOKEN }}
