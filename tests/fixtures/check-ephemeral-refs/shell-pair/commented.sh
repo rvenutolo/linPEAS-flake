@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
-# A tidy comment about nothing in particular.
+# A tidy comment quoting `#123` and saying nothing else.
 echo one

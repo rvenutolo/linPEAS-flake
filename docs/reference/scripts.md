@@ -385,16 +385,20 @@ dates, planning/review-pass labels, or literal `.claude/` paths.
 Markdown is read as prose; shell is read as comments only, lifted from
 the `shfmt` syntax tree; Nix is read as the comments that start their
 own line, both `#` line comments and `/* */` block comments.
+Only the sources whose raw text carries a candidate token are
+extracted; the rest are set aside and reported as such.
 Default mode blocks (exit 1); --advisory mode
 suppresses findings, not defects: it warns on fuzzy causal-history
 phrases and exits 0 on those, but a could-not-run (unterminated
 fence/generated block/Nix block comment, unparsable shell, a shell
-scan or a Nix scan that extracted no comments, failed source
+scan or a Nix scan that extracted no comments, a failed candidate
+scan, a structural pass that read fewer sources than were set aside
+for it, a class regex that fails its own canary, failed source
 enumeration) still exits non-zero the same as the default pass.
 
 **Options:**
 
-- `--advisory` — suppress findings, not defects: warn on fuzzy causal-history phrases and exit 0 for those, but still exit 1 on an unterminated fence/generated block/Nix block comment and 2 on a failed source enumeration, an unparsable shell source, a shell scan that extracted no comments, or a Nix scan that extracted no comments
+- `--advisory` — suppress findings, not defects: warn on fuzzy causal-history phrases and exit 0 for those, but still exit 1 on an unterminated fence/generated block/Nix block comment and 2 on a failed source enumeration, a failed candidate scan, a class regex that fails its canary, a structural pass that read fewer sources than were set aside, an unparsable shell source, a shell scan that extracted no comments, or a Nix scan that extracted no comments
 
 ### scripts/check-flake-lock-provenance.sh
 

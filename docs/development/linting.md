@@ -130,6 +130,55 @@ either mode (`LINT_ALLOW_EMPTY_SCAN=1` accepts a genuinely empty scan
 set) rather than a scan that read nothing reading as a scan that found
 nothing wrong.
 
+### The candidate pass
+
+Extraction is the expensive half of this lint — `shfmt` and `jq` per
+shell source, `awk` per source, `grep` per class per source — and almost
+no file in the tree carries a banned shape. One
+`grep --files-with-matches` for the union of the mode's class regexes
+therefore runs first, over every scannable source at once, and only the
+sources it names are extracted and scanned. On the live tree that is
+around 23 of 245 in the blocking pass and 6 of 245 in the advisory one.
+
+**A set-aside source cannot be hiding a violation.** Every extractor
+emits, for a given source line, either a blank line or a substring of
+that same raw line: Markdown emits the line with exempt regions blanked,
+shell emits `#` prepended to the comment text `shfmt` reports — and the
+raw line carries that `#` — while Nix emits the line with its indent
+stripped. Blanking only removes text, and removing text cannot create a
+match. The one regex feature that could read differently is the left
+boundary guard `(^|[^-&[:alnum:]_])`: where an extracted match binds
+`^`, the same position in the raw line is preceded by whitespace or by
+line start, because a comment opener requires one and a Markdown line
+*is* the raw line — and whitespace satisfies the guard's negated class.
+So a match in the extracted stream implies a match in the raw file.
+
+The union is assembled from the same class-regex constants the scan
+uses rather than written out a second time, because a class that widened
+without its union widening would start setting aside files the scan
+would have flagged.
+
+**What it gives up:** a shell source with no candidate token is never
+handed to `shfmt`, so a parse failure in it is not reported. The verdict
+is unchanged, and `shellcheck` and the formatter already gate shell
+parsability. Markdown and Nix keep their structural diagnostics: a
+second pass reads every set-aside source of those two languages for an
+unterminated fence, generated block or `/* */`, because those regions
+blank everything below them and must stay a named defect wherever they
+sit.
+
+**What asserts the pass is still working.** A candidate pass that
+matched nothing would set every file aside and exit clean, and no file
+count or verdict would show it. Two things catch that. Each class regex
+is matched against a fixed canary literal carrying a token of its own
+class, and the mode's union against every canary it covers, before
+anything is scanned; a failure exits 2 naming the class. This check
+answers to no override — an empty tree is a state an operator can vouch
+for with `LINT_ALLOW_EMPTY_SCAN=1`, a degenerate matcher is not. And the
+scope summary states the parsed/pre-filtered split alongside the source
+counts, so a run that read one file of forty cannot read like a run that
+read forty.
+
 ### Blocking classes
 
 | Class              | Shapes                                                                        |
