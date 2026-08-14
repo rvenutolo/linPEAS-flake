@@ -5,6 +5,15 @@ repo_url: https://github.com/rvenutolo/linPEAS-flake
 repo_name: rvenutolo/linPEAS-flake
 edit_uri: edit/main/docs/
 strict: true
+# A doc that exists but is in no nav entry is reachable only by inline
+# links from other pages. `warn` rather than `error` because mkdocs accepts
+# only warn/info/ignore for this key and rejects `error` at config load;
+# `strict: true` above promotes the warning to a hard build failure, so an
+# omitted doc aborts `nix build .#site`. The default is `info`, which
+# strict mode does not promote — hence the explicit entry.
+validation:
+  nav:
+    omitted_files: warn
 
 theme:
   name: material
@@ -99,6 +108,7 @@ nav:
       - Treefmt config: reference/treefmt-config.md
   - Runbooks:
       - actionlint embedded linters: actionlint-embedded-linters.md
+      - CI watchdog: runbooks/ci-watchdog.md
       - Docker Hub recovery: runbooks/dockerhub-recovery.md
       - Ratchet pin audit: runbooks/ratchet-pin-audit.md
       - Reproducibility check: runbooks/reproducibility-check.md
