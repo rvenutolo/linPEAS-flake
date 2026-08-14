@@ -25,13 +25,15 @@ failures=0
 # source count could not tell a file that was read from one that was
 # skipped.
 # @arg $1 markdown sources  @arg $2 shell sources  @arg $3 nix sources
-# @arg $4 candidates parsed  @arg $5 sources pre-filtered
-# @arg $6 lines read  @arg $7 shell comments  @arg $8 nix comments
-# @arg $9 allowlisted skipped  @arg ${10} code-fence lines
-# @arg ${11} inline code spans  @arg ${12} generated-block lines
+# @arg $4 yaml sources  @arg $5 candidates parsed
+# @arg $6 sources pre-filtered  @arg $7 lines read
+# @arg $8 shell comments  @arg $9 nix comments  @arg ${10} yaml comments
+# @arg ${11} allowlisted skipped  @arg ${12} code-fence lines
+# @arg ${13} inline code spans  @arg ${14} generated-block lines
 function summary() {
-  printf 'ephemeral-refs: scanned %d markdown, %d shell, %d nix source(s); parsed %d candidate(s), pre-filtered %d; %d line(s), %d shell comment(s), %d nix comment(s); skipped %d allowlisted; exempted %d code-fence line(s), %d inline code span(s), %d generated-block line(s)' \
-    "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9" "${10}" "${11}" "${12}"
+  printf 'ephemeral-refs: scanned %d markdown, %d shell, %d nix, %d yaml source(s); parsed %d candidate(s), pre-filtered %d; %d line(s), %d shell comment(s), %d nix comment(s), %d yaml comment(s); skipped %d allowlisted; exempted %d code-fence line(s), %d inline code span(s), %d generated-block line(s)' \
+    "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9" "${10}" "${11}" "${12}" \
+    "${13}" "${14}"
 }
 
 # @description Run the lint against one source under an arbitrary repo
@@ -118,7 +120,7 @@ function run_scope_scenario() {
   local -r name='enumeration reaches SECURITY.md and skips .claude'
   local -r expected_stderr='SECURITY.md:3: [issue-ref] #456'
   local expected_stdout
-  expected_stdout="$(summary 2 0 0 1 1 3 0 0 1 0 0 0)"
+  expected_stdout="$(summary 2 0 0 0 1 1 3 0 0 0 1 0 0 0)"
   readonly expected_stdout
 
   local stderr_file stdout_file outcome_file
@@ -171,7 +173,7 @@ function run_tilde_scenario() {
     >"${tmp_root}/docs/tilde.md"
 
   run_scenario_root 'tilde-fenced banned shapes pass' "${tmp_root}" \
-    'docs/tilde.md' '' 0 '' "$(summary 1 0 0 1 0 5 0 0 0 3 0 0)"
+    'docs/tilde.md' '' 0 '' "$(summary 1 0 0 0 1 0 5 0 0 0 0 3 0 0)"
 
   rm --recursive --force -- "${tmp_root}"
 }
@@ -228,7 +230,7 @@ function run_prefiltered_shell_scenario() {
     >"${tmp_root}/scripts/quiet.sh"
 
   run_scenario_root 'unparsable shell with no candidate token is set aside' \
-    "${tmp_root}" 'scripts/quiet.sh' '' 0 '' "$(summary 0 1 0 0 1 0 0 0 0 0 0 0)"
+    "${tmp_root}" 'scripts/quiet.sh' '' 0 '' "$(summary 0 1 0 0 0 1 0 0 0 0 0 0 0 0)"
 
   rm --recursive --force -- "${tmp_root}"
 }
@@ -367,6 +369,23 @@ function run_unterminated_nix_block_scenario() {
   rm --recursive --force -- "${tmp_root}"
 }
 
+# @description Assert the breadth rule holds YAML to its own corpus,
+# the same way it holds shell and Nix to theirs. The token sits in a
+# quoted scalar so the source is a candidate and reaches the extractor;
+# what it must not have is a comment for the extractor to find.
+function run_yaml_no_comments_scenario() {
+  local tmp_root
+  tmp_root="$(mktemp -d)"
+  mkdir --parents "${tmp_root}/.github"
+  printf 'name: quiet\nenv:\n  ANCHOR: "#123"\n' \
+    >"${tmp_root}/.github/bare.yml"
+
+  run_scenario_root 'yaml source set with no comments is a could-not-run' \
+    "${tmp_root}" '.github/bare.yml' '' 2 'no comments extracted from 1 yaml source(s)'
+
+  rm --recursive --force -- "${tmp_root}"
+}
+
 # @description Assert that a comment-free shell source still contributes
 # its line count. The extractor pairs a comment-row file against the
 # source with `awk`'s two-operand `NR == FNR` split, and an empty row
@@ -378,7 +397,7 @@ function run_unterminated_nix_block_scenario() {
 function run_source_pair_scenario() {
   run_scenario_root 'comment-free shell source still contributes its lines' \
     "${FIXTURES}/shell-pair" $'commented.sh\nbare.sh' '' 0 '' \
-    "$(summary 0 2 0 2 0 6 1 0 0 0 1 0)"
+    "$(summary 0 2 0 0 2 0 6 1 0 0 0 0 1 0)"
 }
 
 function main() {
@@ -388,25 +407,25 @@ function main() {
   # output. That is what separates a doc the lint found clean from a doc
   # the lint mostly skipped.
   run_scenario 'good prose passes' 'good' 'source.md' '' 0 '' \
-    "$(summary 1 0 0 1 0 10 0 0 0 0 2 0)"
+    "$(summary 1 0 0 0 1 0 10 0 0 0 0 0 2 0)"
   run_scenario 'bare issue ref fails' \
     'bad-issue-ref' 'source.md' '' 1 'source.md:3: [issue-ref] #123' \
-    "$(summary 1 0 0 1 0 3 0 0 0 0 0 0)"
+    "$(summary 1 0 0 0 1 0 3 0 0 0 0 0 0 0)"
   run_scenario 'prose date fails' \
-    'bad-date' 'source.md' '' 1 '[date]' "$(summary 1 0 0 1 0 3 0 0 0 0 0 0)"
+    'bad-date' 'source.md' '' 1 '[date]' "$(summary 1 0 0 0 1 0 3 0 0 0 0 0 0 0)"
   run_scenario 'planning label fails' \
-    'bad-planning' 'source.md' '' 1 '[planning]' "$(summary 1 0 0 1 0 3 0 0 0 0 0 0)"
+    'bad-planning' 'source.md' '' 1 '[planning]' "$(summary 1 0 0 0 1 0 3 0 0 0 0 0 0 0)"
   run_scenario 'review-pass label fails' \
-    'bad-review' 'source.md' '' 1 '[review]' "$(summary 1 0 0 1 0 3 0 0 0 0 0 0)"
+    'bad-review' 'source.md' '' 1 '[review]' "$(summary 1 0 0 0 1 0 3 0 0 0 0 0 0 0)"
   # Enumerated shapes that legitimately start a match must still report.
   run_scenario 'standalone planning shapes still match' \
-    'planning-shapes' 'source.md' '' 1 '[planning]' "$(summary 1 0 0 1 0 5 0 0 0 0 0 0)"
+    'planning-shapes' 'source.md' '' 1 '[planning]' "$(summary 1 0 0 0 1 0 5 0 0 0 0 0 0 0)"
   run_scenario 'standalone review shapes still match' \
-    'review-shapes' 'source.md' '' 1 '[review]' "$(summary 1 0 0 1 0 5 0 0 0 0 0 0)"
+    'review-shapes' 'source.md' '' 1 '[review]' "$(summary 1 0 0 0 1 0 5 0 0 0 0 0 0 0)"
   # Mid-word matches (`UTF-8` -> `F-8`, `ID5:` -> `D5:`) must not be smuggled
   # back into the blocking gate by the bare planning/review shapes.
   run_scenario 'encoding shapes are not planning/review labels' \
-    'false-positive-shapes' 'source.md' '' 0 '' "$(summary 1 0 0 1 0 8 0 0 0 0 1 0)"
+    'false-positive-shapes' 'source.md' '' 0 '' "$(summary 1 0 0 0 1 0 8 0 0 0 0 0 1 0)"
   # An unterminated generated block must fail loud, not blank to EOF.
   # The run aborts mid-scan, so no scope summary is owed.
   run_scenario 'unterminated generated block errors' \
@@ -420,23 +439,23 @@ function main() {
   # quoted marker is counted as a code span, never as a generated block.
   run_scenario 'inline BEGIN mention does not open a block' \
     'inline-begin-mention' 'source.md' '' 1 'source.md:5: [issue-ref] #654' \
-    "$(summary 1 0 0 1 0 5 0 0 0 0 1 0)"
+    "$(summary 1 0 0 0 1 0 5 0 0 0 0 0 1 0)"
   run_scenario 'fenced BEGIN/END mention does not open a block' \
     'fenced-begin-mention' 'source.md' '' 1 'source.md:11: [issue-ref] #789' \
-    "$(summary 1 0 0 1 0 11 0 0 0 5 0 0)"
+    "$(summary 1 0 0 0 1 0 11 0 0 0 0 5 0 0)"
   run_scenario 'literal .claude path fails' \
-    'bad-claude-path' 'source.md' '' 1 '[claude-path]' "$(summary 1 0 0 1 0 3 0 0 0 0 0 0)"
+    'bad-claude-path' 'source.md' '' 1 '[claude-path]' "$(summary 1 0 0 0 1 0 3 0 0 0 0 0 0 0)"
   run_scenario 'code-span/block banned shapes pass' \
-    'exempt-codeblock' 'source.md' '' 0 '' "$(summary 1 0 0 1 0 10 0 0 0 4 2 0)"
+    'exempt-codeblock' 'source.md' '' 0 '' "$(summary 1 0 0 0 1 0 10 0 0 0 0 4 2 0)"
   run_scenario 'generated-block banned shapes pass' \
-    'exempt-genblock' 'source.md' '' 0 '' "$(summary 1 0 0 1 0 9 0 0 0 0 0 5)"
+    'exempt-genblock' 'source.md' '' 0 '' "$(summary 1 0 0 0 1 0 9 0 0 0 0 0 0 5)"
   run_scope_scenario
   run_tilde_scenario
   run_scenario 'causal phrase passes blocking pass' \
-    'advisory' 'source.md' '' 0 '' "$(summary 1 0 0 1 0 6 0 0 0 0 1 0)"
+    'advisory' 'source.md' '' 0 '' "$(summary 1 0 0 0 1 0 6 0 0 0 0 0 1 0)"
   run_scenario 'causal phrase prints in advisory mode' \
     'advisory' 'source.md' '--advisory' 0 '[advisory] source.md:3:' \
-    "$(summary 1 0 0 1 0 6 0 0 0 0 1 0)"
+    "$(summary 1 0 0 0 1 0 6 0 0 0 0 0 1 0)"
 
   # Shell sources reach the same class regexes through a comment
   # extractor rather than through `strip_exempt`, so each scenario below
@@ -444,35 +463,35 @@ function main() {
   # backed by zero comments is a gate that stopped reading.
   run_scenario 'shell comment blocking ref fails' \
     'shell-blocking' 'source.sh' '' 1 'source.sh:3: [issue-ref] #123' \
-    "$(summary 0 1 0 1 0 4 2 0 0 0 0 0)"
+    "$(summary 0 1 0 0 1 0 4 2 0 0 0 0 0 0)"
   run_scenario 'shell comment causal phrase passes blocking pass' \
-    'shell-causal' 'source.sh' '' 0 '' "$(summary 0 1 0 1 0 4 2 0 0 0 1 0)"
+    'shell-causal' 'source.sh' '' 0 '' "$(summary 0 1 0 0 1 0 4 2 0 0 0 0 1 0)"
   run_scenario 'shell comment causal phrase prints in advisory mode' \
     'shell-causal' 'source.sh' '--advisory' 0 '[advisory] source.sh:2:' \
-    "$(summary 0 1 0 1 0 4 2 0 0 0 1 0)"
+    "$(summary 0 1 0 0 1 0 4 2 0 0 0 0 1 0)"
   # The two false-positive guards below pass against the pre-widening
   # lint as well; they exist to hold the AST extractor to its promise
   # that a hash inside code is not a comment, not to prove the widening.
   run_scenario 'shell string literals are not comments' \
-    'shell-literal' 'source.sh' '' 0 '' "$(summary 0 1 0 1 0 5 1 0 0 0 0 0)"
+    'shell-literal' 'source.sh' '' 0 '' "$(summary 0 1 0 0 1 0 5 1 0 0 0 0 0 0)"
   run_scenario 'shell heredoc body is not comments' \
-    'shell-heredoc' 'source.sh' '' 0 '' "$(summary 0 1 0 1 0 7 1 0 0 0 0 0)"
+    'shell-heredoc' 'source.sh' '' 0 '' "$(summary 0 1 0 0 1 0 7 1 0 0 0 0 0 0)"
   run_scenario 'shell trailing comment is scanned' \
     'shell-trailing' 'source.sh' '' 1 'source.sh:3: [issue-ref] #321' \
-    "$(summary 0 1 0 1 0 3 2 0 0 0 0 0)"
+    "$(summary 0 1 0 0 1 0 3 2 0 0 0 0 0 0)"
   run_scenario 'shell comment code spans are exempt' \
-    'shell-backtick' 'source.sh' '' 0 '' "$(summary 0 1 0 1 0 3 1 0 0 0 5 0)"
+    'shell-backtick' 'source.sh' '' 0 '' "$(summary 0 1 0 0 1 0 3 1 0 0 0 0 5 0)"
   # Only the comment opening line 1 at column 1 is the shebang. A comment
   # whose text happens to start with `!` is prose wherever else it sits,
   # so the ref on line 3 must report and the comment tally must count it.
   run_scenario 'bang-prefixed comment below the shebang is scanned' \
     'shell-bang-comment' 'source.sh' '' 1 'source.sh:3: [issue-ref] #234' \
-    "$(summary 0 1 0 1 0 4 2 0 0 0 0 0)"
+    "$(summary 0 1 0 0 1 0 4 2 0 0 0 0 0 0)"
   # `shfmt` strips the hash from a comment's text. Put back, or a
   # reference written flush against it is invisible to the class regexes.
   run_scenario 'shell ref flush against the hash is scanned' \
     'shell-hash-flush' 'source.sh' '' 1 'source.sh:2: [issue-ref] #345' \
-    "$(summary 0 1 0 1 0 3 1 0 0 0 0 0)"
+    "$(summary 0 1 0 0 1 0 3 1 0 0 0 0 0 0)"
   run_unparsable_shell_scenario
   run_prefiltered_shell_scenario
   run_no_comments_scenario
@@ -491,23 +510,47 @@ function main() {
   # boundary would report the file clean.
   run_scenario 'nix comment blocking ref fails' \
     'nix-comment' 'source.nix' '' 1 'source.nix:2: [issue-ref] #123' \
-    "$(summary 0 0 1 1 0 4 0 1 0 0 0 0)"
+    "$(summary 0 0 1 0 1 0 4 0 1 0 0 0 0 0)"
   run_scenario 'nix embedded shell comment is scanned' \
     'nix-embedded-shell' 'source.nix' '' 1 'source.nix:4: [issue-ref] #456' \
-    "$(summary 0 0 1 1 0 7 0 1 0 0 0 0)"
+    "$(summary 0 0 1 0 1 0 7 0 1 0 0 0 0 0)"
   # The Nix matcher strips only the indent, so a ref flush against the
   # hash reaches the class regexes the same way it does on the shell path.
   run_scenario 'nix ref flush against the hash is scanned' \
     'nix-hash-flush' 'source.nix' '' 1 'source.nix:2: [issue-ref] #456' \
-    "$(summary 0 0 1 1 0 4 0 1 0 0 0 0)"
+    "$(summary 0 0 1 0 1 0 4 0 1 0 0 0 0 0)"
   # `/* */` is the other Nix comment form. Nothing forbids one, so a
   # matcher that read only `#` lines would leave it as an open evasion
   # path — the tally states all four lines the block spans were read.
   run_scenario 'nix block comment blocking ref fails' \
     'nix-block-comment' 'source.nix' '' 1 'source.nix:3: [issue-ref] #789' \
-    "$(summary 0 0 1 1 0 7 0 4 0 0 0 0)"
+    "$(summary 0 0 1 0 1 0 7 0 4 0 0 0 0 0)"
   run_unterminated_nix_block_scenario
   run_nix_no_comments_scenario
+
+  # YAML reaches the same class regexes through a line-start comment
+  # matcher, the shape the Nix path uses and for the same reason: no
+  # comment-preserving reader in this toolchain can tell a trailing `#`
+  # from one inside a quoted scalar.
+  run_scenario 'yaml comment blocking ref fails' \
+    'yaml-comment' 'source.yml' '' 1 'source.yml:3: [issue-ref] #123' \
+    "$(summary 0 0 0 1 1 0 5 0 0 1 0 0 0 0)"
+  # The population a YAML parser cannot reach: to one, a `run:` block is
+  # a single string, so a comment-node reader sees nothing here at all.
+  # A third of this repo's YAML comments live in blocks like this one.
+  run_scenario 'yaml block-scalar comment is scanned' \
+    'yaml-block-scalar' 'source.yml' '' 1 'source.yml:12: [issue-ref] #456' \
+    "$(summary 0 0 0 1 1 0 13 0 0 1 0 0 0 0)"
+  # False-positive guards. Both pass against the pre-widening lint too —
+  # they hold the matcher to its promise that only a line-start `#`
+  # opens a comment, rather than proving the widening.
+  run_scenario 'yaml quoted and trailing hashes are not comments' \
+    'yaml-quoted-hash' 'source.yml' '' 0 '' \
+    "$(summary 0 0 0 1 1 0 10 0 0 2 0 0 0 0)"
+  run_scenario 'yaml comment code spans are exempt' \
+    'yaml-backtick' 'source.yml' '' 0 '' \
+    "$(summary 0 0 0 1 1 0 5 0 0 1 0 0 1 0)"
+  run_yaml_no_comments_scenario
 
   harness_assert_verify || failures=$((failures + 1))
 

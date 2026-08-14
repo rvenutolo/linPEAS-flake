@@ -19,7 +19,7 @@ name: scorecard-drift-check
 # Branch-Protection would cover — force-push blocked, deletion
 # blocked, admin enforcement, required status checks, required PRs —
 # is already cross-checked by settings-posture-drift-check, so the
-# second-source value is diminished. Triaged 2026-05-28 in #261).
+# second-source value is diminished).
 #
 # Dropped as duplicates of an existing in-tree signal — the
 # scorecard signal is coarser than the check that already covers it:
@@ -96,8 +96,8 @@ jobs:
         # SCORECARD_EXPERIMENTAL=1 unlocks the SBOM and Webhooks checks
         # (both are flagged experimental by the scorecard CLI; without
         # the env var the CLI refuses to run them and exits 1 with
-        # "one or more checks failed during execution" — surfaced by
-        # the first post-merge dispatch on 2026-05-28).
+        # "one or more checks failed during execution", which reads as
+        # a scan failure rather than as a missing opt-in).
         env:
           GITHUB_AUTH_TOKEN: ${{ secrets.SCORECARD_PAT }}
           REPO: ${{ github.repository }}
@@ -106,10 +106,9 @@ jobs:
           set -Eeuo pipefail
           # --output writes the JSON payload to a file directly,
           # bypassing stdout entirely so scorecard's info/warn log
-          # lines can never contaminate the parser input. The third
-          # post-merge dispatch on 2026-05-28 confirmed `--logLevel`
-          # is not a recognized flag — the only log-control knob is
-          # `--verbosity=info|debug|warn`, and even at `warn` the
+          # lines can never contaminate the parser input. `--logLevel`
+          # is not a recognized flag on this CLI — the only log-control
+          # knob is `--verbosity=info|debug|warn`, and even at `warn` the
           # CLI prints info-level lines mixed with JSON when JSON
           # goes to stdout. Routing JSON to a file sidesteps both
           # problems and is the pattern the upstream scorecard-action

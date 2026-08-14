@@ -91,19 +91,20 @@ source of truth).
 ## Ephemeral-reference lint
 
 `scripts/check-ephemeral-refs.sh` gates Markdown prose — and the
-comments in every shell and Nix source — against "ephemeral references":
+comments in every shell, Nix and YAML source — against "ephemeral
+references":
 tokens that describe what a file *replaced* or which plan, review pass,
 ticket, date, or PR introduced it, rather than the CURRENT state of the
 repo. Tracked files are the durable home for behavior; history is
 recovered from `git log` and PR threads, so it must not leak into prose
 or into a comment.
 
-Scope is every Markdown, shell and Nix source in the repo, minus the
+Scope is every Markdown, shell, Nix and YAML source in the repo, minus the
 file allowlist below. A source's extension is the whole classifier:
 `.md` is read as prose, `.sh` as shell comments, `.nix` as Nix comments,
-and any other extension is skipped rather than guessed at — so a shell
-library without a `.sh` suffix, and shell embedded in a workflow `run:`
-block, are out of scope by construction. Enumeration runs through
+`.yml`/`.yaml` as YAML comments, and any other extension is skipped
+rather than guessed at — so a shell library without a `.sh` suffix is
+out of scope by construction. Enumeration runs through
 `git ls-files --cached --others --exclude-standard`, so it covers files
 a commit is about to introduce as well as tracked ones, and honors
 `.gitignore` so build outputs stay out.
@@ -204,16 +205,23 @@ Fuzzy causal-history phrases surface as advisories, never blockers:
 
 ### Exemptions
 
-- **Every extension no extractor claims (the largest exemption).** Only
-    `.md`, `.sh` and `.nix` are read. Everything else is skipped whole,
-    and the biggest population behind that line is workflow YAML: the
-    comments in `.github/workflows/**` are out of scope, and several
-    live ones there carry banned shapes today. The ban is therefore a
-    ban on Markdown prose and on shell and Nix comments, not a
-    tree-wide one — a reader should not conclude a shape is absent from
-    the repo because this gate is green. Widening to a fourth
-    extraction mechanism is a separate change against a population that
-    has not been measured.
+- **Every extension no extractor claims.** Only `.md`, `.sh`, `.nix`,
+    `.yml` and `.yaml` are read; everything else is skipped whole. The
+    remaining population was measured rather than guessed at: 395
+    full-line comments across `.toml`, `.awk`, `justfile`, `.py`,
+    `.envrc`, `.gitignore`, `.gitattributes` and `CODEOWNERS`, carrying
+    **zero** banned shapes. The ban is therefore a ban on Markdown prose
+    and on shell, Nix and YAML comments, not a tree-wide one — but the
+    gap between the two is now measured and empty.
+- **A `#` line inside a non-shell YAML block scalar.** The YAML matcher
+    reads any line whose first non-space character is `#`, including
+    inside a `run:` block. That is deliberate: those blocks are embedded
+    shell, their `#` lines are genuine comments, and they hold roughly a
+    third of the repo's YAML comments — a population no comment-node
+    reader can reach, because to a YAML parser the whole block is one
+    string. The cost is that a `#` line in a block scalar that is *not*
+    shell would be read as a comment. The tree has no such block today,
+    and a banned token quoted in backticks is exempt either way.
 - **File allowlist (skipped entirely):** `CHANGELOG.md`,
     `docs/releases.md`, everything under `tests/fixtures/**`, and
     everything under `.claude/**`. The first two structurally list PR

@@ -1,0 +1,5 @@
+name: yaml-comment-fixture
+
+# This step was reworked in #123 after triage.
+on:
+  workflow_dispatch:

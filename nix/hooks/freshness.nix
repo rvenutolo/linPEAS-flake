@@ -219,9 +219,9 @@ in
     pass_filenames = false;
     language = "system";
   };
-  # Asserts Markdown prose and the comments in every shell and Nix
-  # source carry no ephemeral references (PR/issue refs, prose dates,
-  # planning/review-pass labels, literal `.claude/` paths). Shell
+  # Asserts Markdown prose and the comments in every shell, Nix and
+  # YAML source carry no ephemeral references (PR/issue refs, prose
+  # dates, planning/review-pass labels, literal `.claude/` paths). Shell
   # comments are lifted from the `shfmt` syntax tree, which is why
   # `shfmt` is on the shared tool path. Runs the blocking pass first
   # (gates the commit), then the --advisory pass for fuzzy
@@ -229,7 +229,7 @@ in
   check-ephemeral-refs = {
     enable = true;
     name = "check-ephemeral-refs";
-    description = "Markdown prose and shell/Nix comments carry no ephemeral references (PR/issue refs, prose dates, planning/review labels, literal .claude/ paths).";
+    description = "Markdown prose and shell/Nix/YAML comments carry no ephemeral references (PR/issue refs, prose dates, planning/review labels, literal .claude/ paths).";
     entry = "${pkgs-unstable.writeShellScript "check-ephemeral-refs-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'
@@ -238,7 +238,13 @@ in
       ${pkgs-unstable.bash}/bin/bash scripts/check-ephemeral-refs.sh
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-ephemeral-refs.sh --advisory
     ''}";
-    files = "^(README\\.md|CONTRIBUTING\\.md|SECURITY\\.md|\\.github/PULL_REQUEST_TEMPLATE\\.md|docs/.*\\.md|tests/README\\.md|scripts/.*\\.sh|tests/.*\\.sh|nix/.*\\.nix|flake\\.nix|treefmt\\.nix)$";
+    files = "^(README\\.md|CONTRIBUTING\\.md|SECURITY\\.md|\\.github/PULL_REQUEST_TEMPLATE\\.md|docs/.*\\.md|tests/README\\.md|scripts/.*\\.sh|tests/.*\\.sh|nix/.*\\.nix|flake\\.nix|treefmt\\.nix|\\.github/.*\\.ya?ml|docs/_data/.*\\.ya?ml|[^/]*\\.ya?ml)$";
+    # The YAML alternatives are derived from where YAML actually sits in
+    # this repo — `.github/**` (workflows, composite actions, issue
+    # templates, config), `docs/_data/`, and the root-level config
+    # files — rather than from `.github/workflows` alone, which would
+    # leave a composite action's comments able to drift without ever
+    # tripping the hook that gates them.
     # `tests/.*\.sh` above reaches the fixture trees, which the lint
     # skips outright — staging one would buy a full-tree scan that
     # cannot report on the file that triggered it. Keep the trigger
