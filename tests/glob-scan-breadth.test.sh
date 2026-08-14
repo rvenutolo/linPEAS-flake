@@ -72,7 +72,11 @@ readonly -a ROWS=(
   "min-permissions|check-min-permissions.sh|workflow YAML|WORKFLOWS_DIR_OVERRIDE=${EMPTY}"
   "no-opaque-procsub|check-no-opaque-procsub.sh|repo shell scripts|SCRIPTS_DIR_OVERRIDE=${EMPTY}"
   "permission-scopes|check-permission-scopes.sh|workflow YAML|WORKFLOWS_DIR_OVERRIDE=${EMPTY}"
-  "pin-digest-provenance|check-pin-digest-provenance.sh|pin-scanned YAML|HEAD_DIR_OVERRIDE=${EMPTY}"
+  # The base side is pinned to a directory rather than left on its default
+  # git ref: resolving that ref is an earlier could-not-run guard, and a
+  # checkout that never fetched the base branch stops this script there,
+  # before the head scan this row exists to exercise.
+  "pin-digest-provenance|check-pin-digest-provenance.sh|pin-scanned YAML|BASE_DIR_OVERRIDE=${REPO_ROOT},HEAD_DIR_OVERRIDE=${EMPTY}"
   "pr-workflows-no-secrets|check-pr-workflows-no-secrets.sh|workflow YAML|WORKFLOWS_DIR_OVERRIDE=${EMPTY}"
   "pull-request-target-absent|check-pull-request-target-absent.sh|workflow YAML|WORKFLOWS_DIR_OVERRIDE=${EMPTY}"
   "script-has-test-scripts|check-script-has-test.sh|check scripts|SCRIPTS_DIR_OVERRIDE=${EMPTY},TESTS_DIR_OVERRIDE=${REPO_ROOT}/tests"
