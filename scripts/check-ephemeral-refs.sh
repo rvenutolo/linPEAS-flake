@@ -7,13 +7,17 @@
 # Markdown is read as prose; shell is read as comments only, lifted from
 # the `shfmt` syntax tree; Nix is read as the comments that start their
 # own line, both `#` line comments and `/* */` block comments.
+# Only the sources whose raw text carries a candidate token are
+# extracted; the rest are set aside and reported as such.
 # Default mode blocks (exit 1); --advisory mode
 # suppresses findings, not defects: it warns on fuzzy causal-history
 # phrases and exits 0 on those, but a could-not-run (unterminated
 # fence/generated block/Nix block comment, unparsable shell, a shell
-# scan or a Nix scan that extracted no comments, failed source
+# scan or a Nix scan that extracted no comments, a failed candidate
+# scan, a structural pass that read fewer sources than were set aside
+# for it, a class regex that fails its own canary, failed source
 # enumeration) still exits non-zero the same as the default pass.
-# @option --advisory suppress findings, not defects: warn on fuzzy causal-history phrases and exit 0 for those, but still exit 1 on an unterminated fence/generated block/Nix block comment and 2 on a failed source enumeration, an unparsable shell source, a shell scan that extracted no comments, or a Nix scan that extracted no comments
+# @option --advisory suppress findings, not defects: warn on fuzzy causal-history phrases and exit 0 for those, but still exit 1 on an unterminated fence/generated block/Nix block comment and 2 on a failed source enumeration, a failed candidate scan, a class regex that fails its canary, a structural pass that read fewer sources than were set aside, an unparsable shell source, a shell scan that extracted no comments, or a Nix scan that extracted no comments
 
 # Lint: ban "ephemeral references" from the repo's Markdown prose and
 # from its shell and Nix comments. Tracked files describe the CURRENT
@@ -28,6 +32,43 @@
 #                 for fuzzy causal-history phrases and exit 0 for those,
 #                 but a could-not-run is a defect, not a finding: it
 #                 still exits non-zero the same as the default pass.
+#
+# The run has four phases, and the first three cost a fixed number of
+# processes however large the tree is:
+#
+#   1. Enumerate — one `git ls-files`.
+#   2. Candidate — one `grep --files-with-matches` for the union of the
+#      mode's class regexes over every scannable source. A source with
+#      no candidate token anywhere in its raw text is not extracted.
+#   3. Structural — one `awk` over the Markdown sources the candidate
+#      pass set aside and one over the Nix ones, so an unterminated
+#      region is still a named could-not-run in a file nothing else
+#      reads.
+#   4. Extract and scan — the per-language path below, candidates only.
+#
+# Why the candidate pass cannot hide a violation: every extractor emits,
+# for a given source line, either a blank line or a substring of that
+# same raw line — Markdown emits the line with exempt regions blanked,
+# shell emits `#` prepended to the text `shfmt` reports (and the raw
+# line carries that `#`), Nix and YAML emit the line with its indent
+# stripped. Blanking only removes text, and removing text cannot create
+# a match. The one regex feature that could read differently is the
+# left boundary guard: where an extracted match binds `^`, the same
+# position in the raw line is preceded by whitespace or by line start,
+# because a comment opener requires one and a Markdown line *is* the raw
+# line — and whitespace satisfies the guard's negated class. So a match
+# in the extracted stream implies a match in the raw file, and skipping
+# a file the union does not match is sound. Widening a class regex
+# without widening the union it is joined into would break that, which
+# is why the union is assembled from these constants rather than written
+# out a second time.
+#
+# What the candidate pass gives up: a shell source with no candidate
+# token is never handed to `shfmt`, so a parse failure in it is not
+# reported. The verdict is unchanged — a file with no candidate token
+# carries no violation to hide — and `shellcheck` and the formatter
+# already gate shell parsability. Markdown and Nix keep their
+# structural diagnostics through phase 3.
 #
 # Extraction is per language; matching is shared. A source's extension
 # is the whole classifier, and the extracted text reaches one set of
@@ -82,9 +123,12 @@
 # Exits 0 on clean in either mode; 1 on a blocking match (default mode
 # only — --advisory exits 0 on the same finding) or an unterminated
 # fence/generated block/Nix block comment (both modes); 2 if the source
-# set could not be enumerated, a shell source could not be parsed, or a
-# scan covering shell extracted no shell comments or a scan covering Nix
-# extracted no Nix comments (both modes).
+# set could not be enumerated, the candidate scan could not read a
+# source, a class regex fails its canary, the structural pass read
+# fewer sources than the candidate pass set aside for it, a shell
+# source could not be parsed, or a scan that parsed shell extracted no
+# shell comments or a scan that parsed Nix extracted no Nix comments
+# (both modes).
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -132,6 +176,63 @@ readonly RE_CLAUDE='\.claude/'
 
 # Advisory class: fuzzy causal-history phrases.
 readonly RE_CAUSAL='(prior to|previously|Migration note|was reshaped|Tightened from|swapped|switched (from|to)|legacy .* was deleted|added in #?[0-9]+|post-PR #?[0-9]+)'
+
+# The candidate pass matches one union per mode. Assembled from the
+# constants above rather than written out again: a class whose regex
+# widens must widen the union in the same edit, or the pass would set
+# aside a file the scan would have flagged. None of the constants
+# carries an unparenthesized top-level alternation, so joining them with
+# `|` is the disjunction it reads as.
+readonly UNION_BLOCKING="${RE_ISSUE}|${RE_DATE}|${RE_PLANNING}|${RE_REVIEW}|${RE_CLAUDE}"
+readonly UNION_ADVISORY="${RE_CAUSAL}"
+
+# One literal per class, each carrying a token that class must match.
+# These are the canaries the run asserts against before it scans
+# anything: they are what catches a union that has stopped matching a
+# class it is supposed to cover, which no verdict and no file count
+# would show — the run would simply set every file aside and exit clean.
+readonly CANARY_ISSUE=' #123 '
+readonly CANARY_DATE='2026-01-02'
+readonly CANARY_PLANNING=' GAP-7'
+readonly CANARY_REVIEW=' (D3)'
+readonly CANARY_CLAUDE='.claude/'
+readonly CANARY_CAUSAL='previously'
+
+# @description Assert every class regex matches its own canary, and that
+# the mode's union matches every canary the mode covers. A class dropped
+# from a union, or a join that lost a branch, exits 2 naming the class.
+# Deliberately not gated by LINT_ALLOW_EMPTY_SCAN: an empty tree is a
+# situation an operator can vouch for, a degenerate matcher is not.
+# @stderr `class regex canary failed: <class>` on the first failure
+# @exitcode 2 when a canary does not match
+function assert_class_canaries() {
+  local class canary regex
+  local -a rows=(
+    "issue-ref	${CANARY_ISSUE}	${RE_ISSUE}"
+    "date	${CANARY_DATE}	${RE_DATE}"
+    "planning	${CANARY_PLANNING}	${RE_PLANNING}"
+    "review	${CANARY_REVIEW}	${RE_REVIEW}"
+    "claude-path	${CANARY_CLAUDE}	${RE_CLAUDE}"
+    "causal	${CANARY_CAUSAL}	${RE_CAUSAL}"
+  )
+  local row union
+  for row in "${rows[@]}"; do
+    IFS=$'\t' read -r class canary regex <<<"${row}"
+    if [[ ! ${canary} =~ ${regex} ]]; then
+      printf 'class regex canary failed: %s (own regex)\n' "${class}" >&2
+      exit 2
+    fi
+    if [[ ${class} == 'causal' ]]; then
+      union="${UNION_ADVISORY}"
+    else
+      union="${UNION_BLOCKING}"
+    fi
+    if [[ ! ${canary} =~ ${union} ]]; then
+      printf 'class regex canary failed: %s (mode union)\n' "${class}" >&2
+      exit 2
+    fi
+  done
+}
 
 # @description Blank ephemeral-exempt regions in place, preserving line
 # count so downstream line numbers match the original file. Blanks
@@ -234,6 +335,168 @@ function language_of() {
   esac
 }
 
+# @description Print the sources whose raw text carries a token of the
+# mode's class union — the only ones an extractor can turn into a
+# finding. One `grep` for the whole tree, not one per source: the scan
+# it replaces spawned five per file and dominated the run.
+# `--files-with-matches` names the operand it matched, so the caller
+# maps back by path.
+# A source that matches nothing is set aside, never dropped: phase 3
+# still reads Markdown and Nix for unterminated regions, and the tally
+# reports how many were set aside so a run cannot look like it read what
+# it skipped.
+# @arg $1 union extended-regex union for the mode
+# @arg $2 extra_flag `--ignore-case` for the advisory union, empty otherwise
+# @arg $@ (from $3) absolute source paths
+# @stdout one matching path per line
+# @stderr grep's own diagnostic when a source cannot be read
+# @exitcode 0 on a clean pass (with or without matches), 2 when grep
+#   could not read an operand
+function discover_candidates() {
+  local -r union="$1"
+  local -r extra_flag="$2"
+  shift 2
+  # Zero operands would leave grep reading stdin, which never returns.
+  [[ $# -eq 0 ]] && return 0
+
+  local -a flags=(--files-with-matches --extended-regexp --binary-files=text)
+  [[ -n ${extra_flag} ]] && flags+=("${extra_flag}")
+
+  local rc=0
+  grep "${flags[@]}" --regexp="${union}" -- "$@" || rc=$?
+  # 0 is "matched", 1 is "nothing matched" — the common, clean case.
+  # Anything above that is a read failure, which grep reports even when
+  # other operands did match, so it can never be read as "no candidates".
+  if [[ ${rc} -ge 2 ]]; then
+    printf 'candidate scan failed: grep exited %d\n' "${rc}" >&2
+    return 2
+  fi
+  return 0
+}
+
+# @description Read every Markdown source the candidate pass set aside
+# and report an unterminated code fence or generated block. Same
+# verdicts as `strip_exempt`, which still does this for the sources that
+# are scanned; this covers the ones that are not, so a malformed doc
+# stays a named defect rather than becoming invisible the moment it
+# carries no banned token.
+# Fences are recognized before generated blocks and inline code spans
+# are blanked before a `BEGIN` is looked for, which is what makes a
+# marker quoted inside a fence or a code span documentation rather than
+# a block opener — the same ordering `strip_exempt`'s two passes get by
+# running one after the other.
+# `awk` has no per-file END, so each file's state is judged when the
+# next one starts and the last one at END.
+# The source list arrives on stdin, one REPO_ROOT-relative path per
+# line, and each file is opened with `getline` rather than handed over
+# as an `awk` file operand. That keeps the diagnostic naming the source
+# the way every other diagnostic here does — relative, never by the
+# absolute path an operand would carry — and it sidesteps operand
+# assignment parsing entirely rather than defending against it per path.
+# Newline-free paths are what makes a line-delimited list safe, and
+# `check-path-hygiene.sh` is what makes them newline-free.
+# @arg $1 stats path the source count is written to
+# @arg $2 root REPO_ROOT, prepended to each relative path to open it
+# @stdin one REPO_ROOT-relative source path per line
+# @stderr `<src>: unterminated code fence` / `<src>: unterminated generated block`
+# @exitcode 0 when every source closes its regions, 1 otherwise
+function check_md_structure() {
+  local -r stats="$1"
+  local -r root="$2"
+  awk -v stats="${stats}" -v root="${root}" '
+    {
+      src = $0
+      if (src == "") next
+      path = root "/" src
+      in_fence = 0
+      in_gen = 0
+      opened = 0
+      while ((rc = (getline line < path)) > 0) {
+        opened = 1
+        if (line ~ /^[[:space:]]*(```|~~~)/) { in_fence = !in_fence; continue }
+        if (in_fence) continue
+        while (match(line, /`[^`]*`/)) {
+          pad = ""
+          for (i = 0; i < RLENGTH; i++) pad = pad " "
+          line = substr(line, 1, RSTART - 1) pad substr(line, RSTART + RLENGTH)
+        }
+        if (line ~ /<!--[[:space:]]*BEGIN[[:space:]]/) { in_gen = 1; continue }
+        if (in_gen) {
+          if (line ~ /<!--[[:space:]]*END[[:space:]]/) { in_gen = 0 }
+          continue
+        }
+      }
+      close(path)
+      # A file that could not be opened is not a file that closed its
+      # regions. Leaving it out of the tally is what the breadth check
+      # above the summary reads as a pass that stopped reading.
+      if (rc < 0 && !opened) next
+      files++
+      if (in_fence) {
+        printf "%s: unterminated code fence\n", src > "/dev/stderr"
+        bad = 1
+      }
+      if (in_gen) {
+        printf "%s: unterminated generated block\n", src > "/dev/stderr"
+        bad = 1
+      }
+    }
+    END {
+      printf("%d\n", files) > stats
+      if (bad) exit 1
+    }
+  '
+}
+
+# @description Read every Nix source the candidate pass set aside and
+# report an unterminated `/* */` block comment, the same verdict
+# `extract_nix_comments` reaches for the sources that are scanned. Only
+# an opener that starts its own line latches, for the reason the
+# extractor gives: a mid-line `/*` cannot be told from the one in a
+# quoted glob.
+# The source list arrives on stdin for the reason the Markdown pass
+# takes it that way.
+# @arg $1 stats path the source count is written to
+# @arg $2 root REPO_ROOT, prepended to each relative path to open it
+# @stdin one REPO_ROOT-relative source path per line
+# @stderr `<src>: unterminated Nix block comment`
+# @exitcode 0 when every source closes its blocks, 1 otherwise
+function check_nix_structure() {
+  local -r stats="$1"
+  local -r root="$2"
+  awk -v stats="${stats}" -v root="${root}" '
+    {
+      src = $0
+      if (src == "") next
+      path = root "/" src
+      in_block = 0
+      opened = 0
+      while ((rc = (getline line < path)) > 0) {
+        opened = 1
+        if (in_block) {
+          if (index(line, "*/") > 0) { in_block = 0 }
+          continue
+        }
+        if (line ~ /^[[:space:]]*\/\*/) {
+          sub(/^[[:space:]]*\/\*/, "", line)
+          if (index(line, "*/") == 0) { in_block = 1 }
+        }
+      }
+      close(path)
+      if (rc < 0 && !opened) next
+      files++
+      if (in_block) {
+        printf "%s: unterminated Nix block comment\n", src > "/dev/stderr"
+        bad = 1
+      }
+    }
+    END {
+      printf("%d\n", files) > stats
+      if (bad) exit 1
+    }
+  '
+}
+
 # @description Emit one line per source line, carrying that line's shell
 # comment text where a comment sits and a blank line everywhere else, so
 # a hit's reported line number matches the original file. Comments come
@@ -264,8 +527,10 @@ function extract_shell_comments() {
     return 1
   fi
 
-  local pairs_file
-  pairs_file="$(make_temp)"
+  # One run-scoped staging file, truncated per source, rather than a
+  # `mktemp` per source: the scan reaches this three times a file and
+  # the spawns cost more than the work they stage.
+  local -r pairs_file="${WORK_DIR}/pairs"
   # Row zero is a sentinel that keeps this file non-empty for a source
   # carrying no comments at all. `awk`'s two-operand `NR == FNR` split
   # reads an empty first operand as no operand, then mistakes the second
@@ -283,7 +548,6 @@ function extract_shell_comments() {
       | "\(.Hash.Line)\t#\(.Text)"
     ' <<<"${ast}" >>"${pairs_file}"; then
     printf '%s: comment extraction failed\n' "${src_rel}" >&2
-    rm --force -- "${pairs_file}"
     return 1
   fi
 
@@ -310,7 +574,6 @@ function extract_shell_comments() {
     }
     END { printf("%d %d\n", count, src_lines) > stats }
   ' "$(awk_path "${pairs_file}")" "$(awk_path "${file}")" || rc=$?
-  rm --force -- "${pairs_file}"
   return "${rc}"
 }
 
@@ -446,8 +709,7 @@ function scan_class() {
   [[ -z ${matches} ]] && return 0
 
   local match lineno token
-  local tmp
-  tmp="$(make_temp)"
+  local -r tmp="${WORK_DIR}/matches"
   printf '%s\n' "${matches}" >"${tmp}"
   while IFS= read -r match; do
     [[ -z ${match} ]] && continue
@@ -459,7 +721,6 @@ function scan_class() {
     printf '%s:%s: [%s] %s\n' "${src_rel}" "${lineno}" "${class}" "${token}" >&2
     blocking_hits=$((blocking_hits + 1))
   done <"${tmp}"
-  rm --force -- "${tmp}"
 }
 
 # @description Scan one stripped source for advisory causal phrases and
@@ -479,8 +740,7 @@ function scan_advisory() {
   [[ -z ${matches} ]] && return 0
 
   local match lineno phrase
-  local tmp
-  tmp="$(make_temp)"
+  local -r tmp="${WORK_DIR}/matches"
   printf '%s\n' "${matches}" >"${tmp}"
   while IFS= read -r match; do
     [[ -z ${match} ]] && continue
@@ -488,7 +748,6 @@ function scan_advisory() {
     phrase="${match#*:}"
     printf '[advisory] %s:%s: %s\n' "${src_rel}" "${lineno}" "${phrase}" >&2
   done <"${tmp}"
-  rm --force -- "${tmp}"
 }
 
 # @description NUL-delimited source producer for `enumerate_into`,
@@ -548,49 +807,153 @@ function main() {
     fi
   done
 
+  # A degenerate matcher is not a state an operator can vouch for the
+  # way an empty tree is, so this runs ahead of everything and answers
+  # to no override.
+  assert_class_canaries
+
   blocking_hits=0
   local md_sources=0 shell_sources=0 nix_sources=0
+  local md_parsed=0 shell_parsed=0 nix_parsed=0
   # Comments are tallied per language, never summed into one counter.
   # The two corpora differ by an order of magnitude, so a shared total
   # stays comfortably positive when one extractor stops matching
   # entirely — the breadth assertion below would then pass on the
   # strength of the other language's comments alone.
-  local allowlisted=0 lines=0 shell_comments=0 nix_comments=0
+  local allowlisted=0 prefiltered=0 lines=0 shell_comments=0 nix_comments=0
   local fenced=0 spans=0 gen=0
   local f_lines f_fenced f_spans f_gen f_comments
-  local stats_dir
-  stats_dir="$(make_temp --directory)"
 
-  local src_rel src_abs stripped lang raw
+  WORK_DIR="$(make_temp --directory)"
+  local -r stripped="${WORK_DIR}/stripped"
+  local -r raw="${WORK_DIR}/raw"
+
+  # One prefix builds every `grep` and `awk` operand, and the structural
+  # pass strips the same prefix back off, so a diagnostic names its
+  # source relative to REPO_ROOT the way every other diagnostic here
+  # does. `awk_path` is what keeps a relative root from being read as a
+  # variable assignment.
+  local op_prefix
+  op_prefix="$(awk_path "${REPO_ROOT}")/"
+  readonly op_prefix
+
+  # Classify once. The language is carried alongside the path rather
+  # than recomputed later: `language_of` runs in a command substitution,
+  # and a second pass over the tree would fork once per source for an
+  # answer already known.
+  local -a scan_rel=() scan_op=() scan_lang=()
+  local src_rel lang
   for src_rel in "${sources[@]}"; do
     [[ -z ${src_rel} ]] && continue
     if is_allowlisted "${src_rel}"; then
       allowlisted=$((allowlisted + 1))
       continue
     fi
-    src_abs="${REPO_ROOT}/${src_rel}"
-    [[ -f ${src_abs} ]] || continue
+    [[ -f "${REPO_ROOT}/${src_rel}" ]] || continue
     lang="$(language_of "${src_rel}")"
     # An extension no extractor claims carries no prose this lint can
     # read, so it is skipped rather than guessed at.
     [[ ${lang} == 'other' ]] && continue
-
-    stripped="$(make_temp)"
     case "${lang}" in
+    md) md_sources=$((md_sources + 1)) ;;
+    sh) shell_sources=$((shell_sources + 1)) ;;
+    nix) nix_sources=$((nix_sources + 1)) ;;
+    esac
+    scan_rel+=("${src_rel}")
+    scan_op+=("${op_prefix}${src_rel}")
+    scan_lang+=("${lang}")
+  done
+
+  # Candidate pass: one grep for the whole tree.
+  local union extra_flag
+  if [[ ${ADVISORY} -eq 1 ]]; then
+    union="${UNION_ADVISORY}"
+    extra_flag='--ignore-case'
+  else
+    union="${UNION_BLOCKING}"
+    extra_flag=''
+  fi
+  local -r candidates_file="${WORK_DIR}/candidates"
+  if ! discover_candidates "${union}" "${extra_flag}" "${scan_op[@]}" \
+    >"${candidates_file}"; then
+    rm --recursive --force -- "${WORK_DIR}"
+    exit 2
+  fi
+  local -A is_candidate=()
+  local op
+  while IFS= read -r op; do
+    [[ -z ${op} ]] && continue
+    is_candidate["${op}"]=1
+  done <"${candidates_file}"
+
+  # Structural pass over the Markdown and Nix sources the candidate pass
+  # set aside. A malformed region is a could-not-run wherever it sits,
+  # and nothing else will read these files.
+  local -a md_aside=() nix_aside=()
+  local i
+  for i in "${!scan_rel[@]}"; do
+    [[ -n ${is_candidate["${scan_op[i]}"]:-} ]] && continue
+    case "${scan_lang[i]}" in
+    md) md_aside+=("${scan_rel[i]}") ;;
+    nix) nix_aside+=("${scan_rel[i]}") ;;
+    esac
+  done
+  # The lists go through files rather than arguments: a redirection is
+  # not an `awk` operand, so the paths never reach operand assignment
+  # parsing at all.
+  local -r md_list="${WORK_DIR}/md-aside"
+  local -r nix_list="${WORK_DIR}/nix-aside"
+  : >"${md_list}"
+  : >"${nix_list}"
+  [[ ${#md_aside[@]} -gt 0 ]] && printf '%s\n' "${md_aside[@]}" >"${md_list}"
+  [[ ${#nix_aside[@]} -gt 0 ]] && printf '%s\n' "${nix_aside[@]}" >"${nix_list}"
+  local md_struct=0 nix_struct=0
+  if ! check_md_structure "${WORK_DIR}/md-struct" "${REPO_ROOT}" \
+    <"${md_list}"; then
+    rm --recursive --force -- "${WORK_DIR}"
+    exit 1
+  fi
+  IFS=' ' read -r md_struct <"${WORK_DIR}/md-struct"
+  if ! check_nix_structure "${WORK_DIR}/nix-struct" "${REPO_ROOT}" \
+    <"${nix_list}"; then
+    rm --recursive --force -- "${WORK_DIR}"
+    exit 1
+  fi
+  IFS=' ' read -r nix_struct <"${WORK_DIR}/nix-struct"
+  # The structural pass is the only thing that reads a set-aside source,
+  # so a pass that has stopped opening files leaves nothing behind to
+  # notice. Count what it read against what was set aside for it.
+  if [[ ${md_struct} -ne ${#md_aside[@]} ||
+    ${nix_struct} -ne ${#nix_aside[@]} ]]; then
+    printf 'structural pass read %d of %d markdown and %d of %d nix source(s) set aside\n' \
+      "${md_struct}" "${#md_aside[@]}" "${nix_struct}" "${#nix_aside[@]}" >&2
+    rm --recursive --force -- "${WORK_DIR}"
+    exit 2
+  fi
+
+  local src_abs
+  for i in "${!scan_rel[@]}"; do
+    if [[ -z ${is_candidate["${scan_op[i]}"]:-} ]]; then
+      prefiltered=$((prefiltered + 1))
+      continue
+    fi
+    src_rel="${scan_rel[i]}"
+    src_abs="${REPO_ROOT}/${src_rel}"
+
+    case "${scan_lang[i]}" in
     md)
       # An unterminated code fence or generated block is a fatal doc
       # defect: fail loud rather than let strip_exempt blank to EOF and
       # hide violations.
-      if ! strip_exempt "${src_abs}" "${src_rel}" "${stats_dir}" >"${stripped}"; then
-        rm --force -- "${stripped}"
-        rm --recursive --force -- "${stats_dir}"
+      if ! strip_exempt "${src_abs}" "${src_rel}" "${WORK_DIR}" >"${stripped}"; then
+        rm --recursive --force -- "${WORK_DIR}"
         exit 1
       fi
-      md_sources=$((md_sources + 1))
+      md_parsed=$((md_parsed + 1))
       # The tally files are space-separated; the script-wide IFS is not, so
       # read with a field separator of its own.
-      IFS=' ' read -r f_lines f_fenced f_spans <"${stats_dir}/code"
-      IFS=' ' read -r f_gen <"${stats_dir}/gen"
+      IFS=' ' read -r f_lines f_fenced f_spans <"${WORK_DIR}/code"
+      IFS=' ' read -r f_gen <"${WORK_DIR}/gen"
       lines=$((lines + f_lines))
       fenced=$((fenced + f_fenced))
       spans=$((spans + f_spans))
@@ -599,17 +962,14 @@ function main() {
     sh)
       # A source the parser rejects is a could-not-run: reporting it as
       # clean would hide every comment in it behind an exit 0.
-      raw="$(make_temp)"
-      if ! extract_shell_comments "${src_abs}" "${src_rel}" "${stats_dir}" >"${raw}"; then
-        rm --force -- "${raw}" "${stripped}"
-        rm --recursive --force -- "${stats_dir}"
+      if ! extract_shell_comments "${src_abs}" "${src_rel}" "${WORK_DIR}" >"${raw}"; then
+        rm --recursive --force -- "${WORK_DIR}"
         exit 2
       fi
-      blank_code_spans "${raw}" "${stats_dir}" >"${stripped}"
-      rm --force -- "${raw}"
-      shell_sources=$((shell_sources + 1))
-      IFS=' ' read -r f_comments f_lines <"${stats_dir}/comments"
-      IFS=' ' read -r f_spans <"${stats_dir}/spans"
+      blank_code_spans "${raw}" "${WORK_DIR}" >"${stripped}"
+      shell_parsed=$((shell_parsed + 1))
+      IFS=' ' read -r f_comments f_lines <"${WORK_DIR}/comments"
+      IFS=' ' read -r f_spans <"${WORK_DIR}/spans"
       shell_comments=$((shell_comments + f_comments))
       lines=$((lines + f_lines))
       spans=$((spans + f_spans))
@@ -618,17 +978,14 @@ function main() {
       # An unterminated block comment leaves the extractor reading code
       # as comment text, so it is a fatal defect on this path exactly as
       # an unterminated fence is on the Markdown one.
-      raw="$(make_temp)"
-      if ! extract_nix_comments "${src_abs}" "${src_rel}" "${stats_dir}" >"${raw}"; then
-        rm --force -- "${raw}" "${stripped}"
-        rm --recursive --force -- "${stats_dir}"
+      if ! extract_nix_comments "${src_abs}" "${src_rel}" "${WORK_DIR}" >"${raw}"; then
+        rm --recursive --force -- "${WORK_DIR}"
         exit 1
       fi
-      blank_code_spans "${raw}" "${stats_dir}" >"${stripped}"
-      rm --force -- "${raw}"
-      nix_sources=$((nix_sources + 1))
-      IFS=' ' read -r f_comments f_lines <"${stats_dir}/comments"
-      IFS=' ' read -r f_spans <"${stats_dir}/spans"
+      blank_code_spans "${raw}" "${WORK_DIR}" >"${stripped}"
+      nix_parsed=$((nix_parsed + 1))
+      IFS=' ' read -r f_comments f_lines <"${WORK_DIR}/comments"
+      IFS=' ' read -r f_spans <"${WORK_DIR}/spans"
       nix_comments=$((nix_comments + f_comments))
       lines=$((lines + f_lines))
       spans=$((spans + f_spans))
@@ -644,39 +1001,41 @@ function main() {
       scan_class "${src_rel}" "${stripped}" 'review' "${RE_REVIEW}"
       scan_class "${src_rel}" "${stripped}" 'claude-path' "${RE_CLAUDE}"
     fi
-
-    rm --force -- "${stripped}"
   done
-  rm --recursive --force -- "${stats_dir}"
+  rm --recursive --force -- "${WORK_DIR}"
 
   # A clean run has nothing to say about findings, which leaves an
   # operator unable to tell prose the lint read from prose it skipped —
-  # an allowlisted path, or a file that is mostly fenced code. State the
-  # scope instead: what was read, what was set aside, and why. The
+  # an allowlisted path, a file that is mostly fenced code, or a source
+  # the candidate pass set aside. State the scope instead: what was
+  # enumerated, how much of it was parsed, and what was exempted. The
   # per-language source counts are what catches a run that has stopped
   # seeing one language while still exiting 0.
-  printf 'ephemeral-refs: scanned %d markdown, %d shell, %d nix source(s), %d line(s), %d shell comment(s), %d nix comment(s); skipped %d allowlisted; exempted %d code-fence line(s), %d inline code span(s), %d generated-block line(s)\n' \
-    "${md_sources}" "${shell_sources}" "${nix_sources}" "${lines}" \
+  printf 'ephemeral-refs: scanned %d markdown, %d shell, %d nix source(s); parsed %d candidate(s), pre-filtered %d; %d line(s), %d shell comment(s), %d nix comment(s); skipped %d allowlisted; exempted %d code-fence line(s), %d inline code span(s), %d generated-block line(s)\n' \
+    "${md_sources}" "${shell_sources}" "${nix_sources}" \
+    "$((md_parsed + shell_parsed + nix_parsed))" "${prefiltered}" "${lines}" \
     "${shell_comments}" "${nix_comments}" "${allowlisted}" "${fenced}" \
     "${spans}" "${gen}"
 
   # A gate that reads no comments has not found a clean tree, it has
   # stopped reading: assert the count rather than infer it from a clean
   # exit, the same rule the enumeration helper applies to file counts.
-  # Each language answers for its own corpus, because the repo's shell
-  # comments outnumber its Nix comments better than ten to one — a joint
-  # total would stay far from zero with the Nix extractor matching
-  # nothing at all.
-  if [[ ${shell_sources} -gt 0 && ${shell_comments} -eq 0 &&
+  # The count is scoped to the sources actually parsed — a language
+  # whose every source was set aside has no comments to answer for, and
+  # the pre-filtered tally above is what states that. Each language
+  # still answers for its own corpus, because the repo's shell comments
+  # outnumber its Nix comments better than ten to one and a joint total
+  # would stay far from zero with the Nix extractor matching nothing.
+  if [[ ${shell_parsed} -gt 0 && ${shell_comments} -eq 0 &&
     -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
     printf 'no comments extracted from %d shell source(s)\n' \
-      "${shell_sources}" >&2
+      "${shell_parsed}" >&2
     exit 2
   fi
-  if [[ ${nix_sources} -gt 0 && ${nix_comments} -eq 0 &&
+  if [[ ${nix_parsed} -gt 0 && ${nix_comments} -eq 0 &&
     -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
     printf 'no comments extracted from %d nix source(s)\n' \
-      "${nix_sources}" >&2
+      "${nix_parsed}" >&2
     exit 2
   fi
 
