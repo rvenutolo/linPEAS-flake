@@ -69,9 +69,9 @@ in
     pass_filenames = false;
     language = "system";
   };
-  # Refuse to commit if the pre-commit hook table in docs/development/git.md
-  # is stale relative to the flake hook manifest. Invokes
-  # refresh-precommit-table.sh in --check mode — never mutates the
+  # Refuse to commit if the just-recipes blocks in README.md and
+  # docs/reference/just-recipes.md are stale relative to the justfile.
+  # Invokes refresh-just-recipes.sh in --check mode — never mutates the
   # working tree, exits 1 on diff.
   just-recipes-fresh = {
     enable = true;
@@ -123,6 +123,10 @@ in
     pass_filenames = false;
     language = "system";
   };
+  # Refuse to commit if the pre-commit hook table in docs/development/git.md
+  # is stale relative to the flake hook manifest. Invokes
+  # refresh-precommit-table.sh in --check mode — never mutates the
+  # working tree, exits 1 on diff.
   precommit-table-fresh = {
     enable = true;
     name = "precommit-table-fresh";
