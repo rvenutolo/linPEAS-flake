@@ -4,6 +4,7 @@
 # @description Regenerate docs/security/enforcement-matrix.md from
 # the inline enforcer annotations on every bullet of
 # docs/invariant-index.md, with bidirectional orphan checks.
+# @generates docs/security/enforcement-matrix.md
 # @option --check exit 1 if the matrix would change; do not mutate the working tree
 
 # Regenerate docs/security/enforcement-matrix.md from the inline

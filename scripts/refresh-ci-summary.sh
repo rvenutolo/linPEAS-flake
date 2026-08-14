@@ -3,6 +3,7 @@
 #
 # @description Regenerate the ci-summary managed block in README.md
 # from required-checks.md plus the ci-check-categories.yml map.
+# @generates-block README.md
 # @option --check exit 1 if README.md would change; exit 2 if an input
 # file is missing; do not mutate the working tree
 

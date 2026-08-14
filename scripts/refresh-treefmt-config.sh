@@ -4,6 +4,7 @@
 # @description Regenerate the treefmt-config managed block in
 # docs/reference/treefmt-config.md from the enabled-formatter manifest
 # exposed by `nix/treefmt-config.nix` as `devTooling.<system>.treefmtConfig`.
+# @generates docs/reference/treefmt-config.md
 # @option --check exit 1 if the doc would change; exit 2 if the check
 # cannot run (doc missing, or nix eval fails); do not mutate the working
 # tree

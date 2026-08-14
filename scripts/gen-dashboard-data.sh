@@ -3,6 +3,7 @@
 #
 # @description Generate docs/_data/dashboard.yml for the MkDocs site
 # by aggregating pin metadata and live GitHub REST API data.
+# @generates docs/_data/dashboard.yml
 
 # Generate docs/_data/dashboard.yml for the MkDocs site.
 #
