@@ -275,6 +275,41 @@ with an inline `# exit-code-exempt: <rationale>`; the rationale must be
 non-empty, and a clean run prints the exemption count. Full rationale:
 [Workflow hardening → guard-exit-code](../security/workflow-hardening.md#guard-exit-code).
 
+## Glob-driven scan breadth
+
+`scripts/check-enumerate-helper-required.sh` bans a `for` loop that
+expands a glob at its own loop head. Under `nullglob` a pattern matching
+nothing expands to nothing, the body never runs, no violation is found
+and the run exits 0 — so a scan root that exists and holds nothing is
+scored a clean tree, and an operator override pointing the scan at the
+wrong directory reads as a repo with nothing to fix. `glob_into`
+(`scripts/lib/enumerate.sh`) is the glob analogue of `enumerate_into`: it
+expands the patterns itself, fills the named array, and exits **2** on an
+empty match set unless `LINT_ALLOW_EMPTY_SCAN=1`.
+
+```bash
+files=()
+glob_into files 'workflow YAML' "${DIR}/*.yml" "${DIR}/*.yaml"
+for f in "${files[@]}"; do
+```
+
+Note the quoting: the pattern reaches the helper as one quoted string and
+is expanded inside it, so a caller that has not set `nullglob` cannot
+hand the helper an unexpanded pattern that would count as one match.
+
+Detection reads the same syntax tree the producer rule does — a
+`ForClause` whose `WordIter` items carry `*`, `?` or `[` in a bare `Lit`
+part. A metacharacter inside quotes is not a pattern and does not count,
+and a pattern handed to `glob_into` is an argument of a call expression
+rather than a loop item, so a compliant call site cannot false-hit. A
+loop whose empty match set genuinely is the normal state — sweeping a
+leftover scratch file, say — opts out with an inline
+`# glob-exempt: <rationale>` on the line above; the rationale must be
+non-empty, the marker word is keyed to the kind of site so the sibling
+`# enumerate-exempt:` excuses nothing here, and a clean run prints the
+exemption count. Full rationale:
+[Workflow hardening → enumerate-helper-required](../security/workflow-hardening.md#enumerate-helper-required).
+
 ## Treefmt YAML quote gotcha
 
 Prettier rewrites single-quoted YAML scalars to double-quoted. Run
