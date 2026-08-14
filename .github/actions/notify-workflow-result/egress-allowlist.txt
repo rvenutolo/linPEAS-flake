@@ -1,0 +1,10 @@
+# Canonical egress allowlist for any job that runs this composite.
+# Read by scripts/check-egress-allowlist.sh, which requires every such job's
+# harden-runner allowed-endpoints to match this set.
+#
+# api.github.com                 the composite's REST calls, and action resolution
+# github.com                     actions/checkout's clone
+# objects.githubusercontent.com  action tarball bytes
+api.github.com:443
+github.com:443
+objects.githubusercontent.com:443

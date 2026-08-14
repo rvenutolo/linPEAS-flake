@@ -55,4 +55,40 @@ expect bad-attestation-verify-missing-tuf.yml 1 "tuf-repo.github.com"
 # A workflow yq cannot parse must fail loud, not empty the scan silently.
 expect bad-malformed.yml 1 "could not evaluate"
 
+# Every job carrying the notify composite is bound to the declared host set.
+# The pure three-step shape must match it exactly; a job with extra steps may
+# carry more, but never less.
+expect good-notify-parity.yml 0 ""
+expect bad-notify-missing-host.yml 1 "github.com:443"
+expect bad-notify-extra-host.yml 1 "cache.nixos.org"
+expect good-notify-sha-pinned.yml 0 ""
+# The SHA-pinned self-reference has to be discovered, not merely tolerated: a
+# clean run over the matching pinned job says nothing about whether the job
+# was read at all, so the pinned form gets a violating job of its own.
+expect bad-notify-sha-pinned-missing-host.yml 1 "github.com:443"
+expect good-notify-extended.yml 0 ""
+expect bad-notify-extended-missing.yml 1 "api.github.com:443"
+
+# Zero notify jobs on an unfiltered scan is a broken discovery predicate, not
+# a clean tree: assert the breadth the rule claims to have checked. Exit 2,
+# not 1 — this is the repo's "could not run" code, and check-guard-exit-code.sh
+# enforces the split.
+got_exit=0
+got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${REPO_ROOT}/tests/fixtures/egress-allowlist-no-notify" \
+  "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+if [[ ${got_exit} != 2 || ${got_stderr} != *"0 notify job"* ]]; then
+  printf 'FAIL zero-notify-discovery: exit %s\n  stderr: %s\n' "${got_exit}" "${got_stderr}" >&2
+  exit 1
+fi
+printf 'OK   zero-notify-discovery\n'
+
+# ...and the documented override suppresses it.
+LINT_ALLOW_EMPTY_SCAN=1 WORKFLOWS_DIR_OVERRIDE="${REPO_ROOT}/tests/fixtures/egress-allowlist-no-notify" \
+  "${SCRIPT}" >/dev/null 2>&1 ||
+  {
+    printf 'FAIL zero-notify-discovery-override\n' >&2
+    exit 1
+  }
+printf 'OK   zero-notify-discovery-override\n'
+
 printf 'all tests passed\n'
