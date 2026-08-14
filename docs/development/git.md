@@ -151,7 +151,7 @@ Hooks (alphabetical):
 | `job-timeout-minutes`               | Every workflow job declares an explicit timeout-minutes.                                                                                               |
 | `just-recipes-fresh`                | just-recipes blocks in README.md and docs/reference/just-recipes.md match the justfile.                                                                |
 | `lint-shell-tools`                  | devShells.lint declares every tool the .#lint lint groups need.                                                                                        |
-| `lock-derived-docs`                 | The flake-lock bumper regenerates every doc a lock bump can staleness.                                                                                 |
+| `lock-derived-docs`                 | Every lock-writing workflow regenerates the docs a lock bump can staleness.                                                                            |
 | `manifest-digest-pinned`            | docker manifest/imagetools create sources are digest-pinned.                                                                                           |
 | `manifest-hook-watches-nix`         | Every hook reaching the Nix hook manifest watches nix/hooks in its files filter.                                                                       |
 | `markdownlint`                      | Markdown style + structure.                                                                                                                            |

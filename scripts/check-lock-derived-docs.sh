@@ -1,18 +1,23 @@
 #!/usr/bin/env bash
 # scripts/check-lock-derived-docs.sh
 #
-# @description Lint: the flake-lock bump workflow runs a generator for
-# every freshness hook that declares `flake.lock` a trigger, and commits
-# the lock itself.
+# @description Lint: every workflow that writes a flake.lock runs a
+# generator for each freshness hook that declares `flake.lock` a
+# trigger, and commits the lock itself.
 
 # A freshness hook whose `files` regex names `flake.lock` is a
-# declaration that bumping the lock can leave its doc stale. The bump
-# workflow writes a new lock, so it owns regenerating exactly that set:
-# a doc it skips reaches the PR stale, the required freshness gate fails,
-# and the bump cannot merge without a human touching a bot branch.
+# declaration that bumping the lock can leave its doc stale. A workflow
+# that writes a lock therefore owns regenerating exactly that set: a doc
+# it skips reaches the PR stale, the required freshness gate fails, and
+# the change cannot merge without a human touching a branch the
+# automation owns.
+#
+# Subjects are discovered rather than named — every workflow carrying a
+# lock update in a run block — so a new lock-writing workflow is governed
+# without editing this lint.
 #
 # Source-parsed rather than evaluated: `files` and `entry` are literal in
-# the hook module, and the workflow's lists are literal YAML.
+# the hook module, and each workflow's lists are literal YAML.
 #
 # Honors ROOT_OVERRIDE for fixtures (default: the repo root). Exits 0 on
 # agreement, 1 on a set mismatch, 2 when an input could not be read.
