@@ -115,7 +115,9 @@ done
 # Step 1 — derive the set of manifest-reading script basenames: any
 # scripts/*.sh whose body references the flake hook manifest.
 declare -A manifest_scripts=()
-for f in "${SCRIPTS_DIR}"/*.sh; do
+declare -a repo_scripts=()
+glob_into repo_scripts 'repo shell scripts' "${SCRIPTS_DIR}/*.sh"
+for f in "${repo_scripts[@]}"; do
   [[ -f ${f} ]] || continue
   if grep --quiet --extended-regexp 'preCommitHooks|PRECOMMIT_HOOK_NAMES' -- "${f}"; then
     manifest_scripts["$(basename "${f}")"]=1
@@ -152,7 +154,9 @@ done
 # would leave the function returning 0 with a short block list.
 parse_blocks() {
   local nix
-  for nix in "${HOOKS_DIR}"/*.nix; do
+  local -a hook_modules=()
+  glob_into hook_modules 'hook modules' "${HOOKS_DIR}/*.nix"
+  for nix in "${hook_modules[@]}"; do
     [[ -f ${nix} ]] || continue
     awk '
       # Block opens on the treefmt-stable 2-space shape: "  name = {"

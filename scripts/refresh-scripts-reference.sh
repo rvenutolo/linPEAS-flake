@@ -38,6 +38,7 @@ function cleanup() {
   if [[ -n ${repo_root} ]]; then
     local stray
     shopt -s nullglob
+    # glob-exempt: a leftover in-repo temp file is normally absent, so an empty match is this loop's expected state
     for stray in "${repo_root}"/.refresh-scripts-reference-*.md; do
       rm --force -- "${stray}"
     done

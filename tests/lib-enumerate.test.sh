@@ -3,7 +3,11 @@
 # NUL-delimited producer into an array with no line-oriented data loss,
 # that producer failure and an empty scan set are both surfaced as exit 2
 # rather than silently accepted as an empty result, and that a final
-# record missing its trailing NUL is kept rather than dropped.
+# record missing its trailing NUL is kept rather than dropped. Also
+# proves the glob analogue: a pattern set matching nothing is exit 2
+# rather than a clean tree, a path holding a space stays one element, and
+# the caller's `nullglob` and `globstar` settings are what they were on
+# return.
 set -Eeuo pipefail
 IFS=$'\n\t'
 
@@ -218,6 +222,172 @@ if [[ ${rc} -eq 2 ]] &&
 else
   fail "mktemp-fails: expected exit 2 + temp-file failure message, got exit ${rc}"
   cat -- "${work}/mktemp-fails.out" "${work}/mktemp-fails.err" >&2
+fi
+
+# Fixture trees for the glob scenarios. Each lives in its own directory
+# under the harness work dir so one scenario's match set cannot reach
+# another's, and none of them collides with the per-scenario script and
+# capture files run_scenario writes directly into that dir.
+readonly multi="${work}/fixture-multi"
+readonly empty="${work}/fixture-empty"
+readonly spaced="${work}/fixture-spaced"
+readonly starred="${work}/fixture-starred"
+mkdir --parents -- "${multi}" "${empty}" "${spaced}" \
+  "${starred}/sub/deep"
+: >"${multi}/alpha-one.aa"
+: >"${multi}/alpha-two.aa"
+: >"${multi}/beta-one.bb"
+: >"${spaced}/space probe.aa"
+: >"${starred}/top.txt"
+: >"${starred}/sub/mid.txt"
+: >"${starred}/sub/deep/low.txt"
+
+# 9. glob-multiple — two patterns fill one array in pattern order, and a
+# caller who never touched `nullglob` still has it unset on return.
+run_scenario 'glob-multiple' 'multiple=3' "
+declare -a out=()
+glob_into out 'multi probe' \"${multi}/*.aa\" \"${multi}/*.bb\"
+printf 'multiple=%d\n' \"\${#out[@]}\"
+printf 'order=%s,%s,%s\n' \"\${out[0]##*/}\" \"\${out[1]##*/}\" \"\${out[2]##*/}\"
+if shopt -q nullglob; then printf 'nullglob-after=set\n'; else printf 'nullglob-after=unset\n'; fi
+"
+harness_assert_also 'order=alpha-one.aa,alpha-two.aa,beta-one.bb'
+harness_assert_also 'nullglob-after=unset'
+if [[ ${rc} -eq 0 ]] &&
+  grep --fixed-strings --quiet -- 'multiple=3' "${work}/glob-multiple.out" &&
+  grep --fixed-strings --quiet -- 'order=alpha-one.aa,alpha-two.aa,beta-one.bb' \
+    "${work}/glob-multiple.out" &&
+  grep --fixed-strings --quiet -- 'nullglob-after=unset' "${work}/glob-multiple.out"; then
+  pass 'glob-multiple: two patterns fill three elements in pattern order, nullglob left unset, exit 0'
+else
+  fail "glob-multiple: expected exit 0 + three elements in pattern order + nullglob unset, got exit ${rc}"
+  cat -- "${work}/glob-multiple.out" "${work}/glob-multiple.err" >&2
+fi
+
+# 10. glob-empty — patterns matching nothing under an existing root are
+# exit 2, not a clean tree. The shared escape-hatch hint is claimed here
+# as well as by the enumerate-side empty scenario: both paths really do
+# print it, so each also carries a substring naming its own path.
+run_scenario 'glob-empty' 'matched 0 files via glob probe set' "
+declare -a out=()
+glob_into out 'glob probe set' \"${empty}/*.aa\" \"${empty}/*.bb\"
+printf 'unreached=%d\n' \"\${#out[@]}\"
+"
+harness_assert_also 'LINT_ALLOW_EMPTY_SCAN=1 if this is deliberate'
+if [[ ${rc} -eq 2 ]] &&
+  grep --fixed-strings --quiet -- 'matched 0 files via glob probe set' \
+    "${work}/glob-empty.err" &&
+  grep --fixed-strings --quiet -- 'LINT_ALLOW_EMPTY_SCAN=1 if this is deliberate' \
+    "${work}/glob-empty.err"; then
+  pass 'glob-empty: a pattern set matching nothing is exit 2, stderr names the label and the hint'
+else
+  fail "glob-empty: expected exit 2 + label and LINT_ALLOW_EMPTY_SCAN hint, got exit ${rc}"
+  cat -- "${work}/glob-empty.out" "${work}/glob-empty.err" >&2
+fi
+
+# 11. glob-empty-allowed — the same empty match set, opted out via
+# LINT_ALLOW_EMPTY_SCAN, is exit 0 with an empty array, and a caller who
+# had `nullglob` set still has it set on return.
+run_scenario 'glob-empty-allowed' 'allowed=0' "
+shopt -s nullglob
+export LINT_ALLOW_EMPTY_SCAN=1
+declare -a out=()
+glob_into out 'allowed probe' \"${empty}/*.aa\"
+printf 'allowed=%d\n' \"\${#out[@]}\"
+if shopt -q nullglob; then printf 'nullglob-after=set\n'; else printf 'nullglob-after=unset\n'; fi
+"
+harness_assert_also 'nullglob-after=set'
+if [[ ${rc} -eq 0 ]] &&
+  grep --fixed-strings --quiet -- 'allowed=0' "${work}/glob-empty-allowed.out" &&
+  grep --fixed-strings --quiet -- 'nullglob-after=set' "${work}/glob-empty-allowed.out"; then
+  pass 'glob-empty-allowed: LINT_ALLOW_EMPTY_SCAN=1 turns the same empty match set exit 0, nullglob left set'
+else
+  fail "glob-empty-allowed: expected exit 0 + empty array + nullglob still set, got exit ${rc}"
+  cat -- "${work}/glob-empty-allowed.out" "${work}/glob-empty-allowed.err" >&2
+fi
+
+# 12. glob-space-name — a match holding a space is one element. The
+# expansion runs under an empty IFS, so pathname expansion happens
+# without word splitting; `declare -p` captures the element boundary
+# unambiguously.
+run_scenario 'glob-space-name' 'spaced=1' "
+declare -a out=()
+glob_into out 'spaced probe' \"${spaced}/*.aa\"
+printf 'spaced=%d\n' \"\${#out[@]}\"
+declare -p out
+"
+harness_assert_also 'space probe.aa")'
+if [[ ${rc} -eq 0 ]] &&
+  grep --fixed-strings --quiet -- 'spaced=1' "${work}/glob-space-name.out" &&
+  grep --fixed-strings --quiet -- 'space probe.aa")' "${work}/glob-space-name.out"; then
+  pass 'glob-space-name: a match containing a space stays one element, exit 0'
+else
+  fail "glob-space-name: expected one element carrying the space, got exit ${rc}"
+  cat -- "${work}/glob-space-name.out" "${work}/glob-space-name.err" >&2
+fi
+
+# 13. glob-no-nullglob — a caller that has explicitly unset `nullglob`
+# still gets exit 2 on an empty match set. This is the scenario the
+# expand-inside-the-function decision exists for: a call site expanding
+# its own patterns without `nullglob` would hand the function the literal
+# unexpanded pattern, which counts as one match and vouches for exactly
+# the tree the assertion exists to catch.
+run_scenario 'glob-no-nullglob' 'matched 0 files via nullglob-unset probe' "
+shopt -u nullglob
+declare -a out=()
+glob_into out 'nullglob-unset probe' \"${empty}/*.aa\"
+printf 'unreached=%d\n' \"\${#out[@]}\"
+"
+harness_assert_also 'LINT_ALLOW_EMPTY_SCAN=1 if this is deliberate'
+if [[ ${rc} -eq 2 ]] &&
+  grep --fixed-strings --quiet -- 'matched 0 files via nullglob-unset probe' \
+    "${work}/glob-no-nullglob.err" &&
+  grep --fixed-strings --quiet -- 'LINT_ALLOW_EMPTY_SCAN=1 if this is deliberate' \
+    "${work}/glob-no-nullglob.err"; then
+  pass 'glob-no-nullglob: an unset nullglob still yields exit 2, not one literal-pattern element'
+else
+  fail "glob-no-nullglob: expected exit 2 with no literal-pattern element, got exit ${rc}"
+  cat -- "${work}/glob-no-nullglob.out" "${work}/glob-no-nullglob.err" >&2
+fi
+
+# 14. glob-globstar-set — a caller with `globstar` set keeps the reach it
+# already had, and still has the option set on return.
+run_scenario 'glob-globstar-set' 'starset=3' "
+shopt -s globstar
+declare -a out=()
+glob_into out 'globstar probe' \"${starred}/**/*.txt\"
+printf 'starset=%d\n' \"\${#out[@]}\"
+if shopt -q globstar; then printf 'globstar-after=set\n'; else printf 'globstar-after=unset\n'; fi
+"
+harness_assert_also 'globstar-after=set'
+if [[ ${rc} -eq 0 ]] &&
+  grep --fixed-strings --quiet -- 'starset=3' "${work}/glob-globstar-set.out" &&
+  grep --fixed-strings --quiet -- 'globstar-after=set' "${work}/glob-globstar-set.out"; then
+  pass 'glob-globstar-set: a set globstar recurses and stays set, exit 0'
+else
+  fail "glob-globstar-set: expected three recursive matches and globstar still set, got exit ${rc}"
+  cat -- "${work}/glob-globstar-set.out" "${work}/glob-globstar-set.err" >&2
+fi
+
+# 15. glob-globstar-unset — the same pattern against the same tree with
+# `globstar` unset reaches one directory level only, and the option is
+# still unset on return: the function neither widens nor narrows what the
+# caller asked for.
+run_scenario 'glob-globstar-unset' 'starunset=1' "
+shopt -u globstar
+declare -a out=()
+glob_into out 'globstar probe' \"${starred}/**/*.txt\"
+printf 'starunset=%d\n' \"\${#out[@]}\"
+if shopt -q globstar; then printf 'globstar-after=set\n'; else printf 'globstar-after=unset\n'; fi
+"
+harness_assert_also 'globstar-after=unset'
+if [[ ${rc} -eq 0 ]] &&
+  grep --fixed-strings --quiet -- 'starunset=1' "${work}/glob-globstar-unset.out" &&
+  grep --fixed-strings --quiet -- 'globstar-after=unset' "${work}/glob-globstar-unset.out"; then
+  pass 'glob-globstar-unset: an unset globstar reaches one level and stays unset, exit 0'
+else
+  fail "glob-globstar-unset: expected one single-level match and globstar still unset, got exit ${rc}"
+  cat -- "${work}/glob-globstar-unset.out" "${work}/glob-globstar-unset.err" >&2
 fi
 
 harness_assert_verify || failures=$((failures + 1))

@@ -13,6 +13,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 # shellcheck source=scripts/lib/awk-path.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
 # shellcheck source=scripts/lib/temp.sh
@@ -30,7 +32,12 @@ readonly DOC_FILE="${DOC_FILE_OVERRIDE:-${REPO_ROOT}/docs/architecture/ci.md}"
 # @description Emit `name<TAB>cron` for each workflow yaml with a cron schedule.
 function workflow_pairs() {
   local f name cron
-  for f in "${WORKFLOWS_DIR}"/*.yml "${WORKFLOWS_DIR}"/*.yaml; do
+  local -a workflow_files=()
+  glob_into workflow_files 'workflow YAML' \
+    "${WORKFLOWS_DIR}/*.yml" "${WORKFLOWS_DIR}/*.yaml"
+  # The `-f` gate stays: this scan holds files, and a directory named
+  # `foo.yml` matches the pattern the same way a file does.
+  for f in "${workflow_files[@]}"; do
     [[ -f ${f} ]] || continue
     name="$(basename "${f}")"
     name="${name%.yaml}"
@@ -85,7 +92,12 @@ function main() {
   # A workflow with >1 cron line can't be represented in the name-keyed
   # table model; surface the limitation rather than silently dropping lines.
   local f cron_count
-  for f in "${WORKFLOWS_DIR}"/*.yml "${WORKFLOWS_DIR}"/*.yaml; do
+  local -a workflow_files=()
+  glob_into workflow_files 'workflow YAML' \
+    "${WORKFLOWS_DIR}/*.yml" "${WORKFLOWS_DIR}/*.yaml"
+  # The `-f` gate stays: this scan holds files, and a directory named
+  # `foo.yml` matches the pattern the same way a file does.
+  for f in "${workflow_files[@]}"; do
     [[ -f ${f} ]] || continue
     cron_count="$(grep -Ec '^[[:space:]]*-[[:space:]]*cron:' "${f}" || true)"
     if ((cron_count > 1)); then

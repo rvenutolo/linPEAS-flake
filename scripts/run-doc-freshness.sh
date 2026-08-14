@@ -8,24 +8,17 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 
 readonly TESTS_DIR="${TESTS_DIR_OVERRIDE:-tests}"
 
 function main() {
   local -a harnesses=()
   local h
-  # Sorted glob; nullglob so an empty match yields an empty array
-  # rather than the literal pattern.
-  shopt -s nullglob
-  for h in "${TESTS_DIR}"/refresh-*.test.sh; do
-    harnesses+=("${h}")
-  done
-  shopt -u nullglob
-
-  if [[ ${#harnesses[@]} -eq 0 ]]; then
-    printf 'no refresh-*.test.sh harnesses found under %s/\n' "${TESTS_DIR}" >&2
-    exit 2
-  fi
+  # Sorted glob, filled through the shared helper so a scan root holding
+  # no harness is a could-not-run rather than a run that found nothing.
+  glob_into harnesses 'doc-freshness harnesses' "${TESTS_DIR}/refresh-*.test.sh"
 
   local failed=0
   local -a rows=()

@@ -87,7 +87,38 @@ expect bad-empty-rationale.sh 1 \
 # score a lint that had gone half-blind as a pass.
 run_expect 'all-good-shapes' \
   "${FIXTURES}/good-direct.sh"$'\n'"${FIXTURES}/good-wrapper.sh"$'\n'"${FIXTURES}/good-exempt.sh"$'\n'"${FIXTURES}/good-mentions-only.sh" \
-  0 '4 file(s) scanned, 3 producer call(s) classified, 1 exemption(s)'
+  0 '4 file(s) scanned, 3 scan site(s) classified, 1 exemption(s)'
+
+# The glob rule's violating shapes. A loop that expands its own pattern
+# at the loop head has nowhere to state how many files it matched, so an
+# empty root produces the clean run a populated one would.
+expect bad-bare-glob-loop.sh 1 \
+  'bad-bare-glob-loop.sh:10:1: this for loop iterates a glob directly'
+expect bad-glob-empty-rationale.sh 1 \
+  'bad-glob-empty-rationale.sh:9:1: glob-exempt marker carries no rationale'
+
+# Each rule owns its own marker word, and these two prove the keying in
+# both directions: an exemption written for one class must not silence
+# the other, or a single marker word would be an opt-out from both rules
+# at once no matter which one the site was actually reasoned about.
+expect bad-glob-marker-mismatch.sh 1 \
+  'bad-glob-marker-mismatch.sh:11:1: this for loop iterates a glob directly'
+expect bad-producer-marker-mismatch.sh 1 \
+  'bad-producer-marker-mismatch.sh:10:12: git ls-files runs outside enumerate_into'
+
+# The glob rule's clean shapes, merged for the same reason the producer
+# rule's are: each alone prints an indistinguishable clean summary, and
+# the counts are what prove all four were read — a helper call, an
+# exempted loop, two helper calls whose only glob is a call argument, and
+# a loop over an array that carries no pattern at all.
+#
+# The tally is load-bearing here too. A rule that stopped counting the
+# helper's own call sites would leave this run at exit 0 and move only
+# the count, so a scenario asserting the exit code alone would score a
+# half-blind rule as a pass.
+run_expect 'all-good-glob-shapes' \
+  "${FIXTURES}/good-glob-into.sh"$'\n'"${FIXTURES}/good-glob-exempt.sh"$'\n'"${FIXTURES}/good-glob-arg-only.sh"$'\n'"${FIXTURES}/good-no-glob-loop.sh" \
+  0 '4 file(s) scanned, 4 scan site(s) classified, 1 exemption(s)'
 
 # @description The producer tally is its own breadth assertion, separate
 # from the file enumeration: a real file can be scanned and yield no
@@ -95,7 +126,7 @@ run_expect 'all-good-shapes' \
 # summary a genuinely enumeration-free tree prints, because a grammar
 # that stopped recognizing producers would report exactly the same line.
 run_expect 'zero-producer-scan' "${FIXTURES}/good-mentions-only.sh" 2 \
-  'classified 0 producer call(s) across 1 file(s) scanned'
+  'classified 0 scan site(s) across 1 file(s) scanned'
 
 # @description Same input, opted out: proves the documented release
 # valve turns that run green rather than only existing in prose.
@@ -108,13 +139,13 @@ function expect_zero_producer_allowed() {
   LINT_ALLOW_EMPTY_SCAN=1 PATHS_OVERRIDE="${FIXTURES}/good-mentions-only.sh" \
     "${SCRIPT}" >"${out_file}" 2>"${err_file}" || got_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
-  harness_assert_record "${name}" '1 file(s) scanned, 0 producer call(s) classified, 0 exemption(s)' \
+  harness_assert_record "${name}" '1 file(s) scanned, 0 scan site(s) classified, 0 exemption(s)' \
     "${outcome_file}" "${out_file}" "${err_file}"
 
   if [[ ${got_exit} != 0 ]]; then
     fail "$(printf '%s: exit %s, want 0' "${name}" "${got_exit}")"
     cat -- "${err_file}" >&2
-  elif ! grep --fixed-strings --quiet -- '1 file(s) scanned, 0 producer call(s) classified, 0 exemption(s)' "${out_file}"; then
+  elif ! grep --fixed-strings --quiet -- '1 file(s) scanned, 0 scan site(s) classified, 0 exemption(s)' "${out_file}"; then
     fail "$(printf '%s: stdout missing the clean summary' "${name}")"
     cat -- "${out_file}" >&2
   else

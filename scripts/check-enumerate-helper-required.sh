@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # scripts/check-enumerate-helper-required.sh
 #
-# @description Lint: every filesystem enumeration in a repo script runs
-# through `enumerate_into` (scripts/lib/enumerate.sh). A producer —
-# `find`, `git ls-files`, `git ls-tree` — may appear only as an argument
-# to the helper, inside a function the helper is handed by name, or
-# behind an inline `# enumerate-exempt: <rationale>` marker.
+# @description Lint: every filesystem scan in a repo script asserts its
+# own breadth. An enumeration runs through `enumerate_into`
+# (scripts/lib/enumerate.sh) — a producer (`find`, `git ls-files`, `git
+# ls-tree`) may appear only as an argument to the helper, inside a
+# function the helper is handed by name, or behind an inline
+# `# enumerate-exempt: <rationale>` marker. A glob-driven scan fills its
+# array through `glob_into` — a `for` loop may not expand a pattern at
+# its own loop head unless an inline `# glob-exempt: <rationale>` marker
+# says an empty match set is that loop's normal state.
 #
 # The property being protected is scan breadth, not producer status. A
 # producer that fails is the easy half; the hard half is a producer that
@@ -18,10 +22,21 @@
 # assertion structural instead of something each call site has to
 # remember.
 #
-# That is what makes this rule decidable in one pass. Associating an
-# enumeration with a cardinality test written an arbitrary distance
-# later is not something a textual rule can do; asking whether a
-# producer is an argument to the helper is local to one call expression.
+# A glob loop fails the same way from the other end. Under `nullglob` a
+# pattern matching nothing expands to nothing, the loop body never runs,
+# no violation is found and the run exits 0 — so a scan root that exists
+# and holds nothing scores as a clean tree. `glob_into` is the same
+# assertion for that shape: it expands the patterns, fills the array and
+# refuses an empty match set, and the loop then walks an ordinary array.
+#
+# That is what makes both rules decidable in one pass. Associating a scan
+# with a cardinality test written an arbitrary distance later is not
+# something a textual rule can do; asking whether a producer is an
+# argument to the helper is local to one call expression, and so is
+# asking whether a `for` loop expands a pattern at its own head.
+# Patterns handed to `glob_into` are arguments of a `CallExpr` and never
+# `WordIter` items, so a compliant call site cannot false-hit the glob
+# rule however many metacharacters it carries.
 #
 # Detection parses each script's syntax tree via `shfmt --to-json` (the
 # mvdan.cc/sh parser `shfmt` and `treefmt` already run over this repo)
@@ -37,20 +52,26 @@
 # the word right after `git`: the one hand-rolled enumeration this lint
 # was written against spelled it `git -C "${ROOT}" ls-files`.
 #
-# The count of producer calls classified is itself asserted nonzero
-# (unless LINT_ALLOW_EMPTY_SCAN=1). A grammar that silently recognized
-# no producers would report "0 violations" and exit 0 — the same clean
-# line a genuinely producer-free tree prints — leaving this gate off
-# while green, which is the exact failure it exists to prevent one level
-# down.
+# The count of scan sites classified — producer calls plus `glob_into`
+# call sites plus glob loops — is itself asserted nonzero (unless
+# LINT_ALLOW_EMPTY_SCAN=1). A grammar that silently recognized nothing
+# would report "0 violations" and exit 0 — the same clean line a
+# genuinely scan-free tree prints — leaving this gate off while green,
+# which is the exact failure it exists to prevent one level down.
+#
+# Each rule owns its own marker word, and a marker excuses only the kind
+# of site it names: a rationale for running a producer outside the
+# enumeration helper says nothing about whether a glob's match set may
+# come back empty, and the reverse holds too.
 #
 # Honors PATHS_OVERRIDE (newline-separated file list) for fixtures, and
-# LINT_ALLOW_EMPTY_SCAN=1 to accept a run whose producer tally (or whose
+# LINT_ALLOW_EMPTY_SCAN=1 to accept a run whose scan-site tally (or whose
 # enumerated file count) comes back zero.
-# Exit 0 clean, 1 on a producer outside the helper or an exemption
-# marker with no rationale, 2 when a required tool is absent, the scan
-# set could not be enumerated (or classified nothing), a named path does
-# not exist, or a file could not be parsed as shell.
+# Exit 0 clean, 1 on a producer outside `enumerate_into`, a `for` loop
+# expanding a glob at its own head, or an exemption marker with no
+# rationale, 2 when a required tool is absent, the scan set could not be
+# enumerated (or classified nothing), a named path does not exist, or a
+# file could not be parsed as shell.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -85,13 +106,20 @@ fi
 
 # The jq program walks one file's shfmt --to-json tree per run
 # (--to-json accepts only stdin, one document per invocation) and emits
-# one `<ok|bad>\t<line>\t<col>\t<producer>` record per producer call.
+# one `<ok|bad>\t<line>\t<col>\t<what>` record per scan site, where
+# `<what>` is the producer name for an enumeration and the literal below
+# for a glob-driven scan. The shell loop keys its marker word off that
+# field, so an exemption written for one rule cannot silence the other.
 #
-# Three positions are recognized, and each is counted:
+# Three positions are recognized for a producer, and each is counted:
 #   ok  — the producer's words are arguments of an `enumerate_into` call
 #   ok  — the producer runs inside a function whose name that same file
 #         hands to `enumerate_into`
 #   bad — anywhere else
+#
+# Two are recognized for a glob scan:
+#   ok  — a `glob_into` call, which owns the match set and its size
+#   bad — a `for` whose iteration words carry a glob metacharacter
 #
 # A producer passed directly to the helper is NOT its own command node:
 # `enumerate_into arr label git ls-files -z` parses as one call whose
@@ -100,6 +128,11 @@ fi
 # form by looking for a producer command node. The two cannot
 # double-count each other, because a word is either an argument of the
 # helper call or the head of its own.
+#
+# The `what` field of a glob record. Held in one variable so the jq
+# program and the shell loop that keys the marker word off it cannot
+# drift apart.
+readonly GLOB_WHAT='glob loop'
 # shellcheck disable=SC2016 # jq program literal; $-prefixed names are jq variables, not shell
 readonly JQ_PROG='
 # A word yields text only when it is unambiguously static: a bare
@@ -193,15 +226,44 @@ def producer_of(args):
     | (if $inside > 0 then "ok" else "bad" end) as $verdict
     | "\($verdict)\t\($call.Pos.Line)\t\($call.Pos.Col)\t\($prod)"] as $standalone
 
-| ($direct + $standalone)[]
+# Position 4: a `glob_into` call. Counted rather than merely ignored, so
+# the nonzero tally below covers this rule as well — a walk that stopped
+# recognizing the sanctioned shape would otherwise still print a clean
+# line.
+| [.. | objects | select(.Type == "CallExpr")
+    | select(((.Args // []) | length) > 0)
+    | select((.Args[0] | literal_word_text) == "glob_into")
+    | "ok\t\(.Pos.Line)\t\(.Pos.Col)\t\($glob_what)"] as $glob_calls
+
+# Position 5: a `for` whose iteration words carry a glob metacharacter in
+# an unquoted literal. Only a bare `Lit` part counts: a metacharacter
+# inside quotes is not a pattern, so `for x in "*"` iterates one literal
+# asterisk and asserts nothing about any tree. `.Loop.Items` is empty for
+# a C-style `for ((;;))`, which therefore never reaches the test.
+| [.. | objects | select(.Type == "ForClause")
+    | select(([(.Loop.Items // [])[]
+        | (.Parts // [])[]
+        | select(.Type == "Lit")
+        | (.Value // "")
+        | select(test("[*?[]"))] | length) > 0)
+    | "bad\t\(.Pos.Line)\t\(.Pos.Col)\t\($glob_what)"] as $glob_loops
+
+| ($direct + $standalone + $glob_calls + $glob_loops)[]
 '
 
-# An exemption marker on the producer's own line or the line above it.
-# The marker must open the comment, so prose naming it exempts nothing,
-# and the rationale must be non-empty — an empty one is drift, not an
-# exemption, exactly as the sibling exit-code and patch-tag markers
-# treat it.
-readonly MARKER='#[[:space:]]*enumerate-exempt:'
+# The exemption marker word each rule answers to, keyed by the record's
+# `what` field. A marker excuses only the kind of site it names: a
+# rationale for running a producer outside the enumeration helper is not
+# a statement about whether a glob may match nothing, so one word cannot
+# be allowed to opt a site out of both rules at once.
+#
+# The marker sits on the site's own line or in the contiguous comment
+# block above it, must open the comment so prose naming it exempts
+# nothing, and its rationale must be non-empty — an empty one is drift,
+# not an exemption, exactly as the sibling exit-code and patch-tag
+# markers treat it.
+readonly MARKER_ENUMERATE='enumerate-exempt'
+readonly MARKER_GLOB='glob-exempt'
 
 scanned=0
 classified=0
@@ -224,7 +286,7 @@ for f in "${paths[@]}"; do
   fi
 
   records=""
-  if ! records="$(jq --raw-output "${JQ_PROG}" <<<"${ast_json}")"; then
+  if ! records="$(jq --raw-output --arg glob_what "${GLOB_WHAT}" "${JQ_PROG}" <<<"${ast_json}")"; then
     printf '%s: jq failed walking the parsed syntax tree\n' "${f}" >&2
     exit 2
   fi
@@ -236,12 +298,21 @@ for f in "${paths[@]}"; do
   file_lines=()
   mapfile -t file_lines <"${f}"
 
-  while IFS=$'\t' read -r verdict line col producer; do
+  while IFS=$'\t' read -r verdict line col what; do
     [[ -z ${verdict} ]] && continue
     classified=$((classified + 1))
     [[ ${verdict} == ok ]] && continue
 
-    # The marker may sit on the producer's own line or anywhere in the
+    # The marker word follows the kind of site, so the exemption a
+    # reviewer reads is the one the site was reasoned about.
+    if [[ ${what} == "${GLOB_WHAT}" ]]; then
+      marker_word="${MARKER_GLOB}"
+    else
+      marker_word="${MARKER_ENUMERATE}"
+    fi
+    marker_re="#[[:space:]]*${marker_word}:"
+
+    # The marker may sit on the site's own line or anywhere in the
     # contiguous comment block directly above it. A rationale worth
     # reading rarely fits on one line, and a marker that only counted
     # when it landed on the last comment line would push the reason
@@ -253,18 +324,18 @@ for f in "${paths[@]}"; do
       probe=$((probe - 1))
     done
 
-    if [[ ${marker_text} =~ ${MARKER} ]]; then
+    if [[ ${marker_text} =~ ${marker_re} ]]; then
       # The rationale is the remainder of the marker's own line: a
       # continuation line may carry more prose, but the marker line
       # itself has to say something.
-      rationale="${marker_text#*enumerate-exempt:}"
+      rationale="${marker_text#*"${marker_word}":}"
       rationale="${rationale%%$'\n'*}"
       # Trim surrounding whitespace without invoking anything.
       rationale="${rationale#"${rationale%%[![:space:]]*}"}"
       rationale="${rationale%"${rationale##*[![:space:]]}"}"
       if [[ -z ${rationale} ]]; then
-        printf '%s:%s:%s: enumerate-exempt marker carries no rationale; %s stays a hit until the marker says why the helper is wrong here\n' \
-          "${f}" "${line}" "${col}" "${producer}" >&2
+        printf '%s:%s:%s: %s marker carries no rationale; %s stays a hit until the marker says why the helper is wrong here\n' \
+          "${f}" "${line}" "${col}" "${marker_word}" "${what}" >&2
         failed=$((failed + 1))
       else
         exempted=$((exempted + 1))
@@ -272,29 +343,34 @@ for f in "${paths[@]}"; do
       continue
     fi
 
-    printf '%s:%s:%s: %s runs outside enumerate_into; an enumeration that asserts no breadth reads an empty scan as a clean tree\n' \
-      "${f}" "${line}" "${col}" "${producer}" >&2
+    if [[ ${what} == "${GLOB_WHAT}" ]]; then
+      printf '%s:%s:%s: this for loop iterates a glob directly; a glob loop that asserts no breadth reads an empty root as a clean tree — fill an array with glob_into and loop over that\n' \
+        "${f}" "${line}" "${col}" >&2
+    else
+      printf '%s:%s:%s: %s runs outside enumerate_into; an enumeration that asserts no breadth reads an empty scan as a clean tree\n' \
+        "${f}" "${line}" "${col}" "${what}" >&2
+    fi
     failed=$((failed + 1))
   done <<<"${records}"
 done
 
 if ((failed > 0)); then
-  printf '%d filesystem enumeration(s) outside enumerate_into\n' "${failed}" >&2
+  printf '%d scan(s) that assert no breadth: a filesystem enumeration outside enumerate_into, or a for loop expanding a glob at its own head\n' "${failed}" >&2
   exit 1
 fi
 
 # A zero tally says nothing about whether these scripts really run no
-# enumeration or whether the walk above stopped recognizing producers.
-# Both print the same clean line, so the zero has to be stated as
-# deliberate. LINT_ALLOW_EMPTY_SCAN is the opt-out rather than a new
-# variable: this is the same shape its siblings already use — the scan
-# ran, and the count of the thing being verified came back zero.
+# scan at all or whether the walk above stopped recognizing producers and
+# glob loops. Both print the same clean line, so the zero has to be
+# stated as deliberate. LINT_ALLOW_EMPTY_SCAN is the opt-out rather than
+# a new variable: this is the same shape its siblings already use — the
+# scan ran, and the count of the thing being verified came back zero.
 if [[ -z ${LINT_ALLOW_EMPTY_SCAN:-} ]] && ((classified == 0)); then
-  printf '%s: classified 0 producer call(s) across %d file(s) scanned — an unrecognized producer grammar reports the same clean line an enumeration-free tree does; set LINT_ALLOW_EMPTY_SCAN=1 if these scripts deliberately run no enumeration\n' \
+  printf '%s: classified 0 scan site(s) across %d file(s) scanned — an unrecognized grammar reports the same clean line a scan-free tree does; set LINT_ALLOW_EMPTY_SCAN=1 if these scripts deliberately run no enumeration and no glob scan\n' \
     "${0##*/}" "${scanned}" >&2
   exit 2
 fi
 
-printf 'enumerate-helper-required: %d file(s) scanned, %d producer call(s) classified, %d exemption(s)\n' \
+printf 'enumerate-helper-required: %d file(s) scanned, %d scan site(s) classified, %d exemption(s)\n' \
   "${scanned}" "${classified}" "${exempted}"
 exit 0

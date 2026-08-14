@@ -29,6 +29,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 
 readonly DEFAULT_DIR="scripts"
 readonly OVERRIDE="${SCRIPTS_DIR_OVERRIDE:-}"
@@ -40,7 +42,11 @@ readonly WANT_SET_LINE="set -Eeuo pipefail"
 
 failed=0
 shopt -s nullglob globstar
-for f in "${DIR}"/**/*.sh; do
+# `globstar` is set here and left set across the call, so the pattern keeps
+# reaching every nested directory under the scan root.
+declare -a repo_scripts=()
+glob_into repo_scripts 'repo shell scripts' "${DIR}/**/*.sh"
+for f in "${repo_scripts[@]}"; do
   [[ -f ${f} ]] || continue
   if [[ -n ${FILE_FILTER} && "$(basename "${f}")" != "${FILE_FILTER}" ]]; then
     continue

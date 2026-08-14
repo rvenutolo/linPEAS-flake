@@ -186,7 +186,9 @@ function required_modules() {
 
 # Step 1 — derive generator basename -> evaluated attribute.
 declare -A generator_attr=()
-for f in "${ROOT}"/scripts/*.sh; do
+declare -a repo_scripts=()
+glob_into repo_scripts 'repo shell scripts' "${ROOT}/scripts/*.sh"
+for f in "${repo_scripts[@]}"; do
   [[ -f ${f} ]] || continue
   attr="$(grep --only-matching --extended-regexp \
     'devTooling\.\$\{sys\}\.[A-Za-z0-9_]+' -- "${f}" |
@@ -245,7 +247,9 @@ fi
 # leave the function returning 0 with a short block list.
 function parse_blocks() {
   local nix
-  for nix in "${ROOT}"/nix/hooks/*.nix; do
+  local -a hook_modules=()
+  glob_into hook_modules 'freshness hook modules' "${ROOT}/nix/hooks/*.nix"
+  for nix in "${hook_modules[@]}"; do
     [[ -f ${nix} ]] || continue
     awk '
       /^  [A-Za-z0-9_-]+ = \{/ {

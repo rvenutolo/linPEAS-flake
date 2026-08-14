@@ -30,6 +30,14 @@ if ! command -v yq >/dev/null 2>&1; then
   exit 2
 fi
 
+# Sourced below the tool guard, not above it: resolving the library path
+# runs `dirname` and `readlink`, so a PATH that cannot reach yq cannot
+# reach those either, and a source line placed first would report a
+# missing library instead of the missing tool that actually stopped the
+# run.
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
+
 readonly DEFAULT_DIRS=(.github/workflows .github/actions)
 readonly OVERRIDE="${WORKFLOWS_DIR_OVERRIDE:-}"
 readonly FILE_FILTER="${WORKFLOW_FILE_FILTER:-}"
@@ -52,7 +60,12 @@ for dir in "${scan_dirs[@]}"; do
   # (and `**/*.yaml`) already cover top-level *.yml/*.yaml. A separate
   # `*.yml`/`*.yaml` would match (and re-scan) every top-level file a
   # second time, double-counting violations.
-  for f in "${dir}"/**/*.yml "${dir}"/**/*.yaml; do
+  # `globstar` is set above and left set across the call, so the pattern
+  # keeps reaching every nested directory under this scan root.
+  declare -a workflow_files=()
+  glob_into workflow_files "workflow and composite-action YAML under ${dir}" \
+    "${dir}/**/*.yml" "${dir}/**/*.yaml"
+  for f in "${workflow_files[@]}"; do
     [[ -f ${f} ]] || continue
     if [[ -n ${FILE_FILTER} && "$(basename "${f}")" != "${FILE_FILTER}" ]]; then
       continue

@@ -37,6 +37,18 @@ function expect() {
   stderr_file="$(mktemp)"
   outcome_file="$(mktemp)"
 
+  # The guard scans its scripts root for manifest readers before it scores
+  # anything, and asserts that root is non-empty. A fixture whose scenario
+  # varies only the hook side would leave it empty and stop the run on a
+  # could-not-run the scenario never meant to raise, so every fixture gets
+  # one inert script: it is read and classified as no manifest reader,
+  # which is what an uninvolved script in the real tree also is. Blanket
+  # LINT_ALLOW_EMPTY_SCAN would instead switch off the module-scan breadth
+  # assertion one scenario below asserts.
+  mkdir --parents -- "${scripts_dir}"
+  printf '#!/usr/bin/env bash\n# fixture filler: names no hook manifest\n' \
+    >"${scripts_dir}/fixture-filler.sh"
+
   local got_exit=0
   HOOKS_DIR_OVERRIDE="${hooks_dir}" \
     SCRIPTS_DIR_OVERRIDE="${scripts_dir}" \

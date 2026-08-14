@@ -72,3 +72,49 @@ function enumerate_into() {
     exit 2
   fi
 }
+
+# @description Fill an array from one or more globs, asserting the match
+# set is non-empty. The glob analogue of `enumerate_into`: under
+# `nullglob` a pattern that matches nothing expands to nothing, the loop
+# body never runs, no violation is found and the lint exits 0 — a scan
+# root that exists and holds nothing is scored a clean tree. Patterns
+# arrive as strings and are expanded here rather than at the call site,
+# because a caller that has not set `nullglob` would otherwise hand this
+# function the literal unexpanded pattern and it would count as one
+# match — the helper vouching for exactly the tree it exists to catch.
+# `globstar` is left as the caller set it, so a `**` pattern keeps the
+# reach it already had.
+# @arg $1 name of the array to fill
+# @arg $2 human-readable label naming the scan set, used in the diagnostic
+# @arg $@ the glob patterns, quoted so they reach this function unexpanded
+# @exitcode 2 the match set was empty while LINT_ALLOW_EMPTY_SCAN was unset
+function glob_into() {
+  local -r __glob_target="$1" __glob_label="$2"
+  shift 2
+  local -n __glob_out_ref="${__glob_target}"
+  __glob_out_ref=()
+
+  local __glob_had_nullglob=0
+  shopt -q nullglob && __glob_had_nullglob=1
+  shopt -s nullglob
+
+  local __glob_pat
+  local -a __glob_batch=()
+  for __glob_pat in "$@"; do
+    # Empty IFS so the unquoted expansion below undergoes pathname
+    # expansion without word splitting: a path holding a space is one
+    # match, not two.
+    local IFS=''
+    # shellcheck disable=SC2206 # deliberate glob expansion of a pattern string
+    __glob_batch=(${__glob_pat})
+    __glob_out_ref+=("${__glob_batch[@]}")
+  done
+
+  ((__glob_had_nullglob == 1)) || shopt -u nullglob
+
+  if ((${#__glob_out_ref[@]} == 0)) && [[ -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
+    printf '%s: matched 0 files via %s — a real tree cannot have an empty scan set; set LINT_ALLOW_EMPTY_SCAN=1 if this is deliberate\n' \
+      "${0##*/}" "${__glob_label}" >&2
+    exit 2
+  fi
+}

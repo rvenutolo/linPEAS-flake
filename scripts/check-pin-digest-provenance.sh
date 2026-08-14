@@ -100,7 +100,12 @@ function scanned_files_under() {
   local -r root="$1"
   local f rel
   shopt -s nullglob globstar
-  for f in "${root}"/.github/**/*.yml "${root}"/.github/**/*.yaml; do
+  # `globstar` is set here and left set across the call, so the pattern
+  # keeps reaching every nested directory under the scan root.
+  local -a pin_files=()
+  glob_into pin_files 'pin-scanned YAML' \
+    "${root}/.github/**/*.yml" "${root}/.github/**/*.yaml"
+  for f in "${pin_files[@]}"; do
     rel="${f#"${root}"/}"
     is_scanned_pin_file "${rel}" && printf '%s\n' "${rel}"
   done

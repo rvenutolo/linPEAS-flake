@@ -31,6 +31,8 @@
 # shellcheck disable=SC2016
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 
 readonly DEFAULT_DIR=".github/workflows"
 readonly DEFAULT_ALLOWLIST=".github/permission-scopes.yml"
@@ -56,7 +58,9 @@ failed=0
 shopt -s nullglob
 
 # --- forward: workflow write scopes ⊆ allowlist -------------------------
-for f in "${DIR}"/*.yml "${DIR}"/*.yaml; do
+declare -a workflow_files=()
+glob_into workflow_files 'workflow YAML' "${DIR}/*.yml" "${DIR}/*.yaml"
+for f in "${workflow_files[@]}"; do
   [[ -f ${f} ]] || continue
   base="$(basename "${f}")"
   if [[ -n ${FILE_FILTER} && ${base} != "${FILE_FILTER}" ]]; then

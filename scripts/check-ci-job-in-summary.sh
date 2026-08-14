@@ -61,6 +61,8 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 # shellcheck source=scripts/lib/temp.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
 
@@ -180,7 +182,12 @@ done
 all_jobs_file="$(make_temp)"
 trap 'rm --force -- "${ci_jobs_file}" "${cat_keys_file}" "${all_jobs_file}"' EXIT
 shopt -s nullglob
-for f in "${WORKFLOWS_DIR}"/*.yml "${WORKFLOWS_DIR}"/*.yaml; do
+# Enumerated before the pipeline rather than inside it: a glob expanded in
+# the `for` head runs in the pipeline's own subshell, where an exit would
+# end that subshell alone and leave the redirect writing an empty job set.
+declare -a workflow_files=()
+glob_into workflow_files 'workflow YAML' "${WORKFLOWS_DIR}/*.yml" "${WORKFLOWS_DIR}/*.yaml"
+for f in "${workflow_files[@]}"; do
   [[ -f ${f} ]] || continue
   yq eval '.jobs // {} | keys | .[]' "${f}" 2>/dev/null || true
 done | sort --unique >"${all_jobs_file}"

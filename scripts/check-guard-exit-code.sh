@@ -60,6 +60,8 @@
 # Exit 0 clean, 1 on any hit, 2 on operational error.
 set -Eeuo pipefail
 IFS=$'\n\t'
+# shellcheck source=scripts/lib/enumerate.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
 
 readonly DIR="${SCRIPTS_DIR_OVERRIDE:-scripts}"
 [[ -d ${DIR} ]] || {
@@ -286,7 +288,11 @@ failed=0
 exempted=0
 scanned=0
 shopt -s nullglob globstar
-for f in "${DIR}"/**/*.sh; do
+# `globstar` is set here and left set across the call, so the pattern keeps
+# reaching every nested directory under the scan root.
+declare -a repo_scripts=()
+glob_into repo_scripts 'repo shell scripts' "${DIR}/**/*.sh"
+for f in "${repo_scripts[@]}"; do
   scanned=$((scanned + 1))
   # `scripts/lib/temp.sh` holds the one sanctioned bare invocation in the
   # tree — the guarded helper every other site routes through — so the

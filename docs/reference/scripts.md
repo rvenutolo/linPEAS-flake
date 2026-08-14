@@ -308,11 +308,14 @@ carries any sigstore host at all, and carries no denylisted host.
 
 ### scripts/check-enumerate-helper-required.sh
 
-Lint: every filesystem enumeration in a repo script runs
-through `enumerate_into` (scripts/lib/enumerate.sh). A producer —
-`find`, `git ls-files`, `git ls-tree` — may appear only as an argument
-to the helper, inside a function the helper is handed by name, or
-behind an inline `# enumerate-exempt: <rationale>` marker.
+Lint: every filesystem scan in a repo script asserts its
+own breadth. An enumeration runs through `enumerate_into`
+(scripts/lib/enumerate.sh) — a producer (`find`, `git ls-files`, `git ls-tree`) may appear only as an argument to the helper, inside a
+function the helper is handed by name, or behind an inline
+`# enumerate-exempt: <rationale>` marker. A glob-driven scan fills its
+array through `glob_into` — a `for` loop may not expand a pattern at
+its own loop head unless an inline `# glob-exempt: <rationale>` marker
+says an empty match set is that loop's normal state.
 
 The property being protected is scan breadth, not producer status. A
 producer that fails is the easy half; the hard half is a producer that
@@ -324,10 +327,21 @@ assertion lives: routing every enumeration through it makes the
 assertion structural instead of something each call site has to
 remember.
 
-That is what makes this rule decidable in one pass. Associating an
-enumeration with a cardinality test written an arbitrary distance
-later is not something a textual rule can do; asking whether a
-producer is an argument to the helper is local to one call expression.
+A glob loop fails the same way from the other end. Under `nullglob` a
+pattern matching nothing expands to nothing, the loop body never runs,
+no violation is found and the run exits 0 — so a scan root that exists
+and holds nothing scores as a clean tree. `glob_into` is the same
+assertion for that shape: it expands the patterns, fills the array and
+refuses an empty match set, and the loop then walks an ordinary array.
+
+That is what makes both rules decidable in one pass. Associating a scan
+with a cardinality test written an arbitrary distance later is not
+something a textual rule can do; asking whether a producer is an
+argument to the helper is local to one call expression, and so is
+asking whether a `for` loop expands a pattern at its own head.
+Patterns handed to `glob_into` are arguments of a `CallExpr` and never
+`WordIter` items, so a compliant call site cannot false-hit the glob
+rule however many metacharacters it carries.
 
 Detection parses each script's syntax tree via `shfmt --to-json` (the
 mvdan.cc/sh parser `shfmt` and `treefmt` already run over this repo)
@@ -342,20 +356,26 @@ flags (`-C <dir>`, `-c <k>=<v>`, `--git-dir=…`) rather than by reading
 the word right after `git`: the one hand-rolled enumeration this lint
 was written against spelled it `git -C "${ROOT}" ls-files`.
 
-The count of producer calls classified is itself asserted nonzero
-(unless LINT_ALLOW_EMPTY_SCAN=1). A grammar that silently recognized
-no producers would report "0 violations" and exit 0 — the same clean
-line a genuinely producer-free tree prints — leaving this gate off
-while green, which is the exact failure it exists to prevent one level
-down.
+The count of scan sites classified — producer calls plus `glob_into`
+call sites plus glob loops — is itself asserted nonzero (unless
+LINT_ALLOW_EMPTY_SCAN=1). A grammar that silently recognized nothing
+would report "0 violations" and exit 0 — the same clean line a
+genuinely scan-free tree prints — leaving this gate off while green,
+which is the exact failure it exists to prevent one level down.
+
+Each rule owns its own marker word, and a marker excuses only the kind
+of site it names: a rationale for running a producer outside the
+enumeration helper says nothing about whether a glob's match set may
+come back empty, and the reverse holds too.
 
 Honors PATHS_OVERRIDE (newline-separated file list) for fixtures, and
-LINT_ALLOW_EMPTY_SCAN=1 to accept a run whose producer tally (or whose
+LINT_ALLOW_EMPTY_SCAN=1 to accept a run whose scan-site tally (or whose
 enumerated file count) comes back zero.
-Exit 0 clean, 1 on a producer outside the helper or an exemption
-marker with no rationale, 2 when a required tool is absent, the scan
-set could not be enumerated (or classified nothing), a named path does
-not exist, or a file could not be parsed as shell.
+Exit 0 clean, 1 on a producer outside `enumerate_into`, a `for` loop
+expanding a glob at its own head, or an exemption marker with no
+rationale, 2 when a required tool is absent, the scan set could not be
+enumerated (or classified nothing), a named path does not exist, or a
+file could not be parsed as shell.
 
 ### scripts/check-ephemeral-refs.sh
 
