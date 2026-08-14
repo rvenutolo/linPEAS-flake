@@ -5,6 +5,7 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
 readonly SCRIPT="${REPO_ROOT}/scripts/check-egress-allowlist.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/egress-allowlist"
+readonly DECLARATION_FIXTURES="${REPO_ROOT}/tests/fixtures/egress-allowlist-declaration"
 
 function expect() {
   local -r fixture="$1" want_exit="$2" want_msg="$3"
@@ -68,6 +69,37 @@ expect good-notify-sha-pinned.yml 0 ""
 expect bad-notify-sha-pinned-missing-host.yml 1 "github.com:443"
 expect good-notify-extended.yml 0 ""
 expect bad-notify-extended-missing.yml 1 "api.github.com:443"
+
+# The parity rule is worth exactly as much as the declaration it reads, so a
+# declaration that is unreadable or that names no host is a could-not-run:
+# with an empty comparison set every notify job scores clean whatever its
+# allowlist holds, and the run would report that as a checked tree. Exit 2,
+# not 1 — nothing was evaluated, so this is not drift.
+function expect_declaration() {
+  local -r name="$1" declaration="$2" want_msg="$3"
+  local got_exit=0 got_stderr
+  got_stderr="$(NOTIFY_EGRESS_DECLARATION_OVERRIDE="${declaration}" \
+    WORKFLOWS_DIR_OVERRIDE="${FIXTURES}" \
+    WORKFLOW_FILE_FILTER=good-notify-parity.yml \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  if [[ ${got_exit} != 2 ]]; then
+    printf 'FAIL %s: exit %s, want 2\n  stderr: %s\n' "${name}" "${got_exit}" "${got_stderr}" >&2
+    return 1
+  fi
+  if [[ ${got_stderr} != *"${want_msg}"* ]]; then
+    printf 'FAIL %s: stderr missing %q\n  got: %s\n' "${name}" "${want_msg}" "${got_stderr}" >&2
+    return 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+
+# Absent: the diagnostic has to name the file it could not read, otherwise an
+# operator cannot tell which path the run resolved.
+expect_declaration declaration-absent "${DECLARATION_FIXTURES}/absent.txt" "absent.txt"
+# Present and readable, but comments and blanks only. A file that exists is
+# not a declaration that declares anything, so the host count is what the
+# guard keys on rather than the file's existence.
+expect_declaration declaration-zero-hosts "${DECLARATION_FIXTURES}/comments-only.txt" "read 0 host(s)"
 
 # Zero notify jobs on an unfiltered scan is a broken discovery predicate, not
 # a clean tree: assert the breadth the rule claims to have checked. Exit 2,
