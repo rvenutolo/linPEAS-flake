@@ -813,7 +813,9 @@ block under `.github/workflows/*.yml` (or `.yaml`) and
 ### scripts/check-scorecard-threshold.sh
 
 Reads OSSF Scorecard JSON on stdin; exits 1 if any
-check scored below 10. Prints offender names + scores to stderr.
+check scored below 10, exits 2 if stdin cannot be read as scorecard
+JSON at all. Prints offender names + scores, or the could-not-run
+diagnostic, to stderr.
 
 ### scripts/check-script-has-test.sh
 
