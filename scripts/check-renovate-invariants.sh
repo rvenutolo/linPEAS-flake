@@ -32,11 +32,6 @@ readonly REPO_ROOT
 readonly DEFAULT_PATH="${REPO_ROOT}/renovate.json"
 readonly path="${RENOVATE_JSON_OVERRIDE:-${DEFAULT_PATH}}"
 
-if [[ ! -f ${path} ]]; then
-  printf 'renovate config not found: %s\n' "${path}" >&2
-  exit 2
-fi
-
 # Name the payload's source by kind — the override variable when a fixture
 # supplies it, the config's repo-relative name otherwise. Never the resolved
 # path: a path in a diagnostic lets two harness scenarios be told apart by
@@ -47,6 +42,11 @@ else
   payload_source='renovate.json'
 fi
 readonly payload_source
+
+if [[ ! -f ${path} ]]; then
+  printf 'renovate config not found: %s\n' "${payload_source}" >&2
+  exit 2
+fi
 
 if ! renovate_payload="$(cat -- "${path}")"; then
   printf 'renovate config not readable: %s\n' "${payload_source}" >&2
@@ -66,6 +66,11 @@ readonly renovate_payload
 # (exit 2); `renovate-config-validator` renders the verdict on a
 # schema-invalid config in its own job. An explicit `null` is treated as
 # absent so it keeps reaching the drift checks below.
+#
+# The subject is passed because the source kind alone does not identify this
+# payload: a sibling lint reads the same renovate.json through the same
+# override variable and the same repo-relative name to check a different set
+# of invariants.
 require_json_payload "${payload_source}" "${renovate_payload}" '
   if type != "object" then "payload is \(type), want object"
   elif (.extends != null) and ((.extends | type) != "array") then ".extends is \(.extends | type), want array"
@@ -73,7 +78,7 @@ require_json_payload "${payload_source}" "${renovate_payload}" '
   elif (.packageRules != null) and ((.packageRules | type) != "array") then ".packageRules is \(.packageRules | type), want array"
   elif (.packageRules != null) and (any(.packageRules[]; type != "object")) then "a packageRules entry is not an object"
   else empty
-  end'
+  end' 'renovate invariants'
 
 # 1. extends includes helpers:pinGitHubActionDigests
 if ! jq -e '.extends | type == "array" and any(. == "helpers:pinGitHubActionDigests")' "${path}" >/dev/null 2>&1; then
