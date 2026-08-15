@@ -784,8 +784,6 @@ on its own line and the matched value is on the next). Asserting the marker's
 file is consumed by a live manager handles both without a line-adjacency
 heuristic.
 
-payload-subject-exempt: renovate.json is maintainer-authored, in-tree config that lands through PR review, not an externally-supplied payload
-
 Honors RENOVATE_JSON_OVERRIDE (config path) and SCAN_ROOT (tree root) for
 fixture testing, and LINT_ALLOW_EMPTY_SCAN=1 to accept an empty scan set.
 Exits 0 when every marker is live, 1 on any dead marker, 2 on a tooling

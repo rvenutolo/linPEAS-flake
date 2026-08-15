@@ -14,8 +14,6 @@
 # file is consumed by a live manager handles both without a line-adjacency
 # heuristic.
 #
-# payload-subject-exempt: renovate.json is maintainer-authored, in-tree config that lands through PR review, not an externally-supplied payload
-#
 # Honors RENOVATE_JSON_OVERRIDE (config path) and SCAN_ROOT (tree root) for
 # fixture testing, and LINT_ALLOW_EMPTY_SCAN=1 to accept an empty scan set.
 # Exits 0 when every marker is live, 1 on any dead marker, 2 on a tooling
@@ -30,6 +28,10 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+# shellcheck source=scripts/lib/log.sh
+source "${_lib_dir}/lib/log.sh"
+# shellcheck source=scripts/lib/payload.sh
+source "${_lib_dir}/lib/payload.sh"
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
 readonly REPO_ROOT
@@ -48,6 +50,40 @@ if [[ ! -f ${RENOVATE_JSON} ]]; then
   printf 'renovate config not found: %s\n' "${RENOVATE_JSON}" >&2
   exit 2
 fi
+
+# Name the payload's source by kind — the override variable when a fixture
+# supplies it, the config's repo-relative name otherwise. Never the resolved
+# path: a path in a diagnostic lets two harness scenarios be told apart by
+# their fixture rather than by their behavior.
+if [[ -n ${RENOVATE_JSON_OVERRIDE:-} ]]; then
+  payload_source='RENOVATE_JSON_OVERRIDE'
+else
+  payload_source='renovate.json'
+fi
+readonly payload_source
+
+if ! renovate_payload="$(cat -- "${RENOVATE_JSON}")"; then
+  printf 'renovate config not readable: %s\n' "${payload_source}" >&2
+  exit 2
+fi
+readonly renovate_payload
+
+# One shape gate in front of every read. Without it a config whose top
+# level is not an object kills jq with a raw diagnostic under an exit
+# code the convention does not catalogue, and one that parses to zero
+# managers leaves every marker in the tree reading as dead.
+#
+# The per-manager field types are deliberately NOT checked here. A
+# `managerFilePatterns` or `matchStrings` holding the wrong type is
+# caught by the capture guards inside the two helpers below, whose
+# diagnostics name the offending manager index — a precision this gate
+# cannot match, and which its own scenarios pin.
+require_json_payload "${payload_source}" "${renovate_payload}" '
+  if type != "object" then "payload is \(type), want object"
+  elif (.customManagers != null) and ((.customManagers | type) != "array") then ".customManagers is \(.customManagers | type), want array"
+  elif (.customManagers != null) and (any(.customManagers[]; type != "object")) then "a customManagers entry is not an object"
+  else empty
+  end'
 
 num_managers="$(jq '.customManagers // [] | length' "${RENOVATE_JSON}")"
 readonly num_managers
