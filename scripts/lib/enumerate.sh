@@ -9,8 +9,19 @@
 # Source after `set -Eeuo pipefail`.
 # shellcheck shell=bash
 
+# The library directory is resolved by parameter expansion rather than by
+# `readlink`/`dirname`, so a script whose PATH is missing the tool it is
+# about to guard dies in its own guard naming that tool, not at this line
+# naming `readlink`. The fallback covers an invocation with a bare
+# filename, where the expansion strips nothing. This library resolves its
+# own directory into `_lib_self_dir` rather than `_lib_dir`: a sourcing
+# script sets `_lib_dir` for its own subsequent `source` lines (and any
+# later use of the variable), and this file is sourced from a different
+# directory than the caller, so reusing the name would overwrite it.
+_lib_self_dir="${BASH_SOURCE[0]%/*}"
+if [[ ${_lib_self_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_self_dir=.; fi
 # shellcheck source=scripts/lib/temp.sh
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/temp.sh"
+source "${_lib_self_dir}/temp.sh"
 
 # @description Run a NUL-emitting enumeration into an array, asserting
 # both that the producer succeeded and that it found something. Breadth

@@ -178,8 +178,10 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+_lib_dir="${BASH_SOURCE[0]%/*}"
+if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
+source "${_lib_dir}/lib/enumerate.sh"
 
 readonly DEFAULT_DIR=".github/workflows"
 readonly OVERRIDE="${WORKFLOWS_DIR_OVERRIDE:-}"
@@ -221,7 +223,7 @@ readonly DECLARATION_REL=".github/actions/${NOTIFY_COMPOSITE}/egress-allowlist.t
 # the fixture harness repoints the scan root at tests/fixtures, and the
 # declaration a fixture run must be measured against is always the real one
 # beside the composite it describes.
-SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+SCRIPT_DIR="${_lib_dir}"
 readonly SCRIPT_DIR
 readonly DECLARATION="${NOTIFY_EGRESS_DECLARATION_OVERRIDE:-${SCRIPT_DIR}/../${DECLARATION_REL}}"
 

@@ -54,6 +54,7 @@ lint-script-hygiene:
   - path-hygiene
   - awk-operand-explicit
   - enumerate-helper-required
+  - lib-source-tool-free
 lint-doc-invariants:
   - orphan-invariants
   - doc-anchors
