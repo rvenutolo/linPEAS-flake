@@ -13,7 +13,7 @@
 # on PATH. Neither says anything about the config's validity, so neither
 # may borrow the rejection code.
 #
-# payload-subject-exempt: RENOVATE_JSON_OVERRIDE defaults to the same in-tree renovate.json — maintainer-authored config that lands through PR review, not an externally-supplied payload
+# payload-subject-exempt: a malformed config is this script's verdict, not an obstacle to it — the validator rejects one at exit 1, so there is no could-not-run outcome for a scenario to prove
 
 set -Eeuo pipefail
 IFS=$'\n\t'
