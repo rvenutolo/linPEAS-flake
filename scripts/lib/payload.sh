@@ -37,19 +37,28 @@
 # @arg $2 the payload
 # @arg $3 optional jq program emitting a message for the first field
 #   whose type is wrong, and `empty` when the shape is acceptable
+# @arg $4 optional subject, prefixed to every diagnostic as `<subject>: `.
+#   A source kind does not always identify what could not be read: two
+#   lints in this tree read different rulesets through one override
+#   variable and one API route, so the source alone leaves an operator
+#   unable to tell which subject's payload was malformed. Callers whose
+#   source kind is unique to them pass nothing and their output is
+#   unchanged.
 # @exitcode 2 the payload is empty, unparsable, or the shape program
 #   named a fault
 function require_json_payload() {
   local -r __payload_source="$1" __payload="$2" __shape_prog="${3:-}"
+  local -r __prefix="${4:+${4}: }"
   require_tool jq
 
   if [[ -z ${__payload//[[:space:]]/} ]]; then
-    printf 'empty payload from %s\n' "${__payload_source}" >&2
+    printf '%sempty payload from %s\n' "${__prefix}" "${__payload_source}" >&2
     exit 2
   fi
 
   if ! jq --exit-status type >/dev/null 2>&1 <<<"${__payload}"; then
-    printf 'payload from %s is not valid JSON\n' "${__payload_source}" >&2
+    printf '%spayload from %s is not valid JSON\n' \
+      "${__prefix}" "${__payload_source}" >&2
     exit 2
   fi
 
@@ -61,12 +70,13 @@ function require_json_payload() {
   # acceptable — the gate vouching for exactly what it exists to catch.
   local __shape_error
   if ! __shape_error="$(jq --raw-output "${__shape_prog}" <<<"${__payload}" 2>/dev/null)"; then
-    printf 'payload from %s could not be read for shape\n' "${__payload_source}" >&2
+    printf '%spayload from %s could not be read for shape\n' \
+      "${__prefix}" "${__payload_source}" >&2
     exit 2
   fi
   if [[ -n ${__shape_error} ]]; then
-    printf 'unexpected payload shape from %s: %s\n' \
-      "${__payload_source}" "${__shape_error}" >&2
+    printf '%sunexpected payload shape from %s: %s\n' \
+      "${__prefix}" "${__payload_source}" "${__shape_error}" >&2
     exit 2
   fi
 }

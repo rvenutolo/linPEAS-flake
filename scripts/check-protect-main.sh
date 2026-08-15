@@ -144,7 +144,7 @@ ruleset_json="$(fetch_ruleset)"
 if [[ -n ${RULESET_JSON_OVERRIDE:-} ]]; then
   ruleset_source='RULESET_JSON_OVERRIDE'
 else
-  ruleset_source="/repos/${THIS_REPO}/rulesets"
+  ruleset_source="/repos/${THIS_REPO}/rulesets/{id}"
 fi
 readonly ruleset_source
 require_json_payload "${ruleset_source}" "${ruleset_json}" '
@@ -158,7 +158,7 @@ require_json_payload "${ruleset_source}" "${ruleset_json}" '
   elif (.conditions.ref_name | type) != "object" then ".conditions.ref_name is \(.conditions.ref_name | type), want object"
   elif (.conditions.ref_name.include | type) != "array" then ".conditions.ref_name.include is \(.conditions.ref_name.include | type), want array"
   else empty
-  end'
+  end' 'protect-main ruleset'
 
 # --- Top-level shape ---------------------------------------------------------
 

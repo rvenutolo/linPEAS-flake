@@ -32,6 +32,12 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+_lib_dir="${BASH_SOURCE[0]%/*}"
+if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
+# shellcheck source=scripts/lib/log.sh
+source "${_lib_dir}/lib/log.sh"
+# shellcheck source=scripts/lib/payload.sh
+source "${_lib_dir}/lib/payload.sh"
 
 readonly EXPECTED_NAME='release-tag-protection'
 readonly EXPECTED_TARGET='tag'
@@ -75,7 +81,7 @@ if [[ -n ${RULESET_JSON_OVERRIDE:-} ]]; then
     exit 2
   fi
 else
-  payload_source="/repos/${THIS_REPO}/rulesets"
+  payload_source="/repos/${THIS_REPO}/rulesets/{id}"
 fi
 readonly payload_source
 
@@ -88,13 +94,11 @@ ruleset_json="$(fetch_ruleset)"
 # empty rule list (drift, exit 1), and an absent `.bypass_actors` stays "no
 # actor may bypass". A repository ruleset always carries `conditions.ref_name`,
 # so its absence means this is not a ruleset detail response at all.
-# jq reads empty input as no input at all and exits 0, so emptiness is checked
-# here rather than in the program below.
-if [[ -z ${ruleset_json//[[:space:]]/} ]]; then
-  printf 'release-tag-protection ruleset: empty payload from %s\n' "${payload_source}" >&2
-  exit 2
-fi
-if ! shape_error="$(jq --raw-output '
+#
+# The subject is passed because the source kind alone does not identify this
+# payload: a sibling lint reads a different ruleset through the same override
+# variable and the same API route.
+require_json_payload "${payload_source}" "${ruleset_json}" '
   if type != "object" then "payload is \(type), want object"
   elif (.name | type) != "string" then ".name is \(.name | type), want string"
   elif (.target | type) != "string" then ".target is \(.target | type), want string"
@@ -105,15 +109,7 @@ if ! shape_error="$(jq --raw-output '
   elif (.conditions.ref_name | type) != "object" then ".conditions.ref_name is \(.conditions.ref_name | type), want object"
   elif (.conditions.ref_name.include | type) != "array" then ".conditions.ref_name.include is \(.conditions.ref_name.include | type), want array"
   else empty
-  end' <<<"${ruleset_json}" 2>/dev/null)"; then
-  printf 'release-tag-protection ruleset: payload from %s is not valid JSON\n' "${payload_source}" >&2
-  exit 2
-fi
-if [[ -n ${shape_error} ]]; then
-  printf 'release-tag-protection ruleset: unexpected payload shape from %s: %s\n' \
-    "${payload_source}" "${shape_error}" >&2
-  exit 2
-fi
+  end' 'release-tag-protection ruleset'
 
 name="$(jq --raw-output .name <<<"${ruleset_json}")"
 target="$(jq --raw-output .target <<<"${ruleset_json}")"

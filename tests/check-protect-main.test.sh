@@ -99,7 +99,7 @@ function main() {
   # passes the gate's array check but fails the `.type` read.
   run_scenario 'non-array rules is a tooling error' \
     'bad-rules-wrong-type' 2 \
-    'unexpected payload shape from RULESET_JSON_OVERRIDE: .rules is string, want array'
+    'protect-main ruleset: unexpected payload shape from RULESET_JSON_OVERRIDE: .rules is string, want array'
   # Absent inputs are read failures, not posture drift: with no mirror
   # there is nothing to compare the live ruleset against.
   run_scenario 'absent mirror is a tooling error' \
@@ -109,13 +109,14 @@ function main() {
   # runs before the live ruleset is even fetched, so these three reuse
   # the good mirror and doc fixtures and vary only live.json.
   run_scenario 'empty ruleset payload is a tooling error' \
-    'bad-ruleset-empty' 2 'empty payload from RULESET_JSON_OVERRIDE'
+    'bad-ruleset-empty' 2 'protect-main ruleset: empty payload from RULESET_JSON_OVERRIDE'
   run_scenario 'ruleset payload that is not JSON is a tooling error' \
-    'bad-ruleset-not-json' 2 'payload from RULESET_JSON_OVERRIDE is not valid JSON' \
+    'bad-ruleset-not-json' 2 \
+    'protect-main ruleset: payload from RULESET_JSON_OVERRIDE is not valid JSON' \
     'live-payload.txt'
   run_scenario 'boolean-typed ruleset payload is a tooling error' \
     'bad-ruleset-wrong-type' 2 \
-    'unexpected payload shape from RULESET_JSON_OVERRIDE: payload is boolean, want object'
+    'protect-main ruleset: unexpected payload shape from RULESET_JSON_OVERRIDE: payload is boolean, want object'
 
   # The no-op-ruleset guard (fetch_ruleset hard-fails when the live
   # ruleset id is empty) is unreachable through run_scenario, which always
