@@ -77,7 +77,7 @@ function fetch_ruleset() {
 if [[ -n ${RULESET_JSON_OVERRIDE:-} ]]; then
   payload_source='RULESET_JSON_OVERRIDE'
   if [[ ! -r ${RULESET_JSON_OVERRIDE} ]]; then
-    printf 'release-tag-protection ruleset: payload from %s is not readable\n' "${payload_source}" >&2
+    printf '%s ruleset: payload from %s is not readable\n' "${EXPECTED_NAME}" "${payload_source}" >&2
     exit 2
   fi
 else
@@ -109,7 +109,7 @@ require_json_payload "${payload_source}" "${ruleset_json}" '
   elif (.conditions.ref_name | type) != "object" then ".conditions.ref_name is \(.conditions.ref_name | type), want object"
   elif (.conditions.ref_name.include | type) != "array" then ".conditions.ref_name.include is \(.conditions.ref_name.include | type), want array"
   else empty
-  end' 'release-tag-protection ruleset'
+  end' "${EXPECTED_NAME} ruleset"
 
 name="$(jq --raw-output .name <<<"${ruleset_json}")"
 target="$(jq --raw-output .target <<<"${ruleset_json}")"
@@ -147,7 +147,7 @@ fi
 # keeps an absent `.rules` an empty list (drift, exit 1); anything jq
 # cannot iterate is a tooling fault (exit 2).
 if ! rule_types="$(jq --raw-output '.rules // [] | .[].type' <<<"${ruleset_json}")"; then
-  printf 'release-tag-protection ruleset: could not read .rules[].type (unexpected shape)\n' >&2
+  printf '%s ruleset: could not read .rules[].type (unexpected shape)\n' "${EXPECTED_NAME}" >&2
   exit 2
 fi
 actual_rules=()

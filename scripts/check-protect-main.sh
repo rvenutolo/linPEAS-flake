@@ -147,6 +147,10 @@ else
   ruleset_source="/repos/${THIS_REPO}/rulesets/{id}"
 fi
 readonly ruleset_source
+
+# The subject is passed because the source kind alone does not identify this
+# payload: a sibling lint reads a different ruleset through the same override
+# variable and the same API route.
 require_json_payload "${ruleset_source}" "${ruleset_json}" '
   if type != "object" then "payload is \(type), want object"
   elif (.name | type) != "string" then ".name is \(.name | type), want string"
@@ -158,7 +162,7 @@ require_json_payload "${ruleset_source}" "${ruleset_json}" '
   elif (.conditions.ref_name | type) != "object" then ".conditions.ref_name is \(.conditions.ref_name | type), want object"
   elif (.conditions.ref_name.include | type) != "array" then ".conditions.ref_name.include is \(.conditions.ref_name.include | type), want array"
   else empty
-  end' 'protect-main ruleset'
+  end' "${EXPECTED_NAME} ruleset"
 
 # --- Top-level shape ---------------------------------------------------------
 
@@ -212,7 +216,7 @@ fi
 # cannot iterate is a tooling fault (exit 2).
 
 if ! rule_types="$(jq --raw-output '.rules // [] | .[].type' <<<"${ruleset_json}")"; then
-  printf 'protect-main ruleset: could not read .rules[].type (unexpected shape)\n' >&2
+  printf '%s ruleset: could not read .rules[].type (unexpected shape)\n' "${EXPECTED_NAME}" >&2
   exit 2
 fi
 actual_rules=()
