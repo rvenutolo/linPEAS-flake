@@ -12,6 +12,8 @@
 # cannot run — the config file is absent, or the validator itself is not
 # on PATH. Neither says anything about the config's validity, so neither
 # may borrow the rejection code.
+#
+# payload-subject-exempt: RENOVATE_JSON_OVERRIDE defaults to the same in-tree renovate.json — maintainer-authored config that lands through PR review, not an externally-supplied payload
 
 set -Eeuo pipefail
 IFS=$'\n\t'

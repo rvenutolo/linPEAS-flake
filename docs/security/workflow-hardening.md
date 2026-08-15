@@ -211,6 +211,20 @@ The count of scan sites classified — producer calls, `glob_into` call sites an
 
 Enforced by `scripts/check-enumerate-helper-required.sh`. Wired as the `lint-script-hygiene` CI job (member check `enumerate-helper-required`).
 
+## payload-shape-scenario
+
+Every script matching a four-arm external-payload predicate — a literal `gh api` call, a `*_JSON_OVERRIDE`-shaped variable, a bare stdin slurp (`="$(cat)"`), or a scoped `flake.lock`/lock-content read (`cat -- ... flake.lock`, `git show ...:flake.lock`) — carries a harness scenario that feeds it a malformed payload and asserts exit 2, or a `# payload-subject-exempt: <rationale>` marker.
+
+A shape gate (`require_json_payload`, or an equivalent hand-rolled `die_op` guard) that regresses or was never written is invisible to every other lint in this repo, because none of them runs the scripts under test — only a scenario that actually drives a malformed payload through the gate and checks the exit code proves the gate still fires. The lint therefore gates the scenario's *existence*, not the gate's source text: it never greps a script for `require_json_payload`, since a script that forgot the gate would then be undiscoverable by construction.
+
+All four predicate arms are needed. A `gh api` / `*_JSON_OVERRIDE` predicate alone misses a script whose payload arrives on stdin with no override variable at all, and a lock-content read scoped only to the read call — not to any mention of the filename — avoids flagging a script that merely names `flake.lock` in a comment or a watch list. The predicate is textual and declares that plainly: a `gh api` call or an override variable name built by string interpolation is invisible to it.
+
+The scenario match is not a textual `2` substring search: it is anchored to the scenario call's own bare positional exit-code argument, parsed via `shfmt --to-json` the same way `enumerate-helper-required` parses call sites above. Only a `2` that stands alone as one whole, unquoted argument word of some function call counts, so a message string that merely contains the digit 2 — quoted prose such as `'malformed payload: 2 offending fields, exit clean'` — is never mistaken for the exit-code argument. Once a genuine bare-`2` argument is found, its own line, continuation lines, and the contiguous comment block above it are checked for one of a small vocabulary of malformed-payload words (`malformed`, `garbage`, `unparsable`, `payload`).
+
+A subject that reads no externally-supplied payload on its verdict path — a maintainer-authored, PR-reviewed in-tree config file; a meta-lint that only mentions `gh api` in the text it scans; a generator whose documented output contract already records an unreachable or malformed API response as a data row rather than a run failure — carries an inline `# payload-subject-exempt: <rationale>` marker, matching this repo's `enumerate-exempt` / `glob-exempt` / `exit-code-exempt` / `reason-ladder-exempt` convention: the rationale records what was measured, not what was assumed. A marker on a script the predicate does not match is reported as drift, the same way a stale entry in any of this repo's other exemption lists would be.
+
+Enforced by `scripts/check-payload-shape-scenario.sh`. Wired as the `lint-script-hygiene` CI job (member check `payload-shape-scenario`).
+
 ## script-has-test
 
 Every `scripts/check-*.sh` has a matching `tests/check-*.test.sh`, and every `tests/check-*.test.sh` has a matching `scripts/check-*.sh`.

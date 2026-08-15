@@ -675,6 +675,21 @@ line-oriented path handoff in this repo's own tooling, and a tab
 corrupts the tab-separated inventories those handoffs produce just as
 surely, so both stay in scope alongside the rest of the control range.
 
+### scripts/check-payload-shape-scenario.sh
+
+Lint: every script that reads an externally-supplied
+payload carries a harness scenario feeding it a malformed payload and
+asserting exit 2. A shape gate (`require_json_payload` or an
+equivalent hand-rolled `die_op` guard) that regresses or was never
+written is invisible to every other lint in this repo, because none of
+them runs the scripts under test — only a scenario that actually drives
+a malformed payload through the gate and checks the exit code proves
+the gate still fires. This lint therefore gates the *scenario's
+existence*, not the gate's source text: grepping a script for
+`require_json_payload` would pass a script that calls it on a path a
+scenario never exercises, and would fail a script whose gate is
+hand-rolled (die_op) but genuinely covered.
+
 ### scripts/check-permission-scopes.sh
 
 Per-job GITHUB_TOKEN write-scope allowlist lint for
@@ -746,6 +761,8 @@ cannot run — the config file is absent, or the validator itself is not
 on PATH. Neither says anything about the config's validity, so neither
 may borrow the rejection code.
 
+payload-subject-exempt: RENOVATE_JSON_OVERRIDE defaults to the same in-tree renovate.json — maintainer-authored config that lands through PR review, not an externally-supplied payload
+
 ### scripts/check-renovate-invariants.sh
 
 Lint: renovate.json carries the security-critical
@@ -766,6 +783,8 @@ where value + `# renovate:` share a line; and above, where the comment sits
 on its own line and the matched value is on the next). Asserting the marker's
 file is consumed by a live manager handles both without a line-adjacency
 heuristic.
+
+payload-subject-exempt: renovate.json is maintainer-authored, in-tree config that lands through PR review, not an externally-supplied payload
 
 Honors RENOVATE_JSON_OVERRIDE (config path) and SCAN_ROOT (tree root) for
 fixture testing, and LINT_ALLOW_EMPTY_SCAN=1 to accept an empty scan set.

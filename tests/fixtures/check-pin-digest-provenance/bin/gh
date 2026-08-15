@@ -46,6 +46,17 @@ case "${GH_STUB_MODE:-deny}" in
     printf 'gh: HTTP 500 upstream boom\n' >&2
     exit 1
     ;;
+  tagobject-malformed)
+    case "$*" in
+      *"/git/tags/"*)
+        printf 'not-a-forty-hex-sha\n'
+        ;;
+      *)
+        printf 'unexpected gh call: %s\n' "$*" >&2
+        exit 97
+        ;;
+    esac
+    ;;
   compare-not-found)
     case "$*" in
       *"/git/tags/"*)

@@ -215,6 +215,13 @@ function main() {
   run_scenario 'floating repoint diverged fails' 'head-floating-repoint' diverged 1 \
     'but sits off master (diverged)'
   run_scenario 'floating repoint api error exits 2' 'head-floating-repoint' api-error 2 ''
+  # A malformed tag-deref payload is a could-not-run, not a fabricated
+  # reachability verdict: gh exits 0 but the response is neither a 404
+  # (not a tag object) nor a 40-hex commit SHA, so the shape gate below
+  # the deref call must fire rather than let `[[ ... =~ ^[0-9a-f]{40}$
+  # ]]` silently fail the reachability check for the wrong reason.
+  run_scenario 'floating repoint malformed tag-deref payload exits 2' \
+    'head-floating-repoint' tagobject-malformed 2 'malformed tag deref payload'
   run_scenario 'quoted pin shape errors' 'head-quoted-pin' deny 2 'unrecognized uses: pin shape'
   run_scenario 'comment-less pin shape errors' 'head-commentless-pin' deny 2 'unrecognized uses: pin shape'
   run_scenario 'nested action dir repoint fails' 'head-nested-action-repoint' deny 1 \

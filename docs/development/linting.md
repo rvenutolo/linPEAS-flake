@@ -404,3 +404,15 @@ hook `flake-show-fresh` has `NIX_BUILD_TOP` sandbox guard. Freshness of the
 generated block is also enforced in CI by the required `doc-freshness`
 context via `tests/refresh-flake-show.test.sh`, so a stale doc is caught
 even when the pre-commit hook is bypassed.
+
+## Payload shape-gate scenario coverage
+
+`scripts/check-payload-shape-scenario.sh` requires every script
+matching a measured four-arm external-payload predicate (`gh api`, a
+`*_JSON_OVERRIDE` variable, a bare stdin slurp, or a scoped
+`flake.lock` read) to carry a harness scenario that feeds it a
+malformed payload and asserts exit 2, or a `# payload-subject-exempt: <rationale>` marker. The scenario match is anchored to the scenario
+call's own bare positional exit-code argument (parsed via `shfmt --to-json`), not to any `2` appearing as a substring, so a message that
+merely mentions the digit 2 in prose cannot be mistaken for the
+exit-code argument. Full rationale: [Workflow hardening →
+payload-shape-scenario](../security/workflow-hardening.md#payload-shape-scenario).
