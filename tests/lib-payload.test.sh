@@ -5,7 +5,12 @@
 # a shape program that itself errors evaluating the payload all as a
 # could-not-run (exit 2, never exit 1), that a well-formed payload falls
 # through with and without a shape program, and that an absent jq is
-# reported the same way require_tool reports any other missing tool.
+# reported the same way require_tool reports any other missing tool. It
+# also proves payload_source_into fills its caller's variable with the
+# override's own name whether that override is exported or shell-scoped,
+# with the supplied fallback when the override is unset or empty, and
+# that an override name that is not a shell identifier is a could-not-run
+# that names no source at all.
 set -Eeuo pipefail
 IFS=$'\n\t'
 
@@ -195,6 +200,146 @@ if [[ ${rc} -eq 2 ]] &&
 else
   fail "shape-error: expected exit 2 + 'payload from SHAPE_ERROR_SOURCE could not be read for shape', got exit ${rc}"
   cat -- "${work}/shape-error.out" "${work}/shape-error.err" >&2
+fi
+
+# @description Run payload_source_into in its own bash process — its
+# guard path calls `exit`, which must terminate only that process, not
+# this harness — capture its streams, and record the outcome with the
+# cross-scenario discrimination gate. The child prints the filled
+# variable on the success path, so a scenario proves the caller's
+# variable was actually written rather than merely that the call returned
+# 0: a helper that filled nothing would pass every exit-code assertion.
+# Each scenario names a different source, because two scenarios naming
+# one source produce one observable outcome between them and the gate
+# scores such a pair as a single observation.
+# @arg $1 scenario name
+# @arg $2 how the override reaches the helper in the child: 'export',
+#   'shell', 'empty', or 'unset'
+# @arg $3 override variable name (passed as payload_source_into's $2)
+# @arg $4 fallback source name (passed as $3)
+# @arg $5 asserted substring for the discrimination gate
+function run_source_into() {
+  local -r name="$1" mode="$2" ovr_var="$3" fallback="$4" substring="$5"
+  local -r script="${work}/${name}.sh"
+  local -r out="${work}/${name}.out"
+  local -r err="${work}/${name}.err"
+  local -r outcome="${work}/${name}.outcome"
+  cat >"${script}" <<'SCRIPT'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
+source "${LOGLIB}"
+source "${PAYLOADLIB}"
+case "${MODE}" in
+export) export "${OVR_VAR}=/fixtures/payload.json" ;;
+shell)
+  # Set at script scope with `declare` and then proven unexported. Every
+  # caller reads its override with `${VAR:-}`, an expansion that honors a
+  # shell variable, so the helper has to see one too; a setup that left
+  # this variable exported would keep the scenario green against a helper
+  # that only ever consults the environment.
+  unset "${OVR_VAR}"
+  declare "${OVR_VAR}=/fixtures/payload.json"
+  if [[ $(declare -p "${OVR_VAR}") == 'declare -x'* ]]; then
+    printf 'setup exported %s, so the shell-scoped override is not exercised\n' "${OVR_VAR}" >&2
+    exit 3
+  fi
+  ;;
+empty) export "${OVR_VAR}=" ;;
+unset) unset "${OVR_VAR}" 2>/dev/null || true ;;
+*)
+  printf 'unknown mode: %s\n' "${MODE}" >&2
+  exit 3
+  ;;
+esac
+named_source=''
+payload_source_into named_source "${OVR_VAR}" "${FALLBACK}"
+printf 'named=%s\n' "${named_source}"
+SCRIPT
+  chmod +x "${script}"
+  rc=0
+  env \
+    LOGLIB="${LOGLIB}" PAYLOADLIB="${LIB}" \
+    MODE="${mode}" OVR_VAR="${ovr_var}" FALLBACK="${fallback}" \
+    bash "${script}" >"${out}" 2>"${err}" || rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${rc}" >"${outcome}"
+  harness_assert_record "${name}" "${substring}" "${outcome}" "${out}" "${err}"
+}
+
+# 9. source-into-exported-override — an override reaching the helper
+# through the environment names the payload's source by the variable's
+# own name, never by the path the variable holds.
+run_source_into 'source-into-exported-override' export \
+  RENOVATE_JSON_OVERRIDE 'renovate.json' 'named=RENOVATE_JSON_OVERRIDE'
+if [[ ${rc} -eq 0 ]] &&
+  grep --fixed-strings --line-regexp --quiet -- 'named=RENOVATE_JSON_OVERRIDE' \
+    "${work}/source-into-exported-override.out"; then
+  pass 'source-into-exported-override: an exported override is named by its variable name'
+else
+  fail "source-into-exported-override: expected exit 0 + 'named=RENOVATE_JSON_OVERRIDE', got exit ${rc}"
+  cat -- "${work}/source-into-exported-override.out" "${work}/source-into-exported-override.err" >&2
+fi
+
+# 10. source-into-shell-override — the same naming for an override that
+# is only a shell variable. This is what pins the helper to indirect
+# expansion: a `printenv`-based namer would miss this override and name
+# the fallback for a payload that did come from the override, while every
+# caller's own `${VAR:-}` read would have taken the override's path.
+run_source_into 'source-into-shell-override' shell \
+  RULESET_JSON_OVERRIDE 'ruleset API' 'named=RULESET_JSON_OVERRIDE'
+if [[ ${rc} -eq 0 ]] &&
+  grep --fixed-strings --line-regexp --quiet -- 'named=RULESET_JSON_OVERRIDE' \
+    "${work}/source-into-shell-override.out"; then
+  pass 'source-into-shell-override: a shell-scoped override is named by its variable name'
+else
+  fail "source-into-shell-override: expected exit 0 + 'named=RULESET_JSON_OVERRIDE', got exit ${rc}"
+  cat -- "${work}/source-into-shell-override.out" "${work}/source-into-shell-override.err" >&2
+fi
+
+# 11. source-into-unset-override — with no override set the caller's
+# supplied source name is used verbatim, which is how an API route
+# reaches a diagnostic.
+run_source_into 'source-into-unset-override' unset \
+  REPO_JSON_OVERRIDE '/repos/{owner}/{repo}' 'named=/repos/{owner}/{repo}'
+if [[ ${rc} -eq 0 ]] &&
+  grep --fixed-strings --line-regexp --quiet -- 'named=/repos/{owner}/{repo}' \
+    "${work}/source-into-unset-override.out"; then
+  pass 'source-into-unset-override: an absent override falls back to the supplied source name'
+else
+  fail "source-into-unset-override: expected exit 0 + 'named=/repos/{owner}/{repo}', got exit ${rc}"
+  cat -- "${work}/source-into-unset-override.out" "${work}/source-into-unset-override.err" >&2
+fi
+
+# 12. source-into-empty-override — an override set to the empty string
+# falls back too. A namer keyed on the variable being *set* rather than
+# on it being non-empty would name a source no payload came from, since
+# the callers' own `${VAR:-fallback}` reads take the fallback here.
+run_source_into 'source-into-empty-override' empty \
+  FLAKE_LOCK_OVERRIDE 'flake.lock' 'named=flake.lock'
+if [[ ${rc} -eq 0 ]] &&
+  grep --fixed-strings --line-regexp --quiet -- 'named=flake.lock' \
+    "${work}/source-into-empty-override.out"; then
+  pass 'source-into-empty-override: an empty override falls back to the supplied source name'
+else
+  fail "source-into-empty-override: expected exit 0 + 'named=flake.lock', got exit ${rc}"
+  cat -- "${work}/source-into-empty-override.out" "${work}/source-into-empty-override.err" >&2
+fi
+
+# 13. source-into-bad-name — an override name that is not a shell
+# identifier is a could-not-run. Both halves of this assertion are
+# load-bearing: exit 2 alone would also hold for a guard that printed and
+# let the caller continue, and the absence of any `named=` line is what
+# proves no source was named. Without the guard, indirect expansion of a
+# non-identifier is a fatal bash error under a status this repo's exit
+# convention does not catalogue.
+run_source_into 'source-into-bad-name' unset \
+  'not a name' 'renovate.json' 'payload_source_into: not a variable name: not a name'
+if [[ ${rc} -eq 2 ]] &&
+  ! grep --fixed-strings --quiet -- 'named=' "${work}/source-into-bad-name.out"; then
+  pass 'source-into-bad-name: a non-identifier override name is exit 2 and names no source'
+else
+  fail "source-into-bad-name: expected exit 2 and no 'named=' line, got exit ${rc}"
+  cat -- "${work}/source-into-bad-name.out" "${work}/source-into-bad-name.err" >&2
 fi
 
 harness_assert_verify || failures=$((failures + 1))
