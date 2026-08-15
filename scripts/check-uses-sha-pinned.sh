@@ -30,11 +30,6 @@ if ! command -v yq >/dev/null 2>&1; then
   exit 2
 fi
 
-# Sourced below the tool guard, not above it: resolving the library path
-# runs `dirname` and `readlink`, so a PATH that cannot reach yq cannot
-# reach those either, and a source line placed first would report a
-# missing library instead of the missing tool that actually stopped the
-# run.
 _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
