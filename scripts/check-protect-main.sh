@@ -53,8 +53,12 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
+# shellcheck source=scripts/lib/log.sh
+source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/awk-path.sh
 source "${_lib_dir}/lib/awk-path.sh"
+# shellcheck source=scripts/lib/payload.sh
+source "${_lib_dir}/lib/payload.sh"
 
 readonly EXPECTED_NAME='protect-main'
 readonly EXPECTED_TARGET='branch'
@@ -131,6 +135,30 @@ if [[ ${doc_contexts} != "${mirror_contexts}" ]]; then
 fi
 
 ruleset_json="$(fetch_ruleset)"
+
+# The ruleset payload is either a fixture path or the rulesets API's
+# response, and every read below assumes a shape neither source
+# guarantees. Name the source by kind, never by fixture path, so a
+# malformed payload is reported as a could-not-run instead of raw jq
+# noise or drift nobody caused.
+if [[ -n ${RULESET_JSON_OVERRIDE:-} ]]; then
+  ruleset_source='RULESET_JSON_OVERRIDE'
+else
+  ruleset_source="/repos/${THIS_REPO}/rulesets"
+fi
+readonly ruleset_source
+require_json_payload "${ruleset_source}" "${ruleset_json}" '
+  if type != "object" then "payload is \(type), want object"
+  elif (.name | type) != "string" then ".name is \(.name | type), want string"
+  elif (.target | type) != "string" then ".target is \(.target | type), want string"
+  elif (.enforcement | type) != "string" then ".enforcement is \(.enforcement | type), want string"
+  elif has("bypass_actors") and (.bypass_actors | type) != "array" then ".bypass_actors is \(.bypass_actors | type), want array"
+  elif has("rules") and (.rules | type) != "array" then ".rules is \(.rules | type), want array"
+  elif (.conditions | type) != "object" then ".conditions is \(.conditions | type), want object"
+  elif (.conditions.ref_name | type) != "object" then ".conditions.ref_name is \(.conditions.ref_name | type), want object"
+  elif (.conditions.ref_name.include | type) != "array" then ".conditions.ref_name.include is \(.conditions.ref_name.include | type), want array"
+  else empty
+  end'
 
 # --- Top-level shape ---------------------------------------------------------
 
