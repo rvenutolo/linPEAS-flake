@@ -6,10 +6,47 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
-## Unreleased
+## [20260814-55a4f278] - 2026-08-15
+
+### CI
+- Bind every notify job to one declared egress allowlist ([#700](https://github.com/rvenutolo/linPEAS-flake/pull/700))
+
+### Chores
+- Bump linpeas to 20260814-55a4f278 ([#711](https://github.com/rvenutolo/linPEAS-flake/pull/711))
+- Update flake.lock ([#692](https://github.com/rvenutolo/linPEAS-flake/pull/692))
+- Re-enable the scorecard Maintained check ([#689](https://github.com/rvenutolo/linPEAS-flake/pull/689))
+
+### Documentation
+- Correct misdirected comments and add the missing nav entry ([#699](https://github.com/rvenutolo/linPEAS-flake/pull/699))
+
+### Features
+- Require a malformed-payload scenario for payload consumers ([#710](https://github.com/rvenutolo/linPEAS-flake/pull/710))
+- Enforce size-label ignore-list parity with generator declarations ([#703](https://github.com/rvenutolo/linPEAS-flake/pull/703))
+- Regenerate lock-derived docs on every lock-writing workflow ([#697](https://github.com/rvenutolo/linPEAS-flake/pull/697))
+- Commit lock-derived docs alongside the flake.lock bump ([#696](https://github.com/rvenutolo/linPEAS-flake/pull/696))
+- Read YAML comments for ephemeral references ([#691](https://github.com/rvenutolo/linPEAS-flake/pull/691))
+- Enforce the ephemeral-reference ban over shell and Nix ([#682](https://github.com/rvenutolo/linPEAS-flake/pull/682))
+- Gate filesystem enumerations behind enumerate_into ([#680](https://github.com/rvenutolo/linPEAS-flake/pull/680))
+- Reject control characters in tracked paths ([#675](https://github.com/rvenutolo/linPEAS-flake/pull/675))
+- Add a NUL-safe enumeration helper and convert tracked scans ([#674](https://github.com/rvenutolo/linPEAS-flake/pull/674))
 
 ### Fixes
+- Report malformed payloads as could-not-run, not drift ([#709](https://github.com/rvenutolo/linPEAS-flake/pull/709))
+- Resolve shared libraries without external tools ([#706](https://github.com/rvenutolo/linPEAS-flake/pull/706))
+- Assert breadth for glob-driven scan sets ([#687](https://github.com/rvenutolo/linPEAS-flake/pull/687))
+- Report a failed temp-file creation as a could-not-run ([#686](https://github.com/rvenutolo/linPEAS-flake/pull/686))
+- Scan scripts/lib in the three shell-hygiene lints ([#679](https://github.com/rvenutolo/linPEAS-flake/pull/679))
+- Pass awk file operands unambiguously ([#678](https://github.com/rvenutolo/linPEAS-flake/pull/678))
+- Enumerate found files NUL-delimited ([#676](https://github.com/rvenutolo/linPEAS-flake/pull/676))
+- Diagnose malformed tag-protection payloads as could-not-run ([#670](https://github.com/rvenutolo/linPEAS-flake/pull/670))
 - Correct a frozen changelog typo and spell-check PR titles ([#669](https://github.com/rvenutolo/linPEAS-flake/pull/669))
+
+### Performance
+- Extract only the sources that carry a candidate token ([#690](https://github.com/rvenutolo/linPEAS-flake/pull/690))
+
+### Tests
+- Cover the notify egress declaration's could-not-run guard ([#704](https://github.com/rvenutolo/linPEAS-flake/pull/704))
+- Replace the exempted release-window pair with a stacked window ([#672](https://github.com/rvenutolo/linPEAS-flake/pull/672))
 
 ## [20260811-05318383] - 2026-08-12
 
