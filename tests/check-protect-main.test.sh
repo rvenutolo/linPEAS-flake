@@ -92,14 +92,17 @@ function main() {
     'bad-ref-name-drift' 1 'conditions.ref_name.include drift'
   run_scenario 'empty rules list is drift, not a tooling error' \
     'bad-rules-empty' 1 'missing rule: deletion (have: )'
-  # The shape gate now rejects a non-array .rules before the inner
-  # `.rules[].type` capture guard ever runs, so this pins the gate's
-  # diagnostic rather than the capture guard's — the capture guard is
-  # still live for a `.rules` array holding non-object items, which
-  # passes the gate's array check but fails the `.type` read.
+  # Two layers reject a malformed `.rules`, so both need a scenario. The
+  # up-front shape gate rejects a `.rules` that is not an array at all. An
+  # array holding non-objects passes that gate, and the capture guard around
+  # `.rules[].type` is the only thing that catches it — which is why that
+  # guard stays even though the gate stands in front of it.
   run_scenario 'non-array rules is a tooling error' \
     'bad-rules-wrong-type' 2 \
     'protect-main ruleset: unexpected payload shape from RULESET_JSON_OVERRIDE: .rules is string, want array'
+  run_scenario 'rules holding non-objects is a tooling error' \
+    'bad-rules-non-object-items' 2 \
+    'protect-main ruleset: could not read .rules[].type'
   # Absent inputs are read failures, not posture drift: with no mirror
   # there is nothing to compare the live ruleset against.
   run_scenario 'absent mirror is a tooling error' \
