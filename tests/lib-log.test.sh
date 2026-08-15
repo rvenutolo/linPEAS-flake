@@ -79,6 +79,39 @@ else
 fi
 rm --force -- "${tool_err}" "${tool_out}" "${tool_outcome}"
 
+# A stripped PATH must not degrade the log line. The timestamp comes from
+# a shell builtin, so an absent `date` changes nothing an operator reads:
+# no `command not found` noise, and a real timestamp rather than an empty
+# bracket. A library that shells out for its timestamp turns every
+# diagnostic under a broken PATH into three lines of tooling failure
+# ahead of the message the operator needs.
+cat >"${work}/logline.sh" <<EOF
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=\$'\n\t'
+source "${LIB}"
+log_err 'canary message'
+EOF
+chmod +x "${work}/logline.sh"
+
+stripped_err="$(mktemp)"
+stripped_out="$(mktemp)"
+stripped_outcome="$(mktemp)"
+stripped_rc=0
+env --unset=BASH_ENV PATH=/nonexistent /usr/bin/bash "${work}/logline.sh" \
+  >"${stripped_out}" 2>"${stripped_err}" || stripped_rc=$?
+printf 'harness-assert-outcome: exit=%d\n' "${stripped_rc}" >"${stripped_outcome}"
+harness_assert_record 'log line survives a stripped PATH' 'canary message' \
+  "${stripped_outcome}" "${stripped_out}" "${stripped_err}"
+
+if grep -q 'command not found' "${stripped_err}"; then
+  fail 'log emitted a command-not-found line under a stripped PATH'
+elif ! grep -Eq '^\[[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[+-][0-9]{4}\] ERROR canary message$' "${stripped_err}"; then
+  fail "expected a timestamped ERROR line under a stripped PATH; got: $(cat -- "${stripped_err}")"
+else
+  pass 'log line survives a stripped PATH'
+fi
+
 harness_assert_verify || failures=$((failures + 1))
 
 [[ ${failures} -eq 0 ]] || {
