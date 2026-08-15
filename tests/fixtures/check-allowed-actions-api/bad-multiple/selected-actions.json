@@ -1,11 +1,12 @@
 {
-  "github_owned_allowed": null,
-  "verified_allowed": null,
+  "github_owned_allowed": true,
+  "verified_allowed": false,
   "patterns_allowed": [
     "actions/*",
     "DavidAnson/*",
     "github/*",
     "peter-evans/*",
-    "evil-corp/*"
+    "evil-corp/*",
+    "shadow-vendor/*"
   ]
 }

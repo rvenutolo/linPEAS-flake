@@ -20,11 +20,15 @@ failures=0
 # @arg $2 fixture subdir
 # @arg $3 expected exit (0 pass, 1 drift, 2 tooling error)
 # @arg $4 expected stderr substring (empty skips)
+# @arg $5 ruleset payload filename under the fixture subdir (default
+#   live.json) — a scenario whose payload must stay invalid JSON names a
+#   non-.json file here so prettier's `*.json` include never touches it
 function run_scenario() {
   local -r name="$1"
   local -r fixture_dir="$2"
   local -r expected_exit="$3"
   local -r expected_stderr="$4"
+  local -r ruleset_file="${5:-live.json}"
 
   local stderr_file stdout_file outcome_file
   stderr_file="$(mktemp)"
@@ -32,7 +36,7 @@ function run_scenario() {
   outcome_file="$(mktemp)"
 
   local actual_exit=0
-  RULESET_JSON_OVERRIDE="${FIXTURES}/${fixture_dir}/live.json" \
+  RULESET_JSON_OVERRIDE="${FIXTURES}/${fixture_dir}/${ruleset_file}" \
     MIRROR_JSON_OVERRIDE="${FIXTURES}/${fixture_dir}/mirror.json" \
     DOC_TABLE_OVERRIDE="${FIXTURES}/${fixture_dir}/required-checks.md" \
     "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
@@ -88,13 +92,30 @@ function main() {
     'bad-ref-name-drift' 1 'conditions.ref_name.include drift'
   run_scenario 'empty rules list is drift, not a tooling error' \
     'bad-rules-empty' 1 'missing rule: deletion (have: )'
+  # The shape gate now rejects a non-array .rules before the inner
+  # `.rules[].type` capture guard ever runs, so this pins the gate's
+  # diagnostic rather than the capture guard's — the capture guard is
+  # still live for a `.rules` array holding non-object items, which
+  # passes the gate's array check but fails the `.type` read.
   run_scenario 'non-array rules is a tooling error' \
     'bad-rules-wrong-type' 2 \
-    'protect-main ruleset: could not read .rules[].type'
+    'unexpected payload shape from RULESET_JSON_OVERRIDE: .rules is string, want array'
   # Absent inputs are read failures, not posture drift: with no mirror
   # there is nothing to compare the live ruleset against.
   run_scenario 'absent mirror is a tooling error' \
     'no-such-fixture' 2 'mirror file not found'
+  # A malformed ruleset payload is a could-not-run, not drift or a raw
+  # jq crash: the doc-table check above already proved mirror/doc parity
+  # runs before the live ruleset is even fetched, so these three reuse
+  # the good mirror and doc fixtures and vary only live.json.
+  run_scenario 'empty ruleset payload is a tooling error' \
+    'bad-ruleset-empty' 2 'empty payload from RULESET_JSON_OVERRIDE'
+  run_scenario 'ruleset payload that is not JSON is a tooling error' \
+    'bad-ruleset-not-json' 2 'payload from RULESET_JSON_OVERRIDE is not valid JSON' \
+    'live-payload.txt'
+  run_scenario 'boolean-typed ruleset payload is a tooling error' \
+    'bad-ruleset-wrong-type' 2 \
+    'unexpected payload shape from RULESET_JSON_OVERRIDE: payload is boolean, want object'
 
   # The no-op-ruleset guard (fetch_ruleset hard-fails when the live
   # ruleset id is empty) is unreachable through run_scenario, which always

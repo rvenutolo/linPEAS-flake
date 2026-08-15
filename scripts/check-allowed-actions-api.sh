@@ -33,8 +33,12 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
+# shellcheck source=scripts/lib/log.sh
+source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/awk-path.sh
 source "${_lib_dir}/lib/awk-path.sh"
+# shellcheck source=scripts/lib/payload.sh
+source "${_lib_dir}/lib/payload.sh"
 
 readonly THIS_REPO='rvenutolo/linPEAS-flake'
 
@@ -99,6 +103,28 @@ if [[ -z ${doc_patterns_sorted} ]]; then
 fi
 
 selected_json="$(fetch_selected_actions)"
+
+# The selected-actions payload is either a fixture path or the
+# selected-actions API's response, and every read below assumes a shape
+# neither source guarantees. Name the source by kind, never by fixture
+# path, so a malformed payload is reported as a could-not-run instead of
+# raw jq noise or drift nobody caused. `.patterns_allowed` has no
+# `has()` guard here: the read below iterates it with `.patterns_allowed[]`
+# and no `// []` fallback, so an absent field would crash that read the
+# same as a wrong-typed one.
+if [[ -n ${SELECTED_ACTIONS_JSON_OVERRIDE:-} ]]; then
+  selected_source='SELECTED_ACTIONS_JSON_OVERRIDE'
+else
+  selected_source="/repos/${THIS_REPO}/actions/permissions/selected-actions"
+fi
+readonly selected_source
+require_json_payload "${selected_source}" "${selected_json}" '
+  if type != "object" then "payload is \(type), want object"
+  elif (.github_owned_allowed | type) != "boolean" then ".github_owned_allowed is \(.github_owned_allowed | type), want boolean"
+  elif (.verified_allowed | type) != "boolean" then ".verified_allowed is \(.verified_allowed | type), want boolean"
+  elif (.patterns_allowed | type) != "array" then ".patterns_allowed is \(.patterns_allowed | type), want array"
+  else empty
+  end'
 
 # --- github_owned_allowed must be true --------------------------------------
 

@@ -20,11 +20,15 @@ failures=0
 # @arg $2 fixture subdir
 # @arg $3 expected exit
 # @arg $4 expected stderr substring (empty skips)
+# @arg $5 repo payload filename under the fixture subdir (default
+#   repo.json) — a scenario whose payload must stay invalid JSON names a
+#   non-.json file here so prettier's `*.json` include never touches it
 function run_scenario() {
   local -r name="$1"
   local -r fixture_dir="$2"
   local -r expected_exit="$3"
   local -r expected_stderr="$4"
+  local -r repo_file="${5:-repo.json}"
 
   local stderr_file stdout_file outcome_file
   stderr_file="$(mktemp)"
@@ -32,7 +36,7 @@ function run_scenario() {
   outcome_file="$(mktemp)"
 
   local actual_exit=0
-  REPO_JSON_OVERRIDE="${FIXTURES}/${fixture_dir}/repo.json" \
+  REPO_JSON_OVERRIDE="${FIXTURES}/${fixture_dir}/${repo_file}" \
     ACTIONS_PERMS_JSON_OVERRIDE="${FIXTURES}/${fixture_dir}/actions-perms.json" \
     ACTIONS_WORKFLOW_PERMS_JSON_OVERRIDE="${FIXTURES}/${fixture_dir}/actions-workflow-perms.json" \
     ENV_GITHUB_PAGES_JSON_OVERRIDE="${FIXTURES}/${fixture_dir}/env-github-pages.json" \
@@ -77,6 +81,18 @@ function main() {
     'bad-dependabot-off' 1 'dependabot_security_updates.status drift'
   run_scenario 'allowed_actions all fails' \
     'bad-allowed-actions-all' 1 'allowed_actions drift'
+  # A malformed repo payload is a could-not-run, not drift or a raw jq
+  # crash: each scenario reuses the good actions-perms/workflow-perms/
+  # env-github-pages fixtures and varies only the repo payload, naming
+  # the source kind rather than the fixture path.
+  run_scenario 'empty repo payload is a tooling error' \
+    'bad-repo-empty' 2 'empty payload from REPO_JSON_OVERRIDE'
+  run_scenario 'repo payload that is not JSON is a tooling error' \
+    'bad-repo-not-json' 2 'payload from REPO_JSON_OVERRIDE is not valid JSON' \
+    'repo-payload.txt'
+  run_scenario 'boolean-typed repo payload is a tooling error' \
+    'bad-repo-wrong-type' 2 \
+    'unexpected payload shape from REPO_JSON_OVERRIDE: payload is boolean, want object'
 
   # Multi-drift scenario must surface every drift in a single run, not
   # stop at the first. This is asserted by counting drift lines in

@@ -25,6 +25,10 @@
 # Exits 2 when either input file is absent — neither SHA can be read, so
 # there is no parity verdict to give. Borrowing the drift code there
 # would send a maintainer chasing a divergence the inputs never showed.
+# Also exits 2 when flake.lock is present but empty, whitespace-only, or
+# not valid JSON: the same "no verdict to give" reasoning applies to a
+# lockfile Renovate's `cachix/git-hooks.nix` custom manager and
+# `nix flake update` can leave truncated or malformed mid-write.
 #
 # Env overrides (test-only):
 #   FLAKE_NIX_OVERRIDE  — path to flake.nix to read
@@ -32,6 +36,12 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+_lib_dir="${BASH_SOURCE[0]%/*}"
+if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
+# shellcheck source=scripts/lib/log.sh
+source "${_lib_dir}/lib/log.sh"
+# shellcheck source=scripts/lib/payload.sh
+source "${_lib_dir}/lib/payload.sh"
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || printf '.')"
 readonly REPO_ROOT
@@ -67,9 +77,34 @@ if [[ ! ${url_sha} =~ ^[0-9a-f]{7,40}$ ]]; then
   exit 1
 fi
 
-# Extract the locked rev for pre-commit-hooks from flake.lock.
+# flake.lock is written by `nix flake update` from remote input
+# metadata (or, for pre-commit-hooks specifically, kept in URL-SHA sync
+# by the renovate-flake-lock-refresh workflow), and the read below
+# assumes a shape neither source guarantees. Name the source by kind —
+# the override variable when a fixture supplies it, the tracked file's
+# own name otherwise — never by fixture path.
+flake_lock_json="$(cat -- "${FLAKE_LOCK}")"
+if [[ -n ${FLAKE_LOCK_OVERRIDE:-} ]]; then
+  flake_lock_source='FLAKE_LOCK_OVERRIDE'
+else
+  flake_lock_source='flake.lock'
+fi
+readonly flake_lock_source
+
+require_json_payload "${flake_lock_source}" "${flake_lock_json}" '
+  if type != "object" then "payload is \(type), want object"
+  elif has("nodes") and (.nodes | type) != "object" then ".nodes is \(.nodes | type), want object"
+  else empty
+  end'
+
+# Extract the locked rev for pre-commit-hooks from flake.lock. An
+# absent .nodes["pre-commit-hooks"] is a legitimate lockfile state (the
+# input was never added, or the node key differs) and stays a drift
+# verdict below rather than a could-not-run — the gate above only
+# rejects a payload the read cannot trust the shape of, not one that
+# simply lacks this particular node.
 lock_rev="$(jq --raw-output \
-  '.nodes["pre-commit-hooks"].locked.rev // empty' "${FLAKE_LOCK}")"
+  '.nodes["pre-commit-hooks"].locked.rev // empty' <<<"${flake_lock_json}")"
 
 if [[ -z ${lock_rev} ]]; then
   printf 'no nodes["pre-commit-hooks"].locked.rev in %s\n' "${FLAKE_LOCK}" >&2

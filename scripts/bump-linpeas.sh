@@ -8,7 +8,15 @@
 # Exits 1 on a bump error — an upstream tag or asset that fails
 # validation, a digest mismatch.
 # Exits 2 when the bump cannot start: a required tool is absent from
-# PATH, or the pin file it reads and rewrites is not there.
+# PATH, the pin file it reads and rewrites is not there, or the pin
+# file / upstream release payload is empty, unparsable, or the wrong
+# shape. A payload that was never successfully read cannot have
+# drifted, so it must not borrow exit 1.
+#
+# Env overrides (test-only):
+#   PIN_FILE_OVERRIDE — alternate path to the pin file this script
+#     reads and rewrites, in place of linpeas-pin.json at the repo
+#     root.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -18,6 +26,8 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+# shellcheck source=scripts/lib/payload.sh
+source "${_lib_dir}/lib/payload.sh"
 install_err_trap
 
 function main() {
@@ -31,6 +41,9 @@ function main() {
   local repo_root pin_file
   repo_root="$(git rev-parse --show-toplevel)"
   pin_file="${repo_root}/linpeas-pin.json"
+  if [[ -n ${PIN_FILE_OVERRIDE:-} ]]; then
+    pin_file="${PIN_FILE_OVERRIDE}"
+  fi
   readonly repo_root pin_file
 
   if [[ ! -f ${pin_file} ]]; then
@@ -38,8 +51,21 @@ function main() {
     exit 2
   fi
 
+  local pin_json pin_source
+  pin_json="$(cat -- "${pin_file}")"
+  if [[ -n ${PIN_FILE_OVERRIDE:-} ]]; then
+    pin_source='PIN_FILE_OVERRIDE'
+  else
+    pin_source='linpeas-pin.json'
+  fi
+  require_json_payload "${pin_source}" "${pin_json}" '
+    if type != "object" then "payload is \(type), want object"
+    elif (.version | type) != "string" then ".version is \(.version | type), want string"
+    else empty
+    end'
+
   local current_version
-  current_version="$(jq --raw-output .version "${pin_file}")"
+  current_version="$(jq --raw-output .version <<<"${pin_json}")"
   log_info "current pin: ${current_version}"
 
   local release_json
@@ -51,6 +77,12 @@ function main() {
   release_json="$(gh api \
     --header 'X-GitHub-Api-Version: 2022-11-28' \
     repos/peass-ng/PEASS-ng/releases/latest)"
+  require_json_payload 'repos/peass-ng/PEASS-ng/releases/latest' "${release_json}" '
+    if type != "object" then "payload is \(type), want object"
+    elif (.tag_name | type) != "string" then ".tag_name is \(.tag_name | type), want string"
+    elif (.assets | type) != "array" then ".assets is \(.assets | type), want array"
+    else empty
+    end'
 
   local new_tag
   new_tag="$(printf '%s' "${release_json}" | jq --raw-output .tag_name)"

@@ -73,6 +73,17 @@ function main() {
   # reported as a parity drift.
   run_scenario 'absent input files are a tooling error' \
     'no-such-fixture' 2 'flake.nix not found'
+  # A malformed flake.lock payload is a could-not-run, not drift or a
+  # raw jq crash: each scenario keeps a valid flake.nix URL and varies
+  # only the lock payload, naming the source kind rather than the
+  # fixture path.
+  run_scenario 'whitespace-only flake.lock is a tooling error' \
+    'bad-lock-empty' 2 'empty payload from FLAKE_LOCK_OVERRIDE'
+  run_scenario 'flake.lock that is not JSON is a tooling error' \
+    'bad-lock-not-json' 2 'payload from FLAKE_LOCK_OVERRIDE is not valid JSON'
+  run_scenario 'boolean-typed flake.lock is a tooling error' \
+    'bad-lock-wrong-type' 2 \
+    'unexpected payload shape from FLAKE_LOCK_OVERRIDE: payload is boolean, want object'
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
