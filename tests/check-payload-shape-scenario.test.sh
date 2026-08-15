@@ -98,24 +98,21 @@ function main() {
   expect 'zero subjects passes when allowed' \
     "${FIXTURES}/empty/scripts" "${FIXTURES}/empty/tests-does-not-exist" 0 '' 1
 
-  # (g) LIVE: run against the real tree. Every subject this batch gated
+  # (g) LIVE: the real tree must satisfy the lint. Every subject reads
+  # its payload behind a scenario-verified exit-2 shape gate
   # (bump-linpeas.sh, check-allowed-actions-api.sh,
   # check-flake-lock-provenance.sh, check-pin-digest-provenance.sh,
   # check-pre-commit-hooks-sha-parity.sh, check-protect-main.sh,
   # check-scorecard-threshold.sh, check-settings-posture.sh,
-  # check-tag-protection.sh, gen-dashboard-data.sh) now carries a
-  # malformed-payload scenario, and the four non-subjects carry their
-  # exemption marker. inventory-action-pin-tags.sh is a genuine, newly
-  # surfaced gap: its `gh api` payload flows straight into gh's own
-  # `--jq` filter, whose failure already maps to the script's existing
-  # API_FAILURE/exit-1 row rather than to a dedicated exit-2 shape gate,
-  # so closing it means changing that script's error-handling shape —
-  # out of scope here. Asserting on its own name (rather than the
-  # generic uncovered-subject wording scenario (b) already asserts)
-  # keeps this scenario's assertion from being interchangeable with (b).
-  expect 'the live tree has one known, out-of-scope gap' \
-    "${REPO_ROOT}/scripts" "${REPO_ROOT}/tests" 1 \
-    'inventory-action-pin-tags.sh: no scenario asserting exit 2'
+  # check-tag-protection.sh, gen-dashboard-data.sh), and every
+  # non-subject carries its exemption marker: the three renovate.json
+  # readers, the gh-api-version-header meta-lint,
+  # check-payload-shape-scenario.sh's own self-match, and
+  # inventory-action-pin-tags.sh — a generator whose documented output
+  # contract already records an unreachable or malformed API response as
+  # an API_FAILURE data row rather than a could-not-run.
+  expect 'the live tree is clean' \
+    "${REPO_ROOT}/scripts" "${REPO_ROOT}/tests" 0 ''
 
   harness_assert_verify || failures=$((failures + 1))
 

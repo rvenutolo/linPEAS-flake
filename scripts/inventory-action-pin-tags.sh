@@ -24,6 +24,7 @@
 # Honors INVENTORY_PATHS_OVERRIDE (newline-separated paths) for
 # fixture-driven tests, and LINT_ALLOW_EMPTY_SCAN=1 to accept an empty scan
 # set. Default scan: .github/workflows + .github/actions.
+# payload-subject-exempt: this is a generator, not a checker — its documented output contract records an unreachable or malformed `gh api` tags response as an API_FAILURE row (status column) rather than treating it as a run failure; the read is captured with its status checked (`if ! payload=$(gh api --paginate ... )`), so a `--jq` failure on a malformed response takes the same API_FAILURE branch as a network failure, and its exit-1 already means "the inventory has gaps," not "posture violation" or "could not run." Its scan-set failures (the part of the could-not-run convention that does apply to it) already exit 2.
 # Exits 0 if every row is OK / NO_PATCH_TAG; exits 1 on any API_FAILURE;
 # exits 2 when the scan set could not be enumerated or came back empty.
 
