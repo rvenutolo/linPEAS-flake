@@ -60,23 +60,33 @@
 #
 # For each non-exempt subject `scripts/<name>.sh`, its paired
 # `tests/<name>.test.sh` must carry a scenario whose own text — not the
-# script's source — asserts exit 2 against a malformed payload: a line
-# passing the exit-code argument this repo's harnesses use (`2` flanked
-# by whitespace, the shape `run_scenario 'name' 'fixture' 2 'message'`
-# and its variants all share) paired with one of a small vocabulary of
-# malformed-payload words (`malformed`, `garbage`, `unparsable`,
-# `payload`) on that line, its continuation lines, or the
-# contiguous comment block directly above it. A test file that never
-# mentions any of those words near an exit-2 assertion is reported as
-# lacking the scenario, even if the script's own shape gate is airtight.
+# script's source — asserts exit 2 against a malformed payload. The
+# exit code is anchored to the scenario call's actual bare positional
+# argument, parsed via `shfmt --to-json` (the same approach
+# check-enumerate-helper-required.sh uses): only a `2` that stands alone
+# as one whole, unquoted argument word of some function call counts, so
+# a message string that merely *contains* the digit 2 — quoted prose
+# such as `'malformed payload: 2 offending fields, exit clean'` — is not
+# mistaken for the exit-code argument. A textual `' 2 '` substring match
+# would be fooled by exactly that shape, which is the failure mode this
+# lint exists to catch one level down — matching on the harness's own
+# assertion text is worthless if that match cannot be trusted. Once a
+# genuine bare-`2` argument is found, its own line, continuation lines,
+# and the contiguous comment block directly above it are checked for one
+# of a small vocabulary of malformed-payload words (`malformed`,
+# `garbage`, `unparsable`, `payload`). A test file with no such pairing
+# is reported as lacking the scenario, even if the script's own shape
+# gate is airtight.
 #
 # Honors SCRIPTS_DIR_OVERRIDE (default: scripts), TESTS_DIR_OVERRIDE
 # (default: tests), and LINT_ALLOW_EMPTY_SCAN for a scan root that
 # deliberately holds no payload consumer.
 # Exit 0 clean, 1 on an uncovered subject or a stale exemption marker,
-# 2 when the scripts root cannot be enumerated or matches zero subjects.
+# 2 when the scripts root cannot be enumerated, matches zero subjects,
+# a required tool is missing, or a subject's paired test file cannot be
+# parsed as shell.
 #
-# payload-subject-exempt: this file's own header documents the four arm patterns and quotes their grep literals, which is enough to match all four arms of its own predicate; it calls no gh api, reads no override variable, and reads no lock file itself
+# payload-subject-exempt: this file's own header prose quotes the arm-1 (`gh api`), arm-3 (`="$(cat)"`), and arm-4 (`cat -- ... flake.lock` / `git show ...:flake.lock`) patterns literally, which is enough to self-match those three arms; measured directly (`grep` each arm's own pattern against this file) rather than assumed — arm-2's `[A-Z_]+_JSON_OVERRIDE` does NOT fire here, since every `_JSON_OVERRIDE` occurrence in this file is preceded by a character outside `[A-Z_]` (`+`, `*`, `}`). It calls no `gh api`, reads no override variable, and reads no lock file itself.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -86,6 +96,13 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+
+# A missing shfmt or jq must be diagnosed as itself rather than as the
+# per-file "could not parse" message has_malformed_scenario emits below,
+# which is reserved for a file that genuinely fails to parse once both
+# tools are known present.
+require_tool shfmt
+require_tool jq
 
 readonly SCRIPTS_DIR="${SCRIPTS_DIR_OVERRIDE:-scripts}"
 readonly TESTS_DIR="${TESTS_DIR_OVERRIDE:-tests}"
@@ -123,24 +140,76 @@ function exempt_rationale() {
   return 1
 }
 
+# jq program: emit the source line of every CallExpr argument that is a
+# bare, unquoted literal word equal to "2" — the shape this repo's
+# harnesses use for a scenario's exit-code argument
+# (`run_scenario 'name' 'fixture' 2 'message'` and its variants). Only a
+# single-part `Lit` word counts as bare: a single- or double-quoted
+# word whose one part is a plain literal is also accepted (some harness
+# could quote the code), but a quoted string that merely *contains* the
+# character "2" among other text — `'malformed payload: 2 offending
+# fields, exit clean'` — is a `SglQuoted`/`DblQuoted` word whose literal
+# text is that whole sentence, never the bare string "2", so it can
+# never match here. `.. | objects | select(.Type == "CallExpr")` reaches
+# every function/command invocation in the file regardless of which
+# helper name a given harness happens to use.
+# shellcheck disable=SC2016 # jq program literal; $-prefixed names are jq variables, not shell
+readonly BARE_TWO_JQ_PROG='
+def literal_word_text:
+  (.Parts // []) as $p
+  | if ($p | length) != 1 then null
+    else
+      $p[0] as $part
+      | if $part.Type == "Lit" then $part.Value
+        elif $part.Type == "SglQuoted" then ($part.Value // null)
+        elif $part.Type == "DblQuoted"
+          and (($part.Parts // []) | length) == 1
+          and ($part.Parts[0].Type == "Lit")
+        then $part.Parts[0].Value
+        else null
+        end
+    end;
+
+[.. | objects | select(.Type == "CallExpr")
+  | (.Args // [])[]
+  | select((literal_word_text) == "2")
+  | .Pos.Line] | unique | .[]
+'
+
 # @description True if $1 (a test file) carries a scenario whose own
-# text asserts exit 2 against a malformed payload. Reads the file into
-# an array once and, for every line shaped like this repo's harnesses'
-# exit-2 argument, walks upward through its continuation lines and the
-# contiguous comment block above it (the same span
-# check-enumerate-helper-required.sh already walks for its own markers),
-# then checks that combined window for the malformed-payload vocabulary.
+# text asserts exit 2 against a malformed payload. Parses the file's
+# syntax tree once via shfmt --to-json to find every line carrying a
+# genuine bare "2" call argument, then — for each such line — walks
+# upward through its continuation lines and the contiguous comment block
+# above it (the same span check-enumerate-helper-required.sh already
+# walks for its own markers) and checks that combined window for the
+# malformed-payload vocabulary.
 function has_malformed_scenario() {
   local -r test_file="$1"
   [[ -f ${test_file} ]] || return 1
 
+  local ast_json
+  if ! ast_json="$(shfmt --to-json <"${test_file}" 2>/dev/null)"; then
+    printf '%s: shfmt could not parse this file as shell for AST inspection\n' "${test_file}" >&2
+    exit 2
+  fi
+
+  local anchor_lines
+  if ! anchor_lines="$(jq --raw-output "${BARE_TWO_JQ_PROG}" <<<"${ast_json}")"; then
+    printf '%s: jq failed walking the parsed syntax tree\n' "${test_file}" >&2
+    exit 2
+  fi
+  [[ -n ${anchor_lines} ]] || return 1
+
   local -a lines=()
   mapfile -t lines <"${test_file}"
   local -r n=${#lines[@]}
-  local i start k window
+  local anchor i start k window
 
-  for ((i = 0; i < n; i++)); do
-    [[ ${lines[i]} == *' 2 '* ]] || continue
+  while IFS= read -r anchor; do
+    [[ -n ${anchor} ]] || continue
+    i=$((anchor - 1))
+    ((i >= 0 && i < n)) || continue
 
     start=${i}
     while ((start > 0)) && [[ ${lines[start - 1]} =~ \\[[:space:]]*$ ]]; do
@@ -160,7 +229,7 @@ function has_malformed_scenario() {
       ${window} == *unparsable* || ${window} == *payload* ]]; then
       return 0
     fi
-  done
+  done <<<"${anchor_lines}"
   return 1
 }
 

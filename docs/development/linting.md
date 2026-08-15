@@ -405,37 +405,14 @@ generated block is also enforced in CI by the required `doc-freshness`
 context via `tests/refresh-flake-show.test.sh`, so a stale doc is caught
 even when the pre-commit hook is bypassed.
 
-## Payload shape-gate scenario lint
+## Payload shape-gate scenario coverage
 
-`scripts/check-payload-shape-scenario.sh` requires every script that
-reads an externally-supplied payload to carry a harness scenario that
-feeds it a malformed payload and asserts exit 2. A shape gate
-(`require_json_payload`, or an equivalent hand-rolled `die_op` guard) is
-invisible to every other lint in the tree, because none of them runs
-the scripts under test — only a scenario that actually drives a
-malformed payload through the gate and checks the exit code proves the
-gate still fires. The lint therefore gates the scenario's existence,
-not the gate's source text: it never greps a script for
-`require_json_payload`, since a script that forgot the gate would then
-be undiscoverable by construction.
-
-A script counts as a subject when it matches one of four textual arms:
-a literal `gh api` call, a `*_JSON_OVERRIDE`-shaped variable, a bare
-stdin slurp (`="$(cat)"`), or a scoped `flake.lock`/lock-content read
-(`cat -- ... flake.lock`, `git show ...:flake.lock`). All four arms are
-needed — a `gh api` / `*_JSON_OVERRIDE` predicate alone misses a script
-whose payload arrives on stdin with no override variable at all, and a
-lock-content read scoped only to the read call (not to any mention of
-the filename) avoids flagging a script that merely names `flake.lock`
-in a comment or a watch list. The predicate is textual and declares
-that plainly: a `gh api` call or an override variable name built by
-string interpolation is invisible to it.
-
-A subject that reads no externally-supplied payload on its verdict path
-(a maintainer-authored, PR-reviewed in-tree config file; a meta-lint
-that only mentions `gh api` in the text it scans) carries an inline
-`# payload-subject-exempt: <rationale>` marker, matching the repo's
-`enumerate-exempt` / `glob-exempt` / `exit-code-exempt` /
-`reason-ladder-exempt` convention. A marker on a script the predicate
-does not match is reported as drift, the same way a stale entry in any
-of this repo's other exemption lists would be.
+`scripts/check-payload-shape-scenario.sh` requires every script
+matching a measured four-arm external-payload predicate (`gh api`, a
+`*_JSON_OVERRIDE` variable, a bare stdin slurp, or a scoped
+`flake.lock` read) to carry a harness scenario that feeds it a
+malformed payload and asserts exit 2, or a `# payload-subject-exempt: <rationale>` marker. The scenario match is anchored to the scenario
+call's own bare positional exit-code argument (parsed via `shfmt --to-json`), not to any `2` appearing as a substring, so a message that
+merely mentions the digit 2 in prose cannot be mistaken for the
+exit-code argument. Full rationale: [Workflow hardening →
+payload-shape-scenario](../security/workflow-hardening.md#payload-shape-scenario).

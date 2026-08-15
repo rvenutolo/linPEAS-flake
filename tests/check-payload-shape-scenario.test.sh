@@ -72,7 +72,21 @@ function main() {
     "${FIXTURES}/uncovered/scripts" "${FIXTURES}/uncovered/tests" 1 \
     'check-gizmo.sh: no scenario asserting exit 2'
 
-  # (c) GOOD: the same script as (b), but carrying a declared
+  # (c) BAD, and the most valuable fixture in this suite: a scenario
+  # whose text contains the digit 2 and the word "malformed" as prose
+  # inside a quoted message, while the scenario itself asserts exit 0.
+  # `check-gadget.sh` has no exit-2 shape gate at all. A matcher keyed
+  # on any ' 2 ' substring in the file is fooled by this exact shape —
+  # it was, before the matcher was anchored to the scenario call's own
+  # bare positional exit-code argument — and reports a false "covered".
+  # A matcher that requires the "2" to stand alone as an unquoted call
+  # argument is not fooled: 'malformed payload: 2 offending fields,
+  # exit clean' is one quoted word, never a bare "2".
+  expect 'a false "clean pass" containing 2 and malformed is still a violation' \
+    "${FIXTURES}/exit0-trap/scripts" "${FIXTURES}/exit0-trap/tests" 1 \
+    'check-gadget.sh: no scenario asserting exit 2'
+
+  # (d) GOOD: the same script as (b), but carrying a declared
   # payload-subject-exempt marker, so the missing scenario is not a
   # violation. TESTS_DIR points at a directory that does not exist, to
   # prove the exemption short-circuits before any harness is even
@@ -80,25 +94,25 @@ function main() {
   expect 'a declared exemption clears it' \
     "${FIXTURES}/exempt/scripts" "${FIXTURES}/exempt/tests-does-not-exist" 0 ''
 
-  # (d) BAD: a payload-subject-exempt marker on a script the predicate
+  # (e) BAD: a payload-subject-exempt marker on a script the predicate
   # does not match at all — a stale exemption is drift, not a no-op.
   expect 'a marker on a non-subject script is a violation' \
     "${FIXTURES}/stale/scripts" "${FIXTURES}/stale/tests-does-not-exist" 1 \
     'carries a payload-subject-exempt marker but is not a subject'
 
-  # (e) TOOLING: a scan root whose scripts match zero subjects. A clean
+  # (f) TOOLING: a scan root whose scripts match zero subjects. A clean
   # exit here would be indistinguishable from a scan that quietly
   # stopped recognizing every arm of the predicate.
   expect 'zero subjects is a could-not-run' \
     "${FIXTURES}/empty/scripts" "${FIXTURES}/empty/tests-does-not-exist" 2 \
     'scanned 0'
 
-  # (f) TOOLING: ...and the documented override suppresses it, for a
+  # (g) TOOLING: ...and the documented override suppresses it, for a
   # scan root that deliberately holds no external-payload consumer.
   expect 'zero subjects passes when allowed' \
     "${FIXTURES}/empty/scripts" "${FIXTURES}/empty/tests-does-not-exist" 0 '' 1
 
-  # (g) LIVE: the real tree must satisfy the lint. Every subject reads
+  # (h) LIVE: the real tree must satisfy the lint. Every subject reads
   # its payload behind a scenario-verified exit-2 shape gate
   # (bump-linpeas.sh, check-allowed-actions-api.sh,
   # check-flake-lock-provenance.sh, check-pin-digest-provenance.sh,
