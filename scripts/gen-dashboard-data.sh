@@ -85,23 +85,6 @@ function fetch_or_override() {
   fi
 }
 
-# @description Name a fetch_or_override payload's source by kind for a
-# could-not-run diagnostic: the override variable's name when a fixture
-# supplies it, the API path otherwise. Never the override's value — a
-# fixture path never belongs in a diagnostic an operator or the
-# distinct-output harness gate compares.
-# @arg $1 override env-var name
-# @arg $2 gh api path used when the override is unset
-function payload_source_for() {
-  local -r override_var="$1" api_path="$2"
-  local -r override_path="${!override_var:-}"
-  if [[ -n ${override_path} ]]; then
-    printf '%s' "${override_var}"
-  else
-    printf '%s' "${api_path}"
-  fi
-}
-
 # @description Fetch a this-repo lookup that is allowed to degrade. `gh
 # api` writes its JSON error body to stdout, so a failed lookup arrives
 # as a non-empty, non-null string that would otherwise be read as data —
@@ -163,11 +146,7 @@ function main() {
   log_info 'gathering pin + upstream data'
   local pin_json pin_source
   pin_json="$(cat -- "${pin_file}")"
-  if [[ -n ${PIN_FILE_OVERRIDE:-} ]]; then
-    pin_source='PIN_FILE_OVERRIDE'
-  else
-    pin_source='linpeas-pin.json'
-  fi
+  payload_source_into pin_source PIN_FILE_OVERRIDE 'linpeas-pin.json'
   require_json_payload "${pin_source}" "${pin_json}" '
     if type != "object" then "payload is \(type), want object"
     elif (.version | type) != "string" then ".version is \(.version | type), want string"
@@ -194,12 +173,12 @@ function main() {
     exit 1
   fi
 
-  local upstream_release
+  local upstream_release upstream_release_source
   upstream_release="$(fetch_or_override UPSTREAM_RELEASE_JSON_OVERRIDE \
     "repos/${UPSTREAM_REPO}/releases/latest")"
-  require_json_payload \
-    "$(payload_source_for UPSTREAM_RELEASE_JSON_OVERRIDE "repos/${UPSTREAM_REPO}/releases/latest")" \
-    "${upstream_release}" '
+  payload_source_into upstream_release_source UPSTREAM_RELEASE_JSON_OVERRIDE \
+    "repos/${UPSTREAM_REPO}/releases/latest"
+  require_json_payload "${upstream_release_source}" "${upstream_release}" '
     if type != "object" then "payload is \(type), want object"
     elif (.tag_name | type) != "string" then ".tag_name is \(.tag_name | type), want string"
     elif (.published_at | type) != "string" then ".published_at is \(.published_at | type), want string"
@@ -237,12 +216,12 @@ function main() {
   fi
 
   log_info 'gathering recent releases'
-  local releases_json
+  local releases_json releases_source
   releases_json="$(fetch_or_override THIS_REPO_RELEASES_JSON_OVERRIDE \
     "repos/${THIS_REPO}/releases?per_page=20")"
-  require_json_payload \
-    "$(payload_source_for THIS_REPO_RELEASES_JSON_OVERRIDE "repos/${THIS_REPO}/releases?per_page=20")" \
-    "${releases_json}" '
+  payload_source_into releases_source THIS_REPO_RELEASES_JSON_OVERRIDE \
+    "repos/${THIS_REPO}/releases?per_page=20"
+  require_json_payload "${releases_source}" "${releases_json}" '
     if type != "array" then "payload is \(type), want array"
     elif (any(.[]; (.tag_name | type) != "string")) then "a release entry .tag_name is not a string"
     elif (any(.[]; (.published_at | type) != "string")) then "a release entry .published_at is not a string"
@@ -250,12 +229,12 @@ function main() {
     end'
 
   log_info 'gathering recent upstream releases'
-  local upstream_releases_json
+  local upstream_releases_json upstream_releases_source
   upstream_releases_json="$(fetch_or_override UPSTREAM_RELEASES_JSON_OVERRIDE \
     "repos/${UPSTREAM_REPO}/releases?per_page=20")"
-  require_json_payload \
-    "$(payload_source_for UPSTREAM_RELEASES_JSON_OVERRIDE "repos/${UPSTREAM_REPO}/releases?per_page=20")" \
-    "${upstream_releases_json}" '
+  payload_source_into upstream_releases_source UPSTREAM_RELEASES_JSON_OVERRIDE \
+    "repos/${UPSTREAM_REPO}/releases?per_page=20"
+  require_json_payload "${upstream_releases_source}" "${upstream_releases_json}" '
     if type != "array" then "payload is \(type), want array"
     elif (any(.[]; (.tag_name | type) != "string")) then "a release entry .tag_name is not a string"
     elif (any(.[]; (.published_at | type) != "string")) then "a release entry .published_at is not a string"
