@@ -536,6 +536,31 @@ Validate repo config files (renovate.json, workflow
 YAML, composite-action YAML, .markdownlint.json) against pinned
 JSON Schemas using `check-jsonschema`.
 
+### scripts/check-lib-source-tool-free.sh
+
+Lint: every `source .../lib/*.sh` line under `scripts/`
+resolves its library directory by parameter expansion, never through a
+command substitution.
+
+A source line spelled `source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"` needs `readlink` and `dirname` on
+PATH, and it runs above the guard that exists to name a missing tool.
+A script whose PATH lacks them therefore dies at exit 127 naming
+`readlink` — a could-not-run reported under neither the code the
+convention reserves for it nor a diagnostic that names what was
+actually absent. `${BASH_SOURCE[0]%/*}` needs nothing on PATH.
+
+Only the resolution mechanism is gated. A bare `${BASH_SOURCE[0]%/*}`
+with no bare-filename fallback stays legal: it is tool-free, and the
+case it misses is an invocation no caller in this repo makes.
+
+Breadth is asserted rather than inferred: the run reports how many
+source lines it read, and reading none is a broken scan reported as a
+could-not-run rather than a clean tree. `LINT_ALLOW_EMPTY_SCAN=1`
+suppresses that guard for a scan root that deliberately holds nothing.
+
+Honors SCRIPTS_DIR_OVERRIDE for fixtures. Exits 0 clean, 1 on any
+violation, 2 if the scan set is empty or unreadable.
+
 ### scripts/check-lint-shell-tools.sh
 
 Assert every tool the batched `.#lint`-hosted invariant-lint

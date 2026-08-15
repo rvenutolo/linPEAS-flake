@@ -88,6 +88,20 @@ Recursion matters because the shared libraries under `scripts/lib/` are where a 
 
 Enforced by `scripts/check-script-shebang-pipefail.sh`. Wired as the `lint-script-hygiene` CI job (member check `script-shebang-pipefail`) and as a pre-commit hook.
 
+## lib-source-tool-free
+
+Every `source .../lib/*.sh` line under `scripts/` resolves the library directory by parameter expansion (`${BASH_SOURCE[0]%/*}`), never through a command substitution such as `$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")`.
+
+A command-substitution resolution needs `readlink` and/or `dirname` on PATH, and it runs above the guard whose whole job is naming a missing tool. A script whose PATH lacks either tool dies at exit 127 naming `readlink` — a could-not-run reported under neither the exit code this repo reserves for it (2) nor a diagnostic naming what was actually absent. `${BASH_SOURCE[0]%/*}` needs nothing on PATH: the shell performs the trim itself, with a `.` fallback for a bare-filename invocation where the expansion strips nothing.
+
+Only the resolution mechanism is gated, not the variable name it lands in. A library that sources a sibling resolves its own directory into `_lib_self_dir` rather than `_lib_dir`, because `source` runs in the caller's scope and reusing the caller's variable name would clobber it partway through the caller's own subsequent `source` lines — that shape stays clean.
+
+A source line is in scope when it names a path under a `lib/` directory, or when the file doing the sourcing is itself under a `lib/` directory (a library resolving a sibling). Both are structural tests on the line and the file rather than a list of library basenames, so a library added later stays covered without the lint itself needing an update.
+
+Breadth is asserted rather than inferred: a clean run reports how many qualifying source lines it read, and reading zero is scored as a could-not-run rather than a clean tree. `LINT_ALLOW_EMPTY_SCAN=1` suppresses that guard for a scan root that deliberately holds none.
+
+Enforced by `scripts/check-lib-source-tool-free.sh`.
+
 ## no-opaque-procsub
 
 No script anywhere under `scripts/`, sourced libraries included, feeds a redirection from a process substitution — `done < <(yq eval '.x' "$f")`, `mapfile -t rules < <(jq --raw-output '.rules[].type' <<<"${json}")`, `done < <(find . -name '*.sh')`, `done < <(parse_blocks)` and every variant of the shape. There is no exemption marker and no allowlist.
