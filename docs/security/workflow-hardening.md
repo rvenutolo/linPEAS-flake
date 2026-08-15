@@ -225,6 +225,26 @@ A subject for which a malformed payload is not a could-not-run — a script whos
 
 Enforced by `scripts/check-payload-shape-scenario.sh`. Wired as the `lint-script-hygiene` CI job (member check `payload-shape-scenario`).
 
+## payload-source-helper
+
+Every payload source name is filled by `payload_source_into` (`scripts/lib/payload.sh`). No assignment in the scanned shell files sets a variable to a bare `*_OVERRIDE` variable name, whether written plainly (`src='X_JSON_OVERRIDE'`) or declared (`local`, `readonly`, `declare`, `export`), unless the file carries an inline `# payload-source-exempt: <rationale>` marker.
+
+The helper owns one rule: a source is named by kind — the override variable's name when a fixture supplies the payload, the API route or the config's repo-relative filename otherwise — and never by resolved path. The shape gate that consumes the name reads it verbatim into every diagnostic, so a hand-written copy of that rule is a second resolver sitting beside the reader it feeds. When the two disagree about whether the override is set, the diagnostic names a source the run never used, and an operator debugging a malformed payload is sent after the wrong input. Two spellings of the copy are enough for them to drift apart from each other while both keep passing every exit-code assertion, because nothing in a scenario's verdict reads the source name.
+
+The helper fills a caller variable rather than printing its answer, and the rule requires the filling form specifically. A source namer read as `$(...)` in argument position discards its own status: the guard inside would print its complaint, the shape gate would receive an empty source name, and the run would end 0. Filling a named variable keeps the namer in the caller's shell, where a failed resolution can `exit` the script that has the problem. `enumerate_into` binds its output the same way, so the two helpers read alike at their call sites.
+
+Detection parses each file's syntax tree via `shfmt --to-json` rather than matching text. The banned shape is itself a text-shaped shortcut, and a gate whose purpose is rejecting one must not accept one: a matcher keyed on `=('|")?[A-Z_]*_OVERRIDE` reads an override name out of prose, out of a heredoc, and out of the lint's own diagnostic strings, while still missing the same assignment written unquoted. The parser answers the only question that decides the rule — is this a named assignment whose entire value is one literal word spelling an override variable's name — and answers it identically for the three spellings it distinguishes: a single-quoted word, a bare literal word, and a double-quoted word wrapping one literal part.
+
+Both `CallExpr` assignments and `DeclClause` arguments are read, because the parser files a bare assignment and a declared one under different node types. A scan of bare assignments alone would leave `local src='X_JSON_OVERRIDE'` unreachable — the shape any source named inside a function body would be written in, and therefore the one most likely to be written next.
+
+The scan set is `scripts/*.sh`, `scripts/lib/*.sh` and `tests/*.sh`. The library arm is not optional: the helper itself lives in `scripts/lib/`, its neighbors there are the files most likely to copy it, and the older shell-hygiene lints in this repo stop at the top level of `scripts/`.
+
+The exemption marker excuses a file that spells an override variable's name for some reason other than naming a payload source — an operator message telling a reader which variable to set, say. It follows this repo's `payload-subject-exempt` / `enumerate-exempt` / `glob-exempt` convention: the rationale lives beside the code it excuses rather than in a hand-maintained doc table that drifts silently, and a marker whose rationale is empty excuses nothing, since an exemption nobody has to justify is a way to switch the rule off in place. A marker on a file holding no assignment the rule matches is itself reported, ahead of any violation, so a stale marker surfaces on a tree that is otherwise obeying the rule everywhere.
+
+The clean verdict reports files scanned and assignments examined rather than a bare "ok", and the run exits 2 when it examined none, unless `LINT_ALLOW_EMPTY_SCAN=1` says the scan root deliberately holds no assignment. A detector that stopped reaching assignments and a tree with nothing to report otherwise emit the same exit code — the same off-and-green failure the enumeration helper exists to close one level up.
+
+Enforced by `scripts/check-payload-source-helper.sh`. Wired as the `lint-script-hygiene` CI job (member check `payload-source-helper`).
+
 ## script-has-test
 
 Every `scripts/check-*.sh` has a matching `tests/check-*.test.sh`, and every `tests/check-*.test.sh` has a matching `scripts/check-*.sh`.
