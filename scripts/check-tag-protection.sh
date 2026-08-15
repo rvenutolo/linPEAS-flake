@@ -70,20 +70,17 @@ function fetch_ruleset() {
 
 # The payload this lint reads is either a fixture path or the ruleset API's
 # response, and every read below assumes a shape neither source guarantees.
-# Name the source in every could-not-run diagnostic: an operator who sees one
-# needs to know which payload was wrong before anything else. The source is
-# named by kind rather than by path, so a fixture's identity never reaches the
-# output the census-parity gate compares.
-if [[ -n ${RULESET_JSON_OVERRIDE:-} ]]; then
-  payload_source='RULESET_JSON_OVERRIDE'
-  if [[ ! -r ${RULESET_JSON_OVERRIDE} ]]; then
-    printf '%s ruleset: payload from %s is not readable\n' "${EXPECTED_NAME}" "${payload_source}" >&2
-    exit 2
-  fi
-else
-  payload_source="/repos/${THIS_REPO}/rulesets/{id}"
-fi
+payload_source_into payload_source RULESET_JSON_OVERRIDE \
+  "/repos/${THIS_REPO}/rulesets/{id}"
 readonly payload_source
+
+# A fixture the harness points at but cannot read is a could-not-run, not a
+# finding: `cat` would emit nothing and the shape gate would report an empty
+# payload, naming the wrong fault.
+if [[ -n ${RULESET_JSON_OVERRIDE:-} && ! -r ${RULESET_JSON_OVERRIDE} ]]; then
+  printf '%s ruleset: payload from %s is not readable\n' "${EXPECTED_NAME}" "${payload_source}" >&2
+  exit 2
+fi
 
 ruleset_json="$(fetch_ruleset)"
 

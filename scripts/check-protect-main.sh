@@ -138,14 +138,9 @@ ruleset_json="$(fetch_ruleset)"
 
 # The ruleset payload is either a fixture path or the rulesets API's
 # response, and every read below assumes a shape neither source
-# guarantees. Name the source by kind, never by fixture path, so a
-# malformed payload is reported as a could-not-run instead of raw jq
-# noise or drift nobody caused.
-if [[ -n ${RULESET_JSON_OVERRIDE:-} ]]; then
-  ruleset_source='RULESET_JSON_OVERRIDE'
-else
-  ruleset_source="/repos/${THIS_REPO}/rulesets/{id}"
-fi
+# guarantees.
+payload_source_into ruleset_source RULESET_JSON_OVERRIDE \
+  "/repos/${THIS_REPO}/rulesets/{id}"
 readonly ruleset_source
 
 # The subject is passed because the source kind alone does not identify this

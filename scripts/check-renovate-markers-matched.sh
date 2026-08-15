@@ -46,15 +46,7 @@ readonly SCAN_ROOT="${SCAN_ROOT:-${REPO_ROOT}}"
 # from the scan below, since its examples do spell out a depName.
 readonly MARKER_RE='#\s*renovate:\s*datasource=\S+\s+depName='
 
-# Name the payload's source by kind — the override variable when a fixture
-# supplies it, the config's repo-relative name otherwise. Never the resolved
-# path: a path in a diagnostic lets two harness scenarios be told apart by
-# their fixture rather than by their behavior.
-if [[ -n ${RENOVATE_JSON_OVERRIDE:-} ]]; then
-  payload_source='RENOVATE_JSON_OVERRIDE'
-else
-  payload_source='renovate.json'
-fi
+payload_source_into payload_source RENOVATE_JSON_OVERRIDE 'renovate.json'
 readonly payload_source
 
 if [[ ! -f ${RENOVATE_JSON} ]]; then
