@@ -81,7 +81,7 @@ if [[ -n ${RULESET_JSON_OVERRIDE:-} ]]; then
     exit 2
   fi
 else
-  payload_source="/repos/${THIS_REPO}/rulesets"
+  payload_source="/repos/${THIS_REPO}/rulesets/{id}"
 fi
 readonly payload_source
 
