@@ -158,7 +158,7 @@ require_json_payload "${ruleset_source}" "${ruleset_json}" '
   elif (.conditions.ref_name | type) != "object" then ".conditions.ref_name is \(.conditions.ref_name | type), want object"
   elif (.conditions.ref_name.include | type) != "array" then ".conditions.ref_name.include is \(.conditions.ref_name.include | type), want array"
   else empty
-  end'
+  end' 'protect-main ruleset'
 
 # --- Top-level shape ---------------------------------------------------------
 
