@@ -56,8 +56,10 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+_lib_dir="${BASH_SOURCE[0]%/*}"
+if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/temp.sh
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
+source "${_lib_dir}/lib/temp.sh"
 
 OCTOSCAN_DIGEST="sha256:3368f42651f9ca0d7a7cd08de3b734476046d17ffa0b2b0c6c55acef556300db"
 OCTOSCAN_VERSION="v0.1.7"

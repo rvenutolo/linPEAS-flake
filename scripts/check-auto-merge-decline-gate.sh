@@ -27,10 +27,12 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+_lib_dir="${BASH_SOURCE[0]%/*}"
+if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
+source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/temp.sh
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
+source "${_lib_dir}/lib/temp.sh"
 
 readonly DEFAULT_DIR=".github/workflows"
 readonly OVERRIDE="${WORKFLOWS_DIR_OVERRIDE:-}"

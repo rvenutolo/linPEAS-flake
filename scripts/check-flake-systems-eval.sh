@@ -9,10 +9,17 @@
 # @option --flake <dir> flake to check (default: repo root)
 set -Eeuo pipefail
 IFS=$'\n\t'
+# The library directory is resolved by parameter expansion rather than by
+# `readlink`/`dirname`, so a script whose PATH is missing the tool it is
+# about to guard dies in its own guard naming that tool, not at this line
+# naming `readlink`. The fallback covers an invocation with a bare
+# filename, where the expansion strips nothing.
+_lib_dir="${BASH_SOURCE[0]%/*}"
+if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/log.sh
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
+source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/temp.sh
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
+source "${_lib_dir}/lib/temp.sh"
 install_err_trap
 
 function main() {

@@ -35,8 +35,10 @@ fi
 # reach those either, and a source line placed first would report a
 # missing library instead of the missing tool that actually stopped the
 # run.
+_lib_dir="${BASH_SOURCE[0]%/*}"
+if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
+source "${_lib_dir}/lib/enumerate.sh"
 
 readonly DEFAULT_DIRS=(.github/workflows .github/actions)
 readonly OVERRIDE="${WORKFLOWS_DIR_OVERRIDE:-}"

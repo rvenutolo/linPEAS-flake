@@ -62,10 +62,12 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+_lib_dir="${BASH_SOURCE[0]%/*}"
+if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/log.sh
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"
+source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/enumerate.sh
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
+source "${_lib_dir}/lib/enumerate.sh"
 
 readonly SCRIPTS_DIR="${SCRIPTS_DIR_OVERRIDE:-scripts}"
 readonly LABELER="${LABELER_YML_OVERRIDE:-.github/workflows/labeler.yml}"

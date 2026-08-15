@@ -50,8 +50,10 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+_lib_dir="${BASH_SOURCE[0]%/*}"
+if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
+source "${_lib_dir}/lib/enumerate.sh"
 
 readonly ACTION_PREFIX="wagoid/commitlint-github-action"
 readonly BASE_CONFIG=".commitlintrc.yml"

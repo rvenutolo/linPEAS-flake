@@ -28,8 +28,10 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+_lib_dir="${BASH_SOURCE[0]%/*}"
+if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/temp.sh
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
+source "${_lib_dir}/lib/temp.sh"
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
 readonly REPO_ROOT

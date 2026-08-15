@@ -47,12 +47,14 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+_lib_dir="${BASH_SOURCE[0]%/*}"
+if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/enumerate.sh"
+source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/awk-path.sh
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/awk-path.sh"
+source "${_lib_dir}/lib/awk-path.sh"
 # shellcheck source=scripts/lib/temp.sh
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/temp.sh"
+source "${_lib_dir}/lib/temp.sh"
 
 root="${ROOT_OVERRIDE:-$(git rev-parse --show-toplevel)}"
 readonly ROOT="${root}"
