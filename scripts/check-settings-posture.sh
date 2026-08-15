@@ -36,6 +36,12 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+_lib_dir="${BASH_SOURCE[0]%/*}"
+if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
+# shellcheck source=scripts/lib/log.sh
+source "${_lib_dir}/lib/log.sh"
+# shellcheck source=scripts/lib/payload.sh
+source "${_lib_dir}/lib/payload.sh"
 
 readonly THIS_REPO='rvenutolo/linPEAS-flake'
 
@@ -71,6 +77,23 @@ function fetch_json() {
   gh api --header 'X-GitHub-Api-Version: 2022-11-28' -- "${api_path}"
 }
 
+# @description Name a fetch_json payload's source by kind for a
+# could-not-run diagnostic: the override variable's name when a fixture
+# supplies it, the API path otherwise. Never the override's value — a
+# fixture path never reaches the output the census-parity gate compares.
+# @arg $1 override env var name
+# @arg $2 API path
+function payload_source_for() {
+  local -r override_var="$1" api_path="$2"
+  local override
+  override="$(printenv -- "${override_var}" 2>/dev/null || printf '')"
+  if [[ -n ${override} ]]; then
+    printf '%s' "${override_var}"
+  else
+    printf '%s' "${api_path}"
+  fi
+}
+
 # @description Read a `.path.to.field` from JSON and compare it to an
 # expected literal. Reports drift if mismatched.
 # @arg $1 JSON document
@@ -90,12 +113,45 @@ function assert_field() {
 }
 
 repo_json="$(fetch_json REPO_JSON_OVERRIDE "/repos/${THIS_REPO}")"
+require_json_payload \
+  "$(payload_source_for REPO_JSON_OVERRIDE "/repos/${THIS_REPO}")" \
+  "${repo_json}" '
+  if type != "object" then "payload is \(type), want object"
+  elif (.security_and_analysis | type) != "object" then ".security_and_analysis is \(.security_and_analysis | type), want object"
+  else empty
+  end'
+
 actions_perms_json="$(fetch_json ACTIONS_PERMS_JSON_OVERRIDE \
   "/repos/${THIS_REPO}/actions/permissions")"
+require_json_payload \
+  "$(payload_source_for ACTIONS_PERMS_JSON_OVERRIDE "/repos/${THIS_REPO}/actions/permissions")" \
+  "${actions_perms_json}" '
+  if type != "object" then "payload is \(type), want object"
+  elif (.allowed_actions | type) != "string" then ".allowed_actions is \(.allowed_actions | type), want string"
+  elif (.sha_pinning_required | type) != "boolean" then ".sha_pinning_required is \(.sha_pinning_required | type), want boolean"
+  else empty
+  end'
+
 actions_workflow_perms_json="$(fetch_json ACTIONS_WORKFLOW_PERMS_JSON_OVERRIDE \
   "/repos/${THIS_REPO}/actions/permissions/workflow")"
+require_json_payload \
+  "$(payload_source_for ACTIONS_WORKFLOW_PERMS_JSON_OVERRIDE "/repos/${THIS_REPO}/actions/permissions/workflow")" \
+  "${actions_workflow_perms_json}" '
+  if type != "object" then "payload is \(type), want object"
+  elif (.default_workflow_permissions | type) != "string" then ".default_workflow_permissions is \(.default_workflow_permissions | type), want string"
+  elif (.can_approve_pull_request_reviews | type) != "boolean" then ".can_approve_pull_request_reviews is \(.can_approve_pull_request_reviews | type), want boolean"
+  else empty
+  end'
+
 env_github_pages_json="$(fetch_json ENV_GITHUB_PAGES_JSON_OVERRIDE \
   "/repos/${THIS_REPO}/environments/github-pages")"
+require_json_payload \
+  "$(payload_source_for ENV_GITHUB_PAGES_JSON_OVERRIDE "/repos/${THIS_REPO}/environments/github-pages")" \
+  "${env_github_pages_json}" '
+  if type != "object" then "payload is \(type), want object"
+  elif (.can_admins_bypass | type) != "boolean" then ".can_admins_bypass is \(.can_admins_bypass | type), want boolean"
+  else empty
+  end'
 
 # --- Security & analysis ----------------------------------------------------
 
