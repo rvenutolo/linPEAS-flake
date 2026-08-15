@@ -2,7 +2,8 @@
 # tests/bump-linpeas.test.sh — proves scripts/bump-linpeas.sh's pin-file
 # and upstream-release payload reads are shape-gated to a could-not-run
 # (exit 2, source named by kind), never the raw `jq` crash or the
-# exit-1/exit-0 misreads an unguarded read used to produce.
+# exit-1/exit-0 misreads an unguarded read of the same payload would
+# produce.
 #
 # bump-linpeas.sh downloads a release asset and rewrites linpeas-pin.json
 # on any run that reaches its happy path, so every scenario here stubs

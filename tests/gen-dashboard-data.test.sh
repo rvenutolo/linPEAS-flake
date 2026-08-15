@@ -389,10 +389,11 @@ function main() {
 
   # Scenario 3: missing required upstream field (tag_name). Pin is good so
   # we reach the upstream-release fetch. A GitHub release object always
-  # carries tag_name, so its absence is a payload-shape fault the
-  # require_json_payload gate now catches before require_field ever runs —
-  # this scenario used to pin that gap (exit 1, "required field missing",
-  # the same substantive-drift misreport this task's gate exists to close).
+  # carries tag_name, so its absence is a payload-shape fault:
+  # require_json_payload catches it before require_field ever runs, which
+  # is what closes the substantive-drift misreport a bare require_field
+  # check on an unguarded read would otherwise produce (exit 1, "required
+  # field missing", indistinguishable from a real posture change).
   run_scenario 'missing upstream_release.tag_name is a tooling error' \
     'unexpected payload shape from UPSTREAM_RELEASE_JSON_OVERRIDE: .tag_name is null, want string' 2 \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
@@ -405,10 +406,11 @@ function main() {
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/linpeas-pin-absent.json"
 
   # Scenario 3c-e: a malformed pin payload is a could-not-run, not the raw
-  # `jq` crash the unguarded reads used to produce and not the require_field
-  # drift path. Reuses PIN_FILE_OVERRIDE (scenarios 1-3 above already prove
-  # it selects the pin source); each fixture trips a different
-  # require_json_payload diagnostic so the three scenarios stay distinct.
+  # `jq` crash an unguarded read of it would produce and not the
+  # require_field drift path. Reuses PIN_FILE_OVERRIDE (scenarios 1-3
+  # above already prove it selects the pin source); each fixture trips a
+  # different require_json_payload diagnostic so the three scenarios stay
+  # distinct.
   run_scenario 'empty pin payload is a tooling error' \
     'empty payload from PIN_FILE_OVERRIDE' 2 \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/bad-pin-empty.json"
