@@ -63,6 +63,10 @@ tests/fixtures/job-timeout-minutes/bad-malformed.yml
 tests/fixtures/permission-scopes/bad-malformed.yml
 tests/fixtures/permission-scopes/malformed-allowlist/allowlist.yml
 tests/fixtures/pr-workflows-no-secrets/bad-malformed.yml
+tests/fixtures/renovate-invariants/bad-empty-payload.json
+tests/fixtures/renovate-invariants/bad-not-json.json
+tests/fixtures/renovate-markers/bad-empty-payload/renovate.json
+tests/fixtures/renovate-markers/bad-not-json/renovate.json
 tests/fixtures/required-checks/*
 tests/fixtures/run-block-strict/bad-malformed.yml
 tests/fixtures/scorecard-threshold/malformed.json

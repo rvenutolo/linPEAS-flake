@@ -761,7 +761,7 @@ cannot run — the config file is absent, or the validator itself is not
 on PATH. Neither says anything about the config's validity, so neither
 may borrow the rejection code.
 
-payload-subject-exempt: RENOVATE_JSON_OVERRIDE defaults to the same in-tree renovate.json — maintainer-authored config that lands through PR review, not an externally-supplied payload
+payload-subject-exempt: a malformed config is this script's verdict, not an obstacle to it — the validator rejects one at exit 1, so there is no could-not-run outcome for a scenario to prove
 
 ### scripts/check-renovate-invariants.sh
 
@@ -783,8 +783,6 @@ where value + `# renovate:` share a line; and above, where the comment sits
 on its own line and the matched value is on the next). Asserting the marker's
 file is consumed by a live manager handles both without a line-adjacency
 heuristic.
-
-payload-subject-exempt: renovate.json is maintainer-authored, in-tree config that lands through PR review, not an externally-supplied payload
 
 Honors RENOVATE_JSON_OVERRIDE (config path) and SCAN_ROOT (tree root) for
 fixture testing, and LINT_ALLOW_EMPTY_SCAN=1 to accept an empty scan set.

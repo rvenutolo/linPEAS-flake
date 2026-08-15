@@ -62,7 +62,7 @@ function main() {
   run_scenario 'good config passes' \
     'good.json' 0 ''
   run_scenario 'missing minimumReleaseAge fails' \
-    'bad-no-min-age.json' 1 'minimumReleaseAge'
+    'bad-no-min-age.json' 1 'minimumReleaseAge not set'
   run_scenario 'top-level automerge fails' \
     'bad-toplevel-automerge.json' 1 'top-level automerge'
   run_scenario 'missing pinDigests fails' \
@@ -73,6 +73,30 @@ function main() {
   # input, not a dropped invariant.
   run_scenario 'absent config is a tooling error' \
     'no-such-config.json' 2 'renovate config not found'
+  # A malformed payload is a could-not-run, not drift. Every read below
+  # the gate assumes a shape the config file does not guarantee, and a
+  # jq parse failure inverted by `if !` reads as a dropped invariant —
+  # sending a maintainer after a setting nobody touched. Each scenario
+  # names the fault the gate rejected, never the fixture that carried it.
+  run_scenario 'malformed payload that is not JSON is a tooling error' \
+    'bad-not-json.json' 2 'payload from RENOVATE_JSON_OVERRIDE is not valid JSON'
+  run_scenario 'empty payload is a tooling error' \
+    'bad-empty-payload.json' 2 'empty payload from RENOVATE_JSON_OVERRIDE'
+  run_scenario 'array-typed payload is a tooling error' \
+    'bad-top-level-array.json' 2 \
+    'unexpected payload shape from RENOVATE_JSON_OVERRIDE: payload is array, want object'
+  run_scenario 'string-typed extends is a tooling error' \
+    'bad-extends-type.json' 2 \
+    'unexpected payload shape from RENOVATE_JSON_OVERRIDE: .extends is string, want array'
+  run_scenario 'non-object packageRules entry is a tooling error' \
+    'bad-package-rules-item-type.json' 2 \
+    'unexpected payload shape from RENOVATE_JSON_OVERRIDE: a packageRules entry is not an object'
+  run_scenario 'number-typed minimumReleaseAge is a tooling error' \
+    'bad-min-age-type.json' 2 \
+    'unexpected payload shape from RENOVATE_JSON_OVERRIDE: .minimumReleaseAge is number, want string'
+  run_scenario 'string-typed packageRules is a tooling error' \
+    'bad-package-rules-type.json' 2 \
+    'unexpected payload shape from RENOVATE_JSON_OVERRIDE: .packageRules is string, want array'
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then

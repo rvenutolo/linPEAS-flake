@@ -62,15 +62,16 @@ the harness on any substring that does not discriminate.
 
 Environment-variable overrides scoped to test invocation:
 
-| Variable                         | Script                         | Purpose                           |
-| -------------------------------- | ------------------------------ | --------------------------------- |
-| `WORKFLOWS_DIR_OVERRIDE`         | `check-uses-sha-pinned.sh`     | swap the workflows scan root      |
-| `WORKFLOW_FILE_FILTER`           | `check-uses-sha-pinned.sh`     | restrict to a single fixture file |
-| `RENOVATE_FILE_OVERRIDE`         | `check-renovate-invariants.sh` | swap the renovate.json path       |
-| `TAG_PROTECTION_FIXTURE`         | `check-tag-protection.sh`      | swap the rulesets JSON path       |
-| `PIN_FILE_OVERRIDE`              | `gen-dashboard-data.sh`        | swap the linpeas-pin.json path    |
-| `UPSTREAM_RELEASE_JSON_OVERRIDE` | `gen-dashboard-data.sh`        | swap upstream release JSON        |
-| `LATEST_RELEASE_JSON_OVERRIDE`   | `gen-dashboard-data.sh`        | swap rvenutolo release JSON       |
+| Variable                         | Script                                                                                                    | Purpose                           |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `WORKFLOWS_DIR_OVERRIDE`         | `check-uses-sha-pinned.sh`                                                                                | swap the workflows scan root      |
+| `WORKFLOW_FILE_FILTER`           | `check-uses-sha-pinned.sh`                                                                                | restrict to a single fixture file |
+| `RENOVATE_JSON_OVERRIDE`         | `check-renovate-invariants.sh`, `check-renovate-markers-matched.sh`, `check-renovate-config-validator.sh` | swap the renovate.json path       |
+| `SCAN_ROOT`                      | `check-renovate-markers-matched.sh`                                                                       | swap the scanned tree root        |
+| `TAG_PROTECTION_FIXTURE`         | `check-tag-protection.sh`                                                                                 | swap the rulesets JSON path       |
+| `PIN_FILE_OVERRIDE`              | `gen-dashboard-data.sh`                                                                                   | swap the linpeas-pin.json path    |
+| `UPSTREAM_RELEASE_JSON_OVERRIDE` | `gen-dashboard-data.sh`                                                                                   | swap upstream release JSON        |
+| `LATEST_RELEASE_JSON_OVERRIDE`   | `gen-dashboard-data.sh`                                                                                   | swap rvenutolo release JSON       |
 
 Each script defines its own overrides — check the script for the
 canonical list before writing a new test.

@@ -13,13 +13,19 @@
 #   4. github-actions packageRule sets pinDigests: true
 #
 # Honors RENOVATE_JSON_OVERRIDE for fixture testing.
-# payload-subject-exempt: renovate.json is maintainer-authored, in-tree config that lands through PR review, not an externally-supplied payload
 # Exits 0 on intact invariants, 1 on drift, 2 when the config file is
 # absent — no invariant was read, so reporting one as dropped would send
 # a maintainer after a setting nobody touched.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+
+_lib_dir="${BASH_SOURCE[0]%/*}"
+if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
+# shellcheck source=scripts/lib/log.sh
+source "${_lib_dir}/lib/log.sh"
+# shellcheck source=scripts/lib/payload.sh
+source "${_lib_dir}/lib/payload.sh"
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
 readonly REPO_ROOT
@@ -30,6 +36,44 @@ if [[ ! -f ${path} ]]; then
   printf 'renovate config not found: %s\n' "${path}" >&2
   exit 2
 fi
+
+# Name the payload's source by kind — the override variable when a fixture
+# supplies it, the config's repo-relative name otherwise. Never the resolved
+# path: a path in a diagnostic lets two harness scenarios be told apart by
+# their fixture rather than by their behavior.
+if [[ -n ${RENOVATE_JSON_OVERRIDE:-} ]]; then
+  payload_source='RENOVATE_JSON_OVERRIDE'
+else
+  payload_source='renovate.json'
+fi
+readonly payload_source
+
+if ! renovate_payload="$(cat -- "${path}")"; then
+  printf 'renovate config not readable: %s\n' "${payload_source}" >&2
+  exit 2
+fi
+readonly renovate_payload
+
+# One shape gate in front of every read. Each check below is written
+# `if ! jq -e … 2>/dev/null`, so without this gate a jq parse error is
+# inverted into the first check's drift branch and reported as a dropped
+# invariant with jq's own diagnostic discarded.
+#
+# The program asserts types only, never presence. An absent `extends`,
+# `minimumReleaseAge` or `packageRules` means the invariant genuinely is
+# not set, which is the posture verdict this lint exists to render (exit
+# 1). A wrong-typed one means the lint cannot judge the posture at all
+# (exit 2); `renovate-config-validator` renders the verdict on a
+# schema-invalid config in its own job. An explicit `null` is treated as
+# absent so it keeps reaching the drift checks below.
+require_json_payload "${payload_source}" "${renovate_payload}" '
+  if type != "object" then "payload is \(type), want object"
+  elif (.extends != null) and ((.extends | type) != "array") then ".extends is \(.extends | type), want array"
+  elif (.minimumReleaseAge != null) and ((.minimumReleaseAge | type) != "string") then ".minimumReleaseAge is \(.minimumReleaseAge | type), want string"
+  elif (.packageRules != null) and ((.packageRules | type) != "array") then ".packageRules is \(.packageRules | type), want array"
+  elif (.packageRules != null) and (any(.packageRules[]; type != "object")) then "a packageRules entry is not an object"
+  else empty
+  end'
 
 # 1. extends includes helpers:pinGitHubActionDigests
 if ! jq -e '.extends | type == "array" and any(. == "helpers:pinGitHubActionDigests")' "${path}" >/dev/null 2>&1; then
