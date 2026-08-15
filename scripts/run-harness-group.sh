@@ -29,6 +29,7 @@ readonly -a HARNESSES=(
   'lib-enumerate|lib-enumerate.test.sh|'
   'lib-temp|lib-temp.test.sh|'
   'lib-awk-path|lib-awk-path.test.sh|'
+  'lib-payload|lib-payload.test.sh|'
   'glob-scan-breadth|glob-scan-breadth.test.sh|'
   'harness-assert|lib-harness-assert.test.sh|'
   'harness-assert-wired|_harness_assert_wired.test.sh|'
