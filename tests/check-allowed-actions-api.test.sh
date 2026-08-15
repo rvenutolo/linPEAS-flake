@@ -20,11 +20,16 @@ failures=0
 # @arg $2 fixture subdir
 # @arg $3 expected exit
 # @arg $4 expected stderr substring (empty skips)
+# @arg $5 selected-actions payload filename under the fixture subdir
+#   (default selected-actions.json) — a scenario whose payload must stay
+#   invalid JSON names a non-.json file here so prettier's `*.json`
+#   include never touches it
 function run_scenario() {
   local -r name="$1"
   local -r fixture_dir="$2"
   local -r expected_exit="$3"
   local -r expected_stderr="$4"
+  local -r selected_file="${5:-selected-actions.json}"
 
   local stderr_file stdout_file outcome_file
   stderr_file="$(mktemp)"
@@ -32,7 +37,7 @@ function run_scenario() {
   outcome_file="$(mktemp)"
 
   local actual_exit=0
-  SELECTED_ACTIONS_JSON_OVERRIDE="${FIXTURES}/${fixture_dir}/selected-actions.json" \
+  SELECTED_ACTIONS_JSON_OVERRIDE="${FIXTURES}/${fixture_dir}/${selected_file}" \
     ALLOWED_ACTIONS_DOC_OVERRIDE="${FIXTURES}/${fixture_dir}/allowed-actions.md" \
     "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
@@ -78,13 +83,29 @@ function main() {
   # that would point at the live API state.
   run_scenario 'missing allowlist doc could not run' \
     'does-not-exist' 2 'allowed-actions doc not found'
+  # A malformed selected-actions payload is a could-not-run, not drift
+  # or a raw jq crash: each scenario reuses the good allowlist doc and
+  # varies only the API payload, naming the source kind rather than the
+  # fixture path.
+  run_scenario 'empty selected-actions payload is a tooling error' \
+    'bad-selected-empty' 2 'empty payload from SELECTED_ACTIONS_JSON_OVERRIDE'
+  run_scenario 'selected-actions payload that is not JSON is a tooling error' \
+    'bad-selected-not-json' 2 \
+    'payload from SELECTED_ACTIONS_JSON_OVERRIDE is not valid JSON' \
+    'selected-payload.txt'
+  run_scenario 'boolean-typed selected-actions payload is a tooling error' \
+    'bad-selected-wrong-type' 2 \
+    'unexpected payload shape from SELECTED_ACTIONS_JSON_OVERRIDE: payload is boolean, want object'
 
-  # bad-multiple must surface every drift (github_owned, verified, extra
-  # vendor) in a single run — count drift lines. Its offending value for
-  # each key differs from the single-drift fixture covering that key, so
-  # no single-drift assertion can be satisfied by this fixture's output:
-  # the booleans arrive absent (the script reads them as `null`) rather
-  # than flipped, and the unlisted vendor pattern is its own.
+  # bad-multiple must surface every drift in a single run — count drift
+  # lines. It carries the good posture's booleans (a boolean has only
+  # one wrong value, which the single-drift boolean scenarios above
+  # already claim as their asserted substring; reusing it here would
+  # make this scenario's output byte-for-byte overlap with theirs on
+  # that line) and instead derives all three drifts from
+  # `patterns_allowed`: two vendors present on the API but absent from
+  # the doc, one vendor declared in the doc but absent from the API —
+  # none of which the single-vendor scenarios above name.
   local stderr_file
   stderr_file="$(mktemp)"
   SELECTED_ACTIONS_JSON_OVERRIDE="${FIXTURES}/bad-multiple/selected-actions.json" \

@@ -7,7 +7,6 @@ actions/*
 DavidAnson/*
 github/*
 peter-evans/*
-contoso/*
 ```
 
 ## Why this exists
