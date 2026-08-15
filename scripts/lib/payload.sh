@@ -25,8 +25,13 @@
 # scenarios be told apart by their fixture rather than by their
 # behavior.
 #
-# jq reads empty input as no input at all and exits 0, so emptiness is
-# checked here rather than left to the shape program.
+# An empty or whitespace-only payload also fails the parse check below —
+# `jq --exit-status` reports no-output as a failure regardless of why
+# the input produced none — so this check is not what stands between
+# such a payload and acceptance. It exists for diagnostic precision: a
+# producer that wrote nothing and a producer that wrote garbage are
+# different faults with different operator remedies, and the parse
+# check's own diagnostic names only the garbage case.
 #
 # @arg $1 source kind, used verbatim in every diagnostic
 # @arg $2 the payload

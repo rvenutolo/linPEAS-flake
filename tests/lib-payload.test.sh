@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # tests/lib-payload.test.sh — proves scripts/lib/payload.sh's
 # require_json_payload treats an empty payload, a whitespace-only
-# payload, an unparsable payload, and a shape-program-rejected payload
-# all as a could-not-run (exit 2, never exit 1), that a well-formed
-# payload falls through with and without a shape program, and that an
-# absent jq is reported the same way require_tool reports any other
-# missing tool.
+# payload, an unparsable payload, a shape-program-rejected payload, and
+# a shape program that itself errors evaluating the payload all as a
+# could-not-run (exit 2, never exit 1), that a well-formed payload falls
+# through with and without a shape program, and that an absent jq is
+# reported the same way require_tool reports any other missing tool.
 set -Eeuo pipefail
 IFS=$'\n\t'
 
@@ -101,13 +101,13 @@ else
   cat -- "${work}/empty.out" "${work}/empty.err" >&2
 fi
 
-# 2. whitespace — a whitespace-only payload is a could-not-run for the
-# same reason an empty one is. jq reads whitespace-only input as no
-# input at all and exits 0 on `jq --exit-status type`, so a check that
-# tests `[[ -z ${payload} ]]` rather than stripping whitespace first
-# would let this payload fall through the parse check as "valid JSON"
-# and score a garbage payload clean — exactly the failure mode this
-# library exists to close. This scenario is what proves the stripping.
+# 2. whitespace — a whitespace-only payload gets the same diagnostic as
+# a genuinely empty one, which is what proves the emptiness check strips
+# whitespace before testing length: `[[ -z ${payload} ]]` alone would
+# treat this payload as non-empty and let it fall to the parse check
+# below instead, which also rejects it (`jq --exit-status` reports
+# no-output as a failure) but under that check's own "not valid JSON"
+# diagnostic rather than this scenario's "empty payload" one.
 run_scenario 'whitespace' 'WHITESPACE_SOURCE' '   ' '' 'canary-whitespace' \
   'empty payload from WHITESPACE_SOURCE' ''
 if [[ ${rc} -eq 2 ]] &&
@@ -177,6 +177,24 @@ if [[ ${rc} -eq 2 ]] &&
 else
   fail "absent-jq: expected exit 2 + 'missing required tool: jq', got exit ${rc}"
   cat -- "${work}/absent-jq.out" "${work}/absent-jq.err" >&2
+fi
+
+# 8. shape-error — the shape program itself can fail independently of
+# whether the payload is well-formed JSON: `.a.b` asks to index a number
+# as an object, which is a well-formed JSON payload the shape program
+# cannot evaluate. This is a distinct fault from shape-reject (5. above,
+# where the shape program runs fine and reports the mismatch itself) and
+# is what exercises the status check on the shape program's own jq
+# invocation.
+run_scenario 'shape-error' 'SHAPE_ERROR_SOURCE' '{"a":1}' '.a.b' \
+  'canary-shape-error' 'could not be read for shape' ''
+if [[ ${rc} -eq 2 ]] &&
+  grep --fixed-strings --quiet -- 'payload from SHAPE_ERROR_SOURCE could not be read for shape' \
+    "${work}/shape-error.err"; then
+  pass 'shape-error: a shape program that itself errors is exit 2, names the source kind'
+else
+  fail "shape-error: expected exit 2 + 'payload from SHAPE_ERROR_SOURCE could not be read for shape', got exit ${rc}"
+  cat -- "${work}/shape-error.out" "${work}/shape-error.err" >&2
 fi
 
 harness_assert_verify || failures=$((failures + 1))
