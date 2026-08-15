@@ -13,6 +13,7 @@
 #   4. github-actions packageRule sets pinDigests: true
 #
 # Honors RENOVATE_JSON_OVERRIDE for fixture testing.
+# payload-subject-exempt: renovate.json is maintainer-authored, in-tree config that lands through PR review, not an externally-supplied payload
 # Exits 0 on intact invariants, 1 on drift, 2 when the config file is
 # absent — no invariant was read, so reporting one as dropped would send
 # a maintainer after a setting nobody touched.

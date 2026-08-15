@@ -26,6 +26,8 @@
 # the scan could not run because the scripts directory is missing. A
 # directory that was never scanned holds no offenders, so it must not
 # borrow the violation code.
+#
+# payload-subject-exempt: matches only because it scans other scripts' source text for the literal string "gh api" — it issues no API call and consumes no external payload itself
 
 set -Eeuo pipefail
 IFS=$'\n\t'

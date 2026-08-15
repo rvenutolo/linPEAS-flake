@@ -59,6 +59,7 @@ readonly -a HARNESSES=(
   'run-harness-group|run-harness-group.test.sh|'
   'run-lint-group|run-lint-group.test.sh|'
   'linpeas-pin-assert|linpeas-pin-assert.test.sh|'
+  'payload-shape-scenario|check-payload-shape-scenario.test.sh|'
 )
 
 function main() {
