@@ -30,9 +30,10 @@
 #                                        PEASS-ng/releases/download/
 #   6. Atomic write: make_temp + mv; never `>` redirect to the final path.
 #   7. Inputs the generator cannot even read — a required CLI tool absent
-#      from PATH, or a missing pin file — exit 2, not 1. Those say
-#      nothing about the pin's contents, and exit 1 is reserved for data
-#      that was read and found bad.
+#      from PATH, a missing pin file, or a pin/upstream-release/releases
+#      payload that is empty, unparsable, or the wrong shape — exit 2,
+#      not 1. Those say nothing about the pin's contents, and exit 1 is
+#      reserved for data that was read and found bad.
 #
 # Exits 0 on success.
 
@@ -44,6 +45,8 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+# shellcheck source=scripts/lib/payload.sh
+source "${_lib_dir}/lib/payload.sh"
 install_err_trap
 
 # @description Verify a JSON-extracted field is non-empty and not 'null';
@@ -79,6 +82,23 @@ function fetch_or_override() {
     cat -- "${override_path}"
   else
     gh api --header 'X-GitHub-Api-Version: 2022-11-28' -- "${api_path}"
+  fi
+}
+
+# @description Name a fetch_or_override payload's source by kind for a
+# could-not-run diagnostic: the override variable's name when a fixture
+# supplies it, the API path otherwise. Never the override's value — a
+# fixture path never belongs in a diagnostic an operator or the
+# distinct-output harness gate compares.
+# @arg $1 override env-var name
+# @arg $2 gh api path used when the override is unset
+function payload_source_for() {
+  local -r override_var="$1" api_path="$2"
+  local -r override_path="${!override_var:-}"
+  if [[ -n ${override_path} ]]; then
+    printf '%s' "${override_var}"
+  else
+    printf '%s' "${api_path}"
   fi
 }
 
@@ -141,9 +161,23 @@ function main() {
   mkdir --parents "$(dirname -- "${out_file}")"
 
   log_info 'gathering pin + upstream data'
+  local pin_json pin_source
+  pin_json="$(cat -- "${pin_file}")"
+  if [[ -n ${PIN_FILE_OVERRIDE:-} ]]; then
+    pin_source='PIN_FILE_OVERRIDE'
+  else
+    pin_source='linpeas-pin.json'
+  fi
+  require_json_payload "${pin_source}" "${pin_json}" '
+    if type != "object" then "payload is \(type), want object"
+    elif (.version | type) != "string" then ".version is \(.version | type), want string"
+    elif (.url | type) != "string" then ".url is \(.url | type), want string"
+    else empty
+    end'
+
   local pin_version pin_url upstream_tag upstream_date
-  pin_version="$(jq --raw-output .version "${pin_file}")"
-  pin_url="$(jq --raw-output .url "${pin_file}")"
+  pin_version="$(jq --raw-output .version <<<"${pin_json}")"
+  pin_url="$(jq --raw-output .url <<<"${pin_json}")"
   require_field "${pin_version}" 'pin.version'
   require_field "${pin_url}" 'pin.url'
   if [[ ! ${pin_version} =~ ${VERSION_REGEX} ]]; then
@@ -163,6 +197,14 @@ function main() {
   local upstream_release
   upstream_release="$(fetch_or_override UPSTREAM_RELEASE_JSON_OVERRIDE \
     "repos/${UPSTREAM_REPO}/releases/latest")"
+  require_json_payload \
+    "$(payload_source_for UPSTREAM_RELEASE_JSON_OVERRIDE "repos/${UPSTREAM_REPO}/releases/latest")" \
+    "${upstream_release}" '
+    if type != "object" then "payload is \(type), want object"
+    elif (.tag_name | type) != "string" then ".tag_name is \(.tag_name | type), want string"
+    elif (.published_at | type) != "string" then ".published_at is \(.published_at | type), want string"
+    else empty
+    end'
   upstream_tag="$(jq --raw-output .tag_name <<<"${upstream_release}")"
   upstream_date="$(jq --raw-output .published_at <<<"${upstream_release}")"
   require_field "${upstream_tag}" 'upstream_release.tag_name'
@@ -198,11 +240,27 @@ function main() {
   local releases_json
   releases_json="$(fetch_or_override THIS_REPO_RELEASES_JSON_OVERRIDE \
     "repos/${THIS_REPO}/releases?per_page=20")"
+  require_json_payload \
+    "$(payload_source_for THIS_REPO_RELEASES_JSON_OVERRIDE "repos/${THIS_REPO}/releases?per_page=20")" \
+    "${releases_json}" '
+    if type != "array" then "payload is \(type), want array"
+    elif (any(.[]; (.tag_name | type) != "string")) then "a release entry .tag_name is not a string"
+    elif (any(.[]; (.published_at | type) != "string")) then "a release entry .published_at is not a string"
+    else empty
+    end'
 
   log_info 'gathering recent upstream releases'
   local upstream_releases_json
   upstream_releases_json="$(fetch_or_override UPSTREAM_RELEASES_JSON_OVERRIDE \
     "repos/${UPSTREAM_REPO}/releases?per_page=20")"
+  require_json_payload \
+    "$(payload_source_for UPSTREAM_RELEASES_JSON_OVERRIDE "repos/${UPSTREAM_REPO}/releases?per_page=20")" \
+    "${upstream_releases_json}" '
+    if type != "array" then "payload is \(type), want array"
+    elif (any(.[]; (.tag_name | type) != "string")) then "a release entry .tag_name is not a string"
+    elif (any(.[]; (.published_at | type) != "string")) then "a release entry .published_at is not a string"
+    else empty
+    end'
 
   log_info 'gathering last bump PR'
   local bump_pr_json bump_pr_url bump_pr_number bump_pr_merged_at
