@@ -538,25 +538,36 @@ JSON Schemas using `check-jsonschema`.
 
 ### scripts/check-lib-source-tool-free.sh
 
-Lint: every `source .../lib/*.sh` line under `scripts/`
-resolves its library directory by parameter expansion, never through a
-command substitution.
+Lint: `BASH_SOURCE` never appears inside a command
+substitution anywhere under `scripts/`, sourced libraries included.
 
-A source line spelled `source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"` needs `readlink` and `dirname` on
-PATH, and it runs above the guard that exists to name a missing tool.
-A script whose PATH lacks them therefore dies at exit 127 naming
-`readlink` — a could-not-run reported under neither the code the
-convention reserves for it nor a diagnostic that names what was
-actually absent. `${BASH_SOURCE[0]%/*}` needs nothing on PATH.
+`BASH_SOURCE[0]` is how a script locates its own directory to source a
+shared library. Feeding it through a command substitution needs
+`readlink` and/or `dirname` on PATH, and runs above the guard whose
+whole job is naming a missing tool — a script whose PATH lacks either
+tool dies at exit 127 naming `readlink`, a could-not-run reported
+under neither the exit code this repo reserves for it (2) nor a
+diagnostic naming what was actually absent. That is true wherever the
+substitution sits: directly on the `source` line (`source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/log.sh"`), or one
+line earlier into a variable the `source` line then reads (`_lib_dir=" $(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"` followed by `source "${_lib_dir}/lib/log.sh"`) — the second placement dies the same way
+under a stripped PATH, so the rule scans every line of every file
+rather than source lines alone. `${BASH_SOURCE[0]%/*}` needs nothing
+on PATH: the shell performs the trim itself, with a `.` fallback for a
+bare-filename invocation where the expansion strips nothing.
 
-Only the resolution mechanism is gated. A bare `${BASH_SOURCE[0]%/*}`
-with no bare-filename fallback stays legal: it is tool-free, and the
-case it misses is an invocation no caller in this repo makes.
+Only the resolution mechanism is gated, not the variable it lands in
+or the line it lands on. A bare `${BASH_SOURCE[0]%/*}` with no
+bare-filename fallback stays legal: it is tool-free, and the case it
+misses is an invocation no caller in this repo makes. A comment line
+may still name the banned shape without tripping the check on its own
+documentation.
 
-Breadth is asserted rather than inferred: the run reports how many
-source lines it read, and reading none is a broken scan reported as a
-could-not-run rather than a clean tree. `LINT_ALLOW_EMPTY_SCAN=1`
-suppresses that guard for a scan root that deliberately holds nothing.
+Breadth is asserted on a narrower count than the violation scan: the
+run reports how many library `source .../lib/*.sh` lines it read, and
+reading none is a broken scan reported as a could-not-run rather than
+a clean tree, whether the scan root holds no shell script at all or
+holds scripts that never source a library. `LINT_ALLOW_EMPTY_SCAN=1`
+suppresses that guard for a scan root that deliberately holds none.
 
 Honors SCRIPTS_DIR_OVERRIDE for fixtures. Exits 0 clean, 1 on any
 violation, 2 if the scan set is empty or unreadable.

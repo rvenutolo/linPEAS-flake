@@ -55,6 +55,12 @@ function expect() {
 }
 
 function main() {
+  # readlink and dirname put the same BASH_SOURCE-in-a-command-substitution
+  # hit on the source line itself, via two different tools; the lint's
+  # single rule fires on the shape either way, so these two scenarios
+  # cover two *placements* of one rule, not two independent branches.
+  # Deleting the rule flips both together (see the mutation notes in the
+  # task report), which is expected, not a discrimination failure.
   expect 'readlink resolution is a violation' \
     "${FIXTURES}/readlink/scripts" 1 \
     'uses-readlink.sh'
@@ -62,6 +68,13 @@ function main() {
   expect 'dirname resolution is a violation' \
     "${FIXTURES}/dirname/scripts" 1 \
     'uses-dirname.sh'
+
+  # The command substitution lands one line above the source line, in the
+  # variable the source line only reads. A rule scoped to source lines
+  # alone scores this tool-free; the rule here scans every line.
+  expect 'off-source-line resolution is a violation' \
+    "${FIXTURES}/off-source-line/scripts" 1 \
+    'split-resolution.sh'
 
   expect 'tool-free resolution is clean' \
     "${FIXTURES}/clean/scripts" 0 ''
@@ -74,6 +87,15 @@ function main() {
 
   expect 'empty scan root passes when allowed' \
     "${FIXTURES}/empty/scripts" 0 '' 1
+
+  # One real .sh file exists here, so glob_into is satisfied; the file
+  # just never sources a library, so the script's own source-line tally
+  # is what reports the could-not-run this time.
+  expect 'a scan root with no library source line is a could-not-run' \
+    "${FIXTURES}/no-source-lines/scripts" 2 'scanned 0'
+
+  expect 'a scan root with no library source line passes when allowed' \
+    "${FIXTURES}/no-source-lines/scripts" 0 '' 1
 
   expect 'the live tree is clean' \
     "${REPO_ROOT}/scripts" 0 ''
