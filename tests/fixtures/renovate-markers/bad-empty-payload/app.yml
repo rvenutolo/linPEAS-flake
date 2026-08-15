@@ -1,0 +1,1 @@
+image: app:v1.2.3 # renovate: datasource=docker depName=app packageName=app
