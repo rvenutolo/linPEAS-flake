@@ -690,6 +690,80 @@ existence*, not the gate's source text: grepping a script for
 scenario never exercises, and would fail a script whose gate is
 hand-rolled (die_op) but genuinely covered.
 
+### scripts/check-payload-source-helper.sh
+
+Lint: no shell file names a payload's source by hand.
+`payload_source_into` (scripts/lib/payload.sh) fills a caller variable
+with the override variable's name when a fixture supplies the payload
+and with the API route or config filename otherwise, so an assignment
+that sets a variable to a bare `*_OVERRIDE` variable name is a copy of
+a rule the library already owns. Ten such copies existed across nine
+scripts, in two spellings that had already drifted apart from each
+other, which is what a rule with no enforcer costs: the shape gate they
+all feed reads the source name verbatim into every diagnostic, so a
+copy that resolves the override differently from the reader beside it
+names a source the run never used.
+
+--- Why an AST, not a grep ----------------------------------------------
+
+The banned shape is a text-shaped shortcut, and a gate whose purpose is
+rejecting one must not accept one itself. A textual matcher keyed on
+`=('|")?[A-Z_]*_OVERRIDE` reads the override name out of prose, out of
+a heredoc, and out of this file's own diagnostics; it also misses the
+same assignment written unquoted. `shfmt --to-json` answers the only
+question that matters — is this a variable assignment whose entire
+value is one literal word spelling an override variable's name — and
+answers it identically for all three spellings the parser distinguishes:
+a single-quoted word, a bare literal word, and a double-quoted word
+wrapping one literal part.
+
+Both `CallExpr` assignments (`src='X_OVERRIDE'`) and `DeclClause`
+arguments (`local src='X_OVERRIDE'`, `readonly`, `declare`, `export`)
+are read. The parser files those under different node types, and the
+two scripts that named a source inside a function body would have had
+the declared form available to them, so a scan of bare assignments
+alone leaves the shape most likely to be written next unreachable.
+
+--- Exemption -----------------------------------------------------------
+
+An assignment that spells an override variable's name for some reason
+other than naming a payload source — an operator message telling a
+reader which variable to set, say — is excused by an inline
+`# payload-source-exempt: <rationale>` marker anywhere in the file,
+matching this repo's existing `payload-subject-exempt` /
+`enumerate-exempt` / `glob-exempt` convention: the rationale lives
+beside the code it excuses rather than in a hand-maintained doc table
+that drifts silently. A marker with an empty rationale excuses nothing
+— an exemption nobody has to justify is a way to switch the rule off in
+place. A marker on a file holding no assignment the rule matches is
+itself reported, and that report is produced before any violation is,
+so a stale marker surfaces on a tree where the rule is otherwise
+obeyed everywhere.
+
+--- Breadth -------------------------------------------------------------
+
+The scan set is `<scripts>/*.sh`, `<scripts>/lib/*.sh` and
+`<tests>/*.sh`. The library arm is not optional: the helper itself
+lives there, its neighbors are the files most likely to copy it, and
+the older shell-hygiene lints in this repo stop at the top level. The
+clean verdict reports files scanned and assignments examined rather
+than a bare "ok", because a detector that stopped reaching assignments
+and a tree with nothing to report emit the same exit code otherwise.
+
+Measured, not assumed: this file's own prose does not self-match. The
+finished lint run against a scan root holding only this script reports
+zero violations across the 30 assignments it examines there — every
+mention of the banned shape here is a comment or a format string,
+neither of which the parser files as an assignment — so this file needs
+no exemption marker of its own.
+
+Honors SCRIPTS_DIR_OVERRIDE (default: scripts), TESTS_DIR_OVERRIDE
+(default: tests), and LINT_ALLOW_EMPTY_SCAN for a scan root that
+deliberately holds no assignment at all.
+Exit 0 clean, 1 on a hand-named source or a stale exemption marker,
+2 when the scan set cannot be enumerated, holds no assignment, a
+required tool is missing, or a file cannot be parsed as shell.
+
 ### scripts/check-permission-scopes.sh
 
 Per-job GITHUB_TOKEN write-scope allowlist lint for
