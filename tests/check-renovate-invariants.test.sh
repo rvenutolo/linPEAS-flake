@@ -62,7 +62,7 @@ function main() {
   run_scenario 'good config passes' \
     'good.json' 0 ''
   run_scenario 'missing minimumReleaseAge fails' \
-    'bad-no-min-age.json' 1 'minimumReleaseAge'
+    'bad-no-min-age.json' 1 'minimumReleaseAge not set'
   run_scenario 'top-level automerge fails' \
     'bad-toplevel-automerge.json' 1 'top-level automerge'
   run_scenario 'missing pinDigests fails' \
@@ -91,6 +91,12 @@ function main() {
   run_scenario 'non-object packageRules entry is a tooling error' \
     'bad-package-rules-item-type.json' 2 \
     'unexpected payload shape from RENOVATE_JSON_OVERRIDE: a packageRules entry is not an object'
+  run_scenario 'number-typed minimumReleaseAge is a tooling error' \
+    'bad-min-age-type.json' 2 \
+    'unexpected payload shape from RENOVATE_JSON_OVERRIDE: .minimumReleaseAge is number, want string'
+  run_scenario 'string-typed packageRules is a tooling error' \
+    'bad-package-rules-type.json' 2 \
+    'unexpected payload shape from RENOVATE_JSON_OVERRIDE: .packageRules is string, want array'
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
