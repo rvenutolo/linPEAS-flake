@@ -106,17 +106,12 @@ selected_json="$(fetch_selected_actions)"
 
 # The selected-actions payload is either a fixture path or the
 # selected-actions API's response, and every read below assumes a shape
-# neither source guarantees. Name the source by kind, never by fixture
-# path, so a malformed payload is reported as a could-not-run instead of
-# raw jq noise or drift nobody caused. `.patterns_allowed` has no
-# `has()` guard here: the read below iterates it with `.patterns_allowed[]`
-# and no `// []` fallback, so an absent field would crash that read the
-# same as a wrong-typed one.
-if [[ -n ${SELECTED_ACTIONS_JSON_OVERRIDE:-} ]]; then
-  selected_source='SELECTED_ACTIONS_JSON_OVERRIDE'
-else
-  selected_source="/repos/${THIS_REPO}/actions/permissions/selected-actions"
-fi
+# neither source guarantees. `.patterns_allowed` has no `has()` guard in
+# the shape program below: the read that follows iterates it with
+# `.patterns_allowed[]` and no `// []` fallback, so an absent field would
+# crash that read the same as a wrong-typed one.
+payload_source_into selected_source SELECTED_ACTIONS_JSON_OVERRIDE \
+  "/repos/${THIS_REPO}/actions/permissions/selected-actions"
 readonly selected_source
 require_json_payload "${selected_source}" "${selected_json}" '
   if type != "object" then "payload is \(type), want object"

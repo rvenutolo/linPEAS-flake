@@ -80,15 +80,9 @@ fi
 # flake.lock is written by `nix flake update` from remote input
 # metadata (or, for pre-commit-hooks specifically, kept in URL-SHA sync
 # by the renovate-flake-lock-refresh workflow), and the read below
-# assumes a shape neither source guarantees. Name the source by kind —
-# the override variable when a fixture supplies it, the tracked file's
-# own name otherwise — never by fixture path.
+# assumes a shape neither source guarantees.
 flake_lock_json="$(cat -- "${FLAKE_LOCK}")"
-if [[ -n ${FLAKE_LOCK_OVERRIDE:-} ]]; then
-  flake_lock_source='FLAKE_LOCK_OVERRIDE'
-else
-  flake_lock_source='flake.lock'
-fi
+payload_source_into flake_lock_source FLAKE_LOCK_OVERRIDE 'flake.lock'
 readonly flake_lock_source
 
 require_json_payload "${flake_lock_source}" "${flake_lock_json}" '

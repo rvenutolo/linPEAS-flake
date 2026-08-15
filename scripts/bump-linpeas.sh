@@ -53,11 +53,7 @@ function main() {
 
   local pin_json pin_source
   pin_json="$(cat -- "${pin_file}")"
-  if [[ -n ${PIN_FILE_OVERRIDE:-} ]]; then
-    pin_source='PIN_FILE_OVERRIDE'
-  else
-    pin_source='linpeas-pin.json'
-  fi
+  payload_source_into pin_source PIN_FILE_OVERRIDE 'linpeas-pin.json'
   require_json_payload "${pin_source}" "${pin_json}" '
     if type != "object" then "payload is \(type), want object"
     elif (.version | type) != "string" then ".version is \(.version | type), want string"

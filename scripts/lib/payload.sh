@@ -80,3 +80,61 @@ function require_json_payload() {
     exit 2
   fi
 }
+
+# @description Name a payload's source by kind, filling a caller variable.
+#
+# The rule every caller of `require_json_payload` needs first: a source is
+# named by kind — the override variable's name when a fixture supplies the
+# payload, the API route or the config's repo-relative name otherwise — and
+# never by resolved path. A path in a diagnostic lets two harness scenarios
+# be told apart by their fixture rather than by their behavior, which is
+# what the census-parity gate exists to forbid.
+#
+# The result is written into a caller variable rather than printed, because
+# a function whose result is read as `$(...)` cannot fail. In argument
+# position a command substitution discards its own status: the guard below
+# would print, the shape gate would receive an empty source name, and the
+# run would end 0. Filling a named variable keeps this function in the
+# caller's shell, where `exit` ends the script that has the problem. This
+# is the same reasoning the shape check above states for capturing its jq
+# output instead of reading it through a process substitution.
+#
+# The override is resolved by indirect expansion rather than by an
+# environment-only lookup, so that it is seen exactly as its consumer sees it:
+# every caller reads its override with plain `${VAR:-}`, which sees a shell
+# variable as well as an exported one. A namer blind to a variable its reader
+# honors would name the fallback for a payload that did come from the
+# override.
+#
+# The target is bound with a nameref rather than written with `printf -v`,
+# so that a caller naming one of this function's own locals collides in the
+# open — bash warns about the circular reference on stderr — where
+# `printf -v` would write the local without a word and leave the caller's
+# variable untouched. The locals carry a `__psrc_` prefix no call site uses,
+# which keeps that collision theoretical. `scripts/lib/enumerate.sh` binds
+# `enumerate_into`'s output the same way, so the two read alike.
+#
+# @arg $1 name of the caller variable to fill
+# @arg $2 name of the override variable, exported or shell-scoped
+# @arg $3 source name used when the override is unset or empty
+# @exitcode 2 $2 is not a valid shell identifier
+function payload_source_into() {
+  local -r __psrc_out="$1" __psrc_ovr="$2" __psrc_fallback="$3"
+
+  # Checked rather than assumed: indirect expansion of a non-identifier is
+  # a fatal bash error, not an empty result, and this function's whole
+  # value is that such a fault stops the caller under the exit code the
+  # convention catalogues instead of naming an empty source.
+  if [[ ! ${__psrc_ovr} =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+    printf '%s: payload_source_into: not a variable name: %s\n' \
+      "${0##*/}" "${__psrc_ovr}" >&2
+    exit 2
+  fi
+
+  local -n __psrc_ref="${__psrc_out}"
+  if [[ -n ${!__psrc_ovr:-} ]]; then
+    __psrc_ref="${__psrc_ovr}"
+  else
+    __psrc_ref="${__psrc_fallback}"
+  fi
+}
