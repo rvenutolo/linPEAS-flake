@@ -99,11 +99,12 @@ function require_json_payload() {
 # is the same reasoning the shape check above states for capturing its jq
 # output instead of reading it through a process substitution.
 #
-# The override is resolved by indirect expansion rather than by `printenv`,
-# so that it is seen exactly as its consumer sees it: every caller reads its
-# override with plain `${VAR:-}`, which sees a shell variable as well as an
-# exported one. A namer blind to a variable its reader honors would name the
-# fallback for a payload that did come from the override.
+# The override is resolved by indirect expansion rather than by an
+# environment-only lookup, so that it is seen exactly as its consumer sees it:
+# every caller reads its override with plain `${VAR:-}`, which sees a shell
+# variable as well as an exported one. A namer blind to a variable its reader
+# honors would name the fallback for a payload that did come from the
+# override.
 #
 # The target is bound with a nameref rather than written with `printf -v`,
 # so that a caller naming one of this function's own locals collides in the

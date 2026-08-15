@@ -68,8 +68,13 @@ function report_drift() {
 function fetch_json() {
   local -r override_var="$1"
   local -r api_path="$2"
-  local override
-  override="$(printenv -- "${override_var}" 2>/dev/null || printf '')"
+  # Resolved by indirect expansion so this reader and the source namer
+  # honor the same set of variables. An env-only reader paired with a
+  # scope-agnostic namer would name a source the fetch did not use. The
+  # resolved value is bound to a local so the ERR trap, which echoes
+  # BASH_COMMAND, names the failing read by the path it used rather than
+  # by the indirection that produced it.
+  local -r override="${!override_var:-}"
   if [[ -n ${override} ]]; then
     cat -- "${override}"
     return
