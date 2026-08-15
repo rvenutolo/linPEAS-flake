@@ -179,18 +179,18 @@ function main() {
   # every marker in the tree reads as dead — blaming markers nobody
   # touched for a config-shape fault.
   run_scenario 'malformed config that is not JSON is a tooling error' \
-    'bad-not-json' 2 'payload from RENOVATE_JSON_OVERRIDE is not valid JSON'
+    'bad-not-json' 2 'renovate markers: payload from RENOVATE_JSON_OVERRIDE is not valid JSON'
   run_scenario 'empty config payload is a tooling error' \
-    'bad-empty-payload' 2 'empty payload from RENOVATE_JSON_OVERRIDE'
+    'bad-empty-payload' 2 'renovate markers: empty payload from RENOVATE_JSON_OVERRIDE'
   run_scenario 'array-typed config payload is a tooling error' \
     'bad-top-level-array' 2 \
-    'unexpected payload shape from RENOVATE_JSON_OVERRIDE: payload is array, want object'
+    'renovate markers: unexpected payload shape from RENOVATE_JSON_OVERRIDE: payload is array, want object'
   run_scenario 'string-typed customManagers is a tooling error' \
     'bad-custom-managers-type' 2 \
-    'unexpected payload shape from RENOVATE_JSON_OVERRIDE: .customManagers is string, want array'
+    'renovate markers: unexpected payload shape from RENOVATE_JSON_OVERRIDE: .customManagers is string, want array'
   run_scenario 'non-object customManagers entry is a tooling error' \
     'bad-custom-managers-item-type' 2 \
-    'unexpected payload shape from RENOVATE_JSON_OVERRIDE: a customManagers entry is not an object'
+    'renovate markers: unexpected payload shape from RENOVATE_JSON_OVERRIDE: a customManagers entry is not an object'
   run_live_tree
   run_broken_index
   harness_assert_verify || failures=$((failures + 1))
