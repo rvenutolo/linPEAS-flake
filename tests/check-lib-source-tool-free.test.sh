@@ -76,6 +76,13 @@ function main() {
     "${FIXTURES}/off-source-line/scripts" 1 \
     'split-resolution.sh'
 
+  # The command substitution never names BASH_SOURCE at all — a source
+  # line can shell out to build its path via any tool, and dies the same
+  # way under a stripped PATH regardless of what the substitution calls.
+  expect 'source path via non-BASH_SOURCE substitution is a violation' \
+    "${FIXTURES}/git-rev-parse/scripts" 1 \
+    'uses-git-rev-parse.sh'
+
   expect 'tool-free resolution is clean' \
     "${FIXTURES}/clean/scripts" 0 ''
 
