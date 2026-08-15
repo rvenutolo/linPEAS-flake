@@ -46,11 +46,6 @@ readonly SCAN_ROOT="${SCAN_ROOT:-${REPO_ROOT}}"
 # from the scan below, since its examples do spell out a depName.
 readonly MARKER_RE='#\s*renovate:\s*datasource=\S+\s+depName='
 
-if [[ ! -f ${RENOVATE_JSON} ]]; then
-  printf 'renovate config not found: %s\n' "${RENOVATE_JSON}" >&2
-  exit 2
-fi
-
 # Name the payload's source by kind — the override variable when a fixture
 # supplies it, the config's repo-relative name otherwise. Never the resolved
 # path: a path in a diagnostic lets two harness scenarios be told apart by
@@ -61,6 +56,11 @@ else
   payload_source='renovate.json'
 fi
 readonly payload_source
+
+if [[ ! -f ${RENOVATE_JSON} ]]; then
+  printf 'renovate config not found: %s\n' "${payload_source}" >&2
+  exit 2
+fi
 
 if ! renovate_payload="$(cat -- "${RENOVATE_JSON}")"; then
   printf 'renovate config not readable: %s\n' "${payload_source}" >&2
@@ -73,17 +73,25 @@ readonly renovate_payload
 # code the convention does not catalogue, and one that parses to zero
 # managers leaves every marker in the tree reading as dead.
 #
-# The per-manager field types are deliberately NOT checked here. A
-# `managerFilePatterns` or `matchStrings` holding the wrong type is
-# caught by the capture guards inside the two helpers below, whose
-# diagnostics name the offending manager index — a precision this gate
-# cannot match, and which its own scenarios pin.
+# An entry's own *type* is checked here — a customManagers entry that is
+# not an object fails the gate speaking about the array as a whole, with
+# no index named, since nothing below it can be read as a manager at
+# all. Per-manager *field* types are deliberately NOT checked here: a
+# `managerFilePatterns` or `matchStrings` holding the wrong type inside
+# an otherwise-object entry is caught by the capture guards inside the
+# two helpers below, whose diagnostics name the offending manager index —
+# a precision this gate cannot match, and which its own scenarios pin.
+#
+# The subject is passed because the source kind alone does not identify
+# this payload: a sibling lint reads the same renovate.json through the
+# same override variable and the same repo-relative name to check a
+# different set of invariants.
 require_json_payload "${payload_source}" "${renovate_payload}" '
   if type != "object" then "payload is \(type), want object"
   elif (.customManagers != null) and ((.customManagers | type) != "array") then ".customManagers is \(.customManagers | type), want array"
   elif (.customManagers != null) and (any(.customManagers[]; type != "object")) then "a customManagers entry is not an object"
   else empty
-  end'
+  end' 'renovate markers'
 
 num_managers="$(jq '.customManagers // [] | length' "${RENOVATE_JSON}")"
 readonly num_managers

@@ -68,7 +68,7 @@ Environment-variable overrides scoped to test invocation:
 | `WORKFLOW_FILE_FILTER`           | `check-uses-sha-pinned.sh`                                                                                | restrict to a single fixture file |
 | `RENOVATE_JSON_OVERRIDE`         | `check-renovate-invariants.sh`, `check-renovate-markers-matched.sh`, `check-renovate-config-validator.sh` | swap the renovate.json path       |
 | `SCAN_ROOT`                      | `check-renovate-markers-matched.sh`                                                                       | swap the scanned tree root        |
-| `TAG_PROTECTION_FIXTURE`         | `check-tag-protection.sh`                                                                                 | swap the rulesets JSON path       |
+| `RULESET_JSON_OVERRIDE`          | `check-tag-protection.sh`, `check-protect-main.sh`                                                        | swap the rulesets JSON path       |
 | `PIN_FILE_OVERRIDE`              | `gen-dashboard-data.sh`                                                                                   | swap the linpeas-pin.json path    |
 | `UPSTREAM_RELEASE_JSON_OVERRIDE` | `gen-dashboard-data.sh`                                                                                   | swap upstream release JSON        |
 | `LATEST_RELEASE_JSON_OVERRIDE`   | `gen-dashboard-data.sh`                                                                                   | swap rvenutolo release JSON       |

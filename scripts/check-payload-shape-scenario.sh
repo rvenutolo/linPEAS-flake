@@ -47,8 +47,8 @@
 #
 # --- Exemption -----------------------------------------------------------
 #
-# A script matched by the predicate that reads no externally-supplied
-# payload on its verdict path carries an inline
+# A script matched by the predicate for which a malformed payload is
+# not a could-not-run carries an inline
 # `# payload-subject-exempt: <rationale>` marker, matching this repo's
 # existing `enumerate-exempt` / `glob-exempt` / `exit-code-exempt` /
 # `reason-ladder-exempt` convention: the rationale lives beside the code

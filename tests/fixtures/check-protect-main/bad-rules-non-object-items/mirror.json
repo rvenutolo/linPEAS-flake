@@ -1,0 +1,8 @@
+{
+  "rules": [
+    {
+      "type": "required_status_checks",
+      "parameters": { "required_status_checks": [] }
+    }
+  ]
+}

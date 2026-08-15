@@ -79,24 +79,24 @@ function main() {
   # sending a maintainer after a setting nobody touched. Each scenario
   # names the fault the gate rejected, never the fixture that carried it.
   run_scenario 'malformed payload that is not JSON is a tooling error' \
-    'bad-not-json.json' 2 'payload from RENOVATE_JSON_OVERRIDE is not valid JSON'
+    'bad-not-json.json' 2 'renovate invariants: payload from RENOVATE_JSON_OVERRIDE is not valid JSON'
   run_scenario 'empty payload is a tooling error' \
-    'bad-empty-payload.json' 2 'empty payload from RENOVATE_JSON_OVERRIDE'
+    'bad-empty-payload.json' 2 'renovate invariants: empty payload from RENOVATE_JSON_OVERRIDE'
   run_scenario 'array-typed payload is a tooling error' \
     'bad-top-level-array.json' 2 \
-    'unexpected payload shape from RENOVATE_JSON_OVERRIDE: payload is array, want object'
+    'renovate invariants: unexpected payload shape from RENOVATE_JSON_OVERRIDE: payload is array, want object'
   run_scenario 'string-typed extends is a tooling error' \
     'bad-extends-type.json' 2 \
-    'unexpected payload shape from RENOVATE_JSON_OVERRIDE: .extends is string, want array'
+    'renovate invariants: unexpected payload shape from RENOVATE_JSON_OVERRIDE: .extends is string, want array'
   run_scenario 'non-object packageRules entry is a tooling error' \
     'bad-package-rules-item-type.json' 2 \
-    'unexpected payload shape from RENOVATE_JSON_OVERRIDE: a packageRules entry is not an object'
+    'renovate invariants: unexpected payload shape from RENOVATE_JSON_OVERRIDE: a packageRules entry is not an object'
   run_scenario 'number-typed minimumReleaseAge is a tooling error' \
     'bad-min-age-type.json' 2 \
-    'unexpected payload shape from RENOVATE_JSON_OVERRIDE: .minimumReleaseAge is number, want string'
+    'renovate invariants: unexpected payload shape from RENOVATE_JSON_OVERRIDE: .minimumReleaseAge is number, want string'
   run_scenario 'string-typed packageRules is a tooling error' \
     'bad-package-rules-type.json' 2 \
-    'unexpected payload shape from RENOVATE_JSON_OVERRIDE: .packageRules is string, want array'
+    'renovate invariants: unexpected payload shape from RENOVATE_JSON_OVERRIDE: .packageRules is string, want array'
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
