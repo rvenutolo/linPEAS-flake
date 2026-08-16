@@ -173,12 +173,25 @@ function base_files() {
 # dies loud (die_op) rather than silently reading as absent — absent
 # and read-failure are different operational facts and must never
 # collapse to the same "pass" outcome.
+#
+# The BASE_DIR arm applies that same rule to `cat`: a present file that
+# fails to read is captured and status-checked on its own line rather
+# than piped straight to stdout, so a permission-denied `cat` dies loud
+# through `die_op` instead of being followed by the unconditional
+# `return 0` below it — the shape that let a read failure and a
+# genuinely absent file collapse into the same outcome.
+#
+# payload-read-exempt: absence is a legitimate outcome here (a bare return, not a could-not-run), which the shared reader's not-found exit cannot express — this function's contract distinguishes absent from unreadable, and a read failure is reported through this script's own die_op above rather than the shared helper's diagnostics.
 # @arg $1 file path relative to repo root
 function base_content() {
   local -r file="$1"
   if [[ -n ${BASE_DIR} ]]; then
     [[ -f "${BASE_DIR}/${file}" ]] || return 0
-    cat -- "${BASE_DIR}/${file}"
+    local content
+    if ! content="$(cat -- "${BASE_DIR}/${file}" 2>&1)"; then
+      die_op "cannot read ${BASE_DIR}/${file}: ${content}"
+    fi
+    printf '%s' "${content}"
     return 0
   fi
   load_base_file_list
