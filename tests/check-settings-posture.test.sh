@@ -64,6 +64,69 @@ function run_scenario() {
   rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
 }
 
+# Points one override at an unreadable payload while the other three keep
+# the good fixtures, so a scenario proves the could-not-run path fires on
+# the override under test and nowhere else. Mode bits are no lever for
+# root, so this scenario is skipped there.
+# @arg $1 scenario name
+# @arg $2 override variable to point at the unreadable payload
+# @arg $3 expected stderr substring
+function run_unreadable_scenario() {
+  local -r name="$1" override_var="$2" expected_stderr="$3"
+  if [[ ${EUID} -eq 0 ]]; then
+    printf 'SKIP: %s (running as root — mode bits are no lever)\n' "${name}"
+    return 0
+  fi
+  local payload
+  payload="$(mktemp)"
+  printf '{}' >"${payload}"
+  chmod 000 -- "${payload}"
+
+  local repo_override="${FIXTURES}/good/repo.json"
+  local actions_perms_override="${FIXTURES}/good/actions-perms.json"
+  local actions_workflow_perms_override="${FIXTURES}/good/actions-workflow-perms.json"
+  local env_github_pages_override="${FIXTURES}/good/env-github-pages.json"
+  case "${override_var}" in
+  REPO_JSON_OVERRIDE) repo_override="${payload}" ;;
+  ACTIONS_PERMS_JSON_OVERRIDE) actions_perms_override="${payload}" ;;
+  ACTIONS_WORKFLOW_PERMS_JSON_OVERRIDE) actions_workflow_perms_override="${payload}" ;;
+  ENV_GITHUB_PAGES_JSON_OVERRIDE) env_github_pages_override="${payload}" ;;
+  esac
+
+  local stderr_file stdout_file outcome_file
+  stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+
+  local actual_exit=0
+  REPO_JSON_OVERRIDE="${repo_override}" \
+    ACTIONS_PERMS_JSON_OVERRIDE="${actions_perms_override}" \
+    ACTIONS_WORKFLOW_PERMS_JSON_OVERRIDE="${actions_workflow_perms_override}" \
+    ENV_GITHUB_PAGES_JSON_OVERRIDE="${env_github_pages_override}" \
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${expected_stderr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+
+  if [[ ${actual_exit} -ne 2 ]]; then
+    printf 'FAIL: %s — expected exit 2, got %d\n' "${name}" "${actual_exit}" >&2
+    printf 'stderr was:\n' >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet -- "${expected_stderr}" "${stderr_file}"; then
+    printf 'FAIL: %s — stderr missing %q\n' "${name}" "${expected_stderr}" >&2
+    printf 'stderr was:\n' >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+
+  rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
+  chmod 600 -- "${payload}"
+  rm --force -- "${payload}"
+}
+
 function main() {
   run_scenario 'matching fixtures pass' \
     'good' 0 ''
@@ -93,6 +156,24 @@ function main() {
   run_scenario 'boolean-typed repo payload is a tooling error' \
     'bad-repo-wrong-type' 2 \
     'unexpected payload shape from REPO_JSON_OVERRIDE: payload is boolean, want object'
+
+  # This is the reported defect: an unreadable override payload must
+  # report a could-not-run (exit 2), not a raw `cat` failure under exit 1.
+  # One scenario per override that reads through fetch_json_override_into
+  # — each names its own override variable, so the four sentences are
+  # distinguishable without needing a subject.
+  run_unreadable_scenario 'unreadable repo override is a tooling error, not drift' \
+    REPO_JSON_OVERRIDE \
+    'payload from REPO_JSON_OVERRIDE is not readable'
+  run_unreadable_scenario 'unreadable actions-permissions override is a tooling error, not drift' \
+    ACTIONS_PERMS_JSON_OVERRIDE \
+    'payload from ACTIONS_PERMS_JSON_OVERRIDE is not readable'
+  run_unreadable_scenario 'unreadable actions-workflow-permissions override is a tooling error, not drift' \
+    ACTIONS_WORKFLOW_PERMS_JSON_OVERRIDE \
+    'payload from ACTIONS_WORKFLOW_PERMS_JSON_OVERRIDE is not readable'
+  run_unreadable_scenario 'unreadable github-pages environment override is a tooling error, not drift' \
+    ENV_GITHUB_PAGES_JSON_OVERRIDE \
+    'payload from ENV_GITHUB_PAGES_JSON_OVERRIDE is not readable'
 
   # Multi-drift scenario must surface every drift in a single run, not
   # stop at the first. This is asserted by counting drift lines in

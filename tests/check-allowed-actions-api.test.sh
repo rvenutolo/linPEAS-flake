@@ -63,6 +63,63 @@ function run_scenario() {
   rm --force -- "${outcome_file}" "${stdout_file}" "${stderr_file}"
 }
 
+# Points one override at an unreadable payload while the other stays a
+# good fixture, so a scenario proves the could-not-run path fires on the
+# override under test and nowhere else. Mode bits are no lever for root,
+# so this scenario is skipped there.
+# @arg $1 scenario name
+# @arg $2 override variable to point at the unreadable payload
+# @arg $3 expected stderr substring
+function run_unreadable_scenario() {
+  local -r name="$1" override_var="$2" expected_stderr="$3"
+  if [[ ${EUID} -eq 0 ]]; then
+    printf 'SKIP: %s (running as root — mode bits are no lever)\n' "${name}"
+    return 0
+  fi
+  local payload
+  payload="$(mktemp)"
+  printf 'unreadable' >"${payload}"
+  chmod 000 -- "${payload}"
+
+  local selected_override="${FIXTURES}/good/selected-actions.json"
+  local doc_override="${FIXTURES}/good/allowed-actions.md"
+  case "${override_var}" in
+  SELECTED_ACTIONS_JSON_OVERRIDE) selected_override="${payload}" ;;
+  ALLOWED_ACTIONS_DOC_OVERRIDE) doc_override="${payload}" ;;
+  esac
+
+  local stderr_file stdout_file outcome_file
+  stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+
+  local actual_exit=0
+  SELECTED_ACTIONS_JSON_OVERRIDE="${selected_override}" \
+    ALLOWED_ACTIONS_DOC_OVERRIDE="${doc_override}" \
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${expected_stderr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+
+  if [[ ${actual_exit} -ne 2 ]]; then
+    printf 'FAIL: %s — expected exit 2, got %d\n' "${name}" "${actual_exit}" >&2
+    printf 'stderr was:\n' >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet -- "${expected_stderr}" "${stderr_file}"; then
+    printf 'FAIL: %s — stderr missing %q\n' "${name}" "${expected_stderr}" >&2
+    printf 'stderr was:\n' >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+
+  rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
+  chmod 600 -- "${payload}"
+  rm --force -- "${payload}"
+}
+
 function main() {
   local -r multi='multiple drifts surface every one'
 
@@ -96,6 +153,18 @@ function main() {
   run_scenario 'boolean-typed selected-actions payload is a tooling error' \
     'bad-selected-wrong-type' 2 \
     'unexpected payload shape from SELECTED_ACTIONS_JSON_OVERRIDE: payload is boolean, want object'
+
+  # This is the reported defect: an unreadable override payload must
+  # report a could-not-run (exit 2), not a raw `cat` failure under exit 1.
+  run_unreadable_scenario 'unreadable selected-actions override is a tooling error, not drift' \
+    SELECTED_ACTIONS_JSON_OVERRIDE \
+    'payload from SELECTED_ACTIONS_JSON_OVERRIDE is not readable'
+  # The markdown doc does not go through the JSON reader, so its
+  # unreadable case gets its own sentence beside the existing not-found
+  # guard rather than the JSON reader's.
+  run_unreadable_scenario 'unreadable allowed-actions doc override is a tooling error, not drift' \
+    ALLOWED_ACTIONS_DOC_OVERRIDE \
+    'allowed-actions doc is not readable:'
 
   # bad-multiple must surface every drift in a single run — count drift
   # lines. It carries the good posture's booleans (a boolean has only
