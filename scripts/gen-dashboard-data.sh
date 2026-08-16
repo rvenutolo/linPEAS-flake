@@ -92,9 +92,12 @@ function fetch_live() {
 # Used only by the fetches whose payload is required (gated by
 # `require_json_payload` in main): a missing or unreadable override for
 # one of these is a could-not-run, not data. `fetch_soft`'s lookups are
-# allowed to degrade instead, so they keep reading their override
-# through the raw `fetch_or_override` below rather than this hard-exit
-# path.
+# allowed to degrade instead, so they read their override through
+# `fetch_soft_body` below rather than through this hard-exit path. The
+# two names carry the difference: the `_into` suffix marks the reader
+# that fills a caller variable and can `exit 2` in the caller's shell,
+# and `fetch_soft_body` marks the one whose every failure is something
+# `fetch_soft` is expected to catch and fall back on.
 # @arg $1 name of the caller variable to fill
 # @arg $2 override env var name
 # @arg $3 source kind, as named by payload_source_into for this override
@@ -112,16 +115,19 @@ function fetch_override_into() {
   read_json_payload_into "${out_var}" "${override}" "${src}" "${subject}"
 }
 
-# @description Fetch JSON from either an env-var override path (for tests) or
-# the live gh-api endpoint, tolerating a read failure rather than exiting —
-# used only by `fetch_soft` below, whose lookups are allowed to degrade to a
-# fallback on any failure, including a bad override fixture. The required
-# fetches in main() use `fetch_override_into`/`fetch_live` instead, so a bad
-# override on one of those is reported as a could-not-run rather than
-# silently degrading.
+# @description Produce `fetch_soft`'s response body, from either an
+# env-var override path (for tests) or the live gh-api endpoint,
+# tolerating a read failure rather than exiting. It exists only as the
+# body-producing half of `fetch_soft` below, whose lookups are allowed
+# to degrade to a fallback on any failure, including a bad override
+# fixture — hence the name: everything this function can do wrong is
+# `fetch_soft`'s to absorb. The required fetches in main() use
+# `fetch_override_into`/`fetch_live` instead, so a bad override on one
+# of those is reported as a could-not-run rather than silently
+# degrading.
 # @arg $1 override env-var name (e.g. UPSTREAM_RELEASE_JSON_OVERRIDE)
 # @arg $2 gh api path used when the override is unset
-function fetch_or_override() {
+function fetch_soft_body() {
   local -r override_var="$1"
   local -r api_path="$2"
   local -r override_path="${!override_var:-}"
@@ -152,7 +158,7 @@ function fetch_soft() {
   local -r label="$4"
 
   local body rc=0
-  body="$(fetch_or_override "${override_var}" "${api_path}" 2>/dev/null)" || rc=$?
+  body="$(fetch_soft_body "${override_var}" "${api_path}" 2>/dev/null)" || rc=$?
   if ((rc != 0)); then
     log WARN "${label}: lookup failed (exit ${rc}); using fallback"
     return 0
