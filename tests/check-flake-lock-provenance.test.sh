@@ -181,16 +181,16 @@ function main() {
     'payload from BASE_LOCK_FILE not found'
   run_absent_lock_scenario 'missing head errors' HEAD_LOCK_FILE \
     'payload from HEAD_LOCK_FILE not found'
-  # This is the reported defect: an unreadable payload previously died
-  # under the raw `cat` failure at exit 1 — the same code this script
-  # uses for a genuine provenance violation.
+  # This is the reported defect: an unreadable payload dies under the
+  # raw `cat` failure at exit 1 — the same code this script uses for a
+  # genuine provenance violation.
   run_unreadable_lock_scenario 'unreadable base is a tooling error, not a violation' \
     BASE_LOCK_FILE 'payload from BASE_LOCK_FILE is not readable'
   run_unreadable_lock_scenario 'unreadable head is a tooling error, not a violation' \
     HEAD_LOCK_FILE 'payload from HEAD_LOCK_FILE is not readable'
-  # A directory passes the old `-f` guard's existence check but fails
-  # the read; it previously reported the misleading "not found" message
-  # this same guard used for a genuinely absent path.
+  # A directory passes the `-f` guard's existence check but fails the
+  # read; the guard's "not found" message does not distinguish that
+  # from a genuinely absent path.
   run_directory_lock_scenario 'directory-payload base is a tooling error, not a violation' \
     BASE_LOCK_FILE 'payload from BASE_LOCK_FILE could not be read'
   run_directory_lock_scenario 'directory-payload head is a tooling error, not a violation' \

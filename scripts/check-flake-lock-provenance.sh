@@ -93,6 +93,10 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+# shellcheck source=scripts/lib/log.sh
+source "${_lib_dir}/lib/log.sh"
+# shellcheck source=scripts/lib/payload.sh
+source "${_lib_dir}/lib/payload.sh"
 
 readonly BASE_REF="${BASE_REF:-origin/main}"
 
@@ -101,28 +105,30 @@ function die_op() {
   exit 2
 }
 
-function load_base() {
-  if [[ -n ${BASE_LOCK_FILE:-} ]]; then
-    [[ -f ${BASE_LOCK_FILE} ]] || die_op "BASE_LOCK_FILE not found: ${BASE_LOCK_FILE}"
-    cat -- "${BASE_LOCK_FILE}"
-  else
-    git show "${BASE_REF}:flake.lock" 2>/dev/null ||
-      die_op "cannot resolve ${BASE_REF}:flake.lock (is origin/main fetched?)"
-  fi
-}
+# The base payload is either a fixture path (BASE_LOCK_FILE) or the
+# base ref's flake.lock read via `git show` — a git-object read, not a
+# file read, so it stays outside read_json_payload_into's could-not-run
+# guards and keeps its own die_op, naming the source by kind rather than
+# reconstructing the ref string a second time.
+payload_source_into base_source BASE_LOCK_FILE "${BASE_REF}:flake.lock"
+readonly base_source
+if [[ -n ${BASE_LOCK_FILE:-} ]]; then
+  read_json_payload_into base_json "${BASE_LOCK_FILE}" "${base_source}"
+else
+  base_json="$(git show "${BASE_REF}:flake.lock" 2>/dev/null)" ||
+    die_op "cannot resolve ${base_source} (is origin/main fetched?)"
+fi
+readonly base_json
 
-function load_head() {
-  if [[ -n ${HEAD_LOCK_FILE:-} ]]; then
-    [[ -f ${HEAD_LOCK_FILE} ]] || die_op "HEAD_LOCK_FILE not found: ${HEAD_LOCK_FILE}"
-    cat -- "${HEAD_LOCK_FILE}"
-  else
-    [[ -f flake.lock ]] || die_op "flake.lock not found in working tree"
-    cat -- flake.lock
-  fi
-}
-
-base_json="$(load_base)"
-head_json="$(load_head)"
+# The head payload is always a file read — either HEAD_LOCK_FILE or the
+# working tree's own flake.lock — so one read_json_payload_into call
+# covers both arms; the override and the default differ only in which
+# path it reads.
+readonly head_path="${HEAD_LOCK_FILE:-flake.lock}"
+payload_source_into head_source HEAD_LOCK_FILE 'flake.lock'
+readonly head_source
+read_json_payload_into head_json "${head_path}" "${head_source}"
+readonly head_json
 
 printf '%s' "${base_json}" | jq -e '.nodes | type == "object"' >/dev/null 2>&1 ||
   die_op "base flake.lock: invalid JSON or .nodes not an object"
