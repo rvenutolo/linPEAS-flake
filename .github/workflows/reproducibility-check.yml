@@ -240,18 +240,40 @@ jobs:
           set -Eeuo pipefail
           mkdir -p diffoscope-out
           # Always diff both pairs on any mismatch — the divergence may be in either or both.
+          # A non-zero status is the normal report-produced outcome and is
+          # captured rather than tolerated silently, so the summary below
+          # can say what happened instead of leaving it in the step log.
+          image_status=0
           timeout 20m nix shell .#diffoscopeMinimal --command diffoscope \
             --html diffoscope-out/image.html \
             --text diffoscope-out/image.txt \
             build-a/result-image \
             build-b/result-image \
-            || echo 'diffoscope (image) exited non-zero (expected on differences or timeout)'
+            || image_status=$?
+          linpeas_status=0
           timeout 20m nix shell .#diffoscopeMinimal --command diffoscope \
             --html diffoscope-out/linpeas.html \
             --text diffoscope-out/linpeas.txt \
             build-a/linpeas.tar.gz \
             build-b/linpeas.tar.gz \
-            || echo 'diffoscope (linpeas) exited non-zero (expected on differences or timeout)'
+            || linpeas_status=$?
+          # diffoscope writes no report at all when its two inputs are
+          # identical, so an exercise of this path on a reproducible tree
+          # leaves the output directory empty and the upload's
+          # `if-no-files-found: error` fails on a healthy run. This summary
+          # is written unconditionally, which keeps that guard meaning
+          # "the step did not run" rather than "the builds matched" — and
+          # it is the first thing a reader of a real mismatch wants: which
+          # pair diverged, and whether a report came out for it.
+          image_report=none
+          if [[ -s diffoscope-out/image.txt ]]; then image_report=written; fi
+          linpeas_report=none
+          if [[ -s diffoscope-out/linpeas.txt ]]; then linpeas_report=written; fi
+          {
+            printf 'image: diffoscope exit %d, report %s\n' "${image_status}" "${image_report}"
+            printf 'linpeas: diffoscope exit %d, report %s\n' "${linpeas_status}" "${linpeas_report}"
+          } >diffoscope-out/summary.txt
+          cat diffoscope-out/summary.txt
       - name: upload diffoscope artifact (on mismatch)
         if: steps.compare.outputs.exit_code != '0' || inputs.force_diffoscope
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
