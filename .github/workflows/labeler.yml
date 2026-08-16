@@ -26,10 +26,8 @@ jobs:
           allowed-endpoints: >
             *.actions.githubusercontent.com:443
             api.github.com:443
-            cache.nixos.org:443
             github.com:443
             objects.githubusercontent.com:443
-            releases.nixos.org:443
       - uses: actions/labeler@f27b608878404679385c85cfa523b85ccb86e213 # v6.1.0
         with:
           configuration-path: .github/labeler.yml
@@ -48,10 +46,8 @@ jobs:
           allowed-endpoints: >
             *.actions.githubusercontent.com:443
             api.github.com:443
-            cache.nixos.org:443
             github.com:443
             objects.githubusercontent.com:443
-            releases.nixos.org:443
       - uses: pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
