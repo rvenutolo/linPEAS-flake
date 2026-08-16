@@ -395,6 +395,63 @@ function main() {
   expect 'tooling: zero lock-writing workflows is a could-not-run' \
     "${work}/no-lock-writer" 2 'no workflow runs a flake-lock update'
 
+  # (r) BAD: a listed generator writes a doc the credentialed job may not
+  # commit. The bump regenerates it and then drops it, so the doc reaches
+  # the PR exactly as stale as if the generator had never run — and the
+  # freshness gate blocks a branch no human is meant to touch.
+  #
+  # Written as the two-subject attribution case, and it is the only
+  # scenario the forward rule owns: the compliant workflow sorts first in
+  # the discovery glob, so a diagnostic that named the wrong subject would
+  # name `renovate-refresh.yml` and this assertion would miss.
+  write_tree "${work}/declared-not-committable" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' \
+    '    flake.lock'
+  write_workflow "${work}/declared-not-committable" 'renovate-refresh.yml' 'true' \
+    '    scripts/refresh-alpha.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md'
+  expect 'bad: a declared output missing from the committable list names its workflow' \
+    "${work}/declared-not-committable" 1 \
+    'scripts/refresh-alpha.sh declares docs/reference/alpha.md, which is absent from COMMITTABLE_PATHS in .github/workflows/update-flake-lock.yml'
+
+  # (s) BAD: a listed generator that declares no output at all. Nothing
+  # binds what it writes to the committable set, so the forward rule is
+  # vacuous for it and the whole binding would pass in silence for the one
+  # generator it covers least.
+  write_tree "${work}/declares-nothing" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' \
+    '    flake.lock'
+  write_generators "${work}/declares-nothing" ''
+  expect 'bad: a listed generator declaring no output fails' \
+    "${work}/declares-nothing" 1 \
+    'scripts/refresh-alpha.sh is listed in LOCK_DERIVED_GENERATORS in .github/workflows/update-flake-lock.yml but declares no @generates or @generates-block path'
+
+  # (t) BAD: a committable entry no listed generator writes. The list
+  # outlived its generator, so it widens what a credentialed job may
+  # commit past anything the bump regenerates.
+  write_tree "${work}/committable-orphan" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md\n    docs/reference/orphan.md'
+  expect 'bad: a committable path no listed generator declares fails' \
+    "${work}/committable-orphan" 1 \
+    'docs/reference/orphan.md is in COMMITTABLE_PATHS in .github/workflows/update-flake-lock.yml, but no listed generator declares it'
+
+  # (u) GOOD: both annotation kinds mean "this generator writes here", so
+  # a `@generates-block` output is bound to the committable set the same
+  # way a whole-file `@generates` output is. Alpha declares its doc as a
+  # block and beta declares its own whole-file, in one tree.
+  #
+  # FALSE-POSITIVE GUARD: this scenario passes against a lint carrying
+  # none of the three rules, so it proves nothing on its own — it exists
+  # to catch a forward or reverse rule that reads only one of the two
+  # kinds and then reports a compliant tree as drift.
+  write_tree "${work}/block-declaration" "${LOCK_ALPHA}" "${LOCK_BETA}" \
+    $'    scripts/refresh-alpha.sh\n    scripts/refresh-beta.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md\n    docs/reference/beta.md'
+  write_generators "${work}/block-declaration" '# @generates-block docs/reference/alpha.md'
+  expect 'agree: a @generates-block output counts as a declared output' \
+    "${work}/block-declaration" 0 ''
+
   harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then

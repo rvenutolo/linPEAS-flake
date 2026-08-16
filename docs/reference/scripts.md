@@ -596,7 +596,8 @@ Keep EXPECTED in sync with the lintTools list in nix/devshell-lint.nix.
 
 Lint: every workflow that writes a flake.lock runs a
 generator for each freshness hook that declares `flake.lock` a
-trigger, and commits the lock itself.
+trigger, and may commit exactly the lock plus the outputs those
+generators declare with `@generates` / `@generates-block`.
 
 ### scripts/check-manifest-digest-pinned.sh
 
