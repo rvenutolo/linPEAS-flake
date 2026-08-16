@@ -138,3 +138,55 @@ function payload_source_into() {
     __psrc_ref="${__psrc_fallback}"
   fi
 }
+
+# @description Read a file payload into a caller variable, reporting a
+# payload the caller could not read as a could-not-run rather than as a
+# finding.
+#
+# The result is filled through a nameref rather than printed, for the
+# reason `payload_source_into` states: a reader whose value is taken as
+# `$(...)` cannot fail. A read that dies inside a command substitution
+# leaves the caller assigning an empty string under a status it does not
+# check, and the run continues into the shape gate, which then reports an
+# empty payload — or, where the caller's own reads tolerate absence, into
+# a drift verdict about posture nobody changed. Filling a named variable
+# keeps `exit 2` in the shell that has the problem.
+#
+# Three conditions, three sentences: a payload that is absent, one whose
+# permissions forbid the read, and one whose read fails for any other
+# reason are different faults with different operator remedies. The third
+# is not a catch-all for tidiness — a directory passes both the existence
+# and the readable checks and fails only at the read itself, and it is
+# the arm that stays exercisable where mode bits are no lever.
+#
+# The source is named by kind, never by resolved path, exactly as
+# `require_json_payload` requires; pass the value `payload_source_into`
+# filled.
+#
+# @arg $1 name of the caller variable to fill
+# @arg $2 path to read
+# @arg $3 source kind, used verbatim in every diagnostic
+# @arg $4 optional subject, prefixed to every diagnostic as `<subject>: `
+# @exitcode 2 the path is absent, unreadable, or the read failed
+function read_json_payload_into() {
+  local -r __pread_out="$1" __pread_path="$2" __pread_source="$3"
+  local -r __pread_prefix="${4:+${4}: }"
+
+  if [[ ! -e ${__pread_path} ]]; then
+    printf '%spayload from %s not found\n' \
+      "${__pread_prefix}" "${__pread_source}" >&2
+    exit 2
+  fi
+  if [[ ! -r ${__pread_path} ]]; then
+    printf '%spayload from %s is not readable\n' \
+      "${__pread_prefix}" "${__pread_source}" >&2
+    exit 2
+  fi
+
+  local -n __pread_ref="${__pread_out}"
+  if ! __pread_ref="$(cat -- "${__pread_path}")"; then
+    printf '%spayload from %s could not be read\n' \
+      "${__pread_prefix}" "${__pread_source}" >&2
+    exit 2
+  fi
+}
