@@ -166,7 +166,8 @@ function main() {
   # An absent config leaves every marker unjudged; calling that a dead
   # marker would blame the markers for a missing input.
   run_scenario 'absent config is a tooling error' \
-    'no-such-fixture' 2 'renovate config not found'
+    'no-such-fixture' 2 \
+    'renovate markers: payload from RENOVATE_JSON_OVERRIDE not found'
   # A scan root holding nothing but its own renovate.json makes `find`
   # exit 0 with no output — the shape a status check cannot see. Without
   # the breadth assertion the run prints the no-markers summary and

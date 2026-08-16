@@ -13,9 +13,11 @@
 #   4. github-actions packageRule sets pinDigests: true
 #
 # Honors RENOVATE_JSON_OVERRIDE for fixture testing.
-# Exits 0 on intact invariants, 1 on drift, 2 when the config file is
-# absent — no invariant was read, so reporting one as dropped would send
-# a maintainer after a setting nobody touched.
+# Exits 0 on intact invariants, 1 on drift, 2 when the config cannot be
+# read at all — absent, unreadable, or not a regular file — or the
+# payload read fails shape validation. No invariant was read in any of
+# those cases, so reporting one as dropped would send a maintainer after
+# a setting nobody touched.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -35,15 +37,11 @@ readonly path="${RENOVATE_JSON_OVERRIDE:-${DEFAULT_PATH}}"
 payload_source_into payload_source RENOVATE_JSON_OVERRIDE 'renovate.json'
 readonly payload_source
 
-if [[ ! -f ${path} ]]; then
-  printf 'renovate config not found: %s\n' "${payload_source}" >&2
-  exit 2
-fi
-
-if ! renovate_payload="$(cat -- "${path}")"; then
-  printf 'renovate config not readable: %s\n' "${payload_source}" >&2
-  exit 2
-fi
+# read_json_payload_into fills a nameref, so it must run in this shell —
+# never inside `$(...)`, where its `exit 2` would be trapped in a
+# subshell and this script would carry on with an empty renovate_payload.
+read_json_payload_into renovate_payload "${path}" "${payload_source}" \
+  'renovate invariants'
 readonly renovate_payload
 
 # One shape gate in front of every read. Each check below is written

@@ -72,7 +72,8 @@ function main() {
   # No config read means no invariant was checked; that is a missing
   # input, not a dropped invariant.
   run_scenario 'absent config is a tooling error' \
-    'no-such-config.json' 2 'renovate config not found'
+    'no-such-config.json' 2 \
+    'renovate invariants: payload from RENOVATE_JSON_OVERRIDE not found'
   # A malformed payload is a could-not-run, not drift. Every read below
   # the gate assumes a shape the config file does not guarantee, and a
   # jq parse failure inverted by `if !` reads as a dropped invariant —
