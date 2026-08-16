@@ -181,12 +181,23 @@ function base_files() {
 # `return 0` below it — the shape that let a read failure and a
 # genuinely absent file collapse into the same outcome.
 #
+# Absence is decided by `-e` and regular-file-ness by `-f`, as two
+# questions rather than one. The base-side glob matches a directory
+# named `something.yml` as readily as a file, so such a path arrives
+# here as a file base_files() has already listed; answering "is it a
+# regular file" as though it were "is anything there" would report the
+# whole file absent from base, leave its every pin one-sided, and pass a
+# digest repointed under an unchanged version label — the class this
+# gate exists to catch.
+#
 # payload-read-exempt: absence is a legitimate outcome here (a bare return, not a could-not-run), which the shared reader's not-found exit cannot express — this function's contract distinguishes absent from unreadable, and a read failure is reported through this script's own die_op above rather than the shared helper's diagnostics.
 # @arg $1 file path relative to repo root
 function base_content() {
   local -r file="$1"
   if [[ -n ${BASE_DIR} ]]; then
-    [[ -f "${BASE_DIR}/${file}" ]] || return 0
+    [[ -e "${BASE_DIR}/${file}" ]] || return 0
+    [[ -f "${BASE_DIR}/${file}" ]] ||
+      die_op "not a regular file: ${BASE_DIR}/${file}"
     local content
     if ! content="$(cat -- "${BASE_DIR}/${file}" 2>&1)"; then
       die_op "cannot read ${BASE_DIR}/${file}: ${content}"
