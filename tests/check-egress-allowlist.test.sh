@@ -123,4 +123,62 @@ LINT_ALLOW_EMPTY_SCAN=1 WORKFLOWS_DIR_OVERRIDE="${REPO_ROOT}/tests/fixtures/egre
   }
 printf 'OK   zero-notify-discovery-override\n'
 
+# Assertion 7: nix-host reachability. A job whose allowlist carries
+# cache.nixos.org or releases.nixos.org must reach nix through the
+# setup-nix composite, a run: block invoking a nix subcommand, or an
+# in-job `# egress-nix-exempt: <reason>` marker; an empty-reason marker is
+# rejected, and a marker on a job carrying neither host is reported as
+# stale rather than silently tolerated.
+expect good-nix-setup-nix.yml 0 ""
+expect good-nix-run-invocation.yml 0 ""
+expect bad-nix-neither.yml 1 "reaches no nix tooling"
+expect good-nix-exempt.yml 0 ""
+expect bad-nix-exempt-empty-reason.yml 1 "no reason"
+expect bad-nix-stale-marker.yml 1 "stale"
+
+# Breadth: zero jobs carrying either nix host on an unfiltered scan is a
+# broken discovery predicate, not a clean tree — same convention, and same
+# could-not-run exit code, as the zero-notify-discovery guard above. The
+# fixture workflow carries a notify job (so assertion 6's breadth passes)
+# but no nix host at all, isolating assertion 7's own guard.
+got_exit=0
+got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${REPO_ROOT}/tests/fixtures/egress-allowlist-no-nix-host" \
+  "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+if [[ ${got_exit} != 2 || ${got_stderr} != *"0 job(s) carrying cache.nixos.org/releases.nixos.org"* ]]; then
+  printf 'FAIL zero-nix-host-discovery: exit %s\n  stderr: %s\n' "${got_exit}" "${got_stderr}" >&2
+  exit 1
+fi
+printf 'OK   zero-nix-host-discovery\n'
+
+# ...and the documented override suppresses it.
+LINT_ALLOW_EMPTY_SCAN=1 WORKFLOWS_DIR_OVERRIDE="${REPO_ROOT}/tests/fixtures/egress-allowlist-no-nix-host" \
+  "${SCRIPT}" >/dev/null 2>&1 ||
+  {
+    printf 'FAIL zero-nix-host-discovery-override\n' >&2
+    exit 1
+  }
+printf 'OK   zero-nix-host-discovery-override\n'
+
+# LIVE: the real tree must satisfy assertion 7, and the run must have
+# actually scanned something. The assertion checks the printed count is
+# nonzero rather than pinning it to today's exact job count, which would
+# turn every unrelated job addition into a spurious fixture failure — the
+# same convention tests/check-payload-source-helper.test.sh uses for its
+# own live-tree breadth assertion. A regression that narrows the
+# discovery predicate without flipping any fixture above is exactly what
+# this count catches instead.
+live_out=""
+live_exit=0
+live_out="$(WORKFLOWS_DIR_OVERRIDE="${REPO_ROOT}/.github/workflows" "${SCRIPT}" 2>&1)" || live_exit=$?
+if [[ ${live_exit} != 0 ]]; then
+  printf 'FAIL live-nix-host-tree: expected exit 0, got %s\n  output: %s\n' "${live_exit}" "${live_out}" >&2
+  exit 1
+fi
+live_count="$(grep -oE '[0-9]+ nix-host job\(s\) checked' <<<"${live_out}" | grep -oE '^[0-9]+' || true)"
+if [[ -z ${live_count} || ${live_count} -eq 0 ]]; then
+  printf 'FAIL live-nix-host-tree: 0 nix-host jobs checked\n  output: %s\n' "${live_out}" >&2
+  exit 1
+fi
+printf 'OK   live-nix-host-tree (%s job(s) checked)\n' "${live_count}"
+
 printf 'all tests passed\n'
