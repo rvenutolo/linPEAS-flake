@@ -746,27 +746,39 @@ obeyed everywhere.
 
 `read_json_payload_into` (scripts/lib/payload.sh) turns a file path
 into a shape-checked payload while reporting an absent, unreadable, or
-non-regular-file path as a could-not-run. A `cat -- <path>` capture
+non-regular-file path as a could-not-run. A `cat -- <path>` command
 skips every one of those guards, so a hand-rolled read that later
 feeds `require_json_payload` reproduces the helper's job with none of
 its could-not-run handling — the same cost the source-naming rule
 above exists to stop, one level earlier in the same read.
 
 The rule is broader than "feeds require_json_payload": every
-`cat -- <path>` capture under `<scripts>` outside `<scripts>/lib` is a
-violation, whether or not this run can prove the captured value later
-reaches the shape gate. A predicate that only fires when it can trace
-the capture into `require_json_payload` by variable name misses a
-capture wrapped in its own fetch function — the read and the gate then
-share no variable name for a dataflow check to follow — so the rule
-does not attempt that trace at all.
+`cat -- <path>` command under `<scripts>` outside `<scripts>/lib` is a
+violation, whether or not this run can prove its output later reaches
+the shape gate. A predicate that only fires when it can trace the read
+into `require_json_payload` by variable name misses a read wrapped in
+its own fetch function — the read and the gate then share no variable
+name for a dataflow check to follow — so the rule does not attempt
+that trace at all.
 
-Two shapes read a temp file without hand-rolling anything: a capture
+Capturing the output is likewise not part of the predicate. A read
+whose bytes go straight to stdout skips the same three guards a
+captured one does, and it is the shape a fetch helper writes when its
+caller does the capturing, so scoping the rule to `x="$(cat -- ...)"`
+would exempt the reads most likely to be written next.
+
+Two shapes read a temp file without hand-rolling anything: a read
 whose path traces back to a `make_temp` (or `mktemp`) result in the
 same file is exempted automatically, and a `# payload-read-exempt: <rationale>` marker excuses the rest, matching this file's
 `payload-source-exempt` marker in every other respect — a marker with
 no rationale excuses nothing, and a marker on a file holding no
-capture the rule matches is itself reported, before any violation is.
+`cat --` command the rule matches is itself reported, before any
+violation is.
+
+What the rule keys on also bounds what it reaches: a payload read
+written as `$(<file)`, `mapfile`, a `while read` redirection, or a
+file operand handed to `jq`/`yq` is not a `cat --` command and no part
+of this scan sees it.
 
 --- Breadth -------------------------------------------------------------
 
@@ -784,10 +796,12 @@ exit code otherwise.
 
 Measured, not assumed: this file's own prose does not self-match. The
 finished lint run against a scan root holding only this script reports
-zero violations across the 30 assignments it examines there — every
+zero violations across every assignment it examines there — each
 mention of the banned shape here is a comment or a format string,
 neither of which the parser files as an assignment — so this file needs
-no exemption marker of its own.
+no exemption marker of its own. The count itself is deliberately not
+quoted: it moves with every edit to this file, and a quoted tally that
+has drifted reads as a measurement nobody re-took.
 
 Honors SCRIPTS_DIR_OVERRIDE (default: scripts), TESTS_DIR_OVERRIDE
 (default: tests), and LINT_ALLOW_EMPTY_SCAN for a scan root that
