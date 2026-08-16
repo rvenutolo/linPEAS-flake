@@ -168,6 +168,13 @@ function main() {
   run_scenario 'absent config is a tooling error' \
     'no-such-fixture' 2 \
     'renovate markers: payload from RENOVATE_JSON_OVERRIDE not found'
+  # A directory is not a regular file: it passes the existence and
+  # readable checks but cannot be `cat`, so the not-a-regular-file guard
+  # inside read_json_payload_into reaches this verdict by `stat` before
+  # any read is attempted.
+  run_scenario 'directory payload is a tooling error' \
+    'dir-payload' 2 \
+    'renovate markers: payload from RENOVATE_JSON_OVERRIDE could not be read'
   # A scan root holding nothing but its own renovate.json makes `find`
   # exit 0 with no output — the shape a status check cannot see. Without
   # the breadth assertion the run prints the no-markers summary and

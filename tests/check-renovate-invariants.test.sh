@@ -98,6 +98,13 @@ function main() {
   run_scenario 'string-typed packageRules is a tooling error' \
     'bad-package-rules-type.json' 2 \
     'renovate invariants: unexpected payload shape from RENOVATE_JSON_OVERRIDE: .packageRules is string, want array'
+  # A directory is not a regular file: it passes the existence and
+  # readable checks but cannot be `cat`, so the not-a-regular-file guard
+  # inside read_json_payload_into reaches this verdict by `stat` before
+  # any read is attempted.
+  run_scenario 'directory payload is a tooling error' \
+    'dir-payload' 2 \
+    'renovate invariants: payload from RENOVATE_JSON_OVERRIDE could not be read'
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
