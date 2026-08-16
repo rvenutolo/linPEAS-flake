@@ -55,6 +55,16 @@
 #        a `gh attestation verify` run -> tuf-repo.github.com
 #          (verification refreshes GitHub's TUF root before checking the
 #           bundle)
+#        ./.github/actions/setup-nix -> cache.nixos.org AND releases.nixos.org
+#          (the composite downloads the installer from releases.nixos.org, and
+#           every nix command it enables substitutes from cache.nixos.org, so
+#           a job running it without both hosts either fails to install nix or
+#           rebuilds every derivation from source. This is the mirror of
+#           assertion 7: that one binds a PRESENT host to a tool that must be
+#           REACHABLE by it, this one binds a PRESENT tool to the hosts it must
+#           be able to reach. Both arms match the composite path itself and not
+#           a prefix of it, so `setup-nix-cache-thing` is a different action to
+#           both — hence the single shared matcher rather than two)
 #        DeterminateSystems/flakehub-cache-action -> banned outright
 #
 #      GENERAL HAZARD this rule table only partially covers: a redirect to
@@ -265,9 +275,11 @@ readonly -a DENYLIST=(
 readonly NOTIFY_COMPOSITE='notify-workflow-result'
 readonly DECLARATION_REL=".github/actions/${NOTIFY_COMPOSITE}/egress-allowlist.txt"
 
-# Assertion 7 (nix-host reachability): the sole nix-installing path in this
-# tree, the recognized `nix` subcommands a `run:` block can invoke, and the
-# escape-hatch marker.
+# The sole nix-installing path in this tree, the recognized `nix` subcommands
+# a `run:` block can invoke, and the escape-hatch marker. The composite path is
+# read by both directions of the nix rule: assertion 1 requires the two nix
+# hosts wherever it runs, assertion 7 accepts it as the tool a carried nix host
+# is reachable by.
 readonly NIX_SETUP_COMPOSITE='./.github/actions/setup-nix'
 readonly NIX_SUBCOMMANDS='build|develop|shell|run|flake|profile|eval|copy|store|search|registry|repl|show-config'
 readonly NIX_EXEMPT_MARKER='egress-nix-exempt:'
@@ -396,6 +408,19 @@ for f in "${workflow_files[@]}"; do
     uses="$(yq eval ".jobs.\"${job}\".steps[].uses // \"\"" "${f}")"
     runs="$(yq eval ".jobs.\"${job}\".steps[].run // \"\"" "${f}")"
 
+    # Path-bounded setup-nix detection, shared by assertion 1's forward rule
+    # and assertion 7's reachability arm so the two directions of the nix rule
+    # can never disagree about what counts as the composite. It is the
+    # composite path itself that matches, never a `uses:` value that merely
+    # starts with it — `./.github/actions/setup-nix-cache-thing` is a different
+    # composite, installs no nix, and satisfies neither direction.
+    has_setup_nix=0
+    while IFS= read -r u; do
+      if [[ ${u} == "${NIX_SETUP_COMPOSITE}" || ${u} == "${NIX_SETUP_COMPOSITE}@"* ]]; then
+        has_setup_nix=1
+      fi
+    done <<<"${uses}"
+
     # --- Assertion 1: forward rules -------------------------------------
 
     if [[ ${uses} == *"DeterminateSystems/flakehub-cache-action"* ]]; then
@@ -457,6 +482,15 @@ for f in "${workflow_files[@]}"; do
     if [[ ${runs} == *"gh attestation verify"* ]]; then
       has_host "${endpoints}" "tuf-repo.github.com" ||
         fail "${f}: job '${job}' runs 'gh attestation verify' but does not allowlist tuf-repo.github.com (verification refreshes GitHub's TUF root before checking the bundle)"
+    fi
+
+    # Checked per host rather than as a set, so a job carrying one nix host and
+    # not the other is still reported for the one it is missing.
+    if ((has_setup_nix == 1)); then
+      for h in 'releases.nixos.org' 'cache.nixos.org'; do
+        has_host "${endpoints}" "${h}" ||
+          fail "${f}: job '${job}' uses ${NIX_SETUP_COMPOSITE} but does not allowlist ${h} (the composite downloads the installer from releases.nixos.org, and every nix command it enables substitutes from cache.nixos.org)"
+      done
     fi
 
     # --- Assertion 2: ghcr blob-host consistency -------------------------
@@ -604,16 +638,6 @@ for f in "${workflow_files[@]}"; do
 
     if has_host "${endpoints}" "cache.nixos.org" || has_host "${endpoints}" "releases.nixos.org"; then
       nix_host_jobs=$((nix_host_jobs + 1))
-
-      # Path-bounded: the composite path itself, not any `uses:` value that
-      # merely starts with it — `./.github/actions/setup-nix-cache-thing` is
-      # a different composite and must not satisfy this arm.
-      has_setup_nix=0
-      while IFS= read -r u; do
-        if [[ ${u} == "${NIX_SETUP_COMPOSITE}" || ${u} == "${NIX_SETUP_COMPOSITE}@"* ]]; then
-          has_setup_nix=1
-        fi
-      done <<<"${uses}"
 
       # `nix` must be followed by whitespace and a recognized subcommand,
       # with a non-identifier (or start-of-string) character before it:
