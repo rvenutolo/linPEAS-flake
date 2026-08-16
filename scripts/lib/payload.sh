@@ -38,12 +38,18 @@
 # @arg $3 optional jq program emitting a message for the first field
 #   whose type is wrong, and `empty` when the shape is acceptable
 # @arg $4 optional subject, prefixed to every diagnostic as `<subject>: `.
-#   A source kind does not always identify what could not be read: two
-#   lints in this tree read different rulesets through one override
-#   variable and one API route, so the source alone leaves an operator
-#   unable to tell which subject's payload was malformed. Callers whose
-#   source kind is unique to them pass nothing and their output is
-#   unchanged.
+#   A source kind does not always identify what could not be read.
+#   Several sources in this tree are read by more than one caller: one
+#   override variable and one API route naming two different rulesets,
+#   one config file read by three lints, one pin file and one
+#   latest-release route read by both the bump script and the dashboard
+#   generator, and the name `flake.lock` reached by two checks. In each
+#   case the source alone leaves an operator unable to tell which
+#   subject's payload was malformed, so every caller sharing a source
+#   kind passes one. Callers whose source kind is unique to them pass
+#   nothing and their output is unchanged; the rule is a property of the
+#   whole tree, not of one script, so adding a second reader of an
+#   existing source means giving both readers a subject.
 # @exitcode 2 the payload is empty, unparsable, or the shape program
 #   named a fault
 function require_json_payload() {
@@ -136,5 +142,70 @@ function payload_source_into() {
     __psrc_ref="${__psrc_ovr}"
   else
     __psrc_ref="${__psrc_fallback}"
+  fi
+}
+
+# @description Read a file payload into a caller variable, reporting a
+# payload the caller could not read as a could-not-run rather than as a
+# finding.
+#
+# The result is filled through a nameref rather than printed, for the
+# reason `payload_source_into` states: a reader whose value is taken as
+# `$(...)` cannot fail. A read that dies inside a command substitution
+# leaves the caller assigning an empty string under a status it does not
+# check, and the run continues into the shape gate, which then reports an
+# empty payload — or, where the caller's own reads tolerate absence, into
+# a drift verdict about posture nobody changed. Filling a named variable
+# keeps `exit 2` in the shell that has the problem.
+#
+# Three conditions, three sentences: a payload that is absent, one whose
+# permissions forbid the read, and one whose read fails for any other
+# reason are different faults with different operator remedies. The third
+# sentence covers two guards rather than one: a directory, a FIFO, or a
+# device node all pass the existence and readable checks, and none of
+# them is something `cat` can be trusted to fail on promptly — a
+# directory does, but a FIFO with no writer, or a device such as
+# `/dev/random`, blocks or streams instead of erroring, which would turn
+# a could-not-run into a hang. The explicit not-a-regular-file check
+# below reaches that verdict by `stat`, before any read is attempted, so
+# the only thing left for the final `cat` guard to catch is a regular
+# file whose read still fails for some other reason. Both guards stay
+# exercisable where mode bits are no lever — none of these path kinds
+# depend on the permission bits `-r` already checked.
+#
+# The source is named by kind, never by resolved path, exactly as
+# `require_json_payload` requires; pass the value `payload_source_into`
+# filled.
+#
+# @arg $1 name of the caller variable to fill
+# @arg $2 path to read
+# @arg $3 source kind, used verbatim in every diagnostic
+# @arg $4 optional subject, prefixed to every diagnostic as `<subject>: `
+# @exitcode 2 the path is absent, unreadable, or the read failed
+function read_json_payload_into() {
+  local -r __pread_out="$1" __pread_path="$2" __pread_source="$3"
+  local -r __pread_prefix="${4:+${4}: }"
+
+  if [[ ! -e ${__pread_path} ]]; then
+    printf '%spayload from %s not found\n' \
+      "${__pread_prefix}" "${__pread_source}" >&2
+    exit 2
+  fi
+  if [[ ! -r ${__pread_path} ]]; then
+    printf '%spayload from %s is not readable\n' \
+      "${__pread_prefix}" "${__pread_source}" >&2
+    exit 2
+  fi
+  if [[ ! -f ${__pread_path} ]]; then
+    printf '%spayload from %s could not be read\n' \
+      "${__pread_prefix}" "${__pread_source}" >&2
+    exit 2
+  fi
+
+  local -n __pread_ref="${__pread_out}"
+  if ! __pread_ref="$(cat -- "${__pread_path}")"; then
+    printf '%spayload from %s could not be read\n' \
+      "${__pread_prefix}" "${__pread_source}" >&2
+    exit 2
   fi
 }

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # scripts/check-payload-source-helper.sh
 #
-# @description Lint: no shell file names a payload's source by hand.
+# @description Lint: no shell file names a payload's source by hand, and
+# no shell file under `<scripts>` (excluding `lib/`) reads a JSON payload
+# by hand either.
 # `payload_source_into` (scripts/lib/payload.sh) fills a caller variable
 # with the override variable's name when a fixture supplies the payload
 # and with the API route or config filename otherwise, so an assignment
@@ -49,29 +51,75 @@
 # so a stale marker surfaces on a tree where the rule is otherwise
 # obeyed everywhere.
 #
+# --- The read rule ---------------------------------------------------------
+#
+# `read_json_payload_into` (scripts/lib/payload.sh) turns a file path
+# into a shape-checked payload while reporting an absent, unreadable, or
+# non-regular-file path as a could-not-run. A `cat -- <path>` command
+# skips every one of those guards, so a hand-rolled read that later
+# feeds `require_json_payload` reproduces the helper's job with none of
+# its could-not-run handling — the same cost the source-naming rule
+# above exists to stop, one level earlier in the same read.
+#
+# The rule is broader than "feeds require_json_payload": every
+# `cat -- <path>` command under `<scripts>` outside `<scripts>/lib` is a
+# violation, whether or not this run can prove its output later reaches
+# the shape gate. A predicate that only fires when it can trace the read
+# into `require_json_payload` by variable name misses a read wrapped in
+# its own fetch function — the read and the gate then share no variable
+# name for a dataflow check to follow — so the rule does not attempt
+# that trace at all.
+#
+# Capturing the output is likewise not part of the predicate. A read
+# whose bytes go straight to stdout skips the same three guards a
+# captured one does, and it is the shape a fetch helper writes when its
+# caller does the capturing, so scoping the rule to `x="$(cat -- ...)"`
+# would exempt the reads most likely to be written next.
+#
+# Two shapes read a temp file without hand-rolling anything: a read
+# whose path traces back to a `make_temp` (or `mktemp`) result in the
+# same file is exempted automatically, and a `# payload-read-exempt:
+# <rationale>` marker excuses the rest, matching this file's
+# `payload-source-exempt` marker in every other respect — a marker with
+# no rationale excuses nothing, and a marker on a file holding no
+# `cat --` command the rule matches is itself reported, before any
+# violation is.
+#
+# What the rule keys on also bounds what it reaches: a payload read
+# written as `$(<file)`, `mapfile`, a `while read` redirection, or a
+# file operand handed to `jq`/`yq` is not a `cat --` command and no part
+# of this scan sees it.
+#
 # --- Breadth -------------------------------------------------------------
 #
 # The scan set is `<scripts>/*.sh`, `<scripts>/lib/*.sh` and
 # `<tests>/*.sh`. The library arm is not optional: the helper itself
 # lives there, its neighbors are the files most likely to copy it, and
 # the older shell-hygiene lints in this repo stop at the top level. The
-# clean verdict reports files scanned and assignments examined rather
-# than a bare "ok", because a detector that stopped reaching assignments
-# and a tree with nothing to report emit the same exit code otherwise.
+# read rule narrows to `<scripts>/*.sh` alone — a hand-rolled read in a
+# library or a harness is not the shape this rule polices, since neither
+# one is a caller deciding how to read its own payload. The clean
+# verdict reports files scanned, assignments examined, and reads
+# examined rather than a bare "ok", because a detector that stopped
+# reaching either one and a tree with nothing to report emit the same
+# exit code otherwise.
 #
 # Measured, not assumed: this file's own prose does not self-match. The
 # finished lint run against a scan root holding only this script reports
-# zero violations across the 30 assignments it examines there — every
+# zero violations across every assignment it examines there — each
 # mention of the banned shape here is a comment or a format string,
 # neither of which the parser files as an assignment — so this file needs
-# no exemption marker of its own.
+# no exemption marker of its own. The count itself is deliberately not
+# quoted: it moves with every edit to this file, and a quoted tally that
+# has drifted reads as a measurement nobody re-took.
 #
 # Honors SCRIPTS_DIR_OVERRIDE (default: scripts), TESTS_DIR_OVERRIDE
 # (default: tests), and LINT_ALLOW_EMPTY_SCAN for a scan root that
-# deliberately holds no assignment at all.
-# Exit 0 clean, 1 on a hand-named source or a stale exemption marker,
-# 2 when the scan set cannot be enumerated, holds no assignment, a
-# required tool is missing, or a file cannot be parsed as shell.
+# deliberately holds no assignment and no read at all.
+# Exit 0 clean, 1 on a hand-named source, a hand-rolled read, or a stale
+# exemption marker, 2 when the scan set cannot be enumerated, holds no
+# assignment or no read, a required tool is missing, or a file cannot be
+# parsed as shell.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -92,6 +140,7 @@ readonly SCRIPTS_DIR="${SCRIPTS_DIR_OVERRIDE:-scripts}"
 readonly TESTS_DIR="${TESTS_DIR_OVERRIDE:-tests}"
 
 readonly MARKER_RE='^[[:space:]]*#[[:space:]]*payload-source-exempt:[[:space:]]*([^[:space:]].*)?$'
+readonly READ_MARKER_RE='^[[:space:]]*#[[:space:]]*payload-read-exempt:[[:space:]]*([^[:space:]].*)?$'
 
 # jq program over one file's syntax tree. It emits the count of named
 # assignments in the file on its first line, then one tab-separated
@@ -134,16 +183,107 @@ readonly AST_PROG='
 | (["\($count)"] + $rows) | .[]
 '
 
-# @description Echo the exemption marker's rationale for $1, or nothing
-# (and fail) if the file carries no valid marker. A marker whose
-# rationale is empty does not count — the same "empty exemption is drift,
-# not an exemption" rule this repo's sibling markers already enforce.
+# jq program over one file's syntax tree for the read rule. It emits
+# `reads<TAB>violations` on its first line — `reads` counts every
+# `read_json_payload_into` call plus every `cat -- <path>` command,
+# whether or not that read is exempt, so a file scanned entirely
+# through the helper still proves the scan reached it; `violations`
+# counts only the reads that are neither a self-created temp nor
+# excused by the marker checked below — then one tab-separated
+# `line<TAB>display` row per violation.
+#
+# `has_temp_creation` and the `$temp_vars` set below answer "did this
+# file create the thing this read opens", by checking whether a
+# variable's assigned value contains a call to `make_temp` or `mktemp`
+# anywhere in its subtree, the same permissive containment check
+# `AST_PROG`'s CmdSubst detection above already relies on rather than
+# pattern-matching the assignment's exact shape.
+#
+# `word_text` reads the same three word shapes `AST_PROG` distinguishes
+# — single-quoted, bare, and double-quoted-wrapping-one-part — but keeps
+# the variable name separate from the display text: a `ParamExp` names
+# the variable a read opens, a bare `Lit` names a path with no
+# variable to trace at all (so it can never be a self-created temp), and
+# both need the same `// ""` coalesce `AST_PROG` documents — the parser
+# omits a node's value field when the value is empty, and reading that
+# field unguarded aborts jq with exit 5 exactly as it did there.
+# shellcheck disable=SC2016 # jq program literal; $-prefixed names are jq variables, not shell
+readonly READ_AST_PROG='
+def word_text:
+  (.Parts // []) as $ps
+  | if ($ps | length) == 1 and $ps[0].Type == "ParamExp"
+    then {var: $ps[0].Param.Value, text: ("\"${" + $ps[0].Param.Value + "}\"")}
+    elif ($ps | length) == 1 and $ps[0].Type == "DblQuoted"
+      and (($ps[0].Parts | length) == 1) and ($ps[0].Parts[0].Type == "ParamExp")
+    then {var: $ps[0].Parts[0].Param.Value, text: ("\"${" + $ps[0].Parts[0].Param.Value + "}\"")}
+    elif ($ps | length) == 1 and $ps[0].Type == "Lit"
+    then {var: null, text: ($ps[0].Value // "")}
+    elif ($ps | length) == 1 and $ps[0].Type == "SglQuoted"
+    then {var: null, text: ("\u0027" + ($ps[0].Value // "") + "\u0027")}
+    else {var: null, text: "<expr>"} end;
+
+def is_temp_call:
+  .Type == "CallExpr"
+  and ((.Args[0].Parts[0].Value // "") as $c | ($c == "make_temp" or $c == "mktemp"));
+
+def has_temp_creation:
+  [.. | objects | select(is_temp_call)] | length > 0;
+
+def arg_literals:
+  [.Args[]? | (.Parts[0].Value // "")];
+
+def is_cat_dash_dash:
+  (.Type == "CallExpr")
+  and ((.Args[0].Parts[0].Value // "") == "cat")
+  and (arg_literals | any(. == "--"));
+
+# The path operand is the word after `--`, located rather than read off
+# a fixed argument index. `cat --squeeze-blank -- "${p}"` is a legal
+# spelling of the same read and puts the operand one place further
+# along; an index-based reader lands on the separator there, reports
+# `cat -- --` — naming nothing a maintainer can act on — and, worse,
+# finds no variable to trace, which defeats the self-created-temp
+# exemption below and turns a script tearing down its own scratch file
+# into a violation.
+def cat_path_word:
+  (arg_literals | index("--")) as $i
+  | if $i == null then {} else (.Args[$i + 1] // {}) end;
+
+[.. | objects
+  | select(.Type == "CallExpr" or .Type == "DeclClause")
+  | ((.Assigns // []) + (.Args // []))[]
+  | select(.Name != null)
+  | select(.Value != null)
+  | select(.Value | has_temp_creation)
+  | .Name.Value] as $temp_vars
+| [.. | objects
+  | select(is_cat_dash_dash)
+  | . as $c
+  | ($c | cat_path_word | word_text) as $w
+  | {line: $c.Pos.Line, var: $w.var, text: $w.text}] as $cat_reads
+| ([.. | objects | select(.Type == "CallExpr")
+    | select((.Args[0].Parts[0].Value // "") == "read_json_payload_into")] | length) as $helper_count
+| ([$cat_reads[]
+    | . as $r
+    | select($r.var == null or ($temp_vars | index($r.var)) == null)] ) as $candidates
+| (($cat_reads | length) + $helper_count) as $reads
+| ($candidates | length) as $violation_count
+| [$candidates[] | "\(.line)\t\(.text)"] as $rows
+| (["\($reads)\t\($violation_count)"] + $rows) | .[]
+'
+
+# @description Echo the marker's rationale for $1 under regex $2, or
+# nothing (and fail) if the file carries no valid marker of that shape. A
+# marker whose rationale is empty does not count — the same "empty
+# exemption is drift, not an exemption" rule this repo's sibling markers
+# already enforce.
 # @arg $1 file to read
-function exempt_rationale() {
-  local -r f="$1"
+# @arg $2 marker regex, with the rationale in capture group 1
+function marker_rationale() {
+  local -r f="$1" marker_re="$2"
   local line
   while IFS= read -r line; do
-    if [[ ${line} =~ ${MARKER_RE} ]]; then
+    if [[ ${line} =~ ${marker_re} ]]; then
       [[ -n ${BASH_REMATCH[1]:-} ]] || continue
       printf '%s' "${BASH_REMATCH[1]}"
       return 0
@@ -158,6 +298,7 @@ glob_into scan_set "shell files under ${SCRIPTS_DIR}, ${SCRIPTS_DIR}/lib and ${T
 
 files_scanned=0
 assignments_examined=0
+reads_examined=0
 exemptions_applied=0
 declare -a stale_findings=()
 declare -a violation_findings=()
@@ -191,21 +332,53 @@ for file in "${scan_set[@]}"; do
   files_scanned=$((files_scanned + 1))
   assignments_examined=$((assignments_examined + rows[0]))
 
-  if rationale="$(exempt_rationale "${file}")"; then
+  if rationale="$(marker_rationale "${file}" "${MARKER_RE}")"; then
     if ((${#rows[@]} > 1)); then
       exemptions_applied=$((exemptions_applied + 1))
     else
       stale_findings+=("$(printf '%s: carries a payload-source-exempt marker but holds no assignment the rule matches (marker rationale: %s)' \
         "${file}" "${rationale}")")
     fi
-    continue
+  else
+    for ((i = 1; i < ${#rows[@]}; i++)); do
+      IFS=$'\t' read -r hit_line hit_var hit_lit <<<"${rows[i]}"
+      violation_findings+=("$(printf '%s:%s: %s=%s hand-names a payload source — fill it with payload_source_into (%s/lib/payload.sh), or mark the file with a "# payload-source-exempt: <rationale>" comment' \
+        "${file}" "${hit_line}" "${hit_var}" "'${hit_lit}'" "${SCRIPTS_DIR}")")
+    done
   fi
 
-  for ((i = 1; i < ${#rows[@]}; i++)); do
-    IFS=$'\t' read -r hit_line hit_var hit_lit <<<"${rows[i]}"
-    violation_findings+=("$(printf '%s:%s: %s=%s hand-names a payload source — fill it with payload_source_into (%s/lib/payload.sh), or mark the file with a "# payload-source-exempt: <rationale>" comment' \
-      "${file}" "${hit_line}" "${hit_var}" "'${hit_lit}'" "${SCRIPTS_DIR}")")
-  done
+  # The read rule scopes to a script deciding how to read its own
+  # payload — `<scripts>/*.sh` alone, never `<scripts>/lib` or
+  # `<tests>`, matching the file's own top-level directory rather than
+  # which scan_set glob produced it, so a fixture root behaves exactly
+  # like the real one.
+  if [[ "$(dirname -- "${file}")" == "${SCRIPTS_DIR}" ]]; then
+    read_report=''
+    if ! read_report="$(jq --raw-output "${READ_AST_PROG}" <<<"${ast_json}")"; then
+      printf '%s: jq failed walking the parsed syntax tree for the read rule\n' "${file}" >&2
+      exit 2
+    fi
+
+    declare -a read_rows=()
+    mapfile -t read_rows <<<"${read_report}"
+    IFS=$'\t' read -r file_reads file_violations <<<"${read_rows[0]}"
+    reads_examined=$((reads_examined + file_reads))
+
+    if read_rationale="$(marker_rationale "${file}" "${READ_MARKER_RE}")"; then
+      if ((file_violations > 0)); then
+        exemptions_applied=$((exemptions_applied + 1))
+      else
+        stale_findings+=("$(printf '%s: carries a payload-read-exempt marker but holds no hand-rolled read the rule matches (marker rationale: %s)' \
+          "${file}" "${read_rationale}")")
+      fi
+    else
+      for ((i = 1; i < ${#read_rows[@]}; i++)); do
+        IFS=$'\t' read -r hit_line hit_text <<<"${read_rows[i]}"
+        violation_findings+=("$(printf '%s:%s: cat -- %s hand-reads a payload — fill it with read_json_payload_into (%s/lib/payload.sh), or mark the file with a "# payload-read-exempt: <rationale>" comment' \
+          "${file}" "${hit_line}" "${hit_text}" "${SCRIPTS_DIR}")")
+      done
+    fi
+  fi
 done
 
 failed=0
@@ -223,12 +396,24 @@ if ((failed > 0)); then
   exit 1
 fi
 
+# Two independent breadth floors, checked separately: an assignment
+# count of zero and a read count of zero are different scans stopping
+# short — the source-naming rule and the read rule walk disjoint node
+# shapes, so one detector losing its footing does not zero out the
+# other's tally, and a single combined guard would let that happen
+# unnoticed.
 if ((assignments_examined == 0)) && [[ -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
   printf '%s: examined 0 assignment(s) across %d file(s) under %s, %s/lib and %s — set LINT_ALLOW_EMPTY_SCAN=1 if this root deliberately holds none\n' \
     "${0##*/}" "${files_scanned}" "${SCRIPTS_DIR}" "${SCRIPTS_DIR}" "${TESTS_DIR}" >&2
   exit 2
 fi
 
-printf '%s: ok — %d file(s) scanned, %d assignment(s) examined, %d violation(s), %d exemption(s) applied\n' \
-  "${0##*/}" "${files_scanned}" "${assignments_examined}" "${failed}" "${exemptions_applied}"
+if ((reads_examined == 0)) && [[ -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
+  printf '%s: examined 0 read(s) across %d file(s) under %s — set LINT_ALLOW_EMPTY_SCAN=1 if this root deliberately holds none\n' \
+    "${0##*/}" "${files_scanned}" "${SCRIPTS_DIR}" >&2
+  exit 2
+fi
+
+printf '%s: ok — %d file(s) scanned, %d assignment(s) examined, %d violation(s), %d exemption(s) applied, %d read(s) examined\n' \
+  "${0##*/}" "${files_scanned}" "${assignments_examined}" "${failed}" "${exemptions_applied}" "${reads_examined}"
 exit 0

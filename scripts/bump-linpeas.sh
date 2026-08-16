@@ -46,19 +46,19 @@ function main() {
   fi
   readonly repo_root pin_file
 
-  if [[ ! -f ${pin_file} ]]; then
-    log_err "${pin_file} not found"
-    exit 2
-  fi
-
+  # Both payload gates below carry a subject. The pin file's source kind
+  # — `PIN_FILE_OVERRIDE` under a fixture, `linpeas-pin.json` otherwise —
+  # is shared with the dashboard generator, which reads the same file,
+  # so the source alone leaves an operator unable to tell which script
+  # could not read its pin.
   local pin_json pin_source
-  pin_json="$(cat -- "${pin_file}")"
   payload_source_into pin_source PIN_FILE_OVERRIDE 'linpeas-pin.json'
+  read_json_payload_into pin_json "${pin_file}" "${pin_source}" 'bump-linpeas pin'
   require_json_payload "${pin_source}" "${pin_json}" '
     if type != "object" then "payload is \(type), want object"
     elif (.version | type) != "string" then ".version is \(.version | type), want string"
     else empty
-    end'
+    end' 'bump-linpeas pin'
 
   local current_version
   current_version="$(jq --raw-output .version <<<"${pin_json}")"
@@ -73,12 +73,15 @@ function main() {
   release_json="$(gh api \
     --header 'X-GitHub-Api-Version: 2022-11-28' \
     repos/peass-ng/PEASS-ng/releases/latest)"
+  # Subject for the same reason the pin gate above carries one: the
+  # dashboard generator names this identical API route when it fetches
+  # upstream's latest release live.
   require_json_payload 'repos/peass-ng/PEASS-ng/releases/latest' "${release_json}" '
     if type != "object" then "payload is \(type), want object"
     elif (.tag_name | type) != "string" then ".tag_name is \(.tag_name | type), want string"
     elif (.assets | type) != "array" then ".assets is \(.assets | type), want array"
     else empty
-    end'
+    end' 'bump-linpeas upstream release'
 
   local new_tag
   new_tag="$(printf '%s' "${release_json}" | jq --raw-output .tag_name)"

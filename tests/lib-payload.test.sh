@@ -10,7 +10,13 @@
 # override's own name whether that override is exported or shell-scoped,
 # with the supplied fallback when the override is unset or empty, and
 # that an override name that is not a shell identifier is a could-not-run
-# that names no source at all.
+# that names no source at all. It also proves read_json_payload_into
+# fills its caller's variable with a readable file's contents, exit 0,
+# and that an absent path, an unreadable path, and a non-regular-file
+# path (a directory, and a FIFO with no writer — proven under a
+# `timeout` so a regressed guard fails this scenario instead of hanging
+# the harness) are each a distinct could-not-run naming the source kind,
+# with a supplied subject prefixed to the diagnostic line.
 set -Eeuo pipefail
 IFS=$'\n\t'
 
@@ -341,6 +347,175 @@ if [[ ${rc} -eq 2 ]] &&
 else
   fail "source-into-bad-name: expected exit 2 and no 'named=' line, got exit ${rc}"
   cat -- "${work}/source-into-bad-name.out" "${work}/source-into-bad-name.err" >&2
+fi
+
+# @description Run read_json_payload_into in its own bash process — its
+# could-not-run path calls `exit`, which must terminate only that
+# process, not this harness — capture its streams, and record the
+# outcome with the cross-scenario discrimination gate. The child prints
+# the filled variable on the success path, so a scenario proves the
+# caller's variable was actually written rather than merely that the
+# call returned 0: a helper that filled nothing would pass every
+# exit-code assertion.
+# @arg $1 scenario name
+# @arg $2 path to read (passed as read_json_payload_into's $2)
+# @arg $3 source kind (passed as $3)
+# @arg $4 subject, or '' for none (passed as $4)
+# @arg $5 asserted substring for the discrimination gate
+# @arg $6 optional whole-seconds timeout; '' runs the child directly. A
+#   fixture that a regressed guard would leave to block forever (a FIFO
+#   with no writer) needs this so the regression surfaces as this
+#   scenario's own failure rather than a wedged harness process.
+function run_read_into() {
+  local -r name="$1" path="$2" source_kind="$3" subject="$4" substring="$5" \
+    timeout_secs="${6:-}"
+  local -r script="${work}/${name}.sh"
+  local -r out="${work}/${name}.out"
+  local -r err="${work}/${name}.err"
+  local -r outcome="${work}/${name}.outcome"
+  cat >"${script}" <<'SCRIPT'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
+source "${LOGLIB}"
+source "${PAYLOADLIB}"
+filled=''
+read_json_payload_into filled "${READ_PATH}" "${SOURCE_KIND}" "${SUBJECT}"
+printf 'filled=%s\n' "${filled}"
+SCRIPT
+  chmod +x "${script}"
+  rc=0
+  if [[ -n ${timeout_secs} ]]; then
+    env \
+      LOGLIB="${LOGLIB}" PAYLOADLIB="${LIB}" \
+      READ_PATH="${path}" SOURCE_KIND="${source_kind}" SUBJECT="${subject}" \
+      timeout --kill-after="1s" "${timeout_secs}s" \
+      bash "${script}" >"${out}" 2>"${err}" || rc=$?
+  else
+    env \
+      LOGLIB="${LOGLIB}" PAYLOADLIB="${LIB}" \
+      READ_PATH="${path}" SOURCE_KIND="${source_kind}" SUBJECT="${subject}" \
+      bash "${script}" >"${out}" 2>"${err}" || rc=$?
+  fi
+  printf 'harness-assert-outcome: exit=%d\n' "${rc}" >"${outcome}"
+  harness_assert_record "${name}" "${substring}" "${outcome}" "${out}" "${err}"
+}
+
+readonly READ_FIXTURES="${work}/read-fixtures"
+mkdir -- "${READ_FIXTURES}"
+
+# 14. read-happy — a readable file's contents land in the caller's
+# variable, exit 0.
+readonly READ_HAPPY_FIXTURE="${READ_FIXTURES}/happy.txt"
+printf 'read-happy-body' >"${READ_HAPPY_FIXTURE}"
+run_read_into 'read-happy' "${READ_HAPPY_FIXTURE}" 'READ_HAPPY_SOURCE' '' \
+  'filled=read-happy-body'
+if [[ ${rc} -eq 0 ]] &&
+  grep --fixed-strings --line-regexp --quiet -- 'filled=read-happy-body' \
+    "${work}/read-happy.out"; then
+  pass 'read-happy: a readable file fills the caller variable, exit 0'
+else
+  fail "read-happy: expected exit 0 + 'filled=read-happy-body', got exit ${rc}"
+  cat -- "${work}/read-happy.out" "${work}/read-happy.err" >&2
+fi
+
+# 15. read-missing — an absent path is a could-not-run naming the source
+# kind, never a raw "No such file" from `cat`.
+readonly READ_MISSING_FIXTURE="${READ_FIXTURES}/missing.txt"
+run_read_into 'read-missing' "${READ_MISSING_FIXTURE}" 'READ_MISSING_SOURCE' '' \
+  'payload from READ_MISSING_SOURCE not found'
+if [[ ${rc} -eq 2 ]] &&
+  grep --fixed-strings --quiet -- 'payload from READ_MISSING_SOURCE not found' \
+    "${work}/read-missing.err" &&
+  ! grep --fixed-strings --quiet -- 'filled=' "${work}/read-missing.out"; then
+  pass 'read-missing: an absent path is exit 2, stderr names the source kind, nothing filled'
+else
+  fail "read-missing: expected exit 2 + 'payload from READ_MISSING_SOURCE not found', got exit ${rc}"
+  cat -- "${work}/read-missing.out" "${work}/read-missing.err" >&2
+fi
+
+# 16. read-unreadable — a file whose mode forbids the read is a
+# could-not-run distinct from "not found". Root ignores mode bits
+# entirely, so this scenario has no lever under root and is skipped
+# rather than faked; the directory scenario below covers the same
+# could-not-run class for every user including root. The fixture is
+# created here rather than checked in, since git does not preserve mode
+# 000.
+readonly READ_UNREADABLE_FIXTURE="${READ_FIXTURES}/unreadable.txt"
+printf '{}' >"${READ_UNREADABLE_FIXTURE}"
+chmod 000 -- "${READ_UNREADABLE_FIXTURE}"
+if [[ ${EUID} -eq 0 ]]; then
+  printf 'SKIP: unreadable-payload scenario (running as root)\n'
+  pass 'read-unreadable: skipped as root, mode bits are no lever for root'
+else
+  run_read_into 'read-unreadable' "${READ_UNREADABLE_FIXTURE}" 'READ_UNREADABLE_SOURCE' '' \
+    'payload from READ_UNREADABLE_SOURCE is not readable'
+  if [[ ${rc} -eq 2 ]] &&
+    grep --fixed-strings --quiet -- 'payload from READ_UNREADABLE_SOURCE is not readable' \
+      "${work}/read-unreadable.err" &&
+    ! grep --fixed-strings --quiet -- 'filled=' "${work}/read-unreadable.out"; then
+    pass 'read-unreadable: an unreadable file is exit 2, distinct from not-found'
+  else
+    fail "read-unreadable: expected exit 2 + 'payload from READ_UNREADABLE_SOURCE is not readable', got exit ${rc}"
+    cat -- "${work}/read-unreadable.out" "${work}/read-unreadable.err" >&2
+  fi
+fi
+
+# 17. read-directory — a directory passes both the existence and the
+# readable checks and is rejected by the not-a-regular-file guard before
+# any read is attempted, which is what keeps this arm exercisable for
+# every user including root, where the unreadable-file scenario above
+# has no lever.
+readonly READ_DIR_FIXTURE="${READ_FIXTURES}/directory-payload"
+mkdir -- "${READ_DIR_FIXTURE}"
+run_read_into 'read-directory' "${READ_DIR_FIXTURE}" 'READ_DIR_SOURCE' '' \
+  'payload from READ_DIR_SOURCE could not be read'
+if [[ ${rc} -eq 2 ]] &&
+  grep --fixed-strings --quiet -- 'payload from READ_DIR_SOURCE could not be read' \
+    "${work}/read-directory.err" &&
+  ! grep --fixed-strings --quiet -- 'filled=' "${work}/read-directory.out"; then
+  pass 'read-directory: a directory payload is exit 2, distinct from not-found and not-readable'
+else
+  fail "read-directory: expected exit 2 + 'payload from READ_DIR_SOURCE could not be read', got exit ${rc}"
+  cat -- "${work}/read-directory.out" "${work}/read-directory.err" >&2
+fi
+
+# 18. read-subject — a supplied subject is prefixed to the diagnostic,
+# same as require_json_payload's own subject argument.
+readonly READ_SUBJECT_FIXTURE="${READ_FIXTURES}/subject-missing.txt"
+run_read_into 'read-subject' "${READ_SUBJECT_FIXTURE}" 'READ_SUBJECT_SOURCE' 'my-subject' \
+  'my-subject: payload from READ_SUBJECT_SOURCE not found'
+if [[ ${rc} -eq 2 ]] &&
+  grep --fixed-strings --line-regexp --quiet -- \
+    'my-subject: payload from READ_SUBJECT_SOURCE not found' "${work}/read-subject.err" &&
+  ! grep --fixed-strings --quiet -- 'filled=' "${work}/read-subject.out"; then
+  pass 'read-subject: a supplied subject prefixes the diagnostic line'
+else
+  fail "read-subject: expected exit 2 + a line beginning 'my-subject: ', got exit ${rc}"
+  cat -- "${work}/read-subject.out" "${work}/read-subject.err" >&2
+fi
+
+# 19. read-fifo — a FIFO with no writer passes the existence and readable
+# checks the same way a directory does, but a directory alone cannot
+# prove the not-a-regular-file guard reaches its verdict without
+# attempting a read: `cat` on a directory fails immediately regardless of
+# whether that guard runs first, so a regression deleting the guard could
+# still hide behind the final read-failure guard for a directory. A FIFO
+# does not fail promptly — `cat` on one with no writer blocks forever —
+# so this scenario is the one a regressed guard turns into a hang rather
+# than a wrong exit code, which is why it runs under `timeout`.
+readonly READ_FIFO_FIXTURE="${READ_FIXTURES}/fifo-payload"
+mkfifo -- "${READ_FIFO_FIXTURE}"
+run_read_into 'read-fifo' "${READ_FIFO_FIXTURE}" 'READ_FIFO_SOURCE' '' \
+  'payload from READ_FIFO_SOURCE could not be read' 5
+if [[ ${rc} -eq 2 ]] &&
+  grep --fixed-strings --quiet -- 'payload from READ_FIFO_SOURCE could not be read' \
+    "${work}/read-fifo.err" &&
+  ! grep --fixed-strings --quiet -- 'filled=' "${work}/read-fifo.out"; then
+  pass 'read-fifo: a FIFO with no writer is exit 2 without blocking'
+else
+  fail "read-fifo: expected exit 2 + 'payload from READ_FIFO_SOURCE could not be read' within the timeout, got exit ${rc}"
+  cat -- "${work}/read-fifo.out" "${work}/read-fifo.err" >&2
 fi
 
 harness_assert_verify || failures=$((failures + 1))

@@ -74,26 +74,79 @@ function run_follows_scenario() {
   run_pair_scenario "${name}" 'base-follows.lock' "${head}" "${expected_exit}" "${expected_msg}"
 }
 
-# @arg $1 scenario name ; missing base => operational error (exit 2)
-function run_missing_base() {
-  local -r name="$1"
+# Points one of BASE_LOCK_FILE / HEAD_LOCK_FILE at a caller-supplied
+# payload path while the other keeps the valid default fixture, so a
+# scenario proves the could-not-run path fires on the override under
+# test and nowhere else. Shared by the absent, unreadable, and
+# directory-payload scenarios below — each supplies a different kind of
+# broken path and lets this function drive the script and assert the
+# outcome.
+# @arg $1 scenario name  @arg $2 override var (BASE_LOCK_FILE or HEAD_LOCK_FILE)
+# @arg $3 payload path to use for that var  @arg $4 expected exit
+# @arg $5 expected output substring (empty skips)
+function run_broken_lock_scenario() {
+  local -r name="$1" var="$2" payload="$3" expected_exit="$4" expected_msg="$5"
   local out_file outcome_file
   out_file="$(mktemp)"
   outcome_file="$(mktemp)"
+  local base_lock="${FIXTURES}/base.lock" head_lock="${FIXTURES}/base.lock"
+  case "${var}" in
+  BASE_LOCK_FILE) base_lock="${payload}" ;;
+  HEAD_LOCK_FILE) head_lock="${payload}" ;;
+  esac
   local actual_exit=0
-  BASE_LOCK_FILE="${FIXTURES}/does-not-exist.lock" \
-    HEAD_LOCK_FILE="${FIXTURES}/base.lock" \
+  BASE_LOCK_FILE="${base_lock}" \
+    HEAD_LOCK_FILE="${head_lock}" \
     "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
-  if [[ ${actual_exit} -ne 2 ]]; then
-    printf 'FAIL: %s — expected exit 2, got %d\n' "${name}" "${actual_exit}" >&2
+  harness_assert_record "${name}" "${expected_msg}" "${outcome_file}" "${out_file}"
+  if [[ ${actual_exit} -ne ${expected_exit} ]]; then
+    printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${expected_exit}" "${actual_exit}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  elif [[ -n ${expected_msg} ]] &&
+    ! grep --fixed-strings --quiet -- "${expected_msg}" "${out_file}"; then
+    printf 'FAIL: %s — output missing %q\n' "${name}" "${expected_msg}" >&2
     cat -- "${out_file}" >&2
     failures=$((failures + 1))
   else
-    printf 'PASS: %s (exit 2)\n' "${name}"
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
-  harness_assert_record "${name}" '' "${outcome_file}" "${out_file}"
   rm --force -- "${outcome_file}" "${out_file}"
+}
+
+# @arg $1 scenario name  @arg $2 override var  @arg $3 expected output substring
+function run_absent_lock_scenario() {
+  local -r name="$1" var="$2" expected_msg="$3"
+  run_broken_lock_scenario "${name}" "${var}" "${FIXTURES}/does-not-exist.lock" 2 "${expected_msg}"
+}
+
+# Mode bits are no lever for root, so this scenario self-skips there —
+# the directory scenario below covers the same could-not-run path for
+# every user including root.
+# @arg $1 scenario name  @arg $2 override var  @arg $3 expected output substring
+function run_unreadable_lock_scenario() {
+  local -r name="$1" var="$2" expected_msg="$3"
+  if [[ ${EUID} -eq 0 ]]; then
+    printf 'SKIP: %s (running as root — mode bits are no lever)\n' "${name}"
+    return 0
+  fi
+  local payload
+  payload="$(mktemp)"
+  printf '{}' >"${payload}"
+  chmod 000 -- "${payload}"
+  run_broken_lock_scenario "${name}" "${var}" "${payload}" 2 "${expected_msg}"
+  chmod 600 -- "${payload}"
+  rm --force -- "${payload}"
+}
+
+# @arg $1 scenario name  @arg $2 override var  @arg $3 expected output substring
+function run_directory_lock_scenario() {
+  local -r name="$1" var="$2" expected_msg="$3"
+  local payload
+  payload="$(mktemp --directory)"
+  run_broken_lock_scenario "${name}" "${var}" "${payload}" 2 "${expected_msg}"
+  rm --recursive --force -- "${payload}"
 }
 
 function main() {
@@ -119,7 +172,36 @@ function main() {
     'provenance OK: entry "root"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 2; transitive churn tolerated: 1 added, 1 removed'
   run_scenario 'top-level rename + repoint fails' 'head-toplevel-renamed-repoint.lock' 1 \
     'FAIL: top-level input repointed: alpha (alpha -> alpha_2)'
-  run_missing_base 'missing base errors'
+  # The absent case exits 2 under the canonical could-not-run sentence,
+  # which names the payload by kind — the override variable's own name,
+  # never the fixture path a harness scenario happens to point it at.
+  #
+  # The head-side expectations carry a `flake-lock provenance head`
+  # subject and the base-side ones carry none, which is the naming rule
+  # itself rather than an oversight: on a live run the head read names
+  # its source `flake.lock`, the same kind check-pre-commit-hooks-sha-parity.sh
+  # names for the lock it reads, while the base read names
+  # `<base ref>:flake.lock`, which no other script in the tree produces.
+  # A subject is added where the source kind alone stops identifying the
+  # payload, and nowhere else.
+  run_absent_lock_scenario 'missing base errors' BASE_LOCK_FILE \
+    'payload from BASE_LOCK_FILE not found'
+  run_absent_lock_scenario 'missing head errors' HEAD_LOCK_FILE \
+    'flake-lock provenance head: payload from HEAD_LOCK_FILE not found'
+  # This is the reported defect: an unreadable payload dies under the
+  # raw `cat` failure at exit 1 — the same code this script uses for a
+  # genuine provenance violation.
+  run_unreadable_lock_scenario 'unreadable base is a tooling error, not a violation' \
+    BASE_LOCK_FILE 'payload from BASE_LOCK_FILE is not readable'
+  run_unreadable_lock_scenario 'unreadable head is a tooling error, not a violation' \
+    HEAD_LOCK_FILE 'flake-lock provenance head: payload from HEAD_LOCK_FILE is not readable'
+  # A directory passes the `-f` guard's existence check but fails the
+  # read; the guard's "not found" message does not distinguish that
+  # from a genuinely absent path.
+  run_directory_lock_scenario 'directory-payload base is a tooling error, not a violation' \
+    BASE_LOCK_FILE 'payload from BASE_LOCK_FILE could not be read'
+  run_directory_lock_scenario 'directory-payload head is a tooling error, not a violation' \
+    HEAD_LOCK_FILE 'flake-lock provenance head: payload from HEAD_LOCK_FILE could not be read'
 
   run_follows_scenario 'follows routine bump passes' 'head-follows-routine.lock' 0 \
     'provenance OK: entry "root"; top-level inputs resolved: 4 (1 via follows, max depth 1); shared nodes compared: 3; transitive churn tolerated: 0 added, 0 removed'

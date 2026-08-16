@@ -17,10 +17,11 @@
 # Honors RENOVATE_JSON_OVERRIDE (config path) and SCAN_ROOT (tree root) for
 # fixture testing, and LINT_ALLOW_EMPTY_SCAN=1 to accept an empty scan set.
 # Exits 0 when every marker is live, 1 on any dead marker, 2 on a tooling
-# error — the config file is absent, the file enumeration failed or came
-# back empty, or jq cannot read a customManager's declarations — so no
-# verdict about the markers is available and reporting one would blame a
-# marker for a config-shape problem.
+# error — the config cannot be read at all (absent, unreadable, or not a
+# regular file), its shape fails validation, the file enumeration failed
+# or came back empty, or jq cannot read a customManager's declarations —
+# so no verdict about the markers is available and reporting one would
+# blame a marker for a config-shape problem.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -49,15 +50,11 @@ readonly MARKER_RE='#\s*renovate:\s*datasource=\S+\s+depName='
 payload_source_into payload_source RENOVATE_JSON_OVERRIDE 'renovate.json'
 readonly payload_source
 
-if [[ ! -f ${RENOVATE_JSON} ]]; then
-  printf 'renovate config not found: %s\n' "${payload_source}" >&2
-  exit 2
-fi
-
-if ! renovate_payload="$(cat -- "${RENOVATE_JSON}")"; then
-  printf 'renovate config not readable: %s\n' "${payload_source}" >&2
-  exit 2
-fi
+# read_json_payload_into fills a nameref, so it must run in this shell —
+# never inside `$(...)`, where its `exit 2` would be trapped in a
+# subshell and this script would carry on with an empty renovate_payload.
+read_json_payload_into renovate_payload "${RENOVATE_JSON}" "${payload_source}" \
+  'renovate markers'
 readonly renovate_payload
 
 # One shape gate in front of every read. Without it a config whose top

@@ -692,7 +692,9 @@ hand-rolled (die_op) but genuinely covered.
 
 ### scripts/check-payload-source-helper.sh
 
-Lint: no shell file names a payload's source by hand.
+Lint: no shell file names a payload's source by hand, and
+no shell file under `<scripts>` (excluding `lib/`) reads a JSON payload
+by hand either.
 `payload_source_into` (scripts/lib/payload.sh) fills a caller variable
 with the override variable's name when a fixture supplies the payload
 and with the API route or config filename otherwise, so an assignment
@@ -740,29 +742,74 @@ itself reported, and that report is produced before any violation is,
 so a stale marker surfaces on a tree where the rule is otherwise
 obeyed everywhere.
 
+--- The read rule ---------------------------------------------------------
+
+`read_json_payload_into` (scripts/lib/payload.sh) turns a file path
+into a shape-checked payload while reporting an absent, unreadable, or
+non-regular-file path as a could-not-run. A `cat -- <path>` command
+skips every one of those guards, so a hand-rolled read that later
+feeds `require_json_payload` reproduces the helper's job with none of
+its could-not-run handling — the same cost the source-naming rule
+above exists to stop, one level earlier in the same read.
+
+The rule is broader than "feeds require_json_payload": every
+`cat -- <path>` command under `<scripts>` outside `<scripts>/lib` is a
+violation, whether or not this run can prove its output later reaches
+the shape gate. A predicate that only fires when it can trace the read
+into `require_json_payload` by variable name misses a read wrapped in
+its own fetch function — the read and the gate then share no variable
+name for a dataflow check to follow — so the rule does not attempt
+that trace at all.
+
+Capturing the output is likewise not part of the predicate. A read
+whose bytes go straight to stdout skips the same three guards a
+captured one does, and it is the shape a fetch helper writes when its
+caller does the capturing, so scoping the rule to `x="$(cat -- ...)"`
+would exempt the reads most likely to be written next.
+
+Two shapes read a temp file without hand-rolling anything: a read
+whose path traces back to a `make_temp` (or `mktemp`) result in the
+same file is exempted automatically, and a `# payload-read-exempt: <rationale>` marker excuses the rest, matching this file's
+`payload-source-exempt` marker in every other respect — a marker with
+no rationale excuses nothing, and a marker on a file holding no
+`cat --` command the rule matches is itself reported, before any
+violation is.
+
+What the rule keys on also bounds what it reaches: a payload read
+written as `$(<file)`, `mapfile`, a `while read` redirection, or a
+file operand handed to `jq`/`yq` is not a `cat --` command and no part
+of this scan sees it.
+
 --- Breadth -------------------------------------------------------------
 
 The scan set is `<scripts>/*.sh`, `<scripts>/lib/*.sh` and
 `<tests>/*.sh`. The library arm is not optional: the helper itself
 lives there, its neighbors are the files most likely to copy it, and
 the older shell-hygiene lints in this repo stop at the top level. The
-clean verdict reports files scanned and assignments examined rather
-than a bare "ok", because a detector that stopped reaching assignments
-and a tree with nothing to report emit the same exit code otherwise.
+read rule narrows to `<scripts>/*.sh` alone — a hand-rolled read in a
+library or a harness is not the shape this rule polices, since neither
+one is a caller deciding how to read its own payload. The clean
+verdict reports files scanned, assignments examined, and reads
+examined rather than a bare "ok", because a detector that stopped
+reaching either one and a tree with nothing to report emit the same
+exit code otherwise.
 
 Measured, not assumed: this file's own prose does not self-match. The
 finished lint run against a scan root holding only this script reports
-zero violations across the 30 assignments it examines there — every
+zero violations across every assignment it examines there — each
 mention of the banned shape here is a comment or a format string,
 neither of which the parser files as an assignment — so this file needs
-no exemption marker of its own.
+no exemption marker of its own. The count itself is deliberately not
+quoted: it moves with every edit to this file, and a quoted tally that
+has drifted reads as a measurement nobody re-took.
 
 Honors SCRIPTS_DIR_OVERRIDE (default: scripts), TESTS_DIR_OVERRIDE
 (default: tests), and LINT_ALLOW_EMPTY_SCAN for a scan root that
-deliberately holds no assignment at all.
-Exit 0 clean, 1 on a hand-named source or a stale exemption marker,
-2 when the scan set cannot be enumerated, holds no assignment, a
-required tool is missing, or a file cannot be parsed as shell.
+deliberately holds no assignment and no read at all.
+Exit 0 clean, 1 on a hand-named source, a hand-rolled read, or a stale
+exemption marker, 2 when the scan set cannot be enumerated, holds no
+assignment or no read, a required tool is missing, or a file cannot be
+parsed as shell.
 
 ### scripts/check-permission-scopes.sh
 
@@ -831,9 +878,9 @@ which asserts repo-policy invariants on top of a valid schema.
 
 Honors RENOVATE_JSON_OVERRIDE for fixture testing.
 Exits 0 on a valid config, 1 on any validation error, 2 when the check
-cannot run — the config file is absent, or the validator itself is not
-on PATH. Neither says anything about the config's validity, so neither
-may borrow the rejection code.
+cannot run — the config is absent, unreadable, not a regular file, or
+the validator itself is not on PATH. None of those says anything about
+the config's validity, so none may borrow the rejection code.
 
 payload-subject-exempt: a malformed config is this script's verdict, not an obstacle to it — the validator rejects one at exit 1, so there is no could-not-run outcome for a scenario to prove
 
@@ -861,10 +908,11 @@ heuristic.
 Honors RENOVATE_JSON_OVERRIDE (config path) and SCAN_ROOT (tree root) for
 fixture testing, and LINT_ALLOW_EMPTY_SCAN=1 to accept an empty scan set.
 Exits 0 when every marker is live, 1 on any dead marker, 2 on a tooling
-error — the config file is absent, the file enumeration failed or came
-back empty, or jq cannot read a customManager's declarations — so no
-verdict about the markers is available and reporting one would blame a
-marker for a config-shape problem.
+error — the config cannot be read at all (absent, unreadable, or not a
+regular file), its shape fails validation, the file enumeration failed
+or came back empty, or jq cannot read a customManager's declarations —
+so no verdict about the markers is available and reporting one would
+blame a marker for a config-shape problem.
 
 ### scripts/check-required-checks-no-paths.sh
 

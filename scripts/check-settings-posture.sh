@@ -61,13 +61,35 @@ function report_drift() {
   drift_count=$((drift_count + 1))
 }
 
-# @description Fetch a JSON document either from an override fixture
-# or via `gh api`.
-# @arg $1 override env var name
-# @arg $2 API path
-function fetch_json() {
-  local -r override_var="$1"
-  local -r api_path="$2"
+# @description Fetch a JSON document via `gh api`.
+# @arg $1 API path
+function fetch_json_live() {
+  local -r api_path="$1"
+  gh api --header 'X-GitHub-Api-Version: 2022-11-28' -- "${api_path}"
+}
+
+# @description Fill the caller's variable from an override fixture, if
+# one is set. Returns 1 (filling nothing) when no override is set, so
+# the caller falls through to its own literal `fetch_json_live`
+# assignment — kept in the caller rather than folded into this helper,
+# so a static shell-script analyzer sees a literal assignment to the
+# caller's variable name and does not flag it as read-but-never-set. A
+# nameref buried inside this helper would be invisible to that analysis
+# even though the assignment happens at runtime.
+#
+# `read_json_payload_into` fills a nameref, so it must run in the
+# calling shell — never inside `$(...)`, where its `exit 2` would be
+# trapped in a subshell and the caller would carry on with an empty
+# payload. This function is always invoked as a plain command, never
+# captured with `$(...)`, so the read below runs directly here.
+# @arg $1 name of the caller variable to fill
+# @arg $2 override env var name
+# @arg $3 source kind, as named by payload_source_into for this override
+# @exitcode 1 no override is set; the caller must fetch live
+function fetch_json_override_into() {
+  local -r out_var="$1"
+  local -r override_var="$2"
+  local -r src="$3"
   # Resolved by indirect expansion so this reader and the source namer
   # honor the same set of variables. An env-only reader paired with a
   # scope-agnostic namer would name a source the fetch did not use. The
@@ -75,11 +97,8 @@ function fetch_json() {
   # BASH_COMMAND, names the failing read by the path it used rather than
   # by the indirection that produced it.
   local -r override="${!override_var:-}"
-  if [[ -n ${override} ]]; then
-    cat -- "${override}"
-    return
-  fi
-  gh api --header 'X-GitHub-Api-Version: 2022-11-28' -- "${api_path}"
+  [[ -n ${override} ]] || return 1
+  read_json_payload_into "${out_var}" "${override}" "${src}"
 }
 
 # @description Read a `.path.to.field` from JSON and compare it to an
@@ -100,20 +119,24 @@ function assert_field() {
   fi
 }
 
-repo_json="$(fetch_json REPO_JSON_OVERRIDE "/repos/${THIS_REPO}")"
 payload_source_into repo_source REPO_JSON_OVERRIDE "/repos/${THIS_REPO}"
 readonly repo_source
+if ! fetch_json_override_into repo_json REPO_JSON_OVERRIDE "${repo_source}"; then
+  repo_json="$(fetch_json_live "/repos/${THIS_REPO}")"
+fi
 require_json_payload "${repo_source}" "${repo_json}" '
   if type != "object" then "payload is \(type), want object"
   elif (.security_and_analysis | type) != "object" then ".security_and_analysis is \(.security_and_analysis | type), want object"
   else empty
   end'
 
-actions_perms_json="$(fetch_json ACTIONS_PERMS_JSON_OVERRIDE \
-  "/repos/${THIS_REPO}/actions/permissions")"
 payload_source_into actions_perms_source ACTIONS_PERMS_JSON_OVERRIDE \
   "/repos/${THIS_REPO}/actions/permissions"
 readonly actions_perms_source
+if ! fetch_json_override_into actions_perms_json ACTIONS_PERMS_JSON_OVERRIDE \
+  "${actions_perms_source}"; then
+  actions_perms_json="$(fetch_json_live "/repos/${THIS_REPO}/actions/permissions")"
+fi
 require_json_payload "${actions_perms_source}" "${actions_perms_json}" '
   if type != "object" then "payload is \(type), want object"
   elif (.allowed_actions | type) != "string" then ".allowed_actions is \(.allowed_actions | type), want string"
@@ -121,11 +144,14 @@ require_json_payload "${actions_perms_source}" "${actions_perms_json}" '
   else empty
   end'
 
-actions_workflow_perms_json="$(fetch_json ACTIONS_WORKFLOW_PERMS_JSON_OVERRIDE \
-  "/repos/${THIS_REPO}/actions/permissions/workflow")"
 payload_source_into actions_workflow_perms_source ACTIONS_WORKFLOW_PERMS_JSON_OVERRIDE \
   "/repos/${THIS_REPO}/actions/permissions/workflow"
 readonly actions_workflow_perms_source
+if ! fetch_json_override_into actions_workflow_perms_json \
+  ACTIONS_WORKFLOW_PERMS_JSON_OVERRIDE "${actions_workflow_perms_source}"; then
+  actions_workflow_perms_json="$(fetch_json_live \
+    "/repos/${THIS_REPO}/actions/permissions/workflow")"
+fi
 require_json_payload "${actions_workflow_perms_source}" "${actions_workflow_perms_json}" '
   if type != "object" then "payload is \(type), want object"
   elif (.default_workflow_permissions | type) != "string" then ".default_workflow_permissions is \(.default_workflow_permissions | type), want string"
@@ -133,11 +159,14 @@ require_json_payload "${actions_workflow_perms_source}" "${actions_workflow_perm
   else empty
   end'
 
-env_github_pages_json="$(fetch_json ENV_GITHUB_PAGES_JSON_OVERRIDE \
-  "/repos/${THIS_REPO}/environments/github-pages")"
 payload_source_into env_github_pages_source ENV_GITHUB_PAGES_JSON_OVERRIDE \
   "/repos/${THIS_REPO}/environments/github-pages"
 readonly env_github_pages_source
+if ! fetch_json_override_into env_github_pages_json \
+  ENV_GITHUB_PAGES_JSON_OVERRIDE "${env_github_pages_source}"; then
+  env_github_pages_json="$(fetch_json_live \
+    "/repos/${THIS_REPO}/environments/github-pages")"
+fi
 require_json_payload "${env_github_pages_source}" "${env_github_pages_json}" '
   if type != "object" then "payload is \(type), want object"
   elif (.can_admins_bypass | type) != "boolean" then ".can_admins_bypass is \(.can_admins_bypass | type), want boolean"

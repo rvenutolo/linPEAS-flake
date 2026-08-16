@@ -86,6 +86,48 @@ function run_scenario() {
   rm --recursive --force -- "${stub_dir}" "${stdout_file}" "${stderr_file}" "${outcome_file}"
 }
 
+# @description Run the absent-pin-file scenario. Unlike run_scenario's
+# other callers, there is no pin fixture to snapshot before/after — an
+# absent file is the point — so this bypasses that before/after read and
+# stubs `gh` with an arbitrary well-formed release fixture; the pin gate
+# must trip before the stub is ever invoked.
+# @noargs
+function run_absent_pin_scenario() {
+  local -r name='absent pin file is a tooling error'
+  local -r substring='bump-linpeas pin: payload from PIN_FILE_OVERRIDE not found'
+  local -r pin_path="${FIXTURES}/no-such-pin.json"
+  local -r release_path="${FIXTURES}/good-release.json"
+  local stub_dir stdout_file stderr_file outcome_file
+  stub_dir="$(mktemp --directory)"
+  stdout_file="$(mktemp)"
+  stderr_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  write_gh_stub "${stub_dir}" "${release_path}"
+
+  local rc=0
+  PATH="${stub_dir}:${PATH}" \
+    PIN_FILE_OVERRIDE="${pin_path}" \
+    bash "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${rc}" >"${outcome_file}"
+  harness_assert_record "${name}" "${substring}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+
+  if ((rc != 2)); then
+    printf 'FAIL: %s — expected exit 2, got %d\n' "${name}" "${rc}" >&2
+    sed 's/^/    /' "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet -- "${substring}" "${stderr_file}"; then
+    printf 'FAIL: %s — stderr missing %q\n' "${name}" "${substring}" >&2
+    sed 's/^/    /' "${stderr_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s\n' "${name}"
+    passes=$((passes + 1))
+  fi
+
+  rm --recursive --force -- "${stub_dir}" "${stdout_file}" "${stderr_file}" "${outcome_file}"
+}
+
 function main() {
   if [[ ! -f ${SCRIPT} ]]; then
     printf 'FAIL: script not found at %s\n' "${SCRIPT}" >&2
@@ -100,15 +142,28 @@ function main() {
   # the script ever calls `gh`, so which release fixture the stub emits
   # is irrelevant — good-release.json throughout keeps the plumbing
   # identical to the release-payload scenarios below.
+  #
+  # Every expectation carries the `bump-linpeas pin` subject prefix. The
+  # pin file's source kind is shared with the dashboard generator, which
+  # reads the same `PIN_FILE_OVERRIDE` / `linpeas-pin.json` pair, so the
+  # source alone leaves an operator unable to tell which script could not
+  # read its pin. Asserting the prefix here is what keeps that
+  # discrimination from being dropped: this harness sees only its own
+  # scenarios, and a cross-file collision is invisible to the
+  # per-harness discrimination gate.
   run_scenario 'empty pin payload is a tooling error' \
     'bad-pin-empty.json' 'good-release.json' 2 \
-    'empty payload from PIN_FILE_OVERRIDE'
+    'bump-linpeas pin: empty payload from PIN_FILE_OVERRIDE'
   run_scenario 'pin payload that is not JSON is a tooling error' \
     'bad-pin-not-json.txt' 'good-release.json' 2 \
-    'payload from PIN_FILE_OVERRIDE is not valid JSON'
+    'bump-linpeas pin: payload from PIN_FILE_OVERRIDE is not valid JSON'
   run_scenario 'boolean-typed pin payload is a tooling error' \
     'bad-pin-wrong-type.json' 'good-release.json' 2 \
-    'unexpected payload shape from PIN_FILE_OVERRIDE: payload is boolean, want object'
+    'bump-linpeas pin: unexpected payload shape from PIN_FILE_OVERRIDE: payload is boolean, want object'
+  # An absent pin file is a could-not-run, distinct from the
+  # empty/not-JSON/wrong-type shape gate above — the file never even
+  # opens.
+  run_absent_pin_scenario
 
   # Upstream-release scenarios: the pin is well-formed so execution
   # reaches the `gh api` fetch (the stub above intercepts it), and the
@@ -116,15 +171,19 @@ function main() {
   # override exists for this payload — bump-linpeas.sh always calls
   # `gh`, live or stubbed — so the source is named by the literal API
   # path, matching check-tag-protection.sh's no-override convention.
+  # That literal path is the same route the dashboard generator names
+  # when it fetches upstream's latest release live, so these
+  # expectations carry the `bump-linpeas upstream release` subject for
+  # the same reason the pin scenarios above carry theirs.
   run_scenario 'empty release payload is a tooling error' \
     'good-pin.json' 'bad-release-empty.json' 2 \
-    'empty payload from repos/peass-ng/PEASS-ng/releases/latest'
+    'bump-linpeas upstream release: empty payload from repos/peass-ng/PEASS-ng/releases/latest'
   run_scenario 'release payload that is not JSON is a tooling error' \
     'good-pin.json' 'bad-release-not-json.txt' 2 \
-    'payload from repos/peass-ng/PEASS-ng/releases/latest is not valid JSON'
+    'bump-linpeas upstream release: payload from repos/peass-ng/PEASS-ng/releases/latest is not valid JSON'
   run_scenario 'boolean-typed release payload is a tooling error' \
     'good-pin.json' 'bad-release-wrong-type.json' 2 \
-    'unexpected payload shape from repos/peass-ng/PEASS-ng/releases/latest: payload is boolean, want object'
+    'bump-linpeas upstream release: unexpected payload shape from repos/peass-ng/PEASS-ng/releases/latest: payload is boolean, want object'
 
   # Well-formed payloads, already at the upstream tag: both gates pass
   # and the script exits 0 at its "already at latest" short-circuit —

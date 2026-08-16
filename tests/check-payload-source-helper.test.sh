@@ -76,10 +76,13 @@ function main() {
   # (a) GOOD: the source is named by the helper, so no assignment writes
   # an override variable's name. Asserted on the whole tally, not on the
   # violation count alone: the count of assignments actually examined is
-  # what separates a scan from a skip.
+  # what separates a scan from a skip. This fixture predates the read
+  # rule and holds no cat -- capture or helper read at all, so the read
+  # tally is legitimately zero and needs the same override (l) below
+  # uses for a zero assignment tally.
   expect 'a helper-named source is clean' \
     "${FIXTURES}/clean/scripts" "${no_tests}" 0 \
-    '1 file(s) scanned, 2 assignment(s) examined, 0 violation(s), 0 exemption(s) applied'
+    '1 file(s) scanned, 2 assignment(s) examined, 0 violation(s), 0 exemption(s) applied, 0 read(s) examined' 1
 
   # (b) BAD: the hand-inlined conditional, single-quoted — the shape all
   # ten pre-helper copies in this repo were written in.
@@ -103,10 +106,11 @@ function main() {
   # (e) GOOD: the same shape as (b) carrying a marker with a rationale.
   # Asserted on the exemption tally rather than on exit 0, so the
   # scenario proves the marker was read and applied rather than that
-  # nothing was found.
+  # nothing was found. Holds no cat -- capture either, so it needs the
+  # same empty-read override (a) does.
   expect 'a declared exemption clears the assignment' \
     "${FIXTURES}/exempt/scripts" "${no_tests}" 0 \
-    '1 exemption(s) applied'
+    '0 violation(s), 1 exemption(s) applied, 0 read(s) examined' 1
 
   # (f) BAD: a marker with no rationale. An exemption nobody has to
   # justify is a way to switch the rule off in place, so the empty
@@ -129,10 +133,11 @@ function main() {
   # text unguarded dies on this file — and a lint that swallows that
   # status reports the file clean and exits 0 all the same. The assertion
   # is therefore the assignment tally, which only a completed scan
-  # produces.
+  # produces. Holds no cat -- capture either, so it needs the same
+  # empty-read override (a) does.
   expect 'an empty single-quoted assignment is scanned, not skipped' \
     "${FIXTURES}/empty-quote/scripts" "${no_tests}" 0 \
-    '1 file(s) scanned, 3 assignment(s) examined, 0 violation(s), 0 exemption(s) applied'
+    '1 file(s) scanned, 3 assignment(s) examined, 0 violation(s), 0 exemption(s) applied, 0 read(s) examined' 1
 
   # (i) BREADTH: the banned shape inside scripts/lib/. The helper this
   # rule points at lives there, so a scan that stops at the top level
@@ -160,10 +165,108 @@ function main() {
     "${FIXTURES}/no-assignments/scripts" "${no_tests}" 0 \
     '1 file(s) scanned, 0 assignment(s) examined, 0 violation(s), 0 exemption(s) applied' 1
 
-  # (m) LIVE: the real tree must satisfy the lint with no exemption at
-  # all — every payload source in it is named by the library helper.
-  expect 'the live tree is clean' \
-    "${REPO_ROOT}/scripts" "${REPO_ROOT}/tests" 0 ''
+  # --- the read rule -------------------------------------------------------
+
+  # (n) GOOD: the payload is read through the library helper, so no
+  # cat -- capture appears in this file for the rule to examine.
+  expect 'a helper-read payload is clean' \
+    "${FIXTURES}/read-clean/scripts" "${no_tests}" 0 \
+    '1 file(s) scanned, 3 assignment(s) examined, 0 violation(s), 0 exemption(s) applied, 1 read(s) examined'
+
+  # (o) BAD: a hand-rolled cat -- capture, gated the way a real payload
+  # read would be. The rule does not require the dataflow proof that the
+  # captured variable actually reaches a gate — the capture alone is the
+  # violation, since a fetch wrapped in its own function shares no
+  # variable name with the gate for a dataflow check to follow.
+  # shellcheck disable=SC2016 # literal fixture text, not a shell expansion
+  expect 'a hand-rolled cat -- read is a violation' \
+    "${FIXTURES}/read-inlined/scripts" "${no_tests}" 1 \
+    'cat -- "${payload_path}" hand-reads a payload'
+
+  # (p) GOOD: the same shape as (o), excused by a marker carrying a
+  # rationale. Asserted on the exemption tally and the read tally
+  # together, so the scenario proves the marker was read and applied
+  # rather than that the capture went unexamined.
+  expect 'a declared read exemption clears the capture' \
+    "${FIXTURES}/read-exempt/scripts" "${no_tests}" 0 \
+    '3 assignment(s) examined, 0 violation(s), 1 exemption(s) applied, 1 read(s) examined'
+
+  # (q) BAD: a marker with no rationale. The same "empty exemption is
+  # drift" rule the source-naming marker enforces applies here too.
+  # shellcheck disable=SC2016 # literal fixture text, not a shell expansion
+  expect 'a read marker with no rationale excuses nothing' \
+    "${FIXTURES}/read-empty-marker/scripts" "${no_tests}" 1 \
+    'cat -- "${payload_path}" hand-reads a payload'
+
+  # (r) BAD: a marker on a file that already reads through the helper.
+  # The file holds no capture the rule matches, so the marker is drift
+  # and is reported before any violation would be.
+  expect 'a read marker excusing nothing is a violation' \
+    "${FIXTURES}/read-stale-marker/scripts" "${no_tests}" 1 \
+    'carries a payload-read-exempt marker but holds no hand-rolled read the rule matches'
+
+  # (s) GOOD: a cat -- capture of a temp file this same script created.
+  # The automatic temp exemption needs no marker — a script tearing down
+  # its own scratch file is not the shape this rule polices.
+  expect 'a read of a self-created temp is clean' \
+    "${FIXTURES}/read-temp/scripts" "${no_tests}" 0 \
+    '2 assignment(s) examined, 0 violation(s), 0 exemption(s) applied, 1 read(s) examined'
+
+  # (u) GOOD: a read of a self-created temp whose `cat` carries an
+  # option ahead of the `--` separator. The path operand is the word
+  # after `--`, wherever that lands, so a detector reading a fixed
+  # argument position sees the separator instead of the variable, finds
+  # no variable to trace, and reports a temp the script created itself.
+  # The fixture carries one assignment more than (n) and two more than
+  # (s), so its clean tally is its own rather than a repeat of theirs.
+  expect 'a flagged read of a self-created temp is clean' \
+    "${FIXTURES}/read-flagged-temp/scripts" "${no_tests}" 0 \
+    '4 assignment(s) examined, 0 violation(s), 0 exemption(s) applied, 1 read(s) examined'
+
+  # (v) BAD: the same option-before-`--` shape reading a payload path.
+  # The report has to name that path operand; a report naming `--` tells
+  # a maintainer nothing about which read to convert.
+  # shellcheck disable=SC2016 # literal fixture text, not a shell expansion
+  expect 'a flagged hand-rolled read names the path, not the separator' \
+    "${FIXTURES}/read-flagged-payload/scripts" "${no_tests}" 1 \
+    'cat -- "${payload_path}" hand-reads a payload'
+
+  # (t) LIVE: the real tree must satisfy both rules — zero violations,
+  # every hand-rolled read either converted or carrying a
+  # `payload-read-exempt` marker with a rationale. The exit code alone
+  # cannot tell a scan that reached the whole tree apart from one that
+  # silently stopped early, so the assertion also covers the breadth
+  # counts themselves — nonzero assignments and nonzero reads examined
+  # — rather than a substring lifted from today's file count, which
+  # would pin this scenario to a moving target as the tree grows.
+  local live_out_file live_outcome_file live_exit live_assignments live_reads
+  live_out_file="$(mktemp)"
+  live_outcome_file="$(mktemp)"
+  live_exit=0
+  "${SCRIPT}" >"${live_out_file}" 2>&1 || live_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${live_exit}" >"${live_outcome_file}"
+  harness_assert_record 'the live tree is clean' '' "${live_outcome_file}" "${live_out_file}"
+  if [[ ${live_exit} -ne 0 ]]; then
+    printf 'FAIL: the live tree is clean — expected exit 0, got %d\n' "${live_exit}" >&2
+    cat -- "${live_out_file}" >&2
+    failures=$((failures + 1))
+  else
+    live_assignments="$(grep -oE '[0-9]+ assignment\(s\) examined' "${live_out_file}" | grep -oE '^[0-9]+' || true)"
+    live_reads="$(grep -oE '[0-9]+ read\(s\) examined' "${live_out_file}" | grep -oE '^[0-9]+' || true)"
+    if [[ -z ${live_assignments} || ${live_assignments} -eq 0 ]]; then
+      printf 'FAIL: the live tree is clean — 0 assignments examined\n' >&2
+      cat -- "${live_out_file}" >&2
+      failures=$((failures + 1))
+    elif [[ -z ${live_reads} || ${live_reads} -eq 0 ]]; then
+      printf 'FAIL: the live tree is clean — 0 reads examined\n' >&2
+      cat -- "${live_out_file}" >&2
+      failures=$((failures + 1))
+    else
+      printf 'PASS: the live tree is clean (exit 0, %d assignment(s) examined, %d read(s) examined)\n' \
+        "${live_assignments}" "${live_reads}"
+    fi
+  fi
+  rm --force -- "${live_out_file}" "${live_outcome_file}"
 
   harness_assert_verify || failures=$((failures + 1))
 
