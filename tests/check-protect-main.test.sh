@@ -63,6 +63,120 @@ function run_scenario() {
   rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
 }
 
+# Points one override at an unreadable payload while the other two keep
+# the good fixtures, so a scenario proves the could-not-run path fires on
+# the override under test and nowhere else. Mode bits are no lever for
+# root, so this scenario is skipped there; run_directory_scenario below
+# covers the same class for every user including root.
+# @arg $1 scenario name
+# @arg $2 override variable to point at the unreadable payload
+# @arg $3 expected stderr substring
+function run_unreadable_scenario() {
+  local -r name="$1" override_var="$2" expected_stderr="$3"
+  if [[ ${EUID} -eq 0 ]]; then
+    printf 'SKIP: %s (running as root — mode bits are no lever)\n' "${name}"
+    return 0
+  fi
+  local payload
+  payload="$(mktemp)"
+  printf '{}' >"${payload}"
+  chmod 000 -- "${payload}"
+
+  local ruleset_override="${FIXTURES}/good/live.json"
+  local mirror_override="${FIXTURES}/good/mirror.json"
+  local doc_override="${FIXTURES}/good/required-checks.md"
+  case "${override_var}" in
+  PROTECT_MAIN_RULESET_JSON_OVERRIDE) ruleset_override="${payload}" ;;
+  MIRROR_JSON_OVERRIDE) mirror_override="${payload}" ;;
+  DOC_TABLE_OVERRIDE) doc_override="${payload}" ;;
+  esac
+
+  local stderr_file stdout_file outcome_file
+  stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+
+  local actual_exit=0
+  PROTECT_MAIN_RULESET_JSON_OVERRIDE="${ruleset_override}" \
+    MIRROR_JSON_OVERRIDE="${mirror_override}" \
+    DOC_TABLE_OVERRIDE="${doc_override}" \
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${expected_stderr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+
+  if [[ ${actual_exit} -ne 2 ]]; then
+    printf 'FAIL: %s — expected exit 2, got %d\n' "${name}" "${actual_exit}" >&2
+    printf 'stderr was:\n' >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet -- "${expected_stderr}" "${stderr_file}"; then
+    printf 'FAIL: %s — stderr missing %q\n' "${name}" "${expected_stderr}" >&2
+    printf 'stderr was:\n' >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+
+  rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
+  chmod 600 -- "${payload}"
+  rm --force -- "${payload}"
+}
+
+# Points one override at a directory instead of a file. A directory fails
+# the read for every user, root included — no mode bits stand between it
+# and the could-not-run path — so this scenario keeps that path proven
+# even when run_unreadable_scenario above self-skips.
+# @arg $1 scenario name
+# @arg $2 override variable to point at the directory
+# @arg $3 expected stderr substring
+function run_directory_scenario() {
+  local -r name="$1" override_var="$2" expected_stderr="$3"
+  local payload
+  payload="$(mktemp --directory)"
+
+  local ruleset_override="${FIXTURES}/good/live.json"
+  local mirror_override="${FIXTURES}/good/mirror.json"
+  local doc_override="${FIXTURES}/good/required-checks.md"
+  case "${override_var}" in
+  PROTECT_MAIN_RULESET_JSON_OVERRIDE) ruleset_override="${payload}" ;;
+  MIRROR_JSON_OVERRIDE) mirror_override="${payload}" ;;
+  DOC_TABLE_OVERRIDE) doc_override="${payload}" ;;
+  esac
+
+  local stderr_file stdout_file outcome_file
+  stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+
+  local actual_exit=0
+  PROTECT_MAIN_RULESET_JSON_OVERRIDE="${ruleset_override}" \
+    MIRROR_JSON_OVERRIDE="${mirror_override}" \
+    DOC_TABLE_OVERRIDE="${doc_override}" \
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${expected_stderr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+
+  if [[ ${actual_exit} -ne 2 ]]; then
+    printf 'FAIL: %s — expected exit 2, got %d\n' "${name}" "${actual_exit}" >&2
+    printf 'stderr was:\n' >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet -- "${expected_stderr}" "${stderr_file}"; then
+    printf 'FAIL: %s — stderr missing %q\n' "${name}" "${expected_stderr}" >&2
+    printf 'stderr was:\n' >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+
+  rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
+  rm --recursive --force -- "${payload}"
+}
+
 function main() {
   run_scenario 'matching live + mirror passes' \
     'good' 0 ''
@@ -106,7 +220,7 @@ function main() {
   # Absent inputs are read failures, not posture drift: with no mirror
   # there is nothing to compare the live ruleset against.
   run_scenario 'absent mirror is a tooling error' \
-    'no-such-fixture' 2 'mirror file not found'
+    'no-such-fixture' 2 'protect-main mirror: payload from MIRROR_JSON_OVERRIDE not found'
   # A malformed ruleset payload is a could-not-run, not drift or a raw
   # jq crash: the doc-table check above already proved mirror/doc parity
   # runs before the live ruleset is even fetched, so these three reuse
@@ -120,6 +234,25 @@ function main() {
   run_scenario 'boolean-typed ruleset payload is a tooling error' \
     'bad-ruleset-wrong-type' 2 \
     'protect-main ruleset: unexpected payload shape from PROTECT_MAIN_RULESET_JSON_OVERRIDE: payload is boolean, want object'
+
+  # This is the reported defect: an unreadable payload must report a
+  # could-not-run (exit 2), not drift (exit 1). One scenario per override
+  # that reads through the JSON helper, plus the doc table's own guard.
+  run_unreadable_scenario 'unreadable ruleset override is a tooling error, not drift' \
+    PROTECT_MAIN_RULESET_JSON_OVERRIDE \
+    'protect-main ruleset: payload from PROTECT_MAIN_RULESET_JSON_OVERRIDE is not readable'
+  run_unreadable_scenario 'unreadable mirror override is a tooling error, not drift' \
+    MIRROR_JSON_OVERRIDE \
+    'protect-main mirror: payload from MIRROR_JSON_OVERRIDE is not readable'
+  run_unreadable_scenario 'unreadable doc table override is a tooling error, not drift' \
+    DOC_TABLE_OVERRIDE \
+    'required-checks doc is not readable:'
+  # A directory passes both the existence and (typically) the readable
+  # checks, so it proves the could-not-run path for every user, root
+  # included, where the unreadable scenario above self-skips.
+  run_directory_scenario 'directory-payload ruleset override is a tooling error, not drift' \
+    PROTECT_MAIN_RULESET_JSON_OVERRIDE \
+    'protect-main ruleset: payload from PROTECT_MAIN_RULESET_JSON_OVERRIDE could not be read'
 
   # The no-op-ruleset guard (fetch_ruleset hard-fails when the live
   # ruleset id is empty) is unreachable through run_scenario, which always
