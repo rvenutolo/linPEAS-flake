@@ -448,6 +448,10 @@ Every job whose harden-runner `allowed-endpoints:` carries `cache.nixos.org` or 
 
 Every rule elsewhere in `scripts/check-egress-allowlist.sh` binds a host to a tool that must be present; this is the first binding a host to a tool that must be reachable — the two nix hosts are cheap to leave in an allowlist by copy-paste long after the job that needed them stops installing Nix, and nothing else in this repo's tooling notices.
 
+The reverse direction is bound too: every job with a step whose `uses:` names the `./.github/actions/setup-nix` composite must carry **both** `cache.nixos.org` and `releases.nixos.org`. The composite fetches the installer from one and every substitution from the other, so a job that installs Nix without both allowed fails on its first substituter fetch with a `connection refused` against a healthy public host — harden-runner's block signature, which reads as an outage rather than as an allowlist gap. Each host is required on its own, so a job carrying one is reported for the other alone rather than blanket-failed.
+
+Both directions share a single matcher for what counts as the composite, bounded so a same-prefixed path such as `./.github/actions/setup-nix-cache-thing` is neither credited as reaching nix nor required to carry its hosts. A substring test satisfies both directions wrongly and in opposite directions at once, which is why the boundary is pinned by a fixture rather than by reading.
+
 An empty-reason marker is rejected outright, and a marker on a job whose allowlist carries neither host is reported as stale — the rule it would exempt does not apply to that job, so the marker's own justification has gone stale along with it.
 
 Detection deliberately does not follow callees: a job reaching nix indirectly through a `scripts/*.sh` invocation or a `just` recipe is invisible to both the `uses:` and `run:` arms and needs the marker instead. The reason a reviewer reads is what carries the justification in that case, not an approximate call-graph resolver — the same blind-spot tradeoff assertion 4's sigstore rule makes for cosign reached through a script.

@@ -22,7 +22,26 @@
         # implementations, so scripts/refresh-flake-show.sh pins which
         # nix renders the block. Without it the generated output
         # depends on whichever nix the operator has installed.
-        inherit (pkgs-unstable) cosign git-cliff nix;
+        #
+        # `diffoscopeMinimal` is exposed for the same pinning reason,
+        # and it matters most where it is used: reproducibility-check.yml
+        # reaches for it precisely when a build stops being reproducible,
+        # so the diagnostic must not depend on whatever a mutable
+        # reference serves that week. The minimal variant is the one
+        # exposed because the full package's closure is an order of
+        # magnitude larger — more than a runner already holding two build
+        # artifacts can substitute — while the handlers it drops are for
+        # formats that job never compares; its inputs are a gzipped
+        # tarball and a container image tar, both of which the minimal
+        # handler set reads. The attribute keeps the upstream name so the
+        # generated docs/reference/flake-outputs.md says which variant is
+        # published; the binary it provides is `diffoscope`.
+        inherit (pkgs-unstable)
+          cosign
+          diffoscopeMinimal
+          git-cliff
+          nix
+          ;
       };
 
       apps = {

@@ -53,6 +53,20 @@ expect bad-scorecard-missing-osv.yml 1 "api.osv.dev"
 expect bad-scorecard-missing-deps-dev.yml 1 "api.deps.dev"
 expect bad-attestation-verify-missing-tuf.yml 1 "tuf-repo.github.com"
 
+# The mirror of assertion 7: a job that runs the setup-nix composite must carry
+# both nix hosts. Proven per host rather than all-or-nothing — the second
+# fixture carries cache.nixos.org and is still a violation, and its single
+# violation count is what proves the rule did not blanket-demand both hosts
+# from a job already carrying one.
+expect bad-nix-setup-nix-missing-both-hosts.yml 1 "does not allowlist cache.nixos.org"
+expect bad-nix-setup-nix-missing-both-hosts.yml 1 "does not allowlist releases.nixos.org"
+expect bad-nix-setup-nix-missing-releases-host.yml 1 "does not allowlist releases.nixos.org"
+expect bad-nix-setup-nix-missing-releases-host.yml 1 "1 egress-allowlist violation(s)"
+# Boundary discipline for the same rule: a composite whose path merely starts
+# with the setup-nix path is a different action, so it is not required to carry
+# the nix hosts. A bare substring test would fail this fixture.
+expect good-nix-lookalike-without-hosts.yml 0 ""
+
 # A workflow yq cannot parse must fail loud, not empty the scan silently.
 expect bad-malformed.yml 1 "could not evaluate"
 
