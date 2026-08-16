@@ -86,6 +86,48 @@ function run_scenario() {
   rm --recursive --force -- "${stub_dir}" "${stdout_file}" "${stderr_file}" "${outcome_file}"
 }
 
+# @description Run the absent-pin-file scenario. Unlike run_scenario's
+# other callers, there is no pin fixture to snapshot before/after — an
+# absent file is the point — so this bypasses that before/after read and
+# stubs `gh` with an arbitrary well-formed release fixture; the pin gate
+# must trip before the stub is ever invoked.
+# @noargs
+function run_absent_pin_scenario() {
+  local -r name='absent pin file is a tooling error'
+  local -r substring='payload from PIN_FILE_OVERRIDE not found'
+  local -r pin_path="${FIXTURES}/no-such-pin.json"
+  local -r release_path="${FIXTURES}/good-release.json"
+  local stub_dir stdout_file stderr_file outcome_file
+  stub_dir="$(mktemp --directory)"
+  stdout_file="$(mktemp)"
+  stderr_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  write_gh_stub "${stub_dir}" "${release_path}"
+
+  local rc=0
+  PATH="${stub_dir}:${PATH}" \
+    PIN_FILE_OVERRIDE="${pin_path}" \
+    bash "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${rc}" >"${outcome_file}"
+  harness_assert_record "${name}" "${substring}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+
+  if ((rc != 2)); then
+    printf 'FAIL: %s — expected exit 2, got %d\n' "${name}" "${rc}" >&2
+    sed 's/^/    /' "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet -- "${substring}" "${stderr_file}"; then
+    printf 'FAIL: %s — stderr missing %q\n' "${name}" "${substring}" >&2
+    sed 's/^/    /' "${stderr_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s\n' "${name}"
+    passes=$((passes + 1))
+  fi
+
+  rm --recursive --force -- "${stub_dir}" "${stdout_file}" "${stderr_file}" "${outcome_file}"
+}
+
 function main() {
   if [[ ! -f ${SCRIPT} ]]; then
     printf 'FAIL: script not found at %s\n' "${SCRIPT}" >&2
@@ -109,6 +151,10 @@ function main() {
   run_scenario 'boolean-typed pin payload is a tooling error' \
     'bad-pin-wrong-type.json' 'good-release.json' 2 \
     'unexpected payload shape from PIN_FILE_OVERRIDE: payload is boolean, want object'
+  # An absent pin file is a could-not-run, distinct from the
+  # empty/not-JSON/wrong-type shape gate above — the file never even
+  # opens.
+  run_absent_pin_scenario
 
   # Upstream-release scenarios: the pin is well-formed so execution
   # reaches the `gh api` fetch (the stub above intercepts it), and the

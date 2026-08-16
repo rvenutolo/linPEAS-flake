@@ -401,9 +401,31 @@ function main() {
 
   # Scenario 3b: the pin file itself is absent. The script never runs, so
   # this is exit 2 (fix the environment) rather than a rejected input.
+  # The source is named by kind (the override variable), never by the
+  # fixture path that names the scenario.
   run_scenario 'absent pin file cannot be read' \
-    'linpeas-pin-absent.json not found' 2 \
+    'payload from PIN_FILE_OVERRIDE not found' 2 \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/linpeas-pin-absent.json"
+
+  # Scenario 3f-h: the same could-not-run treatment for the three
+  # override-or-live fetches gated by require_json_payload. Each keeps
+  # every upstream override valid so the run reaches that fetch, and
+  # points only the override under test at an absent path.
+  run_scenario 'absent upstream-release payload is a tooling error' \
+    'payload from UPSTREAM_RELEASE_JSON_OVERRIDE not found' 2 \
+    "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
+    "UPSTREAM_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/upstream-release-absent.json"
+  run_scenario 'absent this-repo-releases payload is a tooling error' \
+    'payload from THIS_REPO_RELEASES_JSON_OVERRIDE not found' 2 \
+    "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
+    "UPSTREAM_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-upstream-release.json" \
+    "THIS_REPO_RELEASES_JSON_OVERRIDE=${FIXTURES_DIR}/this-repo-releases-absent.json"
+  run_scenario 'absent upstream-releases payload is a tooling error' \
+    'payload from UPSTREAM_RELEASES_JSON_OVERRIDE not found' 2 \
+    "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
+    "UPSTREAM_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-upstream-release.json" \
+    "THIS_REPO_RELEASES_JSON_OVERRIDE=${FIXTURES_DIR}/good-this-repo-releases.json" \
+    "UPSTREAM_RELEASES_JSON_OVERRIDE=${FIXTURES_DIR}/upstream-releases-absent.json"
 
   # Scenario 3c-e: a malformed pin payload is a could-not-run, not the raw
   # `jq` crash an unguarded read of it would produce and not the

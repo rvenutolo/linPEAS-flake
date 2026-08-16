@@ -84,6 +84,11 @@ function main() {
   run_scenario 'boolean-typed flake.lock is a tooling error' \
     'bad-lock-wrong-type' 2 \
     'unexpected payload shape from FLAKE_LOCK_OVERRIDE: payload is boolean, want object'
+  # flake.nix resolves (so the URL-SHA extraction that runs first
+  # succeeds) but flake.lock itself is absent — a could-not-run on the
+  # payload read, not the empty/not-JSON/wrong-type shape gate above.
+  run_scenario 'absent flake.lock is a tooling error' \
+    'bad-lock-absent' 2 'payload from FLAKE_LOCK_OVERRIDE not found'
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
