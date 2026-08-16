@@ -76,10 +76,13 @@ function main() {
   # (a) GOOD: the source is named by the helper, so no assignment writes
   # an override variable's name. Asserted on the whole tally, not on the
   # violation count alone: the count of assignments actually examined is
-  # what separates a scan from a skip.
+  # what separates a scan from a skip. This fixture predates the read
+  # rule and holds no cat -- capture or helper read at all, so the read
+  # tally is legitimately zero and needs the same override (l) below
+  # uses for a zero assignment tally.
   expect 'a helper-named source is clean' \
     "${FIXTURES}/clean/scripts" "${no_tests}" 0 \
-    '1 file(s) scanned, 2 assignment(s) examined, 0 violation(s), 0 exemption(s) applied'
+    '1 file(s) scanned, 2 assignment(s) examined, 0 violation(s), 0 exemption(s) applied, 0 read(s) examined' 1
 
   # (b) BAD: the hand-inlined conditional, single-quoted — the shape all
   # ten pre-helper copies in this repo were written in.
@@ -103,10 +106,11 @@ function main() {
   # (e) GOOD: the same shape as (b) carrying a marker with a rationale.
   # Asserted on the exemption tally rather than on exit 0, so the
   # scenario proves the marker was read and applied rather than that
-  # nothing was found.
+  # nothing was found. Holds no cat -- capture either, so it needs the
+  # same empty-read override (a) does.
   expect 'a declared exemption clears the assignment' \
     "${FIXTURES}/exempt/scripts" "${no_tests}" 0 \
-    '1 exemption(s) applied'
+    '0 violation(s), 1 exemption(s) applied, 0 read(s) examined' 1
 
   # (f) BAD: a marker with no rationale. An exemption nobody has to
   # justify is a way to switch the rule off in place, so the empty
@@ -129,10 +133,11 @@ function main() {
   # text unguarded dies on this file — and a lint that swallows that
   # status reports the file clean and exits 0 all the same. The assertion
   # is therefore the assignment tally, which only a completed scan
-  # produces.
+  # produces. Holds no cat -- capture either, so it needs the same
+  # empty-read override (a) does.
   expect 'an empty single-quoted assignment is scanned, not skipped' \
     "${FIXTURES}/empty-quote/scripts" "${no_tests}" 0 \
-    '1 file(s) scanned, 3 assignment(s) examined, 0 violation(s), 0 exemption(s) applied'
+    '1 file(s) scanned, 3 assignment(s) examined, 0 violation(s), 0 exemption(s) applied, 0 read(s) examined' 1
 
   # (i) BREADTH: the banned shape inside scripts/lib/. The helper this
   # rule points at lives there, so a scan that stops at the top level
@@ -160,10 +165,76 @@ function main() {
     "${FIXTURES}/no-assignments/scripts" "${no_tests}" 0 \
     '1 file(s) scanned, 0 assignment(s) examined, 0 violation(s), 0 exemption(s) applied' 1
 
-  # (m) LIVE: the real tree must satisfy the lint with no exemption at
-  # all — every payload source in it is named by the library helper.
-  expect 'the live tree is clean' \
-    "${REPO_ROOT}/scripts" "${REPO_ROOT}/tests" 0 ''
+  # --- the read rule -------------------------------------------------------
+
+  # (n) GOOD: the payload is read through the library helper, so no
+  # cat -- capture appears in this file for the rule to examine.
+  expect 'a helper-read payload is clean' \
+    "${FIXTURES}/read-clean/scripts" "${no_tests}" 0 \
+    '1 file(s) scanned, 3 assignment(s) examined, 0 violation(s), 0 exemption(s) applied, 1 read(s) examined'
+
+  # (o) BAD: a hand-rolled cat -- capture, gated the way a real payload
+  # read would be. The rule does not require the dataflow proof that the
+  # captured variable actually reaches a gate — the capture alone is the
+  # violation, since a fetch wrapped in its own function shares no
+  # variable name with the gate for a dataflow check to follow.
+  # shellcheck disable=SC2016 # literal fixture text, not a shell expansion
+  expect 'a hand-rolled cat -- read is a violation' \
+    "${FIXTURES}/read-inlined/scripts" "${no_tests}" 1 \
+    'cat -- "${payload_path}" hand-reads a payload'
+
+  # (p) GOOD: the same shape as (o), excused by a marker carrying a
+  # rationale. Asserted on the exemption tally and the read tally
+  # together, so the scenario proves the marker was read and applied
+  # rather than that the capture went unexamined.
+  expect 'a declared read exemption clears the capture' \
+    "${FIXTURES}/read-exempt/scripts" "${no_tests}" 0 \
+    '3 assignment(s) examined, 0 violation(s), 1 exemption(s) applied, 1 read(s) examined'
+
+  # (q) BAD: a marker with no rationale. The same "empty exemption is
+  # drift" rule the source-naming marker enforces applies here too.
+  # shellcheck disable=SC2016 # literal fixture text, not a shell expansion
+  expect 'a read marker with no rationale excuses nothing' \
+    "${FIXTURES}/read-empty-marker/scripts" "${no_tests}" 1 \
+    'cat -- "${payload_path}" hand-reads a payload'
+
+  # (r) BAD: a marker on a file that already reads through the helper.
+  # The file holds no capture the rule matches, so the marker is drift
+  # and is reported before any violation would be.
+  expect 'a read marker excusing nothing is a violation' \
+    "${FIXTURES}/read-stale-marker/scripts" "${no_tests}" 1 \
+    'carries a payload-read-exempt marker but holds no hand-rolled read the rule matches'
+
+  # (s) GOOD: a cat -- capture of a temp file this same script created.
+  # The automatic temp exemption needs no marker — a script tearing down
+  # its own scratch file is not the shape this rule polices.
+  expect 'a read of a self-created temp is clean' \
+    "${FIXTURES}/read-temp/scripts" "${no_tests}" 0 \
+    '2 assignment(s) examined, 0 violation(s), 0 exemption(s) applied, 1 read(s) examined'
+
+  # (t) LIVE: every payload source in the real tree is named by the
+  # library helper, so the source-naming rule alone would exit 0 here —
+  # but the read rule's scope is scripts/*.sh, and this tree still
+  # carries reads the helper does not cover. Asserted rather than
+  # assumed clean: check-flake-lock-provenance.sh reads a base file, a
+  # head file, and the working tree's own flake.lock by hand, and is
+  # tracked as its own conversion separate from this rule;
+  # check-pin-digest-provenance.sh and gen-dashboard-data.sh each hold
+  # one more hand-rolled read the helper does not yet cover. This
+  # scenario names the known count rather than asserting a clean exit
+  # this run does not produce, so a change to any of these sites — fixed
+  # or newly broken — surfaces here instead of going unnoticed.
+  # One invocation, several asserted properties: the four sites below all
+  # come from this same run against the real tree, so they are recorded
+  # as one scenario with `harness_assert_also` rather than as four
+  # separate invocations of an identical command.
+  expect 'the live tree carries known unconverted hand-rolled reads' \
+    "${REPO_ROOT}/scripts" "${REPO_ROOT}/tests" 1 \
+    '5 payload-source-helper violation(s)'
+  # shellcheck disable=SC2016 # literal diagnostic text, not a shell expansion
+  harness_assert_also 'check-flake-lock-provenance.sh:107: cat -- "${BASE_LOCK_FILE}"'
+  harness_assert_also 'check-pin-digest-provenance.sh:181:'
+  harness_assert_also 'gen-dashboard-data.sh:125:'
 
   harness_assert_verify || failures=$((failures + 1))
 
