@@ -175,6 +175,7 @@ Hooks (alphabetical):
 | `shellcheck`                        | Shell-script static analysis.                                                                                                                          |
 | `size-label-ignores`                | The size-label ignore list matches what the generators declare they write.                                                                             |
 | `statix`                            | Nix anti-pattern lint.                                                                                                                                 |
+| `test-harnesses-fresh`              | The harness census in docs/reference/test-harnesses.md matches the harnesses in tests/.                                                                |
 | `treefmt`                           | Multi-language formatter aggregator (shfmt, prettier, etc).                                                                                            |
 | `treefmt-config-fresh`              | treefmt-config block in docs/reference/treefmt-config.md matches the evaluated treefmt config.                                                         |
 | `typos`                             | Spell-check across the repo.                                                                                                                           |

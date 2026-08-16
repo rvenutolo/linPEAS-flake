@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# @subject scripts/lib/log.sh
 # tests/lib-log.test.sh — proves scripts/lib/log.sh reports the real
 # exit code (the date-substitution $? clobber is fixed) and that
 # require_tool reports an absent tool as a could-not-run condition.

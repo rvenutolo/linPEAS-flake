@@ -48,6 +48,7 @@ readonly EXEMPT=(
   "invariant-index.md"
   "reference/just-recipes.md"
   "reference/scripts.md"
+  "reference/test-harnesses.md"
   "reference/treefmt-config.md"
   "releases.md"
   "security/enforcement-matrix.md"

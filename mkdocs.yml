@@ -105,6 +105,7 @@ nav:
       - Flake outputs: reference/flake-outputs.md
       - Just recipes: reference/just-recipes.md
       - Scripts: reference/scripts.md
+      - Test harnesses: reference/test-harnesses.md
       - Treefmt config: reference/treefmt-config.md
   - Runbooks:
       - actionlint embedded linters: actionlint-embedded-linters.md

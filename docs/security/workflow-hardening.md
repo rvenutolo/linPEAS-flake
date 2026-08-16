@@ -315,6 +315,14 @@ Both moves that reach parity are therefore about what gets recorded. Each record
 
 Enforced by `scripts/lib/harness-assert.sh`, which runs inside every wired harness, and by `tests/_harness_assert_wired.test.sh`, which holds registration to the allowlist; both are reached by the `harness-group` CI job.
 
+## harness subject declaration
+
+Every `tests/*.test.sh` harness names the file or file set it exercises, either through a `SCRIPT=` assignment pointing into `scripts/` or through a `# @subject` header annotation, and never through both.
+
+The census in [`docs/reference/test-harnesses.md`](../reference/test-harnesses.md) is the one place the tree states what each harness covers, and it is only as trustworthy as the declarations it reads. A harness that names no subject would render as an unknown — a row that reports the harness exists while saying nothing about what a regression in it would protect, which is the question the census is consulted to answer. A harness that names two would render whichever the generator happened to prefer, so a `SCRIPT=` assignment retargeted at a different script leaves a stale `# @subject` line describing coverage nobody has. Refusing both shapes keeps the column a claim someone made deliberately rather than one the generator guessed. The same run refuses a directory under `tests/fixtures/` that no harness's fixture set names, since a census that quietly omitted it would describe a smaller tree than the one on disk; a fixture reached only through an override is declared with a `# @fixtures` annotation.
+
+Enforced by `scripts/refresh-test-harnesses.sh`, which exits 2 rather than rendering an unknown subject. Wired as the `doc-freshness` CI job and as the `test-harnesses-fresh` pre-commit hook.
+
 ## manifest-reaching hook watches nix/hooks
 
 Every pre-commit hook that reaches the Nix hook manifest (`nix eval .#devTooling.<system>.preCommitHooks`) includes `nix/hooks` in its `files` filter. A hook reaches it either through the script its entry runs, or through a flake attribute its entry evaluates whose assigning module reads the manifest.

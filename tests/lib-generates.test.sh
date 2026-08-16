@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# @subject scripts/lib/generates.sh
 # tests/lib-generates.test.sh — proves scripts/lib/generates.sh reads the
 # `@generates` / `@generates-block` annotations out of a script's comment
 # header and nowhere else, emits one unit-separated record per

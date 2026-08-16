@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# @subject scripts/lib/enumerate.sh
 # tests/lib-enumerate.test.sh — proves scripts/lib/enumerate.sh turns a
 # NUL-delimited producer into an array with no line-oriented data loss,
 # that producer failure and an empty scan set are both surfaced as exit 2
