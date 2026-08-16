@@ -429,6 +429,17 @@ Renovate flake-input PR. Each declares the set in two workflow-level
 commit — the compute job holds no write credential, so that list, not the
 artifact it uploads, is the trust boundary.
 
+The second list is not written by hand against the first. Every
+generator already declares what it writes in its own comment header —
+`@generates <path>` for a file it owns outright and
+`@generates-block <path>` for a region it splices into a hand-authored
+file — and the committable set is exactly `flake.lock` plus those
+declared outputs. Both annotation kinds count: the split between whole
+file and spliced block is a judgment about who owns the surrounding
+prose, not about who writes the bytes. `flake.lock` is on the list
+because the workflow writes it directly rather than through a
+generator.
+
 `scripts/check-lock-derived-docs.sh` asserts the two stay in agreement
 with the hooks that declare the dependency. It discovers its subjects
 rather than naming them: every workflow carrying a lock update in a `run`
@@ -442,3 +453,16 @@ lists while running no lock update fails too: the lists outlived the step
 they bounded, and nothing reads them. Adding a lock-derived generator
 without teaching every lock-writing workflow to run it fails the lint
 rather than surfacing later as a PR that cannot merge.
+
+It asserts the committable binding in both directions, per workflow. A
+path a listed generator declares but `COMMITTABLE_PATHS` omits is drift:
+the compute job regenerates the doc, the credentialed job may not commit
+it, and the doc reaches the PR exactly as stale as if the generator had
+never run — on a branch nobody is watching, where the only signal is the
+required freshness gate failing after the fact. A `COMMITTABLE_PATHS`
+entry no listed generator declares is drift in the other direction: it
+widens what the credentialed job may commit past anything the bump
+produces. So is a listed generator that declares no output at all —
+running a generator whose writes are bound to nothing puts its doc
+outside the check entirely, which is the first failure wearing a
+compliant-looking list.

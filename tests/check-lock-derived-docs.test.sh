@@ -69,17 +69,33 @@ readonly NOLOCK_BETA='^(justfile|docs/reference/beta\\.md)$'
 # The two generators a fixture hook can run, both present and executable.
 # A scenario that needs a listed-but-absent generator names a third path
 # nothing writes.
-# ${1}=root
+#
+# Each carries the output declaration the real generators carry, in the
+# header position the annotation parser reads, so a fixture generator
+# states what it writes the way every generator in this repo does.
+#
+# alpha's declaration line is a parameter so a scenario can hand it a
+# different annotation kind or no annotation at all; passing the empty
+# string leaves alpha declaring nothing. Calling this again on a root the
+# tree writer already populated rewrites both generators, which is how a
+# scenario overrides the declaration after `write_tree`.
+#
+# ${1}=root  ${2}=alpha declaration line (default: @generates its doc)
 function write_generators() {
   local -r root="$1"
+  local -r alpha_declaration="${2-# @generates docs/reference/alpha.md}"
   mkdir --parents -- "${root}/scripts"
-  cat >"${root}/scripts/refresh-alpha.sh" <<'EOF'
+  cat >"${root}/scripts/refresh-alpha.sh" <<EOF
 #!/usr/bin/env bash
+# scripts/refresh-alpha.sh
+${alpha_declaration}
 set -Eeuo pipefail
 printf 'alpha\n'
 EOF
   cat >"${root}/scripts/refresh-beta.sh" <<'EOF'
 #!/usr/bin/env bash
+# scripts/refresh-beta.sh
+# @generates docs/reference/beta.md
 set -Eeuo pipefail
 printf 'beta\n'
 EOF
@@ -217,7 +233,7 @@ function main() {
   # reverse direction stays silent and the reported gap is the real one.
   write_tree "${work}/missing-from-workflow" "${LOCK_ALPHA}" "${LOCK_BETA}" \
     '    scripts/refresh-beta.sh' \
-    '    flake.lock'
+    $'    flake.lock\n    docs/reference/beta.md'
   expect 'bad: a lock-triggered hook whose generator the bumper skips fails' \
     "${work}/missing-from-workflow" 1 \
     'scripts/refresh-alpha.sh is absent from LOCK_DERIVED_GENERATORS in .github/workflows/update-flake-lock.yml'
@@ -227,7 +243,7 @@ function main() {
   # bump spends its budget regenerating a doc no gate asks for.
   write_tree "${work}/stale-workflow-entry" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
     $'    scripts/refresh-alpha.sh\n    scripts/refresh-beta.sh' \
-    '    flake.lock'
+    $'    flake.lock\n    docs/reference/alpha.md\n    docs/reference/beta.md'
   expect 'bad: a workflow entry no lock-triggered hook backs fails' \
     "${work}/stale-workflow-entry" 1 \
     'scripts/refresh-beta.sh is in LOCK_DERIVED_GENERATORS in .github/workflows/update-flake-lock.yml, but no lock-triggered hook runs it'
@@ -237,7 +253,7 @@ function main() {
   # than discovered weekly at 05:00 UTC.
   write_tree "${work}/generator-absent" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
     $'    scripts/refresh-alpha.sh\n    scripts/refresh-missing.sh' \
-    '    flake.lock'
+    $'    flake.lock\n    docs/reference/alpha.md'
   expect 'bad: a listed generator missing from disk fails' \
     "${work}/generator-absent" 1 \
     'scripts/refresh-missing.sh is listed in LOCK_DERIVED_GENERATORS in .github/workflows/update-flake-lock.yml but is not an executable generator'
@@ -283,7 +299,7 @@ function main() {
   # not a clean pass.
   write_tree "${work}/no-lock-triggered-hook" "${NOLOCK_ALPHA}" "${NOLOCK_BETA}" \
     '    scripts/refresh-alpha.sh' \
-    '    flake.lock'
+    $'    flake.lock\n    docs/reference/alpha.md'
   expect 'tooling: zero lock-triggered hooks is a could-not-run' \
     "${work}/no-lock-triggered-hook" 2 'no freshness hook declares'
 
@@ -292,7 +308,8 @@ function main() {
   # a set nothing was read from.
   write_generators "${work}/freshness-absent"
   write_workflow "${work}/freshness-absent" 'update-flake-lock.yml' 'true' \
-    '    scripts/refresh-alpha.sh' '    flake.lock'
+    '    scripts/refresh-alpha.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md'
   expect 'tooling: an absent freshness module is a could-not-run' \
     "${work}/freshness-absent" 2 'nix/hooks/freshness.nix not found'
 
@@ -308,7 +325,7 @@ function main() {
   # that runs no generator — a finding about content the lint never read.
   write_tree "${work}/workflow-unparsable" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
     '    scripts/refresh-alpha.sh' \
-    '    flake.lock'
+    $'    flake.lock\n    docs/reference/alpha.md'
   printf ': [ this is not yaml\n' \
     >"${work}/workflow-unparsable/.github/workflows/update-flake-lock.yml"
   expect 'tooling: an unparsable workflow is a could-not-run' \
@@ -347,10 +364,10 @@ function main() {
   # workflow must not absorb the finding.
   write_tree "${work}/sibling-gap" "${LOCK_ALPHA}" "${LOCK_BETA}" \
     $'    scripts/refresh-alpha.sh\n    scripts/refresh-beta.sh' \
-    '    flake.lock'
+    $'    flake.lock\n    docs/reference/alpha.md\n    docs/reference/beta.md'
   write_workflow "${work}/sibling-gap" 'renovate-refresh.yml' 'true' \
     '    scripts/refresh-alpha.sh' \
-    '    flake.lock'
+    $'    flake.lock\n    docs/reference/alpha.md'
   expect 'bad: a per-workflow generator gap names the offending workflow' \
     "${work}/sibling-gap" 1 \
     'scripts/refresh-beta.sh is absent from LOCK_DERIVED_GENERATORS in .github/workflows/renovate-refresh.yml'
@@ -363,7 +380,7 @@ function main() {
     $'    flake.lock\n    docs/reference/alpha.md'
   write_workflow "${work}/dead-config" 'stale-lists.yml' 'false' \
     '    scripts/refresh-alpha.sh' \
-    '    flake.lock'
+    $'    flake.lock\n    docs/reference/alpha.md'
   expect 'bad: a workflow declaring the lists but writing no lock fails' \
     "${work}/dead-config" 1 \
     '.github/workflows/stale-lists.yml declares a lock-derived env list but runs no flake-lock update'
@@ -377,6 +394,63 @@ function main() {
   write_workflow "${work}/no-lock-writer" 'ci.yml' 'false' 'omit' 'omit'
   expect 'tooling: zero lock-writing workflows is a could-not-run' \
     "${work}/no-lock-writer" 2 'no workflow runs a flake-lock update'
+
+  # (r) BAD: a listed generator writes a doc the credentialed job may not
+  # commit. The bump regenerates it and then drops it, so the doc reaches
+  # the PR exactly as stale as if the generator had never run — and the
+  # freshness gate blocks a branch no human is meant to touch.
+  #
+  # Written as the two-subject attribution case, and it is the only
+  # scenario the forward rule owns: the compliant workflow sorts first in
+  # the discovery glob, so a diagnostic that named the wrong subject would
+  # name `renovate-refresh.yml` and this assertion would miss.
+  write_tree "${work}/declared-not-committable" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' \
+    '    flake.lock'
+  write_workflow "${work}/declared-not-committable" 'renovate-refresh.yml' 'true' \
+    '    scripts/refresh-alpha.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md'
+  expect 'bad: a declared output missing from the committable list names its workflow' \
+    "${work}/declared-not-committable" 1 \
+    'scripts/refresh-alpha.sh declares docs/reference/alpha.md, which is absent from COMMITTABLE_PATHS in .github/workflows/update-flake-lock.yml'
+
+  # (s) BAD: a listed generator that declares no output at all. Nothing
+  # binds what it writes to the committable set, so the forward rule is
+  # vacuous for it and the whole binding would pass in silence for the one
+  # generator it covers least.
+  write_tree "${work}/declares-nothing" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' \
+    '    flake.lock'
+  write_generators "${work}/declares-nothing" ''
+  expect 'bad: a listed generator declaring no output fails' \
+    "${work}/declares-nothing" 1 \
+    'scripts/refresh-alpha.sh is listed in LOCK_DERIVED_GENERATORS in .github/workflows/update-flake-lock.yml but declares no @generates or @generates-block path'
+
+  # (t) BAD: a committable entry no listed generator writes. The list
+  # outlived its generator, so it widens what a credentialed job may
+  # commit past anything the bump regenerates.
+  write_tree "${work}/committable-orphan" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md\n    docs/reference/orphan.md'
+  expect 'bad: a committable path no listed generator declares fails' \
+    "${work}/committable-orphan" 1 \
+    'docs/reference/orphan.md is in COMMITTABLE_PATHS in .github/workflows/update-flake-lock.yml, but no listed generator declares it'
+
+  # (u) GOOD: both annotation kinds mean "this generator writes here", so
+  # a `@generates-block` output is bound to the committable set the same
+  # way a whole-file `@generates` output is. Alpha declares its doc as a
+  # block and beta declares its own whole-file, in one tree.
+  #
+  # FALSE-POSITIVE GUARD: this scenario passes against a lint carrying
+  # none of the three rules, so it proves nothing on its own — it exists
+  # to catch a forward or reverse rule that reads only one of the two
+  # kinds and then reports a compliant tree as drift.
+  write_tree "${work}/block-declaration" "${LOCK_ALPHA}" "${LOCK_BETA}" \
+    $'    scripts/refresh-alpha.sh\n    scripts/refresh-beta.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md\n    docs/reference/beta.md'
+  write_generators "${work}/block-declaration" '# @generates-block docs/reference/alpha.md'
+  expect 'agree: a @generates-block output counts as a declared output' \
+    "${work}/block-declaration" 0 ''
 
   harness_assert_verify || failures=$((failures + 1))
 

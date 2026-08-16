@@ -86,7 +86,7 @@ live in `.claude/CLAUDE.md` (untracked).
 - **Cron schedule** — cron schedule table in docs/architecture/ci.md must match workflow cron triggers. → [architecture/ci.md](architecture/ci.md) <!-- enforcer: scripts/check-cron-table.sh; ci: -; hook: check-cron-table -->
 - **Single-source cron schedules** — workflow cron times live only in the ci.md schedule table; other docs link it, never restate a literal HH:MM. → [architecture/ci.md](architecture/ci.md) <!-- enforcer: scripts/check-doc-cron-restatement.sh; ci: lint-doc-invariants; hook: check-doc-cron-restatement -->
 - **update-flake-lock credential split / renovate-flake-lock-refresh** → [architecture/flake-input-bumps.md](architecture/flake-input-bumps.md) <!-- enforcer: -; ci: -; hook: - -->
-- **Lock-derived doc regeneration** — every workflow that writes a `flake.lock` runs a generator for each freshness hook that declares `flake.lock` a trigger, and its committable-path list carries `flake.lock`. → [architecture/flake-input-bumps.md](architecture/flake-input-bumps.md) <!-- enforcer: scripts/check-lock-derived-docs.sh; ci: lint-workflow-security; hook: lock-derived-docs -->
+- **Lock-derived doc regeneration** — every workflow that writes a `flake.lock` runs a generator for each freshness hook that declares `flake.lock` a trigger, and its committable-path list is exactly `flake.lock` plus the outputs those generators declare with `@generates` / `@generates-block`, asserted in both directions. → [architecture/flake-input-bumps.md](architecture/flake-input-bumps.md) <!-- enforcer: scripts/check-lock-derived-docs.sh; ci: lint-workflow-security; hook: lock-derived-docs -->
 
 ## Install / Runbooks
 

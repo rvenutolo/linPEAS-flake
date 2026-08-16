@@ -3,7 +3,8 @@
 #
 # @description Lint: every workflow that writes a flake.lock runs a
 # generator for each freshness hook that declares `flake.lock` a
-# trigger, and commits the lock itself.
+# trigger, and may commit exactly the lock plus the outputs those
+# generators declare with `@generates` / `@generates-block`.
 
 # A freshness hook whose `files` regex names `flake.lock` is a
 # declaration that bumping the lock can leave its doc stale. A workflow
@@ -32,6 +33,8 @@ source "${_lib_dir}/lib/log.sh"
 source "${_lib_dir}/lib/awk-path.sh"
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/generates.sh
+source "${_lib_dir}/lib/generates.sh"
 
 root="${ROOT_OVERRIDE:-$(git rev-parse --show-toplevel)}"
 readonly ROOT="${root}"
@@ -165,6 +168,8 @@ function workflow_list() {
 declare -a lock_writing=()
 workflows_scanned=0
 committable_total=0
+declarations_total=0
+generators_declaring=0
 for wf in "${workflow_files[@]}"; do
   workflows_scanned=$((workflows_scanned + 1))
   rel="${wf#"${ROOT}/"}"
@@ -206,6 +211,11 @@ for wf in "${workflow_files[@]}"; do
   # lint prints would say so.
   unset workflow_generators
   declare -A workflow_generators=()
+  # The generators this run may ask for output declarations. A listed path
+  # with no executable behind it is already reported just below, and
+  # handing it to the parser would turn that finding into a could-not-run
+  # about a file the workflow itself is wrong to name.
+  declare -a generator_sources=()
   while IFS= read -r g; do
     [[ -n ${g} ]] || continue
     workflow_generators["${g}"]=1
@@ -213,7 +223,9 @@ for wf in "${workflow_files[@]}"; do
       printf 'lock-derived-docs: %s is listed in LOCK_DERIVED_GENERATORS in %s but is not an executable generator\n' \
         "${g}" "${rel}" >&2
       failed=$((failed + 1))
+      continue
     fi
+    generator_sources+=("${ROOT}/${g}")
   done <<<"${generators_raw}"
 
   for g in "${!hook_generators[@]}"; do
@@ -244,10 +256,17 @@ for wf in "${workflow_files[@]}"; do
     exit 2
   fi
 
+  # Cleared by name before the re-declaration for the same reason the
+  # generator map is: a set that carried over would let the second subject
+  # be scored against the first subject's committable list, and no
+  # diagnostic this lint prints would say which list it read.
+  unset committable_set
+  declare -A committable_set=()
   lock_listed='false'
   while IFS= read -r p; do
     [[ -n ${p} ]] || continue
     committable_total=$((committable_total + 1))
+    committable_set["${p}"]=1
     [[ ${p} == 'flake.lock' ]] && lock_listed='true'
   done <<<"${committable_raw}"
 
@@ -256,6 +275,77 @@ for wf in "${workflow_files[@]}"; do
       "${rel}" >&2
     failed=$((failed + 1))
   fi
+
+  # The committable set is exactly `flake.lock` plus what the listed
+  # generators declare they write, checked in both directions. A generator
+  # regenerates a doc the credentialed job may not commit and the doc
+  # reaches the PR as stale as if the generator had never run; a list
+  # entry nothing declares widens what that job may commit past anything
+  # the bump produces.
+  #
+  # There is deliberately no global "zero declarations, parser broke"
+  # guard here. Such a guard would key on the same emptiness the
+  # declares-nothing rule below reports, so a tree where every listed
+  # generator declared nothing would exit 2 and leave that rule's exit 1
+  # unreachable — the trap the zero-lock-triggered-hooks guard above
+  # avoids by counting matched blocks rather than collected generators.
+  # The declares-nothing rule fires per generator and owns that case. Lib
+  # health is guarded on the other consumer of the same parser, whose
+  # empty-scan guard covers the whole scripts/ tree, so a parser that
+  # stopped matching fails loudly there.
+  #
+  # Captured with its status checked, because the substitution runs inside
+  # an `if`, where errexit is suppressed: a generator that could not be
+  # read would otherwise arrive as a shorter record stream, scored as a
+  # generator that declares nothing.
+  if ! declaration_records="$(generator_declarations "${generator_sources[@]}")"; then
+    printf 'lock-derived-docs: could not read every generator listed in LOCK_DERIVED_GENERATORS in %s to collect its declared outputs\n' \
+      "${rel}" >&2
+    exit 2
+  fi
+
+  # Same reset discipline as the two maps above: declarations carried over
+  # from the previous subject would let this one inherit outputs it never
+  # runs a generator for, and score a gap it never closed.
+  unset declared_paths
+  declare -A declared_paths=()
+  unset declaring_generators
+  declare -A declaring_generators=()
+  # A here-string of an empty variable still feeds one empty line, so a
+  # workflow whose generators declared nothing reaches this loop as a
+  # single blank record rather than as no iteration at all.
+  while IFS=$'\037' read -r kind path script; do
+    [[ -n ${kind} ]] || continue
+    declarations_total=$((declarations_total + 1))
+    declared_paths["${path}"]=1
+    declaring_generators["${script}"]=1
+    # Both kinds mean the generator writes that path, so both bind it to
+    # the committable set; the split between whole file and spliced block
+    # is a judgment about PR size, not about who writes the bytes.
+    if [[ -z ${committable_set["${path}"]:-} ]]; then
+      printf 'lock-derived-docs: %s declares %s, which is absent from COMMITTABLE_PATHS in %s\n' \
+        "${script#"${ROOT}/"}" "${path}" "${rel}" >&2
+      failed=$((failed + 1))
+    fi
+  done <<<"${declaration_records}"
+
+  for src in "${generator_sources[@]}"; do
+    generators_declaring=$((generators_declaring + 1))
+    [[ -n ${declaring_generators["${src}"]:-} ]] && continue
+    printf 'lock-derived-docs: %s is listed in LOCK_DERIVED_GENERATORS in %s but declares no @generates or @generates-block path\n' \
+      "${src#"${ROOT}/"}" "${rel}" >&2
+    failed=$((failed + 1))
+  done
+
+  for p in "${!committable_set[@]}"; do
+    # The lock is the file the workflow writes itself rather than one a
+    # generator declares, and the assertion just above already owns it.
+    [[ ${p} == 'flake.lock' ]] && continue
+    [[ -n ${declared_paths["${p}"]:-} ]] && continue
+    printf 'lock-derived-docs: %s is in COMMITTABLE_PATHS in %s, but no listed generator declares it\n' \
+      "${p}" "${rel}" >&2
+    failed=$((failed + 1))
+  done
 done
 
 # Guard-the-guard, sibling of the zero-lock-triggered-hooks check above.
@@ -276,7 +366,8 @@ fi
 # A clean run is otherwise silent about how much it checked, which reads
 # identically whether it compared real sets or two empty ones. State the
 # breadth covered, on both halves of the comparison.
-printf 'lock-derived-docs: ok — %d hook block(s) scanned, %d lock-triggered, %d workflow(s) scanned, %d lock-writing, %d committable path(s)\n' \
+printf 'lock-derived-docs: ok — %d hook block(s) scanned, %d lock-triggered, %d workflow(s) scanned, %d lock-writing, %d committable path(s), %d generator declaration(s) resolved across %d listed generator(s)\n' \
   "${total_blocks}" "${lock_triggered}" "${workflows_scanned}" \
-  "${#lock_writing[@]}" "${committable_total}"
+  "${#lock_writing[@]}" "${committable_total}" \
+  "${declarations_total}" "${generators_declaring}"
 exit 0
