@@ -124,10 +124,18 @@ readonly base_json
 # working tree's own flake.lock — so one read_json_payload_into call
 # covers both arms; the override and the default differ only in which
 # path it reads.
+#
+# This read carries a subject and the base read above carries none,
+# which is the naming rule rather than an inconsistency: on a live run
+# this one names its source `flake.lock`, the same kind
+# check-pre-commit-hooks-sha-parity.sh names for the lock it reads,
+# while the base read names `<base ref>:flake.lock`, which nothing else
+# in this tree produces.
 readonly head_path="${HEAD_LOCK_FILE:-flake.lock}"
 payload_source_into head_source HEAD_LOCK_FILE 'flake.lock'
 readonly head_source
-read_json_payload_into head_json "${head_path}" "${head_source}"
+read_json_payload_into head_json "${head_path}" "${head_source}" \
+  'flake-lock provenance head'
 readonly head_json
 
 printf '%s' "${base_json}" | jq -e '.nodes | type == "object"' >/dev/null 2>&1 ||

@@ -77,16 +77,22 @@ fi
 # metadata (or, for pre-commit-hooks specifically, kept in URL-SHA sync
 # by the renovate-flake-lock-refresh workflow), and the read below
 # assumes a shape neither source guarantees.
+#
+# Both gates carry a subject. On a live run this script names its source
+# `flake.lock`, which is also what check-flake-lock-provenance.sh names
+# for the head lock it reads, so the source kind alone identifies
+# neither reader.
 payload_source_into flake_lock_source FLAKE_LOCK_OVERRIDE 'flake.lock'
 readonly flake_lock_source
-read_json_payload_into flake_lock_json "${FLAKE_LOCK}" "${flake_lock_source}"
+read_json_payload_into flake_lock_json "${FLAKE_LOCK}" "${flake_lock_source}" \
+  'pre-commit hook parity'
 readonly flake_lock_json
 
 require_json_payload "${flake_lock_source}" "${flake_lock_json}" '
   if type != "object" then "payload is \(type), want object"
   elif has("nodes") and (.nodes | type) != "object" then ".nodes is \(.nodes | type), want object"
   else empty
-  end'
+  end' 'pre-commit hook parity'
 
 # Extract the locked rev for pre-commit-hooks from flake.lock. An
 # absent .nodes["pre-commit-hooks"] is a legitimate lockfile state (the

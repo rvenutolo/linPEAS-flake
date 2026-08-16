@@ -98,14 +98,18 @@ function fetch_live() {
 # @arg $1 name of the caller variable to fill
 # @arg $2 override env var name
 # @arg $3 source kind, as named by payload_source_into for this override
+# @arg $4 optional subject, passed straight through to the reader —
+#   supplied only by a fetch whose source kind another script in this
+#   tree also names, which the reader's own contract is the reference for
 # @exitcode 1 no override is set; the caller must fetch live
 function fetch_override_into() {
   local -r out_var="$1"
   local -r override_var="$2"
   local -r src="$3"
+  local -r subject="${4:-}"
   local -r override="${!override_var:-}"
   [[ -n ${override} ]] || return 1
-  read_json_payload_into "${out_var}" "${override}" "${src}"
+  read_json_payload_into "${out_var}" "${override}" "${src}" "${subject}"
 }
 
 # @description Fetch JSON from either an env-var override path (for tests) or
@@ -180,9 +184,14 @@ function main() {
   out_file="${OUT_FILE_OVERRIDE:-${repo_root}/docs/_data/dashboard.yml}"
   readonly repo_root pin_file out_file
 
+  # The pin gates below carry a subject. Their source kind —
+  # `PIN_FILE_OVERRIDE` under a fixture, `linpeas-pin.json` otherwise —
+  # is shared with `bump-linpeas.sh`, which reads the same file, so the
+  # source alone leaves an operator unable to tell which script could
+  # not read its pin.
   local pin_json pin_source
   payload_source_into pin_source PIN_FILE_OVERRIDE 'linpeas-pin.json'
-  read_json_payload_into pin_json "${pin_file}" "${pin_source}"
+  read_json_payload_into pin_json "${pin_file}" "${pin_source}" 'dashboard pin'
 
   mkdir --parents "$(dirname -- "${out_file}")"
 
@@ -192,7 +201,7 @@ function main() {
     elif (.version | type) != "string" then ".version is \(.version | type), want string"
     elif (.url | type) != "string" then ".url is \(.url | type), want string"
     else empty
-    end'
+    end' 'dashboard pin'
 
   local pin_version pin_url upstream_tag upstream_date
   pin_version="$(jq --raw-output .version <<<"${pin_json}")"
@@ -220,8 +229,13 @@ function main() {
   # so it must run in this shell — never inside `$(...)`, where its
   # `exit 2` would be trapped in a subshell and this script would carry
   # on with an empty upstream_release.
+  #
+  # Both gates carry a subject: `bump-linpeas.sh` names this identical
+  # API route for its own upstream-release fetch, so on a live run the
+  # source kind alone identifies neither caller. The two list fetches
+  # below name routes no other script reads, so they pass none.
   if ! fetch_override_into upstream_release UPSTREAM_RELEASE_JSON_OVERRIDE \
-    "${upstream_release_source}"; then
+    "${upstream_release_source}" 'dashboard upstream release'; then
     upstream_release="$(fetch_live "repos/${UPSTREAM_REPO}/releases/latest")"
   fi
   require_json_payload "${upstream_release_source}" "${upstream_release}" '
@@ -229,7 +243,7 @@ function main() {
     elif (.tag_name | type) != "string" then ".tag_name is \(.tag_name | type), want string"
     elif (.published_at | type) != "string" then ".published_at is \(.published_at | type), want string"
     else empty
-    end'
+    end' 'dashboard upstream release'
   upstream_tag="$(jq --raw-output .tag_name <<<"${upstream_release}")"
   upstream_date="$(jq --raw-output .published_at <<<"${upstream_release}")"
   require_field "${upstream_tag}" 'upstream_release.tag_name'

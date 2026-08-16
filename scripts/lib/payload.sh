@@ -38,12 +38,18 @@
 # @arg $3 optional jq program emitting a message for the first field
 #   whose type is wrong, and `empty` when the shape is acceptable
 # @arg $4 optional subject, prefixed to every diagnostic as `<subject>: `.
-#   A source kind does not always identify what could not be read: two
-#   lints in this tree read different rulesets through one override
-#   variable and one API route, so the source alone leaves an operator
-#   unable to tell which subject's payload was malformed. Callers whose
-#   source kind is unique to them pass nothing and their output is
-#   unchanged.
+#   A source kind does not always identify what could not be read.
+#   Several sources in this tree are read by more than one caller: one
+#   override variable and one API route naming two different rulesets,
+#   one config file read by three lints, one pin file and one
+#   latest-release route read by both the bump script and the dashboard
+#   generator, and the name `flake.lock` reached by two checks. In each
+#   case the source alone leaves an operator unable to tell which
+#   subject's payload was malformed, so every caller sharing a source
+#   kind passes one. Callers whose source kind is unique to them pass
+#   nothing and their output is unchanged; the rule is a property of the
+#   whole tree, not of one script, so adding a second reader of an
+#   existing source means giving both readers a subject.
 # @exitcode 2 the payload is empty, unparsable, or the shape program
 #   named a fault
 function require_json_payload() {
