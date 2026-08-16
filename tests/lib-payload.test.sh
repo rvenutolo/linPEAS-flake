@@ -286,13 +286,14 @@ fi
 # the fallback for a payload that did come from the override, while every
 # caller's own `${VAR:-}` read would have taken the override's path.
 run_source_into 'source-into-shell-override' shell \
-  RULESET_JSON_OVERRIDE 'ruleset API' 'named=RULESET_JSON_OVERRIDE'
+  PROTECT_MAIN_RULESET_JSON_OVERRIDE 'ruleset API' \
+  'named=PROTECT_MAIN_RULESET_JSON_OVERRIDE'
 if [[ ${rc} -eq 0 ]] &&
-  grep --fixed-strings --line-regexp --quiet -- 'named=RULESET_JSON_OVERRIDE' \
+  grep --fixed-strings --line-regexp --quiet -- 'named=PROTECT_MAIN_RULESET_JSON_OVERRIDE' \
     "${work}/source-into-shell-override.out"; then
   pass 'source-into-shell-override: a shell-scoped override is named by its variable name'
 else
-  fail "source-into-shell-override: expected exit 0 + 'named=RULESET_JSON_OVERRIDE', got exit ${rc}"
+  fail "source-into-shell-override: expected exit 0 + 'named=PROTECT_MAIN_RULESET_JSON_OVERRIDE', got exit ${rc}"
   cat -- "${work}/source-into-shell-override.out" "${work}/source-into-shell-override.err" >&2
 fi
 

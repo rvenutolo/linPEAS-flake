@@ -44,10 +44,18 @@
 # is an empty rule list, i.e. drift.
 #
 # Env overrides (test-only):
-#   RULESET_JSON_OVERRIDE — path to a fixture JSON for the live ruleset
-#   MIRROR_JSON_OVERRIDE  — path to a fixture JSON for the in-tree mirror
-#   DOC_TABLE_OVERRIDE    — path to a fixture markdown doc for the
-#                           required-checks table
+#   PROTECT_MAIN_RULESET_JSON_OVERRIDE — path to a fixture JSON for the live
+#                                        ruleset. Named for the ruleset this
+#                                        lint reads, because a sibling lint
+#                                        reads a different ruleset through the
+#                                        same API route and one variable shared
+#                                        between them would feed a single
+#                                        fixture to both whenever one process
+#                                        runs the pair.
+#   MIRROR_JSON_OVERRIDE               — path to a fixture JSON for the in-tree
+#                                        mirror
+#   DOC_TABLE_OVERRIDE                 — path to a fixture markdown doc for the
+#                                        required-checks table
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -75,7 +83,7 @@ readonly DOC_FILE="${DOC_TABLE_OVERRIDE:-${REPO_ROOT}/docs/security/required-che
 
 # @description Fetch the live ruleset JSON or read the override fixture.
 function fetch_ruleset() {
-  local -r override="${RULESET_JSON_OVERRIDE:-}"
+  local -r override="${PROTECT_MAIN_RULESET_JSON_OVERRIDE:-}"
   if [[ -n ${override} ]]; then
     cat -- "${override}"
     return
@@ -139,13 +147,13 @@ ruleset_json="$(fetch_ruleset)"
 # The ruleset payload is either a fixture path or the rulesets API's
 # response, and every read below assumes a shape neither source
 # guarantees.
-payload_source_into ruleset_source RULESET_JSON_OVERRIDE \
+payload_source_into ruleset_source PROTECT_MAIN_RULESET_JSON_OVERRIDE \
   "/repos/${THIS_REPO}/rulesets/{id}"
 readonly ruleset_source
 
 # The subject is passed because the source kind alone does not identify this
-# payload: a sibling lint reads a different ruleset through the same override
-# variable and the same API route.
+# payload: a sibling lint reads a different ruleset through the same API
+# route.
 require_json_payload "${ruleset_source}" "${ruleset_json}" '
   if type != "object" then "payload is \(type), want object"
   elif (.name | type) != "string" then ".name is \(.name | type), want string"
