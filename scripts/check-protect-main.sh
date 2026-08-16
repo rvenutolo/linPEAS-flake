@@ -35,9 +35,10 @@
 #     (absent normalized to null; a stripped/repointed id is drift)
 #
 # Exits 0 on match, 1 on drift. Logs the specific drift to stderr.
-# Exits 2 when the check cannot run: an input file is absent (the
-# in-tree mirror or the required-checks doc), or the ruleset JSON cannot
-# be read at all — e.g. `.rules` is present but is not an array, so
+# Exits 2 when the check cannot run: an input (the in-tree mirror, the
+# required-checks doc, or the ruleset JSON) is absent, unreadable, or
+# otherwise cannot be read — or the ruleset JSON reads but cannot be read
+# as a ruleset, e.g. `.rules` is present but is not an array, so
 # `.rules[].type` errors. A tooling fault must not borrow the drift code:
 # that reads as a substantive ruleset change and sends a maintainer after
 # a rule nobody removed. An absent `.rules` is not a tooling fault — it
@@ -81,13 +82,8 @@ readonly REPO_ROOT
 readonly MIRROR_FILE="${MIRROR_JSON_OVERRIDE:-${REPO_ROOT}/.github/rulesets/protect-main.json}"
 readonly DOC_FILE="${DOC_TABLE_OVERRIDE:-${REPO_ROOT}/docs/security/required-checks.md}"
 
-# @description Fetch the live ruleset JSON or read the override fixture.
+# @description Fetch the live ruleset JSON from the rulesets API.
 function fetch_ruleset() {
-  local -r override="${PROTECT_MAIN_RULESET_JSON_OVERRIDE:-}"
-  if [[ -n ${override} ]]; then
-    cat -- "${override}"
-    return
-  fi
   local id
   id="$(gh api --header 'X-GitHub-Api-Version: 2022-11-28' \
     "/repos/${THIS_REPO}/rulesets" \
@@ -100,16 +96,26 @@ function fetch_ruleset() {
     "/repos/${THIS_REPO}/rulesets/${id}"
 }
 
-if [[ ! -f ${MIRROR_FILE} ]]; then
-  printf 'mirror file not found: %s\n' "${MIRROR_FILE}" >&2
-  exit 2
-fi
+# The mirror payload is either a fixture path or the in-tree file, and
+# every read below assumes a shape neither source guarantees.
+payload_source_into mirror_source MIRROR_JSON_OVERRIDE \
+  '.github/rulesets/protect-main.json'
+readonly mirror_source
+read_json_payload_into mirror_json "${MIRROR_FILE}" "${mirror_source}" \
+  'protect-main mirror'
+readonly mirror_json
+
+# The required-checks doc is markdown, not JSON, so it does not go
+# through read_json_payload_into — it keeps its own not-found guard and
+# gets its own readability guard beside it.
 if [[ ! -f ${DOC_FILE} ]]; then
   printf 'required-checks doc not found: %s\n' "${DOC_FILE}" >&2
   exit 2
 fi
-
-mirror_json="$(cat -- "${MIRROR_FILE}")"
+if [[ ! -r ${DOC_FILE} ]]; then
+  printf 'required-checks doc is not readable: %s\n' "${DOC_FILE}" >&2
+  exit 2
+fi
 
 # --- doc-table parity with in-tree mirror ------------------------------------
 # Contexts in the mirror must match the first column of the
@@ -142,14 +148,24 @@ if [[ ${doc_contexts} != "${mirror_contexts}" ]]; then
   exit 1
 fi
 
-ruleset_json="$(fetch_ruleset)"
-
 # The ruleset payload is either a fixture path or the rulesets API's
 # response, and every read below assumes a shape neither source
 # guarantees.
 payload_source_into ruleset_source PROTECT_MAIN_RULESET_JSON_OVERRIDE \
   "/repos/${THIS_REPO}/rulesets/{id}"
 readonly ruleset_source
+
+# read_json_payload_into fills a nameref, so it must run in this shell —
+# never inside `$(...)`, where its `exit 2` would be trapped in a
+# subshell and this script would carry on with an empty ruleset_json.
+# That is why the override branch is hoisted out of fetch_ruleset rather
+# than living inside it.
+if [[ -n ${PROTECT_MAIN_RULESET_JSON_OVERRIDE:-} ]]; then
+  read_json_payload_into ruleset_json "${PROTECT_MAIN_RULESET_JSON_OVERRIDE}" \
+    "${ruleset_source}" "${EXPECTED_NAME} ruleset"
+else
+  ruleset_json="$(fetch_ruleset)"
+fi
 
 # The subject is passed because the source kind alone does not identify this
 # payload: a sibling lint reads a different ruleset through the same API
