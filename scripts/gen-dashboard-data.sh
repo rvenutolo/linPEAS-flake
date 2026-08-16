@@ -67,11 +67,54 @@ readonly THIS_REPO='rvenutolo/linPEAS-flake'
 readonly EXPECTED_PIN_URL_PREFIX='https://github.com/peass-ng/PEASS-ng/releases/download/'
 readonly VERSION_REGEX='^[0-9]{8}-[0-9a-f]{7,40}$'
 
+# @description Fetch a JSON document from the live gh-api endpoint.
+# @arg $1 gh api path
+function fetch_live() {
+  local -r api_path="$1"
+  gh api --header 'X-GitHub-Api-Version: 2022-11-28' -- "${api_path}"
+}
+
+# @description Fill the caller's variable from an override fixture, if
+# one is set. Returns 1 (filling nothing) when no override is set, so the
+# caller falls through to its own literal `fetch_live` assignment — kept
+# in the caller rather than folded into this helper, so a static
+# shell-script analyzer sees a literal assignment to the caller's
+# variable name and does not flag it as read-but-never-set. A nameref
+# buried inside this helper would be invisible to that analysis even
+# though the assignment happens at runtime.
+#
+# `read_json_payload_into` fills a nameref, so it must run in the
+# calling shell — never inside `$(...)`, where its `exit 2` would be
+# trapped in a subshell and the caller would carry on with an empty
+# payload. This function is always invoked as a plain command, never
+# captured with `$(...)`, so the read below runs directly here.
+#
+# Used only by the fetches whose payload is required (gated by
+# `require_json_payload` in main): a missing or unreadable override for
+# one of these is a could-not-run, not data. `fetch_soft`'s lookups are
+# allowed to degrade instead, so they keep reading their override
+# through the raw `fetch_or_override` below rather than this hard-exit
+# path.
+# @arg $1 name of the caller variable to fill
+# @arg $2 override env var name
+# @arg $3 source kind, as named by payload_source_into for this override
+# @exitcode 1 no override is set; the caller must fetch live
+function fetch_override_into() {
+  local -r out_var="$1"
+  local -r override_var="$2"
+  local -r src="$3"
+  local -r override="${!override_var:-}"
+  [[ -n ${override} ]] || return 1
+  read_json_payload_into "${out_var}" "${override}" "${src}"
+}
+
 # @description Fetch JSON from either an env-var override path (for tests) or
-# the live gh-api endpoint. Override path lets the test harness exercise the
-# script's security-critical failure branches without hitting the network and
-# without mutating real on-disk state. When the override var is empty/unset,
-# behavior is identical to a plain `gh api "${api_path}"`.
+# the live gh-api endpoint, tolerating a read failure rather than exiting —
+# used only by `fetch_soft` below, whose lookups are allowed to degrade to a
+# fallback on any failure, including a bad override fixture. The required
+# fetches in main() use `fetch_override_into`/`fetch_live` instead, so a bad
+# override on one of those is reported as a could-not-run rather than
+# silently degrading.
 # @arg $1 override env-var name (e.g. UPSTREAM_RELEASE_JSON_OVERRIDE)
 # @arg $2 gh api path used when the override is unset
 function fetch_or_override() {
@@ -81,7 +124,7 @@ function fetch_or_override() {
   if [[ -n ${override_path} ]]; then
     cat -- "${override_path}"
   else
-    gh api --header 'X-GitHub-Api-Version: 2022-11-28' -- "${api_path}"
+    fetch_live "${api_path}"
   fi
 }
 
@@ -136,17 +179,13 @@ function main() {
   out_file="${OUT_FILE_OVERRIDE:-${repo_root}/docs/_data/dashboard.yml}"
   readonly repo_root pin_file out_file
 
-  if [[ ! -f ${pin_file} ]]; then
-    log_err "${pin_file} not found"
-    exit 2
-  fi
+  local pin_json pin_source
+  payload_source_into pin_source PIN_FILE_OVERRIDE 'linpeas-pin.json'
+  read_json_payload_into pin_json "${pin_file}" "${pin_source}"
 
   mkdir --parents "$(dirname -- "${out_file}")"
 
   log_info 'gathering pin + upstream data'
-  local pin_json pin_source
-  pin_json="$(cat -- "${pin_file}")"
-  payload_source_into pin_source PIN_FILE_OVERRIDE 'linpeas-pin.json'
   require_json_payload "${pin_source}" "${pin_json}" '
     if type != "object" then "payload is \(type), want object"
     elif (.version | type) != "string" then ".version is \(.version | type), want string"
@@ -174,10 +213,16 @@ function main() {
   fi
 
   local upstream_release upstream_release_source
-  upstream_release="$(fetch_or_override UPSTREAM_RELEASE_JSON_OVERRIDE \
-    "repos/${UPSTREAM_REPO}/releases/latest")"
   payload_source_into upstream_release_source UPSTREAM_RELEASE_JSON_OVERRIDE \
     "repos/${UPSTREAM_REPO}/releases/latest"
+  # read_json_payload_into (inside fetch_override_into) fills a nameref,
+  # so it must run in this shell — never inside `$(...)`, where its
+  # `exit 2` would be trapped in a subshell and this script would carry
+  # on with an empty upstream_release.
+  if ! fetch_override_into upstream_release UPSTREAM_RELEASE_JSON_OVERRIDE \
+    "${upstream_release_source}"; then
+    upstream_release="$(fetch_live "repos/${UPSTREAM_REPO}/releases/latest")"
+  fi
   require_json_payload "${upstream_release_source}" "${upstream_release}" '
     if type != "object" then "payload is \(type), want object"
     elif (.tag_name | type) != "string" then ".tag_name is \(.tag_name | type), want string"
@@ -217,10 +262,16 @@ function main() {
 
   log_info 'gathering recent releases'
   local releases_json releases_source
-  releases_json="$(fetch_or_override THIS_REPO_RELEASES_JSON_OVERRIDE \
-    "repos/${THIS_REPO}/releases?per_page=20")"
   payload_source_into releases_source THIS_REPO_RELEASES_JSON_OVERRIDE \
     "repos/${THIS_REPO}/releases?per_page=20"
+  # read_json_payload_into (inside fetch_override_into) fills a nameref,
+  # so it must run in this shell — never inside `$(...)`, where its
+  # `exit 2` would be trapped in a subshell and this script would carry
+  # on with an empty releases_json.
+  if ! fetch_override_into releases_json THIS_REPO_RELEASES_JSON_OVERRIDE \
+    "${releases_source}"; then
+    releases_json="$(fetch_live "repos/${THIS_REPO}/releases?per_page=20")"
+  fi
   require_json_payload "${releases_source}" "${releases_json}" '
     if type != "array" then "payload is \(type), want array"
     elif (any(.[]; (.tag_name | type) != "string")) then "a release entry .tag_name is not a string"
@@ -230,10 +281,16 @@ function main() {
 
   log_info 'gathering recent upstream releases'
   local upstream_releases_json upstream_releases_source
-  upstream_releases_json="$(fetch_or_override UPSTREAM_RELEASES_JSON_OVERRIDE \
-    "repos/${UPSTREAM_REPO}/releases?per_page=20")"
   payload_source_into upstream_releases_source UPSTREAM_RELEASES_JSON_OVERRIDE \
     "repos/${UPSTREAM_REPO}/releases?per_page=20"
+  # read_json_payload_into (inside fetch_override_into) fills a nameref,
+  # so it must run in this shell — never inside `$(...)`, where its
+  # `exit 2` would be trapped in a subshell and this script would carry
+  # on with an empty upstream_releases_json.
+  if ! fetch_override_into upstream_releases_json UPSTREAM_RELEASES_JSON_OVERRIDE \
+    "${upstream_releases_source}"; then
+    upstream_releases_json="$(fetch_live "repos/${UPSTREAM_REPO}/releases?per_page=20")"
+  fi
   require_json_payload "${upstream_releases_source}" "${upstream_releases_json}" '
     if type != "array" then "payload is \(type), want array"
     elif (any(.[]; (.tag_name | type) != "string")) then "a release entry .tag_name is not a string"

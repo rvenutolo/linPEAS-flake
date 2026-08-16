@@ -52,10 +52,6 @@ if [[ ! -f ${FLAKE_NIX} ]]; then
   printf 'flake.nix not found: %s\n' "${FLAKE_NIX}" >&2
   exit 2
 fi
-if [[ ! -f ${FLAKE_LOCK} ]]; then
-  printf 'flake.lock not found: %s\n' "${FLAKE_LOCK}" >&2
-  exit 2
-fi
 
 # Extract the SHA from the pre-commit-hooks input URL in flake.nix.
 # Expected shape:
@@ -81,9 +77,10 @@ fi
 # metadata (or, for pre-commit-hooks specifically, kept in URL-SHA sync
 # by the renovate-flake-lock-refresh workflow), and the read below
 # assumes a shape neither source guarantees.
-flake_lock_json="$(cat -- "${FLAKE_LOCK}")"
 payload_source_into flake_lock_source FLAKE_LOCK_OVERRIDE 'flake.lock'
 readonly flake_lock_source
+read_json_payload_into flake_lock_json "${FLAKE_LOCK}" "${flake_lock_source}"
+readonly flake_lock_json
 
 require_json_payload "${flake_lock_source}" "${flake_lock_json}" '
   if type != "object" then "payload is \(type), want object"

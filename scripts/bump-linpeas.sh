@@ -46,14 +46,9 @@ function main() {
   fi
   readonly repo_root pin_file
 
-  if [[ ! -f ${pin_file} ]]; then
-    log_err "${pin_file} not found"
-    exit 2
-  fi
-
   local pin_json pin_source
-  pin_json="$(cat -- "${pin_file}")"
   payload_source_into pin_source PIN_FILE_OVERRIDE 'linpeas-pin.json'
+  read_json_payload_into pin_json "${pin_file}" "${pin_source}"
   require_json_payload "${pin_source}" "${pin_json}" '
     if type != "object" then "payload is \(type), want object"
     elif (.version | type) != "string" then ".version is \(.version | type), want string"
