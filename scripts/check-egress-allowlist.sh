@@ -17,7 +17,7 @@
 # finally exercised, which can be months later. A `connection refused` against
 # a healthy public host is harden-runner's block signature, not an outage.
 #
-# Six assertions per job:
+# Seven assertions per job:
 #
 #   1. Forward rules, keyed on `uses:` and on `run:` text:
 #        github/codeql-action/init  -> release-assets.githubusercontent.com
@@ -149,6 +149,43 @@
 #      `LINT_ALLOW_EMPTY_SCAN=1` suppresses it for a deliberately empty
 #      scan root.
 #
+#   7. Nix-host reachability. Every assertion above binds a host to a tool
+#      it must be PRESENT for; this is the first binding a host to a tool
+#      it must be REACHABLE by. Any job whose `allowed-endpoints` carries
+#      `cache.nixos.org` or `releases.nixos.org` must satisfy one of:
+#        - a step `uses:` the `./.github/actions/setup-nix` composite
+#          (the only nix-installing path anywhere in this tree), or
+#        - a `run:` block invoking a `nix` subcommand (`nix build`,
+#          `nix develop`, `nix shell`, `nix flake`, and siblings —
+#          matched only when `nix` is followed by whitespace and a known
+#          subcommand, so `nixpkgs-fmt`, `nixos.org`, and a `nix` path
+#          segment inside a URL such as
+#          `releases.nixos.org/nix/nix-2.34.7/install` do not count), or
+#        - an in-job `# egress-nix-exempt: <reason>` comment with a
+#          non-empty reason.
+#      An empty-reason marker is rejected outright, and a marker on a job
+#      whose allowlist carries neither host is reported as stale — the
+#      rule it would exempt does not apply to that job.
+#
+#      Detection deliberately does NOT follow callees: a job reaching nix
+#      indirectly through a `scripts/*.sh` invocation or a `just` recipe
+#      is invisible to both the `uses:` and `run:` arms and needs the
+#      marker instead, so the reason a reviewer reads is what carries the
+#      justification, not an approximate call-graph resolver that would
+#      buy false confidence rather than coverage.
+#
+#      The marker is a YAML comment, gone once yq has parsed the
+#      document, so it is found by a raw-text scan bounded to the job's
+#      own line range (from its key's line, taken from yq's `line`
+#      builtin, to one line before the next job's key line, or to the
+#      end of the file for the last job) rather than by any yq query.
+#
+#      Breadth is asserted the same way as assertion 6: the run reports
+#      how many jobs carry either host, and finding none on an
+#      unfiltered scan is a could-not-run, not a clean tree.
+#      `WORKFLOW_FILE_FILTER` and `LINT_ALLOW_EMPTY_SCAN=1` suppress that
+#      guard the same way they do for assertion 6.
+#
 # KNOWN BLIND SPOT: detection reads the workflow file only, one level deep. A
 # job that reaches cosign through `scripts/*.sh` or `just` is invisible to the
 # `run:`-text sign/verify rules. Assertion 4's "neither detected" branch
@@ -174,7 +211,7 @@
 # hand.
 # Exits 0 clean, 1 on any drift, 2 if yq is missing, if the declaration
 # file is missing or empty, or if an unfiltered scan discovers no notify
-# job at all.
+# job or no cache.nixos.org/releases.nixos.org-carrying job at all.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -219,6 +256,13 @@ readonly -a DENYLIST=(
 readonly NOTIFY_COMPOSITE='notify-workflow-result'
 readonly DECLARATION_REL=".github/actions/${NOTIFY_COMPOSITE}/egress-allowlist.txt"
 
+# Assertion 7 (nix-host reachability): the sole nix-installing path in this
+# tree, the recognized `nix` subcommands a `run:` block can invoke, and the
+# escape-hatch marker.
+readonly NIX_SETUP_COMPOSITE='./.github/actions/setup-nix'
+readonly NIX_SUBCOMMANDS='build|develop|shell|run|flake|profile|eval|copy|store|search|registry|repl|show-config'
+readonly NIX_EXEMPT_MARKER='egress-nix-exempt:'
+
 # Resolved against this script's own location rather than the scan root:
 # the fixture harness repoints the scan root at tests/fixtures, and the
 # declaration a fixture run must be measured against is always the real one
@@ -257,6 +301,7 @@ readonly DECLARED
 
 failed=0
 notify_jobs=0
+nix_host_jobs=0
 
 function fail() {
   printf '%s\n' "$1" >&2
@@ -296,6 +341,37 @@ for f in "${workflow_files[@]}"; do
     continue
   fi
   [[ -n ${job_rows} ]] || continue
+
+  # Assertion 7 prep: each job's own line range, for the marker raw-text
+  # scan below. A `# egress-nix-exempt:` marker is a YAML comment, gone
+  # once yq has parsed the document, so it can only be found by reading
+  # the file's own text — bounded to one job's lines, so a marker sitting
+  # in a sibling job's block is never credited to this one. `line` (a yq
+  # builtin) reports a job key's own 1-indexed source line; a job's range
+  # runs from there to one line before the next job key's line, or to the
+  # end of the file for the last job in document order.
+  declare -A JOB_START=()
+  declare -A JOB_END=()
+  declare -a job_order=()
+  if ! job_line_rows="$(yq eval '.jobs | keys | .[] | [., line] | join("\t")' "${f}")"; then
+    fail "${f}: could not evaluate job line numbers with yq (malformed?)"
+    continue
+  fi
+  while IFS=$'\t' read -r jline_name jline_num; do
+    [[ -z ${jline_name} ]] && continue
+    JOB_START["${jline_name}"]="${jline_num}"
+    job_order+=("${jline_name}")
+  done <<<"${job_line_rows}"
+  file_lines="$(wc -l <"${f}")"
+  for jidx in "${!job_order[@]}"; do
+    jline_name="${job_order[${jidx}]}"
+    if ((jidx + 1 < ${#job_order[@]})); then
+      JOB_END["${jline_name}"]=$((JOB_START["${job_order[$((jidx + 1))]}"] - 1))
+    else
+      JOB_END["${jline_name}"]="${file_lines}"
+    fi
+  done
+
   while IFS= read -r job; do
     [[ -z ${job} ]] && continue
 
@@ -496,6 +572,56 @@ for f in "${workflow_files[@]}"; do
       fi
     fi
 
+    # --- Assertion 7: nix-host reachability -------------------------------
+
+    marker_present=0
+    marker_reason=""
+    job_start="${JOB_START[${job}]:-0}"
+    job_end="${JOB_END[${job}]:-0}"
+    if ((job_start > 0)); then
+      # `|| true`: grep exits 1 on no match, which `set -e` would
+      # otherwise treat as this pipeline's own failure.
+      marker_line="$(sed -n "${job_start},${job_end}p" "${f}" |
+        grep -m1 -E "^[[:space:]]*#[[:space:]]*${NIX_EXEMPT_MARKER}" || true)"
+      if [[ -n ${marker_line} ]]; then
+        marker_present=1
+        marker_reason="${marker_line#*"${NIX_EXEMPT_MARKER}"}"
+        # Trim surrounding whitespace so a reason of only spaces reads as
+        # empty, the same as no reason at all.
+        marker_reason="${marker_reason#"${marker_reason%%[![:space:]]*}"}"
+        marker_reason="${marker_reason%"${marker_reason##*[![:space:]]}"}"
+      fi
+    fi
+
+    if has_host "${endpoints}" "cache.nixos.org" || has_host "${endpoints}" "releases.nixos.org"; then
+      nix_host_jobs=$((nix_host_jobs + 1))
+
+      has_setup_nix=0
+      [[ ${uses} == *"${NIX_SETUP_COMPOSITE}"* ]] && has_setup_nix=1
+
+      # `nix` must be followed by whitespace and a recognized subcommand,
+      # with a non-identifier (or start-of-string) character before it:
+      # `nixpkgs-fmt`, `nixos.org`, and the `nix` path segment inside
+      # `releases.nixos.org/nix/nix-2.34.7/install` all fail this, since
+      # none has whitespace directly after the bare word `nix`.
+      invokes_nix=0
+      [[ ${runs} =~ (^|[^a-zA-Z0-9_./-])nix[[:space:]]+(${NIX_SUBCOMMANDS})([[:space:]]|$) ]] && invokes_nix=1
+
+      if ((has_setup_nix == 0 && invokes_nix == 0)); then
+        if ((marker_present == 1)); then
+          if [[ -z ${marker_reason} ]]; then
+            fail "${f}: job '${job}' carries a '${NIX_EXEMPT_MARKER}' marker with no reason (allowlists cache.nixos.org/releases.nixos.org, reaches nix through neither ${NIX_SETUP_COMPOSITE} nor a run: nix invocation)"
+          fi
+        else
+          fail "${f}: job '${job}' allowlists cache.nixos.org/releases.nixos.org but reaches no nix tooling — neither ${NIX_SETUP_COMPOSITE} nor a run: nix invocation is detected, and no '# ${NIX_EXEMPT_MARKER} <reason>' marker justifies it"
+        fi
+      fi
+    else
+      if ((marker_present == 1)); then
+        fail "${f}: job '${job}' carries a stale '${NIX_EXEMPT_MARKER}' marker; its allowlist carries neither cache.nixos.org nor releases.nixos.org, so this rule does not apply to it"
+      fi
+    fi
+
   done <<<"${job_rows}"
 done
 shopt -u nullglob
@@ -516,5 +642,16 @@ if ((notify_jobs == 0)) && [[ -z ${FILE_FILTER} && -z ${LINT_ALLOW_EMPTY_SCAN:-}
   exit 2
 fi
 
+# Same convention as the notify breadth guard above: a discovery
+# predicate matching nothing reports the same clean exit a genuinely
+# nix-free tree does, so the breadth assertion 7 claims to have checked
+# is asserted instead of inferred from the absence of a violation.
+if ((nix_host_jobs == 0)) && [[ -z ${FILE_FILTER} && -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
+  printf '%s: found 0 job(s) carrying cache.nixos.org/releases.nixos.org under %s — a predicate matching nothing reports the same ok line a clean tree does; set LINT_ALLOW_EMPTY_SCAN=1 if this root deliberately carries neither host\n' \
+    "${0##*/}" "${DIR}" >&2
+  exit 2
+fi
+
 printf '%d notify job(s) checked against the declared egress allowlist\n' "${notify_jobs}"
+printf '%d nix-host job(s) checked for reachability\n' "${nix_host_jobs}"
 exit 0
