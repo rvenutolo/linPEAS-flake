@@ -395,7 +395,7 @@ function main() {
   # check on an unguarded read would otherwise produce (exit 1, "required
   # field missing", indistinguishable from a real posture change).
   run_scenario 'missing upstream_release.tag_name is a tooling error' \
-    'unexpected payload shape from UPSTREAM_RELEASE_JSON_OVERRIDE: .tag_name is null, want string' 2 \
+    'dashboard upstream release: unexpected payload shape from UPSTREAM_RELEASE_JSON_OVERRIDE: .tag_name is null, want string' 2 \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
     "UPSTREAM_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/missing-tag-upstream-release.json"
 
@@ -403,8 +403,16 @@ function main() {
   # this is exit 2 (fix the environment) rather than a rejected input.
   # The source is named by kind (the override variable), never by the
   # fixture path that names the scenario.
+  #
+  # The `dashboard pin` / `dashboard upstream release` subject prefixes
+  # asserted here and above are load-bearing, not decoration. Both source
+  # kinds are shared with `bump-linpeas.sh`, which reads the same pin
+  # file and names the same upstream-release route, so the source alone
+  # cannot tell an operator which script could not read its payload.
+  # Only the prefix does, and nothing in a per-harness discrimination
+  # gate can see a collision that lives in another file.
   run_scenario 'absent pin file cannot be read' \
-    'payload from PIN_FILE_OVERRIDE not found' 2 \
+    'dashboard pin: payload from PIN_FILE_OVERRIDE not found' 2 \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/linpeas-pin-absent.json"
 
   # Scenario 3f-h: the same could-not-run treatment for the three
@@ -412,7 +420,7 @@ function main() {
   # every upstream override valid so the run reaches that fetch, and
   # points only the override under test at an absent path.
   run_scenario 'absent upstream-release payload is a tooling error' \
-    'payload from UPSTREAM_RELEASE_JSON_OVERRIDE not found' 2 \
+    'dashboard upstream release: payload from UPSTREAM_RELEASE_JSON_OVERRIDE not found' 2 \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
     "UPSTREAM_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/upstream-release-absent.json"
   run_scenario 'absent this-repo-releases payload is a tooling error' \
@@ -434,13 +442,13 @@ function main() {
   # different require_json_payload diagnostic so the three scenarios stay
   # distinct.
   run_scenario 'empty pin payload is a tooling error' \
-    'empty payload from PIN_FILE_OVERRIDE' 2 \
+    'dashboard pin: empty payload from PIN_FILE_OVERRIDE' 2 \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/bad-pin-empty.json"
   run_scenario 'pin payload that is not JSON is a tooling error' \
-    'payload from PIN_FILE_OVERRIDE is not valid JSON' 2 \
+    'dashboard pin: payload from PIN_FILE_OVERRIDE is not valid JSON' 2 \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/bad-pin-not-json.txt"
   run_scenario 'boolean-typed pin payload is a tooling error' \
-    'unexpected payload shape from PIN_FILE_OVERRIDE: payload is boolean, want object' 2 \
+    'dashboard pin: unexpected payload shape from PIN_FILE_OVERRIDE: payload is boolean, want object' 2 \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/bad-pin-wrong-type.json"
 
   # Scenario 4: happy-path bump-lag pairing. Two of three this-repo releases

@@ -172,29 +172,36 @@ function main() {
     'provenance OK: entry "root"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 2; transitive churn tolerated: 1 added, 1 removed'
   run_scenario 'top-level rename + repoint fails' 'head-toplevel-renamed-repoint.lock' 1 \
     'FAIL: top-level input repointed: alpha (alpha -> alpha_2)'
-  # The absent case keeps exiting 2; the sentence changed from a
-  # path-interpolated message (`BASE_LOCK_FILE not found: <resolved
-  # path>`) to the canonical could-not-run sentence naming the payload
-  # by kind — the override variable's own name, never the fixture path
-  # a harness scenario happens to point it at.
+  # The absent case exits 2 under the canonical could-not-run sentence,
+  # which names the payload by kind — the override variable's own name,
+  # never the fixture path a harness scenario happens to point it at.
+  #
+  # The head-side expectations carry a `flake-lock provenance head`
+  # subject and the base-side ones carry none, which is the naming rule
+  # itself rather than an oversight: on a live run the head read names
+  # its source `flake.lock`, the same kind check-pre-commit-hooks-sha-parity.sh
+  # names for the lock it reads, while the base read names
+  # `<base ref>:flake.lock`, which no other script in the tree produces.
+  # A subject is added where the source kind alone stops identifying the
+  # payload, and nowhere else.
   run_absent_lock_scenario 'missing base errors' BASE_LOCK_FILE \
     'payload from BASE_LOCK_FILE not found'
   run_absent_lock_scenario 'missing head errors' HEAD_LOCK_FILE \
-    'payload from HEAD_LOCK_FILE not found'
+    'flake-lock provenance head: payload from HEAD_LOCK_FILE not found'
   # This is the reported defect: an unreadable payload dies under the
   # raw `cat` failure at exit 1 — the same code this script uses for a
   # genuine provenance violation.
   run_unreadable_lock_scenario 'unreadable base is a tooling error, not a violation' \
     BASE_LOCK_FILE 'payload from BASE_LOCK_FILE is not readable'
   run_unreadable_lock_scenario 'unreadable head is a tooling error, not a violation' \
-    HEAD_LOCK_FILE 'payload from HEAD_LOCK_FILE is not readable'
+    HEAD_LOCK_FILE 'flake-lock provenance head: payload from HEAD_LOCK_FILE is not readable'
   # A directory passes the `-f` guard's existence check but fails the
   # read; the guard's "not found" message does not distinguish that
   # from a genuinely absent path.
   run_directory_lock_scenario 'directory-payload base is a tooling error, not a violation' \
     BASE_LOCK_FILE 'payload from BASE_LOCK_FILE could not be read'
   run_directory_lock_scenario 'directory-payload head is a tooling error, not a violation' \
-    HEAD_LOCK_FILE 'payload from HEAD_LOCK_FILE could not be read'
+    HEAD_LOCK_FILE 'flake-lock provenance head: payload from HEAD_LOCK_FILE could not be read'
 
   run_follows_scenario 'follows routine bump passes' 'head-follows-routine.lock' 0 \
     'provenance OK: entry "root"; top-level inputs resolved: 4 (1 via follows, max depth 1); shared nodes compared: 3; transitive churn tolerated: 0 added, 0 removed'

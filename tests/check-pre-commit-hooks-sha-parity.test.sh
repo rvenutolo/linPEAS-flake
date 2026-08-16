@@ -77,18 +77,26 @@ function main() {
   # raw jq crash: each scenario keeps a valid flake.nix URL and varies
   # only the lock payload, naming the source kind rather than the
   # fixture path.
+  #
+  # Each expectation carries the `pre-commit hook parity` subject. On a
+  # live run this script names its source `flake.lock`, which is also
+  # what check-flake-lock-provenance.sh names for the head lock it
+  # reads, so the source alone identifies neither. The subject does, and
+  # asserting it here is what keeps it from being dropped: a collision
+  # that lives in another script is invisible to the per-harness
+  # discrimination gate.
   run_scenario 'whitespace-only flake.lock is a tooling error' \
-    'bad-lock-empty' 2 'empty payload from FLAKE_LOCK_OVERRIDE'
+    'bad-lock-empty' 2 'pre-commit hook parity: empty payload from FLAKE_LOCK_OVERRIDE'
   run_scenario 'flake.lock that is not JSON is a tooling error' \
-    'bad-lock-not-json' 2 'payload from FLAKE_LOCK_OVERRIDE is not valid JSON'
+    'bad-lock-not-json' 2 'pre-commit hook parity: payload from FLAKE_LOCK_OVERRIDE is not valid JSON'
   run_scenario 'boolean-typed flake.lock is a tooling error' \
     'bad-lock-wrong-type' 2 \
-    'unexpected payload shape from FLAKE_LOCK_OVERRIDE: payload is boolean, want object'
+    'pre-commit hook parity: unexpected payload shape from FLAKE_LOCK_OVERRIDE: payload is boolean, want object'
   # flake.nix resolves (so the URL-SHA extraction that runs first
   # succeeds) but flake.lock itself is absent — a could-not-run on the
   # payload read, not the empty/not-JSON/wrong-type shape gate above.
   run_scenario 'absent flake.lock is a tooling error' \
-    'bad-lock-absent' 2 'payload from FLAKE_LOCK_OVERRIDE not found'
+    'bad-lock-absent' 2 'pre-commit hook parity: payload from FLAKE_LOCK_OVERRIDE not found'
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
