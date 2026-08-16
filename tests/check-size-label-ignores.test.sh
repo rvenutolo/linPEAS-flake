@@ -151,6 +151,21 @@ function main() {
     "${DECLARING_SCRIPTS}" "${FIXTURES}/no-such-workflow.yml" 2 \
     'not found or unreadable'
 
+  # (n) TOOLING: a regular file the parser cannot read. `[[ -f ]]` is
+  # satisfied by a mode-000 script, so the scan counts it and hands it to
+  # the parser, which is the only place the read is attempted. Reporting
+  # that as a tree whose scripts declare nothing would attribute every
+  # ignore-list entry to no generator — a verdict about content never
+  # read. The copy is made here rather than committed, because git tracks
+  # only the execute bit.
+  mkdir --parents -- "${work}/unreadable/scripts"
+  cp -- "${DECLARING_SCRIPTS}"/*.sh "${work}/unreadable/scripts/"
+  chmod 000 -- "${work}/unreadable/scripts/refresh-alpha.sh"
+  expect 'tooling: an unreadable script under the scan root is a could-not-run' \
+    "${work}/unreadable/scripts" "${FIXTURES}/good.yml" 2 \
+    'could not read every shell script under'
+  chmod 644 -- "${work}/unreadable/scripts/refresh-alpha.sh"
+
   # (m) LIVE: the real tree must satisfy the lint.
   expect 'live: real tree agrees' \
     "${REPO_ROOT}/scripts" "${REPO_ROOT}/.github/workflows/labeler.yml" 0 ''
