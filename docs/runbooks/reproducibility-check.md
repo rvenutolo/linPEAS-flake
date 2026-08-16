@@ -10,7 +10,9 @@ On its weekly Friday cron (and on `workflow_dispatch`), the workflow:
 1. Builds `.#linpeas` and `.#linpeas-image` twice on independent `ubuntu-latest` runners.
 1. Records each build's: linpeas store path, linpeas NAR hash, image store path, image tar SHA-256, image manifest digest.
 1. Compares the three hash values pairwise (`linpeas_nar_hash`, `image_tar_sha256`, `image_manifest_digest`); the two store paths are reported for context only and do not affect the result.
-1. On any mismatch: installs `diffoscope`, runs it against the differing artifacts with a 20-minute cap, uploads `image.html`/`image.txt` and `linpeas.html`/`linpeas.txt` as the `repro-diff` artifact (30-day retention), and opens a GitHub issue labelled `reproducibility`.
+1. On any mismatch: runs `diffoscope` against the differing artifacts with a 20-minute cap, uploads `image.html`/`image.txt`, `linpeas.html`/`linpeas.txt` and `summary.txt` as the `repro-diff` artifact (30-day retention), and opens a GitHub issue labelled `reproducibility`.
+
+`diffoscope` is resolved from this repo's own flake — the compare job installs Nix through the `./.github/actions/setup-nix` composite and invokes `nix shell .#diffoscopeMinimal --command diffoscope`. The version that runs therefore tracks `flake.lock`, not whatever a distribution archive currently ships, and the job reaches only the hosts already in its `allowed-endpoints` list.
 
 ## How you'll be notified
 
@@ -34,6 +36,36 @@ Currently no `--assignee` is set; mismatches rely on default repo notification s
 ### Bad-input failures (exit 2)
 
 `compare-repro.sh` exits 2 when a hash field is absent, null, or malformed in either build's `build.json`. That is not a divergence — the *measurement* broke, most likely because `nix path-info --json` changed shape and the `measure` step no longer finds `narHash` where it looks. Triage the `measure` step of the failing build job, not the diffoscope output; there is no `repro-diff` artifact to read in this case.
+
+## Exercising the diagnostic path on demand
+
+The diffoscope steps run only when the builds diverge, so on a reproducible tree they are never exercised and a break in them stays latent until the one day they are needed. `workflow_dispatch` carries a `force_diffoscope` input that runs them regardless:
+
+```bash
+gh workflow run reproducibility-check.yml --ref <ref> --field force_diffoscope=true
+```
+
+The input widens the `if:` on the diagnostic steps only — the diffoscope run and the `repro-diff` upload. `open issue (on mismatch)` and `fail job (on mismatch)` keep the mismatch-only condition, so a forced run can add execution but can never fabricate or suppress the reproducibility signal.
+
+A healthy forced run on a reproducible tree looks like this:
+
+1. `setup-nix` completes — no harden-runner block annotation, no fetch failure.
+1. The diffoscope step runs both comparisons (the image tars, then the linpeas tarballs).
+1. The `repro-diff` artifact uploads.
+1. **No issue is filed and the `compare` job does not fail.**
+
+Any of those four missing means the diagnostic path is broken; a failing job or a filed issue means the forced run also found a genuine mismatch, which is triaged as above.
+
+### Reading `summary.txt`
+
+The `repro-diff` artifact always carries `summary.txt`, one line per compared pair, naming that pair's `diffoscope` exit status and whether a report was written:
+
+```text
+image: diffoscope exit 0, report none
+linpeas: diffoscope exit 0, report none
+```
+
+`diffoscope` exits 0 and writes no report when its two inputs are identical, so `exit 0, report none` on both lines is the expected outcome of a forced run on a reproducible tree — that is the diagnostic working, not failing. A diverging pair reports a non-zero exit with `report written`, and its `image.html` / `linpeas.html` are the files to open.
 
 ## Common nondeterminism sources
 
