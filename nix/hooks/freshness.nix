@@ -123,6 +123,26 @@ in
     pass_filenames = false;
     language = "system";
   };
+  # Refuse to commit if the harness census in docs/reference/test-harnesses.md
+  # is stale. The census is derived from the harness sources and the fixture
+  # tree, so those two path sets plus the doc itself are the whole trigger:
+  # the Subject column renders a harness's own declaration, which a `scripts/`
+  # edit cannot change.
+  test-harnesses-fresh = {
+    enable = true;
+    name = "test-harnesses-fresh";
+    description = "The harness census in docs/reference/test-harnesses.md matches the harnesses in tests/.";
+    entry = "${pkgs-unstable.writeShellScript "test-harnesses-fresh" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${toolPath}:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-test-harnesses.sh --check
+    ''}";
+    files = "^(tests/.*\\.test\\.sh|tests/fixtures/.*|docs/reference/test-harnesses\\.md)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Refuse to commit if the pre-commit hook table in docs/development/git.md
   # is stale relative to the flake hook manifest. Invokes
   # refresh-precommit-table.sh in --check mode — never mutates the

@@ -1116,6 +1116,22 @@ prefix into Check / Refresh / Other sections.
 
 - `--check` — exit 1 if drift; exit 2 if the doc or the awk parser is
 
+### scripts/refresh-test-harnesses.sh
+
+Regenerate docs/reference/test-harnesses.md, the census of
+every tests/\*.test.sh harness: the file or file set it exercises and the
+directories under tests/fixtures/ it reads. A harness names its subject
+either by a SCRIPT= assignment pointing into scripts/ or by a
+`# @subject` header annotation, and never by both, so the census can
+neither render an unknown subject nor silently follow the stale one of
+two disagreeing declarations. A fixture directory no harness names is
+refused as well: a census that omitted it would describe a smaller tree
+than the one on disk.
+
+**Options:**
+
+- `--check` — exit 1 if drift; exit 2 if the doc is missing, a harness
+
 ### scripts/refresh-treefmt-config.sh
 
 Regenerate the treefmt-config managed block in
