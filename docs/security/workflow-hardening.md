@@ -437,3 +437,23 @@ ceiling to ~1000/hour per token and eliminates the class.
 
 **Enforcement.** `scripts/check-setup-nix-required.sh`, gated by the
 `setup-nix-required` job in `.github/workflows/ci.yml`.
+
+## nix-host-reachability
+
+Every job whose harden-runner `allowed-endpoints:` carries `cache.nixos.org` or `releases.nixos.org` must satisfy one of:
+
+- a step `uses:` the `./.github/actions/setup-nix` composite — the only nix-installing path anywhere in this tree,
+- a `run:` block invoking a `nix` subcommand (`nix build`, `nix develop`, `nix shell`, `nix flake`, and siblings), matched only when `nix` is followed by whitespace and a recognized subcommand so `nixpkgs-fmt`, `nixos.org`, and a `nix` path segment inside a URL such as `releases.nixos.org/nix/nix-2.34.7/install` do not count. The match is textual over the job's concatenated `run:` text, not shell-comment-aware, so a nix subcommand written inside a shell comment (e.g. `# we do not nix build here anymore`) still satisfies this arm — the same shell-comment blind spot the Docker Hub push-branch check documents in `scripts/check-egress-allowlist.sh`, and not parsed around for the same reason, or
+- an in-job `# egress-nix-exempt: <reason>` comment with a non-empty reason.
+
+Every rule elsewhere in `scripts/check-egress-allowlist.sh` binds a host to a tool that must be present; this is the first binding a host to a tool that must be reachable — the two nix hosts are cheap to leave in an allowlist by copy-paste long after the job that needed them stops installing Nix, and nothing else in this repo's tooling notices.
+
+An empty-reason marker is rejected outright, and a marker on a job whose allowlist carries neither host is reported as stale — the rule it would exempt does not apply to that job, so the marker's own justification has gone stale along with it.
+
+Detection deliberately does not follow callees: a job reaching nix indirectly through a `scripts/*.sh` invocation or a `just` recipe is invisible to both the `uses:` and `run:` arms and needs the marker instead. The reason a reviewer reads is what carries the justification in that case, not an approximate call-graph resolver — the same blind-spot tradeoff assertion 4's sigstore rule makes for cosign reached through a script.
+
+The marker is a YAML comment, gone once yq has parsed the document, so it is found by a raw-text scan bounded to the job's own line range — from its key's source line (read via yq's `line` builtin) to one line before the next job's key line, or to the end of the file for the last job in the document — rather than by any yq query.
+
+Breadth is asserted the same way the notify-composite rule asserts it: the run reports how many jobs carry either host, and finding none on an unfiltered scan is a could-not-run, not a clean tree. `WORKFLOW_FILE_FILTER` and `LINT_ALLOW_EMPTY_SCAN=1` suppress that guard the same way they do for the notify rule.
+
+Enforced by `scripts/check-egress-allowlist.sh` via the `lint-workflow-security` CI job (member check `egress-allowlist`) and a pre-commit hook — the same enforcement path as the tool-inventory rules in [security/trust-model.md](trust-model.md).

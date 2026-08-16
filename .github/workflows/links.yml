@@ -28,7 +28,6 @@ jobs:
           egress-policy: block
           allowed-endpoints: >
             api.github.com:443
-            cache.nixos.org:443
             git-cliff.org:443
             github.blog:443
             github.com:443
@@ -40,7 +39,6 @@ jobs:
             nixos.wiki:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
-            releases.nixos.org:443
             rvenutolo.github.io:443
             www.conventionalcommits.org:443
             www.githubstatus.com:443

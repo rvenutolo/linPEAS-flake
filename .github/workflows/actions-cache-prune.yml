@@ -31,10 +31,8 @@ jobs:
           allowed-endpoints: >
             *.actions.githubusercontent.com:443
             api.github.com:443
-            cache.nixos.org:443
             github.com:443
             objects.githubusercontent.com:443
-            releases.nixos.org:443
 
       - name: prune caches older than 7 days
         env:
@@ -118,10 +116,8 @@ jobs:
           allowed-endpoints: >
             *.actions.githubusercontent.com:443
             api.github.com:443
-            cache.nixos.org:443
             github.com:443
             objects.githubusercontent.com:443
-            releases.nixos.org:443
 
       - name: prune caches scoped to closed PR
         env:

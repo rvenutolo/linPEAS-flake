@@ -875,10 +875,8 @@ jobs:
           allowed-endpoints: >
             *.actions.githubusercontent.com:443
             api.github.com:443
-            cache.nixos.org:443
             github.com:443
             objects.githubusercontent.com:443
-            releases.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -906,11 +904,9 @@ jobs:
           egress-policy: block
           allowed-endpoints: >
             api.github.com:443
-            cache.nixos.org:443
             github.com:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
-            releases.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -927,11 +923,9 @@ jobs:
           egress-policy: block
           allowed-endpoints: >
             api.github.com:443
-            cache.nixos.org:443
             github.com:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
-            releases.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -948,10 +942,8 @@ jobs:
           egress-policy: block
           allowed-endpoints: >
             api.github.com:443
-            cache.nixos.org:443
             github.com:443
             objects.githubusercontent.com:443
-            releases.nixos.org:443
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
