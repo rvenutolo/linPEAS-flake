@@ -212,6 +212,25 @@ function main() {
     "${FIXTURES}/read-temp/scripts" "${no_tests}" 0 \
     '2 assignment(s) examined, 0 violation(s), 0 exemption(s) applied, 1 read(s) examined'
 
+  # (u) GOOD: a read of a self-created temp whose `cat` carries an
+  # option ahead of the `--` separator. The path operand is the word
+  # after `--`, wherever that lands, so a detector reading a fixed
+  # argument position sees the separator instead of the variable, finds
+  # no variable to trace, and reports a temp the script created itself.
+  # The fixture carries one assignment more than (n) and two more than
+  # (s), so its clean tally is its own rather than a repeat of theirs.
+  expect 'a flagged read of a self-created temp is clean' \
+    "${FIXTURES}/read-flagged-temp/scripts" "${no_tests}" 0 \
+    '4 assignment(s) examined, 0 violation(s), 0 exemption(s) applied, 1 read(s) examined'
+
+  # (v) BAD: the same option-before-`--` shape reading a payload path.
+  # The report has to name that path operand; a report naming `--` tells
+  # a maintainer nothing about which read to convert.
+  # shellcheck disable=SC2016 # literal fixture text, not a shell expansion
+  expect 'a flagged hand-rolled read names the path, not the separator' \
+    "${FIXTURES}/read-flagged-payload/scripts" "${no_tests}" 1 \
+    'cat -- "${payload_path}" hand-reads a payload'
+
   # (t) LIVE: the real tree must satisfy both rules — zero violations,
   # every hand-rolled read either converted or carrying a
   # `payload-read-exempt` marker with a rationale. The exit code alone
