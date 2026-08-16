@@ -215,10 +215,25 @@ def is_temp_call:
 def has_temp_creation:
   [.. | objects | select(is_temp_call)] | length > 0;
 
+def arg_literals:
+  [.Args[]? | (.Parts[0].Value // "")];
+
 def is_cat_dash_dash:
   (.Type == "CallExpr")
   and ((.Args[0].Parts[0].Value // "") == "cat")
-  and ([.Args[]?.Parts[0].Value // ""] | any(. == "--"));
+  and (arg_literals | any(. == "--"));
+
+# The path operand is the word after `--`, located rather than read off
+# a fixed argument index. `cat --squeeze-blank -- "${p}"` is a legal
+# spelling of the same read and puts the operand one place further
+# along; an index-based reader lands on the separator there, reports
+# `cat -- --` — naming nothing a maintainer can act on — and, worse,
+# finds no variable to trace, which defeats the self-created-temp
+# exemption below and turns a script tearing down its own scratch file
+# into a violation.
+def cat_path_word:
+  (arg_literals | index("--")) as $i
+  | if $i == null then {} else (.Args[$i + 1] // {}) end;
 
 [.. | objects
   | select(.Type == "CallExpr" or .Type == "DeclClause")
@@ -230,7 +245,7 @@ def is_cat_dash_dash:
 | [.. | objects
   | select(is_cat_dash_dash)
   | . as $c
-  | ($c.Args[2] // {} | word_text) as $w
+  | ($c | cat_path_word | word_text) as $w
   | {line: $c.Pos.Line, var: $w.var, text: $w.text}] as $cat_reads
 | ([.. | objects | select(.Type == "CallExpr")
     | select((.Args[0].Parts[0].Value // "") == "read_json_payload_into")] | length) as $helper_count
