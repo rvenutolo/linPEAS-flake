@@ -56,6 +56,10 @@ function extract_doc_patterns() {
     printf 'allowed-actions doc not found: %s\n' "${doc}" >&2
     exit 2
   fi
+  if [[ ! -r ${doc} ]]; then
+    printf 'allowed-actions doc is not readable: %s\n' "${doc}" >&2
+    exit 2
+  fi
   # POSIX-awk: emit lines between the first ```text fence and the
   # matching close fence after the "## Allowlist (canonical)" heading.
   awk '
@@ -70,13 +74,8 @@ function extract_doc_patterns() {
   ' "$(awk_path "${doc}")"
 }
 
-# @description Fetch live API state or override fixture.
+# @description Fetch the live selected-actions API state.
 function fetch_selected_actions() {
-  local -r override="${SELECTED_ACTIONS_JSON_OVERRIDE:-}"
-  if [[ -n ${override} ]]; then
-    cat -- "${override}"
-    return
-  fi
   gh api --header 'X-GitHub-Api-Version: 2022-11-28' \
     -- "/repos/${THIS_REPO}/actions/permissions/selected-actions"
 }
@@ -102,8 +101,6 @@ if [[ -z ${doc_patterns_sorted} ]]; then
   exit 2
 fi
 
-selected_json="$(fetch_selected_actions)"
-
 # The selected-actions payload is either a fixture path or the
 # selected-actions API's response, and every read below assumes a shape
 # neither source guarantees. `.patterns_allowed` has no `has()` guard in
@@ -113,6 +110,19 @@ selected_json="$(fetch_selected_actions)"
 payload_source_into selected_source SELECTED_ACTIONS_JSON_OVERRIDE \
   "/repos/${THIS_REPO}/actions/permissions/selected-actions"
 readonly selected_source
+
+# read_json_payload_into fills a nameref, so it must run in this shell —
+# never inside `$(...)`, where its `exit 2` would be trapped in a
+# subshell and this script would carry on with an empty selected_json.
+# That is why the override branch is hoisted out of
+# fetch_selected_actions rather than living inside it.
+if [[ -n ${SELECTED_ACTIONS_JSON_OVERRIDE:-} ]]; then
+  read_json_payload_into selected_json "${SELECTED_ACTIONS_JSON_OVERRIDE}" \
+    "${selected_source}"
+else
+  selected_json="$(fetch_selected_actions)"
+fi
+
 require_json_payload "${selected_source}" "${selected_json}" '
   if type != "object" then "payload is \(type), want object"
   elif (.github_owned_allowed | type) != "boolean" then ".github_owned_allowed is \(.github_owned_allowed | type), want boolean"
