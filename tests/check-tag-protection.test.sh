@@ -80,6 +80,47 @@ function run_scenario() {
   rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
 }
 
+# @description Point the override at a directory instead of a file. A
+# directory fails the read for every user, root included — no mode bits
+# stand between it and the could-not-run path — so this scenario proves
+# the could-not-run path independent of permission bits.
+# @arg $1 scenario name  @arg $2 expected stderr substring
+function run_directory_scenario() {
+  local -r name="$1"
+  local -r expected_stderr="$2"
+  local payload
+  payload="$(mktemp --directory)"
+
+  local stderr_file stdout_file outcome_file
+  stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+
+  local actual_exit=0
+  RELEASE_TAG_RULESET_JSON_OVERRIDE="${payload}" \
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${expected_stderr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+
+  if [[ ${actual_exit} -ne 2 ]]; then
+    printf 'FAIL: %s — expected exit 2, got %d\n' "${name}" "${actual_exit}" >&2
+    printf 'stderr was:\n' >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet -- "${expected_stderr}" "${stderr_file}"; then
+    printf 'FAIL: %s — stderr missing %q\n' "${name}" "${expected_stderr}" >&2
+    printf 'stderr was:\n' >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+
+  rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
+  rm --recursive --force -- "${payload}"
+}
+
 function main() {
   run_scenario 'good ruleset passes' \
     'good-ruleset.json' 0 '' \
@@ -137,6 +178,11 @@ function main() {
   run_scenario 'unreadable payload path is a tooling error' \
     'does-not-exist.json' 2 \
     'release-tag-protection ruleset: payload from RELEASE_TAG_RULESET_JSON_OVERRIDE is not readable'
+  # A directory passes the existence and (typically) the readable checks,
+  # so it proves the could-not-run path for every user, root included,
+  # where a chmod-based unreadable-payload scenario would self-skip.
+  run_directory_scenario 'directory-payload override is a tooling error, not drift' \
+    'release-tag-protection ruleset: payload from RELEASE_TAG_RULESET_JSON_OVERRIDE could not be read'
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
