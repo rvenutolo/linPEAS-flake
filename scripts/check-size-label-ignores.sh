@@ -68,6 +68,8 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/generates.sh
+source "${_lib_dir}/lib/generates.sh"
 
 readonly SCRIPTS_DIR="${SCRIPTS_DIR_OVERRIDE:-scripts}"
 readonly LABELER="${LABELER_YML_OVERRIDE:-.github/workflows/labeler.yml}"
@@ -101,25 +103,39 @@ generates_block_count=0
 declare -a script_files=()
 glob_into script_files "shell scripts under ${SCRIPTS_DIR}" "${SCRIPTS_DIR}/*.sh"
 
+# Which of the matched paths is a script to read is this lint's judgment,
+# not the parser's, so the filter and the `scripts_scanned` tally stay
+# here and the parser is handed exactly the files this run counted.
+declare -a header_sources=()
 for script in "${script_files[@]}"; do
   [[ -f ${script} ]] || continue
   scripts_scanned=$((scripts_scanned + 1))
-  # `|| [[ -n ... ]]` keeps a final line with no trailing newline, which
-  # read reports as a failure even after populating the variable.
-  while IFS= read -r line || [[ -n ${line} ]]; do
-    # Header terminator: the first line that is neither a comment nor
-    # blank, matching the annotation parser's own rule.
-    [[ ${line} =~ ^[[:space:]]*$ ]] && continue
-    [[ ${line} == '#'* ]] || break
-    if [[ ${line} =~ ^#[[:space:]]+@generates-block[[:space:]]+([^[:space:]]+)[[:space:]]*$ ]]; then
-      GENERATES_BLOCK["${BASH_REMATCH[1]}"]="${script}"
-      generates_block_count=$((generates_block_count + 1))
-    elif [[ ${line} =~ ^#[[:space:]]+@generates[[:space:]]+([^[:space:]]+)[[:space:]]*$ ]]; then
-      GENERATES["${BASH_REMATCH[1]}"]="${script}"
-      generates_count=$((generates_count + 1))
-    fi
-  done <"${script}"
+  header_sources+=("${script}")
 done
+
+# Captured with its status checked, because the substitution runs inside
+# an `if`, where errexit is suppressed: a script that could not be read
+# would otherwise arrive as a shorter record stream, indistinguishable
+# from one that declares nothing and scored as a tree in agreement.
+if ! declaration_records="$(generator_declarations "${header_sources[@]}")"; then
+  printf '%s: could not read every shell script under %s to collect its generator declarations\n' \
+    "${0##*/}" "${SCRIPTS_DIR}" >&2
+  exit 2
+fi
+
+# A here-string of an empty variable still feeds one empty line, so a run
+# whose scripts declared nothing reaches this loop as a single blank
+# record rather than as no iteration at all.
+while IFS=$'\037' read -r kind path script; do
+  [[ -n ${kind} ]] || continue
+  if [[ ${kind} == 'generates-block' ]]; then
+    GENERATES_BLOCK["${path}"]="${script}"
+    generates_block_count=$((generates_block_count + 1))
+  elif [[ ${kind} == 'generates' ]]; then
+    GENERATES["${path}"]="${script}"
+    generates_count=$((generates_count + 1))
+  fi
+done <<<"${declaration_records}"
 
 declarations=$((generates_count + generates_block_count))
 
