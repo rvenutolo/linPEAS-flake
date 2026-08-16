@@ -212,29 +212,42 @@ function main() {
     "${FIXTURES}/read-temp/scripts" "${no_tests}" 0 \
     '2 assignment(s) examined, 0 violation(s), 0 exemption(s) applied, 1 read(s) examined'
 
-  # (t) LIVE: every payload source in the real tree is named by the
-  # library helper, so the source-naming rule alone would exit 0 here —
-  # but the read rule's scope is scripts/*.sh, and this tree still
-  # carries reads the helper does not cover. Asserted rather than
-  # assumed clean: check-flake-lock-provenance.sh reads a base file, a
-  # head file, and the working tree's own flake.lock by hand, and is
-  # tracked as its own conversion separate from this rule;
-  # check-pin-digest-provenance.sh and gen-dashboard-data.sh each hold
-  # one more hand-rolled read the helper does not yet cover. This
-  # scenario names the known count rather than asserting a clean exit
-  # this run does not produce, so a change to any of these sites — fixed
-  # or newly broken — surfaces here instead of going unnoticed.
-  # One invocation, several asserted properties: the four sites below all
-  # come from this same run against the real tree, so they are recorded
-  # as one scenario with `harness_assert_also` rather than as four
-  # separate invocations of an identical command.
-  expect 'the live tree carries known unconverted hand-rolled reads' \
-    "${REPO_ROOT}/scripts" "${REPO_ROOT}/tests" 1 \
-    '5 payload-source-helper violation(s)'
-  # shellcheck disable=SC2016 # literal diagnostic text, not a shell expansion
-  harness_assert_also 'check-flake-lock-provenance.sh:107: cat -- "${BASE_LOCK_FILE}"'
-  harness_assert_also 'check-pin-digest-provenance.sh:181:'
-  harness_assert_also 'gen-dashboard-data.sh:125:'
+  # (t) LIVE: the real tree must satisfy both rules — zero violations,
+  # every hand-rolled read either converted or carrying a
+  # `payload-read-exempt` marker with a rationale. The exit code alone
+  # cannot tell a scan that reached the whole tree apart from one that
+  # silently stopped early, so the assertion also covers the breadth
+  # counts themselves — nonzero assignments and nonzero reads examined
+  # — rather than a substring lifted from today's file count, which
+  # would pin this scenario to a moving target as the tree grows.
+  local live_out_file live_outcome_file live_exit live_assignments live_reads
+  live_out_file="$(mktemp)"
+  live_outcome_file="$(mktemp)"
+  live_exit=0
+  "${SCRIPT}" >"${live_out_file}" 2>&1 || live_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${live_exit}" >"${live_outcome_file}"
+  harness_assert_record 'the live tree is clean' '' "${live_outcome_file}" "${live_out_file}"
+  if [[ ${live_exit} -ne 0 ]]; then
+    printf 'FAIL: the live tree is clean — expected exit 0, got %d\n' "${live_exit}" >&2
+    cat -- "${live_out_file}" >&2
+    failures=$((failures + 1))
+  else
+    live_assignments="$(grep -oE '[0-9]+ assignment\(s\) examined' "${live_out_file}" | grep -oE '^[0-9]+' || true)"
+    live_reads="$(grep -oE '[0-9]+ read\(s\) examined' "${live_out_file}" | grep -oE '^[0-9]+' || true)"
+    if [[ -z ${live_assignments} || ${live_assignments} -eq 0 ]]; then
+      printf 'FAIL: the live tree is clean — 0 assignments examined\n' >&2
+      cat -- "${live_out_file}" >&2
+      failures=$((failures + 1))
+    elif [[ -z ${live_reads} || ${live_reads} -eq 0 ]]; then
+      printf 'FAIL: the live tree is clean — 0 reads examined\n' >&2
+      cat -- "${live_out_file}" >&2
+      failures=$((failures + 1))
+    else
+      printf 'PASS: the live tree is clean (exit 0, %d assignment(s) examined, %d read(s) examined)\n' \
+        "${live_assignments}" "${live_reads}"
+    fi
+  fi
+  rm --force -- "${live_out_file}" "${live_outcome_file}"
 
   harness_assert_verify || failures=$((failures + 1))
 
