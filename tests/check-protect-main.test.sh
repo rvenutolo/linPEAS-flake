@@ -36,7 +36,7 @@ function run_scenario() {
   outcome_file="$(mktemp)"
 
   local actual_exit=0
-  RULESET_JSON_OVERRIDE="${FIXTURES}/${fixture_dir}/${ruleset_file}" \
+  PROTECT_MAIN_RULESET_JSON_OVERRIDE="${FIXTURES}/${fixture_dir}/${ruleset_file}" \
     MIRROR_JSON_OVERRIDE="${FIXTURES}/${fixture_dir}/mirror.json" \
     DOC_TABLE_OVERRIDE="${FIXTURES}/${fixture_dir}/required-checks.md" \
     "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
@@ -99,7 +99,7 @@ function main() {
   # guard stays even though the gate stands in front of it.
   run_scenario 'non-array rules is a tooling error' \
     'bad-rules-wrong-type' 2 \
-    'protect-main ruleset: unexpected payload shape from RULESET_JSON_OVERRIDE: .rules is string, want array'
+    'protect-main ruleset: unexpected payload shape from PROTECT_MAIN_RULESET_JSON_OVERRIDE: .rules is string, want array'
   run_scenario 'rules holding non-objects is a tooling error' \
     'bad-rules-non-object-items' 2 \
     'protect-main ruleset: could not read .rules[].type'
@@ -112,20 +112,20 @@ function main() {
   # runs before the live ruleset is even fetched, so these three reuse
   # the good mirror and doc fixtures and vary only live.json.
   run_scenario 'empty ruleset payload is a tooling error' \
-    'bad-ruleset-empty' 2 'protect-main ruleset: empty payload from RULESET_JSON_OVERRIDE'
+    'bad-ruleset-empty' 2 'protect-main ruleset: empty payload from PROTECT_MAIN_RULESET_JSON_OVERRIDE'
   run_scenario 'ruleset payload that is not JSON is a tooling error' \
     'bad-ruleset-not-json' 2 \
-    'protect-main ruleset: payload from RULESET_JSON_OVERRIDE is not valid JSON' \
+    'protect-main ruleset: payload from PROTECT_MAIN_RULESET_JSON_OVERRIDE is not valid JSON' \
     'live-payload.txt'
   run_scenario 'boolean-typed ruleset payload is a tooling error' \
     'bad-ruleset-wrong-type' 2 \
-    'protect-main ruleset: unexpected payload shape from RULESET_JSON_OVERRIDE: payload is boolean, want object'
+    'protect-main ruleset: unexpected payload shape from PROTECT_MAIN_RULESET_JSON_OVERRIDE: payload is boolean, want object'
 
   # The no-op-ruleset guard (fetch_ruleset hard-fails when the live
   # ruleset id is empty) is unreachable through run_scenario, which always
-  # sets RULESET_JSON_OVERRIDE. Exercise it directly: stub `gh` to return
-  # an empty ruleset list (empty id) and run the live path with only the
-  # mirror + doc overrides.
+  # sets PROTECT_MAIN_RULESET_JSON_OVERRIDE. Exercise it directly: stub
+  # `gh` to return an empty ruleset list (empty id) and run the live path
+  # with only the mirror + doc overrides.
   local gh_stub_dir stderr_file stdout_file outcome_file no_op_exit=0
   gh_stub_dir="$(mktemp --directory)"
   stderr_file="$(mktemp)"

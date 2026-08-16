@@ -46,7 +46,7 @@ function run_scenario() {
   outcome_file="$(mktemp)"
 
   local actual_exit=0
-  RULESET_JSON_OVERRIDE="${FIXTURES}/${fixture}" \
+  RELEASE_TAG_RULESET_JSON_OVERRIDE="${FIXTURES}/${fixture}" \
     "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
   harness_assert_record "${name}" "${expected_stderr}" \
@@ -113,7 +113,7 @@ function main() {
   # guard stays even though the gate stands in front of it.
   run_scenario 'non-array rules is a tooling error' \
     'bad-rules-wrong-type.json' 2 \
-    'release-tag-protection ruleset: unexpected payload shape from RULESET_JSON_OVERRIDE: .rules is string, want array'
+    'release-tag-protection ruleset: unexpected payload shape from RELEASE_TAG_RULESET_JSON_OVERRIDE: .rules is string, want array'
   run_scenario 'rules holding non-objects is a tooling error' \
     'bad-rules-non-object-items.json' 2 \
     'release-tag-protection ruleset: could not read .rules[].type'
@@ -124,19 +124,19 @@ function main() {
   # outcomes stay distinct.
   run_scenario 'ruleset without include patterns is a tooling error' \
     'bad-no-include-patterns.json' 2 \
-    'release-tag-protection ruleset: unexpected payload shape from RULESET_JSON_OVERRIDE: .conditions.ref_name.include is null, want array'
+    'release-tag-protection ruleset: unexpected payload shape from RELEASE_TAG_RULESET_JSON_OVERRIDE: .conditions.ref_name.include is null, want array'
   run_scenario 'non-array bypass_actors is a tooling error' \
     'bad-bypass-actors-wrong-type.json' 2 \
-    'release-tag-protection ruleset: unexpected payload shape from RULESET_JSON_OVERRIDE: .bypass_actors is object, want array'
+    'release-tag-protection ruleset: unexpected payload shape from RELEASE_TAG_RULESET_JSON_OVERRIDE: .bypass_actors is object, want array'
   run_scenario 'payload that is not JSON is a tooling error' \
     'bad-not-json.json' 2 \
-    'release-tag-protection ruleset: payload from RULESET_JSON_OVERRIDE is not valid JSON'
+    'release-tag-protection ruleset: payload from RELEASE_TAG_RULESET_JSON_OVERRIDE is not valid JSON'
   run_scenario 'empty payload is a tooling error' \
     'bad-empty-payload.json' 2 \
-    'release-tag-protection ruleset: empty payload from RULESET_JSON_OVERRIDE'
+    'release-tag-protection ruleset: empty payload from RELEASE_TAG_RULESET_JSON_OVERRIDE'
   run_scenario 'unreadable payload path is a tooling error' \
     'does-not-exist.json' 2 \
-    'release-tag-protection ruleset: payload from RULESET_JSON_OVERRIDE is not readable'
+    'release-tag-protection ruleset: payload from RELEASE_TAG_RULESET_JSON_OVERRIDE is not readable'
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then

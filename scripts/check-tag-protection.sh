@@ -27,8 +27,11 @@
 # list and an absent `.bypass_actors` is "no actor may bypass", both of
 # which are posture claims this lint judges (drift or pass), not faults.
 #
-# Honors RULESET_JSON_OVERRIDE for the test harness — points at a fixture
-# instead of hitting the live API.
+# Honors RELEASE_TAG_RULESET_JSON_OVERRIDE for the test harness — points at
+# a fixture instead of hitting the live API. The variable is named for the
+# ruleset this lint reads, because a sibling lint reads a different ruleset
+# through the same API route and one variable shared between them would feed
+# a single fixture to both whenever one process runs the pair.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -50,7 +53,7 @@ readonly THIS_REPO='rvenutolo/linPEAS-flake'
 # @description Fetch the ruleset JSON either from override fixture or
 # from the live gh api.
 function fetch_ruleset() {
-  local -r override="${RULESET_JSON_OVERRIDE:-}"
+  local -r override="${RELEASE_TAG_RULESET_JSON_OVERRIDE:-}"
   if [[ -n ${override} ]]; then
     cat -- "${override}"
     return
@@ -70,14 +73,15 @@ function fetch_ruleset() {
 
 # The payload this lint reads is either a fixture path or the ruleset API's
 # response, and every read below assumes a shape neither source guarantees.
-payload_source_into payload_source RULESET_JSON_OVERRIDE \
+payload_source_into payload_source RELEASE_TAG_RULESET_JSON_OVERRIDE \
   "/repos/${THIS_REPO}/rulesets/{id}"
 readonly payload_source
 
 # A fixture the harness points at but cannot read is a could-not-run, not a
 # finding: `cat` would emit nothing and the shape gate would report an empty
 # payload, naming the wrong fault.
-if [[ -n ${RULESET_JSON_OVERRIDE:-} && ! -r ${RULESET_JSON_OVERRIDE} ]]; then
+if [[ -n ${RELEASE_TAG_RULESET_JSON_OVERRIDE:-} &&
+  ! -r ${RELEASE_TAG_RULESET_JSON_OVERRIDE} ]]; then
   printf '%s ruleset: payload from %s is not readable\n' "${EXPECTED_NAME}" "${payload_source}" >&2
   exit 2
 fi
@@ -93,8 +97,8 @@ ruleset_json="$(fetch_ruleset)"
 # so its absence means this is not a ruleset detail response at all.
 #
 # The subject is passed because the source kind alone does not identify this
-# payload: a sibling lint reads a different ruleset through the same override
-# variable and the same API route.
+# payload: a sibling lint reads a different ruleset through the same API
+# route.
 require_json_payload "${payload_source}" "${ruleset_json}" '
   if type != "object" then "payload is \(type), want object"
   elif (.name | type) != "string" then ".name is \(.name | type), want string"
