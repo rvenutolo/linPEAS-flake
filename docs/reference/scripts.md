@@ -692,7 +692,9 @@ hand-rolled (die_op) but genuinely covered.
 
 ### scripts/check-payload-source-helper.sh
 
-Lint: no shell file names a payload's source by hand.
+Lint: no shell file names a payload's source by hand, and
+no shell file under `<scripts>` (excluding `lib/`) reads a JSON payload
+by hand either.
 `payload_source_into` (scripts/lib/payload.sh) fills a caller variable
 with the override variable's name when a fixture supplies the payload
 and with the API route or config filename otherwise, so an assignment
@@ -740,15 +742,45 @@ itself reported, and that report is produced before any violation is,
 so a stale marker surfaces on a tree where the rule is otherwise
 obeyed everywhere.
 
+--- The read rule ---------------------------------------------------------
+
+`read_json_payload_into` (scripts/lib/payload.sh) turns a file path
+into a shape-checked payload while reporting an absent, unreadable, or
+non-regular-file path as a could-not-run. A `cat -- <path>` capture
+skips every one of those guards, so a hand-rolled read that later
+feeds `require_json_payload` reproduces the helper's job with none of
+its could-not-run handling — the same cost the source-naming rule
+above exists to stop, one level earlier in the same read.
+
+The rule is broader than "feeds require_json_payload": every
+`cat -- <path>` capture under `<scripts>` outside `<scripts>/lib` is a
+violation, whether or not this run can prove the captured value later
+reaches the shape gate. A predicate that only fires when it can trace
+the capture into `require_json_payload` by variable name misses a
+capture wrapped in its own fetch function — the read and the gate then
+share no variable name for a dataflow check to follow — so the rule
+does not attempt that trace at all.
+
+Two shapes read a temp file without hand-rolling anything: a capture
+whose path traces back to a `make_temp` (or `mktemp`) result in the
+same file is exempted automatically, and a `# payload-read-exempt: <rationale>` marker excuses the rest, matching this file's
+`payload-source-exempt` marker in every other respect — a marker with
+no rationale excuses nothing, and a marker on a file holding no
+capture the rule matches is itself reported, before any violation is.
+
 --- Breadth -------------------------------------------------------------
 
 The scan set is `<scripts>/*.sh`, `<scripts>/lib/*.sh` and
 `<tests>/*.sh`. The library arm is not optional: the helper itself
 lives there, its neighbors are the files most likely to copy it, and
 the older shell-hygiene lints in this repo stop at the top level. The
-clean verdict reports files scanned and assignments examined rather
-than a bare "ok", because a detector that stopped reaching assignments
-and a tree with nothing to report emit the same exit code otherwise.
+read rule narrows to `<scripts>/*.sh` alone — a hand-rolled read in a
+library or a harness is not the shape this rule polices, since neither
+one is a caller deciding how to read its own payload. The clean
+verdict reports files scanned, assignments examined, and reads
+examined rather than a bare "ok", because a detector that stopped
+reaching either one and a tree with nothing to report emit the same
+exit code otherwise.
 
 Measured, not assumed: this file's own prose does not self-match. The
 finished lint run against a scan root holding only this script reports
@@ -759,10 +791,11 @@ no exemption marker of its own.
 
 Honors SCRIPTS_DIR_OVERRIDE (default: scripts), TESTS_DIR_OVERRIDE
 (default: tests), and LINT_ALLOW_EMPTY_SCAN for a scan root that
-deliberately holds no assignment at all.
-Exit 0 clean, 1 on a hand-named source or a stale exemption marker,
-2 when the scan set cannot be enumerated, holds no assignment, a
-required tool is missing, or a file cannot be parsed as shell.
+deliberately holds no assignment and no read at all.
+Exit 0 clean, 1 on a hand-named source, a hand-rolled read, or a stale
+exemption marker, 2 when the scan set cannot be enumerated, holds no
+assignment or no read, a required tool is missing, or a file cannot be
+parsed as shell.
 
 ### scripts/check-permission-scopes.sh
 

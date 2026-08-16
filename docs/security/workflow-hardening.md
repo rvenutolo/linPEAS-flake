@@ -245,6 +245,18 @@ The clean verdict reports files scanned and assignments examined rather than a b
 
 Enforced by `scripts/check-payload-source-helper.sh`. Wired as the `lint-script-hygiene` CI job (member check `payload-source-helper`).
 
+### payload-source-helper: the read rule
+
+The same file also enforces a second, narrower rule: every `cat -- <path>` capture under `scripts/*.sh` — never `scripts/lib/*.sh` or `tests/*.sh`, since neither is a caller deciding how to read its own payload — is a violation unless the captured path traces back to a `make_temp` or `mktemp` result created earlier in the same file, or the file carries an inline `# payload-read-exempt: <rationale>` marker.
+
+`read_json_payload_into` (`scripts/lib/payload.sh`) turns a file path into a shape-checked payload while reporting an absent, unreadable, or non-regular-file path as a could-not-run rather than a finding. A `cat --` capture skips every one of those guards, reproducing the helper's job with none of its could-not-run handling — the read-side half of the cost the source-naming rule above exists to stop on the naming side. The rule does not require proving that a captured variable later reaches `require_json_payload`: a fetch wrapped in its own function shares no variable name with the gate it feeds, so a dataflow trace between the two would miss exactly the capture most likely to be written next.
+
+A capture whose path traces to a temp this same script created is exempt automatically — tearing down a scratch file the script owns is not the shape this rule polices. The `# payload-read-exempt: <rationale>` marker excuses the rest, matching the source-naming marker in every other respect: a marker whose rationale is empty excuses nothing, and a marker on a file holding no capture the rule matches is itself reported, ahead of any violation.
+
+The clean verdict extends the same tally with a read count — files scanned, assignments examined, violations, exemptions applied, and reads examined — and the run exits 2 when it examined no reads, unless `LINT_ALLOW_EMPTY_SCAN=1` says the scan root deliberately holds none. The two breadth floors are checked independently: an assignment count of zero and a read count of zero are different scans stopping short, since the two rules walk disjoint syntax-tree shapes.
+
+Enforced by `scripts/check-payload-source-helper.sh`. Wired as the `lint-script-hygiene` CI job (member check `payload-source-helper`).
+
 ## script-has-test
 
 Every `scripts/check-*.sh` has a matching `tests/check-*.test.sh`, and every `tests/check-*.test.sh` has a matching `scripts/check-*.sh`.
