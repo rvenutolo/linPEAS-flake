@@ -133,18 +133,18 @@ function parse_harness() {
   done <"${file}"
 }
 
-# @description Emit one section heading and its table, or nothing when the
-# section has no members: an empty table would claim the repo has a class
-# of harness it does not have.
-# @arg $1 section heading  @arg $2 file holding the section's rows
-function emit_section() {
-  local -r heading="$1" rows="$2"
-  [[ -s ${rows} ]] || return 0
+# @description Emit one section's heading and table header. The caller
+# appends the rows and the trailing blank line, because a read whose path
+# arrives as a parameter cannot be traced back to the `make_temp` that
+# created it — the payload-read gate reads such a `cat` as a hand-rolled
+# read of an outside file. Keeping the read in `main`, beside the
+# assignment, is what makes the scratch file visibly this script's own.
+# @arg $1 section heading
+function emit_section_header() {
+  local -r heading="$1"
   printf '## %s\n\n' "${heading}"
   printf '| Harness | Subject | Fixtures |\n'
   printf '| --- | --- | --- |\n'
-  cat -- "${rows}"
-  printf '\n'
 }
 
 function main() {
@@ -317,10 +317,28 @@ fixture.
 Regenerate with `scripts/refresh-test-harnesses.sh`.
 
 MARKDOWN
-    emit_section 'Check harnesses' "${check_bucket}"
-    emit_section 'Library harnesses' "${lib_bucket}"
-    emit_section 'Refresh harnesses' "${refresh_bucket}"
-    emit_section 'Other harnesses' "${other_bucket}"
+    # A section with no members is omitted outright: an empty table would
+    # claim the repo has a class of harness it does not have.
+    if [[ -s ${check_bucket} ]]; then
+      emit_section_header 'Check harnesses'
+      cat -- "${check_bucket}"
+      printf '\n'
+    fi
+    if [[ -s ${lib_bucket} ]]; then
+      emit_section_header 'Library harnesses'
+      cat -- "${lib_bucket}"
+      printf '\n'
+    fi
+    if [[ -s ${refresh_bucket} ]]; then
+      emit_section_header 'Refresh harnesses'
+      cat -- "${refresh_bucket}"
+      printf '\n'
+    fi
+    if [[ -s ${other_bucket} ]]; then
+      emit_section_header 'Other harnesses'
+      cat -- "${other_bucket}"
+      printf '\n'
+    fi
   } >"${doc_new}"
 
   # Run treefmt over the rendered doc so the comparison target matches what
