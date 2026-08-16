@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# @subject scripts/lib/harness-assert.sh
 # tests/lib-harness-assert.test.sh — proves the cross-scenario
 # discrimination gate flags a substring that also appears in a sibling
 # scenario's output, and stays quiet when the substring discriminates.

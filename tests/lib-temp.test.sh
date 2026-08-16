@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# @subject scripts/lib/temp.sh
 # tests/lib-temp.test.sh — proves scripts/lib/temp.sh creates temp files
 # and directories, passes every argument through to `mktemp` verbatim,
 # and reports a creation failure as a could-not-run (exit 2) both when

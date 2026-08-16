@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # tests/_script_docs.test.sh
+# @subject scripts/_script_docs.awk
 #
 # Spec-driven unit test for scripts/_script_docs.awk.
 set -Eeuo pipefail

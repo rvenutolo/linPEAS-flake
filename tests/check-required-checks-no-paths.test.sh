@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # tests/check-required-checks-no-paths.test.sh
+# @subject scripts/check-required-checks-no-paths.sh
 set -Eeuo pipefail
 IFS=$'\n\t'
 

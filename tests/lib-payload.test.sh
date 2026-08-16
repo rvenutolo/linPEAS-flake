@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# @subject scripts/lib/payload.sh
 # tests/lib-payload.test.sh — proves scripts/lib/payload.sh's
 # require_json_payload treats an empty payload, a whitespace-only
 # payload, an unparsable payload, a shape-program-rejected payload, and

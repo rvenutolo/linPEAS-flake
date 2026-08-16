@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # tests/linpeas-pin-assert.test.sh
+# @subject nix/linpeas.nix
 #
 # Verifies the pin-shape assertions in nix/linpeas.nix. A pin whose version is
 # not the tag path-segment embedded in its url must fail eval, so a hand-edited

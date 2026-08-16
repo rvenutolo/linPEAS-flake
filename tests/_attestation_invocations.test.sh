@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # tests/_attestation_invocations.test.sh
+# @subject scripts/_attestation_invocations.awk
 #
 # Spec-driven unit test for scripts/_attestation_invocations.awk.
 #

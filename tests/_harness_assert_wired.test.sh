@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # tests/_harness_assert_wired.test.sh
+# @subject tests/*.test.sh
+# @fixtures tests/fixtures/harness-assert-wired
+# The fixture tree is reached only by pointing TESTS_DIR_OVERRIDE at it,
+# so no path literal in this file names it.
 #
 # Meta-harness: every harness that asserts behavior by grepping a
 # captured output stream is wired to the cross-scenario discrimination

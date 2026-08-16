@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# @subject scripts/lib/awk-path.sh
 # tests/lib-awk-path.test.sh — proves scripts/lib/awk-path.sh prefixes a
 # relative path with `./` (including the hazard case where the first
 # path component contains `=`, which `awk` would otherwise read as a

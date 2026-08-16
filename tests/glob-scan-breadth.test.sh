@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# @subject scripts/*.sh
 # tests/glob-scan-breadth.test.sh — proves every operator-overridable glob
 # scan root in scripts/ asserts its own breadth.
 #
