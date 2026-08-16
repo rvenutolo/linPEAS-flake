@@ -14,23 +14,26 @@ harnesses but not all of them.
 tests/
 ├── <script-name>.test.sh         # one harness per script
 ├── fixtures/
-│   ├── <script-name>/
+│   ├── <fixture-dir>/            # named after the harness, or after the
+│   │   │                         # harness with its `check-` prefix
+│   │   │                         # stripped — the harness's own FIXTURES
+│   │   │                         # constant is canonical
 │   │   ├── good.yml              # minimal passing fixture
 │   │   ├── good-*.yml            # additional passing variants
 │   │   ├── bad-<failure-mode>.yml
 │   │   └── ...
 ```
 
-Current harness / fixture pairs:
+Neither shape is guaranteed: a handful of directories are named for the
+invariant rather than for the harness, so read the harness's `FIXTURES`
+constant rather than inferring a path from its name. Roughly a third of
+the harnesses build their tree at runtime and have no fixture directory
+at all; those render an em dash in the census.
 
-| Script                                      | Harness                                        | Fixtures                                  |
-| ------------------------------------------- | ---------------------------------------------- | ----------------------------------------- |
-| `scripts/check-uses-sha-pinned.sh`          | `tests/check-uses-sha-pinned.test.sh`          | `tests/fixtures/uses-sha-pinned/`         |
-| `scripts/check-pr-workflows-no-secrets.sh`  | `tests/check-pr-workflows-no-secrets.test.sh`  | `tests/fixtures/pr-workflows-no-secrets/` |
-| `scripts/check-required-checks-no-paths.sh` | `tests/check-required-checks-no-paths.test.sh` | `tests/fixtures/required-checks/`         |
-| `scripts/check-tag-protection.sh`           | `tests/check-tag-protection.test.sh`           | `tests/fixtures/tag-protection/`          |
-| `scripts/check-renovate-invariants.sh`      | `tests/check-renovate-invariants.test.sh`      | `tests/fixtures/renovate-invariants/`     |
-| `scripts/gen-dashboard-data.sh`             | `tests/gen-dashboard-data.test.sh`             | `tests/fixtures/dashboard-data/`          |
+Every harness, its subject and its fixture directories are listed in
+[`docs/reference/test-harnesses.md`](../docs/reference/test-harnesses.md),
+which `scripts/refresh-test-harnesses.sh` generates and a pre-commit
+hook holds fresh.
 
 ## Harness conventions
 
@@ -117,6 +120,17 @@ would feed a single fixture to both whenever one process runs the pair.
 1. Write the script's invariant first; commit it.
 1. Create `tests/<script-name>.test.sh` mirroring the existing
     harnesses' shape (env-var overrides, `expect` function).
+1. Declare exactly one subject. A harness that assigns
+    `SCRIPT="${REPO_ROOT}/scripts/<name>.sh"` already declares its
+    subject through that assignment. A harness that does not — one whose
+    target is an awk program, a Nix file, a whole file set, or another
+    harness — must carry a `# @subject <path or file set>` line in its
+    header comment block naming what it exercises. Carrying both is an
+    error, and so is carrying neither:
+    `scripts/refresh-test-harnesses.sh` exits 2 either way rather than
+    rendering an unknown subject. A harness that reaches its fixture
+    directory only through an override, so that no path literal in the
+    file names it, adds a `# @fixtures <path>` line the same way.
 1. Create `tests/fixtures/<script-name>/` with at least one `good`
     and one `bad-*` fixture.
 1. Wire the harness to the discrimination gate: source
