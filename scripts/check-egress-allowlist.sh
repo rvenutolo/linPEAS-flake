@@ -605,8 +605,15 @@ for f in "${workflow_files[@]}"; do
     if has_host "${endpoints}" "cache.nixos.org" || has_host "${endpoints}" "releases.nixos.org"; then
       nix_host_jobs=$((nix_host_jobs + 1))
 
+      # Path-bounded: the composite path itself, not any `uses:` value that
+      # merely starts with it — `./.github/actions/setup-nix-cache-thing` is
+      # a different composite and must not satisfy this arm.
       has_setup_nix=0
-      [[ ${uses} == *"${NIX_SETUP_COMPOSITE}"* ]] && has_setup_nix=1
+      while IFS= read -r u; do
+        if [[ ${u} == "${NIX_SETUP_COMPOSITE}" || ${u} == "${NIX_SETUP_COMPOSITE}@"* ]]; then
+          has_setup_nix=1
+        fi
+      done <<<"${uses}"
 
       # `nix` must be followed by whitespace and a recognized subcommand,
       # with a non-identifier (or start-of-string) character before it:
