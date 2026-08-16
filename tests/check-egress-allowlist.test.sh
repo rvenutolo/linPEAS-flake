@@ -132,6 +132,10 @@ printf 'OK   zero-notify-discovery-override\n'
 expect good-nix-setup-nix.yml 0 ""
 expect good-nix-run-invocation.yml 0 ""
 expect bad-nix-neither.yml 1 "reaches no nix tooling"
+# A same-prefixed but different composite (`setup-nix-cache-thing`) must not
+# satisfy the setup-nix arm: the arm matches the composite path itself, not
+# any path that merely starts with it.
+expect bad-nix-setup-nix-lookalike.yml 1 "reaches no nix tooling"
 expect good-nix-exempt.yml 0 ""
 expect bad-nix-exempt-empty-reason.yml 1 "no reason"
 expect bad-nix-stale-marker.yml 1 "stale"
