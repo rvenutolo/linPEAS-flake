@@ -122,6 +122,7 @@ function fetch_or_override() {
   local -r api_path="$2"
   local -r override_path="${!override_var:-}"
   if [[ -n ${override_path} ]]; then
+    # payload-read-exempt: this read feeds fetch_soft's degrade-to-fallback contract — an absent, unreadable, or malformed override here must resolve to a status fetch_soft's caller can catch and fall back on, not the could-not-run exit the shared reader would raise.
     cat -- "${override_path}"
   else
     fetch_live "${api_path}"
