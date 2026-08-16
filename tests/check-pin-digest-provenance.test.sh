@@ -52,6 +52,55 @@ function run_scenario() {
   rm --force -- "${out_file}" "${outcome_file}"
 }
 
+# Points BASE_DIR_OVERRIDE at a copy of the base fixture tree with one
+# pin-scanned file made unreadable. This is the reported defect:
+# base_content()'s BASE_DIR arm checked only `-f` (existence, regular
+# file) before reading, so a present-but-unreadable file's `cat --`
+# failure was discarded by the unconditional `return 0` that followed
+# it — collapsing a read failure into the same "absent from base"
+# outcome an unreadable file's neighbor produces when it is genuinely
+# missing. Skipped for root, where mode bits are no lever.
+function run_unreadable_base_scenario() {
+  local -r name='an unreadable base file dies loud, not silently absent'
+  if [[ ${EUID} -eq 0 ]]; then
+    printf 'SKIP: %s (running as root — mode bits are no lever)\n' "${name}"
+    return 0
+  fi
+  local base_dir out_file outcome_file
+  base_dir="$(mktemp --directory)"
+  cp -r -- "${FIXTURES}/base/." "${base_dir}/"
+  chmod 000 -- "${base_dir}/.github/workflows/wf.yml"
+  out_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+
+  local actual_exit=0
+  PATH="${FIXTURES}/bin:${PATH}" \
+    GH_STUB_MODE=deny \
+    BASE_DIR_OVERRIDE="${base_dir}" \
+    HEAD_DIR_OVERRIDE="${FIXTURES}/base" \
+    "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+
+  local -r expected_exit=2 expected_msg='pin-digest-provenance: cannot read'
+  harness_assert_record "${name}" "${expected_msg}" \
+    "${outcome_file}" "${out_file}"
+  if [[ ${actual_exit} -ne ${expected_exit} ]]; then
+    printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${expected_exit}" "${actual_exit}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet -- "${expected_msg}" "${out_file}"; then
+    printf 'FAIL: %s — output missing %q\n' "${name}" "${expected_msg}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+
+  rm --force -- "${out_file}" "${outcome_file}"
+  chmod 600 -- "${base_dir}/.github/workflows/wf.yml"
+  rm --recursive --force -- "${base_dir}"
+}
+
 # Exercises real git BASE_REF mode end to end — every run_scenario call
 # above drives BASE_DIR_OVERRIDE, a directory-glob mode that shares one
 # code path (scanned_files_under) with the head-side scan by
@@ -239,6 +288,7 @@ function main() {
   run_git_mode_scenario 'git BASE_REF mode: zero-level composite action repoint fails' 1 \
     'digest repointed under unchanged version: actions/setup-node (v4.0.0): 1111111111111111111111111111111111111111 -> 3333333333333333333333333333333333333333'
   run_git_ls_tree_failure_scenario
+  run_unreadable_base_scenario
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
