@@ -201,6 +201,15 @@
 # tooling shaped differently — `skopeo copy`, `crane push`, `regctl`, or a
 # wrapped script — which would silently under-guard the write path.
 #
+# THE SAME COMMENT BLIND SPOT applies to assertion 7's `run:` arm: the
+# `invokes_nix` regex matches a nix subcommand anywhere in a job's
+# concatenated `run:` text, including inside a shell comment, so a job
+# whose only nix token is `# we do not nix build here anymore` is credited
+# with reaching nix tooling even though it never runs `nix`. As with
+# assertion 3, this is not parsed out: a `run:` block is shell text, and
+# reliably stripping comments from it needs a shell parser this lint does
+# not carry. The documented limitation is the honest treatment.
+#
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures,
 # LINT_ALLOW_EMPTY_SCAN for a deliberately empty scan root, and
 # NOTIFY_EGRESS_DECLARATION_OVERRIDE for an alternate notify egress
@@ -603,7 +612,12 @@ for f in "${workflow_files[@]}"; do
       # with a non-identifier (or start-of-string) character before it:
       # `nixpkgs-fmt`, `nixos.org`, and the `nix` path segment inside
       # `releases.nixos.org/nix/nix-2.34.7/install` all fail this, since
-      # none has whitespace directly after the bare word `nix`.
+      # none has whitespace directly after the bare word `nix`. This is a
+      # textual match over the job's concatenated `run:` text, so a nix
+      # subcommand written inside a shell comment (e.g. `# we do not nix
+      # build here anymore`) still matches — the same shell-comment blind
+      # spot assertion 3's Docker Hub push-branch check has, documented
+      # above rather than parsed around.
       invokes_nix=0
       [[ ${runs} =~ (^|[^a-zA-Z0-9_./-])nix[[:space:]]+(${NIX_SUBCOMMANDS})([[:space:]]|$) ]] && invokes_nix=1
 
