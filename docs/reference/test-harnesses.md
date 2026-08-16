@@ -125,6 +125,7 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/docs-audit-pressure.test.sh`          | `scripts/docs-audit-pressure.sh`          | —                                            |
 | `tests/gen-dashboard-data.test.sh`           | `scripts/gen-dashboard-data.sh`           | `tests/fixtures/dashboard-data`              |
 | `tests/glob-scan-breadth.test.sh`            | `scripts/*.sh`                            | —                                            |
+| `tests/harness-assert-wired-spec.test.sh`    | `tests/_harness_assert_wired.test.sh`     | `tests/fixtures/harness-assert-wired`        |
 | `tests/inventory-action-pin-tags.test.sh`    | `scripts/inventory-action-pin-tags.sh`    | `tests/fixtures/inventory-action-pin-tags`   |
 | `tests/linpeas-pin-assert.test.sh`           | `nix/linpeas.nix`                         | —                                            |
 | `tests/octoscan-scan.test.sh`                | `scripts/octoscan-scan.sh`                | —                                            |

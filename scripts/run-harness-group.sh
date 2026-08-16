@@ -38,6 +38,7 @@ readonly -a HARNESSES=(
   'glob-scan-breadth|glob-scan-breadth.test.sh|'
   'harness-assert|lib-harness-assert.test.sh|'
   'harness-assert-wired|_harness_assert_wired.test.sh|'
+  'harness-assert-wired-spec|harness-assert-wired-spec.test.sh|'
   # Harnesses with no bespoke CI job, lint-group, or refresh-* glob home run
   # here test-only. Any paired enforce script runs in its own workflow or
   # pre-commit hook (e.g. octoscan-scan.sh in octoscan.yml,
