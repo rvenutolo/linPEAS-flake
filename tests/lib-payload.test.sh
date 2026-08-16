@@ -12,10 +12,11 @@
 # that an override name that is not a shell identifier is a could-not-run
 # that names no source at all. It also proves read_json_payload_into
 # fills its caller's variable with a readable file's contents, exit 0,
-# and that an absent path, an unreadable path, and a directory (which
-# passes the readable check and fails only at the read itself) are each
-# a distinct could-not-run naming the source kind, with a supplied
-# subject prefixed to the diagnostic line.
+# and that an absent path, an unreadable path, and a non-regular-file
+# path (a directory, and a FIFO with no writer — proven under a
+# `timeout` so a regressed guard fails this scenario instead of hanging
+# the harness) are each a distinct could-not-run naming the source kind,
+# with a supplied subject prefixed to the diagnostic line.
 set -Eeuo pipefail
 IFS=$'\n\t'
 
@@ -361,8 +362,13 @@ fi
 # @arg $3 source kind (passed as $3)
 # @arg $4 subject, or '' for none (passed as $4)
 # @arg $5 asserted substring for the discrimination gate
+# @arg $6 optional whole-seconds timeout; '' runs the child directly. A
+#   fixture that a regressed guard would leave to block forever (a FIFO
+#   with no writer) needs this so the regression surfaces as this
+#   scenario's own failure rather than a wedged harness process.
 function run_read_into() {
-  local -r name="$1" path="$2" source_kind="$3" subject="$4" substring="$5"
+  local -r name="$1" path="$2" source_kind="$3" subject="$4" substring="$5" \
+    timeout_secs="${6:-}"
   local -r script="${work}/${name}.sh"
   local -r out="${work}/${name}.out"
   local -r err="${work}/${name}.err"
@@ -379,10 +385,18 @@ printf 'filled=%s\n' "${filled}"
 SCRIPT
   chmod +x "${script}"
   rc=0
-  env \
-    LOGLIB="${LOGLIB}" PAYLOADLIB="${LIB}" \
-    READ_PATH="${path}" SOURCE_KIND="${source_kind}" SUBJECT="${subject}" \
-    bash "${script}" >"${out}" 2>"${err}" || rc=$?
+  if [[ -n ${timeout_secs} ]]; then
+    env \
+      LOGLIB="${LOGLIB}" PAYLOADLIB="${LIB}" \
+      READ_PATH="${path}" SOURCE_KIND="${source_kind}" SUBJECT="${subject}" \
+      timeout --kill-after="1s" "${timeout_secs}s" \
+      bash "${script}" >"${out}" 2>"${err}" || rc=$?
+  else
+    env \
+      LOGLIB="${LOGLIB}" PAYLOADLIB="${LIB}" \
+      READ_PATH="${path}" SOURCE_KIND="${source_kind}" SUBJECT="${subject}" \
+      bash "${script}" >"${out}" 2>"${err}" || rc=$?
+  fi
   printf 'harness-assert-outcome: exit=%d\n' "${rc}" >"${outcome}"
   harness_assert_record "${name}" "${substring}" "${outcome}" "${out}" "${err}"
 }
@@ -448,9 +462,10 @@ else
 fi
 
 # 17. read-directory — a directory passes both the existence and the
-# readable checks and fails only at the read itself, which is what keeps
-# this arm exercisable for every user including root, where the
-# unreadable-file scenario above has no lever.
+# readable checks and is rejected by the not-a-regular-file guard before
+# any read is attempted, which is what keeps this arm exercisable for
+# every user including root, where the unreadable-file scenario above
+# has no lever.
 readonly READ_DIR_FIXTURE="${READ_FIXTURES}/directory-payload"
 mkdir -- "${READ_DIR_FIXTURE}"
 run_read_into 'read-directory' "${READ_DIR_FIXTURE}" 'READ_DIR_SOURCE' '' \
@@ -478,6 +493,29 @@ if [[ ${rc} -eq 2 ]] &&
 else
   fail "read-subject: expected exit 2 + a line beginning 'my-subject: ', got exit ${rc}"
   cat -- "${work}/read-subject.out" "${work}/read-subject.err" >&2
+fi
+
+# 19. read-fifo — a FIFO with no writer passes the existence and readable
+# checks the same way a directory does, but a directory alone cannot
+# prove the not-a-regular-file guard reaches its verdict without
+# attempting a read: `cat` on a directory fails immediately regardless of
+# whether that guard runs first, so a regression deleting the guard could
+# still hide behind the final read-failure guard for a directory. A FIFO
+# does not fail promptly — `cat` on one with no writer blocks forever —
+# so this scenario is the one a regressed guard turns into a hang rather
+# than a wrong exit code, which is why it runs under `timeout`.
+readonly READ_FIFO_FIXTURE="${READ_FIXTURES}/fifo-payload"
+mkfifo -- "${READ_FIFO_FIXTURE}"
+run_read_into 'read-fifo' "${READ_FIFO_FIXTURE}" 'READ_FIFO_SOURCE' '' \
+  'payload from READ_FIFO_SOURCE could not be read' 5
+if [[ ${rc} -eq 2 ]] &&
+  grep --fixed-strings --quiet -- 'payload from READ_FIFO_SOURCE could not be read' \
+    "${work}/read-fifo.err" &&
+  ! grep --fixed-strings --quiet -- 'filled=' "${work}/read-fifo.out"; then
+  pass 'read-fifo: a FIFO with no writer is exit 2 without blocking'
+else
+  fail "read-fifo: expected exit 2 + 'payload from READ_FIFO_SOURCE could not be read' within the timeout, got exit ${rc}"
+  cat -- "${work}/read-fifo.out" "${work}/read-fifo.err" >&2
 fi
 
 harness_assert_verify || failures=$((failures + 1))

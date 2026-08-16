@@ -155,9 +155,17 @@ function payload_source_into() {
 # Three conditions, three sentences: a payload that is absent, one whose
 # permissions forbid the read, and one whose read fails for any other
 # reason are different faults with different operator remedies. The third
-# is not a catch-all for tidiness — a directory passes both the existence
-# and the readable checks and fails only at the read itself, and it is
-# the arm that stays exercisable where mode bits are no lever.
+# sentence covers two guards rather than one: a directory, a FIFO, or a
+# device node all pass the existence and readable checks, and none of
+# them is something `cat` can be trusted to fail on promptly — a
+# directory does, but a FIFO with no writer, or a device such as
+# `/dev/random`, blocks or streams instead of erroring, which would turn
+# a could-not-run into a hang. The explicit not-a-regular-file check
+# below reaches that verdict by `stat`, before any read is attempted, so
+# the only thing left for the final `cat` guard to catch is a regular
+# file whose read still fails for some other reason. Both guards stay
+# exercisable where mode bits are no lever — none of these path kinds
+# depend on the permission bits `-r` already checked.
 #
 # The source is named by kind, never by resolved path, exactly as
 # `require_json_payload` requires; pass the value `payload_source_into`
@@ -179,6 +187,11 @@ function read_json_payload_into() {
   fi
   if [[ ! -r ${__pread_path} ]]; then
     printf '%spayload from %s is not readable\n' \
+      "${__pread_prefix}" "${__pread_source}" >&2
+    exit 2
+  fi
+  if [[ ! -f ${__pread_path} ]]; then
+    printf '%spayload from %s could not be read\n' \
       "${__pread_prefix}" "${__pread_source}" >&2
     exit 2
   fi
