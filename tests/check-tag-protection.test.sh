@@ -121,6 +121,54 @@ function run_directory_scenario() {
   rm --recursive --force -- "${payload}"
 }
 
+# @description Point the override at a permission-denied file. Mode bits
+# are no lever for root, so this scenario self-skips there;
+# run_directory_scenario above covers the same could-not-run class for
+# every user including root.
+# @arg $1 scenario name  @arg $2 expected stderr substring
+function run_unreadable_scenario() {
+  local -r name="$1"
+  local -r expected_stderr="$2"
+  if [[ ${EUID} -eq 0 ]]; then
+    printf 'SKIP: %s (running as root — mode bits are no lever)\n' "${name}"
+    return 0
+  fi
+  local payload
+  payload="$(mktemp)"
+  printf '{}' >"${payload}"
+  chmod 000 -- "${payload}"
+
+  local stderr_file stdout_file outcome_file
+  stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+
+  local actual_exit=0
+  RELEASE_TAG_RULESET_JSON_OVERRIDE="${payload}" \
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${expected_stderr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+
+  if [[ ${actual_exit} -ne 2 ]]; then
+    printf 'FAIL: %s — expected exit 2, got %d\n' "${name}" "${actual_exit}" >&2
+    printf 'stderr was:\n' >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet -- "${expected_stderr}" "${stderr_file}"; then
+    printf 'FAIL: %s — stderr missing %q\n' "${name}" "${expected_stderr}" >&2
+    printf 'stderr was:\n' >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+
+  rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
+  chmod 600 -- "${payload}"
+  rm --force -- "${payload}"
+}
+
 function main() {
   run_scenario 'good ruleset passes' \
     'good-ruleset.json' 0 '' \
@@ -175,12 +223,18 @@ function main() {
   run_scenario 'empty payload is a tooling error' \
     'bad-empty-payload.json' 2 \
     'release-tag-protection ruleset: empty payload from RELEASE_TAG_RULESET_JSON_OVERRIDE'
-  run_scenario 'unreadable payload path is a tooling error' \
+  # Absent, permission-denied, and non-regular-file overrides are three
+  # different faults with three different sentences (the shape read_json_
+  # payload_into gives each), so each gets its own scenario rather than
+  # one shared "unreadable" label.
+  run_scenario 'absent payload path is a tooling error' \
     'does-not-exist.json' 2 \
+    'release-tag-protection ruleset: payload from RELEASE_TAG_RULESET_JSON_OVERRIDE not found'
+  run_unreadable_scenario 'unreadable payload path is a tooling error' \
     'release-tag-protection ruleset: payload from RELEASE_TAG_RULESET_JSON_OVERRIDE is not readable'
   # A directory passes the existence and (typically) the readable checks,
   # so it proves the could-not-run path for every user, root included,
-  # where a chmod-based unreadable-payload scenario would self-skip.
+  # where the chmod-based unreadable-payload scenario above would self-skip.
   run_directory_scenario 'directory-payload override is a tooling error, not drift' \
     'release-tag-protection ruleset: payload from RELEASE_TAG_RULESET_JSON_OVERRIDE could not be read'
   harness_assert_verify || failures=$((failures + 1))

@@ -50,14 +50,8 @@ readonly EXPECTED_PATTERN_REGEX='refs/tags/[0-9]{8}-[0-9a-f]{7,40}'
 readonly FALLBACK_PATTERN_GLOB='refs/tags/**'
 readonly THIS_REPO='rvenutolo/linPEAS-flake'
 
-# @description Fetch the ruleset JSON either from override fixture or
-# from the live gh api.
+# @description Fetch the live ruleset JSON from the rulesets API.
 function fetch_ruleset() {
-  local -r override="${RELEASE_TAG_RULESET_JSON_OVERRIDE:-}"
-  if [[ -n ${override} ]]; then
-    cat -- "${override}"
-    return
-  fi
   # Live mode: list rulesets, filter by name, fetch detail.
   local id
   id="$(gh api --header 'X-GitHub-Api-Version: 2022-11-28' \
@@ -77,16 +71,17 @@ payload_source_into payload_source RELEASE_TAG_RULESET_JSON_OVERRIDE \
   "/repos/${THIS_REPO}/rulesets/{id}"
 readonly payload_source
 
-# A fixture the harness points at but cannot read is a could-not-run, not a
-# finding: `cat` would emit nothing and the shape gate would report an empty
-# payload, naming the wrong fault.
-if [[ -n ${RELEASE_TAG_RULESET_JSON_OVERRIDE:-} &&
-  ! -r ${RELEASE_TAG_RULESET_JSON_OVERRIDE} ]]; then
-  printf '%s ruleset: payload from %s is not readable\n' "${EXPECTED_NAME}" "${payload_source}" >&2
-  exit 2
+# read_json_payload_into fills a nameref, so it must run in this shell —
+# never inside `$(...)`, where its `exit 2` would be trapped in a
+# subshell and this script would carry on with an empty ruleset_json.
+# That is why the override branch is hoisted out of fetch_ruleset rather
+# than living inside it.
+if [[ -n ${RELEASE_TAG_RULESET_JSON_OVERRIDE:-} ]]; then
+  read_json_payload_into ruleset_json "${RELEASE_TAG_RULESET_JSON_OVERRIDE}" \
+    "${payload_source}" "${EXPECTED_NAME} ruleset"
+else
+  ruleset_json="$(fetch_ruleset)"
 fi
-
-ruleset_json="$(fetch_ruleset)"
 
 # One shape gate in front of every read, rather than a guard per read: a read
 # added later is then total by construction instead of depending on its author
