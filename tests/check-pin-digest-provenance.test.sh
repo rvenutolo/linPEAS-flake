@@ -101,6 +101,53 @@ function run_unreadable_base_scenario() {
   rm --recursive --force -- "${base_dir}"
 }
 
+# Points BASE_DIR_OVERRIDE at a copy of the base fixture tree with one
+# pin-scanned path replaced by a directory of the same name, and points
+# the head side at a tree that repoints a digest under an unchanged
+# version label. The glob that discovers base files matches a directory
+# as readily as a file, so the path reaches base_content() as a file
+# base_files() has already proved present; a guard that folds it into
+# "absent from base" leaves every pin in that file one-sided, which the
+# comparison passes. The repoint in the head tree is what makes that
+# visible: it must still be reported, or the base read has to say it
+# could not run.
+function run_directory_base_scenario() {
+  local -r name='a directory standing in for a base file dies loud, not silently absent'
+  local base_dir out_file outcome_file
+  base_dir="$(mktemp --directory)"
+  cp -r -- "${FIXTURES}/base/." "${base_dir}/"
+  rm --force -- "${base_dir}/.github/workflows/wf.yml"
+  mkdir --parents "${base_dir}/.github/workflows/wf.yml"
+  out_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+
+  local actual_exit=0
+  PATH="${FIXTURES}/bin:${PATH}" \
+    GH_STUB_MODE=deny \
+    BASE_DIR_OVERRIDE="${base_dir}" \
+    HEAD_DIR_OVERRIDE="${FIXTURES}/head-semver-repoint" \
+    "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+
+  local -r expected_exit=2 expected_msg='pin-digest-provenance: not a regular file'
+  harness_assert_record "${name}" "${expected_msg}" \
+    "${outcome_file}" "${out_file}"
+  if [[ ${actual_exit} -ne ${expected_exit} ]]; then
+    printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${expected_exit}" "${actual_exit}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet -- "${expected_msg}" "${out_file}"; then
+    printf 'FAIL: %s — output missing %q\n' "${name}" "${expected_msg}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+
+  rm --force -- "${out_file}" "${outcome_file}"
+  rm --recursive --force -- "${base_dir}"
+}
+
 # Exercises real git BASE_REF mode end to end — every run_scenario call
 # above drives BASE_DIR_OVERRIDE, a directory-glob mode that shares one
 # code path (scanned_files_under) with the head-side scan by
@@ -289,6 +336,7 @@ function main() {
     'digest repointed under unchanged version: actions/setup-node (v4.0.0): 1111111111111111111111111111111111111111 -> 3333333333333333333333333333333333333333'
   run_git_ls_tree_failure_scenario
   run_unreadable_base_scenario
+  run_directory_base_scenario
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
