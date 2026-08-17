@@ -318,17 +318,29 @@ harness that asserts the diagnostics they produce.
 An enumeration runs through `enumerate_into`
 (scripts/lib/enumerate.sh) — a producer (`find`, `git ls-files`, `git ls-tree`) may appear only as an argument to the helper, inside a
 function the helper is handed by name, or behind an inline
-`# enumerate-exempt: <rationale>` marker. A glob-driven scan fills its
+`# enumerate-exempt: <rationale>` marker. Copying a producer word to a
+variable is banned at that same assignment, since the use site's
+command word is then a value no single pass can resolve; the array
+form is read only at element 0, its command head, so a producer word
+planted at a non-head index and later spliced into command position by
+index arithmetic still evades. A glob-driven scan fills its
 array through `glob_into` — neither a `for` loop at its own head nor an
 array assignment in its element list may expand a pattern, unless an
 inline `# glob-exempt: <rationale>` marker says an empty match set is
 that site's normal state. A filter-driven scan narrows an
-already-enumerated set through `filter_into` — a `*_FILTER` variable
-may be read at file scope to reach that call, but not again inside a
-`for` or `while` loop over the narrowed selection, and not at all in a
-file that never calls `filter_into`, unless an inline
-`# filter-exempt: <rationale>` marker says the direct read is
-deliberate. Those three are the positions a single pass over the tree
+already-enumerated set through `filter_into` — a variable named `FILTER`
+or ending `_FILTER` may be read at file scope to reach that call, but
+not again inside a `for` or `while` loop over the narrowed selection,
+nor in a function that loop calls — one hop out; a function called only
+by that function still evades and stays outside what this pass decides
+— and not at all in a file that never calls `filter_into`, unless an
+inline `# filter-exempt: <rationale>` marker says the direct read is
+deliberate. Copying a filter value into a target whose own name does not
+match that same pattern is a violation at the assignment, wherever the
+copy is later read, because every one of the checks above keys on the
+name of the variable being read and a value under a fresh name would
+otherwise satisfy the letter of all three while re-introducing the
+defect. Those four are the positions a single pass over the tree
 decides; a pattern that reaches a scan by any other route is outside
 what this lint sees, and the rule is stated no wider than that.
 
@@ -358,32 +370,46 @@ reads that array afterwards walks an ordinary list.
 A filter-driven scan fails a third way, one layer past enumeration and
 globbing: `filter_into` narrows a set the other two helpers already
 proved non-empty, and it is the one place that narrowing's own
-cardinality is asserted. A loop that reads the raw `*_FILTER` variable
-again, instead of trusting the selection `filter_into` handed back,
-re-applies the filter test outside the helper. Whether that second
+cardinality is asserted. A loop that reads the raw filter variable
+again — directly in its own body, or one hop out in a function the loop
+calls by name — instead of trusting the selection `filter_into` handed
+back, re-applies the filter test outside the helper. Whether that second
 application runs over the narrowed selection — where it is merely
 redundant, since every path there already matched — or over a set the
 helper never narrowed is not decidable at the read site, and the
 second is the empty-root failure the helper exists to catch: a filter
 matching nothing selects no path, the loop body never fires, and the
-run exits 0. A file that reads a `*_FILTER` variable and never calls
+run exits 0. A file that reads a filter variable and never calls
 `filter_into` at all is the same hole with no call site to point to:
 nothing anywhere in that file asserts the selection the read implies
 is non-empty.
+
+A filter-driven scan fails a fourth way, sideways rather than past any
+of the first three: copying the filter value into a variable whose own
+name is not `FILTER` or `*_FILTER` moves every later read of that copy
+outside all three checks above at once, because each one keys on the
+name of the variable being read rather than tracing where its value
+came from. The copy is flagged at the assignment regardless of where or
+how many times the copied name is later read, which is what keeps the
+rule decidable in one pass rather than requiring the kind of dataflow
+tracing the other three checks were built to avoid.
 
 That is what makes all three rules decidable in one pass. Associating a
 scan with a cardinality test written an arbitrary distance later is not
 something a textual rule can do; asking whether a producer is an
 argument to the helper is local to one call expression, so is asking
 whether a `for` loop or an array assignment expands a pattern in its
-own words, and so is asking whether a `*_FILTER` read falls inside a
+own words, and so is asking whether a filter-named read falls inside a
 loop's own extent or outside every `filter_into` call in the file.
 Patterns handed to `glob_into` are arguments of a `CallExpr` — never
 `WordIter` items, never array elements — and reach it quoted, so a
 compliant call site cannot false-hit the glob rule however many
-metacharacters it carries. A `*_FILTER` read handed to `filter_into` as
-its own argument is excluded from the filter rule the same way, so the
-compliant call site cannot false-hit the rule it satisfies either.
+metacharacters it carries. A filter-named read handed to `filter_into`
+as its own argument is excluded from the filter rule the same way, and
+the sanctioned `readonly FILE_FILTER="${WORKFLOW_FILE_FILTER:-}"` shape
+stays legal under the alias check for the same reason: its own target is
+itself a filter name, so a compliant call site cannot false-hit either
+rule it satisfies.
 
 Detection parses each script's syntax tree via `shfmt --to-json` (the
 mvdan.cc/sh parser `shfmt` and `treefmt` already run over this repo)
@@ -401,8 +427,9 @@ was written against spelled it `git -C "${ROOT}" ls-files`.
 The count of scan sites classified — producer calls plus `glob_into`
 call sites plus glob loops plus glob array assignments plus
 `filter_into` call sites, plus filter reads inside a loop, plus the
-single read reported in a file that calls the helper nowhere — is
-itself asserted nonzero (unless LINT_ALLOW_EMPTY_SCAN=1). A grammar that
+single read reported in a file that calls the helper nowhere, plus a
+filter value copied to an unwatched name — is itself asserted nonzero
+(unless LINT_ALLOW_EMPTY_SCAN=1). A grammar that
 silently recognized nothing would report "0 violations" and exit 0 —
 the same clean line a genuinely scan-free tree prints — leaving this
 gate off while green, which is the exact failure it exists to prevent
@@ -430,12 +457,14 @@ files scanned, sites classified and exemptions applied.
 Honors PATHS_OVERRIDE (newline-separated file list) for fixtures, and
 LINT_ALLOW_EMPTY_SCAN=1 to accept a run whose scan-site tally (or whose
 enumerated file count) comes back zero.
-Exit 0 clean, 1 on a producer outside `enumerate_into`, a `for` loop
-expanding a glob at its own head, an array assignment expanding one in
-its element list, a loop reading a filter variable directly, a script
-reading a filter variable without ever calling `filter_into`, an
-exemption marker with no rationale, or an exemption marker that
-excuses no site this pass classified, 2 when a required tool is
+Exit 0 clean, 1 on a producer outside `enumerate_into`, a producer name
+copied to a variable, a `for` loop expanding a glob at its own head, an
+array assignment expanding one in its element list, a loop reading a
+filter variable directly, a filter read in a function that loop calls,
+a script reading a filter variable without ever calling `filter_into`,
+an assignment copying a filter value to a name outside the filter
+pattern, an exemption marker with no rationale, or an exemption marker
+that excuses no site this pass classified, 2 when a required tool is
 absent, the scan set could not be enumerated (or classified nothing),
 a named path does not exist, or a file could not be parsed as shell.
 

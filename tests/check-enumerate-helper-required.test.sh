@@ -74,6 +74,67 @@ expect bad-bare-git-ls-files.sh 1 'bad-bare-git-ls-files.sh:7:12: git ls-files r
 expect bad-empty-rationale.sh 1 \
   'bad-empty-rationale.sh:9:12: enumerate-exempt marker carries no rationale'
 
+# @description A producer name copied to a variable. The command word at
+# the use site is then a value, so no single pass can tell what runs
+# there. bad-producer-alias.sh is the bare-word scalar form,
+# bad-producer-alias-path.sh a scalar full path caught by its basename,
+# and bad-producer-alias-array.sh the same copy written as a command
+# array, where the producer is one element among several rather than a
+# whole value — and, because the array arm reads only element 0,
+# bad-producer-alias-array.sh also pins the "head is a producer" side of
+# that boundary: git sits first in its array, where a later
+# "${lister[@]}" would run it. All three share the alias sentence, so
+# file, line and column are what tell them apart.
+expect bad-producer-alias.sh 1 \
+  'bad-producer-alias.sh:9:8: this assignment copies a producer name to a variable'
+expect bad-producer-alias-path.sh 1 \
+  'bad-producer-alias-path.sh:8:8: this assignment copies a producer name to a variable'
+expect bad-producer-alias-array.sh 1 \
+  'bad-producer-alias-array.sh:8:19: this assignment copies a producer name to a variable'
+
+# @description The other side of the same boundary: a producer name at a
+# non-head index of an array that is never invoked as a command — the
+# shape a tool-presence inventory takes when it merely lists git among
+# unrelated tool names. Counting it would flag a compliant tool-check
+# array on the strength of one coincidental element, which is exactly the
+# false positive the element-0 restriction exists to rule out. Alone,
+# good-producer-non-head-array.sh classifies no site at all, so
+# good-glob-into.sh's and good-filter-into.sh's own already-proven
+# single-site tallies are folded in beside it; the resulting three-file,
+# two-site tally is what proves the non-head element was read and passed
+# over rather than the file never being scanned.
+run_expect 'good-producer-non-head-array' \
+  "${FIXTURES}/good-producer-non-head-array.sh"$'\n'"${FIXTURES}/good-glob-into.sh"$'\n'"${FIXTURES}/good-filter-into.sh" \
+  0 '3 file(s) scanned, 2 scan site(s) classified, 0 exemption(s)'
+
+# @description A producer named inside the label every compliant
+# enumerate_into call passes. The word is data a diagnostic quotes, not a
+# command the file runs, and counting it would make every compliant call
+# site in this repo a violation of the rule it satisfies. Alone this
+# fixture's clean summary is byte-identical to
+# good-glob-array-pattern-strings.sh's above — both are a single file with
+# one classified site and no exemption — so good-filter-exempt.sh's own
+# already-proven single-file tally is folded in beside it; the resulting
+# two-file, three-site, one-exemption tally is what separates this proof
+# from that sibling rather than the exit code or message shape alone.
+run_expect 'good-producer-name-in-label' \
+  "${FIXTURES}/good-producer-name-in-label.sh"$'\n'"${FIXTURES}/good-filter-exempt.sh" \
+  0 '2 file(s) scanned, 3 scan site(s) classified, 1 exemption(s)'
+
+# @description The negative the interpolated-word guard rests on. A path
+# that merely ends in a producer name reaches the assignment through
+# interpolation, so it carries no single literal word and is never read as
+# the command whose name it happens to end in — proving the word is read
+# through literal_word_text rather than by walking every part regardless
+# of how the word is built. Alone, good-producer-interpolated-path.sh
+# classifies no site at all, so good-glob-into.sh's own already-proven
+# single-site tally is folded in beside it; the resulting two-file,
+# one-site tally is what proves the interpolated word was read and passed
+# over rather than the file never being scanned.
+run_expect 'good-producer-interpolated-path' \
+  "${FIXTURES}/good-producer-interpolated-path.sh"$'\n'"${FIXTURES}/good-glob-into.sh" \
+  0 '2 file(s) scanned, 1 scan site(s) classified, 0 exemption(s)'
+
 # All four clean shapes in one invocation. Each alone prints an
 # indistinguishable clean summary, so four scenarios would be four names
 # over one observation; the merged summary's counts are what prove all
@@ -236,11 +297,12 @@ expect bad-filter-pipeline.sh 1 \
 
 # A file that reads its filter but never narrows anything with it: no
 # call site asserts that the selection the read implies is non-empty.
-# The diagnostic names the shape rather than a position, and no sibling
-# fixture reads a filter without also calling filter_into, so the message
-# alone already discriminates this scenario from the rest of the file.
+# bad-filter-bare-name.sh below reads a filter without calling
+# filter_into too, so the message alone no longer discriminates this
+# scenario from that sibling; the file:line:col prefix is what still
+# does.
 expect bad-filter-no-helper.sh 1 \
-  'reads a filter variable but never calls filter_into'
+  'bad-filter-no-helper.sh:7:14: this script reads a filter variable but never calls filter_into'
 
 # An empty rationale on the filter marker is its own finding, exactly as
 # the enumerate and glob markers already require above. The file:line:col
@@ -284,6 +346,70 @@ run_expect 'good-filter-chain-shapes' \
   "${FIXTURES}/good-filter-and-chain.sh"$'\n'"${FIXTURES}/good-filter-or-chain.sh" \
   0 '2 file(s) scanned, 2 scan site(s) classified, 0 exemption(s)'
 
+# @description A filter read reached through a function a loop calls. By
+# position the read is at file scope, and the file's own filter_into call
+# satisfies the missing-helper arm, so both of the rule's other arms are
+# quiet — the hop is the only thing that sees it. The diagnostic names the
+# function shape rather than the loop shape, because a reader sent hunting
+# for a read inside the loop body will not find one.
+expect bad-filter-in-called-function.sh 1 \
+  'bad-filter-in-called-function.sh:14:9: this filter read sits in a function a loop calls'
+
+# @description The rule reaches exactly one hop. These two files pin the
+# boundary from both sides: a two-hop chain stays legal, and a called
+# function that reads no filter is not a site. Alone, this pair's tally
+# would be byte-identical to good-filter-chain-shapes' own two-file,
+# two-site, zero-exemption summary above, and a three-file fold-in lands on
+# good-filter-shapes' three-file, three-site tally the same way, so
+# good-filter-into.sh and good-filter-file-scope-read.sh — each already
+# proven elsewhere to classify as exactly one clean site — are both folded
+# in beside them; the resulting four-file, four-site tally is what proves
+# all four were read rather than one masking the others, and separates
+# this proof from both siblings rather than the exit code or message shape
+# alone.
+run_expect 'good-filter-hop-boundary' \
+  "${FIXTURES}/good-filter-two-hop-documented-gap.sh"$'\n'"${FIXTURES}/good-filter-function-no-read.sh"$'\n'"${FIXTURES}/good-filter-into.sh"$'\n'"${FIXTURES}/good-filter-file-scope-read.sh" \
+  0 '4 file(s) scanned, 4 scan site(s) classified, 0 exemption(s)'
+
+# @description A function declared inside a loop body, and called by that
+# same loop, has a body whose offset range sits inside both the loop's own
+# extent and the hop the loop reaches: the read must keep reporting as a
+# loop read rather than double-counting as a function read too. Asserting
+# the loop diagnostic's exact position discriminates this fixture from
+# every sibling; the hand check below additionally confirms the function
+# diagnostic never appears, which the shared discrimination gate cannot
+# express on its own since dozens of other bad-* fixtures already print
+# the generic failure-count trailer this scenario would otherwise have to
+# lean on.
+function expect_loop_nested_function() {
+  local -r name='bad-filter-loop-nested-function.sh'
+  local -r want_msg='bad-filter-loop-nested-function.sh:18:21: this loop reads a filter variable directly'
+  local out_file err_file outcome_file got_exit=0
+  out_file="$(mktemp)"
+  err_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  PATHS_OVERRIDE="${FIXTURES}/bad-filter-loop-nested-function.sh" \
+    "${SCRIPT}" >"${out_file}" 2>"${err_file}" || got_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${want_msg}" "${outcome_file}" "${out_file}" "${err_file}"
+
+  if [[ ${got_exit} != 1 ]]; then
+    fail "$(printf '%s: exit %s, want 1' "${name}" "${got_exit}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  elif ! grep --fixed-strings --quiet -- "${want_msg}" "${out_file}" "${err_file}"; then
+    fail "$(printf '%s: output missing the loop diagnostic' "${name}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  elif grep --fixed-strings --quiet -- 'this filter read sits in a function a loop calls' "${out_file}" "${err_file}"; then
+    fail "$(printf '%s: output also carries the function diagnostic — the same read double-reported' "${name}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  else
+    pass "${name}"
+  fi
+  rm --force -- "${out_file}" "${err_file}" "${outcome_file}"
+}
+
+expect_loop_nested_function
+
 # @description A loop read carrying a valid filter-exempt marker is
 # counted as an exemption rather than a hit, the same shape the glob
 # rule's own exempt fixtures prove above. The count pairs — one call site
@@ -291,6 +417,102 @@ run_expect 'good-filter-chain-shapes' \
 # tally already asserted in this file.
 expect good-filter-exempt.sh 0 \
   '1 file(s) scanned, 2 scan site(s) classified, 1 exemption(s)'
+
+# @description A variable named exactly `FILTER` is a filter variable.
+# The predicate keys on the name, so a pattern admitting only a suffixed
+# form leaves the bare word invisible while the rule's prose claims the
+# position is what decides. The read sits inside a loop and the file
+# never calls filter_into, so both the loop-read and the missing-helper
+# arms fire from the widened name alone; both are asserted by their own
+# file:line:col so this scenario stays self-discriminating once the
+# missing-helper message is shared with bad-filter-no-helper.sh below.
+function expect_filter_bare_name() {
+  local -r name='bad-filter-bare-name.sh'
+  local -r missing_msg='bad-filter-bare-name.sh:8:18: this script reads a filter variable but never calls filter_into'
+  local -r loop_msg='bad-filter-bare-name.sh:12:19: this loop reads a filter variable directly'
+  local out_file err_file outcome_file got_exit=0
+  out_file="$(mktemp)"
+  err_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  PATHS_OVERRIDE="${FIXTURES}/bad-filter-bare-name.sh" \
+    "${SCRIPT}" >"${out_file}" 2>"${err_file}" || got_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${missing_msg}" "${outcome_file}" "${out_file}" "${err_file}"
+  harness_assert_also "${loop_msg}"
+
+  if [[ ${got_exit} != 1 ]]; then
+    fail "$(printf '%s: exit %s, want 1' "${name}" "${got_exit}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  elif ! grep --fixed-strings --quiet -- "${missing_msg}" "${out_file}" "${err_file}"; then
+    fail "$(printf '%s: output missing the missing-helper diagnostic' "${name}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  elif ! grep --fixed-strings --quiet -- "${loop_msg}" "${out_file}" "${err_file}"; then
+    fail "$(printf '%s: output missing the loop-read diagnostic' "${name}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  else
+    pass "${name}"
+  fi
+  rm --force -- "${out_file}" "${err_file}" "${outcome_file}"
+}
+
+expect_filter_bare_name
+
+# @description The filter value copied to a name the predicate does not
+# match, in both forms the parser distinguishes: a bare assignment, and a
+# declaration inside a function. bad-filter-alias.sh's copy is a plain
+# assignment at file scope, so it trips only the alias arm.
+expect bad-filter-alias.sh 1 \
+  'bad-filter-alias.sh:13:6: this assignment copies a filter value to another name'
+
+# @description bad-filter-alias-declared.sh's copy is a `local` inside a
+# function the loop calls, the shape a walk reading only bare assignments
+# is blind to. That same read also sits in a body the one-hop rule
+# reaches, so both diagnostics fire from one run: the alias arm at column
+# 14, the position of the copied value itself, and the hop arm at column
+# 15, the position of the read the hop rule reports. Both are asserted so
+# neither arm silently swallows the other on this shared line.
+function expect_filter_alias_declared() {
+  local -r name='bad-filter-alias-declared.sh'
+  local -r alias_msg='bad-filter-alias-declared.sh:15:14: this assignment copies a filter value to another name'
+  local -r hop_msg='bad-filter-alias-declared.sh:15:15: this filter read sits in a function a loop calls'
+  local out_file err_file outcome_file got_exit=0
+  out_file="$(mktemp)"
+  err_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  PATHS_OVERRIDE="${FIXTURES}/bad-filter-alias-declared.sh" \
+    "${SCRIPT}" >"${out_file}" 2>"${err_file}" || got_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${alias_msg}" "${outcome_file}" "${out_file}" "${err_file}"
+  harness_assert_also "${hop_msg}"
+
+  if [[ ${got_exit} != 1 ]]; then
+    fail "$(printf '%s: exit %s, want 1' "${name}" "${got_exit}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  elif ! grep --fixed-strings --quiet -- "${alias_msg}" "${out_file}" "${err_file}"; then
+    fail "$(printf '%s: output missing the alias diagnostic' "${name}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  elif ! grep --fixed-strings --quiet -- "${hop_msg}" "${out_file}" "${err_file}"; then
+    fail "$(printf '%s: output missing the hop diagnostic' "${name}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  else
+    pass "${name}"
+  fi
+  rm --force -- "${out_file}" "${err_file}" "${outcome_file}"
+}
+
+expect_filter_alias_declared
+
+# @description The copy this repo's own filter sites write. Its target is
+# itself a filter name, so the value stays inside the set of names the
+# rule can see. Alone this fixture's clean summary is byte-identical to
+# good-glob-array-pattern-strings.sh's above — both are a single file with
+# one classified site and no exemption — so good-glob-arg-only.sh's own
+# already-proven single-file tally is folded in beside it; the resulting
+# two-file, three-site tally is what separates this proof from that
+# sibling rather than the exit code or message shape alone.
+run_expect 'good-filter-sanctioned-alias' \
+  "${FIXTURES}/good-filter-sanctioned-alias.sh"$'\n'"${FIXTURES}/good-glob-arg-only.sh" \
+  0 '2 file(s) scanned, 3 scan site(s) classified, 0 exemption(s)'
 
 # @description A marker on a file holding no site of its kind excuses
 # nothing and is reported rather than counted. The scan-site tally is zero
