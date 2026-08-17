@@ -149,6 +149,57 @@ expect good-glob-array-exempt.sh 0 \
 expect good-glob-array-pattern-strings.sh 0 \
   '1 file(s) scanned, 1 scan site(s) classified, 0 exemption(s)'
 
+# The filter rule's violating shapes. filter_into narrows an already
+# enumerated set, and a read of the same *_FILTER variable elsewhere
+# throws that guarantee away wherever it happens: the two files below
+# cover a for-loop body and a while-loop body, and a marker written for
+# the glob rule proves it does not excuse this one.
+#
+# All three share the loop-read diagnostic's trailing sentence, so file,
+# line and column are what tells them apart, the same discrimination the
+# glob rule's loop-vs-array pair already rests on above.
+expect bad-filter-in-for-loop.sh 1 \
+  'bad-filter-in-for-loop.sh:12:22: this loop reads a filter variable directly'
+expect bad-filter-in-while-loop.sh 1 \
+  'bad-filter-in-while-loop.sh:12:22: this loop reads a filter variable directly'
+expect bad-filter-marker-mismatch.sh 1 \
+  'bad-filter-marker-mismatch.sh:15:22: this loop reads a filter variable directly'
+
+# A file that reads its filter but never narrows anything with it: no
+# call site asserts that the selection the read implies is non-empty.
+# The diagnostic names the shape rather than a position, and no sibling
+# fixture reads a filter without also calling filter_into, so the message
+# alone already discriminates this scenario from the rest of the file.
+expect bad-filter-no-helper.sh 1 \
+  'reads a filter variable but never calls filter_into'
+
+# An empty rationale on the filter marker is its own finding, exactly as
+# the enumerate and glob markers already require above. The marker word
+# is unique to this rule, so it alone tells this scenario apart from the
+# other two empty-rationale scenarios earlier in this file.
+expect bad-filter-empty-rationale.sh 1 \
+  'filter-exempt marker carries no rationale'
+
+# The filter rule's clean shapes. good-filter-into.sh and
+# good-filter-file-scope-read.sh both read their filter once outside any
+# loop and call filter_into — the second file's extra read, guarding a
+# job-count assertion the way check-egress-allowlist.sh and
+# check-permission-scopes.sh both do, adds no classified site of its own,
+# so alone each prints the identical single-call clean summary. Merged
+# into one run, the file and classified-site counts are what prove both
+# were read rather than one masking the other.
+run_expect 'good-filter-shapes' \
+  "${FIXTURES}/good-filter-into.sh"$'\n'"${FIXTURES}/good-filter-file-scope-read.sh" \
+  0 '2 file(s) scanned, 2 scan site(s) classified, 0 exemption(s)'
+
+# @description A loop read carrying a valid filter-exempt marker is
+# counted as an exemption rather than a hit, the same shape the glob
+# rule's own exempt fixtures prove above. The count pairs — one call site
+# plus one exempted loop site — separate this from every other single-file
+# tally already asserted in this file.
+expect good-filter-exempt.sh 0 \
+  '1 file(s) scanned, 2 scan site(s) classified, 1 exemption(s)'
+
 # @description The producer tally is its own breadth assertion, separate
 # from the file enumeration: a real file can be scanned and yield no
 # producer at all. That has to be a could-not-run rather than the clean
