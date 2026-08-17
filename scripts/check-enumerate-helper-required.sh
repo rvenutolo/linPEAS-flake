@@ -348,13 +348,21 @@ def producer_of(args):
 # `p=/usr/bin/find` is caught by its basename. A bare `git` counts with no
 # subcommand present, because the subcommand is written at the use site the
 # copy has made unreadable. Both a scalar assignment and an array
-# assignment are covered: `$words` holds the single scalar value where one
-# exists, and every element of the array where one exists instead, so a
-# producer word written as one element among several is read the same way
-# a whole scalar value is.
+# assignment are covered, but the array arm reads only element 0: a
+# command array is invoked as `"${arr[@]}"`, so its command head is
+# always its first element, and a producer name sitting at any other
+# index is data the same way the label text an enumerate_into call
+# passes as its own argument is data — counting a non-head element
+# would flag a tool inventory, or any other unrelated list, that merely
+# names a producer somewhere in its middle. Stated honestly, this reads
+# only the element written at index 0: a producer word planted at a
+# non-head index and later spliced into command position by index
+# arithmetic still evades, and is outside what this pass decides, the
+# same kind of boundary the filter rule already states for its own
+# one-hop reach rather than implying total coverage.
 | [.. | objects | select(has("Name")) | select(.Name.Value != null)
     | . as $a
-    | ([($a.Value // empty)] + [((($a.Array // {}).Elems // [])[] | .Value)]) as $words
+    | ([($a.Value // empty)] + [((($a.Array // {}).Elems // [])[0].Value // empty)]) as $words
     | (($a.Value // $a.Array) // null) as $rhs
     | select($rhs != null)
     | select(([$words[] | literal_word_text | basename_of

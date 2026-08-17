@@ -80,14 +80,32 @@ expect bad-empty-rationale.sh 1 \
 # bad-producer-alias-path.sh a scalar full path caught by its basename,
 # and bad-producer-alias-array.sh the same copy written as a command
 # array, where the producer is one element among several rather than a
-# whole value. All three share the alias sentence, so file, line and
-# column are what tell them apart.
+# whole value — and, because the array arm reads only element 0,
+# bad-producer-alias-array.sh also pins the "head is a producer" side of
+# that boundary: git sits first in its array, where a later
+# "${lister[@]}" would run it. All three share the alias sentence, so
+# file, line and column are what tell them apart.
 expect bad-producer-alias.sh 1 \
   'bad-producer-alias.sh:9:8: this assignment copies a producer name to a variable'
 expect bad-producer-alias-path.sh 1 \
   'bad-producer-alias-path.sh:8:8: this assignment copies a producer name to a variable'
 expect bad-producer-alias-array.sh 1 \
   'bad-producer-alias-array.sh:8:19: this assignment copies a producer name to a variable'
+
+# @description The other side of the same boundary: a producer name at a
+# non-head index of an array that is never invoked as a command — the
+# shape a tool-presence inventory takes when it merely lists git among
+# unrelated tool names. Counting it would flag a compliant tool-check
+# array on the strength of one coincidental element, which is exactly the
+# false positive the element-0 restriction exists to rule out. Alone,
+# good-producer-non-head-array.sh classifies no site at all, so
+# good-glob-into.sh's and good-filter-into.sh's own already-proven
+# single-site tallies are folded in beside it; the resulting three-file,
+# two-site tally is what proves the non-head element was read and passed
+# over rather than the file never being scanned.
+run_expect 'good-producer-non-head-array' \
+  "${FIXTURES}/good-producer-non-head-array.sh"$'\n'"${FIXTURES}/good-glob-into.sh"$'\n'"${FIXTURES}/good-filter-into.sh" \
+  0 '3 file(s) scanned, 2 scan site(s) classified, 0 exemption(s)'
 
 # @description A producer named inside the label every compliant
 # enumerate_into call passes. The word is data a diagnostic quotes, not a
