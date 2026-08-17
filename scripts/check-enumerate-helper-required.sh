@@ -14,10 +14,15 @@
 # array through `glob_into` — neither a `for` loop at its own head nor an
 # array assignment in its element list may expand a pattern, unless an
 # inline `# glob-exempt: <rationale>` marker says an empty match set is
-# that site's normal state. Those two are the positions a single pass
-# over the tree decides; a pattern that reaches a scan by any other route
-# is outside what this lint sees, and the rule is stated no wider than
-# that.
+# that site's normal state. A filter-driven scan narrows an
+# already-enumerated set through `filter_into` — a `*_FILTER` variable
+# may be read at file scope to reach that call, but not again inside a
+# `for` or `while` loop over the narrowed selection, and not at all in a
+# file that never calls `filter_into`, unless an inline
+# `# filter-exempt: <rationale>` marker says the direct read is
+# deliberate. Those three are the positions a single pass over the tree
+# decides; a pattern that reaches a scan by any other route is outside
+# what this lint sees, and the rule is stated no wider than that.
 #
 # The property being protected is scan breadth, not producer status. A
 # producer that fails is the easy half; the hard half is a producer that
@@ -38,15 +43,35 @@
 # patterns, fills the array and refuses an empty match set, and whatever
 # reads that array afterwards walks an ordinary list.
 #
-# That is what makes both rules decidable in one pass. Associating a scan
-# with a cardinality test written an arbitrary distance later is not
+# A filter-driven scan fails a third way, one layer past enumeration and
+# globbing: `filter_into` narrows a set the other two helpers already
+# proved non-empty, and it is the one place that narrowing's own
+# cardinality is asserted. A loop that reads the raw `*_FILTER` variable
+# again, instead of trusting the selection `filter_into` handed back,
+# re-applies the filter test outside the helper. Whether that second
+# application runs over the narrowed selection — where it is merely
+# redundant, since every path there already matched — or over a set the
+# helper never narrowed is not decidable at the read site, and the
+# second is the empty-root failure the helper exists to catch: a filter
+# matching nothing selects no path, the loop body never fires, and the
+# run exits 0. A file that reads a `*_FILTER` variable and never calls
+# `filter_into` at all is the same hole with no call site to point to:
+# nothing anywhere in that file asserts the selection the read implies
+# is non-empty.
+#
+# That is what makes all three rules decidable in one pass. Associating a
+# scan with a cardinality test written an arbitrary distance later is not
 # something a textual rule can do; asking whether a producer is an
-# argument to the helper is local to one call expression, and so is
-# asking whether a `for` loop or an array assignment expands a pattern in
-# its own words. Patterns handed to `glob_into` are arguments of a
-# `CallExpr` — never `WordIter` items, never array elements — and reach
-# it quoted, so a compliant call site cannot false-hit the glob rule
-# however many metacharacters it carries.
+# argument to the helper is local to one call expression, so is asking
+# whether a `for` loop or an array assignment expands a pattern in its
+# own words, and so is asking whether a `*_FILTER` read falls inside a
+# loop's own extent or outside every `filter_into` call in the file.
+# Patterns handed to `glob_into` are arguments of a `CallExpr` — never
+# `WordIter` items, never array elements — and reach it quoted, so a
+# compliant call site cannot false-hit the glob rule however many
+# metacharacters it carries. A `*_FILTER` read handed to `filter_into` as
+# its own argument is excluded from the filter rule the same way, so the
+# compliant call site cannot false-hit the rule it satisfies either.
 #
 # Detection parses each script's syntax tree via `shfmt --to-json` (the
 # mvdan.cc/sh parser `shfmt` and `treefmt` already run over this repo)
@@ -63,8 +88,10 @@
 # was written against spelled it `git -C "${ROOT}" ls-files`.
 #
 # The count of scan sites classified — producer calls plus `glob_into`
-# call sites plus glob loops plus glob array assignments — is itself
-# asserted nonzero (unless LINT_ALLOW_EMPTY_SCAN=1). A grammar that
+# call sites plus glob loops plus glob array assignments plus
+# `filter_into` call sites, plus filter reads inside a loop, plus the
+# single read reported in a file that calls the helper nowhere — is
+# itself asserted nonzero (unless LINT_ALLOW_EMPTY_SCAN=1). A grammar that
 # silently recognized nothing would report "0 violations" and exit 0 —
 # the same clean line a genuinely scan-free tree prints — leaving this
 # gate off while green, which is the exact failure it exists to prevent
@@ -73,17 +100,19 @@
 # Each rule owns its own marker word, and a marker excuses only the kind
 # of site it names: a rationale for running a producer outside the
 # enumeration helper says nothing about whether a glob's match set may
-# come back empty, and the reverse holds too.
+# come back empty or a loop may read a filter variable directly, and the
+# reverse holds in every direction.
 #
 # Honors PATHS_OVERRIDE (newline-separated file list) for fixtures, and
 # LINT_ALLOW_EMPTY_SCAN=1 to accept a run whose scan-site tally (or whose
 # enumerated file count) comes back zero.
 # Exit 0 clean, 1 on a producer outside `enumerate_into`, a `for` loop
 # expanding a glob at its own head, an array assignment expanding one in
-# its element list, or an exemption marker with no rationale, 2 when a
-# required tool is absent, the scan set could not be enumerated (or
-# classified nothing), a named path does not exist, or a file could not
-# be parsed as shell.
+# its element list, a loop reading a filter variable directly, a script
+# reading a filter variable without ever calling `filter_into`, or an
+# exemption marker with no rationale, 2 when a required tool is absent,
+# the scan set could not be enumerated (or classified nothing), a named
+# path does not exist, or a file could not be parsed as shell.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -158,12 +187,16 @@ fi
 # double-count each other, because a word is either an argument of the
 # helper call or the head of its own.
 #
-# The `what` field of a glob record, one literal per shape so the
-# diagnostic names the site the reader is looking at rather than calling
-# an assignment a loop. Held in variables so the jq program and the shell
-# loop that keys the marker word off them cannot drift apart.
+# The `what` field of a glob or filter record, one literal per shape so
+# the diagnostic names the site the reader is looking at rather than
+# calling an assignment a loop, or a missing-helper read a loop read.
+# Held in variables so the jq program and the shell loop that keys the
+# marker word off them cannot drift apart.
 readonly GLOB_WHAT='glob loop'
 readonly GLOB_ARRAY_WHAT='glob array assignment'
+readonly FILTER_WHAT='filter selection'
+readonly FILTER_LOOP_WHAT='filter read in a loop'
+readonly FILTER_MISSING_WHAT='filter read without the helper'
 # shellcheck disable=SC2016 # jq program literal; $-prefixed names are jq variables, not shell
 readonly JQ_PROG='
 # A word yields text only when it is unambiguously static: a bare
@@ -300,7 +333,66 @@ def producer_of(args):
         | select(test("[*?[]"))] | length) > 0)
     | "bad\t\(.Array.Pos.Line)\t\(.Array.Pos.Col)\t\($glob_array_what)"] as $glob_arrays
 
-| ($direct + $standalone + $glob_calls + $glob_loops + $glob_arrays)[]
+# The whole extent of the statement that encloses a loop, not the bare
+# `ForClause`/`WhileClause` node: that node ends at `done`, but the
+# input to a `while` loop — a `done < <(…)` redirect, a `done <<<"…"`
+# herestring, or an upstream `… | while` pipeline stage — sits outside
+# it while still being part of what the loop consumes, exactly as much
+# as a filter read among the iteration words of a `for` is part of what
+# it consumes. A statement carries no `Type` field of its own, so it is
+# selected by the `Cmd` it holds — the same idiom this file already
+# uses for `Assign`/`Array` above — and a pipeline stage is selected by
+# walking the right-hand side of a `BinaryCmd`. Selecting on the direct
+# `.Cmd` rather than any statement that merely contains a loop
+# somewhere inside it is what keeps an `if` block from swallowing its
+# own condition into the range of the loop.
+#
+# `BinaryCmd.Op` is an opaque integer with no name in the JSON, fixed by
+# this parser version: 13 is `|`, 14 is `|&`. Only those two extend the
+# range of a loop, because only those two feed the loop data — a `&&`
+# (11) or `||` (12) chain onto a loop is the guard of the loop, not its
+# input: the chained condition decides whether the loop runs at all, and
+# that decision is made and read before the loop consumes anything, the
+# same relationship an `if` condition already has to a loop in its body.
+# Counting every `BinaryCmd` regardless of operator would swallow the
+# filter read of that guard into the range of the loop the same way an
+# unguarded `if` was already kept from doing, through a different
+# operator reaching the same shape.
+| ([.. | objects | select(has("Cmd"))
+    | select((((.Cmd // {}) | .Type) == "ForClause") or (((.Cmd // {}) | .Type) == "WhileClause"))
+    | {from: .Pos.Offset, to: .End.Offset}]
+  + [.. | objects | select(.Type == "BinaryCmd")
+    | select(.Op == 13 or .Op == 14)
+    | select(([(.Y // {}) | .. | objects
+        | select(.Type == "ForClause" or .Type == "WhileClause")] | length) > 0)
+    | {from: .Pos.Offset, to: .End.Offset}]) as $loops
+
+| [.. | objects | select(.Type == "CallExpr")
+    | select(((.Args // []) | length) > 0)
+    | select((.Args[0] | literal_word_text) == "filter_into")] as $filter_calls
+| [$filter_calls[] | {from: .Pos.Offset, to: .End.Offset}] as $filter_call_ranges
+
+# A read of a variable whose name ends `_FILTER`. The name is the whole
+# predicate: this repo spells every fixture-driving filter that way, and
+# a rule keyed on the identity of the enclosing script would say nothing
+# about a new one.
+| [.. | objects | select(.Type == "ParamExp")
+    | select(((.Param.Value // "") | test("_FILTER$")))
+    | . as $r
+    | select(([$filter_call_ranges[]
+        | select($r.Pos.Offset >= .from and $r.Pos.Offset < .to)] | length) == 0)] as $filter_reads
+
+| [$filter_calls[] | "ok\t\(.Pos.Line)\t\(.Pos.Col)\t\($filter_what)"] as $filter_ok
+
+| [$filter_reads[] | . as $r
+    | select(([$loops[] | select($r.Pos.Offset >= .from and $r.Pos.Offset < .to)] | length) > 0)
+    | "bad\t\($r.Pos.Line)\t\($r.Pos.Col)\t\($filter_loop_what)"] as $filter_in_loops
+
+| (if (($filter_reads | length) > 0) and (($filter_calls | length) == 0)
+    then [$filter_reads[0] | "bad\t\(.Pos.Line)\t\(.Pos.Col)\t\($filter_missing_what)"]
+    else [] end) as $filter_missing
+
+| ($direct + $standalone + $glob_calls + $glob_loops + $glob_arrays + $filter_ok + $filter_in_loops + $filter_missing)[]
 '
 
 # The exemption marker word each rule answers to, keyed by the record's
@@ -316,6 +408,12 @@ def producer_of(args):
 # markers treat it.
 readonly MARKER_ENUMERATE='enumerate-exempt'
 readonly MARKER_GLOB='glob-exempt'
+# Named MARKER_FILTER_WORD rather than MARKER_FILTER: the filter rule's
+# own predicate flags any read of a variable whose name ends `_FILTER`,
+# and this constant is read at every entry of the map below it populates
+# — a shorter name here would make the lint trip over its own control
+# plane, a marker word mistaken for the filter value it exists to guard.
+readonly MARKER_FILTER_WORD='filter-exempt'
 
 # Which word answers for which shape, keyed by the record's `what` field.
 # The glob rule owns more than one shape, so the mapping is a lookup by
@@ -327,6 +425,9 @@ readonly MARKER_GLOB='glob-exempt'
 declare -A MARKER_BY_WHAT=(
   ["${GLOB_WHAT}"]="${MARKER_GLOB}"
   ["${GLOB_ARRAY_WHAT}"]="${MARKER_GLOB}"
+  ["${FILTER_WHAT}"]="${MARKER_FILTER_WORD}"
+  ["${FILTER_LOOP_WHAT}"]="${MARKER_FILTER_WORD}"
+  ["${FILTER_MISSING_WHAT}"]="${MARKER_FILTER_WORD}"
 )
 readonly MARKER_BY_WHAT
 
@@ -352,7 +453,9 @@ for f in "${paths[@]}"; do
 
   records=""
   if ! records="$(jq --raw-output --arg glob_what "${GLOB_WHAT}" \
-    --arg glob_array_what "${GLOB_ARRAY_WHAT}" "${JQ_PROG}" <<<"${ast_json}")"; then
+    --arg glob_array_what "${GLOB_ARRAY_WHAT}" --arg filter_what "${FILTER_WHAT}" \
+    --arg filter_loop_what "${FILTER_LOOP_WHAT}" --arg filter_missing_what "${FILTER_MISSING_WHAT}" \
+    "${JQ_PROG}" <<<"${ast_json}")"; then
     printf '%s: jq failed walking the parsed syntax tree\n' "${f}" >&2
     exit 2
   fi
@@ -414,6 +517,14 @@ for f in "${paths[@]}"; do
       printf '%s:%s:%s: this array assignment expands a glob directly; an array filled without asserting its size reads an empty root as a clean tree — fill it with glob_into, passing each pattern as a quoted string\n' \
         "${f}" "${line}" "${col}" >&2
       ;;
+    "${FILTER_LOOP_WHAT}")
+      printf '%s:%s:%s: this loop reads a filter variable directly; that re-applies the filter test outside filter_into, and whether it runs over the already-narrowed selection or a set filter_into never narrowed cannot be told apart here — narrow the scan set with filter_into, which asserts the selection is not empty\n' \
+        "${f}" "${line}" "${col}" >&2
+      ;;
+    "${FILTER_MISSING_WHAT}")
+      printf '%s:%s:%s: this script reads a filter variable but never calls filter_into; a selection whose size is asserted nowhere reads an empty result as a clean tree\n' \
+        "${f}" "${line}" "${col}" >&2
+      ;;
     *)
       printf '%s:%s:%s: %s runs outside enumerate_into; an enumeration that asserts no breadth reads an empty scan as a clean tree\n' \
         "${f}" "${line}" "${col}" "${what}" >&2
@@ -424,7 +535,7 @@ for f in "${paths[@]}"; do
 done
 
 if ((failed > 0)); then
-  printf '%d scan(s) that assert no breadth: a filesystem enumeration outside enumerate_into, or a glob expanded at a for loop head or in an array assignment\n' "${failed}" >&2
+  printf '%d scan(s) that assert no breadth: a filesystem enumeration outside enumerate_into, a glob expanded at a for loop head or in an array assignment, or a filter variable read directly instead of through filter_into\n' "${failed}" >&2
   exit 1
 fi
 

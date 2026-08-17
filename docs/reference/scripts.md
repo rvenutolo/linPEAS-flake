@@ -322,10 +322,15 @@ function the helper is handed by name, or behind an inline
 array through `glob_into` — neither a `for` loop at its own head nor an
 array assignment in its element list may expand a pattern, unless an
 inline `# glob-exempt: <rationale>` marker says an empty match set is
-that site's normal state. Those two are the positions a single pass
-over the tree decides; a pattern that reaches a scan by any other route
-is outside what this lint sees, and the rule is stated no wider than
-that.
+that site's normal state. A filter-driven scan narrows an
+already-enumerated set through `filter_into` — a `*_FILTER` variable
+may be read at file scope to reach that call, but not again inside a
+`for` or `while` loop over the narrowed selection, and not at all in a
+file that never calls `filter_into`, unless an inline
+`# filter-exempt: <rationale>` marker says the direct read is
+deliberate. Those three are the positions a single pass over the tree
+decides; a pattern that reaches a scan by any other route is outside
+what this lint sees, and the rule is stated no wider than that.
 
 The property being protected is scan breadth, not producer status. A
 producer that fails is the easy half; the hard half is a producer that
@@ -345,15 +350,35 @@ a scan root that exists and holds nothing scores as a clean tree.
 patterns, fills the array and refuses an empty match set, and whatever
 reads that array afterwards walks an ordinary list.
 
-That is what makes both rules decidable in one pass. Associating a scan
-with a cardinality test written an arbitrary distance later is not
+A filter-driven scan fails a third way, one layer past enumeration and
+globbing: `filter_into` narrows a set the other two helpers already
+proved non-empty, and it is the one place that narrowing's own
+cardinality is asserted. A loop that reads the raw `*_FILTER` variable
+again, instead of trusting the selection `filter_into` handed back,
+re-applies the filter test outside the helper. Whether that second
+application runs over the narrowed selection — where it is merely
+redundant, since every path there already matched — or over a set the
+helper never narrowed is not decidable at the read site, and the
+second is the empty-root failure the helper exists to catch: a filter
+matching nothing selects no path, the loop body never fires, and the
+run exits 0. A file that reads a `*_FILTER` variable and never calls
+`filter_into` at all is the same hole with no call site to point to:
+nothing anywhere in that file asserts the selection the read implies
+is non-empty.
+
+That is what makes all three rules decidable in one pass. Associating a
+scan with a cardinality test written an arbitrary distance later is not
 something a textual rule can do; asking whether a producer is an
-argument to the helper is local to one call expression, and so is
-asking whether a `for` loop or an array assignment expands a pattern in
-its own words. Patterns handed to `glob_into` are arguments of a
-`CallExpr` — never `WordIter` items, never array elements — and reach
-it quoted, so a compliant call site cannot false-hit the glob rule
-however many metacharacters it carries.
+argument to the helper is local to one call expression, so is asking
+whether a `for` loop or an array assignment expands a pattern in its
+own words, and so is asking whether a `*_FILTER` read falls inside a
+loop's own extent or outside every `filter_into` call in the file.
+Patterns handed to `glob_into` are arguments of a `CallExpr` — never
+`WordIter` items, never array elements — and reach it quoted, so a
+compliant call site cannot false-hit the glob rule however many
+metacharacters it carries. A `*_FILTER` read handed to `filter_into` as
+its own argument is excluded from the filter rule the same way, so the
+compliant call site cannot false-hit the rule it satisfies either.
 
 Detection parses each script's syntax tree via `shfmt --to-json` (the
 mvdan.cc/sh parser `shfmt` and `treefmt` already run over this repo)
@@ -369,8 +394,10 @@ the word right after `git`: the one hand-rolled enumeration this lint
 was written against spelled it `git -C "${ROOT}" ls-files`.
 
 The count of scan sites classified — producer calls plus `glob_into`
-call sites plus glob loops plus glob array assignments — is itself
-asserted nonzero (unless LINT_ALLOW_EMPTY_SCAN=1). A grammar that
+call sites plus glob loops plus glob array assignments plus
+`filter_into` call sites, plus filter reads inside a loop, plus the
+single read reported in a file that calls the helper nowhere — is
+itself asserted nonzero (unless LINT_ALLOW_EMPTY_SCAN=1). A grammar that
 silently recognized nothing would report "0 violations" and exit 0 —
 the same clean line a genuinely scan-free tree prints — leaving this
 gate off while green, which is the exact failure it exists to prevent
@@ -379,17 +406,19 @@ one level down.
 Each rule owns its own marker word, and a marker excuses only the kind
 of site it names: a rationale for running a producer outside the
 enumeration helper says nothing about whether a glob's match set may
-come back empty, and the reverse holds too.
+come back empty or a loop may read a filter variable directly, and the
+reverse holds in every direction.
 
 Honors PATHS_OVERRIDE (newline-separated file list) for fixtures, and
 LINT_ALLOW_EMPTY_SCAN=1 to accept a run whose scan-site tally (or whose
 enumerated file count) comes back zero.
 Exit 0 clean, 1 on a producer outside `enumerate_into`, a `for` loop
 expanding a glob at its own head, an array assignment expanding one in
-its element list, or an exemption marker with no rationale, 2 when a
-required tool is absent, the scan set could not be enumerated (or
-classified nothing), a named path does not exist, or a file could not
-be parsed as shell.
+its element list, a loop reading a filter variable directly, a script
+reading a filter variable without ever calling `filter_into`, or an
+exemption marker with no rationale, 2 when a required tool is absent,
+the scan set could not be enumerated (or classified nothing), a named
+path does not exist, or a file could not be parsed as shell.
 
 ### scripts/check-ephemeral-refs.sh
 
