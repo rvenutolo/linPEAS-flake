@@ -46,15 +46,18 @@
 # A filter-driven scan fails a third way, one layer past enumeration and
 # globbing: `filter_into` narrows a set the other two helpers already
 # proved non-empty, and it is the one place that narrowing's own
-# cardinality is asserted. A loop over the narrowed selection that reads
-# the raw `*_FILTER` variable again, instead of trusting the selection
-# `filter_into` handed back, re-derives the same test outside the
-# helper — a filter matching nothing then leaves that read silently
-# false on every iteration, a loop body that never fires and a clean
-# exit, exactly the empty-root failure the helper exists to catch. A
-# file that reads a `*_FILTER` variable and never calls `filter_into` at
-# all is the same hole with no call site to point to: nothing anywhere
-# in that file asserts the selection the read implies is non-empty.
+# cardinality is asserted. A loop that reads the raw `*_FILTER` variable
+# again, instead of trusting the selection `filter_into` handed back,
+# re-applies the filter test outside the helper. Whether that second
+# application runs over the narrowed selection — where it is merely
+# redundant, since every path there already matched — or over a set the
+# helper never narrowed is not decidable at the read site, and the
+# second is the empty-root failure the helper exists to catch: a filter
+# matching nothing selects no path, the loop body never fires, and the
+# run exits 0. A file that reads a `*_FILTER` variable and never calls
+# `filter_into` at all is the same hole with no call site to point to:
+# nothing anywhere in that file asserts the selection the read implies
+# is non-empty.
 #
 # That is what makes all three rules decidable in one pass. Associating a
 # scan with a cardinality test written an arbitrary distance later is not
@@ -86,8 +89,9 @@
 #
 # The count of scan sites classified — producer calls plus `glob_into`
 # call sites plus glob loops plus glob array assignments plus
-# `filter_into` call sites plus filter reads outside them — is itself
-# asserted nonzero (unless LINT_ALLOW_EMPTY_SCAN=1). A grammar that
+# `filter_into` call sites, plus filter reads inside a loop, plus the
+# single read reported in a file that calls the helper nowhere — is
+# itself asserted nonzero (unless LINT_ALLOW_EMPTY_SCAN=1). A grammar that
 # silently recognized nothing would report "0 violations" and exit 0 —
 # the same clean line a genuinely scan-free tree prints — leaving this
 # gate off while green, which is the exact failure it exists to prevent
@@ -501,7 +505,7 @@ for f in "${paths[@]}"; do
         "${f}" "${line}" "${col}" >&2
       ;;
     "${FILTER_LOOP_WHAT}")
-      printf '%s:%s:%s: this loop reads a filter variable directly; a filter that selects nothing leaves a loop body that never runs and a clean exit — narrow the scan set with filter_into, which asserts the selection is not empty\n' \
+      printf '%s:%s:%s: this loop reads a filter variable directly; that re-applies the filter test outside filter_into, and whether it runs over the already-narrowed selection or a set filter_into never narrowed cannot be told apart here — narrow the scan set with filter_into, which asserts the selection is not empty\n' \
         "${f}" "${line}" "${col}" >&2
       ;;
     "${FILTER_MISSING_WHAT}")

@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # A second, later read of the same filter value is still file scope, not a
-# loop body: the two live sites in check-egress-allowlist.sh and
-# check-permission-scopes.sh both read their filter twice this way, once to
-# narrow the set and once to guard a job-count assertion.
+# loop body: this shape is legal by position, not by what the second read
+# guards. check-egress-allowlist.sh reads its filter twice this way, once
+# to narrow the set and once to guard a job-count assertion; check-
+# permission-scopes.sh reads it twice too, but its second read guards a
+# reverse allowlist-staleness pass instead.
 set -Eeuo pipefail
 IFS=$'\n\t'
 

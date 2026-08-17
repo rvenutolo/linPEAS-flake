@@ -385,19 +385,29 @@ for f in "${selected_files[@]}"; do
 
 A file-scope read reaching that call, as above, is fine. What's banned is
 a `for` or `while` loop reading the raw `*_FILTER` variable again instead
-of trusting the selection `filter_into` already returned — a filter
-matching nothing then leaves that read silently false on every
-iteration, the loop body never runs, and the run exits 0, the same
-empty-selection failure `filter_into` exists to catch — and a script that
+of trusting the selection `filter_into` already returned — that second
+read re-applies the filter test outside the helper, and whether it runs
+over the narrowed selection (merely redundant, since every path there
+already matched) or over a set `filter_into` never narrowed is not
+decidable at the read site; the second case is the empty-selection
+failure `filter_into` exists to catch, one step later — and a script that
 reads a `*_FILTER` variable but never calls `filter_into` at all, which
-asserts the selection's size nowhere. A file-scope read outside every
-loop that only guards a job-count assertion, rather than standing in for
-`filter_into`, stays legal without a marker. Either banned shape opts out
-with an inline `# filter-exempt: <rationale>` on the line above; the
-rationale must be non-empty, the marker word is keyed to this shape so
-neither sibling marker excuses it, and a clean run prints the exemption
-count. Full rationale:
+asserts the selection's size nowhere. A read outside every loop stays
+legal without a marker — the rule tests position, not purpose. The two
+live examples guard a job-count assertion (`check-egress-allowlist.sh`)
+and a reverse allowlist-staleness pass (`check-permission-scopes.sh`).
+Either banned shape opts out with an inline `# filter-exempt: <rationale>`
+on the line above; the rationale must be non-empty, the marker word is
+keyed to this shape so neither sibling marker excuses it, and a clean run
+prints the exemption count. Full rationale:
 [Workflow hardening → enumerate-helper-required](../security/workflow-hardening.md#enumerate-helper-required).
+
+A filter read reached only through a function a loop calls, or laundered
+into a variable whose name does not end `_FILTER`, evades this
+position-based rule entirely — neither shape is recognized today. A
+purely diagnostic in-loop read (a `printf` naming the filter, say) is
+still flagged: the rule cannot tell that apart from a re-derived
+selection, so it takes a marker like any other in-loop read.
 
 ## Treefmt YAML quote gotcha
 
