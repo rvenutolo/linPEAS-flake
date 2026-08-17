@@ -40,7 +40,11 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
-shopt -s nullglob
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+readonly REPO_ROOT
+# shellcheck source=scripts/lib/enumerate.sh
+source "${REPO_ROOT}/scripts/lib/enumerate.sh"
 
 readonly TESTS_DIR="${TESTS_DIR_OVERRIDE:-tests}"
 
@@ -120,7 +124,12 @@ function is_in_list() {
 function main() {
   local unwired=0 wired=0 exempting=0 parity_named=0 parity_stray=0
   local f base state stripped
-  for f in "${TESTS_DIR}"/*.test.sh; do
+  # The scan root's breadth is asserted before any harness is scored: a
+  # root holding no harness leaves every rule below unexercised, and this
+  # gate would print its clean summary having read nothing.
+  local -a harnesses=()
+  glob_into harnesses 'harness scan root' "${TESTS_DIR}/*.test.sh"
+  for f in "${harnesses[@]}"; do
     base="$(basename -- "${f}")"
     is_in_list "${base}" "${EXEMPT[@]}" && continue
 
