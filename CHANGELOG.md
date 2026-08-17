@@ -6,6 +6,38 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20260817-e45108b9] - 2026-08-17
+
+### CI
+- Bind nix cache hosts to jobs that reach nix ([#726](https://github.com/rvenutolo/linPEAS-flake/pull/726))
+
+### Chores
+- Bump linpeas to 20260817-e45108b9 ([#744](https://github.com/rvenutolo/linPEAS-flake/pull/744))
+
+### Features
+- Enforce the filter-selection breadth rule ([#743](https://github.com/rvenutolo/linPEAS-flake/pull/743))
+- Extend scan-breadth enforcement to test harnesses ([#739](https://github.com/rvenutolo/linPEAS-flake/pull/739))
+- Detect glob-driven scans in array assignments ([#738](https://github.com/rvenutolo/linPEAS-flake/pull/738))
+- Generate the test-harness census and gate it on freshness ([#731](https://github.com/rvenutolo/linPEAS-flake/pull/731))
+- Enforce payload source-naming through the helper ([#719](https://github.com/rvenutolo/linPEAS-flake/pull/719))
+
+### Fixes
+- Assert breadth of post-enumeration filter selections ([#740](https://github.com/rvenutolo/linPEAS-flake/pull/740))
+- Assert scan breadth where an empty glob reads as a clean tree ([#737](https://github.com/rvenutolo/linPEAS-flake/pull/737))
+- Take diffoscope from the pinned flake so the mismatch path can run ([#728](https://github.com/rvenutolo/linPEAS-flake/pull/728))
+- Bind lock-derived generator outputs to the committable set ([#727](https://github.com/rvenutolo/linPEAS-flake/pull/727))
+- Report an unreadable payload as a could-not-run ([#724](https://github.com/rvenutolo/linPEAS-flake/pull/724))
+- Give each ruleset lint its own override variable ([#720](https://github.com/rvenutolo/linPEAS-flake/pull/720))
+- Close follow-ups from the payload-gate review ([#717](https://github.com/rvenutolo/linPEAS-flake/pull/717))
+- Report a malformed renovate config as a could-not-run ([#714](https://github.com/rvenutolo/linPEAS-flake/pull/714))
+- Distinguish the two ruleset lints in could-not-run diagnostics ([#713](https://github.com/rvenutolo/linPEAS-flake/pull/713))
+
+### Refactor
+- Name payload sources through one library helper ([#718](https://github.com/rvenutolo/linPEAS-flake/pull/718))
+
+### Tests
+- Exercise the harness-assert-wired lint's detections ([#732](https://github.com/rvenutolo/linPEAS-flake/pull/732))
+
 ## [20260814-55a4f278] - 2026-08-15
 
 ### CI
