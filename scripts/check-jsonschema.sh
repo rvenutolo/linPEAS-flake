@@ -24,6 +24,13 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# Resolved before the `cd` below: `BASH_SOURCE`-relative sourcing after a
+# directory change would look for the library under the new working
+# directory.
+_lib_dir="${BASH_SOURCE[0]%/*}"
+if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
+# shellcheck source=scripts/lib/enumerate.sh
+source "${_lib_dir}/lib/enumerate.sh"
 
 # renovate: datasource=git-refs depName=SchemaStore/schemastore packageName=https://github.com/SchemaStore/schemastore currentValue=master
 readonly SCHEMASTORE_SHA='0c09eaee518187f3ed6885467cccb67026835394'
@@ -44,8 +51,6 @@ fi
 repo_root="$(git rev-parse --show-toplevel)"
 cd "${repo_root}"
 
-shopt -s nullglob globstar
-
 failed=0
 
 function run_check() {
@@ -62,15 +67,21 @@ if [[ -f renovate.json ]]; then
   run_check 'renovate.json' --builtin-schema vendor.renovate renovate.json
 fi
 
-workflow_files=(.github/workflows/*.yml .github/workflows/*.yaml)
-if ((${#workflow_files[@]} > 0)); then
-  run_check 'github-workflows' --builtin-schema vendor.github-workflows "${workflow_files[@]}"
-fi
+# Each set is asserted on its own. A tree holding no workflow — or no
+# composite action — validates nothing here, and the run then reports `all
+# schema validations passed` having read not one file, which is a
+# could-not-run wearing a clean verdict.
+declare -a workflow_files=()
+glob_into workflow_files 'workflow YAML' '.github/workflows/*.yml' '.github/workflows/*.yaml'
+run_check 'github-workflows' --builtin-schema vendor.github-workflows "${workflow_files[@]}"
 
-action_files=(.github/actions/**/action.yml .github/actions/**/action.yaml)
-if ((${#action_files[@]} > 0)); then
-  run_check 'github-actions' --builtin-schema vendor.github-actions "${action_files[@]}"
-fi
+declare -a action_files=()
+# `**` also matches zero segments, so this covers both
+# `.github/actions/<name>/action.yml` and a bare `.github/actions/action.yml`.
+shopt -s globstar
+glob_into action_files 'composite-action YAML' '.github/actions/**/action.yml' '.github/actions/**/action.yaml'
+shopt -u globstar
+run_check 'github-actions' --builtin-schema vendor.github-actions "${action_files[@]}"
 
 if [[ -f .markdownlint.json ]]; then
   run_check 'markdownlint config' --schemafile "${MARKDOWNLINT_SCHEMA_URL}" .markdownlint.json
