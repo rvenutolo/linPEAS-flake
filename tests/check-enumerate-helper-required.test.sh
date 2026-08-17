@@ -284,6 +284,70 @@ run_expect 'good-filter-chain-shapes' \
   "${FIXTURES}/good-filter-and-chain.sh"$'\n'"${FIXTURES}/good-filter-or-chain.sh" \
   0 '2 file(s) scanned, 2 scan site(s) classified, 0 exemption(s)'
 
+# @description A filter read reached through a function a loop calls. By
+# position the read is at file scope, and the file's own filter_into call
+# satisfies the missing-helper arm, so both of the rule's other arms are
+# quiet — the hop is the only thing that sees it. The diagnostic names the
+# function shape rather than the loop shape, because a reader sent hunting
+# for a read inside the loop body will not find one.
+expect bad-filter-in-called-function.sh 1 \
+  'bad-filter-in-called-function.sh:14:9: this filter read sits in a function a loop calls'
+
+# @description The rule reaches exactly one hop. These two files pin the
+# boundary from both sides: a two-hop chain stays legal, and a called
+# function that reads no filter is not a site. Alone, this pair's tally
+# would be byte-identical to good-filter-chain-shapes' own two-file,
+# two-site, zero-exemption summary above, and a three-file fold-in lands on
+# good-filter-shapes' three-file, three-site tally the same way, so
+# good-filter-into.sh and good-filter-file-scope-read.sh — each already
+# proven elsewhere to classify as exactly one clean site — are both folded
+# in beside them; the resulting four-file, four-site tally is what proves
+# all four were read rather than one masking the others, and separates
+# this proof from both siblings rather than the exit code or message shape
+# alone.
+run_expect 'good-filter-hop-boundary' \
+  "${FIXTURES}/good-filter-two-hop-documented-gap.sh"$'\n'"${FIXTURES}/good-filter-function-no-read.sh"$'\n'"${FIXTURES}/good-filter-into.sh"$'\n'"${FIXTURES}/good-filter-file-scope-read.sh" \
+  0 '4 file(s) scanned, 4 scan site(s) classified, 0 exemption(s)'
+
+# @description A function declared inside a loop body, and called by that
+# same loop, has a body whose offset range sits inside both the loop's own
+# extent and the hop the loop reaches: the read must keep reporting as a
+# loop read rather than double-counting as a function read too. Asserting
+# the loop diagnostic's exact position discriminates this fixture from
+# every sibling; the hand check below additionally confirms the function
+# diagnostic never appears, which the shared discrimination gate cannot
+# express on its own since dozens of other bad-* fixtures already print
+# the generic failure-count trailer this scenario would otherwise have to
+# lean on.
+function expect_loop_nested_function() {
+  local -r name='bad-filter-loop-nested-function.sh'
+  local -r want_msg='bad-filter-loop-nested-function.sh:18:21: this loop reads a filter variable directly'
+  local out_file err_file outcome_file got_exit=0
+  out_file="$(mktemp)"
+  err_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  PATHS_OVERRIDE="${FIXTURES}/bad-filter-loop-nested-function.sh" \
+    "${SCRIPT}" >"${out_file}" 2>"${err_file}" || got_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${want_msg}" "${outcome_file}" "${out_file}" "${err_file}"
+
+  if [[ ${got_exit} != 1 ]]; then
+    fail "$(printf '%s: exit %s, want 1' "${name}" "${got_exit}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  elif ! grep --fixed-strings --quiet -- "${want_msg}" "${out_file}" "${err_file}"; then
+    fail "$(printf '%s: output missing the loop diagnostic' "${name}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  elif grep --fixed-strings --quiet -- 'this filter read sits in a function a loop calls' "${out_file}" "${err_file}"; then
+    fail "$(printf '%s: output also carries the function diagnostic — the same read double-reported' "${name}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  else
+    pass "${name}"
+  fi
+  rm --force -- "${out_file}" "${err_file}" "${outcome_file}"
+}
+
+expect_loop_nested_function
+
 # @description A loop read carrying a valid filter-exempt marker is
 # counted as an exemption rather than a hit, the same shape the glob
 # rule's own exempt fixtures prove above. The count pairs — one call site
