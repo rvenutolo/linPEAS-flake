@@ -74,6 +74,49 @@ expect bad-bare-git-ls-files.sh 1 'bad-bare-git-ls-files.sh:7:12: git ls-files r
 expect bad-empty-rationale.sh 1 \
   'bad-empty-rationale.sh:9:12: enumerate-exempt marker carries no rationale'
 
+# @description A producer name copied to a variable. The command word at
+# the use site is then a value, so no single pass can tell what runs
+# there. bad-producer-alias.sh is the bare-word scalar form,
+# bad-producer-alias-path.sh a scalar full path caught by its basename,
+# and bad-producer-alias-array.sh the same copy written as a command
+# array, where the producer is one element among several rather than a
+# whole value. All three share the alias sentence, so file, line and
+# column are what tell them apart.
+expect bad-producer-alias.sh 1 \
+  'bad-producer-alias.sh:9:8: this assignment copies a producer name to a variable'
+expect bad-producer-alias-path.sh 1 \
+  'bad-producer-alias-path.sh:8:8: this assignment copies a producer name to a variable'
+expect bad-producer-alias-array.sh 1 \
+  'bad-producer-alias-array.sh:8:19: this assignment copies a producer name to a variable'
+
+# @description A producer named inside the label every compliant
+# enumerate_into call passes. The word is data a diagnostic quotes, not a
+# command the file runs, and counting it would make every compliant call
+# site in this repo a violation of the rule it satisfies. Alone this
+# fixture's clean summary is byte-identical to
+# good-glob-array-pattern-strings.sh's above — both are a single file with
+# one classified site and no exemption — so good-filter-exempt.sh's own
+# already-proven single-file tally is folded in beside it; the resulting
+# two-file, three-site, one-exemption tally is what separates this proof
+# from that sibling rather than the exit code or message shape alone.
+run_expect 'good-producer-name-in-label' \
+  "${FIXTURES}/good-producer-name-in-label.sh"$'\n'"${FIXTURES}/good-filter-exempt.sh" \
+  0 '2 file(s) scanned, 3 scan site(s) classified, 1 exemption(s)'
+
+# @description The negative the interpolated-word guard rests on. A path
+# that merely ends in a producer name reaches the assignment through
+# interpolation, so it carries no single literal word and is never read as
+# the command whose name it happens to end in — proving the word is read
+# through literal_word_text rather than by walking every part regardless
+# of how the word is built. Alone, good-producer-interpolated-path.sh
+# classifies no site at all, so good-glob-into.sh's own already-proven
+# single-site tally is folded in beside it; the resulting two-file,
+# one-site tally is what proves the interpolated word was read and passed
+# over rather than the file never being scanned.
+run_expect 'good-producer-interpolated-path' \
+  "${FIXTURES}/good-producer-interpolated-path.sh"$'\n'"${FIXTURES}/good-glob-into.sh" \
+  0 '2 file(s) scanned, 1 scan site(s) classified, 0 exemption(s)'
+
 # All four clean shapes in one invocation. Each alone prints an
 # indistinguishable clean summary, so four scenarios would be four names
 # over one observation; the merged summary's counts are what prove all
