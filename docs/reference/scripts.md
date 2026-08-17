@@ -318,7 +318,12 @@ harness that asserts the diagnostics they produce.
 An enumeration runs through `enumerate_into`
 (scripts/lib/enumerate.sh) — a producer (`find`, `git ls-files`, `git ls-tree`) may appear only as an argument to the helper, inside a
 function the helper is handed by name, or behind an inline
-`# enumerate-exempt: <rationale>` marker. A glob-driven scan fills its
+`# enumerate-exempt: <rationale>` marker. Copying a producer word to a
+variable is banned at that same assignment, since the use site's
+command word is then a value no single pass can resolve; the array
+form is read only at element 0, its command head, so a producer word
+planted at a non-head index and later spliced into command position by
+index arithmetic still evades. A glob-driven scan fills its
 array through `glob_into` — neither a `for` loop at its own head nor an
 array assignment in its element list may expand a pattern, unless an
 inline `# glob-exempt: <rationale>` marker says an empty match set is
@@ -452,13 +457,14 @@ files scanned, sites classified and exemptions applied.
 Honors PATHS_OVERRIDE (newline-separated file list) for fixtures, and
 LINT_ALLOW_EMPTY_SCAN=1 to accept a run whose scan-site tally (or whose
 enumerated file count) comes back zero.
-Exit 0 clean, 1 on a producer outside `enumerate_into`, a `for` loop
-expanding a glob at its own head, an array assignment expanding one in
-its element list, a loop reading a filter variable directly, a script
-reading a filter variable without ever calling `filter_into`, an
-assignment copying a filter value to a name outside the filter pattern,
-an exemption marker with no rationale, or an exemption marker that
-excuses no site this pass classified, 2 when a required tool is
+Exit 0 clean, 1 on a producer outside `enumerate_into`, a producer name
+copied to a variable, a `for` loop expanding a glob at its own head, an
+array assignment expanding one in its element list, a loop reading a
+filter variable directly, a filter read in a function that loop calls,
+a script reading a filter variable without ever calling `filter_into`,
+an assignment copying a filter value to a name outside the filter
+pattern, an exemption marker with no rationale, or an exemption marker
+that excuses no site this pass classified, 2 when a required tool is
 absent, the scan set could not be enumerated (or classified nothing),
 a named path does not exist, or a file could not be parsed as shell.
 

@@ -382,11 +382,12 @@ clean run prints the exemption count. Full rationale:
 
 ## Filter-narrowed scan breadth
 
-`scripts/check-enumerate-helper-required.sh` also bans a `*_FILTER`
-variable read that stands in for `filter_into`
-(`scripts/lib/enumerate.sh`) instead of reaching it. A filter narrows a
-scan set the enumeration or glob rules above already proved non-empty,
-and `filter_into` is where that narrowing's own size is asserted:
+`scripts/check-enumerate-helper-required.sh` also bans a filter variable
+read that stands in for `filter_into` (`scripts/lib/enumerate.sh`)
+instead of reaching it. A filter narrows a scan set the enumeration or
+glob rules above already proved non-empty, and `filter_into` is where
+that narrowing's own size is asserted. A filter variable is any name
+that is exactly `FILTER` or ends `_FILTER`:
 
 ```bash
 declare -a workflow_files=()
@@ -397,31 +398,48 @@ for f in "${selected_files[@]}"; do
 ```
 
 A file-scope read reaching that call, as above, is fine. What's banned is
-a `for` or `while` loop reading the raw `*_FILTER` variable again instead
+a `for` or `while` loop reading the raw filter variable again instead
 of trusting the selection `filter_into` already returned — that second
 read re-applies the filter test outside the helper, and whether it runs
 over the narrowed selection (merely redundant, since every path there
 already matched) or over a set `filter_into` never narrowed is not
 decidable at the read site; the second case is the empty-selection
-failure `filter_into` exists to catch, one step later — and a script that
-reads a `*_FILTER` variable but never calls `filter_into` at all, which
-asserts the selection's size nowhere. A read outside every loop stays
-legal without a marker — the rule tests position, not purpose. The two
-live examples guard a job-count assertion (`check-egress-allowlist.sh`)
-and a reverse allowlist-staleness pass (`check-permission-scopes.sh`).
-Either banned shape opts out with an inline `# filter-exempt: <rationale>`
-on the line above; the marker has to open the comment — a sentence
-naming it is prose, not an exemption — the rationale must be non-empty,
-the marker word is keyed to this shape so neither sibling marker
-excuses it, and a clean run prints the exemption count. Full rationale:
+failure `filter_into` exists to catch, one step later. The loop's reach
+follows one function hop: a read inside a function whose name appears as
+a literal command word within the loop's own extent is treated the same
+as a read written inline, because the loop consumes it exactly as it
+would consume a read written directly in its body. The hop stops at one
+level — a function called only by another function the loop calls still
+sits outside every extent and still evades — and a script that reads a
+filter variable but never calls `filter_into` at all is banned too, since
+nothing there asserts the selection's size. Copying a filter value into a
+variable whose own name does not match the filter pattern is banned at
+the assignment itself, wherever the copy is later read: every check
+above keys on the name of the variable being read, so a value carried
+under a fresh name would satisfy the letter of all of them while
+re-introducing the same defect. The sanctioned
+`readonly FILE_FILTER="${WORKFLOW_FILE_FILTER:-}"` stays legal because
+its own target matches the filter pattern.
+
+A read outside every loop and every hop-reached function stays legal
+without a marker — the rule tests position, not purpose. The two live
+examples guard a job-count assertion (`check-egress-allowlist.sh`) and a
+reverse allowlist-staleness pass (`check-permission-scopes.sh`). Any of
+the four banned shapes — the in-loop re-read, the one-hop function read,
+the missing `filter_into` call, or the aliasing assignment — opts out
+with an inline `# filter-exempt: <rationale>` on the line above; the
+marker has to open the comment — a sentence naming it is prose, not an
+exemption — the rationale must be non-empty, the marker word is keyed to
+this shape so neither sibling marker excuses it, and a clean run prints
+the exemption count. Full rationale:
 [Workflow hardening → enumerate-helper-required](../security/workflow-hardening.md#enumerate-helper-required).
 
-A filter read reached only through a function a loop calls, or laundered
-into a variable whose name does not end `_FILTER`, evades this
-position-based rule entirely — neither shape is recognized today. A
+A two-hop chain — a function called only by another function the loop
+calls — still evades, stated as the boundary rather than implied away. A
 purely diagnostic in-loop read (a `printf` naming the filter, say) is
 still flagged: the rule cannot tell that apart from a re-derived
-selection, so it takes a marker like any other in-loop read.
+selection, so it takes a marker like any other in-loop or hop-reached
+read.
 
 All three markers — `# enumerate-exempt:`, `# glob-exempt:`, and
 `# filter-exempt:` — are censused the same way regardless of which
