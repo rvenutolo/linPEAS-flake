@@ -121,6 +121,11 @@ function reachable_set() {
   # 4. Direct `tests/<x>.test.sh` invocations in any workflow file. Guard the
   # glob explicitly (nullglob makes an empty match vanish, which would leave
   # grep reading stdin).
+  #
+  # glob-exempt: this glob collects reachability evidence, so an empty match
+  # set subtracts runners rather than violations — every harness a workflow
+  # was the only caller of then reports as unreachable and the check exits 1,
+  # which is louder than the run a populated directory produces
   local -a wf_files=("${WORKFLOWS_DIR}"/*.yml)
   if ((${#wf_files[@]} > 0)); then
     local hit
