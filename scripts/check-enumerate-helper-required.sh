@@ -375,7 +375,12 @@ def producer_of(args):
 # markers treat it.
 readonly MARKER_ENUMERATE='enumerate-exempt'
 readonly MARKER_GLOB='glob-exempt'
-readonly MARKER_FILTER='filter-exempt'
+# Named MARKER_FILTER_WORD rather than MARKER_FILTER: the filter rule's
+# own predicate flags any read of a variable whose name ends `_FILTER`,
+# and this constant is read at every entry of the map below it populates
+# — a shorter name here would make the lint trip over its own control
+# plane, a marker word mistaken for the filter value it exists to guard.
+readonly MARKER_FILTER_WORD='filter-exempt'
 
 # Which word answers for which shape, keyed by the record's `what` field.
 # The glob rule owns more than one shape, so the mapping is a lookup by
@@ -387,9 +392,9 @@ readonly MARKER_FILTER='filter-exempt'
 declare -A MARKER_BY_WHAT=(
   ["${GLOB_WHAT}"]="${MARKER_GLOB}"
   ["${GLOB_ARRAY_WHAT}"]="${MARKER_GLOB}"
-  ["${FILTER_WHAT}"]="${MARKER_FILTER}"
-  ["${FILTER_LOOP_WHAT}"]="${MARKER_FILTER}"
-  ["${FILTER_MISSING_WHAT}"]="${MARKER_FILTER}"
+  ["${FILTER_WHAT}"]="${MARKER_FILTER_WORD}"
+  ["${FILTER_LOOP_WHAT}"]="${MARKER_FILTER_WORD}"
+  ["${FILTER_MISSING_WHAT}"]="${MARKER_FILTER_WORD}"
 )
 readonly MARKER_BY_WHAT
 
