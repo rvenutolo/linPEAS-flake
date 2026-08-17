@@ -18,6 +18,10 @@
 # workflow to read, or holds one that could not be read.
 set -Eeuo pipefail
 IFS=$'\n\t'
+_lib_dir="${BASH_SOURCE[0]%/*}"
+if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
+# shellcheck source=scripts/lib/enumerate.sh
+source "${_lib_dir}/lib/enumerate.sh"
 
 readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-.github/workflows}"
 
@@ -73,18 +77,12 @@ if consumes_secret "${VERIFY_WF}" 'DOCKERHUB_TOKEN_RW'; then
 fi
 
 # Suffix: every secrets.DOCKERHUB_TOKEN* reference must be _RW or _DELETE.
-shopt -s nullglob
-declare -a workflow_files=("${WORKFLOWS_DIR}"/*.yml "${WORKFLOWS_DIR}"/*.yaml)
-shopt -u nullglob
 # A workflows dir that exists but holds no YAML leaves this whole check with
 # nothing to read, and the run then exits 0 having asserted nothing about
 # any suffix. That is a could-not-run, not a clean split.
-if ((${#workflow_files[@]} == 0)) && [[ -z ${LINT_ALLOW_EMPTY_SCAN:-} ]]; then
-  printf 'dockerhub-token-scope-split lint: %s holds 0 workflow file(s); set LINT_ALLOW_EMPTY_SCAN=1 if that is deliberate\n' \
-    "${WORKFLOWS_DIR}" >&2
-  exit 2
-fi
-for wf in ${workflow_files+"${workflow_files[@]}"}; do
+declare -a workflow_files=()
+glob_into workflow_files 'workflow YAML' "${WORKFLOWS_DIR}/*.yml" "${WORKFLOWS_DIR}/*.yaml"
+for wf in "${workflow_files[@]}"; do
   # grep separates "this workflow names no DOCKERHUB_TOKEN" (1) from "this
   # workflow could not be read" (2). Only the first is a finding about
   # content; scoring the second the same way clears an unreadable workflow

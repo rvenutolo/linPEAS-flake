@@ -166,7 +166,7 @@ function main() {
   # nothing about any suffix.
   dir="$(mktemp --directory)"
   assert_run 'workflows dir with no YAML is a could-not-run' "${dir}" 2 \
-    'holds 0 workflow file(s)'
+    'matched 0 files via workflow YAML'
   rm --recursive --force -- "${dir}"
 
   harness_assert_verify || failures=$((failures + 1))
