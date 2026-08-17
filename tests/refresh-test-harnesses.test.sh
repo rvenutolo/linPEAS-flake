@@ -21,6 +21,8 @@ repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/enumerate.sh
+source "${REPO_ROOT}/scripts/lib/enumerate.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/refresh-test-harnesses.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/test-harnesses"
 readonly DOC="${REPO_ROOT}/docs/reference/test-harnesses.md"
@@ -190,10 +192,12 @@ function main() {
   # 10. The live tree. The census line must report the harness count the
   #     tree actually holds, so a derivation that skipped files cannot
   #     round-trip its way to green.
+  # This count is the expectation the census line is scored against, so an
+  # empty match set would not fail the row — it would assert that the
+  # generator found zero harnesses, and a generator that skipped the whole
+  # tree would round-trip its way to green against it.
   local -a live_harnesses=()
-  shopt -s nullglob
-  live_harnesses=("${REPO_ROOT}"/tests/*.test.sh)
-  shopt -u nullglob
+  glob_into live_harnesses 'live harness tree' "${REPO_ROOT}/tests/*.test.sh"
   local -r live_expect="test-harnesses: ok — ${#live_harnesses[@]} harness(es),"
   if [[ -f ${DOC} ]]; then
     live_backup="$(mktemp)"

@@ -116,6 +116,10 @@ function main() {
   MATRIX_OUTPUT_OVERRIDE="${leak_out}" "${SCRIPT}" >/dev/null 2>&1 || true
   rm --force -- "${leak_out}"
   local remaining
+  # enumerate-exempt: this find counts leaked temps, and zero is the
+  # result the row demands — the check below passes on remaining -eq 0.
+  # Routing it through the enumeration helper would make the clean tree
+  # exit 2, turning the assertion's success condition into a failure.
   remaining="$(find "${REPO_ROOT}" -maxdepth 1 -type f \
     -name '.refresh-enforcement-matrix-*.md' | wc -l | tr -d '[:space:]')"
   if [[ ! -e ${LEAK_STRAY} ]] && [[ ${remaining} -eq 0 ]]; then

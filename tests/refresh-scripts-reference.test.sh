@@ -109,6 +109,11 @@ EOF
   "${SCRIPT}"
   local -a leaked
   shopt -s nullglob
+  # glob-exempt: an empty match set is the passing state here, not a
+  # missed scan. The row passes only when the generator's sweep left no
+  # .refresh-scripts-reference-*.md in the repo root, which the test
+  # below reads as ${#leaked[@]} -eq 0, so a match is the leak being
+  # hunted. Asserting a non-empty set would invert the assertion.
   leaked=("${REPO_ROOT}"/.refresh-scripts-reference-*.md)
   shopt -u nullglob
   if [[ ! -e ${stray} && ${#leaked[@]} -eq 0 ]]; then
