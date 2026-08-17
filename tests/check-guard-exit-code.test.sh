@@ -75,6 +75,11 @@ function main() {
     'good-compound-test' 0 '1 script(s) scanned, 0 exemption(s)'
   run_scenario 'rationale-bearing exemption is counted, not flagged' \
     'good-exempted' 0 '1 script(s) scanned, 1 exemption(s)'
+  # The marker word appears on the exit line, but only inside a sentence
+  # describing the escape hatch — it never opens the comment, so it must
+  # not be read as taking the exemption.
+  run_scenario 'a marker quoted in prose on the exit line is not an exemption' \
+    'bad-prose-marker' 1 'bad-prose-marker/scripts/reads-input.sh:8: exits 1 inside a guard'
   # An empty rationale is its own finding: silently honoring it would
   # make the marker a way to opt out of stating a reason.
   run_scenario 'exemption without a rationale is a hit' \

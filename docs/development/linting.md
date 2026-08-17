@@ -328,8 +328,15 @@ Matching is by command position, so prose naming the command — a
 comment, a parenthetical, a string operand — is never a hit. The one
 sanctioned bare invocation lives in `scripts/lib/temp.sh`, which the rule
 skips by basename. A call whose failure genuinely is the finding opts out
-with an inline `# exit-code-exempt: <rationale>`; the rationale must be
-non-empty, and a clean run prints the exemption count. Full rationale:
+with an inline `# exit-code-exempt: <rationale>`, which has to open the
+comment — a sentence merely naming the marker is prose about the rule,
+not a use of it, and excuses nothing; the rationale must be non-empty,
+and a clean run prints the exemption count. Matching anchors to the
+line's first `#`, so any earlier `#` on the line — inside a string, a
+`${x#y}` expansion, or anywhere else, whatever produced it — can hide a
+genuine trailing marker — the miss reports the site rather than
+silently excusing it, the safe direction for this lint to fail in. Full
+rationale:
 [Workflow hardening → guard-exit-code](../security/workflow-hardening.md#guard-exit-code).
 
 ## Glob-driven scan breadth
@@ -361,10 +368,11 @@ and a pattern handed to `glob_into` is an argument of a call expression
 rather than a loop item, so a compliant call site cannot false-hit. A
 loop whose empty match set genuinely is the normal state — sweeping a
 leftover scratch file, say — opts out with an inline
-`# glob-exempt: <rationale>` on the line above; the rationale must be
-non-empty, the marker word is keyed to the kind of site so the sibling
-`# enumerate-exempt:` excuses nothing here, and a clean run prints the
-exemption count. Full rationale:
+`# glob-exempt: <rationale>` on the line above; the marker has to open
+the comment — a sentence naming it is prose, not an exemption — the
+rationale must be non-empty, the marker word is keyed to the kind of
+site so the sibling `# enumerate-exempt:` excuses nothing here, and a
+clean run prints the exemption count. Full rationale:
 [Workflow hardening → enumerate-helper-required](../security/workflow-hardening.md#enumerate-helper-required).
 
 ## Filter-narrowed scan breadth
@@ -397,9 +405,10 @@ legal without a marker — the rule tests position, not purpose. The two
 live examples guard a job-count assertion (`check-egress-allowlist.sh`)
 and a reverse allowlist-staleness pass (`check-permission-scopes.sh`).
 Either banned shape opts out with an inline `# filter-exempt: <rationale>`
-on the line above; the rationale must be non-empty, the marker word is
-keyed to this shape so neither sibling marker excuses it, and a clean run
-prints the exemption count. Full rationale:
+on the line above; the marker has to open the comment — a sentence
+naming it is prose, not an exemption — the rationale must be non-empty,
+the marker word is keyed to this shape so neither sibling marker
+excuses it, and a clean run prints the exemption count. Full rationale:
 [Workflow hardening → enumerate-helper-required](../security/workflow-hardening.md#enumerate-helper-required).
 
 A filter read reached only through a function a loop calls, or laundered
