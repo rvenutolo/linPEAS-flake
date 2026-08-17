@@ -402,8 +402,21 @@ def producer_of(args):
 # is selected by the `Hash` position it carries rather than by a `Text`
 # key: an empty `#` line has no `Text` at all, and a selector keyed on
 # the text would drop it from a census that has to see every comment.
+#
+# The text is emitted as-is, tab and newline included. A tab survives
+# the tab-delimited shell read below intact: what is the last variable
+# that read assigns, and a read with fewer names than fields hands the
+# whole remainder — every embedded delimiter included — to the last
+# one. A newline can appear too, when a comment line ends in a
+# trailing backslash; shfmt embeds that backslash and the terminating
+# newline into the same Text field rather than treating the next line
+# as a continuation. That newline still ends the shell read early, but
+# only after the marker word and its rationale, so the truncated
+# record is read complete and the resulting blank continuation record
+# is skipped by the zero-length verdict guard the loop below already
+# has.
 | [.. | objects | select(has("Hash"))
-    | "cmt\t\(.Pos.Line)\t\(.Pos.Col)\t\((.Text // "") | gsub("\t"; " ") | gsub("\n"; " "))"] as $comments
+    | "cmt\t\(.Pos.Line)\t\(.Pos.Col)\t\(.Text // "")"] as $comments
 
 | ($comments + $direct + $standalone + $glob_calls + $glob_loops + $glob_arrays + $filter_ok + $filter_in_loops + $filter_missing)[]
 '
@@ -523,7 +536,7 @@ for f in "${paths[@]}"; do
     while ((probe >= 1)); do
       comment_text="${COMMENT_TEXT[${probe}]:-}"
       trimmed="${comment_text#"${comment_text%%[![:space:]]*}"}"
-      if [[ -n ${comment_text} && ${trimmed} == "${marker_word}:"* ]]; then
+      if [[ ${trimmed} == "${marker_word}:"* ]]; then
         marker_line="${probe}"
         rationale="${trimmed#"${marker_word}":}"
         # Trim surrounding whitespace without invoking anything.

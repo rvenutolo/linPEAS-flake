@@ -138,6 +138,30 @@ run_expect 'all-good-glob-shapes' \
 expect good-glob-array-exempt.sh 0 \
   '1 file(s) scanned, 1 scan site(s) classified, 1 exemption(s)'
 
+# @description Two edge cases in how this lint's own comment record is
+# read, merged into one run so the combined tally discriminates from
+# every single-file clean summary above. good-glob-exempt-tab-rationale.sh
+# carries a rationale with a literal tab right after the marker word:
+# the comment record this lint emits is itself a TAB-separated field,
+# and that tab lands in the last variable of the shell's own
+# `IFS=$'\t' read -r verdict line col what`, which absorbs the rest of
+# the record whole, so the marker is still recognized and the
+# rationale still non-empty.
+# good-glob-exempt-backslash-continuation.sh's marker line ends in a
+# trailing backslash, which gets a `shfmt` comment node whose own Text
+# embeds that backslash and the newline terminating it, rather than
+# reading as continued into the next comment line; the embedded
+# newline ends the shell `read` that parses this lint's own comment
+# record early, but only after the marker word and its rationale, so
+# the exemption is still recognized. Alone, each of these two prints
+# the same single-file clean summary `good-glob-array-exempt.sh`
+# already asserts above; merged, the two-file, two-exemption tally is
+# what proves both were read as marker lines rather than one masking
+# the other.
+run_expect 'good-glob-exempt-comment-record-edge-cases' \
+  "${FIXTURES}/good-glob-exempt-tab-rationale.sh"$'\n'"${FIXTURES}/good-glob-exempt-backslash-continuation.sh" \
+  0 '2 file(s) scanned, 2 scan site(s) classified, 2 exemption(s)'
+
 # @description The negative the whole rule rests on. Patterns reach
 # `glob_into` as quoted strings and are expanded inside the helper, so a
 # metacharacter inside quotes is not a scan whose breadth went
