@@ -150,25 +150,41 @@ function report(kind, ln, detail, gline) {
   printf "%s\t%d\t%d\t%s\n", kind, ln, gline, detail
 }
 
+# Whether a line carries the exit-code-exempt marker, opening its own
+# comment. Everything up to and including the first `#` is dropped and
+# the remainder must begin with the marker word: a sentence that merely
+# names the marker — a comment describing the escape hatch, say — leaves
+# other words in front of it and is prose about the rule rather than a
+# use of it, so it excuses nothing. Any earlier `#` on the line, whatever
+# produced it — a `${x#y}` expansion, a `#` inside a string, or anything
+# else — makes this miss a real trailing marker, which reports the site
+# instead of excusing it: the safe direction, and visible rather than
+# silent.
+#
+# This is the one predicate both classify() and the marker census below
+# call, so the two cannot drift apart: a marker classify() cannot see —
+# because an earlier `#` truncated the match — is a marker the census
+# cannot see either, and is therefore never reported as an orphan on top
+# of being missed as an exemption. `marker_after` is a global side
+# channel carrying the matched text back to the caller, since an awk
+# function returns one value and classify() still needs the substring
+# past the marker word to read the rationale.
+function marker_open(text) {
+  marker_after = text
+  return sub(/^[^#]*#/, "", marker_after) && match(marker_after, /^[ \t]*exit-code-exempt:/)
+}
+
 # Route one flagged line through the exit-code-exempt marker: a marker
 # carrying a rationale is tallied as an exemption, an empty one is its
 # own finding, and an unmarked line is the hit. Both rules below share
 # this, so the marker means the same thing wherever it sits and neither
-# rule can drift into honoring an empty rationale on its own.
-#
-# The marker has to OPEN the comment on its line: everything up to and
-# including the first `#` is dropped and the remainder must begin with
-# the marker word. A sentence that merely names the marker — a comment
-# describing the escape hatch, say — leaves other words in front of it
-# and is prose about the rule rather than a use of it, so it excuses
-# nothing. Any earlier `#` on the line, whatever produced it — a
-# `${x#y}` expansion, a `#` inside a string, or anything else — makes
-# this miss a real trailing marker, which reports the site instead of
-# excusing it: the safe direction, and visible rather than silent.
-function classify(hitkind, norkind, ln, detail, text, gline,   rest, after) {
-  after = text
-  if (sub(/^[^#]*#/, "", after) && match(after, /^[ \t]*exit-code-exempt:/)) {
-    rest = substr(after, RLENGTH + 1)
+# rule can drift into honoring an empty rationale on its own. A line
+# whose marker is read here is also marked consumed, so the census below
+# does not report it a second time as excusing nothing.
+function classify(hitkind, norkind, ln, detail, text, gline,   rest) {
+  if (marker_open(text)) {
+    marker_used[ln] = 1
+    rest = substr(marker_after, RLENGTH + 1)
     rest = trim(rest)
     if (rest == "") {
       report(norkind, ln, detail, gline)
@@ -240,6 +256,18 @@ BEGIN {
 
 {
   line = $0
+
+  # Every line whose comment opens with the marker word, recorded as the
+  # file is read and ahead of the mode branches below that `next` past a
+  # line once they have consumed it — a marker can sit on a line no guard
+  # shape ever visits, so the census has to see every line, not only the
+  # ones a hit or a bare mktemp already walks. The subtraction at END is
+  # what turns a marker the rules never consumed into a finding: this
+  # marker is a trailing comment on the guard line itself, so one written
+  # a line off, or left behind when a guard was rewritten, reaches
+  # nothing at all.
+  if (marker_open($0)) marker_lines[FNR] = 1
+
   # Whole-line comments are blanked, keeping the line count intact, so a
   # header that names a banned shape is not read as that shape.
   if (line ~ /^[ \t]*#/) line = ""
@@ -302,10 +330,22 @@ BEGIN {
     next
   }
 }
+
+# One record per marker the classification pass above never consumed:
+# a marker read as it went by, but no exit-line or bare-mktemp branch
+# ever routed it through classify() to mark it used.
+END {
+  for (ln in marker_lines) {
+    if (!(ln in marker_used)) {
+      report("orphan", ln, "", 0)
+    }
+  }
+}
 '
 
 failed=0
 exempted=0
+orphans=0
 scanned=0
 shopt -s nullglob globstar
 # `globstar` is set here and left set across the call, so the pattern keeps
@@ -352,15 +392,26 @@ for f in "${repo_scripts[@]}"; do
     exempt)
       exempted=$((exempted + 1))
       ;;
+    orphan)
+      printf '%s:%s: exit-code-exempt marker excuses no site this rule matches; a marker protecting nothing keeps asserting a decision the lint no longer honors — move it onto the site it was written for, or delete it\n' \
+        "${f}" "${exit_line}" >&2
+      orphans=$((orphans + 1))
+      ;;
     esac
   done <<<"${findings}"
 done
 shopt -u nullglob globstar
 
-if ((failed > 0)); then
-  printf '%d site(s) reporting a could-not-run on the wrong side of the exit-code convention\n' "${failed}" >&2
+if ((failed > 0 || orphans > 0)); then
+  if ((failed > 0)); then
+    printf '%d site(s) reporting a could-not-run on the wrong side of the exit-code convention\n' "${failed}" >&2
+  fi
+  if ((orphans > 0)); then
+    printf '%d exemption marker(s) that excuse nothing\n' "${orphans}" >&2
+  fi
   exit 1
 fi
 
-printf 'guard-exit-code: %d script(s) scanned, %d exemption(s)\n' "${scanned}" "${exempted}"
+printf 'guard-exit-code: %d script(s) scanned, %d exemption(s), %d orphan marker(s)\n' \
+  "${scanned}" "${exempted}" "${orphans}"
 exit 0
