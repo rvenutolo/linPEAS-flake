@@ -17,8 +17,10 @@
 # that site's normal state. A filter-driven scan narrows an
 # already-enumerated set through `filter_into` — a `*_FILTER` variable
 # may be read at file scope to reach that call, but not again inside a
-# `for` or `while` loop over the narrowed selection, and not at all in a
-# file that never calls `filter_into`, unless an inline
+# `for` or `while` loop over the narrowed selection, nor in a function
+# that loop calls — one hop out; a function called only by that function
+# still evades and stays outside what this pass decides — and not at all
+# in a file that never calls `filter_into`, unless an inline
 # `# filter-exempt: <rationale>` marker says the direct read is
 # deliberate. Those three are the positions a single pass over the tree
 # decides; a pattern that reaches a scan by any other route is outside
@@ -52,8 +54,9 @@
 # globbing: `filter_into` narrows a set the other two helpers already
 # proved non-empty, and it is the one place that narrowing's own
 # cardinality is asserted. A loop that reads the raw `*_FILTER` variable
-# again, instead of trusting the selection `filter_into` handed back,
-# re-applies the filter test outside the helper. Whether that second
+# again — directly in its own body, or one hop out in a function the loop
+# calls by name — instead of trusting the selection `filter_into` handed
+# back, re-applies the filter test outside the helper. Whether that second
 # application runs over the narrowed selection — where it is merely
 # redundant, since every path there already matched — or over a set the
 # helper never narrowed is not decidable at the read site, and the
@@ -215,6 +218,7 @@ readonly GLOB_WHAT='glob loop'
 readonly GLOB_ARRAY_WHAT='glob array assignment'
 readonly FILTER_WHAT='filter selection'
 readonly FILTER_LOOP_WHAT='filter read in a loop'
+readonly FILTER_FUNC_WHAT='filter read in a function a loop calls'
 readonly FILTER_MISSING_WHAT='filter read without the helper'
 # shellcheck disable=SC2016 # jq program literal; $-prefixed names are jq variables, not shell
 readonly JQ_PROG='
@@ -386,6 +390,29 @@ def producer_of(args):
         | select(.Type == "ForClause" or .Type == "WhileClause")] | length) > 0)
     | {from: .Pos.Offset, to: .End.Offset}]) as $loops
 
+# Function bodies a loop reaches in ONE hop: a FuncDecl whose name appears
+# as a literal command word inside the extent of some loop. A read in such
+# a body re-applies the filter test where the loop consumes it, exactly as
+# a read written inline would, and by position alone it sits at file scope
+# — so the position rule has to follow the call to stay true to what it
+# claims.
+#
+# One hop, deliberately, not a transitive closure: a function called only
+# by another function a loop calls still sits outside every extent and
+# still evades. The rule is stated no wider than it reaches, in the header
+# comment above and in the invariant entry, because a reader who assumes
+# total coverage resolves the difference by trusting the wrong half.
+| [.. | objects | select(.Type == "CallExpr")
+    | select(((.Args // []) | length) > 0)
+    | . as $c
+    | ($c.Args[0] | literal_word_text) as $w
+    | select($w != null)
+    | select(([$loops[] | select($c.Pos.Offset >= .from and $c.Pos.Offset < .to)] | length) > 0)
+    | $w] as $loop_called
+| [$funcs[]
+    | select(.name as $n | $loop_called | index($n) != null)
+    | {from: .from, to: .to}] as $hop_bodies
+
 | [.. | objects | select(.Type == "CallExpr")
     | select(((.Args // []) | length) > 0)
     | select((.Args[0] | literal_word_text) == "filter_into")] as $filter_calls
@@ -406,6 +433,15 @@ def producer_of(args):
 | [$filter_reads[] | . as $r
     | select(([$loops[] | select($r.Pos.Offset >= .from and $r.Pos.Offset < .to)] | length) > 0)
     | "bad\t\($r.Pos.Line)\t\($r.Pos.Col)\t\($filter_loop_what)"] as $filter_in_loops
+
+# A read inside a hop-reached body that is not already inside the own
+# extent of the loop. The two sets are kept apart rather than merged so
+# the message can name the function shape: a reader told to look inside
+# the loop body will not find the read there.
+| [$filter_reads[] | . as $r
+    | select(([$loops[] | select($r.Pos.Offset >= .from and $r.Pos.Offset < .to)] | length) == 0)
+    | select(([$hop_bodies[] | select($r.Pos.Offset >= .from and $r.Pos.Offset < .to)] | length) > 0)
+    | "bad\t\($r.Pos.Line)\t\($r.Pos.Col)\t\($filter_func_what)"] as $filter_in_funcs
 
 | (if (($filter_reads | length) > 0) and (($filter_calls | length) == 0)
     then [$filter_reads[0] | "bad\t\(.Pos.Line)\t\(.Pos.Col)\t\($filter_missing_what)"]
@@ -432,7 +468,7 @@ def producer_of(args):
 | [.. | objects | select(has("Hash"))
     | "cmt\t\(.Pos.Line)\t\(.Pos.Col)\t\(.Text // "")"] as $comments
 
-| ($comments + $direct + $standalone + $glob_calls + $glob_loops + $glob_arrays + $filter_ok + $filter_in_loops + $filter_missing)[]
+| ($comments + $direct + $standalone + $glob_calls + $glob_loops + $glob_arrays + $filter_ok + $filter_in_loops + $filter_in_funcs + $filter_missing)[]
 '
 
 # The exemption marker word each rule answers to, keyed by the record's
@@ -470,6 +506,7 @@ declare -A MARKER_BY_WHAT=(
   ["${GLOB_ARRAY_WHAT}"]="${MARKER_GLOB}"
   ["${FILTER_WHAT}"]="${MARKER_FILTER_WORD}"
   ["${FILTER_LOOP_WHAT}"]="${MARKER_FILTER_WORD}"
+  ["${FILTER_FUNC_WHAT}"]="${MARKER_FILTER_WORD}"
   ["${FILTER_MISSING_WHAT}"]="${MARKER_FILTER_WORD}"
 )
 readonly MARKER_BY_WHAT
@@ -505,7 +542,8 @@ for f in "${paths[@]}"; do
   records=""
   if ! records="$(jq --raw-output --arg glob_what "${GLOB_WHAT}" \
     --arg glob_array_what "${GLOB_ARRAY_WHAT}" --arg filter_what "${FILTER_WHAT}" \
-    --arg filter_loop_what "${FILTER_LOOP_WHAT}" --arg filter_missing_what "${FILTER_MISSING_WHAT}" \
+    --arg filter_loop_what "${FILTER_LOOP_WHAT}" --arg filter_func_what "${FILTER_FUNC_WHAT}" \
+    --arg filter_missing_what "${FILTER_MISSING_WHAT}" \
     "${JQ_PROG}" <<<"${ast_json}")"; then
     printf '%s: jq failed walking the parsed syntax tree\n' "${f}" >&2
     exit 2
@@ -597,6 +635,10 @@ for f in "${paths[@]}"; do
       ;;
     "${FILTER_LOOP_WHAT}")
       printf '%s:%s:%s: this loop reads a filter variable directly; that re-applies the filter test outside filter_into, and whether it runs over the already-narrowed selection or a set filter_into never narrowed cannot be told apart here — narrow the scan set with filter_into, which asserts the selection is not empty\n' \
+        "${f}" "${line}" "${col}" >&2
+      ;;
+    "${FILTER_FUNC_WHAT}")
+      printf '%s:%s:%s: this filter read sits in a function a loop calls; the loop consumes the read as if it were written inline, and whether it runs over the already-narrowed selection or a set filter_into never narrowed cannot be told apart here — narrow the scan set with filter_into, which asserts the selection is not empty\n' \
         "${f}" "${line}" "${col}" >&2
       ;;
     "${FILTER_MISSING_WHAT}")

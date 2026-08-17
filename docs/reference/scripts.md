@@ -325,8 +325,10 @@ inline `# glob-exempt: <rationale>` marker says an empty match set is
 that site's normal state. A filter-driven scan narrows an
 already-enumerated set through `filter_into` — a `*_FILTER` variable
 may be read at file scope to reach that call, but not again inside a
-`for` or `while` loop over the narrowed selection, and not at all in a
-file that never calls `filter_into`, unless an inline
+`for` or `while` loop over the narrowed selection, nor in a function
+that loop calls — one hop out; a function called only by that function
+still evades and stays outside what this pass decides — and not at all
+in a file that never calls `filter_into`, unless an inline
 `# filter-exempt: <rationale>` marker says the direct read is
 deliberate. Those three are the positions a single pass over the tree
 decides; a pattern that reaches a scan by any other route is outside
@@ -359,8 +361,9 @@ A filter-driven scan fails a third way, one layer past enumeration and
 globbing: `filter_into` narrows a set the other two helpers already
 proved non-empty, and it is the one place that narrowing's own
 cardinality is asserted. A loop that reads the raw `*_FILTER` variable
-again, instead of trusting the selection `filter_into` handed back,
-re-applies the filter test outside the helper. Whether that second
+again — directly in its own body, or one hop out in a function the loop
+calls by name — instead of trusting the selection `filter_into` handed
+back, re-applies the filter test outside the helper. Whether that second
 application runs over the narrowed selection — where it is merely
 redundant, since every path there already matched — or over a set the
 helper never narrowed is not decidable at the read site, and the
