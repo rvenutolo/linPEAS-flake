@@ -292,6 +292,88 @@ run_expect 'good-filter-chain-shapes' \
 expect good-filter-exempt.sh 0 \
   '1 file(s) scanned, 2 scan site(s) classified, 1 exemption(s)'
 
+# @description A marker on a file holding no site of its kind excuses
+# nothing and is reported rather than counted. The scan-site tally is zero
+# here, so the documented empty-scan valve is set: the orphan report is
+# the finding, not the absence of scans.
+function expect_orphan_no_site() {
+  local -r name='orphan-marker-no-site'
+  local -r want_msg='bad-orphan-glob-marker.sh:9: glob-exempt marker excuses no site this rule matches'
+  local out_file err_file outcome_file got_exit=0
+  out_file="$(mktemp)"
+  err_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  LINT_ALLOW_EMPTY_SCAN=1 PATHS_OVERRIDE="${FIXTURES}/bad-orphan-glob-marker.sh" \
+    "${SCRIPT}" >"${out_file}" 2>"${err_file}" || got_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${want_msg}" "${outcome_file}" "${out_file}" "${err_file}"
+
+  if [[ ${got_exit} != 1 ]]; then
+    fail "$(printf '%s: exit %s, want 1' "${name}" "${got_exit}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  elif ! grep --fixed-strings --quiet -- "${want_msg}" "${out_file}" "${err_file}"; then
+    fail "$(printf '%s: output missing %q' "${name}" "${want_msg}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  else
+    pass "${name}"
+  fi
+  rm --force -- "${out_file}" "${err_file}" "${outcome_file}"
+}
+
+expect_orphan_no_site
+
+# @description A marker one blank line above its site reaches nothing,
+# which is the case a per-file predicate cannot see: the file does hold a
+# site of exactly that kind. Both findings come from the same invocation,
+# so they are asserted on one record via harness_assert_also rather than
+# as two separate `expect` calls: driving the script twice against the
+# same fixture would produce two byte-identical records asserting
+# different substrings, which is exactly the collapsed-coverage shape the
+# discrimination gate exists to catch. Asserting both substrings here
+# still proves the orphan arm and the loop arm fire together from one run
+# rather than one masking the other.
+function expect_orphan_off_by_one() {
+  local -r name='bad-orphan-marker-off-by-one.sh'
+  local -r orphan_msg='bad-orphan-marker-off-by-one.sh:9: glob-exempt marker excuses no site this rule matches'
+  local -r loop_msg='bad-orphan-marker-off-by-one.sh:11:1: this for loop iterates a glob directly'
+  local out_file err_file outcome_file got_exit=0
+  out_file="$(mktemp)"
+  err_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  PATHS_OVERRIDE="${FIXTURES}/bad-orphan-marker-off-by-one.sh" \
+    "${SCRIPT}" >"${out_file}" 2>"${err_file}" || got_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${orphan_msg}" "${outcome_file}" "${out_file}" "${err_file}"
+  harness_assert_also "${loop_msg}"
+
+  if [[ ${got_exit} != 1 ]]; then
+    fail "$(printf '%s: exit %s, want 1' "${name}" "${got_exit}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  elif ! grep --fixed-strings --quiet -- "${orphan_msg}" "${out_file}" "${err_file}"; then
+    fail "$(printf '%s: output missing the orphan diagnostic' "${name}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  elif ! grep --fixed-strings --quiet -- "${loop_msg}" "${out_file}" "${err_file}"; then
+    fail "$(printf '%s: output missing the glob-loop diagnostic' "${name}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  else
+    pass "${name}"
+  fi
+  rm --force -- "${out_file}" "${err_file}" "${outcome_file}"
+}
+
+expect_orphan_off_by_one
+
+# @description The orphan census's own breadth. A clean file prints the
+# count it checked rather than staying silent, so a census that stopped
+# running is visible here instead of being indistinguishable from a tree
+# with no stale marker in it. good-glob-exempt.sh, the fixture the plan
+# for this scenario names, ties good-glob-array-exempt.sh's tally
+# byte-for-byte once the new field is appended (1/1/1/0 either way), so
+# good-glob-arg-only.sh stands in: its two-site tally is unique across
+# every scenario already asserted in this file.
+expect good-glob-arg-only.sh 0 \
+  '1 file(s) scanned, 2 scan site(s) classified, 0 exemption(s), 0 orphan marker(s)'
+
 # @description The producer tally is its own breadth assertion, separate
 # from the file enumeration: a real file can be scanned and yield no
 # producer at all. That has to be a could-not-run rather than the clean

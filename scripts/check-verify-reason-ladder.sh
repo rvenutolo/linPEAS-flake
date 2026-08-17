@@ -42,6 +42,19 @@
 # `name:` line, or anywhere else in the step is not seen. The rationale
 # after the colon must be non-empty.
 #
+# A marker excuses nothing in two shapes, both reported as drift rather
+# than silently accepted. On a step id already referenced by a
+# `steps.<id>.outcome` entry in the attribution env, assertion 1 would
+# have passed that step whether or not the marker existed. On the
+# attribution step's own `id:` line, assertion 1 skips it
+# unconditionally, so a marker there changes nothing it could exempt.
+# Unlike this lint's sibling exemption markers, this one sits on an
+# `id:` line, so it always names a step that genuinely exists in the
+# job — there is no shape here where a marker is attached to no site at
+# all, only one attached to a site assertion 1 was never going to flag.
+# Neither shape adds a tally to the clean summary line; it stays the
+# same three-count line it always was.
+#
 # See docs/security/verification.md.
 #
 # Env overrides (test-only):
@@ -50,7 +63,8 @@
 #
 # Exit codes:
 #   0  all four assertions hold
-#   1  drift detected (details printed to stderr)
+#   1  drift detected, including a reason-ladder-exempt marker that
+#      excuses nothing (details printed to stderr)
 #   2  missing yq / missing input file / unparsable workflow
 
 set -Eeuo pipefail
@@ -147,6 +161,7 @@ done <<<"${step_ids}"
 # counts, which keeps the exemption visually attached to the step it
 # exempts.
 declare -A EXEMPT=()
+declare -A EXEMPT_LINE=()
 # The scan is captured so awk's exit status reaches this shell: a process
 # substitution runs in its own subshell, so a dead awk would hand the loop
 # an empty stream and every exemption marker in the file would go unread.
@@ -159,14 +174,14 @@ if ! exempt_rows="$(awk -v marker="${EXEMPT_MARKER}" '
     rationale = line
     sub(("^.*" marker "[[:space:]]*"), "", rationale)
     sub(/[[:space:]]+$/, "", rationale)
-    printf "%s\t%s\n", id, rationale
+    printf "%s\t%s\t%d\n", id, rationale, FNR
   }
 ' "$(awk_path "${WORKFLOW}")")"; then
   printf '%s: awk failed scanning for reason-ladder-exempt markers\n' \
     "${WORKFLOW}" >&2
   exit 2
 fi
-while IFS=$'\t' read -r id rationale; do
+while IFS=$'\t' read -r id rationale marker_line; do
   [[ -z ${id} ]] && continue
   if [[ -z ${rationale} ]]; then
     printf '%s: reason-ladder-exempt marker on step id %q carries no rationale\n' \
@@ -175,6 +190,7 @@ while IFS=$'\t' read -r id rationale; do
     continue
   fi
   EXEMPT["${id}"]=1
+  EXEMPT_LINE["${id}"]="${marker_line}"
 done <<<"${exempt_rows}"
 
 # --- attribution env block -------------------------------------------
@@ -218,6 +234,26 @@ done <<<"${env_rows}"
 if ((bad_env_name)); then
   exit 1
 fi
+
+# A reason-ladder-exempt marker excuses nothing in two different shapes.
+# Unlike its sibling lints, this marker always names a real step, so
+# either shape is an unearned exemption rather than one attached to no
+# site — the same drift, reported with the reason that actually applies
+# to the step the marker sits on rather than one sentence doing duty for
+# both: the two shapes are true for different reasons, and a marker on
+# the attribution step is never also read by that step's own env block,
+# so a single sentence claiming both would be false for one of them.
+for id in "${!EXEMPT[@]}"; do
+  if [[ -n ${REFERENCED[${id}]:-} ]]; then
+    printf '%s:%s: reason-ladder-exempt marker on step id %q excuses nothing; the attribution env already reads this step, so assertion 1 would have passed it whether or not the marker were there — delete it\n' \
+      "${WORKFLOW}" "${EXEMPT_LINE[${id}]}" "${id}" >&2
+    drift=1
+  elif [[ ${id} == "${ATTRIBUTE_ID}" ]]; then
+    printf '%s:%s: reason-ladder-exempt marker on step id %q excuses nothing; assertion 1 skips the attribution step unconditionally, so an exemption on it changes nothing — delete it\n' \
+      "${WORKFLOW}" "${EXEMPT_LINE[${id}]}" "${id}" >&2
+    drift=1
+  fi
+done
 
 # --- assertion 1: coverage -------------------------------------------
 for id in "${steps[@]}"; do

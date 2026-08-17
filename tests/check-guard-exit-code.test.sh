@@ -84,8 +84,10 @@ function main() {
   # make the marker a way to opt out of stating a reason.
   run_scenario 'exemption without a rationale is a hit' \
     'bad-exemption-no-rationale' 1 'marker carries no rationale'
+  # The full summary line, orphan field included, so a census that stopped
+  # running is a missing substring here rather than a silent pass.
   run_scenario 'guards already exiting 2 pass' \
-    'good-clean' 0 '2 script(s) scanned, 0 exemption(s)'
+    'good-clean' 0 '2 script(s) scanned, 0 exemption(s), 0 orphan marker(s)'
   # The violation sits under lib/ beside a clean top-level script, so a
   # scan that stops at the root still reads a file and reports nothing.
   # The asserted path is what discriminates this from the tool-guard
@@ -114,6 +116,12 @@ function main() {
   # command without running it.
   run_scenario 'prose naming the temp-file command is not a hit' \
     'good-mktemp-prose' 0 '4 script(s) scanned, 0 exemption(s)'
+  # The marker sits on a line no guard shape reaches at all — an orphan
+  # from birth, not one a rewrite left behind — so it is reported rather
+  # than silently ignored.
+  run_scenario 'a marker on a line with no guard is an orphan' \
+    'bad-orphan-marker' 1 \
+    'bad-orphan-marker/scripts/no-guard.sh:7: exit-code-exempt marker excuses no site this rule matches'
 
   harness_assert_verify || failures=$((failures + 1))
 
