@@ -540,9 +540,16 @@ including a parenthetical, is not a hit.
 Escape hatch: `# exit-code-exempt: <rationale>`, on the exit line of a
 guard whose missing input genuinely IS the finding, or on the line of a
 bare temp-file creation whose failure IS the finding. The marker has
-to open the comment, so prose naming it exempts nothing, and the
-rationale has to be non-empty. A clean run prints the exemption count,
-so the exempt set is stated rather than open-ended.
+to open the comment — matching drops everything up to and including
+the line's first `#` and requires the remainder to begin with the
+marker word, so prose naming it exempts nothing — and the rationale
+has to be non-empty. A `#` inside an earlier parameter expansion on
+the same line (`t="${d#pfx-}"; exit 1 # exit-code-exempt: <why>`) is
+read as that first `#`, so a genuine trailing marker can be missed;
+the miss reports the site as a hit rather than silently excusing it,
+which is the direction this lint is safe to fail in. A clean run
+prints the exemption count, so the exempt set is stated rather than
+open-ended.
 
 The scan recurses. The shared libraries under `scripts/lib/` decide
 which exit code their callers report — `enumerate_into` is where a

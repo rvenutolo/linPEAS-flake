@@ -413,7 +413,10 @@ def producer_of(args):
 # block above it, must open the comment so prose naming it exempts
 # nothing, and its rationale must be non-empty — an empty one is drift,
 # not an exemption, exactly as the sibling exit-code and patch-tag
-# markers treat it.
+# markers treat it. What "open the comment" means is decided from the
+# syntax tree rather than the raw line: the comment's text is the
+# `Text` a `shfmt --to-json` `Comment` node carries, and the marker word
+# has to be the first thing in that text.
 readonly MARKER_ENUMERATE='enumerate-exempt'
 readonly MARKER_GLOB='glob-exempt'
 # Named MARKER_FILTER_WORD rather than MARKER_FILTER: the filter rule's
