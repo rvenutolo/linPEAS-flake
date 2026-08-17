@@ -391,6 +391,143 @@ else
   cat -- "${work}/glob-globstar-unset.out" "${work}/glob-globstar-unset.err" >&2
 fi
 
+# 16. filter-selects-one — three paths, filtering on one basename selects
+# exactly the path with that basename.
+# shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
+run_scenario 'filter-selects-one' 'selone=1' '
+declare -a out=()
+filter_into out "filter-selects-one probe" "b.yml" "a.yml" "b.yml" "c.yml"
+printf "selone=%d\n" "${#out[@]}"
+declare -p out
+'
+harness_assert_also '[0]="b.yml"'
+if [[ ${rc} -eq 0 ]] &&
+  grep --fixed-strings --quiet -- 'selone=1' "${work}/filter-selects-one.out" &&
+  grep --fixed-strings --quiet -- '[0]="b.yml"' "${work}/filter-selects-one.out"; then
+  pass 'filter-selects-one: a matching basename selects exactly that path, exit 0'
+else
+  fail "filter-selects-one: expected one selected element, got exit ${rc}"
+  cat -- "${work}/filter-selects-one.out" "${work}/filter-selects-one.err" >&2
+fi
+
+# 17. filter-identity-empty-value — an empty filter value selects every
+# input path, in input order.
+# shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
+run_scenario 'filter-identity-empty-value' 'identity=3' '
+declare -a out=()
+filter_into out "filter-identity-empty-value probe" "" "a.yml" "b.yml" "c.yml"
+printf "identity=%d\n" "${#out[@]}"
+declare -p out
+'
+harness_assert_also '[0]="a.yml" [1]="b.yml" [2]="c.yml"'
+if [[ ${rc} -eq 0 ]] &&
+  grep --fixed-strings --quiet -- 'identity=3' "${work}/filter-identity-empty-value.out" &&
+  grep --fixed-strings --quiet -- '[0]="a.yml" [1]="b.yml" [2]="c.yml"' \
+    "${work}/filter-identity-empty-value.out"; then
+  pass 'filter-identity-empty-value: an empty filter value selects every input path, exit 0'
+else
+  fail "filter-identity-empty-value: expected all three paths selected, got exit ${rc}"
+  cat -- "${work}/filter-identity-empty-value.out" "${work}/filter-identity-empty-value.err" >&2
+fi
+
+# 18. filter-selects-nothing — a filter value naming no path in the input
+# set is exit 2, not the silent clean-tree line an empty loop body would
+# otherwise produce.
+# shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
+run_scenario 'filter-selects-nothing' 'selected 0 of' '
+declare -a out=()
+filter_into out "filter-selects-nothing probe" "no-such.yml" "a.yml" "b.yml" "c.yml"
+printf "unreached=%d\n" "${#out[@]}"
+'
+harness_assert_also 'filter no-such.yml selected 0 of 3 files for filter-selects-nothing probe'
+harness_assert_also 'LINT_ALLOW_EMPTY_SCAN=1 if this is deliberate'
+if [[ ${rc} -eq 2 ]] &&
+  grep --fixed-strings --quiet -- 'filter no-such.yml selected 0 of 3 files for filter-selects-nothing probe' \
+    "${work}/filter-selects-nothing.err"; then
+  pass 'filter-selects-nothing: a filter matching nothing is exit 2, stderr names the filter, count and label'
+else
+  fail "filter-selects-nothing: expected exit 2 + filter/count/label in stderr, got exit ${rc}"
+  cat -- "${work}/filter-selects-nothing.out" "${work}/filter-selects-nothing.err" >&2
+fi
+
+# 19. filter-empty-input-set — an empty filter value against no input
+# paths is exit 2 naming the empty input set, distinct from a filter that
+# matched nothing against a non-empty input set.
+# shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
+run_scenario 'filter-empty-input-set' 'the input scan set was empty' '
+declare -a out=()
+filter_into out "filter-empty-input-set probe" ""
+printf "unreached=%d\n" "${#out[@]}"
+'
+harness_assert_also 'selected 0 files for filter-empty-input-set probe'
+harness_assert_also 'LINT_ALLOW_EMPTY_SCAN=1 if this is deliberate'
+if [[ ${rc} -eq 2 ]] &&
+  grep --fixed-strings --quiet -- 'selected 0 files for filter-empty-input-set probe' \
+    "${work}/filter-empty-input-set.err" &&
+  grep --fixed-strings --quiet -- 'the input scan set was empty' \
+    "${work}/filter-empty-input-set.err"; then
+  pass 'filter-empty-input-set: an empty input scan set is exit 2, stderr names the empty-input cause'
+else
+  fail "filter-empty-input-set: expected exit 2 + empty-input-set message, got exit ${rc}"
+  cat -- "${work}/filter-empty-input-set.out" "${work}/filter-empty-input-set.err" >&2
+fi
+
+# 20. filter-empty-allowed — the same filter matching nothing, opted out
+# via LINT_ALLOW_EMPTY_SCAN, is exit 0 with an empty array.
+# shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
+run_scenario 'filter-empty-allowed' 'filternone=0' '
+export LINT_ALLOW_EMPTY_SCAN=1
+declare -a out=()
+filter_into out "filter-empty-allowed probe" "no-such.yml" "a.yml" "b.yml" "c.yml"
+printf "filternone=%d\n" "${#out[@]}"
+declare -p out
+'
+if [[ ${rc} -eq 0 ]] &&
+  grep --fixed-strings --quiet -- 'filternone=0' "${work}/filter-empty-allowed.out"; then
+  pass 'filter-empty-allowed: LINT_ALLOW_EMPTY_SCAN=1 turns a filter matching nothing exit 0'
+else
+  fail "filter-empty-allowed: expected exit 0 + empty array, got exit ${rc}"
+  cat -- "${work}/filter-empty-allowed.out" "${work}/filter-empty-allowed.err" >&2
+fi
+
+# 21. filter-basename-not-substring — the comparison is basename equality,
+# not a suffix test: a filter of `b.yml` must not also select `ab.yml`.
+# shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
+run_scenario 'filter-basename-not-substring' 'notsuffix=1' '
+declare -a out=()
+filter_into out "filter-basename-not-substring probe" "b.yml" "a/b.yml" "x/ab.yml"
+printf "notsuffix=%d\n" "${#out[@]}"
+declare -p out
+'
+harness_assert_also '[0]="a/b.yml"'
+if [[ ${rc} -eq 0 ]] &&
+  grep --fixed-strings --quiet -- 'notsuffix=1' "${work}/filter-basename-not-substring.out" &&
+  grep --fixed-strings --quiet -- '[0]="a/b.yml"' "${work}/filter-basename-not-substring.out"; then
+  pass 'filter-basename-not-substring: an equal basename is selected, a matching suffix is not, exit 0'
+else
+  fail "filter-basename-not-substring: expected only the equal-basename path selected, got exit ${rc}"
+  cat -- "${work}/filter-basename-not-substring.out" "${work}/filter-basename-not-substring.err" >&2
+fi
+
+# 22. filter-path-with-space — a selected path holding a space stays one
+# element.
+# shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
+run_scenario 'filter-path-with-space' 'spacefilter=1' '
+declare -a out=()
+filter_into out "filter-path-with-space probe" "b.yml" "dir with space/b.yml"
+printf "spacefilter=%d\n" "${#out[@]}"
+declare -p out
+'
+harness_assert_also 'dir with space/b.yml")'
+if [[ ${rc} -eq 0 ]] &&
+  grep --fixed-strings --quiet -- 'spacefilter=1' "${work}/filter-path-with-space.out" &&
+  grep --fixed-strings --quiet -- 'dir with space/b.yml")' "${work}/filter-path-with-space.out"; then
+  pass 'filter-path-with-space: a selected path holding a space stays one element, exit 0'
+else
+  fail "filter-path-with-space: expected one element carrying the space, got exit ${rc}"
+  cat -- "${work}/filter-path-with-space.out" "${work}/filter-path-with-space.err" >&2
+fi
+
 harness_assert_verify || failures=$((failures + 1))
 
 if [[ ${failures} -gt 0 ]]; then
