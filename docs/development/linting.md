@@ -367,6 +367,38 @@ non-empty, the marker word is keyed to the kind of site so the sibling
 exemption count. Full rationale:
 [Workflow hardening → enumerate-helper-required](../security/workflow-hardening.md#enumerate-helper-required).
 
+## Filter-narrowed scan breadth
+
+`scripts/check-enumerate-helper-required.sh` also bans a `*_FILTER`
+variable read that stands in for `filter_into`
+(`scripts/lib/enumerate.sh`) instead of reaching it. A filter narrows a
+scan set the enumeration or glob rules above already proved non-empty,
+and `filter_into` is where that narrowing's own size is asserted:
+
+```bash
+declare -a workflow_files=()
+glob_into workflow_files 'workflow YAML' "${DIR}/*.yml" "${DIR}/*.yaml"
+declare -a selected_files=()
+filter_into selected_files 'workflow YAML' "${FILE_FILTER}" "${workflow_files[@]}"
+for f in "${selected_files[@]}"; do
+```
+
+A file-scope read reaching that call, as above, is fine. What's banned is
+a `for` or `while` loop reading the raw `*_FILTER` variable again instead
+of trusting the selection `filter_into` already returned — a filter
+matching nothing then leaves that read silently false on every
+iteration, the loop body never runs, and the run exits 0, the same
+empty-selection failure `filter_into` exists to catch — and a script that
+reads a `*_FILTER` variable but never calls `filter_into` at all, which
+asserts the selection's size nowhere. A file-scope read outside every
+loop that only guards a job-count assertion, rather than standing in for
+`filter_into`, stays legal without a marker. Either banned shape opts out
+with an inline `# filter-exempt: <rationale>` on the line above; the
+rationale must be non-empty, the marker word is keyed to this shape so
+neither sibling marker excuses it, and a clean run prints the exemption
+count. Full rationale:
+[Workflow hardening → enumerate-helper-required](../security/workflow-hardening.md#enumerate-helper-required).
+
 ## Treefmt YAML quote gotcha
 
 Prettier rewrites single-quoted YAML scalars to double-quoted. Run
