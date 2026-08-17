@@ -332,10 +332,11 @@ with an inline `# exit-code-exempt: <rationale>`, which has to open the
 comment — a sentence merely naming the marker is prose about the rule,
 not a use of it, and excuses nothing; the rationale must be non-empty,
 and a clean run prints the exemption count. Matching anchors to the
-line's first `#`, so a `#` inside an earlier parameter expansion
-(`${d#pfx-}`) can hide a genuine trailing marker — the miss reports the
-site rather than silently excusing it, the safe direction for this lint
-to fail in. Full rationale:
+line's first `#`, so any earlier `#` on the line — inside a string, a
+`${x#y}` expansion, or anywhere else, whatever produced it — can hide a
+genuine trailing marker — the miss reports the site rather than
+silently excusing it, the safe direction for this lint to fail in. Full
+rationale:
 [Workflow hardening → guard-exit-code](../security/workflow-hardening.md#guard-exit-code).
 
 ## Glob-driven scan breadth

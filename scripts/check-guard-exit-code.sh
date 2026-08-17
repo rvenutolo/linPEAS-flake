@@ -49,13 +49,14 @@
 # to open the comment — matching drops everything up to and including
 # the line's first `#` and requires the remainder to begin with the
 # marker word, so prose naming it exempts nothing — and the rationale
-# has to be non-empty. A `#` inside an earlier parameter expansion on
-# the same line (`t="${d#pfx-}"; exit 1 # exit-code-exempt: <why>`) is
-# read as that first `#`, so a genuine trailing marker can be missed;
-# the miss reports the site as a hit rather than silently excusing it,
-# which is the direction this lint is safe to fail in. A clean run
-# prints the exemption count, so the exempt set is stated rather than
-# open-ended.
+# has to be non-empty. Any earlier `#` on the same line, whatever
+# produced it — a `${x#y}` expansion, a `#` inside a string, or
+# anything else (`printf 'a#b\n'; exit 1 # exit-code-exempt: <why>`) —
+# is read as that first `#`, so a genuine trailing marker can be
+# missed; the miss reports the site as a hit rather than silently
+# excusing it, which is the direction this lint is safe to fail in. A
+# clean run prints the exemption count, so the exempt set is stated
+# rather than open-ended.
 #
 # The scan recurses. The shared libraries under `scripts/lib/` decide
 # which exit code their callers report — `enumerate_into` is where a
@@ -160,7 +161,8 @@ function report(kind, ln, detail, gline) {
 # the marker word. A sentence that merely names the marker — a comment
 # describing the escape hatch, say — leaves other words in front of it
 # and is prose about the rule rather than a use of it, so it excuses
-# nothing. A `#` inside a parameter expansion earlier on the line makes
+# nothing. Any earlier `#` on the line, whatever produced it — a
+# `${x#y}` expansion, a `#` inside a string, or anything else — makes
 # this miss a real trailing marker, which reports the site instead of
 # excusing it: the safe direction, and visible rather than silent.
 function classify(hitkind, norkind, ln, detail, text, gline,   rest, after) {

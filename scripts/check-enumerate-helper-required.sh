@@ -24,6 +24,11 @@
 # decides; a pattern that reaches a scan by any other route is outside
 # what this lint sees, and the rule is stated no wider than that.
 #
+# Every marker must open its comment: the comment's text is read from
+# the syntax tree, not the raw line, and the marker word has to be the
+# first thing in it — which is what makes the match immune to a `#`
+# inside a string or an expansion earlier on the line.
+#
 # The property being protected is scan breadth, not producer status. A
 # producer that fails is the easy half; the hard half is a producer that
 # succeeds and enumerates nothing: `GIT_INDEX_FILE=/nonexistent git

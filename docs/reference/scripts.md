@@ -332,6 +332,11 @@ deliberate. Those three are the positions a single pass over the tree
 decides; a pattern that reaches a scan by any other route is outside
 what this lint sees, and the rule is stated no wider than that.
 
+Every marker must open its comment: the comment's text is read from
+the syntax tree, not the raw line, and the marker word has to be the
+first thing in it — which is what makes the match immune to a `#`
+inside a string or an expansion earlier on the line.
+
 The property being protected is scan breadth, not producer status. A
 producer that fails is the easy half; the hard half is a producer that
 succeeds and enumerates nothing: `GIT_INDEX_FILE=/nonexistent git ls-files` exits 0 and prints not one path, which every status check in
@@ -543,13 +548,14 @@ bare temp-file creation whose failure IS the finding. The marker has
 to open the comment — matching drops everything up to and including
 the line's first `#` and requires the remainder to begin with the
 marker word, so prose naming it exempts nothing — and the rationale
-has to be non-empty. A `#` inside an earlier parameter expansion on
-the same line (`t="${d#pfx-}"; exit 1 # exit-code-exempt: <why>`) is
-read as that first `#`, so a genuine trailing marker can be missed;
-the miss reports the site as a hit rather than silently excusing it,
-which is the direction this lint is safe to fail in. A clean run
-prints the exemption count, so the exempt set is stated rather than
-open-ended.
+has to be non-empty. Any earlier `#` on the same line, whatever
+produced it — a `${x#y}` expansion, a `#` inside a string, or
+anything else (`printf 'a#b\n'; exit 1 # exit-code-exempt: <why>`) —
+is read as that first `#`, so a genuine trailing marker can be
+missed; the miss reports the site as a hit rather than silently
+excusing it, which is the direction this lint is safe to fail in. A
+clean run prints the exemption count, so the exempt set is stated
+rather than open-ended.
 
 The scan recurses. The shared libraries under `scripts/lib/` decide
 which exit code their callers report — `enumerate_into` is where a
