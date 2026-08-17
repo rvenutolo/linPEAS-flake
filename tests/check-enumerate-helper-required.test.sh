@@ -174,11 +174,12 @@ expect bad-filter-no-helper.sh 1 \
   'reads a filter variable but never calls filter_into'
 
 # An empty rationale on the filter marker is its own finding, exactly as
-# the enumerate and glob markers already require above. The marker word
-# is unique to this rule, so it alone tells this scenario apart from the
-# other two empty-rationale scenarios earlier in this file.
+# the enumerate and glob markers already require above. The file:line:col
+# prefix is asserted the same way its three sibling empty-rationale
+# scenarios are, so a position-reporting regression on this path is
+# caught rather than masked by the marker word alone.
 expect bad-filter-empty-rationale.sh 1 \
-  'filter-exempt marker carries no rationale'
+  'bad-filter-empty-rationale.sh:13:22: filter-exempt marker carries no rationale'
 
 # The filter rule's clean shapes. good-filter-into.sh and
 # good-filter-file-scope-read.sh both read their filter once outside any
