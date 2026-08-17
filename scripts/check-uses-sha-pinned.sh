@@ -51,6 +51,7 @@ readonly USES_QUERY='.. | select(tag == "!!map" and has("uses")) | .uses'
 
 failed=0
 shopt -s nullglob globstar
+declare -a all_files=()
 for dir in "${scan_dirs[@]}"; do
   [[ -d ${dir} ]] || continue
   # A single globstar glob: `**` also matches zero segments, so `**/*.yml`
@@ -62,32 +63,35 @@ for dir in "${scan_dirs[@]}"; do
   declare -a workflow_files=()
   glob_into workflow_files "workflow and composite-action YAML under ${dir}" \
     "${dir}/**/*.yml" "${dir}/**/*.yaml"
-  for f in "${workflow_files[@]}"; do
-    [[ -f ${f} ]] || continue
-    if [[ -n ${FILE_FILTER} && "$(basename "${f}")" != "${FILE_FILTER}" ]]; then
-      continue
-    fi
-    uses_output=''
-    yq_rc=0
-    uses_output="$(yq "${USES_QUERY}" "${f}" 2>/dev/null)" || yq_rc=$?
-    if ((yq_rc != 0)); then
-      printf '%s: yq parse failed; uses: references cannot be verified\n' "${f}" >&2
-      failed=$((failed + 1))
-      continue
-    fi
-    while IFS= read -r ref; do
-      [[ -z ${ref} ]] && continue
-      # Path-relative composite (./...) is content-addressed by the checkout.
-      [[ ${ref} == ./* ]] && continue
-      # Expect owner/repo[/path]@<40-hex-sha>.
-      if [[ ! ${ref} =~ @[0-9a-f]{40}$ ]]; then
-        printf '%s: %q not SHA-pinned (need owner/repo@<40-hex>)\n' "${f}" "${ref}" >&2
-        failed=$((failed + 1))
-      fi
-    done <<<"${uses_output}"
-  done
+  all_files+=("${workflow_files[@]}")
 done
 shopt -u nullglob globstar
+
+declare -a selected_files=()
+filter_into selected_files 'workflow and composite-action YAML' "${FILE_FILTER}" \
+  ${all_files+"${all_files[@]}"}
+
+for f in "${selected_files[@]}"; do
+  [[ -f ${f} ]] || continue
+  uses_output=''
+  yq_rc=0
+  uses_output="$(yq "${USES_QUERY}" "${f}" 2>/dev/null)" || yq_rc=$?
+  if ((yq_rc != 0)); then
+    printf '%s: yq parse failed; uses: references cannot be verified\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  while IFS= read -r ref; do
+    [[ -z ${ref} ]] && continue
+    # Path-relative composite (./...) is content-addressed by the checkout.
+    [[ ${ref} == ./* ]] && continue
+    # Expect owner/repo[/path]@<40-hex-sha>.
+    if [[ ! ${ref} =~ @[0-9a-f]{40}$ ]]; then
+      printf '%s: %q not SHA-pinned (need owner/repo@<40-hex>)\n' "${f}" "${ref}" >&2
+      failed=$((failed + 1))
+    fi
+  done <<<"${uses_output}"
+done
 
 if ((failed > 0)); then
   printf '%d unpinned uses: reference(s) found\n' "${failed}" >&2
