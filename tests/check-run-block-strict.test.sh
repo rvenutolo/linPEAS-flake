@@ -50,6 +50,7 @@ expect bad-weak.yml 1 "must start with"
 expect good-folded.yml 0 ""
 expect bad-folded-missing.yml 1 "bad-folded-missing.yml: job build step[0]"
 expect bad-malformed.yml 1 "could not evaluate"
+expect no-such-workflow.yml 2 'selected 0 of'
 
 expect_composite composite-good 0 ""
 expect_composite composite-bad-missing 1 "composite-bad-missing/action.yml: composite step[0]"

@@ -31,5 +31,6 @@ expect bad-empty-group.yml 1 "empty"
 expect bad-scalar.yml 1 "unexpected shape"
 expect bad-seq-group.yml 1 "group has unexpected shape"
 expect bad-map-group.yml 1 "group has unexpected shape"
+expect no-such-workflow.yml 2 'selected 0 of'
 
 printf 'all tests passed\n'

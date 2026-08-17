@@ -35,5 +35,6 @@ expect bad-determinate-installer.yml 1 \
   "DeterminateSystems/nix-installer-action@2f1b1a1c8b4e3d9a7c0e5f6b8d2a4c6e0f1a3b5d installs Nix outside the composite"
 expect bad-quick-install.yml 1 \
   "nixbuild/nix-quick-install-action@9d1f2e3a4b5c6d7e8f90a1b2c3d4e5f60718293a installs Nix outside the composite"
+expect no-such-workflow.yml 2 'selected 0 of'
 
 printf 'all tests passed\n'

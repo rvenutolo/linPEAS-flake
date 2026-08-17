@@ -29,5 +29,6 @@ expect bad-map.yml 1 "pull_request_target"
 expect bad-map-null.yml 1 "pull_request_target"
 expect bad-string.yml 1 "pull_request_target"
 expect bad-seq.yml 1 "pull_request_target"
+expect no-such-workflow.yml 2 'selected 0 of'
 
 printf 'all tests passed\n'

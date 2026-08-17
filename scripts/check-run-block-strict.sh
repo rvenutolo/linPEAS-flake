@@ -111,13 +111,12 @@ declare -a files=()
 shopt -s globstar
 glob_into files 'workflow and composite-action files' ${patterns+"${patterns[@]}"}
 shopt -u globstar
+declare -a selected_files=()
+filter_into selected_files 'workflow and composite-action files' "${FILE_FILTER}" "${files[@]}"
 
 failed=0
-for f in "${files[@]}"; do
+for f in "${selected_files[@]}"; do
   [[ -f ${f} ]] || continue
-  if [[ -n ${FILE_FILTER} && "$(basename "${f}")" != "${FILE_FILTER}" ]]; then
-    continue
-  fi
 
   if ! rows="$(yq eval "${ROWS_QUERY}" "${f}")"; then
     printf '%s: could not evaluate workflow or action with yq (malformed?)\n' "${f}" >&2
