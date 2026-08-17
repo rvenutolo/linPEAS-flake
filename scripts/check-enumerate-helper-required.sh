@@ -458,17 +458,19 @@ def producer_of(args):
 #
 # `local`, `readonly`, `declare` and `export` forms are filed under a
 # different node than a bare assignment, so the walk selects any object
-# carrying a `Name` rather than a call expressions assignment list — the
-# declared form is the one a copy inside a function actually takes. An
-# assignment with no value at all carries no `Value` key, and dereferencing
-# the absent key kills the whole walk partway through the tree, which a
-# swallowed status then reports as a clean file: the fallbacks below are
-# what keep that from happening.
+# carrying a `Name` rather than the assignment list of a call expression —
+# the declared form is the one a copy inside a function actually takes.
+#
+# A bare assignment (`x=`), a `declare z` or an `export E` with no value
+# carries no `Value` key. That is harmless here because the value is only
+# ever reached through `.. | objects`: the `..` recursion over `null`
+# yields `null`, which `objects` then filters out, so a missing key never
+# reaches the ParamExp walk or the position interpolation below. A direct
+# index such as `.Value.Parts[]` would not be null-safe the same way.
 | [.. | objects | select(has("Name")) | select(.Name.Value != null)
     | . as $a
     | select(($a.Name.Value | test("(^|_)FILTER$")) == false)
-    | (($a.Value // $a.Array) // null) as $rhs
-    | select($rhs != null)
+    | ($a.Value // $a.Array) as $rhs
     | select(([$rhs | .. | objects | select(.Type == "ParamExp")
         | (.Param.Value // "") | select(test("(^|_)FILTER$"))] | length) > 0)
     | "bad\t\($rhs.Pos.Line)\t\($rhs.Pos.Col)\t\($filter_alias_what)"] as $filter_alias
