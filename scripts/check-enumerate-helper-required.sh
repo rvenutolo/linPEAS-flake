@@ -329,10 +329,26 @@ def producer_of(args):
         | select(test("[*?[]"))] | length) > 0)
     | "bad\t\(.Array.Pos.Line)\t\(.Array.Pos.Col)\t\($glob_array_what)"] as $glob_arrays
 
-# The whole extent of a loop, head included: a filter read among the
-# iteration words of a `for` discards just as much as one in the body.
-| [.. | objects | select(.Type == "ForClause" or .Type == "WhileClause")
-    | {from: .Pos.Offset, to: .End.Offset}] as $loops
+# The whole extent of the statement that encloses a loop, not the bare
+# `ForClause`/`WhileClause` node: that node ends at `done`, but the
+# input to a `while` loop — a `done < <(…)` redirect, a `done <<<"…"`
+# herestring, or an upstream `… | while` pipeline stage — sits outside
+# it while still being part of what the loop consumes, exactly as much
+# as a filter read among the iteration words of a `for` is part of what
+# it consumes. A statement carries no `Type` field of its own, so it is
+# selected by the `Cmd` it holds — the same idiom this file already
+# uses for `Assign`/`Array` above — and a pipeline stage is selected by
+# walking the right-hand side of a `BinaryCmd`. Selecting on the direct
+# `.Cmd` rather than any statement that merely contains a loop
+# somewhere inside it is what keeps an `if` block from swallowing its
+# own condition into the range of the loop.
+| ([.. | objects | select(has("Cmd"))
+    | select((((.Cmd // {}) | .Type) == "ForClause") or (((.Cmd // {}) | .Type) == "WhileClause"))
+    | {from: .Pos.Offset, to: .End.Offset}]
+  + [.. | objects | select(.Type == "BinaryCmd")
+    | select(([(.Y // {}) | .. | objects
+        | select(.Type == "ForClause" or .Type == "WhileClause")] | length) > 0)
+    | {from: .Pos.Offset, to: .End.Offset}]) as $loops
 
 | [.. | objects | select(.Type == "CallExpr")
     | select(((.Args // []) | length) > 0)

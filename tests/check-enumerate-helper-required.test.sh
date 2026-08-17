@@ -165,6 +165,19 @@ expect bad-filter-in-while-loop.sh 1 \
 expect bad-filter-marker-mismatch.sh 1 \
   'bad-filter-marker-mismatch.sh:15:22: this loop reads a filter variable directly'
 
+# The loop rule covers a while loop's input as well as its body: a
+# `done < <(…)` redirect, a `done <<<"…"` herestring, and an upstream
+# `… | while` pipeline stage are all part of what the loop consumes,
+# even though none sits inside the bare `WhileClause` node, which ends
+# at `done`. Same discrimination as the trio above — file, line and
+# column separate these three from each other and from the rest.
+expect bad-filter-while-redirect.sh 1 \
+  'bad-filter-while-redirect.sh:15:55: this loop reads a filter variable directly'
+expect bad-filter-while-herestring.sh 1 \
+  'bad-filter-while-herestring.sh:15:57: this loop reads a filter variable directly'
+expect bad-filter-pipeline.sh 1 \
+  'bad-filter-pipeline.sh:12:46: this loop reads a filter variable directly'
+
 # A file that reads its filter but never narrows anything with it: no
 # call site asserts that the selection the read implies is non-empty.
 # The diagnostic names the shape rather than a position, and no sibling
