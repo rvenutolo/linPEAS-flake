@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # scripts/check-enumerate-helper-required.sh
 #
-# @description Lint: every filesystem scan in a repo script asserts its
-# own breadth. An enumeration runs through `enumerate_into`
+# @description Lint: every filesystem scan in a repo script or test
+# harness asserts its own breadth. The scan set is `scripts/*.sh` plus
+# `tests/*.test.sh`, less `tests/fixtures/` — a tree whose files exist to
+# be violations of this lint, driven through PATHS_OVERRIDE by the
+# harness that asserts the diagnostics they produce.
+# An enumeration runs through `enumerate_into`
 # (scripts/lib/enumerate.sh) — a producer (`find`, `git ls-files`, `git
 # ls-tree`) may appear only as an argument to the helper, inside a
 # function the helper is handed by name, or behind an inline
@@ -96,12 +100,25 @@ source "${_lib_dir}/lib/log.sh"
 require_tool shfmt
 require_tool jq
 
-# @description NUL-delimited producer for `enumerate_into`. The pathspec
-# crosses `/`, so this covers `scripts/lib/` as well as the top level.
+# @description NUL-delimited producer for `enumerate_into`. Each pathspec
+# crosses `/`, so `scripts/*.sh` covers `scripts/lib/` as well as the top
+# level and `tests/*.test.sh` reaches a harness at any depth. Test
+# harnesses scan the tree the same way the scripts they drive do — a
+# harness whose own enumeration comes back empty asserts nothing about
+# the script under test and still exits 0 — so they are held to the same
+# rule.
+#
+# `tests/fixtures/` is excluded because that tree holds files written to
+# be violations of this lint: this lint's own harness feeds them in
+# through PATHS_OVERRIDE and asserts the diagnostics they produce.
+# Gating the fixture tree here would make the lint flag its own test
+# inputs, and marking them exempt would destroy what they test. The
+# exclusion is a pathspec rather than a name filter because fixture files
+# are named after the harness shapes they imitate, `.test.sh` included.
 # @stdout NUL-delimited paths
 # shellcheck disable=SC2329 # invoked indirectly, by name, via enumerate_into
 function enumerate_helper_git_sources() {
-  git ls-files -z -- 'scripts/*.sh'
+  git ls-files -z -- 'scripts/*.sh' 'tests/*.test.sh' ':(exclude)tests/fixtures/*'
 }
 
 paths=()

@@ -62,6 +62,14 @@ function scenario_glob_selects_new_classes() {
   fi
 
   local selected
+  # enumerate-exempt: this selection's breadth is scored by the `missing`
+  # counter below, which requires at least one selected file per named
+  # path class and prints the class that found none. An empty selection
+  # therefore fails this scenario by name rather than passing quietly,
+  # which is the property the enumeration helper would otherwise supply —
+  # and supplying it as exit 2 would replace a diagnostic naming the
+  # unselected class with one naming neither. The pathspecs must also stay
+  # word-split, one glob per git argument.
   # shellcheck disable=SC2046 # each glob must reach git ls-files as its
   # own pathspec argument; splitting on IFS is the point.
   selected="$(cd "${REPO_ROOT}" && git ls-files $(extract_scan_globs))"
@@ -120,6 +128,13 @@ function scenario_glob_hook_filter_parity() {
   fi
 
   local selected
+  # enumerate-exempt: this selection's breadth is scored by the `seen`
+  # counter below, which fails the scenario outright when the loop reads
+  # no path and names the broken SCAN_GLOBS parse as the cause. An empty
+  # selection cannot reach the parity verdict green, so the assertion the
+  # enumeration helper adds is already made here, in terms that say what
+  # broke. The pathspecs must also stay word-split, one glob per git
+  # argument.
   # shellcheck disable=SC2046 # each glob must reach git ls-files as its
   # own pathspec argument; splitting on IFS is the point.
   selected="$(cd "${REPO_ROOT}" && git ls-files $(extract_scan_globs))"

@@ -83,6 +83,11 @@ function main() {
     fail 'planted stray temp survived a normal run'
   fi
   local leftovers
+  # enumerate-exempt: this find looks for temps that must not exist, so
+  # printing nothing is the outcome the row scores as a pass — the check
+  # below passes when leftovers is empty. An enumeration helper that
+  # refuses an empty result would fail the run precisely when the sweep
+  # under test worked.
   leftovers="$(find "${REPO_ROOT}" -maxdepth 1 -name '.refresh-precommit-*.md' -print 2>/dev/null)"
   if [[ -z ${leftovers} ]]; then
     pass 'no .refresh-precommit-*.md temps remain after a normal run'

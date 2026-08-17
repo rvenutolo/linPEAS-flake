@@ -310,8 +310,12 @@ denylisted host.
 
 ### scripts/check-enumerate-helper-required.sh
 
-Lint: every filesystem scan in a repo script asserts its
-own breadth. An enumeration runs through `enumerate_into`
+Lint: every filesystem scan in a repo script or test
+harness asserts its own breadth. The scan set is `scripts/*.sh` plus
+`tests/*.test.sh`, less `tests/fixtures/` — a tree whose files exist to
+be violations of this lint, driven through PATHS_OVERRIDE by the
+harness that asserts the diagnostics they produce.
+An enumeration runs through `enumerate_into`
 (scripts/lib/enumerate.sh) — a producer (`find`, `git ls-files`, `git ls-tree`) may appear only as an argument to the helper, inside a
 function the helper is handed by name, or behind an inline
 `# enumerate-exempt: <rationale>` marker. A glob-driven scan fills its
