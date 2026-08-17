@@ -392,7 +392,15 @@ def producer_of(args):
     then [$filter_reads[0] | "bad\t\(.Pos.Line)\t\(.Pos.Col)\t\($filter_missing_what)"]
     else [] end) as $filter_missing
 
-| ($direct + $standalone + $glob_calls + $glob_loops + $glob_arrays + $filter_ok + $filter_in_loops + $filter_missing)[]
+# Every comment in the file, emitted ahead of the site records so the
+# shell loop has the whole map before it classifies anything. A comment
+# is selected by the `Hash` position it carries rather than by a `Text`
+# key: an empty `#` line has no `Text` at all, and a selector keyed on
+# the text would drop it from a census that has to see every comment.
+| [.. | objects | select(has("Hash"))
+    | "cmt\t\(.Pos.Line)\t\(.Pos.Col)\t\((.Text // "") | gsub("\t"; " ") | gsub("\n"; " "))"] as $comments
+
+| ($comments + $direct + $standalone + $glob_calls + $glob_loops + $glob_arrays + $filter_ok + $filter_in_loops + $filter_missing)[]
 '
 
 # The exemption marker word each rule answers to, keyed by the record's
@@ -466,38 +474,63 @@ for f in "${paths[@]}"; do
   # a read failure would be indistinguishable from "no marker here".
   file_lines=()
   mapfile -t file_lines <"${f}"
+  declare -A COMMENT_TEXT=()
 
   while IFS=$'\t' read -r verdict line col what; do
     [[ -z ${verdict} ]] && continue
+
+    # Comment records arrive ahead of every site record and are census
+    # data, not scan sites: counting one would inflate the tally that
+    # exists to prove the grammar still recognizes real scans.
+    if [[ ${verdict} == cmt ]]; then
+      COMMENT_TEXT["${line}"]="${what}"
+      continue
+    fi
+
     classified=$((classified + 1))
     [[ ${verdict} == ok ]] && continue
 
     # The marker word follows the kind of site, so the exemption a
     # reviewer reads is the one the site was reasoned about.
     marker_word="${MARKER_BY_WHAT[${what}]:-${MARKER_ENUMERATE}}"
-    marker_re="#[[:space:]]*${marker_word}:"
 
     # The marker may sit on the site's own line or anywhere in the
     # contiguous comment block directly above it. A rationale worth
     # reading rarely fits on one line, and a marker that only counted
-    # when it landed on the last comment line would push the reason
-    # away from the sentence that explains it.
-    marker_text="${file_lines[line - 1]:-}"
-    probe=$((line - 1))
-    while ((probe >= 1)) && [[ ${file_lines[probe - 1]:-} =~ ^[[:space:]]*# ]]; do
-      marker_text="${file_lines[probe - 1]}"$'\n'"${marker_text}"
+    # when it landed on the last comment line would push the reason away
+    # from the sentence that explains it.
+    #
+    # The marker has to OPEN its comment: the text a comment carries is
+    # read from the syntax tree and the word must be the first thing in
+    # it. A comment that merely names the marker — this file's own header
+    # does, and so does every doc sentence describing the escape hatch —
+    # is prose about the rule, and prose that excused a site would make
+    # any sentence naming a marker an exemption for whatever happened to
+    # sit beneath it. Reading the text from the tree rather than from the
+    # raw line is also what keeps a `#` inside a string or a `${x#y}`
+    # expansion from being mistaken for a comment opener.
+    marker_line=0
+    rationale=''
+    probe="${line}"
+    while ((probe >= 1)); do
+      comment_text="${COMMENT_TEXT[${probe}]:-}"
+      trimmed="${comment_text#"${comment_text%%[![:space:]]*}"}"
+      if [[ -n ${comment_text} && ${trimmed} == "${marker_word}:"* ]]; then
+        marker_line="${probe}"
+        rationale="${trimmed#"${marker_word}":}"
+        # Trim surrounding whitespace without invoking anything.
+        rationale="${rationale#"${rationale%%[![:space:]]*}"}"
+        rationale="${rationale%"${rationale##*[![:space:]]}"}"
+        break
+      fi
+      # Walk up only while the line above is a comment-only line, which
+      # is what makes the block contiguous rather than a search of the
+      # whole file.
+      [[ ${file_lines[probe - 2]:-} =~ ^[[:space:]]*# ]] || break
       probe=$((probe - 1))
     done
 
-    if [[ ${marker_text} =~ ${marker_re} ]]; then
-      # The rationale is the remainder of the marker's own line: a
-      # continuation line may carry more prose, but the marker line
-      # itself has to say something.
-      rationale="${marker_text#*"${marker_word}":}"
-      rationale="${rationale%%$'\n'*}"
-      # Trim surrounding whitespace without invoking anything.
-      rationale="${rationale#"${rationale%%[![:space:]]*}"}"
-      rationale="${rationale%"${rationale##*[![:space:]]}"}"
+    if ((marker_line > 0)); then
       if [[ -z ${rationale} ]]; then
         printf '%s:%s:%s: %s marker carries no rationale; %s stays a hit until the marker says why the helper is wrong here\n' \
           "${f}" "${line}" "${col}" "${marker_word}" "${what}" >&2
