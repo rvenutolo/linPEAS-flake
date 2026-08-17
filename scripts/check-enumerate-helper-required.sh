@@ -460,10 +460,18 @@ declare -A MARKER_BY_WHAT=(
 )
 readonly MARKER_BY_WHAT
 
+# Every marker word this lint owns. The census below looks for all three
+# regardless of which rule a file happens to hold sites for: a marker that
+# excuses nothing is a finding whichever word it is spelled with, and a
+# census keyed on the sites present would go blind on exactly the file
+# whose site left.
+readonly MARKER_WORDS=("${MARKER_ENUMERATE}" "${MARKER_GLOB}" "${MARKER_FILTER_WORD}")
+
 scanned=0
 classified=0
 exempted=0
 failed=0
+orphans=0
 for f in "${paths[@]}"; do
   # A path `git ls-files` enumerated always exists; a path named by
   # PATHS_OVERRIDE is operator input, and one naming a file that is not
@@ -496,6 +504,7 @@ for f in "${paths[@]}"; do
   file_lines=()
   mapfile -t file_lines <"${f}"
   declare -A COMMENT_TEXT=()
+  declare -A CONSUMED=()
 
   while IFS=$'\t' read -r verdict line col what; do
     [[ -z ${verdict} ]] && continue
@@ -552,6 +561,7 @@ for f in "${paths[@]}"; do
     done
 
     if ((marker_line > 0)); then
+      CONSUMED["${marker_line}"]=1
       if [[ -z ${rationale} ]]; then
         printf '%s:%s:%s: %s marker carries no rationale; %s stays a hit until the marker says why the helper is wrong here\n' \
           "${f}" "${line}" "${col}" "${marker_word}" "${what}" >&2
@@ -586,10 +596,35 @@ for f in "${paths[@]}"; do
     esac
     failed=$((failed + 1))
   done <<<"${records}"
+
+  # A marker the classification never consumed protects nothing. It still
+  # reads as a decision someone made about the code beneath it, so it
+  # keeps asserting that decision after the site was rewritten into a
+  # compliant shape, moved, or left the file — and after a marker written
+  # one line too high, which is the case a per-file predicate cannot see
+  # because the file does hold a site of that kind. The sibling
+  # payload-source and payload-subject rules already treat their mirror
+  # case as drift, so the convention is settled.
+  for marker_probe in "${!COMMENT_TEXT[@]}"; do
+    comment_text="${COMMENT_TEXT[${marker_probe}]}"
+    trimmed="${comment_text#"${comment_text%%[![:space:]]*}"}"
+    for marker_word in "${MARKER_WORDS[@]}"; do
+      [[ ${trimmed} == "${marker_word}:"* ]] || continue
+      [[ -n ${CONSUMED[${marker_probe}]:-} ]] && continue
+      printf '%s:%s: %s marker excuses no site this rule matches; a marker protecting nothing keeps asserting a decision the lint no longer honors — move it onto the site it was written for, or delete it\n' \
+        "${f}" "${marker_probe}" "${marker_word}" >&2
+      orphans=$((orphans + 1))
+    done
+  done
 done
 
-if ((failed > 0)); then
-  printf '%d scan(s) that assert no breadth: a filesystem enumeration outside enumerate_into, a glob expanded at a for loop head or in an array assignment, or a filter variable read directly instead of through filter_into\n' "${failed}" >&2
+if ((failed > 0 || orphans > 0)); then
+  if ((failed > 0)); then
+    printf '%d scan(s) that assert no breadth: a filesystem enumeration outside enumerate_into, a glob expanded at a for loop head or in an array assignment, or a filter variable read directly instead of through filter_into\n' "${failed}" >&2
+  fi
+  if ((orphans > 0)); then
+    printf '%d exemption marker(s) that excuse nothing\n' "${orphans}" >&2
+  fi
   exit 1
 fi
 
@@ -605,6 +640,6 @@ if [[ -z ${LINT_ALLOW_EMPTY_SCAN:-} ]] && ((classified == 0)); then
   exit 2
 fi
 
-printf 'enumerate-helper-required: %d file(s) scanned, %d scan site(s) classified, %d exemption(s)\n' \
-  "${scanned}" "${classified}" "${exempted}"
+printf 'enumerate-helper-required: %d file(s) scanned, %d scan site(s) classified, %d exemption(s), %d orphan marker(s)\n' \
+  "${scanned}" "${classified}" "${exempted}" "${orphans}"
 exit 0
