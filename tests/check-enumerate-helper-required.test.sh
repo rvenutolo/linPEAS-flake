@@ -236,11 +236,12 @@ expect bad-filter-pipeline.sh 1 \
 
 # A file that reads its filter but never narrows anything with it: no
 # call site asserts that the selection the read implies is non-empty.
-# The diagnostic names the shape rather than a position, and no sibling
-# fixture reads a filter without also calling filter_into, so the message
-# alone already discriminates this scenario from the rest of the file.
+# bad-filter-bare-name.sh below reads a filter without calling
+# filter_into too, so the message alone no longer discriminates this
+# scenario from that sibling; the file:line:col prefix is what still
+# does.
 expect bad-filter-no-helper.sh 1 \
-  'reads a filter variable but never calls filter_into'
+  'bad-filter-no-helper.sh:7:14: this script reads a filter variable but never calls filter_into'
 
 # An empty rationale on the filter marker is its own finding, exactly as
 # the enumerate and glob markers already require above. The file:line:col
@@ -355,6 +356,102 @@ expect_loop_nested_function
 # tally already asserted in this file.
 expect good-filter-exempt.sh 0 \
   '1 file(s) scanned, 2 scan site(s) classified, 1 exemption(s)'
+
+# @description A variable named exactly `FILTER` is a filter variable.
+# The predicate keys on the name, so a pattern admitting only a suffixed
+# form leaves the bare word invisible while the rule's prose claims the
+# position is what decides. The read sits inside a loop and the file
+# never calls filter_into, so both the loop-read and the missing-helper
+# arms fire from the widened name alone; both are asserted by their own
+# file:line:col so this scenario stays self-discriminating once the
+# missing-helper message is shared with bad-filter-no-helper.sh below.
+function expect_filter_bare_name() {
+  local -r name='bad-filter-bare-name.sh'
+  local -r missing_msg='bad-filter-bare-name.sh:8:18: this script reads a filter variable but never calls filter_into'
+  local -r loop_msg='bad-filter-bare-name.sh:12:19: this loop reads a filter variable directly'
+  local out_file err_file outcome_file got_exit=0
+  out_file="$(mktemp)"
+  err_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  PATHS_OVERRIDE="${FIXTURES}/bad-filter-bare-name.sh" \
+    "${SCRIPT}" >"${out_file}" 2>"${err_file}" || got_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${missing_msg}" "${outcome_file}" "${out_file}" "${err_file}"
+  harness_assert_also "${loop_msg}"
+
+  if [[ ${got_exit} != 1 ]]; then
+    fail "$(printf '%s: exit %s, want 1' "${name}" "${got_exit}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  elif ! grep --fixed-strings --quiet -- "${missing_msg}" "${out_file}" "${err_file}"; then
+    fail "$(printf '%s: output missing the missing-helper diagnostic' "${name}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  elif ! grep --fixed-strings --quiet -- "${loop_msg}" "${out_file}" "${err_file}"; then
+    fail "$(printf '%s: output missing the loop-read diagnostic' "${name}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  else
+    pass "${name}"
+  fi
+  rm --force -- "${out_file}" "${err_file}" "${outcome_file}"
+}
+
+expect_filter_bare_name
+
+# @description The filter value copied to a name the predicate does not
+# match, in both forms the parser distinguishes: a bare assignment, and a
+# declaration inside a function. bad-filter-alias.sh's copy is a plain
+# assignment at file scope, so it trips only the alias arm.
+expect bad-filter-alias.sh 1 \
+  'bad-filter-alias.sh:13:6: this assignment copies a filter value to another name'
+
+# @description bad-filter-alias-declared.sh's copy is a `local` inside a
+# function the loop calls, the shape a walk reading only bare assignments
+# is blind to. That same read also sits in a body the one-hop rule
+# reaches, so both diagnostics fire from one run: the alias arm at column
+# 14, the position of the copied value itself, and the hop arm at column
+# 15, the position of the read the hop rule reports. Both are asserted so
+# neither arm silently swallows the other on this shared line.
+function expect_filter_alias_declared() {
+  local -r name='bad-filter-alias-declared.sh'
+  local -r alias_msg='bad-filter-alias-declared.sh:15:14: this assignment copies a filter value to another name'
+  local -r hop_msg='bad-filter-alias-declared.sh:15:15: this filter read sits in a function a loop calls'
+  local out_file err_file outcome_file got_exit=0
+  out_file="$(mktemp)"
+  err_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  PATHS_OVERRIDE="${FIXTURES}/bad-filter-alias-declared.sh" \
+    "${SCRIPT}" >"${out_file}" 2>"${err_file}" || got_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${alias_msg}" "${outcome_file}" "${out_file}" "${err_file}"
+  harness_assert_also "${hop_msg}"
+
+  if [[ ${got_exit} != 1 ]]; then
+    fail "$(printf '%s: exit %s, want 1' "${name}" "${got_exit}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  elif ! grep --fixed-strings --quiet -- "${alias_msg}" "${out_file}" "${err_file}"; then
+    fail "$(printf '%s: output missing the alias diagnostic' "${name}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  elif ! grep --fixed-strings --quiet -- "${hop_msg}" "${out_file}" "${err_file}"; then
+    fail "$(printf '%s: output missing the hop diagnostic' "${name}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  else
+    pass "${name}"
+  fi
+  rm --force -- "${out_file}" "${err_file}" "${outcome_file}"
+}
+
+expect_filter_alias_declared
+
+# @description The copy this repo's own filter sites write. Its target is
+# itself a filter name, so the value stays inside the set of names the
+# rule can see. Alone this fixture's clean summary is byte-identical to
+# good-glob-array-pattern-strings.sh's above — both are a single file with
+# one classified site and no exemption — so good-glob-arg-only.sh's own
+# already-proven single-file tally is folded in beside it; the resulting
+# two-file, three-site tally is what separates this proof from that
+# sibling rather than the exit code or message shape alone.
+run_expect 'good-filter-sanctioned-alias' \
+  "${FIXTURES}/good-filter-sanctioned-alias.sh"$'\n'"${FIXTURES}/good-glob-arg-only.sh" \
+  0 '2 file(s) scanned, 3 scan site(s) classified, 0 exemption(s)'
 
 # @description A marker on a file holding no site of its kind excuses
 # nothing and is reported rather than counted. The scan-site tally is zero
