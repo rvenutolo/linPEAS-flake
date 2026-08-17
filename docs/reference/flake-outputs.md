@@ -18,12 +18,12 @@ block between the markers by hand.
 ├───checks
 │   ├───aarch64-linux
 │   │   ├───formatting: derivation 'treefmt-check'
-│   │   ├───linpeas-build: derivation 'linpeas-20260814-55a4f278'
+│   │   ├───linpeas-build: derivation 'linpeas-20260817-e45108b9'
 │   │   ├───lint-shell-tools: derivation 'check-lint-shell-tools'
 │   │   └───pre-commit: derivation 'pre-commit-run'
 │   └───x86_64-linux
 │       ├───formatting: derivation 'treefmt-check'
-│       ├───linpeas-build: derivation 'linpeas-20260814-55a4f278'
+│       ├───linpeas-build: derivation 'linpeas-20260817-e45108b9'
 │       ├───lint-shell-tools: derivation 'check-lint-shell-tools'
 │       └───pre-commit: derivation 'pre-commit-run'
 ├───devShells
@@ -43,22 +43,22 @@ block between the markers by hand.
 └───packages
     ├───aarch64-linux
     │   ├───cosign: package 'cosign-3.1.3'
-    │   ├───default: package 'linpeas-20260814-55a4f278'
+    │   ├───default: package 'linpeas-20260817-e45108b9'
     │   ├───diffoscopeMinimal: package 'diffoscope-326'
     │   ├───git-cliff: package 'git-cliff-2.13.1'
-    │   ├───linpeas: package 'linpeas-20260814-55a4f278'
+    │   ├───linpeas: package 'linpeas-20260817-e45108b9'
     │   ├───linpeas-image: package 'linpeas.tar.gz'
     │   ├───nix: package 'nix-2.34.8'
-    │   └───site: package 'linpeas-flake-site-20260814-55a4f278'
+    │   └───site: package 'linpeas-flake-site-20260817-e45108b9'
     └───x86_64-linux
         ├───cosign: package 'cosign-3.1.3'
-        ├───default: package 'linpeas-20260814-55a4f278'
+        ├───default: package 'linpeas-20260817-e45108b9'
         ├───diffoscopeMinimal: package 'diffoscope-326'
         ├───git-cliff: package 'git-cliff-2.13.1'
-        ├───linpeas: package 'linpeas-20260814-55a4f278'
+        ├───linpeas: package 'linpeas-20260817-e45108b9'
         ├───linpeas-image: package 'linpeas.tar.gz'
         ├───nix: package 'nix-2.34.8'
-        └───site: package 'linpeas-flake-site-20260814-55a4f278'
+        └───site: package 'linpeas-flake-site-20260817-e45108b9'
 ```
 
 <!-- END flake-show -->
