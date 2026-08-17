@@ -62,12 +62,11 @@ shopt -s nullglob
 # --- forward: workflow write scopes ⊆ allowlist -------------------------
 declare -a workflow_files=()
 glob_into workflow_files 'workflow YAML' "${DIR}/*.yml" "${DIR}/*.yaml"
-for f in "${workflow_files[@]}"; do
+declare -a selected_files=()
+filter_into selected_files 'workflow YAML' "${FILE_FILTER}" "${workflow_files[@]}"
+for f in "${selected_files[@]}"; do
   [[ -f ${f} ]] || continue
   base="$(basename "${f}")"
-  if [[ -n ${FILE_FILTER} && ${base} != "${FILE_FILTER}" ]]; then
-    continue
-  fi
   # Capture yq's output (and exit status) into a variable rather than
   # feeding the loop from `< <(yq ...)`: a process substitution's exit
   # status is not propagated under set -Eeuo pipefail, so a yq failure

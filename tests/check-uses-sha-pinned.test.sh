@@ -35,6 +35,8 @@ expect bad-tag-pinned.yaml 1 "not SHA-pinned"
 # action.yaml composite: fixed alongside the .yaml workflow glob above.
 expect action.yaml 1 "not SHA-pinned"
 
+expect no-such-workflow.yml 2 'selected 0 of'
+
 # Flow-style unpinned ref, generated at runtime: a committed flow-mapping
 # fixture is unusable because prettier normalizes `{uses: x}` to
 # `{ uses: x }` while yamllint forbids the inner-brace spaces. The old

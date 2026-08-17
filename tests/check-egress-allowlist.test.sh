@@ -69,6 +69,7 @@ expect good-nix-lookalike-without-hosts.yml 0 ""
 
 # A workflow yq cannot parse must fail loud, not empty the scan silently.
 expect bad-malformed.yml 1 "could not evaluate"
+expect no-such-workflow.yml 2 'selected 0 of'
 
 # Every job carrying the notify composite is bound to the declared host set.
 # The pure three-step shape must match it exactly; a job with extra steps may

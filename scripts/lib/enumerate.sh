@@ -129,3 +129,55 @@ function glob_into() {
     exit 2
   fi
 }
+
+# @description Narrow an enumerated path list to what a filter selects,
+# asserting the selection is not empty. `enumerate_into` and `glob_into`
+# assert the breadth of a scan set as it is produced; a filter applied
+# afterwards can throw all of it away again, and neither helper can see
+# that happen. A filter naming a file the tree does not hold leaves no
+# path to walk: the loop body never runs, no violation is found, and the
+# run exits 0 — the same clean line a genuinely clean tree prints. So the
+# selection is asserted where it is made. An empty filter value selects
+# everything, which keeps a caller that may or may not be filtering on
+# one code path rather than branching around this call.
+# @arg $1 name of the array to fill
+# @arg $2 human-readable label naming the scan set, used in the diagnostic
+# @arg $3 the filter value: a basename to select, or empty to select all
+# @arg $@ the paths to select from
+# @exitcode 2 the selection was empty while LINT_ALLOW_EMPTY_SCAN was unset
+function filter_into() {
+  local -r __filter_target="$1" __filter_label="$2" __filter_value="$3"
+  shift 3
+  # Named distinctly so a caller passing a plainly-named array cannot
+  # collide with the nameref, which bash rejects as a circular reference.
+  local -n __filter_out_ref="${__filter_target}"
+  __filter_out_ref=()
+
+  local -r __filter_input_count=$#
+  local __filter_path
+  for __filter_path in "$@"; do
+    # Basename compared by parameter expansion rather than by `basename`,
+    # which would fork once per path in the scan set. The comparison is
+    # equality, not a suffix test: `b.yml` must not select `ab.yml`.
+    if [[ -n ${__filter_value} && ${__filter_path##*/} != "${__filter_value}" ]]; then
+      continue
+    fi
+    __filter_out_ref+=("${__filter_path}")
+  done
+
+  ((${#__filter_out_ref[@]} > 0)) && return 0
+  [[ -z ${LINT_ALLOW_EMPTY_SCAN:-} ]] || return 0
+
+  # Two arms, because the two causes are different operator problems: a
+  # filter that named a file this tree does not hold, and a caller that
+  # handed in nothing to select from. One message would misdescribe one
+  # of them.
+  if [[ -n ${__filter_value} ]]; then
+    printf '%s: filter %q selected 0 of %d files for %s — the filter matched nothing; set LINT_ALLOW_EMPTY_SCAN=1 if this is deliberate\n' \
+      "${0##*/}" "${__filter_value}" "${__filter_input_count}" "${__filter_label}" >&2
+  else
+    printf '%s: selected 0 files for %s — the input scan set was empty; set LINT_ALLOW_EMPTY_SCAN=1 if this is deliberate\n' \
+      "${0##*/}" "${__filter_label}" >&2
+  fi
+  exit 2
+}

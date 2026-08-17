@@ -30,5 +30,6 @@ expect bad-audit.yml 1 "not block"
 expect bad-empty.yml 1 "empty allowed-endpoints"
 expect bad-missing.yml 1 "empty allowed-endpoints"
 expect bad-seq-endpoints.yml 1 "could not evaluate"
+expect no-such-workflow.yml 2 'selected 0 of'
 
 printf 'all tests passed\n'

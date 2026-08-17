@@ -29,5 +29,6 @@ expect bad-missing.yml 1 "missing"
 expect bad-warn.yml 1 "if-no-files-found: warn"
 expect bad-ignore.yml 1 "if-no-files-found: ignore"
 expect bad-malformed.yml 1 "could not evaluate"
+expect no-such-workflow.yml 2 'selected 0 of'
 
 printf 'all tests passed\n'

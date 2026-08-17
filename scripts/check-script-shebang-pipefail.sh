@@ -48,11 +48,10 @@ shopt -s nullglob globstar
 # reaching every nested directory under the scan root.
 declare -a repo_scripts=()
 glob_into repo_scripts 'repo shell scripts' "${DIR}/**/*.sh"
-for f in "${repo_scripts[@]}"; do
+declare -a selected_scripts=()
+filter_into selected_scripts 'repo shell scripts' "${FILE_FILTER}" "${repo_scripts[@]}"
+for f in "${selected_scripts[@]}"; do
   [[ -f ${f} ]] || continue
-  if [[ -n ${FILE_FILTER} && "$(basename "${f}")" != "${FILE_FILTER}" ]]; then
-    continue
-  fi
 
   first_line="$(head -n 1 "${f}")"
   rel="${f#"${DIR}"/}"

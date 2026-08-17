@@ -34,5 +34,6 @@ expect good-lib.sh 0 ""
 expect bad-lib-shebang.sh 1 "opens with a shebang"
 expect bad-lib-sets-options.sh 1 "sets its own shell options"
 expect bad-lib-no-directive.sh 1 "carries no shellcheck shell= directive"
+expect no-such-script.sh 2 'selected 0 of'
 
 printf 'all tests passed\n'

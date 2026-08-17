@@ -48,11 +48,10 @@ failed=0
 shopt -s nullglob
 declare -a workflow_files=()
 glob_into workflow_files 'workflow YAML' "${DIR}/*.yml" "${DIR}/*.yaml"
-for f in "${workflow_files[@]}"; do
+declare -a selected_files=()
+filter_into selected_files 'workflow YAML' "${FILE_FILTER}" "${workflow_files[@]}"
+for f in "${selected_files[@]}"; do
   [[ -f ${f} ]] || continue
-  if [[ -n ${FILE_FILTER} && "$(basename "${f}")" != "${FILE_FILTER}" ]]; then
-    continue
-  fi
 
   # Capture yq's output into a temp file rather than feeding the loop
   # from `< <(yq ...)`: a process substitution's exit status is not

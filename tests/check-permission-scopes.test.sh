@@ -69,6 +69,8 @@ expect good-scalar-readall.yml 0 ""
 # error), not a workflow-scan drift — exit 2, not 1.
 expect_unfiltered "${FIXTURES}/malformed-allowlist" "${FIXTURES}/malformed-allowlist/allowlist.yml" 2 "" bad-malformed-allowlist
 
+expect no-such-workflow.yml 2 'selected 0 of'
+
 # Real-tree guard: the committed allowlist must match the live workflows.
 real_exit=0
 "${SCRIPT}" >/dev/null 2>&1 || real_exit=$?
