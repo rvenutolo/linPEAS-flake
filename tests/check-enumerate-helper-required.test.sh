@@ -185,13 +185,21 @@ expect bad-filter-empty-rationale.sh 1 \
 # good-filter-file-scope-read.sh both read their filter once outside any
 # loop and call filter_into — the second file's extra read, guarding a
 # job-count assertion the way check-egress-allowlist.sh and
-# check-permission-scopes.sh both do, adds no classified site of its own,
-# so alone each prints the identical single-call clean summary. Merged
-# into one run, the file and classified-site counts are what prove both
-# were read rather than one masking the other.
+# check-permission-scopes.sh both do, adds no classified site of its own.
+# good-filter-into-in-loop.sh calls filter_into from inside a loop body
+# instead of at file scope, which exercises a different branch of the
+# rule: the call's own filter-value argument sits inside the loop's
+# extent, and the rule has to exclude that argument from counting as a
+# direct loop read of its own accord, not merely because a file-scope
+# call never lands inside a loop's extent to begin with. Alone, each of
+# the three prints an indistinguishable single-call clean summary — for
+# good-filter-into-in-loop.sh that summary is even byte-identical to an
+# unrelated glob scenario's. Merged into one run, the file and
+# classified-site counts are what prove all three were read rather than
+# one masking the others.
 run_expect 'good-filter-shapes' \
-  "${FIXTURES}/good-filter-into.sh"$'\n'"${FIXTURES}/good-filter-file-scope-read.sh" \
-  0 '2 file(s) scanned, 2 scan site(s) classified, 0 exemption(s)'
+  "${FIXTURES}/good-filter-into.sh"$'\n'"${FIXTURES}/good-filter-file-scope-read.sh"$'\n'"${FIXTURES}/good-filter-into-in-loop.sh" \
+  0 '3 file(s) scanned, 3 scan site(s) classified, 0 exemption(s)'
 
 # @description A loop read carrying a valid filter-exempt marker is
 # counted as an exemption rather than a hit, the same shape the glob
