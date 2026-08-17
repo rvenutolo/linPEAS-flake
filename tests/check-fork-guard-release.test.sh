@@ -35,5 +35,6 @@ expect good-app-token-guarded.yml 0 ""
 
 # A workflow yq cannot parse must fail loud, not empty the scan silently.
 expect bad-malformed.yml 1 "could not evaluate"
+expect no-such-workflow.yml 2 'selected 0 of'
 
 printf 'all tests passed\n'

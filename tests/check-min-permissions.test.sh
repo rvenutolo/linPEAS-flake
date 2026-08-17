@@ -35,5 +35,6 @@ expect bad-job-shape.yml 1 "unexpected shape"
 # the scan silently. permissions: {} stays parseable so this isolates
 # the per-job process-substitution site rather than the top-level read.
 expect bad-malformed.yml 1 "could not evaluate"
+expect no-such-workflow.yml 2 'selected 0 of'
 
 printf 'all tests passed\n'
