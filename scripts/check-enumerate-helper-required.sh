@@ -241,6 +241,7 @@ readonly FILTER_LOOP_WHAT='filter read in a loop'
 readonly FILTER_FUNC_WHAT='filter read in a function a loop calls'
 readonly FILTER_MISSING_WHAT='filter read without the helper'
 readonly FILTER_ALIAS_WHAT='filter value copied to another name'
+readonly PRODUCER_ALIAS_WHAT='producer name copied to a variable'
 # shellcheck disable=SC2016 # jq program literal; $-prefixed names are jq variables, not shell
 readonly JQ_PROG='
 # A word yields text only when it is unambiguously static: a bare
@@ -333,6 +334,32 @@ def producer_of(args):
       | length) as $inside
     | (if $inside > 0 then "ok" else "bad" end) as $verdict
     | "\($verdict)\t\($call.Pos.Line)\t\($call.Pos.Col)\t\($prod)"] as $standalone
+
+# A producer name copied to a variable. The enumeration rule predicate is
+# the literal command word, so a copy leaves the use site head a value and
+# nothing in one pass can say what command runs there. Whether the copy is
+# ever used as a command is undecidable here, which is why the copy itself
+# is the violation, the same reason the filter alias rule fires at its
+# assignment rather than at the read.
+#
+# The word is read through `literal_word_text` and `basename_of`, not by
+# walking parts: that keeps `x="${dir}/find"`, an interpolated path that
+# merely ends in the name, from being read as the command, while
+# `p=/usr/bin/find` is caught by its basename. A bare `git` counts with no
+# subcommand present, because the subcommand is written at the use site the
+# copy has made unreadable. Both a scalar assignment and an array
+# assignment are covered: `$words` holds the single scalar value where one
+# exists, and every element of the array where one exists instead, so a
+# producer word written as one element among several is read the same way
+# a whole scalar value is.
+| [.. | objects | select(has("Name")) | select(.Name.Value != null)
+    | . as $a
+    | ([($a.Value // empty)] + [((($a.Array // {}).Elems // [])[] | .Value)]) as $words
+    | (($a.Value // $a.Array) // null) as $rhs
+    | select($rhs != null)
+    | select(([$words[] | literal_word_text | basename_of
+        | select(. == "find" or . == "git")] | length) > 0)
+    | "bad\t\($rhs.Pos.Line)\t\($rhs.Pos.Col)\t\($producer_alias_what)"] as $producer_alias
 
 # Position 4: a `glob_into` call. Counted rather than merely ignored, so
 # the nonzero tally below covers this rule as well — a walk that stopped
@@ -515,7 +542,7 @@ def producer_of(args):
 | [.. | objects | select(has("Hash"))
     | "cmt\t\(.Pos.Line)\t\(.Pos.Col)\t\(.Text // "")"] as $comments
 
-| ($comments + $direct + $standalone + $glob_calls + $glob_loops + $glob_arrays + $filter_ok + $filter_in_loops + $filter_in_funcs + $filter_missing + $filter_alias)[]
+| ($comments + $direct + $standalone + $producer_alias + $glob_calls + $glob_loops + $glob_arrays + $filter_ok + $filter_in_loops + $filter_in_funcs + $filter_missing + $filter_alias)[]
 '
 
 # The exemption marker word each rule answers to, keyed by the record's
@@ -556,6 +583,7 @@ declare -A MARKER_BY_WHAT=(
   ["${FILTER_FUNC_WHAT}"]="${MARKER_FILTER_WORD}"
   ["${FILTER_MISSING_WHAT}"]="${MARKER_FILTER_WORD}"
   ["${FILTER_ALIAS_WHAT}"]="${MARKER_FILTER_WORD}"
+  ["${PRODUCER_ALIAS_WHAT}"]="${MARKER_ENUMERATE}"
 )
 readonly MARKER_BY_WHAT
 
@@ -592,6 +620,7 @@ for f in "${paths[@]}"; do
     --arg glob_array_what "${GLOB_ARRAY_WHAT}" --arg filter_what "${FILTER_WHAT}" \
     --arg filter_loop_what "${FILTER_LOOP_WHAT}" --arg filter_func_what "${FILTER_FUNC_WHAT}" \
     --arg filter_missing_what "${FILTER_MISSING_WHAT}" --arg filter_alias_what "${FILTER_ALIAS_WHAT}" \
+    --arg producer_alias_what "${PRODUCER_ALIAS_WHAT}" \
     "${JQ_PROG}" <<<"${ast_json}")"; then
     printf '%s: jq failed walking the parsed syntax tree\n' "${f}" >&2
     exit 2
@@ -695,6 +724,10 @@ for f in "${paths[@]}"; do
       ;;
     "${FILTER_ALIAS_WHAT}")
       printf '%s:%s:%s: this assignment copies a filter value to another name; every arm of the filter rule keys on the name being read, so the copy makes the read invisible while leaving the selection unasserted — pass the filter to filter_into and read the selection it returns\n' \
+        "${f}" "${line}" "${col}" >&2
+      ;;
+    "${PRODUCER_ALIAS_WHAT}")
+      printf '%s:%s:%s: this assignment copies a producer name to a variable; the command word at the use site is then a value, so no single pass can tell what command runs there — hand the producer to enumerate_into directly, or wrap it in a function the helper is given by name\n' \
         "${f}" "${line}" "${col}" >&2
       ;;
     *)
