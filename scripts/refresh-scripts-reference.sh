@@ -163,9 +163,14 @@ function main() {
   # its status checked rather than piped into `mapfile` through a process
   # substitution, whose subshell would hide a failed sort behind an empty
   # list and regenerate the reference with every script missing from it.
+  # `LC_ALL=C` makes the order byte-deterministic: a dev locale such as
+  # en_US.UTF-8 ignores the hyphen of `check-pr-workflows-no-secrets.sh` at
+  # the primary collation level and files it after `check-protect-main.sh`,
+  # while a C-locale CI runner sorts it ahead — the same tree rendering two
+  # different documents, and --check red on whichever one is not committed.
   local -a sorted
   local sorted_out
-  if ! sorted_out="$(printf '%s\n' "${scripts[@]}" | sort)"; then
+  if ! sorted_out="$(printf '%s\n' "${scripts[@]}" | LC_ALL=C sort)"; then
     log_err "could not sort the script list under ${scripts_dir}"
     exit 2
   fi

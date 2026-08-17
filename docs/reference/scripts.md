@@ -837,6 +837,12 @@ digest-repoint supply-chain class) and fails. Floating-major pins
 a hard fail their new commit must be reachable from the upstream
 default branch — a force-pushed dangling commit fails.
 
+### scripts/check-pr-workflows-no-secrets.sh
+
+Lint: no workflow triggered by `pull_request` /
+`pull_request_target` references any `secrets.*` other than
+`secrets.GITHUB_TOKEN`.
+
 ### scripts/check-pre-commit-hooks-sha-parity.sh
 
 Lint: the SHA embedded in `flake.nix`'s
@@ -849,12 +855,6 @@ Lint: the live `protect-main` branch ruleset matches
 the desired posture, the in-tree mirror at
 `.github/rulesets/protect-main.json`, and the `## Required contexts`
 table in `docs/security/required-checks.md`.
-
-### scripts/check-pr-workflows-no-secrets.sh
-
-Lint: no workflow triggered by `pull_request` /
-`pull_request_target` references any `secrets.*` other than
-`secrets.GITHUB_TOKEN`.
 
 ### scripts/check-pull-request-target-absent.sh
 
