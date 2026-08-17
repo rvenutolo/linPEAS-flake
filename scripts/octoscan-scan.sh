@@ -127,6 +127,10 @@ repo_root="$(git rev-parse --show-toplevel 2>/dev/null || printf '%s' "$PWD")"
 workflows_dir="${repo_root}/.github/workflows"
 
 shopt -s nullglob
+# glob-exempt: an empty match set is a reported outcome here rather than a
+# missed scan — the branch directly below prints `has-finding=false` with a
+# `nothing-to-scan` classification, so a caller reading the summary can tell
+# a workflow-free tree from a tree that scanned clean
 workflows=("${workflows_dir}"/*.yml "${workflows_dir}"/*.yaml)
 shopt -u nullglob
 

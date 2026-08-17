@@ -101,6 +101,16 @@ expect bad-glob-empty-rationale.sh 1 \
 # both directions: an exemption written for one class must not silence
 # the other, or a single marker word would be an opt-out from both rules
 # at once no matter which one the site was actually reasoned about.
+# The glob rule covers an array assignment as well as a loop head, and
+# the diagnostic has to say which one it found: an assignment is not a
+# loop, so the loop sentence would send a reader hunting for a `for` that
+# is not in the file. Asserting the sentence and not only the exit code
+# is what holds the two apart.
+expect bad-glob-array-assign.sh 1 \
+  'bad-glob-array-assign.sh:11:7: this array assignment expands a glob directly'
+expect bad-glob-array-empty-rationale.sh 1 \
+  'bad-glob-array-empty-rationale.sh:9:8: glob-exempt marker carries no rationale'
+
 expect bad-glob-marker-mismatch.sh 1 \
   'bad-glob-marker-mismatch.sh:11:1: this for loop iterates a glob directly'
 expect bad-producer-marker-mismatch.sh 1 \
@@ -119,6 +129,25 @@ expect bad-producer-marker-mismatch.sh 1 \
 run_expect 'all-good-glob-shapes' \
   "${FIXTURES}/good-glob-into.sh"$'\n'"${FIXTURES}/good-glob-exempt.sh"$'\n'"${FIXTURES}/good-glob-arg-only.sh"$'\n'"${FIXTURES}/good-no-glob-loop.sh" \
   0 '4 file(s) scanned, 4 scan site(s) classified, 1 exemption(s)'
+
+# One marker word answers for both glob shapes, so an assignment states
+# its exemption in exactly the words a loop does. The exemption count is
+# what proves the marker was honored rather than the site never having
+# been recognized: an unrecognized assignment would also exit 0, at zero
+# exemptions.
+expect good-glob-array-exempt.sh 0 \
+  '1 file(s) scanned, 1 scan site(s) classified, 1 exemption(s)'
+
+# @description The negative the whole rule rests on. Patterns reach
+# `glob_into` as quoted strings and are expanded inside the helper, so a
+# metacharacter inside quotes is not a scan whose breadth went
+# unasserted. Were the assignment rule to count one, every compliant call
+# site in this repo would become a violation of the rule it satisfies —
+# and the single classified site here is the `glob_into` call alone, so a
+# rule that started counting the two quoted-pattern assignments would
+# move this line rather than merely failing.
+expect good-glob-array-pattern-strings.sh 0 \
+  '1 file(s) scanned, 1 scan site(s) classified, 0 exemption(s)'
 
 # @description The producer tally is its own breadth assertion, separate
 # from the file enumeration: a real file can be scanned and yield no

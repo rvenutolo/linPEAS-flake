@@ -287,6 +287,10 @@ function main() {
   # less than the repo holds.
   local -a fixture_dirs=()
   shopt -s nullglob
+  # glob-exempt: a repo may legitimately hold no fixture directory at all, and
+  # the scan root is already gated — `fixtures_root` sits under the same
+  # `tests_dir` the `glob_into harness_paths` call above refuses to find empty,
+  # so an unreachable tree fails there and never reaches this sweep
   fixture_dirs=("${fixtures_root}"/*/)
   shopt -u nullglob
   local fixture_dir orphan_name
