@@ -15,14 +15,19 @@
 # array assignment in its element list may expand a pattern, unless an
 # inline `# glob-exempt: <rationale>` marker says an empty match set is
 # that site's normal state. A filter-driven scan narrows an
-# already-enumerated set through `filter_into` — a `*_FILTER` variable
-# may be read at file scope to reach that call, but not again inside a
-# `for` or `while` loop over the narrowed selection, nor in a function
-# that loop calls — one hop out; a function called only by that function
-# still evades and stays outside what this pass decides — and not at all
-# in a file that never calls `filter_into`, unless an inline
-# `# filter-exempt: <rationale>` marker says the direct read is
-# deliberate. Those three are the positions a single pass over the tree
+# already-enumerated set through `filter_into` — a variable named `FILTER`
+# or ending `_FILTER` may be read at file scope to reach that call, but
+# not again inside a `for` or `while` loop over the narrowed selection,
+# nor in a function that loop calls — one hop out; a function called only
+# by that function still evades and stays outside what this pass decides
+# — and not at all in a file that never calls `filter_into`, unless an
+# inline `# filter-exempt: <rationale>` marker says the direct read is
+# deliberate. Copying a filter value into a target whose own name does not
+# match that same pattern is a violation at the assignment, wherever the
+# copy is later read, because every one of the checks above keys on the
+# name of the variable being read and a value under a fresh name would
+# otherwise satisfy the letter of all three while re-introducing the
+# defect. Those four are the positions a single pass over the tree
 # decides; a pattern that reaches a scan by any other route is outside
 # what this lint sees, and the rule is stated no wider than that.
 #
@@ -53,7 +58,7 @@
 # A filter-driven scan fails a third way, one layer past enumeration and
 # globbing: `filter_into` narrows a set the other two helpers already
 # proved non-empty, and it is the one place that narrowing's own
-# cardinality is asserted. A loop that reads the raw `*_FILTER` variable
+# cardinality is asserted. A loop that reads the raw filter variable
 # again — directly in its own body, or one hop out in a function the loop
 # calls by name — instead of trusting the selection `filter_into` handed
 # back, re-applies the filter test outside the helper. Whether that second
@@ -62,24 +67,37 @@
 # helper never narrowed is not decidable at the read site, and the
 # second is the empty-root failure the helper exists to catch: a filter
 # matching nothing selects no path, the loop body never fires, and the
-# run exits 0. A file that reads a `*_FILTER` variable and never calls
+# run exits 0. A file that reads a filter variable and never calls
 # `filter_into` at all is the same hole with no call site to point to:
 # nothing anywhere in that file asserts the selection the read implies
 # is non-empty.
+#
+# A filter-driven scan fails a fourth way, sideways rather than past any
+# of the first three: copying the filter value into a variable whose own
+# name is not `FILTER` or `*_FILTER` moves every later read of that copy
+# outside all three checks above at once, because each one keys on the
+# name of the variable being read rather than tracing where its value
+# came from. The copy is flagged at the assignment regardless of where or
+# how many times the copied name is later read, which is what keeps the
+# rule decidable in one pass rather than requiring the kind of dataflow
+# tracing the other three checks were built to avoid.
 #
 # That is what makes all three rules decidable in one pass. Associating a
 # scan with a cardinality test written an arbitrary distance later is not
 # something a textual rule can do; asking whether a producer is an
 # argument to the helper is local to one call expression, so is asking
 # whether a `for` loop or an array assignment expands a pattern in its
-# own words, and so is asking whether a `*_FILTER` read falls inside a
+# own words, and so is asking whether a filter-named read falls inside a
 # loop's own extent or outside every `filter_into` call in the file.
 # Patterns handed to `glob_into` are arguments of a `CallExpr` — never
 # `WordIter` items, never array elements — and reach it quoted, so a
 # compliant call site cannot false-hit the glob rule however many
-# metacharacters it carries. A `*_FILTER` read handed to `filter_into` as
-# its own argument is excluded from the filter rule the same way, so the
-# compliant call site cannot false-hit the rule it satisfies either.
+# metacharacters it carries. A filter-named read handed to `filter_into`
+# as its own argument is excluded from the filter rule the same way, and
+# the sanctioned `readonly FILE_FILTER="${WORKFLOW_FILE_FILTER:-}"` shape
+# stays legal under the alias check for the same reason: its own target is
+# itself a filter name, so a compliant call site cannot false-hit either
+# rule it satisfies.
 #
 # Detection parses each script's syntax tree via `shfmt --to-json` (the
 # mvdan.cc/sh parser `shfmt` and `treefmt` already run over this repo)
@@ -98,8 +116,9 @@
 # The count of scan sites classified — producer calls plus `glob_into`
 # call sites plus glob loops plus glob array assignments plus
 # `filter_into` call sites, plus filter reads inside a loop, plus the
-# single read reported in a file that calls the helper nowhere — is
-# itself asserted nonzero (unless LINT_ALLOW_EMPTY_SCAN=1). A grammar that
+# single read reported in a file that calls the helper nowhere, plus a
+# filter value copied to an unwatched name — is itself asserted nonzero
+# (unless LINT_ALLOW_EMPTY_SCAN=1). A grammar that
 # silently recognized nothing would report "0 violations" and exit 0 —
 # the same clean line a genuinely scan-free tree prints — leaving this
 # gate off while green, which is the exact failure it exists to prevent
@@ -131,7 +150,8 @@
 # expanding a glob at its own head, an array assignment expanding one in
 # its element list, a loop reading a filter variable directly, a script
 # reading a filter variable without ever calling `filter_into`, an
-# exemption marker with no rationale, or an exemption marker that
+# assignment copying a filter value to a name outside the filter pattern,
+# an exemption marker with no rationale, or an exemption marker that
 # excuses no site this pass classified, 2 when a required tool is
 # absent, the scan set could not be enumerated (or classified nothing),
 # a named path does not exist, or a file could not be parsed as shell.
@@ -220,6 +240,7 @@ readonly FILTER_WHAT='filter selection'
 readonly FILTER_LOOP_WHAT='filter read in a loop'
 readonly FILTER_FUNC_WHAT='filter read in a function a loop calls'
 readonly FILTER_MISSING_WHAT='filter read without the helper'
+readonly FILTER_ALIAS_WHAT='filter value copied to another name'
 # shellcheck disable=SC2016 # jq program literal; $-prefixed names are jq variables, not shell
 readonly JQ_PROG='
 # A word yields text only when it is unambiguously static: a bare
@@ -418,15 +439,39 @@ def producer_of(args):
     | select((.Args[0] | literal_word_text) == "filter_into")] as $filter_calls
 | [$filter_calls[] | {from: .Pos.Offset, to: .End.Offset}] as $filter_call_ranges
 
-# A read of a variable whose name ends `_FILTER`. The name is the whole
-# predicate: this repo spells every fixture-driving filter that way, and
-# a rule keyed on the identity of the enclosing script would say nothing
-# about a new one.
+# A read of a variable named `FILTER` or ending `_FILTER`. The name is
+# the whole predicate: this repo spells every fixture-driving filter that
+# way, whether alone or suffixed, and a rule keyed on the identity of the
+# enclosing script would say nothing about a new one.
 | [.. | objects | select(.Type == "ParamExp")
-    | select(((.Param.Value // "") | test("_FILTER$")))
+    | select(((.Param.Value // "") | test("(^|_)FILTER$")))
     | . as $r
     | select(([$filter_call_ranges[]
         | select($r.Pos.Offset >= .from and $r.Pos.Offset < .to)] | length) == 0)] as $filter_reads
+
+# An assignment copying a filter value into a target whose own name is not
+# a filter name. The copy is the violation, wherever it is later read:
+# every arm of this rule keys on the name of the variable being read, and a
+# value under a fresh name satisfies the letter of all three while
+# re-introducing the defect. Flagging the copy keeps the whole rule
+# decidable in one pass, which tracing the value to its read would not.
+#
+# `local`, `readonly`, `declare` and `export` forms are filed under a
+# different node than a bare assignment, so the walk selects any object
+# carrying a `Name` rather than a call expressions assignment list — the
+# declared form is the one a copy inside a function actually takes. An
+# assignment with no value at all carries no `Value` key, and dereferencing
+# the absent key kills the whole walk partway through the tree, which a
+# swallowed status then reports as a clean file: the fallbacks below are
+# what keep that from happening.
+| [.. | objects | select(has("Name")) | select(.Name.Value != null)
+    | . as $a
+    | select(($a.Name.Value | test("(^|_)FILTER$")) == false)
+    | (($a.Value // $a.Array) // null) as $rhs
+    | select($rhs != null)
+    | select(([$rhs | .. | objects | select(.Type == "ParamExp")
+        | (.Param.Value // "") | select(test("(^|_)FILTER$"))] | length) > 0)
+    | "bad\t\($rhs.Pos.Line)\t\($rhs.Pos.Col)\t\($filter_alias_what)"] as $filter_alias
 
 | [$filter_calls[] | "ok\t\(.Pos.Line)\t\(.Pos.Col)\t\($filter_what)"] as $filter_ok
 
@@ -468,7 +513,7 @@ def producer_of(args):
 | [.. | objects | select(has("Hash"))
     | "cmt\t\(.Pos.Line)\t\(.Pos.Col)\t\(.Text // "")"] as $comments
 
-| ($comments + $direct + $standalone + $glob_calls + $glob_loops + $glob_arrays + $filter_ok + $filter_in_loops + $filter_in_funcs + $filter_missing)[]
+| ($comments + $direct + $standalone + $glob_calls + $glob_loops + $glob_arrays + $filter_ok + $filter_in_loops + $filter_in_funcs + $filter_missing + $filter_alias)[]
 '
 
 # The exemption marker word each rule answers to, keyed by the record's
@@ -508,6 +553,7 @@ declare -A MARKER_BY_WHAT=(
   ["${FILTER_LOOP_WHAT}"]="${MARKER_FILTER_WORD}"
   ["${FILTER_FUNC_WHAT}"]="${MARKER_FILTER_WORD}"
   ["${FILTER_MISSING_WHAT}"]="${MARKER_FILTER_WORD}"
+  ["${FILTER_ALIAS_WHAT}"]="${MARKER_FILTER_WORD}"
 )
 readonly MARKER_BY_WHAT
 
@@ -543,7 +589,7 @@ for f in "${paths[@]}"; do
   if ! records="$(jq --raw-output --arg glob_what "${GLOB_WHAT}" \
     --arg glob_array_what "${GLOB_ARRAY_WHAT}" --arg filter_what "${FILTER_WHAT}" \
     --arg filter_loop_what "${FILTER_LOOP_WHAT}" --arg filter_func_what "${FILTER_FUNC_WHAT}" \
-    --arg filter_missing_what "${FILTER_MISSING_WHAT}" \
+    --arg filter_missing_what "${FILTER_MISSING_WHAT}" --arg filter_alias_what "${FILTER_ALIAS_WHAT}" \
     "${JQ_PROG}" <<<"${ast_json}")"; then
     printf '%s: jq failed walking the parsed syntax tree\n' "${f}" >&2
     exit 2
@@ -643,6 +689,10 @@ for f in "${paths[@]}"; do
       ;;
     "${FILTER_MISSING_WHAT}")
       printf '%s:%s:%s: this script reads a filter variable but never calls filter_into; a selection whose size is asserted nowhere reads an empty result as a clean tree\n' \
+        "${f}" "${line}" "${col}" >&2
+      ;;
+    "${FILTER_ALIAS_WHAT}")
+      printf '%s:%s:%s: this assignment copies a filter value to another name; every arm of the filter rule keys on the name being read, so the copy makes the read invisible while leaving the selection unasserted — pass the filter to filter_into and read the selection it returns\n' \
         "${f}" "${line}" "${col}" >&2
       ;;
     *)
