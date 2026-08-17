@@ -214,6 +214,20 @@ run_expect 'good-filter-shapes' \
   "${FIXTURES}/good-filter-into.sh"$'\n'"${FIXTURES}/good-filter-file-scope-read.sh"$'\n'"${FIXTURES}/good-filter-into-in-loop.sh" \
   0 '3 file(s) scanned, 3 scan site(s) classified, 0 exemption(s)'
 
+# @description A `&&` or `||` chain onto a loop is the guard of the
+# loop, not its input, so the filter read in the chained condition stays
+# a file-scope read even though the loop sits on the right-hand side of
+# the same BinaryCmd. good-filter-and-chain.sh and good-filter-or-chain.sh
+# each read their filter once, in the chained condition, and call
+# filter_into elsewhere — alone, each prints the same single-call clean
+# summary every other file-scope-read fixture above does. Merged into
+# one run, the two-file, two-site tally is what proves both operators
+# were read as the guard shape rather than swallowed into the range of
+# the loop that follows them.
+run_expect 'good-filter-chain-shapes' \
+  "${FIXTURES}/good-filter-and-chain.sh"$'\n'"${FIXTURES}/good-filter-or-chain.sh" \
+  0 '2 file(s) scanned, 2 scan site(s) classified, 0 exemption(s)'
+
 # @description A loop read carrying a valid filter-exempt marker is
 # counted as an exemption rather than a hit, the same shape the glob
 # rule's own exempt fixtures prove above. The count pairs — one call site

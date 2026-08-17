@@ -346,10 +346,23 @@ def producer_of(args):
 # `.Cmd` rather than any statement that merely contains a loop
 # somewhere inside it is what keeps an `if` block from swallowing its
 # own condition into the range of the loop.
+#
+# `BinaryCmd.Op` is an opaque integer with no name in the JSON, fixed by
+# this parser version: 13 is `|`, 14 is `|&`. Only those two extend the
+# range of a loop, because only those two feed the loop data — a `&&`
+# (11) or `||` (12) chain onto a loop is the guard of the loop, not its
+# input: the chained condition decides whether the loop runs at all, and
+# that decision is made and read before the loop consumes anything, the
+# same relationship an `if` condition already has to a loop in its body.
+# Counting every `BinaryCmd` regardless of operator would swallow the
+# filter read of that guard into the range of the loop the same way an
+# unguarded `if` was already kept from doing, through a different
+# operator reaching the same shape.
 | ([.. | objects | select(has("Cmd"))
     | select((((.Cmd // {}) | .Type) == "ForClause") or (((.Cmd // {}) | .Type) == "WhileClause"))
     | {from: .Pos.Offset, to: .End.Offset}]
   + [.. | objects | select(.Type == "BinaryCmd")
+    | select(.Op == 13 or .Op == 14)
     | select(([(.Y // {}) | .. | objects
         | select(.Type == "ForClause" or .Type == "WhileClause")] | length) > 0)
     | {from: .Pos.Offset, to: .End.Offset}]) as $loops
