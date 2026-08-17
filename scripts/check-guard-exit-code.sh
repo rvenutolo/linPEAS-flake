@@ -147,10 +147,19 @@ function report(kind, ln, detail, gline) {
 # own finding, and an unmarked line is the hit. Both rules below share
 # this, so the marker means the same thing wherever it sits and neither
 # rule can drift into honoring an empty rationale on its own.
-function classify(hitkind, norkind, ln, detail, text, gline,   rest) {
-  if (text ~ /#[ \t]*exit-code-exempt:/) {
-    rest = text
-    sub(/^.*#[ \t]*exit-code-exempt:[ \t]*/, "", rest)
+#
+# The marker has to OPEN the comment on its line: everything up to and
+# including the first `#` is dropped and the remainder must begin with
+# the marker word. A sentence that merely names the marker — a comment
+# describing the escape hatch, say — leaves other words in front of it
+# and is prose about the rule rather than a use of it, so it excuses
+# nothing. A `#` inside a parameter expansion earlier on the line makes
+# this miss a real trailing marker, which reports the site instead of
+# excusing it: the safe direction, and visible rather than silent.
+function classify(hitkind, norkind, ln, detail, text, gline,   rest, after) {
+  after = text
+  if (sub(/^[^#]*#/, "", after) && match(after, /^[ \t]*exit-code-exempt:/)) {
+    rest = substr(after, RLENGTH + 1)
     rest = trim(rest)
     if (rest == "") {
       report(norkind, ln, detail, gline)
