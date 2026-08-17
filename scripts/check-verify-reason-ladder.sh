@@ -42,6 +42,19 @@
 # `name:` line, or anywhere else in the step is not seen. The rationale
 # after the colon must be non-empty.
 #
+# A marker excuses nothing in two shapes, both reported as drift rather
+# than silently accepted. On a step id already referenced by a
+# `steps.<id>.outcome` entry in the attribution env, assertion 1 would
+# have passed that step whether or not the marker existed. On the
+# attribution step's own `id:` line, assertion 1 skips it
+# unconditionally, so a marker there changes nothing it could exempt.
+# Unlike this lint's sibling exemption markers, this one sits on an
+# `id:` line, so it always names a step that genuinely exists in the
+# job — there is no shape here where a marker is attached to no site at
+# all, only one attached to a site assertion 1 was never going to flag.
+# Neither shape adds a tally to the clean summary line; it stays the
+# same three-count line it always was.
+#
 # See docs/security/verification.md.
 #
 # Env overrides (test-only):
@@ -50,7 +63,8 @@
 #
 # Exit codes:
 #   0  all four assertions hold
-#   1  drift detected (details printed to stderr)
+#   1  drift detected, including a reason-ladder-exempt marker that
+#      excuses nothing (details printed to stderr)
 #   2  missing yq / missing input file / unparsable workflow
 
 set -Eeuo pipefail

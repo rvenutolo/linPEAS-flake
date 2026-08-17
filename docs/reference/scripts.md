@@ -414,16 +414,30 @@ enumeration helper says nothing about whether a glob's match set may
 come back empty or a loop may read a filter variable directly, and the
 reverse holds in every direction.
 
+A site a marker was written for can still be rewritten into a
+compliant shape, moved, or dropped from the file entirely while the
+comment above it stays behind, so every marker word this lint owns is
+censused independently of whichever rule's sites a file happens to
+hold today: a `# glob-exempt:` comment sitting where the glob rule
+finds nothing to excuse is unconsumed exactly like an
+`# enumerate-exempt:` comment would be, because a marker protecting
+nothing keeps asserting the decision it was written for regardless of
+which of the three words it is spelled with. A marker classification
+never consumed while walking a file is reported on its own line, and
+the clean summary line carries the count as a fourth field alongside
+files scanned, sites classified and exemptions applied.
+
 Honors PATHS_OVERRIDE (newline-separated file list) for fixtures, and
 LINT_ALLOW_EMPTY_SCAN=1 to accept a run whose scan-site tally (or whose
 enumerated file count) comes back zero.
 Exit 0 clean, 1 on a producer outside `enumerate_into`, a `for` loop
 expanding a glob at its own head, an array assignment expanding one in
 its element list, a loop reading a filter variable directly, a script
-reading a filter variable without ever calling `filter_into`, or an
-exemption marker with no rationale, 2 when a required tool is absent,
-the scan set could not be enumerated (or classified nothing), a named
-path does not exist, or a file could not be parsed as shell.
+reading a filter variable without ever calling `filter_into`, an
+exemption marker with no rationale, or an exemption marker that
+excuses no site this pass classified, 2 when a required tool is
+absent, the scan set could not be enumerated (or classified nothing),
+a named path does not exist, or a file could not be parsed as shell.
 
 ### scripts/check-ephemeral-refs.sh
 
@@ -557,6 +571,22 @@ excusing it, which is the direction this lint is safe to fail in. A
 clean run prints the exemption count, so the exempt set is stated
 rather than open-ended.
 
+The same predicate that opens a marker's comment for classification
+also opens it for a census that runs after every hit and bare-mktemp
+check: a line whose comment opens with `exit-code-exempt:` is recorded
+as the file is read, marked consumed only when a hit or a bare mktemp
+is actually routed through it, and any recorded line left unconsumed
+once the file is done is reported as its own finding and fails the
+run — a marker still reads as a decision someone made about the guard
+beneath it, and keeps asserting that decision after the guard was
+rewritten into a compliant shape, moved, or left the file.
+Classification and the census share this one predicate rather than
+two, so a marker an earlier `#` hides from classification is hidden
+from the census identically, and is never both missed as an exemption
+and reported as unconsumed. The clean summary line reports this count
+too, as a third field alongside scripts scanned and exemptions
+applied.
+
 The scan recurses. The shared libraries under `scripts/lib/` decide
 which exit code their callers report — `enumerate_into` is where a
 could-not-run enumeration becomes exit 2 for every lint that uses it —
@@ -564,7 +594,8 @@ so a scan stopping at the top level would vouch for the code that
 settles the very convention this lint enforces.
 
 Honors SCRIPTS_DIR_OVERRIDE (default: scripts) for fixtures.
-Exit 0 clean, 1 on any hit, 2 on operational error.
+Exit 0 clean, 1 on any hit or an exemption marker that excuses no
+guard this pass classified, 2 on operational error.
 
 ### scripts/check-harden-runner-block.sh
 

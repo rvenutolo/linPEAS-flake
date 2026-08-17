@@ -335,7 +335,12 @@ and a clean run prints the exemption count. Matching anchors to the
 line's first `#`, so any earlier `#` on the line — inside a string, a
 `${x#y}` expansion, or anywhere else, whatever produced it — can hide a
 genuine trailing marker — the miss reports the site rather than
-silently excusing it, the safe direction for this lint to fail in. Full
+silently excusing it, the safe direction for this lint to fail in. A marker
+classification never routes an exit-1 hit or a bare `mktemp` through —
+because the site it was reasoned about was rewritten into a compliant
+shape, moved, or left the file — is reported as its own finding rather
+than passed over, and the clean run's summary line counts it as a
+third field alongside scripts scanned and exemptions applied. Full
 rationale:
 [Workflow hardening → guard-exit-code](../security/workflow-hardening.md#guard-exit-code).
 
@@ -418,6 +423,15 @@ purely diagnostic in-loop read (a `printf` naming the filter, say) is
 still flagged: the rule cannot tell that apart from a re-derived
 selection, so it takes a marker like any other in-loop read.
 
+All three markers — `# enumerate-exempt:`, `# glob-exempt:`, and
+`# filter-exempt:` — are censused the same way regardless of which
+rule's sites a file happens to hold: a marker classification never
+consumed while walking a file, because the site it was reasoned about
+was rewritten into a compliant shape, moved, or left the file, is
+reported on its own line rather than passed over. The clean run's
+summary line counts it as a fourth field alongside files scanned, sites
+classified and exemptions applied.
+
 ## Treefmt YAML quote gotcha
 
 Prettier rewrites single-quoted YAML scalars to double-quoted. Run
@@ -467,3 +481,20 @@ call's own bare positional exit-code argument (parsed via `shfmt --to-json`), no
 merely mentions the digit 2 in prose cannot be mistaken for the
 exit-code argument. Full rationale: [Workflow hardening →
 payload-shape-scenario](../security/workflow-hardening.md#payload-shape-scenario).
+
+## Reason-ladder unearned exemption
+
+`scripts/check-verify-reason-ladder.sh` also rejects a
+`# reason-ladder-exempt: <reason>` marker that excuses nothing. The
+marker sits on a step's own `id:` line, so it always names a step that
+genuinely exists in the `verify` job — there is no shape here where a
+marker is attached to no site at all. What it can be is unearned,
+in either of two shapes: on a step id the attribution env already
+references via `steps.<id>.outcome`, where coverage would have passed
+that step whether or not the marker existed, or on the attribution
+step's own id, which coverage skips unconditionally regardless of any
+marker. Either shape is reported as drift and fails the run. Unlike
+this lint's sibling exemption markers, an unearned exemption here adds
+no field to the clean summary line, which stays the same three-count
+line it always was. Full rationale: [Verification → Ladder coverage is
+linted](../security/verification.md#ladder-coverage-is-linted).

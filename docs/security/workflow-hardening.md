@@ -72,6 +72,16 @@ This protects only an explicitly closed or merged PR; routine PRs are unaffected
 
 Enforced by `scripts/check-auto-merge-decline-gate.sh`. Wired as the `lint-workflow-security` CI job (member check `auto-merge-decline-gate`) and as a pre-commit hook.
 
+## verify-reason-ladder
+
+The `attribute failure reason` step of `verify-latest-release.yml` covers every `id:`-carrying step of the `verify` job, reads every env var it declares, documents every reason token it emits, and walks the ladder in step-execution order — four assertions binding four hand-synced copies of the same mapping.
+
+The escape hatch is a `# reason-ladder-exempt: <reason>` comment on the same line as a step's `id:` key, for a step that legitimately carries an id without being a verification outcome; the rationale must be non-empty.
+
+A marker excuses nothing in two shapes, both reported as drift. On a step id the attribution env already references via `steps.<id>.outcome`, coverage would have passed that step whether or not the marker existed. On the attribution step's own id, coverage skips it unconditionally, so a marker there changes nothing it could exempt. This marker always sits on a real step's `id:` line — unlike enumerate-helper-required's and guard-exit-code's markers, it can never be attached to no site at all — so an exemption that protects nothing here is unearned rather than orphaned. Neither shape adds a field to the clean summary line.
+
+Enforced by `scripts/check-verify-reason-ladder.sh`. Wired as the `lint-workflow-security` CI job (member check `verify-reason-ladder`). Full rationale: [Verification → Ladder coverage is linted](verification.md#ladder-coverage-is-linted).
+
 ## script-shebang-pipefail
 
 Every executable under `scripts/` starts with `#!/usr/bin/env bash` (exact first line) and contains `set -Eeuo pipefail` somewhere in the file.
@@ -157,6 +167,8 @@ A hit is the command in *command position* — after line start, `$(`, a pipe, a
 
 The escape hatch is the same `# exit-code-exempt: <rationale>` marker, on the creation line, for a call whose failure genuinely is the finding. Both rules share one marker implementation, so an empty rationale is a diagnostic on either of them rather than a silent pass, and both feed the same exemption tally a clean run prints.
 
+Both rules also share one census of the marker itself, run after classification finishes with the file: every line whose comment opens with `exit-code-exempt:` is recorded as the file is read, marked consumed only when an exit-1 hit or a bare `mktemp` is actually routed through it, and any recorded line left unconsumed once the file is done is reported as its own finding and fails the run. A marker still reads as a decision someone made about the guard or the creation beneath it, and keeps asserting that decision after the site was rewritten into a compliant shape, moved, or left the file. Classification and the census share one predicate rather than two, so a marker an earlier `#` hides from classification is hidden from the census identically, and is never both missed as an exemption and reported as unconsumed. The clean summary line reports this count too, as a third field alongside scripts scanned and exemptions applied.
+
 Enforced by `scripts/check-guard-exit-code.sh`. Wired as the `lint-script-hygiene` CI job (member check `guard-exit-code`).
 
 ## path-hygiene
@@ -222,6 +234,8 @@ A read outside every loop is legal without a marker — the rule tests position,
 Either banned shape — the in-loop re-read, or the missing `filter_into` call entirely — takes an inline `# filter-exempt: <rationale>` marker, held to the same non-empty-rationale rule as its siblings; the marker word is keyed to this shape, so neither `# enumerate-exempt:` nor `# glob-exempt:` excuses it.
 
 Every marker among the three — `# enumerate-exempt:`, `# glob-exempt:`, `# filter-exempt:` — has to open its comment: the comment's text is read from the syntax tree, not the raw line, and the marker word must be the first thing in that text. A sentence that merely names a marker — this lint's own header, or a doc paragraph describing the escape hatch — is prose about the rule rather than a use of it, and excuses nothing. Reading from the tree also makes the anchor immune to a `#` that appears earlier on the line inside a string or a `${x#y}` expansion, unlike guard-exit-code's matcher, which anchors to a line's first `#` and so can be misled by one earlier on the line.
+
+A site a marker was written for can be rewritten into a compliant shape, moved, or dropped from the file entirely while the comment above it stays behind, so all three marker words are censused independently of whichever rule's sites a file happens to hold today. A `# glob-exempt:` comment sitting where the glob rule finds nothing to excuse is unconsumed exactly like an `# enumerate-exempt:` comment would be, because a marker protecting nothing keeps asserting the decision it was written for regardless of which of the three words it is spelled with. A marker classification never consumed while walking a file is reported on its own line, and the clean summary line carries the count as a fourth field alongside files scanned, sites classified and exemptions applied.
 
 Enforced by `scripts/check-enumerate-helper-required.sh`. Wired as the `lint-script-hygiene` CI job (member check `enumerate-helper-required`).
 

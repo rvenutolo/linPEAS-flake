@@ -58,6 +58,22 @@
 # clean run prints the exemption count, so the exempt set is stated
 # rather than open-ended.
 #
+# The same predicate that opens a marker's comment for classification
+# also opens it for a census that runs after every hit and bare-mktemp
+# check: a line whose comment opens with `exit-code-exempt:` is recorded
+# as the file is read, marked consumed only when a hit or a bare mktemp
+# is actually routed through it, and any recorded line left unconsumed
+# once the file is done is reported as its own finding and fails the
+# run — a marker still reads as a decision someone made about the guard
+# beneath it, and keeps asserting that decision after the guard was
+# rewritten into a compliant shape, moved, or left the file.
+# Classification and the census share this one predicate rather than
+# two, so a marker an earlier `#` hides from classification is hidden
+# from the census identically, and is never both missed as an exemption
+# and reported as unconsumed. The clean summary line reports this count
+# too, as a third field alongside scripts scanned and exemptions
+# applied.
+#
 # The scan recurses. The shared libraries under `scripts/lib/` decide
 # which exit code their callers report — `enumerate_into` is where a
 # could-not-run enumeration becomes exit 2 for every lint that uses it —
@@ -65,7 +81,8 @@
 # settles the very convention this lint enforces.
 #
 # Honors SCRIPTS_DIR_OVERRIDE (default: scripts) for fixtures.
-# Exit 0 clean, 1 on any hit, 2 on operational error.
+# Exit 0 clean, 1 on any hit or an exemption marker that excuses no
+# guard this pass classified, 2 on operational error.
 set -Eeuo pipefail
 IFS=$'\n\t'
 _lib_dir="${BASH_SOURCE[0]%/*}"

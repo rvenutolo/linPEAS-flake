@@ -108,16 +108,30 @@
 # come back empty or a loop may read a filter variable directly, and the
 # reverse holds in every direction.
 #
+# A site a marker was written for can still be rewritten into a
+# compliant shape, moved, or dropped from the file entirely while the
+# comment above it stays behind, so every marker word this lint owns is
+# censused independently of whichever rule's sites a file happens to
+# hold today: a `# glob-exempt:` comment sitting where the glob rule
+# finds nothing to excuse is unconsumed exactly like an
+# `# enumerate-exempt:` comment would be, because a marker protecting
+# nothing keeps asserting the decision it was written for regardless of
+# which of the three words it is spelled with. A marker classification
+# never consumed while walking a file is reported on its own line, and
+# the clean summary line carries the count as a fourth field alongside
+# files scanned, sites classified and exemptions applied.
+#
 # Honors PATHS_OVERRIDE (newline-separated file list) for fixtures, and
 # LINT_ALLOW_EMPTY_SCAN=1 to accept a run whose scan-site tally (or whose
 # enumerated file count) comes back zero.
 # Exit 0 clean, 1 on a producer outside `enumerate_into`, a `for` loop
 # expanding a glob at its own head, an array assignment expanding one in
 # its element list, a loop reading a filter variable directly, a script
-# reading a filter variable without ever calling `filter_into`, or an
-# exemption marker with no rationale, 2 when a required tool is absent,
-# the scan set could not be enumerated (or classified nothing), a named
-# path does not exist, or a file could not be parsed as shell.
+# reading a filter variable without ever calling `filter_into`, an
+# exemption marker with no rationale, or an exemption marker that
+# excuses no site this pass classified, 2 when a required tool is
+# absent, the scan set could not be enumerated (or classified nothing),
+# a named path does not exist, or a file could not be parsed as shell.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
