@@ -46,6 +46,10 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+_lib_dir="${BASH_SOURCE[0]%/*}"
+if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
+# shellcheck source=scripts/lib/enumerate.sh
+source "${_lib_dir}/lib/enumerate.sh"
 
 readonly DEFAULT_WORKFLOWS_DIR=".github/workflows"
 readonly DEFAULT_ACTIONS_DIR=".github/actions"
@@ -88,17 +92,25 @@ first_meaningful_line() {
   '
 }
 
-files=()
-shopt -s nullglob globstar
+# Patterns are collected as strings and expanded inside `glob_into`, which
+# asserts the match set is non-empty. A merge-gate lint whose whole scan set
+# expands to nothing prints nothing and exits 0 — byte-identical to a clean
+# run over a fully compliant tree. The assertion is over the union rather than
+# per pattern because a repo may hold workflows and no composite actions;
+# only both roots coming up empty is the could-not-run.
+declare -a patterns=()
 if [[ -n ${workflows_dir} && -d ${workflows_dir} ]]; then
-  files+=("${workflows_dir}"/*.yml "${workflows_dir}"/*.yaml)
+  patterns+=("${workflows_dir}/*.yml" "${workflows_dir}/*.yaml")
 fi
 if [[ -n ${actions_dir} && -d ${actions_dir} ]]; then
   # `**` also matches zero segments, so this covers both
   # `<dir>/<name>/action.yml` and a bare `<dir>/action.yml`.
-  files+=("${actions_dir}"/**/action.yml "${actions_dir}"/**/action.yaml)
+  patterns+=("${actions_dir}/**/action.yml" "${actions_dir}/**/action.yaml")
 fi
-shopt -u nullglob globstar
+declare -a files=()
+shopt -s globstar
+glob_into files 'workflow and composite-action files' ${patterns+"${patterns[@]}"}
+shopt -u globstar
 
 failed=0
 for f in "${files[@]}"; do

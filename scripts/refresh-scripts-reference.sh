@@ -22,6 +22,8 @@ source "${_lib_dir}/lib/log.sh"
 source "${_lib_dir}/lib/awk-path.sh"
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+# shellcheck source=scripts/lib/enumerate.sh
+source "${_lib_dir}/lib/enumerate.sh"
 install_err_trap
 
 # Temp files removed by the EXIT trap. Declared at script scope, not main-local:
@@ -150,26 +152,29 @@ function main() {
   refresh_bucket="$(make_temp)"
   other_bucket="$(make_temp)"
 
-  # Walk scripts in sorted order, skipping `_*.sh` helpers.
+  # Walk scripts in sorted order, skipping `_*.sh` helpers. The match set is
+  # asserted non-empty rather than iterated as-is: a scripts root that exists
+  # and holds nothing would otherwise rewrite the tracked 1300-line reference
+  # down to an empty managed block while the run reports success.
   local script name json bucket
-  shopt -s nullglob
   local -a scripts
-  scripts=("${scripts_dir}"/*.sh)
-  shopt -u nullglob
+  glob_into scripts 'scripts directory' "${scripts_dir}/*.sh"
   # Sort by basename for deterministic output. The sort is captured with
   # its status checked rather than piped into `mapfile` through a process
   # substitution, whose subshell would hide a failed sort behind an empty
   # list and regenerate the reference with every script missing from it.
+  # `LC_ALL=C` makes the order byte-deterministic: a dev locale such as
+  # en_US.UTF-8 ignores the hyphen of `check-pr-workflows-no-secrets.sh` at
+  # the primary collation level and files it after `check-protect-main.sh`,
+  # while a C-locale CI runner sorts it ahead — the same tree rendering two
+  # different documents, and --check red on whichever one is not committed.
   local -a sorted
   local sorted_out
-  sorted=()
-  if [[ ${#scripts[@]} -gt 0 ]]; then
-    if ! sorted_out="$(printf '%s\n' "${scripts[@]}" | sort)"; then
-      log_err "could not sort the script list under ${scripts_dir}"
-      exit 2
-    fi
-    mapfile -t sorted <<<"${sorted_out}"
+  if ! sorted_out="$(printf '%s\n' "${scripts[@]}" | LC_ALL=C sort)"; then
+    log_err "could not sort the script list under ${scripts_dir}"
+    exit 2
   fi
+  mapfile -t sorted <<<"${sorted_out}"
 
   for script in "${sorted[@]}"; do
     name="$(basename -- "${script}")"
