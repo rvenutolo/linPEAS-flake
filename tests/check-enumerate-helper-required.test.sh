@@ -177,14 +177,22 @@ expect bad-prose-quoted-enumerate-marker.sh 1 \
 expect bad-prose-quoted-filter-marker.sh 1 \
   'bad-prose-quoted-filter-marker.sh:17:9: this loop reads a filter variable directly'
 
-# @description A block that names the marker in prose and then states it
-# takes its rationale from the marker's own comment, not the sentence
-# that mentions it. Alone, this fixture prints a clean summary
-# byte-identical to good-glob-array-exempt.sh's — both are a single file
-# with one classified site and one exemption — so good-glob-into.sh's
-# own single non-exempt site is folded in beside it; the resulting
-# two-file tally is what separates the marker-after-prose-quote proof
-# from that sibling rather than the exit code or message shape alone.
+# @description A comment block that names the marker in prose, ending
+# that sentence on the word itself, sits directly above the real marker
+# that exempts this site. A matcher that reads the rationale from the
+# first raw occurrence of the marker word in the joined block — rather
+# than from the comment that actually opens with it — strips to the
+# prose sentence's own trailing colon and finds nothing after it before
+# the line break, so a genuinely well-formed exemption is misread as
+# carrying no rationale and the site wrongly stays a hit. The exemption
+# succeeding at exit 0 is what proves the rationale came from the marker
+# comment itself rather than from whichever comment happened to end in
+# the word first. Alone, this fixture's clean summary is byte-identical
+# to good-glob-array-exempt.sh's — both are a single file with one
+# classified site and one exemption — so good-glob-into.sh's own single
+# non-exempt site is folded in beside it; the resulting two-file tally is
+# what separates this proof from that sibling rather than the exit code
+# or message shape alone.
 run_expect 'good-marker-after-prose-quote' \
   "${FIXTURES}/good-marker-after-prose-quote.sh"$'\n'"${FIXTURES}/good-glob-into.sh" \
   0 '2 file(s) scanned, 2 scan site(s) classified, 1 exemption(s)'
