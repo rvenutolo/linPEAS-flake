@@ -64,8 +64,10 @@ function expect() {
 
 # @description A reason-ladder-exempt marker on a step the attribution env
 # already reads excuses nothing, and neither does one on the attribution
-# step itself: assertion 1 skips the attribution step unconditionally and
-# would have passed the referenced step regardless of the marker. Both
+# step itself — but for two different reasons, so each gets its own
+# diagnostic: assertion 1 skips the attribution step unconditionally
+# regardless of any marker, while it would have passed the referenced step
+# because the env already reads it, not because assertion 1 skips it. Both
 # arms are covered by the one fixture — 'step-alpha', which the env
 # already reads via STEP_ALPHA, and 'attribute', the ladder's own step —
 # so both diagnostics come from one invocation. They are asserted on one
@@ -76,8 +78,8 @@ function expect() {
 # catch.
 function expect_unearned_exempt() {
   local -r scenario='bad-unearned-exempt'
-  local -r referenced_msg='reason-ladder-exempt marker on step id step-alpha excuses nothing'
-  local -r attribute_msg='reason-ladder-exempt marker on step id attribute excuses nothing'
+  local -r referenced_msg='reason-ladder-exempt marker on step id step-alpha excuses nothing; the attribution env already reads this step, so assertion 1 would have passed it whether or not the marker were there'
+  local -r attribute_msg='reason-ladder-exempt marker on step id attribute excuses nothing; assertion 1 skips the attribution step unconditionally, so an exemption on it changes nothing'
 
   local stderr_file stdout_file outcome_file
   stderr_file="$(mktemp)"

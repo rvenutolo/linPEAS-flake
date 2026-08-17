@@ -221,14 +221,21 @@ if ((bad_env_name)); then
   exit 1
 fi
 
-# A marker on a step the attribution env already references excuses
-# nothing: assertion 1 would have passed that step regardless. Unlike its
-# sibling lints, this marker always names a real step, so the finding is
-# an unearned exemption rather than one attached to no site — the same
-# drift in a different shape, and the same reason to report it.
+# A reason-ladder-exempt marker excuses nothing in two different shapes.
+# Unlike its sibling lints, this marker always names a real step, so
+# either shape is an unearned exemption rather than one attached to no
+# site — the same drift, reported with the reason that actually applies
+# to the step the marker sits on rather than one sentence doing duty for
+# both: the two shapes are true for different reasons, and a marker on
+# the attribution step is never also read by that step's own env block,
+# so a single sentence claiming both would be false for one of them.
 for id in "${!EXEMPT[@]}"; do
-  if [[ ${id} == "${ATTRIBUTE_ID}" ]] || [[ -n ${REFERENCED[${id}]:-} ]]; then
-    printf '%s:%s: reason-ladder-exempt marker on step id %q excuses nothing; the attribution env already reads this step, so the exemption asserts a decision the lint no longer honors — delete it\n' \
+  if [[ -n ${REFERENCED[${id}]:-} ]]; then
+    printf '%s:%s: reason-ladder-exempt marker on step id %q excuses nothing; the attribution env already reads this step, so assertion 1 would have passed it whether or not the marker were there — delete it\n' \
+      "${WORKFLOW}" "${EXEMPT_LINE[${id}]}" "${id}" >&2
+    drift=1
+  elif [[ ${id} == "${ATTRIBUTE_ID}" ]]; then
+    printf '%s:%s: reason-ladder-exempt marker on step id %q excuses nothing; assertion 1 skips the attribution step unconditionally, so an exemption on it changes nothing — delete it\n' \
       "${WORKFLOW}" "${EXEMPT_LINE[${id}]}" "${id}" >&2
     drift=1
   fi
