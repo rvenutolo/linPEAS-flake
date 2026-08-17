@@ -72,4 +72,24 @@ if [[ ${malformed_exit} != 1 || ${malformed_err} != *"could not evaluate"* ]]; t
 fi
 printf 'OK   malformed composite rejected\n'
 
+# Roots that exist and hold nothing leave the lint with no file to read, and
+# an unasserted scan set makes that run byte-identical to a clean pass over a
+# fully compliant tree. The diagnostic is asserted, not just the exit code: a
+# check keyed on exit 2 alone passes just as happily when the message names
+# the wrong scan set.
+empty_workflows="$(mktemp --directory)"
+empty_actions="$(mktemp --directory)"
+empty_exit=0
+empty_err="$(WORKFLOWS_DIR_OVERRIDE="${empty_workflows}" \
+  ACTIONS_DIR_OVERRIDE="${empty_actions}" \
+  "${SCRIPT}" 2>&1 >/dev/null)" || empty_exit=$?
+rm --recursive --force -- "${empty_workflows}" "${empty_actions}"
+if [[ ${empty_exit} != 2 ||
+  ${empty_err} != *'matched 0 files via workflow and composite-action files'* ]]; then
+  printf 'FAIL empty scan set: exit %s (want 2)\n  stderr: %s\n' \
+    "${empty_exit}" "${empty_err}" >&2
+  exit 1
+fi
+printf 'OK   empty scan set rejected\n'
+
 printf 'all tests passed\n'
