@@ -147,6 +147,7 @@ done <<<"${step_ids}"
 # counts, which keeps the exemption visually attached to the step it
 # exempts.
 declare -A EXEMPT=()
+declare -A EXEMPT_LINE=()
 # The scan is captured so awk's exit status reaches this shell: a process
 # substitution runs in its own subshell, so a dead awk would hand the loop
 # an empty stream and every exemption marker in the file would go unread.
@@ -159,14 +160,14 @@ if ! exempt_rows="$(awk -v marker="${EXEMPT_MARKER}" '
     rationale = line
     sub(("^.*" marker "[[:space:]]*"), "", rationale)
     sub(/[[:space:]]+$/, "", rationale)
-    printf "%s\t%s\n", id, rationale
+    printf "%s\t%s\t%d\n", id, rationale, FNR
   }
 ' "$(awk_path "${WORKFLOW}")")"; then
   printf '%s: awk failed scanning for reason-ladder-exempt markers\n' \
     "${WORKFLOW}" >&2
   exit 2
 fi
-while IFS=$'\t' read -r id rationale; do
+while IFS=$'\t' read -r id rationale marker_line; do
   [[ -z ${id} ]] && continue
   if [[ -z ${rationale} ]]; then
     printf '%s: reason-ladder-exempt marker on step id %q carries no rationale\n' \
@@ -175,6 +176,7 @@ while IFS=$'\t' read -r id rationale; do
     continue
   fi
   EXEMPT["${id}"]=1
+  EXEMPT_LINE["${id}"]="${marker_line}"
 done <<<"${exempt_rows}"
 
 # --- attribution env block -------------------------------------------
@@ -218,6 +220,19 @@ done <<<"${env_rows}"
 if ((bad_env_name)); then
   exit 1
 fi
+
+# A marker on a step the attribution env already references excuses
+# nothing: assertion 1 would have passed that step regardless. Unlike its
+# sibling lints, this marker always names a real step, so the finding is
+# an unearned exemption rather than one attached to no site — the same
+# drift in a different shape, and the same reason to report it.
+for id in "${!EXEMPT[@]}"; do
+  if [[ ${id} == "${ATTRIBUTE_ID}" ]] || [[ -n ${REFERENCED[${id}]:-} ]]; then
+    printf '%s:%s: reason-ladder-exempt marker on step id %q excuses nothing; the attribution env already reads this step, so the exemption asserts a decision the lint no longer honors — delete it\n' \
+      "${WORKFLOW}" "${EXEMPT_LINE[${id}]}" "${id}" >&2
+    drift=1
+  fi
+done
 
 # --- assertion 1: coverage -------------------------------------------
 for id in "${steps[@]}"; do
