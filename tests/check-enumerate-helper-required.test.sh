@@ -165,6 +165,30 @@ expect bad-filter-in-while-loop.sh 1 \
 expect bad-filter-marker-mismatch.sh 1 \
   'bad-filter-marker-mismatch.sh:15:22: this loop reads a filter variable directly'
 
+# @description A comment that only quotes the marker word is prose about
+# the escape hatch, not the escape hatch. All three rules key off the
+# same matcher, so all three are proven: a mention that excused a site
+# would make every doc sentence naming a marker an exemption for whatever
+# happened to sit under it.
+expect bad-prose-quoted-glob-marker.sh 1 \
+  'bad-prose-quoted-glob-marker.sh:12:1: this for loop iterates a glob directly'
+expect bad-prose-quoted-enumerate-marker.sh 1 \
+  'bad-prose-quoted-enumerate-marker.sh:11:1: git ls-files runs outside enumerate_into'
+expect bad-prose-quoted-filter-marker.sh 1 \
+  'bad-prose-quoted-filter-marker.sh:17:9: this loop reads a filter variable directly'
+
+# @description A block that names the marker in prose and then states it
+# takes its rationale from the marker's own comment, not the sentence
+# that mentions it. Alone, this fixture prints a clean summary
+# byte-identical to good-glob-array-exempt.sh's — both are a single file
+# with one classified site and one exemption — so good-glob-into.sh's
+# own single non-exempt site is folded in beside it; the resulting
+# two-file tally is what separates the marker-after-prose-quote proof
+# from that sibling rather than the exit code or message shape alone.
+run_expect 'good-marker-after-prose-quote' \
+  "${FIXTURES}/good-marker-after-prose-quote.sh"$'\n'"${FIXTURES}/good-glob-into.sh" \
+  0 '2 file(s) scanned, 2 scan site(s) classified, 1 exemption(s)'
+
 # The loop rule covers a while loop's input as well as its body: a
 # `done < <(…)` redirect, a `done <<<"…"` herestring, and an upstream
 # `… | while` pipeline stage are all part of what the loop consumes,
