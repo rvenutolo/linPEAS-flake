@@ -104,6 +104,7 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/refresh-ci-dag.test.sh`             | `scripts/refresh-ci-dag.sh`             | `tests/fixtures/refresh-ci-dag`             |
 | `tests/refresh-ci-summary.test.sh`         | `scripts/refresh-ci-summary.sh`         | —                                           |
 | `tests/refresh-enforcement-matrix.test.sh` | `scripts/refresh-enforcement-matrix.sh` | `tests/fixtures/refresh-enforcement-matrix` |
+| `tests/refresh-ephemeral-refs-gap.test.sh` | `scripts/refresh-ephemeral-refs-gap.sh` | `tests/fixtures/ephemeral-refs-gap`         |
 | `tests/refresh-flake-show.test.sh`         | `scripts/refresh-flake-show.sh`         | —                                           |
 | `tests/refresh-just-recipes.test.sh`       | `scripts/refresh-just-recipes.sh`       | —                                           |
 | `tests/refresh-precommit-table.test.sh`    | `scripts/refresh-precommit-table.sh`    | —                                           |
