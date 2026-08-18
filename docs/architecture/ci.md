@@ -123,7 +123,7 @@ Nix-based jobs pull from the public `cache.nixos.org` substituter; there is no r
 
 ## Cron schedule
 
-All schedules fit the maintainer's monitoring windows: daily crons run 08:00–10:00 UTC, weekly crons run Friday 05:00–07:00 UTC (both year-round inside the intended US-Eastern early-morning windows regardless of DST). `ci-watchdog` is the one exception: it is a backstop that must fire around the clock, not a monitoring-window report, so it runs on a continuous 30-minute cadence instead.
+All schedules fit the maintainer's monitoring windows: daily crons run 08:00–10:00 UTC, weekly crons run Friday 05:00–07:00 UTC (both year-round inside the intended US-Eastern early-morning windows regardless of DST). `ci-watchdog` is the one exception: it is a backstop that must fire around the clock, not a monitoring-window report, so it runs on a continuous 30-minute cadence instead. The monthly `docs-audit-reminder` is the other departure: it sits at 10:00 on the 1st, deliberately clear of both the daily and the weekly cluster.
 
 | Workflow                          | Cron            | UTC          | Purpose                                                                                                                    |
 | --------------------------------- | --------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------- |
