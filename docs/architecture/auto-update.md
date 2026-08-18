@@ -91,12 +91,14 @@ Enforced by `scripts/check-pin-diff-isolated.sh` via the
 `lint-doc-invariants` CI job (member check `pin-diff-isolated`) + pre-commit hook. Lint asserts
 exactly one writer (`scripts/bump-linpeas.sh`) under `scripts/`.
 
-## nix/pin.nix invariants
+## nix/linpeas.nix pin invariants
 
 `pin.version` must match `[0-9]{8}-[0-9a-f]{7,40}`. `pin.url` must start with
-`https://github.com/peass-ng/PEASS-ng/releases/download/`. Flake-eval-time
-asserts because `pin.version` interpolates into derivation names, docker
-tags, OCI labels.
+`https://github.com/peass-ng/PEASS-ng/releases/download/`. `pin.version` must
+also be the release-tag path segment of `pin.url`, so a hand-edited pin
+cannot declare one version while fetching a different release's artifact.
+Flake-eval-time asserts because `pin.version` interpolates into derivation
+names, docker tags, OCI labels.
 
 Upstream peass-ng versioning-scheme change: update regex carefully, keep some
 shape check.
