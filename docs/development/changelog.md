@@ -49,7 +49,7 @@ This regex must exactly match the canonical pin-shape regex enforced
 across the codebase. Drift causes git-cliff to see no tags and generate
 an empty changelog. `scripts/check-cliff-tag-pattern.sh` enforces
 parity at commit time; the cross-layer parity set it joins is
-`bump-linpeas.sh`, `flake.nix`, `stale-pin-check.yml`,
+`bump-linpeas.sh`, `nix/linpeas.nix`, `stale-pin-check.yml`,
 `release-on-bump.yml`, and `gen-dashboard-data.sh`.
 
 ### docs: update changelog skip rule
