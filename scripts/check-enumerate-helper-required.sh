@@ -307,6 +307,19 @@ def producer_of(args):
       end
   end;
 
+# The literal metacharacters a word writes unquoted: its own bare parts,
+# and the alternate or default word of an expansion it holds. A pattern
+# inside ${y+*.yml} is written literally at this site exactly as a bare
+# one is, and is expanded in the same place; only the level it sits at
+# differs. A quoted metacharacter is still not a pattern, which is why
+# only a Lit is read at either level.
+def bare_lit_globs:
+  [ (.Parts // [])[]
+    | (select(.Type == "Lit") | (.Value // "")),
+      (select(.Type == "ParamExp")
+        | ((.Exp.Word.Parts // [])[] | select(.Type == "Lit") | (.Value // ""))) ]
+  | [ .[] | select(test("[*?[]")) ];
+
 [.. | objects | select(.Type == "FuncDecl")
   | {name: .Name.Value, from: .Body.Pos.Offset, to: .Body.End.Offset}] as $funcs
 
@@ -385,23 +398,24 @@ def producer_of(args):
     | "ok\t\(.Pos.Line)\t\(.Pos.Col)\t\($glob_what)"] as $glob_calls
 
 # Position 5: a `for` whose iteration words carry a glob metacharacter in
-# an unquoted literal. Only a bare `Lit` part counts: a metacharacter
-# inside quotes is not a pattern, so `for x in "*"` iterates one literal
-# asterisk and asserts nothing about any tree. `.Loop.Items` is empty for
-# a C-style `for ((;;))`, which therefore never reaches the test.
+# an unquoted literal, at the word itself or in the alternate or default
+# word of an expansion it holds. Only a `Lit` counts at either level: a
+# metacharacter inside quotes is not a pattern, so `for x in "*"`
+# iterates one literal asterisk and asserts nothing about any tree.
+# `.Loop.Items` is empty for a C-style `for ((;;))`, which therefore
+# never reaches the test. The site list is kept apart from the records so
+# a later position can ask whether this one already classified the site.
 | [.. | objects | select(.Type == "ForClause")
-    | select(([(.Loop.Items // [])[]
-        | (.Parts // [])[]
-        | select(.Type == "Lit")
-        | (.Value // "")
-        | select(test("[*?[]"))] | length) > 0)
-    | "bad\t\(.Pos.Line)\t\(.Pos.Col)\t\($glob_what)"] as $glob_loops
+    | select(([(.Loop.Items // [])[] | bare_lit_globs[]] | length) > 0)
+    | {line: .Pos.Line, col: .Pos.Col}] as $glob_loop_sites
+| [$glob_loop_sites[] | "bad\t\(.line)\t\(.col)\t\($glob_what)"] as $glob_loops
 
 # Position 6: an array assignment whose element words carry a glob
-# metacharacter in an unquoted literal. An `Assign` node carries no
-# `Type` field, so it is selected by the `Array` it holds; a scalar
-# assignment holds a null one. The position reported is that of the array
-# expression itself, which is where the pattern is written.
+# metacharacter in an unquoted literal, read at the same two levels the
+# loop head is read at. An `Assign` node carries no `Type` field, so it is
+# selected by the `Array` it holds; a scalar assignment holds a null one.
+# The position reported is that of the array expression itself, which is
+# where the pattern is written.
 #
 # Only a bare `Lit` part counts, for the same reason it does at a loop
 # head, and this is the restriction the whole rule rests on: `x=("*")`
@@ -411,12 +425,9 @@ def producer_of(args):
 # its match set is asserted. Counting a quoted metacharacter here would
 # make every compliant call site a violation of the rule it satisfies.
 | [.. | objects | select(has("Array")) | select(.Array != null)
-    | select(([(.Array.Elems // [])[]
-        | (.Value.Parts // [])[]
-        | select(.Type == "Lit")
-        | (.Value // "")
-        | select(test("[*?[]"))] | length) > 0)
-    | "bad\t\(.Array.Pos.Line)\t\(.Array.Pos.Col)\t\($glob_array_what)"] as $glob_arrays
+    | select(([(.Array.Elems // [])[] | (.Value // {}) | bare_lit_globs[]] | length) > 0)
+    | {line: .Array.Pos.Line, col: .Array.Pos.Col}] as $glob_array_sites
+| [$glob_array_sites[] | "bad\t\(.line)\t\(.col)\t\($glob_array_what)"] as $glob_arrays
 
 # The whole extent of the statement that encloses a loop, not the bare
 # `ForClause`/`WhileClause` node: that node ends at `done`, but the
