@@ -161,8 +161,9 @@ Binding:
     token is release-only).
 1. `secrets.DOCKERHUB_TOKEN_DELETE` must never be consumed in
     `release-on-bump.yml` or `verify-latest-release.yml`.
-1. Manual recovery snippets calling `curl -X DELETE` must use
-    `DOCKERHUB_TOKEN_DELETE` (the `_RW` token returns `401`).
+1. Manual recovery snippets performing a tag delete (`--request DELETE`
+    or `-X DELETE`) must use `DOCKERHUB_TOKEN_DELETE` (the `_RW` token
+    returns `401`).
 1. No unsuffixed `DOCKERHUB_TOKEN` secret may exist; only `_RW` and
     `_DELETE` variants are authoritative.
 
