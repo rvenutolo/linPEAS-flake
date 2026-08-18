@@ -347,11 +347,13 @@ rationale:
 ## Glob-driven scan breadth
 
 `scripts/check-enumerate-helper-required.sh` bans a `for` loop that
-expands a glob at its own loop head. Under `nullglob` a pattern matching
-nothing expands to nothing, the body never runs, no violation is found
-and the run exits 0 — so a scan root that exists and holds nothing is
-scored a clean tree, and an operator override pointing the scan at the
-wrong directory reads as a repo with nothing to fix. `glob_into`
+expands a glob at its own loop head and an array assignment that expands
+one in its element list. Under `nullglob` a pattern matching nothing
+expands to nothing — the loop body never runs, the array comes back
+empty, no violation is found and the run exits 0 — so a scan root that
+exists and holds nothing is scored a clean tree, and an operator
+override pointing the scan at the wrong directory reads as a repo with
+nothing to fix. `glob_into`
 (`scripts/lib/enumerate.sh`) is the glob analogue of `enumerate_into`: it
 expands the patterns itself, fills the named array, and exits **2** on an
 empty match set unless `LINT_ALLOW_EMPTY_SCAN=1`.
@@ -368,10 +370,31 @@ hand the helper an unexpanded pattern that would count as one match.
 
 Detection reads the same syntax tree the producer rule does — a
 `ForClause` whose `WordIter` items carry `*`, `?` or `[` in a bare `Lit`
-part. A metacharacter inside quotes is not a pattern and does not count,
-and a pattern handed to `glob_into` is an argument of a call expression
-rather than a loop item, so a compliant call site cannot false-hit. A
-loop whose empty match set genuinely is the normal state — sweeping a
+part, or an assignment whose `Array` elements carry one, at the word
+itself or one level in, among the `Lit` parts of an expansion's
+alternate or default word. A metacharacter inside quotes is not a
+pattern and does not count, and a pattern handed to `glob_into` is an
+argument of a call expression rather than a loop item, so a compliant
+call site cannot false-hit.
+
+A pattern copied into a variable is banned at the read rather than at
+the assignment: an unquoted `${pat}` among a loop's iteration words or
+an array's elements expands whatever pattern this same file assigns that
+name, while a quoted `"${pat}"` expands nothing and is exactly how a
+pattern reaches `glob_into`. Three shapes are left alone — a name all of
+whose glob-bearing assignments are themselves classified array
+assignments, since that site already answers the breadth question and
+carries the marker if an empty match is normal there; a read under `+`
+or `:+`,
+which emits only the alternate word and never the value the variable
+holds; and a site the loop or array position has already reported, so
+one scan earns one finding and consumes one marker. The rule reads one
+file and never traces a value to its read, so a name given a pattern on
+one branch and a data list on another is reported, and a pattern
+arriving at a loop head through a command substitution or an indirect
+expansion is not seen at all.
+
+A loop whose empty match set genuinely is the normal state — sweeping a
 leftover scratch file, say — opts out with an inline
 `# glob-exempt: <rationale>` on the line above; the marker has to open
 the comment — a sentence naming it is prose, not an exemption — the

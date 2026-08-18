@@ -17,9 +17,23 @@
 # planted at a non-head index and later spliced into command position by
 # index arithmetic still evades. A glob-driven scan fills its
 # array through `glob_into` — neither a `for` loop at its own head nor an
-# array assignment in its element list may expand a pattern, unless an
-# inline `# glob-exempt: <rationale>` marker says an empty match set is
-# that site's normal state. A filter-driven scan narrows an
+# array assignment in its element list may expand a pattern, whether the
+# metacharacter is written bare in the word itself, sits one level in as
+# the alternate or default word of an expansion that word holds, or is
+# held in a variable this same file assigns a pattern and read unquoted
+# at either place, unless an inline `# glob-exempt: <rationale>` marker
+# says an empty match set is that site's normal state. A read under a `+`
+# or `:+` operator is not such a read: those emit only the alternate word
+# and never the value the variable holds, so no pattern it holds can
+# expand there. That last shape is decided at the read rather than at the
+# assignment, and only within one file: a name a sourced library assigns
+# is not seen, the value read is never traced back to the assignment that
+# produced it — a name given a pattern on one branch and a data list on
+# another is reported — and a pattern reaching a loop head or an array
+# element through a command substitution or an indirect expansion is not
+# read at all. A site both the literal and the laundered shape match
+# earns one record, one diagnostic and one exemption, as every other
+# position here does. A filter-driven scan narrows an
 # already-enumerated set through `filter_into` — a variable named `FILTER`
 # or ending `_FILTER` may be read at file scope to reach that call, but
 # not again inside a `for` or `while` loop over the narrowed selection,
@@ -32,7 +46,7 @@
 # copy is later read, because every one of the checks above keys on the
 # name of the variable being read and a value under a fresh name would
 # otherwise satisfy the letter of all three while re-introducing the
-# defect. Those four are the positions a single pass over the tree
+# defect. Those are the positions a single pass over the tree
 # decides; a pattern that reaches a scan by any other route is outside
 # what this lint sees, and the rule is stated no wider than that.
 #
@@ -59,6 +73,15 @@
 # `glob_into` is the same assertion for both shapes: it expands the
 # patterns, fills the array and refuses an empty match set, and whatever
 # reads that array afterwards walks an ordinary list.
+#
+# A pattern held in a variable fails that same way, and the quoting at
+# the read is what decides whether it does: `pat='scripts/*.sh'` expands
+# nowhere until something reads it, so `for f in ${pat}` runs exactly the
+# unasserted scan a bare pattern runs, while `for f in "${pat}"` iterates
+# one literal string and `glob_into files 'shell sources' "${pat}"`
+# asserts the match set. The verdict therefore lands at the read, unlike
+# the two copying rules, which land at the assignment because the value
+# they follow is identified by name or by literal wherever it goes.
 #
 # A filter-driven scan fails a third way, one layer past enumeration and
 # globbing: `filter_into` narrows a set the other two helpers already
@@ -94,10 +117,17 @@
 # whether a `for` loop or an array assignment expands a pattern in its
 # own words, and so is asking whether a filter-named read falls inside a
 # loop's own extent or outside every `filter_into` call in the file.
+# Whether a name read at one of those two glob positions is one this file
+# gives a pattern is a question about the same tree, answered by
+# collecting that file's assignments in the same walk, which is what
+# keeps the laundered read a file question rather than a dataflow one.
 # Patterns handed to `glob_into` are arguments of a `CallExpr` — never
 # `WordIter` items, never array elements — and reach it quoted, so a
 # compliant call site cannot false-hit the glob rule however many
-# metacharacters it carries. A filter-named read handed to `filter_into`
+# metacharacters it carries; a pattern-bearing name reaches it quoted
+# too, and a quoted read is a part of the quoted string rather than of
+# the word, so it is not a read the rule counts either. A filter-named
+# read handed to `filter_into`
 # as its own argument is excluded from the filter rule the same way, and
 # the sanctioned `readonly FILE_FILTER="${WORKFLOW_FILE_FILTER:-}"` shape
 # stays legal under the alias check for the same reason: its own target is
@@ -118,12 +148,14 @@
 # the word right after `git`: the one hand-rolled enumeration this lint
 # was written against spelled it `git -C "${ROOT}" ls-files`.
 #
-# The count of scan sites classified — producer calls plus `glob_into`
-# call sites plus glob loops plus glob array assignments plus
-# `filter_into` call sites, plus filter reads inside a loop, plus the
-# single read reported in a file that calls the helper nowhere, plus a
-# filter value copied to an unwatched name — is itself asserted nonzero
-# (unless LINT_ALLOW_EMPTY_SCAN=1). A grammar that
+# The count of scan sites classified — producer calls plus a producer
+# name copied to a variable, plus `glob_into` call sites plus glob loops
+# plus glob array assignments plus an unquoted read of a pattern-bearing
+# name at either, plus `filter_into` call sites, plus filter reads inside
+# a loop and inside a function one hop out, plus the single read reported
+# in a file that calls the helper nowhere, plus a filter value copied to
+# an unwatched name — is itself asserted nonzero (unless
+# LINT_ALLOW_EMPTY_SCAN=1). A grammar that
 # silently recognized nothing would report "0 violations" and exit 0 —
 # the same clean line a genuinely scan-free tree prints — leaving this
 # gate off while green, which is the exact failure it exists to prevent
@@ -153,9 +185,11 @@
 # enumerated file count) comes back zero.
 # Exit 0 clean, 1 on a producer outside `enumerate_into`, a producer name
 # copied to a variable, a `for` loop expanding a glob at its own head, an
-# array assignment expanding one in its element list, a loop reading a
-# filter variable directly, a filter read in a function that loop calls,
-# a script reading a filter variable without ever calling `filter_into`,
+# array assignment expanding one in its element list, a `for` loop or an
+# array assignment expanding a variable this file assigns a glob pattern,
+# a loop reading a filter variable directly, a filter read in a function
+# that loop calls, a script reading a filter variable without ever
+# calling `filter_into`,
 # an assignment copying a filter value to a name outside the filter
 # pattern, an exemption marker with no rationale, or an exemption marker
 # that excuses no site this pass classified, 2 when a required tool is
