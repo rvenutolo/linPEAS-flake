@@ -93,8 +93,10 @@ To resolve a partial set, restore the missing per-arch images by
 rebuilding at the historic commit, then re-run the backfill:
 
 1. Identify the commit that pinned `<tag>`:
-    `git log --diff-filter=A --format='%H %s' -- linpeas-pin.json`
-    then find the commit where `<tag>` first appeared in the JSON.
+    `git log -S'<tag>' --reverse --format='%H %s' -- linpeas-pin.json | head -1`.
+    `-S` selects the commits where the tag's occurrence count changed —
+    the one that introduced it and the one that later replaced it — so
+    `--reverse` plus `head -1` takes the introducing commit.
 1. Locally check out that commit and run
     `nix build .#linpeas-image --print-build-logs`.
 1. `docker load --input result` + retag + push to GHCR / Docker Hub
