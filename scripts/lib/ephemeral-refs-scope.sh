@@ -3,9 +3,10 @@
 # @description The ephemeral-reference ban's scan scope: which file types
 # an extractor claims, which paths are skipped outright, and the class
 # regexes a scan matches against. Shared by the lint that enforces the
-# ban and by the generator that reports the gap between the ban's scope
-# and the tree, so a class that widens widens for both and the reported
-# gap stays the exact complement of the scan. Source after
+# ban and by the generator that reports which types the ban leaves
+# unread, so a class that widens widens for both and the two stay
+# derived from one record set rather than two lists that drift. Source
+# after
 # `set -Eeuo pipefail`.
 # shellcheck shell=bash
 
@@ -13,8 +14,9 @@
 # single source of both the `git ls-files` pathspec the lint scans and
 # the language its extractor is chosen by, so a type cannot be enumerated
 # for one and unknown to the other. The generator reads the same records
-# and takes their complement, which is what makes the gap it reports the
-# exact set this lint does not read — a second hand-kept list would drift
+# and inverts them, which is what keeps the types it reports and the
+# types this lint scans from ever disagreeing — a second hand-kept list
+# would drift
 # against this one and describe a narrower tree than the ban leaves
 # unread.
 readonly -a EPHEMERAL_REFS_TYPES=(

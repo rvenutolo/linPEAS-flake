@@ -3,17 +3,19 @@
 #
 # @description Regenerate the ephemeral-refs-gap managed block in
 # docs/development/linting.md: the file types no ephemeral-refs extractor
-# claims and that nonetheless carry `#` comments. The corpus is the exact
-# complement of the lint's own scan set — same producer, same allowlist,
-# inverted type filter, all read from scripts/lib/ephemeral-refs-scope.sh
-# — so the page cannot describe a narrower tree than the ban leaves
-# unread. A blocking-class shape found inside that complement is refused
+# claims and that nonetheless carry `#` comments. The corpus inverts the
+# lint's own type filter — same producer, same allowlist, all read from
+# scripts/lib/ephemeral-refs-scope.sh — so the page cannot describe a
+# narrower set of types than the ban leaves unread. Files the allowlist
+# skips sit outside both sets and are accounted for by the page's
+# allowlist bullet. A blocking-class shape found inside the corpus is
+# refused
 # rather than rendered: the prose around the block states the gap is
 # empty, and rendering a non-zero count would publish a page that
 # contradicts itself.
 # @generates-block docs/development/linting.md
 # @option --check exit 1 if the block would change; exit 2 if the check
-# cannot run (doc missing, marker missing, empty complement, empty
+# cannot run (doc missing, marker missing, no unclaimed sources, empty
 # corpus, or a class regex that fails its canary) or if a blocking shape
 # was found; do not mutate the working tree
 
@@ -62,11 +64,13 @@ readonly MARKER_END='    <!-- END ephemeral-refs-gap -->'
 # contributes nothing without needing to be enumerated as an exception.
 readonly RE_COMMENT='^[[:space:]]*#'
 
-# @description NUL-delimited producer for the complement of the lint's
-# scan set: every path `git ls-files` reports that no extractor claims
-# and the allowlist does not skip. The producer flags mirror the lint's
-# exactly, so a file the lint reads cannot also appear here and the two
-# sets stay exact complements.
+# @description NUL-delimited producer for the types the lint does not
+# read: every path `git ls-files` reports that no extractor claims and
+# the allowlist does not skip. The producer flags mirror the lint's
+# exactly, so a file the lint reads cannot also appear here — the two
+# sets are disjoint. They are not complements: a path that is a claimed
+# type and also allowlisted sits outside both, and the page's allowlist
+# bullet is what accounts for it.
 # @stdout NUL-delimited source paths, sorted
 # shellcheck disable=SC2329 # invoked indirectly, by name, via enumerate_into
 function unclaimed_sources() {
