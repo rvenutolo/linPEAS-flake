@@ -498,11 +498,20 @@ def pattern_texts:
 # is `-` and 84 is `:-`, which do emit the value and are therefore read.
 # Whatever the alternate word itself carries is a literal written at this
 # site, and the loop and array positions above already read it.
+#
+# A site the loop or array position already classified is not reported
+# again. The two rules can match the same words — a default word writing
+# a literal pattern beside a name that holds one — and it is still one
+# scan whose breadth goes unasserted, so it earns one record, one
+# diagnostic and one exemption. Every other position in this file keeps
+# that same relationship between a site and a record.
 | [.. | objects | select(.Type == "ForClause")
     | . as $fc
     | (.Loop.Items // [])[] | (.Parts // [])[]
     | select(.Type == "ParamExp")
     | select((.Exp.Op // 0) != 81 and (.Exp.Op // 0) != 82)
+    | select(([$glob_loop_sites[]
+        | select(.line == $fc.Pos.Line and .col == $fc.Pos.Col)] | length) == 0)
     | (.Param.Value // "") as $n
     | select($glob_names | index($n) != null)
     | {line: $fc.Pos.Line, col: $fc.Pos.Col, name: $n}] as $glob_var_loop_hits
@@ -511,6 +520,8 @@ def pattern_texts:
     | (.Array.Elems // [])[] | (.Value.Parts // [])[]
     | select(.Type == "ParamExp")
     | select((.Exp.Op // 0) != 81 and (.Exp.Op // 0) != 82)
+    | select(([$glob_array_sites[]
+        | select(.line == $aa.Array.Pos.Line and .col == $aa.Array.Pos.Col)] | length) == 0)
     | (.Param.Value // "") as $n
     | select($glob_names | index($n) != null)
     | {line: $aa.Array.Pos.Line, col: $aa.Array.Pos.Col, name: $n}] as $glob_var_array_hits
