@@ -127,7 +127,10 @@ in
   # docs/development/linting.md is stale, or if a blocking shape has
   # appeared in a file type no extractor claims. Invokes
   # refresh-ephemeral-refs-gap.sh in --check mode — never mutates the
-  # working tree, exits 1 on drift and 2 on a shape found.
+  # working tree, exits 1 on drift and 2 on a shape found. The
+  # `(.*/)?` prefix on the bare filenames lets justfile, .envrc and
+  # .gitignore trigger from any directory, since those are naming
+  # conventions rather than fixed repo-root paths.
   ephemeral-refs-gap-fresh = {
     enable = true;
     name = "ephemeral-refs-gap-fresh";
@@ -139,7 +142,7 @@ in
       export PATH="${toolPath}:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-ephemeral-refs-gap.sh --check
     ''}";
-    files = "^(.*\\.(toml|awk|txt)|justfile|\\.envrc|\\.gitignore|docs/development/linting\\.md|scripts/refresh-ephemeral-refs-gap\\.sh|scripts/lib/ephemeral-refs-scope\\.sh)$";
+    files = "^((.*/)?(justfile|\\.envrc|\\.gitignore)|.*\\.(toml|awk|txt)|docs/development/linting\\.md|scripts/refresh-ephemeral-refs-gap\\.sh|scripts/lib/ephemeral-refs-scope\\.sh)$";
     pass_filenames = false;
     language = "system";
   };
