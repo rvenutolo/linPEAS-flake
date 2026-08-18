@@ -67,8 +67,8 @@ Environment-variable overrides scoped to test invocation:
 
 | Variable                             | Script                                                                                                    | Purpose                                      |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `WORKFLOWS_DIR_OVERRIDE`             | every workflow-scanning lint — enumerate with `rg --files-with-matches WORKFLOWS_DIR_OVERRIDE scripts/`   | swap the workflows scan root                 |
-| `WORKFLOW_FILE_FILTER`               | every workflow-scanning lint — enumerate with `rg --files-with-matches WORKFLOW_FILE_FILTER scripts/`     | restrict to a single fixture file            |
+| `WORKFLOWS_DIR_OVERRIDE`             | every workflow-scanning lint — enumerate with `grep -rl WORKFLOWS_DIR_OVERRIDE scripts/`                  | swap the workflows scan root                 |
+| `WORKFLOW_FILE_FILTER`               | every workflow-scanning lint — enumerate with `grep -rl WORKFLOW_FILE_FILTER scripts/`                    | restrict to a single fixture file            |
 | `RENOVATE_JSON_OVERRIDE`             | `check-renovate-invariants.sh`, `check-renovate-markers-matched.sh`, `check-renovate-config-validator.sh` | swap the renovate.json path                  |
 | `SCAN_ROOT`                          | `check-renovate-markers-matched.sh`                                                                       | swap the scanned tree root                   |
 | `RELEASE_TAG_RULESET_JSON_OVERRIDE`  | `check-tag-protection.sh`                                                                                 | swap the release-tag-protection ruleset JSON |
