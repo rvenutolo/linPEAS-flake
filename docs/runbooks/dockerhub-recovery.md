@@ -40,9 +40,11 @@ The push loop inside `release-on-bump.yml` per-arch jobs runs
 - **ghcr.io push failed after docker.io succeeded.** docker.io has
     the arch-suffixed tag (`{version}-{arch}`) but ghcr.io does not.
     The `manifest` job is skipped, so neither registry has the
-    unsuffixed `{version}` or `:latest` tags. Recovery requires
-    deleting the orphan docker.io arch tag before retrying, otherwise
-    the next push would push to a tag that already exists.
+    unsuffixed `{version}` or `:latest` tags. Delete the orphan
+    docker.io arch tag before retrying: the push itself would succeed
+    and silently overwrite it, replacing bytes a prior attestation or
+    signature may already reference and leaving the retry's digests
+    ambiguous.
 
 ## Prerequisites<a name="prerequisites"></a>
 
