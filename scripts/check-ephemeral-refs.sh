@@ -151,6 +151,8 @@ source "${_lib_dir}/lib/awk-path.sh"
 source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+# shellcheck source=scripts/lib/ephemeral-refs-scope.sh
+source "${_lib_dir}/lib/ephemeral-refs-scope.sh"
 
 REPO_ROOT="${EPHEMERAL_REFS_ROOT_OVERRIDE:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)}"
 readonly REPO_ROOT
@@ -168,46 +170,6 @@ for arg in "$@"; do
   esac
 done
 readonly ADVISORY
-
-# Blocking classes. Boundary-guarded issue ref: a leading boundary that
-# is not `-`, `&`, or a word char (so `#1-anchor` anchor targets,
-# `&#123;` HTML numeric entities, and `#fff` hex colors do not match)
-# followed by `#` and digits, then a trailing boundary that is not `-`
-# or a word char (so `#1-anchor` is excluded by its trailing `-`).
-readonly RE_ISSUE='(^|[^-&[:alnum:]_])#[0-9]+([^-[:alnum:]_]|$)'
-readonly RE_DATE='([0-9]{4}-[0-9]{2}-[0-9]{2}|(January|February|March|April|May|June|July|August|September|October|November|December)[[:space:]]+[0-9]{4}|Q[1-4][[:space:]]+[0-9]{4})'
-# Each enumerated shape carries the same left boundary guard as
-# RE_ISSUE so it cannot match inside a larger token (e.g. `UTF-8` ->
-# `F-8`, `PDF-1.7` -> `F-1`, `ID5:` -> `D5:`). No right guard on shapes
-# ending in literal punctuation (`(D3)`, `D5:`, `(L4,`) — that suffix is
-# itself the boundary.
-readonly RE_PLANNING='(^|[^-&[:alnum:]_])(GAP-[0-9]+|P[0-9]+\.[0-9]+|Wave-P?[0-9]+|Phase[[:space:]]+[0-9]+|AU-P-[0-9]+|SC-POST-[0-9]+|plan[[:space:]]+[0-9]+|F-[0-9]+)'
-readonly RE_REVIEW='(^|[^-&[:alnum:]_])(\(D[0-9]+\)|\(L[0-9]+[,)]|Per[[:space:]]+D[0-9]+|D[0-9]+:)'
-readonly RE_CLAUDE='\.claude/'
-
-# Advisory class: fuzzy causal-history phrases.
-readonly RE_CAUSAL='(prior to|previously|Migration note|was reshaped|Tightened from|swapped|switched (from|to)|legacy .* was deleted|added in #?[0-9]+|post-PR #?[0-9]+)'
-
-# The candidate pass matches one union per mode. Assembled from the
-# constants above rather than written out again: a class whose regex
-# widens must widen the union in the same edit, or the pass would set
-# aside a file the scan would have flagged. None of the constants
-# carries an unparenthesized top-level alternation, so joining them with
-# `|` is the disjunction it reads as.
-readonly UNION_BLOCKING="${RE_ISSUE}|${RE_DATE}|${RE_PLANNING}|${RE_REVIEW}|${RE_CLAUDE}"
-readonly UNION_ADVISORY="${RE_CAUSAL}"
-
-# One literal per class, each carrying a token that class must match.
-# These are the canaries the run asserts against before it scans
-# anything: they are what catches a union that has stopped matching a
-# class it is supposed to cover, which no verdict and no file count
-# would show — the run would simply set every file aside and exit clean.
-readonly CANARY_ISSUE=' #123 '
-readonly CANARY_DATE='2026-01-02'
-readonly CANARY_PLANNING=' GAP-7'
-readonly CANARY_REVIEW=' (D3)'
-readonly CANARY_CLAUDE='.claude/'
-readonly CANARY_CAUSAL='previously'
 
 # @description Assert every class regex matches its own canary, and that
 # the mode's union matches every canary the mode covers. A class dropped
@@ -329,22 +291,6 @@ function strip_exempt() {
       }
     }
   '
-}
-
-# @description Language of one source, by extension. Extension is the
-# whole classifier: a shell library without a `.sh` suffix, and shell
-# embedded in a workflow `run:` block, are out of scope by construction
-# rather than by a content sniff that would have to guess.
-# @arg $1 src_rel source path relative to REPO_ROOT
-# @stdout one of `md`, `sh`, `nix`, `other`
-function language_of() {
-  case "$1" in
-  *.md) printf 'md\n' ;;
-  *.sh) printf 'sh\n' ;;
-  *.nix) printf 'nix\n' ;;
-  *.yml | *.yaml) printf 'yaml\n' ;;
-  *) printf 'other\n' ;;
-  esac
 }
 
 # @description Print the sources whose raw text carries a token of the
@@ -809,7 +755,10 @@ function scan_advisory() {
 # relative to REPO_ROOT. The invariant covers all Markdown prose and
 # every shell and Nix comment in the repo, not one directory, so
 # enumeration is git's
-# rather than a hand-kept path list. `--cached` covers tracked sources.
+# rather than a hand-kept path list. The pathspec is built from
+# `EPHEMERAL_REFS_TYPES` rather than written out here, so the set this
+# reads and the set the gap generator reports as unread stay exact
+# complements of each other. `--cached` covers tracked sources.
 # `--others --exclude-standard` adds sources that are not committed yet
 # but are not ignored either — exactly the files a commit is about to
 # introduce, so a new doc or script is gated by the same run that
@@ -819,24 +768,10 @@ function scan_advisory() {
 # @stdout NUL-delimited source paths, sorted
 # shellcheck disable=SC2329 # invoked indirectly, by name, via enumerate_into
 function ephemeral_refs_git_sources() {
-  (cd "${REPO_ROOT}" && git ls-files --cached --others --exclude-standard -z -- '*.md' '*.sh' '*.nix' '*.yml' '*.yaml') |
+  local -a pathspec=()
+  ephemeral_refs_pathspec_into pathspec
+  (cd "${REPO_ROOT}" && git ls-files --cached --others --exclude-standard -z -- "${pathspec[@]}") |
     sort --zero-terminated
-}
-
-# @description True when the given source path is on the skip-entirely
-# file allowlist (`CHANGELOG.md`, `docs/releases.md`,
-# `tests/fixtures/**`, `.claude/**`).
-# @arg $1 src_rel source path relative to REPO_ROOT
-function is_allowlisted() {
-  local -r src_rel="$1"
-  case "${src_rel}" in
-  # `.claude/` holds Claude tooling rather than user-facing prose, so its
-  # workflow-phase and label vocabulary is not an ephemeral reference.
-  CHANGELOG.md | docs/releases.md | tests/fixtures/* | .claude/*)
-    return 0
-    ;;
-  esac
-  return 1
 }
 
 function main() {
