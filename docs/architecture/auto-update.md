@@ -12,7 +12,7 @@ flowchart TD
   fetch["curl --location asset_url<br/>cross-check .digest<br/>(hard fail on absent)"]
   validate["validate URL prefix<br/>validate tag regex"]
   hash["nix hash file --sri"]
-  write["mktemp + mv<br/>linpeas-pin.json"]
+  write["make_temp + mv<br/>linpeas-pin.json"]
   show["./scripts/refresh-flake-show.sh"]
   pr["gh pr create<br/>chore: bump linpeas to <tag>"]
   automerge["gh pr merge --auto --merge"]
