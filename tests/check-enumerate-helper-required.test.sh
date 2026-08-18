@@ -244,6 +244,37 @@ run_expect 'good-glob-exempt-comment-record-edge-cases' \
 expect good-glob-array-pattern-strings.sh 0 \
   '1 file(s) scanned, 1 scan site(s) classified, 0 exemption(s)'
 
+# @description A pattern laundered through a variable. The metacharacter
+# is written at the assignment and expanded at the read, so the shape is
+# decided by how the read is quoted rather than by how the assignment is
+# written — which is why the diagnostic names the variable rather than
+# only its position.
+#
+# shellcheck disable=SC2016 # the brace pair is a literal substring of the diagnostic, not an expansion
+expect bad-glob-var-loop.sh 1 \
+  'bad-glob-var-loop.sh:12:1: this for loop expands ${pat}'
+# shellcheck disable=SC2016 # the brace pair is a literal substring of the diagnostic, not an expansion
+expect bad-glob-var-array.sh 1 \
+  'bad-glob-var-array.sh:11:7: this array assignment expands ${pat}'
+# A quoted metacharacter in an array element is not a site the array
+# position classifies, so the source is invisible there and the unquoted
+# read is the only place the breadth question can be asked.
+# shellcheck disable=SC2016 # the brace pair is a literal substring of the diagnostic, not an expansion
+expect bad-glob-var-quoted-source-array.sh 1 \
+  'bad-glob-var-quoted-source-array.sh:12:1: this for loop expands ${pats}'
+
+# @description The clean counterparts, merged so the tally discriminates
+# them from every single-file clean summary already asserted above. A
+# quoted read expands no pattern; a value whose only metacharacter
+# arrived inside a parameter expansion holds no pattern to expand; and a
+# read of a name whose pattern is expanded at an already-classified,
+# already-marked site asks a question that site answered. The counts are
+# load-bearing: a rule that started classifying any of these three would
+# move this line rather than merely failing.
+run_expect 'all-good-glob-var-shapes' \
+  "${FIXTURES}/good-glob-var-quoted-read.sh"$'\n'"${FIXTURES}/good-glob-var-param-pattern.sh"$'\n'"${FIXTURES}/good-glob-var-classified-source.sh" \
+  0 '3 file(s) scanned, 3 scan site(s) classified, 1 exemption(s)'
+
 # The filter rule's violating shapes. filter_into narrows an already
 # enumerated set, and a read of the same *_FILTER variable elsewhere
 # throws that guarantee away wherever it happens: the two files below
