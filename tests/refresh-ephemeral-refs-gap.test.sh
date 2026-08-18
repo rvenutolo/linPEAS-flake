@@ -150,13 +150,7 @@ function main() {
   local -r good_census_line="ephemeral-refs-gap: ok — ${good_census}"
   harness_assert_record 'good round trip' "${good_census}" \
     "${work}/good-check.outcome" "${work}/good-check.out" "${work}/good-check.err"
-  harness_assert_also 'is up to date'
-  # The live-tree scenario below is also a clean, already-generated run,
-  # so it legitimately prints this same banner. The two rows still
-  # discriminate on their census substrings, which differ because the
-  # fixture root and the live tree hold different populations.
-  harness_assert_exempt 'is up to date' 'live' \
-    'both rows are a clean --check on an already-generated tree, just different trees'
+  harness_assert_also "${page_good} is up to date"
   if [[ ${generate_rc} -eq 0 ]] && [[ ${rc} -eq 0 ]] &&
     grep --fixed-strings --line-regexp --quiet -- "${good_census_line}" "${work}/good-check.out"; then
     pass 'generate then --check is clean and reports the tree it walked'
