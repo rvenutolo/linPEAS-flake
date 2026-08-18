@@ -757,8 +757,10 @@ function scan_advisory() {
 # enumeration is git's
 # rather than a hand-kept path list. The pathspec is built from
 # `EPHEMERAL_REFS_TYPES` rather than written out here, so the set this
-# reads and the set the gap generator reports as unread stay exact
-# complements of each other. `--cached` covers tracked sources.
+# reads and the set the gap generator reports as unread come from one
+# record set and cannot overlap. They are not complements: anything the
+# allowlist skips sits outside both, whether its type is claimed or not.
+# `--cached` covers tracked sources.
 # `--others --exclude-standard` adds sources that are not committed yet
 # but are not ignored either — exactly the files a commit is about to
 # introduce, so a new doc or script is gated by the same run that

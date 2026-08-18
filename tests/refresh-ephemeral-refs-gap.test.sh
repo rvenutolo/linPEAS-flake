@@ -310,6 +310,40 @@ function main() {
     cat -- "${work}/live.err" >&2
   fi
 
+  # 13. Under LINT_ALLOW_EMPTY_SCAN=1 a genuinely empty corpus must
+  #     render zero labels, not the one phantom empty-string element an
+  #     unguarded `mapfile` on an empty `labels_out` would leave behind,
+  #     and the page must state the gap in prose rather than leave a bare
+  #     period where the label sentence would otherwise sit. The opt-out
+  #     is set only for this one invocation, via `env` on the call itself
+  #     — the file-top `unset LINT_ALLOW_EMPTY_SCAN` stays in force for
+  #     every other row, including the breadth-failure row that shares
+  #     this same fixture root without the opt-out.
+  local page_empty="${work}/empty-labels.md"
+  seed_page "${page_empty}"
+  rc=0
+  env "EPHEMERAL_REFS_GAP_ROOT_OVERRIDE=${FIXTURES}/no-comments" \
+    "EPHEMERAL_REFS_GAP_DOC_OVERRIDE=${page_empty}" \
+    "LINT_ALLOW_EMPTY_SCAN=1" \
+    bash "${SCRIPT}" \
+    >"${work}/empty-labels.out" 2>"${work}/empty-labels.err" || rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${rc}" >"${work}/empty-labels.outcome"
+  local -r empty_census_line='ephemeral-refs-gap: ok — 1 unclaimed source(s), 0 carrying comments, 0 type label(s), 0 blocking shape(s)'
+  # shellcheck disable=SC2016 # literal backticks in markdown output
+  local -r empty_sentence_line='    No file type outside the extractors carries a `#` comment.'
+  harness_assert_record 'empty-labels' "${empty_census_line}" \
+    "${work}/empty-labels.outcome" "${work}/empty-labels.out" "${work}/empty-labels.err" \
+    "${page_empty}"
+  harness_assert_also "${empty_sentence_line}"
+  if [[ ${rc} -eq 0 ]] &&
+    grep --fixed-strings --line-regexp --quiet -- "${empty_census_line}" "${work}/empty-labels.out" &&
+    grep --fixed-strings --line-regexp --quiet -- "${empty_sentence_line}" "${page_empty}"; then
+    pass 'LINT_ALLOW_EMPTY_SCAN=1 over an empty complement counts zero labels and states the gap in prose'
+  else
+    fail "empty-labels: expected exit 0, census line ${empty_census_line@Q}, sentence line ${empty_sentence_line@Q}, got exit ${rc}"
+    cat -- "${work}/empty-labels.out" "${work}/empty-labels.err" >&2
+  fi
+
   harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then

@@ -68,9 +68,9 @@ readonly RE_COMMENT='^[[:space:]]*#'
 # read: every path `git ls-files` reports that no extractor claims and
 # the allowlist does not skip. The producer flags mirror the lint's
 # exactly, so a file the lint reads cannot also appear here — the two
-# sets are disjoint. They are not complements: a path that is a claimed
-# type and also allowlisted sits outside both, and the page's allowlist
-# bullet is what accounts for it.
+# sets are disjoint. They are not complements: anything the allowlist
+# skips sits outside both, whether its type is claimed or not, and the
+# page's allowlist bullet is what accounts for it.
 # @stdout NUL-delimited source paths, sorted
 # shellcheck disable=SC2329 # invoked indirectly, by name, via enumerate_into
 function unclaimed_sources() {
@@ -232,8 +232,17 @@ function main() {
     log_err 'could not sort the type labels'
     exit 2
   fi
+  # A here-string always feeds one trailing newline, so `<<<""` is one
+  # empty line, not zero: an unguarded `mapfile` on an empty `labels_out`
+  # (the corpus survived breadth but every source's label collided down
+  # to nothing, which cannot happen today, or the breadth guard was
+  # bypassed via `LINT_ALLOW_EMPTY_SCAN=1`) would seed `sorted_labels`
+  # with one phantom empty-string element — the census would then count
+  # a label that names nothing.
   local -a sorted_labels=()
-  mapfile -t sorted_labels <<<"${labels_out}"
+  if [[ -n ${labels_out} ]]; then
+    mapfile -t sorted_labels <<<"${labels_out}"
+  fi
 
   local sentence='' label
   for label in "${sorted_labels[@]}"; do
@@ -255,9 +264,18 @@ function main() {
   {
     printf '%s\n' "${MARKER_BEGIN}"
     printf '\n'
-    # shellcheck disable=SC2016 # literal backticks in markdown output
-    printf '%sFile types no extractor claims and that carry `#` comments:\n' "${INDENT}"
-    printf '%s%s.\n' "${INDENT}" "${sentence}"
+    if ((${#sorted_labels[@]} > 0)); then
+      # shellcheck disable=SC2016 # literal backticks in markdown output
+      printf '%sFile types no extractor claims and that carry `#` comments:\n' "${INDENT}"
+      printf '%s%s.\n' "${INDENT}" "${sentence}"
+    else
+      # An empty `sorted_labels` still needs a real sentence here, not
+      # `${sentence}` rendered as an empty string: that leaves a bare
+      # `.` on its own line, which reads as truncated prose rather than
+      # as the corpus genuinely holding nothing to name.
+      # shellcheck disable=SC2016 # literal backticks in markdown output
+      printf '%sNo file type outside the extractors carries a `#` comment.\n' "${INDENT}"
+    fi
     printf '%sNo blocking shape appears in any of them.\n' "${INDENT}"
     printf '\n'
     printf '%s\n' "${MARKER_END}"
