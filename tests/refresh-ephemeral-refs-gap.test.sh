@@ -151,6 +151,12 @@ function main() {
   harness_assert_record 'good round trip' "${good_census}" \
     "${work}/good-check.outcome" "${work}/good-check.out" "${work}/good-check.err"
   harness_assert_also 'is up to date'
+  # The live-tree scenario below is also a clean, already-generated run,
+  # so it legitimately prints this same banner. The two rows still
+  # discriminate on their census substrings, which differ because the
+  # fixture root and the live tree hold different populations.
+  harness_assert_exempt 'is up to date' 'live' \
+    'both rows are a clean --check on an already-generated tree, just different trees'
   if [[ ${generate_rc} -eq 0 ]] && [[ ${rc} -eq 0 ]] &&
     grep --fixed-strings --line-regexp --quiet -- "${good_census_line}" "${work}/good-check.out"; then
     pass 'generate then --check is clean and reports the tree it walked'
@@ -268,6 +274,47 @@ function main() {
   printf 'harness-assert-outcome: exit=%d\n' "${rc}" >"${work}/canary.outcome"
   expect_failure 'canary' 2 'the blocking union no longer matches the issue canary' \
     'a union that stopped matching a class is refused before anything is read'
+
+  # 12. The live tree. The generator ships with the page it generates, so
+  #     a --check that is not clean on a freshly-generated tree means the
+  #     committed block and the tree disagree. The label list is asserted
+  #     from the tree rather than from the generator's own output: an
+  #     expectation the generator produced would let a generator that
+  #     scanned nothing round-trip its way to green.
+  local live_labels
+  # shellcheck disable=SC2016 # literal backticks in markdown output
+  live_labels="$(sed --quiet 's/^    \(`\..*`\)\.$/\1/p' \
+    "${REPO_ROOT}/docs/development/linting.md" | head --lines=1)"
+  rc=0
+  bash "${SCRIPT}" --check >"${work}/live.out" 2>"${work}/live.err" || rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${rc}" >"${work}/live.outcome"
+  # The recorded substring is this run's own census tail, read back
+  # rather than hardcoded: the live tree's counts move as the repo
+  # grows, and a constant fixed here would go stale on its own. Reading
+  # it back still discriminates against the fixture scenarios above,
+  # whose counts are small and fixed by their fixture roots.
+  local live_census
+  live_census="$(sed --quiet 's/^ephemeral-refs-gap: ok — \(.*\)$/\1/p' \
+    "${work}/live.out" | head --lines=1)"
+  harness_assert_record 'live' "${live_census}" \
+    "${work}/live.outcome" "${work}/live.out" "${work}/live.err"
+  # Anchored to the whole census line rather than a bare substring
+  # search for `0 blocking shape(s)`: that substring is also the tail of
+  # a hypothetical `10 blocking shape(s)`, the exact leaked-digit defect
+  # the label-list rows above were rewritten to close. Capturing the
+  # digits between the last comma and the literal suffix, over the
+  # entire line (`^...$`), means only a genuine zero can satisfy it.
+  local live_blocking_count
+  live_blocking_count="$(sed --regexp-extended --quiet \
+    's/^ephemeral-refs-gap: ok — .*, ([0-9]+) blocking shape\(s\)$/\1/p' \
+    "${work}/live.out" | head --lines=1)"
+  if [[ ${rc} -eq 0 ]] && [[ -n ${live_labels} ]] &&
+    [[ ${live_blocking_count} == '0' ]]; then
+    pass "live tree round trip is clean over ${live_labels}"
+  else
+    fail "live round trip: check exit ${rc}, labels read as ${live_labels@Q}, blocking count read as ${live_blocking_count@Q}"
+    cat -- "${work}/live.err" >&2
+  fi
 
   harness_assert_verify || failures=$((failures + 1))
 

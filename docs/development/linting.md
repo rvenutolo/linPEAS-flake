@@ -138,8 +138,10 @@ shell source, `awk` per source, `grep` per class per source — and almost
 no file in the tree carries a banned shape. One
 `grep --files-with-matches` for the union of the mode's class regexes
 therefore runs first, over every scannable source at once, and only the
-sources it names are extracted and scanned. On the live tree that is
-around 23 of 245 in the blocking pass and 6 of 245 in the advisory one.
+sources it names are extracted and scanned. On the live tree only a small
+minority of scannable sources carry a candidate token in either pass, and
+each run states its own split in the scope summary rather than this page
+holding a copy that goes stale.
 
 **A set-aside source cannot be hiding a violation.** Every extractor
 emits, for a given source line, either a blank line or a substring of
@@ -206,13 +208,24 @@ Fuzzy causal-history phrases surface as advisories, never blockers:
 ### Exemptions
 
 - **Every extension no extractor claims.** Only `.md`, `.sh`, `.nix`,
-    `.yml` and `.yaml` are read; everything else is skipped whole. The
-    remaining population was measured rather than guessed at: 395
-    full-line comments across `.toml`, `.awk`, `justfile`, `.py`,
-    `.envrc`, `.gitignore`, `.gitattributes` and `CODEOWNERS`, carrying
-    **zero** banned shapes. The ban is therefore a ban on Markdown prose
-    and on shell, Nix and YAML comments, not a tree-wide one — but the
-    gap between the two is now measured and empty.
+    `.yml` and `.yaml` are read; everything else is skipped whole. What
+    that leaves unread is not guessed at and not counted by hand: it is
+    the exact complement of this lint's own scan set, taken from the same
+    type records, and `scripts/refresh-ephemeral-refs-gap.sh` refuses to
+    render it while a blocking shape sits inside it.
+
+    <!-- BEGIN ephemeral-refs-gap -->
+
+    File types no extractor claims and that carry `#` comments:
+    `.awk`, `.envrc`, `.gitignore`, `.toml`, `.txt`, `justfile`.
+    No blocking shape appears in any of them.
+
+    <!-- END ephemeral-refs-gap -->
+
+    The ban is therefore a ban on Markdown prose and on shell, Nix and
+    YAML comments, not a tree-wide one — but the gap between the two is
+    gated empty rather than measured once.
+
 - **A `#` line inside a non-shell YAML block scalar.** The YAML matcher
     reads any line whose first non-space character is `#`, including
     inside a `run:` block. That is deliberate: those blocks are embedded
@@ -222,6 +235,7 @@ Fuzzy causal-history phrases surface as advisories, never blockers:
     string. The cost is that a `#` line in a block scalar that is *not*
     shell would be read as a comment. The tree has no such block today,
     and a banned token quoted in backticks is exempt either way.
+
 - **File allowlist (skipped entirely):** `CHANGELOG.md`,
     `docs/releases.md`, everything under `tests/fixtures/**`, and
     everything under `.claude/**`. The first two structurally list PR
@@ -230,6 +244,7 @@ Fuzzy causal-history phrases surface as advisories, never blockers:
     workflow-phase and label vocabulary is not an ephemeral reference.
     The allowlist is also the only escape from a false positive: there
     is no per-line or per-token suppression comment.
+
 - **Structural stripping:** generated auto-blocks (the `BEGIN`/`END`
     HTML-comment marker pairs), fenced code blocks, and inline code spans
     are blanked in place (preserving line count) before matching. Stable
