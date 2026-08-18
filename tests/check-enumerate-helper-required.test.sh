@@ -275,6 +275,19 @@ run_expect 'all-good-glob-var-shapes' \
   "${FIXTURES}/good-glob-var-quoted-read.sh"$'\n'"${FIXTURES}/good-glob-var-param-pattern.sh"$'\n'"${FIXTURES}/good-glob-var-classified-source.sh" \
   0 '3 file(s) scanned, 3 scan site(s) classified, 1 exemption(s)'
 
+# @description A read under a plus operator emits the alternate word and
+# never the value of the parameter, so a pattern the variable holds
+# cannot expand there. Alone this fixture's clean summary is
+# byte-identical to good-glob-array-pattern-strings.sh's above — a single
+# file with one classified site and no exemption — so good-glob-into.sh's
+# and good-glob-arg-only.sh's own already-proven tallies are folded in
+# beside it; the resulting three-file, four-site tally is what proves the
+# read was reached and dismissed rather than the file never having been
+# walked.
+run_expect 'good-glob-var-alternate-word' \
+  "${FIXTURES}/good-glob-var-alternate-word.sh"$'\n'"${FIXTURES}/good-glob-into.sh"$'\n'"${FIXTURES}/good-glob-arg-only.sh" \
+  0 '3 file(s) scanned, 4 scan site(s) classified, 0 exemption(s)'
+
 # The filter rule's violating shapes. filter_into narrows an already
 # enumerated set, and a read of the same *_FILTER variable elsewhere
 # throws that guarantee away wherever it happens: the two files below
