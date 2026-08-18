@@ -80,7 +80,7 @@ The escape hatch is a `# reason-ladder-exempt: <reason>` comment on the same lin
 
 A marker excuses nothing in two shapes, both reported as drift. On a step id the attribution env already references via `steps.<id>.outcome`, coverage would have passed that step whether or not the marker existed. On the attribution step's own id, coverage skips it unconditionally, so a marker there changes nothing it could exempt. This marker always sits on a real step's `id:` line — unlike enumerate-helper-required's and guard-exit-code's markers, it can never be attached to no site at all — so an exemption that protects nothing here is unearned rather than orphaned. Neither shape adds a field to the clean summary line.
 
-Enforced by `scripts/check-verify-reason-ladder.sh`. Wired as the `lint-workflow-security` CI job (member check `verify-reason-ladder`). Full rationale: [Verification → Ladder coverage is linted](verification.md#ladder-coverage-is-linted).
+Enforced by `scripts/check-verify-reason-ladder.sh`. Wired as the `lint-workflow-security` CI job (member check `verify-reason-ladder`) and as a pre-commit hook. Full rationale: [Verification → Ladder coverage is linted](verification.md#ladder-coverage-is-linted).
 
 ## script-shebang-pipefail
 
