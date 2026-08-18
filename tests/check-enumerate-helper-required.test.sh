@@ -288,6 +288,20 @@ run_expect 'good-glob-var-alternate-word' \
   "${FIXTURES}/good-glob-var-alternate-word.sh"$'\n'"${FIXTURES}/good-glob-into.sh"$'\n'"${FIXTURES}/good-glob-arg-only.sh" \
   0 '3 file(s) scanned, 4 scan site(s) classified, 0 exemption(s)'
 
+# @description One site, one record. The default word writes a literal
+# pattern and the name read is pattern-bearing, so two glob positions
+# match the same loop, and the marker above it is consumed once: the
+# exemption count is what proves a single record was emitted, since a
+# doubled site would report two exemptions from the one comment and a
+# second classified site. Alone this fixture's clean summary is
+# byte-identical to good-glob-array-exempt.sh's above — a single file
+# with one classified site and one exemption — so good-glob-into.sh's
+# and good-glob-arg-only.sh's own already-proven tallies are folded in
+# beside it.
+run_expect 'good-glob-var-double-qualifies-exempt' \
+  "${FIXTURES}/good-glob-var-double-qualifies-exempt.sh"$'\n'"${FIXTURES}/good-glob-into.sh"$'\n'"${FIXTURES}/good-glob-arg-only.sh" \
+  0 '3 file(s) scanned, 4 scan site(s) classified, 1 exemption(s)'
+
 # The filter rule's violating shapes. filter_into narrows an already
 # enumerated set, and a read of the same *_FILTER variable elsewhere
 # throws that guarantee away wherever it happens: the two files below
