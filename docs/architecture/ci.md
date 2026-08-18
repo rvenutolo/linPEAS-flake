@@ -165,7 +165,12 @@ Surfacing "open bump PR" state on the dashboard is deliberately not implemented 
 
 `stale-pin-check.yml`'s notify body distinguishes:
 
-- `reason=upstream-api-failure` — `gh api .../releases/latest` failed.
+- `reason=pin-malformed` — local `linpeas-pin.json` has a malformed
+    `.version` field.
+- `reason=upstream-api-failure` — `gh api .../releases/latest` failed or
+    returned empty.
+- `reason=upstream-tag-malformed` — the API succeeded but upstream
+    published a tag outside the canonical shape.
 - `reason=stall-detected` — API succeeded but local pin is stale.
 
 Do not collapse into single `failure` classification.
