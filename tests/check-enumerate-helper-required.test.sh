@@ -177,6 +177,16 @@ expect bad-glob-marker-mismatch.sh 1 \
 expect bad-producer-marker-mismatch.sh 1 \
   'bad-producer-marker-mismatch.sh:10:12: git ls-files runs outside enumerate_into'
 
+# @description A pattern written literally inside an expansion word.
+# A position that reads only the own literal parts of a word cannot see
+# it, though it is expanded exactly where a bare one would be. The two
+# shapes sit in two fixtures rather than one so each scenario produces
+# its own observable output.
+expect bad-glob-alt-word-loop.sh 1 \
+  'bad-glob-alt-word-loop.sh:11:1: this for loop iterates a glob directly'
+expect bad-glob-alt-word-array.sh 1 \
+  'bad-glob-alt-word-array.sh:10:7: this array assignment expands a glob directly'
+
 # The glob rule's clean shapes, merged for the same reason the producer
 # rule's are: each alone prints an indistinguishable clean summary, and
 # the counts are what prove all four were read — a helper call, an
@@ -233,6 +243,64 @@ run_expect 'good-glob-exempt-comment-record-edge-cases' \
 # move this line rather than merely failing.
 expect good-glob-array-pattern-strings.sh 0 \
   '1 file(s) scanned, 1 scan site(s) classified, 0 exemption(s)'
+
+# @description A pattern laundered through a variable. The metacharacter
+# is written at the assignment and expanded at the read, so the shape is
+# decided by how the read is quoted rather than by how the assignment is
+# written — which is why the diagnostic names the variable rather than
+# only its position.
+#
+# shellcheck disable=SC2016 # the brace pair is a literal substring of the diagnostic, not an expansion
+expect bad-glob-var-loop.sh 1 \
+  'bad-glob-var-loop.sh:12:1: this for loop expands ${pat}'
+# shellcheck disable=SC2016 # the brace pair is a literal substring of the diagnostic, not an expansion
+expect bad-glob-var-array.sh 1 \
+  'bad-glob-var-array.sh:11:7: this array assignment expands ${pat}'
+# A quoted metacharacter in an array element is not a site the array
+# position classifies, so the source is invisible there and the unquoted
+# read is the only place the breadth question can be asked.
+# shellcheck disable=SC2016 # the brace pair is a literal substring of the diagnostic, not an expansion
+expect bad-glob-var-quoted-source-array.sh 1 \
+  'bad-glob-var-quoted-source-array.sh:12:1: this for loop expands ${pats}'
+
+# @description The clean counterparts, merged so the tally discriminates
+# them from every single-file clean summary already asserted above. A
+# quoted read expands no pattern; a value whose only metacharacter
+# arrived inside a parameter expansion holds no pattern to expand; and a
+# read of a name whose pattern is expanded at an already-classified,
+# already-marked site asks a question that site answered. The counts are
+# load-bearing: a rule that started classifying any of these three would
+# move this line rather than merely failing.
+run_expect 'all-good-glob-var-shapes' \
+  "${FIXTURES}/good-glob-var-quoted-read.sh"$'\n'"${FIXTURES}/good-glob-var-param-pattern.sh"$'\n'"${FIXTURES}/good-glob-var-classified-source.sh" \
+  0 '3 file(s) scanned, 3 scan site(s) classified, 1 exemption(s)'
+
+# @description A read under a plus operator emits the alternate word and
+# never the value of the parameter, so a pattern the variable holds
+# cannot expand there. Alone this fixture's clean summary is
+# byte-identical to good-glob-array-pattern-strings.sh's above — a single
+# file with one classified site and no exemption — so good-glob-into.sh's
+# and good-glob-arg-only.sh's own already-proven tallies are folded in
+# beside it; the resulting three-file, four-site tally is what proves the
+# read was reached and dismissed rather than the file never having been
+# walked.
+run_expect 'good-glob-var-alternate-word' \
+  "${FIXTURES}/good-glob-var-alternate-word.sh"$'\n'"${FIXTURES}/good-glob-into.sh"$'\n'"${FIXTURES}/good-glob-arg-only.sh" \
+  0 '3 file(s) scanned, 4 scan site(s) classified, 0 exemption(s)'
+
+# @description One site, one record. The default word writes a literal
+# pattern and the name read is pattern-bearing, so two glob positions
+# match the same loop, and the marker above it is consumed once: the
+# exemption count is what proves a single record was emitted, since a
+# doubled site would report two exemptions from the one comment and a
+# second classified site. Alone this fixture's clean summary is
+# byte-identical to good-glob-array-exempt.sh's above — a single file
+# with one classified site and one exemption — so good-glob-into.sh's
+# and good-glob-arg-only.sh's own already-proven tallies are folded in
+# beside it.
+run_expect 'good-glob-var-double-qualifies-exempt' \
+  "${FIXTURES}/good-glob-var-double-qualifies-exempt.sh"$'\n'"${FIXTURES}/good-glob-into.sh"$'\n'"${FIXTURES}/good-glob-arg-only.sh" \
+  0 '3 file(s) scanned, 4 scan site(s) classified, 1 exemption(s)'
 
 # The filter rule's violating shapes. filter_into narrows an already
 # enumerated set, and a read of the same *_FILTER variable elsewhere

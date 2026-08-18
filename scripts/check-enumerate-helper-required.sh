@@ -17,9 +17,23 @@
 # planted at a non-head index and later spliced into command position by
 # index arithmetic still evades. A glob-driven scan fills its
 # array through `glob_into` — neither a `for` loop at its own head nor an
-# array assignment in its element list may expand a pattern, unless an
-# inline `# glob-exempt: <rationale>` marker says an empty match set is
-# that site's normal state. A filter-driven scan narrows an
+# array assignment in its element list may expand a pattern, whether the
+# metacharacter is written bare in the word itself, sits one level in as
+# the alternate or default word of an expansion that word holds, or is
+# held in a variable this same file assigns a pattern and read unquoted
+# at either place, unless an inline `# glob-exempt: <rationale>` marker
+# says an empty match set is that site's normal state. A read under a `+`
+# or `:+` operator is not such a read: those emit only the alternate word
+# and never the value the variable holds, so no pattern it holds can
+# expand there. That last shape is decided at the read rather than at the
+# assignment, and only within one file: a name a sourced library assigns
+# is not seen, the value read is never traced back to the assignment that
+# produced it — a name given a pattern on one branch and a data list on
+# another is reported — and a pattern reaching a loop head or an array
+# element through a command substitution or an indirect expansion is not
+# read at all. A site both the literal and the laundered shape match
+# earns one record, one diagnostic and one exemption, as every other
+# position here does. A filter-driven scan narrows an
 # already-enumerated set through `filter_into` — a variable named `FILTER`
 # or ending `_FILTER` may be read at file scope to reach that call, but
 # not again inside a `for` or `while` loop over the narrowed selection,
@@ -32,7 +46,7 @@
 # copy is later read, because every one of the checks above keys on the
 # name of the variable being read and a value under a fresh name would
 # otherwise satisfy the letter of all three while re-introducing the
-# defect. Those four are the positions a single pass over the tree
+# defect. Those are the positions a single pass over the tree
 # decides; a pattern that reaches a scan by any other route is outside
 # what this lint sees, and the rule is stated no wider than that.
 #
@@ -59,6 +73,15 @@
 # `glob_into` is the same assertion for both shapes: it expands the
 # patterns, fills the array and refuses an empty match set, and whatever
 # reads that array afterwards walks an ordinary list.
+#
+# A pattern held in a variable fails that same way, and the quoting at
+# the read is what decides whether it does: `pat='scripts/*.sh'` expands
+# nowhere until something reads it, so `for f in ${pat}` runs exactly the
+# unasserted scan a bare pattern runs, while `for f in "${pat}"` iterates
+# one literal string and `glob_into files 'shell sources' "${pat}"`
+# asserts the match set. The verdict therefore lands at the read, unlike
+# the two copying rules, which land at the assignment because the value
+# they follow is identified by name or by literal wherever it goes.
 #
 # A filter-driven scan fails a third way, one layer past enumeration and
 # globbing: `filter_into` narrows a set the other two helpers already
@@ -94,10 +117,17 @@
 # whether a `for` loop or an array assignment expands a pattern in its
 # own words, and so is asking whether a filter-named read falls inside a
 # loop's own extent or outside every `filter_into` call in the file.
+# Whether a name read at one of those two glob positions is one this file
+# gives a pattern is a question about the same tree, answered by
+# collecting that file's assignments in the same walk, which is what
+# keeps the laundered read a file question rather than a dataflow one.
 # Patterns handed to `glob_into` are arguments of a `CallExpr` — never
 # `WordIter` items, never array elements — and reach it quoted, so a
 # compliant call site cannot false-hit the glob rule however many
-# metacharacters it carries. A filter-named read handed to `filter_into`
+# metacharacters it carries; a pattern-bearing name reaches it quoted
+# too, and a quoted read is a part of the quoted string rather than of
+# the word, so it is not a read the rule counts either. A filter-named
+# read handed to `filter_into`
 # as its own argument is excluded from the filter rule the same way, and
 # the sanctioned `readonly FILE_FILTER="${WORKFLOW_FILE_FILTER:-}"` shape
 # stays legal under the alias check for the same reason: its own target is
@@ -118,12 +148,14 @@
 # the word right after `git`: the one hand-rolled enumeration this lint
 # was written against spelled it `git -C "${ROOT}" ls-files`.
 #
-# The count of scan sites classified — producer calls plus `glob_into`
-# call sites plus glob loops plus glob array assignments plus
-# `filter_into` call sites, plus filter reads inside a loop, plus the
-# single read reported in a file that calls the helper nowhere, plus a
-# filter value copied to an unwatched name — is itself asserted nonzero
-# (unless LINT_ALLOW_EMPTY_SCAN=1). A grammar that
+# The count of scan sites classified — producer calls plus a producer
+# name copied to a variable, plus `glob_into` call sites plus glob loops
+# plus glob array assignments plus an unquoted read of a pattern-bearing
+# name at either, plus `filter_into` call sites, plus filter reads inside
+# a loop and inside a function one hop out, plus the single read reported
+# in a file that calls the helper nowhere, plus a filter value copied to
+# an unwatched name — is itself asserted nonzero (unless
+# LINT_ALLOW_EMPTY_SCAN=1). A grammar that
 # silently recognized nothing would report "0 violations" and exit 0 —
 # the same clean line a genuinely scan-free tree prints — leaving this
 # gate off while green, which is the exact failure it exists to prevent
@@ -153,9 +185,11 @@
 # enumerated file count) comes back zero.
 # Exit 0 clean, 1 on a producer outside `enumerate_into`, a producer name
 # copied to a variable, a `for` loop expanding a glob at its own head, an
-# array assignment expanding one in its element list, a loop reading a
-# filter variable directly, a filter read in a function that loop calls,
-# a script reading a filter variable without ever calling `filter_into`,
+# array assignment expanding one in its element list, a `for` loop or an
+# array assignment expanding a variable this file assigns a glob pattern,
+# a loop reading a filter variable directly, a filter read in a function
+# that loop calls, a script reading a filter variable without ever
+# calling `filter_into`,
 # an assignment copying a filter value to a name outside the filter
 # pattern, an exemption marker with no rationale, or an exemption marker
 # that excuses no site this pass classified, 2 when a required tool is
@@ -210,11 +244,12 @@ fi
 
 # The jq program walks one file's shfmt --to-json tree per run
 # (--to-json accepts only stdin, one document per invocation) and emits
-# one `<ok|bad>\t<line>\t<col>\t<what>` record per scan site, where
-# `<what>` is the producer name for an enumeration and one of the shape
-# literals below for a glob-driven scan. The shell loop keys its marker
-# word off that field, so an exemption written for one rule cannot
-# silence the other.
+# one `<ok|bad>\t<line>\t<col>\t<detail>\t<what>` record per scan site,
+# where `<what>` is the producer name for an enumeration and one of the
+# shape literals below for a glob-driven scan, and `<detail>` is the
+# identifier the diagnostic names or a literal `-` where the shape names
+# none. The shell loop keys its marker word off the `what` field, so an
+# exemption written for one rule cannot silence the other.
 #
 # Three positions are recognized for a producer, and each is counted:
 #   ok  — the producer's words are arguments of an `enumerate_into` call
@@ -242,6 +277,8 @@ fi
 # marker word off them cannot drift apart.
 readonly GLOB_WHAT='glob loop'
 readonly GLOB_ARRAY_WHAT='glob array assignment'
+readonly GLOB_VAR_WHAT='glob variable read in a loop'
+readonly GLOB_VAR_ARRAY_WHAT='glob variable read in an array assignment'
 readonly FILTER_WHAT='filter selection'
 readonly FILTER_LOOP_WHAT='filter read in a loop'
 readonly FILTER_FUNC_WHAT='filter read in a function a loop calls'
@@ -307,6 +344,38 @@ def producer_of(args):
       end
   end;
 
+# The literal metacharacters a word writes unquoted: its own bare parts,
+# and the alternate or default word of an expansion it holds. A pattern
+# inside ${y+*.yml} is written literally at this site exactly as a bare
+# one is, and is expanded in the same place; only the level it sits at
+# differs. A quoted metacharacter is still not a pattern, which is why
+# only a Lit is read at either level.
+def bare_lit_globs:
+  [ (.Parts // [])[]
+    | (select(.Type == "Lit") | (.Value // "")),
+      (select(.Type == "ParamExp")
+        | ((.Exp.Word.Parts // [])[] | select(.Type == "Lit") | (.Value // ""))) ]
+  | [ .[] | select(test("[*?[]")) ];
+
+# The static text a word carries in its own parts: a bare literal, a
+# single-quoted value, or a literal inside a double-quoted string. Unlike
+# bare_lit_globs this reads quoted text too, because at an assignment the
+# quoting decides nothing — a quoted pattern and a bare one leave the same
+# text in the variable, and it is the read that expands it or does not.
+#
+# The walk stops at a ParamExp rather than recursing into it: the pattern
+# in ${text%%[![:space:]]*} is a parameter-expansion pattern, not a
+# filesystem glob, and counting it would read every line of string
+# surgery in the tree as a glob source.
+def pattern_texts:
+  [ (.Parts // [])[]
+    | if .Type == "Lit" then (.Value // "")
+      elif .Type == "SglQuoted" then (.Value // "")
+      elif .Type == "DblQuoted"
+      then ((.Parts // [])[] | select(.Type == "Lit") | (.Value // ""))
+      else empty
+      end ];
+
 [.. | objects | select(.Type == "FuncDecl")
   | {name: .Name.Value, from: .Body.Pos.Offset, to: .Body.End.Offset}] as $funcs
 
@@ -328,7 +397,7 @@ def producer_of(args):
     | . as $call
     | (producer_of((.Args // [])[3:])) as $prod
     | select($prod != null)
-    | "ok\t\($call.Pos.Line)\t\($call.Pos.Col)\t\($prod)"] as $direct
+    | "ok\t\($call.Pos.Line)\t\($call.Pos.Col)\t-\t\($prod)"] as $direct
 
 # Positions 2 and 3: a producer that is the head of its own command.
 | [.. | objects | select(.Type == "CallExpr")
@@ -339,7 +408,7 @@ def producer_of(args):
         | select($call.Pos.Offset >= .from and $call.Pos.Offset < .to)]
       | length) as $inside
     | (if $inside > 0 then "ok" else "bad" end) as $verdict
-    | "\($verdict)\t\($call.Pos.Line)\t\($call.Pos.Col)\t\($prod)"] as $standalone
+    | "\($verdict)\t\($call.Pos.Line)\t\($call.Pos.Col)\t-\t\($prod)"] as $standalone
 
 # A producer name copied to a variable. The enumeration rule predicate is
 # the literal command word, so a copy leaves the use site head a value and
@@ -373,7 +442,7 @@ def producer_of(args):
     | select($rhs != null)
     | select(([$words[] | literal_word_text | basename_of
         | select(. == "find" or . == "git")] | length) > 0)
-    | "bad\t\($rhs.Pos.Line)\t\($rhs.Pos.Col)\t\($producer_alias_what)"] as $producer_alias
+    | "bad\t\($rhs.Pos.Line)\t\($rhs.Pos.Col)\t-\t\($producer_alias_what)"] as $producer_alias
 
 # Position 4: a `glob_into` call. Counted rather than merely ignored, so
 # the nonzero tally below covers this rule as well — a walk that stopped
@@ -382,26 +451,27 @@ def producer_of(args):
 | [.. | objects | select(.Type == "CallExpr")
     | select(((.Args // []) | length) > 0)
     | select((.Args[0] | literal_word_text) == "glob_into")
-    | "ok\t\(.Pos.Line)\t\(.Pos.Col)\t\($glob_what)"] as $glob_calls
+    | "ok\t\(.Pos.Line)\t\(.Pos.Col)\t-\t\($glob_what)"] as $glob_calls
 
 # Position 5: a `for` whose iteration words carry a glob metacharacter in
-# an unquoted literal. Only a bare `Lit` part counts: a metacharacter
-# inside quotes is not a pattern, so `for x in "*"` iterates one literal
-# asterisk and asserts nothing about any tree. `.Loop.Items` is empty for
-# a C-style `for ((;;))`, which therefore never reaches the test.
+# an unquoted literal, at the word itself or in the alternate or default
+# word of an expansion it holds. Only a `Lit` counts at either level: a
+# metacharacter inside quotes is not a pattern, so `for x in "*"`
+# iterates one literal asterisk and asserts nothing about any tree.
+# `.Loop.Items` is empty for a C-style `for ((;;))`, which therefore
+# never reaches the test. The site list is kept apart from the records so
+# a later position can ask whether this one already classified the site.
 | [.. | objects | select(.Type == "ForClause")
-    | select(([(.Loop.Items // [])[]
-        | (.Parts // [])[]
-        | select(.Type == "Lit")
-        | (.Value // "")
-        | select(test("[*?[]"))] | length) > 0)
-    | "bad\t\(.Pos.Line)\t\(.Pos.Col)\t\($glob_what)"] as $glob_loops
+    | select(([(.Loop.Items // [])[] | bare_lit_globs[]] | length) > 0)
+    | {line: .Pos.Line, col: .Pos.Col}] as $glob_loop_sites
+| [$glob_loop_sites[] | "bad\t\(.line)\t\(.col)\t-\t\($glob_what)"] as $glob_loops
 
 # Position 6: an array assignment whose element words carry a glob
-# metacharacter in an unquoted literal. An `Assign` node carries no
-# `Type` field, so it is selected by the `Array` it holds; a scalar
-# assignment holds a null one. The position reported is that of the array
-# expression itself, which is where the pattern is written.
+# metacharacter in an unquoted literal, read at the same two levels the
+# loop head is read at. An `Assign` node carries no `Type` field, so it is
+# selected by the `Array` it holds; a scalar assignment holds a null one.
+# The position reported is that of the array expression itself, which is
+# where the pattern is written.
 #
 # Only a bare `Lit` part counts, for the same reason it does at a loop
 # head, and this is the restriction the whole rule rests on: `x=("*")`
@@ -411,12 +481,88 @@ def producer_of(args):
 # its match set is asserted. Counting a quoted metacharacter here would
 # make every compliant call site a violation of the rule it satisfies.
 | [.. | objects | select(has("Array")) | select(.Array != null)
-    | select(([(.Array.Elems // [])[]
-        | (.Value.Parts // [])[]
-        | select(.Type == "Lit")
-        | (.Value // "")
-        | select(test("[*?[]"))] | length) > 0)
-    | "bad\t\(.Array.Pos.Line)\t\(.Array.Pos.Col)\t\($glob_array_what)"] as $glob_arrays
+    | select(([(.Array.Elems // [])[] | (.Value // {}) | bare_lit_globs[]] | length) > 0)
+    | {line: .Array.Pos.Line, col: .Array.Pos.Col}] as $glob_array_sites
+| [$glob_array_sites[] | "bad\t\(.line)\t\(.col)\t-\t\($glob_array_what)"] as $glob_arrays
+
+# Names this file gives a glob metacharacter at an assignment the glob
+# rule does not already classify. An assignment the array position
+# classifies is left out: that site expands the pattern itself and either
+# asserts its breadth or carries the marker saying an empty match set is
+# normal there, so a read of the resulting paths asks a question already
+# answered, and flagging it would demand a second marker on a compliant
+# loop. A name assigned a pattern at one site and classified at another
+# stays in the set — the test is whether any unclassified glob-bearing
+# assignment exists, not whether some classified one does.
+| [.. | objects | select(has("Name")) | select(.Name.Value != null)
+    | . as $a
+    | (([ ($a.Value // empty) | pattern_texts ]
+        + [ (($a.Array // {}).Elems // [])[] | (.Value // {}) | pattern_texts ])
+        | flatten) as $texts
+    | select(([$texts[] | select(test("[*?[]"))] | length) > 0)
+    | select((([ (($a.Array // {}).Elems // [])[] | (.Value // {})
+                | bare_lit_globs[] ] | length) > 0) | not)
+    | $a.Name.Value] as $glob_names
+
+# Position 7: an unquoted read of one of those names among the iteration
+# words of a loop or the elements of an array. Only a direct part counts,
+# and that is the whole quoted-read distinction: a ParamExp inside a
+# DblQuoted is a part of the quoted string rather than of the word, so
+# `for f in "${pat}"` iterates one literal string and never reaches here.
+#
+# This is the one position whose verdict is decided at the read rather
+# than at the assignment, and deliberately so. The filter and producer
+# alias rules fire at the copy because the value they follow is
+# identified by name or by literal wherever it lands; a metacharacter is
+# identified by what expands it, and the same assignment is legal — and
+# written at call sites throughout this repo — when the value travels
+# quoted to `glob_into`. Flagging the assignment would make the repo a
+# violation of the rule it satisfies.
+#
+# The source predicate asks whether this file ever assigns that name a
+# pattern, not whether the value read here is that one. A name assigned a
+# pattern on one branch and a data list on another is reported, which
+# keeps the rule decidable in one pass; tracing the value to its read is
+# the dataflow every rule in this file was built to avoid.
+#
+# A read under a plus operator is skipped: it emits the alternate word
+# and never the value of the parameter, so a pattern the variable holds
+# cannot expand there. `Exp.Op` is an opaque integer with no name in the
+# JSON, fixed by this parser version: 81 is `+` and 82 is `:+`, while 83
+# is `-` and 84 is `:-`, which do emit the value and are therefore read.
+# Whatever the alternate word itself carries is a literal written at this
+# site, and the loop and array positions above already read it.
+#
+# A site the loop or array position already classified is not reported
+# again. The two rules can match the same words — a default word writing
+# a literal pattern beside a name that holds one — and it is still one
+# scan whose breadth goes unasserted, so it earns one record, one
+# diagnostic and one exemption. Every other position in this file keeps
+# that same relationship between a site and a record.
+| [.. | objects | select(.Type == "ForClause")
+    | . as $fc
+    | (.Loop.Items // [])[] | (.Parts // [])[]
+    | select(.Type == "ParamExp")
+    | select((.Exp.Op // 0) != 81 and (.Exp.Op // 0) != 82)
+    | select(([$glob_loop_sites[]
+        | select(.line == $fc.Pos.Line and .col == $fc.Pos.Col)] | length) == 0)
+    | (.Param.Value // "") as $n
+    | select($glob_names | index($n) != null)
+    | {line: $fc.Pos.Line, col: $fc.Pos.Col, name: $n}] as $glob_var_loop_hits
+| [.. | objects | select(has("Array")) | select(.Array != null)
+    | . as $aa
+    | (.Array.Elems // [])[] | (.Value.Parts // [])[]
+    | select(.Type == "ParamExp")
+    | select((.Exp.Op // 0) != 81 and (.Exp.Op // 0) != 82)
+    | select(([$glob_array_sites[]
+        | select(.line == $aa.Array.Pos.Line and .col == $aa.Array.Pos.Col)] | length) == 0)
+    | (.Param.Value // "") as $n
+    | select($glob_names | index($n) != null)
+    | {line: $aa.Array.Pos.Line, col: $aa.Array.Pos.Col, name: $n}] as $glob_var_array_hits
+| [$glob_var_loop_hits[]
+    | "bad\t\(.line)\t\(.col)\t\(.name)\t\($glob_var_what)"] as $glob_var_loops
+| [$glob_var_array_hits[]
+    | "bad\t\(.line)\t\(.col)\t\(.name)\t\($glob_var_array_what)"] as $glob_var_arrays
 
 # The whole extent of the statement that encloses a loop, not the bare
 # `ForClause`/`WhileClause` node: that node ends at `done`, but the
@@ -514,13 +660,13 @@ def producer_of(args):
     | ($a.Value // $a.Array) as $rhs
     | select(([$rhs | .. | objects | select(.Type == "ParamExp")
         | (.Param.Value // "") | select(test("(^|_)FILTER$"))] | length) > 0)
-    | "bad\t\($rhs.Pos.Line)\t\($rhs.Pos.Col)\t\($filter_alias_what)"] as $filter_alias
+    | "bad\t\($rhs.Pos.Line)\t\($rhs.Pos.Col)\t-\t\($filter_alias_what)"] as $filter_alias
 
-| [$filter_calls[] | "ok\t\(.Pos.Line)\t\(.Pos.Col)\t\($filter_what)"] as $filter_ok
+| [$filter_calls[] | "ok\t\(.Pos.Line)\t\(.Pos.Col)\t-\t\($filter_what)"] as $filter_ok
 
 | [$filter_reads[] | . as $r
     | select(([$loops[] | select($r.Pos.Offset >= .from and $r.Pos.Offset < .to)] | length) > 0)
-    | "bad\t\($r.Pos.Line)\t\($r.Pos.Col)\t\($filter_loop_what)"] as $filter_in_loops
+    | "bad\t\($r.Pos.Line)\t\($r.Pos.Col)\t-\t\($filter_loop_what)"] as $filter_in_loops
 
 # A read inside a hop-reached body that is not already inside the own
 # extent of the loop. The two sets are kept apart rather than merged so
@@ -529,10 +675,10 @@ def producer_of(args):
 | [$filter_reads[] | . as $r
     | select(([$loops[] | select($r.Pos.Offset >= .from and $r.Pos.Offset < .to)] | length) == 0)
     | select(([$hop_bodies[] | select($r.Pos.Offset >= .from and $r.Pos.Offset < .to)] | length) > 0)
-    | "bad\t\($r.Pos.Line)\t\($r.Pos.Col)\t\($filter_func_what)"] as $filter_in_funcs
+    | "bad\t\($r.Pos.Line)\t\($r.Pos.Col)\t-\t\($filter_func_what)"] as $filter_in_funcs
 
 | (if (($filter_reads | length) > 0) and (($filter_calls | length) == 0)
-    then [$filter_reads[0] | "bad\t\(.Pos.Line)\t\(.Pos.Col)\t\($filter_missing_what)"]
+    then [$filter_reads[0] | "bad\t\(.Pos.Line)\t\(.Pos.Col)\t-\t\($filter_missing_what)"]
     else [] end) as $filter_missing
 
 # Every comment in the file, emitted ahead of the site records so the
@@ -553,10 +699,18 @@ def producer_of(args):
 # record is read complete and the resulting blank continuation record
 # is skipped by the zero-length verdict guard the loop below already
 # has.
+#
+# The record carries a `detail` field ahead of its last one, holding the
+# identifier a diagnostic names, or `-` where a shape names none. It sits
+# ahead of the text rather than after it because the last field is the
+# one that absorbs an embedded tab, and a comment carrying a tab has to
+# arrive whole; `-` rather than an empty string because a tab is IFS
+# whitespace, so a run of them delimits one field and an empty middle
+# field would silently shift every field after it.
 | [.. | objects | select(has("Hash"))
-    | "cmt\t\(.Pos.Line)\t\(.Pos.Col)\t\(.Text // "")"] as $comments
+    | "cmt\t\(.Pos.Line)\t\(.Pos.Col)\t-\t\(.Text // "")"] as $comments
 
-| ($comments + $direct + $standalone + $producer_alias + $glob_calls + $glob_loops + $glob_arrays + $filter_ok + $filter_in_loops + $filter_in_funcs + $filter_missing + $filter_alias)[]
+| ($comments + $direct + $standalone + $producer_alias + $glob_calls + $glob_loops + $glob_arrays + $glob_var_loops + $glob_var_arrays + $filter_ok + $filter_in_loops + $filter_in_funcs + $filter_missing + $filter_alias)[]
 '
 
 # The exemption marker word each rule answers to, keyed by the record's
@@ -592,6 +746,8 @@ readonly MARKER_FILTER_WORD='filter-exempt'
 declare -A MARKER_BY_WHAT=(
   ["${GLOB_WHAT}"]="${MARKER_GLOB}"
   ["${GLOB_ARRAY_WHAT}"]="${MARKER_GLOB}"
+  ["${GLOB_VAR_WHAT}"]="${MARKER_GLOB}"
+  ["${GLOB_VAR_ARRAY_WHAT}"]="${MARKER_GLOB}"
   ["${FILTER_WHAT}"]="${MARKER_FILTER_WORD}"
   ["${FILTER_LOOP_WHAT}"]="${MARKER_FILTER_WORD}"
   ["${FILTER_FUNC_WHAT}"]="${MARKER_FILTER_WORD}"
@@ -635,6 +791,8 @@ for f in "${paths[@]}"; do
     --arg filter_loop_what "${FILTER_LOOP_WHAT}" --arg filter_func_what "${FILTER_FUNC_WHAT}" \
     --arg filter_missing_what "${FILTER_MISSING_WHAT}" --arg filter_alias_what "${FILTER_ALIAS_WHAT}" \
     --arg producer_alias_what "${PRODUCER_ALIAS_WHAT}" \
+    --arg glob_var_what "${GLOB_VAR_WHAT}" \
+    --arg glob_var_array_what "${GLOB_VAR_ARRAY_WHAT}" \
     "${JQ_PROG}" <<<"${ast_json}")"; then
     printf '%s: jq failed walking the parsed syntax tree\n' "${f}" >&2
     exit 2
@@ -649,7 +807,7 @@ for f in "${paths[@]}"; do
   declare -A COMMENT_TEXT=()
   declare -A CONSUMED=()
 
-  while IFS=$'\t' read -r verdict line col what; do
+  while IFS=$'\t' read -r verdict line col detail what; do
     [[ -z ${verdict} ]] && continue
 
     # Comment records arrive ahead of every site record and are census
@@ -724,6 +882,16 @@ for f in "${paths[@]}"; do
       printf '%s:%s:%s: this array assignment expands a glob directly; an array filled without asserting its size reads an empty root as a clean tree — fill it with glob_into, passing each pattern as a quoted string\n' \
         "${f}" "${line}" "${col}" >&2
       ;;
+    "${GLOB_VAR_WHAT}")
+      # shellcheck disable=SC2016 # the brace pair is literal diagnostic text spelling the variable the site reads, not an expansion
+      printf '%s:%s:%s: this for loop expands ${%s}, a variable this file assigns a glob pattern; the pattern is expanded here, where nothing asserts what it matched — fill an array with glob_into and loop over that\n' \
+        "${f}" "${line}" "${col}" "${detail}" >&2
+      ;;
+    "${GLOB_VAR_ARRAY_WHAT}")
+      # shellcheck disable=SC2016 # the brace pair is literal diagnostic text spelling the variable the site reads, not an expansion
+      printf '%s:%s:%s: this array assignment expands ${%s}, a variable this file assigns a glob pattern; an array filled from a pattern whose match set is asserted nowhere reads an empty root as a clean tree — fill it with glob_into, passing each pattern as a quoted string\n' \
+        "${f}" "${line}" "${col}" "${detail}" >&2
+      ;;
     "${FILTER_LOOP_WHAT}")
       printf '%s:%s:%s: this loop reads a filter variable directly; that re-applies the filter test outside filter_into, and whether it runs over the already-narrowed selection or a set filter_into never narrowed cannot be told apart here — narrow the scan set with filter_into, which asserts the selection is not empty\n' \
         "${f}" "${line}" "${col}" >&2
@@ -775,7 +943,7 @@ done
 
 if ((failed > 0 || orphans > 0)); then
   if ((failed > 0)); then
-    printf '%d scan(s) that assert no breadth: a filesystem enumeration outside enumerate_into, a glob expanded at a for loop head or in an array assignment, or a filter variable read directly instead of through filter_into\n' "${failed}" >&2
+    printf '%d scan(s) that assert no breadth: a filesystem enumeration outside enumerate_into, a glob expanded at a for loop head or in an array assignment, a variable holding a pattern expanded unquoted at either, or a filter variable read directly instead of through filter_into\n' "${failed}" >&2
   fi
   if ((orphans > 0)); then
     printf '%d exemption marker(s) that excuse nothing\n' "${orphans}" >&2
