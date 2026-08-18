@@ -76,7 +76,7 @@ gh attestation verify "oci://${DIGEST}" --repo rvenutolo/linPEAS-flake
 
 {% endraw %}
 
-See [Security → Multi-arch attestations](../security/verification.md) for
+See [Security → Multi-arch attestations](../security/verification.md#multi-arch-attestations) for
 the trust contract.
 
 ## Verify build provenance
