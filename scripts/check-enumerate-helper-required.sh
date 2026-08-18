@@ -490,10 +490,19 @@ def pattern_texts:
 # pattern on one branch and a data list on another is reported, which
 # keeps the rule decidable in one pass; tracing the value to its read is
 # the dataflow every rule in this file was built to avoid.
+#
+# A read under a plus operator is skipped: it emits the alternate word
+# and never the value of the parameter, so a pattern the variable holds
+# cannot expand there. `Exp.Op` is an opaque integer with no name in the
+# JSON, fixed by this parser version: 81 is `+` and 82 is `:+`, while 83
+# is `-` and 84 is `:-`, which do emit the value and are therefore read.
+# Whatever the alternate word itself carries is a literal written at this
+# site, and the loop and array positions above already read it.
 | [.. | objects | select(.Type == "ForClause")
     | . as $fc
     | (.Loop.Items // [])[] | (.Parts // [])[]
     | select(.Type == "ParamExp")
+    | select((.Exp.Op // 0) != 81 and (.Exp.Op // 0) != 82)
     | (.Param.Value // "") as $n
     | select($glob_names | index($n) != null)
     | {line: $fc.Pos.Line, col: $fc.Pos.Col, name: $n}] as $glob_var_loop_hits
@@ -501,6 +510,7 @@ def pattern_texts:
     | . as $aa
     | (.Array.Elems // [])[] | (.Value.Parts // [])[]
     | select(.Type == "ParamExp")
+    | select((.Exp.Op // 0) != 81 and (.Exp.Op // 0) != 82)
     | (.Param.Value // "") as $n
     | select($glob_names | index($n) != null)
     | {line: $aa.Array.Pos.Line, col: $aa.Array.Pos.Col, name: $n}] as $glob_var_array_hits
