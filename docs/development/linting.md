@@ -208,11 +208,12 @@ Fuzzy causal-history phrases surface as advisories, never blockers:
 ### Exemptions
 
 - **Every extension no extractor claims.** Only `.md`, `.sh`, `.nix`,
-    `.yml` and `.yaml` are read; everything else is skipped whole. What
-    that leaves unread is not guessed at and not counted by hand: it is
-    the exact complement of this lint's own scan set, taken from the same
-    type records, and `scripts/refresh-ephemeral-refs-gap.sh` refuses to
-    render it while a blocking shape sits inside it.
+    `.yml` and `.yaml` are read; everything else is skipped whole. Which
+    types those are is not guessed at and not counted by hand: they are
+    derived by inverting the same type records the scan set is built
+    from, over the files the allowlist below does not already skip, and
+    `scripts/refresh-ephemeral-refs-gap.sh` refuses to render them while
+    a blocking shape sits inside one.
 
     <!-- BEGIN ephemeral-refs-gap -->
 
