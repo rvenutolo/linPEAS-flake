@@ -36,8 +36,8 @@ flowchart LR
 
 The canonical list — mirroring the `protect-main` branch ruleset — lives
 in [`docs/security/required-checks.md`](../security/required-checks.md).
-The table below summarizes the functional and invariant gates; consult the
-canonical doc as source of truth.
+The tables below group all 29 required contexts by what they gate; consult
+the canonical doc as source of truth.
 
 Functional gates:
 
@@ -61,16 +61,32 @@ Self-enforcing invariant gates:
 | `required-checks-no-paths`   | No required workflow declares `paths:` / `paths-ignore:` under `pull_request:`                                                                                                                                                                                                                                                           |
 | `tag-protection-drift-check` | The `release-tag-protection` ruleset still blocks deletion / non-FF / update of release-tag refs                                                                                                                                                                                                                                         |
 | `lint-workflow-security`     | Batched workflow-security member lints; e.g. member check `uses-sha-pinned`: every `uses:` in workflows + composite actions is a full 40-hex SHA (or a `./...` self-ref). The trailing `# vX.Y.Z` patch-tag comment is a separate rule, `patch-tag-pins`, enforced as a pre-commit hook only — it is in no lint group and gates no merge |
+| `cliff-tag-pattern`          | `cliff.toml`'s `tag_pattern` still matches the canonical pin-shape regex, so git-cliff keeps seeing the release tags                                                                                                                                                                                                                     |
+| `harness-group`              | Every fixture-driven test harness in the group runs, alongside the live-repo probes wired to them                                                                                                                                                                                                                                        |
+| `lint-doc-invariants`        | Batched doc-invariant member lints (12), covering invariant-index integrity, doc anchors, ephemeral references, cron restatement, and schema validation                                                                                                                                                                                  |
+| `lint-script-hygiene`        | Batched shell-hygiene member lints (17) over `scripts/` and `tests/`, covering shebang/pipefail, per-script test coverage, helper routing, and path hygiene                                                                                                                                                                              |
+| `protect-main-drift-check`   | The live `protect-main` ruleset matches the desired posture, its in-tree mirror, and the required-contexts table in `docs/security/required-checks.md`                                                                                                                                                                                   |
+| `setup-nix-required`         | Every workflow installing Nix goes through the `./.github/actions/setup-nix` composite with `github-token`, never a vendor installer directly                                                                                                                                                                                            |
 
 Doc-quality + conventional-commit gates (all alphabetical):
 
-| Job                                        | What it enforces                                                                                                                                    |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `commitlint`                               | Every branch commit independently satisfies [Conventional Commits](https://www.conventionalcommits.org).                                            |
-| `editorconfig`                             | `.editorconfig` compliance (charset, line endings, trailing whitespace, final newline).                                                             |
-| `lint-pr-title` (workflow `pr-title-lint`) | PR title independently satisfies Conventional Commits and is spell-checked with `typos`. The PR title is used verbatim as the merge-commit subject. |
-| `markdownlint`                             | Markdown style + structure.                                                                                                                         |
-| `typos`                                    | Spell-check across the repo.                                                                                                                        |
+| Job                                        | What it enforces                                                                                                                                            |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `changelog-links`                          | The regenerated changelog carries no duplicate PR links and keeps the scorecard-count preprocessor; released sections match a fresh git-cliff regeneration. |
+| `commitlint`                               | Every branch commit independently satisfies [Conventional Commits](https://www.conventionalcommits.org).                                                    |
+| `doc-freshness`                            | Every generated doc still matches what its generator emits.                                                                                                 |
+| `editorconfig`                             | `.editorconfig` compliance (charset, line endings, trailing whitespace, final newline).                                                                     |
+| `lint-pr-title` (workflow `pr-title-lint`) | PR title independently satisfies Conventional Commits and is spell-checked with `typos`. The PR title is used verbatim as the merge-commit subject.         |
+| `markdownlint`                             | Markdown style + structure.                                                                                                                                 |
+| `typos`                                    | Spell-check across the repo.                                                                                                                                |
+
+Supply-chain + secret-scanning gates:
+
+| Job                 | What it enforces                                                         |
+| ------------------- | ------------------------------------------------------------------------ |
+| `dependency-review` | Reviews the pull request's dependency changes for known vulnerabilities. |
+| `gitleaks`          | Secret scan.                                                             |
+| `trufflehog`        | Secret scan with a complementary detector set.                           |
 
 ## Merge policy
 
