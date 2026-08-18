@@ -80,7 +80,7 @@ The escape hatch is a `# reason-ladder-exempt: <reason>` comment on the same lin
 
 A marker excuses nothing in two shapes, both reported as drift. On a step id the attribution env already references via `steps.<id>.outcome`, coverage would have passed that step whether or not the marker existed. On the attribution step's own id, coverage skips it unconditionally, so a marker there changes nothing it could exempt. This marker always sits on a real step's `id:` line — unlike enumerate-helper-required's and guard-exit-code's markers, it can never be attached to no site at all — so an exemption that protects nothing here is unearned rather than orphaned. Neither shape adds a field to the clean summary line.
 
-Enforced by `scripts/check-verify-reason-ladder.sh`. Wired as the `lint-workflow-security` CI job (member check `verify-reason-ladder`). Full rationale: [Verification → Ladder coverage is linted](verification.md#ladder-coverage-is-linted).
+Enforced by `scripts/check-verify-reason-ladder.sh`. Wired as the `lint-workflow-security` CI job (member check `verify-reason-ladder`) and as a pre-commit hook. Full rationale: [Verification → Ladder coverage is linted](verification.md#ladder-coverage-is-linted).
 
 ## script-shebang-pipefail
 
@@ -333,7 +333,7 @@ An exemption is sound at the moment it is written and silent afterwards. The sha
 
 Wiring is scored on a call because the gate reads harness source text. A header comment naming `harness_assert_verify`, or a commented-out call left in place, otherwise satisfies the check while nothing runs — the failure mode the gate exists to catch, reproduced inside the gate. Whole-line comments are blanked before matching, and the verify token must open a statement, optionally behind `if`, `||`, or `&&`. A trailing comment on a code line survives the blanking; the statement-anchored patterns reject it regardless, since the token is not the first word on its line.
 
-The ratchet covers every harness, including those asserting by other means than the quiet-grep idiom, because an exemption registered by a harness outside the wiring gate's scope weakens the same library. `tests/lib-harness-assert.test.sh` is the one exclusion, on the `EXEMPT` array: the gate library's own spec test must not be gated by the library it tests, and its generated library-driving snippets are indistinguishable from live calls to any textual rule.
+Both ratchets cover every harness that is not on the `EXEMPT` array in `tests/_harness_assert_wired.test.sh`, including those asserting by other means than the quiet-grep idiom — an exemption registered by a harness the wiring verdict does not score weakens the same library. The `EXEMPT` entries are skipped before either ratchet runs, so they are out of ratchet scope as well as out of the wiring verdict, and each carries its reason inline. `tests/lib-harness-assert.test.sh` is the reason-bearing case: the gate library's own spec test must not be gated by the library it tests, and its generated library-driving snippets are indistinguishable from live calls to any textual rule.
 
 Enforced by `tests/_harness_assert_wired.test.sh`, reached by the `harness-group` CI job.
 

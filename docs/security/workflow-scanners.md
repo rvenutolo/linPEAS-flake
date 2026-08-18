@@ -117,24 +117,24 @@ several also have narrative coverage
 in [workflow hardening](workflow-hardening.md). This table is an index, not a
 re-description.
 
-| Lint                         | Catches                                                                     |
-| ---------------------------- | --------------------------------------------------------------------------- |
-| actionlint                   | workflow syntax, `run:`-block shellcheck, expression errors                 |
-| actionlint-shellcheck-active | guards that actionlint's shellcheck integration stays enabled               |
-| uses-sha-pinned              | every `uses:` pinned to a full commit SHA                                   |
-| patch-tag-pins               | the patch-tag pin-comment convention on SHA pins                            |
-| pin-diff-isolated            | pin bumps isolated to their own diff                                        |
-| ratchet-pin-audit            | a publisher force-moving a tag to a new SHA after we pinned it (daily cron) |
-| stale-pin-check              | pins drifted from their canonical release tag (cron)                        |
-| min-permissions              | least-privilege `permissions:` on every workflow and job                    |
-| checkout-persist-credentials | `persist-credentials: false` on `actions/checkout`                          |
-| pull-request-target-absent   | bans the dangerous `pull_request_target` trigger                            |
-| workflow-concurrency         | top-level `concurrency.group` present                                       |
-| workflow-on-branches         | explicit branch scoping on `on:` triggers                                   |
-| nix-run-pinned               | `nix run` invocations pinned through the flake                              |
-| cosign-identity-pinned       | every `cosign verify*` subcommand pins identity and OIDC issuer             |
-| manifest-digest-pinned       | multi-arch manifest sources pinned by digest, not tag                       |
-| settings-posture-drift-check | repo settings vs. the expected hardened posture (daily cron)                |
+| Lint                         | Catches                                                                      |
+| ---------------------------- | ---------------------------------------------------------------------------- |
+| actionlint                   | workflow syntax, `run:`-block shellcheck, expression errors                  |
+| actionlint-shellcheck-active | guards that actionlint's shellcheck integration stays enabled                |
+| uses-sha-pinned              | every `uses:` pinned to a full commit SHA                                    |
+| patch-tag-pins               | the patch-tag pin-comment convention on SHA pins                             |
+| pin-diff-isolated            | pin bumps isolated to their own diff                                         |
+| ratchet-pin-audit            | a publisher force-moving a tag to a new SHA after we pinned it (daily cron)  |
+| stale-pin-check              | the linpeas upstream pin stalled >14d behind a newer upstream release (cron) |
+| min-permissions              | least-privilege `permissions:` on every workflow and job                     |
+| checkout-persist-credentials | `persist-credentials: false` on `actions/checkout`                           |
+| pull-request-target-absent   | bans the dangerous `pull_request_target` trigger                             |
+| workflow-concurrency         | top-level `concurrency.group` present                                        |
+| workflow-on-branches         | explicit branch scoping on `on:` triggers                                    |
+| nix-run-pinned               | `nix run` invocations pinned through the flake                               |
+| cosign-identity-pinned       | every `cosign verify*` subcommand pins identity and OIDC issuer              |
+| manifest-digest-pinned       | multi-arch manifest sources pinned by digest, not tag                        |
+| settings-posture-drift-check | repo settings vs. the expected hardened posture (daily cron)                 |
 
 See the [enforcement matrix](enforcement-matrix.md) for the authoritative
 enforcer/hook/CI mapping of each.

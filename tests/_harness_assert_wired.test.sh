@@ -138,16 +138,17 @@ function main() {
     # lose a match to the reader closing the pipe early.
     stripped="$(without_comments "${f}")"
 
-    # The escape-hatch ratchet covers every harness, including those that
-    # assert by other means than a quiet grep.
+    # The escape-hatch ratchet covers every harness the loop reaches —
+    # the EXEMPT array is skipped above, before this point — including
+    # those that assert by other means than a quiet grep.
     if grep --extended-regexp --quiet -- "${GATE_EXEMPT_CALL}" <<<"${stripped}"; then
       printf 'harness-assert-wired: %s registers a discrimination exemption\n' \
         "${base}" >&2
       exempting=$((exempting + 1))
     fi
 
-    # The parity ratchet covers every harness for the same reason: a
-    # collapsed pair excused by a harness the wiring gate never reaches
+    # The parity ratchet covers the same set for the same reason: a
+    # collapsed pair excused by a harness the wiring verdict never scores
     # still costs the same coverage.
     if grep --extended-regexp --quiet -- "${GATE_PARITY_EXEMPT_CALL}" <<<"${stripped}"; then
       if is_in_list "${base}" "${PARITY_EXEMPT_ALLOWED[@]}"; then

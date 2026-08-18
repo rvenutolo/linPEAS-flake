@@ -30,7 +30,8 @@ upstream account compromise post-release.
 
 - SRI digest pin in `linpeas-pin.json`, written by
     `scripts/bump-linpeas.sh` only.
-- Per-release `.digest` recorded alongside the version.
+- GitHub-API `.digest` cross-checked against the downloaded asset at bump
+    time — hard fail when it is absent, unprefixed, or mismatched.
 - URL-prefix lock to `https://github.com/peass-ng/PEASS-ng/releases/download/`.
 
 See [`docs/security/verification.md`](verification.md).
