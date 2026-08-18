@@ -1,8 +1,11 @@
 # Required Status Checks — main branch
 
-In-tree mirror of the `protect-main` branch ruleset
-(`gh api repos/rvenutolo/linPEAS-flake/rules/branches/main`). Update
-this file in the same change as any modification to the ruleset.
+In-tree restatement of the required-context set from the `protect-main`
+branch ruleset (`gh api repos/rvenutolo/linPEAS-flake/rules/branches/main`).
+Distinct from `.github/rulesets/protect-main.json`, which is the mirror
+diffed against the live ruleset; the `## Required contexts` table below is
+a third copy, diffed against that mirror. Update this file in the same
+change as any modification to the ruleset.
 
 ## Required contexts
 
