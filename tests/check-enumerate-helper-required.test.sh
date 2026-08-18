@@ -177,6 +177,16 @@ expect bad-glob-marker-mismatch.sh 1 \
 expect bad-producer-marker-mismatch.sh 1 \
   'bad-producer-marker-mismatch.sh:10:12: git ls-files runs outside enumerate_into'
 
+# @description A pattern written literally inside an expansion word.
+# A position that reads only the own literal parts of a word cannot see
+# it, though it is expanded exactly where a bare one would be. The two
+# shapes sit in two fixtures rather than one so each scenario produces
+# its own observable output.
+expect bad-glob-alt-word-loop.sh 1 \
+  'bad-glob-alt-word-loop.sh:11:1: this for loop iterates a glob directly'
+expect bad-glob-alt-word-array.sh 1 \
+  'bad-glob-alt-word-array.sh:10:7: this array assignment expands a glob directly'
+
 # The glob rule's clean shapes, merged for the same reason the producer
 # rule's are: each alone prints an indistinguishable clean summary, and
 # the counts are what prove all four were read — a helper call, an
