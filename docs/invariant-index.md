@@ -108,7 +108,7 @@ live in `.claude/CLAUDE.md` (untracked).
 
 ## Development
 
-- **ci-summary-category-map** — every required status check is categorized for the README CI summary. → [security/required-checks.md](security/required-checks.md). <!-- enforcer: scripts/check-ci-job-in-summary.sh, scripts/refresh-ci-summary.sh; ci: lint-doc-invariants, doc-freshness; hook: ci-job-in-summary, ci-summary-fresh -->
+- **ci-summary-category-map** — every required status check is categorized for the README CI summary. → [security/required-checks.md](security/required-checks.md) <!-- enforcer: scripts/check-ci-job-in-summary.sh, scripts/refresh-ci-summary.sh; ci: lint-doc-invariants, doc-freshness; hook: ci-job-in-summary, ci-summary-fresh -->
 - **Merging PRs** — merge-commit only, signed, PR title = subject. → [development/git.md](development/git.md) <!-- enforcer: -; ci: -; hook: commitlint -->
 - **Commitlint config is explicit** — every commitlint action step names an existing `configFile`, and the merge ruleset relaxes only the two line-length rules. → [development/git.md](development/git.md) <!-- enforcer: scripts/check-commitlint-config-explicit.sh; ci: lint-workflow-security; hook: commitlint-config-explicit -->
 - **Ephemeral-reference ban** — every Markdown, shell, Nix and YAML source in the repo outside the skip allowlist carries no PR/issue refs, prose dates, planning/review labels, or literal `.claude/` paths. → [development/linting.md](development/linting.md) <!-- enforcer: scripts/check-ephemeral-refs.sh; ci: lint-doc-invariants; hook: check-ephemeral-refs -->
