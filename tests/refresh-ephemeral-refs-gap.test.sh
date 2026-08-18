@@ -87,10 +87,20 @@ function expect_failure() {
 }
 
 # @description Assert one scenario rendered a page holding an expected
-# fragment, and record the page as the scenario's observable output.
+# line as a complete line, and record the page as the scenario's
+# observable output. Every label-list row uses this rather than a
+# substring match: the rendered line is a `, `-joined, `LC_ALL=C`-sorted
+# list, so an expected list is always a suffix of a longer list that
+# leaked one more label in ahead of it — `` `.toml`, `justfile`. `` is a
+# suffix of `` `.sh`, `.toml`, `justfile`. ``, and `` `.toml`. `` is a
+# suffix of `` `.awk`, `.toml`. ``. A substring assertion on either would
+# stay green through exactly the regression it exists to catch — a type
+# filter or an allowlist entry that stopped excluding something.
+# Anchoring to the whole line, indent included, closes that: a leaked
+# label changes the line's start, not just its middle.
 # @arg $1 scenario name  @arg $2 page path
-# @arg $3 expected page substring  @arg $4 human description
-function expect_page() {
+# @arg $3 expected exact line  @arg $4 human description
+function expect_page_line() {
   local -r name="$1" page="$2" expect="$3" description="$4"
   # A run that died before writing leaves no page behind. Copy into a
   # stand-in that always exists, so the gate records an empty observation
@@ -105,10 +115,10 @@ function expect_page() {
   harness_assert_record "${name}" "${expect}" \
     "${work}/${name}.outcome" "${observed}"
   if [[ ${rc} -eq 0 ]] &&
-    grep --fixed-strings --quiet -- "${expect}" "${observed}"; then
+    grep --fixed-strings --line-regexp --quiet -- "${expect}" "${observed}"; then
     pass "${description}"
   else
-    fail "${description}: expected exit 0 and ${expect@Q} in the page, got exit ${rc}"
+    fail "${description}: expected exit 0 and exact line ${expect@Q} in the page, got exit ${rc}"
     cat -- "${work}/${name}.err" >&2
   fi
 }
@@ -127,11 +137,22 @@ function main() {
   # derivation that drops the type filter, the comment filter or a label,
   # rather than only on one that crashes.
   local -r good_census='3 unclaimed source(s), 2 carrying comments, 2 type label(s), 0 blocking shape(s)'
+  # The local check below matches the whole stdout line, not this
+  # substring: a count that grew from 3 to, say, 13 would still render
+  # "...13 unclaimed source(s)...", and "3 unclaimed source(s)" is a
+  # trailing substring of that too — the same unanchored-substring gap a
+  # leaked type label hides behind, just on digits instead of labels. The
+  # census is a single stdout line by construction, so anchoring to it
+  # whole costs nothing. `good_census` itself stays substring-shaped
+  # because harness_assert_record's cross-scenario check is a deliberate
+  # substring search over other scenarios' raw output, not this
+  # single-scenario line check.
+  local -r good_census_line="ephemeral-refs-gap: ok — ${good_census}"
   harness_assert_record 'good round trip' "${good_census}" \
     "${work}/good-check.outcome" "${work}/good-check.out" "${work}/good-check.err"
   harness_assert_also 'is up to date'
   if [[ ${generate_rc} -eq 0 ]] && [[ ${rc} -eq 0 ]] &&
-    grep --fixed-strings --quiet -- "${good_census}" "${work}/good-check.out"; then
+    grep --fixed-strings --line-regexp --quiet -- "${good_census_line}" "${work}/good-check.out"; then
     pass 'generate then --check is clean and reports the tree it walked'
   else
     fail "good round trip: generate exit ${generate_rc}, check exit ${rc}"
@@ -143,8 +164,12 @@ function main() {
   local page_labels="${work}/labels.md"
   seed_page "${page_labels}"
   run_gen 'labels' "${FIXTURES}/good" "${page_labels}"
+  # Matched as the complete line (four-space indent included), not a
+  # substring: `claimed.sh` sorts first under LC_ALL=C, so a broken type
+  # filter would still leave `` `.toml`, `justfile`. `` sitting as a
+  # substring of the leaked line and a substring match would not notice.
   # shellcheck disable=SC2016 # literal backticks in markdown output
-  expect_page 'labels' "${page_labels}" '`.toml`, `justfile`.' \
+  expect_page_line 'labels' "${page_labels}" '    `.toml`, `justfile`.' \
     'the label list renders sorted and excludes claimed and comment-less sources'
 
   # 3. A hand-edited block must read as drift, not as a page the
@@ -222,8 +247,13 @@ function main() {
   local page_allow="${work}/allowlisted.md"
   seed_page "${page_allow}"
   run_gen 'allowlisted' "${FIXTURES}/allowlisted" "${page_allow}"
+  # Matched as the complete line: a leaked `tests/fixtures/**` source
+  # would sort ahead of `.toml` under LC_ALL=C and render as
+  # `` `.awk`, `.toml`. ``, which still contains `` `.toml`. `` as a
+  # substring. A substring assertion would pass on exactly the allowlist
+  # regression this row exists to catch.
   # shellcheck disable=SC2016 # literal backticks in markdown output
-  expect_page 'allowlisted' "${page_allow}" '`.toml`.' \
+  expect_page_line 'allowlisted' "${page_allow}" '    `.toml`.' \
     'a source under a skipped path is excluded while its sibling is kept'
 
   # 11. A union that matches nothing would render the empty verdict over
