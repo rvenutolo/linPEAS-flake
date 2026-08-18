@@ -278,6 +278,13 @@ file's.
     fragment — would have its `#` lines read as comments and could
     false-positive. The file allowlist is the only escape if that ever
     happens.
+- **YAML reads only the `#` comments that start their own line**, for
+    the reason the Nix matcher gives. A `#` line inside a `run:` block
+    scalar is read like any other: those blocks are embedded shell, and
+    they hold a population no YAML parser can reach, since to one the
+    whole block is a single string. There is no multi-line region to
+    leave open, so this extractor has no unterminated-region failure of
+    its own — only the empty-corpus check below.
 - **Backtick code spans inside a comment are exempt**, the same rule
     inline code already gets in Markdown: a comment naming a banned shape
     as an example — an allowlist entry, a scan-scope note, one of the
@@ -289,11 +296,12 @@ skipped or read as clean. A Nix block comment that never closes exits 1
 with `unterminated Nix block comment`: the extractor has no way back out
 of the block, so every line below the opener would be handed on as
 comment text and the run would report against code. And a run that
-covered shell yet extracted no shell comments, or covered Nix yet
-extracted no Nix comments, exits 2 — each language answers for its own
-corpus, because the repo's shell comments outnumber its Nix comments by
-better than ten to one and a joint total would stay far from zero with
-the Nix extractor matching nothing at all. A gate that has stopped
+covered shell yet extracted no shell comments, covered Nix yet extracted
+no Nix comments, or covered YAML yet extracted no YAML comments, exits
+2 — each language answers for its own corpus, because the repo's shell
+comments outnumber its Nix comments by better than ten to one and a
+joint total would stay far from zero with the Nix extractor matching
+nothing at all. A gate that has stopped
 reading is indistinguishable, by exit code alone, from a gate that read
 everything and found nothing, so breadth is asserted rather than
 inferred. `LINT_ALLOW_EMPTY_SCAN=1` accepts that too — the same operator
