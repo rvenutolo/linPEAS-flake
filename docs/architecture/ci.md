@@ -215,9 +215,12 @@ if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclu
         section and logs a `WARN` naming the lookup.
 
     Tested by `tests/gen-dashboard-data.test.sh` via `dashboard-data-tests`
-    required CI job. Fixture-injection env hooks: `PIN_FILE_OVERRIDE`,
-    `UPSTREAM_RELEASE_JSON_OVERRIDE`, `LATEST_RELEASE_JSON_OVERRIDE`. New
-    invariant in script requires matching fixture + scenario.
+    required CI job. The script's eight fixture-injection env hooks are
+    `PIN_FILE_OVERRIDE`, `OUT_FILE_OVERRIDE`,
+    `UPSTREAM_RELEASE_JSON_OVERRIDE`, `LATEST_RELEASE_JSON_OVERRIDE`,
+    `THIS_REPO_RELEASES_JSON_OVERRIDE`, `UPSTREAM_RELEASES_JSON_OVERRIDE`,
+    `BUMP_PR_JSON_OVERRIDE`, and `PARITY_JSON_OVERRIDE`. New invariant in
+    script requires matching fixture + scenario.
 
 - `pages.yml`'s `build` job intentionally NOT in required-check set. Site bug
     must not block pin bumps.
