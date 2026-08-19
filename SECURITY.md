@@ -73,18 +73,19 @@ This means:
     arch-image digest and run `gh attestation verify` against that — the
     attestation is attached per arch, not to the index.
 
-The release pipeline's `verify` job validates the per-arch digests
-captured at push time. Those push-time steps do **not** re-resolve the
-published `:VERSION` and `:latest` manifest tags after manifest
-publication to confirm they still point at those digests. A consumer who pulls by the
-manifest tag and then verifies against the **arch-resolved** digest
+The release pipeline re-checks the published manifest tags after it
+publishes them: the `verify manifest tags resolve to attested per-arch digests` step in `release-on-bump.yml`'s `verify` job re-fetches both the
+`:VERSION` and `:latest` manifests post-publish and confirms their
+per-arch digests match the values that were attested. A drift at this
+step fails the release, so a tag repointed before the release completes
+does not ship.
+
+The residual risk is consumer-side and post-release. A consumer who pulls
+by the manifest tag and then verifies against the **arch-resolved** digest
 (via `docker manifest inspect` or the `RepoDigests` value returned by
 `docker inspect`) is protected. A consumer who trusts the manifest tag
-implicitly — without resolving to the per-arch digest — is not. The
-mitigation is the `verify manifest tags resolve to attested per-arch digests` step in `release-on-bump.yml`'s `verify` job, which re-fetches
-both `:VERSION` and `:latest` manifests post-publish and confirms
-their per-arch digests match the values that were attested. A drift
-at this step fails the release.
+implicitly — without resolving to the per-arch digest and without
+`cosign verify` — is not.
 
 ## Auto-merge surface
 
