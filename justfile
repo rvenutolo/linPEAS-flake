@@ -18,9 +18,9 @@ fmt:
 lint:
   pre-commit run --all-files
 
-# Run lychee link checker against README, SECURITY, and docs/
+# Run lychee link checker against every tracked markdown file
 lint-links:
-  lychee --config lychee.toml README.md SECURITY.md 'docs/**/*.md'
+  lychee --config lychee.toml './**/*.md'
 
 # Run the batched lint groups, harnesses, and doc-freshness checks CI runs
 verify:
