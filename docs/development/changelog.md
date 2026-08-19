@@ -48,10 +48,10 @@ tag_pattern = "^[0-9]{8}-[0-9a-f]{7,40}$"
 This regex must exactly match the canonical pin-shape regex enforced
 across the codebase. Drift causes git-cliff to see no tags and generate
 an empty changelog. `scripts/check-cliff-tag-pattern.sh` enforces
-parity as the required `cliff-tag-pattern` CI job; the cross-layer
-parity set it joins is
-`bump-linpeas.sh`, `nix/linpeas.nix`, `stale-pin-check.yml`,
-`release-on-bump.yml`, and `gen-dashboard-data.sh`.
+parity as the required `cliff-tag-pattern` CI job. The cross-layer
+parity set it joins is listed in
+[architecture/auto-update.md](../architecture/auto-update.md#canonical-pin-shape),
+generated from the tree.
 
 ### docs: update changelog skip rule
 

@@ -2,9 +2,9 @@
 # scripts/check-cliff-tag-pattern.sh
 #
 # @description Refuse to build if cliff.toml's tag_pattern drifts from the
-# canonical pin-shape regex. Joins the cross-layer parity set enforced in
-# bump-linpeas.sh, nix/linpeas.nix, stale-pin-check.yml,
-# release-on-bump.yml, and gen-dashboard-data.sh.
+# canonical pin-shape regex. One member of the cross-layer parity set;
+# docs/architecture/auto-update.md lists every file that carries the
+# regex, derived from the tree rather than restated here.
 #
 # Exits 0 when tag_pattern exactly matches the canonical value.
 # Exits 1 on drift (missing key, wrong value).
