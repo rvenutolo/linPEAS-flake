@@ -291,11 +291,26 @@ verify-latest-release.yml. The delete-capable token must never leak into
 workflows that only push images, and no unsuffixed secrets.DOCKERHUB_TOKEN
 may exist — only \_RW and \_DELETE are authoritative.
 
+The same split binds the manual recovery snippets in the docs. A
+shell-fenced Markdown block that performs a tag delete
+(`--request DELETE` / `-X DELETE`) against Docker Hub must name
+DOCKERHUB_TOKEN_DELETE and must not name DOCKERHUB_TOKEN_RW: the
+write-scoped PAT returns 401 on a tag delete, so a snippet pasting it
+hands the operator a failure that reads like a credential problem.
+A fence counts as a Docker Hub delete when it does a DELETE and either
+addresses hub.docker.com or names a DOCKERHUB_TOKEN — a DELETE against
+some other API is not this rule's business, and scoping on the host
+alone would exempt a snippet that spells the host through a variable.
+Token names are matched over the whole fence, not the delete line: a
+real snippet assigns its credential many lines above the request.
+
 Honors WORKFLOWS_DIR_OVERRIDE (defaults to .github/workflows) so the test
-harness can point at a temp dir, and LINT_ALLOW_EMPTY_SCAN=1 to accept a
-workflows dir holding no YAML. Exits 0 if the split holds, 1 on a
-violation, 2 when the workflows dir is not there to read, holds no
-workflow to read, or holds one that could not be read.
+harness can point at a temp dir, PATHS_OVERRIDE (newline-separated file
+list) for the Markdown scan set, and LINT_ALLOW_EMPTY_SCAN=1 to accept a
+workflows dir holding no YAML or an empty Markdown scan set. Exits 0 if
+the split holds, 1 on a violation, 2 when the workflows dir is not there
+to read, holds no workflow to read, holds one that could not be read, or
+the Markdown scan set could not be enumerated.
 
 ### scripts/check-egress-allowlist.sh
 
