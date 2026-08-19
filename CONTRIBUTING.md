@@ -41,8 +41,9 @@ Highlights:
     member check `uses-sha-pinned`: every `uses:` is a full 40-hex SHA.
     The trailing `# vX.Y.Z` patch-tag comment is a separate rule,
     `patch-tag-pins`, which belongs to no lint group and therefore runs
-    as a pre-commit hook only — not as part of this or any other
-    required check.
+    against the tree as a pre-commit hook only; no required check
+    enforces it. Its test harness does run in CI, inside
+    `harness-group`.
 - `flake-check`; `build-linpeas`(`-arm64`), `smoke-test`(`-arm64`),
     `image-smoke`(`-arm64`) — derivation health on x86_64 and aarch64.
 - `gitleaks`, `dependency-review` — supply-chain.
