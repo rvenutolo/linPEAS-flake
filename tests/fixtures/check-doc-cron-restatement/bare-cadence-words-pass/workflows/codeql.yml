@@ -1,0 +1,4 @@
+name: Scanners
+on:
+  schedule:
+    - cron: "0 6 * * 5"

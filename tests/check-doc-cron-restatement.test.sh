@@ -86,13 +86,13 @@ function main() {
     "${FIXTURES}/yml-suffixed-fails" \
     1 'docs/x.md'
 
-  # No line reaches the workflow-name test, so the clock-time tally is zero
+  # No line reaches the workflow-name test, so the schedule tally is zero
   # and no exemption fires.
   run_scenario 'cadence word without a clock time passes' \
     "${FIXTURES}/cadence-only-passes/workflows" \
     "${FIXTURES}/cadence-only-passes" \
     0 '' \
-    'ok — scanned 1 doc(s), 1 line(s) against 1 workflow(s); 0 line(s) carried a clock time; exemptions applied: none'
+    'ok — scanned 1 doc(s), 1 line(s) against 1 workflow(s); 0 line(s) carried a clock time or cadence; exemptions applied: none'
 
   # A line does carry a clock time and still passes, so the tally is one:
   # the pass came from the name test, not from an empty working set.
@@ -100,19 +100,45 @@ function main() {
     "${FIXTURES}/bare-common-word-passes/workflows" \
     "${FIXTURES}/bare-common-word-passes" \
     0 '' \
-    'ok — scanned 1 doc(s), 1 line(s) against 1 workflow(s); 1 line(s) carried a clock time; exemptions applied: none'
+    'ok — scanned 1 doc(s), 1 line(s) against 1 workflow(s); 1 line(s) carried a clock time or cadence; exemptions applied: none'
+
+  # A restated cadence duplicates the same fact the clock-time branch
+  # guards, so it is caught the same way.
+  run_scenario 'numeric-minute cadence restatement fails' \
+    "${FIXTURES}/cadence-restatement-fails/workflows" \
+    "${FIXTURES}/cadence-restatement-fails" \
+    1 'docs/x.md'
+
+  run_scenario 'hour and day cadence restatements fail' \
+    "${FIXTURES}/cadence-units-fail/workflows" \
+    "${FIXTURES}/cadence-units-fail" \
+    1 'docs/x.md'
+  # Both non-minute units are reported, so neither rides on the other.
+  harness_assert_also 'every 6 hours'
+  harness_assert_also 'every 2 days'
+
+  # `daily`, `weekly`, and `Friday` are the sanctioned idiom — "runs on a
+  # daily cron (see the schedule table)" is the phrasing this lint exists
+  # to encourage, so a pattern reaching them would report the fix as the
+  # defect. Both lines name a workflow, so only the cadence test keeps
+  # them clean.
+  run_scenario 'bare daily/weekly/Friday cadence words still pass' \
+    "${FIXTURES}/bare-cadence-words-pass/workflows" \
+    "${FIXTURES}/bare-cadence-words-pass" \
+    0 '' \
+    'ok — scanned 1 doc(s), 2 line(s) against 1 workflow(s); 0 line(s) carried a clock time or cadence; exemptions applied: none'
 
   run_scenario 'restatement inside ci.md is exempt' \
     "${FIXTURES}/ci-md-exempt/workflows" \
     "${FIXTURES}/ci-md-exempt" \
     0 '' \
-    'ok — scanned 0 doc(s), 0 line(s) against 1 workflow(s); 0 line(s) carried a clock time; exemptions applied: docs/architecture/ci.md excluded'
+    'ok — scanned 0 doc(s), 0 line(s) against 1 workflow(s); 0 line(s) carried a clock time or cadence; exemptions applied: docs/architecture/ci.md excluded'
 
   run_scenario 'README ci-summary block is exempt' \
     "${FIXTURES}/readme-block-exempt/workflows" \
     "${FIXTURES}/readme-block-exempt" \
     0 '' \
-    'ok — scanned 1 doc(s), 4 line(s) against 1 workflow(s); 0 line(s) carried a clock time; exemptions applied: README ci-summary block (5 line(s) skipped)'
+    'ok — scanned 1 doc(s), 4 line(s) against 1 workflow(s); 0 line(s) carried a clock time or cadence; exemptions applied: README ci-summary block (5 line(s) skipped)'
 
   run_scenario 'README restatement outside the ci-summary block fails' \
     "${FIXTURES}/readme-outside-block-fails/workflows" \
