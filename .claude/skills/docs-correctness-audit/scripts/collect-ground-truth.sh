@@ -18,10 +18,48 @@ IFS=$'\n\t'
 section() { printf '\n===== %s =====\n' "$1"; }
 
 # Banned-token sweep over tracked docs. Canonical list: references/repo-map.md §4.
-# Authoritative: a hit here is real; readers flag it without re-judging by eye.
+#
+# The sweep reads prose only. Before matching, it blanks the three regions the
+# repo's own lint (scripts/check-ephemeral-refs.sh) exempts: fenced code blocks,
+# generated BEGIN/END bodies, and inline code spans. Without that pass the sweep
+# reports a doc that *documents* a banned shape as an example — a table of
+# banned token shapes, a generated hook table — as though it carried one, which
+# is a false positive on every hit. Blanking preserves line numbering, so a
+# reported line number still points at the right line.
+#
+# This mirrors the real lint rather than calling it, so the sweep still works on
+# a fixture repo that does not contain it. The real lint remains the final
+# authority: when the two disagree, believe `scripts/check-ephemeral-refs.sh`.
 EPH_FILES=()
+EPH_SCAN_DIR=""
+
+# @description Emit one file with its exempt regions blanked, line for line.
+_eph_blank() { # $1=path
+  awk '
+    /^[[:space:]]*```/                { in_fence = !in_fence; print ""; next }
+    in_fence                          { print ""; next }
+    /<!--[[:space:]]*BEGIN[[:space:]]/ { in_gen = 1; print ""; next }
+    /<!--[[:space:]]*END[[:space:]]/   { in_gen = 0; print ""; next }
+    in_gen                            { print ""; next }
+    { line = $0; gsub(/`[^`]*`/, " ", line); print line }
+  ' <"$1"
+}
+
+# @description Materialise blanked copies of EPH_FILES under a temp mirror, so
+#              each category grep runs once over prose-only text.
+_eph_prepare() {
+  local f dir
+  EPH_SCAN_DIR="$(mktemp -d)"
+  for f in "${EPH_FILES[@]}"; do
+    dir="${f%/*}"
+    [[ ${dir} == "${f}" ]] && dir="."
+    mkdir -p "${EPH_SCAN_DIR}/${dir}"
+    _eph_blank "${f}" >"${EPH_SCAN_DIR}/${f}"
+  done
+}
+
 _emit_eph() { # $1=category $2=ERE — emits "file:line\t(category) <trimmed line>"
-  grep -HnE "$2" -- "${EPH_FILES[@]}" 2>/dev/null |
+  (cd "${EPH_SCAN_DIR}" && grep -HnE "$2" -- "${EPH_FILES[@]}" 2>/dev/null) |
     sed -E "s/^([^:]+:[0-9]+):[[:space:]]*/\1	($1) /" || true
 }
 sweep_ephemeral_tokens() {
@@ -30,6 +68,7 @@ sweep_ephemeral_tokens() {
     echo '(none)'
     return 0
   fi
+  _eph_prepare
   local hits
   hits="$(
     {
@@ -45,6 +84,8 @@ sweep_ephemeral_tokens() {
       _emit_eph claude-path '\.claude/'
     } | sort -u || true
   )"
+  [[ -n ${EPH_SCAN_DIR} ]] && rm -rf "${EPH_SCAN_DIR}"
+  EPH_SCAN_DIR=""
   if [[ -z ${hits} ]]; then echo '(none)'; else printf '%s\n' "${hits}"; fi
 }
 
@@ -147,12 +188,18 @@ for k, v in sorted(d.items()):
     echo '(no ruleset file at .github/rulesets/protect-main.json)'
   fi
 
-  section "EPHEMERAL-TOKEN HITS (banned shapes in tracked docs; authoritative — see repo-map §4)"
+  section "EPHEMERAL-TOKEN HITS (banned shapes in tracked-doc PROSE; see repo-map §4)"
   sweep_ephemeral_tokens
-  echo '(SUPPRESSED deterministically: fill:/stroke:/color:#hex, &#NNN;, #N-anchor targets,'
+  echo '(Prose only: fenced code blocks, generated BEGIN/END bodies, and inline'
+  echo ' code spans are blanked before matching, mirroring check-ephemeral-refs.sh.'
+  echo ' Also suppressed: fill:/stroke:/color:#hex, &#NNN;, #N-anchor targets,'
   echo ' SHA/UTF/RFC/ISO/BASE-NNN, X-GitHub-Api-Version date literal.'
   echo ' Excludes .claude/ tooling, CHANGELOG.md + docs/releases.md (historical records),'
-  echo ' tests/fixtures. A hit above is authoritative — flag it.)'
+  echo ' tests/fixtures.'
+  # shellcheck disable=SC2016 # literal backticks in human-readable prose
+  echo ' NOT authoritative — `scripts/check-ephemeral-refs.sh` is. Run it and'
+  echo ' believe its exit code; treat anything here it does not report as a'
+  echo ' false positive. causal-history is advisory-only even in the real lint.)'
 
   section "UNRESOLVED INTERNAL LINKS / ANCHORS (lychee --offline; external skipped; authoritative)"
   sweep_internal_links
