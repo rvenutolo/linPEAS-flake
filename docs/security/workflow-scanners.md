@@ -18,7 +18,7 @@ closes:
 
 | Layer                  | When it fires                                                                      | Tools                                                                                                  | Closes the gap of                                                 |
 | ---------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| Commit-time prevention | every `git commit` (pre-commit)                                                    | zizmor + the workflow-hardening hook family                                                            | bad edits never enter history                                     |
+| Commit-time prevention | every `git commit` (pre-commit)                                                    | zizmor, octoscan + the workflow-hardening hook family                                                  | bad edits never enter history                                     |
 | PR / push detection    | every PR to `main` (codeql full; octoscan paths-filtered) and every push to `main` | codeql, octoscan                                                                                       | changed workflows checked server-side, in the diff                |
 | Weekly full sweep      | Friday cron cluster                                                                | codeql, octoscan, zizmor-drift                                                                         | `--no-verify` bypasses, web-UI / bot edits, upstream rule changes |
 | Posture watchdog       | daily + weekly cron                                                                | scorecard-drift, ratchet-pin-audit, settings-posture-drift, stale-pin-check, allowed-actions-api-drift | silent regressions no single PR introduces                        |
@@ -63,9 +63,12 @@ next section. The weekly Friday cron cluster runs them in a fixed order (see
 - **Unique signal:** repo-jacking and known-vuln (CVE) detection in `uses:`
     references, plus a second injection-triangulation angle — coverage zizmor
     and codeql do not provide.
-- **Triggers:** PR to `main` filtered to `.github/workflows/**` and the
-    octoscan scan script; push to `main`; weekly Friday cron (full tree); manual
-    dispatch.
+- **Triggers:** every `git commit` as a pre-commit hook, fired by a
+    workflow-YAML `files` filter but scanning the full `.github/workflows`
+    directory to match the CI invocation (it self-skips inside the Nix build
+    sandbox, where docker is unavailable); PR to `main` filtered to
+    `.github/workflows/**` and the octoscan scan script; push to `main`; weekly
+    Friday cron (full tree); manual dispatch.
 - **Status: advisory-by-design.** It is the cheapest scanner and runs
     zero-noise, but it fails on *any* finding (no severity threshold) against an
     untuned rule set, so as a required check a single false positive would block
