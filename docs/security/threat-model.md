@@ -31,7 +31,9 @@ upstream account compromise post-release.
 - SRI digest pin in `linpeas-pin.json`, written by
     `scripts/bump-linpeas.sh` only.
 - GitHub-API `.digest` cross-checked against the downloaded asset at bump
-    time — hard fail when it is absent, unprefixed, or mismatched.
+    time — hard fail when it is absent, unprefixed, or mismatched. The
+    recorded SRI `hash` is that digest: the two encode the same 32 bytes,
+    so the pin carries no separate digest field and needs none.
 - URL-prefix lock to `https://github.com/peass-ng/PEASS-ng/releases/download/`.
 
 See [`docs/security/verification.md`](verification.md).
