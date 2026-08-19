@@ -123,7 +123,7 @@ trigger semantics, and credential split live in
 | `update-linpeas.yml`        | daily + dispatch                   | Bumps `linpeas-pin.json` to the latest upstream tag. Opens PR; auto-merges on green.                               |
 | `stale-pin-check.yml`       | daily                              | Files a deduped issue if `update-linpeas` is stalled.                                                              |
 | `pages.yml`                 | push, PR, release, daily, dispatch | Rebuilds the MkDocs site; deploys via OIDC on non-PR events. Not in the required-check set.                        |
-| `update-flake-lock.yml`     | weekly Fri                         | Bumps `nixpkgs` via `nix flake update`; opens auto-merging PR.                                                     |
+| `update-flake-lock.yml`     | weekly Fri                         | Bumps every flake input via `nix flake update`; opens auto-merging PR.                                             |
 | `verify-latest-release.yml` | weekly Fri                         | Re-verifies the latest release's attestations and re-fetches upstream `linpeas.sh` to confirm the pinned SRI hash. |
 | Renovate                    | weekly Fri batch                   | Bumps action SHAs + tracked flake inputs after a 7-day cooldown.                                                   |
 | `release-on-bump.yml`       | push to `main` changing the pin    | Tags the release, builds + pushes per-arch OCI images (ghcr.io + docker.io), attests SLSA provenance + SBOMs.      |
@@ -177,7 +177,8 @@ required-check table; alphabetical):
 - `image-cve-scan-trivy` and `image-cve-scan-grype` (weekly cron, `image-cve-scan.yml`; Trivy + Grype → code-scanning SARIF,
     advisory only; prevention path is `update-flake-lock`).
 - `release-tag-protection` ruleset blocks delete / non-FF / update on
-    release tags; drift asserted by `tag-protection-drift-check`.
+    release tags. The ruleset itself is not a check; its drift is asserted
+    by `tag-protection-drift-check`, which *is* a required context.
 - `step-security/harden-runner` runs as the first step in every job
     in `egress-policy: block` mode, each with a per-job
     `allowed-endpoints:` allowlist.
