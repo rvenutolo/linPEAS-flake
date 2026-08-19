@@ -123,6 +123,29 @@ in
     pass_filenames = false;
     language = "system";
   };
+  # Refuse to commit if the ephemeral-refs-gap block in
+  # docs/development/linting.md is stale, or if a blocking shape has
+  # appeared in a file type no extractor claims. Invokes
+  # refresh-ephemeral-refs-gap.sh in --check mode — never mutates the
+  # working tree, exits 1 on drift and 2 on a shape found. The
+  # `(.*/)?` prefix on the bare filenames lets justfile, .envrc and
+  # .gitignore trigger from any directory, since those are naming
+  # conventions rather than fixed repo-root paths.
+  ephemeral-refs-gap-fresh = {
+    enable = true;
+    name = "ephemeral-refs-gap-fresh";
+    description = "The scope-gap block in docs/development/linting.md matches the file types no ephemeral-refs extractor claims, and none of them carries a blocking shape.";
+    entry = "${pkgs-unstable.writeShellScript "ephemeral-refs-gap-fresh" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${toolPath}:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-ephemeral-refs-gap.sh --check
+    ''}";
+    files = "^((.*/)?(justfile|\\.envrc|\\.gitignore)|.*\\.(toml|awk|txt)|docs/development/linting\\.md|scripts/refresh-ephemeral-refs-gap\\.sh|scripts/lib/ephemeral-refs-scope\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Refuse to commit if the harness census in docs/reference/test-harnesses.md
   # is stale. The census is derived from the harness sources and the fixture
   # tree, so those two path sets plus the doc itself are the whole trigger:

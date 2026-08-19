@@ -1224,6 +1224,25 @@ docs/invariant-index.md, with bidirectional orphan checks.
 
 - `--check` — exit 1 if the matrix would change; do not mutate the working tree
 
+### scripts/refresh-ephemeral-refs-gap.sh
+
+Regenerate the ephemeral-refs-gap managed block in
+docs/development/linting.md: the file types no ephemeral-refs extractor
+claims and that nonetheless carry `#` comments. The corpus inverts the
+lint's own type filter — same producer, same allowlist, all read from
+scripts/lib/ephemeral-refs-scope.sh — so the page cannot describe a
+narrower set of types than the ban leaves unread. Files the allowlist
+skips sit outside both sets and are accounted for by the page's
+allowlist bullet. A blocking-class shape found inside the corpus is
+refused
+rather than rendered: the prose around the block states the gap is
+empty, and rendering a non-zero count would publish a page that
+contradicts itself.
+
+**Options:**
+
+- `--check` — exit 1 if the block would change; exit 2 if the check
+
 ### scripts/refresh-flake-show.sh
 
 Regenerate the flake-show managed block in
