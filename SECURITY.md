@@ -76,12 +76,14 @@ at this step fails the release.
 
 ## Auto-merge surface
 
-Three independent automations merge to `main` without human review:
+Four independent automations merge to `main` without human review:
 
 - `update-linpeas.yml` (daily) — upstream `linpeas.sh` content.
 - `update-flake-lock.yml` (weekly) — `nixpkgs` and other flake input revs.
 - Renovate (weekly) — GitHub Action SHAs and the pinned Nix installer
     version.
+- `release-on-bump.yml` (per release) — the regenerated `CHANGELOG.md`,
+    committed via an auto-merging PR under the same App identity.
 
 Each is gated by CI (build success + SRI-hash integrity), not by content
 review. A compromise of any upstream feed produces an attested release

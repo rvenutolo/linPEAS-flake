@@ -20,11 +20,12 @@ This page expands the trust model briefly described in [`SECURITY.md`](https://g
 
 ## Auto-merge surface
 
-Three automations may auto-merge PRs into `main` when CI passes:
+Four automations may auto-merge PRs into `main` when CI passes:
 
 1. **`update-linpeas.yml`** — daily pin bumps. Opens a PR authored by the `linpeas-flake-bumper` GitHub App bot, gated by all required CI checks, auto-merged on green.
 2. **`update-flake-lock.yml`** — weekly nixpkgs input bump. Split into a `contents: read` `compute-lock` job (runs `nix flake update`) and a `push-and-merge` job that uses `actions/*` SHAs plus the repo-wide `step-security/harden-runner` pin to mint a `linpeas-flake-bumper` GitHub App installation token, keeping the bump credential out of any third-party action's env. Same CI gating.
-3. **Renovate** — Friday batch for GitHub Action SHA pins, the pinned Nix installer version, and tracked flake inputs (`nixpkgs` stable branch, `nixpkgs-unstable`, `cachix/git-hooks.nix`), plus the SchemaStore and octoscan pins. All PRs honor a non-empty `minimumReleaseAge` (7 days) and per-manager `automerge` scopes; the `renovate-invariants` CI lint enforces both. Same gating.
+3. **Renovate** — Friday batch. Only three dependency sets carry `automerge`: GitHub Action SHA pins, the pinned Nix installer version, and the octoscan pin. The tracked flake inputs (`nixpkgs` stable branch, `nixpkgs-unstable`, `cachix/git-hooks.nix`) and the SchemaStore pin are PR-only — their blast radius is wide enough that they must be reviewed and merged by hand. All PRs honor a non-empty `minimumReleaseAge` (7 days) and per-manager `automerge` scopes; the `renovate-invariants` CI lint enforces both. Same gating.
+4. **`release-on-bump.yml`** — per release. The `changelog` job regenerates `CHANGELOG.md` and commits it through a PR it auto-merges under the same `linpeas-flake-bumper` App identity as the bump workflows. Same gating.
 
 A compromise of the **`linpeas-flake-bumper` GitHub App** installation token used by `update-linpeas.yml` would let an attacker open a PR with arbitrary changes. The App is installed only on this repository with `Contents: Read and write` + `Pull requests: Read and write` permissions; the installation token is minted per job, lives one hour, and revokes at job end. The auto-merge bot would still gate on CI — so any malicious change would have to also pass all required checks (build, smoke, attestation re-verify, SRI cross-check). See [`docs/security/repo-config.md`](repo-config.md) for the full credential model.
 
@@ -49,7 +50,7 @@ See `SECURITY.md` for the secret rotation policy.
   - `vars.BUMP_APP_CLIENT_ID` — public, GitHub App Client ID (e.g. `Iv23...`). Preferred over App ID (numeric) per the `actions/create-github-app-token` v3 deprecation.
   - `secrets.BUMP_APP_PRIVATE_KEY` — App's PEM private key. Rotate on suspected compromise; no forced cadence.
 - Tokens minted via `actions/create-github-app-token` are scoped to one job, valid one hour, and revoked at job end. They live only as `${{ steps.app-token.outputs.token }}` passed via `GH_TOKEN`. Never reach `.git/config`; there must never be a `git push` using them. Commits land via REST `PUT /repos/{owner}/{repo}/contents/{path}` → web-flow-signed by GitHub.
-- `BUMP_APP_PRIVATE_KEY` only enters env in `push-and-merge` jobs, never `compute-pin` / `compute-lock`. Those compute jobs must remain `permissions: contents: read`, must not reference the secret, and must keep untrusted Nix actions inside their own boundary.
+- `BUMP_APP_PRIVATE_KEY` enters env only in the credential-holding write jobs — `push-and-merge` (`update-linpeas.yml`, `update-flake-lock.yml`), `push-refresh` (`renovate-flake-lock-refresh.yml`) and `changelog` (`release-on-bump.yml`) — never in `compute-pin` / `compute-lock` / `compute-refresh`. Those compute jobs must remain `permissions: contents: read`, must not reference the secret, and must keep untrusted Nix actions inside their own boundary.
 - `docs/security/required-checks.md` mirrors the `protect-main` branch ruleset's required-check set. Update in same change as GitHub-side list changes.
 - No `paths:` / `paths-ignore:` filter on any workflow listed in `docs/security/required-checks.md`. Enforced by `required-checks-no-paths` CI job.
 
