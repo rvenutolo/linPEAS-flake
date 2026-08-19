@@ -42,9 +42,10 @@ Ownership is declared at the generator, in the header annotation block
 | `@generates <path>`       | the script owns that file's content                  | required           |
 | `@generates-block <path>` | the script splices a block into a hand-authored file | forbidden          |
 
-No generator writes a whole file — each splices a `<!-- BEGIN x -->`
-block into a doc that also carries hand-authored prose — so which side
-of the line a doc falls on is a judgment. Recording it at the generator
+Most generators splice a `<!-- BEGIN x -->` block into a doc that also
+carries hand-authored prose; a few (`scripts/refresh-test-harnesses.sh`,
+`scripts/gen-dashboard-data.sh`) own their output file outright. Which
+side of the line a doc falls on is therefore a judgment. Recording it at the generator
 keeps that judgment reviewable next to the code that makes it, where a
 coverage threshold would be a magic number that moves as the prose
 around the block grows. Files carrying a block inside hand-written

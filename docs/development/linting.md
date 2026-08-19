@@ -356,15 +356,16 @@ with an inline `# exit-code-exempt: <rationale>`, which has to open the
 comment — a sentence merely naming the marker is prose about the rule,
 not a use of it, and excuses nothing; the rationale must be non-empty,
 and a clean run prints the exemption count. Matching anchors to the
-line's first `#`, so any earlier `#` on the line — inside a string, a
-`${x#y}` expansion, or anywhere else, whatever produced it — can hide a
-genuine trailing marker — the miss reports the site rather than
-silently excusing it, the safe direction for this lint to fail in. A marker
-classification never routes an exit-1 hit or a bare `mktemp` through —
-because the site it was reasoned about was rewritten into a compliant
-shape, moved, or left the file — is reported as its own finding rather
-than passed over, and the clean run's summary line counts it as a
-third field alongside scripts scanned and exemptions applied. Full
+line's first `#`. Any earlier `#` on the line — inside a string, a
+`${x#y}` expansion, or anywhere else — can therefore hide a genuine
+trailing marker, and the miss reports the site rather than silently
+excusing it, which is the safe direction for this lint to fail in.
+
+A marker classification never consumed while walking a file, because the
+site it was reasoned about was rewritten into a compliant shape, moved,
+or left the file, is reported as its own finding rather than passed
+over. The clean run's summary line counts it as a third field alongside
+scripts scanned and exemptions applied. Full
 rationale:
 [Workflow hardening → guard-exit-code](../security/workflow-hardening.md#guard-exit-code).
 
