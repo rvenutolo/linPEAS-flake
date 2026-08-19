@@ -32,4 +32,9 @@ exclude_path = [
   # that drive check-orphan-invariants and refresh-enforcement-matrix;
   # they are not real docs and must not be link-checked.
   "tests/fixtures",
+  # Untracked working notes. CI checks a clean checkout where this tree
+  # does not exist, so the entry is inert there; locally it keeps the
+  # recursive glob off scratch documents whose dead references are
+  # deliberate.
+  ".claude",
 ]
