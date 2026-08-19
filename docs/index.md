@@ -68,7 +68,7 @@ Personal Nix-flake wrapper around [peass-ng/PEASS-ng](https://github.com/peass-n
     {
       inputs.linpeas-flake.url = "github:rvenutolo/linPEAS-flake";
     }
-    # access via: linpeas-flake.packages.${system}.linpeas
+    # access via: inputs.linpeas-flake.packages.${system}.default
     ```
 
     Overlay form on the [Nix install page](install/nix.md).
