@@ -39,11 +39,12 @@ Today the `check-run-block-pyflakes-required` pre-commit hook fails if any
 workflow `run:` invokes `python`/`python3`/`pip` (also catches `pip3` and
 `sudo`-prefixed forms). When that happens:
 
-1. Add `pkgs.python3Packages.pyflakes` to the devShell package list in
+1. Add `python3Packages.pyflakes` to the devShell package list in
     `nix/devshell.nix` (same scope as the existing `shellcheck` entry — grep
-    `nix/devshell.nix` for the bare `shellcheck` package line).
+    `nix/devshell.nix` for the bare `shellcheck` package line; the list is
+    already inside `with pkgs-unstable;`).
 1. Extend `actionlintWrapped` in `nix/wrappers.nix` (grep for `actionlintWrapped =`)
-    to pass `-pyflakes=${pkgs.python3Packages.pyflakes}/bin/pyflakes` in
+    to pass `-pyflakes=${pkgs-unstable.python3Packages.pyflakes}/bin/pyflakes` in
     addition to `-shellcheck=...`.
 1. Add a python smoke fixture
     (`tests/fixtures/actionlint-pyflakes-smoke.yml`) containing a `run:`
