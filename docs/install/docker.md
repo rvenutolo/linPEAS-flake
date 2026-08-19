@@ -95,7 +95,15 @@ Proves image was built by `release-on-bump.yml` workflow in this repo. Does **no
 
 ## Manifest digest-pinning
 
-`release-on-bump.yml`'s `manifest` job MUST invoke `docker buildx imagetools create` with captured `@sha256:` digests from
-`needs.image-*.outputs.{ghcr,hub}_digest` — never the mutable
-`${VERSION}-amd64` / `${VERSION}-arm64` tags. Arch tags can be rewritten
-between per-arch push and manifest create; digests cannot.
+Every `docker buildx imagetools create`, `docker manifest create`, and
+`docker manifest annotate` invocation in this repo MUST name its source
+images by immutable digest — an `@sha256:` literal or an `@${…DIGEST}`
+expansion — never a mutable tag. The rule is repo-wide: workflows,
+composite actions, scripts, and shell-fenced markdown are all scanned.
+Target list names are exempt, because they are tags by necessity.
+
+The rule's live instance is `release-on-bump.yml`'s `manifest` job, which
+takes its source digests from `needs.image-*.outputs.{ghcr,hub}_digest`
+rather than the `${VERSION}-amd64` / `${VERSION}-arm64` arch tags. Arch
+tags can be rewritten between per-arch push and manifest create; digests
+cannot.
