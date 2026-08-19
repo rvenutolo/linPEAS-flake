@@ -218,9 +218,9 @@ with a self-policed EXEMPT list for auxiliary (non-required) jobs.
 ### scripts/check-cliff-tag-pattern.sh
 
 Refuse to build if cliff.toml's tag_pattern drifts from the
-canonical pin-shape regex. Joins the cross-layer parity set enforced in
-bump-linpeas.sh, nix/linpeas.nix, stale-pin-check.yml,
-release-on-bump.yml, and gen-dashboard-data.sh.
+canonical pin-shape regex. One member of the cross-layer parity set;
+docs/architecture/auto-update.md lists every file that carries the
+regex, derived from the tree rather than restated here.
 
 Exits 0 when tag_pattern exactly matches the canonical value.
 Exits 1 on drift (missing key, wrong value).
@@ -1261,6 +1261,21 @@ README.md and docs/reference/just-recipes.md from the current
 **Options:**
 
 - `--check` — exit 1 if either doc would change; exit 2 if either doc
+
+### scripts/refresh-pin-parity.sh
+
+Regenerate the pin-parity managed block in
+docs/architecture/auto-update.md: every tracked file carrying the
+canonical pin-shape literal, grouped by path into enforcement and
+documentation. The set is read from the tree on every run, so no
+hand-written list can name a file that has stopped carrying the shape
+or omit one that gained it. A file under tests/ is excluded; the block
+says so in prose, because a versioning-scheme migration touches the
+fixtures too and a silent omission would read as coverage.
+
+**Options:**
+
+- `--check` — exit 1 if the block would change; exit 2 if the check
 
 ### scripts/refresh-precommit-table.sh
 

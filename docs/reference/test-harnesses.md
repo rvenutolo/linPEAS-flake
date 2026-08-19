@@ -107,6 +107,7 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/refresh-ephemeral-refs-gap.test.sh` | `scripts/refresh-ephemeral-refs-gap.sh` | `tests/fixtures/ephemeral-refs-gap`         |
 | `tests/refresh-flake-show.test.sh`         | `scripts/refresh-flake-show.sh`         | —                                           |
 | `tests/refresh-just-recipes.test.sh`       | `scripts/refresh-just-recipes.sh`       | —                                           |
+| `tests/refresh-pin-parity.test.sh`         | `scripts/refresh-pin-parity.sh`         | `tests/fixtures/pin-parity`                 |
 | `tests/refresh-precommit-table.test.sh`    | `scripts/refresh-precommit-table.sh`    | —                                           |
 | `tests/refresh-scripts-reference.test.sh`  | `scripts/refresh-scripts-reference.sh`  | —                                           |
 | `tests/refresh-test-harnesses.test.sh`     | `scripts/refresh-test-harnesses.sh`     | `tests/fixtures/test-harnesses`             |

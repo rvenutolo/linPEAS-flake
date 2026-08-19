@@ -146,6 +146,29 @@ in
     pass_filenames = false;
     language = "system";
   };
+  # Refuse to commit if the pin-parity block in
+  # docs/architecture/auto-update.md is stale. Invokes
+  # refresh-pin-parity.sh in --check mode — never mutates the working
+  # tree, exits 1 on drift and 2 when the check could not run. The
+  # trigger set is broad because any tracked file can gain or lose the
+  # pin-shape literal, and a narrower pattern would miss the file type
+  # that gained it; the doc-freshness CI job is the backstop for a type
+  # this pattern does not name.
+  pin-parity-fresh = {
+    enable = true;
+    name = "pin-parity-fresh";
+    description = "The pin-parity block in docs/architecture/auto-update.md names every tracked file carrying the canonical pin-shape regex.";
+    entry = "${pkgs-unstable.writeShellScript "pin-parity-fresh" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${toolPath}:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-pin-parity.sh --check
+    ''}";
+    files = "^((.*/)?(justfile|\\.envrc)|.*\\.(sh|nix|toml|ya?ml|json|md))$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Refuse to commit if the harness census in docs/reference/test-harnesses.md
   # is stale. The census is derived from the harness sources and the fixture
   # tree, so those two path sets plus the doc itself are the whole trigger:

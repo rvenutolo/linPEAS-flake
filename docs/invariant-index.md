@@ -78,6 +78,7 @@ live in `.claude/CLAUDE.md` (untracked).
 ## Architecture / CI
 
 - **Pin-diff isolation** — only `bump-linpeas.sh` mutates `linpeas-pin.json`. → [architecture/auto-update.md](architecture/auto-update.md) <!-- enforcer: scripts/check-pin-diff-isolated.sh; ci: lint-doc-invariants; hook: pin-diff-isolated -->
+- **Pin-shape parity set** — every tracked file carrying the canonical pin-shape regex is derived from the tree and rendered into a managed block in `auto-update.md`; the copies are permanent, so the list of them is generated rather than remembered. → [architecture/auto-update.md](architecture/auto-update.md) <!-- enforcer: scripts/refresh-pin-parity.sh; ci: doc-freshness; hook: pin-parity-fresh -->
 - **nix/linpeas.nix pin invariants** — `pin.version` regex, `pin.url` prefix. → [architecture/auto-update.md](architecture/auto-update.md) <!-- enforcer: -; ci: -; hook: - -->
 - **Release VERSION shape** — `^[0-9]{8}-[0-9a-f]{7,40}$`. → [architecture/auto-update.md](architecture/auto-update.md) <!-- enforcer: -; ci: -; hook: - -->
 - **Linpeas-pin release-trigger** — pin change must cut release. → [architecture/auto-update.md](architecture/auto-update.md) <!-- enforcer: -; ci: -; hook: - -->

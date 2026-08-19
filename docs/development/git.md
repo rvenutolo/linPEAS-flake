@@ -165,6 +165,7 @@ Hooks (alphabetical):
 | `patch-tag-pins`                    | SHA-pinned uses: comments name exact patch tag (vX.Y.Z), not major (vX).                                                                                 |
 | `permission-scopes`                 | Per-job GITHUB_TOKEN write scopes are allowlisted in .github/permission-scopes.yml.                                                                      |
 | `pin-diff-isolated`                 | Only scripts/bump-linpeas.sh mutates linpeas-pin.json.                                                                                                   |
+| `pin-parity-fresh`                  | The pin-parity block in docs/architecture/auto-update.md names every tracked file carrying the canonical pin-shape regex.                                |
 | `pre-commit-hooks-sha-parity`       | The pre-commit-hooks input SHA in flake.nix matches flake.lock locked.rev.                                                                               |
 | `precommit-table-fresh`             | Hook table in docs/development/git.md matches the flake hook manifest.                                                                                   |
 | `pull-request-target-absent`        | No workflow uses the pull_request_target trigger.                                                                                                        |
