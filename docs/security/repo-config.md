@@ -15,13 +15,22 @@ vendor list and the procedure for adding a new vendor.
 ## Workflow action SHA pinning
 
 Every `uses:` in `.github/workflows/*.yml` (or `.yaml`) and `.github/actions/**/*.yml` (or `.yaml`)
-must end with a full 40-hex SHA + trailing `# vX.Y.Z` comment, OR be
-a path-relative `./...` self-reference. Includes first-party GitHub-owned
-actions.
+must end with a full 40-hex SHA, OR be a path-relative `./...`
+self-reference. Includes first-party GitHub-owned actions.
 
 Enforced by `scripts/check-uses-sha-pinned.sh` (member check
 `uses-sha-pinned` of the `lint-workflow-security` CI job; pre-commit hook same name with `NIX_BUILD_TOP` guard).
 Belt-and-braces backup to the GitHub-side `sha_pinning_required` setting.
+
+The trailing `# v<major>.<minor>[.<patch>]` comment beside each SHA is a
+separate rule with a separate enforcer: `scripts/check-patch-tag-pins.sh`,
+wired as the `patch-tag-pins` pre-commit hook. That hook is the only thing
+enforcing it — the rule is in no lint group and gates no merge, and the
+`harness-group` job runs its fixture tests without a live-repo probe. A pin
+whose comment is missing, carries no version, or names only a major tag
+therefore reaches `main` if the hook is bypassed. A
+`# patch-tag-exception: <reason>` marker on the same line opts a ref out.
+See [`../architecture/pin-convention.md`](../architecture/pin-convention.md).
 
 ## App-based bump auth
 

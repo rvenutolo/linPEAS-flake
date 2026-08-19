@@ -45,10 +45,13 @@ upstream tagging convention.
 ## Enforcement
 
 - Lint: `scripts/check-patch-tag-pins.sh`, wired as the
-    `patch-tag-pins` pre-commit hook (see `nix/hooks/workflow-security.nix`). Fails any PR
-    whose SHA pin lacks an exact patch-tag comment and an exception
-    marker — whether the comment is missing entirely, names no version,
-    or names only a major tag.
+    `patch-tag-pins` pre-commit hook (see `nix/hooks/workflow-security.nix`).
+    Fails the commit locally when a SHA pin lacks both an exact patch-tag
+    comment and an exception marker — whether the comment is missing
+    entirely, names no version, or names only a major tag. The hook is the
+    whole enforcement surface: the rule is in no lint group and gates no
+    merge, and `harness-group` runs its fixture tests without a live-repo
+    probe, so a bypassed hook lets a malformed comment reach `main`.
 
 - Runtime check: [ratchet-pin-audit](../runbooks/ratchet-pin-audit.md)
     (daily). Patch-tag immutability means the audit stays quiet under
