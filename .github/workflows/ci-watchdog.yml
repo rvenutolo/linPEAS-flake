@@ -158,9 +158,10 @@ jobs:
                   )
                   .join('\n');
                 const body =
-                  `The retry watchdog re-ran this PR's failed jobs ` +
-                  `${maxAttempts} times and they failed every time. This is no ` +
-                  `longer a transient — treat it as a real failure.\n\n` +
+                  `The retry watchdog exhausted this PR's ${maxAttempts}-attempt ` +
+                  `budget (the original run plus ${maxAttempts - 1} re-runs) and ` +
+                  `the jobs failed every time. This is no longer a transient — ` +
+                  `treat it as a real failure.\n\n` +
                   `PR: ${pr.html_url}\nHead commit: \`${pr.head.sha}\`\n\n` +
                   `Exhausted runs:\n\n${detail}\n\n` +
                   `Triggered by the scheduled \`ci-watchdog\` workflow.\n\n` +

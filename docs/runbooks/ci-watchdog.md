@@ -38,8 +38,9 @@ bump PRs for weeks at a time.
 
 ## When you get a `ci-watchdog: PR #N exhausted retries` issue
 
-The watchdog re-ran the PR's failed jobs 3 times and they failed every time.
-That is no longer a transient — treat it as a real failure.
+The watchdog exhausted the PR's 3-attempt budget — the original run plus 2
+re-runs — and the jobs failed every time. That is no longer a transient —
+treat it as a real failure.
 
 1. Open the run URLs listed in the issue body and read the failing job's log.
 1. If the PR is genuinely broken (a dependency bump that breaks the build, a
