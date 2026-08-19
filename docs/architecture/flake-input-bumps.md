@@ -140,9 +140,15 @@ Out of scope for unstable bumps (these only happen on stable):
 
 PR title looks like one of:
 
-- `Update dependency cachix/git-hooks.nix to <new-SHA>`
-- `Update dependency NixOS/nixpkgs-unstable to <new-SHA>`
-- `Update dependency NixOS/nixpkgs to <YY.MM>`
+- `Update cachix/git-hooks.nix digest to <new-SHA>`
+- `Update NixOS/nixpkgs-unstable to <version>`
+- `Update NixOS/nixpkgs to <version>`
+
+Only the dependency-name substring is matched, so the surrounding wording
+is not load-bearing — `renovate-flake-lock-refresh.yml` selects the input
+with `case` arms globbing on `cachix/git-hooks.nix`,
+`NixOS/nixpkgs-unstable` and `NixOS/nixpkgs`. A title that stops carrying
+one of those three substrings is what silently stops the auto-refresh.
 
 Diff: exactly one line in `flake.nix` changed. `flake.lock` is **not**
 touched. CI required checks will fail on `flake-check` (lock-out-of-date

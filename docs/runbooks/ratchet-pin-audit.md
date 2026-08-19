@@ -8,6 +8,14 @@ canonical SHA its tag now resolves to, the workflow opens (or
 updates) a single deduped umbrella issue labeled `ratchet-drift`.
 The issue auto-closes on the next clean run.
 
+Two classes of ref are skipped before any API call: floating-major pins
+(`# vN`), because such a tag retargets on every release and a benign move
+is indistinguishable from an attack; and this repo's own composite-action
+self-references, which have no upstream tag to compare against. Their
+integrity comes instead from the immutable digest pin plus the PR-time
+`check-pin-digest-provenance.sh` gate — see
+[pin convention](../architecture/pin-convention.md).
+
 This runbook is linked inline from the auto-filed issue body.
 
 ## Why this exists

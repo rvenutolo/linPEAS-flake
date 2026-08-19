@@ -7,7 +7,8 @@ to an existing file under `docs/`, and every `docs/**/*.md` (minus
 an explicit EXEMPT allowlist for overview pages) must appear here.
 
 Behavior rules for the AI assistant and other non-binding guidance
-live in `.claude/CLAUDE.md` (untracked).
+live in an untracked assistant-tooling tree and are out of scope for
+this index.
 
 ## Security
 
@@ -63,7 +64,7 @@ live in `.claude/CLAUDE.md` (untracked).
 - **freshness hook watches evaluated sources** — every pre-commit hook whose entry evaluates a flake attribute names, in its `files` filter, every source that evaluation reads: for a generator evaluating `devTooling.<system>.<attr>`, the nix modules the attribute is defined or transposed by; for an entry evaluating an attribute directly, `flake.nix`, `flake.lock`, the modules assigning it, and the paths those modules reference. A source edit then re-triggers the freshness check on the per-changed-file commit path. → [security/workflow-hardening.md](security/workflow-hardening.md) <!-- enforcer: scripts/check-freshness-hook-watches-modules.sh; ci: lint-script-hygiene; hook: freshness-hook-watches-modules -->
 - **lean lint-shell routing** — light lint groups (`lint-workflow-security`, `lint-script-hygiene`) run in `devShells.lint`; `lint-doc-invariants` stays on `devShells.default` because `renovate-config-validator` needs the renovate closure. → [security/workflow-hardening.md](security/workflow-hardening.md) <!-- enforcer: -; ci: -; hook: - -->
 - **lean lint-shell tool guard** — every tool the `.#lint`-hosted lint groups need is present on `PATH`; keeps `devShells.lint` buildInputs from silently dropping a tool. → [security/workflow-hardening.md](security/workflow-hardening.md) <!-- enforcer: scripts/check-lint-shell-tools.sh; ci: lint-script-hygiene; hook: lint-shell-tools -->
-- **ci.yml job ↔ summary category** — every required ci.yml job appears in `docs/_data/ci-check-categories.yml`; every category entry points at a real job. → [security/workflow-hardening.md](security/workflow-hardening.md) <!-- enforcer: scripts/check-ci-job-in-summary.sh; ci: lint-doc-invariants; hook: ci-job-in-summary -->
+- **ci.yml job ↔ summary category** — every ci.yml job appears in `docs/_data/ci-check-categories.yml` or on the lint's self-policed EXEMPT list; every category entry naming a ci.yml job points at a real one, with entries for other workflows' jobs out of scope. → [security/workflow-hardening.md](security/workflow-hardening.md) <!-- enforcer: scripts/check-ci-job-in-summary.sh; ci: lint-doc-invariants; hook: ci-job-in-summary -->
 - **Multi-line run: strict-mode prelude** — every block-scalar or newline-carrying `run:` block, in a workflow job or a `.github/actions/**/action.ya?ml` composite, starts with `set -Eeuo pipefail`. → [security/workflow-hardening.md](security/workflow-hardening.md) <!-- enforcer: scripts/check-run-block-strict.sh; ci: lint-workflow-security; hook: run-block-strict -->
 - **Fork-guard on guard-required jobs** — every job holding `contents`/`packages`/`id-token`/`attestations`/`actions` at `write`, or minting a GitHub App installation token, includes `github.repository == 'rvenutolo/linPEAS-flake'` in its `if:`. → [security/workflow-hardening.md](security/workflow-hardening.md) <!-- enforcer: scripts/check-fork-guard-release.sh; ci: lint-workflow-security; hook: fork-guard-release -->
 - **No unpinned `nix run nixpkgs#`** — no `nix` subcommand may take a bare `nixpkgs#<pkg>` ref; must use `nix shell .#<pkg>`, `nix run .#<pkg>`, or pin a revision. → [security/workflow-hardening.md](security/workflow-hardening.md) <!-- enforcer: scripts/check-nix-run-pinned.sh; ci: lint-workflow-security; hook: nix-run-pinned -->

@@ -17,8 +17,9 @@ The `prune-stale` job runs daily and on manual
 
 ## PR-close prune
 
-The `prune-on-pr-close` job runs on every `pull_request: closed` event
-(merged or abandoned). It removes all cache entries scoped to:
+The `prune-on-pr-close` job runs on every `pull_request: closed` event for
+a PR targeting `main` (merged or abandoned). It removes all cache entries
+scoped to:
 
 - `refs/pull/${PR_NUMBER}/merge`
 - `refs/heads/${HEAD_REF}`
