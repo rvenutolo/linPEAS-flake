@@ -1,13 +1,13 @@
 # Verification walkthrough
 
-Step-by-step procedure to verify a release of this wrapper. None of this trusts the Pages site you are reading.
+How to verify a release of this wrapper yourself. None of this trusts the Pages site you are reading.
 
 <!-- mdformat-toc start --slug=github --maxlevel=3 --minlevel=2 -->
 
 - [Tools needed](#tools-needed)
-- [1. Verify the OCI image's build provenance](#1-verify-the-oci-images-build-provenance)
+- [Verify the OCI image's build provenance](#verify-the-oci-images-build-provenance)
 - [Multi-arch attestations](#multi-arch-attestations)
-- [2. Verify the weekly parity check is current](#2-verify-the-weekly-parity-check-is-current)
+- [Verify the weekly parity check is current](#verify-the-weekly-parity-check-is-current)
 - [Bump-script integrity guards](#bump-script-integrity-guards)
 - [verify-latest-release upstream parity](#verify-latest-release-upstream-parity)
 - [verify-latest-release failure attribution](#verify-latest-release-failure-attribution)
@@ -28,12 +28,15 @@ Step-by-step procedure to verify a release of this wrapper. None of this trusts 
 
 ## Tools needed<a name="tools-needed"></a>
 
-- `gh` (GitHub CLI) ≥ 2.40 — `gh attestation verify` subcommand.
-- `curl` — for direct asset download.
-- `sha256sum` and/or `openssl` — for hash recomputation.
-- `nix` (optional) — for SRI hash recompute.
+- `gh` (GitHub CLI) ≥ 2.40 — `gh attestation verify` subcommand, and
+    `gh release download` for the signed release assets.
+- `cosign` ≥ 2.2 — `cosign verify` for image signatures and
+    `cosign verify-blob` for the `.sigstore` release-asset bundles.
 
-## 1. Verify the OCI image's build provenance<a name="1-verify-the-oci-images-build-provenance"></a>
+Either toolchain alone is enough for the image: `gh attestation verify` and
+`cosign verify` check different signatures over the same digest.
+
+## Verify the OCI image's build provenance<a name="verify-the-oci-images-build-provenance"></a>
 
 ```bash
 gh attestation verify \
@@ -41,7 +44,9 @@ gh attestation verify \
   --repo rvenutolo/linPEAS-flake
 ```
 
-Same trust model: proves the image was built by this repo's release workflow.
+This proves the image was built by this repo's `release-on-bump.yml` workflow
+run. `--repo` pins the attestation to this repository, so a bundle issued by
+any other repo cannot satisfy it.
 
 ## Multi-arch attestations<a name="multi-arch-attestations"></a>
 
@@ -62,7 +67,7 @@ This means:
     arch image) would miss it. Always verify against the resolved
     arch-image digest.
 
-## 2. Verify the weekly parity check is current<a name="2-verify-the-weekly-parity-check-is-current"></a>
+## Verify the weekly parity check is current<a name="verify-the-weekly-parity-check-is-current"></a>
 
 ```bash
 gh run list \
