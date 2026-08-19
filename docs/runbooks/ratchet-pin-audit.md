@@ -131,6 +131,21 @@ belt-and-suspenders tripwire and performs the actual drift
 detection via per-ref `gh api repos/{owner}/{repo}/git/refs/tags/{tag}`
 canonical-SHA re-derivation.
 
+That version number is load-bearing, not incidental: it is what makes
+the sentence above a claim about a specific tool rather than a
+permanent one. `ratchet` comes from nixpkgs as a bare devShell entry
+with no pin in the tree, so it floats with the nixpkgs input while this
+page and `ratchet-pin-audit.yml` assert a number.
+`scripts/check-ratchet-pin-audit.sh` therefore compares every
+`ratchet <X.Y.Z>` literal in both files against `ratchet --version` from
+the devShell and fails on a mismatch. A nixpkgs bump that changes the
+version turns that check red, which is the prompt to re-read this
+paragraph: if a later ratchet gains upstream API checks, the rationale
+for the `gh api` re-derivation stops holding and the workflow's extra
+work starts looking redundant. Dropping every literal instead of
+updating it also fails, so removing the claim stays a decision rather
+than a side effect.
+
 `ratchet update` does reach upstream, but it only operates on pins
 written in ratchet's own annotation format
 (`uses: foo@<sha> # ratchet:foo@v3`). Our pins use plain

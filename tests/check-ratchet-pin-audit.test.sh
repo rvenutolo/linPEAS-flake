@@ -38,6 +38,45 @@ expect bad-schedule.yml 1 "on: must include a schedule sequence"
 # it must not be counted as a failed one.
 expect no-such-workflow.yml 2 "workflow not found at"
 
+# --- documented ratchet version vs the installed tool ----------------
+# `ratchet` floats with the nixpkgs input while three sites assert a
+# specific number, so the mismatch has to be reachable. RATCHET_VERSION
+# _OVERRIDE stands in for the installed tool, which keeps the case
+# offline and does not need a second ratchet on PATH.
+# @arg $1 doc fixture  @arg $2 workflow fixture  @arg $3 stand-in version
+# @arg $4 expected exit  @arg $5 expected stderr substring
+function expect_version() {
+  local -r doc="$1" workflow="$2" version="$3" want_exit="$4" want_msg="$5"
+  local got_exit=0 got_stderr
+  got_stderr="$(RATCHET_VERSION_OVERRIDE="${version}" \
+    RATCHET_DOC_OVERRIDE="${FIXTURES}/${doc}" \
+    WORKFLOW_PATH_OVERRIDE="${FIXTURES}/${workflow}" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  if [[ ${got_exit} != "${want_exit}" ]]; then
+    printf 'FAIL %s @ %s: exit %s, want %s\n  stderr: %s\n' \
+      "${doc}" "${version}" "${got_exit}" "${want_exit}" "${got_stderr}" >&2
+    return 1
+  fi
+  if [[ -n ${want_msg} && ${got_stderr} != *"${want_msg}"* ]]; then
+    printf 'FAIL %s @ %s: stderr missing %q\n  got: %s\n' \
+      "${doc}" "${version}" "${want_msg}" "${got_stderr}" >&2
+    return 1
+  fi
+  printf 'OK   %s @ %s\n' "${doc}" "${version}"
+}
+
+expect_version version-stated.md good.yml 0.11.4 0 ""
+expect_version version-stated.md good.yml 0.12.0 1 \
+  "does not match the devShell's ratchet 0.12.0"
+# A reword that drops every literal leaves nothing to compare. Removing
+# the version claim is a decision, so it fails rather than passing quiet.
+expect_version version-absent.md version-absent.yml 0.11.4 1 \
+  "version site found in"
+# A version string the tool did not produce is a could-not-run: scoring
+# it as a mismatch would report drift the check never actually measured.
+expect_version version-stated.md good.yml 'not-a-version' 2 \
+  "could not read a version"
+
 # --- classify-pin-ref.sh verdict tests -------------------------------
 # Pure classifier: <tag> <pinned> <ref_object_sha> <ref_object_type>
 # <deref_commit_sha>. Fake 40-hex SHAs keep the cases offline and
