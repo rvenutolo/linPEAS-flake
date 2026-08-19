@@ -16,7 +16,7 @@ Equivalent to executing `linpeas -a` against the currently-pinned upstream `linp
 nix profile install github:rvenutolo/linPEAS-flake
 ```
 
-Adds `linpeas` to your Nix profile. Upgrade with `nix profile upgrade linpeas`.
+Installs `packages.<system>.default`. Nix names the resulting profile element after the flake (`linPEAS-flake`), not the package, so upgrade with `nix profile upgrade --all`, which is robust to the element name.
 
 ## As a flake input
 
@@ -26,7 +26,7 @@ Adds `linpeas` to your Nix profile. Upgrade with `nix profile upgrade linpeas`.
 
   outputs = { self, nixpkgs, linpeas-flake, ... }: {
     # ...
-    # access via: linpeas-flake.packages.${system}.linpeas
+    # access via: linpeas-flake.packages.${system}.default
   };
 }
 ```
