@@ -52,36 +52,51 @@ This means:
     not resolve cleanly against the manifest index alone — point the verify
     at the arch-specific image (or pull on the target arch and use the
     resolved `RepoDigests` value).
+
 - Each arch image was independently built from the same commit of this
     repo, so the attestations cover the same source provenance.
-- The manifest index itself is **not** attested. An attacker with push
-    to either registry could repoint the manifest at unattested images;
-    the verify step in `release-on-bump.yml` would catch this at release
-    time, but consumers who only verify the manifest pointer (not the
-    arch image) would miss it. Always verify against the resolved
-    arch-image digest.
 
-The release pipeline's `verify` job validates the per-arch digests
-captured at push time. Those push-time steps do **not** re-resolve the
-published `:VERSION` and `:latest` manifest tags after manifest
-publication to confirm they still point at those digests. A consumer who pulls by the
-manifest tag and then verifies against the **arch-resolved** digest
+- The manifest index itself is **not** SLSA-attested — the build
+    provenance covers the per-arch images. The index *is* cosign
+    keyless-signed on both registries, so a repointed manifest tag
+    resolves to an index digest carrying no signature and fails
+    `cosign verify` without any arch resolution:
+
+    ```bash
+    cosign verify \
+      --certificate-identity 'https://github.com/rvenutolo/linPEAS-flake/.github/workflows/release-on-bump.yml@refs/heads/main' \
+      --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+      ghcr.io/rvenutolo/linpeas:latest
+    ```
+
+    To check build provenance rather than the signature, resolve to the
+    arch-image digest and run `gh attestation verify` against that — the
+    attestation is attached per arch, not to the index.
+
+The release pipeline re-checks the published manifest tags after it
+publishes them: the `verify manifest tags resolve to attested per-arch digests` step in `release-on-bump.yml`'s `verify` job re-fetches both the
+`:VERSION` and `:latest` manifests post-publish and confirms their
+per-arch digests match the values that were attested. A drift at this
+step fails the release, so a tag repointed before the release completes
+does not ship.
+
+The residual risk is consumer-side and post-release. A consumer who pulls
+by the manifest tag and then verifies against the **arch-resolved** digest
 (via `docker manifest inspect` or the `RepoDigests` value returned by
 `docker inspect`) is protected. A consumer who trusts the manifest tag
-implicitly — without resolving to the per-arch digest — is not. The
-mitigation is the `verify manifest tags resolve to attested per-arch digests` step in `release-on-bump.yml`'s `verify` job, which re-fetches
-both `:VERSION` and `:latest` manifests post-publish and confirms
-their per-arch digests match the values that were attested. A drift
-at this step fails the release.
+implicitly — without resolving to the per-arch digest and without
+`cosign verify` — is not.
 
 ## Auto-merge surface
 
-Three independent automations merge to `main` without human review:
+Four independent automations merge to `main` without human review:
 
 - `update-linpeas.yml` (daily) — upstream `linpeas.sh` content.
 - `update-flake-lock.yml` (weekly) — `nixpkgs` and other flake input revs.
 - Renovate (weekly) — GitHub Action SHAs and the pinned Nix installer
     version.
+- `release-on-bump.yml` (per release) — the regenerated `CHANGELOG.md`,
+    committed via an auto-merging PR under the same App identity.
 
 Each is gated by CI (build success + SRI-hash integrity), not by content
 review. A compromise of any upstream feed produces an attested release
@@ -179,7 +194,7 @@ attestation carries `https://slsa.dev/provenance/v1`.
 
 ## Runner egress control (harden-runner, block mode)
 
-`step-security/harden-runner` runs as the first step of every job in every workflow, with `egress-policy: block`. Each job declares an `allowed-endpoints:` allowlist scoped to the minimum outbound hosts it needs: a shared baseline (`api.github.com`, `github.com`, `objects.githubusercontent.com`) plus job-specific endpoints. `cache.nixos.org` and `releases.nixos.org` are not part of that baseline — they appear only on jobs that install or invoke Nix, and `scripts/check-egress-allowlist.sh` rejects either host on a job that carries it without a Nix-reaching step, so copying them into a new job's allowlist by habit fails the lint rather than passing it. Block mode drops any egress to a host outside the allowlist, so a compromised step cannot exfiltrate a credential (App token, Docker Hub PAT, signing key) to an attacker-controlled host. Rotating host families — Actions cache/artifact storage (`*.blob.core.windows.net`), the hosted-runner control plane (`*.githubapp.com`), and the Actions runtime (`*.actions.githubusercontent.com`) — are matched by wildcard.
+`step-security/harden-runner` runs as the first step of every job in every workflow, with `egress-policy: block`. Each job declares an `allowed-endpoints:` allowlist scoped to the minimum outbound hosts it needs: a two-host floor (`api.github.com`, `github.com`), plus `objects.githubusercontent.com` on jobs that fetch release or blob content, plus job-specific endpoints. `cache.nixos.org` and `releases.nixos.org` are not part of that baseline — they appear only on jobs that install or invoke Nix, and `scripts/check-egress-allowlist.sh` rejects either host on a job that carries it without a Nix-reaching step, so copying them into a new job's allowlist by habit fails the lint rather than passing it. Block mode drops any egress to a host outside the allowlist, so a compromised step cannot exfiltrate a credential (App token, Docker Hub PAT, signing key) to an attacker-controlled host. Rotating host families — Actions cache/artifact storage (`*.blob.core.windows.net`), the hosted-runner control plane (`*.githubapp.com`), and the Actions runtime (`*.actions.githubusercontent.com`) — are matched by wildcard.
 
 When a job legitimately needs a new endpoint, add it to that job's `allowed-endpoints:`; never relax a job back to audit. `scripts/check-harden-runner-block.sh` (pre-commit and the `lint-workflow-security` CI job) fails any harden-runner step that is not `egress-policy: block` with a non-empty allowlist.
 
