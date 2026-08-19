@@ -250,13 +250,22 @@ jobs:
 
   preflight:
     # Backfill-only image-presence probe and single source of truth
-    # for image gating. On a normal push / force-republish
-    # (backfill-tag == '') it emits image-mode=full immediately with no
-    # registry probe, so the hot release path pays nothing. In backfill
-    # mode it anonymously inspects the four per-arch tags and
-    # classifies the release as `full` (complete image set -> run the
-    # image/manifest jobs) or `none` (image-less -> skip them, backfill
-    # pin sidecars only, finish green). A partial mix fails loudly.
+    # for image gating and for the historic per-arch digests. On a
+    # normal push / force-republish (backfill-tag == '') it emits
+    # image-mode=full immediately with no registry probe, so the hot
+    # release path pays nothing. In backfill mode it anonymously
+    # inspects the four per-arch tags plus the `:<tag>` multi-arch
+    # index on each registry, and classifies the release as `full`
+    # (complete set -> run the image/manifest jobs) or `none`
+    # (image-less -> skip them, backfill pin sidecars only, finish
+    # green). A partial mix fails loudly.
+    #
+    # On `full` it also emits the per-arch digests the index records.
+    # Those digests are what the image jobs pull by: the index is the
+    # authoritative record of which bytes the release shipped, and an
+    # arch tag repointed since the original publish would otherwise
+    # receive fresh attestations and a fresh cosign signature over
+    # substituted content.
     if: github.repository == 'rvenutolo/linPEAS-flake'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -264,6 +273,12 @@ jobs:
       contents: read # checkout the classifier script
     outputs:
       image-mode: ${{ steps.classify.outputs.image-mode }}
+      # Empty unless image-mode is `full`; the image jobs that consume
+      # them do not run in any other mode.
+      amd64-ghcr-digest: ${{ steps.classify.outputs.amd64-ghcr-digest }}
+      amd64-hub-digest: ${{ steps.classify.outputs.amd64-hub-digest }}
+      arm64-ghcr-digest: ${{ steps.classify.outputs.arm64-ghcr-digest }}
+      arm64-hub-digest: ${{ steps.classify.outputs.arm64-hub-digest }}
     steps:
       - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
         with:
@@ -327,13 +342,63 @@ jobs:
               "${ref}" "${out}" >&2
             return 1
           }
+          # Read the digest a `:<tag>` OCI index records for one
+          # platform. Attestation manifests that
+          # attest-build-provenance attaches sit in the same index with
+          # platform unknown/unknown, so the selection is on the
+          # linux/<arch> pair rather than on position. Anything other
+          # than exactly one match is a malformed index: refuse it
+          # rather than pick one and bless the wrong bytes.
+          index_digest() {
+            local ref="$1" arch="$2" raw count digest
+            # shellcheck disable=SC2016 # $arch is a jq variable, bound below
+            local -r filter='
+              [ .manifests[]
+                | select(.platform.os == "linux"
+                    and .platform.architecture == $arch)
+                | .digest ]
+              | unique'
+            if ! raw="$(docker buildx imagetools inspect --raw "${ref}")"; then
+              printf 'preflight: could not read index %s\n' "${ref}" >&2
+              return 1
+            fi
+            count="$(jq --arg arch "${arch}" "${filter} | length" <<<"${raw}")"
+            if [[ ${count} != '1' ]]; then
+              printf 'preflight: index %s records %s linux/%s manifest(s), want exactly 1\n' \
+                "${ref}" "${count}" "${arch}" >&2
+              return 1
+            fi
+            digest="$(jq --raw-output --arg arch "${arch}" \
+              "${filter} | .[0]" <<<"${raw}")"
+            if [[ ${digest} != sha256:* ]]; then
+              printf 'preflight: index %s gave a malformed linux/%s digest: %s\n' \
+                "${ref}" "${arch}" "${digest}" >&2
+              return 1
+            fi
+            printf '%s' "${digest}"
+          }
           amd64_ghcr="$(probe "ghcr.io/rvenutolo/linpeas:${BACKFILL_TAG}-amd64")"
           amd64_hub="$(probe "docker.io/rvenutolo/linpeas:${BACKFILL_TAG}-amd64")"
           arm64_ghcr="$(probe "ghcr.io/rvenutolo/linpeas:${BACKFILL_TAG}-arm64")"
           arm64_hub="$(probe "docker.io/rvenutolo/linpeas:${BACKFILL_TAG}-arm64")"
+          index_ghcr="$(probe "ghcr.io/rvenutolo/linpeas:${BACKFILL_TAG}")"
+          index_hub="$(probe "docker.io/rvenutolo/linpeas:${BACKFILL_TAG}")"
           mode="$(bash scripts/classify-backfill-image-mode.sh \
-            "${amd64_ghcr}" "${amd64_hub}" "${arm64_ghcr}" "${arm64_hub}")"
+            "${amd64_ghcr}" "${amd64_hub}" "${arm64_ghcr}" "${arm64_hub}" \
+            "${index_ghcr}" "${index_hub}")"
           printf 'image-mode=%s\n' "${mode}" >>"${GITHUB_OUTPUT}"
+          # `none` skips the image jobs outright, so there is nothing to
+          # resolve a digest for. Each digest is captured into its own
+          # variable first: a command substitution that failed inside a
+          # printf argument list would leave the output empty and the
+          # step green.
+          [[ ${mode} == 'full' ]] || exit 0
+          for arch in amd64 arm64; do
+            ghcr_digest="$(index_digest "ghcr.io/rvenutolo/linpeas:${BACKFILL_TAG}" "${arch}")"
+            hub_digest="$(index_digest "docker.io/rvenutolo/linpeas:${BACKFILL_TAG}" "${arch}")"
+            printf '%s-ghcr-digest=%s\n' "${arch}" "${ghcr_digest}" >>"${GITHUB_OUTPUT}"
+            printf '%s-hub-digest=%s\n' "${arch}" "${hub_digest}" >>"${GITHUB_OUTPUT}"
+          done
 
   image-amd64:
     needs: [release, preflight]
@@ -409,44 +474,51 @@ jobs:
           printf '%s' "${DOCKERHUB_TOKEN}" \
             | docker login docker.io --username "${DOCKERHUB_USERNAME}" --password-stdin
 
-      - name: pull existing image + capture digests (backfill mode)
+      - name: pull existing image by digest (backfill mode)
+        # Source the historic bytes by digest, never by the mutable
+        # `<version>-<arch>` tag. The digests come from the `:<version>`
+        # OCI index the release published, which is the only in-registry
+        # record of what it shipped. Pulling the arch tag instead would
+        # hand fresh SLSA attestations and a fresh cosign signature to
+        # whatever that tag points at today, and the manifest job would
+        # then rebuild and re-sign the index over the substitution — the
+        # exact defect scripts/check-manifest-digest-pinned.sh polices
+        # everywhere else in the tree.
         id: pull
         if: inputs.backfill-tag != ''
         env:
           VERSION: ${{ needs.release.outputs.version }}
           ARCH: amd64
+          GHCR_DIGEST: ${{ needs.preflight.outputs.amd64-ghcr-digest }}
+          HUB_DIGEST: ${{ needs.preflight.outputs.amd64-hub-digest }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
-          for reg in docker.io ghcr.io; do
-            docker pull "${reg}/rvenutolo/linpeas:${VERSION}-${ARCH}"
-          done
-          ghcr_digest="$(
-            docker inspect "ghcr.io/rvenutolo/linpeas:${VERSION}-${ARCH}" \
-              | jq --raw-output \
-                  '.[0].RepoDigests[] | select(startswith("ghcr.io/rvenutolo/linpeas@"))' \
-              | head -n1
-          )"
-          hub_digest="$(
-            docker inspect "docker.io/rvenutolo/linpeas:${VERSION}-${ARCH}" \
-              | jq --raw-output \
-                  '.[0].RepoDigests[]
-                    | select(startswith("rvenutolo/linpeas@")
-                          or startswith("docker.io/rvenutolo/linpeas@"))' \
-              | head -n1
-          )"
-          ghcr_digest="${ghcr_digest#*@}"
-          hub_digest="${hub_digest#*@}"
-          if [[ "${ghcr_digest}" != sha256:* ]]; then
-            printf 'unexpected ghcr digest for %s: %s\n' "${ARCH}" "${ghcr_digest}" >&2
+          # preflight emits these only on image-mode=full, and this step
+          # runs only when the image jobs do. An empty or malformed value
+          # here means the gate and the digest source disagree, which is
+          # a bug to surface, not a case to fall back from.
+          if [[ ${GHCR_DIGEST} != sha256:* ]]; then
+            printf 'preflight supplied no ghcr digest for %s: %q\n' "${ARCH}" "${GHCR_DIGEST}" >&2
             exit 1
           fi
-          if [[ "${hub_digest}" != sha256:* ]]; then
-            printf 'unexpected docker hub digest for %s: %s\n' "${ARCH}" "${hub_digest}" >&2
+          if [[ ${HUB_DIGEST} != sha256:* ]]; then
+            printf 'preflight supplied no docker hub digest for %s: %q\n' "${ARCH}" "${HUB_DIGEST}" >&2
             exit 1
           fi
-          printf 'ghcr_digest=%s\n' "${ghcr_digest}" >> "${GITHUB_OUTPUT}"
-          printf 'hub_digest=%s\n' "${hub_digest}" >> "${GITHUB_OUTPUT}"
+          docker pull "docker.io/rvenutolo/linpeas@${HUB_DIGEST}"
+          docker pull "ghcr.io/rvenutolo/linpeas@${GHCR_DIGEST}"
+          # The syft SBOM step below addresses the image by its arch tag.
+          # Recreating that tag locally, over bytes the daemon already
+          # verified against the digest, keeps that step unchanged
+          # without reading a tag from a registry.
+          docker tag "docker.io/rvenutolo/linpeas@${HUB_DIGEST}" \
+            "rvenutolo/linpeas:${VERSION}-${ARCH}"
+          # No re-derivation from `docker inspect`: `docker pull` by
+          # digest is digest-verified by the daemon, so these are already
+          # the digests of the bytes on disk.
+          printf 'ghcr_digest=%s\n' "${GHCR_DIGEST}" >>"${GITHUB_OUTPUT}"
+          printf 'hub_digest=%s\n' "${HUB_DIGEST}" >>"${GITHUB_OUTPUT}"
 
       - name: load, tag, push arch image, and capture digests
         # Push the per-arch image to both registries under arch-suffixed
@@ -709,44 +781,51 @@ jobs:
           printf '%s' "${DOCKERHUB_TOKEN}" \
             | docker login docker.io --username "${DOCKERHUB_USERNAME}" --password-stdin
 
-      - name: pull existing image + capture digests (backfill mode)
+      - name: pull existing image by digest (backfill mode)
+        # Source the historic bytes by digest, never by the mutable
+        # `<version>-<arch>` tag. The digests come from the `:<version>`
+        # OCI index the release published, which is the only in-registry
+        # record of what it shipped. Pulling the arch tag instead would
+        # hand fresh SLSA attestations and a fresh cosign signature to
+        # whatever that tag points at today, and the manifest job would
+        # then rebuild and re-sign the index over the substitution — the
+        # exact defect scripts/check-manifest-digest-pinned.sh polices
+        # everywhere else in the tree.
         id: pull
         if: inputs.backfill-tag != ''
         env:
           VERSION: ${{ needs.release.outputs.version }}
           ARCH: arm64
+          GHCR_DIGEST: ${{ needs.preflight.outputs.arm64-ghcr-digest }}
+          HUB_DIGEST: ${{ needs.preflight.outputs.arm64-hub-digest }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
-          for reg in docker.io ghcr.io; do
-            docker pull "${reg}/rvenutolo/linpeas:${VERSION}-${ARCH}"
-          done
-          ghcr_digest="$(
-            docker inspect "ghcr.io/rvenutolo/linpeas:${VERSION}-${ARCH}" \
-              | jq --raw-output \
-                  '.[0].RepoDigests[] | select(startswith("ghcr.io/rvenutolo/linpeas@"))' \
-              | head -n1
-          )"
-          hub_digest="$(
-            docker inspect "docker.io/rvenutolo/linpeas:${VERSION}-${ARCH}" \
-              | jq --raw-output \
-                  '.[0].RepoDigests[]
-                    | select(startswith("rvenutolo/linpeas@")
-                          or startswith("docker.io/rvenutolo/linpeas@"))' \
-              | head -n1
-          )"
-          ghcr_digest="${ghcr_digest#*@}"
-          hub_digest="${hub_digest#*@}"
-          if [[ "${ghcr_digest}" != sha256:* ]]; then
-            printf 'unexpected ghcr digest for %s: %s\n' "${ARCH}" "${ghcr_digest}" >&2
+          # preflight emits these only on image-mode=full, and this step
+          # runs only when the image jobs do. An empty or malformed value
+          # here means the gate and the digest source disagree, which is
+          # a bug to surface, not a case to fall back from.
+          if [[ ${GHCR_DIGEST} != sha256:* ]]; then
+            printf 'preflight supplied no ghcr digest for %s: %q\n' "${ARCH}" "${GHCR_DIGEST}" >&2
             exit 1
           fi
-          if [[ "${hub_digest}" != sha256:* ]]; then
-            printf 'unexpected docker hub digest for %s: %s\n' "${ARCH}" "${hub_digest}" >&2
+          if [[ ${HUB_DIGEST} != sha256:* ]]; then
+            printf 'preflight supplied no docker hub digest for %s: %q\n' "${ARCH}" "${HUB_DIGEST}" >&2
             exit 1
           fi
-          printf 'ghcr_digest=%s\n' "${ghcr_digest}" >> "${GITHUB_OUTPUT}"
-          printf 'hub_digest=%s\n' "${hub_digest}" >> "${GITHUB_OUTPUT}"
+          docker pull "docker.io/rvenutolo/linpeas@${HUB_DIGEST}"
+          docker pull "ghcr.io/rvenutolo/linpeas@${GHCR_DIGEST}"
+          # The syft SBOM step below addresses the image by its arch tag.
+          # Recreating that tag locally, over bytes the daemon already
+          # verified against the digest, keeps that step unchanged
+          # without reading a tag from a registry.
+          docker tag "docker.io/rvenutolo/linpeas@${HUB_DIGEST}" \
+            "rvenutolo/linpeas:${VERSION}-${ARCH}"
+          # No re-derivation from `docker inspect`: `docker pull` by
+          # digest is digest-verified by the daemon, so these are already
+          # the digests of the bytes on disk.
+          printf 'ghcr_digest=%s\n' "${GHCR_DIGEST}" >>"${GITHUB_OUTPUT}"
+          printf 'hub_digest=%s\n' "${HUB_DIGEST}" >>"${GITHUB_OUTPUT}"
 
       - name: load, tag, push arch image, and capture digests
         # See comment on the amd64 job: docker.io is pushed first to

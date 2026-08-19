@@ -2,9 +2,10 @@
 # tests/classify-backfill-image-mode.test.sh
 #
 # Verdict + failure-mode matrix for
-# scripts/classify-backfill-image-mode.sh. Pure classifier: four
-# presence tokens (amd64@ghcr amd64@hub arm64@ghcr arm64@hub), each
-# "present" or "absent". Offline and deterministic.
+# scripts/classify-backfill-image-mode.sh. Pure classifier: six
+# presence tokens (amd64@ghcr amd64@hub arm64@ghcr arm64@hub
+# index@ghcr index@hub), each "present" or "absent". Offline and
+# deterministic.
 set -Eeuo pipefail
 IFS=$'\n\t'
 
@@ -43,15 +44,37 @@ function classify() {
   printf 'OK   %s\n' "${desc}"
 }
 
-classify "all present -> full" full present present present present
-classify "all absent -> none" none absent absent absent absent
-classify "one arch present (partial)" "<error>" present present absent absent
-classify "one registry present (partial)" "<error>" present absent present absent
-classify "single tag present (partial)" "<error>" present absent absent absent
-classify "single tag absent (partial)" "<error>" absent present present present
-classify "too few args" "<error>" present present present
-classify "too many args" "<error>" present present present present present
-classify "bad token" "<error>" present present present maybe
+classify "all present -> full" full \
+  present present present present present present
+classify "all absent -> none" none \
+  absent absent absent absent absent absent
+
+# The index carries the historic per-arch digests, so a release whose
+# arch tags all survive but whose index was evicted has nothing safe to
+# pull by. That is the state this signal exists to catch, and it must
+# not classify as `full`.
+classify "arch tags present, both indexes absent (partial)" "<error>" \
+  present present present present absent absent
+classify "arch tags present, one index absent (partial)" "<error>" \
+  present present present present present absent
+classify "indexes present, arch tags absent (partial)" "<error>" \
+  absent absent absent absent present present
+
+classify "one arch present (partial)" "<error>" \
+  present present absent absent absent absent
+classify "one registry present (partial)" "<error>" \
+  present absent present absent present absent
+classify "single object present (partial)" "<error>" \
+  present absent absent absent absent absent
+classify "single object absent (partial)" "<error>" \
+  absent present present present present present
+
+classify "too few args (the pre-index arity)" "<error>" \
+  present present present present
+classify "too many args" "<error>" \
+  present present present present present present present
+classify "bad token" "<error>" \
+  present present present present present maybe
 
 if [[ ${failures} -ne 0 ]]; then
   printf '\nclassify-backfill-image-mode: FAILURES\n' >&2

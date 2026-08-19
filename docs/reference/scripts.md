@@ -1362,10 +1362,10 @@ Bump linpeas-pin.json to the latest peass-ng/PEASS-ng release.
 
 Classify whether a release-on-bump `backfill-tag` run
 should exercise the per-arch image pipeline. Given the presence
-(`present`/`absent`) of the four per-arch container tags in the
-order amd64@ghcr amd64@hub arm64@ghcr arm64@hub, print `full` when
-all four exist, `none` when all four are absent, and fail on any
-partial mix. Pure and side-effect free so the decision is
+(`present`/`absent`) of six registry objects in the order
+amd64@ghcr amd64@hub arm64@ghcr arm64@hub index@ghcr index@hub,
+print `full` when all six exist, `none` when all six are absent, and
+fail on any partial mix. Pure and side-effect free so the decision is
 unit-testable without contacting a registry.
 
 ### scripts/classify-pin-ref.sh
