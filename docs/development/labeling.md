@@ -42,13 +42,16 @@ Ownership is declared at the generator, in the header annotation block
 | `@generates <path>`       | the script owns that file's content                  | required           |
 | `@generates-block <path>` | the script splices a block into a hand-authored file | forbidden          |
 
-Most generators splice a `<!-- BEGIN x -->` block into a doc that also
-carries hand-authored prose; a few (`scripts/refresh-test-harnesses.sh`,
-`scripts/gen-dashboard-data.sh`) own their output file outright. Which
-side of the line a doc falls on is therefore a judgment. Recording it at the generator
-keeps that judgment reviewable next to the code that makes it, where a
-coverage threshold would be a magic number that moves as the prose
-around the block grows. Files carrying a block inside hand-written
+Most generators own their output file outright. The minority splice a
+`<!-- BEGIN x -->` block into a doc that also carries hand-authored
+prose: `refresh-precommit-table.sh`, `refresh-pin-parity.sh`,
+`refresh-just-recipes.sh`, `refresh-ci-summary.sh`, and
+`refresh-ephemeral-refs-gap.sh`. `refresh-just-recipes.sh` is on both
+sides — it owns `docs/reference/just-recipes.md` and splices a block into
+`README.md`. Which side of the line a doc falls on is therefore a
+judgment. Recording it at the generator keeps that judgment reviewable
+next to the code that makes it, where a coverage threshold would be a
+magic number that moves as the prose around the block grows. Files carrying a block inside hand-written
 prose (`docs/development/git.md`, `README.md`) stay off the list on
 purpose: ignoring them wholesale would also drop hand-edits to the
 surrounding prose from the size count, which is the same failure in the
