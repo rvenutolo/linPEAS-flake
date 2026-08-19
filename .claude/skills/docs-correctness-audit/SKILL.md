@@ -125,14 +125,16 @@ Read-only fan-out needs no orchestration opt-in — it is plain parallel reads.
 1. **Prose quality.** Clarity, grammar, dead links, and ephemeral-token
     violations per the regex. CHANGELOG / releases pages are exempt from the
     PR-ref and date bans (they structurally list PRs and dates).
-    Ephemeral-token violations are given authoritatively by the collector's
-    **`EPHEMERAL-TOKEN HITS`** section (see `references/repo-map.md §4` for
-    the full suppression and scope rules). For the **structural categories**
-    (`planning-label`, `review-pass`, `ad-hoc-ticket`, `pr-ref`, `date`), flag
-    every hit without re-judging. For the **fuzzy categories**
-    (`causal-history`, `claude-path`), eyeball each candidate — a common word
-    like "previously" or a legitimate reference to `.claude/CLAUDE.md` can
-    match; confirm context before reporting.
+    Ephemeral-token candidates come from the collector's
+    **`EPHEMERAL-TOKEN HITS`** section (see `references/repo-map.md` §4 for
+    suppression and scope). That sweep reads prose only — fenced blocks,
+    generated bodies, and inline code spans are blanked first — but it is
+    **not** the authority: `scripts/check-ephemeral-refs.sh` is. Run the real
+    lint; anything the sweep reports that the lint does not is a false
+    positive, and a doc that quotes a banned shape as an example is
+    documentation, not a violation. Note `causal-history` is advisory-only even
+    in the real lint, so a hit there is a style nit rather than a gate failure
+    — report it as low severity if at all.
 
 ### 4. Controller verifies, completeness-gates, dedups, ranks
 

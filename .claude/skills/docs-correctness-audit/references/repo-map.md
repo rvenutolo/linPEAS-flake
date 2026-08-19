@@ -102,19 +102,28 @@ banned shapes in tracked docs and comments:
 Allowed: incident-warning text that prevents a regression (keep the warning,
 drop any dated tag).
 
-The collector emits an authoritative **`EPHEMERAL-TOKEN HITS`** section that
-applies these shapes over all tracked `*.md` files, excluding `.claude/`
-tooling, `tests/fixtures/`, `docs/_data/`, and fully exempting `CHANGELOG.md`
-and `docs/releases.md` (historical records). Deterministic suppressions remove
-known-good matches: `(fill|stroke|color):#hex` colors, `&#NNN;` HTML entities,
-`#N-` anchor targets, `(SHA|UTF|RFC|ISO|BASE)-NNN` standard acronyms, and the
-`X-GitHub-Api-Version: <date>` literal. The **structural categories** —
-`planning-label`, `review-pass`, `ad-hoc-ticket`, `pr-ref`, and `date` — are
-authoritative: flag every hit without re-deriving by eye. The **fuzzy
-categories** — `causal-history` (common words like "previously" appear in
-legitimate prose) and `claude-path` (a doc may legitimately reference
-`.claude/CLAUDE.md`) — are candidates that warrant a quick eyeball before
-reporting; do not treat them as automatically confirmed violations.
+The collector emits an **`EPHEMERAL-TOKEN HITS`** section applying these shapes
+over all tracked `*.md` files, excluding `.claude/` tooling, `tests/fixtures/`,
+`docs/_data/`, and fully exempting `CHANGELOG.md` and `docs/releases.md`
+(historical records).
+
+**It reads prose only.** Fenced code blocks, generated `BEGIN`/`END` bodies, and
+inline code spans are blanked before matching (line numbering preserved), the
+same three regions `scripts/check-ephemeral-refs.sh` exempts. That pass is
+load-bearing: without it, every doc that *documents* a banned shape as an
+example — `docs/development/linting.md`'s table of banned shapes, the generated
+hook table in `docs/development/git.md` — reports as though it carried one.
+Deterministic suppressions additionally remove `(fill|stroke|color):#hex`
+colors, `&#NNN;` HTML entities, `#N-` anchor targets,
+`(SHA|UTF|RFC|ISO|BASE)-NNN` standard acronyms, and the
+`X-GitHub-Api-Version: <date>` literal.
+
+**The sweep is not authoritative — `scripts/check-ephemeral-refs.sh` is.** Run
+it and believe its exit code; anything the sweep reports that the real lint does
+not is a false positive. Two standing caveats: `causal-history` is
+advisory-only even in the real lint (it never fails a gate), and the sweep
+covers `*.md` only, while the real lint also reads shell, Nix and YAML
+comments.
 
 ## 5. Invariant-index consistency
 

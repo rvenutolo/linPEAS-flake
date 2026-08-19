@@ -36,6 +36,20 @@ fx="$(mktemp -d)"
   mkdir -p docs
   cp "${REAL_REPO}/lychee.toml" .
   printf '# Doc\n\nPhase 3 work remains.\nTracking #388 here.\nclassDef x fill:#c8e6c9,stroke:#2e7d32\nEntity &#123; literal.\nsee [toc](#1-delete-the-thing).\nEvery call passes X-GitHub-Api-Version: 2022-11-28 header.\nUses SHA-256 digest.\n' >docs/eph.md
+  # Exempt-region fixture: the same banned shapes, but quoted as documentation
+  # rather than referenced. The real lint blanks all three regions; so must the
+  # sweep, or every doc that documents the rules reports as violating them.
+  {
+    printf '# Rules\n\n'
+    # shellcheck disable=SC2016 # literal backticks in human-readable prose
+    printf 'A planning label looks like `Phase 7` and a PR ref like `#404`.\n'
+    # shellcheck disable=SC2016 # literal backticks in human-readable prose
+    printf 'A date span reads `2019-03-04` in prose.\n\n'
+    printf 'Example of what NOT to write:\n\n'
+    # shellcheck disable=SC2016 # literal fence markers, not expansions
+    printf '```text\nPhase 5 landed in #505 on 2018-02-03\n```\n\n'
+    printf '<!-- BEGIN sometable -->\nPhase 6 shipped in #606 on 2017-01-02\n<!-- END sometable -->\n'
+  } >docs/exempt.md
   printf '# Changelog\n\n- #999 shipped 2024-01-01\n- Phase 9 cleanup\n' >CHANGELOG.md
   mkdir -p .claude
   printf 'Phase 8 work\n' >.claude/x.md
@@ -56,6 +70,14 @@ case "${eph}" in *"#999"*) check "exempts CHANGELOG pr-ref" 1 ;; *) check "exemp
 case "${eph}" in *"2024-01-01"*) check "exempts CHANGELOG date" 1 ;; *) check "exempts CHANGELOG date" 0 ;; esac
 case "${eph}" in *"Phase 9"*) check "fully exempts CHANGELOG planning-label" 1 ;; *) check "fully exempts CHANGELOG planning-label" 0 ;; esac
 case "${eph}" in *"Phase 8"*) check "excludes .claude/ from sweep" 1 ;; *) check "excludes .claude/ from sweep" 0 ;; esac
+# --- exempt regions must be blanked, not reported ---
+case "${eph}" in *"Phase 7"*) check "exempts inline code span (planning-label)" 1 ;; *) check "exempts inline code span (planning-label)" 0 ;; esac
+case "${eph}" in *"#404"*) check "exempts inline code span (pr-ref)" 1 ;; *) check "exempts inline code span (pr-ref)" 0 ;; esac
+case "${eph}" in *"2019-03-04"*) check "exempts inline code span (date)" 1 ;; *) check "exempts inline code span (date)" 0 ;; esac
+case "${eph}" in *"Phase 5"* | *"#505"* | *"2018-02-03"*) check "exempts fenced code block" 1 ;; *) check "exempts fenced code block" 0 ;; esac
+case "${eph}" in *"Phase 6"* | *"#606"* | *"2017-01-02"*) check "exempts generated BEGIN/END block" 1 ;; *) check "exempts generated BEGIN/END block" 0 ;; esac
+# --- blanking must not shift reported line numbers ---
+case "${eph}" in *"docs/eph.md:3"*) check "line numbers survive blanking" 0 ;; *) check "line numbers survive blanking" 1 ;; esac
 rm -rf "${fx}"
 
 # --- internal-link fixture ---
