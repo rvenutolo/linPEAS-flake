@@ -16,11 +16,11 @@
 # an entry must name a real `ci.yml` job that is absent from the
 # category map, so it cannot rot into a name that exempts nothing.
 #
-# Reverse — every key in `ci.yml`'s share of the category map
-# corresponds to a real `jobs.<name>:` in `ci.yml`. Category-map
-# entries that point at jobs in other workflow files (gitleaks,
-# dependency-review, pr-title-lint, …) are not the responsibility
-# of this lint.
+# Reverse — every key in the category map names a real `jobs.<name>:`
+# in some workflow under `.github/workflows/`. The map itself does not
+# record which workflow an entry belongs to, so the check spans all of
+# them: entries naming jobs in other files (gitleaks, dependency-review,
+# pr-title-lint, …) are in scope and must resolve too.
 #
 # Manifest coverage — every check basename in
 # `.github/lint-groups.yml` resolves to a real
