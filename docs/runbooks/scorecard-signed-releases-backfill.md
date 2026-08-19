@@ -19,14 +19,15 @@ Do NOT use for:
 
 - A current-tag release missing assets due to a partial publish —
     use `force-republish` instead.
-- A release with a PARTIAL per-arch image set (some but not all four
-    `{ghcr.io,docker.io}:<tag>-{amd64,arm64}` tags present). The
-    preflight fails loudly on this half-published state — see
-    "Partial image set" below.
+- A release with a PARTIAL per-arch image set (some but not all six of
+    the `{ghcr.io,docker.io}:<tag>-{amd64,arm64}` tags and the
+    `{ghcr.io,docker.io}:<tag>` indexes present). The preflight fails
+    loudly on this half-published state — see "Partial image set"
+    below.
 
-An IMAGE-LESS release (all four per-arch tags absent) is fully
-supported: backfill writes the pin sidecars, the image jobs skip, and
-the run finishes green. No image rebuild is required.
+An IMAGE-LESS release (all six absent) is fully supported: backfill
+writes the pin sidecars, the image jobs skip, and the run finishes
+green. No image rebuild is required.
 
 ## Procedure
 
@@ -42,8 +43,10 @@ The workflow:
     bytes, and uploads `linpeas-pin.json.intoto.jsonl` +
     `linpeas-pin.json.sigstore`.
 - Pulls the per-arch images from GHCR + Docker Hub at the historic
-    digests, regenerates each `linpeas-image-<arch>.cdx.json` SBOM,
-    signs it, attests its bytes, and uploads all three asset shapes.
+    digests — read out of each registry's `:<tag>` index, never from
+    the mutable `<tag>-<arch>` tags — regenerates each
+    `linpeas-image-<arch>.cdx.json` SBOM, signs it, attests its bytes,
+    and uploads all three asset shapes.
 - Rebuilds the multi-arch index from the existing per-arch digests
     (byte-identical to the original publish) and re-signs it
     (idempotent at registry).
@@ -78,16 +81,29 @@ Expect:
 
 ## Partial image set
 
-The `preflight` job probes the four per-arch tags
-(`{ghcr.io,docker.io}/rvenutolo/linpeas:<tag>-{amd64,arm64}`) and
-classifies the release:
+The `preflight` job probes six registry objects — the four per-arch
+tags (`{ghcr.io,docker.io}/rvenutolo/linpeas:<tag>-{amd64,arm64}`) and
+the multi-arch index on each registry
+(`{ghcr.io,docker.io}/rvenutolo/linpeas:<tag>`) — and classifies the
+release:
 
-- **all four present** → images are pulled, image SBOM sidecars
-    regenerated, the multi-arch index rebuilt.
-- **all four absent** → image-less; the image/manifest jobs skip and
+- **all six present** → the per-arch digests are read from each
+    registry's index, the images are pulled at those digests, image
+    SBOM sidecars are regenerated, and the multi-arch index is
+    rebuilt.
+- **all six absent** → image-less; the image/manifest jobs skip and
     only the pin sidecars are backfilled. The run is green.
-- **partial** (1–3 present) → `preflight` fails. This is a
+- **partial** (1–5 present) → `preflight` fails. This is a
     half-published state no automatic path can safely repair.
+
+The index is a required signal because it is the only in-registry
+record of which per-arch digests the release shipped. A release whose
+arch tags all survive but whose index was evicted leaves backfill
+nothing to source by except a mutable tag, and blessing a repointed
+tag with fresh attestations and a fresh signature is the outcome
+pulling by digest exists to prevent. An index that records anything
+other than exactly one `linux/<arch>` manifest per arch also fails the
+preflight rather than being guessed at.
 
 To resolve a partial set, restore the missing per-arch images by
 rebuilding at the historic commit, then re-run the backfill:
@@ -100,7 +116,10 @@ rebuilding at the historic commit, then re-run the backfill:
 1. Locally check out that commit and run
     `nix build .#linpeas-image --print-build-logs`.
 1. `docker load --input result` + retag + push to GHCR / Docker Hub
-    under `${tag}-${arch}` for the missing arch(es)/registry(ies).
+    under `${tag}-${arch}` for the missing arch(es)/registry(ies). If
+    the `:<tag>` index is the missing object, rebuild it with
+    `docker buildx imagetools create --tag <reg>/rvenutolo/linpeas:<tag>`
+    over both per-arch digest refs.
 1. Re-run `gh workflow run release-on-bump.yml --ref main -F backfill-tag=<tag>`.
 
 The rebuilt image must be byte-identical to the original for cosign
