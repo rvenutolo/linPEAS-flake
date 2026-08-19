@@ -71,16 +71,20 @@ function carrying_sources() {
     LC_ALL=C sort --zero-terminated
 }
 
-# @description Emit one group: a bolded label, then either a bullet per
-# path or a sentence saying the group is empty. An empty group gets a
-# sentence rather than a bare label followed by nothing, because a label
-# with no list under it reads as truncated output rather than as a group
-# that genuinely holds nothing.
+# @description Emit one group: a labelled lead-in line, then either a
+# bullet per path or a sentence saying the group is empty. An empty group
+# gets a sentence rather than a bare label followed by nothing, because a
+# label with no list under it reads as truncated output rather than as a
+# group that genuinely holds nothing. The label is plain text closing on
+# a colon rather than emphasis: bold standing alone on a line is a
+# heading wearing the wrong markup, which the markdown linter rejects,
+# and a real heading would put a generated block's internals in the
+# page's table of contents.
 # @arg $1 group label  @arg $2 empty-case sentence  @arg $@ the paths
 function emit_group() {
   local -r label="$1" empty_sentence="$2"
   shift 2
-  printf '**%s**\n\n' "${label}"
+  printf '%s:\n\n' "${label}"
   if (($# == 0)); then
     printf '%s\n\n' "${empty_sentence}"
     return 0

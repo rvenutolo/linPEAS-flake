@@ -100,8 +100,55 @@ cannot declare one version while fetching a different release's artifact.
 Flake-eval-time asserts because `pin.version` interpolates into derivation
 names, docker tags, OCI labels.
 
-Upstream peass-ng versioning-scheme change: update regex carefully, keep some
-shape check.
+Upstream peass-ng versioning-scheme change: update the regex carefully and
+keep a shape check. Every file that has to move together is listed under
+[Canonical pin shape](#canonical-pin-shape).
+
+## Canonical pin shape
+
+Upstream tags the linpeas release as `YYYYMMDD-<hex>`, and the repo matches
+that shape with one regex, `^[0-9]{8}-[0-9a-f]{7,40}$`. The regex has no
+single home: a Nix assert, a git-cliff config key, several scripts and
+several workflow steps each carry their own copy, because workflow YAML
+cannot source a shell library and a Nix assert cannot read one either. The
+duplication is therefore permanent, and the risk it carries is that a
+versioning-scheme migration updates some copies and leaves others behind.
+
+The list below is derived from the tree on every run, so it names the copies
+that exist rather than the copies someone remembered. Regenerate it with
+`scripts/refresh-pin-parity.sh`; do not hand-edit between the markers.
+
+<!-- BEGIN pin-parity -->
+
+Enforcement and configuration:
+
+- `.github/actions/notify-workflow-result/action.yml`
+- `.github/workflows/release-on-bump.yml`
+- `.github/workflows/stale-pin-check.yml`
+- `.github/workflows/update-linpeas.yml`
+- `cliff.toml`
+- `nix/linpeas.nix`
+- `scripts/bump-linpeas.sh`
+- `scripts/check-cliff-tag-pattern.sh`
+- `scripts/check-tag-protection.sh`
+- `scripts/gen-dashboard-data.sh`
+- `scripts/refresh-pin-parity.sh`
+
+Documentation:
+
+- `docs/architecture/auto-update.md`
+- `docs/architecture/ci.md`
+- `docs/development/changelog.md`
+- `docs/invariant-index.md`
+- `docs/security/repo-config.md`
+- `docs/security/settings-posture.md`
+- `docs/security/trust-model.md`
+
+Test fixtures and harnesses under `tests/` carry the shape too and are
+excluded from these lists; a scheme migration updates them alongside the
+check each one drives.
+
+<!-- END pin-parity -->
 
 ## Release VERSION shape validation
 

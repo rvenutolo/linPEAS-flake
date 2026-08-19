@@ -253,6 +253,50 @@ function main() {
     cat -- "${work}/empty.out" "${work}/empty.err" >&2
   fi
 
+  # 10. The live tree. The generator ships with the page it generates, so
+  #     a --check that is not clean on a freshly-generated tree means the
+  #     committed block and the tree disagree. The bullet count is read
+  #     back out of the page and compared against the census the run
+  #     printed: an expectation taken from the generator's own output
+  #     alone would let a generator that scanned nothing round-trip its
+  #     way to green, while the two numbers agreeing proves the rendered
+  #     list is the set that was counted.
+  local live_page="${REPO_ROOT}/docs/architecture/auto-update.md"
+  rc=0
+  bash "${SCRIPT}" --check >"${work}/live.out" 2>"${work}/live.err" || rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${rc}" >"${work}/live.outcome"
+  # The recorded substring is this run's own census tail, read back rather
+  # than hardcoded: the live tree's counts move as the repo grows, and a
+  # constant fixed here would go stale on its own. Reading it back still
+  # discriminates against the fixture scenarios above, whose counts are
+  # small and fixed by their fixture roots.
+  local live_census
+  live_census="$(sed --quiet 's/^pin-parity: ok — \(.*\)$/\1/p' \
+    "${work}/live.out" | head --lines=1)"
+  harness_assert_record 'live' "${live_census}" \
+    "${work}/live.outcome" "${work}/live.out" "${work}/live.err"
+  # Anchored over the entire line rather than searched as a bare number:
+  # `8 file(s)` is a trailing substring of `18 file(s)`, the same
+  # leaked-digit gap the group rows close by matching whole lines.
+  local live_count
+  live_count="$(sed --regexp-extended --quiet \
+    's/^pin-parity: ok — ([0-9]+) file\(s\) carrying the pin shape: [0-9]+ enforcement, [0-9]+ documentation$/\1/p' \
+    "${work}/live.out" | head --lines=1)"
+  local live_bullets
+  live_bullets="$(awk '
+    /^<!-- BEGIN pin-parity -->$/ { inside = 1; next }
+    /^<!-- END pin-parity -->$/   { inside = 0 }
+    inside && /^- / { n++ }
+    END { print n + 0 }
+  ' "${live_page}")"
+  if [[ ${rc} -eq 0 ]] && [[ -n ${live_count} ]] && [[ ${live_count} -gt 0 ]] &&
+    [[ ${live_bullets} == "${live_count}" ]]; then
+    pass "live tree round trip is clean over ${live_count} carrying file(s)"
+  else
+    fail "live round trip: check exit ${rc}, census count ${live_count@Q}, rendered bullets ${live_bullets@Q}"
+    cat -- "${work}/live.err" >&2
+  fi
+
   harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then
