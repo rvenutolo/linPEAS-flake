@@ -2,7 +2,10 @@
 
 Every push to `main` and every PR runs a required set of jobs that gate auto-merge. Separate non-blocking weekly workflows run informational checks (image CVE scans).
 
-## Required jobs
+## Build and smoke gates
+
+The seven functional gates below are the build-and-run core of the required
+set; the full list of 29 required contexts is in the next section.
 
 ```mermaid
 flowchart LR
@@ -43,7 +46,7 @@ Functional gates:
 
 | Job                   | Runner             | What it tests                                                                                   |
 | --------------------- | ------------------ | ----------------------------------------------------------------------------------------------- |
-| `flake-check`         | `ubuntu-latest`    | `nix flake check` — eval, treefmt, deadnix, statix, actionlint, yamllint, shellcheck, schema    |
+| `flake-check`         | `ubuntu-latest`    | `nix flake check` — eval, treefmt, deadnix, statix, actionlint, yamllint, shellcheck            |
 | `build-linpeas`       | `ubuntu-latest`    | `nix build .#linpeas` — fetches upstream `linpeas.sh`, verifies SRI hash, builds the derivation |
 | `smoke-test`          | `ubuntu-latest`    | `./result/bin/linpeas -h` exits 0                                                               |
 | `build-linpeas-arm64` | `ubuntu-24.04-arm` | aarch64 build of `linpeas`                                                                      |
@@ -113,7 +116,7 @@ Every job's first step is `step-security/harden-runner` with `egress-policy: blo
 
 ## Pages workflow
 
-The Pages workflow (`pages.yml`) is **not** in the required set. Its `build` job runs on every PR for visibility, and its failure auto-files a deduped issue tagged `pages-build-failure`. Coupling the Pages build to merge-gating would invert the priority — the supply-chain pipeline is higher priority than the documentation site.
+The Pages workflow (`pages.yml`) is **not** in the required set. Its `build` job runs on every PR for visibility; on non-PR events a `build` or `deploy` failure auto-files a deduped issue tagged `pages-build-failure`. The `notify` job is skipped on `pull_request`, so a failure on a contributor branch files nothing. Coupling the Pages build to merge-gating would invert the priority — the supply-chain pipeline is higher priority than the documentation site.
 
 ```mermaid
 flowchart TD
@@ -124,13 +127,18 @@ flowchart TD
   isPR{"event == pull_request?"}
   deploy["actions/deploy-pages<br/>OIDC, github-pages env"]
   pr_only["build only"]
-  fail["on failure:<br/>create / comment deduped issue"]
+  notifygate{"event == pull_request?"}
+  fail["create / comment<br/>deduped issue"]
+  quiet["no issue filed"]
 
   trigger --> data --> build --> smoke --> isPR
   isPR -- yes --> pr_only
   isPR -- no --> deploy
-  build -. failure .-> fail
-  smoke -. failure .-> fail
+  build -. failure .-> notifygate
+  smoke -. failure .-> notifygate
+  deploy -. failure .-> notifygate
+  notifygate -- yes --> quiet
+  notifygate -- no --> fail
 ```
 
 ## Cache
