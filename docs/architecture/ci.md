@@ -65,7 +65,7 @@ Self-enforcing invariant gates:
 | `tag-protection-drift-check` | The `release-tag-protection` ruleset still blocks deletion / non-FF / update of release-tag refs                                                                                                                                                                                                                                         |
 | `lint-workflow-security`     | Batched workflow-security member lints; e.g. member check `uses-sha-pinned`: every `uses:` in workflows + composite actions is a full 40-hex SHA (or a `./...` self-ref). The trailing `# vX.Y.Z` patch-tag comment is a separate rule, `patch-tag-pins`, enforced as a pre-commit hook only — it is in no lint group and gates no merge |
 | `cliff-tag-pattern`          | `cliff.toml`'s `tag_pattern` still matches the canonical pin-shape regex, so git-cliff keeps seeing the release tags                                                                                                                                                                                                                     |
-| `harness-group`              | Every fixture-driven test harness in the group runs, alongside the live-repo probes wired to them                                                                                                                                                                                                                                        |
+| `harness-group`              | Every fixture-driven test harness in the group runs, alongside the one live-repo probe wired to them (`ratchet-pin-audit`); the rest are test-only by design                                                                                                                                                                             |
 | `lint-doc-invariants`        | Batched doc-invariant member lints (12), covering invariant-index integrity, doc anchors, ephemeral references, cron restatement, and schema validation                                                                                                                                                                                  |
 | `lint-script-hygiene`        | Batched shell-hygiene member lints (17) over `scripts/` and `tests/`, covering shebang/pipefail, per-script test coverage, helper routing, and path hygiene                                                                                                                                                                              |
 | `protect-main-drift-check`   | The live `protect-main` ruleset matches the desired posture, its in-tree mirror, and the required-contexts table in `docs/security/required-checks.md`                                                                                                                                                                                   |
@@ -123,7 +123,7 @@ flowchart TD
   trigger["pages.yml<br/>push to main /<br/>PR / release / cron / dispatch"]
   data["bash scripts/gen-dashboard-data.sh"]
   build["nix build 'path:$(pwd)#site'<br/>(path: ref — git ref hides the<br/>gitignored dashboard.yml)"]
-  smoke[{% raw %}"smoke: index.html exists<br/>+ no raw {{ }} in dashboard.html"{% endraw %}]
+  smoke[{% raw %}"smoke: index.html exists<br/>+ no raw {{ }} in dashboard/index.html"{% endraw %}]
   isPR{"event == pull_request?"}
   deploy["actions/deploy-pages<br/>OIDC, github-pages env"]
   pr_only["build only"]
@@ -143,7 +143,7 @@ flowchart TD
 
 ## Cache
 
-Nix-based jobs pull from the public `cache.nixos.org` substituter; there is no repo-specific Nix binary cache layered on top. All third-party actions are SHA-pinned with `# vX.Y.Z` version comments; Renovate maintains them via `helpers:pinGitHubActionDigests` + explicit `pinDigests: true` in `renovate.json`.
+Nix-based jobs pull from the public `cache.nixos.org` substituter; there is no repo-specific Nix binary cache layered on top. All third-party actions are SHA-pinned, with `# vX.Y.Z` patch-tag comments except for refs carrying an inline `# patch-tag-exception:` marker — see [pin convention](pin-convention.md). Renovate maintains them via `helpers:pinGitHubActionDigests` + explicit `pinDigests: true` in `renovate.json`.
 
 ## Cron schedule
 
@@ -172,7 +172,7 @@ All schedules fit the maintainer's monitoring windows: daily crons run 08:00–1
 | `trufflehog`                      | `50 6 * * 5`    | Fri 06:50    | Full-history secret scan (complementary detector set)                                                                      |
 | `docs-audit-reminder`             | `0 10 1 * *`    | 1st 10:00    | Monthly prompt to run the semantic docs audit; opens a deduped `docs-audit` issue when CI churn suggests prose has drifted |
 
-Daily crons fire in this UTC order: `ci-watchdog` (00:20) → `actions-cache-prune` (08:00) → `update-linpeas` (08:05) → `stale-pin-check` (09:00) → `ratchet-pin-audit` (09:15) → `settings-posture-drift-check` (09:25) → `allowed-actions-api-drift-check` (09:35) → `pages` (09:55). `ci-watchdog`'s minute field (`20,50`) recurs every 30 minutes around the clock — the 00:20 timestamp is only where its cron string sorts among the fixed-time daily crons, not a single daily firing. Bump-related crons (`update-linpeas`, `stale-pin-check`) front-load the window so the dashboard cron at 09:55 reads a settled state; drift checks cluster between them. Weekly crons fire Friday in slot order: `update-flake-lock` leads at 05:00 so its auto-merge PR's CI runs inside the window, the scanner cluster (`codeql` → `octoscan` → `scorecard-drift-check` → `zizmor-drift-check`) fills the second hour, and the secret-scan pair (`gitleaks`, `trufflehog`) closes it.
+Daily crons fire in this UTC order: `ci-watchdog` (00:20) → `actions-cache-prune` (08:00) → `update-linpeas` (08:05) → `stale-pin-check` (09:00) → `ratchet-pin-audit` (09:15) → `settings-posture-drift-check` (09:25) → `allowed-actions-api-drift-check` (09:35) → `pages` (09:55). `ci-watchdog`'s minute field (`20,50`) recurs every 30 minutes around the clock — the 00:20 timestamp is only where its cron string sorts among the fixed-time daily crons, not a single daily firing. Bump-related crons (`update-linpeas`, `stale-pin-check`) front-load the window so the dashboard cron at 09:55 reads a settled state; drift checks cluster between them. Weekly crons fire Friday in slot order: `update-flake-lock` leads at 05:00 so its auto-merge PR's CI runs inside the window, the build- and release-verification chain (`reproducibility-check` → `image-cve-scan` → `verify-latest-release` → `links`) fills out the first hour, the scanner cluster (`codeql` → `octoscan` → `scorecard-drift-check` → `zizmor-drift-check`) fills the second, and the secret-scan pair (`gitleaks`, `trufflehog`) closes it.
 
 ### Pages staleness window
 
