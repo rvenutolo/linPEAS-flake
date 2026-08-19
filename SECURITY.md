@@ -52,14 +52,26 @@ This means:
     not resolve cleanly against the manifest index alone — point the verify
     at the arch-specific image (or pull on the target arch and use the
     resolved `RepoDigests` value).
+
 - Each arch image was independently built from the same commit of this
     repo, so the attestations cover the same source provenance.
-- The manifest index itself is **not** attested. An attacker with push
-    to either registry could repoint the manifest at unattested images;
-    the verify step in `release-on-bump.yml` would catch this at release
-    time, but consumers who only verify the manifest pointer (not the
-    arch image) would miss it. Always verify against the resolved
-    arch-image digest.
+
+- The manifest index itself is **not** SLSA-attested — the build
+    provenance covers the per-arch images. The index *is* cosign
+    keyless-signed on both registries, so a repointed manifest tag
+    resolves to an index digest carrying no signature and fails
+    `cosign verify` without any arch resolution:
+
+    ```bash
+    cosign verify \
+      --certificate-identity 'https://github.com/rvenutolo/linPEAS-flake/.github/workflows/release-on-bump.yml@refs/heads/main' \
+      --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+      ghcr.io/rvenutolo/linpeas:latest
+    ```
+
+    To check build provenance rather than the signature, resolve to the
+    arch-image digest and run `gh attestation verify` against that — the
+    attestation is attached per arch, not to the index.
 
 The release pipeline's `verify` job validates the per-arch digests
 captured at push time. Those push-time steps do **not** re-resolve the
