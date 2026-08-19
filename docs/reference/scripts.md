@@ -266,12 +266,18 @@ the target file.
 
 ### scripts/check-doc-cron-restatement.sh
 
-Lint: ban restating literal workflow cron times in docs.
+Lint: ban restating a workflow's cron schedule in docs.
 A line that names a workflow (backticked bare name `NAME` or a
-`NAME.yml`/`NAME.yaml` token) AND carries a clock time (HH:MM) restates the
-single source of truth, the schedule table in docs/architecture/ci.md.
-Such lines must live only in that table; this lint flags them
-everywhere else (README.md + docs/\*\*, excluding ci.md itself).
+`NAME.yml`/`NAME.yaml` token) AND carries either a clock time (HH:MM) or a
+numeric cadence (`every N minutes/hours/days`) restates the single source
+of truth, the schedule table in docs/architecture/ci.md. Such lines must
+live only in that table; this lint flags them everywhere else
+(README.md + docs/\*\*, excluding ci.md itself).
+
+Bare `daily`, `weekly`, and `Friday` are deliberately out of reach: the
+sanctioned form is prose like "runs on a daily cron (see the schedule
+table)", and a pattern that flagged those would report the very phrasing
+this lint exists to encourage.
 
 Exit codes:
 0 no restatements found

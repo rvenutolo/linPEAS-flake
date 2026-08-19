@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 # scripts/check-doc-cron-restatement.sh
 #
-# @description Lint: ban restating literal workflow cron times in docs.
+# @description Lint: ban restating a workflow's cron schedule in docs.
 # A line that names a workflow (backticked bare name `NAME` or a
-# `NAME.yml`/`NAME.yaml` token) AND carries a clock time (HH:MM) restates the
-# single source of truth, the schedule table in docs/architecture/ci.md.
-# Such lines must live only in that table; this lint flags them
-# everywhere else (README.md + docs/**, excluding ci.md itself).
+# `NAME.yml`/`NAME.yaml` token) AND carries either a clock time (HH:MM) or a
+# numeric cadence (`every N minutes/hours/days`) restates the single source
+# of truth, the schedule table in docs/architecture/ci.md. Such lines must
+# live only in that table; this lint flags them everywhere else
+# (README.md + docs/**, excluding ci.md itself).
+#
+# Bare `daily`, `weekly`, and `Friday` are deliberately out of reach: the
+# sanctioned form is prose like "runs on a daily cron (see the schedule
+# table)", and a pattern that flagged those would report the very phrasing
+# this lint exists to encourage.
 #
 # Exit codes:
 #   0  no restatements found
@@ -35,7 +41,11 @@ readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-${REPO_ROOT}/.github/workflows
 readonly SCAN_ROOT="${SCAN_ROOT_OVERRIDE:-${REPO_ROOT}}"
 
 # Clock-time pattern: HH:MM not embedded in a longer run of digits.
-readonly TIME_RE='(^|[^0-9])[0-9]{1,2}:[0-9]{2}([^0-9]|$)'
+readonly CLOCK_RE='(^|[^0-9])[0-9]{1,2}:[0-9]{2}([^0-9]|$)'
+# Numeric-cadence pattern: `every 30 minutes`, `every 6 hrs`, `every 2 days`.
+# Anchored on a digit run so the bare cadence words stay unreachable.
+readonly CADENCE_RE='[Ee]very[[:space:]]+[0-9]+[[:space:]]*(minutes?|mins?|hours?|hrs?|days?)([^[:alnum:]]|$)'
+readonly SCHEDULE_RE="(${CLOCK_RE})|(${CADENCE_RE})"
 
 # @description Emit the live workflow file paths (`*.yml`, `*.yaml`), one per
 #              line. Kept separate from the name set so the summary can report
@@ -144,7 +154,7 @@ function main() {
 
   local found=0 file lineno text lines_out
   # Scope tallies for the summary line. `timed` counts the lines that reached
-  # the workflow-name test at all: a clean verdict over zero timed lines
+  # the workflow-name test at all: a clean verdict over zero scheduled lines
   # proves nothing about the name test, so an operator wants the two apart.
   # `readme_skipped` is the evidence behind the ci-summary exemption.
   local -i docs=0 lines=0 timed=0 kept=0 readme_total=0 readme_skipped=0
@@ -180,7 +190,7 @@ function main() {
     while IFS=$'\t' read -r lineno text; do
       [[ -n ${lineno} ]] || continue
       kept=$((kept + 1))
-      if [[ ${text} =~ ${TIME_RE} ]]; then
+      if [[ ${text} =~ ${SCHEDULE_RE} ]]; then
         timed=$((timed + 1))
         if [[ ${text} =~ ${name_re} ]]; then
           printf '%s:%s: %s\n' "${file}" "${lineno}" "${text}" >&2
@@ -222,7 +232,7 @@ function main() {
     fi
   done
 
-  printf 'check-doc-cron-restatement: ok — scanned %d doc(s), %d line(s) against %d workflow(s); %d line(s) carried a clock time; exemptions applied: %s\n' \
+  printf 'check-doc-cron-restatement: ok — scanned %d doc(s), %d line(s) against %d workflow(s); %d line(s) carried a clock time or cadence; exemptions applied: %s\n' \
     "${docs}" "${lines}" "${#wf_paths[@]}" "${timed}" "${exempt_desc}"
 }
 

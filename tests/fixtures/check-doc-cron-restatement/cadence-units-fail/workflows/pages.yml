@@ -1,0 +1,4 @@
+name: Pages
+on:
+  schedule:
+    - cron: "55 9 * * *"

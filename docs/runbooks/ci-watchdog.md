@@ -2,9 +2,10 @@
 
 ## What it does
 
-`ci-watchdog` runs every 30 minutes. It finds open bot-authored pull
-requests that have auto-merge enabled and a failed workflow run on their
-current head commit, and re-runs the failed jobs.
+`ci-watchdog` runs on a cron schedule
+(see [CI — cron schedule](../architecture/ci.md#cron-schedule)). It finds
+open bot-authored pull requests that have auto-merge enabled and a failed
+workflow run on their current head commit, and re-runs the failed jobs.
 
 Each run gets at most 3 attempts. `reRunWorkflowFailedJobs` re-runs a run in
 place and increments its attempt counter, so the bound needs no stored
