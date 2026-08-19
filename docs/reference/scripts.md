@@ -1262,6 +1262,21 @@ README.md and docs/reference/just-recipes.md from the current
 
 - `--check` — exit 1 if either doc would change; exit 2 if either doc
 
+### scripts/refresh-pin-parity.sh
+
+Regenerate the pin-parity managed block in
+docs/architecture/auto-update.md: every tracked file carrying the
+canonical pin-shape literal, grouped by path into enforcement and
+documentation. The set is read from the tree on every run, so no
+hand-written list can name a file that has stopped carrying the shape
+or omit one that gained it. A file under tests/ is excluded; the block
+says so in prose, because a versioning-scheme migration touches the
+fixtures too and a silent omission would read as coverage.
+
+**Options:**
+
+- `--check` — exit 1 if the block would change; exit 2 if the check
+
 ### scripts/refresh-precommit-table.sh
 
 Regenerate the precommit-table managed block in
