@@ -33,6 +33,7 @@ readonly -a HARNESSES=(
   'bump-linpeas|bump-linpeas.test.sh|'
   'backfill-image-mode|classify-backfill-image-mode.test.sh|'
   'renovate-flake-input|classify-renovate-flake-input.test.sh|'
+  'refresh-notify-result|classify-refresh-notify-result.test.sh|'
   'lib-log|lib-log.test.sh|'
   'lib-enumerate|lib-enumerate.test.sh|'
   'lib-temp|lib-temp.test.sh|'
