@@ -142,6 +142,15 @@ and the octoscan `OCTOSCAN_DIGEST`/`OCTOSCAN_VERSION` pair against
     to a version-label bump, which the gate passes) or update the pin
     to the corrected upstream release. A digest-only change is never
     merged unreviewed.
+1. Both sides of a moved SHA are first dereferenced through the
+    annotated-tag-object API. A pin naming a tag object and a pin
+    naming the commit that tag points at are one hop apart, not a
+    repoint, and compare equal. This does not soften rule 1: a tag
+    object's hash covers the commit it tags, so retagging a released
+    version moves the tag object too and the resolved commits still
+    differ. Container digests name no git object, resolve to
+    themselves, and so never reach an API call — the octoscan pair is
+    judged purely on rule 1.
 1. A floating-major pin (`# vN`, no immutable patch tag upstream)
     legitimately retargets across patches, so its digest moves are
     instead verified reachable from the upstream default branch via

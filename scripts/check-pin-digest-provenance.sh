@@ -10,6 +10,14 @@
 # (`# vN`) legitimately retarget across patch releases, so instead of
 # a hard fail their new commit must be reachable from the upstream
 # default branch — a force-pushed dangling commit fails.
+#
+# Both sides of a moved SHA are first dereferenced through the
+# annotated-tag-object API, so a pin naming a tag object and a pin
+# naming that tag's commit compare equal instead of reading as a
+# repoint. This does not soften the gate: a tag object's hash covers
+# the commit it tags, so retagging a released version moves the tag
+# object too and the resolved commits still differ. Container digests
+# name no git object and resolve to themselves.
 
 # Gates the Renovate auto-merge path: a digest-only bump PR is by
 # construction a repointed released tag. minimumReleaseAge does not
@@ -271,6 +279,53 @@ function extract_pins() {
 # Floating-major reachability probe.
 # @arg $1 uses path   @arg $2 new sha
 # Returns 0 reachable, 1 not reachable; dies (exit 2) on API error.
+# Dereference a pin SHA one hop through the annotated-tag-object API.
+# An annotated-tag-object SHA names the commit it tags; a 404 means the
+# SHA already names a commit and resolves to itself. Any other API
+# failure is operational and dies loud.
+#
+# The result lands in DEREF_RESULT rather than on stdout because
+# die_op() must be able to end the run: called inside a command
+# substitution it would exit only that subshell, printing its message
+# into a captured string the caller then treats as a SHA.
+# @arg $1 owner/repo
+# @arg $2 40-hex pin sha
+# @sets DEREF_RESULT
+function deref_tag_object() {
+  local -r owner_repo="$1" sha="$2"
+  command -v gh >/dev/null 2>&1 ||
+    die_op 'gh not found on PATH (needed for tag-object dereference)'
+  local tag_out
+  if tag_out="$(gh api --header "${GH_API_VERSION_HEADER}" \
+    "repos/${owner_repo}/git/tags/${sha}" --jq '.object.sha' 2>&1)"; then
+    [[ ${tag_out} =~ ^[0-9a-f]{40}$ ]] ||
+      die_op "malformed tag deref payload for ${owner_repo}@${sha}: ${tag_out}"
+    DEREF_RESULT="${tag_out}"
+    return 0
+  fi
+  grep --quiet --ignore-case 'Not Found' <<<"${tag_out}" ||
+    die_op "tag deref API error for ${owner_repo}@${sha}: ${tag_out}"
+  DEREF_RESULT="${sha}"
+}
+
+# Resolve a pin to the commit it names. Only a 40-hex git SHA can be a
+# tag object; a container digest (`sha256:…`) names no git object and
+# resolves to itself without an API call, which is what keeps the
+# octoscan pair off this path entirely.
+# @arg $1 uses path (owner/repo[/subpath]) or container image
+# @arg $2 pin sha or container digest
+# @sets DEREF_RESULT
+function resolve_pin_commit() {
+  local -r path="$1" sha="$2"
+  if [[ ! ${sha} =~ ^[0-9a-f]{40}$ ]]; then
+    DEREF_RESULT="${sha}"
+    return 0
+  fi
+  local -a parts
+  IFS=/ read -ra parts <<<"${path}"
+  deref_tag_object "${parts[0]}/${parts[1]}" "${sha}"
+}
+
 function check_reachable() {
   local -r path="$1" sha="$2"
   command -v gh >/dev/null 2>&1 ||
@@ -278,17 +333,8 @@ function check_reachable() {
   local -a parts
   IFS=/ read -ra parts <<<"${path}"
   local -r owner_repo="${parts[0]}/${parts[1]}"
-  local commit="${sha}" tag_out
-  # Annotated-tag-object pins dereference to their commit; a 404 means
-  # the SHA is not a tag object, i.e. already a commit.
-  if tag_out="$(gh api --header "${GH_API_VERSION_HEADER}" \
-    "repos/${owner_repo}/git/tags/${sha}" --jq '.object.sha' 2>&1)"; then
-    [[ ${tag_out} =~ ^[0-9a-f]{40}$ ]] ||
-      die_op "malformed tag deref payload for ${owner_repo}@${sha}: ${tag_out}"
-    commit="${tag_out}"
-  elif ! grep --quiet --ignore-case 'Not Found' <<<"${tag_out}"; then
-    die_op "tag deref API error for ${owner_repo}@${sha}: ${tag_out}"
-  fi
+  deref_tag_object "${owner_repo}" "${sha}"
+  local -r commit="${DEREF_RESULT}"
   local default_branch
   default_branch="$(gh api --header "${GH_API_VERSION_HEADER}" \
     "repos/${owner_repo}" --jq '.default_branch' 2>&1)" ||
@@ -436,6 +482,39 @@ while IFS= read -r key; do
       fi
     done <<<"${head_shas}"
   else
+    # A pin naming an annotated tag object and a pin naming the commit
+    # that tag points at are the same release one dereference apart, but
+    # they read here as a SHA that moved under a label that did not.
+    # Resolving both sides before comparing separates that from a
+    # repoint without softening the gate: a tag object's hash covers the
+    # commit it tags, so retagging a released version moves the tag
+    # object too and the resolved commits still differ. Container
+    # digests resolve to themselves, so the octoscan pair never reaches
+    # an API call here.
+    resolved_base=""
+    while IFS= read -r sha; do
+      [[ -n ${sha} ]] || continue
+      resolve_pin_commit "${path}" "${sha}"
+      resolved_base+="${DEREF_RESULT}"$'\n'
+    done <<<"${base_shas}"
+    resolved_head=""
+    while IFS= read -r sha; do
+      [[ -n ${sha} ]] || continue
+      resolve_pin_commit "${path}" "${sha}"
+      resolved_head+="${DEREF_RESULT}"$'\n'
+    done <<<"${head_shas}"
+    # `awk NF` drops the empty field the here-string's trailing newline
+    # would otherwise leave at the head of the sorted set — harmless to
+    # the equality test, but it renders as a leading comma in the note
+    # below, which reads as a missing SHA.
+    resolved_base="$(sort --unique <<<"${resolved_base}" | awk 'NF')"
+    resolved_head="$(sort --unique <<<"${resolved_head}" | awk 'NF')"
+    if [[ ${resolved_base} == "${resolved_head}" ]]; then
+      printf 'note: %s (%s) names one commit on both sides, one tag-object dereference apart: %s\n' \
+        "${path}" "${version}" \
+        "$(paste --serial --delimiters=, <<<"${resolved_head}")" >&2
+      continue
+    fi
     # Naming the digests that moved makes the line answer "which SHA is
     # this now" without a second lookup, and keeps two repoints of the
     # same path and version — the same key reached by different routes —
