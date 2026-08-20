@@ -50,17 +50,17 @@ jobs:
       issues: write # escalation on exhausting the retry bound
       pull-requests: read # enumerate bot PRs and their auto-merge state
     steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+      - uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
         with:
           egress-policy: block
           allowed-endpoints: >
             api.github.com:443
             github.com:443
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
       - name: re-run failed jobs on stuck bot PRs
-        uses: actions/github-script@d746ffe35508b1917358783b479e04febd2b8f71 # v9.0.0 # patch-tag-exception: pinned SHA is the v9.0.0 annotated-tag object, not the underlying commit
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0 # patch-tag-exception: pinned SHA is the v9.0.0 annotated-tag object, not the underlying commit
         env:
           MAX_ATTEMPTS: "3"
         with:
