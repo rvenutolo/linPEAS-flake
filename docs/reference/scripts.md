@@ -1413,6 +1413,18 @@ and side-effect free so the drift decision — including the
 attack-detection branch — is unit-testable without contacting the
 GitHub API.
 
+### scripts/classify-refresh-notify-result.sh
+
+Classify what `renovate-flake-lock-refresh.yml`'s
+`notify` job should report. Given the `identify`, `compute-refresh`
+and `push-refresh` job results followed by `identify`'s
+`should_refresh` and `unmapped` outputs, print `failure` when a
+refresh was attempted and did not land (or could not be attempted),
+`success` when one landed or was already in place, and `skipped` for
+the steady state where the `ci` completion was not a Renovate flake
+bump. Pure and side-effect free so the decision is unit-testable
+without a workflow run.
+
 ### scripts/classify-renovate-flake-input.sh
 
 Classify one Renovate PR title into the flake input that

@@ -415,6 +415,23 @@ Loop-breaker: `push-refresh` compares `git hash-object flake.lock`
 vs branch's blob SHA; bails on match. Protects against the
 ci → refresh → ci cycle.
 
+Reporting: the `notify` job runs whenever `identify` ran, and
+`scripts/classify-refresh-notify-result.sh` decides what the run
+amounts to — `failure` files the deduped
+`renovate-flake-lock-refresh-failure` issue, `success` closes it, and
+`skipped` is inert in the composite. The verdict lives in a script
+rather than in the job's `if:` gate because a gate reading `identify`'s
+outputs cannot see an `identify` that failed: a failed job sets no
+outputs, so its failure and its ordinary early exit look identical from
+the gate. That matters most here, because this workflow reacts to
+someone else's PR — a red run in the Actions tab has no watcher at the
+moment it goes red, and the PR it was meant to repair sits with a
+failing `flake-check` instead. A combination the job graph cannot
+produce classifies as `failure` too: an issue naming a drifted workflow
+beats the silence. `tests/classify-refresh-notify-result.test.sh` holds
+the matrix, including both ends of it — a failed `identify` reports, and
+a `ci` completion that is not a Renovate flake bump stays silent.
+
 Not in required-checks. Lockfile refresh on a PR cannot block the
 PR's own merge gate (chicken-and-egg).
 

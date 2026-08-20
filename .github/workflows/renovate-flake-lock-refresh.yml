@@ -27,8 +27,12 @@ name: renovate-flake-lock-refresh
 #      the request is authenticated by an App installation token, so
 #      `required_signatures` on `protect-main` is satisfied if the PR
 #      later merges.
-#   4. `notify` — files / closes a deduped issue under
-#      `renovate-flake-lock-refresh-failure`.
+#   4. `notify` — runs whenever `identify` ran, asks
+#      `scripts/classify-refresh-notify-result.sh` what the run amounts
+#      to, and files / closes a deduped issue under
+#      `renovate-flake-lock-refresh-failure`. The classifier decides,
+#      rather than a job gate, because a gate reading `identify`'s
+#      outputs is blind to an `identify` that failed and set none.
 #
 # Loop-breaker: when this workflow's commit lands on the PR branch,
 # `ci` re-runs, which re-triggers this workflow. The second pass'
@@ -422,22 +426,19 @@ jobs:
   notify:
     name: notify
     needs: [identify, compute-refresh, push-refresh]
-    # Post if we attempted a refresh, or if identify reached the
-    # mapping and found no input for the title. Every other
-    # identify-stage skip means the workflow_run was not a Renovate
-    # flake bump — the steady-state for >99% of ci completions, which
-    # must stay silent.
+    # Runs whenever `identify` ran at all, and decides what to report in
+    # a step rather than here. A gate keyed on `identify`'s outputs
+    # cannot see a failed `identify` — a job that fails sets no outputs
+    # — and that is the stage whose failure is least likely to be
+    # noticed, since this workflow reacts to someone else's PR and
+    # nobody is watching the Actions tab when it goes red.
     #
-    # `unmapped` is not one of those: it is only reachable after the
-    # author and flake.nix gates have both passed, so it says a
-    # Renovate PR edits flake.nix and this workflow cannot tell which
-    # input to refresh. Left silent, that lands as a green run beside a
-    # PR whose flake-check fails forever.
-    if: |
-      always() && (
-        needs.identify.outputs.should_refresh == 'true' ||
-        needs.identify.outputs.unmapped == 'true'
-      )
+    # `identify` itself is gated on a `renovate/*` head branch in this
+    # repo, so a `skipped` result here means the ci completion was never
+    # a candidate: no runner is spent on it. Every completion that does
+    # reach `identify` gets classified, and the steady-state verdict is
+    # `skipped`, which is inert in the composite.
+    if: always() && needs.identify.result != 'skipped'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -453,19 +454,41 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # One verdict, computed in a script the harness can drive with
+      # every job-result combination. Splitting it between this job's
+      # gate and the composite's `result:` input is what let the two
+      # disagree about whether a failed identify is reportable.
+      - name: classify what to report
+        id: classify
+        env:
+          IDENTIFY_RESULT: ${{ needs.identify.result }}
+          COMPUTE_RESULT: ${{ needs.compute-refresh.result }}
+          PUSH_RESULT: ${{ needs.push-refresh.result }}
+          SHOULD_REFRESH: ${{ needs.identify.outputs.should_refresh }}
+          UNMAPPED: ${{ needs.identify.outputs.unmapped }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          verdict="$(./scripts/classify-refresh-notify-result.sh \
+            "${IDENTIFY_RESULT}" \
+            "${COMPUTE_RESULT}" \
+            "${PUSH_RESULT}" \
+            "${SHOULD_REFRESH}" \
+            "${UNMAPPED}")"
+          printf 'reporting %s\n' "${verdict}"
+          printf 'result=%s\n' "${verdict}" >> "${GITHUB_OUTPUT}"
       - uses: ./.github/actions/notify-workflow-result
         with:
-          # Success: compute-refresh produced no diff (push-refresh
-          # skipped) OR push-refresh completed cleanly.
-          # Failure: any failure in identify / compute-refresh / push-refresh.
-          result: ${{ (needs.identify.result == 'success' && needs.compute-refresh.result == 'success' && (needs.push-refresh.result == 'success' || needs.push-refresh.result == 'skipped')) && 'success' || 'failure' }}
+          # `skipped` is inert in the composite, so the steady-state
+          # verdict files and closes nothing.
+          result: ${{ steps.classify.outputs.result }}
           label: renovate-flake-lock-refresh-failure
           title: "renovate-flake-lock-refresh: auto-refresh failed"
           body: |
             ${{ needs.identify.outputs.unmapped == 'true' && 'This PR edits `flake.nix`, but its title maps to no known flake input, so no refresh was attempted. Renovate has changed the title shape: teach `scripts/classify-renovate-flake-input.sh` the new one and add it to `tests/classify-renovate-flake-input.test.sh` as an observed title.' || 'The `renovate-flake-lock-refresh` workflow failed.' }}
 
-            - PR: #${{ needs.identify.outputs.pr_number }}
-            - Input: `${{ needs.identify.outputs.input_name || '(unmapped)' }}`
+            - PR: ${{ needs.identify.outputs.pr_number && format('#{0}', needs.identify.outputs.pr_number) || '(unknown — identify set no outputs)' }}
+            - Input: `${{ needs.identify.outputs.input_name || '(none)' }}`
             - identify: `${{ needs.identify.result }}`
             - compute-refresh: `${{ needs.compute-refresh.result }}`
             - push-refresh: `${{ needs.push-refresh.result }}`
