@@ -159,6 +159,79 @@ function run_scope_scenario() {
   rm --force -- "${outcome_file}" "${stdout_file}" "${stderr_file}"
 }
 
+# @description Run the advisory pass over one fixture and assert the
+# exact set of advisory lines it reports. Substring presence alone
+# cannot state the absence a precision scenario is about, and the scope
+# summary carries no advisory tally, so the count of `[advisory]` lines
+# is asserted alongside each expected line: a fixture that is supposed
+# to report nothing proves it by reporting zero, and one that reports
+# six proves no seventh phrase crept in.
+# @arg $1 name human-readable scenario name
+# @arg $2 fixture_dir fixture directory under FIXTURES
+# @arg $3 expected_stdout scope summary the run must print
+# @arg $@ (from $4) every `[advisory] file:line: phrase` line expected,
+#   in any order; none for a fixture that must stay silent
+function run_advisory_scenario() {
+  local -r name="$1"
+  local -r fixture_dir="$2"
+  local -r expected_stdout="$3"
+  shift 3
+  local -a expected_lines=("$@")
+
+  local stderr_file stdout_file outcome_file
+  stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+
+  local actual_exit=0
+  EPHEMERAL_REFS_ROOT_OVERRIDE="${FIXTURES}/${fixture_dir}" \
+    EPHEMERAL_REFS_SOURCES_OVERRIDE='source.md' \
+    "${SCRIPT}" --advisory >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+
+  local actual_count
+  actual_count="$(grep --count --fixed-strings -- '[advisory] ' "${stderr_file}" || true)"
+
+  local missing=''
+  local line
+  for line in ${expected_lines+"${expected_lines[@]}"}; do
+    if ! grep --fixed-strings --quiet -- "${line}" "${stderr_file}"; then
+      missing="${line}"
+      break
+    fi
+  done
+
+  if [[ ${actual_exit} -ne 0 ]]; then
+    printf 'FAIL: %s — expected exit 0, got %d\n' "${name}" "${actual_exit}" >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif [[ ${actual_count} -ne ${#expected_lines[@]} ]]; then
+    printf 'FAIL: %s — expected %d advisory line(s), got %d\n' \
+      "${name}" "${#expected_lines[@]}" "${actual_count}" >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif [[ -n ${missing} ]]; then
+    printf 'FAIL: %s — stderr missing %q\n' "${name}" "${missing}" >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet -- "${expected_stdout}" "${stdout_file}"; then
+    printf 'FAIL: %s — stdout missing %q\n' "${name}" "${expected_stdout}" >&2
+    cat -- "${stdout_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+
+  harness_assert_record "${name}" "${expected_lines[0]-}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  local extra
+  for extra in ${expected_lines+"${expected_lines[@]:1}"}; do
+    harness_assert_also "${extra}"
+  done
+  harness_assert_also "${expected_stdout}"
+  rm --force -- "${outcome_file}" "${stdout_file}" "${stderr_file}"
+}
+
 # @description Assert that banned shapes inside a tilde (`~~~`) code
 # fence are stripped. The fixture is built at runtime in a temp dir so
 # the Markdown formatter cannot normalize the tilde fence to backticks.
@@ -456,6 +529,23 @@ function main() {
   run_scenario 'causal phrase prints in advisory mode' \
     'advisory' 'source.md' '--advisory' 0 '[advisory] source.md:3:' \
     "$(summary 1 0 0 0 1 0 6 0 0 0 0 0 1 0)"
+  # Precision, both directions. Every retained alternative names a past
+  # state outright, so it must still fire; the shapes below it are bare
+  # verbs and prepositions whose reading depends on their subject, so
+  # they must not. The unjudgeable fixture carries a quoted `previously`
+  # to stay in the advisory candidate set: without it the union would
+  # set the file aside and a silent run would prove nothing about what
+  # the scan does with the prose.
+  run_advisory_scenario 'every retained causal phrase reports' \
+    'causal-retained' "$(summary 1 0 0 0 1 0 15 0 0 0 0 0 0 0)" \
+    '[advisory] source.md:5: Migration note' \
+    '[advisory] source.md:7: Tightened from' \
+    '[advisory] source.md:9: switched from' \
+    '[advisory] source.md:11: legacy wrapper was deleted' \
+    '[advisory] source.md:13: added in 42' \
+    '[advisory] source.md:15: post-PR 7'
+  run_advisory_scenario 'threat and drift prose reports nothing' \
+    'causal-unjudgeable' "$(summary 1 0 0 0 1 0 12 0 0 0 0 0 1 0)"
 
   # Shell sources reach the same class regexes through a comment
   # extractor rather than through `strip_exempt`, so each scenario below

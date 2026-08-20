@@ -94,8 +94,16 @@ readonly RE_PLANNING='(^|[^-&[:alnum:]_])(GAP-[0-9]+|P[0-9]+\.[0-9]+|Wave-P?[0-9
 readonly RE_REVIEW='(^|[^-&[:alnum:]_])(\(D[0-9]+\)|\(L[0-9]+[,)]|Per[[:space:]]+D[0-9]+|D[0-9]+:)'
 readonly RE_CLAUDE='\.claude/'
 
-# Advisory class: fuzzy causal-history phrases.
-readonly RE_CAUSAL='(prior to|previously|Migration note|was reshaped|Tightened from|swapped|switched (from|to)|legacy .* was deleted|added in #?[0-9]+|post-PR #?[0-9]+)'
+# Advisory class: fuzzy causal-history phrases. Every alternative names
+# a past state explicitly, so what it modifies cannot change the reading
+# — that is what makes it judgeable by regex. Bare verbs and
+# prepositions (`prior to`, `swapped`, `was reshaped`) are deliberately
+# absent: each reads as repo history or as present-tense prose depending
+# only on its subject, so a matcher for them fires on threat models and
+# hypothetical drift as readily as on rot. An advisory that is usually
+# wrong trains a reader to scroll past the one that is right, which
+# costs more than the recall it buys.
+readonly RE_CAUSAL='(previously|Migration note|Tightened from|switched (from|to)|legacy .* was deleted|added in #?[0-9]+|post-PR #?[0-9]+)'
 
 # The candidate pass matches one union per mode. Assembled from the
 # constants above rather than written out again: a class whose regex
