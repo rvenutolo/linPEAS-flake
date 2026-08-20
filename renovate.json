@@ -24,19 +24,38 @@
       "automerge": true
     },
     {
-      "description": "Nix install URL: scoped automerge for the same reason as github-actions. The custom manager below extracts the version from the pinned Nix install URL. matchDepNames is narrowed to 'nix' so the other custom-regex managers in this file (cachix/git-hooks.nix, NixOS/nixpkgs) do NOT inherit automerge — those have wide blast radius (flake-eval-time evaluation, lib drift, package version refresh) and must be reviewed manually.",
+      "description": "Nix install URL: scoped automerge for the same reason as github-actions. The custom manager below extracts the version from the pinned Nix install URL. matchDepNames narrows this rule to 'nix'; every other custom-regex dependency in this file carries its own automerge rule below, so each scope stays explicit per dependency rather than blanket.",
       "matchManagers": ["custom.regex"],
       "matchDepNames": ["nix"],
       "automerge": true
     },
     {
-      "description": "nixpkgs-unstable: weekly grouping (inherits the global Friday schedule). Stays manual-merge — wide tooling-layer blast across formatters + linters. Reviewer policy: formatter diff sanity-check + CI green is sufficient (see docs/architecture/flake-input-bumps.md). NOT in any matchPackageNames automerge narrow.",
+      "description": "nixpkgs-unstable: weekly grouping (inherits the global Friday schedule) plus automerge once every required check passes. Wide tooling-layer blast across formatters and linters, so the required check set is what stands between the bump and main. renovate-flake-lock-refresh.yml supplies the lockfile this manager cannot write and fails closed when the refresh would write outside the paths it may commit, which keeps a tree-reformatting bump red rather than merging it. Triage for fallout that surfaces after the bump lands: docs/architecture/flake-input-bumps.md.",
       "matchManagers": ["custom.regex"],
       "matchDepNames": ["NixOS/nixpkgs-unstable"],
-      "groupName": "nixpkgs-unstable"
+      "groupName": "nixpkgs-unstable",
+      "automerge": true
     },
     {
-      "description": "octoscan: scoped automerge for the same reason as github-actions — digest-pinned, 7-day quarantine catches obvious breakage. Narrowed by matchDepNames so other custom.regex managers (NixOS/nixpkgs, cachix/git-hooks.nix, SchemaStore/schemastore, NixOS/nixpkgs-unstable) do NOT inherit automerge — those have wide blast radius and must be reviewed manually.",
+      "description": "NixOS/nixpkgs stable branch: automerge once every required check passes. Widest blast radius in the repo — runtime, tooling, and the image base layer all move with the YY.MM branch — and part of the fallout (formatter rewrites, new linter rules) surfaces on a later cron run or contributor PR rather than on this PR's own checks. Recovery for that case is a revert. renovate-flake-lock-refresh.yml supplies the lockfile this manager cannot write; see docs/architecture/flake-input-bumps.md for the triage tables.",
+      "matchManagers": ["custom.regex"],
+      "matchDepNames": ["NixOS/nixpkgs"],
+      "automerge": true
+    },
+    {
+      "description": "cachix/git-hooks.nix master HEAD: automerge once every required check passes. renovate-flake-lock-refresh.yml supplies the lockfile this manager cannot write; while flake.nix is ahead of flake.lock the flake-check job is red, so the PR cannot merge before the refresh lands.",
+      "matchManagers": ["custom.regex"],
+      "matchDepNames": ["cachix/git-hooks.nix"],
+      "automerge": true
+    },
+    {
+      "description": "SchemaStore/schemastore master HEAD: automerge once every required check passes. The pin feeds scripts/check-jsonschema.sh, which validates this repo's JSON and YAML against the bumped SHA in CI, so a schema set that rejects a tracked file keeps the PR red.",
+      "matchManagers": ["custom.regex"],
+      "matchDepNames": ["SchemaStore/schemastore"],
+      "automerge": true
+    },
+    {
+      "description": "octoscan: scoped automerge for the same reason as github-actions — digest-pinned, 7-day quarantine catches obvious breakage. matchDepNames narrows this rule to the octoscan image so each custom-regex dependency keeps its own explicit automerge scope.",
       "matchManagers": ["custom.regex"],
       "matchDepNames": ["ghcr.io/synacktiv/octoscan"],
       "automerge": true
@@ -54,7 +73,7 @@
       ]
     },
     {
-      "description": "cachix/git-hooks.nix master HEAD tracker. Uses git-refs datasource because that repo publishes 0 GitHub releases and 0 tags — master HEAD is the only upstream-truth signal. Renovate opens a PR whenever master advances; runs through the global 7-day minimumReleaseAge quarantine. Stays manual-merge by design (see matchDepNames narrow above). REVIEWER NOTE: this manager only substitutes the SHA in flake.nix; flake.lock will be stale until you run `nix flake update pre-commit-hooks` locally and push the refresh — see docs/architecture/flake-input-bumps.md for the full runbook.",
+      "description": "cachix/git-hooks.nix master HEAD tracker. Uses git-refs datasource because that repo publishes 0 GitHub releases and 0 tags — master HEAD is the only upstream-truth signal. Renovate opens a PR whenever master advances; runs through the global 7-day minimumReleaseAge quarantine. This manager only substitutes the SHA in flake.nix; renovate-flake-lock-refresh.yml runs `nix flake update pre-commit-hooks` on the PR branch and commits the refreshed flake.lock. Until that commit lands the PR is red and cannot merge. When the auto-refresh does not fire, an issue is filed under the renovate-flake-lock-refresh-failure label and the manual fallback is in docs/architecture/flake-input-bumps.md.",
       "customType": "regex",
       "managerFilePatterns": ["/^flake\\.nix$/"],
       "matchStrings": [
@@ -66,7 +85,7 @@
       "packageNameTemplate": "https://github.com/cachix/git-hooks.nix"
     },
     {
-      "description": "NixOS/nixpkgs stable branch tracker. Captures the YY.MM suffix of the nixos-YY.MM branch in flake.nix and watches NixOS/nixpkgs tags for new YY.MM tags (versioningTemplate restricts to MAJOR.MINOR form). NixOS tags only at GA, so this naturally proposes the next stable branch when it ships. Stays manual-merge by design (see matchDepNames narrow above) because nixpkgs branch bumps have wide blast radius. REVIEWER NOTE: this manager only substitutes the branch name in flake.nix; flake.lock will be stale and CI will fail until you run `nix flake update nixpkgs` locally and push the refresh. Expect downstream side-effects (prettier, mkdocs-macros strictness, zizmor major version, image base-layer rotation) — see docs/architecture/flake-input-bumps.md for the full runbook.",
+      "description": "NixOS/nixpkgs stable branch tracker. Captures the YY.MM suffix of the nixos-YY.MM branch in flake.nix and watches NixOS/nixpkgs tags for new YY.MM tags (versioningTemplate restricts to MAJOR.MINOR form). NixOS tags only at GA, so this naturally proposes the next stable branch when it ships. This manager only substitutes the branch name in flake.nix; renovate-flake-lock-refresh.yml runs `nix flake update nixpkgs` on the PR branch and commits the refreshed flake.lock, and the PR stays red until it does. Expect downstream side-effects (prettier, mkdocs-macros strictness, zizmor major version, image base-layer rotation) — see docs/architecture/flake-input-bumps.md for the triage tables.",
       "customType": "regex",
       "managerFilePatterns": ["/^flake\\.nix$/"],
       "matchStrings": [
@@ -77,7 +96,7 @@
       "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)$"
     },
     {
-      "description": "NixOS/nixpkgs-unstable rolling branch tracker. The branch name 'nixos-unstable' itself never changes; the actual movement is via flake.lock. This manager exists as a trigger for renovate-flake-lock-refresh.yml (which runs `nix flake update nixpkgs-unstable` and commits the refreshed lockfile) and to surface tooling-layer churn for human review. git-refs datasource on the branch HEAD; weekly cadence inherits global schedule. REVIEWER NOTE: this is the tooling-layer bump — expect formatter-output diffs (shfmt, prettier, mdformat, taplo, just, nixfmt) and new linter rules (zizmor, statix, deadnix, actionlint, shellcheck). No runtime regressions; linpeas-image stays on stable nixpkgs. See docs/architecture/flake-input-bumps.md.",
+      "description": "NixOS/nixpkgs-unstable rolling branch tracker. The branch name 'nixos-unstable' itself never changes; the actual movement is via flake.lock. This manager exists as a trigger for renovate-flake-lock-refresh.yml (which runs `nix flake update nixpkgs-unstable` and commits the refreshed lockfile). git-refs datasource on the branch HEAD; weekly cadence inherits global schedule. This is the tooling-layer bump — expect formatter-output diffs (shfmt, prettier, mdformat, taplo, just, nixfmt) and new linter rules (zizmor, statix, deadnix, actionlint, shellcheck), all of which surface as red checks on the PR. No runtime regressions; linpeas-image stays on stable nixpkgs. See docs/architecture/flake-input-bumps.md.",
       "customType": "regex",
       "managerFilePatterns": ["/^flake\\.nix$/"],
       "matchStrings": [
@@ -89,7 +108,7 @@
       "packageNameTemplate": "https://github.com/NixOS/nixpkgs"
     },
     {
-      "description": "SchemaStore master HEAD tracker for the JSON Schema URLs consumed by scripts/check-jsonschema.sh. Same shape as the cachix/git-hooks.nix manager — SchemaStore publishes 0 releases and 0 tags, master HEAD is the only upstream-truth signal. Renovate opens a PR whenever master advances; the global 7-day minimumReleaseAge applies. Not in any matchDepNames automerge narrow, so it stays manual-merge.",
+      "description": "SchemaStore master HEAD tracker for the JSON Schema URLs consumed by scripts/check-jsonschema.sh. Same shape as the cachix/git-hooks.nix manager — SchemaStore publishes 0 releases and 0 tags, master HEAD is the only upstream-truth signal. Renovate opens a PR whenever master advances; the global 7-day minimumReleaseAge applies. The bumped SHA is what check-jsonschema.sh validates against in CI, so a schema set that rejects a tracked file keeps the PR red.",
       "customType": "regex",
       "managerFilePatterns": ["/^scripts/check-jsonschema\\.sh$/"],
       "matchStrings": ["SCHEMASTORE_SHA='(?<currentDigest>[0-9a-f]{40})'"],

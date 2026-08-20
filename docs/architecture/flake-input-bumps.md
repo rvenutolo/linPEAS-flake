@@ -1,6 +1,6 @@
 # Flake-input bump runbook
 
-This page is the reviewer playbook for the Renovate PRs that touch
+This page is the triage runbook for the Renovate PRs that touch
 flake-input pins in `flake.nix`:
 
 - **`cachix/git-hooks.nix`** — master HEAD tracker. Fires whenever
@@ -15,8 +15,11 @@ flake-input pins in `flake.nix`:
     — devShell, CI hooks, formatters, linters, mkdocs. Never touches
     `linpeas-image`.**
 
-All three managers are intentionally **manual-merge**. They do pure text
-substitution on `flake.nix` and **do not refresh `flake.lock`**.
+All three bumps merge unattended once the required check set is green;
+see [Dependency-PR merge policy](auto-update.md#dependency-pr-merge-policy)
+for the gates that replace a reviewer. The managers do pure text
+substitution on `flake.nix` and **do not refresh `flake.lock`**, so a
+bump PR is red until the lockfile catches up.
 
 The lockfile refresh is performed automatically by the
 `renovate-flake-lock-refresh` workflow, which fires on every `ci`
@@ -32,7 +35,8 @@ string is a substring of the unstable one), runs
 after `ci` first goes green.
 
 The manual runbook below is the **fallback** when the auto-refresh
-does not fire — most often because the PR title format changed and
+does not fire, and the reproduction path when a landed bump breaks
+something — most often because the PR title format changed and
 no longer matches the `case` arm in
 `.github/workflows/renovate-flake-lock-refresh.yml`. If auto-refresh
 silently does not act, an issue is filed under the
@@ -46,15 +50,15 @@ in `inputs.*.url`. Renovate's hosted SaaS does not run
 `postUpgradeTasks` (`nix flake update` is not in Mend's allowed-command
 list), and switching to self-hosted Renovate for one command would add
 significant ops surface for a solo-maintainer repo.
+`renovate-flake-lock-refresh.yml` closes that gap unattended; this
+runbook covers the case where it does not fire, and the case where a
+bump that already landed breaks something.
 
-The cost of this gap is one reviewer touch per bump:
+Bump cadence, which sets how often either case comes up:
 
 - `cachix/git-hooks.nix`: maybe a handful of bumps per year.
 - `NixOS/nixpkgs`: twice per year (May `YY.05`, November `YY.11`).
 - `NixOS/nixpkgs-unstable`: weekly, but narrow blast radius.
-
-The wide-blast-radius nature of these bumps (especially nixpkgs) means a
-human review pass was needed anyway.
 
 ## Expected breakage surface
 
@@ -65,9 +69,10 @@ human review pass was needed anyway.
 A major `NixOS/nixpkgs` bump (e.g. `25.11` → `26.05`) tends to drag in
 new versions of every tool the devShell + CI + image touch, plus the
 image's bundled runtime payload. The visible fallout falls into a
-small set of recurring classes. Walk the full list before merging,
-even when CI is green — some failures land later (next cron tick,
-next contributor PR).
+small set of recurring classes. A green check set does not clear the
+list: some of these surface on a later cron tick or on the next
+contributor PR rather than on the bump's own checks. Walk the list
+when one does.
 
 - **Formatter rewrites.** `nixfmt`, `prettier`, `mdformat`, `shfmt`,
     and `taplo` all move with nixpkgs. A new minor version often
@@ -151,8 +156,11 @@ with `case` arms globbing on `cachix/git-hooks.nix`,
 one of those three substrings is what silently stops the auto-refresh.
 
 Diff: exactly one line in `flake.nix` changed. `flake.lock` is **not**
-touched. CI required checks will fail on `flake-check` (lock-out-of-date
-error) until you complete the steps below.
+touched. CI required checks fail on `flake-check` (lock-out-of-date
+error) until the lockfile catches up — normally through the
+auto-refresh above, and through the steps below when it does not
+fire. A bump therefore cannot auto-merge on the strength of the
+`flake.nix` line alone.
 
 ## Step-by-step
 
@@ -301,10 +309,12 @@ git push
 `treefmt` is wired as a pre-commit hook — it will run on every staged
 file change. If it rewrites something, re-stage and commit.
 
-### 11. Wait for CI, merge
+### 11. Wait for CI
 
-Watch the PR's required checks. If everything is green, merge-commit
-through the GitHub UI or `gh pr merge <num> --merge --delete-branch`.
+Watch the PR's required checks. On green the PR merges itself —
+`automerge` is scoped to every flake-input manager. To stop a bump
+from landing, close the PR: disabling auto-merge does not hold,
+because Renovate re-arms it on its next run over the repo.
 Note: every commit on the branch must independently satisfy Conventional
 Commits (`commitlint` is a required check) and be signed
 (`required_signatures` is enforced), since each lands verbatim on
@@ -347,15 +357,29 @@ The safe order:
 
 If both PRs land cleanly when merged independently, no action needed.
 
-## Reviewer policy
+That order is advisory, not enforced: both PRs auto-merge on green, so
+whichever goes green first lands first. The failure mode is benign —
+if a landed `nixpkgs` bump makes the pinned `git-hooks.nix` revision
+incompatible, the `git-hooks.nix` PR rebases onto it, `flake check`
+goes red, and the PR sits until the incompatibility is fixed forward.
 
-- **Stable (`nixpkgs`) bump:** full walk through every breakage class
-    above; verify `linpeas-image` build + bundled-binary version
-    inventory; do not auto-trust CI green.
-- **Unstable (`nixpkgs-unstable`) bump:** formatter-diff sanity-check
-    and CI green is sufficient. Image build is unaffected by definition
+## What a green check set proves
+
+Every input merges on green. What that green establishes differs by
+input:
+
+- **Stable (`nixpkgs`) bump:** the weakest of the three. The
+    `linpeas-image` build and the bundled-binary inventory are covered
+    at PR time, but several breakage classes above are not reproducible
+    then — CVE-scan output, dashboard rebuild, and formatter drift over
+    files the PR does not touch all resolve later. Treat the first
+    weekly cron cycle after a stable bump as part of the bump.
+- **Unstable (`nixpkgs-unstable`) bump:** close to conclusive.
+    Formatter and linter churn is exactly what the required checks
+    execute, and the image build is unaffected by definition
     (allocation gates it to stable).
-- **`cachix/git-hooks.nix` bump:** hook config diff + CI green.
+- **`cachix/git-hooks.nix` bump:** conclusive for the hook config,
+    which is the entire surface the input touches.
 
 ## update-flake-lock credential split
 
