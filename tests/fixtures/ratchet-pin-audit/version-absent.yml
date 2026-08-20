@@ -5,14 +5,13 @@ name: ratchet-pin-audit
 # it. `check-uses-sha-pinned.sh` enforces that every `uses:` is a
 # SHA; Renovate keeps SHAs aligned with canonical release tags;
 # neither catches the tag-vs-pin drift attack. `ratchet lint` is
-# the canonical detector (in ratchet 0.11.4; `check` is an alias).
-# Drift → deduped umbrella issue (`ratchet-drift` label)
-# opened/edited/closed by the notify-workflow-result composite,
-# mirroring stale-pin-check.
+# the canonical detector (in 0.11.4; `check` is an alias). Drift → deduped umbrella issue
+# (`ratchet-drift` label) opened/edited/closed by the
+# notify-workflow-result composite, mirroring stale-pin-check.
 
 on:
   schedule:
-    - cron: "15 9 * * *" # daily 09:15 UTC (opens the drift-check cluster, ahead of the dashboard render)
+    - cron: "0 11 * * *" # daily 11:00 UTC
   workflow_dispatch:
 
 permissions: {}
@@ -35,15 +34,7 @@ jobs:
     steps:
       - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
         with:
-          egress-policy: block
-          allowed-endpoints: >
-            *.actions.githubusercontent.com:443
-            api.github.com:443
-            cache.nixos.org:443
-            codeload.github.com:443
-            github.com:443
-            objects.githubusercontent.com:443
-            releases.nixos.org:443
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
@@ -87,7 +78,7 @@ jobs:
           fi
 
           # Run ratchet to assert every `uses:` is SHA-pinned. Note: as of
-          # ratchet 0.11.4, `check`/`lint` is a *local* pin-shape check — it
+          # current ratchet, `check`/`lint` is a *local* pin-shape check — it
           # does NOT contact upstream APIs to detect tag-vs-SHA drift. The
           # canonical-tag drift comparison below (via `gh api`) is what
           # actually detects the silent-regression attack this workflow
@@ -130,95 +121,43 @@ jobs:
               tag="${BASH_REMATCH[3]}"
               # Skip local actions (./.github/actions/foo); they have no upstream.
               [[ "${repo}" == .* ]] && continue
-              # Strip monorepo subpaths: github/codeql-action/upload-sarif → github/codeql-action.
-              # GitHub's "owner/repo" is always exactly two slash-separated segments;
-              # anything after is an in-repo path. The API only accepts the top-level repo.
-              IFS=/ read -ra _parts <<<"${repo}"
-              repo_root="${_parts[0]}/${_parts[1]}"
-              # Skip self-references: `uses: <this-repo>/.github/actions/<name>@<sha>` is
-              # functionally a local action invocation via absolute slug. The SHA is the
-              # repo's own main-branch HEAD as Renovate maintains it; no canonical tag
-              # exists to compare against.
-              self_repo="${GITHUB_REPOSITORY:-rvenutolo/linPEAS-flake}"
-              if [[ "${repo_root}" == "${self_repo}" ]]; then
-                continue
-              fi
-              # Floating-major tags (vN) retarget on every release; the
-              # audit cannot distinguish a benign move from an attack.
-              # Skip before any API call to avoid wasted requests and a
-              # spurious upstream-api-failure on a ref we exclude anyway.
-              # Same rule as scripts/classify-pin-ref.sh.
-              if [[ "${tag}" =~ ^v[0-9]+$ ]]; then
-                printf 'excluded (floating major): %s@%s — integrity via immutable digest pin + Renovate + PR-time digest-provenance gate\n' \
-                  "${repo}" "${tag}" >&2
-                continue
-              fi
               ref_info=""
               if ! ref_info="$(gh api \
                 --header 'X-GitHub-Api-Version: 2022-11-28' \
-                "repos/${repo_root}/git/refs/tags/${tag}" \
+                "repos/${repo}/git/refs/tags/${tag}" \
                 --jq '{sha: .object.sha, type: .object.type}' 2>/dev/null)" || [[ -z "${ref_info}" ]]; then
-                printf 'API lookup failed for %s@%s\n' "${repo_root}" "${tag}" >&2
+                printf 'API lookup failed for %s@%s\n' "${repo}" "${tag}" >&2
                 emit_result failure upstream-api-failure ''
               fi
-              # A malformed payload can make jq exit non-zero; without this
-              # guard, errexit would abort the step before emit_result, so the
-              # notify job would report reason=unknown instead of a typed
-              # reason. Route jq failure to upstream-api-failure — the payload
-              # came from the GitHub API.
-              if ! ref_object_sha="$(jq -r '.sha // ""' <<<"${ref_info}")" \
-                || ! tag_type="$(jq -r '.type // ""' <<<"${ref_info}")"; then
-                printf 'jq parse failed for %s@%s: %s\n' "${repo_root}" "${tag}" "${ref_info}" >&2
-                emit_result failure upstream-api-failure ''
-              fi
-              if [[ -z "${ref_object_sha}" || -z "${tag_type}" ]]; then
-                printf 'malformed ref payload for %s@%s: %s\n' "${repo_root}" "${tag}" "${ref_info}" >&2
+              canonical="$(jq -r '.sha // ""' <<<"${ref_info}")"
+              tag_type="$(jq -r '.type // ""' <<<"${ref_info}")"
+              if [[ -z "${canonical}" || -z "${tag_type}" ]]; then
+                printf 'malformed ref payload for %s@%s: %s\n' "${repo}" "${tag}" "${ref_info}" >&2
                 emit_result failure upstream-api-failure ''
               fi
 
-              # Dereference annotated tags to their commit. Keep BOTH the
-              # tag-object SHA and the commit: a pin may legitimately be
-              # either (docs/architecture/pin-convention.md), and the
-              # classifier accepts both.
-              deref_commit_sha=""
+              # Resolve annotated tags unconditionally: the canonical commit SHA is what we
+              # compare against `pinned`, not the tag-object SHA. This must run BEFORE the
+              # equality check — pinning to the tag-object SHA (unusual but possible) would
+              # otherwise produce a false "no drift" result.
               if [[ "${tag_type}" == "tag" ]]; then
-                if ! deref_commit_sha="$(gh api \
+                if ! canonical="$(gh api \
                   --header 'X-GitHub-Api-Version: 2022-11-28' \
-                  "repos/${repo_root}/git/tags/${ref_object_sha}" \
-                  --jq '.object.sha' 2>/dev/null)" || [[ -z "${deref_commit_sha}" ]]; then
-                  printf 'API lookup failed (annotated tag deref) for %s@%s\n' "${repo_root}" "${tag}" >&2
+                  "repos/${repo}/git/tags/${canonical}" \
+                  --jq '.object.sha' 2>/dev/null)" || [[ -z "${canonical}" ]]; then
+                  printf 'API lookup failed (annotated tag deref) for %s@%s\n' "${repo}" "${tag}" >&2
                   emit_result failure upstream-api-failure ''
                 fi
               fi
-
-              verdict=""
-              if ! verdict="$(bash scripts/classify-pin-ref.sh \
-                "${tag}" "${pinned}" "${ref_object_sha}" "${tag_type}" "${deref_commit_sha}")"; then
-                printf 'classify-pin-ref failed for %s@%s\n' "${repo_root}" "${tag}" >&2
-                emit_result failure ratchet-tool-failure ''
-              fi
-
-              case "${verdict}" in
-                current) ;;
-                drift)
-                  # canonical = where the tag now resolves (the commit
-                  # for an annotated tag, else the ref object itself).
-                  canonical="${deref_commit_sha:-${ref_object_sha}}"
-                  # Use original `repo` (full subpath) so operators see the literal pinned ref.
-                  drift_line="${repo}@${tag} pinned=${pinned} canonical=${canonical}"
-                  # Shape-validate before letting it reach $GITHUB_OUTPUT.
-                  if [[ ! "${drift_line}" =~ ^[A-Za-z0-9._/-]+@[A-Za-z0-9._/-]+\ pinned=[0-9a-f]{7,40}\ canonical=[0-9a-f]{7,40}$ ]]; then
-                    printf 'malformed drift line rejected: %q\n' "${drift_line}" >&2
-                    emit_result failure ratchet-tool-failure ''
-                  fi
-                  drift_lines+="${drift_line}"$'\n'
-                  ;;
-                skip-floating-major) ;;
-                *)
-                  printf 'unexpected classifier verdict %q for %s@%s\n' "${verdict}" "${repo_root}" "${tag}" >&2
+              if [[ "${canonical}" != "${pinned}" ]]; then
+                drift_line="${repo}@${tag} pinned=${pinned} canonical=${canonical}"
+                # Shape-validate before letting it reach $GITHUB_OUTPUT.
+                if [[ ! "${drift_line}" =~ ^[A-Za-z0-9._/-]+@[A-Za-z0-9._/-]+\ pinned=[0-9a-f]{7,40}\ canonical=[0-9a-f]{7,40}$ ]]; then
+                  printf 'malformed drift line rejected: %q\n' "${drift_line}" >&2
                   emit_result failure ratchet-tool-failure ''
-                  ;;
-              esac
+                fi
+                drift_lines+="${drift_line}"$'\n'
+              fi
             fi
           done < <(grep -hE '^\s*-?\s*uses:\s+[A-Za-z0-9._/-]+@[0-9a-f]{7,40}' "${files[@]}" || true)
 
@@ -239,21 +178,13 @@ jobs:
     steps:
       - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
         with:
-          egress-policy: block
-          allowed-endpoints: >
-            api.github.com:443
-            github.com:443
-            objects.githubusercontent.com:443
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/notify-workflow-result
         with:
-          # Logical result computed by `check` wins; if the job died
-          # before producing one, fall back to its raw result so the
-          # composite files failed/cancelled runs and stays inert on
-          # skipped.
-          result: ${{ needs.check.outputs.result || needs.check.result }}
+          result: ${{ needs.check.outputs.result || (needs.check.result == 'failure' && 'failure' || 'skipped') }}
           label: ratchet-drift
           label-description: action pin SHA drift detected by ratchet check
           title: "ratchet-pin-audit: action pin drift detected"
@@ -275,13 +206,11 @@ jobs:
               matches the canonical SHA its tag now resolves to. The
               publisher force-moved the tag. Compare the canonical SHA
               against upstream release notes; if the re-tag is legitimate,
-              replace each `pinned` SHA with the corresponding `canonical`
-              SHA in the affected workflow files (or wait for Renovate to
-              do it on its next scheduled run), review the diff, and open
+              run `nix develop --command ratchet update
+              .github/workflows/*.yml` locally, review the diff, and open
               a PR. If the release notes do **not** describe the SHA
               change, treat this as a potential supply-chain event and
-              escalate — do **not** auto-update. See the runbook for the
-              exact remediation command.
+              escalate — do **not** auto-update.
             - `upstream-api-failure` — the GitHub API call inside
               `ratchet check` (or the per-ref re-derivation) failed or
               rate-limited. The `github.token` authenticates at 5000/hr;
