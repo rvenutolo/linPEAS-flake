@@ -307,11 +307,11 @@ Enforced by `scripts/check-script-has-test.sh`. Wired as the `lint-script-hygien
 
 ## test-runner reachability
 
-Every `tests/*.test.sh` harness is executed by at least one runner, so the coverage it represents is real rather than latent.
+Every test harness is executed by at least one runner — both the `tests/*.test.sh` set and the harnesses tracked under `.claude/` — so the coverage each represents is real rather than latent.
 
-`check-script-has-test` guarantees a test *file* exists for each script; it does not guarantee the test ever *runs*. A harness wired into no runner is a coverage no-op — a regression it would catch merges green while the pairing guard stays satisfied. This asserts every harness is reachable via one of four runners: the `HARNESSES` array in `scripts/run-harness-group.sh` (the `harness-group` job), the `tests/refresh-*.test.sh` glob in `scripts/run-doc-freshness.sh` (the `doc-freshness` job), a `.github/lint-groups.yml` member resolving to `tests/check-<name>.test.sh` (run by `scripts/run-lint-group.sh`), or a direct `tests/<x>.test.sh` invocation in a `.github/workflows/*.yml`.
+`check-script-has-test` guarantees a test *file* exists for each script; it does not guarantee the test ever *runs*. A harness wired into no runner is a coverage no-op — a regression it would catch merges green while the pairing guard stays satisfied. Two scan sets are held to this: `tests/*.test.sh`, and the harnesses tracked under `.claude/`. The second is enumerated with `git ls-files` rather than a glob, because `.claude/` is not gitignored and is overwhelmingly untracked, so a glob would report local-only harnesses as violations; only the committed set is a CI concern. A `tests/` harness is keyed by basename and a tracked `.claude/` one by its repo-root-relative path — exactly how each is spelled in the `HARNESSES` array. Every harness must be reachable via one of four runners: the `HARNESSES` array in `scripts/run-harness-group.sh` (the `harness-group` job), the `tests/refresh-*.test.sh` glob in `scripts/run-doc-freshness.sh` (the `doc-freshness` job), a `.github/lint-groups.yml` member resolving to `tests/check-<name>.test.sh` (run by `scripts/run-lint-group.sh`), or a direct `tests/<x>.test.sh` invocation in a `.github/workflows/*.yml`.
 
-The `EXEMPT` list in the script is empty: every harness must be wired to a runner. A genuinely manual-only harness would be listed there with a rationale.
+The `EXEMPT` list in the script is empty: every harness must be wired to a runner. An entry is named as its scan set keys it — a `tests/` harness by basename, a tracked `.claude/` one by its repo-root-relative path. A genuinely manual-only harness would be listed there with a rationale.
 
 Enforced by `scripts/check-test-reachable.sh`. Wired as the `lint-script-hygiene` CI job (member check `test-reachable`).
 
