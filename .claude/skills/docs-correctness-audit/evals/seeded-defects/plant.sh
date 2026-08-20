@@ -9,9 +9,6 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 seeds="$here/seeds.json"
 results="$here/results"
 wt="${TMPDIR:-/tmp}/docs-audit-seeded-defects"
-# Skill root is three levels up from this script's dir.
-skill_dir="$(cd "$here/../.." && pwd)"
-skill_name="$(basename "$skill_dir")"
 repo_root="$(git -C "$here" rev-parse --show-toplevel)"
 
 remove_worktree() {
@@ -29,18 +26,18 @@ if [ "${1:-}" = "--clean" ]; then
 fi
 
 mkdir -p "$results"
+# Planting must leave the primary tree exactly as it found it. Comparing the
+# tracked-file status before and after asserts that; an absolute "tree is
+# clean" test would instead refuse to run for anyone holding uncommitted
+# edits, which is everyone running the harness-group runner before a push.
+primary_before="$(git -C "$repo_root" status --porcelain --untracked-files=no)"
 remove_worktree # idempotent: clear any prior worktree first
-# Detach so the worktree does not occupy the `main` branch ref — required when
-# the primary tree itself has `main` checked out. Seeds are never committed.
-git -C "$repo_root" worktree add --quiet --detach "$wt" main
-
-# Copy the (untracked) skill into the worktree so /docs-audit is discoverable.
-mkdir -p "$wt/.claude/skills"
-cp -r "$skill_dir" "$wt/.claude/skills/$skill_name"
-[ -f "$wt/.claude/skills/$skill_name/SKILL.md" ] || {
-  echo "skill copy failed" >&2
-  exit 1
-}
+# Detach so the worktree does not occupy the branch ref the primary tree has
+# checked out. The base is HEAD rather than a branch name because seeds anchor
+# on verbatim sentences in tracked docs: resolving them against the commit
+# under test is what makes a reworded anchor fail on the change that reworded
+# it. Seeds are never committed.
+git -C "$repo_root" worktree add --quiet --detach "$wt" HEAD
 
 resolved="[]"
 while IFS= read -r seed; do
@@ -91,9 +88,10 @@ done < <(jq -c '.seeds[]' "$seeds")
 printf '%s\n' "$resolved" | jq '.' >"$results/manifest-resolved.json"
 printf '%s\n' "$wt" >"$results/worktree-path.txt"
 
-# Primary tree must be untouched (tracked files).
-if [ -n "$(git -C "$repo_root" status --porcelain --untracked-files=no)" ]; then
-  echo "ERROR: primary tree has modified tracked files" >&2
+# Primary tree must be unchanged by planting (tracked files).
+primary_after="$(git -C "$repo_root" status --porcelain --untracked-files=no)"
+if [ "$primary_before" != "$primary_after" ]; then
+  echo "ERROR: planting modified the primary tree" >&2
   exit 1
 fi
 
