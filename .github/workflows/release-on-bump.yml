@@ -75,7 +75,7 @@ jobs:
             timestamp.sigstore.dev:443
             tuf-repo-cdn.sigstore.dev:443
             uploads.github.com:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -190,7 +190,7 @@ jobs:
       - name: attest provenance for pin file
         id: attest-pin
         if: steps.exists.outputs.exists == 'false' || inputs.backfill-tag != ''
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: linpeas-pin.json
 
@@ -300,7 +300,7 @@ jobs:
             production.cloudfront.docker.com:443
             registry-1.docker.io:443
             release-assets.githubusercontent.com:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -442,7 +442,7 @@ jobs:
             timestamp.sigstore.dev:443
             tuf-repo-cdn.sigstore.dev:443
             uploads.github.com:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -582,14 +582,14 @@ jobs:
           printf 'hub_digest=%s\n' "${hub_digest}" >> "${GITHUB_OUTPUT}"
 
       - name: attest provenance for ghcr image (amd64)
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ghcr.io/rvenutolo/linpeas
           subject-digest: ${{ steps.push.outputs.ghcr_digest || steps.pull.outputs.ghcr_digest }}
           push-to-registry: true
 
       - name: attest provenance for Docker Hub image (amd64)
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: docker.io/rvenutolo/linpeas
           subject-digest: ${{ steps.push.outputs.hub_digest || steps.pull.outputs.hub_digest }}
@@ -617,7 +617,7 @@ jobs:
         # SBOM file bytes themselves; its bundle becomes the
         # .intoto.jsonl release-asset sidecar consumed by Scorecard.
         id: attest-sbom-amd64
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: linpeas-image-amd64.cdx.json
 
@@ -749,7 +749,7 @@ jobs:
             timestamp.sigstore.dev:443
             tuf-repo-cdn.sigstore.dev:443
             uploads.github.com:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -872,14 +872,14 @@ jobs:
           printf 'hub_digest=%s\n' "${hub_digest}" >> "${GITHUB_OUTPUT}"
 
       - name: attest provenance for ghcr image (arm64)
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ghcr.io/rvenutolo/linpeas
           subject-digest: ${{ steps.push.outputs.ghcr_digest || steps.pull.outputs.ghcr_digest }}
           push-to-registry: true
 
       - name: attest provenance for Docker Hub image (arm64)
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: docker.io/rvenutolo/linpeas
           subject-digest: ${{ steps.push.outputs.hub_digest || steps.pull.outputs.hub_digest }}
@@ -899,7 +899,7 @@ jobs:
       - name: attest provenance for SBOM bytes (arm64)
         # See amd64 job for rationale.
         id: attest-sbom-arm64
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: linpeas-image-arm64.cdx.json
 
@@ -1008,7 +1008,7 @@ jobs:
             tarballs.nixos.org:443
             timestamp.sigstore.dev:443
             tuf-repo-cdn.sigstore.dev:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
@@ -1163,7 +1163,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -1417,7 +1417,7 @@ jobs:
             tarballs.nixos.org:443
             tuf-repo-cdn.sigstore.dev:443
             tuf-repo.github.com:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -1606,7 +1606,7 @@ jobs:
             api.github.com:443
             github.com:443
             objects.githubusercontent.com:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       # Common Docker Hub causes — parity with dockerhub-sync.yml; keep wording in sync.
