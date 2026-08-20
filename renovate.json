@@ -99,11 +99,11 @@
       "packageNameTemplate": "https://github.com/SchemaStore/schemastore"
     },
     {
-      "description": "octoscan container image pinned by digest in scripts/octoscan-scan.sh (single source of truth for the CI workflow and the pre-commit hook). The matchString spans both the OCTOSCAN_DIGEST and OCTOSCAN_VERSION shell vars so Renovate updates both atomically — no drift between digest and version label. Uses docker datasource; Renovate resolves the newest tag for ghcr.io/synacktiv/octoscan and substitutes both currentDigest + currentValue in one PR. Automerge is enabled via a scoped packageRule (matchDepNames narrow), matching the github-actions pattern (digest-pinned + 7-day quarantine).",
+      "description": "octoscan container image pinned by digest in scripts/octoscan-scan.sh (single source of truth for the CI workflow and the pre-commit hook). The matchString spans both the OCTOSCAN_DIGEST and OCTOSCAN_VERSION shell vars so Renovate updates both atomically — no drift between digest and version label. Uses docker datasource; Renovate resolves the newest tag for ghcr.io/synacktiv/octoscan and substitutes both currentDigest + currentValue in one PR. Automerge is enabled via a scoped packageRule (matchDepNames narrow), matching the github-actions pattern (digest-pinned + 7-day quarantine). The `sha256:` prefix MUST stay inside the currentDigest capture group: the docker datasource reports digests prefixed, so capturing bare hex makes every run compare `<hex>` against `sha256:<hex>`, report an update for a digest that never moved, and open a PR that check-pin-digest-provenance.sh then hard-fails as a repointed released tag — a standing false supply-chain alarm.",
       "customType": "regex",
       "managerFilePatterns": ["/^scripts/octoscan-scan\\.sh$/"],
       "matchStrings": [
-        "OCTOSCAN_DIGEST=\"sha256:(?<currentDigest>[a-f0-9]{64})\"[\\s\\S]*?OCTOSCAN_VERSION=\"(?<currentValue>v\\d+\\.\\d+\\.\\d+)\""
+        "OCTOSCAN_DIGEST=\"(?<currentDigest>sha256:[a-f0-9]{64})\"[\\s\\S]*?OCTOSCAN_VERSION=\"(?<currentValue>v\\d+\\.\\d+\\.\\d+)\""
       ],
       "datasourceTemplate": "docker",
       "depNameTemplate": "ghcr.io/synacktiv/octoscan",
