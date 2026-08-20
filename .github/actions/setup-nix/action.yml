@@ -20,7 +20,7 @@ inputs:
     # tags only and zero GitHub releases, so a releases lookup resolves
     # to an empty set and the pin below never moves. Every tag is plain
     # MAJOR.MINOR.PATCH, so no versioning template is needed.
-    default: "https://releases.nixos.org/nix/nix-2.34.7/install" # renovate: datasource=github-tags depName=nix packageName=NixOS/nix
+    default: "https://releases.nixos.org/nix/nix-2.35.2/install" # renovate: datasource=github-tags depName=nix packageName=NixOS/nix
   extra-nix-config:
     description: "Additional lines appended to nix.conf beyond the baseline (experimental-features, access-tokens)."
     required: false
