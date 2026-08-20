@@ -201,9 +201,18 @@ left-boundary guard so they cannot match inside a larger token (e.g.
 ### Advisory class (warn-only)
 
 Fuzzy causal-history phrases surface as advisories, never blockers:
-`prior to`, `previously`, `Migration note`, `was reshaped`,
-`Tightened from`, `swapped`, `switched from`/`switched to`,
-`legacy <X> was deleted`, `added in #123`, `post-PR #123`.
+`previously`, `Migration note`, `Tightened from`,
+`switched from`/`switched to`, `legacy <X> was deleted`,
+`added in #123`, `post-PR #123`.
+
+Each of those names a past state outright, so it reads the same way
+whatever it modifies. Bare verbs and prepositions do not: `prior to`
+describes when a threat occurs as readily as when a rewrite happened,
+`swapped` fits an attacker substituting an asset as well as a change we
+made, and `was reshaped` sits inside a present-tense inference about
+drift that has not happened yet. The class carries only the phrases a
+regex can judge, because an advisory that is usually wrong teaches a
+reader to scroll past the one that is right.
 
 ### Exemptions
 

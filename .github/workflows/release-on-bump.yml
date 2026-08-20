@@ -1210,8 +1210,9 @@ jobs:
             --output CHANGELOG.md
           # Idempotent: no diff means the committed changelog already covers
           # this release (a recovery re-run, or the changelog already landed),
-          # so there is nothing to open a PR for. Previously this aborted,
-          # which made a recovery re-run fail instead of no-op'ing.
+          # so there is nothing to open a PR for. A recovery re-run has to
+          # reach the jobs downstream of this one, so an empty diff is a
+          # clean no-op rather than an abort.
           if git diff --quiet CHANGELOG.md; then
             printf 'CHANGELOG.md already current; no changelog PR needed\n'
             printf 'changed=false\n' >>"${GITHUB_OUTPUT}"
