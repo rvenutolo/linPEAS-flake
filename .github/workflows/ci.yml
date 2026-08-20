@@ -37,7 +37,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
@@ -71,7 +71,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
@@ -79,7 +79,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: build linpeas
         run: nix build .#linpeas --print-build-logs
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: linpeas-result
           path: result/bin/linpeas
@@ -108,7 +108,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
@@ -148,7 +148,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
@@ -156,7 +156,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: build linpeas (aarch64)
         run: nix build .#linpeas --print-build-logs
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: linpeas-result-arm64
           path: result/bin/linpeas
@@ -185,7 +185,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
@@ -228,7 +228,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
@@ -316,7 +316,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
@@ -403,7 +403,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
@@ -433,7 +433,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
@@ -466,7 +466,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
@@ -498,7 +498,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
@@ -532,7 +532,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
@@ -572,7 +572,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
@@ -603,7 +603,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
@@ -634,7 +634,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: fetch base ref for provenance diffs
@@ -679,7 +679,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
@@ -715,7 +715,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
@@ -749,7 +749,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
@@ -782,7 +782,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
@@ -814,7 +814,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
@@ -845,7 +845,7 @@ jobs:
             release-assets.githubusercontent.com:443
             releases.nixos.org:443
             tarballs.nixos.org:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # git-cliff walks all release tags and commit history; a shallow
           # clone hides the commits the fixtures assert against.
@@ -877,10 +877,10 @@ jobs:
             api.github.com:443
             github.com:443
             objects.githubusercontent.com:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: DavidAnson/markdownlint-cli2-action@ded1f9488f68a970bc66ea5619e13e9b52e601cd # v23.2.0
+      - uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff # v24.2.0
         with:
           globs: |
             **/*.md
@@ -907,7 +907,7 @@ jobs:
             github.com:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: crate-ci/typos@8a48f81b6c64dcfea44b3633223084c4be58ac5f # v1.49.0
@@ -926,7 +926,7 @@ jobs:
             github.com:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: editorconfig-checker/action-editorconfig-checker@840e866d93b8e032123c23bac69dece044d4d84c # v2.2.0
@@ -944,7 +944,7 @@ jobs:
             api.github.com:443
             github.com:443
             objects.githubusercontent.com:443
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
