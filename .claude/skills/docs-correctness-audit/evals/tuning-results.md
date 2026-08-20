@@ -1,10 +1,13 @@
 # Cluster-granularity tuning results
 
-Why the audit fans out **four** read-only cluster readers (the map in
-[`../references/repo-map.md`](../references/repo-map.md) §2) rather than one per
-`docs/` subdirectory. The numbers below come from the seeded-defect recall
-harness in [`seeded-defects/`](seeded-defects/) (`plant.sh` → run the audit →
-`score.sh`), run twice per configuration against the same seven planted defects.
+Why the audit covers the `docs/` tree with **four** read-only cluster readers
+(the map in [`../references/repo-map.md`](../references/repo-map.md) §2) rather
+than one per `docs/` subdirectory. The `claude-tooling` reader in that map is
+outside this comparison: it reads the audit's own specification, not the `docs/`
+tree, so no `docs/` granularity choice applies to it. The numbers below come
+from the seeded-defect recall harness in [`seeded-defects/`](seeded-defects/)
+(`plant.sh` → run the audit → `score.sh`), run twice per configuration against
+the same seven planted defects.
 
 ## Configurations compared
 

@@ -33,14 +33,15 @@ high severity, and neither is caught by a freshness gate.
 
 ## 2. Doc cluster map (one read-only agent per row)
 
-| Cluster     | Files                                                                                                                                                                                     |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| core-docs   | `docs/reference/*.md`, `docs/install/*.md`, `docs/runbooks/*.md`                                                                                                                          |
-| security    | `docs/security/*.md`                                                                                                                                                                      |
-| arch+dev    | `docs/architecture/*.md`, `docs/development/*.md`                                                                                                                                         |
-| root + misc | `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`, `docs/index.md`, `docs/dashboard.md`, `docs/releases.md`, `docs/invariant-index.md`, `docs/actionlint-embedded-linters.md` |
+| Cluster        | Files                                                                                                                                                                                     |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| core-docs      | `docs/reference/*.md`, `docs/install/*.md`, `docs/runbooks/*.md`                                                                                                                          |
+| security       | `docs/security/*.md`                                                                                                                                                                      |
+| arch+dev       | `docs/architecture/*.md`, `docs/development/*.md`                                                                                                                                         |
+| root + misc    | `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`, `docs/index.md`, `docs/dashboard.md`, `docs/releases.md`, `docs/invariant-index.md`, `docs/actionlint-embedded-linters.md` |
+| claude-tooling | every tracked `.claude/**/*.md` (`git ls-files '.claude/**/*.md'`) except `skills/*/evals/seeded-defects/fixtures/*.md`                                                                   |
 
-Four clusters, not one per `docs/` subdirectory: most of a reader's cost is
+Five clusters, not one per `docs/` subdirectory: most of a reader's cost is
 fixed per-agent overhead (re-reading the ground-truth bundle, tool setup), so
 collapsing the low-drift-density doc groups — `reference`+`install`+`runbooks`
 into `core-docs`, `architecture`+`development` into `arch+dev` — cuts reader
@@ -49,9 +50,24 @@ stay standalone because they hold the dense, high-severity drift surfaces
 (member-vs-job CI prose; required-check counts, ghost jobs, broken links). The
 recall-vs-cost evidence for this map is in
 [`../evals/tuning-results.md`](../evals/tuning-results.md). Keep `security` and
-`root + misc` un-merged; merging them regresses high-severity recall.
+`root + misc` un-merged; merging them regresses high-severity recall. That
+recall-vs-cost tuning covers the four `docs/` clusters; `claude-tooling` is
+separate from all of them because it is not user-facing documentation at all —
+it is the audit's own specification, so its reader checks this file against the
+tree rather than checking the tree against prose.
 
-`.claude/CLAUDE.md` and the global CLAUDE.md are read-only reference for the
+Part of `.claude/` is tracked and committed — the `docs-correctness-audit` and
+`multi-agent-review` skills and their slash commands. Those are maintained
+artifacts with real commit history, and they restate facts that live elsewhere
+in the tree: the doc cluster map, the generated-doc table below, and the
+ephemeral-token regex on this very page. Nothing gates any of those
+duplications, so when a generator is added or removed the table here goes
+stale silently and the next audit runs against a stale map. The
+`claude-tooling` row is what puts them in scope. The fixtures under
+`skills/*/evals/seeded-defects/fixtures/` stay out: they exist to carry planted
+defects, so reporting them would be reporting the harness working.
+
+`.claude/CLAUDE.md` and the global CLAUDE.md stay read-only reference for the
 rules (esp. the ephemeral-token regex); the global one lives outside the repo
 and is never edited.
 
@@ -67,11 +83,14 @@ edits inside their `BEGIN/END` markers; a fix means fixing the generator.
 | `docs/reference/flake-outputs.md` (flake-show block)              | `just show` / `refresh-flake-show.sh`                            |
 | `docs/reference/scripts.md`                                       | `just show-scripts` / `refresh-scripts-reference.sh`             |
 | `docs/reference/treefmt-config.md`                                | `just show-treefmt` / `refresh-treefmt-config.sh`                |
+| `docs/reference/test-harnesses.md`                                | `refresh-test-harnesses.sh` (no recipe)                          |
 | `docs/reference/just-recipes.md` + README recipe block            | `just show-recipes` / `refresh-just-recipes.sh`                  |
 | `docs/security/enforcement-matrix.md`                             | `just show-enforcement-matrix` / `refresh-enforcement-matrix.sh` |
 | `docs/architecture/ci-dag.md`                                     | `just show-ci-dag` / `refresh-ci-dag.sh`                         |
 | pre-commit hook table in `docs/development/git.md`                | `just show-hooks` / `refresh-precommit-table.sh`                 |
 | CI summary block in `README.md`                                   | `just show-ci-summary` / `refresh-ci-summary.sh`                 |
+| ephemeral-refs-gap block in `docs/development/linting.md`         | `refresh-ephemeral-refs-gap.sh` (no recipe)                      |
+| pin-parity block in `docs/architecture/auto-update.md`            | `refresh-pin-parity.sh` (no recipe)                              |
 | `docs/_data/dashboard.yml` (drives `dashboard.md`, `releases.md`) | `just site-data` / `gen-dashboard-data.sh`                       |
 
 Hand-written prose *surrounding* a generated block is in scope.
@@ -96,8 +115,10 @@ banned shapes in tracked docs and comments:
     current behavior.
 - Issue / PR refs: `#\d+`, `PR #\d+`, `issue #\d+`. **Exempt: CHANGELOG and
     release-notes pages**, which structurally list PRs.
-- Literal paths into `.claude/` from tracked files — the tree is intentionally
-    untracked.
+- Literal paths into `.claude/` from `README.md`, `docs/**`, and the other
+    user-facing trees — nearly all of `.claude/` is untracked, so such a path
+    does not resolve for a reader who clones the repo. Tracked `.claude/`
+    files may reference their own siblings.
 
 Allowed: incident-warning text that prevents a regression (keep the warning,
 drop any dated tag).
@@ -106,6 +127,13 @@ The collector emits an **`EPHEMERAL-TOKEN HITS`** section applying these shapes
 over all tracked `*.md` files, excluding `.claude/` tooling, `tests/fixtures/`,
 `docs/_data/`, and fully exempting `CHANGELOG.md` and `docs/releases.md`
 (historical records).
+
+The `.claude/` exclusion is deliberate and does not conflict with the
+`claude-tooling` cluster: those files quote the banned shapes as pattern data —
+the bullet list above is a list of them — so a shape-matching sweep reports the
+specification as a violation. `scripts/check-ephemeral-refs.sh` allowlists the
+tree for the same reason. The `claude-tooling` reader covers that prose by
+reading meaning instead of matching shapes.
 
 **It reads prose only.** Fenced code blocks, generated `BEGIN`/`END` bodies, and
 inline code spans are blanked before matching (line numbering preserved), the

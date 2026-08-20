@@ -64,10 +64,10 @@
       "id": "wrong-check-count",
       "category": "required-check count",
       "file": "CONTRIBUTING.md",
-      "anchor": "Every PR must pass roughly 22 required status checks before merge.",
+      "anchor": "Every PR must pass 29 required status checks before merge.",
       "op": "replace-substr",
-      "from": "roughly 22",
-      "payload": "roughly 19",
+      "from": "pass 29",
+      "payload": "pass 26",
       "expected_severity": "high",
       "sentinel": "",
       "line_tol": 3
