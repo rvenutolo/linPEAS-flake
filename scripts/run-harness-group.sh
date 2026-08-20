@@ -19,10 +19,13 @@ IFS=$'\n\t'
 
 readonly TESTS_DIR="${TESTS_DIR_OVERRIDE:-tests}"
 readonly SCRIPTS_DIR="${SCRIPTS_DIR_OVERRIDE:-scripts}"
+readonly ROOT_DIR="${ROOT_DIR_OVERRIDE:-.}"
 
-# name | test-harness (under TESTS_DIR) | enforce-script (under
-# SCRIPTS_DIR; empty = test-only). Pipe-delimited; no field contains a
-# pipe or whitespace.
+# name | test-harness | enforce-script (under SCRIPTS_DIR; empty =
+# test-only). Pipe-delimited; no field contains a pipe or whitespace.
+# A test-harness field holding a `/` is a repo-root-relative path resolved
+# under ROOT_DIR; a bare filename resolves under TESTS_DIR. The two forms
+# cannot collide, since a bare filename holds no separator.
 readonly -a HARNESSES=(
   'ratchet-pin-audit|check-ratchet-pin-audit.test.sh|check-ratchet-pin-audit.sh'
   'allowed-actions-api|check-allowed-actions-api.test.sh|'
@@ -62,23 +65,37 @@ readonly -a HARNESSES=(
   'run-harness-group|run-harness-group.test.sh|'
   'run-lint-group|run-lint-group.test.sh|'
   'linpeas-pin-assert|linpeas-pin-assert.test.sh|'
+  # Tracked harnesses outside tests/. Nearly all of `.claude/` is untracked,
+  # but the docs-correctness-audit skill and its seeded-defect eval are
+  # committed, and their harnesses are reachable from no other runner —
+  # scripts/check-test-reachable.sh holds that. Test-only: the paired scripts
+  # build a throwaway worktree or read a results manifest, neither of which is
+  # an enforcement pass this job could act on.
+  'docs-audit-plant|.claude/skills/docs-correctness-audit/evals/seeded-defects/plant.test.sh|'
+  'docs-audit-score|.claude/skills/docs-correctness-audit/evals/seeded-defects/score.test.sh|'
+  'docs-audit-ground-truth|.claude/skills/docs-correctness-audit/scripts/collect-ground-truth.test.sh|'
 )
 
 function main() {
   local failed=0 passed=0
   local -a rows=()
-  local entry name test_rel enforce_rel start end secs status rc stage
+  local entry name test_rel enforce_rel test_path start end secs status rc stage
   for entry in "${HARNESSES[@]}"; do
     IFS='|' read -r name test_rel enforce_rel <<<"${entry}"
+    if [[ ${test_rel} == */* ]]; then
+      test_path="${ROOT_DIR}/${test_rel}"
+    else
+      test_path="${TESTS_DIR}/${test_rel}"
+    fi
     rc=0
     stage=''
     start="$(date +%s)"
-    if [[ ! -f "${TESTS_DIR}/${test_rel}" ]]; then
-      printf '::error::missing test harness: %s/%s\n' "${TESTS_DIR}" "${test_rel}" >&2
+    if [[ ! -f ${test_path} ]]; then
+      printf '::error::missing test harness: %s\n' "${test_path}" >&2
       rc=1
       stage='missing'
     else
-      bash "${TESTS_DIR}/${test_rel}" || rc=$?
+      bash "${test_path}" || rc=$?
       if [[ ${rc} -ne 0 ]]; then
         stage='test'
       elif [[ -n ${enforce_rel} ]]; then

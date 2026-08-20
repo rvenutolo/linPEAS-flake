@@ -51,6 +51,7 @@ function run_scenario() {
   step_file="$(mktemp)"
   TESTS_DIR_OVERRIDE="${tests_dir}" \
     SCRIPTS_DIR_OVERRIDE="${scripts_dir}" \
+    ROOT_DIR_OVERRIDE="${tests_dir%/*}/root" \
     GITHUB_STEP_SUMMARY="${step_file}" \
     "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
   # The exit code is part of what the run observably did, so it is recorded
@@ -113,10 +114,13 @@ function run_scenario() {
 #      $8 ratchet-enforce forbidden-marker (optional)
 #      $9 backfill-image-mode test exit code (optional, default 0)
 #      $10 lib-log test exit code (optional, default 0)
+#      $11 docs-audit-plant test exit code (optional, default 0)
 function seed() {
   local -r work="$1"
   local -r tests_dir="${work}/tests" scripts_dir="${work}/scripts"
-  mkdir -p "${tests_dir}" "${scripts_dir}"
+  local -r root_dir="${work}/root"
+  local -r plant_rel='.claude/skills/docs-correctness-audit/evals/seeded-defects/plant.test.sh'
+  mkdir -p "${tests_dir}" "${scripts_dir}" "${root_dir}"
   make_stub "${tests_dir}/check-ratchet-pin-audit.test.sh" "$2"
   make_stub "${scripts_dir}/check-ratchet-pin-audit.sh" "$3" "${8:-}"
   make_stub "${tests_dir}/check-allowed-actions-api.test.sh" "$4"
@@ -129,17 +133,29 @@ function seed() {
   make_stub "${scripts_dir}/check-allowed-actions-api.sh" 0 "$6"
   make_stub "${scripts_dir}/check-settings-posture.sh" 0 "$7"
 
+  # docs-audit-plant is the root-relative test-only harness the scenarios
+  # below drive; seed it explicitly so its exit code is controllable.
+  mkdir -p -- "${root_dir}/${plant_rel%/*}"
+  make_stub "${root_dir}/${plant_rel}" "${11:-0}"
+
   # The runner declares harnesses beyond the scenario-controlled ones above.
   # Stub every other declared harness as passing so the fixture tree is
   # complete (the runner errors on a missing harness) and this spec-test
   # stays decoupled from the exact HARNESSES membership.
-  local entry test_rel
+  local entry test_rel dest
   while IFS= read -r entry; do
     entry="${entry#*\'}"
     entry="${entry%%\'*}"
     IFS='|' read -r _ test_rel _ <<<"${entry}"
-    if [[ -n ${test_rel} && ! -e "${tests_dir}/${test_rel}" ]]; then
-      make_stub "${tests_dir}/${test_rel}" 0
+    [[ -n ${test_rel} ]] || continue
+    if [[ ${test_rel} == */* ]]; then
+      dest="${root_dir}/${test_rel}"
+    else
+      dest="${tests_dir}/${test_rel}"
+    fi
+    if [[ ! -e ${dest} ]]; then
+      mkdir -p -- "${dest%/*}"
+      make_stub "${dest}" 0
     fi
   done < <(grep -E "^[[:space:]]*'[^']+\|[^']+\.test\.sh\|[^']*'" "${SCRIPT}")
 }
@@ -228,6 +244,32 @@ function main() {
   seed "${work}" 0 0 0 0 "${forbidden_allowed}" "${forbidden_settings}" "" 0 1
   run_scenario 'lib-log test fails -> exit 1' \
     "${work}/tests" "${work}/scripts" 1 '| lib-log | FAIL (test) |' \
+    "${forbidden_allowed}" "${forbidden_settings}"
+  rm --recursive --force -- "${work}"
+
+  # Scenario 7: a repo-root-relative harness fails -> row FAIL, exit 1. The
+  # entry form that resolves outside tests/ has to fail as loudly as the rest,
+  # or registering a harness there is registration without enforcement.
+  work="$(mktemp -d)"
+  forbidden_allowed="${work}/ran-allowed"
+  forbidden_settings="${work}/ran-settings"
+  seed "${work}" 0 0 0 0 "${forbidden_allowed}" "${forbidden_settings}" '' 0 0 1
+  run_scenario 'root-relative harness fails -> exit 1' \
+    "${work}/tests" "${work}/scripts" 1 '| docs-audit-plant | FAIL (test) |' \
+    "${forbidden_allowed}" "${forbidden_settings}"
+  rm --recursive --force -- "${work}"
+
+  # Scenario 8: a root-relative entry whose file is absent names the path the
+  # runner actually tried. A diagnostic naming only the filename would read
+  # identically for a mistyped tests/ entry and a mistyped root-relative one.
+  work="$(mktemp -d)"
+  forbidden_allowed="${work}/ran-allowed"
+  forbidden_settings="${work}/ran-settings"
+  seed "${work}" 0 0 0 0 "${forbidden_allowed}" "${forbidden_settings}"
+  rm --force -- "${work}/root/.claude/skills/docs-correctness-audit/evals/seeded-defects/plant.test.sh"
+  run_scenario 'missing root-relative harness names its path' \
+    "${work}/tests" "${work}/scripts" 1 \
+    "missing test harness: ${work}/root/.claude/skills/docs-correctness-audit/evals/seeded-defects/plant.test.sh" \
     "${forbidden_allowed}" "${forbidden_settings}"
   rm --recursive --force -- "${work}"
 
