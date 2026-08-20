@@ -488,7 +488,7 @@ jobs:
             ${{ needs.identify.outputs.unmapped == 'true' && 'This PR edits `flake.nix`, but its title maps to no known flake input, so no refresh was attempted. Renovate has changed the title shape: teach `scripts/classify-renovate-flake-input.sh` the new one and add it to `tests/classify-renovate-flake-input.test.sh` as an observed title.' || 'The `renovate-flake-lock-refresh` workflow failed.' }}
 
             - PR: ${{ needs.identify.outputs.pr_number && format('#{0}', needs.identify.outputs.pr_number) || '(unknown — identify set no outputs)' }}
-            - Input: `${{ needs.identify.outputs.input_name || '(unmapped)' }}`
+            - Input: `${{ needs.identify.outputs.input_name || '(none)' }}`
             - identify: `${{ needs.identify.result }}`
             - compute-refresh: `${{ needs.compute-refresh.result }}`
             - push-refresh: `${{ needs.push-refresh.result }}`
