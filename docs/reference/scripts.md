@@ -1006,6 +1006,14 @@ digest-repoint supply-chain class) and fails. Floating-major pins
 a hard fail their new commit must be reachable from the upstream
 default branch — a force-pushed dangling commit fails.
 
+Both sides of a moved SHA are first dereferenced through the
+annotated-tag-object API, so a pin naming a tag object and a pin
+naming that tag's commit compare equal instead of reading as a
+repoint. This does not soften the gate: a tag object's hash covers
+the commit it tags, so retagging a released version moves the tag
+object too and the resolved commits still differ. Container digests
+name no git object and resolve to themselves.
+
 ### scripts/check-pr-workflows-no-secrets.sh
 
 Lint: no workflow triggered by `pull_request` /

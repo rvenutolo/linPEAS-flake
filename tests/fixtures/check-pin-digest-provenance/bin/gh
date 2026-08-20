@@ -46,6 +46,37 @@ case "${GH_STUB_MODE:-deny}" in
     printf 'gh: HTTP 500 upstream boom\n' >&2
     exit 1
     ;;
+  deref-none)
+    # Every pin already names a commit: the tag-object lookup 404s on
+    # both sides, so a moved SHA stays a moved SHA.
+    case "$*" in
+      *"/git/tags/"*)
+        printf 'gh: Not Found (HTTP 404)\n' >&2
+        exit 1
+        ;;
+      *)
+        printf 'unexpected gh call: %s\n' "$*" >&2
+        exit 97
+        ;;
+    esac
+    ;;
+  deref-alike)
+    # The base pin names an annotated tag object whose commit is the
+    # head pin, so the two sides differ by one dereference and no more.
+    case "$*" in
+      *"/git/tags/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"*)
+        printf 'dddddddddddddddddddddddddddddddddddddddd\n'
+        ;;
+      *"/git/tags/"*)
+        printf 'gh: Not Found (HTTP 404)\n' >&2
+        exit 1
+        ;;
+      *)
+        printf 'unexpected gh call: %s\n' "$*" >&2
+        exit 97
+        ;;
+    esac
+    ;;
   tagobject-malformed)
     case "$*" in
       *"/git/tags/"*)

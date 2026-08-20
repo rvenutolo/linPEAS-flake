@@ -291,14 +291,27 @@ function main() {
   # on the numbers rather than matching a sibling's banner.
   run_scenario 'unchanged tree passes' 'base' deny 0 \
     'pin digest provenance OK: 16 pin(s) across 5 file(s)'
-  run_scenario 'semver digest repoint fails' 'head-semver-repoint' deny 1 \
+  run_scenario 'semver digest repoint fails' 'head-semver-repoint' deref-none 1 \
     'digest repointed under unchanged version: actions/checkout (v4.3.1): bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb -> dddddddddddddddddddddddddddddddddddddddd'
+  # The same head tree as the scenario above, separated only by what the
+  # base pin turns out to name. Renovate normalizes a pin that names an
+  # annotated tag object to the commit that tag points at, which moves
+  # the SHA while the version label stays put — the repoint shape. It is
+  # told apart from a repoint by dereferencing, not by the diff.
+  run_scenario 'tag-object pin normalized to its commit passes' \
+    'head-semver-repoint' deref-alike 0 \
+    'names one commit on both sides, one tag-object dereference apart: dddddddddddddddddddddddddddddddddddddddd'
   run_scenario 'version bump passes' 'head-version-bump' deny 0 \
     'pin digest provenance OK: 6 pin(s) across 3 file(s)'
   run_scenario 'multi-instance uniform bump passes' 'head-multi-instance-bump' deny 0 \
     'pin digest provenance OK: 7 pin(s) across 3 file(s)'
   run_scenario 'pin add/remove passes' 'head-added-removed' deny 0 \
     'pin digest provenance OK: 8 pin(s) across 3 file(s)'
+  # The deny stub is load-bearing here, not incidental: a container
+  # digest names no git object, so this scenario reaching its verdict
+  # proves the tag-object dereference never fires on the octoscan pair.
+  # Relaxing this to a permissive stub would retire that guarantee
+  # silently.
   run_scenario 'octoscan digest-only repoint fails' 'head-octoscan-digest-only' deny 1 \
     'digest repointed under unchanged version: ghcr.io/synacktiv/octoscan (v0.1.7): sha256:1111111111111111111111111111111111111111111111111111111111111111 -> sha256:2222222222222222222222222222222222222222222222222222222222222222'
   run_scenario 'octoscan lockstep bump passes' 'head-octoscan-lockstep' deny 0 \
@@ -320,11 +333,11 @@ function main() {
     'head-floating-repoint' tagobject-malformed 2 'malformed tag deref payload'
   run_scenario 'quoted pin shape errors' 'head-quoted-pin' deny 2 'unrecognized uses: pin shape'
   run_scenario 'comment-less pin shape errors' 'head-commentless-pin' deny 2 'unrecognized uses: pin shape'
-  run_scenario 'nested action dir repoint fails' 'head-nested-action-repoint' deny 1 \
+  run_scenario 'nested action dir repoint fails' 'head-nested-action-repoint' deref-none 1 \
     'digest repointed under unchanged version: actions/setup-node (v4.0.0): 3333333333333333333333333333333333333333 -> 4444444444444444444444444444444444444444'
   run_scenario 'uppercase-SHA case-only change passes' 'head-uppercase-sha-same-pin' deny 0 \
     'pin digest provenance OK: 6 pin(s) across 4 file(s)'
-  run_scenario 'file rename plus repoint fails' 'head-file-rename-repoint' deny 1 \
+  run_scenario 'file rename plus repoint fails' 'head-file-rename-repoint' deref-none 1 \
     'digest repointed under unchanged version: actions/checkout (v4.3.1): bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb -> 5555555555555555555555555555555555555555'
   run_scenario 'self-reference pin repoint under unchanged comment passes' \
     'head-self-reference-repoint' deny 0 \
