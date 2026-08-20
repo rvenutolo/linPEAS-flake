@@ -16,7 +16,11 @@ inputs:
   install-url:
     description: "Nix installer URL. Defaults to the pinned NixOS release; matrix callers override with `matrix.nix-install-url`."
     required: false
-    default: "https://releases.nixos.org/nix/nix-2.34.7/install" # renovate: datasource=github-releases depName=nix packageName=NixOS/nix
+    # datasource=github-tags, not github-releases: NixOS/nix publishes
+    # tags only and zero GitHub releases, so a releases lookup resolves
+    # to an empty set and the pin below never moves. Every tag is plain
+    # MAJOR.MINOR.PATCH, so no versioning template is needed.
+    default: "https://releases.nixos.org/nix/nix-2.34.7/install" # renovate: datasource=github-tags depName=nix packageName=NixOS/nix
   extra-nix-config:
     description: "Additional lines appended to nix.conf beyond the baseline (experimental-features, access-tokens)."
     required: false
