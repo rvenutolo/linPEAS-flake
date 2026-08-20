@@ -52,7 +52,7 @@ Personal Nix-flake wrapper around [peass-ng/PEASS-ng](https://github.com/peass-n
     nix run github:rvenutolo/linPEAS-flake -- -a
     ```
 
-    Persistent: `nix profile install github:rvenutolo/linPEAS-flake`. Full options on the [Nix install page](install/nix.md).
+    Persistent: `nix profile add github:rvenutolo/linPEAS-flake` (Nix 2.30+). Full options on the [Nix install page](install/nix.md).
 
 === "Docker"
 
