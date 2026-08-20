@@ -65,6 +65,36 @@ flowchart LR
 
 No third-party flake-lock action is used: such actions take the write credential as a `with: token:` input, which would put it inside an externally-controlled action boundary. The split-job design instead confines Nix evaluation to a `contents: read` job; the `push-and-merge` job authenticates to the GitHub API as the `linpeas-flake-bumper` App via a short-lived installation token (`actions/create-github-app-token`), then commits files via REST `PUT /contents`. No `git push`, no PAT in `.git/config`. REST commits authenticated by an App installation token are auto-signed by GitHub's web-flow GPG key, so the bump branch satisfies `required_signatures` on `main`.
 
+## Dependency-PR merge policy
+
+Every class of dependency bump merges unattended once the required
+check set is green. There is no reviewer gate on any class, and no
+per-PR lever to introduce one: Renovate re-arms `platformAutomerge` on
+its next run over the repo, so `gh pr merge --disable-auto` does not
+hold. A bump that must not land is held by making a check fail, or by
+closing the PR and letting the dependency-dashboard entry re-propose
+it.
+
+What stands between a bump and `main`:
+
+| Gate                              | Applies to                                                    | What it catches                                                                                                              |
+| --------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `minimumReleaseAge: 7 days`       | every Renovate PR                                             | a release yanked or patched shortly after publication                                                                        |
+| SHA / digest pinning              | GitHub Actions, octoscan, `cachix/git-hooks.nix`, SchemaStore | a mutable tag repointed under the pin                                                                                        |
+| `check-pin-digest-provenance.sh`  | GitHub Actions, octoscan                                      | a digest-only repoint where the version label did not move                                                                   |
+| required check set                | every PR                                                      | build, harness, lint, and attestation failures reproducible at PR time                                                       |
+| `renovate-flake-lock-refresh.yml` | `nixpkgs`, `nixpkgs-unstable`, `pre-commit-hooks`             | a `flake.nix` bump whose lockfile refresh writes outside the paths it may commit — the job fails closed and the PR stays red |
+
+The gate this policy deliberately does not have is a human reading the
+diff. That trade is sharpest for the `nixpkgs` stable-branch bump,
+where part of the fallout — formatter rewrites, new linter rules —
+surfaces on a later cron run or contributor PR rather than on the
+bump's own checks. A green check set is therefore not proof that a
+stable-branch bump is inert; it is proof that nothing reproducible at
+PR time is broken. Recovery for the rest is a revert, and the fallout
+classes are tabulated in
+[flake-input-bumps.md](flake-input-bumps.md).
+
 ## Where this site fits
 
 The Pages workflow runs:

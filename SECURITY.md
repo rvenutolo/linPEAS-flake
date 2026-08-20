@@ -93,8 +93,9 @@ Four independent automations merge to `main` without human review:
 
 - `update-linpeas.yml` (daily) — upstream `linpeas.sh` content.
 - `update-flake-lock.yml` (weekly) — `nixpkgs` and other flake input revs.
-- Renovate (weekly) — GitHub Action SHAs and the pinned Nix installer
-    version.
+- Renovate (weekly) — every dependency it tracks: GitHub Action SHAs,
+    the pinned Nix installer version, the octoscan image digest, the
+    tracked flake inputs, and the SchemaStore pin.
 - `release-on-bump.yml` (per release) — the regenerated `CHANGELOG.md`,
     committed via an auto-merging PR under the same App identity.
 
