@@ -39,11 +39,11 @@ install, no state.
 nix run github:rvenutolo/linPEAS-flake -- -a
 ```
 
-**`nix profile install`** — persistent install on a Nix-enabled
-machine. `linpeas` ends up on `$PATH`.
+**`nix profile add`** — persistent install on a Nix-enabled machine
+running Nix 2.30 or newer. `linpeas` ends up on `$PATH`.
 
 ```sh
-nix profile install github:rvenutolo/linPEAS-flake
+nix profile add github:rvenutolo/linPEAS-flake
 ```
 
 ### With Docker

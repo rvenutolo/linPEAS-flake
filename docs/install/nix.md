@@ -2,6 +2,10 @@
 
 The flake exposes a `linpeas` package, a runnable `linpeas` app, and an overlay. Pin and content integrity are enforced at eval and build time — see [Security → Trust model](../security/trust-model.md).
 
+## Nix version
+
+`nix run`, flake-input use, and the overlay work on any flake-enabled Nix. The persistent install below needs **Nix 2.30 or newer**, which is where the subcommand is named `nix profile add`. Older Nix spells it `nix profile install`; 2.30 and newer still accept that spelling, but warn that it is a deprecated alias.
+
 ## Run without installing
 
 ```bash
@@ -13,7 +17,7 @@ Equivalent to executing `linpeas -a` against the currently-pinned upstream `linp
 ## Persistent install
 
 ```bash
-nix profile install github:rvenutolo/linPEAS-flake
+nix profile add github:rvenutolo/linPEAS-flake
 ```
 
 Installs `packages.<system>.default`. Nix names the resulting profile element after the flake (`linPEAS-flake`), not the package, so upgrade with `nix profile upgrade --all`, which is robust to the element name.
