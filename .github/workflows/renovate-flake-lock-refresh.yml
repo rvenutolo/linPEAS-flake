@@ -102,6 +102,7 @@ jobs:
       pr_number: ${{ steps.detect.outputs.pr_number }}
       head_branch: ${{ steps.detect.outputs.head_branch }}
       input_name: ${{ steps.detect.outputs.input_name }}
+      unmapped: ${{ steps.detect.outputs.unmapped }}
     steps:
       - uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
         with:
@@ -110,6 +111,16 @@ jobs:
             api.github.com:443
             github.com:443
             objects.githubusercontent.com:443
+      # Checks out this workflow's own ref — the default branch — and
+      # NOT the Renovate branch whose `ci` run triggered us.
+      # classify-renovate-flake-input.sh names the flake input that a
+      # later job refreshes while holding an App installation token, so
+      # it has to come from trusted content; resolving it from the head
+      # under test would let a branch choose the classifier that judges
+      # it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: identify Renovate PR + bumped input
         id: detect
         env:
@@ -157,37 +168,38 @@ jobs:
             exit 0
           fi
 
-          # Map PR title to flake input name. Renovate's hosted SaaS
-          # uses dep names from the custom-managers in renovate.json:
-          # `cachix/git-hooks.nix`       -> input `pre-commit-hooks`
-          # `NixOS/nixpkgs-unstable`     -> input `nixpkgs-unstable`
-          # `NixOS/nixpkgs`              -> input `nixpkgs`
-          # Title shapes observed in past Renovate PRs:
-          #   "Update cachix/git-hooks.nix digest to <sha>"
-          #   "Update NixOS/nixpkgs-unstable to <version>"
-          #   "Update NixOS/nixpkgs to <version>"
+          # Map the PR title to a flake input. The mapping lives in
+          # scripts/classify-renovate-flake-input.sh so it can be
+          # exercised against real Renovate titles by
+          # tests/classify-renovate-flake-input.test.sh; inline here it
+          # was unreachable by any test and drifted out of step with the
+          # titles Renovate actually opens.
+          #
+          # Exit 3 is "no flake input maps to this title", which is
+          # distinct from a broken invocation (exit 2). Every PR that
+          # reaches this point is a Renovate PR that edits flake.nix, so
+          # each one should map; one that does not means the title shape
+          # moved again, and that is reported rather than skipped.
           title=$(printf '%s' "${pr_json}" | jq -r '.title')
-          input_name=""
-          # Map PR title to flake input name. nixpkgs-unstable arm MUST precede
-          # the nixpkgs arm — the latter is a substring of the former, so case
-          # ordering decides the match.
-          case "${title}" in
-            *"cachix/git-hooks.nix"*)
-              input_name="pre-commit-hooks"
-              ;;
-            *"NixOS/nixpkgs-unstable"*)
-              input_name="nixpkgs-unstable"
-              ;;
-            *"NixOS/nixpkgs"*)
-              input_name="nixpkgs"
-              ;;
-            *)
-              printf 'title %q does not match a known flake input; skip\n' \
-                "${title}"
-              printf 'should_refresh=false\n' >> "${GITHUB_OUTPUT}"
-              exit 0
-              ;;
-          esac
+          classify_rc=0
+          input_name=$(./scripts/classify-renovate-flake-input.sh "${title}") ||
+            classify_rc=$?
+          if [[ ${classify_rc} -eq 3 ]]; then
+            printf 'title %q maps to no flake input, but the PR edits flake.nix\n' \
+              "${title}"
+            {
+              printf 'should_refresh=false\n'
+              printf 'unmapped=true\n'
+              printf 'pr_number=%s\n' "${pr_number}"
+              printf 'head_branch=%s\n' "${HEAD_BRANCH}"
+            } >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          if [[ ${classify_rc} -ne 0 ]]; then
+            printf 'classify-renovate-flake-input failed (exit %d)\n' \
+              "${classify_rc}" >&2
+            exit "${classify_rc}"
+          fi
 
           printf 'will refresh %s on PR #%s (%s)\n' \
             "${input_name}" "${pr_number}" "${HEAD_BRANCH}"
@@ -410,11 +422,22 @@ jobs:
   notify:
     name: notify
     needs: [identify, compute-refresh, push-refresh]
-    # Only post if we actually attempted a refresh. An identify-stage
-    # skip means the workflow_run was not a Renovate flake bump; that
-    # is the steady-state for >99% of ci completions and must stay
-    # silent.
-    if: always() && needs.identify.outputs.should_refresh == 'true'
+    # Post if we attempted a refresh, or if identify reached the
+    # mapping and found no input for the title. Every other
+    # identify-stage skip means the workflow_run was not a Renovate
+    # flake bump — the steady-state for >99% of ci completions, which
+    # must stay silent.
+    #
+    # `unmapped` is not one of those: it is only reachable after the
+    # author and flake.nix gates have both passed, so it says a
+    # Renovate PR edits flake.nix and this workflow cannot tell which
+    # input to refresh. Left silent, that lands as a green run beside a
+    # PR whose flake-check fails forever.
+    if: |
+      always() && (
+        needs.identify.outputs.should_refresh == 'true' ||
+        needs.identify.outputs.unmapped == 'true'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -439,10 +462,10 @@ jobs:
           label: renovate-flake-lock-refresh-failure
           title: "renovate-flake-lock-refresh: auto-refresh failed"
           body: |
-            The `renovate-flake-lock-refresh` workflow failed.
+            ${{ needs.identify.outputs.unmapped == 'true' && 'This PR edits `flake.nix`, but its title maps to no known flake input, so no refresh was attempted. Renovate has changed the title shape: teach `scripts/classify-renovate-flake-input.sh` the new one and add it to `tests/classify-renovate-flake-input.test.sh` as an observed title.' || 'The `renovate-flake-lock-refresh` workflow failed.' }}
 
             - PR: #${{ needs.identify.outputs.pr_number }}
-            - Input: `${{ needs.identify.outputs.input_name }}`
+            - Input: `${{ needs.identify.outputs.input_name || '(unmapped)' }}`
             - identify: `${{ needs.identify.result }}`
             - compute-refresh: `${{ needs.compute-refresh.result }}`
             - push-refresh: `${{ needs.push-refresh.result }}`

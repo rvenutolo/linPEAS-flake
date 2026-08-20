@@ -1407,6 +1407,15 @@ and side-effect free so the drift decision — including the
 attack-detection branch — is unit-testable without contacting the
 GitHub API.
 
+### scripts/classify-renovate-flake-input.sh
+
+Classify one Renovate PR title into the flake input that
+PR bumps: prints `pre-commit-hooks`, `nixpkgs-unstable`, or
+`nixpkgs`. Drives the identify job of
+.github/workflows/renovate-flake-lock-refresh.yml, which runs
+`nix flake update <input>` on the PR branch. Pure and side-effect
+free so the mapping is testable without a live Renovate PR.
+
 ### scripts/compare-repro.sh
 
 Compare two reproducibility-build hash JSON files.
