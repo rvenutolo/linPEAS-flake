@@ -60,7 +60,7 @@ jobs:
         with:
           persist-credentials: false
       - name: re-run failed jobs on stuck bot PRs
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0 # patch-tag-exception: pinned SHA is the v9.0.0 annotated-tag object, not the underlying commit
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           MAX_ATTEMPTS: "3"
         with:
