@@ -31,6 +31,7 @@ function fail() {
 # is the same observable outcome.
 # @arg $1 name  @arg $2 dir  @arg $3 expected exit  @arg $4 stderr substring
 # @arg $5 stdout substring (empty skips the check)
+# @arg $6 'strict' to leave LINT_ALLOW_EMPTY_SCAN unset (empty allows empty)
 function assert_run() {
   local -r name="$1" dir="$2" expected_exit="$3" expected_stderr="$4"
   local -r expected_stdout="${5:-}"
@@ -43,11 +44,15 @@ function assert_run() {
   # breadth assertion those roots carry against the real tree is held by
   # tests/glob-scan-breadth.test.sh, which points each one at an empty
   # directory on purpose.
-  LINT_ALLOW_EMPTY_SCAN=1 \
+  local -r strict="${6:-}"
+  local -a empty_env=(LINT_ALLOW_EMPTY_SCAN=1)
+  [[ ${strict} == 'strict' ]] && empty_env=()
+  env "${empty_env[@]}" \
     TESTS_DIR_OVERRIDE="${dir}/tests" \
     HARNESS_RUNNER_OVERRIDE="${dir}/run-harness-group.sh" \
     LINT_GROUPS_OVERRIDE="${dir}/lint-groups.yml" \
     WORKFLOWS_DIR_OVERRIDE="${dir}/workflows" \
+    REPO_ROOT_OVERRIDE="${dir}" \
     "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
   harness_assert_record "${name}" "${expected_stderr}" \
@@ -80,6 +85,12 @@ function scaffold() {
   mkdir -p "${dir}/tests" "${dir}/workflows"
   printf 'readonly -a HARNESSES=(\n)\n' >"${dir}/run-harness-group.sh"
   printf '# empty\n' >"${dir}/lint-groups.yml"
+  # The tracked-.claude scan set comes from `git ls-files`, so a scenario dir
+  # that is not a repository would fail the enumeration rather than exercise
+  # the mechanism under test. Fixed identity so `git` never prompts.
+  git init --quiet "${dir}"
+  git -C "${dir}" config user.email 'harness@example.invalid'
+  git -C "${dir}" config user.name 'harness'
 }
 
 function main() {
@@ -129,6 +140,45 @@ function main() {
     >"${dir}/workflows/ci.yml"
   assert_run 'reachable via direct workflow invocation' "${dir}" 0 '' \
     'direct workflow invocation: 1'
+  rm --recursive --force -- "${dir}"
+
+  # A tracked `.claude/` harness registered by its repo-root-relative path is
+  # reachable, and is counted in its own scan set rather than folded into the
+  # `tests/` tally. Both key shapes are registered here in one run: the header's
+  # per-scan-set counts are what prove the path-keyed entry was resolved and
+  # counted, which a single-scan-set run cannot show.
+  dir="$(mktemp --directory)"
+  scaffold "${dir}"
+  : >"${dir}/tests/foo.test.sh"
+  mkdir -p "${dir}/.claude/skills/probe"
+  : >"${dir}/.claude/skills/probe/planted.test.sh"
+  git -C "${dir}" add -- .claude/skills/probe/planted.test.sh
+  printf "readonly -a HARNESSES=(\n  'foo|foo.test.sh|'\n  'probe|.claude/skills/probe/planted.test.sh|'\n)\n" \
+    >"${dir}/run-harness-group.sh"
+  assert_run 'registered tracked .claude harness is reachable' "${dir}" 0 '' \
+    '1 tests/ harness(es) + 1 tracked .claude/ harness(es) reachable'
+  rm --recursive --force -- "${dir}"
+
+  # An unregistered tracked `.claude/` harness is named by its path, not its
+  # basename: the path is what the HARNESSES entry would have to spell.
+  dir="$(mktemp --directory)"
+  scaffold "${dir}"
+  mkdir -p "${dir}/.claude/skills/probe"
+  : >"${dir}/.claude/skills/probe/planted.test.sh"
+  git -C "${dir}" add -- .claude/skills/probe/planted.test.sh
+  assert_run 'unregistered tracked .claude harness fails and is named' \
+    "${dir}" 1 \
+    'unreachable test harness (no runner executes it): .claude/skills/probe/planted.test.sh'
+  rm --recursive --force -- "${dir}"
+
+  # A tracked-.claude scan set that enumerates nothing is a could-not-run, not
+  # a clean tree: the repo commits such harnesses, so an empty set means the
+  # enumeration stopped matching, and every one of them would score reachable.
+  dir="$(mktemp --directory)"
+  scaffold "${dir}"
+  : >"${dir}/tests/refresh-baz.test.sh"
+  assert_run 'empty tracked .claude scan set is a could-not-run' "${dir}" 2 \
+    'enumerated 0 files via tracked .claude harnesses' '' strict
   rm --recursive --force -- "${dir}"
 
   harness_assert_verify || failures=$((failures + 1))

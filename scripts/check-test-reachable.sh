@@ -1,17 +1,23 @@
 #!/usr/bin/env bash
 # scripts/check-test-reachable.sh
 #
-# @description Lint: every tests/*.test.sh harness is executed by some runner.
-# check-script-has-test guarantees a test FILE exists for each script; it does
-# not guarantee the test ever RUNS. A harness reachable by no runner is a
-# coverage no-op — the regressions it would catch pass green while the pairing
-# guard stays satisfied. This asserts every harness is reachable via one of
-# four runners:
+# @description Lint: every test harness is executed by some runner. Two scan
+# sets: `tests/*.test.sh`, and the tracked harnesses under `.claude/`. The
+# second comes from `git ls-files` rather than a glob because `.claude/` is not
+# gitignored and is overwhelmingly untracked — a glob would report dozens of
+# local-only harnesses as violations, and only the committed set is a CI
+# concern. check-script-has-test guarantees a test FILE exists for each script;
+# it does not guarantee the test ever RUNS. A harness reachable by no runner is
+# a coverage no-op — the regressions it would catch pass green while the
+# pairing guard stays satisfied. Reachability is via one of four runners:
 #   1. the HARNESSES array in scripts/run-harness-group.sh (harness-group job),
 #   2. the tests/refresh-*.test.sh glob in scripts/run-doc-freshness.sh,
 #   3. a .github/lint-groups.yml member -> tests/check-<name>.test.sh
 #      (executed by scripts/run-lint-group.sh), or
 #   4. a direct `tests/<x>.test.sh` invocation in a .github/workflows/*.yml.
+# A tests/ harness is keyed by basename and a tracked `.claude/` one by its
+# repo-root-relative path, which is exactly how each is spelled in the
+# HARNESSES array, so the two key spaces cannot collide.
 #
 # Overridable dirs/paths let the paired test harness point at fixtures. Exits
 # 0 if every harness is reachable, 1 otherwise.
@@ -28,9 +34,20 @@ readonly HARNESS_RUNNER="${HARNESS_RUNNER_OVERRIDE:-scripts/run-harness-group.sh
 readonly LINT_GROUPS="${LINT_GROUPS_OVERRIDE:-.github/lint-groups.yml}"
 readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-.github/workflows}"
 
-# Harnesses intentionally executed by no runner. Empty: every harness must be
-# wired to a runner. A genuinely manual-only harness would be listed here with
-# a rationale comment.
+repo_root="${REPO_ROOT_OVERRIDE:-}"
+if [[ -z ${repo_root} ]]; then
+  repo_root="$(git rev-parse --show-toplevel)"
+fi
+readonly REPO_ROOT="${repo_root}"
+# Single star, not double: git pathspecs default to non-glob magic where `*`
+# crosses `/`, so this form reaches every depth, while `.claude/**/*.test.sh`
+# silently misses a harness sitting directly under `.claude/`.
+readonly CLAUDE_PATHSPEC='.claude/*.test.sh'
+
+# Harnesses intentionally executed by no runner, named as the scan set keys
+# them: a tests/ harness by basename, a tracked `.claude/` one by its
+# repo-root-relative path. Empty: every harness must be wired to a runner. A
+# genuinely manual-only harness would be listed here with a rationale comment.
 readonly -a EXEMPT=()
 
 # The four reachability mechanisms, in the order the summary reports them.
@@ -155,7 +172,11 @@ function reached_count() {
   while IFS= read -r entry; do
     [[ ${entry} == "${mechanism}|"* ]] || continue
     name="${entry#*|}"
-    [[ -f "${TESTS_DIR}/${name}" ]] && count=$((count + 1))
+    if [[ ${name} == */* ]]; then
+      [[ -f "${REPO_ROOT}/${name}" ]] && count=$((count + 1))
+    else
+      [[ -f "${TESTS_DIR}/${name}" ]] && count=$((count + 1))
+    fi
   done <<<"$2"
   printf '%d' "${count}"
 }
@@ -178,6 +199,20 @@ function main() {
     fi
   done
 
+  local -a claude_harnesses=()
+  enumerate_into claude_harnesses 'tracked .claude harnesses' \
+    git -C "${REPO_ROOT}" ls-files -z -- "${CLAUDE_PATHSPEC}"
+
+  local claude_checked=0 rel
+  for rel in "${claude_harnesses[@]}"; do
+    is_exempt "${rel}" && continue
+    claude_checked=$((claude_checked + 1))
+    if ! grep --quiet --line-regexp --fixed-strings -- "${rel}" <<<"${names}"; then
+      printf 'unreachable test harness (no runner executes it): %s\n' "${rel}" >&2
+      failed=1
+    fi
+  done
+
   if ((failed > 0)); then
     printf 'test-reachable lint: some harnesses run in no runner\n' >&2
     exit 1
@@ -188,7 +223,8 @@ function main() {
   # or the coverage is spread across all four, and a mechanism that has
   # silently stopped matching anything is exactly the regression this lint
   # exists to catch. Counts overlap where a harness has two runners.
-  printf 'test-reachable lint: %d harness(es) reachable, by runner:\n' "${checked}"
+  printf 'test-reachable lint: %d tests/ harness(es) + %d tracked .claude/ harness(es) reachable, by runner:\n' \
+    "${checked}" "${claude_checked}"
   local mechanism
   for mechanism in "${MECHANISMS[@]}"; do
     printf '  %s: %s\n' "${mechanism}" "$(reached_count "${mechanism}" "${reachable}")"

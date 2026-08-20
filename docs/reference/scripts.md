@@ -1176,18 +1176,24 @@ include pattern, required rules).
 
 ### scripts/check-test-reachable.sh
 
-Lint: every tests/\*.test.sh harness is executed by some runner.
-check-script-has-test guarantees a test FILE exists for each script; it does
-not guarantee the test ever RUNS. A harness reachable by no runner is a
-coverage no-op — the regressions it would catch pass green while the pairing
-guard stays satisfied. This asserts every harness is reachable via one of
-four runners:
+Lint: every test harness is executed by some runner. Two scan
+sets: `tests/*.test.sh`, and the tracked harnesses under `.claude/`. The
+second comes from `git ls-files` rather than a glob because `.claude/` is not
+gitignored and is overwhelmingly untracked — a glob would report dozens of
+local-only harnesses as violations, and only the committed set is a CI
+concern. check-script-has-test guarantees a test FILE exists for each script;
+it does not guarantee the test ever RUNS. A harness reachable by no runner is
+a coverage no-op — the regressions it would catch pass green while the
+pairing guard stays satisfied. Reachability is via one of four runners:
 
 1. the HARNESSES array in scripts/run-harness-group.sh (harness-group job),
 1. the tests/refresh-\*.test.sh glob in scripts/run-doc-freshness.sh,
 1. a .github/lint-groups.yml member -> tests/check-<name>.test.sh
     (executed by scripts/run-lint-group.sh), or
 1. a direct `tests/<x>.test.sh` invocation in a .github/workflows/\*.yml.
+    A tests/ harness is keyed by basename and a tracked `.claude/` one by its
+    repo-root-relative path, which is exactly how each is spelled in the
+    HARNESSES array, so the two key spaces cannot collide.
 
 Overridable dirs/paths let the paired test harness point at fixtures. Exits
 0 if every harness is reachable, 1 otherwise.
