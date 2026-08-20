@@ -1,0 +1,16 @@
+{
+  "seeds": [
+    {
+      "id": "bad-anchor",
+      "category": "internal-link",
+      "file": "docs/index.md",
+      "anchor": "zzq7 this sentence appears in no tracked document",
+      "op": "insert-after",
+      "from": "",
+      "payload": "unused: the anchor never resolves",
+      "expected_severity": "high",
+      "sentinel": "zzq7-bad-anchor",
+      "line_tol": 3
+    }
+  ]
+}

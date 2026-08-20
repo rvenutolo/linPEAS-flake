@@ -45,4 +45,16 @@ check "primary tree unchanged by planting" \
 "$plant" --clean >/dev/null
 check "worktree removed after --clean" "[ ! -d '$wt' ]"
 
+# A seeds anchor is a verbatim copy of a sentence the rest of the repo is free
+# to reword. An anchor that no longer resolves has to be a loud failure: a seed
+# that quietly does not plant shrinks the recall denominator without saying so.
+bad_rc=0
+# shellcheck disable=SC2034 # read via check()'s eval of the assertion string below, not a direct expansion here
+bad_out="$(SEEDS_OVERRIDE="$here/fixtures/seeds-bad-anchor.json" "$plant" 2>&1)" ||
+  bad_rc=$?
+check "unresolvable anchor fails the plant" "[ '$bad_rc' -ne 0 ]"
+check "unresolvable anchor names the miss" \
+  "printf '%s' \"\$bad_out\" | grep -qF 'anchor matched 0 lines'"
+"$plant" --clean >/dev/null 2>&1 || true
+
 exit "$fail"

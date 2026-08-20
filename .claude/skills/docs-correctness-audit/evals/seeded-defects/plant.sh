@@ -6,7 +6,9 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-seeds="$here/seeds.json"
+# Env override (test-only): SEEDS_OVERRIDE points the plant at an alternate
+# seed set, so the harness can drive the unresolvable-anchor path.
+seeds="${SEEDS_OVERRIDE:-$here/seeds.json}"
 results="$here/results"
 wt="${TMPDIR:-/tmp}/docs-audit-seeded-defects"
 repo_root="$(git -C "$here" rev-parse --show-toplevel)"
