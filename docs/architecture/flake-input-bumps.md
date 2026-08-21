@@ -40,9 +40,10 @@ The manual runbook below is the **fallback** when the auto-refresh
 does not fire, and the reproduction path when a landed bump breaks
 something — most often because the PR title format changed and
 no longer matches a `case` arm in
-`scripts/classify-renovate-flake-input.sh`. If auto-refresh
-silently does not act, an issue is filed under the
-`renovate-flake-lock-refresh-failure` label; pursue the manual
+`scripts/classify-renovate-flake-input.sh`, or because the author login
+GitHub reports moved out of step with
+`scripts/classify-renovate-pr-author.sh`. Either way an issue is filed
+under the `renovate-flake-lock-refresh-failure` label; pursue the manual
 steps below in the meantime.
 
 ## Why a runbook
@@ -422,7 +423,19 @@ on Renovate's SaaS runners; no `postUpgradeTasks` allowlist).
 Trigger: `workflow_run` of `ci` completing on a `renovate/*` head
 branch. The `identify` job gates on ALL of:
 
-- PR author == `renovate[bot]` (or legacy `renovate`).
+- PR author is the Renovate App, decided by
+    `scripts/classify-renovate-pr-author.sh`. GitHub reports the same App
+    under three spellings — `app/renovate` from `gh pr view --json   author`, `renovate[bot]` from the REST and GraphQL APIs, and a bare
+    `renovate` from a self-hosted legacy install — so the classifier
+    normalizes one optional `app/` prefix and one optional `[bot]`
+    suffix and then matches `renovate` exactly. A login that merely
+    contains `renovate` is rejected: this workflow pushes commits to a
+    PR branch, and `renovate` is a claimable username shape. Unlike the
+    other gates below, an author that does not match FAILS the
+    `identify` job rather than skipping it — every PR reaching this point
+    is on a `renovate/` branch, so an author Renovate does not own is an
+    anomaly, and a silent skip is what let an earlier login-shape change
+    disable the whole workflow undetected.
 - PR head branch starts with `renovate/`.
 - PR diff touches `flake.nix`.
 - PR title contains a known dep name (`cachix/git-hooks.nix` →
@@ -434,7 +447,8 @@ branch. The `identify` job gates on ALL of:
 Adding a new auto-refreshable input requires three coordinated
 edits in the same PR: (1) extend the `case` arms in
 `scripts/classify-renovate-flake-input.sh`, which the `identify` job
-invokes (and extend its test harness alongside),
+invokes (and extend its test harness alongside; the same pairing applies
+to `scripts/classify-renovate-pr-author.sh` if a login shape moves),
 (2) add a Renovate `customManager` in `renovate.json`,
 (3) extend the manual fallback runbook in
 `docs/architecture/flake-input-bumps.md`.

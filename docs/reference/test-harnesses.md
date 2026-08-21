@@ -125,6 +125,7 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/classify-backfill-image-mode.test.sh`   | `scripts/classify-backfill-image-mode.sh`   | —                                            |
 | `tests/classify-refresh-notify-result.test.sh` | `scripts/classify-refresh-notify-result.sh` | —                                            |
 | `tests/classify-renovate-flake-input.test.sh`  | `scripts/classify-renovate-flake-input.sh`  | —                                            |
+| `tests/classify-renovate-pr-author.test.sh`    | `scripts/classify-renovate-pr-author.sh`    | —                                            |
 | `tests/compare-repro.test.sh`                  | `scripts/compare-repro.sh`                  | `tests/fixtures/compare-repro`               |
 | `tests/docs-audit-pressure.test.sh`            | `scripts/docs-audit-pressure.sh`            | —                                            |
 | `tests/gen-dashboard-data.test.sh`             | `scripts/gen-dashboard-data.sh`             | `tests/fixtures/dashboard-data`              |

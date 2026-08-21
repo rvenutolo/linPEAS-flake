@@ -13,7 +13,8 @@ name: renovate-flake-lock-refresh
 #
 #   1. `identify` — fires off the `ci` workflow's completion on a
 #      `renovate/*` branch; finds the matching open PR, verifies its
-#      author is the `renovate[bot]` App, confirms it touches
+#      author is the Renovate App via
+#      `scripts/classify-renovate-pr-author.sh`, confirms it touches
 #      `flake.nix`, and maps the PR title to a flake input name.
 #   2. `compute-refresh` — checks out the PR branch, runs
 #      `nix flake update <name>`, regenerates the docs that lock
@@ -83,8 +84,8 @@ concurrency:
 jobs:
   identify:
     # Defense-in-depth gate. Today's load-bearing trust is the
-    # `author.login == renovate[bot]` check in the detect step below — a
-    # fork PR cannot impersonate that App identity. The
+    # author check in the detect step below — a fork PR cannot
+    # impersonate that App identity. The
     # `head_repository.full_name` check here closes a future-regression
     # gap: if GitHub ever changes how `author.login` is computed for
     # workflow_run-triggered events (or how PRs from forks declare their
@@ -154,13 +155,32 @@ jobs:
             --repo "${REPO}" \
             --json author,files,title)
 
+          # The author gate lives in
+          # scripts/classify-renovate-pr-author.sh so it can be exercised
+          # against the logins GitHub really returns by
+          # tests/classify-renovate-pr-author.test.sh; inline here it was
+          # unreachable by any test and drifted out of step with them.
+          # `gh pr view --json author` renders an App as `app/<slug>`,
+          # which an inline two-spelling comparison read as "not
+          # Renovate" and skipped, silently, on every PR.
+          #
+          # Exit 3 is "some other author". Reaching it is an anomaly, not
+          # a routine no-op: this job only runs for a PR whose branch is
+          # under `renovate/`, so an author Renovate does not own means
+          # either somebody pushed such a branch by hand or the login
+          # shape moved again. Both are worth surfacing, and the silent
+          # `should_refresh=false` this replaces is what let the last
+          # shape change sit undetected. Failing here reaches `notify`,
+          # which classifies an `identify` that failed and files an
+          # issue.
           author=$(printf '%s' "${pr_json}" | jq -r '.author.login')
-          # Hosted Renovate App installs as `renovate[bot]`. Self-hosted
-          # legacy installs may show as `renovate`. Accept both.
-          if [[ "${author}" != "renovate" && "${author}" != "renovate[bot]" ]]; then
-            printf 'PR author %s is not Renovate; skip\n' "${author}"
-            printf 'should_refresh=false\n' >> "${GITHUB_OUTPUT}"
-            exit 0
+          author_rc=0
+          ./scripts/classify-renovate-pr-author.sh "${author}" >/dev/null ||
+            author_rc=$?
+          if [[ ${author_rc} -ne 0 ]]; then
+            printf 'PR #%s on %s has author %q, which is not Renovate\n' \
+              "${pr_number}" "${HEAD_BRANCH}" "${author}" >&2
+            exit "${author_rc}"
           fi
 
           # PR must touch flake.nix; otherwise nothing for us to refresh.
