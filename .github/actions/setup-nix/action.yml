@@ -62,7 +62,7 @@ runs:
         # Exhausting the retries is a warning, not a failure; say so explicitly
         # rather than inheriting the exit status of the preceding echo.
         exit 0
-    - uses: cachix/install-nix-action@b97f05dcb019ddea06450a50ef6203d2fdc19fee # v31 # patch-tag-exception: pinned SHA is the v31 annotated-tag object, not a release commit; cachix publishes only floating major tags (v31 retargets across patches) so there is no immutable patch tag to ratchet to
+    - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31 # patch-tag-exception: pinned SHA is the v31 annotated-tag object, not a release commit; cachix publishes only floating major tags (v31 retargets across patches) so there is no immutable patch tag to ratchet to
       with:
         install_url: ${{ inputs.install-url }}
         extra_nix_config: |
