@@ -120,7 +120,7 @@ not be parsed as shell.
 
 Lint: scripts/bump-linpeas.sh retains its three
 supply-chain integrity guards — asset-URL prefix, `.digest`
-cross-check, and atomic (mktemp + mv) pin write.
+cross-check, and atomic (make_temp + mv) pin write.
 
 ### scripts/check-changelog-fresh.sh
 

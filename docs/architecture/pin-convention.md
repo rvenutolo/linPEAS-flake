@@ -7,10 +7,10 @@ tag.
 
 ```yaml
 # Required
-- uses: github/codeql-action/init@03e4368ac7daa2bd82b3e85262f3bf87ee112f57 # v3.36.0
+- uses: some-org/some-action@0123456789abcdef0123456789abcdef01234567 # v3.36.0
 
 # Forbidden
-- uses: github/codeql-action/init@03e4368ac7daa2bd82b3e85262f3bf87ee112f57 # v3
+- uses: some-org/some-action@0123456789abcdef0123456789abcdef01234567 # v3
 ```
 
 ## Why patch tags, not major tags

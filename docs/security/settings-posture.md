@@ -1,6 +1,6 @@
 # Settings Posture — `rvenutolo/linPEAS-flake`
 
-This document is the **source of truth** for every GitHub-side settings knob this repo depends on. Every row is verifiable by a single `gh api` query. If a value drifts, treat it as a security incident.
+This document is the **source of truth** for every GitHub-side settings knob this repo depends on. Most rows are verifiable by a single `gh api` query; the tag-protection ruleset row is verified by a script, and the manual-UI rows (fork-PR approval gate, merge-method flags, maintainer 2FA) expose no REST endpoint the read-only drift-check App can reach — each is called out where it appears. If a value drifts, treat it as a security incident.
 
 ## Security & analysis
 

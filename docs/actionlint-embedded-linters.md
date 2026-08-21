@@ -12,8 +12,8 @@ actionlint discovers embedded linters via `$PATH`. A pre-commit invocation
 from a shell that has not entered the devShell (fresh checkout without
 direnv, CI step that forgot `nix develop`) silently degrades: actionlint
 exits 0 with embedded coverage disabled. To eliminate this, the actionlint
-hook in `nix/hooks/linters.nix` is wrapped so the binary always receives an explicit
-`-shellcheck=/nix/store/.../shellcheck` flag. Discovery is deterministic
+hook's entry points at a wrapper built in `nix/wrappers.nix`, so the binary
+always receives an explicit `-shellcheck=/nix/store/.../shellcheck` flag. Discovery is deterministic
 at flake evaluation.
 
 ## Canary
@@ -36,8 +36,9 @@ If the canary fails:
 ## Wiring pyflakes when python `run:` lands
 
 Today the `check-run-block-pyflakes-required` pre-commit hook fails if any
-workflow `run:` invokes `python`/`python3`/`pip` (also catches `pip3` and
-`sudo`-prefixed forms). When that happens:
+workflow or composite-action `run:` invokes `python`/`python3`/`pip` (also
+catches `pip3` and `sudo`-prefixed forms). It walks both
+`.github/workflows` and `.github/actions`. When that happens:
 
 1. Add `python3Packages.pyflakes` to the devShell package list in
     `nix/devshell.nix` (same scope as the existing `shellcheck` entry — grep
