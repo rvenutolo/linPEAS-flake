@@ -167,6 +167,15 @@ auto-refresh above, and through the steps below when it does not
 fire. A bump therefore cannot auto-merge on the strength of the
 `flake.nix` line alone.
 
+Every one of these bumps repoints an input's source, which is what the
+`flake.lock` input-provenance gate exists to catch. It passes here because
+the repoint is *declared*: the gate reads `flake.nix` on both sides and
+tolerates a lock move for an input whose declared `url` moved with it,
+logging a note that names both. The corroboration is per input name, so a
+lock carrying a second, undeclared repoint alongside the declared one still
+fails. See [the gate's section in the trust
+model](../security/trust-model.md#flakelock-input-provenance-gate).
+
 ## Step-by-step
 
 ### 1. Check out the PR locally

@@ -3,7 +3,8 @@
 #
 # Failure-mode harness for scripts/check-flake-lock-provenance.sh.
 # Drives the check entirely off fixture files via the BASE_LOCK_FILE /
-# HEAD_LOCK_FILE env overrides, so no git history is touched.
+# HEAD_LOCK_FILE / BASE_FLAKE_NIX / HEAD_FLAKE_NIX env overrides, so no
+# git history is touched.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -21,6 +22,15 @@ readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-flake-lock-provenance"
 # reporting which fixture is slow. `timeout` reports 124 on a kill, so a
 # blown bound surfaces as an exit-code mismatch naming the scenario.
 readonly SCENARIO_TIMEOUT_SECS=20
+
+# Both `flake.nix` sides default to the same fixture, which is what
+# makes every pre-existing scenario mean what it always meant: identical
+# declarations corroborate nothing, so a lock move is judged on the lock
+# alone. Exported rather than passed per call so a scenario that forgets
+# them cannot silently fall through to the repo's own `flake.nix` and
+# make its verdict depend on the checkout's git state.
+export BASE_FLAKE_NIX="${FIXTURES}/base.flake.nix"
+export HEAD_FLAKE_NIX="${FIXTURES}/base.flake.nix"
 
 failures=0
 
@@ -58,6 +68,19 @@ function run_pair_scenario() {
   rm --force -- "${outcome_file}" "${out_file}"
 }
 
+# Runs a scenario whose head `flake.nix` differs from the base one, so
+# the check sees a declared move to corroborate against. The base
+# declaration stays at the shared fixture: corroboration is about what
+# moved between the two sides, and anchoring the base is what keeps each
+# scenario's declared move to exactly the one it names.
+# @arg $1 scenario name  @arg $2 head lock fixture  @arg $3 head flake.nix fixture
+# @arg $4 expected exit  @arg $5 expected output substring (empty skips)
+function run_declared_scenario() {
+  local -r name="$1" head="$2" head_nix="$3" expected_exit="$4" expected_msg="$5"
+  HEAD_FLAKE_NIX="${FIXTURES}/${head_nix}" \
+    run_pair_scenario "${name}" 'base.lock' "${head}" "${expected_exit}" "${expected_msg}"
+}
+
 # @arg $1 scenario name  @arg $2 head fixture basename  @arg $3 expected exit
 # @arg $4 expected stderr/stdout substring (empty skips)
 # Thin wrapper over run_pair_scenario anchored at the default base lock.
@@ -74,10 +97,10 @@ function run_follows_scenario() {
   run_pair_scenario "${name}" 'base-follows.lock' "${head}" "${expected_exit}" "${expected_msg}"
 }
 
-# Points one of BASE_LOCK_FILE / HEAD_LOCK_FILE at a caller-supplied
-# payload path while the other keeps the valid default fixture, so a
-# scenario proves the could-not-run path fires on the override under
-# test and nowhere else. Shared by the absent, unreadable, and
+# Points one of BASE_LOCK_FILE / HEAD_LOCK_FILE / BASE_FLAKE_NIX /
+# HEAD_FLAKE_NIX at a caller-supplied payload path while the other three
+# keep their valid default fixtures, so a scenario proves the
+# could-not-run path fires on the override under test and nowhere else. Shared by the absent, unreadable, and
 # directory-payload scenarios below — each supplies a different kind of
 # broken path and lets this function drive the script and assert the
 # outcome.
@@ -90,13 +113,18 @@ function run_broken_lock_scenario() {
   out_file="$(mktemp)"
   outcome_file="$(mktemp)"
   local base_lock="${FIXTURES}/base.lock" head_lock="${FIXTURES}/base.lock"
+  local base_nix="${FIXTURES}/base.flake.nix" head_nix="${FIXTURES}/base.flake.nix"
   case "${var}" in
   BASE_LOCK_FILE) base_lock="${payload}" ;;
   HEAD_LOCK_FILE) head_lock="${payload}" ;;
+  BASE_FLAKE_NIX) base_nix="${payload}" ;;
+  HEAD_FLAKE_NIX) head_nix="${payload}" ;;
   esac
   local actual_exit=0
   BASE_LOCK_FILE="${base_lock}" \
     HEAD_LOCK_FILE="${head_lock}" \
+    BASE_FLAKE_NIX="${base_nix}" \
+    HEAD_FLAKE_NIX="${head_nix}" \
     "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
   harness_assert_record "${name}" "${expected_msg}" "${outcome_file}" "${out_file}"
@@ -155,21 +183,21 @@ function main() {
   # entry-point ids, follows depths, and tolerated transitive churn — and the
   # verdict alone renders all of that as the same observable outcome.
   run_scenario 'routine bump passes' 'head-routine.lock' 0 \
-    'provenance OK: entry "root"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 3; transitive churn tolerated: 0 added, 0 removed'
+    'provenance OK: entry "root"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 3; transitive churn tolerated: 0 added, 0 removed; flake.nix-corroborated moves: 0'
   run_scenario 'top-level owner change fails' 'head-toplevel-owner.lock' 1 \
     'FAIL: node repointed: alpha (original.owner: orgA -> evil)'
   run_scenario 'top-level type change fails' 'head-toplevel-type.lock' 1 \
     'FAIL: node repointed: alpha (locked.type: github -> git)'
   run_scenario 'top-level input added fails' 'head-toplevel-added.lock' 1 'FAIL: top-level input added: delta'
   run_scenario 'top-level input removed fails' 'head-toplevel-removed.lock' 1 'FAIL: top-level input removed: beta'
-  run_scenario 'transitive repoint fails' 'head-transitive-repoint.lock' 1 'FAIL: node repointed: gamma'
+  run_scenario 'transitive repoint fails' 'head-transitive-repoint.lock' 1 'FAIL: node repointed: gamma (original.owner: orgC -> evil)'
   run_scenario 'transitive node added tolerated' 'head-transitive-added.lock' 0 \
-    'provenance OK: entry "root"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 3; transitive churn tolerated: 1 added, 0 removed'
+    'provenance OK: entry "root"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 3; transitive churn tolerated: 1 added, 0 removed; flake.nix-corroborated moves: 0'
   run_scenario 'transitive node removed tolerated' 'head-transitive-removed.lock' 0 \
-    'provenance OK: entry "root"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 2; transitive churn tolerated: 0 added, 1 removed'
+    'provenance OK: entry "root"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 2; transitive churn tolerated: 0 added, 1 removed; flake.nix-corroborated moves: 0'
   run_scenario 'garbage head json errors' 'head-garbage.lock' 2 ''
   run_scenario 'top-level rename same source' 'head-toplevel-renamed-same.lock' 0 \
-    'provenance OK: entry "root"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 2; transitive churn tolerated: 1 added, 1 removed'
+    'provenance OK: entry "root"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 2; transitive churn tolerated: 1 added, 1 removed; flake.nix-corroborated moves: 0'
   run_scenario 'top-level rename + repoint fails' 'head-toplevel-renamed-repoint.lock' 1 \
     'FAIL: top-level input repointed: alpha (alpha -> alpha_2)'
   # The absent case exits 2 under the canonical could-not-run sentence,
@@ -204,11 +232,11 @@ function main() {
     HEAD_LOCK_FILE 'flake-lock provenance head: payload from HEAD_LOCK_FILE could not be read'
 
   run_follows_scenario 'follows routine bump passes' 'head-follows-routine.lock' 0 \
-    'provenance OK: entry "root"; top-level inputs resolved: 4 (1 via follows, max depth 1); shared nodes compared: 3; transitive churn tolerated: 0 added, 0 removed'
+    'provenance OK: entry "root"; top-level inputs resolved: 4 (1 via follows, max depth 1); shared nodes compared: 3; transitive churn tolerated: 0 added, 0 removed; flake.nix-corroborated moves: 0'
   run_follows_scenario 'string-to-array repoint fails' 'head-follows-string-to-array.lock' 1 'FAIL: top-level input repointed: gamma'
-  run_follows_scenario 'array-to-array repoint fails' 'head-follows-array-change.lock' 1 'FAIL: top-level input repointed: beta'
+  run_follows_scenario 'array-to-array repoint fails' 'head-follows-array-change.lock' 1 'FAIL: top-level input repointed: beta (alpha -> gamma)'
   run_follows_scenario 'string-to-array same source passes' 'head-follows-string-to-array-same.lock' 0 \
-    'provenance OK: entry "root"; top-level inputs resolved: 4 (2 via follows, max depth 1); shared nodes compared: 2; transitive churn tolerated: 0 added, 1 removed'
+    'provenance OK: entry "root"; top-level inputs resolved: 4 (2 via follows, max depth 1); shared nodes compared: 2; transitive churn tolerated: 0 added, 1 removed; flake.nix-corroborated moves: 0'
   run_follows_scenario 'dangling follows path fails' 'head-follows-dangling.lock' 1 \
     'FAIL: top-level input unresolvable (follows path names no such node): beta'
   run_follows_scenario 'cyclic follows fails' 'head-follows-cycle.lock' 1 \
@@ -226,7 +254,7 @@ function main() {
   # much headroom the ceiling still has.
   run_pair_scenario 'deep legal follows chain resolves' \
     'base-follows-deep.lock' 'base-follows-deep.lock' 0 \
-    'provenance OK: entry "root"; top-level inputs resolved: 33 (32 via follows, max depth 32); shared nodes compared: 1; transitive churn tolerated: 0 added, 0 removed'
+    'provenance OK: entry "root"; top-level inputs resolved: 33 (32 via follows, max depth 32); shared nodes compared: 1; transitive churn tolerated: 0 added, 0 removed; flake.nix-corroborated moves: 0'
 
   run_scenario 'decoy renamed root fails' 'head-decoy-root.lock' 1 'FAIL: root node id changed: root -> realroot'
   run_scenario 'head .root missing errors' 'head-root-missing.lock' 2 'head flake.lock: .root missing or not a string (got null)'
@@ -234,7 +262,58 @@ function main() {
   # Naming the entry point is what separates this from the plain routine
   # bump: the two resolve identically shaped graphs under different root ids.
   run_pair_scenario 'alt root id routine bump passes' 'base-alt-root.lock' 'head-alt-root-routine.lock' 0 \
-    'provenance OK: entry "top"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 3; transitive churn tolerated: 0 added, 0 removed'
+    'provenance OK: entry "top"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 3; transitive churn tolerated: 0 added, 0 removed; flake.nix-corroborated moves: 0'
+
+  # Corroboration by flake.nix. The gate exists to bound the lock-only
+  # bot path, so what separates a violation from a declared bump is
+  # whether `flake.nix` moved the same input. Each scenario below pairs a
+  # lock move with a declaration that does or does not account for it.
+  run_declared_scenario 'declared repoint passes' \
+    'head-alpha-declared-repoint.lock' 'head-alpha-repoint.flake.nix' 0 \
+    'provenance OK: entry "root"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 3; transitive churn tolerated: 0 added, 0 removed; flake.nix-corroborated moves: 1'
+  # Corroboration is per input name, not per PR: a declaration that moved
+  # one input must not vouch for a second input moving alongside it.
+  # This is the smuggling case the gate is really for.
+  run_declared_scenario 'a declared repoint does not cover an undeclared sibling' \
+    'head-alpha-beta-repoint.lock' 'head-alpha-repoint.flake.nix' 1 \
+    'FAIL: node repointed: beta (original.ref: main -> next)'
+  # The block-shaped declaration (`<name> = { url = ...; }`) is the other
+  # half of the parser, and the one a nested `inputs.<x>.follows` line
+  # sits inside — reading that nested line as a top-level source would
+  # corroborate the wrong name.
+  run_declared_scenario 'a block-shaped declaration corroborates its own input' \
+    'head-alpha-beta-repoint.lock' 'head-beta-repoint.flake.nix' 1 \
+    'FAIL: node repointed: alpha (original.ref: main -> next)'
+  run_declared_scenario 'declared top-level input add passes' \
+    'head-toplevel-added.lock' 'head-delta-added.flake.nix' 0 \
+    'note: top-level input add/remove corroborated by flake.nix (tolerated): delta ((absent) -> github:orgD/delta/main)'
+  run_declared_scenario 'declared top-level input removal passes' \
+    'head-toplevel-removed.lock' 'head-beta-removed.flake.nix' 0 \
+    'note: top-level input add/remove corroborated by flake.nix (tolerated): beta (github:orgB/beta/main -> (absent))'
+  run_declared_scenario 'a declaration naming another input does not cover an add' \
+    'head-alpha-declared-plus-delta-added.lock' 'head-alpha-repoint.flake.nix' 1 \
+    'FAIL: top-level input added: delta'
+  # `flake.nix` names no transitive node, so no declaration can reach
+  # one. A PR that legitimately repoints a top-level input still cannot
+  # carry a repoint deeper in the graph.
+  run_declared_scenario 'a transitive repoint stays gated under a declared move' \
+    'head-alpha-declared-plus-transitive.lock' 'head-alpha-repoint.flake.nix' 1 \
+    'FAIL: node repointed: gamma (original.repo: gamma -> gamma-fork)'
+
+  # A parser that stops finding declarations would corroborate nothing
+  # and block every legitimate bump under a message naming the wrong
+  # cause. An unparsable `flake.nix` is therefore a could-not-run on
+  # both sides, not an empty map.
+  run_broken_lock_scenario 'base flake.nix with no inputs block is a could-not-run' \
+    BASE_FLAKE_NIX "${FIXTURES}/no-inputs.flake.nix" 2 \
+    "BASE_FLAKE_NIX: no top-level 'inputs = {' block found"
+  run_broken_lock_scenario 'head flake.nix with no inputs block is a could-not-run' \
+    HEAD_FLAKE_NIX "${FIXTURES}/no-inputs.flake.nix" 2 \
+    "HEAD_FLAKE_NIX: no top-level 'inputs = {' block found"
+  run_absent_lock_scenario 'missing base flake.nix errors' BASE_FLAKE_NIX \
+    'payload from BASE_FLAKE_NIX not found'
+  run_absent_lock_scenario 'missing head flake.nix errors' HEAD_FLAKE_NIX \
+    'flake-lock provenance head flake.nix: payload from HEAD_FLAKE_NIX not found'
 
   harness_assert_verify || failures=$((failures + 1))
 
