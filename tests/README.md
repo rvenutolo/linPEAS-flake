@@ -115,7 +115,6 @@ Environment-variable overrides scoped to test invocation:
 | `RENOVATE_JSON_OVERRIDE`             | `check-renovate-invariants.sh`, `check-renovate-markers-matched.sh`, `check-renovate-config-validator.sh` | swap the renovate.json path                  |
 | `SCAN_ROOT`                          | `check-renovate-markers-matched.sh`                                                                       | swap the scanned tree root                   |
 | `SCAN_ROOT_OVERRIDE`                 | `check-doc-cron-restatement.sh`                                                                           | swap the scanned tree root                   |
-| `PYFLAKES_GUARD_SCAN_ROOT_OVERRIDE`  | `check-run-block-pyflakes-required.sh`                                                                    | swap the scanned tree root                   |
 | `RELEASE_TAG_RULESET_JSON_OVERRIDE`  | `check-tag-protection.sh`                                                                                 | swap the release-tag-protection ruleset JSON |
 | `PROTECT_MAIN_RULESET_JSON_OVERRIDE` | `check-protect-main.sh`                                                                                   | swap the protect-main ruleset JSON           |
 | `PIN_FILE_OVERRIDE`                  | `bump-linpeas.sh`, `gen-dashboard-data.sh`                                                                | swap the linpeas-pin.json path               |

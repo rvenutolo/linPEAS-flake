@@ -1,0 +1,16 @@
+# Fixture for scripts/check-actionlint-pyflakes-active.sh.
+# Contains a deliberate unused import. actionlint with pyflakes wired
+# must surface a [pyflakes] finding against this file. Do NOT fix the
+# lint — the canary asserts the warning is produced.
+name: actionlint-pyflakes-smoke
+on: push
+permissions: {}
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: planted unused import
+        shell: python
+        run: |
+          import os
+          print("smoke")

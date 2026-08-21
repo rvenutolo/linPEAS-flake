@@ -10,6 +10,31 @@ Do not edit between the markers.
 
 ## Check scripts
 
+### scripts/check-actionlint-pyflakes-active.sh
+
+Canary: assert actionlint's embedded pyflakes
+integration is wired. Runs the (wrapper-pinned) actionlint
+binary against a fixture workflow containing a planted unused
+import; fails if a pyflakes finding does not appear in output.
+pyflakes emits no numeric codes of its own (F401 and friends are
+flake8's numbering), so the assertion is on actionlint's own
+`[pyflakes]` linter tag, which is present exactly when pyflakes ran
+and reported.
+
+If this script fails, the actionlint hook has silently stopped
+invoking pyflakes on python `run:` blocks. See
+docs/actionlint-embedded-linters.md.
+
+Env overrides (test-only):
+ACTIONLINT_PYFLAKES_FIXTURE_OVERRIDE — alternate fixture path
+
+Exits 0 on clean, 1 when the canary fires (pyflakes no longer
+reaches python `run:` blocks), 2 when the canary could not run at all:
+the fixture is missing or actionlint is absent from PATH. A canary that
+never ran says nothing about the integration, so it must not borrow
+the failure code — that sends a maintainer after a wiring regression
+that has not happened.
+
 ### scripts/check-actionlint-shellcheck-active.sh
 
 Canary: assert actionlint's embedded shellcheck
@@ -1108,27 +1133,6 @@ Lint: no workflow listed in
 docs/security/required-checks.md declares `paths:` or
 `paths-ignore:` under `on.pull_request:` — avoiding the auto-merge
 path-filter skip trap.
-
-### scripts/check-run-block-pyflakes-required.sh
-
-Guard: fail if any GitHub Actions `run:` block
-invokes python (python/python3/pip/pip3) while pyflakes is not
-wired into the actionlint hook. Today no python run: exists,
-so this is a passive gate. The day someone adds a python run:,
-this fails with a pointer to the runbook describing how to
-wire pyflakes.
-
-Scope: .github/workflows/\*.{yml,yaml} and
-.github/actions/\*\*/action.{yml,yaml}
-
-Env overrides (test-only):
-PYFLAKES_GUARD_SCAN_ROOT_OVERRIDE — alternate directory tree
-containing workflow/action YAML files (overrides the default
-repo-root .github/ scan).
-LINT_ALLOW_EMPTY_SCAN — set to 1 to accept an empty scan set.
-
-Exits 0 on clean, 1 if any python invocation found, 2 when the scan set
-could not be enumerated or came back empty.
 
 ### scripts/check-run-block-strict.sh
 
