@@ -48,11 +48,14 @@ regresses high-severity recall.
 
 ## How to re-measure
 
+Paths below are relative to this file's directory — `cd` to the skill's
+`evals/` directory first.
+
 ```sh
-bash evals/seeded-defects/plant.sh
+bash seeded-defects/plant.sh
 # run /docs-audit against the planted worktree, save the report, repeat
-bash evals/seeded-defects/score.sh <report1.md> <report2.md>
-bash evals/seeded-defects/plant.sh --clean
+bash seeded-defects/score.sh <report1.md> <report2.md>
+bash seeded-defects/plant.sh --clean
 ```
 
 A configuration ships only if seed recall holds at 14/14 across two runs (no

@@ -60,7 +60,7 @@ Refuters: reproduce the bug against the real script with a crafted input (`WORKF
 
 ## 3. CI / supply-chain security posture — *adversarial* (strict)
 
-Attacker-mindset agents, one per trust boundary across `.github/workflows/*` (~29).
+Attacker-mindset agents, one per trust boundary across `.github/workflows/*` (size the slices from `ls .github/workflows/*.yml | wc -l` rather than a figure here, which rots).
 
 Slices:
 
