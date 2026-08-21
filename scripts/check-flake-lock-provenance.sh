@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # scripts/check-flake-lock-provenance.sh
 #
-# @description Lint: a bot `flake.lock` bump may only move
-# `rev`/`narHash`/`lastModified`. Fails when a top-level input is
-# added, removed, or repointed, or when any node present in both base
-# and head has its source identity (owner/repo/type/url/ref/flake/...)
-# changed. Gates the auto-merged weekly flake.lock update so a
-# source-level repoint of an input cannot slip into the build/dev
-# closure unreviewed.
+# @description Lint: a `flake.lock` bump that `flake.nix` does not
+# account for may only move `rev`/`narHash`/`lastModified`. Fails when a
+# top-level input is added, removed, or repointed, or when any node
+# present in both base and head has its source identity
+# (owner/repo/type/url/ref/flake/...) changed, unless `flake.nix` itself
+# declares a different `url` for that input between base and head.
+# Gates the auto-merged weekly flake.lock update so a source-level
+# repoint of an input cannot slip into the build/dev closure
+# undeclared.
 
 # Compares the base `flake.lock` (origin/main, or BASE_LOCK_FILE)
 # against the head `flake.lock` (working tree, or HEAD_LOCK_FILE),
@@ -21,6 +23,28 @@
 # base and head fails. A node add/remove fails only for TOP-LEVEL
 # inputs (the entry node's `inputs`); transitive node churn is
 # tolerated and logged.
+#
+# Corroboration by `flake.nix`: a move is a violation only when nothing
+# declared it. The bot path this gate bounds — the weekly
+# `update-flake-lock.yml` cron — rewrites `flake.lock` alone and never
+# edits `flake.nix`, so on that path both sides parse to the same
+# input->url map and every move still fails. When `flake.nix` DOES
+# declare a different `url` for an input across base and head, that
+# input's lock move is the declared consequence rather than a smuggled
+# one: it is tolerated and logged as a note naming both the input and
+# the `flake.nix` move that vouched for it. Corroboration is per input
+# name, so a PR that legitimately repoints one input cannot carry an
+# undeclared repoint of another. Only top-level inputs are reachable —
+# `flake.nix` names no transitive node, so a transitive repoint is never
+# corroborated and stays gated exactly as before.
+#
+# What corroboration deliberately does NOT do is verify that the lock's
+# new `original` is the one `nix` would derive from the new `flake.nix`
+# url. That equivalence is `flake-check`'s to enforce, and it does:
+# a lock disagreeing with `flake.nix` fails evaluation. Re-deriving a
+# flake reference from a url string here would duplicate that check
+# against a hand-written parser, and a parser that drifted would block
+# legitimate bumps while claiming provenance grounds.
 #
 # The entry point is each lock's own top-level `.root` field, not a
 # hardcoded "root" node id — a lock's root node can be named anything.
@@ -85,6 +109,8 @@
 # Env overrides (test-only):
 #   BASE_LOCK_FILE — base flake.lock path (default: git show ${BASE_REF}:flake.lock)
 #   HEAD_LOCK_FILE — head flake.lock path (default: ./flake.lock)
+#   BASE_FLAKE_NIX — base flake.nix path (default: git show ${BASE_REF}:flake.nix)
+#   HEAD_FLAKE_NIX — head flake.nix path (default: ./flake.nix)
 #   BASE_REF       — git ref for base (default: origin/main)
 
 set -Eeuo pipefail
@@ -138,6 +164,96 @@ read_json_payload_into head_json "${head_path}" "${head_source}" \
   'flake-lock provenance head'
 readonly head_json
 
+# Renders `flake.nix`'s top-level `inputs` block as a JSON object
+# mapping each input name to its declared `url` string. An input
+# declared without a `url` (a bare top-level `follows`) is absent from
+# the map, which reads the same as "this input declares no source" and
+# so never corroborates a lock repoint.
+#
+# The parser recognises the two shapes nixfmt produces, and only those:
+#
+#   <name>.url = "<url>";
+#   <name> = { url = "<url>"; ... };
+#
+# A nested `inputs.<name>.url` line inside a block is deliberately not
+# matched — the `url =` pattern is anchored at the start of the line, so
+# a nested input's source cannot be read as a top-level declaration.
+#
+# Brace depth is tracked across the `inputs` block to tell those two
+# shapes apart; whole-line comments are skipped so a `{` inside one
+# cannot desync the depth. A file with no `inputs` block at all is an
+# operational error rather than an empty map: an empty map silently
+# corroborates nothing, which would turn a parser that stopped working
+# into a gate that blocks every legitimate bump with a message naming
+# the wrong cause.
+# @arg $1 name of the variable to assign  @arg $2 flake.nix content
+# @arg $3 human-readable source name for error messages
+function flake_inputs_into() {
+  local -n _out="$1"
+  local -r content="$2" source_name="$3"
+  local line depth=0 in_inputs=0 seen_inputs=0 block='' braces
+  local -a args=()
+  while IFS= read -r line; do
+    [[ ${line} =~ ^[[:space:]]*# ]] && continue
+    if ((in_inputs == 0)); then
+      if ((seen_inputs == 0)) && [[ ${line} =~ ^[[:space:]]*inputs[[:space:]]*=[[:space:]]*\{ ]]; then
+        in_inputs=1
+        seen_inputs=1
+        depth=1
+      fi
+      continue
+    fi
+    if ((depth == 1)); then
+      if [[ ${line} =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_-]*)\.url[[:space:]]*=[[:space:]]*\"([^\"]*)\" ]]; then
+        args+=(--arg "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}")
+      elif [[ ${line} =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_-]*)[[:space:]]*=[[:space:]]*\{ ]]; then
+        block="${BASH_REMATCH[1]}"
+      fi
+    elif ((depth == 2)) && [[ -n ${block} ]] &&
+      [[ ${line} =~ ^[[:space:]]*url[[:space:]]*=[[:space:]]*\"([^\"]*)\" ]]; then
+      args+=(--arg "${block}" "${BASH_REMATCH[1]}")
+    fi
+    braces="${line//[^\{]/}"
+    depth=$((depth + ${#braces}))
+    braces="${line//[^\}]/}"
+    depth=$((depth - ${#braces}))
+    if ((depth <= 1)); then block=''; fi
+    if ((depth <= 0)); then in_inputs=0; fi
+  done <<<"${content}"
+  if ((seen_inputs == 0)); then
+    die_op "${source_name}: no top-level 'inputs = {' block found"
+  fi
+  _out="$(jq -n "${args[@]}" '$ARGS.named')"
+}
+
+# `flake.nix` is read on both sides for the same reason the lock is: a
+# repoint of an input's source is a provenance violation ONLY when
+# nothing declared it. The weekly `update-flake-lock.yml` cron — the bot
+# path this gate exists to bound — rewrites the lock alone and never
+# touches `flake.nix`, so under that path the two maps are identical and
+# every repoint still fails exactly as before.
+payload_source_into base_nix_source BASE_FLAKE_NIX "${BASE_REF}:flake.nix"
+readonly base_nix_source
+if [[ -n ${BASE_FLAKE_NIX:-} ]]; then
+  read_json_payload_into base_nix_text "${BASE_FLAKE_NIX}" "${base_nix_source}"
+else
+  base_nix_text="$(git show "${BASE_REF}:flake.nix" 2>/dev/null)" ||
+    die_op "cannot resolve ${base_nix_source} (is origin/main fetched?)"
+fi
+readonly base_nix_text
+
+readonly head_nix_path="${HEAD_FLAKE_NIX:-flake.nix}"
+payload_source_into head_nix_source HEAD_FLAKE_NIX 'flake.nix'
+readonly head_nix_source
+read_json_payload_into head_nix_text "${head_nix_path}" "${head_nix_source}" \
+  'flake-lock provenance head flake.nix'
+readonly head_nix_text
+
+flake_inputs_into base_nix_json "${base_nix_text}" "${base_nix_source}"
+readonly base_nix_json
+flake_inputs_into head_nix_json "${head_nix_text}" "${head_nix_source}"
+readonly head_nix_json
+
 printf '%s' "${base_json}" | jq -e '.nodes | type == "object"' >/dev/null 2>&1 ||
   die_op "base flake.lock: invalid JSON or .nodes not an object"
 printf '%s' "${head_json}" | jq -e '.nodes | type == "object"' >/dev/null 2>&1 ||
@@ -172,6 +288,20 @@ def srcdiff($a; $b):
     | select(($a | getpath($p)) != ($b | getpath($p)))
     | "\($p | join(".")): \(($a | getpath($p)) // "(absent)") -> \(($b | getpath($p)) // "(absent)")" ]
   | sort | join(", ");
+# True when `flake.nix` itself declares a different source for $name
+# between base and head. That declaration is what separates a repoint
+# somebody asked for from one that appeared in the lock alone: the
+# lock-only bot path never edits `flake.nix`, so under it both sides
+# read the same and this is false for every input. A transitive node is
+# named in neither map, so `null != null` keeps it strictly gated —
+# corroboration reaches top-level inputs only, which are exactly the
+# names `flake.nix` declares.
+def corroborated($name):
+  ($nixbase[$name] // null) != ($nixhead[$name] // null);
+# Renders the `flake.nix` side of a corroborated move, so the note says
+# which declaration vouched for the lock rather than only that one did.
+def nixmove($name):
+  "\($nixbase[$name] // "(absent)") -> \($nixhead[$name] // "(absent)")";
 # Nesting ceiling and total step budget — see the header for what each
 # one bounds and why depth alone is not enough.
 def follows_depth_ceiling: 32;
@@ -241,8 +371,10 @@ else
 | ($head.nodes[$hroot].inputs // {}) as $hin
 | ($bin | keys) as $bk
 | ($hin | keys) as $hk
-| [ ($hk - $bk)[] | "FAIL: top-level input added: \(.)" ] as $added
-| [ ($bk - $hk)[] | "FAIL: top-level input removed: \(.)" ] as $removed
+| [ ($hk - $bk)[] | select(corroborated(.) | not) | "FAIL: top-level input added: \(.)" ] as $added
+| [ ($bk - $hk)[] | select(corroborated(.) | not) | "FAIL: top-level input removed: \(.)" ] as $removed
+| [ (($hk - $bk) + ($bk - $hk))[] | select(corroborated(.))
+    | "note: top-level input add/remove corroborated by flake.nix (tolerated): \(.) (\(nixmove(.)))" ] as $addrem_ok
 | [ $bk[] | select(. as $n | $hk | index($n)) ] as $common
 # One fold over the shared top-level inputs, carrying the step budget
 # left over from the previous input — base and head both draw on it, so
@@ -267,10 +399,12 @@ else
                 else ["FAIL: top-level input unresolvable (follows path names no such node): \($name)"]
                 end)
           elif ($base.nodes[$bres.node] | srcid) != ($head.nodes[$hres.node] | srcid)
-          then ["FAIL: top-level input repointed: \($name)"
-                + (if $bres.node != $hres.node
-                   then " (\($bres.node) -> \($hres.node))"
-                   else "" end)]
+          then (if corroborated($name) then []
+                else ["FAIL: top-level input repointed: \($name)"
+                      + (if $bres.node != $hres.node
+                         then " (\($bres.node) -> \($hres.node))"
+                         else "" end)]
+                end)
           else []
           end)) })
    ) as $tlacc
@@ -280,7 +414,15 @@ else
     | . as $k
     | select($head.nodes | has($k))
     | select(($base.nodes[$k] | srcid) != ($head.nodes[$k] | srcid))
+    | select(corroborated($k) | not)
     | "FAIL: node repointed: \($k) (\(srcdiff($base.nodes[$k] | srcid; $head.nodes[$k] | srcid)))" ] as $noderep
+| [ ($base.nodes | keys[])
+    | select(. != $broot)
+    | . as $k
+    | select($head.nodes | has($k))
+    | select(($base.nodes[$k] | srcid) != ($head.nodes[$k] | srcid))
+    | select(corroborated($k))
+    | "note: node repoint corroborated by flake.nix (tolerated): \($k) (\(nixmove($k)))" ] as $noderep_ok
 | [ ($head.nodes | keys[]) | select(. != $hroot) | . as $k
     | select(($base.nodes | has($k)) | not)
     | "note: transitive node added (tolerated): \($k)" ] as $tadd
@@ -297,9 +439,10 @@ else
 | ([ ($base.nodes | keys[]) | . as $k
      | select($k != $broot) | select($head.nodes | has($k)) ]
    | length) as $shared
+| ($addrem_ok + $noderep_ok) as $corroborated
 | { fails: ($added + $removed + $tlrep + $noderep),
-    notes: ($tadd + $trem),
-    summary: ("entry \($base.root | @json); top-level inputs resolved: \($common | length) (\($viafollows) via follows, max depth \($tlacc.depth)); shared nodes compared: \($shared); transitive churn tolerated: \($tadd | length) added, \($trem | length) removed"),
+    notes: ($tadd + $trem + $corroborated),
+    summary: ("entry \($base.root | @json); top-level inputs resolved: \($common | length) (\($viafollows) via follows, max depth \($tlacc.depth)); shared nodes compared: \($shared); transitive churn tolerated: \($tadd | length) added, \($trem | length) removed; flake.nix-corroborated moves: \($corroborated | length)"),
     root_mismatch: false }
 end
 '
@@ -310,6 +453,8 @@ trap 'rm --force -- "${jq_err_file}"' EXIT
 if ! result="$(jq -n \
   --argjson base "${base_json}" \
   --argjson head "${head_json}" \
+  --argjson nixbase "${base_nix_json}" \
+  --argjson nixhead "${head_nix_json}" \
   "${JQ_PROG}" 2>"${jq_err_file}")"; then
   die_op "flake.lock comparison failed: $(cat -- "${jq_err_file}")"
 fi
@@ -329,8 +474,9 @@ if [[ -n ${fails} ]]; then
     printf 'flake.lock provenance check FAILED — the lock entry point was repointed.\n' >&2
     printf 'A routine bump never renames the root node. Review the change.\n' >&2
   else
-    printf 'flake.lock provenance check FAILED — an input source identity changed.\n' >&2
-    printf 'A routine bump may only move rev/narHash/lastModified. Review the change.\n' >&2
+    printf 'flake.lock provenance check FAILED — an undeclared input source identity changed.\n' >&2
+    printf 'A bump flake.nix does not declare may only move rev/narHash/lastModified.\n' >&2
+    printf 'Repoint the input in flake.nix too, or review the change.\n' >&2
   fi
   exit 1
 fi
