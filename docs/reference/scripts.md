@@ -1434,6 +1434,14 @@ PR bumps: prints `pre-commit-hooks`, `nixpkgs-unstable`, or
 `nix flake update <input>` on the PR branch. Pure and side-effect
 free so the mapping is testable without a live Renovate PR.
 
+### scripts/classify-renovate-pr-author.sh
+
+Classify one PR author login as Renovate or not, printing
+the canonical `renovate` spelling when it is. Drives the identify job
+of .github/workflows/renovate-flake-lock-refresh.yml, which refreshes
+`flake.lock` only on a PR that Renovate opened. Pure and side-effect
+free so the mapping is testable without a live Renovate PR.
+
 ### scripts/compare-repro.sh
 
 Compare two reproducibility-build hash JSON files.
