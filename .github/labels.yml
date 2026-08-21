@@ -10,6 +10,10 @@
   color: 0075ca
   description: Documentation, README, MkDocs site
 
+- name: enhancement
+  color: a2eeef
+  description: New feature or request
+
 - name: idea
   color: a2eeef
   description: Proposal captured via the idea issue template

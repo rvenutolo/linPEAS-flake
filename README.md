@@ -206,7 +206,7 @@ Upstream PEASS-ng releases ship no signatures (GPG, cosign, SLSA). Integrity
 rests on:
 
 1. SRI hash pinning in `linpeas-pin.json` — Nix refuses to build on mismatch.
-1. Flake-eval-time assertions on `pin.version` (YYYYMMDD-<hex>) and `pin.url`
+1. Flake-eval-time assertions on `pin.version` (`YYYYMMDD-<hex>`) and `pin.url`
     (peass-ng release prefix) — derivation eval fails on a malformed pin.
 1. GitHub Releases API `digest` field cross-check inside the bump workflow
     (hard fail if absent — never a silent skip).
@@ -279,7 +279,7 @@ just check           # Run all flake checks (eval, formatting, pre-commit)
 just fmt             # Format every file via treefmt
 just image           # Build the OCI image
 just lint            # Run pre-commit hooks against all files
-just lint-links      # Run lychee link checker against every tracked markdown file
+just lint-links      # Run lychee link checker over every markdown file lychee.toml does not exclude
 just show            # Regenerate the <!-- BEGIN/END flake-show --> block in docs/reference/flake-outputs.md
 just show-ci-dag     # Regenerate docs/architecture/ci-dag.md from ci.yml needs graph
 just show-ci-summary # Regenerate the Continuous integration summary in README.md

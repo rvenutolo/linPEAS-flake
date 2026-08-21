@@ -9,8 +9,9 @@ check — auto-labeling is cosmetic and must not block merge.
 Sync to repo manually with one-shot `gh label create --force` loop —
 no sync workflow (would require allowlisting `crazy-max/*`).
 
-`.github/release.yml` groups auto-generated release notes by these
-labels.
+`.github/release.yml` groups auto-generated release notes by the area
+labels above plus `enhancement`, `bug`, and `idea`, with a `*` catch-all
+collecting everything else.
 
 ## Size labels
 

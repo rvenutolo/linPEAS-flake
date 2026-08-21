@@ -88,8 +88,8 @@ dependency.
     `@sha256:` digest references — no tag-only manifests.
 - SBOM generation and attestation run on every release
     (`release-on-bump.yml`).
-- Trivy and Grype CVE scans run on a weekly cron (`image-cve-scan.yml`),
-    advisory-only — not in the required-check set. Each fails its own job on
+- Trivy and Grype CVE scans run on a weekly cron plus a path-filtered push
+    to `main` (`image-cve-scan.yml`), advisory-only — not in the required-check set. Each fails its own job on
     CRITICAL findings and opens a deduped tracking issue.
 - Docker Hub push credentials are split into `_RW` and `_DELETE` tokens,
     never an unsuffixed PAT.

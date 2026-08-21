@@ -4,8 +4,11 @@
 
 `ci-watchdog` runs on a cron schedule
 (see [CI — cron schedule](../architecture/ci.md#cron-schedule)). It finds
-open bot-authored pull requests that have auto-merge enabled and a failed
-workflow run on their current head commit, and re-runs the failed jobs.
+open bot-authored pull requests that have auto-merge enabled and a completed
+run on their current head commit that concluded `failure` or `timed_out`, and
+re-runs the failed jobs. A PR with any run still in progress is deferred to the
+next tick, and `cancelled` runs are never re-run — they are nearly always
+concurrency-group cancels superseded by a newer run.
 
 Each run gets at most 3 attempts. `reRunWorkflowFailedJobs` re-runs a run in
 place and increments its attempt counter, so the bound needs no stored
@@ -36,7 +39,7 @@ of a harden-runner egress block, which is a permanent configuration bug.
 Nothing else in this repo re-runs a failed job. A bot PR with auto-merge
 enabled that hits a transient infrastructure failure will sit open forever,
 because auto-merge waits for checks that will never re-run. This has parked
-bump PRs for weeks at a time.
+bump PRs open indefinitely.
 
 ## When you get a `ci-watchdog: PR #N exhausted retries` issue
 

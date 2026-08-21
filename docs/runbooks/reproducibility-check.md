@@ -10,7 +10,7 @@ On its weekly Friday cron (and on `workflow_dispatch`), the workflow:
 1. Builds `.#linpeas` and `.#linpeas-image` twice on independent `ubuntu-latest` runners.
 1. Records each build's: linpeas store path, linpeas NAR hash, image store path, image tar SHA-256, image manifest digest.
 1. Compares the three hash values pairwise (`linpeas_nar_hash`, `image_tar_sha256`, `image_manifest_digest`); the two store paths are reported for context only and do not affect the result.
-1. On any mismatch: runs `diffoscope` against the differing artifacts with a 20-minute cap, uploads `image.html`/`image.txt`, `linpeas.html`/`linpeas.txt` and `summary.txt` as the `repro-diff` artifact (30-day retention), and opens a GitHub issue labelled `reproducibility`.
+1. On any mismatch: runs `diffoscope` on both pairs (the image tars and the linpeas tarballs), each under its own 20-minute cap, uploads `image.html`/`image.txt`, `linpeas.html`/`linpeas.txt` and `summary.txt` as the `repro-diff` artifact (30-day retention), and opens a GitHub issue labelled `reproducibility`.
 
 `diffoscope` is resolved from this repo's own flake — the compare job installs Nix through the `./.github/actions/setup-nix` composite and invokes `nix shell .#diffoscopeMinimal --command diffoscope`. The version that runs therefore tracks `flake.lock`, not whatever a distribution archive currently ships, and the job reaches only the hosts already in its `allowed-endpoints` list.
 
@@ -82,7 +82,9 @@ linpeas: diffoscope exit 0, report none
 
 Promote the `compare` job to a required check once **all** are true:
 
-- 4 consecutive green weekly runs with no manual workarounds
+- 4 consecutive weekly runs in which the `compare` job's
+    `fail job (on mismatch)` step did not fire — workflow-level green is
+    not the signal, since `continue-on-error` masks a mismatch
 - No outstanding `reproducibility`-labelled issues
 - Image build time at parity with baseline (no diagnostic overhead left in workflow)
 

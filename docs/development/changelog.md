@@ -189,9 +189,12 @@ order:
     git-cliff to walk all tags).
 1. Mint a short-lived App installation token using
     `BUMP_APP_CLIENT_ID` + `BUMP_APP_PRIVATE_KEY`.
+1. Re-assert the canonical pin shape on `VERSION` at the credential
+    boundary, failing the job on a malformed value.
 1. Run `nix shell .#git-cliff --command git-cliff --config cliff.toml --output CHANGELOG.md`.
 1. Detect whether `CHANGELOG.md` changed (a no-op day — identical pin
     — produces no diff).
+1. If changed, render the latest section with `git-cliff --latest  --strip header` into `.release-notes.md` for the release body.
 1. If changed, create a `chore/changelog-${VERSION}` branch from
     `main` and commit `CHANGELOG.md` via REST `PUT /contents` as the
     App identity (GitHub web-flow-signs the commit).

@@ -122,10 +122,10 @@ Environment-variable overrides scoped to test invocation:
 | `LATEST_RELEASE_JSON_OVERRIDE`       | `gen-dashboard-data.sh`                                                                                   | swap rvenutolo release JSON                  |
 
 Each script defines its own overrides — check the script for the
-canonical list before writing a new test. The three scan-root overrides
+canonical list before writing a new test. The two scan-root overrides
 are listed one script at a time rather than behind an enumerating grep,
 because each lint spells the variable differently: a grep for the
-shortest of the three names all three scripts, two of which ignore the
+shorter of the two names both scripts, one of which ignores the
 variable it matched and would scan the live repo instead of the fixture.
 The `^[^#]*` anchor on the enumerating greps that remain keeps them off
 comment-only mentions: a lint can name another lint's override variable

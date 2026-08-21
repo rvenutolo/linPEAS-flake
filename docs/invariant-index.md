@@ -7,16 +7,17 @@ to an existing file under `docs/`, and every `docs/**/*.md` (minus
 an explicit EXEMPT allowlist) must appear here. That allowlist covers
 three kinds of page: generator-owned ones, whose content is a rendering
 rather than a rule; overview ones, which route to rules held elsewhere
-(`security/threat-model.md`, `index.md`); and the two install guides
-that only tell a consumer how to use the flake — `install/nix.md` and
-`install/consume-from-flake.md`. `install/docker.md` is **not** exempt:
-it holds the OCI-image and manifest digest-pinning rules and is indexed
-below like any other rule-bearing page. The array in
+(`security/threat-model.md`, `index.md`); and `install/consume-from-flake.md`,
+which only tells a consumer how to use the flake. `install/nix.md` is exempt
+from the reverse sweep alone — its declared-systems rule is indexed below.
+`install/docker.md` is **not** exempt: it holds the OCI-image and manifest
+digest-pinning rules and is indexed below like any other rule-bearing page. The array in
 `scripts/check-orphan-invariants.sh` is the authoritative list.
 
-Behavior rules for the AI assistant and other non-binding guidance
-live in an untracked assistant-tooling tree and are out of scope for
-this index.
+Behavior rules for the AI assistant and other non-binding guidance live
+mostly in an untracked assistant-tooling tree. The committed part of
+`.claude/` is audit tooling rather than a binding rule, so it is out of
+scope for this index either way.
 
 ## Security
 
