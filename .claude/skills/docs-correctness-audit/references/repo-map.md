@@ -33,13 +33,13 @@ high severity, and neither is caught by a freshness gate.
 
 ## 2. Doc cluster map (one read-only agent per row)
 
-| Cluster        | Files                                                                                                                                                                                                                                                                                              |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| core-docs      | `docs/reference/*.md`, `docs/install/*.md`, `docs/runbooks/*.md`                                                                                                                                                                                                                                   |
-| security       | `docs/security/*.md`                                                                                                                                                                                                                                                                               |
-| arch+dev       | `docs/architecture/*.md`, `docs/development/*.md`                                                                                                                                                                                                                                                  |
-| root + misc    | `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`, `docs/index.md`, `docs/dashboard.md`, `docs/releases.md`, `docs/invariant-index.md`, `docs/actionlint-embedded-linters.md`, `tests/README.md`, `.github/PULL_REQUEST_TEMPLATE.md` — **plus any tracked `*.md` no row above claims** |
-| claude-tooling | every tracked `.claude/**/*.md` (`git ls-files '.claude/**/*.md'`) except `skills/*/evals/seeded-defects/fixtures/*.md`                                                                                                                                                                            |
+| Cluster        | Files                                                                                                                                                                                                                                                                                                                                          |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| core-docs      | `docs/reference/*.md`, `docs/install/*.md`, `docs/runbooks/*.md`                                                                                                                                                                                                                                                                               |
+| security       | `docs/security/*.md`                                                                                                                                                                                                                                                                                                                           |
+| arch+dev       | `docs/architecture/*.md`, `docs/development/*.md`                                                                                                                                                                                                                                                                                              |
+| root + misc    | `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`, `docs/index.md`, `docs/dashboard.md`, `docs/releases.md`, `docs/invariant-index.md`, `docs/actionlint-embedded-linters.md`, `tests/README.md`, `.github/PULL_REQUEST_TEMPLATE.md` — **plus any tracked `*.md` outside `docs/` and outside `.claude/` that no other row claims** |
+| claude-tooling | every tracked `.claude/**/*.md` (`git ls-files '.claude/**/*.md'`) except `skills/*/evals/seeded-defects/fixtures/*.md`                                                                                                                                                                                                                        |
 
 Five clusters, not one per `docs/` subdirectory: most of a reader's cost is
 fixed per-agent overhead (re-reading the ground-truth bundle, tool setup), so
@@ -121,7 +121,7 @@ banned shapes in tracked docs and comments:
     static test-fixture data.
 - Causal-history phrases: `previously`, `Migration note`, `Tightened from`,
     `switched from/to`, `legacy <X> was deleted`,
-    `now enforced via X (previously Y)`, `added in #?\d+`, `post-PR #\d+`.
+    `now enforced via X (previously Y)`, `added in #?\d+`, `post-PR #?\d+`.
     Rewrite to motivate the current rule by current behavior. Bare verbs and
     prepositions (`prior to`, `swapped`, `was reshaped`) are **not** on this
     list: each reads as repo history or as present-tense prose depending only
@@ -200,7 +200,7 @@ enforcer (script / CI job / hook) that still exists?
 The collector emits an authoritative **`UNRESOLVED INTERNAL LINKS / ANCHORS`**
 section produced by `lychee --offline --include-fragments=anchor-only`, reusing
 `lychee.toml`. It runs over all tracked `*.md` files, excluding `.claude/`
-tooling and `tests/fixtures/`. External URLs are skipped entirely — only
+tooling, `tests/fixtures/` and `docs/_data/`. External URLs are skipped entirely — only
 relative file paths and heading anchors are checked. A listed entry is
 authoritative drift: the link target does not exist (high severity). Flag every
 entry without re-deriving by eye.

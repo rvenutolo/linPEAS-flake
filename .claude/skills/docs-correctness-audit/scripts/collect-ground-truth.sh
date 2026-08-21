@@ -4,8 +4,9 @@
 # @description Emit, in one labeled dump, the repo ground-truth bundle the audit
 # shares with every cluster reader: flake outputs, just recipes, scripts,
 # workflows, the ci.yml top-level job list, lint-group membership, a union
-# allowlist of all valid CI job/check names, workflow crons, and the
-# required-check context count. Run this ONCE and hand its output to every
+# allowlist of all valid CI job/check names, workflow crons, the
+# required-check context count, an ephemeral-token sweep over tracked
+# docs, and an internal link/anchor check. Run this ONCE and hand its output to every
 # reader, so a path/recipe/output/job/cron named in a doc is checked against one
 # authoritative list instead of re-derived per agent. The job list, lint-group
 # map, and union allowlist are the load-bearing facts: a doc calling a lint-group
@@ -82,7 +83,7 @@ sweep_ephemeral_tokens() {
       # and prepositions (`prior to`, `swapped`, `was reshaped`) are excluded
       # there on purpose, so including them here would report hits the real
       # lint never raises.
-      _emit_eph causal-history 'previously|Migration note|Tightened from|switched (from|to)|legacy .* was deleted|added in #?[0-9]+|post-PR #[0-9]+'
+      _emit_eph causal-history 'previously|Migration note|Tightened from|switched (from|to)|legacy .* was deleted|added in #?[0-9]+|post-PR #?[0-9]+'
       _emit_eph pr-ref '#[0-9]+|PR #[0-9]+|issue #[0-9]+' |
         grep -vE '(fill|stroke|color):#[0-9a-fA-F]{3,8}|&#[0-9]+;|#[0-9]+-' || true
       _emit_eph claude-path '\.claude/'
@@ -121,6 +122,43 @@ sweep_internal_links() {
   if [[ -z ${errs} ]]; then echo '(none)'; else printf '%s\n' "${errs}"; fi
 }
 
+# @description Read `nix flake show --json` on stdin, emit "outputs: a, b, c".
+#
+# Newer Nix wraps the tree in an "inventory" key and emits a stub for every
+# well-known output name whether or not this flake defines it, so a naive key
+# dump reports nixosModules, nixosConfigurations and legacyPackages as outputs
+# this flake has. flake-parts does create those three, but empty, and the
+# renderer behind docs/reference/flake-outputs.md omits them — a reader handed
+# the naive dump reports that omission as generator drift. Keep only outputs
+# holding something: a child with real entries, a derivation, or a system Nix
+# declined to enumerate. A bare isLegacy marker is a placeholder for an empty
+# legacyPackages set, not content.
+filter_flake_outputs() {
+  python3 -c '
+import json, sys
+
+def substantive(node):
+    if not isinstance(node, dict):
+        return bool(node)
+    if node.get("filtered") or "derivation" in node:
+        return True
+    kids = node.get("children")
+    if isinstance(kids, dict):
+        return any(substantive(c) for c in kids.values())
+    return not node.get("isLegacy", False) and bool(node)
+
+def defined(v):
+    if not isinstance(v, dict) or "output" not in v:
+        return True
+    return substantive(v["output"])
+
+d = json.load(sys.stdin)
+tree = d["inventory"] if isinstance(d.get("inventory"), dict) else d
+names = sorted(k for k, v in tree.items() if defined(v))
+print("outputs: " + ", ".join(names))
+'
+}
+
 list_ci_jobs() { # $1=workflow path — emits "<line>:  <job-id>" for the jobs: block only
   # Scoped to the jobs: block. A bare 2-space-key grep also returns `on:`
   # trigger names and `concurrency:` keys, which read as job ids to someone
@@ -142,15 +180,7 @@ main() {
   cd "${REPO_ROOT}"
 
   section "FLAKE OUTPUTS (nix flake show)"
-  if ! nix flake show --json 2>/dev/null | python3 -c '
-import json, sys
-d = json.load(sys.stdin)
-for k, v in sorted(d.items()):
-    if isinstance(v, dict):
-        print(k + ": " + ", ".join(sorted(v.keys())))
-    else:
-        print(k)
-' 2>/dev/null; then
+  if ! nix flake show --json 2>/dev/null | filter_flake_outputs 2>/dev/null; then
     nix flake show 2>&1 | sed 's/\x1b\[[0-9;]*m//g'
   fi
 
