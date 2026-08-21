@@ -18,11 +18,16 @@ tests/
 │   │   │                         # harness with its `check-` prefix
 │   │   │                         # stripped — the harness's own FIXTURES
 │   │   │                         # constant is canonical
-│   │   ├── good.yml              # minimal passing fixture
-│   │   ├── good-*.yml            # additional passing variants
-│   │   ├── bad-<failure-mode>.yml
+│   │   ├── good.<ext>            # minimal passing fixture
+│   │   ├── good-*.<ext>          # additional passing variants
+│   │   ├── bad-<failure-mode>.<ext>
 │   │   └── ...
 ```
+
+The `good` / `bad-` prefix is the portable part; the extension follows
+whatever the subject lint reads. Workflow-scanning lints use `.yml`, but
+fixtures across this tree are also `.sh`, `.json`, `.md`, `.lock`,
+`.toml`, `.nix`, `.txt`, `.tsv`, and extensionless command shims.
 
 Neither shape is guaranteed: a handful of directories are named for the
 invariant rather than for the harness, so read the harness's `FIXTURES`
@@ -49,10 +54,13 @@ readonly SCRIPT="${REPO_ROOT}/scripts/<script-name>.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/<script-name>"
 ```
 
-Then defines a single `expect` function that takes
+Most check harnesses then define a single `expect` function that takes
 `<fixture> <want_exit> <want_stderr_substring>`, runs the script
 with environment overrides pointing it at the fixture, and asserts
-on exit code + stderr.
+on exit code + stderr. The rest use per-scenario helpers
+(`expect_empty_scan`, `expect_failure`, `run_expect`) or a bare
+`pass`/`fail` counter — the preamble above is universal, this shape is
+a convention rather than a requirement.
 
 A scenario's expected substring must not appear in any sibling
 scenario's output. A substring the nominal path also prints matches
@@ -62,6 +70,12 @@ nothing. Harnesses source `scripts/lib/harness-assert.sh`, call
 each script invocation, and end `main` with
 `harness_assert_verify || failures=$((failures + 1))`. The gate fails
 the harness on any substring that does not discriminate.
+
+The gate reaches a harness only if it asserts with a quiet `grep`, which
+is how `tests/_harness_assert_wired.test.sh` tells an assertion from a
+data extraction. A harness that asserts another way — a
+`[[ ${out} != *"${want}"* ]]` test, say — is not scored at all, so it
+needs neither the wiring nor an `EXEMPT` entry.
 
 Environment-variable overrides scoped to test invocation:
 
@@ -93,9 +107,12 @@ runs the pair.
 
 1. Add a fixture file. Name with the convention:
 
-    - `good.yml` (or `good-<scenario>.yml`) — script must exit 0.
-    - `bad-<failure-mode>.yml` — script must exit non-zero with a
+    - `good.<ext>` (or `good-<scenario>.<ext>`) — script must exit 0.
+    - `bad-<failure-mode>.<ext>` — script must exit non-zero with a
         specific stderr substring.
+
+    The extension is whatever the subject lint reads — `.yml` for the
+    workflow scanners, but `.sh`, `.json`, `.md` and others elsewhere.
 
 1. Add an `expect` line to the harness, for example:
 
@@ -122,8 +139,10 @@ runs the pair.
 ## Adding a new test harness
 
 1. Write the script's invariant first; commit it.
+
 1. Create `tests/<script-name>.test.sh` mirroring the existing
     harnesses' shape (env-var overrides, `expect` function).
+
 1. Declare exactly one subject. A harness that assigns
     `SCRIPT="${REPO_ROOT}/scripts/<name>.sh"` already declares its
     subject through that assignment. A harness that does not — one whose
@@ -135,8 +154,10 @@ runs the pair.
     rendering an unknown subject. A harness that reaches its fixture
     directory only through an override, so that no path literal in the
     file names it, adds a `# @fixtures <path>` line the same way.
+
 1. Create `tests/fixtures/<script-name>/` with at least one `good`
     and one `bad-*` fixture.
+
 1. Wire the harness to the discrimination gate: source
     `scripts/lib/harness-assert.sh`, call `harness_assert_record` for
     every scenario, and call `harness_assert_verify` at the end of
@@ -144,13 +165,29 @@ runs the pair.
     rewritten workflow file, a generated doc — rather than captured
     scenario output belongs on the `EXEMPT` array in
     `tests/_harness_assert_wired.test.sh` with a rationale comment
-    instead.
-1. Register the harness so it actually runs: add its basename to
-    `.github/lint-groups.yml` if the `check-<name>.sh` + `test.sh`
-    pair belongs to a lint group, add it to the `HARNESSES` array in
-    `scripts/run-harness-group.sh` if it is a standalone harness, or
-    name it `tests/refresh-*.test.sh` to be picked up automatically
-    by `scripts/run-doc-freshness.sh`'s glob.
+    instead. A harness that asserts without a quiet `grep` is outside
+    what the gate scores and needs neither.
+
+1. Register the harness so it actually runs.
+    `scripts/check-test-reachable.sh` accepts four runners, and a
+    harness reachable by none of them is a coverage no-op that still
+    satisfies the pairing guard:
+
+    - add the invariant name to `.github/lint-groups.yml` if the
+        `check-<name>.sh` + `check-<name>.test.sh` pair belongs to a
+        lint group — that manifest holds the name with its `check-`
+        prefix and `.test.sh` suffix stripped, and
+        `scripts/run-lint-group.sh` re-derives both paths from it;
+    - add it to the `HARNESSES` array in
+        `scripts/run-harness-group.sh` if it is a standalone harness;
+    - name it `tests/refresh-*.test.sh` to be picked up automatically
+        by `scripts/run-doc-freshness.sh`'s glob;
+    - or invoke it directly from a `.github/workflows/*.yml` step, the
+        way the `dashboard-data-tests` job runs
+        `tests/gen-dashboard-data.test.sh`. This is the right shape when
+        the harness needs a dedicated job rather than a slot in a
+        batched one.
+
 1. If the script is wired into a CI required check, also document
     it in `docs/security/required-checks.md` and ensure
     `scripts/check-required-checks-no-paths.sh` covers the new
