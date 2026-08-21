@@ -42,7 +42,8 @@ hook holds fresh.
 
 ## Harness conventions
 
-Every harness opens with:
+Every harness opens with a shebang, `set -Eeuo pipefail`, `IFS=$'\n\t'`,
+and a readonly `REPO_ROOT` derived from `git rev-parse --show-toplevel`:
 
 ```bash
 #!/usr/bin/env bash
@@ -50,6 +51,16 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
+```
+
+The `REPO_ROOT` assignment is spelled two ways across the tree and both
+are accepted — the direct form above, and a two-step form that assigns a
+lowercase temp first. Match whichever the file you are editing already
+uses rather than converting it:
+
+```bash
+repo_root="$(git rev-parse --show-toplevel)"
+readonly REPO_ROOT="${repo_root}"
 ```
 
 A harness with a single script subject then binds it, and one that reads
@@ -76,9 +87,9 @@ Most check harnesses then define a single `expect` function that takes
 with environment overrides pointing it at the fixture, and asserts
 on exit code + stderr. The rest use per-scenario helpers
 (`expect_empty_scan`, `expect_failure`, `run_expect`) or a bare
-`pass`/`fail` counter — the shebang-through-`REPO_ROOT` lines above are
-universal, but this assertion shape is a convention rather than a
-requirement.
+`pass`/`fail` counter — the shebang, `set`, `IFS` and readonly
+`REPO_ROOT` above are universal, but this assertion shape is a
+convention rather than a requirement.
 
 A scenario's expected substring must not appear in any sibling
 scenario's output. A substring the nominal path also prints matches
