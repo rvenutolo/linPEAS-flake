@@ -2,7 +2,8 @@
 name: docs-correctness-audit
 description: >-
   Read-only documentation correctness audit for this repo: cross-checks every
-  Markdown doc (README, docs/**, CHANGELOG, SECURITY, CONTRIBUTING)
+  tracked Markdown doc (README, docs/**, CHANGELOG, SECURITY, CONTRIBUTING,
+  tests/README.md, the PR template, and the tracked `.claude/` tooling)
   against the actual code, CI, config, and workflows, then emits one
   severity-ranked findings report without editing anything. Invoke ONLY via the
   /docs-audit slash command. Do NOT auto-trigger on natural-language mentions of
@@ -129,8 +130,9 @@ Read-only fan-out needs no orchestration opt-in — it is plain parallel reads.
     ways); invariant-index entries vs their tracked-doc sections; a claimed
     invariant with no backing check.
 1. **Prose quality.** Clarity, grammar, dead links, and ephemeral-token
-    violations per the regex. CHANGELOG / releases pages are exempt from the
-    PR-ref and date bans (they structurally list PRs and dates).
+    violations per the regex. CHANGELOG / releases pages are exempt from
+    every ephemeral class, not just the PR-ref and date bans — the lint
+    skips both files wholesale (they structurally list PRs and dates).
     Ephemeral-token candidates come from the collector's
     **`EPHEMERAL-TOKEN HITS`** section (see `references/repo-map.md` §4 for
     suppression and scope). That sweep reads prose only — fenced blocks,
