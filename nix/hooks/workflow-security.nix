@@ -431,6 +431,22 @@
     pass_filenames = false;
     language = "system";
   };
+
+  actionlint-pyflakes-active = {
+    enable = true;
+    name = "actionlint-pyflakes-active";
+    description = "actionlint pyflakes integration canary.";
+    entry = "${pkgs-unstable.writeShellScript "check-actionlint-pyflakes-active-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${actionlintWrapped}/bin:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-actionlint-pyflakes-active.sh
+    ''}";
+    files = "^(flake\\.nix|nix/wrappers\\.nix|tests/fixtures/actionlint-pyflakes-smoke\\.yml|scripts/check-actionlint-pyflakes-active\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Asserts every workflow that writes a flake.lock runs a generator for
   # each freshness hook that names `flake.lock` a trigger. A lock-derived
   # doc a lock-writing workflow skips reaches its PR stale, and the

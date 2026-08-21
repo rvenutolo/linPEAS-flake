@@ -2,16 +2,18 @@
   perSystem =
     { pkgs-unstable, ... }:
     let
-      # actionlint discovers embedded shellcheck via $PATH. Hook
-      # invocations from a shell that has not entered the devShell
-      # (fresh checkout without direnv, CI step that forgot
-      # `nix develop`) silently degrade: actionlint exits 0 with
-      # shellcheck coverage disabled. Pinning the binary path here
-      # makes discovery deterministic at flake evaluation. See
+      # actionlint discovers its embedded linters via $PATH, and which
+      # binaries land there is nixpkgs' packaging decision rather than
+      # this repo's: the nixpkgs actionlint is itself a wrapper that
+      # prepends its own shellcheck and pyflakes. Naming both paths here
+      # makes the pairing this repo's own, so a nixpkgs change that drops
+      # or repoints either one surfaces as a canary failure instead of as
+      # embedded coverage silently going quiet. See
       # docs/actionlint-embedded-linters.md.
       actionlintWrapped = pkgs-unstable.writeShellScriptBin "actionlint" ''
         exec ${pkgs-unstable.actionlint}/bin/actionlint \
           -shellcheck=${pkgs-unstable.shellcheck}/bin/shellcheck \
+          -pyflakes=${pkgs-unstable.python3Packages.pyflakes}/bin/pyflakes \
           "$@"
       '';
 
