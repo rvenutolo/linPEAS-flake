@@ -19,7 +19,7 @@ links here rather than embedding the snippets inline, so:
 - [When this applies](#when-this-applies)
 - [Prerequisites](#prerequisites)
 - [Step-by-step](#step-by-step)
-  - [1. Delete the GitHub release + tag](#1-delete-the-github-release--tag)
+  - [1. Delete the GitHub release + tag (re-push path only)](#1-delete-the-github-release--tag-re-push-path-only)
   - [2. Delete the orphan docker.io arch tag](#2-delete-the-orphan-dockerio-arch-tag)
   - [3. Re-trigger the release pipeline](#3-re-trigger-the-release-pipeline)
   - [4. Confirm green end-to-end](#4-confirm-green-end-to-end)
@@ -61,11 +61,18 @@ The push loop inside `release-on-bump.yml` per-arch jobs runs
 
 ## Step-by-step<a name="step-by-step"></a>
 
-### 1. Delete the GitHub release + tag<a name="1-delete-the-github-release--tag"></a>
+### 1. Delete the GitHub release + tag (re-push path only)<a name="1-delete-the-github-release--tag-re-push-path-only"></a>
 
-Release-creation is gated on tag-doesn't-exist; if you don't delete
-the orphan release first, the retry will skip the release step and
-the recovery is incomplete.
+**Skip this step if you will re-run with `force-republish`** (step 3,
+second bullet). On that path the image, manifest, verify, and changelog
+jobs re-run against the current pin while the `release` job stays gated
+by the "tag exists" guard, so the release and its assets survive and
+nothing needs deleting.
+
+Delete only when recovering by re-pushing the pin commit (step 3, first
+bullet). Release-creation is gated on tag-doesn't-exist, so an orphan
+release left in place makes the re-push skip the release step and leaves
+the recovery incomplete.
 
 ```bash
 VERSION="<pin-version>"            # e.g. 20260516-deadbee
@@ -180,5 +187,15 @@ Rotation: on suspected compromise only.
 
 ## Notify-body parity invariant<a name="notify-body-parity-invariant"></a>
 
-`release-on-bump.yml`'s notify-failure issue body carries a `## Common Docker Hub causes` subsection mirroring this runbook's "Common Docker
-Hub failure modes" section. Keep wording in parity.
+Three copies of the same failure-cause list exist and must stay in
+parity with this runbook's "Common Docker Hub failure modes" section:
+
+- `release-on-bump.yml`'s notify-failure issue body carries it as a
+    `## Common Docker Hub causes` subsection.
+- `dockerhub-sync.yml`'s notify-failure issue body carries the same
+    bullets as a `Common causes:` list, phrased against
+    `DOCKERHUB_TOKEN_DELETE` rather than `_RW` because that is the token
+    its own job consumes.
+
+Nothing enforces this parity, so an edit here has to reach both
+workflows by hand.
