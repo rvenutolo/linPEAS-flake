@@ -142,8 +142,14 @@ the `attribute failure reason` step. Reasons:
     index images failed against the pinned workflow identity and OIDC issuer.
     Treat as a signing-chain incident, adjacent in severity to the
     `*-attest-failed` reasons.
-- `unknown` — attribution step couldn't match a known failed step
-    (bug in the attribute logic itself).
+- `unattributed` — the job failed but no ladder arm matched the failed
+    step. The ladder has a gap: the failure is real and unexplained, so
+    triage it by hand and fix the attribution step. This is the token to
+    watch for after adding a verification step without wiring its
+    `id:` into the ladder.
+- `unknown` — the `verify` job produced no `reason` output at all,
+    which happens when it is cancelled or skipped before the attribution
+    step runs. Not a verification result; re-run the cron.
 
 Only `upstream-sri-drift` and `cross-registry-manifest-mismatch` (and to
 a lesser extent `manifest-tag-drift`) warrant the "treat as security
