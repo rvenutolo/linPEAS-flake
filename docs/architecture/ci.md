@@ -147,7 +147,7 @@ Nix-based jobs pull from the public `cache.nixos.org` substituter; there is no r
 
 ## Cron schedule
 
-All schedules fit the maintainer's monitoring windows: daily crons run 08:00–10:00 UTC, weekly crons run Friday 05:00–07:00 UTC (both year-round inside the intended US-Eastern early-morning windows regardless of DST). `ci-watchdog` is the one exception: it is a backstop that must fire around the clock, not a monitoring-window report, so it runs on a continuous 30-minute cadence instead. The monthly `docs-audit-reminder` is the other departure: it sits at 10:00 on the 1st, deliberately clear of both the daily and the weekly cluster.
+All schedules fit the maintainer's monitoring windows: daily crons run 08:00–10:00 UTC, weekly crons run Friday 05:00–07:00 UTC (both year-round inside the intended US-Eastern early-morning windows regardless of DST). Two schedules sit outside those windows. `ci-watchdog` is a backstop that must fire around the clock, not a monitoring-window report, so it runs on a continuous 30-minute cadence instead. The monthly `docs-audit-reminder` sits at 10:00 on the 1st, at the tail of the daily window and clear of every daily cron in it, so a once-a-month reminder never competes with the bump pipeline for attention.
 
 | Workflow                          | Cron            | UTC          | Purpose                                                                                                                    |
 | --------------------------------- | --------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------- |
@@ -233,6 +233,10 @@ if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclu
 - `scripts/gen-dashboard-data.sh` enforces (mirrors `bump-linpeas.sh`):
 
     1. `pin.version` must match `[0-9]{8}-[0-9a-f]{7,40}` — hard-fail.
+    1. `pin.url` must start with
+        `https://github.com/peass-ng/PEASS-ng/releases/download/` — hard-fail.
+        The rendered dashboard links that URL, so an off-prefix pin would
+        point a reader at a download host upstream does not control.
     1. Missing required JSON fields hard-fail with field name; never partial
         YAML.
     1. This-repo lookups that are allowed to degrade (`releases/latest`, the
@@ -242,6 +246,9 @@ if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclu
         a literal `"null"` tag or image ref. A failed, unparsable, or
         wrong-shaped response degrades to the documented empty/`unknown`
         section and logs a `WARN` naming the lookup.
+    1. The YAML is written atomically — `make_temp` then `mv`, never a `>`
+        redirect onto the final path — so an aborted run cannot leave a
+        truncated `dashboard.yml` behind for the site build to read.
 
     Tested by `tests/gen-dashboard-data.test.sh` via `dashboard-data-tests`
     required CI job. The script's eight fixture-injection env hooks are
