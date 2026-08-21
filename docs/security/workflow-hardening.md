@@ -293,8 +293,6 @@ A read whose path traces to a temp this same script created is exempt automatica
 
 The clean verdict extends the same tally with a read count — files scanned, assignments examined, violations, exemptions applied, and reads examined — and the run exits 2 when it examined no reads, unless `LINT_ALLOW_EMPTY_SCAN=1` says the scan root deliberately holds none. The two breadth floors are checked independently: an assignment count of zero and a read count of zero are different scans stopping short, since the two rules walk disjoint syntax-tree shapes.
 
-Enforced by `scripts/check-payload-source-helper.sh`. Wired as the `lint-script-hygiene` CI job (member check `payload-source-helper`).
-
 ## script-has-test
 
 Every `scripts/check-*.sh` has a matching `tests/check-*.test.sh`, and every `tests/check-*.test.sh` has a matching `scripts/check-*.sh`.

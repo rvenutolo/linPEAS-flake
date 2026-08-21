@@ -36,8 +36,8 @@ The allowlist is a per-job YAML map: workflow filename → job id → sorted
 list of permitted write-scope **names**:
 
 ```yaml
-release-on-bump.yml:
-  release: [attestations, contents, id-token]
+example-workflow.yml:
+  build: [attestations, contents, id-token]
   notify: [issues]
 ```
 
