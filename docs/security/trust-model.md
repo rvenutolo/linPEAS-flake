@@ -24,7 +24,7 @@ Four automations may auto-merge PRs into `main` when CI passes:
 
 1. **`update-linpeas.yml`** — daily pin bumps. Opens a PR authored by the `linpeas-flake-bumper` GitHub App bot, gated by all required CI checks, auto-merged on green.
 2. **`update-flake-lock.yml`** — weekly nixpkgs input bump. Split into a `contents: read` `compute-lock` job (runs `nix flake update`) and a `push-and-merge` job that uses `actions/*` SHAs plus the repo-wide `step-security/harden-runner` pin to mint a `linpeas-flake-bumper` GitHub App installation token, keeping the bump credential out of any third-party action's env. Same CI gating.
-3. **Renovate** — Friday batch. Every dependency set Renovate tracks carries `automerge`: GitHub Action SHA pins, the pinned Nix installer version, the octoscan pin, the tracked flake inputs (`nixpkgs` stable branch, `nixpkgs-unstable`, `cachix/git-hooks.nix`), and the SchemaStore pin. No class waits on a reviewer; the required check set is the whole gate. Each set carries its own per-manager `automerge` scope rather than a top-level key, so a manager this config does not name — npm activated by a new `package.json`, say — cannot inherit automerge. All PRs honor a non-empty `minimumReleaseAge` (7 days); the `renovate-invariants` CI lint enforces the release age and the per-manager scoping. Same gating. What a green check set does and does not prove for the wide-blast flake inputs is spelled out in [`docs/architecture/flake-input-bumps.md`](../architecture/flake-input-bumps.md).
+3. **Renovate** — Friday batch. Every dependency set Renovate tracks carries `automerge`: GitHub Action SHA pins, the pinned Nix installer version, the octoscan pin, the tracked flake inputs (`nixpkgs` stable branch, `cachix/git-hooks.nix`), and the SchemaStore pin. `nixpkgs-unstable` is deliberately absent: it is branch-tracked, so the weekly `nix flake update` cron already floats it and a Renovate manager for it would only rewrite the branch name in `flake.nix` into a fixed rev, freezing the input. No class waits on a reviewer; the required check set is the whole gate. Each set carries its own per-manager `automerge` scope rather than a top-level key, so a manager this config does not name — npm activated by a new `package.json`, say — cannot inherit automerge. All PRs honor a non-empty `minimumReleaseAge` (7 days); the `renovate-invariants` CI lint enforces the release age and the per-manager scoping. Same gating. What a green check set does and does not prove for the wide-blast flake inputs is spelled out in [`docs/architecture/flake-input-bumps.md`](../architecture/flake-input-bumps.md).
 4. **`release-on-bump.yml`** — per release. The `changelog` job regenerates `CHANGELOG.md` and commits it through a PR it auto-merges under the same `linpeas-flake-bumper` App identity as the bump workflows. Same gating.
 
 A compromise of the **`linpeas-flake-bumper` GitHub App** installation token used by `update-linpeas.yml` would let an attacker open a PR with arbitrary changes. The App is installed only on this repository with `Contents: Read and write` + `Pull requests: Read and write` permissions; the installation token is minted per job, lives one hour, and revokes at job end. The auto-merge bot would still gate on CI — so any malicious change would have to also pass all required checks (build, smoke, attestation re-verify, SRI cross-check). See [`docs/security/repo-config.md`](repo-config.md) for the full credential model.
@@ -92,11 +92,10 @@ are reachable at all: `flake.nix` names no transitive node, so a transitive
 repoint is never corroborated.
 
 This is what lets a bump that Renovate proposes as a one-line `flake.nix` edit
-— the `NixOS/nixpkgs` stable branch, `NixOS/nixpkgs-unstable`, and the
-`cachix/git-hooks.nix` SHA — reach green and auto-merge once
-`renovate-flake-lock-refresh.yml` supplies the matching lockfile. Without
-corroboration every one of those is a source repoint by construction, and no
-such PR could ever pass.
+— the `NixOS/nixpkgs` stable branch and the `cachix/git-hooks.nix` SHA —
+reach green and auto-merge once `renovate-flake-lock-refresh.yml` supplies the
+matching lockfile. Without corroboration both are a source repoint by
+construction, and no such PR could ever pass.
 
 What corroboration deliberately does not do is verify that the lock's new
 `original` is the one `nix` would derive from the new `flake.nix` url. That

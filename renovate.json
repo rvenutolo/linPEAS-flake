@@ -30,13 +30,6 @@
       "automerge": true
     },
     {
-      "description": "nixpkgs-unstable: weekly grouping (inherits the global Friday schedule) plus automerge once every required check passes. Wide tooling-layer blast across formatters and linters, so the required check set is what stands between the bump and main. renovate-flake-lock-refresh.yml supplies the lockfile this manager cannot write and fails closed when the refresh would write outside the paths it may commit, which keeps a tree-reformatting bump red rather than merging it. Triage for fallout that surfaces after the bump lands: docs/architecture/flake-input-bumps.md.",
-      "matchManagers": ["custom.regex"],
-      "matchDepNames": ["NixOS/nixpkgs-unstable"],
-      "groupName": "nixpkgs-unstable",
-      "automerge": true
-    },
-    {
       "description": "NixOS/nixpkgs stable branch: automerge once every required check passes. Widest blast radius in the repo — runtime, tooling, and the image base layer all move with the YY.MM branch — and part of the fallout (formatter rewrites, new linter rules) surfaces on a later cron run or contributor PR rather than on this PR's own checks. Recovery for that case is a revert. renovate-flake-lock-refresh.yml supplies the lockfile this manager cannot write; see docs/architecture/flake-input-bumps.md for the triage tables.",
       "matchManagers": ["custom.regex"],
       "matchDepNames": ["NixOS/nixpkgs"],
@@ -94,18 +87,6 @@
       "datasourceTemplate": "github-tags",
       "depNameTemplate": "NixOS/nixpkgs",
       "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)$"
-    },
-    {
-      "description": "NixOS/nixpkgs-unstable rolling branch tracker. The branch name 'nixos-unstable' itself never changes; the actual movement is via flake.lock. This manager exists as a trigger for renovate-flake-lock-refresh.yml (which runs `nix flake update nixpkgs-unstable` and commits the refreshed lockfile). git-refs datasource on the branch HEAD; weekly cadence inherits global schedule. This is the tooling-layer bump — expect formatter-output diffs (shfmt, prettier, mdformat, taplo, just, nixfmt) and new linter rules (zizmor, statix, deadnix, actionlint, shellcheck), all of which surface as red checks on the PR. No runtime regressions; linpeas-image stays on stable nixpkgs. See docs/architecture/flake-input-bumps.md.",
-      "customType": "regex",
-      "managerFilePatterns": ["/^flake\\.nix$/"],
-      "matchStrings": [
-        "nixpkgs-unstable\\.url\\s*=\\s*\"github:NixOS/nixpkgs/(?<currentDigest>nixos-unstable)\""
-      ],
-      "currentValueTemplate": "nixos-unstable",
-      "datasourceTemplate": "git-refs",
-      "depNameTemplate": "NixOS/nixpkgs-unstable",
-      "packageNameTemplate": "https://github.com/NixOS/nixpkgs"
     },
     {
       "description": "SchemaStore master HEAD tracker for the JSON Schema URLs consumed by scripts/check-jsonschema.sh. Same shape as the cachix/git-hooks.nix manager — SchemaStore publishes 0 releases and 0 tags, master HEAD is the only upstream-truth signal. Renovate opens a PR whenever master advances; the global 7-day minimumReleaseAge applies. The bumped SHA is what check-jsonschema.sh validates against in CI, so a schema set that rejects a tracked file keeps the PR red.",
