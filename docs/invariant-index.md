@@ -4,7 +4,8 @@ Binding rules of the project. Each entry points to the tracked doc
 that holds the canonical wording for that rule. Linted by
 `scripts/check-orphan-invariants.sh` — every entry here must resolve
 to an existing file under `docs/`, and every `docs/**/*.md` (minus
-an explicit EXEMPT allowlist for overview pages) must appear here.
+an explicit EXEMPT allowlist for overview and generator-owned pages) must
+appear here.
 
 Behavior rules for the AI assistant and other non-binding guidance
 live in an untracked assistant-tooling tree and are out of scope for

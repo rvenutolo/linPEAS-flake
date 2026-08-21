@@ -130,11 +130,18 @@ confirm:
 
 - `release` published a new release (or kept the existing one with
     `force-republish`).
+- `preflight` classified the release's registry state; it runs on every
+    dispatch.
 - `image-amd64` and `image-arm64` both pushed clean to docker.io and
     ghcr.io.
 - `manifest` built and pushed.
+- `changelog` re-ran, which it does on the `force-republish` path used
+    above.
 - `verify` passed per-arch attestation re-verify, manifest reresolve,
     and `:latest` matches `:VERSION` per-arch digests.
+
+Those are the seven jobs the workflow's own failure issue enumerates, so a
+green run means all seven, not just the ones Docker Hub touches.
 
 Close the `release-on-bump-failure` issue with a one-line root-cause
 comment (e.g., `transient: docker.io 502 on push, retry green`).
