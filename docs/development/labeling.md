@@ -16,7 +16,7 @@ labels.
 
 PRs are auto-labeled with `size/XS`, `size/S`, `size/M`, `size/L`, or
 `size/XL` by the `size` job in `.github/workflows/labeler.yml` using
-`pascalgn/size-label-action`. Thresholds (additive line changes):
+`pascalgn/size-label-action`. Thresholds (total changed lines, additions plus deletions):
 
 | Label     | Range   |
 | --------- | ------- |

@@ -7,18 +7,28 @@ flake-input pins in `flake.nix`:
     upstream master moves.
 - **`NixOS/nixpkgs`** — stable-branch tracker. Fires when the next
     NixOS GA tag (`YY.MM`) lands plus the global 7-day
-    `minimumReleaseAge` quarantine. **Widest blast: runtime, tooling,
-    and image base.**
-    `nixpkgs-unstable` is a third tracked input, but **Renovate does not
-    track it**. Its URL names a branch that never renames
+    `minimumReleaseAge` quarantine. **Blast: the linpeas runtime
+    derivation and the image's bundled payload. No tooling.**
+- **`nixpkgs-unstable`** — a third input, but **Renovate does not track
+    it**. Its URL names a branch that never renames
     (`github:NixOS/nixpkgs/nixos-unstable`), so the weekly
     `update-flake-lock.yml` cron's bare `nix flake update` already floats it
     and lands it as a `chore: update flake.lock` PR. A Renovate manager for
     it would be redundant with that cron, and worse: its only possible edit
     is to replace the branch name in `flake.nix` with a fixed rev, which
     freezes the input and silently stops the manager from ever matching
-    again. **Narrow blast: tooling only — devShell, CI hooks, formatters,
-    linters, mkdocs. Never touches `linpeas-image`.**
+    again. **Blast: the whole tooling layer — devShell, CI hooks,
+    formatters, linters, mkdocs. Never touches `linpeas-image`.**
+
+Which input owns what is decided in `flake.nix` and `nix/`, not by
+branch name. `flake.nix` makes both `treefmt-nix` and `pre-commit-hooks`
+set `inputs.nixpkgs.follows = "nixpkgs-unstable"`; `nix/devshell.nix`
+builds the shell from `pkgs-unstable`; `nix/treefmt-config.nix` sets
+`treefmt.pkgs = pkgs-unstable`; and `nix/hooks/*` reads `pkgs.lib` only.
+The only stable-`pkgs` consumers in the tree are `nix/linpeas.nix` and
+`nix/image.nix`. A stable bump therefore cannot move `nixfmt`,
+`prettier`, `mdformat`, `shfmt`, `taplo`, `zizmor`, `statix`, `deadnix`,
+`actionlint`, `shellcheck`, or `mkdocs`.
 
 Both Renovate bumps merge unattended once the required check set is green;
 see [Dependency-PR merge policy](auto-update.md#dependency-pr-merge-policy)
@@ -67,39 +77,23 @@ Bump cadence, which sets how often either case comes up:
 - `cachix/git-hooks.nix`: maybe a handful of bumps per year.
 - `NixOS/nixpkgs`: twice per year (May `YY.05`, November `YY.11`).
 - `nixpkgs-unstable`: weekly via the `update-flake-lock.yml` cron, not
-    Renovate. Narrow blast radius.
+    Renovate. Carries the tooling layer.
 
 ## Expected breakage surface
 
-### Stable (`NixOS/nixpkgs`) bump — wide blast
+### Stable (`NixOS/nixpkgs`) bump — runtime and image base
 
 {% raw %}
 
-A major `NixOS/nixpkgs` bump (e.g. `25.11` → `26.05`) tends to drag in
-new versions of every tool the devShell + CI + image touch, plus the
-image's bundled runtime payload. The visible fallout falls into a
-small set of recurring classes. A green check set does not clear the
-list: some of these surface on a later cron tick or on the next
-contributor PR rather than on the bump's own checks. Walk the list
-when one does.
+A major `NixOS/nixpkgs` bump (e.g. `25.11` → `26.05`) rotates the
+image's bundled runtime payload and the linpeas derivation's build
+inputs. It does **not** touch the devShell or CI tooling — those follow
+`nixpkgs-unstable` (see the ownership note at the top of this page), so
+a stable bump cannot produce a formatter or linter delta. The visible
+fallout falls into a small set of recurring classes. A green check set
+does not clear the list: some of these surface on a later cron tick
+rather than on the bump's own checks. Walk the list when one does.
 
-- **Formatter rewrites.** `nixfmt`, `prettier`, `mdformat`, `shfmt`,
-    and `taplo` all move with nixpkgs. A new minor version often
-    rewrites whitespace, line wrapping, or quoting conventions across
-    Markdown / YAML / JSON / Nix / shell / TOML. Accept via `nix fmt`;
-    do not pin around it.
-- **mkdocs-macros strictness.** The site build (`nix build "path:$(pwd)#site"`) aborts on a literal `{{ ... }}` outside a Jinja2 raw block. New plugin behavior occasionally
-    starts treating a non-template block as macro input. Wrap the
-    block in raw tags; do not loosen `--strict`.
-- **mkdocs --strict warnings.** Plugin upgrades can promote warnings
-    to errors (broken anchors, missing nav entries, deprecated
-    options). Fix forward; pin the misbehaving plugin only as a last
-    resort and document the pin reason in the same PR.
-- **zizmor major version.** New major versions change rule severities
-    or add rules that surface on existing workflows. `nix flake check`
-    fails on the new finding. Fix the workflow; only as a last resort
-    raise `--min-severity` in `nix/hooks/linters.nix` (the `zizmor` hook),
-    and never above `low` without a security-review entry.
 - **CRITICAL CVEs in image base layers.** `image-cve-scan-trivy` and
     `image-cve-scan-grype` (`image-cve-scan.yml`, weekly cron plus a push
     trigger on the paths that change the image) are the canonical surface. The new nixpkgs may carry an unfixed
@@ -119,37 +113,49 @@ when one does.
     spurious verify failures the same day — confirm by re-dispatching
     `verify-latest-release` the next day before assuming
     attestation drift.
-- **pre-commit-hooks lib drift.** When `nixpkgs` lib symbols change
-    between releases, `cachix/git-hooks.nix` (and the hooks it
-    enables) sometimes break before the project's own pin bumps.
-    Surfaces as `nix flake check` failures unrelated to any
-    workflow change. See "Interaction between the three pins" below.
 
 Step 5 of the step-by-step below contains the same surface as a
 symptom → fix lookup table; use this section to anticipate before
 the PR arrives, and the table to triage after CI fails.
 
-{% endraw %}
+### Unstable (`nixpkgs-unstable`) bump — the whole tooling layer
 
-### Unstable (`nixpkgs-unstable`) bump — narrow blast
-
-Tooling-only. Never touches the image runtime payload. The expected
-fallout is a strict subset of the stable list:
+Tooling-only. Never touches the image runtime payload. This is where
+every formatter, linter and site-build regression comes from, and it
+lands weekly on the cron's lockfile PR rather than on a Renovate one:
 
 - **Formatter rewrites.** `nixfmt`, `prettier`, `mdformat`, `shfmt`,
-    `taplo`, `just`. Frequent; usually one-line whitespace deltas.
-    Accept via `nix fmt`.
+    `taplo`, `just`. Frequent; usually one-line whitespace deltas, but a
+    new minor version can rewrite wrapping or quoting conventions across
+    Markdown / YAML / JSON / Nix / shell / TOML. Accept via `nix fmt`;
+    do not pin around it.
 - **New linter rules.** `zizmor`, `statix`, `deadnix`, `actionlint`,
-    `shellcheck`. Fix forward; raise minimum-severity only as a last
-    resort (and never above `low` for `zizmor` without a
-    security-review entry).
-- **mkdocs / mkdocs-macros plugin churn.** Same shape as the stable
-    bump, less frequent than a stable major.
+    `shellcheck`. A new `zizmor` major changes rule severities or adds
+    rules that surface on existing workflows, failing `nix flake check`.
+    Fix forward; raise `--min-severity` in `nix/hooks/linters.nix` only
+    as a last resort, and never above `low` without a security-review
+    entry.
+- **mkdocs-macros strictness.** The site build
+    (`nix build "path:$(pwd)#site"`) aborts on a literal `{{ ... }}`
+    outside a Jinja2 raw block. New plugin behavior occasionally starts
+    treating a non-template block as macro input. Wrap the block in raw
+    tags; do not loosen `--strict`.
+- **mkdocs --strict warnings.** Plugin upgrades can promote warnings to
+    errors (broken anchors, missing nav entries, deprecated options).
+    Fix forward; pin the misbehaving plugin only as a last resort and
+    document the pin reason in the same PR.
+- **pre-commit-hooks lib drift.** `cachix/git-hooks.nix` follows
+    `nixpkgs-unstable`, so when lib symbols move under it the hooks it
+    enables sometimes break before that pin's own bump lands. Surfaces
+    as `nix flake check` failures unrelated to any workflow change. See
+    "Interaction between the three pins" below.
 
 Out of scope for unstable bumps (these only happen on stable):
 
 - Image base-layer rotation / new bundled `coreutils` versions.
 - CRITICAL CVEs in runtime payload.
+
+{% endraw %}
 
 ## When the Renovate PR arrives
 
@@ -215,10 +221,11 @@ Both commands rewrite `flake.lock` in place. Confirm the diff is sane
 
 ### 3. Run formatter
 
-Newer nixpkgs ships newer treefmt + prettier + shfmt. These will
-sometimes rewrite tracked files (markdown line wraps, blank-line
-trimming, etc.). Run the formatter explicitly so the diff lands in this
-PR rather than fighting CI:
+A newer `nixpkgs-unstable` ships newer treefmt + prettier + shfmt.
+These will sometimes rewrite tracked files (markdown line wraps,
+blank-line trimming, etc.). Run the formatter explicitly so the diff
+lands in this PR rather than fighting CI. A stable-only bump leaves the
+formatters untouched, so this step is a no-op there:
 
 ```bash
 nix fmt
@@ -248,7 +255,9 @@ for what asserts that list.
 
 ### 5. Check expected side-effect classes
 
-Use the table as a checklist for any nixpkgs bump:
+Use the table as a checklist for any nixpkgs bump. The first four rows
+belong to `nixpkgs-unstable`, which owns the tooling layer; only the
+last row can fire on a stable bump:
 
 | Class                      | Symptom                                                                                                                                                                                             | Fix                                                                                                                                                  |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -394,9 +403,9 @@ input:
 - **Stable (`nixpkgs`) bump:** the weakest of the three. The
     `linpeas-image` build and the bundled-binary inventory are covered
     at PR time, but several breakage classes above are not reproducible
-    then — CVE-scan output, dashboard rebuild, and formatter drift over
-    files the PR does not touch all resolve later. Treat the first
-    weekly cron cycle after a stable bump as part of the bump.
+    then — CVE-scan output and the dashboard rebuild both resolve later.
+    Treat the first weekly cron cycle after a stable bump as part of the
+    bump.
 - **Unstable (`nixpkgs-unstable`) bump**, which reaches `main` on the
     cron's lockfile PR rather than a Renovate one: close to conclusive.
     Formatter and linter churn is exactly what the required checks
