@@ -56,8 +56,12 @@ linpeas sees the host instead of the container.
 docker run --rm \
   --pid=host --net=host --ipc=host --userns=host --privileged \
   -v /:/host:ro \
-  rvenutolo/linpeas:latest -d /host
+  rvenutolo/linpeas:latest -f /host
 ```
+
+`-f` scopes linpeas to a filesystem scan of the mounted tree —
+processes, software, permissions, interesting files, API keys —
+rather than the full privesc check set.
 
 **Container / sidecar audit** — audit a *different* running
 container. Real use cases: CI hardening, base-image review, forensics
