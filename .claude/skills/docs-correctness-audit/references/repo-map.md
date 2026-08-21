@@ -11,7 +11,7 @@ Run these once and pass the results to every reader so a thing named in a doc is
 checked against one authoritative list:
 
 ```sh
-nix flake show --json          # flake outputs: apps, packages, devShells, checks, overlays, formatter
+nix flake show --json          # flake output inventory (the bundle's FLAKE OUTPUTS section is authoritative)
 just --list                    # every recipe (and what each regenerates)
 ls scripts/                    # *.sh inventory (check-*, refresh-*, and helpers)
 ls .github/workflows/          # workflow filenames
@@ -33,13 +33,13 @@ high severity, and neither is caught by a freshness gate.
 
 ## 2. Doc cluster map (one read-only agent per row)
 
-| Cluster        | Files                                                                                                                                                                                     |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| core-docs      | `docs/reference/*.md`, `docs/install/*.md`, `docs/runbooks/*.md`                                                                                                                          |
-| security       | `docs/security/*.md`                                                                                                                                                                      |
-| arch+dev       | `docs/architecture/*.md`, `docs/development/*.md`                                                                                                                                         |
-| root + misc    | `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`, `docs/index.md`, `docs/dashboard.md`, `docs/releases.md`, `docs/invariant-index.md`, `docs/actionlint-embedded-linters.md` |
-| claude-tooling | every tracked `.claude/**/*.md` (`git ls-files '.claude/**/*.md'`) except `skills/*/evals/seeded-defects/fixtures/*.md`                                                                   |
+| Cluster        | Files                                                                                                                                                                                                                                                                                              |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| core-docs      | `docs/reference/*.md`, `docs/install/*.md`, `docs/runbooks/*.md`                                                                                                                                                                                                                                   |
+| security       | `docs/security/*.md`                                                                                                                                                                                                                                                                               |
+| arch+dev       | `docs/architecture/*.md`, `docs/development/*.md`                                                                                                                                                                                                                                                  |
+| root + misc    | `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`, `docs/index.md`, `docs/dashboard.md`, `docs/releases.md`, `docs/invariant-index.md`, `docs/actionlint-embedded-linters.md`, `tests/README.md`, `.github/PULL_REQUEST_TEMPLATE.md` — **plus any tracked `*.md` no row above claims** |
+| claude-tooling | every tracked `.claude/**/*.md` (`git ls-files '.claude/**/*.md'`) except `skills/*/evals/seeded-defects/fixtures/*.md`                                                                                                                                                                            |
 
 Five clusters, not one per `docs/` subdirectory: most of a reader's cost is
 fixed per-agent overhead (re-reading the ground-truth bundle, tool setup), so
@@ -55,6 +55,13 @@ recall-vs-cost tuning covers the four `docs/` clusters; `claude-tooling` is
 separate from all of them because it is not user-facing documentation at all —
 it is the audit's own specification, so its reader checks this file against the
 tree rather than checking the tree against prose.
+
+`root + misc` carries the catch-all clause because the four other rows are
+directory globs: a tracked doc that lives outside `docs/` and outside
+`.claude/` matches none of them and would otherwise be assigned to no reader
+while still appearing in the collector's sweeps. Verify the map covers
+everything with `git ls-files '*.md'` minus `tests/fixtures/` — every result
+must fall in some row.
 
 Part of `.claude/` is tracked and committed — the `docs-correctness-audit` and
 `multi-agent-review` skills and their slash commands. Those are maintained
@@ -108,11 +115,14 @@ banned shapes in tracked docs and comments:
 - Dates in prose: `\d{4}-\d{2}-\d{2}`, `<Month> \d{4}`, `Q[1-4] \d{4}`.
     Exempt: stable parameter literals (e.g. `X-GitHub-Api-Version: 2022-11-28`),
     static test-fixture data.
-- Causal-history phrases: `prior to`, `previously`, `Migration note`,
-    `was reshaped`, `Tightened from`, `swapped`, `switched from/to`,
-    `legacy <X> was deleted`, `now enforced via X (previously Y)`,
-    `added in #?\d+`, `post-PR #\d+`. Rewrite to motivate the current rule by
-    current behavior.
+- Causal-history phrases: `previously`, `Migration note`, `Tightened from`,
+    `switched from/to`, `legacy <X> was deleted`,
+    `now enforced via X (previously Y)`, `added in #?\d+`, `post-PR #\d+`.
+    Rewrite to motivate the current rule by current behavior. Bare verbs and
+    prepositions (`prior to`, `swapped`, `was reshaped`) are **not** on this
+    list: each reads as repo history or as present-tense prose depending only
+    on its subject, so matching them fires on threat models and hypothetical
+    drift as readily as on rot.
 - Issue / PR refs: `#\d+`, `PR #\d+`, `issue #\d+`. **Exempt: CHANGELOG and
     release-notes pages**, which structurally list PRs.
 - Literal paths into `.claude/` from `README.md`, `docs/**`, and the other
@@ -156,7 +166,8 @@ comments.
 ## 5. Invariant-index consistency
 
 `docs/invariant-index.md` is the binding-rules index; `check-orphan-invariants.sh`
-enforces that each entry points at a real tracked-doc section and vice versa.
+enforces that each entry points at a real tracked-doc file and vice versa
+(heading anchors are a separate lint, `check-doc-anchors.sh`).
 For the consistency dimension, mirror that intent and additionally check the
 *semantic* agreement the script cannot: does the index one-liner still match
 what the linked section says, and does a claimed invariant have a backing

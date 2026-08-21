@@ -99,6 +99,52 @@ case "${lnk}" in *"example.com"*) check "skips external URL" 1 ;; *) check "skip
 case "${lnk}" in *"#real"*) check "resolves valid anchor (no error)" 1 ;; *) check "resolves valid anchor (no error)" 0 ;; esac
 rm -rf "${fl}"
 
+# --- ci.yml job listing is scoped to the jobs: block ---
+# A bare 2-space-key grep also returns `on:` trigger names and `concurrency:`
+# keys. Those read as job ids to a reader checking a doc's "CI job X" claim,
+# which is the one thing this section exists to answer.
+cj="$(mktemp -d)"
+{
+  printf 'name: ci\n\n'
+  printf 'on:\n  push:\n    branches: [main]\n  pull_request:\n\n'
+  printf 'concurrency:\n  group: ci-ref\n  cancel-in-progress: true\n\n'
+  printf 'permissions: {}\n\n'
+  printf 'jobs:\n'
+  printf '  flake-check:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n'
+  printf '  lint-doc-invariants:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n'
+} >"${cj}/ci.yml"
+# shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
+jobs_out="$(source "${COLLECTOR}" && list_ci_jobs "${cj}/ci.yml")"
+case "${jobs_out}" in *"flake-check"*) check "lists a real job id" 0 ;; *) check "lists a real job id" 1 ;; esac
+case "${jobs_out}" in *"lint-doc-invariants"*) check "lists every job id" 0 ;; *) check "lists every job id" 1 ;; esac
+case "${jobs_out}" in *"push"*) check "excludes on: trigger names" 1 ;; *) check "excludes on: trigger names" 0 ;; esac
+case "${jobs_out}" in *"pull_request"*) check "excludes on: pull_request" 1 ;; *) check "excludes on: pull_request" 0 ;; esac
+case "${jobs_out}" in *"group"*) check "excludes concurrency keys" 1 ;; *) check "excludes concurrency keys" 0 ;; esac
+case "${jobs_out}" in *"cancel-in-progress"*) check "excludes cancel-in-progress" 1 ;; *) check "excludes cancel-in-progress" 0 ;; esac
+rm -rf "${cj}"
+
+# --- causal-history sweep mirrors RE_CAUSAL, no wider ---
+# The real lint (scripts/lib/ephemeral-refs-scope.sh) excludes bare verbs and
+# prepositions on purpose. A sweep that reports them hands the audit hits the
+# lint never raises, and every one of those is a false positive to chase down.
+cs="$(mktemp -d)"
+(
+  cd "${cs}"
+  git init -q && git config user.email t@t && git config user.name t
+  cp "${REAL_REPO}/lychee.toml" .
+  mkdir -p docs
+  printf '# Causal\n\nThis was previously a different shape.\n' >docs/flagged.md
+  printf '# Bare\n\nCompromise prior to publication is out of scope.\nThe operator swapped the token.\nThe interface was reshaped by the caller.\n' >docs/bare.md
+  git add -A && git commit -qm init
+)
+# shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
+cau="$(cd "${cs}" && source "${COLLECTOR}" && sweep_ephemeral_tokens)"
+case "${cau}" in *"(causal-history)"*"previously"*) check "flags previously" 0 ;; *) check "flags previously" 1 ;; esac
+case "${cau}" in *"prior to"*) check "does not flag bare 'prior to'" 1 ;; *) check "does not flag bare 'prior to'" 0 ;; esac
+case "${cau}" in *"swapped"*) check "does not flag bare 'swapped'" 1 ;; *) check "does not flag bare 'swapped'" 0 ;; esac
+case "${cau}" in *"reshaped"*) check "does not flag bare 'was reshaped'" 1 ;; *) check "does not flag bare 'was reshaped'" 0 ;; esac
+rm -rf "${cs}"
+
 if [[ ${fails} -ne 0 ]]; then
   printf '\n%d FAILED\n' "${fails}"
   exit 1
