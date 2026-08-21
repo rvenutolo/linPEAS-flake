@@ -87,7 +87,9 @@ Look for `"conclusion": "success"` within the last 7 days. Current state on the 
     `https://github.com/peass-ng/PEASS-ng/releases/download/`. Hard fail.
 - GitHub-API `.digest` field never silently skipped. Absent or
     non-`sha256:` prefix is a hard fail.
-- Pin file written via `mktemp` + `mv` (atomic). Never `>`.
+- Pin file written via `make_temp` (`scripts/lib/temp.sh`) + `mv` (atomic).
+    Never `>`, and never a bare `mktemp` — the script-hygiene lint rejects that
+    shape anywhere under `scripts/`.
 - Every `gh api` call must pass `--header "X-GitHub-Api-Version: 2022-11-28"`.
     Apply to any new security-sensitive GitHub-REST caller.
 
