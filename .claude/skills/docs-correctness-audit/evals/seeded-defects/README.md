@@ -7,9 +7,10 @@ disposable `git worktree`; you run the audit M times against that copy;
 
 ## Run trigger
 
-**Manual only. Not wired into CI** — a full audit is ~9 min and ~100k+ tokens;
-M runs multiply that. Run this when you want a recall number (e.g. before/after
-a skill edit), not on every change.
+**The audit loop is manual only, and not wired into CI** — a full audit is
+~9 min and ~100k+ tokens; M runs multiply that. Run it when you want a recall
+number (e.g. before/after a skill edit), not on every change. The harness's own
+tests do run in CI; see Tests below.
 
 ## Steps
 
@@ -19,10 +20,13 @@ a skill edit), not on every change.
     ./plant.sh
     ```
 
-    Builds a worktree at `${TMPDIR:-/tmp}/docs-audit-seeded-defects`, copies the
-    skill in, applies all seeds, and writes `results/manifest-resolved.json`.
+    Adds a detached worktree at HEAD under
+    `${TMPDIR:-/tmp}/docs-audit-seeded-defects` — the tracked skill is checked
+    out with it, so nothing is copied — applies all seeds, and writes
+    `results/manifest-resolved.json`.
 
-1. Run the audit M times (default M=3), fresh session each:
+1. Run the audit M times (default M=2, matching the ship gate in
+    [`../tuning-results.md`](../tuning-results.md)), fresh session each:
 
     ```sh
     cd "$(cat results/worktree-path.txt)"
@@ -60,9 +64,9 @@ column) is exactly the signal being measured.
 
 ## Expected recall profile
 
-- **Collector-driven** seeds (`broken-link`, `ghost-job`, `wrong-check-count`)
-    lean on the deterministic ephemeral/link/CI-name sweeps — expect high, stable
-    recall.
+- **Collector-driven** seeds (`broken-link`, `ghost-job`, `wrong-check-count`,
+    `ephemeral-token`) lean on the deterministic ephemeral/link/CI-name sweeps —
+    expect high, stable recall.
 - **Reasoning-driven** seeds (`mislabel-member`, `drifted-cron`, `stale-path`)
     lean on reader judgment — expect the flaky tail. A low number there is a
     measurement, not a bug in the harness.
@@ -71,4 +75,7 @@ column) is exactly the signal being measured.
 
 `plant.test.sh` and `score.test.sh` are cheap, deterministic, and need no audit
 run. They validate the harness mechanics (planting, manifest, scoring math),
-not the audit. The audit loop stays manual.
+not the audit. Together with `../../scripts/collect-ground-truth.test.sh` they
+are registered in `scripts/run-harness-group.sh` as `docs-audit-plant`,
+`docs-audit-score` and `docs-audit-ground-truth`, and run in the required
+`harness-group` CI job. Only the audit loop itself stays manual.
