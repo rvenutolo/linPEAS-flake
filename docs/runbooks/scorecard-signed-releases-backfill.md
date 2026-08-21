@@ -127,8 +127,11 @@ image-digest verification to match. `reproducibility-check.yml`
 asserts this weekly; confirm it has been green for `<tag>` before
 relying on a rebuild.
 
-Restoring images to an image-less release (making all four present) is
-optional and uses the same rebuild-and-push steps for every arch.
+Restoring images to an image-less release (making all six present — the
+four per-arch tags **and** both `:<tag>` indexes) is optional and uses
+the same rebuild-and-push steps for every arch. Pushing only the four
+per-arch tags leaves the release at four-of-six, which the preflight
+classifies as `partial` and hard-fails.
 
 ## Timestamps
 
