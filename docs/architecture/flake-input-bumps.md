@@ -9,13 +9,18 @@ flake-input pins in `flake.nix`:
     NixOS GA tag (`YY.MM`) lands plus the global 7-day
     `minimumReleaseAge` quarantine. **Widest blast: runtime, tooling,
     and image base.**
-- **`NixOS/nixpkgs-unstable`** — rolling-branch tracker. Fires on
-    every upstream commit, grouped weekly by the global
-    `before 06:00 on friday` schedule. **Narrow blast: tooling only
-    — devShell, CI hooks, formatters, linters, mkdocs. Never touches
-    `linpeas-image`.**
+    `nixpkgs-unstable` is a third tracked input, but **Renovate does not
+    track it**. Its URL names a branch that never renames
+    (`github:NixOS/nixpkgs/nixos-unstable`), so the weekly
+    `update-flake-lock.yml` cron's bare `nix flake update` already floats it
+    and lands it as a `chore: update flake.lock` PR. A Renovate manager for
+    it would be redundant with that cron, and worse: its only possible edit
+    is to replace the branch name in `flake.nix` with a fixed rev, which
+    freezes the input and silently stops the manager from ever matching
+    again. **Narrow blast: tooling only — devShell, CI hooks, formatters,
+    linters, mkdocs. Never touches `linpeas-image`.**
 
-All three bumps merge unattended once the required check set is green;
+Both Renovate bumps merge unattended once the required check set is green;
 see [Dependency-PR merge policy](auto-update.md#dependency-pr-merge-policy)
 for the gates that replace a reviewer. The managers do pure text
 substitution on `flake.nix` and **do not refresh `flake.lock`**, so a
@@ -61,7 +66,8 @@ Bump cadence, which sets how often either case comes up:
 
 - `cachix/git-hooks.nix`: maybe a handful of bumps per year.
 - `NixOS/nixpkgs`: twice per year (May `YY.05`, November `YY.11`).
-- `NixOS/nixpkgs-unstable`: weekly, but narrow blast radius.
+- `nixpkgs-unstable`: weekly via the `update-flake-lock.yml` cron, not
+    Renovate. Narrow blast radius.
 
 ## Expected breakage surface
 
@@ -95,7 +101,8 @@ when one does.
     raise `--min-severity` in `nix/hooks/linters.nix` (the `zizmor` hook),
     and never above `low` without a security-review entry.
 - **CRITICAL CVEs in image base layers.** `image-cve-scan-trivy` and
-    `image-cve-scan-grype` (`image-cve-scan.yml`, weekly cron) are the canonical surface. The new nixpkgs may carry an unfixed
+    `image-cve-scan-grype` (`image-cve-scan.yml`, weekly cron plus a push
+    trigger on the paths that change the image) are the canonical surface. The new nixpkgs may carry an unfixed
     `CRITICAL` CVE in `coreutils`, `bashInteractive`, `gnused`, etc.
     The CRITICAL-fail gate flags this loudly; the remediation is
     "wait for nixpkgs to patch + bump again", not a code change here.
@@ -124,7 +131,7 @@ the PR arrives, and the table to triage after CI fails.
 
 {% endraw %}
 
-### Unstable (`NixOS/nixpkgs-unstable`) bump — narrow blast
+### Unstable (`nixpkgs-unstable`) bump — narrow blast
 
 Tooling-only. Never touches the image runtime payload. The expected
 fallout is a strict subset of the stable list:
@@ -149,7 +156,6 @@ Out of scope for unstable bumps (these only happen on stable):
 PR title looks like one of:
 
 - `Update cachix/git-hooks.nix digest to <new-SHA>`
-- `Update NixOS/nixpkgs-unstable to <version>`
 - `Update NixOS/nixpkgs to <version>`
 
 Only the dependency-name substring is matched, so the surrounding wording
@@ -157,8 +163,13 @@ is not load-bearing — the `identify` job shells out to
 `scripts/classify-renovate-flake-input.sh`, whose `case` arms glob on
 `cachix/git-hooks.nix`, `NixOS/nixpkgs-unstable` and `NixOS/nixpkgs`
 (matched against a lowercased title, so capitalisation does not matter).
-A title that stops carrying one of those three substrings is what
-silently stops the auto-refresh.
+A title that stops carrying one of those substrings is what silently
+stops the auto-refresh.
+
+The classifier keeps its `NixOS/nixpkgs-unstable` arm even though no
+manager emits that title: `NixOS/nixpkgs` is a substring of
+`NixOS/nixpkgs-unstable`, so deleting the arm as dead code would send any
+title naming unstable to the stable arm and refresh the wrong input.
 
 Diff: exactly one line in `flake.nix` changed. `flake.lock` is **not**
 touched. CI required checks fail on `flake-check` (lock-out-of-date
@@ -192,19 +203,13 @@ For a `cachix/git-hooks.nix` bump:
 nix flake update pre-commit-hooks
 ```
 
-For a `NixOS/nixpkgs-unstable` bump:
-
-```bash
-nix flake update nixpkgs-unstable
-```
-
 For a `NixOS/nixpkgs` bump:
 
 ```bash
 nix flake update nixpkgs
 ```
 
-All three commands rewrite `flake.lock` in place. Confirm the diff is sane
+Both commands rewrite `flake.lock` in place. Confirm the diff is sane
 (`git diff flake.lock`) — should show new `lastModified` /
 `narHash` / `rev` for the relevant node, nothing else.
 
@@ -245,13 +250,13 @@ for what asserts that list.
 
 Use the table as a checklist for any nixpkgs bump:
 
-| Class                      | Symptom                                                                                                                                                          | Fix                                                                                                                                                  |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `prettier`                 | YAML / Markdown / JSON whitespace diffs                                                                                                                          | accept the rewrite via `nix fmt`                                                                                                                     |
-| `mkdocs-macros` strictness | `nix build "path:$(pwd)#site"` aborts on a `&#123;&#123; ... &#125;&#125;` literal inside a code block                                                           | wrap the offending block in `&#123;% raw %&#125;...&#123;% endraw %&#125;` (mirrors the convention in `docs/architecture/ci.md`)                     |
-| `zizmor` major version     | `nix flake check` fails on a workflow finding the older version did not surface                                                                                  | fix the workflow or, as a last resort, adjust `--min-severity` in `nix/hooks/linters.nix` (do not raise above `low` without a security-review entry) |
-| `mkdocs --strict`          | Build fails on a new plugin warning                                                                                                                              | fix forward; pin the misbehaving plugin only as a last resort and document the pin reason in the same PR                                             |
-| linpeas-image base layers  | `image-cve-scan-trivy` / `image-cve-scan-grype` SARIF changes (next weekly scan or manual dispatch); `image-smoke` could surface `command not found` regressions | smoke test locally (step 8) — adjust `buildEnv.paths` in `nix/image.nix` only if a required tool genuinely disappeared from nixpkgs                  |
+| Class                      | Symptom                                                                                                                                                                                             | Fix                                                                                                                                                  |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prettier`                 | YAML / Markdown / JSON whitespace diffs                                                                                                                                                             | accept the rewrite via `nix fmt`                                                                                                                     |
+| `mkdocs-macros` strictness | `nix build "path:$(pwd)#site"` aborts on a `&#123;&#123; ... &#125;&#125;` literal inside a code block                                                                                              | wrap the offending block in `&#123;% raw %&#125;...&#123;% endraw %&#125;` (mirrors the convention in `docs/architecture/ci.md`)                     |
+| `zizmor` major version     | `nix flake check` fails on a workflow finding the older version did not surface                                                                                                                     | fix the workflow or, as a last resort, adjust `--min-severity` in `nix/hooks/linters.nix` (do not raise above `low` without a security-review entry) |
+| `mkdocs --strict`          | Build fails on a new plugin warning                                                                                                                                                                 | fix forward; pin the misbehaving plugin only as a last resort and document the pin reason in the same PR                                             |
+| linpeas-image base layers  | `image-cve-scan-trivy` / `image-cve-scan-grype` SARIF changes (the merge itself triggers a scan, since `flake.lock` is a trigger path); `image-smoke` could surface `command not found` regressions | smoke test locally (step 8) — adjust `buildEnv.paths` in `nix/image.nix` only if a required tool genuinely disappeared from nixpkgs                  |
 
 `cachix/git-hooks.nix` bumps in isolation usually only hit the `zizmor`
 row and only when the pre-commit-hooks repo changes hook versions in
@@ -340,12 +345,15 @@ merge-commit subject and must itself satisfy Conventional Commits
 
 For `NixOS/nixpkgs` bumps specifically:
 
-- The CVE-scan SARIF on `main` will change after the next weekly
-    `image-cve-scan.yml` run (or a manual dispatch) — surfacing CVEs is
-    advisory only (the `image-cve-scan-trivy` and `image-cve-scan-grype` jobs are intentionally
-    outside required-checks). Skim the Security tab for any new
-    `CRITICAL` rows. The remediation path for an unfixed
-    base-layer CVE is the next nixpkgs bump.
+- The CVE-scan SARIF on `main` updates on the merge itself:
+    `image-cve-scan.yml` triggers on a push touching `flake.lock`, so a
+    nixpkgs bump rescans without waiting for the Friday cron. Surfacing
+    CVEs is advisory only (the `image-cve-scan-trivy` and
+    `image-cve-scan-grype` jobs are intentionally outside
+    required-checks), so the run does not gate the merge — skim the
+    Security tab for any new `CRITICAL` rows once it finishes. The
+    remediation path for an unfixed base-layer CVE is the next nixpkgs
+    bump.
 - The Pages cron (daily) will rebuild the dashboard on its
     next tick. Push-trigger and release-trigger also rebuild
     immediately.
@@ -357,8 +365,9 @@ For `NixOS/nixpkgs` bumps specifically:
 If a `NixOS/nixpkgs` bump and a `cachix/git-hooks.nix` bump arrive in
 separate Renovate PRs, the order matters when the new nixpkgs `lib`
 adds or removes something `git-hooks.nix` depends on.
-`NixOS/nixpkgs-unstable` bumps are independent and do not affect the
-image; they can land in any order relative to the other two.
+`nixpkgs-unstable` bumps are independent and do not affect the image;
+they arrive on the cron's own lockfile PR and can land in any order
+relative to the other two.
 
 The safe order:
 
@@ -388,7 +397,8 @@ input:
     then — CVE-scan output, dashboard rebuild, and formatter drift over
     files the PR does not touch all resolve later. Treat the first
     weekly cron cycle after a stable bump as part of the bump.
-- **Unstable (`nixpkgs-unstable`) bump:** close to conclusive.
+- **Unstable (`nixpkgs-unstable`) bump**, which reaches `main` on the
+    cron's lockfile PR rather than a Renovate one: close to conclusive.
     Formatter and linter churn is exactly what the required checks
     execute, and the image build is unaffected by definition
     (allocation gates it to stable).
@@ -439,10 +449,12 @@ branch. The `identify` job gates on ALL of:
 - PR head branch starts with `renovate/`.
 - PR diff touches `flake.nix`.
 - PR title contains a known dep name (`cachix/git-hooks.nix` →
-    `pre-commit-hooks` input; `NixOS/nixpkgs-unstable` →
-    `nixpkgs-unstable` input; `NixOS/nixpkgs` → `nixpkgs` input —
-    unstable is matched before stable because the stable string is a
-    substring of the unstable title).
+    `pre-commit-hooks` input; `NixOS/nixpkgs` → `nixpkgs` input). The
+    classifier also maps `NixOS/nixpkgs-unstable` → `nixpkgs-unstable`
+    and matches it before stable, because the stable string is a
+    substring of the unstable title. No manager emits that title now,
+    and the arm stays for exactly that reason: dropping it would route
+    an unstable title to the stable arm.
 
 Adding a new auto-refreshable input requires three coordinated
 edits in the same PR: (1) extend the `case` arms in

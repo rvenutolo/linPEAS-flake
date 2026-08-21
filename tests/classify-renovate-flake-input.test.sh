@@ -64,6 +64,12 @@ classify "live git-hooks.nix title" pre-commit-hooks \
 # ordering that puts stable first classifies every unstable bump as
 # stable and refreshes the wrong input. Asserted from both directions
 # so a reordering cannot pass by fixing one and breaking the other.
+#
+# These stay asserted even though no Renovate manager emits an unstable
+# title any more — the branch-tracked input is floated by the weekly
+# cron instead. The arm is the guard, and the guard is what makes
+# deleting it as dead code a silent misclassification rather than a
+# no-op.
 classify "unstable is not swallowed by the stable arm" nixpkgs-unstable \
   'update nixos/nixpkgs-unstable digest'
 classify "stable is not widened into unstable" nixpkgs \
