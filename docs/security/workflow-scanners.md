@@ -112,13 +112,22 @@ next section. The weekly Friday cron cluster runs them in a fixed order (see
 ## In-tree workflow lints
 
 Beyond the external scanners, a family of in-tree shell lints — pre-commit
-hooks plus daily watchdog crons — enforce specific workflow invariants. Each
-appears in the [enforcement matrix](enforcement-matrix.md) with its enforcer
+hooks plus daily watchdog crons — enforce specific workflow invariants. Most
+appear in the [enforcement matrix](enforcement-matrix.md) with their enforcer
 script, pre-commit hook id, and CI job where one exists — some are enforced by
 hook alone, and some are standalone workflows rather than member checks;
 several also have narrative coverage
 in [workflow hardening](workflow-hardening.md). This table is an index, not a
 re-description.
+
+Two rows below have no matrix row of their own. The matrix is generated
+from the annotations in the [invariant index](../invariant-index.md), so
+a lint earns a row only by being an invariant this repo declares.
+`actionlint` is the upstream workflow linter, run as a pre-commit hook,
+and `stale-pin-check` is a cron workflow; neither is a declared
+invariant. Their nearest-named matrix rows cover different rules —
+"actionlint embedded-shellcheck pin" is the `-shellcheck=` wrapper pin,
+and "Stale-pin failure attribution" is the notify-body reason split.
 
 | Lint                         | Catches                                                                      |
 | ---------------------------- | ---------------------------------------------------------------------------- |
@@ -140,7 +149,7 @@ re-description.
 | settings-posture-drift-check | repo settings vs. the expected hardened posture (daily cron)                 |
 
 See the [enforcement matrix](enforcement-matrix.md) for the authoritative
-enforcer/hook/CI mapping of each.
+enforcer/hook/CI mapping of every row that has one.
 
 ## Why the overlap is budgeted
 
