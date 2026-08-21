@@ -118,8 +118,6 @@ Step 5 of the step-by-step below contains the same surface as a
 symptom → fix lookup table; use this section to anticipate before
 the PR arrives, and the table to triage after CI fails.
 
-{% endraw %}
-
 ### Unstable (`nixpkgs-unstable`) bump — the whole tooling layer
 
 Tooling-only. Never touches the image runtime payload. This is where
@@ -156,6 +154,8 @@ Out of scope for unstable bumps (these only happen on stable):
 
 - Image base-layer rotation / new bundled `coreutils` versions.
 - CRITICAL CVEs in runtime payload.
+
+{% endraw %}
 
 ## When the Renovate PR arrives
 
