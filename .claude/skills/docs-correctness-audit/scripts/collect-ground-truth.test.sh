@@ -5,7 +5,7 @@ IFS=$'\n\t'
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COLLECTOR="${HERE}/collect-ground-truth.sh"
-# shellcheck disable=SC2034  # used by Tasks 2 and 3 fixture checks
+# shellcheck disable=SC2034  # used by the ephemeral and link fixture checks below
 REAL_REPO="$(git -C "${HERE}" rev-parse --show-toplevel)"
 fails=0
 check() { # $1=label $2=condition-already-evaluated(0/1)
@@ -26,7 +26,43 @@ case "${src_out}" in
 *) check "sourcing does not auto-run main" 0 ;;
 esac
 
-# (further fixture-based checks added in Tasks 2 and 3)
+# --- flake-output filter fixture ---
+# Newer Nix emits a doc/output stub for every well-known output name and wraps
+# the tree in "inventory". flake-parts materialises nixosModules,
+# nixosConfigurations and legacyPackages as empty sets, and the renderer behind
+# docs/reference/flake-outputs.md omits them — so a filter that keeps them makes
+# every reader report that omission as generator drift.
+# shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
+source "${COLLECTOR}"
+
+flake_json='{
+  "version": 3,
+  "inventory": {
+    "packages":            {"doc": "d", "output": {"children": {"x86_64-linux": {"children": {"linpeas": {"derivation": {"name": "linpeas"}}}}}}},
+    "apps":                {"doc": "d", "output": {"children": {"x86_64-linux": {"filtered": true}}}},
+    "lib":                 {"unknown": true},
+    "nixosModules":        {"doc": "d", "output": {"children": {}}},
+    "nixosConfigurations": {"doc": "d", "output": {"children": {}}},
+    "legacyPackages":      {"doc": "d", "output": {"children": {"x86_64-linux": {"isLegacy": true}, "aarch64-linux": {"isLegacy": true}}}}
+  }
+}'
+
+got="$(printf '%s' "${flake_json}" | filter_flake_outputs || true)"
+rc=0
+[[ ${got} == "outputs: apps, lib, packages" ]] || rc=1
+check "flake filter drops empty and isLegacy-only outputs" "${rc}"
+
+case "${got}" in
+*nixosModules* | *nixosConfigurations* | *legacyPackages*) check "flake filter names no undefined output" 1 ;;
+*) check "flake filter names no undefined output" 0 ;;
+esac
+
+# The pre-wrapper schema has no "inventory" key; the filter must still read it.
+legacy_json='{"packages": {"doc": "d", "output": {"children": {"x86_64-linux": {"filtered": true}}}}}'
+got_legacy="$(printf '%s' "${legacy_json}" | filter_flake_outputs || true)"
+rc=0
+[[ ${got_legacy} == "outputs: packages" ]] || rc=1
+check "flake filter reads an un-wrapped inventory" "${rc}"
 
 # --- ephemeral-token fixture ---
 fx="$(mktemp -d)"
