@@ -85,10 +85,13 @@ SKILL.md you were given, then run it from the repo root:
 bash <this-skill-dir>/scripts/collect-ground-truth.sh
 ```
 
-It emits one labeled bundle — flake outputs, `just` recipes, `scripts/*.sh`,
-workflows, the **ci.yml top-level job list**, **lint-group membership**, workflow
-crons, the required-check context count, an **`EPHEMERAL-TOKEN HITS`** sweep of
-banned token shapes over tracked docs, and an **`UNRESOLVED INTERNAL LINKS / ANCHORS`** check via `lychee --offline`. Hand this same bundle to every reader
+It emits one labeled bundle of eleven sections — flake outputs, `just` recipes,
+`scripts/*.sh`, workflows, the **ci.yml top-level job list**, **lint-group
+membership**, the **`VALID CI JOB / CHECK NAMES`** union allowlist (the
+ghost/mislabel detector this audit turns on), workflow crons, the required-check
+context count, an **`EPHEMERAL-TOKEN HITS`** sweep of banned token shapes over
+tracked docs, and an **`UNRESOLVED INTERNAL LINKS / ANCHORS`** check via
+`lychee --offline`. Hand this same bundle to every reader
 so a path/recipe/output/job/cron named in a doc is checked against one
 authoritative list, not re-derived per agent (and not re-run by all of them).
 `references/repo-map.md` explains what each field means and how to use it; the

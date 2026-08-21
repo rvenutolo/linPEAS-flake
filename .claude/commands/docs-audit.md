@@ -7,8 +7,9 @@ Run a documentation correctness audit of this repository using the
 
 1. Run its bundled `scripts/collect-ground-truth.sh` once to gather the
     authoritative ground-truth bundle (flake outputs, recipes, scripts,
-    workflows, ci.yml job list, lint-group membership, crons, required-check
-    count).
+    workflows, ci.yml job list, lint-group membership, the valid CI job /
+    check-name union allowlist, crons, required-check count, the
+    ephemeral-token sweep, and the internal link / anchor check).
 1. Fan out read-only cluster readers (one per doc cluster) checking factual
     drift, internal consistency, and prose quality.
 1. Verify every candidate finding empirically before reporting it — especially

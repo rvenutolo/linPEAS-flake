@@ -90,7 +90,7 @@ edits inside their `BEGIN/END` markers; a fix means fixing the generator.
 | `docs/reference/flake-outputs.md` (flake-show block)              | `just show` / `refresh-flake-show.sh`                            |
 | `docs/reference/scripts.md`                                       | `just show-scripts` / `refresh-scripts-reference.sh`             |
 | `docs/reference/treefmt-config.md`                                | `just show-treefmt` / `refresh-treefmt-config.sh`                |
-| `docs/reference/test-harnesses.md`                                | `refresh-test-harnesses.sh` (no recipe)                          |
+| `docs/reference/test-harnesses.md`                                | `refresh-test-harnesses.sh` (no recipe; **whole file**)          |
 | `docs/reference/just-recipes.md` + README recipe block            | `just show-recipes` / `refresh-just-recipes.sh`                  |
 | `docs/security/enforcement-matrix.md`                             | `just show-enforcement-matrix` / `refresh-enforcement-matrix.sh` |
 | `docs/architecture/ci-dag.md`                                     | `just show-ci-dag` / `refresh-ci-dag.sh`                         |
@@ -100,7 +100,11 @@ edits inside their `BEGIN/END` markers; a fix means fixing the generator.
 | pin-parity block in `docs/architecture/auto-update.md`            | `refresh-pin-parity.sh` (no recipe)                              |
 | `docs/_data/dashboard.yml` (drives `dashboard.md`, `releases.md`) | `just site-data` / `gen-dashboard-data.sh`                       |
 
-Hand-written prose *surrounding* a generated block is in scope.
+Hand-written prose *surrounding* a generated block is in scope — except
+where the row says **whole file**. `docs/reference/test-harnesses.md` carries no
+`BEGIN`/`END` markers at all: its generator emits the heading, the
+do-not-hand-edit line, the intro paragraph and the regenerate line along with
+the census. Nothing in that file is hand-written, so nothing in it is in scope.
 
 ## 4. Ephemeral-token regex (prose-quality dimension)
 
@@ -109,7 +113,7 @@ banned shapes in tracked docs and comments:
 
 - Planning labels: `GAP-\d+`, `P\d+\.\d+`, `Wave-P?\d+`, `Phase \d+`,
     `AU-P-\d+`, `SC-POST-\d+`, `plan \d+`, `F-\d+`, `finding F-\d+`
-- Review-pass labels: `\(D\d+\)`, `\(L\d+[,) ]`, `Per D\d+`, `D\d+:`
+- Review-pass labels: `\(D\d+\)`, `\(L\d+[,)]`, `Per D\d+`, `D\d+:`
 - Ad-hoc ticket shapes: `DH-\d+`, `NC-[A-Z]\d+`, any
     `<2-3 uppercase letters>-<digits>` not externally meaningful
 - Dates in prose: `\d{4}-\d{2}-\d{2}`, `<Month> \d{4}`, `Q[1-4] \d{4}`.
@@ -125,10 +129,13 @@ banned shapes in tracked docs and comments:
     drift as readily as on rot.
 - Issue / PR refs: `#\d+`, `PR #\d+`, `issue #\d+`. **Exempt: CHANGELOG and
     release-notes pages**, which structurally list PRs.
-- Literal paths into `.claude/` from `README.md`, `docs/**`, and the other
-    user-facing trees — nearly all of `.claude/` is untracked, so such a path
-    does not resolve for a reader who clones the repo. Tracked `.claude/`
-    files may reference their own siblings.
+- Literal paths into `.claude/` from any scanned source outside the file
+    allowlist — Markdown prose and shell, Nix and YAML comments alike, since
+    `RE_CLAUDE` is unscoped. The allowlist is `CHANGELOG.md`,
+    `docs/releases.md`, `tests/fixtures/**` and `.claude/**`. Nearly all of
+    `.claude/` is untracked, so such a path does not resolve for a reader who
+    clones the repo; tracked `.claude/` files may reference their own siblings
+    because the allowlist skips that tree outright.
 
 Allowed: incident-warning text that prevents a regression (keep the warning,
 drop any dated tag).
@@ -158,10 +165,25 @@ colors, `&#NNN;` HTML entities, `#N-` anchor targets,
 
 **The sweep is not authoritative — `scripts/check-ephemeral-refs.sh` is.** Run
 it and believe its exit code; anything the sweep reports that the real lint does
-not is a false positive. Two standing caveats: `causal-history` is
-advisory-only even in the real lint (it never fails a gate), and the sweep
-covers `*.md` only, while the real lint also reads shell, Nix and YAML
-comments.
+not is a false positive. The lint's complete class set is in
+`scripts/lib/ephemeral-refs-scope.sh`: `RE_ISSUE`, `RE_DATE`, `RE_PLANNING`,
+`RE_REVIEW` and `RE_CLAUDE` block, `RE_CAUSAL` warns. Four standing caveats
+where this page's bullet list above is deliberately wider than that set:
+
+- `causal-history` is advisory-only even in the real lint — it never fails a
+    gate, so a hit there is a style nit.
+- The sweep covers `*.md` only, while the real lint also reads shell, Nix and
+    YAML comments.
+- **`ad-hoc-ticket` is sweep-only.** No blocking class implements it —
+    `RE_PLANNING` enumerates `GAP-`, `P<n>.<n>`, `Wave-P<n>`, `Phase <n>`,
+    `AU-P-`, `SC-POST-`, `plan <n>` and `F-<n>`, and stops there. A generic
+    `[A-Z]{2,3}-[0-9]+` matcher would fire on `UTF-8`, `SHA-256`, `RFC-822` and
+    `ISO-8601`; the enumerated shapes carry explicit boundary guards precisely
+    because that shape is noisy. Every `ad-hoc-ticket` hit is therefore a
+    judgement call for the reader, never a gate failure.
+- The sweep's review-pass shape is `\(L\d+[,) ]`, one alternative wider than
+    the lint's `\(L\d+[,)]` — the lint has no trailing-space alternative, so
+    `(L4 ` is a sweep hit the gate never raises.
 
 ## 5. Invariant-index consistency
 
