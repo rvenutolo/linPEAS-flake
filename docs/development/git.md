@@ -78,18 +78,18 @@ changes: `feat!: drop Java 11 support`.
 
 ## Local lint commands
 
-Run before pushing:
-
 These commands need no manual tool install — `just`, `pre-commit`, `lychee`,
 and every linter come from the flake `devShells.default`. Enter it with
 `nix develop` or via direnv (`direnv allow`). See the README Development
 section for details.
 
+Run before pushing:
+
 ```sh
 just check       # nix flake check
 just fmt         # nix fmt (treefmt: shfmt, prettier, …)
 just lint        # pre-commit run --all-files
-just lint-links  # lychee link check on tracked markdown
+just lint-links  # lychee link check (scope set by lychee.toml)
 ```
 
 `pre-commit install` (once) wires the git hooks so the same hooks run

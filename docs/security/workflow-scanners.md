@@ -16,12 +16,12 @@ posture, not redundancy to trim.
 Workflow scanning runs at four moments, each with a blind spot the next layer
 closes:
 
-| Layer                  | When it fires                                                                      | Tools                                                                                                  | Closes the gap of                                                 |
-| ---------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| Commit-time prevention | every `git commit` (pre-commit)                                                    | zizmor, octoscan + the workflow-hardening hook family                                                  | bad edits never enter history                                     |
-| PR / push detection    | every PR to `main` (codeql full; octoscan paths-filtered) and every push to `main` | codeql, octoscan                                                                                       | changed workflows checked server-side, in the diff                |
-| Weekly full sweep      | Friday cron cluster                                                                | codeql, octoscan, zizmor-drift                                                                         | `--no-verify` bypasses, web-UI / bot edits, upstream rule changes |
-| Posture watchdog       | daily + weekly cron                                                                | scorecard-drift, ratchet-pin-audit, settings-posture-drift, stale-pin-check, allowed-actions-api-drift | silent regressions no single PR introduces                        |
+| Layer                  | When it fires                                                                      | Tools                                                                                                                        | Closes the gap of                                                 |
+| ---------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Commit-time prevention | every `git commit` (pre-commit)                                                    | zizmor, octoscan + the workflow-hardening hook family                                                                        | bad edits never enter history                                     |
+| PR / push detection    | every PR to `main` (codeql full; octoscan paths-filtered) and every push to `main` | codeql, octoscan                                                                                                             | changed workflows checked server-side, in the diff                |
+| Weekly full sweep      | Friday cron cluster                                                                | codeql, octoscan, zizmor-drift                                                                                               | `--no-verify` bypasses, web-UI / bot edits, upstream rule changes |
+| Posture watchdog       | daily + weekly cron                                                                | scorecard-drift, ratchet-pin-audit, settings-posture-drift, stale-pin-check, allowed-actions-api-drift, flake-lock-staleness | silent regressions no single PR introduces                        |
 
 Commit-time prevention is the cheapest and earliest gate, but it is bypassable
 (`--no-verify`, edits made in the GitHub web UI or by bots before hooks
@@ -127,7 +127,8 @@ a lint earns a row only by being an invariant this repo declares.
 `actionlint` is the upstream workflow linter, run as a pre-commit hook,
 and `stale-pin-check` is a cron workflow; neither is a declared
 invariant. Their nearest-named matrix rows cover different rules —
-"actionlint embedded-shellcheck pin" is the `-shellcheck=` wrapper pin,
+"actionlint embedded-linter pins" covers the `-shellcheck=` and
+`-pyflakes=` wrapper pins,
 and "Stale-pin failure attribution" is the notify-body reason split.
 
 | Lint                         | Catches                                                                      |

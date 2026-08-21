@@ -151,9 +151,9 @@ the `attribute failure reason` step. Reasons:
     which happens when it is cancelled or skipped before the attribution
     step runs. Not a verification result; re-run the cron.
 
-Only `upstream-sri-drift` and `cross-registry-manifest-mismatch` (and to
-a lesser extent `manifest-tag-drift`) warrant the "treat as security
-incident" framing. Folding all reasons into a single failure body trains
+`upstream-sri-drift`, `cross-registry-manifest-mismatch`, the
+`*-attest-failed` family and `images-cosign-failed` warrant the "treat as
+security incident" framing, with `manifest-tag-drift` a step below. Folding all reasons into a single failure body trains
 the maintainer to skim-read auto-filed issues — exactly the wrong reflex
 when the failure is a real SRI drift or a one-sided registry rollback.
 
@@ -173,7 +173,7 @@ ladder's branch order matches the steps' execution order — the order the
 "first failed step wins" rule depends on.
 
 Without that binding, a step added without a ladder branch reports
-`unknown`, whose documented meaning is a bug in the attribution logic —
+`unattributed`, whose documented meaning is a gap in the ladder —
 so a real verification failure would be auto-filed as a self-diagnosed
 tooling bug, and the triage reflex would be wrong for exactly the case
 that matters.
@@ -210,7 +210,7 @@ main, every PR, and a weekly Friday cron. Required check named
 ## OCI image CVE scan (Trivy)<a name="oci-image-cve-scan-trivy"></a>
 
 `image-cve-scan.yml`'s `image-cve-scan-trivy` job (weekly cron +
-dispatch) uploads SARIF (CRITICAL + HIGH) to code-scanning, then
+path-filtered push to `main` + dispatch) uploads SARIF (CRITICAL + HIGH) to code-scanning, then
 post-processes the SARIF to count CRITICAL findings and **fails the
 job** when count > 0. The job emits an `outputs.has-finding` boolean
 (`'true'` iff the count step ran and returned a non-zero count) so
@@ -249,7 +249,7 @@ output and open / update deduped issues via
 ## OCI image CVE scan (Grype)<a name="oci-image-cve-scan-grype"></a>
 
 `image-cve-scan.yml`'s `image-cve-scan-grype` job (weekly cron +
-dispatch) uploads SARIF (CRITICAL + HIGH) to the Security tab under
+path-filtered push to `main` + dispatch) uploads SARIF (CRITICAL + HIGH) to the Security tab under
 category `grype-image-cve`, using Grype as a second-opinion scanner
 alongside Trivy. The job itself fails (and emits a notify issue) only
 when one or more CRITICAL findings are reported. Advisory only — not

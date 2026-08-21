@@ -1,6 +1,6 @@
 # Settings Posture — `rvenutolo/linPEAS-flake`
 
-This document is the **source of truth** for every GitHub-side settings knob this repo depends on. Most rows are verifiable by a single `gh api` query; the tag-protection ruleset row is verified by a script, and the manual-UI rows (fork-PR approval gate, merge-method flags, maintainer 2FA) expose no REST endpoint the read-only drift-check App can reach — each is called out where it appears. If a value drifts, treat it as a security incident.
+This document is the **source of truth** for every GitHub-side settings knob this repo depends on. Most rows are verifiable by a single `gh api` query; the tag-protection ruleset row is verified by a script, and the manual-UI rows (fork-PR approval gate, merge-method flags, maintainer 2FA) either expose no REST endpoint or gate the field behind `contents: write`, which the read-only drift-check App cannot hold — each is called out where it appears. If a value drifts, treat it as a security incident.
 
 ## Security & analysis
 
@@ -80,9 +80,9 @@ subject — `pr-title-lint` enforces it as Conventional Commits.
 
 ## Tag-protection ruleset
 
-| Setting                          | Required value                                                                                                                                                                      | Probe                                                                               |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Ruleset `release-tag-protection` | exists, target `tag`, enforcement `active`, rules include `deletion` + `update` + `non_fast_forward`, include pattern matches `refs/tags/[0-9]{8}-[0-9a-f]{7,40}` or `refs/tags/**` | `nix develop --command ./scripts/check-tag-protection.sh` (exit 0 = posture intact) |
+| Setting                          | Required value                                                                                                                                                                                             | Probe                                                                               |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Ruleset `release-tag-protection` | exists, target `tag`, enforcement `active`, rules include `deletion` + `update` + `non_fast_forward`, `bypass_actors` empty, include pattern matches `refs/tags/[0-9]{8}-[0-9a-f]{7,40}` or `refs/tags/**` | `nix develop --command ./scripts/check-tag-protection.sh` (exit 0 = posture intact) |
 
 ## Maintainer account (manual)
 

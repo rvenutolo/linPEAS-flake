@@ -46,8 +46,8 @@ carrying a planted finding and asserting the code appears:
 | `scripts/check-actionlint-pyflakes-active.sh`   | `tests/fixtures/actionlint-pyflakes-smoke.yml`   | `[pyflakes]` |
 
 Each is wired as a pre-commit hook (`actionlint-shellcheck-active`,
-`actionlint-pyflakes-active`) whose `files` filter watches the wrapper,
-the fixture, and the canary itself. Both harnesses run in `harness-group`.
+`actionlint-pyflakes-active`) whose `files` filter watches `flake.nix`,
+the wrapper, the fixture, and the canary itself. Both harnesses run in `harness-group`.
 
 Each exits 0 when the linter reached the block, 1 when the integration
 has gone quiet, and 2 when the canary could not run at all — a missing

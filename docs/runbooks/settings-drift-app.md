@@ -16,7 +16,7 @@ The `settings-posture-drift-check` workflow (and any other drift-check that need
 
 - **`secrets.GITHUB_TOKEN`** — never granted admin scope by GitHub regardless of `permissions:` block declarations. Returns `HTTP 403 Resource not accessible by integration` on `/repos/X/actions/permissions`, `security_and_analysis` fields of `/repos/X`, and environment endpoints.
 - **`linpeas-flake-bumper`** — the bump-bot App. Adding admin scope to it widens the blast radius of its write-capable installation token. Keep it scoped to its bump duties.
-- **`settings-drift-checker`** — this App. **Read-only**. Administration:Read + Metadata:Read. Cannot mutate any state. If its private key leaks, the worst an attacker gains is a snapshot of already-public repo metadata plus admin-only fields they could read by viewing repo Settings in a browser as a viewer.
+- **`settings-drift-checker`** — this App. **Read-only**. Administration:Read + Metadata:Read. Cannot mutate any state. If its private key leaks, the worst an attacker gains is a snapshot of already-public repo metadata plus the admin-only fields a repo admin can already read in the repo Settings UI.
 
 ## One-time setup<a name="one-time-setup"></a>
 

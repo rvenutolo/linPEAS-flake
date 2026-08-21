@@ -18,7 +18,7 @@ fmt:
 lint:
   pre-commit run --all-files
 
-# Run lychee link checker against every tracked markdown file
+# Run lychee link checker over every markdown file lychee.toml does not exclude
 lint-links:
   lychee --config lychee.toml './**/*.md'
 

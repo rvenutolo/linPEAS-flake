@@ -137,8 +137,9 @@ confirm:
 
 - `release` published a new release (or kept the existing one with
     `force-republish`).
-- `preflight` classified the release's registry state; it runs on every
-    dispatch.
+- `preflight` emitted `image-mode=full`. On the recovery paths above it
+    performs no registry probe — the state classification only runs in
+    backfill mode, where `backfill-tag` is non-empty.
 - `image-amd64` and `image-arm64` both pushed clean to docker.io and
     ghcr.io.
 - `manifest` built and pushed.
@@ -192,10 +193,12 @@ parity with this runbook's "Common Docker Hub failure modes" section:
 
 - `release-on-bump.yml`'s notify-failure issue body carries it as a
     `## Common Docker Hub causes` subsection.
-- `dockerhub-sync.yml`'s notify-failure issue body carries the same
+- `dockerhub-sync.yml`'s notify-failure issue body carries the same three
     bullets as a `Common causes:` list, phrased against
     `DOCKERHUB_TOKEN_DELETE` rather than `_RW` because that is the token
-    its own job consumes.
+    its own job consumes. It adds a fourth, sync-specific bullet about a
+    no-op parent `release-on-bump` run, which carries no parity obligation
+    here.
 
 Nothing enforces this parity, so an edit here has to reach both
 workflows by hand.
