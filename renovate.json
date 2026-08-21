@@ -30,7 +30,7 @@
       "automerge": true
     },
     {
-      "description": "NixOS/nixpkgs stable branch: automerge once every required check passes. Widest blast radius in the repo — runtime, tooling, and the image base layer all move with the YY.MM branch — and part of the fallout (formatter rewrites, new linter rules) surfaces on a later cron run or contributor PR rather than on this PR's own checks. Recovery for that case is a revert. renovate-flake-lock-refresh.yml supplies the lockfile this manager cannot write; see docs/architecture/flake-input-bumps.md for the triage tables.",
+      "description": "NixOS/nixpkgs stable branch: automerge once every required check passes. Blast radius is the linpeas runtime derivation and the image base layer; the tooling layer follows nixpkgs-unstable and does not move with the YY.MM branch. Part of the fallout (CVE-scan output, dashboard rebuild) surfaces on a later cron run rather than on this PR's own checks. Recovery for that case is a revert. renovate-flake-lock-refresh.yml supplies the lockfile this manager cannot write; see docs/architecture/flake-input-bumps.md for the triage tables.",
       "matchManagers": ["custom.regex"],
       "matchDepNames": ["NixOS/nixpkgs"],
       "automerge": true
@@ -78,7 +78,7 @@
       "packageNameTemplate": "https://github.com/cachix/git-hooks.nix"
     },
     {
-      "description": "NixOS/nixpkgs stable branch tracker. Captures the YY.MM suffix of the nixos-YY.MM branch in flake.nix and watches NixOS/nixpkgs tags for new YY.MM tags (versioningTemplate restricts to MAJOR.MINOR form). NixOS tags only at GA, so this naturally proposes the next stable branch when it ships. This manager only substitutes the branch name in flake.nix; renovate-flake-lock-refresh.yml runs `nix flake update nixpkgs` on the PR branch and commits the refreshed flake.lock, and the PR stays red until it does. Expect downstream side-effects (prettier, mkdocs-macros strictness, zizmor major version, image base-layer rotation) — see docs/architecture/flake-input-bumps.md for the triage tables.",
+      "description": "NixOS/nixpkgs stable branch tracker. Captures the YY.MM suffix of the nixos-YY.MM branch in flake.nix and watches NixOS/nixpkgs tags for new YY.MM tags (versioningTemplate restricts to MAJOR.MINOR form). NixOS tags only at GA, so this naturally proposes the next stable branch when it ships. This manager only substitutes the branch name in flake.nix; renovate-flake-lock-refresh.yml runs `nix flake update nixpkgs` on the PR branch and commits the refreshed flake.lock, and the PR stays red until it does. Expect downstream side-effects (image base-layer rotation, new bundled coreutils/bash versions, CRITICAL CVEs in the runtime payload) — see docs/architecture/flake-input-bumps.md for the triage tables.",
       "customType": "regex",
       "managerFilePatterns": ["/^flake\\.nix$/"],
       "matchStrings": [
