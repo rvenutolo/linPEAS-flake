@@ -12,6 +12,9 @@ Run a documentation correctness audit of this repository using the
     ephemeral-token sweep, and the internal link / anchor check).
 1. Fan out read-only cluster readers (one per doc cluster) checking factual
     drift, internal consistency, and prose quality.
+1. Require a coverage note from every reader saying what it cross-checked
+    against ground truth. A cluster reporting "clean" without one is not clean
+    — re-dispatch it.
 1. Verify every candidate finding empirically before reporting it — especially
     hand-written claims about CI jobs / required checks, which freshness gates do
     not cover.

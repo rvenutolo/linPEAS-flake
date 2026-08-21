@@ -39,13 +39,13 @@ Slices:
 - derivation/output coherence — `flake.nix`, `nix/packages.nix`, `nix/image.nix`, `nix/wrappers.nix`
 - pin fetch/verify logic — `nix/pin.nix`, `nix/linpeas.nix`, `linpeas-pin.json`
 - devShells + checks wiring — `nix/devshell*.nix`, `nix/checks.nix`, `nix/hooks/*`
-- hammer-shim / manifest parity — `nix/hammer-shim.nix`
+- hammer-shim / manifest parity — `nix/hammer-shim.nix`, `nix/manifests.nix`
 
 Refuters: verify eval behavior empirically (`nix eval`, `nix build`, `nix path-info`) — a derivation that *looks* wrong in trace often builds identically. Kill "supply-chain downgrade"-style claims unless a concrete eval reproduces them.
 
 ## 2. Shell script correctness — *deep*
 
-Per-script logic trace across every `scripts/*.sh` (~95; size the slices from
+Per-script logic trace across every `scripts/*.sh` (~97; size the slices from
 `ls scripts/*.sh | wc -l` rather than this figure, which rots).
 
 Slices:
