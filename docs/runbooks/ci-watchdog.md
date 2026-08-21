@@ -59,6 +59,15 @@ treat it as a real failure.
 
 Close the issue once the PR merges or is closed.
 
+The watchdog files ONE issue per stuck PR and comments on it only when a
+later tick observed something the last report did not — a different head
+commit, or a different set of exhausted runs. A run of ticks that sees the
+same thing stays silent, so the issue's comment thread is a list of changes,
+not a heartbeat: if it has not grown, nothing about the PR has moved. Each
+report carries an invisible `ci-watchdog-observation` marker naming what it
+saw, which is what a later tick compares against; editing or deleting the
+most recent report makes the next tick treat its observation as new.
+
 ## When the watchdog job goes red
 
 Check the job log for a line starting with `Sweep`. Its presence, or
