@@ -693,9 +693,11 @@ jobs:
     # once and runs each harness via scripts/run-harness-group.sh,
     # printing a per-harness pass/fail table. ratchet-pin-audit also
     # runs its live enforce script; the allowed-actions-api and
-    # settings-posture live probes need admin-scoped App tokens and run
-    # schedule-only in their own drift-check workflows. Required status
-    # context; see docs/security/required-checks.md.
+    # settings-posture live probes need admin-scoped App tokens, and the
+    # flake-lock-staleness probe is keyed on wall-clock age rather than
+    # on the tree, so those three run schedule-only in their own
+    # drift-check workflows. Required status context; see
+    # docs/security/required-checks.md.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
