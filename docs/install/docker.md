@@ -26,7 +26,7 @@ This form exists for environments where Docker is the only available shipping ve
 
 ## Run (container audit, default)
 
-The default invocation below scans the **linpeas image itself** — a near-empty Nix-built container with no services, secrets, or users. It is useful as a smoke test confirming args reach the binary, not as a real audit. For real host or sidecar audits, see [README → Usage](../../README.md#usage).
+The default invocation below scans the **linpeas image itself** — a near-empty Nix-built container with no services, secrets, or users. It is useful as a smoke test confirming args reach the binary, not as a real audit. For real host or sidecar audits, see [README → Usage](https://github.com/rvenutolo/linPEAS-flake#usage).
 
 ```bash
 # Docker Hub (default registry — no prefix needed)
