@@ -163,7 +163,8 @@ If a task-notification truncates, recover per-agent returns from the run's
 
 ### 4. Write / append the report
 
-One artifact under `.claude/reports/` (never tracked `docs/`). Structure below.
+One artifact at `.claude/reports/<YYYY-MM-DD>-multi-agent-review-findings.md`
+(never tracked `docs/`). Structure below.
 After the last dimension, confirm `git status` shows no modified tracked files.
 
 ## Report structure

@@ -60,7 +60,8 @@ below.
 
 ## Determinism
 
-Setup is deterministic — fixed sentinels, fixed seeds, a clean `main` worktree.
+Setup is deterministic — fixed sentinels, fixed seeds, a worktree detached
+at `HEAD`.
 The **only** stochastic part is the audit itself; that variance (the FLAKY
 column) is exactly the signal being measured.
 
