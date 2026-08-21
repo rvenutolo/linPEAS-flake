@@ -34,7 +34,7 @@ readonly -a HARNESSES=(
   'backfill-image-mode|classify-backfill-image-mode.test.sh|'
   'renovate-flake-input|classify-renovate-flake-input.test.sh|'
   'renovate-pr-author|classify-renovate-pr-author.test.sh|'
-  'flake-lock-staleness|check-flake-lock-staleness.test.sh|check-flake-lock-staleness.sh'
+  'flake-lock-staleness|check-flake-lock-staleness.test.sh|'
   'refresh-notify-result|classify-refresh-notify-result.test.sh|'
   'lib-log|lib-log.test.sh|'
   'lib-enumerate|lib-enumerate.test.sh|'
