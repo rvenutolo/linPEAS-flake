@@ -428,6 +428,9 @@ jobs:
           VERIFY_BLOB_PIN: ${{ steps.verify-blob-pin.outcome }}
           VERIFY_BLOB_SBOM_AMD64: ${{ steps.verify-blob-sbom-amd64.outcome }}
           VERIFY_BLOB_SBOM_ARM64: ${{ steps.verify-blob-sbom-arm64.outcome }}
+          # Names no step outcome: it is how the terminal branch below
+          # distinguishes a clean run from a failure no ladder arm matched.
+          JOB_STATUS: ${{ job.status }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
@@ -435,6 +438,9 @@ jobs:
           # Order matters: the first failed step wins. Downstream steps
           # skipped after a failure show outcome `skipped`; only the
           # actually-failed step shows `failure`. Walk in execution order.
+          # The terminal branch is load-bearing: without it a failed step
+          # the ladder does not cover leaves the initializer in place and
+          # a real verification failure reports `ok`.
           if   [[ ${READ_TAG}              == 'failure' ]]; then reason='release-tag-fetch-failed'
           elif [[ ${DOWNLOAD_ASSETS}       == 'failure' ]]; then reason='release-asset-download-failed'
           elif [[ ${VERIFY_GHCR}           == 'failure' ]]; then reason='ghcr-attest-failed'
@@ -447,6 +453,7 @@ jobs:
           elif [[ ${VERIFY_BLOB_PIN}        == 'failure' ]]; then reason='pin-blob-sig-failed'
           elif [[ ${VERIFY_BLOB_SBOM_AMD64} == 'failure' ]]; then reason='sbom-amd64-blob-sig-failed'
           elif [[ ${VERIFY_BLOB_SBOM_ARM64} == 'failure' ]]; then reason='sbom-arm64-blob-sig-failed'
+          elif [[ ${JOB_STATUS} == 'failure' ]]; then reason='unattributed'
           fi
           printf 'reason=%s\n' "${reason}" >> "${GITHUB_OUTPUT}"
           printf 'attributed reason: %s\n' "${reason}"
@@ -561,9 +568,13 @@ jobs:
               — `gh release view` / `gh release download` failed.
               Transient GitHub API or release-asset visibility lag.
               Re-run the cron.
-            - `unknown` — attribution step did not match a known failed
-              step. File a bug against this workflow's
-              `attribute failure reason` step.
+            - `unattributed` — the job failed but no ladder arm matched
+              the failed step, so the attribution ladder has a gap. Treat
+              the failure as unexplained until triaged by hand, and file a
+              bug against this workflow's `attribute failure reason` step.
+            - `unknown` — the `verify` job emitted no reason at all, so it
+              was cancelled or skipped before the attribution step ran.
+              Re-run the cron.
 
             Investigate the `verify` job logs for the failing step. Do
             NOT merge any subsequent pin bumps if the reason is

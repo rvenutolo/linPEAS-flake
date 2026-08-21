@@ -100,6 +100,8 @@ classes are tabulated in
 The Pages workflow runs:
 
 - On every push to `main` (catches docs and code changes).
+- On every PR to `main` — `build` only; `deploy` and `notify` are gated off
+    for pull requests, so a PR renders the site without publishing it.
 - On every release (catches release-on-bump pin landings).
 - Last slot in the daily window, after `update-linpeas` and `stale-pin-check`, so the dashboard reads a settled state. See [CI — cron schedule](ci.md#cron-schedule).
 - On manual `workflow_dispatch`.
