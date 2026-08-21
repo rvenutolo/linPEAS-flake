@@ -33,7 +33,7 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/enumerate.sh"
 
 # renovate: datasource=git-refs depName=SchemaStore/schemastore packageName=https://github.com/SchemaStore/schemastore currentValue=master
-readonly SCHEMASTORE_SHA='0c09eaee518187f3ed6885467cccb67026835394'
+readonly SCHEMASTORE_SHA='ecae713b273dfed09cb9e29398f21b7da0bf9cd9'
 
 readonly MARKDOWNLINT_SCHEMA_URL="https://raw.githubusercontent.com/SchemaStore/schemastore/${SCHEMASTORE_SHA}/src/schemas/json/markdownlint.json"
 
