@@ -9,7 +9,7 @@ linpeas enumerates Linux privilege-escalation vectors against whatever filesyste
 - **Container audit.** Drop the image into a running container (`docker exec` or a sidecar) to audit that container's privesc surface — SUID binaries baked into a base image, secrets in `/etc`, sudoers misconfigurations, etc.
 - **CI pipeline scanning.** Run linpeas inside an ephemeral build container in CI as a pre-deploy hardening gate.
 - **Base-image hardening review.** Bring up a candidate base image, exec linpeas inside it, fail the review on findings above a threshold.
-- **Forensics on a captured container filesystem.** Mount the suspect filesystem into the linpeas image and run with `-d <path>`.
+- **Forensics on a captured container filesystem.** Mount the suspect filesystem into the linpeas image and run with `-f <path>`.
 
 For a **host** audit, linpeas needs to see the host. Either install via Nix (`nix run github:rvenutolo/linPEAS-flake`), or run the image with host namespaces explicitly:
 
@@ -17,8 +17,10 @@ For a **host** audit, linpeas needs to see the host. Either install via Nix (`ni
 docker run --rm \
   --pid=host --net=host --ipc=host --userns=host --privileged \
   -v /:/host:ro \
-  rvenutolo/linpeas:latest -d /host
+  rvenutolo/linpeas:latest -f /host
 ```
+
+`-f` scopes linpeas to a filesystem scan of the mounted tree — processes, software, permissions, interesting files, API keys — rather than the full privesc check set. Passing no path instead scans the container's own near-empty filesystem, and `-d` is the host-discovery flag, which exits before any privesc check runs.
 
 This form exists for environments where Docker is the only available shipping vehicle.
 
