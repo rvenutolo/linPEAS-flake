@@ -193,10 +193,14 @@ read forty.
 | Literal `.claude/` | any `.claude/` path — prose must not point into the Claude tooling tree       |
 
 The PR/issue-ref match is boundary-guarded so anchor targets
-(`#1-anchor`), HTML numeric entities (`&#123;`), and hex colors (`#fff`)
-do not trip it. The enumerated planning/review shapes carry the same
-left-boundary guard so they cannot match inside a larger token (e.g.
-`UTF-8`, `PDF-1.7`, `ID5:`).
+(`#1-anchor`) and HTML numeric entities (`&#123;`) do not trip it — the
+left guard excludes `&`, the right guard excludes `-`. Hex colors are
+not covered by that guard: `#fff` escapes only because `f` is not a
+digit, and an all-numeric color such as `#333` matches the shape. Colors
+stay clear because Mermaid and CSS blocks are fenced, and fenced blocks
+are blanked before any class runs. The enumerated planning/review shapes
+carry the same left-boundary guard so they cannot match inside a larger
+token (e.g. `UTF-8`, `PDF-1.7`, `ID5:`).
 
 ### Advisory class (warn-only)
 
