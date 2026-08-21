@@ -40,9 +40,9 @@ Live status of the `linPEAS-flake` pin, releases, and upstream parity.
 
 </div>
 
-- **Upstream release:** [{{ dashboard.pin.upstream_tag }}](https://github.com/peass-ng/PEASS-ng/releases/tag/{{ dashboard.pin.upstream_tag }})
+- **Pinned release:** [{{ dashboard.pin.version }}](https://github.com/peass-ng/PEASS-ng/releases/tag/{{ dashboard.pin.version }})
 - **Pinned URL:** [{{ dashboard.pin.url }}]({{ dashboard.pin.url }})
-- **Last upstream tag date:** {{ dashboard.pin.upstream_date }}
+- **Latest upstream tag:** [{{ dashboard.pin.upstream_tag }}](https://github.com/peass-ng/PEASS-ng/releases/tag/{{ dashboard.pin.upstream_tag }}), published {{ dashboard.pin.upstream_date }}
 
 ## Last automated bump
 

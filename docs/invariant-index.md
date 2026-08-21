@@ -6,9 +6,12 @@ that holds the canonical wording for that rule. Linted by
 to an existing file under `docs/`, and every `docs/**/*.md` (minus
 an explicit EXEMPT allowlist) must appear here. That allowlist covers
 three kinds of page: generator-owned ones, whose content is a rendering
-rather than a rule; overview ones, which route to rules held elsewhere;
-and the install guides, which tell a consumer how to use the flake and
-so state no invariant of their own. The array in
+rather than a rule; overview ones, which route to rules held elsewhere
+(`security/threat-model.md`, `index.md`); and the two install guides
+that only tell a consumer how to use the flake — `install/nix.md` and
+`install/consume-from-flake.md`. `install/docker.md` is **not** exempt:
+it holds the OCI-image and manifest digest-pinning rules and is indexed
+below like any other rule-bearing page. The array in
 `scripts/check-orphan-invariants.sh` is the authoritative list.
 
 Behavior rules for the AI assistant and other non-binding guidance
