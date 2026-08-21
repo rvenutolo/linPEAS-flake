@@ -50,17 +50,35 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
+```
+
+A harness with a single script subject then binds it, and one that reads
+a committed fixture tree binds that:
+
+```bash
 readonly SCRIPT="${REPO_ROOT}/scripts/<script-name>.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/<script-name>"
 ```
+
+Neither of those two is universal. A harness that exercises a library or
+a cross-cutting rule rather than one script assigns no `SCRIPT`, and
+declares its subject with a `# @subject` header annotation instead.
+Exactly one of the two is required and never both — the census
+generator hard-fails a harness that declares no subject or declares one
+twice, and `doc-freshness` runs it. A harness that builds its tree at
+runtime assigns no `FIXTURES`; one that reaches a committed tree only
+through an environment override declares it with
+`# @fixtures tests/fixtures/<name>`, so that tree is not reported as an
+orphan.
 
 Most check harnesses then define a single `expect` function that takes
 `<fixture> <want_exit> <want_stderr_substring>`, runs the script
 with environment overrides pointing it at the fixture, and asserts
 on exit code + stderr. The rest use per-scenario helpers
 (`expect_empty_scan`, `expect_failure`, `run_expect`) or a bare
-`pass`/`fail` counter — the preamble above is universal, this shape is
-a convention rather than a requirement.
+`pass`/`fail` counter — the shebang-through-`REPO_ROOT` lines above are
+universal, but this assertion shape is a convention rather than a
+requirement.
 
 A scenario's expected substring must not appear in any sibling
 scenario's output. A substring the nominal path also prints matches
@@ -84,7 +102,9 @@ Environment-variable overrides scoped to test invocation:
 | `WORKFLOWS_DIR_OVERRIDE`             | every workflow-scanning lint — enumerate with `grep -rlE '^[^#]*WORKFLOWS_DIR_OVERRIDE' scripts/`         | swap the workflows scan root                 |
 | `WORKFLOW_FILE_FILTER`               | every workflow-scanning lint — enumerate with `grep -rlE '^[^#]*WORKFLOW_FILE_FILTER' scripts/`           | restrict to a single fixture file            |
 | `RENOVATE_JSON_OVERRIDE`             | `check-renovate-invariants.sh`, `check-renovate-markers-matched.sh`, `check-renovate-config-validator.sh` | swap the renovate.json path                  |
-| `SCAN_ROOT`                          | every lint that walks a configurable tree root — enumerate with `grep -rlE '^[^#]*SCAN_ROOT' scripts/`    | swap the scanned tree root                   |
+| `SCAN_ROOT`                          | `check-renovate-markers-matched.sh`                                                                       | swap the scanned tree root                   |
+| `SCAN_ROOT_OVERRIDE`                 | `check-doc-cron-restatement.sh`                                                                           | swap the scanned tree root                   |
+| `PYFLAKES_GUARD_SCAN_ROOT_OVERRIDE`  | `check-run-block-pyflakes-required.sh`                                                                    | swap the scanned tree root                   |
 | `RELEASE_TAG_RULESET_JSON_OVERRIDE`  | `check-tag-protection.sh`                                                                                 | swap the release-tag-protection ruleset JSON |
 | `PROTECT_MAIN_RULESET_JSON_OVERRIDE` | `check-protect-main.sh`                                                                                   | swap the protect-main ruleset JSON           |
 | `PIN_FILE_OVERRIDE`                  | `bump-linpeas.sh`, `gen-dashboard-data.sh`                                                                | swap the linpeas-pin.json path               |
@@ -92,9 +112,14 @@ Environment-variable overrides scoped to test invocation:
 | `LATEST_RELEASE_JSON_OVERRIDE`       | `gen-dashboard-data.sh`                                                                                   | swap rvenutolo release JSON                  |
 
 Each script defines its own overrides — check the script for the
-canonical list before writing a new test. The `^[^#]*` anchor on the
-enumerating greps keeps them off comment-only mentions: a lint can name
-another lint's override variable in a rule comment without consuming it,
+canonical list before writing a new test. The three scan-root overrides
+are listed one script at a time rather than behind an enumerating grep,
+because each lint spells the variable differently: a grep for the
+shortest of the three names all three scripts, two of which ignore the
+variable it matched and would scan the live repo instead of the fixture.
+The `^[^#]*` anchor on the enumerating greps that remain keeps them off
+comment-only mentions: a lint can name another lint's override variable
+in a rule comment without consuming it,
 which a bare substring grep reports as a consumer. The two ruleset
 overrides are named for the ruleset each lint reads: one variable shared
 between them would feed a single fixture to both whenever one process
