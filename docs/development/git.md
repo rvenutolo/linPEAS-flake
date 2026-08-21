@@ -196,7 +196,8 @@ offline work). Run it manually with `just lint-links`; CI runs it on a
 weekly cron only (plus manual `workflow_dispatch`); it is not a required
 check.
 
-One-time setup:
+Only needed when working outside the devShell — entering it installs the
+hooks for you:
 
 ```sh
 pre-commit install
