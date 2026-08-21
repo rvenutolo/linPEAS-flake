@@ -33,13 +33,13 @@ high severity, and neither is caught by a freshness gate.
 
 ## 2. Doc cluster map (one read-only agent per row)
 
-| Cluster        | Files                                                                                                                                                                                                                                                                                                                                          |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| core-docs      | `docs/reference/*.md`, `docs/install/*.md`, `docs/runbooks/*.md`                                                                                                                                                                                                                                                                               |
-| security       | `docs/security/*.md`                                                                                                                                                                                                                                                                                                                           |
-| arch+dev       | `docs/architecture/*.md`, `docs/development/*.md`                                                                                                                                                                                                                                                                                              |
-| root + misc    | `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`, `docs/index.md`, `docs/dashboard.md`, `docs/releases.md`, `docs/invariant-index.md`, `docs/actionlint-embedded-linters.md`, `tests/README.md`, `.github/PULL_REQUEST_TEMPLATE.md` — **plus any tracked `*.md` outside `docs/` and outside `.claude/` that no other row claims** |
-| claude-tooling | every tracked `.claude/**/*.md` (`git ls-files '.claude/**/*.md'`) except `skills/*/evals/seeded-defects/fixtures/*.md`                                                                                                                                                                                                                        |
+| Cluster        | Files                                                                                                                                                                                                                                                                                                                      |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| core-docs      | `docs/reference/*.md`, `docs/install/*.md`, `docs/runbooks/*.md`                                                                                                                                                                                                                                                           |
+| security       | `docs/security/*.md`                                                                                                                                                                                                                                                                                                       |
+| arch+dev       | `docs/architecture/*.md`, `docs/development/*.md`                                                                                                                                                                                                                                                                          |
+| root + misc    | `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`, `docs/index.md`, `docs/dashboard.md`, `docs/releases.md`, `docs/invariant-index.md`, `docs/actionlint-embedded-linters.md`, `tests/README.md`, `.github/PULL_REQUEST_TEMPLATE.md` — **plus any tracked `*.md` outside `.claude/` that no other row claims** |
+| claude-tooling | every tracked `.claude/**/*.md` (`git ls-files '.claude/**/*.md'`) except `skills/*/evals/seeded-defects/fixtures/*.md`                                                                                                                                                                                                    |
 
 Five clusters, not one per `docs/` subdirectory: most of a reader's cost is
 fixed per-agent overhead (re-reading the ground-truth bundle, tool setup), so
@@ -49,17 +49,20 @@ count without losing the load-bearing detections. `security` and `root + misc`
 stay standalone because they hold the dense, high-severity drift surfaces
 (member-vs-job CI prose; required-check counts, ghost jobs, broken links). The
 recall-vs-cost evidence for this map is in
-[`../evals/tuning-results.md`](../evals/tuning-results.md). Keep `security` and
-`root + misc` un-merged; merging them regresses high-severity recall. That
-recall-vs-cost tuning covers the four `docs/` clusters; `claude-tooling` is
+[`../evals/tuning-results.md`](../evals/tuning-results.md), which also records a
+measured three-reader variant that merges `security` into `root + misc`: it held
+seed recall at 14/14, so the split is a judgement about depth on non-seeded
+drift, not a measured recall win. Keep them un-merged unless someone re-measures
+cost head-to-head. That recall-vs-cost tuning covers the four `docs/` clusters; `claude-tooling` is
 separate from all of them because it is not user-facing documentation at all —
 it is the audit's own specification, so its reader checks this file against the
 tree rather than checking the tree against prose.
 
 `root + misc` carries the catch-all clause because the four other rows are
-directory globs: a tracked doc that lives outside `docs/` and outside
-`.claude/` matches none of them and would otherwise be assigned to no reader
-while still appearing in the collector's sweeps. Verify the map covers
+directory globs: a tracked doc outside `.claude/` that falls in none of those
+directories — a new top-level `docs/` page as readily as a new root-level one —
+matches no row and would otherwise be assigned to no reader while still
+appearing in the collector's sweeps. Verify the map covers
 everything with `git ls-files '*.md'` minus `tests/fixtures/` — every result
 must fall in some row.
 
@@ -127,8 +130,12 @@ banned shapes in tracked docs and comments:
     list: each reads as repo history or as present-tense prose depending only
     on its subject, so matching them fires on threat models and hypothetical
     drift as readily as on rot.
-- Issue / PR refs: `#\d+`, `PR #\d+`, `issue #\d+`. **Exempt: CHANGELOG and
-    release-notes pages**, which structurally list PRs.
+- Issue / PR refs: `#\d+`, `PR #\d+`, `issue #\d+`.
+
+`CHANGELOG.md` and `docs/releases.md` are exempt from **every** class above,
+not merely the PR-ref one: `is_allowlisted()` skips both files before any
+class runs, because they structurally record PRs and dates.
+
 - Literal paths into `.claude/` from any scanned source outside the file
     allowlist — Markdown prose and shell, Nix and YAML comments alike, since
     `RE_CLAUDE` is unscoped. The allowlist is `CHANGELOG.md`,
@@ -168,7 +175,7 @@ it and believe its exit code; anything the sweep reports that the real lint does
 not is a false positive. The lint's complete class set is in
 `scripts/lib/ephemeral-refs-scope.sh`: `RE_ISSUE`, `RE_DATE`, `RE_PLANNING`,
 `RE_REVIEW` and `RE_CLAUDE` block, `RE_CAUSAL` warns. Four standing caveats
-where this page's bullet list above is deliberately wider than that set:
+where this page, the collector sweep, and the real lint diverge:
 
 - `causal-history` is advisory-only even in the real lint — it never fails a
     gate, so a hit there is a style nit.
@@ -188,7 +195,9 @@ where this page's bullet list above is deliberately wider than that set:
 ## 5. Invariant-index consistency
 
 `docs/invariant-index.md` is the binding-rules index; `check-orphan-invariants.sh`
-enforces that each entry points at a real tracked-doc file and vice versa
+enforces that each entry points at a real tracked-doc file, and that every
+non-`EXEMPT` docs file has an entry (the script's `EXEMPT` array holds the
+generated and overview pages)
 (heading anchors are a separate lint, `check-doc-anchors.sh`).
 For the consistency dimension, mirror that intent and additionally check the
 *semantic* agreement the script cannot: does the index one-liner still match
