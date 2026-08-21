@@ -101,7 +101,8 @@ when one does.
     raise `--min-severity` in `nix/hooks/linters.nix` (the `zizmor` hook),
     and never above `low` without a security-review entry.
 - **CRITICAL CVEs in image base layers.** `image-cve-scan-trivy` and
-    `image-cve-scan-grype` (`image-cve-scan.yml`, weekly cron) are the canonical surface. The new nixpkgs may carry an unfixed
+    `image-cve-scan-grype` (`image-cve-scan.yml`, weekly cron plus a push
+    trigger on the paths that change the image) are the canonical surface. The new nixpkgs may carry an unfixed
     `CRITICAL` CVE in `coreutils`, `bashInteractive`, `gnused`, etc.
     The CRITICAL-fail gate flags this loudly; the remediation is
     "wait for nixpkgs to patch + bump again", not a code change here.
@@ -249,13 +250,13 @@ for what asserts that list.
 
 Use the table as a checklist for any nixpkgs bump:
 
-| Class                      | Symptom                                                                                                                                                          | Fix                                                                                                                                                  |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `prettier`                 | YAML / Markdown / JSON whitespace diffs                                                                                                                          | accept the rewrite via `nix fmt`                                                                                                                     |
-| `mkdocs-macros` strictness | `nix build "path:$(pwd)#site"` aborts on a `&#123;&#123; ... &#125;&#125;` literal inside a code block                                                           | wrap the offending block in `&#123;% raw %&#125;...&#123;% endraw %&#125;` (mirrors the convention in `docs/architecture/ci.md`)                     |
-| `zizmor` major version     | `nix flake check` fails on a workflow finding the older version did not surface                                                                                  | fix the workflow or, as a last resort, adjust `--min-severity` in `nix/hooks/linters.nix` (do not raise above `low` without a security-review entry) |
-| `mkdocs --strict`          | Build fails on a new plugin warning                                                                                                                              | fix forward; pin the misbehaving plugin only as a last resort and document the pin reason in the same PR                                             |
-| linpeas-image base layers  | `image-cve-scan-trivy` / `image-cve-scan-grype` SARIF changes (next weekly scan or manual dispatch); `image-smoke` could surface `command not found` regressions | smoke test locally (step 8) — adjust `buildEnv.paths` in `nix/image.nix` only if a required tool genuinely disappeared from nixpkgs                  |
+| Class                      | Symptom                                                                                                                                                                                             | Fix                                                                                                                                                  |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prettier`                 | YAML / Markdown / JSON whitespace diffs                                                                                                                                                             | accept the rewrite via `nix fmt`                                                                                                                     |
+| `mkdocs-macros` strictness | `nix build "path:$(pwd)#site"` aborts on a `&#123;&#123; ... &#125;&#125;` literal inside a code block                                                                                              | wrap the offending block in `&#123;% raw %&#125;...&#123;% endraw %&#125;` (mirrors the convention in `docs/architecture/ci.md`)                     |
+| `zizmor` major version     | `nix flake check` fails on a workflow finding the older version did not surface                                                                                                                     | fix the workflow or, as a last resort, adjust `--min-severity` in `nix/hooks/linters.nix` (do not raise above `low` without a security-review entry) |
+| `mkdocs --strict`          | Build fails on a new plugin warning                                                                                                                                                                 | fix forward; pin the misbehaving plugin only as a last resort and document the pin reason in the same PR                                             |
+| linpeas-image base layers  | `image-cve-scan-trivy` / `image-cve-scan-grype` SARIF changes (the merge itself triggers a scan, since `flake.lock` is a trigger path); `image-smoke` could surface `command not found` regressions | smoke test locally (step 8) — adjust `buildEnv.paths` in `nix/image.nix` only if a required tool genuinely disappeared from nixpkgs                  |
 
 `cachix/git-hooks.nix` bumps in isolation usually only hit the `zizmor`
 row and only when the pre-commit-hooks repo changes hook versions in
@@ -344,12 +345,15 @@ merge-commit subject and must itself satisfy Conventional Commits
 
 For `NixOS/nixpkgs` bumps specifically:
 
-- The CVE-scan SARIF on `main` will change after the next weekly
-    `image-cve-scan.yml` run (or a manual dispatch) — surfacing CVEs is
-    advisory only (the `image-cve-scan-trivy` and `image-cve-scan-grype` jobs are intentionally
-    outside required-checks). Skim the Security tab for any new
-    `CRITICAL` rows. The remediation path for an unfixed
-    base-layer CVE is the next nixpkgs bump.
+- The CVE-scan SARIF on `main` updates on the merge itself:
+    `image-cve-scan.yml` triggers on a push touching `flake.lock`, so a
+    nixpkgs bump rescans without waiting for the Friday cron. Surfacing
+    CVEs is advisory only (the `image-cve-scan-trivy` and
+    `image-cve-scan-grype` jobs are intentionally outside
+    required-checks), so the run does not gate the merge — skim the
+    Security tab for any new `CRITICAL` rows once it finishes. The
+    remediation path for an unfixed base-layer CVE is the next nixpkgs
+    bump.
 - The Pages cron (daily) will rebuild the dashboard on its
     next tick. Push-trigger and release-trigger also rebuild
     immediately.
