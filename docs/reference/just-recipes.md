@@ -29,7 +29,7 @@ just show-ci-dag     # Regenerate docs/architecture/ci-dag.md from ci.yml needs 
 just show-ci-summary # Regenerate the Continuous integration summary in README.md
 just show-enforcement-matrix # Regenerate docs/security/enforcement-matrix.md from invariant-index annotations
 just show-hooks      # Regenerate the pre-commit hook table in docs/development/git.md
-just show-recipes    # Regenerate the just-recipes list in README.md
+just show-recipes    # Regenerate the just-recipes list in README.md and docs/reference/just-recipes.md
 just show-scripts    # Regenerate docs/reference/scripts.md from in-script annotations
 just show-treefmt    # Regenerate docs/reference/treefmt-config.md from treefmt.nix
 just site            # Build the Pages site
