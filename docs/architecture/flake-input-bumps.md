@@ -460,7 +460,7 @@ branch. The `identify` job gates on ALL of:
 
 - PR author is the Renovate App, decided by
     `scripts/classify-renovate-pr-author.sh`. GitHub reports the same App
-    under three spellings — `app/renovate` from `gh pr view --json   author`, `renovate[bot]` from the REST and GraphQL APIs, and a bare
+    under three spellings — `app/renovate` from `gh pr view --json author`, `renovate[bot]` from the REST and GraphQL APIs, and a bare
     `renovate` from a self-hosted legacy install — so the classifier
     normalizes one optional `app/` prefix and one optional `[bot]`
     suffix and then matches `renovate` exactly. A login that merely

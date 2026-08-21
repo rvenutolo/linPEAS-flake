@@ -194,7 +194,7 @@ order:
 1. Run `nix shell .#git-cliff --command git-cliff --config cliff.toml --output CHANGELOG.md`.
 1. Detect whether `CHANGELOG.md` changed (a no-op day — identical pin
     — produces no diff).
-1. If changed, render the latest section with `git-cliff --latest  --strip header` into `.release-notes.md` for the release body.
+1. If changed, render the latest section with `git-cliff --latest --strip header` into `.release-notes.md` for the release body.
 1. If changed, create a `chore/changelog-${VERSION}` branch from
     `main` and commit `CHANGELOG.md` via REST `PUT /contents` as the
     App identity (GitHub web-flow-signs the commit).

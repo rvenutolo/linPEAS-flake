@@ -135,6 +135,7 @@ and "Stale-pin failure attribution" is the notify-body reason split.
 | ---------------------------- | ---------------------------------------------------------------------------- |
 | actionlint                   | workflow syntax, `run:`-block shellcheck, expression errors                  |
 | actionlint-shellcheck-active | guards that actionlint's shellcheck integration stays enabled                |
+| actionlint-pyflakes-active   | guards that actionlint's pyflakes integration stays enabled                  |
 | uses-sha-pinned              | every `uses:` pinned to a full commit SHA                                    |
 | patch-tag-pins               | the patch-tag pin-comment convention on SHA pins                             |
 | pin-diff-isolated            | pin bumps isolated to their own diff                                         |
