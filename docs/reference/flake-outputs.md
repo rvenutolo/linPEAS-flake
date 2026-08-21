@@ -47,7 +47,7 @@ the markers by hand.
     ├───aarch64-linux
     │   ├───cosign: package 'cosign-3.1.3'
     │   ├───default: package 'linpeas-20260817-e45108b9'
-    │   ├───diffoscopeMinimal: package 'diffoscope-326'
+    │   ├───diffoscopeMinimal: package 'diffoscope-328'
     │   ├───git-cliff: package 'git-cliff-2.13.1'
     │   ├───linpeas: package 'linpeas-20260817-e45108b9'
     │   ├───linpeas-image: package 'linpeas.tar.gz'
@@ -56,7 +56,7 @@ the markers by hand.
     └───x86_64-linux
         ├───cosign: package 'cosign-3.1.3'
         ├───default: package 'linpeas-20260817-e45108b9'
-        ├───diffoscopeMinimal: package 'diffoscope-326'
+        ├───diffoscopeMinimal: package 'diffoscope-328'
         ├───git-cliff: package 'git-cliff-2.13.1'
         ├───linpeas: package 'linpeas-20260817-e45108b9'
         ├───linpeas-image: package 'linpeas.tar.gz'

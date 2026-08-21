@@ -551,13 +551,15 @@ enumeration) still exits non-zero the same as the default pass.
 
 ### scripts/check-flake-lock-provenance.sh
 
-Lint: a bot `flake.lock` bump may only move
-`rev`/`narHash`/`lastModified`. Fails when a top-level input is
-added, removed, or repointed, or when any node present in both base
-and head has its source identity (owner/repo/type/url/ref/flake/...)
-changed. Gates the auto-merged weekly flake.lock update so a
-source-level repoint of an input cannot slip into the build/dev
-closure unreviewed.
+Lint: a `flake.lock` bump that `flake.nix` does not
+account for may only move `rev`/`narHash`/`lastModified`. Fails when a
+top-level input is added, removed, or repointed, or when any node
+present in both base and head has its source identity
+(owner/repo/type/url/ref/flake/...) changed, unless `flake.nix` itself
+declares a different `url` for that input between base and head.
+Gates the auto-merged weekly flake.lock update so a source-level
+repoint of an input cannot slip into the build/dev closure
+undeclared.
 
 ### scripts/check-flake-systems-eval.sh
 
@@ -1432,6 +1434,14 @@ PR bumps: prints `pre-commit-hooks`, `nixpkgs-unstable`, or
 `nixpkgs`. Drives the identify job of
 .github/workflows/renovate-flake-lock-refresh.yml, which runs
 `nix flake update <input>` on the PR branch. Pure and side-effect
+free so the mapping is testable without a live Renovate PR.
+
+### scripts/classify-renovate-pr-author.sh
+
+Classify one PR author login as Renovate or not, printing
+the canonical `renovate` spelling when it is. Drives the identify job
+of .github/workflows/renovate-flake-lock-refresh.yml, which refreshes
+`flake.lock` only on a PR that Renovate opened. Pure and side-effect
 free so the mapping is testable without a live Renovate PR.
 
 ### scripts/compare-repro.sh

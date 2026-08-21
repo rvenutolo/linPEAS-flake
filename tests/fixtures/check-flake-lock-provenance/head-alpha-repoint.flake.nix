@@ -1,0 +1,13 @@
+{
+  description = "provenance fixture: the declaration both sides share";
+
+  inputs = {
+    alpha.url = "github:orgA/alpha/next";
+    beta = {
+      url = "github:orgB/beta/main";
+      inputs.alpha.follows = "alpha";
+    };
+  };
+
+  outputs = _: { };
+}

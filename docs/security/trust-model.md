@@ -62,17 +62,56 @@ The weekly `update-flake-lock` cron bumps every flake input and auto-merges
 the PR; the only build-path gate is `flake-check`, which does not verify input
 *provenance*. `check-flake-lock-provenance.sh` (run in the `lint-doc-invariants`
 required group) closes that gap: it diffs the PR's `flake.lock` against
-`origin/main` and fails when an input's source identity changes.
+`origin/main` and fails when an input's source identity changes without
+`flake.nix` declaring it.
 
-Only `locked.rev`, `locked.narHash`, and `locked.lastModified` may move. Per
-node the check compares `original`, the `flake` flag, and the rest of `locked`
-(`type`/`owner`/`repo`/`url`/`ref`/…); `inputs` wiring is excluded so that
-legitimate transitive graph churn is tolerated. Scope is hybrid: a
-source-identity change on any node present in both base and head fails, while a
-node add/remove fails only for a top-level input (the entry node's `inputs`).
-On a normal bump the gate is invisible and the PR auto-merges as before; it
-fails — pausing `gh pr merge --auto` — only on a source repoint, the event
-worth a human glance.
+Only `locked.rev`, `locked.narHash`, and `locked.lastModified` may move on
+their own. Per node the check compares `original`, the `flake` flag, and the
+rest of `locked` (`type`/`owner`/`repo`/`url`/`ref`/…); `inputs` wiring is
+excluded so that legitimate transitive graph churn is tolerated. Scope is
+hybrid: a source-identity change on any node present in both base and head
+fails, while a node add/remove fails only for a top-level input (the entry
+node's `inputs`). On a normal bump the gate is invisible and the PR
+auto-merges as before; it fails — pausing `gh pr merge --auto` — only on an
+undeclared source repoint.
+
+### What `flake.nix` corroborates
+
+The cron this gate bounds rewrites `flake.lock` alone and never edits
+`flake.nix`, so a lock move with no matching declaration is the smuggling case
+the gate exists for. The check therefore reads `flake.nix` on both sides too,
+parses its top-level `inputs` block into an input-name-to-`url` map, and
+tolerates a lock move for any input whose declared `url` differs between base
+and head. Such a move is logged as a note naming the input and the `flake.nix`
+move that vouched for it, and counted in the summary line.
+
+Corroboration is per input name. A PR that legitimately repoints one input
+cannot carry an undeclared repoint of another — the second input's own
+declaration did not move, so its lock move still fails. Only top-level inputs
+are reachable at all: `flake.nix` names no transitive node, so a transitive
+repoint is never corroborated.
+
+This is what lets a bump that Renovate proposes as a one-line `flake.nix` edit
+— the `NixOS/nixpkgs` stable branch, `NixOS/nixpkgs-unstable`, and the
+`cachix/git-hooks.nix` SHA — reach green and auto-merge once
+`renovate-flake-lock-refresh.yml` supplies the matching lockfile. Without
+corroboration every one of those is a source repoint by construction, and no
+such PR could ever pass.
+
+What corroboration deliberately does not do is verify that the lock's new
+`original` is the one `nix` would derive from the new `flake.nix` url. That
+equivalence is `flake-check`'s to enforce, and it does: a lock disagreeing
+with `flake.nix` fails evaluation. Re-deriving a flake reference from a url
+string here would duplicate that check against a hand-written parser, and a
+parser that drifted would block legitimate bumps while claiming provenance
+grounds.
+
+The parser recognises the two shapes `nixfmt` produces — `<name>.url = "…";`
+and `<name> = { url = "…"; … };` — and reads a nested `inputs.<name>.url`
+line inside a block as neither. A `flake.nix` with no top-level `inputs` block
+is an operational error, not an empty map: an empty map corroborates nothing,
+which would turn a parser that stopped working into a gate blocking every
+legitimate bump under a message naming the wrong cause.
 
 The entry point is each lock's own top-level `.root` field, validated as a
 string independently for base and head — not a hardcoded `"root"` node id,
@@ -103,8 +142,9 @@ so a routine `follows` restructuring that still lands on the same source is
 not a provenance event.
 
 The `lint-doc-invariants` job fetches `origin/main` before the check runs
-(`actions/checkout` does not create that ref on its own); if the base lock
-cannot be resolved the check exits non-zero rather than passing silently.
+(`actions/checkout` does not create that ref on its own); if the base lock or
+the base `flake.nix` cannot be resolved the check exits non-zero rather than
+passing silently.
 
 ## PR-triggered workflow secret allowlist
 
