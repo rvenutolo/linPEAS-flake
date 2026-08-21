@@ -45,7 +45,8 @@ Refuters: verify eval behavior empirically (`nix eval`, `nix build`, `nix path-i
 
 ## 2. Shell script correctness — *deep*
 
-Per-script logic trace across `scripts/*.sh` (~70).
+Per-script logic trace across every `scripts/*.sh` (~95; size the slices from
+`ls scripts/*.sh | wc -l` rather than this figure, which rots).
 
 Slices:
 

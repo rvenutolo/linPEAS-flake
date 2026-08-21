@@ -78,7 +78,11 @@ sweep_ephemeral_tokens() {
         grep -vE '(SHA|UTF|RFC|ISO|BASE)-[0-9]+' || true
       _emit_eph date '[0-9]{4}-[0-9]{2}-[0-9]{2}|(January|February|March|April|May|June|July|August|September|October|November|December) [0-9]{4}|Q[1-4] [0-9]{4}' |
         grep -vE 'X-GitHub-Api-Version: [0-9]{4}-[0-9]{2}-[0-9]{2}' || true
-      _emit_eph causal-history 'prior to|previously|Migration note|was reshaped|Tightened from|swapped|switched (from|to)|legacy .* was deleted|added in #?[0-9]+|post-PR #[0-9]+'
+      # Mirrors RE_CAUSAL in scripts/lib/ephemeral-refs-scope.sh. Bare verbs
+      # and prepositions (`prior to`, `swapped`, `was reshaped`) are excluded
+      # there on purpose, so including them here would report hits the real
+      # lint never raises.
+      _emit_eph causal-history 'previously|Migration note|Tightened from|switched (from|to)|legacy .* was deleted|added in #?[0-9]+|post-PR #[0-9]+'
       _emit_eph pr-ref '#[0-9]+|PR #[0-9]+|issue #[0-9]+' |
         grep -vE '(fill|stroke|color):#[0-9a-fA-F]{3,8}|&#[0-9]+;|#[0-9]+-' || true
       _emit_eph claude-path '\.claude/'
@@ -117,6 +121,22 @@ sweep_internal_links() {
   if [[ -z ${errs} ]]; then echo '(none)'; else printf '%s\n' "${errs}"; fi
 }
 
+list_ci_jobs() { # $1=workflow path — emits "<line>:  <job-id>" for the jobs: block only
+  # Scoped to the jobs: block. A bare 2-space-key grep also returns `on:`
+  # trigger names and `concurrency:` keys, which read as job ids to someone
+  # checking a doc's "CI job X" claim against this section.
+  awk '
+    /^jobs:[[:space:]]*$/ { in_jobs = 1; next }
+    /^[A-Za-z]/ { in_jobs = 0 }
+    in_jobs && /^  [A-Za-z0-9_-]+:/ {
+      name = $0
+      sub(/:.*/, "", name)
+      gsub(/[[:space:]]/, "", name)
+      printf "%d:  %s\n", NR, name
+    }
+  ' "$1"
+}
+
 main() {
   REPO_ROOT="$(git rev-parse --show-toplevel)"
   cd "${REPO_ROOT}"
@@ -144,7 +164,7 @@ for k, v in sorted(d.items()):
   ls .github/workflows/
 
   section "CI.YML TOP-LEVEL JOBS (ci.yml's own jobs; see union allowlist below for ALL valid names)"
-  grep -nE '^  [a-z][a-z0-9-]+:' .github/workflows/ci.yml | sed 's/: *$//'
+  list_ci_jobs .github/workflows/ci.yml
 
   section "LINT-GROUP MEMBERSHIP (.github/lint-groups.yml)"
   if [[ -f .github/lint-groups.yml ]]; then
