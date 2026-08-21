@@ -24,10 +24,12 @@ bump PR is red until the lockfile catches up.
 The lockfile refresh is performed automatically by the
 `renovate-flake-lock-refresh` workflow, which fires on every `ci`
 completion against a `renovate/*` branch, detects the bumped input
-from the PR title (the `case` arms recognise three title shapes:
-`cachix/git-hooks.nix`, `NixOS/nixpkgs-unstable`, and `NixOS/nixpkgs`
-— the unstable arm is matched before the stable arm because the stable
-string is a substring of the unstable one), runs
+from the PR title by handing it to
+`scripts/classify-renovate-flake-input.sh`, whose `case` arms recognise
+three title shapes — `cachix/git-hooks.nix`, `NixOS/nixpkgs-unstable`,
+and `NixOS/nixpkgs`, matched case-insensitively against a lowercased
+title, with the unstable arm ahead of the stable one because the stable
+string is a substring of the unstable one — then runs
 `nix flake update <name>`, and commits the refreshed
 `flake.lock` back to the PR branch (App-signed via REST
 `PUT /contents`). Watch the PR for a follow-on
@@ -37,8 +39,8 @@ after `ci` first goes green.
 The manual runbook below is the **fallback** when the auto-refresh
 does not fire, and the reproduction path when a landed bump breaks
 something — most often because the PR title format changed and
-no longer matches the `case` arm in
-`.github/workflows/renovate-flake-lock-refresh.yml`. If auto-refresh
+no longer matches a `case` arm in
+`scripts/classify-renovate-flake-input.sh`. If auto-refresh
 silently does not act, an issue is filed under the
 `renovate-flake-lock-refresh-failure` label; pursue the manual
 steps below in the meantime.
@@ -150,10 +152,12 @@ PR title looks like one of:
 - `Update NixOS/nixpkgs to <version>`
 
 Only the dependency-name substring is matched, so the surrounding wording
-is not load-bearing — `renovate-flake-lock-refresh.yml` selects the input
-with `case` arms globbing on `cachix/git-hooks.nix`,
-`NixOS/nixpkgs-unstable` and `NixOS/nixpkgs`. A title that stops carrying
-one of those three substrings is what silently stops the auto-refresh.
+is not load-bearing — the `identify` job shells out to
+`scripts/classify-renovate-flake-input.sh`, whose `case` arms glob on
+`cachix/git-hooks.nix`, `NixOS/nixpkgs-unstable` and `NixOS/nixpkgs`
+(matched against a lowercased title, so capitalisation does not matter).
+A title that stops carrying one of those three substrings is what
+silently stops the auto-refresh.
 
 Diff: exactly one line in `flake.nix` changed. `flake.lock` is **not**
 touched. CI required checks fail on `flake-check` (lock-out-of-date
@@ -419,8 +423,10 @@ branch. The `identify` job gates on ALL of:
     substring of the unstable title).
 
 Adding a new auto-refreshable input requires three coordinated
-edits in the same PR: (1) extend the `case` arm in
-`identify`, (2) add a Renovate `customManager` in `renovate.json`,
+edits in the same PR: (1) extend the `case` arms in
+`scripts/classify-renovate-flake-input.sh`, which the `identify` job
+invokes (and extend its test harness alongside),
+(2) add a Renovate `customManager` in `renovate.json`,
 (3) extend the manual fallback runbook in
 `docs/architecture/flake-input-bumps.md`.
 
