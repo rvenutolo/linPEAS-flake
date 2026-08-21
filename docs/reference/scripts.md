@@ -551,13 +551,15 @@ enumeration) still exits non-zero the same as the default pass.
 
 ### scripts/check-flake-lock-provenance.sh
 
-Lint: a bot `flake.lock` bump may only move
-`rev`/`narHash`/`lastModified`. Fails when a top-level input is
-added, removed, or repointed, or when any node present in both base
-and head has its source identity (owner/repo/type/url/ref/flake/...)
-changed. Gates the auto-merged weekly flake.lock update so a
-source-level repoint of an input cannot slip into the build/dev
-closure unreviewed.
+Lint: a `flake.lock` bump that `flake.nix` does not
+account for may only move `rev`/`narHash`/`lastModified`. Fails when a
+top-level input is added, removed, or repointed, or when any node
+present in both base and head has its source identity
+(owner/repo/type/url/ref/flake/...) changed, unless `flake.nix` itself
+declares a different `url` for that input between base and head.
+Gates the auto-merged weekly flake.lock update so a source-level
+repoint of an input cannot slip into the build/dev closure
+undeclared.
 
 ### scripts/check-flake-systems-eval.sh
 
