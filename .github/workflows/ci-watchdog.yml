@@ -148,7 +148,8 @@ jobs:
                 }
 
                 // Escalate. Dedupe by exact title so each stuck PR gets one
-                // issue; a second exhaustion comments rather than duplicating.
+                // issue; a second exhaustion comments only when it observed
+                // something new.
                 const title = `ci-watchdog: PR #${pr.number} exhausted retries`;
                 const detail = exhausted
                   .map(
@@ -157,6 +158,21 @@ jobs:
                       `conclusion \`${r.conclusion}\` — ${r.html_url}`,
                   )
                   .join('\n');
+                // Everything this sweep actually observed about the PR,
+                // rendered as one stable string. Run ids are sorted so the
+                // order the API happened to page them in is not part of the
+                // identity. Carried in an HTML comment because the marker has
+                // to survive in the issue and read as nothing to a human:
+                // the alternative, re-deriving the observation by parsing the
+                // prose back out of a previous comment, breaks the moment the
+                // prose is reworded.
+                const observation = [
+                  pr.head.sha,
+                  ...exhausted
+                    .map((r) => `${r.id}:${r.run_attempt}:${r.conclusion}`)
+                    .sort(),
+                ].join(' ');
+                const marker = `<!-- ci-watchdog-observation: ${observation} -->`;
                 const body =
                   `The retry watchdog exhausted this PR's ${maxAttempts}-attempt ` +
                   `budget (the original run plus ${maxAttempts - 1} re-runs) and ` +
@@ -166,7 +182,8 @@ jobs:
                   `Exhausted runs:\n\n${detail}\n\n` +
                   `Triggered by the scheduled \`ci-watchdog\` workflow.\n\n` +
                   `What to do: ` +
-                  `https://github.com/${owner}/${repo}/blob/main/docs/runbooks/ci-watchdog.md`;
+                  `https://github.com/${owner}/${repo}/blob/main/docs/runbooks/ci-watchdog.md` +
+                  `\n\n${marker}`;
 
                 const open = await github.paginate(github.rest.issues.listForRepo, {
                   owner,
@@ -178,11 +195,42 @@ jobs:
                 const existing = open.find((i) => i.title === title);
 
                 if (existing) {
+                  // The open issue is already the signal that this PR is
+                  // stuck. A tick that observed exactly what the last report
+                  // did adds nothing, and this workflow ticks on a schedule
+                  // for as long as the PR stays red — so commenting
+                  // unconditionally buries the reports that DO carry news
+                  // under an unbounded run of identical ones.
+                  //
+                  // The comparison is against the LAST marker on the issue,
+                  // body included: the body carries the first observation, and
+                  // each later comment carries the one that displaced it. A
+                  // report the watchdog has already made and then moved past
+                  // must be able to recur — a PR that gets pushed to, fails
+                  // differently, and is then reverted is genuinely news twice.
+                  const comments = await github.paginate(
+                    github.rest.issues.listComments,
+                    { owner, repo, issue_number: existing.number, per_page: 100 },
+                  );
+                  const reports = [existing.body ?? '', ...comments.map((c) => c.body ?? '')]
+                    .filter((b) => b.includes('<!-- ci-watchdog-observation: '));
+                  const last = reports[reports.length - 1];
+                  if (last !== undefined && last.includes(marker)) {
+                    core.notice(
+                      `PR #${pr.number}: issue #${existing.number} already reports ` +
+                        `this observation; not commenting.`,
+                    );
+                    continue;
+                  }
                   await github.rest.issues.createComment({
                     owner,
                     repo,
                     issue_number: existing.number,
-                    body: `Still exhausted after a further check:\n\n${detail}`,
+                    body:
+                      `Still exhausted, and this check observed something the ` +
+                      `last report did not.\n\n` +
+                      `Head commit: \`${pr.head.sha}\`\n\n` +
+                      `Exhausted runs:\n\n${detail}\n\n${marker}`,
                   });
                   core.notice(`PR #${pr.number}: appended to issue #${existing.number}`);
                   continue;
