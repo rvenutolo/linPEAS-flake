@@ -1,8 +1,8 @@
 # The 8 review dimensions (hardcoded, tuned for this repo)
 
 Fixed option set for the scoping `AskUserQuestion`. Each dimension is one
-`Workflow` run: a **finder** fan-out (4–7 parallel slices, each a distinct
-lens) → **refute-all** stage (3 independent skeptics per finding,
+`Workflow` run: a **finder** fan-out (1–6 parallel slices, each a distinct
+lens; dimension 6 batches its index entries into 3–5 finder groups) → **refute-all** stage (3 independent skeptics per finding,
 default-refuted, keep if ≥2/3 survive) → survivors appended to the report.
 
 Per-dimension option style for `AskUserQuestion` (offer these, recommend the
@@ -73,7 +73,7 @@ Slices:
 
 Refuters: refutation is mandatory and strict — skeptics default hard to refuted. Kill a claim only when a concrete attacker path fails to reproduce, not merely because it "looks" gated.
 
-## 4. Docs accuracy — *fresh agents*
+## 4. Docs accuracy — *deep*
 
 Cross-check docs against actual code/CI/config. Flag generated docs (`refresh-*` targets, `BEGIN/END` markers) separately — drift there is a generator bug, not hand-edit. Do NOT re-run `/docs-audit`; use fresh readers here.
 
