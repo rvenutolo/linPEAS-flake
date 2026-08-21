@@ -83,7 +83,7 @@ What stands between a bump and `main`:
 | SHA / digest pinning              | GitHub Actions, octoscan, `cachix/git-hooks.nix`, SchemaStore | a mutable tag repointed under the pin                                                                                        |
 | `check-pin-digest-provenance.sh`  | GitHub Actions, octoscan                                      | a digest-only repoint where the version label did not move                                                                   |
 | required check set                | every PR                                                      | build, harness, lint, and attestation failures reproducible at PR time                                                       |
-| `renovate-flake-lock-refresh.yml` | `nixpkgs`, `nixpkgs-unstable`, `pre-commit-hooks`             | a `flake.nix` bump whose lockfile refresh writes outside the paths it may commit — the job fails closed and the PR stays red |
+| `renovate-flake-lock-refresh.yml` | `nixpkgs`, `pre-commit-hooks`                                 | a `flake.nix` bump whose lockfile refresh writes outside the paths it may commit — the job fails closed and the PR stays red |
 
 The gate this policy deliberately does not have is a human reading the
 diff. That trade is sharpest for the `nixpkgs` stable-branch bump,

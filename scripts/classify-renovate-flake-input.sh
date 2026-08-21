@@ -41,6 +41,14 @@ readonly title_lc
 
 # The nixpkgs-unstable arm MUST precede the nixpkgs arm — the latter is
 # a substring of the former, so arm ordering decides the match.
+#
+# No Renovate manager opens a `nixos/nixpkgs-unstable` title today: that
+# input is branch-tracked, so the weekly `nix flake update` cron floats
+# it and no bot PR names it. The arm stays anyway, and deleting it as
+# dead code is the trap it guards against — without it a title that does
+# mention unstable falls through to the `nixos/nixpkgs` arm and drives
+# `nix flake update nixpkgs`, refreshing the wrong input under a name
+# that looks right.
 case "${title_lc}" in
 *"cachix/git-hooks.nix"*)
   printf 'pre-commit-hooks\n'
