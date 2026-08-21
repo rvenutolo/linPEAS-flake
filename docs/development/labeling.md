@@ -52,8 +52,9 @@ sides — it owns `docs/reference/just-recipes.md` and splices a block into
 judgment. Recording it at the generator keeps that judgment reviewable
 next to the code that makes it, where a coverage threshold would be a
 magic number that moves as the prose around the block grows. Files carrying a block inside hand-written
-prose (`docs/development/git.md`, `README.md`) stay off the list on
-purpose: ignoring them wholesale would also drop hand-edits to the
+prose (`README.md`, `docs/architecture/auto-update.md`,
+`docs/development/git.md`, `docs/development/linting.md`) stay off the
+list on purpose: ignoring them wholesale would also drop hand-edits to the
 surrounding prose from the size count, which is the same failure in the
 opposite direction.
 
