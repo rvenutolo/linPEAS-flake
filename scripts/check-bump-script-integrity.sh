@@ -3,7 +3,7 @@
 #
 # @description Lint: scripts/bump-linpeas.sh retains its three
 # supply-chain integrity guards — asset-URL prefix, `.digest`
-# cross-check, and atomic (mktemp + mv) pin write.
+# cross-check, and atomic (make_temp + mv) pin write.
 
 # Lint: assert scripts/bump-linpeas.sh still carries the three
 # hard-fail integrity guards the "Bump-script integrity" invariant
