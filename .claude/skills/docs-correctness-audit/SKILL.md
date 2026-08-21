@@ -2,7 +2,7 @@
 name: docs-correctness-audit
 description: >-
   Read-only documentation correctness audit for this repo: cross-checks every
-  Markdown doc (README, docs/**, CLAUDE.md, CHANGELOG, SECURITY, CONTRIBUTING)
+  Markdown doc (README, docs/**, CHANGELOG, SECURITY, CONTRIBUTING)
   against the actual code, CI, config, and workflows, then emits one
   severity-ranked findings report without editing anything. Invoke ONLY via the
   /docs-audit slash command. Do NOT auto-trigger on natural-language mentions of
@@ -51,9 +51,12 @@ agree on one source of truth.
     drift of this repo, so make it the spine of the audit.** Freshness checks
     (`*-fresh`) gate only the *generated block bodies*; they say nothing about
     hand-written prose that *describes* CI. The trap: many per-rule checks are
-    **member checks** that run inside a group job via `scripts/run-lint-group.sh`
+    **member checks** that run inside a group job — via `scripts/run-lint-group.sh`
     (`lint-workflow-security`, `lint-script-hygiene`, `lint-doc-invariants`,
-    `harness-group`) — not standalone jobs and not required status checks. Prose
+    whose membership lives in `.github/lint-groups.yml`) or via
+    `scripts/run-harness-group.sh` (`harness-group`, whose members are the test
+    harnesses listed in that script's own `HARNESSES` array) — not standalone
+    jobs and not required status checks. Prose
     that calls such a member a "required CI job" is real drift that *no* freshness
     gate catches, because nothing generates that sentence. Two failure modes,
     both high severity: (a) **mislabel** — a real lint-group *member* called a
