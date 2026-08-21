@@ -284,8 +284,9 @@ jobs:
               exact remediation command.
             - `upstream-api-failure` — the GitHub API call inside
               `ratchet check` (or the per-ref re-derivation) failed or
-              rate-limited. The `github.token` authenticates at 5000/hr;
-              transient 5xx is also possible. Re-run the workflow once
+              rate-limited. The `github.token` is capped at 1,000
+              requests/hr per repository; transient 5xx is also possible.
+              Re-run the workflow once
               before investigating ratchet itself.
             - `ratchet-tool-failure` — ratchet exited non-zero but the
               re-derivation could not reproduce drift, OR a drift line

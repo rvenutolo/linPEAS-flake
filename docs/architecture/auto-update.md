@@ -164,10 +164,10 @@ Only `scripts/bump-linpeas.sh` may mutate `linpeas-pin.json`. Any
 commit landing on `main` that changes the SRI hash, pin URL, or pin
 version must isolate that change to `linpeas-pin.json`. The only automatic trigger
 for `release-on-bump.yml` is `push.paths: [linpeas-pin.json]` (a manual
-`workflow_dispatch` recovery and backfill path also exists); a pin
-change that bundles in unrelated files is fine, but a pin change
-that arrives via a different script breaks the trigger-contract
-assumption.
+`workflow_dispatch` recovery and backfill path also exists). A pin change
+that bundles in unrelated files is what this rule forbids — the trigger may
+or may not fire depending on the merge-commit diff shape — and a pin change
+that arrives via a different script breaks the same contract.
 
 Enforced by `scripts/check-pin-diff-isolated.sh` via the
 `lint-doc-invariants` CI job (member check `pin-diff-isolated`) + pre-commit hook. Lint asserts

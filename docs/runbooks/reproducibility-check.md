@@ -102,5 +102,9 @@ If a real-world repro break cannot be fixed within one week of detection:
 
 1. Re-add `continue-on-error: true` to the `compare` job.
 1. Remove `compare` from the ruleset required checks.
-1. Update **Status** header to `Burn-in (demoted YYYY-MM-DD pending issue #N)`.
-1. Link the blocking issue here under a `## Active demotions` section.
+1. Update **Status** header to `Burn-in (demoted)`. Keep the date and the
+    blocking issue number out of this file — `check-ephemeral-refs.sh` blocks
+    both shapes in tracked prose. They belong in the demoting commit message
+    and in the tracking issue.
+1. Note under a `## Active demotions` section which check is demoted and what
+    has to be true to re-promote it, linking the issue by title.
