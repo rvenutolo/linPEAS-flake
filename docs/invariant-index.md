@@ -4,8 +4,12 @@ Binding rules of the project. Each entry points to the tracked doc
 that holds the canonical wording for that rule. Linted by
 `scripts/check-orphan-invariants.sh` — every entry here must resolve
 to an existing file under `docs/`, and every `docs/**/*.md` (minus
-an explicit EXEMPT allowlist for overview and generator-owned pages) must
-appear here.
+an explicit EXEMPT allowlist) must appear here. That allowlist covers
+three kinds of page: generator-owned ones, whose content is a rendering
+rather than a rule; overview ones, which route to rules held elsewhere;
+and the install guides, which tell a consumer how to use the flake and
+so state no invariant of their own. The array in
+`scripts/check-orphan-invariants.sh` is the authoritative list.
 
 Behavior rules for the AI assistant and other non-binding guidance
 live in an untracked assistant-tooling tree and are out of scope for
@@ -87,7 +91,7 @@ this index.
 - **Stale-pin failure attribution** — `stale-pin-check.yml` notify body distinguishes `reason=upstream-api-failure` from `reason=stall-detected`; never collapse into a single failure class. → [architecture/ci.md](architecture/ci.md) <!-- enforcer: -; ci: -; hook: - -->
 - **Cron-notify root-cause comments** — when a `notify-workflow-result` issue auto-closes after a transient failure recovers, a one-line root-cause comment goes on the closed issue; maintainer discipline, no lint. → [architecture/ci.md](architecture/ci.md) <!-- enforcer: -; ci: -; hook: - -->
 - **dockerhub-sync trigger** — triggers are `workflow_run` of `release-on-bump` completed-successfully plus manual `workflow_dispatch`; no `push:` trigger; the `if:` gate stays on the `sync` job. → [architecture/ci.md](architecture/ci.md) <!-- enforcer: -; ci: -; hook: - -->
-- **Pages site invariants** — `docs/_data/dashboard.yml` is generated and gitignored; `gen-dashboard-data.sh` hard-fails on bad pin shape or missing JSON fields, and shape-checks every soft this-repo lookup so an API error body degrades to the documented fallback instead of publishing a literal `"null"`. → [architecture/ci.md](architecture/ci.md) <!-- enforcer: scripts/gen-dashboard-data.sh; ci: dashboard-data-tests; hook: - -->
+- **Pages site invariants** — `docs/_data/dashboard.yml` is generated and gitignored; `gen-dashboard-data.sh` hard-fails on bad pin shape, on a `pin.url` outside the upstream release-download prefix, and on missing JSON fields, writes the YAML atomically, and shape-checks every soft this-repo lookup so an API error body degrades to the documented fallback instead of publishing a literal `"null"`. → [architecture/ci.md](architecture/ci.md) <!-- enforcer: scripts/gen-dashboard-data.sh; ci: dashboard-data-tests; hook: - -->
 - **Cron schedule** — cron schedule table in docs/architecture/ci.md must match workflow cron triggers; a push-triggered `cron-table-drift-check` workflow re-runs the same script, which is not a required check. → [architecture/ci.md](architecture/ci.md) <!-- enforcer: scripts/check-cron-table.sh; ci: -; hook: check-cron-table -->
 - **Single-source cron schedules** — workflow schedules live only in the ci.md schedule table; other docs link it, never restate a literal HH:MM or a numeric cadence. → [architecture/ci.md](architecture/ci.md) <!-- enforcer: scripts/check-doc-cron-restatement.sh; ci: lint-doc-invariants; hook: check-doc-cron-restatement -->
 - **update-flake-lock credential split / renovate-flake-lock-refresh** → [architecture/flake-input-bumps.md](architecture/flake-input-bumps.md) <!-- enforcer: -; ci: -; hook: - -->

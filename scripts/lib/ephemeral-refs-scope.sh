@@ -79,10 +79,15 @@ function is_allowlisted() {
 }
 
 # Blocking classes. Boundary-guarded issue ref: a leading boundary that
-# is not `-`, `&`, or a word char (so `#1-anchor` anchor targets,
-# `&#123;` HTML numeric entities, and `#fff` hex colors do not match)
-# followed by `#` and digits, then a trailing boundary that is not `-`
-# or a word char (so `#1-anchor` is excluded by its trailing `-`).
+# is not `-`, `&`, or a word char (so `#1-anchor` anchor targets and
+# `&#123;` HTML numeric entities do not match) followed by `#` and
+# digits, then a trailing boundary that is not `-` or a word char (so
+# `#1-anchor` is excluded by its trailing `-`). Hex colors are NOT
+# guarded here: `#fff` misses only because `f` is not a digit, and
+# `#333` matches. Colors stay clear because they live in Mermaid and
+# CSS blocks, which are fenced, and strip_exempt blanks fenced blocks
+# before any class runs — do not drop that pass believing this guard
+# covers them.
 readonly RE_ISSUE='(^|[^-&[:alnum:]_])#[0-9]+([^-[:alnum:]_]|$)'
 readonly RE_DATE='([0-9]{4}-[0-9]{2}-[0-9]{2}|(January|February|March|April|May|June|July|August|September|October|November|December)[[:space:]]+[0-9]{4}|Q[1-4][[:space:]]+[0-9]{4})'
 # Each enumerated shape carries the same left boundary guard as

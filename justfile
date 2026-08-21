@@ -56,7 +56,7 @@ show:
 show-hooks:
   ./scripts/refresh-precommit-table.sh
 
-# Regenerate the just-recipes list in README.md
+# Regenerate the just-recipes list in README.md and docs/reference/just-recipes.md
 show-recipes:
   ./scripts/refresh-just-recipes.sh
 
