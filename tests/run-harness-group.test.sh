@@ -142,17 +142,29 @@ function seed() {
   # Stub every other declared harness as passing so the fixture tree is
   # complete (the runner errors on a missing harness) and this spec-test
   # stays decoupled from the exact HARNESSES membership.
-  local entry test_rel dest
+  # Both fields are stubbed, not just the test harness: an entry that
+  # names an enforce script gets that script run too, so stubbing only
+  # the harness leaves the runner calling a path the fixture tree does
+  # not have. The `-e` guards keep the scenario-controlled stubs seeded
+  # above — which carry specific exit codes and forbidden-call markers —
+  # from being overwritten by a passing stub.
+  local entry test_rel enforce_rel dest
   while IFS= read -r entry; do
     entry="${entry#*\'}"
     entry="${entry%%\'*}"
-    IFS='|' read -r _ test_rel _ <<<"${entry}"
+    IFS='|' read -r _ test_rel enforce_rel <<<"${entry}"
     [[ -n ${test_rel} ]] || continue
     if [[ ${test_rel} == */* ]]; then
       dest="${root_dir}/${test_rel}"
     else
       dest="${tests_dir}/${test_rel}"
     fi
+    if [[ ! -e ${dest} ]]; then
+      mkdir -p -- "${dest%/*}"
+      make_stub "${dest}" 0
+    fi
+    [[ -n ${enforce_rel} ]] || continue
+    dest="${scripts_dir}/${enforce_rel}"
     if [[ ! -e ${dest} ]]; then
       mkdir -p -- "${dest%/*}"
       make_stub "${dest}" 0

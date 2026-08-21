@@ -65,6 +65,49 @@ flowchart LR
 
 No third-party flake-lock action is used: such actions take the write credential as a `with: token:` input, which would put it inside an externally-controlled action boundary. The split-job design instead confines Nix evaluation to a `contents: read` job; the `push-and-merge` job authenticates to the GitHub API as the `linpeas-flake-bumper` App via a short-lived installation token (`actions/create-github-app-token`), then commits files via REST `PUT /contents`. No `git push`, no PAT in `.git/config`. REST commits authenticated by an App installation token are auto-signed by GitHub's web-flow GPG key, so the bump branch satisfies `required_signatures` on `main`.
 
+## Flake-input staleness watchdog
+
+Both mechanisms above refresh inputs, and neither announces having stopped.
+A disabled workflow, a broken trigger, or a Renovate manager whose matcher no
+longer matches leaves every input frozen while every check stays green. Both
+halves of that have already happened in this repo: a login-shape change
+silently disabled `renovate-flake-lock-refresh.yml` for its entire lifetime,
+and Renovate sat in Mend silent mode long enough for `pre-commit-hooks` to
+reach 102 days without anything saying so.
+
+`scripts/check-flake-lock-staleness.sh`, run daily by
+`flake-lock-staleness-check.yml`, watches the freeze rather than any single
+mechanism: it fails when a top-level input's `locked.lastModified` is older
+than the bound declared for that input.
+
+It is a scheduled issue-filer, not a required check. A gate keyed on
+wall-clock age turns every unrelated PR red the moment a cron runs late, which
+charges contributors for infrastructure lateness.
+
+`locked.lastModified` is an upstream commit time, not a record of when this
+repo last checked, which is what makes the bounds uneven rather than
+arbitrary. For a high-churn input, upstream moves far faster than the bound,
+so an old lock can only mean nobody refreshed it. For a low-churn input, an
+old lock most likely means upstream is quiet, and a tight bound would report
+that as drift. Each input therefore gets the bound its upstream churn can
+support:
+
+| Tier | Bound    | Inputs                                           | Why                                                                                                                             |
+| ---- | -------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| Fast | 14 days  | `nixpkgs`, `nixpkgs-unstable`                    | Branch-tracked against an upstream committing at least daily. Two missed weekly cron cycles is already past anything healthy.   |
+| Slow | 120 days | `flake-parts`, `treefmt-nix`, `pre-commit-hooks` | Upstream commits in bursts. Loose enough that ordinary quiet never fires, tight enough that a stopped mechanism still surfaces. |
+
+Scope is the top-level inputs only. A transitive node's rev is chosen by its
+parent's pin rather than by anything this repo runs, so its age reports on
+somebody else's release cadence — `gitignore` is years old because
+`git-hooks.nix` pins it there, and no mechanism here is failing. Including it
+would mean a permanently red check nobody can act on.
+
+An input present in `flake.lock` that the bound table does not name is an
+operational error, not a pass: a threshold table rots when an input is added
+and not registered, and the silent-pass version of that rot is a new input
+nobody is watching.
+
 ## Dependency-PR merge policy
 
 Every class of dependency bump merges unattended once the required

@@ -1,0 +1,90 @@
+{
+  "nodes": {
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1784408000,
+        "narHash": "sha256-AAA",
+        "owner": "org",
+        "repo": "nixpkgs",
+        "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "org",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs-unstable": {
+      "locked": {
+        "lastModified": 1786827200,
+        "narHash": "sha256-AAA",
+        "owner": "org",
+        "repo": "nixpkgs-unstable",
+        "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "org",
+        "repo": "nixpkgs-unstable",
+        "type": "github"
+      }
+    },
+    "flake-parts": {
+      "locked": {
+        "lastModified": 1785358400,
+        "narHash": "sha256-AAA",
+        "owner": "org",
+        "repo": "flake-parts",
+        "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "org",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
+    "treefmt-nix": {
+      "locked": {
+        "lastModified": 1769720000,
+        "narHash": "sha256-AAA",
+        "owner": "org",
+        "repo": "treefmt-nix",
+        "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "org",
+        "repo": "treefmt-nix",
+        "type": "github"
+      }
+    },
+    "pre-commit-hooks": {
+      "locked": {
+        "lastModified": 1778187200,
+        "narHash": "sha256-AAA",
+        "owner": "org",
+        "repo": "pre-commit-hooks",
+        "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "org",
+        "repo": "pre-commit-hooks",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "nixpkgs": "nixpkgs",
+        "nixpkgs-unstable": "nixpkgs-unstable",
+        "flake-parts": "flake-parts",
+        "treefmt-nix": "treefmt-nix",
+        "pre-commit-hooks": "pre-commit-hooks"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
