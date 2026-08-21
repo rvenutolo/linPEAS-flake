@@ -35,6 +35,7 @@ flowchart TD
   manifest["manifest:<br/>multi-arch manifest by digest"]
   verify["verify:<br/>gh attestation verify<br/>(provenance + SBOM)"]
   changelog["changelog:<br/>git-cliff regenerate + PR"]
+  notify["notify:<br/>file/close deduped<br/>release-on-bump-failure issue"]
 
   trigger --> release
   trigger --> preflight
@@ -46,7 +47,13 @@ flowchart TD
   image_arm64 --> manifest
   manifest --> verify
   release --> changelog
+  verify --> notify
+  changelog --> notify
 ```
+
+`notify` runs on `always()` and reads the result of every job above it,
+so it is the observability path for this pipeline rather than a step in
+it.
 
 ## Weekly dependency upkeep
 

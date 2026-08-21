@@ -187,7 +187,7 @@ Rotation: on suspected compromise only.
 
 ## Notify-body parity invariant<a name="notify-body-parity-invariant"></a>
 
-Three copies of the same failure-cause list exist and must stay in
+Two other copies of this failure-cause list exist and must stay in
 parity with this runbook's "Common Docker Hub failure modes" section:
 
 - `release-on-bump.yml`'s notify-failure issue body carries it as a

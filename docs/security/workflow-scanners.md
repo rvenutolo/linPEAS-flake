@@ -84,15 +84,16 @@ next section. The weekly Friday cron cluster runs them in a fixed order (see
 ### scorecard
 
 - **Unique signal:** OpenSSF Scorecard posture score — an independent second
-    opinion on repo hardening (pinned dependencies, signed releases, SAST
-    presence, security policy, and more) that no in-tree lint computes as a
+    opinion on repo hardening (pinned dependencies, signed releases, SBOM,
+    security policy, and more) that no in-tree lint computes as a
     single graded posture.
 - **Triggers:** weekly Friday cron and manual dispatch only. It does **not**
     scan on PRs or pushes.
 - **Status:** weekly watchdog. A check scoring below threshold fails the run
     and opens a deduped `scorecard-drift` tracking issue; the next clean run
     closes it. The check set is curated — review-flow checks not applicable to a
-    solo repo, and checks duplicating a blocking in-tree gate, are dropped; the
+    solo repo, checks duplicating an in-tree signal whether blocking or
+    advisory, and checks no in-repo change can move, are dropped; the
     scorecard drift-check workflow file carries the per-check rationale.
 
 ### zizmor

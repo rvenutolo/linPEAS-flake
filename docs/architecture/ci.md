@@ -44,15 +44,15 @@ the canonical doc as source of truth.
 
 Functional gates:
 
-| Job                   | Runner             | What it tests                                                                                   |
-| --------------------- | ------------------ | ----------------------------------------------------------------------------------------------- |
-| `flake-check`         | `ubuntu-latest`    | `nix flake check` — eval, treefmt, deadnix, statix, actionlint, yamllint, shellcheck            |
-| `build-linpeas`       | `ubuntu-latest`    | `nix build .#linpeas` — fetches upstream `linpeas.sh`, verifies SRI hash, builds the derivation |
-| `smoke-test`          | `ubuntu-latest`    | `./result/bin/linpeas -h` exits 0                                                               |
-| `build-linpeas-arm64` | `ubuntu-24.04-arm` | aarch64 build of `linpeas`                                                                      |
-| `smoke-test-arm64`    | `ubuntu-24.04-arm` | aarch64 `-h` smoke                                                                              |
-| `image-smoke`         | `ubuntu-latest`    | builds OCI image, `docker load`, `docker run --rm <img> -h` exits 0                             |
-| `image-smoke-arm64`   | `ubuntu-24.04-arm` | aarch64 OCI image smoke                                                                         |
+| Job                   | Runner             | What it tests                                                                                                                                                              |
+| --------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake-check`         | `ubuntu-latest`    | `nix flake check` — eval, treefmt, deadnix, statix, actionlint, yamllint, shellcheck; plus `check-flake-systems-eval.sh` (every declared system's packages force-evaluate) |
+| `build-linpeas`       | `ubuntu-latest`    | `nix build .#linpeas` — fetches upstream `linpeas.sh`, verifies SRI hash, builds the derivation                                                                            |
+| `smoke-test`          | `ubuntu-latest`    | `./result/bin/linpeas -h` exits 0                                                                                                                                          |
+| `build-linpeas-arm64` | `ubuntu-24.04-arm` | aarch64 build of `linpeas`                                                                                                                                                 |
+| `smoke-test-arm64`    | `ubuntu-24.04-arm` | aarch64 `-h` smoke                                                                                                                                                         |
+| `image-smoke`         | `ubuntu-latest`    | builds OCI image, `docker load`, `docker run --rm <img> -h` exits 0                                                                                                        |
+| `image-smoke-arm64`   | `ubuntu-24.04-arm` | aarch64 OCI image smoke                                                                                                                                                    |
 
 Self-enforcing invariant gates:
 
@@ -147,7 +147,7 @@ Nix-based jobs pull from the public `cache.nixos.org` substituter; there is no r
 
 ## Cron schedule
 
-All schedules fit the maintainer's monitoring windows: daily crons run 08:00–10:00 UTC, weekly crons run Friday 05:00–07:00 UTC (both year-round inside the intended US-Eastern early-morning windows regardless of DST). Two schedules sit outside those windows. `ci-watchdog` is a backstop that must fire around the clock, not a monitoring-window report, so it runs on a continuous 30-minute cadence instead. The monthly `docs-audit-reminder` sits at 10:00 on the 1st, at the tail of the daily window and clear of every daily cron in it, so a once-a-month reminder never competes with the bump pipeline for attention.
+All schedules fit the maintainer's monitoring windows: daily crons run 08:00–10:00 UTC, weekly crons run Friday 05:00–07:00 UTC (both year-round inside the intended US-Eastern early-morning windows regardless of DST). One schedule runs outside those windows: `ci-watchdog` is a backstop that must fire around the clock, not a monitoring-window report, so it runs on a continuous 30-minute cadence instead. The monthly `docs-audit-reminder` sits at the very tail of the daily window (10:00 on the 1st) and clear of every daily cron in it, so a once-a-month reminder never competes with the bump pipeline for attention.
 
 | Workflow                          | Cron            | UTC          | Purpose                                                                                                                    |
 | --------------------------------- | --------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------- |
