@@ -58,6 +58,8 @@ reproducibility-check.yml:
   compare: [issues]
 scorecard-drift-check.yml:
   notify: [issues]
+flake-lock-staleness-check.yml:
+  notify: [issues]
 settings-posture-drift-check.yml:
   notify: [issues]
 stale-pin-check.yml:

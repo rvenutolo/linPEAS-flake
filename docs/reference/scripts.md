@@ -561,6 +561,13 @@ Gates the auto-merged weekly flake.lock update so a source-level
 repoint of an input cannot slip into the build/dev closure
 undeclared.
 
+### scripts/check-flake-lock-staleness.sh
+
+Lint: every top-level `flake.lock` input was refreshed
+recently enough that the mechanism responsible for refreshing it is
+demonstrably still running. Fails when an input's `locked.lastModified`
+is older than the threshold declared for it.
+
 ### scripts/check-flake-systems-eval.sh
 
 Assert every system declared in `flake.lib.systems`
