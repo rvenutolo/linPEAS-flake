@@ -8,12 +8,14 @@
 
 # The notify job turns the `reason` token into triage wording. A
 # verification step whose `id:` never reaches the attribution ladder
-# makes a real failure surface as `reason=unknown`, which the notify
-# body documents as "a bug in the attribution logic itself" — so a
-# genuine tamper signal is filed as a self-diagnosed tooling bug and the
-# maintainer's first reflex is to go fix the lint instead of the
-# incident. The reason list in the verification doc is a third copy of
-# the same mapping and drifts the same way.
+# makes a real failure surface as `reason=unattributed`: the ladder's
+# terminal branch catches the failed job so the token cannot be the
+# clean-run initializer, but nothing says which step broke. That is a
+# gap this lint exists to keep closed, because the alternative a missing
+# terminal branch produces is worse — a genuine tamper signal reported
+# under the same token as a clean run. The reason list in the
+# verification doc is a third copy of the same mapping and drifts the
+# same way.
 #
 # Four assertions:
 #
@@ -381,10 +383,11 @@ prev_name=''
 prev_index=-1
 for name in ${ladder_order+"${ladder_order[@]}"}; do
   ref="${ENV_STEP[${name}]}"
-  # An env value naming no step, or naming one the verify job does not
-  # define, carries no execution position to order against. Say so
-  # rather than skipping silently: an unresolvable reference is drift in
-  # its own right.
+  # An env value naming no step outcome carries no execution position to
+  # order against, so it is skipped — `JOB_STATUS` is one, read by the
+  # terminal branch rather than by an ordered arm. A value that does name
+  # a step, but one the verify job does not define, is different: that is
+  # an unresolvable reference and drift in its own right, reported below.
   if [[ -z ${ref} ]]; then
     continue
   fi

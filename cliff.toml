@@ -39,9 +39,11 @@ topo_order = false
 sort_commits = "newest"
 
 commit_preprocessors = [
-  # An early commit subject mislabeled the scorecard allowlist "15-check".
-  # Correct the count so the rendered changelog matches the workflow and
-  # the invariant index.
+  # An early commit subject mislabeled the scorecard allowlist "15-check"
+  # when it held ten checks. Correct it to the count that was in force
+  # when that commit landed. The allowlist has grown since, so this is a
+  # historical correction and deliberately not the current count — the
+  # changelog records what shipped, not what the workflow runs today.
   { pattern = '15-check allowlist', replace = "10-check allowlist" },
   # A merged subject spells "unparsable" with an extra "e". Merge subjects
   # are frozen in signed history and this one renders into the changelog,
