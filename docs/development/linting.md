@@ -38,16 +38,16 @@ see [Git workflow → Pre-commit hooks](git.md#pre-commit-hooks).
 
 `.markdownlint.json` disables eight rules. Rationale per rule:
 
-| Rule  | Name                            | Reason                                                                                                               |
-| ----- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| MD007 | Unordered list indentation      | mdformat's nested-list output uses 4-space indent, conflicting with the default 2-space expectation                  |
-| MD013 | Line length                     | Docs site is MkDocs-Material with prose paragraphs; hard-wrapping at 80/100 chars fights table cells and admonitions |
-| MD024 | Multiple headings same content  | Dashboard and release-notes pages have repeated section headers per release / per artifact                           |
-| MD032 | Lists surrounded by blank lines | Common false positives around mkdocs-material admonition trees                                                       |
-| MD033 | Inline HTML                     | MkDocs-Material relies on `<details>`, `<span>` for admonitions and badges                                           |
-| MD038 | Spaces inside code-span markers | False positives on Mermaid edge-syntax (`-->`, `---`)                                                                |
-| MD041 | First line top-level heading    | Some pages (release notes, dashboard) open with a macros / yaml block before the H1                                  |
-| MD060 | Hard tabs                       | Source files include intentional tab characters (justfile rules); markdownlint should not police that                |
+| Rule  | Name                            | Reason                                                                                                                              |
+| ----- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| MD007 | Unordered list indentation      | mdformat's nested-list output uses 4-space indent, conflicting with the default 2-space expectation                                 |
+| MD013 | Line length                     | Docs site is MkDocs-Material with prose paragraphs; hard-wrapping at 80/100 chars fights table cells and admonitions                |
+| MD024 | Multiple headings same content  | Dashboard and release-notes pages have repeated section headers per release / per artifact                                          |
+| MD032 | Lists surrounded by blank lines | Common false positives around mkdocs-material admonition trees                                                                      |
+| MD033 | Inline HTML                     | MkDocs-Material relies on `<details>`, `<span>` for admonitions and badges                                                          |
+| MD038 | Spaces inside code-span markers | False positives on Mermaid edge-syntax (`-->`, `---`)                                                                               |
+| MD041 | First line top-level heading    | Some pages (release notes, dashboard) open with a macros / yaml block before the H1                                                 |
+| MD060 | Table column style              | mdformat's GFM table output does not keep pipe columns vertically aligned; enforcing a single table style would fight the formatter |
 
 Adding or removing a disable: update `.markdownlint.json` and this
 table in the same PR so the rationale stays discoverable.
@@ -555,8 +555,11 @@ even when the pre-commit hook is bypassed.
 matching a measured four-arm external-payload predicate (`gh api`, a
 `*_JSON_OVERRIDE` variable, a bare stdin slurp, or a scoped
 `flake.lock` read) to carry a harness scenario that feeds it a
-malformed payload and asserts exit 2, or a `# payload-subject-exempt: <rationale>` marker. The scenario match is anchored to the scenario
-call's own bare positional exit-code argument (parsed via `shfmt --to-json`), not to any `2` appearing as a substring, so a message that
+malformed payload and asserts exit 2, or a
+`# payload-subject-exempt: <rationale>` marker. The scenario match is
+anchored to the scenario call's own bare positional exit-code argument
+(parsed via `shfmt --to-json`), not to any `2` appearing as a substring,
+so a message that
 merely mentions the digit 2 in prose cannot be mistaken for the
 exit-code argument. Full rationale: [Workflow hardening →
 payload-shape-scenario](../security/workflow-hardening.md#payload-shape-scenario).

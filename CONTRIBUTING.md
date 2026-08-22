@@ -1,7 +1,8 @@
 # Contributing to linPEAS-flake
 
-`linPEAS-flake` is a solo-maintained Nix flake that re-distributes the
-upstream `peass-ng/PEASS-ng` `linpeas.sh` binary. External contributions
+`linPEAS-flake` is a solo-maintained Nix flake that wraps the upstream
+`peass-ng/PEASS-ng` `linpeas.sh` script and republishes it as a Nix
+package and OCI image. External contributions
 are welcome on the strict terms below; the supply-chain hardening
 posture is non-negotiable.
 

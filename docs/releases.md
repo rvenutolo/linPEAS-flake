@@ -12,4 +12,4 @@ No releases have been published yet.
 {% endfor %}
 {% endif %}
 
-Each release is built by [`release-on-bump.yml`](https://github.com/rvenutolo/linPEAS-flake/actions/workflows/release-on-bump.yml) when `linpeas-pin.json` changes on `main`. Build provenance is attested via SLSA; verify with `gh attestation verify`. See [Verification walkthrough](security/verification.md).
+Each release is built by [`release-on-bump.yml`](https://github.com/rvenutolo/linPEAS-flake/actions/workflows/release-on-bump.yml) when `linpeas-pin.json` changes on `main` (plus manual dispatch for republish/backfill recovery). Build provenance is attested via SLSA; verify with `gh attestation verify`. See [Verification walkthrough](security/verification.md).

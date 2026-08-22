@@ -89,7 +89,9 @@ implicitly — without resolving to the per-arch digest and without
 
 ## Auto-merge surface
 
-Four independent automations merge to `main` without human review:
+Four independent automations merge to `main` without human review (a
+different grouping than the three-automations-plus-watcher framing in
+Architecture → Auto-update, whose fourth entry is the stall watcher):
 
 - `update-linpeas.yml` (daily) — upstream `linpeas.sh` content.
 - `update-flake-lock.yml` (weekly) — `nixpkgs` and other flake input revs.
@@ -106,9 +108,14 @@ accepted trust model for a thin wrapper repo — it matches the trust model
 of `curl ... | bash`, with the addition of reproducible, hash-pinned
 downloads and build-provenance attestations.
 
-`dockerhub-sync.yml` triggers on `release-on-bump` workflow_run completed-successfully (plus manual dispatch). It does NOT trigger on arbitrary README pushes. This narrows the `DOCKERHUB_TOKEN_DELETE` exposure window to release-time only.
+`dockerhub-sync.yml` triggers on `release-on-bump` workflow_run
+completed-successfully (plus manual dispatch). It does NOT trigger on
+arbitrary README pushes. This narrows the `DOCKERHUB_TOKEN_DELETE`
+exposure window to release-time only.
 
-The `workflow_run` trigger does not introduce a TOCTOU concern: `dockerhub-sync.yml` has no `contents: write` and only PATCHes Docker Hub repo metadata.
+The `workflow_run` trigger does not introduce a TOCTOU concern:
+`dockerhub-sync.yml` has no `contents: write` and only PATCHes Docker
+Hub repo metadata.
 
 ## Supply-chain posture monitoring
 
@@ -130,8 +137,9 @@ section covers `codeql.yml`; the other four are inventoried there.
     the failed check on the PR itself, so it files no issue). An
     analyze failure that produced no finding (scan crash, runner
     breakage) files under `codeql-infra` instead, so transient
-    infrastructure trouble is not paged as a security finding. Findings **below** CRITICAL are advisory: they
-    upload to the Security tab without failing the workflow. A green
+    infrastructure trouble is not paged as a security finding. Findings
+    **below** CRITICAL are advisory: they upload to the Security tab
+    without failing the workflow. A green
     CodeQL run therefore proves the scan completed with zero CRITICAL
     findings — **not** that zero findings exist. Closing the loop on
     sub-critical findings requires a maintainer to review the Security
@@ -160,7 +168,10 @@ the notify jobs.
     [`docs/security/repo-config.md`](docs/security/repo-config.md) for
     the full credential model. Rotate on suspected compromise only.
 
-- `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN_RW` / `DOCKERHUB_TOKEN_DELETE` — Docker Hub access tokens used by the release pipeline. The split limits blast radius:
+- `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN_RW` / `DOCKERHUB_TOKEN_DELETE` —
+    the Docker Hub account name plus two scoped access tokens used by the
+    release pipeline and its post-release sync. The split limits blast
+    radius:
 
     - `DOCKERHUB_TOKEN_RW` — Read, Write on `rvenutolo/linpeas`. Used ONLY by `release-on-bump.yml` (the `image-amd64`, `image-arm64`, and `manifest` jobs). The `verify` job deliberately runs without it — `gh attestation verify` reads from Sigstore and the GitHub API, and `cosign verify` reads the published images with anonymous registry pulls, so no registry push credential enters that job's env. Cannot delete tags.
     - `DOCKERHUB_TOKEN_DELETE` — Read, Write, Delete on `rvenutolo/linpeas`. Used ONLY by `dockerhub-sync.yml` (`peter-evans/dockerhub-description` needs Delete to PATCH repo metadata).
@@ -196,7 +207,23 @@ attestation carries `https://slsa.dev/provenance/v1`.
 
 ## Runner egress control (harden-runner, block mode)
 
-`step-security/harden-runner` runs as the first step of every job in every workflow, with `egress-policy: block`. Each job declares an `allowed-endpoints:` allowlist scoped to the minimum outbound hosts it needs: a two-host floor (`api.github.com`, `github.com`), plus `objects.githubusercontent.com` on jobs that fetch release or blob content, plus job-specific endpoints. `cache.nixos.org` and `releases.nixos.org` are not part of that baseline — they appear only on jobs that install or invoke Nix, and `scripts/check-egress-allowlist.sh` rejects either host on a job that carries it without a Nix-reaching step, so copying them into a new job's allowlist by habit fails the lint rather than passing it. Block mode drops any egress to a host outside the allowlist, so a compromised step cannot exfiltrate a credential (App token, Docker Hub PAT, signing key) to an attacker-controlled host. Rotating host families — Actions cache/artifact storage (`*.blob.core.windows.net`), the hosted-runner control plane (`*.githubapp.com`), and the Actions runtime (`*.actions.githubusercontent.com`) — are matched by wildcard.
+`step-security/harden-runner` runs as the first step of every job in
+every workflow, with `egress-policy: block`. Each job declares an
+`allowed-endpoints:` allowlist scoped to the minimum outbound hosts it
+needs: a two-host floor (`api.github.com`, `github.com`), plus
+`objects.githubusercontent.com` on jobs that fetch release or blob
+content, plus job-specific endpoints. `cache.nixos.org` and
+`releases.nixos.org` are not part of that baseline — they appear only on
+jobs that install or invoke Nix, and `scripts/check-egress-allowlist.sh`
+rejects either host on a job that carries it without a Nix-reaching
+step, so copying them into a new job's allowlist by habit fails the lint
+rather than passing it. Block mode drops any egress to a host outside
+the allowlist, so a compromised step cannot exfiltrate a credential (App
+token, Docker Hub PAT, signing key) to an attacker-controlled host.
+Rotating host families — Actions cache/artifact storage
+(`*.blob.core.windows.net`), the hosted-runner control plane
+(`*.githubapp.com`), and the Actions runtime
+(`*.actions.githubusercontent.com`) — are matched by wildcard.
 
 When a job legitimately needs a new endpoint, add it to that job's `allowed-endpoints:`; never relax a job back to audit. `scripts/check-harden-runner-block.sh` (pre-commit and the `lint-workflow-security` CI job) fails any harden-runner step that is not `egress-policy: block` with a non-empty allowlist.
 

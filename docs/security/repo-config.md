@@ -57,7 +57,9 @@ for the credential split.
 
 `main` is protected by the `protect-main` ruleset. See
 [`required-checks.md`](required-checks.md) for the gating check list and
-[`settings-posture.md`](settings-posture.md) for the full ruleset shape.
+the full ruleset shape, and [`settings-posture.md`](settings-posture.md)
+for the repo-level settings knobs (merge-method flags, Actions
+permissions, tag protection).
 
 ## Merge policy
 

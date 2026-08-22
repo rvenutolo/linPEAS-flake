@@ -2,7 +2,10 @@
 
 `labeler.yml` applies area labels (`ci`, `docs`, `nix`, `scripts`,
 `tests`, `security`, `pin`, `renovate`) per `.github/labeler.yml`
-globs. Label catalog of record: `.github/labels.yml`. Not a required
+globs. Catalog of record for the area and `size/*` labels:
+`.github/labels.yml`; failure-notification labels are created on demand
+by the `notify-workflow-result` composite and by Renovate, and are
+deliberately not in the manifest. Not a required
 check — auto-labeling is cosmetic and must not block merge.
 
 `.github/labels.yml` is the canonical label-color/description source.
@@ -52,7 +55,8 @@ sides — it owns `docs/reference/just-recipes.md` and splices a block into
 `README.md`. Which side of the line a doc falls on is therefore a
 judgment. Recording it at the generator keeps that judgment reviewable
 next to the code that makes it, where a coverage threshold would be a
-magic number that moves as the prose around the block grows. Files carrying a block inside hand-written
+magic number that moves as the prose around the block grows. Files
+carrying a block inside hand-written
 prose (`README.md`, `docs/architecture/auto-update.md`,
 `docs/development/git.md`, `docs/development/linting.md`) stay off the
 list on purpose: ignoring them wholesale would also drop hand-edits to the
