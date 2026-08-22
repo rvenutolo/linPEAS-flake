@@ -44,8 +44,7 @@ Settings → General → "Pull Requests" must match:
 | `merge_commit_message`   | `PR_BODY`      |
 
 These flags appear on `GET /repos/{owner}/{repo}` but GitHub gates the
-fields behind `contents: read` AND `contents: write` — i.e. push
-access. The `settings-drift-checker` App
+fields behind `contents: write` — i.e. push access. The `settings-drift-checker` App
 ([`docs/runbooks/settings-drift-app.md`](../runbooks/settings-drift-app.md))
 is read-only by construction; granting `contents: write` would let its
 installation token push arbitrary code, which is a far worse blast
