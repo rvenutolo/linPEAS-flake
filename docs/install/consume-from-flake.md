@@ -7,6 +7,7 @@ For one-shot use see `nix run` and the Docker image in the project README.
 
 ```nix
 {
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   inputs.linpeas-flake = {
     url = "github:rvenutolo/linPEAS-flake/<TAG>";
     inputs.nixpkgs.follows = "nixpkgs";

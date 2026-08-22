@@ -336,7 +336,7 @@ everything and found nothing, so breadth is asserted rather than
 inferred. `LINT_ALLOW_EMPTY_SCAN=1` accepts that too — the same operator
 escape hatch an empty source set has.
 
-### v1 decision
+### Why the fuzzy shapes are advisory
 
 Causal-history phrases are **advisory only**, not blocking: they
 false-positive on legitimate prose, so they warn rather than fail. The

@@ -36,9 +36,10 @@
 # Scope is the TOP-LEVEL inputs — the entry node's `inputs` — and only
 # those. A transitive node's rev is chosen by its parent's pin, not by
 # anything this repo runs, so its age reports on somebody else's
-# release cadence: `gitignore` is years old because `git-hooks.nix`
-# pins it there, and no mechanism here is failing. Including it would
-# mean a permanently red check nobody can act on.
+# release cadence: `flake-compat` moves only when `git-hooks.nix`
+# repins it, and no mechanism here is failing. Including it would
+# mean a check that goes red on somebody else's quiet, which nobody
+# here can act on.
 #
 # An input present in the lock that the table below does not name is an
 # operational error, not a pass. A threshold table is exactly the kind

@@ -29,7 +29,7 @@ Four automations may auto-merge PRs into `main` when CI passes:
 
 A compromise of the **`linpeas-flake-bumper` GitHub App** installation token used by `update-linpeas.yml` would let an attacker open a PR with arbitrary changes. The App is installed only on this repository with `Contents: Read and write` + `Pull requests: Read and write` permissions; the installation token is minted per job, lives one hour, and revokes at job end. The auto-merge bot would still gate on CI — so any malicious change would have to also pass all required checks (build, smoke, attestation re-verify, SRI cross-check). See [`docs/security/repo-config.md`](repo-config.md) for the full credential model.
 
-See `SECURITY.md` for the secret rotation policy.
+See [`SECURITY.md`](https://github.com/rvenutolo/linPEAS-flake/blob/main/SECURITY.md) for the secret rotation policy.
 
 ## Currently pinned
 

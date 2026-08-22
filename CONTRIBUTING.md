@@ -20,7 +20,7 @@ posture is non-negotiable.
 ```sh
 nix develop           # drops you into the devShell with every tool CI uses
 just                  # list recipes
-just check            # nix flake check (formatting + pre-commit + derivation builds)
+just check            # nix flake check (formatting + pre-commit + lint-shell-tools + derivation build)
 just fmt              # treefmt — prettier + nixfmt + shfmt + taplo + mdformat + just
 just lint             # pre-commit run --all-files
 just lint-links       # lychee over every markdown file lychee.toml does not exclude
