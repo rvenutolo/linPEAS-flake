@@ -39,12 +39,19 @@ Either toolchain alone is enough for the image: `gh attestation verify` and
 ## Verify the OCI image's build provenance<a name="verify-the-oci-images-build-provenance"></a>
 
 ```bash
+DIGEST=$(docker buildx imagetools inspect \
+  ghcr.io/rvenutolo/linpeas:{{ dashboard.release.latest_tag or "<tag>" }} --raw |
+  jq --raw-output '.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64").digest')
 gh attestation verify \
-  oci://ghcr.io/rvenutolo/linpeas:{{ dashboard.release.latest_tag or "<tag>" }} \
+  "oci://ghcr.io/rvenutolo/linpeas@${DIGEST}" \
   --repo rvenutolo/linPEAS-flake
 ```
 
-This proves the image was built by this repo's `release-on-bump.yml` workflow
+The first command resolves the `linux/amd64` arch-image digest from the
+multi-arch index (substitute `arm64` as needed) — attestations are
+per-arch, so the verify must target that digest, not the tag (see
+[Multi-arch attestations](#multi-arch-attestations)). This proves the
+image was built by this repo's `release-on-bump.yml` workflow
 run. `--repo` pins the attestation to this repository, so a bundle issued by
 any other repo cannot satisfy it.
 
@@ -54,10 +61,13 @@ The published OCI image is a multi-arch manifest covering `linux/amd64`
 and `linux/arm64`. **SLSA attestations are per-arch**, not per-manifest.
 This means:
 
-- `gh attestation verify oci://docker.io/rvenutolo/linpeas:<tag> --repo rvenutolo/linPEAS-flake` may
-    not resolve cleanly against the manifest index alone — point the verify
-    at the arch-specific image (or pull on the target arch and use the
-    resolved `RepoDigests` value).
+- `gh attestation verify oci://docker.io/rvenutolo/linpeas:<tag> --repo rvenutolo/linPEAS-flake`
+    fails with a not-found error: the tag resolves to the manifest index,
+    which carries no attestation. The `RepoDigests` value recorded by a
+    tag pull is that same index digest, so it fails the same way. Resolve
+    the arch-image digest from the index via
+    `docker buildx imagetools inspect <ref> --raw` and verify that
+    digest instead.
 - Each arch image was independently built from the same commit of this
     repo, so the attestations cover the same source provenance.
 - The manifest index itself is **not** attested. An attacker with push
