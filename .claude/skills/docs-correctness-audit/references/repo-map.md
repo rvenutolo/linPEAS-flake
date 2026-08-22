@@ -85,23 +85,25 @@ and is never edited.
 
 These bodies are produced by generators and gated for freshness by CI. Confirm
 the current set with `just --list` (the recipes whose descriptions say
-"Regenerate …") and `ls scripts/refresh-*.sh`. Do **not** propose prose/drift
+"Regenerate …") and `ls scripts/refresh-*.sh` — plus the one generator both
+routes miss: git-cliff (the CHANGELOG row below). Do **not** propose prose/drift
 edits inside their `BEGIN/END` markers; a fix means fixing the generator.
 
-| Generated target                                                  | Generator (recipe / script)                                      |
-| ----------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `docs/reference/flake-outputs.md` (flake-show block)              | `just show` / `refresh-flake-show.sh`                            |
-| `docs/reference/scripts.md`                                       | `just show-scripts` / `refresh-scripts-reference.sh`             |
-| `docs/reference/treefmt-config.md`                                | `just show-treefmt` / `refresh-treefmt-config.sh`                |
-| `docs/reference/test-harnesses.md`                                | `refresh-test-harnesses.sh` (no recipe; **whole file**)          |
-| `docs/reference/just-recipes.md` + README recipe block            | `just show-recipes` / `refresh-just-recipes.sh`                  |
-| `docs/security/enforcement-matrix.md`                             | `just show-enforcement-matrix` / `refresh-enforcement-matrix.sh` |
-| `docs/architecture/ci-dag.md`                                     | `just show-ci-dag` / `refresh-ci-dag.sh`                         |
-| pre-commit hook table in `docs/development/git.md`                | `just show-hooks` / `refresh-precommit-table.sh`                 |
-| CI summary block in `README.md`                                   | `just show-ci-summary` / `refresh-ci-summary.sh`                 |
-| ephemeral-refs-gap block in `docs/development/linting.md`         | `refresh-ephemeral-refs-gap.sh` (no recipe)                      |
-| pin-parity block in `docs/architecture/auto-update.md`            | `refresh-pin-parity.sh` (no recipe)                              |
-| `docs/_data/dashboard.yml` (drives `dashboard.md`, `releases.md`) | `just site-data` / `gen-dashboard-data.sh`                       |
+| Generated target                                                      | Generator (recipe / script)                                                                                                  |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `docs/reference/flake-outputs.md` (flake-show block)                  | `just show` / `refresh-flake-show.sh`                                                                                        |
+| `docs/reference/scripts.md`                                           | `just show-scripts` / `refresh-scripts-reference.sh`                                                                         |
+| `docs/reference/treefmt-config.md`                                    | `just show-treefmt` / `refresh-treefmt-config.sh`                                                                            |
+| `docs/reference/test-harnesses.md`                                    | `refresh-test-harnesses.sh` (no recipe; **whole file**)                                                                      |
+| `docs/reference/just-recipes.md` + README recipe block                | `just show-recipes` / `refresh-just-recipes.sh`                                                                              |
+| `docs/security/enforcement-matrix.md`                                 | `just show-enforcement-matrix` / `refresh-enforcement-matrix.sh`                                                             |
+| `docs/architecture/ci-dag.md`                                         | `just show-ci-dag` / `refresh-ci-dag.sh`                                                                                     |
+| pre-commit hook table in `docs/development/git.md`                    | `just show-hooks` / `refresh-precommit-table.sh`                                                                             |
+| CI summary block in `README.md`                                       | `just show-ci-summary` / `refresh-ci-summary.sh`                                                                             |
+| ephemeral-refs-gap block in `docs/development/linting.md`             | `refresh-ephemeral-refs-gap.sh` (no recipe)                                                                                  |
+| pin-parity block in `docs/architecture/auto-update.md`                | `refresh-pin-parity.sh` (no recipe)                                                                                          |
+| `docs/_data/dashboard.yml` (drives `dashboard.md`, `releases.md`)     | `just site-data` / `gen-dashboard-data.sh`                                                                                   |
+| released sections of `CHANGELOG.md` (`## Unreleased` is hand-written) | git-cliff in `release-on-bump.yml`'s changelog job; freshness gate `check-changelog-fresh.sh` (no recipe, no `refresh-*.sh`) |
 
 Hand-written prose *surrounding* a generated block is in scope — except
 where the row says **whole file**. `docs/reference/test-harnesses.md` carries no
@@ -120,8 +122,11 @@ banned shapes in tracked docs and comments:
 - Ad-hoc ticket shapes: `DH-\d+`, `NC-[A-Z]\d+`, any
     `<2-3 uppercase letters>-<digits>` not externally meaningful
 - Dates in prose: `\d{4}-\d{2}-\d{2}`, `<Month> \d{4}`, `Q[1-4] \d{4}`.
-    Exempt: stable parameter literals (e.g. `X-GitHub-Api-Version: 2022-11-28`),
-    static test-fixture data.
+    The `X-GitHub-Api-Version: <date>` literal is suppressed by the collector
+    sweep only — `RE_DATE` carries no such exemption, and in the real lint the
+    literal survives only by sitting inside a code span or fence. Static
+    test-fixture data is exempt because `is_allowlisted()` skips
+    `tests/fixtures/**` wholesale.
 - Causal-history phrases: `previously`, `Migration note`, `Tightened from`,
     `switched from/to`, `legacy <X> was deleted`,
     `now enforced via X (previously Y)`, `added in #?\d+`, `post-PR #?\d+`.
@@ -159,9 +164,14 @@ specification as a violation. `scripts/check-ephemeral-refs.sh` allowlists the
 tree for the same reason. The `claude-tooling` reader covers that prose by
 reading meaning instead of matching shapes.
 
-**It reads prose only.** Fenced code blocks, generated `BEGIN`/`END` bodies, and
-inline code spans are blanked before matching (line numbering preserved), the
-same three regions `scripts/check-ephemeral-refs.sh` exempts. That pass is
+**It reads prose only.** Fenced code blocks (backtick or tilde), generated
+`BEGIN`/`END` bodies, and inline code spans are blanked before matching (line
+numbering preserved) — the same three regions `scripts/check-ephemeral-refs.sh`
+exempts, in the same order: fences are recognized first, and inline code spans
+are blanked before a `BEGIN` is looked for, so a marker quoted in a span or a
+fence is documentation, not a block opener. Like the lint, the sweep fails
+loud on an unterminated fence or generated block rather than silently blanking
+to end-of-file. That pass is
 load-bearing: without it, every doc that *documents* a banned shape as an
 example — `docs/development/linting.md`'s table of banned shapes, the generated
 hook table in `docs/development/git.md` — reports as though it carried one.
@@ -195,10 +205,10 @@ where this page, the collector sweep, and the real lint diverge:
 ## 5. Invariant-index consistency
 
 `docs/invariant-index.md` is the binding-rules index; `check-orphan-invariants.sh`
-enforces that each entry points at a real tracked-doc file, and that every
-non-`EXEMPT` docs file has an entry (the script's `EXEMPT` array holds the
-generated and overview pages)
-(heading anchors are a separate lint, `check-doc-anchors.sh`).
+enforces that each index pointer resolves to an existing file under `docs/`,
+and that every non-`EXEMPT` docs file has an entry — the script's `EXEMPT`
+array holds the generated and overview pages. Heading anchors are a separate
+lint, `check-doc-anchors.sh`.
 For the consistency dimension, mirror that intent and additionally check the
 *semantic* agreement the script cannot: does the index one-liner still match
 what the linked section says, and does a claimed invariant have a backing

@@ -34,15 +34,37 @@ section() { printf '\n===== %s =====\n' "$1"; }
 EPH_FILES=()
 EPH_SCAN_DIR=""
 
-# @description Emit one file with its exempt regions blanked, line for line.
+# @description Emit one file with its exempt regions blanked, line for line,
+# mirroring check-ephemeral-refs.sh's strip_exempt ordering: fences (backtick
+# or tilde) are recognized first, inline code spans are blanked before a BEGIN
+# is looked for (so a marker quoted in a span is documentation, not a block
+# opener), and an END closes a generated block only from inside one. An
+# unterminated fence or generated block would silently blank every line to
+# EOF, hiding any hit below it — fail loud instead, exactly as the lint does.
 _eph_blank() { # $1=path
-  awk '
-    /^[[:space:]]*```/                { in_fence = !in_fence; print ""; next }
-    in_fence                          { print ""; next }
-    /<!--[[:space:]]*BEGIN[[:space:]]/ { in_gen = 1; print ""; next }
-    /<!--[[:space:]]*END[[:space:]]/   { in_gen = 0; print ""; next }
-    in_gen                            { print ""; next }
-    { line = $0; gsub(/`[^`]*`/, " ", line); print line }
+  awk -v src="$1" '
+    {
+      line = $0
+      if (line ~ /^[[:space:]]*(```|~~~)/) { in_fence = !in_fence; print ""; next }
+      if (in_fence) { print ""; next }
+      while (match(line, /`[^`]*`/)) {
+        pad = ""
+        for (i = 0; i < RLENGTH; i++) pad = pad " "
+        line = substr(line, 1, RSTART - 1) pad substr(line, RSTART + RLENGTH)
+      }
+      if (line ~ /<!--[[:space:]]*BEGIN[[:space:]]/) { in_gen = 1; print ""; next }
+      if (in_gen) {
+        if (line ~ /<!--[[:space:]]*END[[:space:]]/) { in_gen = 0 }
+        print ""
+        next
+      }
+      print line
+    }
+    END {
+      if (in_fence) { printf "%s: unterminated code fence\n", src > "/dev/stderr"; bad = 1 }
+      if (in_gen) { printf "%s: unterminated generated block\n", src > "/dev/stderr"; bad = 1 }
+      if (bad) exit 1
+    }
   ' <"$1"
 }
 
@@ -55,7 +77,14 @@ _eph_prepare() {
     dir="${f%/*}"
     [[ ${dir} == "${f}" ]] && dir="."
     mkdir -p "${EPH_SCAN_DIR}/${dir}"
-    _eph_blank "${f}" >"${EPH_SCAN_DIR}/${f}"
+    # A failed blank (unterminated fence / generated block) is a doc defect
+    # the sweep must not paper over — propagate it instead of scanning a
+    # partially-blanked mirror.
+    if ! _eph_blank "${f}" >"${EPH_SCAN_DIR}/${f}"; then
+      rm -rf "${EPH_SCAN_DIR}"
+      EPH_SCAN_DIR=""
+      return 1
+    fi
   done
 }
 
@@ -69,7 +98,7 @@ sweep_ephemeral_tokens() {
     echo '(none)'
     return 0
   fi
-  _eph_prepare
+  _eph_prepare || return 1
   local hits
   hits="$(
     {

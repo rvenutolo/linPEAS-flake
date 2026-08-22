@@ -84,7 +84,12 @@ fx="$(mktemp -d)"
     printf 'Example of what NOT to write:\n\n'
     # shellcheck disable=SC2016 # literal fence markers, not expansions
     printf '```text\nPhase 5 landed in #505 on 2018-02-03\n```\n\n'
-    printf '<!-- BEGIN sometable -->\nPhase 6 shipped in #606 on 2017-01-02\n<!-- END sometable -->\n'
+    printf '<!-- BEGIN sometable -->\nPhase 6 shipped in #606 on 2017-01-02\n<!-- END sometable -->\n\n'
+    printf '~~~text\nPhase 4 landed in #707 on 2016-05-06\n~~~\n\n'
+    # An inline-quoted BEGIN marker is documentation, not a block opener:
+    # the prose after it must still be scanned, not blanked to the next END.
+    # shellcheck disable=SC2016 # literal backticks in human-readable prose
+    printf 'The marker `<!-- BEGIN x -->` opens a generated block.\nPhase 2 remains.\n'
   } >docs/exempt.md
   printf '# Changelog\n\n- #999 shipped 2024-01-01\n- Phase 9 cleanup\n' >CHANGELOG.md
   mkdir -p .claude
@@ -112,9 +117,38 @@ case "${eph}" in *"#404"*) check "exempts inline code span (pr-ref)" 1 ;; *) che
 case "${eph}" in *"2019-03-04"*) check "exempts inline code span (date)" 1 ;; *) check "exempts inline code span (date)" 0 ;; esac
 case "${eph}" in *"Phase 5"* | *"#505"* | *"2018-02-03"*) check "exempts fenced code block" 1 ;; *) check "exempts fenced code block" 0 ;; esac
 case "${eph}" in *"Phase 6"* | *"#606"* | *"2017-01-02"*) check "exempts generated BEGIN/END block" 1 ;; *) check "exempts generated BEGIN/END block" 0 ;; esac
+case "${eph}" in *"Phase 4"* | *"#707"* | *"2016-05-06"*) check "exempts tilde-fenced code block" 1 ;; *) check "exempts tilde-fenced code block" 0 ;; esac
+case "${eph}" in *"(planning-label) Phase 2 remains"*) check "inline BEGIN mention does not open a block" 0 ;; *) check "inline BEGIN mention does not open a block" 1 ;; esac
 # --- blanking must not shift reported line numbers ---
 case "${eph}" in *"docs/eph.md:3"*) check "line numbers survive blanking" 0 ;; *) check "line numbers survive blanking" 1 ;; esac
 rm -rf "${fx}"
+
+# --- unterminated regions fail loud, mirroring the real lint ---
+for kind in fence genblock; do
+  fu="$(mktemp -d)"
+  (
+    cd "${fu}"
+    git init -q && git config user.email t@t && git config user.name t
+    mkdir -p docs
+    if [[ ${kind} == fence ]]; then
+      printf '# Bad\n\n```text\nnever closed\n' >docs/bad.md
+    else
+      printf '# Bad\n\n<!-- BEGIN sometable -->\nnever closed\n' >docs/bad.md
+    fi
+    git add -A && git commit -qm init
+  )
+  rc=0
+  # shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
+  out="$( (cd "${fu}" && source "${COLLECTOR}" && sweep_ephemeral_tokens) 2>&1)" || rc=$?
+  want='unterminated code fence'
+  [[ ${kind} == genblock ]] && want='unterminated generated block'
+  if [[ ${rc} -ne 0 && ${out} == *"${want}"* ]]; then
+    check "unterminated ${kind} fails loud" 0
+  else
+    check "unterminated ${kind} fails loud" 1
+  fi
+  rm -rf "${fu}"
+done
 
 # --- internal-link fixture ---
 fl="$(mktemp -d)"
