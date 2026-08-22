@@ -74,7 +74,7 @@ A PR body may contain fenced lines of any length. Prose in a PR body needs no
 manual wrapping — GitHub wraps it.
 
 Allowed types match branch naming. Append `!` after the type for breaking
-changes: `feat!: drop Java 11 support`.
+changes: `feat!: drop x86_64-darwin from declared systems`.
 
 ## Local lint commands
 
@@ -86,6 +86,7 @@ section for details.
 Run before pushing:
 
 ```sh
+just verify      # batched lint groups + harnesses + doc-freshness (what CI runs)
 just check       # nix flake check
 just fmt         # nix fmt (treefmt: shfmt, prettier, …)
 just lint        # pre-commit run --all-files

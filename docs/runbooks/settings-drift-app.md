@@ -46,7 +46,7 @@ The `settings-posture-drift-check` workflow (and any other drift-check that need
 1. **Add the Client ID as a repository variable**:
 
     ```bash
-    gh variable set SETTINGS_DRIFT_APP_CLIENT_ID --body 'Iv1.xxxxxxxxxxxxxxxx' --repo rvenutolo/linPEAS-flake
+    gh variable set SETTINGS_DRIFT_APP_CLIENT_ID --body '<client-id>' --repo rvenutolo/linPEAS-flake
     ```
 
 1. **Add the private key as a repository secret**:

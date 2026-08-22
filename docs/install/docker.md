@@ -1,6 +1,6 @@
 # Install with Docker
 
-Each release publishes an OCI image to both Docker Hub (`docker.io/rvenutolo/linpeas`) and GitHub Container Registry (`ghcr.io/rvenutolo/linpeas`) with the upstream tag and `:latest`. Both registries serve identical image bytes with matching SLSA attestations.
+Each release publishes an OCI image to both Docker Hub (`docker.io/rvenutolo/linpeas`) and GitHub Container Registry (`ghcr.io/rvenutolo/linpeas`) with the upstream tag and `:latest`.
 
 ## What this image is for
 
@@ -65,32 +65,31 @@ To pull a specific arch explicitly:
 docker pull --platform linux/arm64 rvenutolo/linpeas:latest
 ```
 
-When verifying the SLSA attestation, point at the resolved arch-image
-digest (not the manifest pointer):
-
-{% raw %}
-
-```bash
-docker pull rvenutolo/linpeas:latest
-DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' rvenutolo/linpeas:latest)
-gh attestation verify "oci://${DIGEST}" --repo rvenutolo/linPEAS-flake
-```
-
-{% endraw %}
-
-See [Security → Multi-arch attestations](../security/verification.md#multi-arch-attestations) for
+SLSA attestations cover the per-arch images, not the multi-arch index a
+tag resolves to — see
+[Verify build provenance](#verify-build-provenance) below for the
+digest-resolution recipe and
+[Security → Multi-arch attestations](../security/verification.md#multi-arch-attestations) for
 the trust contract.
 
 ## Verify build provenance
 
+Attestations exist only for the per-arch images. A bare tag (and the
+`RepoDigests` value a tag pull records) resolves to the multi-arch
+manifest index, which carries no attestation — verifying it fails with
+a not-found error. Resolve your platform's arch-image digest from the
+index first, then verify that digest (substitute `arm64` as needed):
+
 ```bash
 # Docker Hub
-gh attestation verify oci://docker.io/rvenutolo/linpeas:{{ dashboard.release.latest_tag or "<tag>" }} \
-  --repo rvenutolo/linPEAS-flake
+DIGEST=$(docker buildx imagetools inspect docker.io/rvenutolo/linpeas:{{ dashboard.release.latest_tag or "<tag>" }} --raw |
+  jq --raw-output '.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64").digest')
+gh attestation verify "oci://docker.io/rvenutolo/linpeas@${DIGEST}" --repo rvenutolo/linPEAS-flake
 
 # GitHub Container Registry
-gh attestation verify oci://ghcr.io/rvenutolo/linpeas:{{ dashboard.release.latest_tag or "<tag>" }} \
-  --repo rvenutolo/linPEAS-flake
+DIGEST=$(docker buildx imagetools inspect ghcr.io/rvenutolo/linpeas:{{ dashboard.release.latest_tag or "<tag>" }} --raw |
+  jq --raw-output '.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64").digest')
+gh attestation verify "oci://ghcr.io/rvenutolo/linpeas@${DIGEST}" --repo rvenutolo/linPEAS-flake
 ```
 
 Proves image was built by `release-on-bump.yml` workflow in this repo. Does **not** prove content equivalence with upstream `linpeas.sh` — see [Security → Verification](../security/verification.md).

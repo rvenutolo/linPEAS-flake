@@ -186,7 +186,8 @@ The changelog job in `release-on-bump.yml` performs these steps in
 order:
 
 1. Check out the repo with `fetch-depth: 0` (full history required for
-    git-cliff to walk all tags).
+    git-cliff to walk all tags), then install Nix via
+    `./.github/actions/setup-nix`.
 1. Mint a short-lived App installation token using
     `BUMP_APP_CLIENT_ID` + `BUMP_APP_PRIVATE_KEY`.
 1. Re-assert the canonical pin shape on `VERSION` at the credential
@@ -201,6 +202,10 @@ order:
 1. Open a PR against `main` and enable auto-merge
     (`gh pr merge --auto --merge --delete-branch`). The PR lands once
     the `protect-main` required status checks pass.
+1. If changed, patch the just-published release's body: build
+    `.release-body.md` from `.release-notes.md` plus the upstream
+    tracking footer and apply it with
+    `gh release edit "${VERSION}" --notes-file .release-body.md`.
 
 The PR detour is mandatory: `protect-main` has `bypass_actors == []`
 and a `pull_request` rule, so direct `PUT /contents` to `branch=main`

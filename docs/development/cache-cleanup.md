@@ -1,7 +1,13 @@
 # GitHub Actions cache cleanup
 
 The `actions-cache-prune.yml` workflow keeps the repository's
-Actions-cache namespace from accumulating stale entries. Two triggers:
+Actions-cache namespace from accumulating stale entries. Nothing in
+this repo currently writes an Actions cache — no workflow or composite
+action uses `actions/cache` or a `cache:` input, and Nix-based jobs
+pull from the public `cache.nixos.org` substituter instead — so the
+workflow is a standing guard: it bounds the lifetime of any cache a
+future action, or a third-party action's opaque internal caching,
+might create. Two triggers:
 
 ## Daily cron
 
@@ -24,9 +30,9 @@ scoped to:
 - `refs/pull/${PR_NUMBER}/merge`
 - `refs/heads/${HEAD_REF}`
 
-This shortens the cache-poisoning persistence window: a poisoned PR
-cache is evicted immediately on PR close rather than waiting for the
-daily cron sweep.
+This shortens the cache-poisoning persistence window: should any PR
+cache exist, a poisoned one is evicted immediately on PR close rather
+than waiting for the daily cron sweep.
 
 ## Permissions
 
@@ -43,9 +49,10 @@ release pipelines. The workflow does not page on failure.
 ## Recovery
 
 If a prune mass-deleted entries by mistake (e.g. cron date arithmetic
-drift), no action is required — the next CI run rebuilds caches from
-scratch within a few minutes. Cache rebuilds are not paid in OCI image
-publication time.
+drift), no action is required — no CI job reads an Actions cache, so
+nothing is lost but the entries themselves; any action that does cache
+opaquely repopulates on its next run. Cache rebuilds are not paid in
+OCI image publication time.
 
 If the action-token rate-limits during a prune run, the workflow
 fails cleanly and re-runs on the next cron tick. Manual recovery:
