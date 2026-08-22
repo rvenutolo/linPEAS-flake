@@ -1,6 +1,6 @@
 # CI architecture
 
-Every push to `main` and every PR runs a required set of jobs that gate auto-merge. Separate non-blocking weekly workflows run informational checks (image CVE scans).
+Every push to `main` and every PR runs a required set of jobs that gate auto-merge. Separate non-blocking workflows run informational checks: weekly image CVE scans, a monthly docs-audit reminder, and PR-time SAST.
 
 ## Build and smoke gates
 

@@ -172,8 +172,8 @@ enforced. Every branch commit must independently pass `commitlint` and be
 signed; see
 [`docs/development/git.md`](docs/development/git.md).
 
-Defense-in-depth supply-chain layers (advisory or implicit, not in the
-required-check table; alphabetical):
+Defense-in-depth supply-chain layers (the layer itself is not a
+required check; alphabetical):
 
 - `actions.permissions.allowed_actions` = `selected` with a vendor
     allowlist

@@ -83,10 +83,11 @@ Workflow-vulnerability scanner; runs synacktiv/octoscan via a pinned
 ghcr.io container image against `.github/workflows/`. The pre-commit
 hook fires when any `.github/workflows/*.yml` or `*.yaml` file is
 staged; it always scans the full directory to match the CI workflow's
-invocation. Docker is required — the hook exits with a SKIP hint if
-docker is missing. The pinned image digest and the version label
-tracked by Renovate both live in `scripts/octoscan-scan.sh` (single
-source of truth).
+invocation. Docker is required — if docker is missing the hook fails
+with exit 2 (could not run) and hints at `SKIP=octoscan` for one
+commit. The pinned image digest and the version label tracked by
+Renovate both live in `scripts/octoscan-scan.sh` (single source of
+truth).
 
 ## Ephemeral-reference lint
 

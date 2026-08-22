@@ -59,7 +59,7 @@ A healthy forced run on a reproducible tree looks like this:
 1. The `repro-diff` artifact uploads.
 1. **No issue is filed and the `compare` job does not fail.**
 
-Any of those four missing means the diagnostic path is broken; a failing job or a filed issue means the forced run also found a genuine mismatch, which is triaged as above.
+Any of the first three missing means the diagnostic path is broken; a failing job or a filed issue means the forced run also found a genuine mismatch, which is triaged as above.
 
 ### Reading `summary.txt`
 
