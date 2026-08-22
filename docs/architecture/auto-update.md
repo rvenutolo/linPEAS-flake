@@ -1,6 +1,6 @@
 # Auto-update architecture
 
-Three independent automations keep the pin current and the release artifacts in sync.
+Three independent automations keep the pin current and the release artifacts in sync; a fourth watches that they are still running.
 
 ## Daily linpeas pin bump
 
