@@ -232,7 +232,7 @@ reader to scroll past the one that is right.
     <!-- BEGIN ephemeral-refs-gap -->
 
     File types no extractor claims and that carry `#` comments:
-    `.awk`, `.envrc`, `.gitignore`, `.toml`, `.txt`, `justfile`.
+    `.awk`, `.envrc`, `.gitignore`, `.toml`, `.txt`, `docs-audit-state`, `justfile`.
     No blocking shape appears in any of them.
 
     <!-- END ephemeral-refs-gap -->

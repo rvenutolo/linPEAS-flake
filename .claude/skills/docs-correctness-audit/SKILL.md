@@ -176,6 +176,18 @@ report's closing notes, anything that needs a human decision (spec ambiguity,
 a generated-doc/generator fix, a finding whose "fix" would change runtime
 behavior).
 
+### 6. Tell the user to record the audit point
+
+Close the report by naming the step that ends the cycle: once these findings
+are fixed, the final fix PR runs `just docs-audit-done` and stages
+`.github/docs-audit-state`. That marker is the base the monthly reminder
+measures drift pressure from, so an audit that never records its point leaves
+pressure climbing and the reminder issue open. Say it explicitly — this skill
+is read-only and cannot write the marker itself.
+
+If the audit found nothing, the instruction is the same and applies
+immediately: a clean read is still a read.
+
 ## Report structure
 
 Use this template:

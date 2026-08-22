@@ -62,6 +62,7 @@ readonly -a HARNESSES=(
   'scorecard-threshold|check-scorecard-threshold.test.sh|'
   'compare-repro|compare-repro.test.sh|'
   'docs-audit-pressure|docs-audit-pressure.test.sh|'
+  'mark-docs-audit|mark-docs-audit.test.sh|'
   'inventory-action-pin-tags|inventory-action-pin-tags.test.sh|'
   'octoscan-scan|octoscan-scan.test.sh|'
   'run-doc-freshness|run-doc-freshness.test.sh|'

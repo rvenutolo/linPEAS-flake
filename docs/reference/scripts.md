@@ -1475,7 +1475,7 @@ that both measured nothing are not a match.
 
 ### scripts/docs-audit-pressure.sh
 
-Report docs-audit drift pressure over a rolling window:
+Report docs-audit drift pressure since the last audit:
 how many commits touched CI structure (.github/workflows, scripts,
 .github/lint-groups.yml), and which job ids / lint-group members were
 added or removed. Emits a Markdown body for the monthly docs-audit
@@ -1484,6 +1484,15 @@ reminder issue, terminated by a machine-readable PRESSURE=<n> line.
 Freshness gates validate only generated blocks; hand-written prose about
 CI drifts silently. CI churn is the best cheap proxy for that drift, so it
 decides whether a semantic audit is worth running this month.
+
+The diff base is the commit recorded in `.github/docs-audit-state`, which
+`scripts/mark-docs-audit.sh` writes once an audit's fixes have landed. A
+fixed-length window would measure churn the maintainer has already read
+and audited, so its count could never fall to zero on a repo with a
+steady commit rate — and the reminder issue's close condition reads that
+count. Measuring from the audit point makes the number mean "CI-structure
+commits nobody has audited yet", which is zero right after an audit and
+grows only with unreviewed churn.
 
 Body contents are restricted to integers and shape-validated identifiers
 parsed from YAML — never commit subjects or other free text, which would
@@ -1494,7 +1503,10 @@ no YAML.
 
 Exit codes:
 0 success (body on stdout, PRESSURE=<n> as the final line)
-2 missing inputs / parse error / nothing enumerated to measure
+2 missing inputs / parse error / nothing enumerated to measure,
+including an audit-state file that is absent, carries no
+LAST_AUDIT_SHA=\<40-hex> line, or names a commit this history does
+not contain
 
 ### scripts/gen-dashboard-data.sh
 
@@ -1508,6 +1520,31 @@ Enumerate every SHA-pinned `uses:` in
 (or action.yaml), resolve each pinned SHA to its exact patch tag via
 `gh api .../tags`, and emit a TSV mapping pin -> patch tag for
 downstream rewrite tooling.
+
+### scripts/mark-docs-audit.sh
+
+Record the current commit as the point the semantic docs
+audit was last run against. Writes `.github/docs-audit-state`, which
+`scripts/docs-audit-pressure.sh` uses as its diff base and the monthly
+`docs-audit-reminder` workflow reads through it.
+
+Run this in the final fix PR of an audit cycle — once the audit's
+findings are fixed, not when the audit is dispatched. The marker means
+"everything up to here has been read and its drift resolved", and the
+reminder issue closes on the count it produces; marking at dispatch
+time would close the issue over findings still outstanding.
+
+Writes the file only. Staging and committing stay with the caller, so
+the marker lands in the same reviewed PR as the fixes it vouches for
+rather than as a side effect of running a script.
+
+Honors DOCS_AUDIT_STATE_OVERRIDE (default `.github/docs-audit-state`)
+and REF_OVERRIDE (default `HEAD`) for fixtures.
+
+Exits 0 once the marker is written. Exits 2 when it cannot be written:
+the ref does not resolve to a commit in this history, or the target
+path is not writable. There is no exit 1 — this script records a fact
+rather than judging one, so it has no finding to report.
 
 ### scripts/octoscan-scan.sh
 

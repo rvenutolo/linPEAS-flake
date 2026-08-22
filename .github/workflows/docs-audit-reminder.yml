@@ -12,7 +12,10 @@ name: docs-audit-reminder
 # failing, because a workflow that goes red during normal CI churn trains
 # the maintainer to ignore red. A genuine failure — the pressure script
 # erroring, or a GitHub API call failing — does go red: that is a real
-# problem, not a drift signal, and deserves attention on its own.
+# problem, not a drift signal, and deserves attention on its own. An
+# unreadable `.github/docs-audit-state` is one of those: pressure is
+# measured from the commit it names, so without it there is no number to
+# report rather than a number meaning zero drift.
 
 on:
   schedule:
@@ -43,7 +46,8 @@ jobs:
             github.com:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Full history: pressure diffs against a commit ~31 days back.
+          # Full history: pressure diffs against the commit recorded in
+          # .github/docs-audit-state, which a shallow clone may not carry.
           fetch-depth: 0
           persist-credentials: false
       - name: compute drift pressure
@@ -75,7 +79,7 @@ jobs:
           if [[ ${PRESSURE} -eq 0 ]]; then
             if [[ -n ${existing} ]]; then
               gh issue close "${existing}" \
-                --comment 'No CI-structure churn in the last window; closing until drift accrues.'
+                --comment 'No CI-structure churn since the last audit; closing until drift accrues.'
             fi
             printf 'no pressure; nothing to do\n'
             exit 0

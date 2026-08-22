@@ -98,6 +98,7 @@ nav:
   - Development:
       - Git workflow: development/git.md
       - Linting & formatting: development/linting.md
+      - Docs correctness audit: development/docs-audit.md
       - Labeling: development/labeling.md
       - Cache cleanup: development/cache-cleanup.md
       - Changelog: development/changelog.md

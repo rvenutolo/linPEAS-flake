@@ -20,6 +20,7 @@ just                 # Default: list recipes
 just build           # Build the linpeas package
 just bump            # Manually refresh linpeas pin from upstream latest release
 just check           # Run all flake checks (formatting, pre-commit, lint-shell-tools, derivation build)
+just docs-audit-done # Record the current commit as the point the docs audit was last run against
 just fmt             # Format every file via treefmt
 just image           # Build the OCI image
 just lint            # Run pre-commit hooks against all files
