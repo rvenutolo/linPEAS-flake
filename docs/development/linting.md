@@ -17,8 +17,8 @@ Wired in `treefmt.nix`. Run via `nix fmt` or `just fmt`. Pre-commit hook
 | taplo     | TOML                                                              |
 | just      | `justfile`                                                        |
 
-Prettier rewrites single-quoted YAML scalars to double-quoted. Use
-double quotes from the start in workflow files.
+Prettier's YAML quote rewriting is covered in
+[Treefmt YAML quote gotcha](#treefmt-yaml-quote-gotcha).
 
 ## Pre-commit hooks
 
