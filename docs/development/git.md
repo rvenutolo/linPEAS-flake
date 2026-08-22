@@ -90,7 +90,7 @@ just verify      # batched lint groups + harnesses + doc-freshness (what CI runs
 just check       # nix flake check
 just fmt         # nix fmt (treefmt: shfmt, prettier, …)
 just lint        # pre-commit run --all-files
-just lint-links  # lychee link check (scope set by lychee.toml)
+just lint-links  # lychee link check (inputs in the recipe, exclusions in lychee.toml)
 ```
 
 `pre-commit install` (once) wires the git hooks so the same hooks run

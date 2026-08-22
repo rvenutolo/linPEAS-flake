@@ -7,9 +7,10 @@ rules:
   # about is not present here.
   #
   # workflow_run in renovate-flake-lock-refresh.yml is also intentional. The
-  # `identify` job gates on PR `author.login == "renovate[bot]"`, which fork
-  # PRs and write-access users cannot spoof — only the Renovate GitHub App
-  # produces that author identity. `compute-refresh` runs Nix in `contents:
+  # `identify` job gates on the Renovate App author identity via
+  # scripts/classify-renovate-pr-author.sh, which accepts only the spellings
+  # GitHub reports for that App and rejects a login that merely contains
+  # `renovate`. Fork PRs and write-access users cannot produce them. `compute-refresh` runs Nix in `contents:
   # read` mode without the App key (`nix flake update <input>` only
   # re-resolves an input URL → SHA; it does not evaluate flake outputs, so
   # malicious code in flake.nix does not execute here). The App key lands

@@ -185,8 +185,11 @@ colors, `&#NNN;` HTML entities, `#N-` anchor targets,
 it and believe its exit code; anything the sweep reports that the real lint does
 not is a false positive. The lint's complete class set is in
 `scripts/lib/ephemeral-refs-scope.sh`: `RE_ISSUE`, `RE_DATE`, `RE_PLANNING`,
-`RE_REVIEW` and `RE_CLAUDE` block, `RE_CAUSAL` warns. Four standing caveats
-where this page, the collector sweep, and the real lint diverge:
+`RE_REVIEW` and `RE_CLAUDE` block, `RE_CAUSAL` warns. The sweep transcribes
+the blocking classes from those constants, left boundary guards included, so a
+banned shape sitting inside a larger token (`UTF-8`, `PDF-1.7`, `ID5:`,
+`abc#12`) is no more a sweep hit than a gate failure. Three standing caveats
+where this page, the collector sweep, and the real lint still diverge:
 
 - `causal-history` is advisory-only even in the real lint — it never fails a
     gate, so a hit there is a style nit.
@@ -197,11 +200,10 @@ where this page, the collector sweep, and the real lint diverge:
     `AU-P-`, `SC-POST-`, `plan <n>` and `F-<n>`, and stops there. A generic
     `[A-Z]{2,3}-[0-9]+` matcher would fire on `UTF-8`, `SHA-256`, `RFC-822` and
     `ISO-8601`; the enumerated shapes carry explicit boundary guards precisely
-    because that shape is noisy. Every `ad-hoc-ticket` hit is therefore a
-    judgement call for the reader, never a gate failure.
-- The sweep's review-pass shape is `\(L\d+[,) ]`, one alternative wider than
-    the lint's `\(L\d+[,)]` — the lint has no trailing-space alternative, so
-    `(L4 ` is a sweep hit the gate never raises.
+    because that shape is noisy. `ad-hoc-ticket` is the one class the sweep
+    runs without such a guard, which is why it leans on the
+    `(SHA|UTF|RFC|ISO|BASE)-NNN` suppression instead. Every `ad-hoc-ticket`
+    hit is therefore a judgement call for the reader, never a gate failure.
 
 ## 5. Invariant-index consistency
 

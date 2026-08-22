@@ -72,6 +72,10 @@ fx="$(mktemp -d)"
   mkdir -p docs
   cp "${REAL_REPO}/lychee.toml" .
   printf '# Doc\n\nPhase 3 work remains.\nTracking #388 here.\nclassDef x fill:#c8e6c9,stroke:#2e7d32\nEntity &#123; literal.\nsee [toc](#1-delete-the-thing).\nEvery call passes X-GitHub-Api-Version: 2022-11-28 header.\nUses SHA-256 digest.\n' >docs/eph.md
+  # Left-boundary fixtures: each token embeds a banned shape inside a larger
+  # word, which the guarded classes must not match. Guard failure here is the
+  # false-positive class that trains a reader to ignore the sweep.
+  printf 'The encoding is UTF-8 everywhere.\nA PDF-1.7 attachment.\nRecord ID5: opaque.\nSee abc#12 upstream.\nPhase   11 uses padded spacing.\n' >docs/guard.md
   # Exempt-region fixture: the same banned shapes, but quoted as documentation
   # rather than referenced. The real lint blanks all three regions; so must the
   # sweep, or every doc that documents the rules reports as violating them.
@@ -119,6 +123,22 @@ case "${eph}" in *"Phase 5"* | *"#505"* | *"2018-02-03"*) check "exempts fenced 
 case "${eph}" in *"Phase 6"* | *"#606"* | *"2017-01-02"*) check "exempts generated BEGIN/END block" 1 ;; *) check "exempts generated BEGIN/END block" 0 ;; esac
 case "${eph}" in *"Phase 4"* | *"#707"* | *"2016-05-06"*) check "exempts tilde-fenced code block" 1 ;; *) check "exempts tilde-fenced code block" 0 ;; esac
 case "${eph}" in *"(planning-label) Phase 2 remains"*) check "inline BEGIN mention does not open a block" 0 ;; *) check "inline BEGIN mention does not open a block" 1 ;; esac
+# --- left-boundary guards mirror the real lint's classes ---
+# Line-scoped: a hit in another class must not satisfy a guard assertion.
+eph_absent() { # $1=label $2=ERE — the class+token pair must not appear
+  if printf '%s\n' "${eph}" | grep -qE "$2"; then check "$1" 1; else check "$1" 0; fi
+}
+eph_present() { # $1=label $2=ERE — the class+token pair must appear
+  if printf '%s\n' "${eph}" | grep -qE "$2"; then check "$1" 0; else check "$1" 1; fi
+}
+eph_absent "guard: UTF-8 is no planning-label" '\(planning-label\).*UTF-8'
+eph_absent "guard: PDF-1.7 is no planning-label" '\(planning-label\).*PDF-1\.7'
+eph_absent "guard: ID5: is no review-pass" '\(review-pass\).*ID5:'
+eph_absent "guard: abc#12 is no pr-ref" '\(pr-ref\).*abc#12'
+# The guard must not cost recall: a genuine label still hits, and the
+# whitespace class matches the padded spacing a single literal space missed.
+eph_present "guard keeps padded Phase 11" '\(planning-label\).*Phase   11'
+
 # --- blanking must not shift reported line numbers ---
 case "${eph}" in *"docs/eph.md:3"*) check "line numbers survive blanking" 0 ;; *) check "line numbers survive blanking" 1 ;; esac
 rm -rf "${fx}"
