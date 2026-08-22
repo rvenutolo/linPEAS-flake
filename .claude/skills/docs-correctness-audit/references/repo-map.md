@@ -136,11 +136,6 @@ banned shapes in tracked docs and comments:
     on its subject, so matching them fires on threat models and hypothetical
     drift as readily as on rot.
 - Issue / PR refs: `#\d+`, `PR #\d+`, `issue #\d+`.
-
-`CHANGELOG.md` and `docs/releases.md` are exempt from **every** class above,
-not merely the PR-ref one: `is_allowlisted()` skips both files before any
-class runs, because they structurally record PRs and dates.
-
 - Literal paths into `.claude/` from any scanned source outside the file
     allowlist — Markdown prose and shell, Nix and YAML comments alike, since
     `RE_CLAUDE` is unscoped. The allowlist is `CHANGELOG.md`,
@@ -148,6 +143,10 @@ class runs, because they structurally record PRs and dates.
     `.claude/` is untracked, so such a path does not resolve for a reader who
     clones the repo; tracked `.claude/` files may reference their own siblings
     because the allowlist skips that tree outright.
+
+`CHANGELOG.md` and `docs/releases.md` are exempt from **every** class above,
+not merely the PR-ref one: `is_allowlisted()` skips both files before any
+class runs, because they structurally record PRs and dates.
 
 Allowed: incident-warning text that prevents a regression (keep the warning,
 drop any dated tag).
@@ -206,9 +205,12 @@ where this page, the collector sweep, and the real lint diverge:
 
 `docs/invariant-index.md` is the binding-rules index; `check-orphan-invariants.sh`
 enforces that each index pointer resolves to an existing file under `docs/`,
-and that every non-`EXEMPT` docs file has an entry — the script's `EXEMPT`
-array holds the generated and overview pages. Heading anchors are a separate
-lint, `check-doc-anchors.sh`.
+and that every non-`EXEMPT` docs file has an entry. The script's `EXEMPT`
+array is the authority on what is exempt; per the index preamble's own
+taxonomy it holds generator-owned pages, overview pages that route to rules
+held elsewhere, the index itself, and two install guides — not every
+generated page (a generated page can still carry an index entry). Heading
+anchors are a separate lint, `check-doc-anchors.sh`.
 For the consistency dimension, mirror that intent and additionally check the
 *semantic* agreement the script cannot: does the index one-liner still match
 what the linked section says, and does a claimed invariant have a backing
