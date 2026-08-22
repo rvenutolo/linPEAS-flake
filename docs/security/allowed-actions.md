@@ -74,4 +74,7 @@ To probe manually from a developer shell (requires `gh auth login` with admin-re
 nix develop --command ./scripts/check-allowed-actions-api.sh
 ```
 
-Exits 0 on full match, 1 on any drift, with every mismatched entry logged to stderr.
+Exits 0 on full match, 1 on any drift, and 2 when the comparison could
+not be made at all — the allowlist doc is missing, or its canonical
+fenced block yields no patterns. Every mismatched entry is logged to
+stderr.

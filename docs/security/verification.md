@@ -13,6 +13,7 @@ How to verify a release of this wrapper yourself. None of this trusts the Pages 
 - [verify-latest-release failure attribution](#verify-latest-release-failure-attribution)
   - [Ladder coverage is linted](#ladder-coverage-is-linted)
 - [Gitleaks secret scanning](#gitleaks-secret-scanning)
+- [TruffleHog secret scanning](#trufflehog-secret-scanning)
 - [Dependency review](#dependency-review)
 - [OCI image CVE scan (Trivy)](#oci-image-cve-scan-trivy)
 - [OCI image CVE scan (Grype)](#oci-image-cve-scan-grype)
@@ -28,7 +29,7 @@ How to verify a release of this wrapper yourself. None of this trusts the Pages 
 
 ## Tools needed<a name="tools-needed"></a>
 
-- `gh` (GitHub CLI) ≥ 2.40 — `gh attestation verify` subcommand, and
+- `gh` (GitHub CLI) ≥ 2.49 — `gh attestation verify` subcommand, and
     `gh release download` for the signed release assets.
 - `cosign` ≥ 2.2 — `cosign verify` for image signatures and
     `cosign verify-blob` for the `.sigstore` release-asset bundles.
@@ -196,8 +197,8 @@ exemption.
 ## Gitleaks secret scanning<a name="gitleaks-secret-scanning"></a>
 
 `gitleaks.yml` scans the full git history (`fetch-depth: 0`) on push to
-main, every PR, and a weekly Friday cron. Required check named
-`gitleaks` in the `protect-main` ruleset.
+main, every PR, a weekly Friday cron, and manual dispatch. Required
+check named `gitleaks` in the `protect-main` ruleset.
 
 - Uses only `secrets.GITHUB_TOKEN` — PR-triggered workflow secret
     allowlist invariant holds.
@@ -205,6 +206,29 @@ main, every PR, and a weekly Friday cron. Required check named
     rotate → purge with `git filter-repo` → force-push (admin bypass).
 - Vendor `gitleaks/*` is in the `allowed_actions` allowlist; do not
     remove without replacing the workflow.
+
+## TruffleHog secret scanning<a name="trufflehog-secret-scanning"></a>
+
+`trufflehog.yml` scans the full git history (`fetch-depth: 0`) on push
+to main, every PR, a weekly Friday cron, and manual dispatch. Required
+check named `trufflehog` in the `protect-main` ruleset. It runs with
+`extra_args: --only-verified`, so a finding is a credential TruffleHog
+reached the issuing provider to confirm is live — not a pattern match.
+
+Gitleaks and TruffleHog are a deliberate pair: they carry different
+detector sets, and a secret shape one misses is the reason the other
+runs. Neither substitutes for the other, and dropping either needs a
+security-review entry.
+
+- Uses only `secrets.GITHUB_TOKEN` — PR-triggered workflow secret
+    allowlist invariant holds.
+- A verified finding is a live credential and therefore a security
+    incident. Triage is the same as for gitleaks:
+    rotate → purge with `git filter-repo` → force-push (admin bypass).
+    Rotate first — the secret is confirmed valid, so history rewriting
+    is the slower half of the response.
+- Vendor `trufflesecurity/*` is in the `allowed_actions` allowlist; do
+    not remove without replacing the workflow.
 
 ## Dependency review<a name="dependency-review"></a>
 
@@ -261,8 +285,9 @@ output and open / update deduped issues via
 `image-cve-scan.yml`'s `image-cve-scan-grype` job (weekly cron +
 path-filtered push to `main` + dispatch) uploads SARIF (CRITICAL + HIGH) to the Security tab under
 category `grype-image-cve`, using Grype as a second-opinion scanner
-alongside Trivy. The job itself fails (and emits a notify issue) only
-when one or more CRITICAL findings are reported. Advisory only — not
+alongside Trivy. The job fails (and emits a notify issue) on a CRITICAL
+finding, and — like Trivy — on any infrastructure failure ahead of the
+count step; the two notify jobs below distinguish the cases. Advisory only — not
 a required status check; prevention path is a nixpkgs bump via
 `update-flake-lock`.
 
