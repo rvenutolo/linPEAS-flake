@@ -1,6 +1,6 @@
 # Settings Posture — `rvenutolo/linPEAS-flake`
 
-This document is the **source of truth** for every GitHub-side settings knob this repo depends on. Most rows are verifiable by a single `gh api` query; the tag-protection ruleset row is verified by a script, and the manual-UI rows (fork-PR approval gate, merge-method flags, maintainer 2FA) either expose no REST endpoint or gate the field behind `contents: write`, which the read-only drift-check App cannot hold — each is called out where it appears. If a value drifts, treat it as a security incident.
+This document is the **source of truth** for every GitHub-side settings knob this repo depends on. Most rows are verifiable by a single `gh api` query; the tag-protection ruleset row is verified by a script, and the manual-UI rows (fork-PR approval gate, merge-method flags, maintainer 2FA) either expose no REST endpoint, gate the field behind `contents: write` (which the read-only drift-check App cannot hold), or sit outside the token's scope entirely (maintainer 2FA) — each is called out where it appears. If a value drifts, treat it as a security incident.
 
 ## Security & analysis
 
@@ -91,7 +91,7 @@ subject — `pr-title-lint` enforces it as Conventional Commits.
 
 Every row above whose Probe column is a `gh api` invocation is enforced by `scripts/check-settings-posture.sh`, run from `.github/workflows/settings-posture-drift-check.yml` on a daily cron schedule (plus `workflow_dispatch` for manual probes). On mismatch the workflow opens a deduped `settings-drift` issue, which auto-closes when the next run sees the posture reconciled. The tag-protection ruleset row is the exception: it is enforced by `scripts/check-tag-protection.sh` via the `tag-protection-drift-check` required CI job, not by `scripts/check-settings-posture.sh`, which probes only the repo, Actions-permissions, workflow-permissions, and `github-pages` environment endpoints.
 
-Manual-UI rows (fork-PR approval gate, maintainer 2FA, merge-method flags) are not covered — GitHub either exposes no REST endpoint or gates the field behind `contents: write` (push access), which the read-only `settings-drift-checker` App cannot hold. Those rows are review-time + defence-in-depth checks (see the merge-method section above).
+Manual-UI rows (fork-PR approval gate, maintainer 2FA, merge-method flags) are not covered — GitHub either exposes no REST endpoint, gates the field behind `contents: write` (push access) which the read-only `settings-drift-checker` App cannot hold, or keeps the field outside the token's visibility entirely (maintainer 2FA). Those rows are review-time + defence-in-depth checks (see the merge-method section above).
 
 The endpoints this check probes require Administration:Read scope, which `secrets.GITHUB_TOKEN` cannot have. Auth is done via a dedicated read-only `settings-drift-checker` GitHub App; setup is documented at [`docs/runbooks/settings-drift-app.md`](../runbooks/settings-drift-app.md).
 

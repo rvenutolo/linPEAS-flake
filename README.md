@@ -78,7 +78,7 @@ Both registries (`docker.io/rvenutolo/linpeas` and
 `ghcr.io/rvenutolo/linpeas`) serve the **same** image bytes — every
 release pushes to both with identical content digests and matching
 SLSA attestations. See [`docs/install/docker.md`](docs/install/docker.md)
-for the full use-case matrix.
+for per-scenario guidance and provenance-verification steps.
 
 ### As a flake input
 
@@ -122,15 +122,15 @@ trigger semantics, and credential split live in
 
 <!-- Chronological by cron — daily, then weekly; event-driven rows last. -->
 
-| Workflow                    | When                               | Purpose                                                                                                                              |
-| --------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `update-linpeas.yml`        | daily + dispatch                   | Bumps `linpeas-pin.json` to the latest upstream tag. Opens PR; auto-merges on green.                                                 |
-| `stale-pin-check.yml`       | daily                              | Files a deduped issue if `update-linpeas` is stalled.                                                                                |
-| `pages.yml`                 | push, PR, release, daily, dispatch | Rebuilds the MkDocs site; deploys via OIDC on non-PR events. Not in the required-check set.                                          |
-| `update-flake-lock.yml`     | weekly Fri                         | Bumps every flake input via `nix flake update`; opens auto-merging PR.                                                               |
-| `verify-latest-release.yml` | weekly Fri                         | Re-verifies the latest release's attestations and re-fetches upstream `linpeas.sh` to confirm the pinned SRI hash.                   |
-| Renovate                    | weekly Fri batch                   | Bumps action SHAs, the Nix installer pin, the octoscan digest, the SchemaStore pin, and tracked flake inputs after a 7-day cooldown. |
-| `release-on-bump.yml`       | push to `main` changing the pin    | Tags the release, builds + pushes per-arch OCI images (ghcr.io + docker.io), attests SLSA provenance + SBOMs.                        |
+| Workflow                    | When                               | Purpose                                                                                                                                                           |
+| --------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `update-linpeas.yml`        | daily + dispatch                   | Bumps `linpeas-pin.json` to the latest upstream tag. Opens PR; auto-merges on green.                                                                              |
+| `stale-pin-check.yml`       | daily                              | Files a deduped issue on a stalled bump, a malformed pin, or an upstream API/tag failure (four distinct reason tokens).                                           |
+| `pages.yml`                 | push, PR, release, daily, dispatch | Rebuilds the MkDocs site; deploys via OIDC on non-PR events. Not in the required-check set.                                                                       |
+| `update-flake-lock.yml`     | weekly Fri                         | Bumps every flake input via `nix flake update`; opens auto-merging PR.                                                                                            |
+| `verify-latest-release.yml` | weekly Fri                         | Re-verifies the latest release's attestations and re-fetches upstream `linpeas.sh` to confirm the pinned SRI hash.                                                |
+| Renovate                    | weekly Fri batch                   | Bumps action SHAs, the Nix installer pin, the octoscan digest, the SchemaStore pin, and tracked flake inputs after a 7-day cooldown.                              |
+| `release-on-bump.yml`       | pin push to `main` + dispatch      | Tags the release, builds + pushes per-arch OCI images (ghcr.io + docker.io), attests SLSA provenance + SBOMs. Manual dispatch covers republish/backfill recovery. |
 
 Bump-workflow commits are authored by the `linpeas-flake-bumper` GitHub
 App and web-flow-signed by GitHub, satisfying `required_signatures` on
@@ -178,7 +178,9 @@ required-check table; alphabetical):
 - `actions.permissions.allowed_actions` = `selected` with a vendor
     allowlist
     ([`docs/security/allowed-actions.md`](docs/security/allowed-actions.md)).
-- `image-cve-scan-trivy` and `image-cve-scan-grype` (weekly cron, `image-cve-scan.yml`; Trivy + Grype → code-scanning SARIF,
+- `image-cve-scan-trivy` and `image-cve-scan-grype` (weekly cron plus a
+    path-filtered push on image-affecting files, `image-cve-scan.yml`;
+    Trivy + Grype → code-scanning SARIF,
     advisory only; prevention path is `update-flake-lock`).
 - `release-tag-protection` ruleset blocks delete / non-FF / update on
     release tags. The ruleset itself is not a check; its drift is asserted
@@ -254,6 +256,8 @@ All tooling below — `shfmt`, `shellcheck`, `just`, `pre-commit`,
 flake's `devShells.default` (see `nix/devshell.nix` for the full set).
 You do **not** install any of it manually.
 
+Prerequisite: Nix with flakes enabled (`nix-command flakes`).
+
 Enter the shell one of two ways:
 
 - `nix develop` — explicit entry.
@@ -261,9 +265,8 @@ Enter the shell one of two ways:
     `use flake`).
 
 Either path runs the `shellHook`, which installs the `pre-commit` git hooks
-automatically — the `pre-commit install` line below is shown only for
-reference / non-flake setups. Prerequisite: Nix
-with flakes enabled (`nix-command flakes`).
+automatically; the `pre-commit install` line below is shown only for
+reference / non-flake setups.
 
 ```sh
 # Entry points.
@@ -299,5 +302,6 @@ just verify          # Run the batched lint groups, harnesses, and doc-freshness
 
 This wrapper is MIT-licensed (see [`LICENSE`](LICENSE)). The wrapped
 `linpeas.sh` is MIT-licensed by [peass-ng/PEASS-ng](https://github.com/peass-ng/PEASS-ng/blob/master/LICENSE);
-this repo does not redistribute it (Nix fetches it at build time from upstream's
-release URL).
+the source tree does not vendor it (Nix fetches it at build time from
+upstream's release URL); the published OCI images do contain it, under the
+same MIT terms.

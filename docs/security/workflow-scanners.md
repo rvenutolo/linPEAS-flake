@@ -18,7 +18,7 @@ closes:
 
 | Layer                  | When it fires                                                                      | Tools                                                                                                                                                | Closes the gap of                                                 |
 | ---------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Commit-time prevention | every `git commit` (pre-commit)                                                    | zizmor, octoscan + the workflow-hardening hook family                                                                                                | bad edits never enter history                                     |
+| Commit-time prevention | every `git commit` touching a scanned path (pre-commit)                            | zizmor, octoscan + the workflow-hardening hook family                                                                                                | bad edits never enter history                                     |
 | PR / push detection    | every PR to `main` (codeql full; octoscan paths-filtered) and every push to `main` | codeql, octoscan, and the required lint-group jobs (lint-workflow-security / lint-script-hygiene / lint-doc-invariants)                              | changed workflows checked server-side, in the diff                |
 | Weekly full sweep      | Friday cron cluster                                                                | codeql, octoscan, zizmor-drift-check                                                                                                                 | `--no-verify` bypasses, web-UI / bot edits, upstream rule changes |
 | Posture watchdog       | daily + weekly cron                                                                | scorecard-drift-check, ratchet-pin-audit, settings-posture-drift-check, stale-pin-check, allowed-actions-api-drift-check, flake-lock-staleness-check | silent regressions no single PR introduces                        |
@@ -41,6 +41,10 @@ next section. The weekly Friday cron cluster runs them in a fixed order (see
 1. octoscan
 1. scorecard-drift-check
 1. zizmor-drift-check
+
+(scorecard-drift-check shares the same Friday cluster but is classed as a
+posture watchdog in the layer table above, since it grades posture rather
+than re-scanning the tree.)
 
 ### codeql
 
@@ -69,8 +73,8 @@ next section. The weekly Friday cron cluster runs them in a fixed order (see
     sandbox, where docker is unavailable); PR to `main` filtered to
     `.github/workflows/**` and the octoscan scan script; push to `main`; weekly
     Friday cron (full tree); manual dispatch.
-- **Status: advisory-by-design.** It is the cheapest scanner and runs
-    zero-noise, but it fails on *any* finding (no severity threshold) against an
+- **Status:** advisory by design. It is the cheapest scanner and is
+    noise-free today, but it fails on *any* finding (no severity threshold) against an
     untuned rule set, so as a required check a single false positive would block
     merge. Promotion would also force removing its PR paths filter. It stays
     advisory and path-filtered.
@@ -101,8 +105,9 @@ next section. The weekly Friday cron cluster runs them in a fixed order (see
 - **Unique signal:** GitHub-Actions-specific static analysis
     (template-injection, excessive permissions, dangerous triggers) tuned to
     Actions semantics.
-- **Triggers:** runs as a **pre-commit hook on every commit**
-    (`--min-severity=low`), plus a weekly Friday cron and manual dispatch. It
+- **Triggers:** runs as a **pre-commit hook on every commit that touches
+    `.github/workflows/**`** (`--min-severity=low`, scanning the changed
+    workflow files), plus a weekly Friday cron and manual dispatch. It
     does **not** scan on PRs or pushes — commit-time prevention is its primary
     mode.
 - **Status:** commit-time prevention + weekly watchdog. The drift-check covers

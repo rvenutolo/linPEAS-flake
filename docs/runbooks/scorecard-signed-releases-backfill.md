@@ -137,8 +137,8 @@ mismatch during burn-in.
 Restoring images to an image-less release (making all six present — the
 four per-arch tags **and** both `:<tag>` indexes) is optional and uses
 the same rebuild-and-push steps for every arch. Pushing only the four
-per-arch tags leaves the release at four-of-six, which the preflight
-classifies as `partial` and hard-fails.
+per-arch tags leaves the release at four-of-six, a partial set the
+preflight refuses to guess at and hard-fails on.
 
 ## Timestamps
 
