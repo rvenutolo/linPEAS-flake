@@ -32,6 +32,14 @@
 # than the silence this script exists to remove.
 #
 # See docs/architecture/flake-input-bumps.md.
+#
+# Exit codes:
+#   0  classified: `failure`, `success`, or `skipped` on stdout. A
+#      `failure` verdict is an answer, not this script failing, so it
+#      exits 0 like the other two.
+#   2  it could not classify: the argument count is not five, a job
+#      result is not success|failure|cancelled|skipped, or an output is
+#      not true|false|empty
 
 set -Eeuo pipefail
 IFS=$'\n\t'

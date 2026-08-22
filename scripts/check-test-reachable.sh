@@ -19,8 +19,13 @@
 # repo-root-relative path, which is exactly how each is spelled in the
 # HARNESSES array, so the two key spaces cannot collide.
 #
-# Overridable dirs/paths let the paired test harness point at fixtures. Exits
-# 0 if every harness is reachable, 1 otherwise.
+# Overridable dirs/paths let the paired test harness point at fixtures.
+# Exits 0 if every harness is reachable, 1 otherwise. Exits 2 when the
+# check cannot run: a runner manifest, the lint-group manifest, or a
+# workflow file cannot be scanned for the harnesses it wires; the
+# tracked harnesses outside `tests/` cannot be enumerated; a temp file
+# cannot be created; or a scan set comes back empty, which is a
+# could-not-run rather than a tree with nothing to check.
 set -Eeuo pipefail
 IFS=$'\n\t'
 _lib_dir="${BASH_SOURCE[0]%/*}"

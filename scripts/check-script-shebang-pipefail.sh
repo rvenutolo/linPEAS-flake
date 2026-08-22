@@ -25,7 +25,11 @@
 # half of what this lint exists to catch.
 #
 # Honors SCRIPTS_DIR_OVERRIDE + SCRIPT_FILE_FILTER for fixtures.
-# Exits 0 on full coverage, 1 on any drift.
+# Exits 0 on full coverage, 1 on any drift. Exits 2 when the check
+# cannot run: the scan root holds no shell script at any depth, or
+# SCRIPT_FILE_FILTER selects none of the scripts it found. An empty
+# scan set is a could-not-run rather than a clean tree;
+# LINT_ALLOW_EMPTY_SCAN=1 accepts one deliberately.
 
 set -Eeuo pipefail
 IFS=$'\n\t'

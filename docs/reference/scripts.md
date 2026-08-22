@@ -575,6 +575,58 @@ enumeration) still exits non-zero the same as the default pass.
 
 - `--advisory` — suppress findings, not defects: warn on fuzzy causal-history phrases and exit 0 for those, but still exit 1 on an unterminated fence/generated block/Nix block comment and 2 on a failed source enumeration, a failed candidate scan, a class regex that fails its canary, a structural pass that read fewer sources than were set aside, an unparsable shell source, a shell scan that extracted no comments, a Nix scan that extracted no comments, or a YAML scan that extracted no comments
 
+### scripts/check-exit-contract-documented.sh
+
+Lint: every script directly under `scripts/` that can reach
+exit 2 says so in its header. Exit 2 means the check could not run — a
+required tool absent, an input missing or malformed — and exit 1 means
+it ran and found a violation. A header promising only 0 and 1 tells a
+reader, and anyone wiring the script into a new caller, that a
+could-not-run cannot happen; a caller written against that promise
+treats one as a finding and reports a violation nobody observed.
+
+A script can reach exit 2 two ways, and both count:
+
+- a literal `exit 2` / `return 2` on a line that is not a comment
+- a call to a library helper that exits 2 in the caller's shell:
+    require_tool, enumerate_into, glob_into, filter_into,
+    require_json_payload, payload_source_into, read_json_payload_into,
+    make_temp
+    Detection is textual and direct-call-only: a helper reached through
+    another helper is already covered by that helper's own call site, and
+    chasing the source graph would report a script for code it never runs.
+
+The header is every line above the first line that is neither blank nor
+a comment. It is unwrapped before matching, because these contracts
+routinely wrap mid-sentence and a line-oriented match cannot see a
+clause split across two lines.
+
+Four contract shapes count as documenting exit 2, which is every shape
+the tree uses:
+Exits 2 when … (a dedicated sentence)
+Exits 0 on …, 1 on …, 2 on … (a comma-separated list)
+Exit: 0 …, 3 …, 2 usage error. (the same list, any order)
+Exit codes: … a `2` item line … (an enumerated block)
+The list forms match only within one sentence, so a `2` in unrelated
+prose later in the header does not excuse a missing contract. The item
+form requires the 2 to stand alone as a token: `2FA` and `v2` are prose,
+not exit codes, and one of them appears in a header this rule covers.
+
+Scope is `scripts/*.sh` only. Libraries under `scripts/lib/` exit in
+their caller's shell and have no standalone contract of their own —
+documenting that exit is the obligation of the callers this rule reads.
+
+No exemption marker. Every script can describe its own exit codes, so a
+hit is always fixed by writing the sentence rather than by excusing the
+script.
+
+Honors SCRIPTS_DIR_OVERRIDE (default: scripts) and
+LINT_ALLOW_EMPTY_SCAN=1 for fixtures.
+
+Exits 0 when every script that can reach exit 2 documents it, 1 on any
+script that cannot. Exits 2 when the check cannot run: the scan set
+matches no script, which is a could-not-run rather than a clean tree.
+
 ### scripts/check-flake-lock-provenance.sh
 
 Lint: a `flake.lock` bump that `flake.nix` does not
@@ -1218,8 +1270,13 @@ pairing guard stays satisfied. Reachability is via one of four runners:
     repo-root-relative path, which is exactly how each is spelled in the
     HARNESSES array, so the two key spaces cannot collide.
 
-Overridable dirs/paths let the paired test harness point at fixtures. Exits
-0 if every harness is reachable, 1 otherwise.
+Overridable dirs/paths let the paired test harness point at fixtures.
+Exits 0 if every harness is reachable, 1 otherwise. Exits 2 when the
+check cannot run: a runner manifest, the lint-group manifest, or a
+workflow file cannot be scanned for the harnesses it wires; the
+tracked harnesses outside `tests/` cannot be enumerated; a temp file
+cannot be created; or a scan set comes back empty, which is a
+could-not-run rather than a tree with nothing to check.
 
 ### scripts/check-upload-artifact-strict.sh
 
@@ -1560,15 +1617,20 @@ scripts/octoscan-scan.sh --sarif <path> # SARIF output to <path>
 
 Exit codes:
 0 — scan clean
-1 — findings present, OR the scanner ran and errored (image pull
-failure, scanner internal error). The caller must distinguish
-via the `has-finding` line printed to stdout
-(`has-finding=true|false`) — same contract the CI workflow
-already exposes via `$GITHUB_OUTPUT`.
-2 — the scan could not start: a tool it needs is absent, so no
-workflow file was read. Still fails the hook and the job; only
-the diagnosis differs, and it now matches the `infra-failure`
-classification this script already prints for the case.
+1 — findings present, the scanner ran and errored (image pull
+failure, scanner internal error), or the command line is
+unusable. A finding is told from a scanner error by the
+`has-finding` line printed to stdout (`has-finding=true|false`)
+— the same contract the CI workflow exposes via
+`$GITHUB_OUTPUT` — and by the `classification=` field beside it.
+2 — the scan could not proceed: `docker` is absent, `--sarif` was
+given while `jq` is absent, or a per-file SARIF temp file could
+not be created. The two tool guards report before any workflow
+file is read and print the `infra-failure` classification
+themselves; the temp-file failure reports itself, and can land
+after part of the directory has already been scanned. Either
+way the hook and the job still fail; only the diagnosis
+differs.
 
 Per-file iteration: octoscan v0.1.7 directory-target mode silently
 returns exit 0 with empty SARIF even when a single-file invocation

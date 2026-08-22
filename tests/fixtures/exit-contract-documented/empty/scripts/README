@@ -1,0 +1,2 @@
+This directory is the scan root for the empty-scan-set scenario.
+It holds no *.sh on purpose, and needs a tracked file so git keeps it.

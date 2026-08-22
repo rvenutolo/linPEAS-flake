@@ -7,6 +7,12 @@
 # offending system + the real nix error, so a platform drop in a nixpkgs
 # bump is diagnosable at a glance.
 # @option --flake <dir> flake to check (default: repo root)
+#
+# Exits 0 when every declared system evaluates, 1 when one or more fail
+# to evaluate, when the flake declares no systems at all, or when
+# `--flake` is given with no directory. Exits 2 when the check cannot
+# run: an unrecognized argument, `nix` or `jq` absent from PATH, or a
+# temp file that cannot be created.
 set -Eeuo pipefail
 IFS=$'\n\t'
 # The library directory is resolved by parameter expansion rather than by
