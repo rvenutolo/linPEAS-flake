@@ -125,11 +125,12 @@ section covers `codeql.yml`; the other four are inventoried there.
     SAST tool, so skipping path-narrow PRs would drag that fraction down.
     The analyze step passes `fail-on: critical`
     to `codeql-action/analyze`: a CRITICAL-severity finding fails the
-    workflow, and a notify job opens a deduped issue under the
-    `codeql-critical` label. An analyze failure that produced no
-    finding (scan crash, runner breakage) files under `codeql-infra`
-    instead, so transient infrastructure trouble is not paged as a
-    security finding. Findings **below** CRITICAL are advisory: they
+    workflow, and on push, cron, and dispatch runs a notify job opens a
+    deduped issue under the `codeql-critical` label (a PR run pages via
+    the failed check on the PR itself, so it files no issue). An
+    analyze failure that produced no finding (scan crash, runner
+    breakage) files under `codeql-infra` instead, so transient
+    infrastructure trouble is not paged as a security finding. Findings **below** CRITICAL are advisory: they
     upload to the Security tab without failing the workflow. A green
     CodeQL run therefore proves the scan completed with zero CRITICAL
     findings — **not** that zero findings exist. Closing the loop on

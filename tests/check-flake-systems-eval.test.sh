@@ -3,6 +3,7 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+readonly REPO_ROOT
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 SCRIPT="${REPO_ROOT}/scripts/check-flake-systems-eval.sh"

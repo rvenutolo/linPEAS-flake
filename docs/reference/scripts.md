@@ -727,6 +727,14 @@ Lint: every job in .github/workflows/\*.yml begins
 with `step-security/harden-runner@<sha>` as its first step, so the
 eBPF monitor installs before any I/O.
 
+### scripts/check-harness-preamble.sh
+
+Lint: every test harness matching `tests/*.test.sh`
+opens with the canonical preamble — `#!/usr/bin/env bash` as the
+exact first line, `set -Eeuo pipefail`, the tab/newline IFS line,
+and a `readonly REPO_ROOT` derived from
+`git rev-parse --show-toplevel`.
+
 ### scripts/check-job-timeout-minutes.sh
 
 Lint: every job under .github/workflows/\*.yml
