@@ -101,4 +101,7 @@ To probe manually from a developer shell (requires `gh auth login` with admin-re
 nix develop --command ./scripts/check-settings-posture.sh
 ```
 
-Exits 0 on full match, 1 on any drift, with every mismatched setting logged to stderr.
+Exits 0 on full match, 1 on any drift, and 2 when the comparison could
+not be made at all — a probed endpoint returned a payload that is
+missing or the wrong shape. Every mismatched setting is logged to
+stderr.
