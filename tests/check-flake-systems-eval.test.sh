@@ -14,6 +14,34 @@ fail() {
   failures=$((failures + 1))
 }
 
+# @description Run the check with a given command line, assert its exit
+# code and a substring of its stderr, and record the outcome for the
+# cross-scenario discrimination gate.
+# @arg $1 scenario name
+# @arg $2 expected exit code
+# @arg $3 expected stderr substring
+# @arg $@ the arguments handed to the check
+function run_arg_scenario() {
+  local -r name="$1" expected_exit="$2" substring="$3"
+  shift 3
+  local arg_out arg_err arg_outcome arg_rc=0
+  arg_out="$(mktemp)"
+  arg_err="$(mktemp)"
+  arg_outcome="$(mktemp)"
+  "${SCRIPT}" "$@" >"${arg_out}" 2>"${arg_err}" || arg_rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${arg_rc}" >"${arg_outcome}"
+  if [[ ${arg_rc} -eq ${expected_exit} ]] &&
+    grep --fixed-strings --quiet -- "${substring}" "${arg_err}"; then
+    pass "${name}"
+  else
+    fail "${name} — expected exit ${expected_exit} + ${substring}; rc=${arg_rc}"
+    cat -- "${arg_err}" >&2
+  fi
+  harness_assert_record "${name}" "${substring}" \
+    "${arg_outcome}" "${arg_out}" "${arg_err}"
+  rm --force -- "${arg_out}" "${arg_err}" "${arg_outcome}"
+}
+
 # Assertion 1: guard passes against the real repo flake.
 if "${SCRIPT}" >/dev/null 2>&1; then
   pass 'guard passes on the healthy repo flake'
@@ -85,6 +113,22 @@ fi
 harness_assert_record 'guard fails on a per-package value throw' \
   'package broken is not evaluable' "${outcome2}" "${out2}" "${err2}"
 rm -rf -- "${fix2}" "${err2}" "${out2}" "${outcome2}"
+
+# Assertions 4-6: a run that evaluated nothing is a could-not-run, and
+# every way of arriving there reports it the same. Exit 1 is reserved for
+# a flake whose declared systems were evaluated and found wanting; a
+# caller told 1 for an incomplete command line goes looking for a
+# platform this repo dropped.
+run_arg_scenario 'an unrecognized argument is a could-not-run' 2 \
+  'unknown arg: --bogus' --bogus
+run_arg_scenario 'a --flake with no directory is a could-not-run' 2 \
+  '--flake needs a directory' --flake
+# A directory holding no flake is the same class of fault one step later:
+# nothing was evaluated, so nothing can be reported about the systems.
+nonflake="$(mktemp -d)"
+run_arg_scenario 'a flake whose systems cannot be read is a could-not-run' 2 \
+  'cannot read' --flake "${nonflake}"
+rm -rf -- "${nonflake}"
 
 harness_assert_verify || failures=$((failures + 1))
 
