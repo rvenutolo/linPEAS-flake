@@ -92,7 +92,10 @@ DIGEST=$(docker buildx imagetools inspect ghcr.io/rvenutolo/linpeas:{{ dashboard
 gh attestation verify "oci://ghcr.io/rvenutolo/linpeas@${DIGEST}" --repo rvenutolo/linPEAS-flake
 ```
 
-Proves image was built by `release-on-bump.yml` workflow in this repo. Does **not** prove content equivalence with upstream `linpeas.sh` — see [Security → Verification](../security/verification.md).
+A successful verification proves the image was built by the
+`release-on-bump.yml` workflow in this repo. It does **not** prove content
+equivalence with upstream `linpeas.sh` — see
+[Security → Verification](../security/verification.md).
 
 ## Manifest digest-pinning
 

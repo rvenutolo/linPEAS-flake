@@ -59,7 +59,10 @@ generated from the tree.
 { message = "^docs: update changelog", skip = true },
 ```
 
-The changelog commit itself carries the subject `docs: update changelog for <VERSION>`, and the skip rule is anchored to the `^docs: update changelog` prefix so both that commit and a manual regeneration are suppressed. Without this skip, each run would include the previous
+The changelog commit itself carries the subject
+`docs: update changelog for <VERSION>`, and the skip rule is anchored to
+the `^docs: update changelog` prefix so both that commit and a manual
+regeneration are suppressed. Without this skip, each run would include the previous
 run's commit in the next release's entry — a self-reference loop that
 inflates the changelog with administrative noise.
 

@@ -111,7 +111,8 @@ rather than on the bump's own checks. Walk the list when one does.
 
 - **CRITICAL CVEs in image base layers.** `image-cve-scan-trivy` and
     `image-cve-scan-grype` (`image-cve-scan.yml`, weekly cron plus a push
-    trigger on the paths that change the image) are the canonical surface. The new nixpkgs may carry an unfixed
+    trigger on the paths that change the image) are the canonical
+    surface. The new nixpkgs may carry an unfixed
     `CRITICAL` CVE in `coreutils`, `bashInteractive`, `gnused`, etc.
     The CRITICAL-fail gate flags this loudly; the remediation is
     "wait for nixpkgs to patch + bump again", not a code change here.
@@ -460,7 +461,9 @@ branch. The `identify` job gates on ALL of:
 
 - PR author is the Renovate App, decided by
     `scripts/classify-renovate-pr-author.sh`. GitHub reports the same App
-    under three spellings — `app/renovate` from `gh pr view --json author`, `renovate[bot]` from the REST and GraphQL APIs, and a bare
+    under three spellings — `app/renovate` from
+    `gh pr view --json author`, `renovate[bot]` from the REST and
+    GraphQL APIs, and a bare
     `renovate` from a self-hosted legacy install — so the classifier
     normalizes one optional `app/` prefix and one optional `[bot]`
     suffix and then matches `renovate` exactly. A login that merely
