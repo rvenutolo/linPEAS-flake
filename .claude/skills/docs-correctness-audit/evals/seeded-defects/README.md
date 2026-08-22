@@ -42,7 +42,9 @@ below.
       <harness>/results/run-1.md   # run-2.md, run-3.md, ...
     ```
 
-1. Score:
+1. Score — back in the original checkout's harness directory, not the
+    planted worktree (the worktree has the same tracked `score.sh` but no
+    untracked `results/`, so running it there exits 1):
 
     ```sh
     ./score.sh results/run-*.md
