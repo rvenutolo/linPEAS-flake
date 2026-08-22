@@ -45,14 +45,18 @@ Refuters: verify eval behavior empirically (`nix eval`, `nix build`, `nix path-i
 
 ## 2. Shell script correctness — *deep*
 
-Per-script logic trace across every `scripts/*.sh` (~97; size the slices from
-`ls scripts/*.sh | wc -l` rather than this figure, which rots).
+Per-script logic trace across every `scripts/*.sh` **and**
+`scripts/lib/*.sh` (~106; size the slices from
+`ls scripts/*.sh scripts/lib/*.sh | wc -l` rather than this figure, which
+rots). The `scripts/lib/` libraries are load-bearing — the ephemeral-refs
+regex classes, payload helpers, and enumeration guards all live there — so
+a run that skips them silently reviews none of that.
 
 Slices:
 
 - `check-*` validators
 - `refresh-*` generators
-- helpers / runners / everything else
+- `scripts/lib/*.sh` libraries + helpers / runners / everything else
 
 Hunt: edge cases, silent failures, quoting/`set -o pipefail` gaps, `done < <(...)` process-substitution exit-swallowing, `yq | tag` conflating absent vs present-null, divergence from the behavior the header comment claims.
 
@@ -134,7 +138,7 @@ Refuters: hunt seam failures — races, partial-failure states, unverified hando
 
 ______________________________________________________________________
 
-## Cross-dimension watch-outs (from the seed run)
+## Cross-dimension watch-outs
 
 - Keep refuter **verdict scope consistent** with the finder's question. A dim-6-style "is this invariant enforced?" skeptic will wrongly kill a dim-2-style "is this script buggy?" finding — they answer different questions. Scope each dimension's refuter prompt to that dimension's claim type.
 - Seeding later dimensions with earlier **confirmed** findings (5 ← 2/6) is the single highest-yield move.
