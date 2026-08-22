@@ -1019,7 +1019,8 @@ parsed as shell.
 
 Per-job GITHUB_TOKEN write-scope allowlist lint for
 GitHub Actions. Fails when a job grants a write scope absent from
-.github/permission-scopes.yml, or when an allowlist entry is stale.
+.github/permission-scopes.yml, when an allowlist entry is stale, or
+when an allowlist scope list is not sorted.
 
 ### scripts/check-pin-diff-isolated.sh
 
