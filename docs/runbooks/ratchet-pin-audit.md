@@ -75,8 +75,10 @@ Steps:
 
 ### `upstream-api-failure`
 
-The GitHub API call inside ratchet (or the per-ref re-derivation)
-failed or rate-limited. The `github.token` is capped at 1,000 requests
+The per-ref canonical-SHA re-derivation
+(`gh api …/git/refs/tags/{tag}`) failed or rate-limited, or ratchet's
+own output matched the upstream-failure heuristic. The `github.token`
+is capped at 1,000 requests
 per hour per repository; transient 5xx is also possible.
 
 1. Re-run the workflow once via `workflow_dispatch`.

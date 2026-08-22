@@ -282,9 +282,10 @@ jobs:
               change, treat this as a potential supply-chain event and
               escalate — do **not** auto-update. See the runbook for the
               exact remediation command.
-            - `upstream-api-failure` — the GitHub API call inside
-              `ratchet check` (or the per-ref re-derivation) failed or
-              rate-limited. The `github.token` is capped at 1,000
+            - `upstream-api-failure` — the per-ref canonical-SHA
+              re-derivation (`gh api`) failed or rate-limited, or
+              ratchet's own output matched the upstream-failure
+              heuristic. The `github.token` is capped at 1,000
               requests/hr per repository; transient 5xx is also possible.
               Re-run the workflow once
               before investigating ratchet itself.
