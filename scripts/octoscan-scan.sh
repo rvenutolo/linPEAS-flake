@@ -13,15 +13,20 @@
 #
 # Exit codes:
 #   0 — scan clean
-#   1 — findings present, OR the scanner ran and errored (image pull
-#       failure, scanner internal error). The caller must distinguish
-#       via the `has-finding` line printed to stdout
-#       (`has-finding=true|false`) — same contract the CI workflow
-#       already exposes via `$GITHUB_OUTPUT`.
-#   2 — the scan could not start: a tool it needs is absent, so no
-#       workflow file was read. Still fails the hook and the job; only
-#       the diagnosis differs, and it now matches the `infra-failure`
-#       classification this script already prints for the case.
+#   1 — findings present, the scanner ran and errored (image pull
+#       failure, scanner internal error), or the command line is
+#       unusable. A finding is told from a scanner error by the
+#       `has-finding` line printed to stdout (`has-finding=true|false`)
+#       — the same contract the CI workflow exposes via
+#       `$GITHUB_OUTPUT` — and by the `classification=` field beside it.
+#   2 — the scan could not proceed: `docker` is absent, `--sarif` was
+#       given while `jq` is absent, or a per-file SARIF temp file could
+#       not be created. The two tool guards report before any workflow
+#       file is read and print the `infra-failure` classification
+#       themselves; the temp-file failure reports itself, and can land
+#       after part of the directory has already been scanned. Either
+#       way the hook and the job still fail; only the diagnosis
+#       differs.
 #
 # Per-file iteration: octoscan v0.1.7 directory-target mode silently
 # returns exit 0 with empty SARIF even when a single-file invocation

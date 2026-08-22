@@ -22,7 +22,11 @@
 # excluded from the bidirectional rule.
 #
 # Honors SCRIPTS_DIR_OVERRIDE + TESTS_DIR_OVERRIDE for fixtures.
-# Exits 0 on full coverage, 1 on any drift.
+# Exits 0 on full coverage, 1 on any drift. Exits 2 when the check
+# cannot run: either scan set — the check scripts, or their test
+# harnesses — matches no file. An empty scan set is a could-not-run
+# rather than a clean tree; LINT_ALLOW_EMPTY_SCAN=1 accepts one
+# deliberately.
 
 set -Eeuo pipefail
 IFS=$'\n\t'

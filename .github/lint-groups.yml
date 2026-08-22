@@ -52,6 +52,7 @@ lint-script-hygiene:
   - freshness-hook-watches-modules
   - no-opaque-procsub
   - guard-exit-code
+  - exit-contract-documented
   - path-hygiene
   - awk-operand-explicit
   - enumerate-helper-required

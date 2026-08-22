@@ -21,6 +21,13 @@
 # finishes green. A partial mix (some but not all six present) is a
 # half-published anomaly no automatic path can safely repair, so it is
 # a hard error. See docs/runbooks/scorecard-signed-releases-backfill.md.
+#
+# Exit codes:
+#   0  classified: `full` or `none` on stdout
+#   1  a partial mix — some but not all six objects exist, the
+#      half-published state this refuses to guess at
+#   2  it could not classify: the argument count is not six, or an
+#      argument is neither `present` nor `absent`
 
 set -Eeuo pipefail
 IFS=$'\n\t'

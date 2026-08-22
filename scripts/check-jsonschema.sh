@@ -21,6 +21,14 @@
 # nixpkgs revision in flake.lock. The SchemaStore schema is pinned by
 # commit SHA; Renovate's customManager (`schemastore-pin` in
 # renovate.json) bumps it on the same cadence as other tracked SHAs.
+#
+# Exit codes:
+#   0  no file failed schema validation
+#   1  at least one file failed schema validation
+#   2  the check could not run: `check-jsonschema` is not on PATH, or a
+#      scan set — workflow YAML, composite-action YAML — matched no
+#      file, which would otherwise print a clean verdict having
+#      validated nothing
 
 set -Eeuo pipefail
 IFS=$'\n\t'

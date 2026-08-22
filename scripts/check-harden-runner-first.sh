@@ -11,7 +11,11 @@
 # see docs/security/trust-model.md.
 #
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures.
-# Exits 0 on full coverage, 1 on any drift.
+# Exits 0 on full coverage, 1 on any drift. Exits 2 when the check
+# cannot run: `yq` is absent from PATH, the workflow globs match no
+# file, or WORKFLOW_FILE_FILTER selects none of the files they matched.
+# An empty scan set is a could-not-run rather than a clean tree;
+# LINT_ALLOW_EMPTY_SCAN=1 accepts one deliberately.
 
 set -Eeuo pipefail
 IFS=$'\n\t'

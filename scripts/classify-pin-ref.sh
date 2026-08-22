@@ -16,6 +16,12 @@
 # digest pin plus Renovate and the PR-time digest-provenance gate
 # (scripts/check-pin-digest-provenance.sh). See
 # docs/architecture/pin-convention.md.
+#
+# Exit codes:
+#   0  classified: `current`, `drift`, or `skip-floating-major` on
+#      stdout. Drift is a verdict rather than a failure, so it exits 0
+#      like the other two and the caller decides what it means.
+#   2  it could not classify: the argument count is not five
 
 set -Eeuo pipefail
 IFS=$'\n\t'

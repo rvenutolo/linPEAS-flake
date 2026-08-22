@@ -181,6 +181,31 @@ Both rules also share one census of the marker itself, run after classification 
 
 Enforced by `scripts/check-guard-exit-code.sh`. Wired as the `lint-script-hygiene` CI job (member check `guard-exit-code`).
 
+## exit-contract-documented
+
+Every script directly under `scripts/` that can reach exit 2 says so in its header.
+
+[guard-exit-code](#guard-exit-code) settles which code a script *reports*; this rule settles whether a reader can find that out without reading the implementation. The header is the first thing consulted before running a probe by hand or wiring it into a new caller, and a header promising only 0 and 1 states that a could-not-run cannot happen. A caller written against that promise treats one as a finding and reports a violation nobody observed — the same collapse of 2 into 1 that guard-exit-code bans in code, arriving instead through the documentation.
+
+A script can reach exit 2 two ways, and both count: a literal `exit 2` or `return 2` on a line that is not a comment, or a direct call to a library helper that exits 2 in the caller's shell — `require_tool`, `enumerate_into`, `glob_into`, `filter_into`, `require_json_payload`, `payload_source_into`, `read_json_payload_into`, `make_temp`. Detection is textual and direct-call-only: a helper reached through another helper is already covered by that helper's own call site, and chasing the source graph would report a script for code it never runs.
+
+The header is every line above the first that is neither blank nor a comment, and it is unwrapped before matching. These contracts routinely wrap mid-sentence — one enumerates its exit-1 causes at length before reaching its exit-2 clause — and a line-oriented match cannot see a clause split across two lines.
+
+Four shapes count as documenting exit 2, which is every shape the tree uses:
+
+- a dedicated sentence — `Exits 2 when …`, or prose naming `exit 2`
+- a comma-separated list — `Exits 0 on full coverage, 1 on any drift, 2 on tooling error.`
+- the same list in any order — `Exit: 0 mapped, 3 no input maps to this title, 2 usage error.`
+- an enumerated block — an `Exit codes:` heading over a `2` item line
+
+The list forms match within one sentence only, so a `2` in unrelated prose later in the header excuses nothing. The item forms require the `2` to stand alone as a token rather than open a word: `2FA` and `v2` are prose, not exit codes, and one of them appears in a header this rule covers.
+
+Scope is `scripts/*.sh`. Libraries under `scripts/lib/` exit in their caller's shell and carry no standalone contract of their own — documenting that exit is the obligation of the callers this rule reads, which is why this scan does not recurse where guard-exit-code's does.
+
+There is no exemption marker. Every script can describe its own exit codes, so a hit is always fixed by writing the sentence rather than by excusing the script.
+
+Enforced by `scripts/check-exit-contract-documented.sh`. Wired as the `lint-script-hygiene` CI job (member check `exit-contract-documented`).
+
 ## path-hygiene
 
 No path git reports for the tree — tracked, or untracked and not ignored — may carry a byte in the 0x01-0x1F control range or DEL (0x7F).
