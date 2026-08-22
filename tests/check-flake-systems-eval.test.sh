@@ -130,6 +130,23 @@ run_arg_scenario 'a flake whose systems cannot be read is a could-not-run' 2 \
   'cannot read' --flake "${nonflake}"
 rm -rf -- "${nonflake}"
 
+# Assertion 7: the one verdict on this path that is a finding rather than
+# a could-not-run. The list was read and what it says is that nothing is
+# declared, so the status check above it must not fold this case into the
+# could-not-run beside it.
+empty_systems="$(mktemp -d)"
+cat >"${empty_systems}/flake.nix" <<'EOF'
+{
+  outputs = { self }: {
+    lib.systems = [ ];
+  };
+}
+EOF
+(cd "${empty_systems}" && git init -q && git add -A)
+run_arg_scenario 'a flake declaring no systems is a finding' 1 \
+  'no systems in' --flake "${empty_systems}"
+rm -rf -- "${empty_systems}"
+
 harness_assert_verify || failures=$((failures + 1))
 
 [[ ${failures} -eq 0 ]] || {

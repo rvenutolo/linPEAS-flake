@@ -9,10 +9,10 @@
 # @option --flake <dir> flake to check (default: repo root)
 #
 # Exits 0 when every declared system evaluates, 1 when one or more fail
-# to evaluate, when the flake declares no systems at all, or when
-# `--flake` is given with no directory. Exits 2 when the check cannot
-# run: an unrecognized argument, `nix` or `jq` absent from PATH, or a
-# temp file that cannot be created.
+# to evaluate or when the flake declares no systems at all. Exits 2 when
+# the check cannot run: an unrecognized argument, `--flake` given with no
+# directory, a flake whose `lib.systems` cannot be read, `nix` or `jq`
+# absent from PATH, or a temp file that cannot be created.
 set -Eeuo pipefail
 IFS=$'\n\t'
 # The library directory is resolved by parameter expansion rather than by
@@ -31,7 +31,16 @@ install_err_trap
 function main() {
   local flake='.'
   if [[ ${1:-} == '--flake' ]]; then
-    flake="${2:?--flake needs a dir}"
+    # Guarded explicitly rather than through a `${2:?}` expansion, whose
+    # status is bash's own 1. Both branches of this `if` describe one
+    # fault — a command line the check cannot use — and neither evaluates
+    # anything, so both are could-not-runs. Exit 1 here would tell a
+    # caller a declared system failed to evaluate.
+    if [[ -z ${2:-} ]]; then
+      log_err '--flake needs a directory'
+      exit 2
+    fi
+    flake="$2"
   elif [[ -n ${1:-} ]]; then
     log_err "unknown arg: ${1}"
     exit 2
@@ -39,8 +48,19 @@ function main() {
   require_tool nix
   require_tool jq
 
+  # The read's status separates two verdicts a bare `set -e` collapses:
+  # an eval that failed means the systems list was never read, which is a
+  # could-not-run, while an eval that succeeded and returned nothing is a
+  # flake that declares no systems, which is the finding. Left unchecked,
+  # a `--flake` pointing at a directory holding no flake ends the run
+  # under jq's status with the ERR trap's raw line as its only diagnostic.
+  # nix keeps its stderr here so that the could-not-run names the real
+  # reason the flake could not be read.
   local systems
-  systems="$(nix eval --json "${flake}#lib.systems" 2>/dev/null | jq -r '.[]')"
+  if ! systems="$(nix eval --json "${flake}#lib.systems" | jq -r '.[]')"; then
+    log_err "cannot read ${flake}#lib.systems"
+    exit 2
+  fi
   if [[ -z ${systems} ]]; then
     log_err "no systems in ${flake}#lib.systems"
     exit 1
