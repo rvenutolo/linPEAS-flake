@@ -80,6 +80,10 @@ show-enforcement-matrix:
 show-treefmt:
   ./scripts/refresh-treefmt-config.sh
 
+# Record the current commit as the point the docs audit was last run against
+docs-audit-done:
+  ./scripts/mark-docs-audit.sh
+
 # Build the OCI image
 image:
   nix build .#linpeas-image

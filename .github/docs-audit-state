@@ -1,0 +1,10 @@
+# .github/docs-audit-state
+#
+# The commit the semantic docs audit was last run against, once that
+# audit's fixes had landed. scripts/docs-audit-pressure.sh diffs CI
+# structure from here, so this value is what makes the monthly reminder
+# issue's drift count mean "commits nobody has audited yet".
+#
+# Written by scripts/mark-docs-audit.sh; run `just docs-audit-done` in the
+# final fix PR of an audit cycle. Do not hand-edit.
+LAST_AUDIT_SHA=78555f58c95b1dd6c73c2d2b82e46fd670014d27

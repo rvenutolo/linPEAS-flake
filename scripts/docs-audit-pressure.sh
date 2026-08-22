@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/docs-audit-pressure.sh
 #
-# @description Report docs-audit drift pressure over a rolling window:
+# @description Report docs-audit drift pressure since the last audit:
 # how many commits touched CI structure (.github/workflows, scripts,
 # .github/lint-groups.yml), and which job ids / lint-group members were
 # added or removed. Emits a Markdown body for the monthly docs-audit
@@ -10,6 +10,15 @@
 # Freshness gates validate only generated blocks; hand-written prose about
 # CI drifts silently. CI churn is the best cheap proxy for that drift, so it
 # decides whether a semantic audit is worth running this month.
+#
+# The diff base is the commit recorded in `.github/docs-audit-state`, which
+# `scripts/mark-docs-audit.sh` writes once an audit's fixes have landed. A
+# fixed-length window would measure churn the maintainer has already read
+# and audited, so its count could never fall to zero on a repo with a
+# steady commit rate — and the reminder issue's close condition reads that
+# count. Measuring from the audit point makes the number mean "CI-structure
+# commits nobody has audited yet", which is zero right after an audit and
+# grows only with unreviewed churn.
 #
 # Body contents are restricted to integers and shape-validated identifiers
 # parsed from YAML — never commit subjects or other free text, which would
@@ -20,7 +29,10 @@
 #
 # Exit codes:
 #   0  success (body on stdout, PRESSURE=<n> as the final line)
-#   2  missing inputs / parse error / nothing enumerated to measure
+#   2  missing inputs / parse error / nothing enumerated to measure,
+#      including an audit-state file that is absent, carries no
+#      LAST_AUDIT_SHA=<40-hex> line, or names a commit this history does
+#      not contain
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -29,23 +41,45 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
 
-readonly WINDOW_DAYS="${WINDOW_DAYS_OVERRIDE:-31}"
+readonly AUDIT_STATE="${DOCS_AUDIT_STATE_OVERRIDE:-.github/docs-audit-state}"
 readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-.github/workflows}"
 readonly LINT_GROUPS="${LINT_GROUPS_OVERRIDE:-.github/lint-groups.yml}"
 
 # A job id we are willing to render into markdown.
 readonly JOB_ID_RE='^[a-z0-9][a-z0-9-]*$'
 
-# @description Print the commit at the window boundary, or the repo's first
-#              commit when the window predates history.
-function boundary_ref() {
-  local ref
-  ref="$(git rev-list -1 --before="${WINDOW_DAYS} days ago" HEAD 2>/dev/null || true)"
-  if [[ -z ${ref} ]]; then
-    git rev-list --max-parents=0 HEAD | tail -n 1
-  else
-    printf '%s\n' "${ref}"
+# @description Print the commit recorded as the last audit point. Every
+#              could-not-run shape exits 2 rather than falling back to a
+#              window or to the repo's first commit: a fallback base still
+#              prints a PRESSURE line, and the reminder workflow would
+#              file that number as though it had been measured from the
+#              audit point it names.
+function last_audit_ref() {
+  local -r state="${AUDIT_STATE}"
+  if [[ ! -r ${state} ]]; then
+    printf 'cannot read audit-state file: %s\n' "${state}" >&2
+    # shellcheck disable=SC2016 # literal backticks in human-readable prose
+    printf 'run `just docs-audit-done` once an audit has landed\n' >&2
+    exit 2
   fi
+
+  local sha
+  sha="$(sed -n 's/^LAST_AUDIT_SHA=//p' "${state}" | head -n 1)"
+  if [[ ! ${sha} =~ ^[0-9a-f]{40}$ ]]; then
+    printf '%s: no LAST_AUDIT_SHA=<40-hex> line\n' "${state}" >&2
+    exit 2
+  fi
+
+  # A sha that parses but names no commit here — a rewritten history, or a
+  # shallow clone — is an input read and found unusable, not a verdict
+  # about the repo's prose.
+  if ! git rev-parse --quiet --verify "${sha}^{commit}" >/dev/null 2>&1; then
+    printf '%s: LAST_AUDIT_SHA %s is not a commit in this history\n' \
+      "${state}" "${sha}" >&2
+    exit 2
+  fi
+
+  printf '%s\n' "${sha}"
 }
 
 # @description Emit sorted job ids present at a given ref. Only ids matching
@@ -137,12 +171,10 @@ function main() {
     exit 2
   }
 
+  # `last_audit_ref` exits 2 from inside the substitution on every
+  # could-not-run shape, which propagates through this assignment.
   local base
-  base="$(boundary_ref)"
-  [[ -n ${base} ]] || {
-    printf 'cannot resolve window boundary commit\n' >&2
-    exit 2
-  }
+  base="$(last_audit_ref)"
 
   local commits
   commits="$(
@@ -164,8 +196,8 @@ function main() {
   members_added="$(comm -13 <(members_at "${base}") <(members_at HEAD) | only_valid_ids)"
   members_removed="$(comm -23 <(members_at "${base}") <(members_at HEAD) | only_valid_ids)"
 
-  printf 'Drift pressure over the last %s days: **%s** commit(s) touching CI structure.\n\n' \
-    "${WINDOW_DAYS}" "${commits}"
+  printf 'Drift pressure since the last audit: **%s** commit(s) touching CI structure.\n\n' \
+    "${commits}"
 
   render_list 'Jobs added' "${jobs_added}"
   render_list 'Jobs removed' "${jobs_removed}"

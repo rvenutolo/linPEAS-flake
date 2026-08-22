@@ -58,7 +58,7 @@ function run_scenario() {
   err_file="$(mktemp)"
   outcome_file="$(mktemp)"
 
-  WINDOW_DAYS_OVERRIDE="${WINDOW_DAYS:-31}" \
+  DOCS_AUDIT_STATE_OVERRIDE="${STATE_FILE}" \
     WORKFLOWS_DIR_OVERRIDE="${WF_DIR}" \
     LINT_GROUPS_OVERRIDE="${LG_FILE}" \
     "${SCRIPT}" >"${out_file}" 2>"${err_file}" || actual_exit=$?
@@ -105,11 +105,26 @@ function run_scenario() {
   printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
 }
 
-# @description Create a scratch git repo; export WF_DIR / LG_FILE / SANDBOX.
+# @description Record a sandbox commit as that sandbox's audit point.
+#              The marker sits outside the pressure pathspec
+#              (WORKFLOWS_DIR, scripts, LINT_GROUPS), so writing it never
+#              contributes to the count it is the base for.
+# @arg $1 ref to record (default HEAD)
+function mark_audit_point() {
+  local -r ref="${1:-HEAD}"
+  local sha
+  sha="$(git -C "${SANDBOX}" rev-parse "${ref}")"
+  printf 'LAST_AUDIT_SHA=%s\n' "${sha}" >"${STATE_FILE}"
+}
+
+# @description Create a scratch git repo; export WF_DIR / LG_FILE /
+#              STATE_FILE / SANDBOX, with the baseline commit recorded as
+#              the audit point.
 function make_sandbox() {
   SANDBOX="$(mktemp -d)"
   WF_DIR="${SANDBOX}/.github/workflows"
   LG_FILE="${SANDBOX}/.github/lint-groups.yml"
+  STATE_FILE="${SANDBOX}/.github/docs-audit-state"
   mkdir -p "${WF_DIR}"
   git -C "${SANDBOX}" init --quiet
   git -C "${SANDBOX}" config user.email t@t.t
@@ -117,21 +132,16 @@ function make_sandbox() {
   printf 'lint-a:\n  - alpha\n' >"${LG_FILE}"
   printf 'name: a\njobs:\n  build:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
   git -C "${SANDBOX}" add -A
-  # Backdate the baseline well outside the window. GIT_AUTHOR_DATE /
-  # GIT_COMMITTER_DATE only accept strict formats (unix timestamp + tz
-  # offset, RFC2822, ISO); fuzzy approxidate strings like "90 days ago"
-  # are rejected as env vars even though `git commit --date=` accepts them.
-  local -r backdate_ts="$(date -d '90 days ago' '+%s') +0000"
-  GIT_AUTHOR_DATE="${backdate_ts}" GIT_COMMITTER_DATE="${backdate_ts}" \
-    git -C "${SANDBOX}" commit --quiet -m baseline
+  git -C "${SANDBOX}" commit --quiet -m baseline
+  mark_audit_point
 }
 
-# --- scenario: quiet window -> pressure 0 ---
+# --- scenario: nothing since the audit point -> pressure 0 ---
 make_sandbox
 cd "${SANDBOX}"
-run_scenario 'quiet window reports zero pressure' 0 --expect 'PRESSURE=0'
+run_scenario 'no commits since the audit point reports zero pressure' 0 --expect 'PRESSURE=0'
 
-# --- scenario: job added inside window ---
+# --- scenario: job added after the audit point ---
 # One report renders the added job, raises the pressure count, and keeps the
 # commit subject out of the body, so one invocation asserts all three.
 printf 'name: a\njobs:\n  build:\n    runs-on: x\n  publish:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
@@ -187,6 +197,7 @@ function make_non_yaml_workflow_sandbox() {
   SANDBOX="$(mktemp --directory)"
   WF_DIR="${SANDBOX}/.github/workflows"
   LG_FILE="${SANDBOX}/.github/lint-groups.yml"
+  STATE_FILE="${SANDBOX}/.github/docs-audit-state"
   mkdir --parents "${WF_DIR}"
   git -C "${SANDBOX}" init --quiet
   git -C "${SANDBOX}" config user.email t@t.t
@@ -195,22 +206,24 @@ function make_non_yaml_workflow_sandbox() {
   printf 'not a workflow\n' >"${WF_DIR}/README.txt"
   git -C "${SANDBOX}" add --all
   git -C "${SANDBOX}" commit --quiet -m baseline
+  mark_audit_point
 }
 make_non_yaml_workflow_sandbox
 cd "${SANDBOX}"
 run_scenario 'workflows dir tracked with no yaml file fails loudly' 2 \
   --expect-err "enumerated 0 workflow file(s) under ${WF_DIR} at"
 
-# @description Fresh sandbox whose backdated baseline already contains the
-#              job + member that within-window commits then remove, so the
+# @description Fresh sandbox whose audit-point baseline already contains
+#              the job + member that later commits then remove, so the
 #              removal render paths fire (removals are computed against the
-#              backdated boundary, not the previous commit). The removed ids
-#              differ from the added ids of the other sandbox so a rendered
-#              id names the render path it came from.
+#              recorded audit point, not the previous commit). The removed
+#              ids differ from the added ids of the other sandbox so a
+#              rendered id names the render path it came from.
 function make_removal_sandbox() {
   SANDBOX="$(mktemp -d)"
   WF_DIR="${SANDBOX}/.github/workflows"
   LG_FILE="${SANDBOX}/.github/lint-groups.yml"
+  STATE_FILE="${SANDBOX}/.github/docs-audit-state"
   mkdir -p "${WF_DIR}"
   git -C "${SANDBOX}" init --quiet
   git -C "${SANDBOX}" config user.email t@t.t
@@ -218,10 +231,9 @@ function make_removal_sandbox() {
   printf 'lint-a:\n  - alpha\n  - gamma\n' >"${LG_FILE}"
   printf 'name: a\njobs:\n  build:\n    runs-on: x\n  oldjob:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
   git -C "${SANDBOX}" add -A
-  local -r backdate_ts="$(date -d '90 days ago' '+%s') +0000"
-  GIT_AUTHOR_DATE="${backdate_ts}" GIT_COMMITTER_DATE="${backdate_ts}" \
-    git -C "${SANDBOX}" commit --quiet -m baseline
-  # Within-window commits remove the oldjob job and the gamma member.
+  git -C "${SANDBOX}" commit --quiet -m baseline
+  mark_audit_point
+  # Commits after the audit point remove the oldjob job and gamma member.
   printf 'name: a\njobs:\n  build:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
   git -C "${SANDBOX}" add -A
   git -C "${SANDBOX}" commit --quiet -m 'ci: remove oldjob job'
@@ -230,7 +242,7 @@ function make_removal_sandbox() {
   git -C "${SANDBOX}" commit --quiet -m 'ci: remove gamma member'
 }
 
-# --- scenario: job + member removed inside window ---
+# --- scenario: job + member removed after the audit point ---
 # One report carries both removal sections and both removed identifiers, so
 # one invocation asserts each heading and the id rendered beneath it.
 make_removal_sandbox

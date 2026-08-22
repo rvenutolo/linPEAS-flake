@@ -135,6 +135,7 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/harness-assert-wired-spec.test.sh`      | `tests/_harness_assert_wired.test.sh`       | `tests/fixtures/harness-assert-wired`        |
 | `tests/inventory-action-pin-tags.test.sh`      | `scripts/inventory-action-pin-tags.sh`      | `tests/fixtures/inventory-action-pin-tags`   |
 | `tests/linpeas-pin-assert.test.sh`             | `nix/linpeas.nix`                           | —                                            |
+| `tests/mark-docs-audit.test.sh`                | `scripts/mark-docs-audit.sh`                | —                                            |
 | `tests/octoscan-scan.test.sh`                  | `scripts/octoscan-scan.sh`                  | —                                            |
 | `tests/run-doc-freshness.test.sh`              | `scripts/run-doc-freshness.sh`              | —                                            |
 | `tests/run-harness-group.test.sh`              | `scripts/run-harness-group.sh`              | —                                            |
