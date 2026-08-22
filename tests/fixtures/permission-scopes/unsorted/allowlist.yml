@@ -1,0 +1,2 @@
+bad-unsorted-allowlist.yml:
+  writer: [issues, contents]

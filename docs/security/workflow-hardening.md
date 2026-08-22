@@ -98,6 +98,16 @@ Recursion matters because the shared libraries under `scripts/lib/` are where a 
 
 Enforced by `scripts/check-script-shebang-pipefail.sh`. Wired as the `lint-script-hygiene` CI job (member check `script-shebang-pipefail`) and as a pre-commit hook.
 
+## harness-preamble
+
+Every test harness matching `tests/*.test.sh` opens with the canonical preamble documented in `tests/README.md`: `#!/usr/bin/env bash` as the exact first line, `set -Eeuo pipefail`, the `IFS=$'\n\t'` field-separator line, and a `readonly REPO_ROOT` derived from `git rev-parse --show-toplevel`.
+
+A harness that drops a piece of the preamble fails differently from its siblings: without pipefail a failing script-under-test can score as a pass, without the strict IFS a fixture path containing a space word-splits mid-scenario, and without a readonly `REPO_ROOT` derived from the repo top-level a harness run from another directory resolves the wrong tree. The lint makes the documented convention true by construction rather than by review.
+
+The `REPO_ROOT` rule accepts both documented spellings — the direct form and the two-step lowercase form — by asserting the `readonly` line and the rev-parse derivation separately rather than one exact shape. The scan is non-recursive on purpose: fixture harnesses under `tests/fixtures/` exist to violate rules and stay out of scope.
+
+Enforced by `scripts/check-harness-preamble.sh`. Wired as the `lint-script-hygiene` CI job (member check `harness-preamble`).
+
 ## lib-source-tool-free
 
 A script under `scripts/`, sourced libraries included, never resolves a `source`/`.` library path through a command substitution — whether the substitution names `BASH_SOURCE` or invokes some other tool entirely — and `BASH_SOURCE` never appears inside a command substitution anywhere else in the file either.
@@ -331,7 +341,7 @@ An exemption is sound at the moment it is written and silent afterwards. The sha
 
 Wiring is scored on a call because the gate reads harness source text. A header comment naming `harness_assert_verify`, or a commented-out call left in place, otherwise satisfies the check while nothing runs — the failure mode the gate exists to catch, reproduced inside the gate. Whole-line comments are blanked before matching, and the verify token must open a statement, optionally behind `if`, `||`, or `&&`. A trailing comment on a code line survives the blanking; the statement-anchored patterns reject it regardless, since the token is not the first word on its line.
 
-Both ratchets cover every harness that is not on the `EXEMPT` array in `tests/_harness_assert_wired.test.sh`, including those asserting by other means than the quiet-grep idiom — an exemption registered by a harness the wiring verdict does not score weakens the same library. The `EXEMPT` entries are skipped before either ratchet runs, so they are out of ratchet scope as well as out of the wiring verdict, and each carries its reason inline. `tests/lib-harness-assert.test.sh` is the reason-bearing case: the gate library's own spec test must not be gated by the library it tests, and its generated library-driving snippets are indistinguishable from live calls to any textual rule.
+Both ratchets cover every harness that is not on the `EXEMPT` array in `tests/_harness_assert_wired.test.sh`, including those asserting by other means than the quiet-grep idiom — an exemption registered by a harness the wiring verdict does not score weakens the same library. The `EXEMPT` entries are skipped before either ratchet runs, so they are out of ratchet scope as well as out of the wiring verdict, and each carries its reason inline. `tests/lib-harness-assert.test.sh` is the one entry held out for a reason other than artifact-content assertion: the gate library's own spec test must not be gated by the library it tests, and its generated library-driving snippets are indistinguishable from live calls to any textual rule.
 
 Enforced by `tests/_harness_assert_wired.test.sh`, reached by the `harness-group` CI job.
 

@@ -1,0 +1,10 @@
+name: bad-unsorted-allowlist
+on: push
+jobs:
+  writer:
+    permissions:
+      contents: write
+      issues: write
+    runs-on: ubuntu-latest
+    steps:
+      - run: "true"

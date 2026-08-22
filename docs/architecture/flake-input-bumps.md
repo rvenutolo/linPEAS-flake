@@ -32,7 +32,8 @@ Which input owns what is decided in `flake.nix` and `nix/`, not by
 branch name. `flake.nix` makes both `treefmt-nix` and `pre-commit-hooks`
 set `inputs.nixpkgs.follows = "nixpkgs-unstable"`; `nix/devshell.nix`
 builds the shell from `pkgs-unstable`; `nix/treefmt-config.nix` sets
-`treefmt.pkgs = pkgs-unstable`; and `nix/hooks/*` reads `pkgs.lib` only,
+`treefmt.pkgs = pkgs-unstable` and otherwise reads stable `pkgs.lib`
+only; and `nix/hooks/*` reads `pkgs.lib` only,
 with one exception — the `nixpkgs-hammering` hook exports
 `NIX_PATH="nixpkgs=${inputs.nixpkgs}"` so `nix/hammer-shim.nix` evaluates
 the linpeas derivation against stable. The stable-`pkgs` consumers in the
@@ -96,7 +97,7 @@ Bump cadence, which sets how often either case comes up:
 
 {% raw %}
 
-A major `NixOS/nixpkgs` bump (e.g. `25.11` → `26.05`) rotates the
+A major `NixOS/nixpkgs` bump (e.g. `YY.05` → `YY.11`) rotates the
 image's bundled runtime payload and the linpeas derivation's build
 inputs. It does **not** touch the devShell or CI tooling — those follow
 `nixpkgs-unstable` (see the ownership note at the top of this page), so

@@ -54,6 +54,11 @@ expect bad-over-grant.yml 1 "contents"
 expect bad-job-not-in-allowlist.yml 1 "writer"
 expect_unfiltered "${FIXTURES}/stale" "${FIXTURES}/stale/allowlist.yml" 1 "stale" bad-stale-allowlist.yml
 
+# An allowlist scope list that is out of sorted order is drift, reported
+# with the offending workflow/job. Runs unfiltered like the stale case,
+# because the sortedness pass shares the reverse pass's filter skip.
+expect_unfiltered "${FIXTURES}/unsorted" "${FIXTURES}/unsorted/allowlist.yml" 1 "not sorted" bad-unsorted-allowlist.yml
+
 # A workflow yq cannot parse must fail loud, not empty the forward scan
 # silently.
 expect bad-malformed.yml 1 "could not evaluate"

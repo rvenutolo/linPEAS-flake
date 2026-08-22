@@ -41,6 +41,7 @@ lint-workflow-security:
   - lock-derived-docs
 lint-script-hygiene:
   - script-shebang-pipefail
+  - harness-preamble
   - script-has-test
   - test-reachable
   - lint-shell-tools

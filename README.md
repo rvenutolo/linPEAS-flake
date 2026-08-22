@@ -250,8 +250,8 @@ and tag protection, required-check list — lives in
 
 All tooling below — `shfmt`, `shellcheck`, `just`, `pre-commit`,
 `nixfmt`, `deadnix`, `statix`, `actionlint`, `zizmor`, `yamllint`,
-`prettier`, `lychee`, `check-jsonschema`, and more (see `devShells.default` in
-`nix/devshell.nix` for the full set) — is supplied by the flake's `devShells.default`.
+`prettier`, `lychee`, `check-jsonschema`, and more — is supplied by the
+flake's `devShells.default` (see `nix/devshell.nix` for the full set).
 You do **not** install any of it manually.
 
 Enter the shell one of two ways:
