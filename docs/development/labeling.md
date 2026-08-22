@@ -76,9 +76,9 @@ new labels are created once manually after the labels-manifest PR
 merges:
 
 ```sh
-gh label create size/XS --color 009800 --description "0-9 lines changed"
-gh label create size/S  --color 7cfc00 --description "10-29 lines changed"
-gh label create size/M  --color fbca04 --description "30-99 lines changed"
-gh label create size/L  --color ff9800 --description "100-499 lines changed"
-gh label create size/XL --color d73a4a --description "500+ lines changed"
+gh label create size/XS --force --color 009800 --description "0-9 lines changed"
+gh label create size/S  --force --color 7cfc00 --description "10-29 lines changed"
+gh label create size/M  --force --color fbca04 --description "30-99 lines changed"
+gh label create size/L  --force --color ff9800 --description "100-499 lines changed"
+gh label create size/XL --force --color d73a4a --description "500+ lines changed"
 ```

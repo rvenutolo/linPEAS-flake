@@ -15,10 +15,13 @@ tag.
 
 ## Why patch tags, not major tags
 
-Major tags are designed to be force-moved on every release. Pinning
-the SHA but commenting against a moving tag means `ratchet-pin-audit`
-fires every time a publisher cuts a patch release — pure noise,
-indistinguishable from a real force-move.
+Major tags are designed to be force-moved on every release, so a
+deliberately-moving tag cannot be judged by tag-vs-pin equality.
+`ratchet-pin-audit` therefore excludes any ref whose comment names a
+floating major (`vN`) from the comparison entirely — a `# vN` comment
+silently removes the ref from audit coverage, leaving its integrity to
+rest on the immutable digest pin, Renovate currency, and the PR-time
+digest-provenance gate alone.
 
 Per-patch tags (e.g. `v3.36.0`) are immutable by publisher
 convention. Anchoring the comment to a patch tag means a future audit

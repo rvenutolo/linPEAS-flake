@@ -122,15 +122,15 @@ trigger semantics, and credential split live in
 
 <!-- Chronological by cron — daily, then weekly; event-driven rows last. -->
 
-| Workflow                    | When                               | Purpose                                                                                                            |
-| --------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `update-linpeas.yml`        | daily + dispatch                   | Bumps `linpeas-pin.json` to the latest upstream tag. Opens PR; auto-merges on green.                               |
-| `stale-pin-check.yml`       | daily                              | Files a deduped issue if `update-linpeas` is stalled.                                                              |
-| `pages.yml`                 | push, PR, release, daily, dispatch | Rebuilds the MkDocs site; deploys via OIDC on non-PR events. Not in the required-check set.                        |
-| `update-flake-lock.yml`     | weekly Fri                         | Bumps every flake input via `nix flake update`; opens auto-merging PR.                                             |
-| `verify-latest-release.yml` | weekly Fri                         | Re-verifies the latest release's attestations and re-fetches upstream `linpeas.sh` to confirm the pinned SRI hash. |
-| Renovate                    | weekly Fri batch                   | Bumps action SHAs + tracked flake inputs after a 7-day cooldown.                                                   |
-| `release-on-bump.yml`       | push to `main` changing the pin    | Tags the release, builds + pushes per-arch OCI images (ghcr.io + docker.io), attests SLSA provenance + SBOMs.      |
+| Workflow                    | When                               | Purpose                                                                                                                              |
+| --------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `update-linpeas.yml`        | daily + dispatch                   | Bumps `linpeas-pin.json` to the latest upstream tag. Opens PR; auto-merges on green.                                                 |
+| `stale-pin-check.yml`       | daily                              | Files a deduped issue if `update-linpeas` is stalled.                                                                                |
+| `pages.yml`                 | push, PR, release, daily, dispatch | Rebuilds the MkDocs site; deploys via OIDC on non-PR events. Not in the required-check set.                                          |
+| `update-flake-lock.yml`     | weekly Fri                         | Bumps every flake input via `nix flake update`; opens auto-merging PR.                                                               |
+| `verify-latest-release.yml` | weekly Fri                         | Re-verifies the latest release's attestations and re-fetches upstream `linpeas.sh` to confirm the pinned SRI hash.                   |
+| Renovate                    | weekly Fri batch                   | Bumps action SHAs, the Nix installer pin, the octoscan digest, the SchemaStore pin, and tracked flake inputs after a 7-day cooldown. |
+| `release-on-bump.yml`       | push to `main` changing the pin    | Tags the release, builds + pushes per-arch OCI images (ghcr.io + docker.io), attests SLSA provenance + SBOMs.                        |
 
 Bump-workflow commits are authored by the `linpeas-flake-bumper` GitHub
 App and web-flow-signed by GitHub, satisfying `required_signatures` on
@@ -275,7 +275,7 @@ pre-commit install   # one-time, wires git hooks
 just                 # Default: list recipes
 just build           # Build the linpeas package
 just bump            # Manually refresh linpeas pin from upstream latest release
-just check           # Run all flake checks (eval, formatting, pre-commit)
+just check           # Run all flake checks (formatting, pre-commit, lint-shell-tools, derivation build)
 just fmt             # Format every file via treefmt
 just image           # Build the OCI image
 just lint            # Run pre-commit hooks against all files

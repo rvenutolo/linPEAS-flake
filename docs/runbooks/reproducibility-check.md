@@ -35,7 +35,12 @@ Currently no `--assignee` is set; mismatches rely on default repo notification s
 
 ### Bad-input failures (exit 2)
 
-`compare-repro.sh` exits 2 when a hash field is absent, null, or malformed in either build's `build.json`. That is not a divergence — the *measurement* broke. A `nix path-info --json` shape change is not the cause: both `measure` steps pipe it through `jq --exit-status` under `set -Eeuo pipefail`, so a shape change fails its own build job, and `compare` needs both builds and never runs. What can reach `compare` is a `build.json` that uploaded or downloaded incompletely. A `repro-diff` artifact *is* present on exit 2 — the diffoscope and upload steps gate on `exit_code != '0'`, which 2 satisfies — but it diffs builds whose measurement the compare script already rejected, so read the `build.json` artifacts instead. If a build job itself went red, triage its `measure` step there.
+`compare-repro.sh` exits 2 when a hash field is absent, null, or malformed in either build's `build.json`. That is not a divergence — the *measurement* broke.
+
+- A `nix path-info --json` shape change is not the cause: both `measure` steps pipe it through `jq --exit-status` under `set -Eeuo pipefail`, so a shape change fails its own build job, and `compare` needs both builds and never runs.
+- What *can* reach `compare` is a `build.json` that uploaded or downloaded incompletely.
+- A `repro-diff` artifact is present on exit 2 — the diffoscope and upload steps gate on `exit_code != '0'`, which 2 satisfies — but it diffs builds whose measurement the compare script already rejected. Read the `build.json` files in the `repro-build-a` / `repro-build-b` artifacts instead.
+- If a build job itself went red, triage its `measure` step there.
 
 ## Exercising the diagnostic path on demand
 

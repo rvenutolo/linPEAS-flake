@@ -19,7 +19,7 @@ closes:
 | Layer                  | When it fires                                                                      | Tools                                                                                                                        | Closes the gap of                                                 |
 | ---------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | Commit-time prevention | every `git commit` (pre-commit)                                                    | zizmor, octoscan + the workflow-hardening hook family                                                                        | bad edits never enter history                                     |
-| PR / push detection    | every PR to `main` (codeql full; octoscan paths-filtered) and every push to `main` | codeql, octoscan                                                                                                             | changed workflows checked server-side, in the diff                |
+| PR / push detection    | every PR to `main` (codeql full; octoscan paths-filtered) and every push to `main` | codeql, octoscan, and the required lint-group jobs (lint-workflow-security / lint-script-hygiene / lint-doc-invariants)      | changed workflows checked server-side, in the diff                |
 | Weekly full sweep      | Friday cron cluster                                                                | codeql, octoscan, zizmor-drift                                                                                               | `--no-verify` bypasses, web-UI / bot edits, upstream rule changes |
 | Posture watchdog       | daily + weekly cron                                                                | scorecard-drift, ratchet-pin-audit, settings-posture-drift, stale-pin-check, allowed-actions-api-drift, flake-lock-staleness | silent regressions no single PR introduces                        |
 
@@ -110,10 +110,11 @@ next section. The weekly Friday cron cluster runs them in a fixed order (see
     rule changes); on a finding it opens a deduped `zizmor-drift` issue, closed
     on the next clean run.
 
-## In-tree workflow lints
+## In-tree lints and posture watchdogs
 
 Beyond the external scanners, a family of in-tree shell lints — pre-commit
-hooks plus daily watchdog crons — enforce specific workflow invariants. Most
+hooks, required PR lint-group jobs, plus daily watchdog crons — enforce
+specific workflow and posture invariants. Most
 appear in the [enforcement matrix](enforcement-matrix.md) with their enforcer
 script, pre-commit hook id, and CI job where one exists — some are enforced by
 hook alone, and some are standalone workflows rather than member checks;

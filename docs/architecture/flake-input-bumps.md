@@ -301,15 +301,14 @@ is visible to the build.
 ### 7. Run all test suites
 
 ```bash
-nix develop --command bash tests/gen-dashboard-data.test.sh
-nix develop --command bash tests/check-pr-workflows-no-secrets.test.sh
-nix develop --command bash tests/check-required-checks-no-paths.test.sh
-nix develop --command bash tests/check-tag-protection.test.sh
-nix develop --command bash tests/check-renovate-invariants.test.sh
-nix develop --command bash tests/check-uses-sha-pinned.test.sh
+nix develop --command just verify
 ```
 
-All six must exit 0. If any fail, do **not** disable the test — debug
+`just verify` runs the batched lint groups, the full harness suite, and
+the doc-freshness checks — the same set CI gates on. Individual
+harnesses can still be run directly
+(`nix develop --command bash tests/<name>.test.sh`) while iterating on
+a single failure. If any fail, do **not** disable the test — debug
 the regression. The lint scripts encode binding security invariants.
 
 ### 8. Image smoke

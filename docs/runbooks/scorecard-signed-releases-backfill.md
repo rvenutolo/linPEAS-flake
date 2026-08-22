@@ -63,7 +63,8 @@ After backfill:
 gh release view <tag> --json assets --jq '.assets[].name' | sort
 ```
 
-Expect every release-asset name to have BOTH a `.sigstore` and a
+Expect every primary artifact (`linpeas-pin.json`,
+`linpeas-image-<arch>.cdx.json`) to have BOTH a `.sigstore` and a
 `.intoto.jsonl` sibling.
 
 Then trigger the scorecard watchdog:
@@ -123,9 +124,15 @@ rebuilding at the historic commit, then re-run the backfill:
 1. Re-run `gh workflow run release-on-bump.yml --ref main -F backfill-tag=<tag>`.
 
 The rebuilt image must be byte-identical to the original for cosign
-image-digest verification to match. `reproducibility-check.yml`
-asserts this weekly; confirm it has been green for `<tag>` before
-relying on a rebuild.
+image-digest verification to match. The weekly
+`reproducibility-check.yml` run only covers the *current* pin built
+from the default branch, so it says nothing about a historic `<tag>` —
+verify the rebuild directly by comparing the rebuilt per-arch digests
+against the digests recorded in the release's `:<tag>` index before
+pushing. If you cite the weekly check's signal at all, check for open
+`reproducibility`-labelled issues rather than workflow-level green:
+`continue-on-error` on its compare job keeps runs green even on
+mismatch during burn-in.
 
 Restoring images to an image-less release (making all six present — the
 four per-arch tags **and** both `:<tag>` indexes) is optional and uses

@@ -31,7 +31,12 @@ wagoid/*
 
 1. Edit this doc — append the new pattern.
 
-1. Edit the live setting:
+1. Edit the live setting — build `patterns_allowed` by copying the
+    canonical block above **verbatim** (with your new pattern appended),
+    so the doc's canonical list stays the single source of truth. The
+    drift check compares the live setting against that block in both
+    directions, so a hand-typed divergence here files an issue within a
+    day:
 
     ```bash
     gh api -X PUT /repos/rvenutolo/linPEAS-flake/actions/permissions/selected-actions --input - <<'JSON'
@@ -39,23 +44,7 @@ wagoid/*
       "github_owned_allowed": true,
       "verified_allowed": false,
       "patterns_allowed": [
-        "actions/*",
-        "anchore/*",
-        "aquasecurity/*",
-        "cachix/*",
-        "crate-ci/*",
-        "DavidAnson/*",
-        "editorconfig-checker/*",
-        "github/*",
-        "gitleaks/*",
-        "lycheeverse/*",
-        "pascalgn/*",
-        "peter-evans/*",
-        "rvenutolo/*",
-        "step-security/*",
-        "trufflesecurity/*",
-        "wagoid/*",
-        "NEW_VENDOR/*"
+        <every pattern from the canonical block, quoted and comma-separated>
       ]
     }
     JSON

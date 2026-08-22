@@ -19,7 +19,7 @@ appears in the project `README.md`.
 just                 # Default: list recipes
 just build           # Build the linpeas package
 just bump            # Manually refresh linpeas pin from upstream latest release
-just check           # Run all flake checks (eval, formatting, pre-commit)
+just check           # Run all flake checks (formatting, pre-commit, lint-shell-tools, derivation build)
 just fmt             # Format every file via treefmt
 just image           # Build the OCI image
 just lint            # Run pre-commit hooks against all files
