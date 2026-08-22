@@ -98,6 +98,16 @@ Recursion matters because the shared libraries under `scripts/lib/` are where a 
 
 Enforced by `scripts/check-script-shebang-pipefail.sh`. Wired as the `lint-script-hygiene` CI job (member check `script-shebang-pipefail`) and as a pre-commit hook.
 
+## harness-preamble
+
+Every test harness matching `tests/*.test.sh` opens with the canonical preamble documented in `tests/README.md`: `#!/usr/bin/env bash` as the exact first line, `set -Eeuo pipefail`, the `IFS=$'\n\t'` field-separator line, and a `readonly REPO_ROOT` derived from `git rev-parse --show-toplevel`.
+
+A harness that drops a piece of the preamble fails differently from its siblings: without pipefail a failing script-under-test can score as a pass, without the strict IFS a fixture path containing a space word-splits mid-scenario, and without a readonly `REPO_ROOT` derived from the repo top-level a harness run from another directory resolves the wrong tree. The lint makes the documented convention true by construction rather than by review.
+
+The `REPO_ROOT` rule accepts both documented spellings — the direct form and the two-step lowercase form — by asserting the `readonly` line and the rev-parse derivation separately rather than one exact shape. The scan is non-recursive on purpose: fixture harnesses under `tests/fixtures/` exist to violate rules and stay out of scope.
+
+Enforced by `scripts/check-harness-preamble.sh`. Wired as the `lint-script-hygiene` CI job (member check `harness-preamble`).
+
 ## lib-source-tool-free
 
 A script under `scripts/`, sourced libraries included, never resolves a `source`/`.` library path through a command substitution — whether the substitution names `BASH_SOURCE` or invokes some other tool entirely — and `BASH_SOURCE` never appears inside a command substitution anywhere else in the file either.

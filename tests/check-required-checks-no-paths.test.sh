@@ -4,9 +4,10 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-repo_root="$(git rev-parse --show-toplevel)"
-fixtures="${repo_root}/tests/fixtures/required-checks"
-script="${repo_root}/scripts/check-required-checks-no-paths.sh"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+readonly REPO_ROOT
+fixtures="${REPO_ROOT}/tests/fixtures/required-checks"
+script="${REPO_ROOT}/scripts/check-required-checks-no-paths.sh"
 
 failures=0
 

@@ -26,8 +26,9 @@ tests/
 
 The `good` / `bad-` prefix is the portable part; the extension follows
 whatever the subject lint reads. Workflow-scanning lints use `.yml`, but
-fixtures across this tree are also `.sh`, `.json`, `.md`, `.lock`,
-`.toml`, `.nix`, `.txt`, `.tsv`, and extensionless command shims.
+fixtures across this tree are also `.yaml`, `.sh`, `.json`, `.md`,
+`.lock`, `.toml`, `.nix`, `.awk`, `.txt`, `.tsv`, and extensionless
+command shims.
 
 Neither shape is guaranteed: a handful of directories are named for the
 invariant rather than for the harness, so read the harness's `FIXTURES`
@@ -62,6 +63,13 @@ uses rather than converting it:
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
 ```
+
+The opener is enforced, not just documented:
+`scripts/check-harness-preamble.sh` (member check `harness-preamble` in
+the `lint-script-hygiene` CI group) fails any harness missing the
+shebang, the `set` line, the strict IFS line, or a readonly `REPO_ROOT`
+derived from `git rev-parse --show-toplevel`, and accepts both
+spellings above.
 
 A harness with a single script subject then binds it, and one that reads
 a committed fixture tree binds that:
@@ -105,6 +113,16 @@ is how `tests/_harness_assert_wired.test.sh` tells an assertion from a
 data extraction. A harness that asserts another way — a
 `[[ ${out} != *"${want}"* ]]` test, say — is not scored at all, so it
 needs neither the wiring nor an `EXEMPT` entry.
+
+The same gate also enforces parity: two scenarios in one harness must
+not produce byte-identical whole outcomes (exit code + stdout +
+stderr), because a scenario indistinguishable from a sibling proves
+nothing the sibling did not already prove. The relief valve is
+`harness_assert_parity_exempt <scenario> <other> <rationale>`, and only
+harnesses named on the `PARITY_EXEMPT_ALLOWED` array in
+`tests/_harness_assert_wired.test.sh` may register one — reaching for
+it means widening that allowlist in the same change, which is the
+review moment it deserves.
 
 Environment-variable overrides scoped to test invocation:
 
