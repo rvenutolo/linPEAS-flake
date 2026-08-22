@@ -50,8 +50,10 @@ Both `packages.<system>.default` and `packages.<system>.linpeas` are exposed; th
 
 ## Pinning recommendation
 
-Pin to a release tag (shaped `YYYYMMDD-<sha>`), not `main`. Tag pins are
-SHA-checked by Nix on lock; `main` floats and will silently change.
+Pin to a release tag (shaped `YYYYMMDD-<sha>`), not `main`. Both are
+locked to a rev, but `nix flake update linpeas-flake` on a `main` input
+advances to whatever `main` now points at; a tag pin only moves when you
+change the tag.
 
 Update the pin with:
 

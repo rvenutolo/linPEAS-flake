@@ -20,7 +20,7 @@ docker run --rm \
   rvenutolo/linpeas:latest -f /host
 ```
 
-`-f` scopes linpeas to a filesystem scan of the mounted tree — processes, software, permissions, interesting files, API keys — rather than the full privesc check set. Passing no path instead scans the container's own near-empty filesystem. Do not reach for `-d`: it is upstream's network host-discovery flag (`-d <IP/NETMASK>`), and it exits before any privesc check runs.
+`-f` scopes linpeas to a filesystem scan of the mounted tree — processes, software, permissions, interesting files, API keys — rather than the full privesc check set. Omitting `-f` and the bind mount instead scans the container's own near-empty filesystem. Do not reach for `-d`: it is upstream's network host-discovery flag (`-d <IP/NETMASK>`), and it exits before any privesc check runs.
 
 This form exists for environments where Docker is the only available shipping vehicle.
 
