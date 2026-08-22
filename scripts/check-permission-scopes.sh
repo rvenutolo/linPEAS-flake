@@ -3,7 +3,8 @@
 #
 # @description Per-job GITHUB_TOKEN write-scope allowlist lint for
 # GitHub Actions. Fails when a job grants a write scope absent from
-# .github/permission-scopes.yml, or when an allowlist entry is stale.
+# .github/permission-scopes.yml, when an allowlist entry is stale, or
+# when an allowlist scope list is not sorted.
 
 # Hand-maintained allowlist gate. .github/permission-scopes.yml is the
 # source of truth for which *write* scopes each job may hold. For every
@@ -14,6 +15,10 @@
 #   2. Every scope listed for the job in the allowlist is actually granted
 #      `write` by the job, and every allowlist workflow/job exists. A
 #      listed-but-absent scope (or a vanished workflow/job) is stale.
+#   3. Every per-job scope list in the allowlist is sorted, so the
+#      "sorted list of write-scope names" format documented in
+#      docs/security/min-permissions.md stays enforced, diffs stay
+#      minimal, and a duplicate-prone append-anywhere habit cannot form.
 #
 # A job's `permissions:` may also be the scalar `read-all` (ignored) or
 # any other scalar such as `write-all` (a violation — scalar grants
@@ -130,6 +135,22 @@ if [[ -z ${FILE_FILTER} ]]; then
       failed=$((failed + 1))
     fi
   done <<<"${allowlist_rows}"
+
+  # Each job's scope list must be sorted (scope names are lowercase
+  # ASCII, so yq's lexical sort and C-locale sort agree). The sorted and
+  # as-is lists are compared via join, because yq's == on two arrays is
+  # not deep equality. Captured, not process-substituted, for the same
+  # exit-status reason as above.
+  if ! unsorted_rows="$(yq eval 'to_entries[] | .key as $wf | (.value | to_entries[] | select((.value | sort | join(",")) != (.value | join(","))) | $wf + "\t" + .key)' "${ALLOWLIST}")"; then
+    printf '%s: could not evaluate allowlist with yq (malformed?)\n' "${ALLOWLIST}" >&2
+    exit 2
+  fi
+  while IFS=$'\t' read -r wf job; do
+    [[ -z ${job} ]] && continue
+    printf '%s: scope list for %q/%q is not sorted\n' \
+      "${ALLOWLIST}" "${wf}" "${job}" >&2
+    failed=$((failed + 1))
+  done <<<"${unsorted_rows}"
 fi
 
 shopt -u nullglob
