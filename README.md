@@ -282,7 +282,7 @@ just check           # Run all flake checks (formatting, pre-commit, lint-shell-
 just fmt             # Format every file via treefmt
 just image           # Build the OCI image
 just lint            # Run pre-commit hooks against all files
-just lint-links      # Run lychee link checker over every markdown file lychee.toml does not exclude
+just lint-links      # Run lychee link checker over every markdown file, dotted trees included, that lychee.toml does not exclude
 just show            # Regenerate the <!-- BEGIN/END flake-show --> block in docs/reference/flake-outputs.md
 just show-ci-dag     # Regenerate docs/architecture/ci-dag.md from ci.yml needs graph
 just show-ci-summary # Regenerate the Continuous integration summary in README.md

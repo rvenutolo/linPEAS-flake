@@ -102,18 +102,28 @@ sweep_ephemeral_tokens() {
   local hits
   hits="$(
     {
-      _emit_eph planning-label 'GAP-[0-9]+|P[0-9]+\.[0-9]+|Wave-P?[0-9]+|Phase [0-9]+|AU-P-[0-9]+|SC-POST-[0-9]+|plan [0-9]+|F-[0-9]+'
-      _emit_eph review-pass '\(D[0-9]+\)|\(L[0-9]+[,) ]|Per D[0-9]+|D[0-9]+:'
+      # The blocking classes are transcribed from RE_PLANNING, RE_REVIEW,
+      # RE_DATE and RE_ISSUE in scripts/lib/ephemeral-refs-scope.sh, left
+      # boundary guards included. Without the guard a shape matches inside a
+      # larger token — `UTF-8` -> `F-8`, `PDF-1.7` -> `F-1`, `ID5:` -> `D5:`,
+      # `abc#12` -> `#12` — and the sweep reports candidates the gate never
+      # raises, which is what teaches a reader to scroll past its output.
+      _emit_eph planning-label '(^|[^-&[:alnum:]_])(GAP-[0-9]+|P[0-9]+\.[0-9]+|Wave-P?[0-9]+|Phase[[:space:]]+[0-9]+|AU-P-[0-9]+|SC-POST-[0-9]+|plan[[:space:]]+[0-9]+|F-[0-9]+)'
+      _emit_eph review-pass '(^|[^-&[:alnum:]_])(\(D[0-9]+\)|\(L[0-9]+[,)]|Per[[:space:]]+D[0-9]+|D[0-9]+:)'
       _emit_eph ad-hoc-ticket 'DH-[0-9]+|NC-[A-Z][0-9]+|[A-Z]{2,3}-[0-9]+' |
         grep -vE '(SHA|UTF|RFC|ISO|BASE)-[0-9]+' || true
-      _emit_eph date '[0-9]{4}-[0-9]{2}-[0-9]{2}|(January|February|March|April|May|June|July|August|September|October|November|December) [0-9]{4}|Q[1-4] [0-9]{4}' |
+      _emit_eph date '([0-9]{4}-[0-9]{2}-[0-9]{2}|(January|February|March|April|May|June|July|August|September|October|November|December)[[:space:]]+[0-9]{4}|Q[1-4][[:space:]]+[0-9]{4})' |
         grep -vE 'X-GitHub-Api-Version: [0-9]{4}-[0-9]{2}-[0-9]{2}' || true
       # Mirrors RE_CAUSAL in scripts/lib/ephemeral-refs-scope.sh. Bare verbs
       # and prepositions (`prior to`, `swapped`, `was reshaped`) are excluded
       # there on purpose, so including them here would report hits the real
       # lint never raises.
       _emit_eph causal-history 'previously|Migration note|Tightened from|switched (from|to)|legacy .* was deleted|added in #?[0-9]+|post-PR #?[0-9]+'
-      _emit_eph pr-ref '#[0-9]+|PR #[0-9]+|issue #[0-9]+' |
+      # RE_ISSUE's guards subsume the entity and anchor suppressions below;
+      # both are kept so a shape the guard admits stays suppressed. Hex colors
+      # need their own filter either way: RE_ISSUE admits `#333`, and the lint
+      # relies on colors living in fenced blocks to keep it quiet.
+      _emit_eph pr-ref '(^|[^-&[:alnum:]_])#[0-9]+([^-[:alnum:]_]|$)' |
         grep -vE '(fill|stroke|color):#[0-9a-fA-F]{3,8}|&#[0-9]+;|#[0-9]+-' || true
       _emit_eph claude-path '\.claude/'
     } | sort -u || true

@@ -22,7 +22,9 @@ exclude = [
 ]
 
 exclude_path = [
-  ".git",
+  # Anchored: a bare ".git" is matched as a path substring, which also
+  # swallows docs/development/git.md and leaves that page link-unchecked.
+  "/.git/",
   ".direnv",
   "result",
   "result-image",
@@ -32,9 +34,24 @@ exclude_path = [
   # that drive check-orphan-invariants and refresh-enforcement-matrix;
   # they are not real docs and must not be link-checked.
   "tests/fixtures",
-  # Untracked working notes. CI checks a clean checkout where this tree
-  # does not exist, so the entry is inert there; locally it keeps the
-  # recursive glob off scratch documents whose dead references are
-  # deliberate.
-  ".claude",
+  # Untracked working notes. Part of the Claude tooling tree IS tracked — the
+  # docs-correctness-audit and multi-agent-review skills and their slash
+  # commands — and those are maintained docs whose links belong in scope, so
+  # the entries below name the untracked areas rather than the whole tree.
+  # They bite only because the lint recipe names the dotted trees as inputs:
+  # a plain `./**/*.md` glob never descends into a dotted directory, so
+  # nothing under one reaches lychee through it and no exclusion here could
+  # add or remove them. A scratch area missing from this list costs local
+  # noise, never a red job — a clean checkout holds only the tracked half.
+  ".claude/CLAUDE.md",
+  ".claude/plans",
+  ".claude/reports",
+  ".claude/scratch",
+  ".claude/sdd",
+  # Seeded-defect fixtures carry planted violations on purpose, exactly as
+  # tests/fixtures does above.
+  ".claude/skills/docs-correctness-audit/evals/seeded-defects/fixtures",
+  ".claude/skills/docs-correctness-audit-workspace",
+  ".claude/specs",
+  ".claude/worktrees",
 ]
