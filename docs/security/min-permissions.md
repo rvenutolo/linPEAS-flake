@@ -48,7 +48,7 @@ need no entry, and a job with no write scopes is omitted entirely.
 ### Enforcement
 
 `scripts/check-permission-scopes.sh` cross-checks the live workflows
-against the allowlist in both directions and fails on either:
+against the allowlist in both directions and fails on any of:
 
 - **Over-grant** — a job grants a `write` scope that is not listed for
     that job in the allowlist. The token a compromised step could wield
@@ -56,6 +56,9 @@ against the allowlist in both directions and fails on either:
 - **Stale entry** — the allowlist lists a write scope the job no longer
     grants, or names a workflow or job that no longer exists. Stale entries
     rot the allowlist into a misleading record of the actual write surface.
+- **Unsorted scope list** — a job's scope list departs from sorted
+    order, which keeps allowlist diffs minimal and duplicate-prone
+    append-anywhere edits out.
 
 Wired into the `lint-workflow-security` CI group and as the
 `permission-scopes` pre-commit hook.
