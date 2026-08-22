@@ -1,10 +1,11 @@
 # Cluster-granularity tuning results
 
-Why the audit covers the `docs/` tree with **four** read-only cluster readers
+Why the audit covers the user-facing docs with **four** read-only
+cluster readers
 (the map in [`../references/repo-map.md`](../references/repo-map.md) §2) rather
 than one per `docs/` subdirectory. The `claude-tooling` reader in that map is
-outside this comparison: it reads the audit's own specification, not the `docs/`
-tree, so no `docs/` granularity choice applies to it. The numbers below come
+outside this comparison: it reads the audit's own specification, not the
+user-facing docs, so no granularity choice there applies to it. The numbers below come
 from the seeded-defect recall harness in [`seeded-defects/`](seeded-defects/)
 (`plant.sh` → run the audit → `score.sh`), run twice per configuration against
 the same seven planted defects.
@@ -47,8 +48,12 @@ commensurable with the first two rows. Recall is still comparable, because
 
 Merging trades some thoroughness on **low-severity, non-seeded** drift: a reader
 covering more files spreads attention thinner and skips minor prose-imprecision
-findings that a dedicated reader surfaces. All **high-severity** detections held
-across every run of every configuration.
+findings that a dedicated reader surfaces. All seed detections held
+across every run of every configuration. One structural blind spot: the
+seed set plants nothing under `reference/`, `install/`, or `runbooks/`,
+so the `core-docs` merge's recall-neutrality is inferred from the map's
+structure, not measured — no seed exists that the merge could have
+dropped.
 
 `security` and `root + misc` are nonetheless kept standalone in the shipped map,
 and the reason is a judgement rather than a measurement. Merging them was
@@ -75,6 +80,6 @@ bash seeded-defects/plant.sh --clean
 ```
 
 A configuration ships only if seed recall holds at 14/14 across two runs (no
-high-severity category dropped) **and** mean reader-tokens fall below the
+seed category dropped) **and** mean reader-tokens fall below the
 per-subdirectory baseline. A measured difference inside the baseline's run-to-run noise is
 inconclusive, not a win.

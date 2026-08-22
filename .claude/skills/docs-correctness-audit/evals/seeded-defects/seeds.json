@@ -56,7 +56,7 @@
       "op": "insert-after",
       "from": "",
       "payload": "Last reviewed 2099-01-01.",
-      "expected_severity": "high",
+      "expected_severity": "medium",
       "sentinel": "2099-01-01",
       "line_tol": 3
     },

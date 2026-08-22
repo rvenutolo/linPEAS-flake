@@ -39,7 +39,7 @@ high severity, and neither is caught by a freshness gate.
 | security       | `docs/security/*.md`                                                                                                                                                                                                                                                                                                       |
 | arch+dev       | `docs/architecture/*.md`, `docs/development/*.md`                                                                                                                                                                                                                                                                          |
 | root + misc    | `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`, `docs/index.md`, `docs/dashboard.md`, `docs/releases.md`, `docs/invariant-index.md`, `docs/actionlint-embedded-linters.md`, `tests/README.md`, `.github/PULL_REQUEST_TEMPLATE.md` — **plus any tracked `*.md` outside `.claude/` that no other row claims** |
-| claude-tooling | every tracked `.claude/**/*.md` (`git ls-files '.claude/**/*.md'`) except `skills/*/evals/seeded-defects/fixtures/*.md`                                                                                                                                                                                                    |
+| claude-tooling | every tracked `.claude/` Markdown file (`git ls-files '.claude/*.md'` — git's `*` crosses `/`, where `.claude/**/*.md` would skip files sitting directly in `.claude/`) except `skills/*/evals/seeded-defects/fixtures/*.md`                                                                                               |
 
 Five clusters, not one per `docs/` subdirectory: most of a reader's cost is
 fixed per-agent overhead (re-reading the ground-truth bundle, tool setup), so
@@ -53,7 +53,8 @@ recall-vs-cost evidence for this map is in
 measured three-reader variant that merges `security` into `root + misc`: it held
 seed recall at 14/14, so the split is a judgement about depth on non-seeded
 drift, not a measured recall win. Keep them un-merged unless someone re-measures
-cost head-to-head. That recall-vs-cost tuning covers the four `docs/` clusters; `claude-tooling` is
+cost head-to-head. That recall-vs-cost tuning covers the four
+user-facing clusters; `claude-tooling` is
 separate from all of them because it is not user-facing documentation at all —
 it is the audit's own specification, so its reader checks this file against the
 tree rather than checking the tree against prose.
@@ -83,27 +84,28 @@ and is never edited.
 
 ## 3. Generated docs — verify-only, never edit the generated body
 
-These bodies are produced by generators and gated for freshness by CI. Confirm
+These bodies are produced by generators and, except where a row says
+otherwise, gated for freshness by CI. Confirm
 the current set with `just --list` (the recipes whose descriptions say
 "Regenerate …") and `ls scripts/refresh-*.sh` — plus the one generator both
 routes miss: git-cliff (the CHANGELOG row below). Do **not** propose prose/drift
 edits inside their `BEGIN/END` markers; a fix means fixing the generator.
 
-| Generated target                                                      | Generator (recipe / script)                                                                                                  |
-| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `docs/reference/flake-outputs.md` (flake-show block)                  | `just show` / `refresh-flake-show.sh`                                                                                        |
-| `docs/reference/scripts.md`                                           | `just show-scripts` / `refresh-scripts-reference.sh`                                                                         |
-| `docs/reference/treefmt-config.md`                                    | `just show-treefmt` / `refresh-treefmt-config.sh`                                                                            |
-| `docs/reference/test-harnesses.md`                                    | `refresh-test-harnesses.sh` (no recipe; **whole file**)                                                                      |
-| `docs/reference/just-recipes.md` + README recipe block                | `just show-recipes` / `refresh-just-recipes.sh`                                                                              |
-| `docs/security/enforcement-matrix.md`                                 | `just show-enforcement-matrix` / `refresh-enforcement-matrix.sh`                                                             |
-| `docs/architecture/ci-dag.md`                                         | `just show-ci-dag` / `refresh-ci-dag.sh`                                                                                     |
-| pre-commit hook table in `docs/development/git.md`                    | `just show-hooks` / `refresh-precommit-table.sh`                                                                             |
-| CI summary block in `README.md`                                       | `just show-ci-summary` / `refresh-ci-summary.sh`                                                                             |
-| ephemeral-refs-gap block in `docs/development/linting.md`             | `refresh-ephemeral-refs-gap.sh` (no recipe)                                                                                  |
-| pin-parity block in `docs/architecture/auto-update.md`                | `refresh-pin-parity.sh` (no recipe)                                                                                          |
-| `docs/_data/dashboard.yml` (drives `dashboard.md`, `releases.md`)     | `just site-data` / `gen-dashboard-data.sh`                                                                                   |
-| released sections of `CHANGELOG.md` (`## Unreleased` is hand-written) | git-cliff in `release-on-bump.yml`'s changelog job; freshness gate `check-changelog-fresh.sh` (no recipe, no `refresh-*.sh`) |
+| Generated target                                                                                                                                                                                    | Generator (recipe / script)                                                                                                  |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `docs/reference/flake-outputs.md` (flake-show block)                                                                                                                                                | `just show` / `refresh-flake-show.sh`                                                                                        |
+| `docs/reference/scripts.md`                                                                                                                                                                         | `just show-scripts` / `refresh-scripts-reference.sh`                                                                         |
+| `docs/reference/treefmt-config.md`                                                                                                                                                                  | `just show-treefmt` / `refresh-treefmt-config.sh`                                                                            |
+| `docs/reference/test-harnesses.md`                                                                                                                                                                  | `refresh-test-harnesses.sh` (no recipe; **whole file**)                                                                      |
+| `docs/reference/just-recipes.md` + README recipe block                                                                                                                                              | `just show-recipes` / `refresh-just-recipes.sh`                                                                              |
+| `docs/security/enforcement-matrix.md`                                                                                                                                                               | `just show-enforcement-matrix` / `refresh-enforcement-matrix.sh`                                                             |
+| `docs/architecture/ci-dag.md`                                                                                                                                                                       | `just show-ci-dag` / `refresh-ci-dag.sh`                                                                                     |
+| pre-commit hook table in `docs/development/git.md`                                                                                                                                                  | `just show-hooks` / `refresh-precommit-table.sh`                                                                             |
+| CI summary block in `README.md`                                                                                                                                                                     | `just show-ci-summary` / `refresh-ci-summary.sh`                                                                             |
+| ephemeral-refs-gap block in `docs/development/linting.md`                                                                                                                                           | `refresh-ephemeral-refs-gap.sh` (no recipe)                                                                                  |
+| pin-parity block in `docs/architecture/auto-update.md`                                                                                                                                              | `refresh-pin-parity.sh` (no recipe)                                                                                          |
+| `docs/_data/dashboard.yml` (untracked/gitignored — regenerated at site build; drives `dashboard.md`, `releases.md`; no freshness gate — `dashboard-data-tests` covers generator failure modes only) | `just site-data` / `gen-dashboard-data.sh`                                                                                   |
+| released sections of `CHANGELOG.md` (`## Unreleased` is hand-written)                                                                                                                               | git-cliff in `release-on-bump.yml`'s changelog job; freshness gate `check-changelog-fresh.sh` (no recipe, no `refresh-*.sh`) |
 
 Hand-written prose *surrounding* a generated block is in scope — except
 where the row says **whole file**. `docs/reference/test-harnesses.md` carries no
