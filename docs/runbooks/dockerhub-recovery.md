@@ -2,8 +2,9 @@
 
 Steps to recover from a half-published release where one registry
 (`docker.io` or `ghcr.io`) accepted a per-arch push but the other
-failed, leaving an orphan arch-suffixed tag that blocks a clean retry
-of `release-on-bump.yml`.
+failed, leaving an orphan arch-suffixed tag that a naive retry of
+`release-on-bump.yml` would silently overwrite, invalidating
+attestations and signatures already issued over the original bytes.
 
 This runbook is referenced from the auto-filed
 `release-on-bump-failure` issue body. The issue body intentionally

@@ -8,7 +8,7 @@
 On its weekly Friday cron (and on `workflow_dispatch`), the workflow:
 
 1. Builds `.#linpeas` and `.#linpeas-image` twice on independent `ubuntu-latest` runners.
-1. Records each build's: linpeas store path, linpeas NAR hash, image store path, image tar SHA-256, image manifest digest.
+1. Records five values per build: linpeas store path, linpeas NAR hash, image store path, image tar SHA-256, and image manifest digest.
 1. Compares the three hash values pairwise (`linpeas_nar_hash`, `image_tar_sha256`, `image_manifest_digest`); the two store paths are reported for context only and do not affect the result.
 1. On any mismatch: runs `diffoscope` on both pairs (the image tars and the linpeas tarballs), each under its own 20-minute cap, uploads `image.html`/`image.txt`, `linpeas.html`/`linpeas.txt` and `summary.txt` as the `repro-diff` artifact (30-day retention), and opens a GitHub issue labelled `reproducibility`.
 
