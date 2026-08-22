@@ -7,7 +7,7 @@ action uses `actions/cache` or a `cache:` input, and Nix-based jobs
 pull from the public `cache.nixos.org` substituter instead — so the
 workflow is a standing guard: it bounds the lifetime of any cache a
 future action, or a third-party action's opaque internal caching,
-might create. Two triggers:
+might create. Two automatic triggers (plus manual `workflow_dispatch`):
 
 ## Daily cron
 

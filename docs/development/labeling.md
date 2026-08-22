@@ -1,8 +1,8 @@
 # PR auto-labeling
 
-`labeler.yml` applies area labels (`ci`, `docs`, `nix`, `scripts`,
-`tests`, `security`, `pin`, `renovate`) per `.github/labeler.yml`
-globs. Catalog of record for the area and `size/*` labels:
+`.github/workflows/labeler.yml` applies area labels (`ci`, `docs`,
+`nix`, `scripts`, `tests`, `security`, `pin`, `renovate`) per
+`.github/labeler.yml` globs. Catalog of record for the area and `size/*` labels:
 `.github/labels.yml`; failure-notification labels are created on demand
 by the `notify-workflow-result` composite and by Renovate, and are
 deliberately not in the manifest. Not a required
