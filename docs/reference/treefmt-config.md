@@ -44,6 +44,8 @@ package-lock.json
 tests/fixtures/auto-merge-decline-gate/bad-malformed.yml
 tests/fixtures/check-renovate-config-validator/bad-syntax.json
 tests/fixtures/checkout-persist-credentials/bad-malformed.yml
+tests/fixtures/ci-job-in-summary/bad-malformed-categories/categories.yml
+tests/fixtures/ci-job-in-summary/bad-malformed-ci/ci.yml
 tests/fixtures/ci-job-in-summary/bad-malformed-manifest/lint-groups.yml
 tests/fixtures/commitlint-config-explicit/bad-malformed/ci.yml
 tests/fixtures/egress-allowlist/bad-malformed.yml

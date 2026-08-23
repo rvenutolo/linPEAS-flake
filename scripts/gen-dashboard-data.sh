@@ -435,7 +435,11 @@ function main() {
     done <<<"${unmatched}"
   fi
 
-  jq --null-input \
+  # A render that failed wrote a partial document, and the caller must not
+  # read the exit status as anything but a could-not-run: jq leaves 5 on a
+  # payload it cannot parse and yq leaves 1, which this contract reserves
+  # for a required field that was missing from a payload it did read.
+  if ! jq --null-input \
     --arg pin_version "${pin_version}" \
     --arg pin_url "${pin_url}" \
     --arg upstream_tag "${upstream_tag}" \
@@ -484,7 +488,10 @@ function main() {
       },
       generated_at: $generated_at,
     }' |
-    yq --prettyPrint --output-format=yaml eval '.' - >"${out_tmp}"
+    yq --prettyPrint --output-format=yaml eval '.' - >"${out_tmp}"; then
+    log_err "could not render the dashboard document into ${out_tmp}"
+    exit 2
+  fi
 
   mv -- "${out_tmp}" "${out_file}"
   trap - EXIT

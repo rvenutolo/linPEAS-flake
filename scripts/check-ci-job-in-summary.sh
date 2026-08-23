@@ -141,8 +141,18 @@ ci_jobs_file="$(make_temp)"
 cat_keys_file="$(make_temp)"
 trap 'rm --force -- "${ci_jobs_file}" "${cat_keys_file}"' EXIT
 
-yq eval '.jobs | keys | .[]' "${CI_FILE}" | sort --unique >"${ci_jobs_file}"
-yq eval 'keys | .[]' "${CATEGORIES_FILE}" | sort --unique >"${cat_keys_file}"
+# Both files are preconditions, not scanned artifacts: one that yq cannot
+# parse is a run that read no job list, not a run that read one and found
+# a job missing from the summary. Left bare, yq's own 1 reaches the caller
+# as that second reading.
+if ! yq eval '.jobs | keys | .[]' "${CI_FILE}" | sort --unique >"${ci_jobs_file}"; then
+  printf 'cannot read job keys from %s\n' "${CI_FILE}" >&2
+  exit 2
+fi
+if ! yq eval 'keys | .[]' "${CATEGORIES_FILE}" | sort --unique >"${cat_keys_file}"; then
+  printf 'cannot read category keys from %s\n' "${CATEGORIES_FILE}" >&2
+  exit 2
+fi
 
 failed=0
 

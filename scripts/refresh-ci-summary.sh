@@ -101,8 +101,14 @@ function main() {
   }' "$(awk_path "${required_checks_doc}")" |
     sort --unique >"${contexts_file}"
 
-  # Extract keys from the category map.
-  yq 'keys | .[]' "${cat_map}" | sort --unique >"${map_keys_file}"
+  # Extract keys from the category map. The map is a precondition, not a
+  # scanned artifact: one yq cannot parse is a run that read no categories,
+  # not a run that read them and found the summary stale. Left bare, yq's
+  # own 1 is exactly that second reading.
+  if ! yq 'keys | .[]' "${cat_map}" | sort --unique >"${map_keys_file}"; then
+    log_err "cannot read category keys from ${cat_map}"
+    exit 2
+  fi
 
   # DIVERGENCE CHECK direction 1: required contexts not in the map.
   local missing_from_map
@@ -137,7 +143,11 @@ function main() {
     pairs_file="$(make_temp)"
     # Append pairs_file to the outer trap so it's cleaned up too.
     trap 'rm --force -- "${contexts_file:-}" "${map_keys_file:-}" "${block_file:-}" "${doc_new:-}" "${pairs_file:-}"' EXIT
-    yq 'to_entries | .[] | .value + "\t" + .key' "${cat_map}" | sort >"${pairs_file}"
+    if ! yq 'to_entries | .[] | .value + "\t" + .key' "${cat_map}" |
+      sort >"${pairs_file}"; then
+      log_err "cannot read category pairs from ${cat_map}"
+      exit 2
+    fi
     awk -F'\t' '
       {
         cat = $1

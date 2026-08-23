@@ -236,7 +236,12 @@ fi
 bypass_count="$(jq '.bypass_actors | length' <<<"${ruleset_json}")"
 if ((bypass_count != 0)); then
   printf 'bypass_actors non-empty: got %d, want 0\n' "${bypass_count}" >&2
-  jq '.bypass_actors' <<<"${ruleset_json}" >&2
+  # The verdict is exit 1, so the diagnostic beside it must not decide the
+  # status: bare, a jq that cannot render the field ends the run under jq's
+  # own code — 5 on a payload it cannot parse — in place of the violation
+  # this branch found. A diagnostic that could not be printed is not a
+  # reason to withhold the finding.
+  jq '.bypass_actors' <<<"${ruleset_json}" >&2 || log_err 'could not render bypass_actors'
   exit 1
 fi
 

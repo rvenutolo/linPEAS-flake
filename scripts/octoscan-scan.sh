@@ -193,16 +193,27 @@ for wf in "${workflows[@]}"; do
   esac
 done
 
+merge_failed=0
 if [[ -n ${sarif_out} && ${n_error} -eq 0 ]]; then
   # Aggregate only when no file errored, so a file that never analyzed cannot
   # be silently absent from the merged SARIF and reported clean. The first
   # SARIF carries the driver + rules manifest (identical across invocations of
   # the same image); concatenate `runs[0].results` from every per-file SARIF.
-  jq -s '
+  #
+  # A merge that fails routes to the same infra-failure path an unanalyzed
+  # file takes. Left bare it ends the run under jq's own status — 5 for a
+  # per-file SARIF it cannot parse — with neither the `has-finding=` line the
+  # caller reads nor a classification, and 5 is not one of the three codes
+  # this contract defines. It is counted separately from n_error so the
+  # per-file tally keeps summing to the number of files scanned.
+  if ! jq -s '
     [.[].runs[0].results // []] as $all
     | .[0]
     | .runs[0].results = ($all | add)
-  ' "${per_file_sarifs[@]}" >"${sarif_out}"
+  ' "${per_file_sarifs[@]}" >"${sarif_out}"; then
+    printf 'cannot merge per-file SARIF into %s\n' "${sarif_out}" >&2
+    merge_failed=1
+  fi
 fi
 
 printf -v scanned 'scanned %d workflow file(s): %d clean, %d with findings, %d errored' \
@@ -211,7 +222,7 @@ printf -v scanned 'scanned %d workflow file(s): %d clean, %d with findings, %d e
 # Error outranks finding: a file that never analyzed is an infra failure even
 # when another file produced a finding, so it routes to the infra-failure path
 # (has-finding=false, exit 1) and is re-examined rather than reported clean.
-if ((n_error > 0)); then
+if ((n_error > 0 || merge_failed)); then
   # Truncated/partial SARIF is worse than missing SARIF; drop it so downstream
   # consumers (CI upload-sarif) skip cleanly instead of uploading garbage.
   [[ -n ${sarif_out} ]] && rm -f -- "${sarif_out}"

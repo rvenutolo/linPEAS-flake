@@ -144,8 +144,17 @@ function main() {
   # set -u when these locals have gone out of scope.
   trap 'rm --force -- "${tmpfile:-}" "${pin_tmp:-}"' EXIT
 
-  curl --disable --fail --silent --show-error --location \
-    --output "${tmpfile}" "${asset_url}"
+  # An asset this run never downloaded is not an asset it downloaded and
+  # rejected, the same distinction the release lookup above draws. Left
+  # bare, the abort carries curl's own status — 6 for DNS, 22 for an HTTP
+  # error, 28 for a timeout, 35 for TLS — none of which this contract
+  # catalogues, and 1 among them would read as a release verification that
+  # failed.
+  if ! curl --disable --fail --silent --show-error --location \
+    --output "${tmpfile}" "${asset_url}"; then
+    log_err "could not download the release asset: ${asset_url}"
+    exit 2
+  fi
 
   # The GitHub release-asset `.digest` field is an independent integrity
   # signal from the file we just downloaded. Absence/null is treated as a
