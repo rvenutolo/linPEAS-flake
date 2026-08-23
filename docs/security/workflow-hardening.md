@@ -181,6 +181,14 @@ Both rules also share one census of the marker itself, run after classification 
 
 Enforced by `scripts/check-guard-exit-code.sh`. Wired as the `lint-script-hygiene` CI job (member check `guard-exit-code`).
 
+### Required-parameter expansions
+
+No script takes a required value through a `${var:?message}` expansion.
+
+The shape is a third route to the same wrong answer, and the least visible of the three because it looks like a guard. There is no branch to assign a code to: the expansion fails with the shell default status of 1, so an operator who typed an incomplete command line is told the check ran and found a violation in the repo. The split is not a considered distinction — it is the shell default leaking through an expansion nobody chose for its exit code, which is exactly how it reached this tree, sitting two lines above an unrecognized-argument branch that exits 2.
+
+Replace it with an explicit test that logs and exits 2. The same `# exit-code-exempt: <rationale>` marker applies, for the case where an unset value there really is a programming error rather than an operator typo.
+
 ## exit-contract-documented
 
 Every script directly under `scripts/` that can reach exit 2 says so in its header.

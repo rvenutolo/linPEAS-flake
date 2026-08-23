@@ -2,8 +2,9 @@
 # scripts/check-guard-exit-code.sh
 #
 # @description Lint: no script anywhere under `scripts/` may exit 1 out
-# of a guard whose test is only an availability check, and none may
-# create a temp file with a bare `mktemp`. The exit codes separate what the
+# of a guard whose test is only an availability check, none may create
+# a temp file with a bare `mktemp`, and none may take a required value
+# through a `${var:?}` expansion. The exit codes separate what the
 # operator has to do about a run: 2 means the check could not run (a
 # required tool is absent, an input is missing, unreadable or
 # malformed), 1 means it ran and found a violation, 0 means clean. An
@@ -224,6 +225,18 @@ function scan_exit(ln, text) {
 # a bare paren, so a parenthetical naming the command in prose is not a
 # hit. The command name itself is spelled as a character class, like
 # every other pattern here, so this program never matches its own text.
+# A `:?` parameter expansion, which fails with the shell default exit
+# status of 1. The
+# shape is a third route to the same wrong answer: an operator who typed
+# an incomplete command line gets the status that means the check ran and
+# found a violation. The pattern is spelled as character classes so this
+# program never matches its own text, and whole-line comments are blanked
+# before it runs, so prose describing the shape is not read as the shape.
+function scan_paramexp(ln, text) {
+  if (text !~ /[$][{][A-Za-z_0-9#@*]+:[?]/) return
+  classify("paramexp", "paramexp_norationale", ln, trim(text), text, ln)
+}
+
 function scan_temp(ln, text) {
   if (text !~ /(^|[$][(]|[|;!{&]|[ \t]then[ \t]|[ \t]do[ \t]|[ \t]else[ \t])[ \t]*(command[ \t]+)?[m]ktemp([ \t)|;&]|$)/) return
   classify("baretemp", "temp_norationale", ln, trim(text), text, ln)
@@ -292,6 +305,7 @@ BEGIN {
   # Scanned ahead of the branch-tracking modes below, each of which
   # consumes its line, so a creation inside a guard body is still seen.
   if (sanctioned != 1) scan_temp(FNR, line)
+  scan_paramexp(FNR, line)
 
   if (mode == "cond") {
     cond = cond " " line
@@ -403,6 +417,16 @@ for f in "${repo_scripts[@]}"; do
       ;;
     temp_norationale)
       printf '%s:%s: exit-code-exempt marker on a bare mktemp carries no rationale (%s); the call stays a hit until the marker says why a temp file this script cannot create is the finding\n' \
+        "${f}" "${exit_line}" "${detail}" >&2
+      failed=$((failed + 1))
+      ;;
+    paramexp)
+      printf '%s:%s: takes a required value through a :? expansion (%s); bash exits 1 for that, so an operator who typed an incomplete command line is told the check ran and found a violation — guard it explicitly and exit 2\n' \
+        "${f}" "${exit_line}" "${detail}" >&2
+      failed=$((failed + 1))
+      ;;
+    paramexp_norationale)
+      printf '%s:%s: exit-code-exempt marker on a :? expansion carries no rationale (%s); the expansion stays a hit until the marker says why an unset value there is the finding\n' \
         "${f}" "${exit_line}" "${detail}" >&2
       failed=$((failed + 1))
       ;;

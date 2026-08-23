@@ -123,6 +123,16 @@ function main() {
     'bad-orphan-marker' 1 \
     'bad-orphan-marker/scripts/no-guard.sh:7: exit-code-exempt marker excuses no site this rule matches'
 
+  # The third route to the same wrong answer: a required-parameter
+  # expansion fails with the shell default status of 1, so an operator who
+  # typed an incomplete command line is told the check found a violation.
+  run_scenario 'a required-parameter expansion is a hit' \
+    'bad-param-expansion' 1 \
+    'bad-param-expansion/scripts/needs-dir.sh:8: takes a required value through a :? expansion'
+  # The marker means the same thing on this shape as on the other two.
+  run_scenario 'rationale-bearing expansion exemption is counted' \
+    'good-param-exempted' 0 '2 script(s) scanned, 1 exemption(s)'
+
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
