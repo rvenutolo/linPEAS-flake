@@ -44,6 +44,27 @@ if ! command -v yq >/dev/null 2>&1; then
   exit 2
 fi
 
+# @description Print one expression's value from a workflow. Returns
+# non-zero, having named the file, when `yq` cannot evaluate it. `yq` is
+# on PATH — an absent one is reported by the guard above — so a failure
+# here is a workflow in the scanned tree that does not parse, which is a
+# fact about this repo and is reported the way the scan reports any
+# other: a finding against that file, with the scan continuing. What
+# must not happen is the unchecked case, where yq's own status ends the
+# run mid-tree and every workflow after this one goes unscanned.
+# @arg $1 workflow path
+# @arg $2 yq expression
+# @exitcode 1 yq could not evaluate the expression against the file
+function read_workflow() {
+  local -r file="$1" expr="$2"
+  local value
+  if ! value="$(yq eval "${expr}" "${file}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${file}" >&2
+    return 1
+  fi
+  printf '%s' "${value}"
+}
+
 failed=0
 shopt -s nullglob
 declare -a workflow_files=()
@@ -55,7 +76,10 @@ for f in "${selected_files[@]}"; do
 
   # `on:` may be a string ("push"), a sequence ([push, pull_request]),
   # or a map ({push: ..., pull_request_target: ...}). Check all three.
-  on_tag="$(yq eval '.on | tag' "${f}")"
+  if ! on_tag="$(read_workflow "${f}" '.on | tag')"; then
+    failed=$((failed + 1))
+    continue
+  fi
   case "${on_tag}" in
   '!!null')
     continue
@@ -81,7 +105,7 @@ for f in "${selected_files[@]}"; do
     # sub-keys) is still the forbidden trigger — GitHub fires on all its
     # activity types. `has()` is true for the null case; inspecting the
     # value tag is not (it yields `!!null` for both absent and null).
-    pr_target_present="$(yq eval '.on | has("pull_request_target")' "${f}")"
+    pr_target_present="$(read_workflow "${f}" '.on | has("pull_request_target")')" || true
     if [[ ${pr_target_present} == "true" ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
       printf '%s: uses `pull_request_target` trigger (forbidden — base-ref workflow with head-ref code + full secrets)\n' \

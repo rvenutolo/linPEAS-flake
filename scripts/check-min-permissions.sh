@@ -43,6 +43,27 @@ if ! command -v yq >/dev/null 2>&1; then
   exit 2
 fi
 
+# @description Print one expression's value from a workflow. Returns
+# non-zero, having named the file, when `yq` cannot evaluate it. `yq` is
+# on PATH — an absent one is reported by the guard above — so a failure
+# here is a workflow in the scanned tree that does not parse, which is a
+# fact about this repo and is reported the way the scan reports any
+# other: a finding against that file, with the scan continuing. What
+# must not happen is the unchecked case, where yq's own status ends the
+# run mid-tree and every workflow after this one goes unscanned.
+# @arg $1 workflow path
+# @arg $2 yq expression
+# @exitcode 1 yq could not evaluate the expression against the file
+function read_workflow() {
+  local -r file="$1" expr="$2"
+  local value
+  if ! value="$(yq eval "${expr}" "${file}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${file}" >&2
+    return 1
+  fi
+  printf '%s' "${value}"
+}
+
 failed=0
 shopt -s nullglob
 declare -a workflow_files=()
@@ -53,7 +74,10 @@ for f in "${selected_files[@]}"; do
   [[ -f ${f} ]] || continue
 
   # --- top-level permissions ---------------------------------------
-  top_tag="$(yq eval '.permissions | tag' "${f}")"
+  if ! top_tag="$(read_workflow "${f}" '.permissions | tag')"; then
+    failed=$((failed + 1))
+    continue
+  fi
   case "${top_tag}" in
   '!!null')
     # shellcheck disable=SC2016 # literal backticks in human-readable prose
@@ -61,16 +85,16 @@ for f in "${selected_files[@]}"; do
     failed=$((failed + 1))
     ;;
   '!!str')
-    top_val="$(yq eval '.permissions' "${f}")"
+    top_val="$(read_workflow "${f}" '.permissions')" || true
     # shellcheck disable=SC2016 # literal backticks in human-readable prose
     printf '%s: top-level permissions is scalar %q (need `permissions: {}`)\n' \
       "${f}" "${top_val}" >&2
     failed=$((failed + 1))
     ;;
   '!!map')
-    top_len="$(yq eval '.permissions | length' "${f}")"
+    top_len="$(read_workflow "${f}" '.permissions | length')" || true
     if [[ ${top_len} != "0" ]]; then
-      top_keys="$(yq eval '.permissions | keys | join(",")' "${f}")"
+      top_keys="$(read_workflow "${f}" '.permissions | keys | join(",")')" || true
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
       printf '%s: top-level permissions non-empty (keys: %s); need `permissions: {}`\n' \
         "${f}" "${top_keys}" >&2

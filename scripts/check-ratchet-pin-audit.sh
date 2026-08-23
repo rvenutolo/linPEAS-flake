@@ -49,6 +49,26 @@ if ! command -v yq >/dev/null 2>&1; then
   exit 2
 fi
 
+# @description Print one expression's value from the workflow under
+# audit. Returns non-zero, naming the expression, when `yq` cannot
+# evaluate it. `yq` is on PATH — an absent one is reported by the guard
+# above — so a failure here is a workflow that does not parse or an
+# expression its shape does not support. Either way no invariant was
+# scored, which is the answer an absent workflow already gives; an
+# unchecked read would instead leave the run carrying yq's own exit 1,
+# read by the caller as hardening drift in a file nothing was read from.
+# @arg $1 yq expression
+# @exitcode 1 yq could not evaluate the expression
+function read_workflow() {
+  local -r expr="$1"
+  local value
+  if ! value="$(yq eval "${expr}" "${WORKFLOW}")"; then
+    printf 'cannot read %s from %s\n' "${expr}" "${WORKFLOW}" >&2
+    return 1
+  fi
+  printf '%s' "${value}"
+}
+
 failed=0
 fail() {
   printf '%s\n' "$*" >&2
@@ -63,15 +83,23 @@ if [[ ! -f ${WORKFLOW} ]]; then
 fi
 
 # 2. Top-level permissions is exactly the empty map.
-perms_tag="$(yq eval '.permissions | tag' "${WORKFLOW}")"
-perms_len="$(yq eval '.permissions | length' "${WORKFLOW}")"
+if ! perms_tag="$(read_workflow '.permissions | tag')"; then
+  exit 2
+fi
+if ! perms_len="$(read_workflow '.permissions | length')"; then
+  exit 2
+fi
+
 if [[ ${perms_tag} != "!!map" || ${perms_len} != "0" ]]; then
   fail "top-level permissions must be {} (got tag=${perms_tag} length=${perms_len})"
 fi
 
 # 3. Both jobs declare timeout-minutes.
 for job in check notify; do
-  t="$(yq eval ".jobs.\"${job}\".\"timeout-minutes\" // \"\"" "${WORKFLOW}")"
+  if ! t="$(read_workflow ".jobs.\"${job}\".\"timeout-minutes\" // \"\"")"; then
+    exit 2
+  fi
+
   if [[ -z ${t} ]]; then
     fail "job ${job}: timeout-minutes missing"
   fi
@@ -79,22 +107,35 @@ done
 
 # 4. harden-runner is the first step of every job.
 for job in check notify; do
-  first="$(yq eval ".jobs.\"${job}\".steps[0].uses // \"\"" "${WORKFLOW}")"
+  if ! first="$(read_workflow ".jobs.\"${job}\".steps[0].uses // \"\"")"; then
+    exit 2
+  fi
+
   if [[ ${first} != step-security/harden-runner@* ]]; then
     fail "job ${job}: first step must be step-security/harden-runner (got: ${first})"
   fi
 done
 
 # 5. Every actions/checkout step sets persist-credentials: false.
-checkout_count="$(yq eval '[.jobs[].steps[] | select(.uses // "" | test("^actions/checkout@"))] | length' "${WORKFLOW}")"
-safe_count="$(yq eval '[.jobs[].steps[] | select(.uses // "" | test("^actions/checkout@")) | select(.with."persist-credentials" == false)] | length' "${WORKFLOW}")"
+if ! checkout_count="$(read_workflow '[.jobs[].steps[] | select(.uses // "" | test("^actions/checkout@"))] | length')"; then
+  exit 2
+fi
+if ! safe_count="$(read_workflow '[.jobs[].steps[] | select(.uses // "" | test("^actions/checkout@")) | select(.with."persist-credentials" == false)] | length')"; then
+  exit 2
+fi
+
 if [[ ${checkout_count} != "${safe_count}" ]]; then
   fail "actions/checkout: ${checkout_count} steps total, only ${safe_count} set persist-credentials: false"
 fi
 
 # 6. on: includes schedule AND workflow_dispatch.
-sched="$(yq eval '.on.schedule | tag' "${WORKFLOW}")"
-disp="$(yq eval '.on | has("workflow_dispatch")' "${WORKFLOW}")"
+if ! sched="$(read_workflow '.on.schedule | tag')"; then
+  exit 2
+fi
+if ! disp="$(read_workflow '.on | has("workflow_dispatch")')"; then
+  exit 2
+fi
+
 if [[ ${sched} != "!!seq" ]]; then
   fail "on: must include a schedule sequence"
 fi
@@ -103,13 +144,19 @@ if [[ ${disp} != "true" ]]; then
 fi
 
 # 7. concurrency.group is exactly ratchet-pin-audit.
-group="$(yq eval '.concurrency.group // ""' "${WORKFLOW}")"
+if ! group="$(read_workflow '.concurrency.group // ""')"; then
+  exit 2
+fi
+
 if [[ ${group} != "ratchet-pin-audit" ]]; then
   fail "concurrency.group must be \"ratchet-pin-audit\" (got: \"${group}\")"
 fi
 
 # 8. Notify body contains all four reason tokens.
-body="$(yq eval '.jobs.notify.steps[] | select(.uses == "./.github/actions/notify-workflow-result") | .with.body // ""' "${WORKFLOW}")"
+if ! body="$(read_workflow '.jobs.notify.steps[] | select(.uses == "./.github/actions/notify-workflow-result") | .with.body // ""')"; then
+  exit 2
+fi
+
 for token in drift-detected upstream-api-failure ratchet-tool-failure unknown; do
   if ! grep -qE "\`${token}\`" <<<"${body}"; then
     fail "notify body missing reason token: ${token}"
@@ -127,11 +174,17 @@ if [[ -z ${WORKFLOW_PATH_OVERRIDE:-} ]]; then
 fi
 
 # 10. Per-job permissions are exactly what's expected.
-check_perms="$(yq eval '.jobs.check.permissions | to_entries | map(.key + ":" + (.value | tostring)) | sort | join(",")' "${WORKFLOW}")"
+if ! check_perms="$(read_workflow '.jobs.check.permissions | to_entries | map(.key + ":" + (.value | tostring)) | sort | join(",")')"; then
+  exit 2
+fi
+
 if [[ ${check_perms} != "contents:read" ]]; then
   fail "job check: permissions must be exactly { contents: read } (got: ${check_perms})"
 fi
-notify_perms="$(yq eval '.jobs.notify.permissions | to_entries | map(.key + ":" + (.value | tostring)) | sort | join(",")' "${WORKFLOW}")"
+if ! notify_perms="$(read_workflow '.jobs.notify.permissions | to_entries | map(.key + ":" + (.value | tostring)) | sort | join(",")')"; then
+  exit 2
+fi
+
 if [[ ${notify_perms} != "issues:write" ]]; then
   fail "job notify: permissions must be exactly { issues: write } (got: ${notify_perms})"
 fi

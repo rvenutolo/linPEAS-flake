@@ -197,7 +197,12 @@ for p in "${base_path}" "${merge_path}"; do
 done
 
 if [[ -f ${merge_path} ]]; then
-  merge_rules="$(yq eval '.rules // {} | to_entries | map(.key + "=" + (.value | tostring)) | sort | join(",")' "${merge_path}")"
+  # A config that does not parse is a file this lint could not read. Its
+  # yq exit 1 must not surface as the rule-set drift verdict below.
+  if ! merge_rules="$(yq eval '.rules // {} | to_entries | map(.key + "=" + (.value | tostring)) | sort | join(",")' "${merge_path}")"; then
+    printf 'cannot read .rules from %s\n' "${merge_path}" >&2
+    exit 2
+  fi
   readonly want_rules='body-max-line-length=[0],footer-max-line-length=[0]'
   if [[ ${merge_rules} != "${want_rules}" ]]; then
     fail "$(printf '%s: rules must be exactly %q; got %q. The merge ruleset relaxes only the two GitHub-composed line-length rules' \
@@ -206,8 +211,14 @@ if [[ -f ${merge_path} ]]; then
 fi
 
 if [[ -f ${base_path} && -f ${merge_path} ]]; then
-  base_extends="$(yq eval '[.extends // []] | flatten | join(",")' "${base_path}")"
-  merge_extends="$(yq eval '[.extends // []] | flatten | join(",")' "${merge_path}")"
+  if ! base_extends="$(yq eval '[.extends // []] | flatten | join(",")' "${base_path}")"; then
+    printf 'cannot read .extends from %s\n' "${base_path}" >&2
+    exit 2
+  fi
+  if ! merge_extends="$(yq eval '[.extends // []] | flatten | join(",")' "${merge_path}")"; then
+    printf 'cannot read .extends from %s\n' "${merge_path}" >&2
+    exit 2
+  fi
   if [[ ${base_extends} != "${merge_extends}" ]]; then
     # shellcheck disable=SC2016 # literal backticks in human-readable prose
     fail "$(printf '%s and %s declare different `extends:` lists (%q vs %q); the merge config duplicates the base preset list and must track it' \

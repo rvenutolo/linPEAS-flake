@@ -127,7 +127,18 @@ if [[ -z ${FILE_FILTER} ]]; then
     wf_path="${DIR}/${wf}"
     granted=""
     if [[ -f ${wf_path} ]]; then
-      granted="$(yq eval ".jobs.\"${job}\".permissions.\"${scope}\" // \"\"" "${wf_path}")"
+      # Unchecked, a yq failure here leaves `granted` empty and the entry
+      # is reported as stale — a claim about a permission block nothing
+      # read. The forward pass above reports a workflow it cannot
+      # evaluate as a finding against that file and moves on, so this
+      # pass says the same thing rather than inventing a second verdict
+      # for the same file.
+      if ! granted="$(yq eval ".jobs.\"${job}\".permissions.\"${scope}\" // \"\"" \
+        "${wf_path}")"; then
+        printf '%s: could not evaluate workflow with yq (malformed?)\n' "${wf_path}" >&2
+        failed=$((failed + 1))
+        continue
+      fi
     fi
     if [[ ${granted} != "write" ]]; then
       printf '%s: stale entry %q/%q/%q (job does not grant that write scope)\n' \
