@@ -97,6 +97,12 @@ function main() {
   # payload read, not the empty/not-JSON/wrong-type shape gate above.
   run_scenario 'absent flake.lock is a tooling error' \
     'bad-lock-absent' 2 'pre-commit hook parity: payload from FLAKE_LOCK_OVERRIDE not found'
+  # The shape gate proves `.nodes` is an object, not that this node is
+  # one. A node holding a scalar kills the walk into `.locked` with jq's
+  # own exit 5 — outside the convention — where an absent node stays the
+  # drift verdict the scenario above covers.
+  run_scenario 'scalar pre-commit-hooks node is a tooling error' \
+    'bad-lock-scalar-node' 2 'cannot read nodes["pre-commit-hooks"].locked.rev from'
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then

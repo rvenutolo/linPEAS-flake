@@ -47,12 +47,16 @@ payload="$(cat)"
 require_json_payload 'stdin' "${payload}" '
   if type != "object" then "payload is \(type), want object"
   elif (.checks | type) != "array" then ".checks is \(.checks | type), want array"
+  elif any(.checks[]; type != "object") then "a .checks entry is not an object"
   else empty
   end'
 
 # Emit "<name>: <score>" lines for every check scoring below 10. The
-# gate above has already confirmed the payload parses and `.checks` is
-# an array, so this read cannot fail on shape.
+# gate above has already confirmed the payload parses, that `.checks` is
+# an array, and that every entry in it is an object — which is what
+# makes the `.score` read below total. An array of scalars would pass a
+# gate that stopped at the array and then kill this read with jq's own
+# exit 5, outside the convention entirely.
 offenders="$(jq --raw-output '
   .checks[]
   | select(.score < 10)

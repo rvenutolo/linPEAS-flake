@@ -138,12 +138,26 @@ function repo_relative() {
 
 # @description Emit sorted lint-group member names at a given ref.
 # @arg $1 git ref
+# @exitcode 2 the manifest is present at the ref but `yq` cannot read it
 function members_at() {
   local -r ref="$1"
   local -r lint_groups_rel="$(repo_relative "${LINT_GROUPS}")"
-  git show "${ref}:${lint_groups_rel}" 2>/dev/null |
-    yq --exit-status '.[] | .[]' - 2>/dev/null |
-    tr -d '"' | sort -u || true
+  # A ref that never tracked the manifest is a legitimate empty set —
+  # the manifest was added at some point in this history. A manifest
+  # that IS there and cannot be parsed is not: swallowing that reports
+  # "no members added, no members removed" about a file this run never
+  # read, which is the same zero-because-nothing-was-measured reading
+  # that job_ids_at above exists to refuse.
+  local blob
+  if ! blob="$(git show "${ref}:${lint_groups_rel}" 2>/dev/null)"; then
+    return 0
+  fi
+  local members
+  if ! members="$(yq '.[] | .[]' - <<<"${blob}")"; then
+    log_err "cannot read lint-group members from ${lint_groups_rel} at ${ref}"
+    return 2
+  fi
+  printf '%s' "${members}" | tr -d '"' | sort -u
 }
 
 # @description Filter stdin to ids safe to render; drop the rest.
@@ -200,8 +214,16 @@ function main() {
   local jobs_added jobs_removed members_added members_removed
   jobs_added="$(comm -13 <(printf '%s\n' "${base_jobs}") <(printf '%s\n' "${head_jobs}") | only_valid_ids)"
   jobs_removed="$(comm -23 <(printf '%s\n' "${base_jobs}") <(printf '%s\n' "${head_jobs}") | only_valid_ids)"
-  members_added="$(comm -13 <(members_at "${base}") <(members_at HEAD) | only_valid_ids)"
-  members_removed="$(comm -23 <(members_at "${base}") <(members_at HEAD) | only_valid_ids)"
+  # Resolved into variables before they are compared, for the reason the
+  # job-id sets above are: a members_at failure inside `comm <(…)` exits
+  # its own subshell and leaves comm diffing an empty set at exit 0.
+  local base_members head_members
+  base_members="$(members_at "${base}")" || exit 2
+  head_members="$(members_at HEAD)" || exit 2
+  members_added="$(comm -13 <(printf '%s\n' "${base_members}") \
+    <(printf '%s\n' "${head_members}") | only_valid_ids)"
+  members_removed="$(comm -23 <(printf '%s\n' "${base_members}") \
+    <(printf '%s\n' "${head_members}") | only_valid_ids)"
 
   printf 'Drift pressure since the last audit: **%s** commit(s) touching CI structure.\n\n' \
     "${commits}"

@@ -95,6 +95,15 @@ function main() {
   run_scenario 'boolean-typed payload is a tooling error' \
     'bool.json' 2 'unexpected payload shape from stdin: payload is boolean, want object'
 
+  # A `.checks` array of scalars passes a gate that stops at the array
+  # and then kills the `.score` read with jq's own exit 5, outside the
+  # convention. Built inline: a tracked fixture of this shape reads as a
+  # scorecard payload rather than as the shape probe it is.
+  local scalar_checks_payload="${work}/scalar-checks-payload.json"
+  printf '{"checks": ["not-an-object"]}\n' >"${scalar_checks_payload}"
+  run_scenario 'non-object .checks entry is a tooling error' \
+    "${scalar_checks_payload}" 2 'a .checks entry is not an object'
+
   harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then
