@@ -23,14 +23,37 @@ function expect() {
   printf 'OK   %s\n' "${fixture}"
 }
 
-expect good.yml 0 ""
-expect good-no-cancel.yml 0 ""
-expect bad-missing.yml 1 "missing top-level"
-expect bad-no-group.yml 1 "missing"
-expect bad-empty-group.yml 1 "empty"
-expect bad-scalar.yml 1 "unexpected shape"
-expect bad-seq-group.yml 1 "group has unexpected shape"
-expect bad-map-group.yml 1 "group has unexpected shape"
+# @description Scan a workflow that does not parse, written to a temp
+# dir at run time so no unparsable file sits in the tree for the
+# formatters to choke on. A file that does not parse is a fact about
+# this repo, so it is a finding against that file; what the read must
+# not do is leave yq's status unchecked, which ends the run mid-tree and
+# leaves every workflow after this one unscanned.
+# @arg $1 file body  @arg $2 expected stderr substring
+function expect_unparsable() {
+  local -r body="$1" want_msg="$2"
+  local dir got_exit=0 got_stderr
+  dir="$(mktemp --directory)"
+  printf '%s' "${body}" >"${dir}/bad-unparsable.yml"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${dir}" \
+    WORKFLOW_FILE_FILTER='bad-unparsable.yml' \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  rm --recursive --force -- "${dir}"
+  if [[ ${got_exit} != 1 ]]; then
+    printf 'FAIL unparsable workflow: exit %s, want 1\n  stderr: %s\n' \
+      "${got_exit}" "${got_stderr}" >&2
+    return 1
+  fi
+  if [[ ${got_stderr} != *"${want_msg}"* ]]; then
+    printf 'FAIL unparsable workflow: stderr missing %q\n  got: %s\n' \
+      "${want_msg}" "${got_stderr}" >&2
+    return 1
+  fi
+  printf 'OK   unparsable workflow reported as a finding\n'
+}
+
 expect no-such-workflow.yml 2 'selected 0 of'
+
+expect_unparsable 'concurrency: [\n' 'bad-unparsable.yml: could not evaluate'
 
 printf 'all tests passed\n'

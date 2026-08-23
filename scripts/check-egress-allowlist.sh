@@ -395,17 +395,29 @@ for f in "${selected_files[@]}"; do
   while IFS= read -r job; do
     [[ -z ${job} ]] && continue
 
-    endpoints="$(yq eval "
+    # Every endpoint finding below is derived from this list. A yq that
+    # dies on the step walk has read no allowlist at all, and its exit 1
+    # would surface as an allowlist found wanting.
+    if ! endpoints="$(yq eval "
       .jobs.\"${job}\".steps[]
       | select(.uses // \"\" | test(\"step-security/harden-runner@\"))
       | .with.\"allowed-endpoints\" // \"\"
-    " "${f}" | tr ' ' '\n' | sed '/^$/d')"
+    " "${f}" | tr ' ' '\n' | sed '/^$/d')"; then
+      printf '%s: cannot read allowed-endpoints for job %q\n' "${f}" "${job}" >&2
+      exit 2
+    fi
 
     # A job with no harden-runner step has no allowlist to lint.
     [[ -z ${endpoints} ]] && continue
 
-    uses="$(yq eval ".jobs.\"${job}\".steps[].uses // \"\"" "${f}")"
-    runs="$(yq eval ".jobs.\"${job}\".steps[].run // \"\"" "${f}")"
+    if ! uses="$(yq eval ".jobs.\"${job}\".steps[].uses // \"\"" "${f}")"; then
+      printf '%s: cannot read the step uses: list for job %q\n' "${f}" "${job}" >&2
+      exit 2
+    fi
+    if ! runs="$(yq eval ".jobs.\"${job}\".steps[].run // \"\"" "${f}")"; then
+      printf '%s: cannot read the step run: list for job %q\n' "${f}" "${job}" >&2
+      exit 2
+    fi
 
     # Path-bounded setup-nix detection, shared by assertion 1's forward rule
     # and assertion 7's reachability arm so the two directions of the nix rule

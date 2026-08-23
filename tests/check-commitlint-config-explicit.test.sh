@@ -35,6 +35,27 @@ expect extends-mismatch/ci.yml 1 "declare different"
 
 # A workflow yq cannot parse must fail loud, not empty the scan silently.
 expect bad-malformed/ci.yml 1 "could not evaluate"
+# A commitlint config that does not parse is a file this lint could not
+# read: yq exits 1 on it, and reporting that as the rule-set drift
+# verdict would name rules nothing was ever read. The config is written
+# at run time rather than kept in the tree, because the formatters
+# refuse to touch unparsable YAML.
+function expect_unparsable() {
+  local dir got_exit=0 got_stderr
+  dir="$(mktemp --directory)"
+  : >"${dir}/ci.yml"
+  cp -- "${FIXTURES}/good/.commitlintrc.yml" "${dir}/.commitlintrc.yml"
+  printf 'rules: [\n' >"${dir}/.commitlintrc.merge.yml"
+  got_stderr="$(PATHS_OVERRIDE="${dir}/ci.yml" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  rm --recursive --force -- "${dir}"
+  if [[ ${got_exit} != 2 || ${got_stderr} != *'cannot read .rules from'* ]]; then
+    printf 'FAIL unparsable merge config: exit %s\n  stderr: %s\n' \
+      "${got_exit}" "${got_stderr}" >&2
+    return 1
+  fi
+  printf 'OK   unparsable merge config is a tooling error\n'
+}
+expect_unparsable
 
 # @description Drive the enumeration itself, not a fixture: with
 # PATHS_OVERRIDE unset the script enumerates via `git ls-files`, and an

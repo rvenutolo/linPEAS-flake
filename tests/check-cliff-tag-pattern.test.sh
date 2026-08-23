@@ -73,6 +73,18 @@ function main() {
   run_scenario 'cliff.toml without tag_pattern key fails' \
     "${FIXTURES}/bad-no-key-cliff.toml" 1 'tag_pattern key absent'
 
+  # A config that does not parse is one this check could not read: yq
+  # exits 1 on it, and that 1 is the same status a drifted pattern
+  # carries, so the read has to be checked rather than trusted.
+  # Written at run time rather than kept in the tree: the formatters
+  # refuse to touch unparsable TOML.
+  local bad_toml_dir
+  bad_toml_dir="$(mktemp --directory)"
+  printf '[git]\ntag_pattern = "\n' >"${bad_toml_dir}/cliff.toml"
+  run_scenario 'unparsable cliff.toml exits tooling code' \
+    "${bad_toml_dir}/cliff.toml" 2 'cannot read .git.tag_pattern from'
+  rm --recursive --force -- "${bad_toml_dir}"
+
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then

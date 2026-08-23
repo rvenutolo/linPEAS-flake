@@ -67,12 +67,33 @@ if ! command -v yq >/dev/null 2>&1; then
   exit 2
 fi
 
+# @description Print one expression's value from a workflow. Returns
+# non-zero, naming the expression, when `yq` cannot evaluate it. The scan
+# has already proved this file parses, so a failure here is an expression
+# its shape does not support — nothing about the job's permissions was
+# read, and an unchecked read would leave the run carrying yq's own
+# exit 1, indistinguishable from a job found missing its fork guard.
+# @arg $1 workflow path
+# @arg $2 yq expression
+# @exitcode 1 yq could not evaluate the expression against the file
+function read_workflow() {
+  local -r file="$1" expr="$2"
+  local value
+  if ! value="$(yq eval "${expr}" "${file}")"; then
+    printf 'cannot read %s from %s\n' "${expr}" "${file}" >&2
+    return 1
+  fi
+  printf '%s' "${value}"
+}
+
 # Detect a guard-required write scope on one job. Returns 0 if found.
 job_needs_fork_guard() {
   local -r file="$1" job="$2"
   for scope in contents packages id-token attestations actions; do
     local val
-    val="$(yq eval ".jobs.\"${job}\".permissions.\"${scope}\" // \"\"" "${file}")"
+    if ! val="$(read_workflow "${file}" ".jobs.\"${job}\".permissions.\"${scope}\" // \"\"")"; then
+      exit 2
+    fi
     if [[ ${val} == "write" ]]; then
       return 0
     fi
@@ -80,7 +101,9 @@ job_needs_fork_guard() {
   # App installation token = real write privilege despite a read-only
   # GITHUB_TOKEN. A job minting one must carry the fork guard.
   local body
-  body="$(yq eval ".jobs.\"${job}\"" "${file}")"
+  if ! body="$(read_workflow "${file}" ".jobs.\"${job}\"")"; then
+    exit 2
+  fi
   [[ ${body} == *"actions/create-github-app-token"* ]] && return 0
   [[ ${body} == *"secrets.BUMP_APP_PRIVATE_KEY"* ]] && return 0
   return 1
@@ -111,7 +134,9 @@ for f in "${selected_files[@]}"; do
     if ! job_needs_fork_guard "${f}" "${job}"; then
       continue
     fi
-    if_clause="$(yq eval ".jobs.\"${job}\".if // \"\"" "${f}")"
+    if ! if_clause="$(read_workflow "${f}" ".jobs.\"${job}\".if // \"\"")"; then
+      exit 2
+    fi
     if [[ ${if_clause} != *"${GUARD_NEEDLE}"* ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
       printf '%s: job %q holds guard-required write scope but is missing fork guard `%s`; got if=%q\n' \

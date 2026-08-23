@@ -37,6 +37,31 @@ expect bad-schedule.yml 1 "on: must include a schedule sequence"
 # An absent workflow file is a missing input: no invariant was read, so
 # it must not be counted as a failed one.
 expect no-such-workflow.yml 2 "workflow not found at"
+# A workflow that does not parse is the same kind of answer as an absent
+# one: no invariant was read, so it is not a failed invariant. The file
+# is written at run time rather than kept in the tree, because the
+# formatters refuse to touch unparsable YAML. yq exits 1 on it, and an
+# unchecked read would report that as hardening drift.
+function expect_unparsable() {
+  local dir got_exit=0 got_stderr
+  dir="$(mktemp --directory)"
+  printf 'jobs: [\n' >"${dir}/ratchet-pin-audit.yml"
+  got_stderr="$(WORKFLOW_PATH_OVERRIDE="${dir}/ratchet-pin-audit.yml" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  rm --recursive --force -- "${dir}"
+  if [[ ${got_exit} != 2 ]]; then
+    printf 'FAIL unparsable workflow: exit %s, want 2\n  stderr: %s\n' \
+      "${got_exit}" "${got_stderr}" >&2
+    return 1
+  fi
+  if [[ ${got_stderr} != *'cannot read'* ]]; then
+    printf 'FAIL unparsable workflow: stderr missing %q\n  got: %s\n' \
+      'cannot read' "${got_stderr}" >&2
+    return 1
+  fi
+  printf 'OK   unparsable workflow is a tooling error\n'
+}
+expect_unparsable
 
 # --- documented ratchet version vs the installed tool ----------------
 # `ratchet` floats with the nixpkgs input while three sites assert a

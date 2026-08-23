@@ -130,11 +130,21 @@ for f in "${selected_files[@]}"; do
   fi
   while IFS='|' read -r shape job idx; do
     [[ -z ${shape} ]] && continue
+    # The rows query above proves the step exists, not that this read of
+    # its body succeeds. A yq that dies here has read no run: block, and
+    # its exit 1 would surface as a strict-mode violation in a block
+    # nothing was read from.
     if [[ ${shape} == composite ]]; then
-      body="$(yq eval ".runs.steps[${idx}].run" "${f}")"
+      if ! body="$(yq eval ".runs.steps[${idx}].run" "${f}")"; then
+        printf '%s: cannot read composite step[%s] run: block\n' "${f}" "${idx}" >&2
+        exit 2
+      fi
       where="$(printf 'composite step[%s]' "${idx}")"
     else
-      body="$(yq eval ".jobs.\"${job}\".steps[${idx}].run" "${f}")"
+      if ! body="$(yq eval ".jobs.\"${job}\".steps[${idx}].run" "${f}")"; then
+        printf '%s: cannot read job %q step[%s] run: block\n' "${f}" "${job}" "${idx}" >&2
+        exit 2
+      fi
       where="$(printf 'job %q step[%s]' "${job}" "${idx}")"
     fi
     first="$(printf '%s\n' "${body}" | first_meaningful_line || true)"

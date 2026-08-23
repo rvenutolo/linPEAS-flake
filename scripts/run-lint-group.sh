@@ -29,7 +29,13 @@ function main() {
   fi
 
   local checks
-  checks="$(yq eval ".\"${group}\" // [] | .[]" "${MANIFEST}")"
+  # A manifest that does not parse is an input this runner could not
+  # read. Unchecked, yq's own exit 1 becomes the runner's status and
+  # reads as a lint in the group having found a violation.
+  if ! checks="$(yq eval ".\"${group}\" // [] | .[]" "${MANIFEST}")"; then
+    printf 'cannot read group %s from %s\n' "${group}" "${MANIFEST}" >&2
+    exit 2
+  fi
   if [[ -z ${checks} ]]; then
     printf 'unknown or empty group: %s\n' "${group}" >&2
     exit 2
