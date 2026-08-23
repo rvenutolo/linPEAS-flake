@@ -118,7 +118,8 @@ resolve_patch_tag() {
       fi
     fi
   elif [[ ! -v tag_cache[${owner_repo}] ]]; then
-    if ! payload=$(gh api --paginate "repos/${owner_repo}/tags" \
+    if ! payload=$(gh api --header 'X-GitHub-Api-Version: 2022-11-28' \
+      --paginate "repos/${owner_repo}/tags" \
       --jq '.[] | [.name, .commit.sha] | @tsv' 2>/dev/null); then
       tag_cache[${owner_repo}]="__API_FAIL__"
     else
