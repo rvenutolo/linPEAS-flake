@@ -108,6 +108,29 @@ function main() {
   fi
   rm --force -- "${ws_backup}" "${ws_err}" "${ws_out}" "${ws_outcome}"
 
+  # A `nix` that is present and fails has evaluated nothing: exit 2, not
+  # the exit 1 that --check mode reads as a document to regenerate.
+  local nix_shim nix_err nix_out nix_outcome nix_rc=0
+  nix_shim="$(mktemp --directory)"
+  nix_err="$(mktemp)"
+  nix_out="$(mktemp)"
+  nix_outcome="$(mktemp)"
+  printf '#!/usr/bin/env bash\nexit 1\n' >"${nix_shim}/nix"
+  chmod +x -- "${nix_shim}/nix"
+  PATH="${nix_shim}:${PATH}" "${SCRIPT}" --check >"${nix_out}" 2>"${nix_err}" || nix_rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${nix_rc}" >"${nix_outcome}"
+  harness_assert_record 'failing nix eval is a tooling error' \
+    'could not evaluate' "${nix_outcome}" "${nix_out}" "${nix_err}"
+  if [[ ${nix_rc} -eq 2 ]] &&
+    grep --fixed-strings --quiet -- 'could not evaluate' "${nix_err}"; then
+    pass 'failing nix eval is a tooling error, not a stale document'
+  else
+    fail "failing nix eval: expected exit 2 + 'could not evaluate', got exit ${nix_rc}"
+    sed 's/^/    /' "${nix_err}" >&2
+  fi
+  rm --recursive --force -- "${nix_shim}"
+  rm --force -- "${nix_err}" "${nix_out}" "${nix_outcome}"
+
   harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then

@@ -11,6 +11,9 @@
 
 # Env overrides (test-only):
 #   SCRIPTS_DIR_OVERRIDE — alternate scripts/ root (for fixture tests)
+#   SCRIPT_DOCS_AWK_OVERRIDE — alternate annotation parser, so the
+#     shape gate below is exercisable against a parser that emits
+#     something other than the document this renderer reads
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -118,7 +121,7 @@ function main() {
   readonly repo_root
   scripts_dir="${SCRIPTS_DIR_OVERRIDE:-${repo_root}/scripts}"
   doc="${repo_root}/docs/reference/scripts.md"
-  awk_parser="${repo_root}/scripts/_script_docs.awk"
+  awk_parser="${SCRIPT_DOCS_AWK_OVERRIDE:-${repo_root}/scripts/_script_docs.awk}"
   readonly scripts_dir doc awk_parser
 
   # An absent input is a could-not-run condition, not drift: exit 2 so the
@@ -183,6 +186,23 @@ function main() {
     fi
     if ! json="$(awk -f "${awk_parser}" <"${script}" 2>/dev/null)"; then
       log_err "parse failure (missing @description?) in ${script}"
+      exit 2
+    fi
+    # The eight field reads in emit_entry walk this document with no
+    # further guard apiece. Proving the shape once here is what makes
+    # them total: a parser emitting another shape would otherwise kill
+    # the render mid-entry with jq's own status, and a generated
+    # document is not the place to discover that the parser changed.
+    if ! jq --exit-status '
+      type == "object"
+      and (.description | type) == "string"
+      and (.example | type) == "string"
+      and (.args | type) == "array"
+      and all(.args[]; (.name | type) == "string" and (.text | type) == "string")
+      and (.options | type) == "array"
+      and all(.options[]; (.flag | type) == "string" and (.text | type) == "string")
+    ' <<<"${json}" >/dev/null 2>&1; then
+      log_err "unexpected parser output shape for ${script}"
       exit 2
     fi
     case "${name}" in
