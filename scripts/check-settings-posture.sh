@@ -119,8 +119,15 @@ function assert_field() {
   local -r path="$2"
   local -r want="$3"
   local -r key="$4"
+  # The shape gate proves each payload parses and that the fields it
+  # names carry the right type; it does not prove every path this reads
+  # walks through objects. A `jq` that dies on the walk exits 5, outside
+  # the convention entirely, and has read no value to compare.
   local got
-  got="$(jq --raw-output -- "${path}" <<<"${json}")"
+  if ! got="$(jq --raw-output -- "${path}" <<<"${json}")"; then
+    log_err "cannot read ${path} for ${key}: jq failed"
+    exit 2
+  fi
   if [[ ${got} != "${want}" ]]; then
     report_drift "${key}" "${got}" "${want}"
   fi
@@ -129,7 +136,14 @@ function assert_field() {
 payload_source_into repo_source REPO_JSON_OVERRIDE "/repos/${THIS_REPO}"
 readonly repo_source
 if ! fetch_json_override_into repo_json REPO_JSON_OVERRIDE "${repo_source}"; then
-  repo_json="$(fetch_json_live "/repos/${THIS_REPO}")"
+  # `gh` is on PATH — an absent one is reported by the guard above — so a
+  # failure here is the API refusing, the token expiring, or the network
+  # being gone. Unchecked, `gh`'s own exit 1 becomes this lint's verdict
+  # and reads as posture drift, when no posture field was read at all.
+  if ! repo_json="$(fetch_json_live "/repos/${THIS_REPO}")"; then
+    log_err "cannot fetch ${repo_source}: GitHub API call failed"
+    exit 2
+  fi
 fi
 require_json_payload "${repo_source}" "${repo_json}" '
   if type != "object" then "payload is \(type), want object"
@@ -142,7 +156,11 @@ payload_source_into actions_perms_source ACTIONS_PERMS_JSON_OVERRIDE \
 readonly actions_perms_source
 if ! fetch_json_override_into actions_perms_json ACTIONS_PERMS_JSON_OVERRIDE \
   "${actions_perms_source}"; then
-  actions_perms_json="$(fetch_json_live "/repos/${THIS_REPO}/actions/permissions")"
+  if ! actions_perms_json="$(fetch_json_live \
+    "/repos/${THIS_REPO}/actions/permissions")"; then
+    log_err "cannot fetch ${actions_perms_source}: GitHub API call failed"
+    exit 2
+  fi
 fi
 require_json_payload "${actions_perms_source}" "${actions_perms_json}" '
   if type != "object" then "payload is \(type), want object"
@@ -156,8 +174,11 @@ payload_source_into actions_workflow_perms_source ACTIONS_WORKFLOW_PERMS_JSON_OV
 readonly actions_workflow_perms_source
 if ! fetch_json_override_into actions_workflow_perms_json \
   ACTIONS_WORKFLOW_PERMS_JSON_OVERRIDE "${actions_workflow_perms_source}"; then
-  actions_workflow_perms_json="$(fetch_json_live \
-    "/repos/${THIS_REPO}/actions/permissions/workflow")"
+  if ! actions_workflow_perms_json="$(fetch_json_live \
+    "/repos/${THIS_REPO}/actions/permissions/workflow")"; then
+    log_err "cannot fetch ${actions_workflow_perms_source}: GitHub API call failed"
+    exit 2
+  fi
 fi
 require_json_payload "${actions_workflow_perms_source}" "${actions_workflow_perms_json}" '
   if type != "object" then "payload is \(type), want object"
@@ -171,8 +192,11 @@ payload_source_into env_github_pages_source ENV_GITHUB_PAGES_JSON_OVERRIDE \
 readonly env_github_pages_source
 if ! fetch_json_override_into env_github_pages_json \
   ENV_GITHUB_PAGES_JSON_OVERRIDE "${env_github_pages_source}"; then
-  env_github_pages_json="$(fetch_json_live \
-    "/repos/${THIS_REPO}/environments/github-pages")"
+  if ! env_github_pages_json="$(fetch_json_live \
+    "/repos/${THIS_REPO}/environments/github-pages")"; then
+    log_err "cannot fetch ${env_github_pages_source}: GitHub API call failed"
+    exit 2
+  fi
 fi
 require_json_payload "${env_github_pages_source}" "${env_github_pages_json}" '
   if type != "object" then "payload is \(type), want object"

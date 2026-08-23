@@ -124,8 +124,14 @@ readonly selected_source
 if [[ -n ${SELECTED_ACTIONS_JSON_OVERRIDE:-} ]]; then
   read_json_payload_into selected_json "${SELECTED_ACTIONS_JSON_OVERRIDE}" \
     "${selected_source}"
-else
-  selected_json="$(fetch_selected_actions)"
+elif ! selected_json="$(fetch_selected_actions)"; then
+  # `gh` is on PATH — an absent one is reported by the guard above — so a
+  # failure here is the API refusing, the token expiring, or the network
+  # being gone. Unchecked, `gh`'s own exit 1 would surface as this
+  # check's verdict and read as an allowlist that drifted, when nothing
+  # about the live allowlist was read at all.
+  log_err "cannot fetch ${selected_source}: GitHub API call failed"
+  exit 2
 fi
 
 require_json_payload "${selected_source}" "${selected_json}" '
