@@ -87,17 +87,31 @@ readonly MIRROR_FILE="${MIRROR_JSON_OVERRIDE:-${REPO_ROOT}/.github/rulesets/prot
 readonly DOC_FILE="${DOC_TABLE_OVERRIDE:-${REPO_ROOT}/docs/security/required-checks.md}"
 
 # @description Fetch the live ruleset JSON from the rulesets API.
+# Both calls are status-checked. `gh` present but failing — an API
+# error, an expired token, no network — exits 1, and an unchecked
+# assignment hands that 1 to the caller as this check's own verdict,
+# which reads as a drifted ruleset rather than as a fetch that never
+# happened. An empty ruleset list is a different answer: the API
+# answered, and no ruleset by this name is a finding about the repo.
 function fetch_ruleset() {
   local id
-  id="$(gh api --header 'X-GitHub-Api-Version: 2022-11-28' \
+  if ! id="$(gh api --header 'X-GitHub-Api-Version: 2022-11-28' \
     "/repos/${THIS_REPO}/rulesets" \
-    --jq ".[] | select(.name==\"${EXPECTED_NAME}\") | .id")"
+    --jq ".[] | select(.name==\"${EXPECTED_NAME}\") | .id")"; then
+    log_err "cannot list rulesets for ${THIS_REPO}: GitHub API call failed"
+    exit 2
+  fi
   if [[ -z ${id} ]]; then
     printf 'no ruleset named %q on %s\n' "${EXPECTED_NAME}" "${THIS_REPO}" >&2
     exit 1
   fi
-  gh api --header 'X-GitHub-Api-Version: 2022-11-28' \
-    "/repos/${THIS_REPO}/rulesets/${id}"
+  local body
+  if ! body="$(gh api --header 'X-GitHub-Api-Version: 2022-11-28' \
+    "/repos/${THIS_REPO}/rulesets/${id}")"; then
+    log_err "cannot fetch ruleset ${id} for ${THIS_REPO}: GitHub API call failed"
+    exit 2
+  fi
+  printf '%s' "${body}"
 }
 
 # The mirror payload is either a fixture path or the in-tree file, and
@@ -127,13 +141,20 @@ fi
 # Runs before the live-ruleset fetch so the doc half also fails
 # offline (and under fixture overrides without a live fixture).
 
-mirror_contexts="$(jq --compact-output \
+# The payload gate above proves the mirror parses, not that it carries a
+# required_status_checks rule shaped the way this read walks it. A `jq`
+# that dies on the walk has read no context list, and its own status
+# would surface as a doc-table drift verdict below.
+if ! mirror_contexts="$(jq --compact-output \
   '.rules[] | select(.type=="required_status_checks") |
   .parameters.required_status_checks |
   map(.context) | sort | unique' \
-  <<<"${mirror_json}")"
+  <<<"${mirror_json}")"; then
+  log_err "cannot read required_status_checks contexts from ${mirror_source}"
+  exit 2
+fi
 
-doc_contexts="$(awk --field-separator='|' '
+if ! doc_contexts="$(awk --field-separator='|' '
   /^## Required contexts$/ { in_section = 1; next }
   in_section && /^## / { in_section = 0 }
   in_section && /^\|/ {
@@ -141,7 +162,10 @@ doc_contexts="$(awk --field-separator='|' '
     gsub(/^[ \t]+|[ \t]+$/, "", cell)
     if (cell != "Context" && cell !~ /^-+$/ && cell != "") { print cell }
   }
-' "$(awk_path "${DOC_FILE}")" | jq --raw-input . | jq --slurp --compact-output 'sort | unique')"
+' "$(awk_path "${DOC_FILE}")" | jq --raw-input . | jq --slurp --compact-output 'sort | unique')"; then
+  log_err "cannot read the required-contexts table from ${DOC_FILE}"
+  exit 2
+fi
 
 if [[ ${doc_contexts} != "${mirror_contexts}" ]]; then
   printf 'doc-table drift between required-checks.md and in-tree mirror:\n' >&2
@@ -264,9 +288,12 @@ done
 
 # --- pull_request rule: allowed_merge_methods == ["merge"] ------------------
 
-merge_methods="$(jq --compact-output \
+if ! merge_methods="$(jq --compact-output \
   '.rules[] | select(.type=="pull_request") | .parameters.allowed_merge_methods' \
-  <<<"${ruleset_json}")"
+  <<<"${ruleset_json}")"; then
+  log_err "cannot read allowed_merge_methods from ${ruleset_source}"
+  exit 2
+fi
 if [[ ${merge_methods} != "${EXPECTED_MERGE_METHODS}" ]]; then
   printf 'allowed_merge_methods drift: got %s, want %s\n' \
     "${merge_methods}" "${EXPECTED_MERGE_METHODS}" >&2
@@ -275,10 +302,13 @@ fi
 
 # --- pull_request rule: required_review_thread_resolution == true ----------
 
-thread_resolution="$(jq --raw-output \
+if ! thread_resolution="$(jq --raw-output \
   '.rules[] | select(.type=="pull_request") |
   .parameters.required_review_thread_resolution' \
-  <<<"${ruleset_json}")"
+  <<<"${ruleset_json}")"; then
+  log_err "cannot read required_review_thread_resolution from ${ruleset_source}"
+  exit 2
+fi
 if [[ ${thread_resolution} != 'true' ]]; then
   printf 'required_review_thread_resolution drift: got %q, want true\n' \
     "${thread_resolution}" >&2
@@ -287,10 +317,13 @@ fi
 
 # --- required_status_checks rule: strict policy == true --------------------
 
-strict_policy="$(jq --raw-output \
+if ! strict_policy="$(jq --raw-output \
   '.rules[] | select(.type=="required_status_checks") |
   .parameters.strict_required_status_checks_policy' \
-  <<<"${ruleset_json}")"
+  <<<"${ruleset_json}")"; then
+  log_err "cannot read strict_required_status_checks_policy from ${ruleset_source}"
+  exit 2
+fi
 if [[ ${strict_policy} != 'true' ]]; then
   printf 'strict_required_status_checks_policy drift: got %q, want true\n' \
     "${strict_policy}" >&2
@@ -302,11 +335,14 @@ fi
 # was computed for the doc-table check above). integration_id is verified
 # separately in the block that follows.
 
-live_contexts="$(jq --compact-output \
+if ! live_contexts="$(jq --compact-output \
   '.rules[] | select(.type=="required_status_checks") |
   .parameters.required_status_checks |
   map(.context) | sort | unique' \
-  <<<"${ruleset_json}")"
+  <<<"${ruleset_json}")"; then
+  log_err "cannot read required_status_checks contexts from ${ruleset_source}"
+  exit 2
+fi
 
 if [[ ${live_contexts} != "${mirror_contexts}" ]]; then
   printf 'required-status-checks drift between live ruleset and in-tree mirror:\n' >&2
@@ -323,19 +359,25 @@ fi
 # repointed integration_id — which would let a non-Actions reporter satisfy a
 # provenance check — is flagged.
 
-mirror_tuples="$(jq --compact-output \
+if ! mirror_tuples="$(jq --compact-output \
   '.rules[] | select(.type=="required_status_checks") |
   .parameters.required_status_checks |
   map({context, integration_id: (.integration_id // null)}) |
   sort_by(.context)' \
-  <<<"${mirror_json}")"
+  <<<"${mirror_json}")"; then
+  log_err "cannot read context/integration_id pairs from ${mirror_source}"
+  exit 2
+fi
 
-live_tuples="$(jq --compact-output \
+if ! live_tuples="$(jq --compact-output \
   '.rules[] | select(.type=="required_status_checks") |
   .parameters.required_status_checks |
   map({context, integration_id: (.integration_id // null)}) |
   sort_by(.context)' \
-  <<<"${ruleset_json}")"
+  <<<"${ruleset_json}")"; then
+  log_err "cannot read context/integration_id pairs from ${ruleset_source}"
+  exit 2
+fi
 
 if [[ ${live_tuples} != "${mirror_tuples}" ]]; then
   printf 'integration_id drift between live ruleset and in-tree mirror:\n' >&2

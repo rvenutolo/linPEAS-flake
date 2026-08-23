@@ -127,6 +127,50 @@ function run_unreadable_scenario() {
   rm --force -- "${payload}"
 }
 
+# @description Run the lint against a live `gh` that is present and
+# fails, with no payload override, so the fetch itself is the fault. An
+# unchecked fetch would hand `gh`'s own exit 1 to the caller, which reads
+# as settings-posture drift.
+# @arg $1 scenario name  @arg $2 expected stderr substring
+function run_failing_gh_scenario() {
+  local -r name="$1"
+  local -r expected_stderr="$2"
+
+  local shim_dir
+  shim_dir="$(mktemp --directory)"
+  printf '#!/usr/bin/env bash\nexit 1\n' >"${shim_dir}/gh"
+  chmod +x -- "${shim_dir}/gh"
+
+  local stderr_file stdout_file outcome_file
+  stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+
+  local actual_exit=0
+  PATH="${shim_dir}:${PATH}" \
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${expected_stderr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+
+  if [[ ${actual_exit} -ne 2 ]]; then
+    printf 'FAIL: %s — expected exit 2, got %d\n' "${name}" "${actual_exit}" >&2
+    printf 'stderr was:\n' >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet -- "${expected_stderr}" "${stderr_file}"; then
+    printf 'FAIL: %s — stderr missing %q\n' "${name}" "${expected_stderr}" >&2
+    printf 'stderr was:\n' >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+
+  rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
+  rm --recursive --force -- "${shim_dir}"
+}
+
 function main() {
   run_scenario 'matching fixtures pass' \
     'good' 0 ''
@@ -199,6 +243,10 @@ function main() {
   fi
   rm --force -- "${stderr_file}"
 
+  # A `gh` that is present and fails is a fetch that never happened, not
+  # posture that drifted: exit 2, and a diagnostic naming the call.
+  run_failing_gh_scenario 'failing gh is a tooling error, not posture drift' \
+    'GitHub API call failed'
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
