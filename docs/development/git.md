@@ -93,10 +93,13 @@ just lint        # pre-commit run --all-files
 just lint-links  # lychee link check (inputs in the recipe, exclusions in lychee.toml)
 ```
 
-`pre-commit install` (once) wires the git hooks so the same hooks run
-against staged files on every commit (`just lint` runs them against
-every file in the repo). Entering the devShell — `nix develop` or
-direnv — installs them for you.
+Entering the devShell — `nix develop` or direnv — wires the git hooks for
+you, so the same hooks run against staged files on every commit (`just lint` runs them against every file in the repo). Only when working
+outside the devShell do you need to install them yourself, once:
+
+```sh
+pre-commit install
+```
 
 ## Merge policy
 
@@ -196,10 +199,3 @@ Lychee is not a pre-commit hook (it hits the network and can flake on
 offline work). Run it manually with `just lint-links`; CI runs it on a
 weekly cron only (plus manual `workflow_dispatch`); it is not a required
 check.
-
-Only needed when working outside the devShell — entering it installs the
-hooks for you:
-
-```sh
-pre-commit install
-```

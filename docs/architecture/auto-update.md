@@ -80,7 +80,7 @@ longer matches leaves every input frozen while every check stays green. Both
 halves of that have already happened in this repo: a login-shape change
 silently disabled `renovate-flake-lock-refresh.yml` for its entire lifetime,
 and Renovate sat in Mend silent mode long enough for `pre-commit-hooks` to
-reach 102 days without anything saying so.
+go months past its staleness tier without anything saying so.
 
 `scripts/check-flake-lock-staleness.sh`, run daily by
 `flake-lock-staleness-check.yml`, watches the freeze rather than any single
