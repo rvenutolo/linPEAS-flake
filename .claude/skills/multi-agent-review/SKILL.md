@@ -74,7 +74,7 @@ one `Workflow` whose script is the template below. It returns
 `{ survivors, refuted }`: append `survivors` to the running report's dimension
 section and fold `refuted` into the Refutation log (the killed findings *are*
 the finder false-positive rate — dropping them leaves that section empty). Each
-`refuted` entry carries `contested` — a `true` there is a **2-1 kill**: one
+`refuted` entry carries `contested` — a `true` there means exactly one live
 skeptic could not refute it, so a real finding may have been buried. Surface
 those in a **Contested kills** subsection, never silently. Then show the user a
 one-screen summary (counts + top findings, contested-kill count called out)
@@ -88,7 +88,8 @@ hand-editing each finder prompt.
 ### 3. Workflow script template
 
 One dimension = one `Workflow` call. Fan out the dimension's slices as finders,
-dedup, then refute each survivor with 3 skeptics; keep ≥2/3. The controller
+dedup, then refute each survivor with 3 skeptics; keep a finding when at least
+two of the skeptics that returned could not refute it. The controller
 injects four per-dimension values from `references/dimensions.md`: `SLICES`,
 `FINDER_PROMPT(s)`, `REFUTER_GUIDANCE` (that dimension's refuter paragraph
 *verbatim* — this is what scopes the skeptic to the dimension's claim type), and
@@ -143,14 +144,14 @@ const graded = (await parallel(toRefute.map(f => () =>
       const live = vs.filter(Boolean)
       const nonRefuted = live.filter(v => !v.refuted).length
       // contested = killed (< 2 skeptics failed to refute) but NOT unanimous: at
-      // least one skeptic could not refute it. A 2-1 kill can bury a real finding,
+      // least one skeptic could not refute it. Such a kill can bury a real finding,
       // so it is surfaced separately rather than dropped silently.
       return { f, survived: nonRefuted >= 2, contested: nonRefuted === 1,
         votes: { nonRefuted, total: live.length }, why: live.map(v => v.why).filter(Boolean) }
     })))).filter(Boolean)
 
 // Keep the killed findings — the Refutation log needs the false-positive rate,
-// and contested kills (2-1) must be visible, not silently dropped.
+// and contested kills must be visible, not silently dropped.
 return {
   survivors: graded.filter(r => r.survived).map(r => r.f),
   refuted: graded.filter(r => !r.survived).map(r => ({
@@ -184,13 +185,14 @@ After the last dimension, confirm `git status` shows no modified tracked files.
 - Failure scenario: <inputs/state → wrong outcome, reproducible from here>
 - Suggested direction: …
 
-## Advisory (dimension 7)   <-- kept visually separate from defect sections>
+## Advisory (dimension 7)   <kept visually separate from defect sections>
 
 ## Refutation log
 <per dimension: what was found-then-killed and why — shows the finder's
-  false-positive rate, not just survivors. Unanimous 3-0 kills only.>
+  false-positive rate, not just survivors. Unanimous kills only
+  (`nonRefuted === 0`); cite each entry's `votes` for the live skeptic count.>
 
-### Contested kills (2-1)
+### Contested kills
 <killed findings where one skeptic could NOT refute (contested=true): each with
   its file:line, the dissenting skeptic's reason, and why the majority killed it.
   These are near-misses — a real finding may be buried here; do not omit them.>
@@ -199,9 +201,11 @@ After the last dimension, confirm `git status` shows no modified tracked files.
 Severity scale: `critical / high / medium / low / advisory`. Dimension 7
 findings are always `advisory`. Rank findings most-severe-first within each
 dimension. Every reported finding must be self-contained and carry its
-`failure_scenario`. A `refuted` entry with `contested: true` was a 2-1 kill —
-list it under **Contested kills**, never fold it silently into the clean-kill
-log.
+`failure_scenario`. A `refuted` entry with `contested: true` is a kill that one
+live skeptic could not refute — list it under **Contested kills**, never fold it
+silently into the clean-kill log. The tallies are computed over the skeptics
+that actually returned (`live`), so a run where one agent dies reports two
+votes, not three; quote `votes` rather than assuming a denominator.
 
 ## Spot-check protocol (offer to the user)
 
