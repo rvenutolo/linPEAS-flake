@@ -101,7 +101,20 @@ for f in "${selected_files[@]}"; do
       failed=$((failed + 1))
       continue
     fi
-    if ! grep -qxF "${scope}" <<<"$(allowed "${base}" "${job}")"; then
+    # Capture the allowlist read (and its exit status) into a variable
+    # rather than feeding the here-string from `<<<"$(allowed ...)"`: a
+    # command substitution's exit status is not propagated into the
+    # command it feeds, so a yq failure yields an empty scope list and
+    # every write scope in the workflow is reported as an over-grant
+    # against an allowlist nothing read. The allowlist is a precondition
+    # file, not a scanned artifact, so an unparsable one is a tooling
+    # error (exit 2); an unparsable workflow stays a finding.
+    if ! allowed_scopes="$(allowed "${base}" "${job}")"; then
+      printf '%s: could not evaluate allowlist with yq (malformed?)\n' \
+        "${ALLOWLIST}" >&2
+      exit 2
+    fi
+    if ! grep -qxF "${scope}" <<<"${allowed_scopes}"; then
       printf '%s: job %q grants write scope %q not allowed by %s\n' \
         "${f}" "${job}" "${scope}" "${ALLOWLIST}" >&2
       failed=$((failed + 1))
