@@ -36,6 +36,13 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/awk-path.sh
 source "${_lib_dir}/lib/awk-path.sh"
+# shellcheck source=scripts/lib/log.sh
+source "${_lib_dir}/lib/log.sh"
+
+# Every tag resolution is an API call. An absent `gh` makes all of
+# them fail and the run reports API failures, naming the registry for
+# a fault that is local.
+require_tool gh
 
 OUTPUT="${TMPDIR:-/tmp}/action-pin-inventory.tsv"
 while [[ $# -gt 0 ]]; do

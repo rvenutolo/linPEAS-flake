@@ -42,6 +42,10 @@ source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/payload.sh
 source "${_lib_dir}/lib/payload.sh"
 
+# The ruleset is read from the API, so an absent `gh` means the check
+# read nothing. Unguarded it exits 1, which reads as a drifted ruleset.
+require_tool gh
+
 readonly EXPECTED_NAME='release-tag-protection'
 readonly EXPECTED_TARGET='tag'
 readonly EXPECTED_ENFORCEMENT='active'

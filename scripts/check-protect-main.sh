@@ -69,6 +69,10 @@ source "${_lib_dir}/lib/awk-path.sh"
 # shellcheck source=scripts/lib/payload.sh
 source "${_lib_dir}/lib/payload.sh"
 
+# The ruleset comes from the API, so an absent `gh` means nothing was
+# read. Unguarded it exits 1, telling a caller the ruleset drifted.
+require_tool gh
+
 readonly EXPECTED_NAME='protect-main'
 readonly EXPECTED_TARGET='branch'
 readonly EXPECTED_ENFORCEMENT='active'

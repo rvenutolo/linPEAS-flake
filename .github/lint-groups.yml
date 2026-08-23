@@ -59,6 +59,7 @@ lint-script-hygiene:
   - lib-source-tool-free
   - payload-shape-scenario
   - payload-source-helper
+  - tool-guarded
 lint-doc-invariants:
   - orphan-invariants
   - doc-anchors

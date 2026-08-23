@@ -40,6 +40,13 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/log.sh
+source "${_lib_dir}/lib/log.sh"
+
+# The job enumeration below ends in `|| true`, so an absent `yq`
+# yields an empty list and the pressure figure silently undercounts
+# rather than reporting that it read nothing.
+require_tool yq
 
 readonly AUDIT_STATE="${DOCS_AUDIT_STATE_OVERRIDE:-.github/docs-audit-state}"
 readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-.github/workflows}"

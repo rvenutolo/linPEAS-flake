@@ -1278,6 +1278,64 @@ tracked harnesses outside `tests/` cannot be enumerated; a temp file
 cannot be created; or a scan set comes back empty, which is a
 could-not-run rather than a tree with nothing to check.
 
+### scripts/check-tool-guarded.sh
+
+Lint: every third-party tool a script under `scripts/`
+invokes must be guarded somewhere in that same script. A guard is
+`require_tool <tool>`, a `command -v <tool>` availability test, or a
+library helper that guards the tool on its caller's behalf.
+
+An unguarded tool does not fail loudly. It fails as whatever the
+surrounding code does with a non-zero status, and every one of those
+readings is wrong:
+
+- A shape probe written as `<tool> ... || die` reports the payload as
+    malformed. The operator opens a file that is intact and looks for a
+    field that is present.
+- A guard that treats success as the violation — `if <tool> ...; then report` — scores every input clean, because an absent tool cannot
+    succeed. The check exits 0 having read nothing, which is the only
+    failure mode here that no caller can see.
+- An enumeration ending in `|| true` comes back empty, and a lint that
+    asserts over an empty set asserts nothing.
+- An unchecked command substitution ends the run under the tool's own
+    status — 127 for an absent one — which the exit-code convention
+    does not catalogue.
+
+The convention this protects: 2 means the check could not run, 1 means
+it ran and found a violation, 0 means it ran and found none. A missing
+binary is a could-not-run in every case, and `require_tool` is what
+says so.
+
+Scope is tools a shell can genuinely lack. POSIX utilities and
+coreutils staples are assumed present: guarding `grep` in every script
+that greps would cost a hundred lines to describe an environment that
+does not occur, and a rule nobody believes is a rule that gets
+exempted.
+
+The rule is presence, not position. A parse tree reports where a word
+was written, and in shell that is not when it runs: nearly every script
+here defines its functions above the `main` that calls them, so a tool
+invoked at line 100 inside a function routinely executes after a guard
+written at line 700. Ordering those two correctly needs a call graph,
+and comparing the line numbers instead reports the tree's ordinary
+layout as a defect. What is checkable without one — and what the nine
+faults this rule was written for all violate — is whether the script
+guards the tool at all.
+
+Detection reads command words from `shfmt --tojson` rather than
+matching text. A tool name occurs in comments, in message strings, and
+in `@description` prose, and none of those is an invocation; a `||`
+inside a `sed` or `awk` program text reads as shell control flow to a
+line-oriented scan. The parser knows which words are commands and a
+regex does not.
+
+Honors SCRIPTS_DIR_OVERRIDE (default: scripts) and
+LINT_ALLOW_EMPTY_SCAN=1 for fixtures.
+
+Exits 0 when every invocation is guarded, 1 when one is not. Exits 2
+when the check cannot run: `shfmt` or `jq` absent from PATH, a script
+`shfmt` cannot parse, or a scan set matching no script.
+
 ### scripts/check-upload-artifact-strict.sh
 
 Lint: every `actions/upload-artifact` step in every

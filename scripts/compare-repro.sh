@@ -15,6 +15,16 @@ if [[ $# -ne 2 ]]; then
   exit 2
 fi
 
+# Every field below is read with `jq`, and the shape probes report a
+# failed read as a defect in the build-info file. An absent `jq` would
+# therefore be announced as `not a JSON object` against a file that is a
+# perfectly good JSON object. This script sources no libraries, so the
+# guard is written out rather than taken from `require_tool`.
+if ! command -v jq >/dev/null 2>&1; then
+  printf 'ERROR: jq not found on PATH\n' >&2
+  exit 2
+fi
+
 readonly BUILD_A="$1"
 readonly BUILD_B="$2"
 
