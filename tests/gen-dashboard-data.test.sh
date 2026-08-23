@@ -293,6 +293,59 @@ function run_empty_bump_pr_scenario() {
 # @arg $2 override var name to point at the 404 body
 # @arg $3 yq path that must read back as the documented fallback
 # @arg $4 expected fallback value at that path
+# @description Run the generator with a live `gh` that is present and
+# fails, and no override for the required upstream-release lookup, so the
+# fetch itself is the fault. Asserts exit 2 — the lookup never happened,
+# so it says nothing about the pin — and that no dashboard.yml was
+# written.
+# @arg $1 scenario name  @arg $2 expected stderr substring
+function run_failing_gh_scenario() {
+  local -r name="$1"
+  local -r expected_stderr="$2"
+
+  local shim_dir out_tmp stderr_tmp stdout_tmp outcome_tmp
+  shim_dir="$(mktemp --directory)"
+  printf '#!/usr/bin/env bash\nexit 1\n' >"${shim_dir}/gh"
+  chmod +x -- "${shim_dir}/gh"
+  out_tmp="$(mktemp)"
+  stderr_tmp="$(mktemp)"
+  stdout_tmp="$(mktemp)"
+  outcome_tmp="$(mktemp)"
+  # shellcheck disable=SC2064  # capture paths at trap-set time
+  trap "rm --force --recursive -- '${shim_dir}' '${out_tmp}' '${stderr_tmp}' '${stdout_tmp}' '${outcome_tmp}'" RETURN
+
+  local prior
+  prior="$(snapshot_out_file)"
+
+  local exit_code=0
+  env "PATH=${shim_dir}:${PATH}" \
+    "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
+    "OUT_FILE_OVERRIDE=${out_tmp}" \
+    bash "${SCRIPT}" >"${stdout_tmp}" 2>"${stderr_tmp}" || exit_code=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${exit_code}" >"${outcome_tmp}"
+  harness_assert_record "${name}" "${expected_stderr}" \
+    "${outcome_tmp}" "${stdout_tmp}" "${stderr_tmp}"
+
+  if ((exit_code != 2)); then
+    printf 'FAIL: %s — expected exit 2, got %d\n' "${name}" "${exit_code}" >&2
+    sed 's/^/    /' "${stderr_tmp}" >&2
+    fail_count=$((fail_count + 1))
+    return 0
+  fi
+  if ! grep --fixed-strings --quiet -- "${expected_stderr}" "${stderr_tmp}"; then
+    printf 'FAIL: %s — stderr missing %q\n' "${name}" "${expected_stderr}" >&2
+    sed 's/^/    /' "${stderr_tmp}" >&2
+    fail_count=$((fail_count + 1))
+    return 0
+  fi
+  if ! assert_out_file_unchanged "${prior}" "${name}"; then
+    fail_count=$((fail_count + 1))
+    return 0
+  fi
+  printf 'PASS: %s\n' "${name}"
+  pass_count=$((pass_count + 1))
+}
+
 # @arg $5 expected stderr substring (the WARN)
 function run_api_error_scenario() {
   local -r name="$1"
@@ -480,6 +533,11 @@ function main() {
   run_api_error_scenario 'parity-run API error soft-fallback' \
     'PARITY_JSON_OVERRIDE' '.parity.conclusion' 'unknown' \
     'parity run: response is not valid JSON of the expected shape'
+
+  # A `gh` that is present and fails is a lookup that never happened, not
+  # upstream data the generator read and rejected.
+  run_failing_gh_scenario 'failing gh on the required upstream lookup is a tooling error' \
+    'could not fetch repos/peass-ng/PEASS-ng/releases/latest'
 
   harness_assert_verify || fail_count=$((fail_count + 1))
 

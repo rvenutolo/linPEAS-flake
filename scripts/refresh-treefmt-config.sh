@@ -119,7 +119,13 @@ function main() {
   doc_fmt="$(make_temp "${repo_root}/.refresh-treefmt-config-XXXXXX.md")"
 
   local sys
-  sys="$(nix eval --impure --raw --expr 'builtins.currentSystem')"
+  # A `nix` that is present and fails has evaluated nothing. Unchecked,
+  # its exit 1 becomes this generator's status, which --check mode reads
+  # as a stale document to regenerate rather than an eval that never ran.
+  if ! sys="$(nix eval --impure --raw --expr 'builtins.currentSystem')"; then
+    log_err 'could not evaluate builtins.currentSystem'
+    exit 2
+  fi
 
   # Capture stderr (instead of discarding it) so harmless `trace:` messages
   # from treefmt-nix's evaluation do not corrupt the JSON payload on stdout,
