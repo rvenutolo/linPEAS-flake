@@ -686,8 +686,9 @@ to this repository.
 ### scripts/check-guard-exit-code.sh
 
 Lint: no script anywhere under `scripts/` may exit 1 out
-of a guard whose test is only an availability check, and none may
-create a temp file with a bare `mktemp`. The exit codes separate what the
+of a guard whose test is only an availability check, none may create
+a temp file with a bare `mktemp`, and none may take a required value
+through a `${var:?}` expansion. The exit codes separate what the
 operator has to do about a run: 2 means the check could not run (a
 required tool is absent, an input is missing, unreadable or
 malformed), 1 means it ran and found a violation, 0 means clean. An
