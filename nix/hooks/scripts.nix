@@ -2,6 +2,19 @@
   pkgs-unstable,
   ...
 }:
+let
+  # Hooks in this file otherwise run on ambient PATH, which is the right
+  # default: their scripts need nothing a shell does not already have.
+  # The parse-tree lints are the exception — they read command words from
+  # `shfmt --tojson` through `jq`, and a commit made from a shell outside
+  # the devShell would otherwise stop at their `require_tool` guard with a
+  # could-not-run instead of linting. Pinning the two here resolves the
+  # same binaries the devShell does rather than whatever the host ships.
+  parserToolPath = pkgs-unstable.lib.makeBinPath [
+    pkgs-unstable.jq
+    pkgs-unstable.shfmt
+  ];
+in
 {
   # Every scripts/*.sh starts with #!/usr/bin/env bash and
   # contains set -Eeuo pipefail. See docs/security/workflow-hardening.md.
@@ -191,6 +204,7 @@
       set -Eeuo pipefail
       IFS=$'\n\t'
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${parserToolPath}:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-gh-api-version-header.sh
     ''}";
     files = "^(scripts/.*\\.sh)$";
