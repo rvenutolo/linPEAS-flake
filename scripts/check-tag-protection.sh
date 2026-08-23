@@ -55,18 +55,32 @@ readonly FALLBACK_PATTERN_GLOB='refs/tags/**'
 readonly THIS_REPO='rvenutolo/linPEAS-flake'
 
 # @description Fetch the live ruleset JSON from the rulesets API.
+# Both calls are status-checked. `gh` present but failing — an API
+# error, an expired token, no network — exits 1, and an unchecked
+# assignment hands that 1 to the caller as this check's own verdict,
+# which reads as a drifted ruleset rather than as a fetch that never
+# happened. An empty ruleset list is a different answer: the API
+# answered, and no ruleset by this name is a finding about the repo.
 function fetch_ruleset() {
   # Live mode: list rulesets, filter by name, fetch detail.
   local id
-  id="$(gh api --header 'X-GitHub-Api-Version: 2022-11-28' \
+  if ! id="$(gh api --header 'X-GitHub-Api-Version: 2022-11-28' \
     "/repos/${THIS_REPO}/rulesets" \
-    --jq ".[] | select(.name==\"${EXPECTED_NAME}\") | .id")"
+    --jq ".[] | select(.name==\"${EXPECTED_NAME}\") | .id")"; then
+    log_err "cannot list rulesets for ${THIS_REPO}: GitHub API call failed"
+    exit 2
+  fi
   if [[ -z ${id} ]]; then
     printf 'no ruleset named %q on %s\n' "${EXPECTED_NAME}" "${THIS_REPO}" >&2
     exit 1
   fi
-  gh api --header 'X-GitHub-Api-Version: 2022-11-28' \
-    "/repos/${THIS_REPO}/rulesets/${id}"
+  local body
+  if ! body="$(gh api --header 'X-GitHub-Api-Version: 2022-11-28' \
+    "/repos/${THIS_REPO}/rulesets/${id}")"; then
+    log_err "cannot fetch ruleset ${id} for ${THIS_REPO}: GitHub API call failed"
+    exit 2
+  fi
+  printf '%s' "${body}"
 }
 
 # The payload this lint reads is either a fixture path or the ruleset API's
