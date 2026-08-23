@@ -128,6 +128,14 @@
     # JSON to exercise the parse-error branch of the threshold check;
     # prettier refuses to format invalid JSON.
     "tests/fixtures/scorecard-threshold/malformed.json"
+    # ci-job-in-summary malformed fixtures are intentionally unparsable
+    # YAML, to prove the cross-check reports a file yq could not read as a
+    # could-not-run rather than as a job missing from the summary; prettier
+    # refuses to format invalid YAML. They cannot be generated at run time
+    # under a shared `bad-malformed.yml` name, because the harness derives
+    # both paths from the fixture directory it is handed.
+    "tests/fixtures/ci-job-in-summary/bad-malformed-ci/ci.yml"
+    "tests/fixtures/ci-job-in-summary/bad-malformed-categories/categories.yml"
     # tag-protection payload-shape fixtures are intentionally not
     # well-formed ruleset JSON, to exercise the not-JSON and empty-payload
     # branches of the lint's shape gate; prettier refuses to format invalid

@@ -350,10 +350,14 @@ MARKDOWN
   # flake.nix as its project root, so the temp must live in-repo.
   fmt_target="$(make_temp "${repo_root}/.refresh-test-harnesses-XXXXXX.md")"
   cp -- "${doc_new}" "${fmt_target}"
-  # No `|| true`: a treefmt/mdformat failure must abort under set -e before
-  # an unformatted census is moved into place, which would otherwise be
-  # written to the tracked file while this script exited 0 "refreshed".
-  treefmt --no-cache --quiet -- "${fmt_target}" >/dev/null
+  # The failure is caught rather than left to `set -e`: an unformatted
+  # census must not reach the tracked file, and a formatter that could not
+  # run is a could-not-run. Left bare, the abort carries treefmt's own 1,
+  # which `--check`'s caller reads as "the census is stale, regenerate it".
+  if ! treefmt --no-cache --quiet -- "${fmt_target}" >/dev/null; then
+    log_err "treefmt could not format ${fmt_target} — the render was not written"
+    exit 2
+  fi
   mv -- "${fmt_target}" "${doc_new}"
 
   local census

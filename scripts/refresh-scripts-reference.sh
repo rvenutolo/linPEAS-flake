@@ -255,11 +255,14 @@ function main() {
   # treefmt needs flake.nix as project root, so the temp must live in-repo.
   fmt_target="$(make_temp "${repo_root}/.refresh-scripts-reference-XXXXXX.md")"
   cp -- "${doc_new}" "${fmt_target}"
-  # No `|| true`: a treefmt/mdformat failure must abort under set -e before the
-  # unformatted splice is moved into place, matching the sibling generators
-  # (refresh-precommit-table / refresh-treefmt-config). Swallowing it wrote an
-  # unformatted doc to the tracked file while the script exited 0 "refreshed".
-  treefmt --no-cache --quiet -- "${fmt_target}" >/dev/null
+  # The failure is caught rather than left to `set -e`: an unformatted splice
+  # must not reach the tracked file, and a formatter that could not run is a
+  # could-not-run. Left bare, the abort carries treefmt's own 1, which
+  # `--check`'s caller reads as "the doc is stale, regenerate it".
+  if ! treefmt --no-cache --quiet -- "${fmt_target}" >/dev/null; then
+    log_err "treefmt could not format ${fmt_target} — the render was not written"
+    exit 2
+  fi
   mv -- "${fmt_target}" "${doc_new}"
 
   if [[ ${check_only} == 'true' ]]; then

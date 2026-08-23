@@ -166,12 +166,17 @@ function main() {
     printf '| %s | %s |\n' \
       "$(printf '%*s' "${col1_width}" '' | tr ' ' '-')" \
       "$(printf '%*s' "${col2_width}" '' | tr ' ' '-')"
-    # Data rows — use jq to read the sorted JSON and print padded lines
-    jq --raw-output --argjson w1 "${col1_width}" --argjson w2 "${col2_width}" '
+    # Data rows — use jq to read the sorted JSON and print padded lines.
+    # jq exits 5 on a payload it cannot parse, which is outside the
+    # 0/1/2 an operator can act on, so the failure is named here instead.
+    if ! jq --raw-output --argjson w1 "${col1_width}" --argjson w2 "${col2_width}" '
       to_entries | sort_by(.key)[] |
       "| " + ("`" + .key + "`" | . + (" " * ($w1 - length))) +
       " | " + (.value | . + (" " * ($w2 - length))) + " |"
-    ' "${hooks_file}"
+    ' "${hooks_file}"; then
+      log_err "cannot render hook rows from ${hooks_file}"
+      exit 2
+    fi
     printf '\n'
     printf '<!-- END precommit-table -->\n'
   } >"${block_file}"
@@ -198,7 +203,13 @@ function main() {
   # this step, mdformat's table-cell escapes cause persistent drift between
   # the script output and the committed file.
   cp -- "${doc_new}" "${doc_fmt}"
-  treefmt --no-cache --quiet -- "${doc_fmt}" >/dev/null
+  # A formatter that could not run is a could-not-run: left bare, the abort
+  # carries treefmt's own 1, which `--check`'s caller reads as "the table is
+  # stale, regenerate it".
+  if ! treefmt --no-cache --quiet -- "${doc_fmt}" >/dev/null; then
+    log_err "treefmt could not format ${doc_fmt} — the render was not written"
+    exit 2
+  fi
 
   if [[ ${check_only} == 'true' ]]; then
     # cmp short-circuits on first byte difference and supports --silent across

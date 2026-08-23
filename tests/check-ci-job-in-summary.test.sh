@@ -62,6 +62,12 @@ expect good 2 "" "${FIXTURES}/bad-malformed-manifest/lint-groups.yml" ""
 # The two files the cross-check reads are inputs, not findings: absent, the
 # lint has compared nothing and must not report drift.
 expect does-not-exist 2 "ci workflow not found"
+# Present but unparsable is the same verdict as absent, and for the same
+# reason: neither file was read, so nothing was cross-checked. Left to
+# `set -e`, yq's own exit 1 reaches the caller as a job missing from the
+# summary — drift found in a document this run never opened.
+expect bad-malformed-ci 2 "cannot read job keys"
+expect bad-malformed-categories 2 "cannot read category keys"
 
 missing_categories_exit=0
 missing_categories_stderr="$(env \

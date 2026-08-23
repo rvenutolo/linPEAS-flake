@@ -150,7 +150,9 @@ function main() {
     printf '\n'
     printf '| Formatter | Includes | Excludes |\n'
     printf '| --- | --- | --- |\n'
-    jq --raw-output '
+    # jq exits 5 on a payload it cannot parse, which is outside the 0/1/2
+    # an operator can act on, so the failure is named here instead.
+    if ! jq --raw-output '
       def fmt_globs(arr):
         if (arr | length) == 0 then "—"
         else (arr | map("`" + . + "`") | join(" "))
@@ -158,14 +160,20 @@ function main() {
       .formatters
       | sort_by(.name)[]
       | "| `" + .name + "` | " + fmt_globs(.includes) + " | " + fmt_globs(.excludes) + " |"
-    ' "${cfg_file}"
+    ' "${cfg_file}"; then
+      log_err "cannot render the formatter table from ${cfg_file}"
+      exit 2
+    fi
     printf '\n'
     printf '## Global excludes\n'
     printf '\n'
     printf 'Patterns excluded from every formatter:\n'
     printf '\n'
     printf '```text\n'
-    jq --raw-output '.globalExcludes | unique | sort[]' "${cfg_file}"
+    if ! jq --raw-output '.globalExcludes | unique | sort[]' "${cfg_file}"; then
+      log_err "cannot render global excludes from ${cfg_file}"
+      exit 2
+    fi
     printf '```\n'
     printf '\n'
     printf '<!-- END treefmt-config -->\n'
@@ -194,7 +202,13 @@ function main() {
   # this step, mdformat's escape rules cause persistent drift between the
   # script output and the committed file.
   cp -- "${doc_new}" "${doc_fmt}"
-  treefmt --no-cache --quiet -- "${doc_fmt}" >/dev/null
+  # A formatter that could not run is a could-not-run: left bare, the abort
+  # carries treefmt's own 1, which `--check`'s caller reads as "the block is
+  # stale, regenerate it".
+  if ! treefmt --no-cache --quiet -- "${doc_fmt}" >/dev/null; then
+    log_err "treefmt could not format ${doc_fmt} — the render was not written"
+    exit 2
+  fi
 
   if [[ ${check_only} == 'true' ]]; then
     # cmp short-circuits on first byte difference and supports --silent across

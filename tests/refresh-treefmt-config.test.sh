@@ -131,6 +131,31 @@ function main() {
   rm --recursive --force -- "${nix_shim}"
   rm --force -- "${nix_err}" "${nix_out}" "${nix_outcome}"
 
+  # Same argument one tool over: a `treefmt` that is present and fails has
+  # formatted nothing, so the comparison target was never built. Exit 1
+  # there is the code --check mode uses for a document to regenerate, and
+  # sends the operator to run a generator whose formatter is what broke.
+  local fmt_shim fmt_err fmt_out fmt_outcome fmt_rc=0
+  fmt_shim="$(mktemp --directory)"
+  fmt_err="$(mktemp)"
+  fmt_out="$(mktemp)"
+  fmt_outcome="$(mktemp)"
+  printf '#!/usr/bin/env bash\nexit 1\n' >"${fmt_shim}/treefmt"
+  chmod +x -- "${fmt_shim}/treefmt"
+  PATH="${fmt_shim}:${PATH}" "${SCRIPT}" --check >"${fmt_out}" 2>"${fmt_err}" || fmt_rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${fmt_rc}" >"${fmt_outcome}"
+  harness_assert_record 'failing treefmt is a tooling error' \
+    'could not format' "${fmt_outcome}" "${fmt_out}" "${fmt_err}"
+  if [[ ${fmt_rc} -eq 2 ]] &&
+    grep --fixed-strings --quiet -- 'could not format' "${fmt_err}"; then
+    pass 'failing treefmt is a tooling error, not a stale document'
+  else
+    fail "failing treefmt: expected exit 2 + 'could not format', got exit ${fmt_rc}"
+    sed 's/^/    /' "${fmt_err}" >&2
+  fi
+  rm --recursive --force -- "${fmt_shim}"
+  rm --force -- "${fmt_err}" "${fmt_out}" "${fmt_outcome}"
+
   harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then

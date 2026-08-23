@@ -9,6 +9,8 @@ ignore: |
   tests/fixtures/**/bad-malformed.yml
   tests/fixtures/permission-scopes/malformed-allowlist/allowlist.yml
   tests/fixtures/ci-job-in-summary/bad-malformed-manifest/lint-groups.yml
+  tests/fixtures/ci-job-in-summary/bad-malformed-ci/ci.yml
+  tests/fixtures/ci-job-in-summary/bad-malformed-categories/categories.yml
   tests/fixtures/commitlint-config-explicit/bad-malformed/ci.yml
 
 rules:
