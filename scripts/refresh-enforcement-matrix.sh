@@ -294,16 +294,28 @@ function load_hook_names() {
   require_tool nix
   require_tool jq
   local sys
-  sys="$(nix eval --impure --raw --expr 'builtins.currentSystem')"
-  nix eval --json ".#devTooling.${sys}.preCommitHooks" |
-    jq --raw-output 'keys[]' | sort --unique >"${out_file}"
+  # A `nix` that is present and fails has evaluated nothing. Unchecked,
+  # its exit 1 becomes this generator's status, which --check mode reads
+  # as a stale document to regenerate rather than an eval that never ran.
+  if ! sys="$(nix eval --impure --raw --expr 'builtins.currentSystem')"; then
+    log_err 'could not evaluate builtins.currentSystem'
+    exit 2
+  fi
+  if ! nix eval --json ".#devTooling.${sys}.preCommitHooks" |
+    jq --raw-output 'keys[]' | sort --unique >"${out_file}"; then
+    log_err "could not evaluate .#devTooling.${sys}.preCommitHooks"
+    exit 2
+  fi
 }
 
 # load_ci_jobs <ci_yml> <out_file>
 function load_ci_jobs() {
   local -r ci_yml="$1" out_file="$2"
   require_tool yq
-  yq eval '.jobs | keys | .[]' "${ci_yml}" | sort --unique >"${out_file}"
+  if ! yq eval '.jobs | keys | .[]' "${ci_yml}" | sort --unique >"${out_file}"; then
+    log_err "could not read the job list from ${ci_yml}"
+    exit 2
+  fi
 }
 
 # load_ci_jobs_exempt <out_file> <sibling>

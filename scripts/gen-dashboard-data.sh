@@ -15,8 +15,9 @@
 #
 # Hard-fail rules (security-critical):
 #   1. Any required CLI tool missing  -> exit 2 (see rule 7).
-#   2. Upstream peass-ng releases/latest non-200 -> exit 1 (curl/gh error
-#      surfaced). This-repo lookups (releases/latest, last bump PR, latest
+#   2. Upstream peass-ng releases/latest non-200 -> exit 2: the lookup
+#      never happened, so it says nothing about the pin's contents.
+#      This-repo lookups (releases/latest, last bump PR, latest
 #      verify-latest-release run) soft-fall-back to empty/"unknown" so a
 #      brand-new repo or transient API hiccup does not block the build.
 #      A lookup that returns a JSON API error body is a degraded lookup,
@@ -242,7 +243,15 @@ function main() {
   # below name routes no other script reads, so they pass none.
   if ! fetch_override_into upstream_release UPSTREAM_RELEASE_JSON_OVERRIDE \
     "${upstream_release_source}" 'dashboard upstream release'; then
-    upstream_release="$(fetch_live "repos/${UPSTREAM_REPO}/releases/latest")"
+    # `gh` is on PATH — an absent one is reported by require_tool above —
+    # so a failure here is the API refusing, the token expiring, or the
+    # network being gone. That is a lookup that never happened, not a
+    # pin this generator read and rejected, and the two must not leave
+    # the run with the same status.
+    if ! upstream_release="$(fetch_live "repos/${UPSTREAM_REPO}/releases/latest")"; then
+      log_err "could not fetch ${upstream_release_source}"
+      exit 2
+    fi
   fi
   require_json_payload "${upstream_release_source}" "${upstream_release}" '
     if type != "object" then "payload is \(type), want object"
@@ -291,7 +300,10 @@ function main() {
   # on with an empty releases_json.
   if ! fetch_override_into releases_json THIS_REPO_RELEASES_JSON_OVERRIDE \
     "${releases_source}"; then
-    releases_json="$(fetch_live "repos/${THIS_REPO}/releases?per_page=20")"
+    if ! releases_json="$(fetch_live "repos/${THIS_REPO}/releases?per_page=20")"; then
+      log_err "could not fetch ${releases_source}"
+      exit 2
+    fi
   fi
   require_json_payload "${releases_source}" "${releases_json}" '
     if type != "array" then "payload is \(type), want array"
@@ -310,7 +322,10 @@ function main() {
   # on with an empty upstream_releases_json.
   if ! fetch_override_into upstream_releases_json UPSTREAM_RELEASES_JSON_OVERRIDE \
     "${upstream_releases_source}"; then
-    upstream_releases_json="$(fetch_live "repos/${UPSTREAM_REPO}/releases?per_page=20")"
+    if ! upstream_releases_json="$(fetch_live "repos/${UPSTREAM_REPO}/releases?per_page=20")"; then
+      log_err "could not fetch ${upstream_releases_source}"
+      exit 2
+    fi
   fi
   require_json_payload "${upstream_releases_source}" "${upstream_releases_json}" '
     if type != "array" then "payload is \(type), want array"
@@ -323,7 +338,7 @@ function main() {
   local bump_pr_json bump_pr_url bump_pr_number bump_pr_merged_at
   bump_pr_json="$(fetch_soft BUMP_PR_JSON_OVERRIDE \
     "search/issues?q=repo:${THIS_REPO}+is:pr+is:merged+in:title+chore%3A+bump+linpeas&sort=updated&order=desc&per_page=1" \
-    'has("items")' \
+    '((.items | type) == "array") and all(.items[]; type == "object")' \
     'last bump PR')"
   # A swallowed Search-API failure (the `|| true` above) yields an empty
   # string, not `{"items":[]}`. jq on empty input emits nothing — the `// 0`
@@ -345,7 +360,7 @@ function main() {
   local parity_json parity_conclusion parity_checked_at parity_run_url
   parity_json="$(fetch_soft PARITY_JSON_OVERRIDE \
     "repos/${THIS_REPO}/actions/workflows/verify-latest-release.yml/runs?per_page=1" \
-    'has("workflow_runs")' \
+    '((.workflow_runs | type) == "array") and all(.workflow_runs[]; type == "object")' \
     'parity run')"
   if [[ -z ${parity_json} ]]; then
     parity_conclusion='unknown'
@@ -379,8 +394,11 @@ function main() {
   # Unmatched this-repo releases (no upstream entry within the fetched
   # window) are skipped with a warning, not failed: the upstream window is
   # finite and a very old this-repo release may have aged out of it.
+  # The payload gate proves each `published_at` is a string, not that it
+  # is a date `fromdateiso8601` can parse. A jq that dies on the pairing
+  # has computed no lag at all, and its exit 5 is outside the convention.
   local lag_recent
-  lag_recent="$(jq --compact-output --slurp '
+  if ! lag_recent="$(jq --compact-output --slurp '
       (.[0] | map({(.tag_name): .published_at}) | add) as $upstream
       | .[1]
       | map(
@@ -399,7 +417,10 @@ function main() {
             }
         )
       | reverse
-    ' <(printf '%s' "${upstream_releases_json}") <(printf '%s' "${releases_json}"))"
+    ' <(printf '%s' "${upstream_releases_json}") <(printf '%s' "${releases_json}"))"; then
+    log_err 'could not pair this-repo releases with upstream releases for bump lag'
+    exit 2
+  fi
 
   local unmatched
   unmatched="$(jq --raw-output --slurp '

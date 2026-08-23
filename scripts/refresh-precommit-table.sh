@@ -117,9 +117,18 @@ function main() {
   doc_fmt="$(make_temp "${repo_root}/.refresh-precommit-XXXXXX.md")"
 
   local sys
-  sys="$(nix eval --impure --raw --expr 'builtins.currentSystem')"
+  # A `nix` that is present and fails has evaluated nothing. Unchecked,
+  # its exit 1 becomes this generator's status, which --check mode reads
+  # as a stale document to regenerate rather than an eval that never ran.
+  if ! sys="$(nix eval --impure --raw --expr 'builtins.currentSystem')"; then
+    log_err 'could not evaluate builtins.currentSystem'
+    exit 2
+  fi
 
-  nix eval --json ".#devTooling.${sys}.preCommitHooks" >"${hooks_file}"
+  if ! nix eval --json ".#devTooling.${sys}.preCommitHooks" >"${hooks_file}"; then
+    log_err "could not evaluate .#devTooling.${sys}.preCommitHooks"
+    exit 2
+  fi
 
   # Render the block in prettier's canonical padded-column form.
   # Compute the max widths for col1 (`name`) and col2 (description), then pad
@@ -127,17 +136,23 @@ function main() {
   local col1_width col2_width
 
   # col1: max of header "Hook" (4) and max(len("`name`")) across all hooks
-  col1_width="$(
+  if ! col1_width="$(
     jq --raw-output '
       (["Hook"] + (keys | map("`" + . + "`"))) | map(length) | max
     ' "${hooks_file}"
-  )"
+  )"; then
+    log_err 'could not read hook names from the evaluated hook set'
+    exit 2
+  fi
   # col2: max of header "What it checks" (14) and max(len(description)) across all hooks
-  col2_width="$(
+  if ! col2_width="$(
     jq --raw-output '
       (["What it checks"] + [.[]] ) | map(length) | max
     ' "${hooks_file}"
-  )"
+  )"; then
+    log_err 'could not read hook descriptions from the evaluated hook set'
+    exit 2
+  fi
 
   # Render the block: markers, blank line, padded header, separator, rows, blank line, end marker.
   {

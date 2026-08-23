@@ -111,21 +111,33 @@ function main() {
   # GitHub Actions accepts a scalar string or a sequence; wrapping in
   # an outer array and flattening one level coerces either shape into a
   # list of strings.
-  yq -o=json '
+  # A workflow that does not parse is an input this generator could not
+  # read. Unchecked, yq's own exit 1 becomes the generator's status, and
+  # --check mode reads that as a diagram gone stale.
+  if ! yq -o=json '
     .jobs | with_entries(.value = ([(.value.needs // [])] | flatten))
-  ' "${workflow}" >"${jobs_file}"
+  ' "${workflow}" >"${jobs_file}"; then
+    log_err "could not read the job graph from ${workflow}"
+    exit 2
+  fi
 
   # Dangling-needs validation: every name in any needs[] list must be a
   # top-level job key. Exit 2 with a descriptive message if not.
+  # A jq that dies here has computed no dangling set, and an unchecked
+  # read would leave the run carrying jq's own status — read by --check
+  # mode as a stale diagram rather than a graph nothing was read from.
   local dangling
-  dangling="$(jq --raw-output '
+  if ! dangling="$(jq --raw-output '
     . as $m
     | ([keys[]]) as $jobs
     | ([.[] | .[]]) as $needs
     | ($needs - $jobs)
     | unique
     | .[]
-  ' "${jobs_file}")"
+  ' "${jobs_file}")"; then
+    log_err "could not read the needs graph for ${workflow}"
+    exit 2
+  fi
   if [[ -n ${dangling} ]]; then
     log_err "${workflow} has needs: references to non-existent jobs:"
     while IFS= read -r n; do log_err "  ${n}"; done <<<"${dangling}"
@@ -154,7 +166,10 @@ function main() {
     if [[ -n ${job_keys} ]]; then
       while IFS= read -r job; do
         [[ -z ${job} ]] && continue
-        cat="$(yq ".\"${job}\" // \"\"" "${cat_map}")"
+        if ! cat="$(yq ".\"${job}\" // \"\"" "${cat_map}")"; then
+          log_err "could not read the category of job ${job}"
+          exit 2
+        fi
         if [[ -z ${cat} || ${cat} == 'null' ]]; then
           cls='aux'
         else
@@ -181,12 +196,15 @@ function main() {
     awk -F'\t' '{ printf "  %s:::%s\n", $1, $2 }' "$(awk_path "${cats_file}")"
     # Edges: "<need> --> <job>", sorted by (job, need).
     local edges
-    edges="$(jq --raw-output '
+    if ! edges="$(jq --raw-output '
       to_entries[]
       | . as $e
       | $e.value[]
       | "\(.)\t\($e.key)"
-    ' "${jobs_file}" | sort --field-separator=$'\t' --key=2,2 --key=1,1)"
+    ' "${jobs_file}" | sort --field-separator=$'\t' --key=2,2 --key=1,1)"; then
+      log_err "could not read the edge list for ${workflow}"
+      exit 2
+    fi
     if [[ -n ${edges} ]]; then
       printf '\n'
       printf '%s\n' "${edges}" | awk -F'\t' '{ printf "  %s --> %s\n", $1, $2 }'

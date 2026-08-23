@@ -102,7 +102,38 @@ EOF
     fail "--check expected exit 2 on missing @description, got ${rc}"
   fi
 
-  # 5. Leak cleanup: a stray in-repo temp from an interrupted run must be
+  # 5. Parser-shape scenario: a parser that emits JSON of another shape
+  # is a document the renderer could not read, not drift. The override
+  # stands in for a changed parser; the shape gate must catch it before
+  # any field read walks the wrong document.
+  fixture_dir="$(mktemp --directory)"
+  cat >"${fixture_dir}/some-script.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description something
+set -Eeuo pipefail
+echo hi
+EOF
+  local wrong_parser stderr_file
+  wrong_parser="$(mktemp)"
+  stderr_file="$(mktemp)"
+  cat >"${wrong_parser}" <<'EOF'
+BEGIN { print "{\"description\": 42, \"args\": [], \"options\": [], \"example\": \"\"}"; exit }
+EOF
+  rc=0
+  SCRIPT_DOCS_AWK_OVERRIDE="${wrong_parser}" SCRIPTS_DIR_OVERRIDE="${fixture_dir}" \
+    "${SCRIPT}" --check 2>"${stderr_file}" || rc=$?
+  rm --recursive --force -- "${fixture_dir}"
+  fixture_dir=''
+  if [[ ${rc} -eq 2 ]] &&
+    grep --fixed-strings --quiet 'unexpected parser output shape' "${stderr_file}"; then
+    pass '--check exits 2 when the parser emits an unexpected shape'
+  else
+    fail "--check expected exit 2 on unexpected parser shape, got ${rc}"
+    sed 's/^/    /' "${stderr_file}" >&2
+  fi
+  rm --force -- "${wrong_parser}" "${stderr_file}"
+
+  # 6. Leak cleanup: a stray in-repo temp from an interrupted run must be
   # swept by the EXIT trap on the next default-mode run.
   stray="${REPO_ROOT}/.refresh-scripts-reference-deadbeef.md"
   : >"${stray}"

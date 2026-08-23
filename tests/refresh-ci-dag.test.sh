@@ -156,6 +156,29 @@ EOF
   fi
   rm --force -- "${missing_err}" "${missing_out}" "${missing_outcome}"
 
+  # A workflow that does not parse is an input the generator could not
+  # read: exit 2, not the exit 1 that reads as a diagram gone stale.
+  local bad_wf bad_err bad_out bad_outcome bad_rc=0
+  bad_wf="$(mktemp)"
+  bad_err="$(mktemp)"
+  bad_out="$(mktemp)"
+  bad_outcome="$(mktemp)"
+  printf 'jobs: [\n' >"${bad_wf}"
+  CI_WORKFLOW_OVERRIDE="${bad_wf}" \
+    CATEGORIES_FILE_OVERRIDE="${FIXTURES}/categories.yml" \
+    "${SCRIPT}" --check >"${bad_out}" 2>"${bad_err}" || bad_rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${bad_rc}" >"${bad_outcome}"
+  harness_assert_record 'unparsable workflow rejected' \
+    'could not read the job graph' "${bad_outcome}" "${bad_out}" "${bad_err}"
+  if [[ ${bad_rc} -eq 2 ]] &&
+    grep --fixed-strings --quiet -- 'could not read the job graph' "${bad_err}"; then
+    pass 'unparsable workflow exits 2 (could not run, not drift)'
+  else
+    fail "unparsable-workflow guard: expected exit 2, got exit ${bad_rc}"
+    sed 's/^/    /' "${bad_err}" >&2
+  fi
+  rm --force -- "${bad_wf}" "${bad_err}" "${bad_out}" "${bad_outcome}"
+
   # Markers the anchored awk splice cannot match (trailing whitespace on both
   # markers) must be rejected by the guard, not silently emitted unchanged.
   # An unanchored guard grep false-greens here; the anchored guard fails
