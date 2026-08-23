@@ -58,6 +58,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
+# shellcheck source=scripts/lib/log.sh
+source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/payload.sh
 source "${_lib_dir}/lib/payload.sh"
 
@@ -98,6 +100,14 @@ function die_op() {
   exit 2
 }
 
+# The tool guard stands in front of every read below, because each of
+# those reads reports a defect in the lock's contents and a pipeline that
+# never ran read no contents. Without it an absent `jq` fails the first
+# shape probe and is reported as a malformed `.root`, sending an operator
+# into a file the check never parsed. The shared helper is what names the
+# tool, so the sentence is the one every other check here prints.
+require_tool jq
+
 readonly lock_path="${FLAKE_LOCK_OVERRIDE:-flake.lock}"
 payload_source_into lock_source FLAKE_LOCK_OVERRIDE 'flake.lock'
 readonly lock_source
@@ -128,7 +138,16 @@ readonly now
 # `nix` writes them sorted and a fixture need not, and an order that
 # tracks the payload makes both the summary line and which stale input
 # is named first unstable between them.
-records="$(printf '%s' "${lock_json}" | jq -r '
+#
+# The status is checked rather than left to `set -e`. The probes above
+# establish that `.root` is a string and `.nodes` an object; they say
+# nothing about the entry node itself, so a lock whose entry node is not
+# an object clears both and dies here under jq's own exit code — a status
+# the convention does not catalogue and no caller reads as a
+# could-not-run. jq's raw diagnostic is dropped for the same reason the
+# shape gate in `lib/payload.sh` drops its own: the sentence below names
+# what could not be read, in this check's voice.
+if ! records="$(printf '%s' "${lock_json}" | jq -r '
   .root as $root
   | (.nodes[$root].inputs // {})
   | to_entries
@@ -137,7 +156,9 @@ records="$(printf '%s' "${lock_json}" | jq -r '
   | if (.value | type) == "string"
     then $name + "\t" + (.value | tostring)
     else $name + "\t" + "-"
-    end')"
+    end' 2>/dev/null)"; then
+  die_op "${lock_source}: the entry node's input list could not be read"
+fi
 
 stale=0
 checked=0
@@ -151,8 +172,13 @@ while IFS=$'\t' read -r name node; do
   if [[ ${node} == "-" ]]; then
     die_op "top-level input '${name}' resolves through follows; this check reads directly-pinned inputs only"
   fi
-  last_modified="$(printf '%s' "${lock_json}" |
-    jq -r --arg n "${node}" '.nodes[$n].locked.lastModified // "-"')"
+  # Checked for the same reason as the input-list read above: a node that
+  # is not an object cannot be indexed, and an unchecked substitution
+  # ends the run under jq's status instead of this check's.
+  if ! last_modified="$(printf '%s' "${lock_json}" |
+    jq -r --arg n "${node}" '.nodes[$n].locked.lastModified // "-"' 2>/dev/null)"; then
+    die_op "top-level input '${name}' (node '${node}') could not be read"
+  fi
   if [[ ${last_modified} == "-" || ! ${last_modified} =~ ^[0-9]+$ ]]; then
     die_op "top-level input '${name}' (node '${node}') has no numeric locked.lastModified"
   fi

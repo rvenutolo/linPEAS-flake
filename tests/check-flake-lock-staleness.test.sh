@@ -94,10 +94,19 @@ function main() {
   run_scenario 'a non-string .root is a could-not-run' 'root-nonstring.lock' 2 \
     '.root missing or not a string'
 
+  # A lock that clears both shape probes can still hold a node the reads
+  # below cannot index. jq dies there under its own status, which the
+  # exit-code convention does not catalogue and no caller knows how to
+  # read, so each read reports what it could not read.
+  run_scenario 'an entry node that is not an object is a could-not-run' 'entry-node-nonobject.lock' 2 \
+    "the entry node's input list could not be read"
+  run_scenario 'an input node that is not an object is a could-not-run' 'input-node-nonobject.lock' 2 \
+    "top-level input 'nixpkgs' (node 'nixpkgs') could not be read"
+
   # Time is an input, so a caller that supplies a broken one must be
   # told rather than silently falling back to the wall clock — a
   # fallback would make the verdict depend on the day.
-  local out_file actual_exit=0
+  local out_file outcome_file actual_exit=0
   out_file="$(mktemp)"
   FLAKE_LOCK_OVERRIDE="${FIXTURES}/all-fresh.lock" \
     STALENESS_NOW_EPOCH="not-a-timestamp" \
@@ -128,6 +137,42 @@ function main() {
     printf 'PASS: an absent lock is a could-not-run (exit %d)\n' "${actual_exit}"
   fi
   rm --force -- "${out_file}"
+
+  # jq absent from PATH is a fault in the environment, not in the lock.
+  # The shape probes read the payload through jq, so without it they test
+  # nothing — and a probe that ran no test cannot name a defect in a file
+  # it never parsed.
+  #
+  # The environment is built as a symlink farm holding exactly the tools
+  # the check needs, rather than by stripping jq's directory out of the
+  # ambient PATH: on this tree several tools share one directory, so
+  # stripping would take the reader's `cat` along with `jq` and the run
+  # would die before reaching the guard under test.
+  local farm tool bash_bin
+  farm="$(mktemp --directory)"
+  bash_bin="$(command -v bash)"
+  for tool in cat date; do
+    ln --symbolic -- "$(command -v "${tool}")" "${farm}/${tool}"
+  done
+  actual_exit=0
+  out_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  env --unset=BASH_ENV PATH="${farm}" \
+    FLAKE_LOCK_OVERRIDE="${FIXTURES}/all-fresh.lock" \
+    STALENESS_NOW_EPOCH="${NOW}" \
+    "${bash_bin}" "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  if [[ ${actual_exit} -ne 2 ]] ||
+    ! grep --fixed-strings --quiet -- 'missing required tool: jq' "${out_file}"; then
+    printf 'FAIL: an absent jq names the tool, not the lock — exit %d\n' "${actual_exit}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: an absent jq names the tool, not the lock (exit %d)\n' "${actual_exit}"
+  fi
+  harness_assert_record 'an absent jq names the tool, not the lock' \
+    'missing required tool: jq' "${outcome_file}" "${out_file}"
+  rm --recursive --force -- "${outcome_file}" "${out_file}" "${farm}"
 
   # The live tree must satisfy its own check. This is the scenario that
   # notices a real input going stale, and the only one whose input is
