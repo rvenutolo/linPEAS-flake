@@ -23,6 +23,35 @@ function expect() {
   printf 'OK   %s\n' "${fixture}"
 }
 
+# @description Scan a workflow that does not parse, written to a temp
+# dir at run time so no unparsable file sits in the tree for the
+# formatters to choke on. A file that does not parse is a fact about
+# this repo, so it is a finding against that file; what the read must
+# not do is leave yq's status unchecked, which ends the run mid-tree and
+# leaves every workflow after this one unscanned.
+# @arg $1 file body  @arg $2 expected stderr substring
+function expect_unparsable() {
+  local -r body="$1" want_msg="$2"
+  local dir got_exit=0 got_stderr
+  dir="$(mktemp --directory)"
+  printf '%s' "${body}" >"${dir}/bad-unparsable.yml"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${dir}" \
+    WORKFLOW_FILE_FILTER='bad-unparsable.yml' \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  rm --recursive --force -- "${dir}"
+  if [[ ${got_exit} != 1 ]]; then
+    printf 'FAIL unparsable workflow: exit %s, want 1\n  stderr: %s\n' \
+      "${got_exit}" "${got_stderr}" >&2
+    return 1
+  fi
+  if [[ ${got_stderr} != *"${want_msg}"* ]]; then
+    printf 'FAIL unparsable workflow: stderr missing %q\n  got: %s\n' \
+      "${want_msg}" "${got_stderr}" >&2
+    return 1
+  fi
+  printf 'OK   unparsable workflow reported as a finding\n'
+}
+
 expect good.yml 0 ""
 expect bad-no-top.yml 1 "missing top-level"
 expect bad-top-nonempty.yml 1 "non-empty"
@@ -30,11 +59,8 @@ expect bad-top-write-all.yml 1 "scalar"
 expect bad-job-missing.yml 1 "missing"
 expect bad-top-list.yml 1 "unexpected shape"
 expect bad-job-shape.yml 1 "unexpected shape"
-
-# A jobs map yq cannot traverse (per-job scan) must fail loud, not empty
-# the scan silently. permissions: {} stays parseable so this isolates
-# the per-job process-substitution site rather than the top-level read.
-expect bad-malformed.yml 1 "could not evaluate"
 expect no-such-workflow.yml 2 'selected 0 of'
+
+expect_unparsable 'permissions: [\n' 'bad-unparsable.yml: could not evaluate'
 
 printf 'all tests passed\n'

@@ -35,7 +35,13 @@ if [[ ! -f ${CLIFF_TOML} ]]; then
   exit 2
 fi
 
-actual="$(yq eval '.git.tag_pattern' "${CLIFF_TOML}")"
+# A cliff.toml that does not parse is a file this check could not read.
+# yq exits 1 on it, and an unchecked read would leave the run carrying
+# that 1 — the same status a drifted tag pattern produces.
+if ! actual="$(yq eval '.git.tag_pattern' "${CLIFF_TOML}")"; then
+  printf 'cannot read .git.tag_pattern from %s\n' "${CLIFF_TOML}" >&2
+  exit 2
+fi
 
 if [[ ${actual} == 'null' ]] || [[ -z ${actual} ]]; then
   printf 'tag_pattern key absent from [git] section in %s\n' "${CLIFF_TOML}" >&2

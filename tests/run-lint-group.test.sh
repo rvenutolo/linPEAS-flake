@@ -138,6 +138,39 @@ function run_test_gate_scenario() {
   rm --recursive --force -- "${work}" "${outcome_file}" "${out_file}" "${step_file}"
 }
 
+# @description Run against a manifest that does not parse. yq exits 1 on
+# it, and an unchecked read would leave the runner carrying that 1 — the
+# same status a lint in the group reports when it finds a violation.
+function run_unparsable_manifest_scenario() {
+  local manifest outcome_file out_file step_file
+  manifest="$(mktemp)"
+  outcome_file="$(mktemp)"
+  out_file="$(mktemp)"
+  step_file="$(mktemp)"
+  printf 'demo-all-pass: [\n' >"${manifest}"
+
+  local actual_exit=0
+  LINT_GROUPS_OVERRIDE="${manifest}" \
+    GITHUB_STEP_SUMMARY="${step_file}" \
+    "${SCRIPT}" demo-all-pass >"${out_file}" 2>&1 || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record 'unparsable manifest' 'cannot read group' \
+    "${outcome_file}" "${out_file}" "${step_file}"
+
+  if [[ ${actual_exit} -ne 2 ]]; then
+    printf 'FAIL: unparsable manifest — expected exit 2, got %d\n' "${actual_exit}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet -- 'cannot read group' "${out_file}"; then
+    printf 'FAIL: unparsable manifest — output missing the diagnostic\n' >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: unparsable manifest -> exit 2\n'
+  fi
+  rm --force -- "${manifest}" "${outcome_file}" "${out_file}" "${step_file}"
+}
+
 function main() {
   run_scenario 'all checks pass -> exit 0' 'demo-all-pass' 0 '| ccc | pass |'
   run_scenario 'one check fails -> exit 1' 'demo-one-fail' 1 '| bbb | FAIL |'
@@ -146,6 +179,7 @@ function main() {
   run_scenario 'missing script -> exit 1' 'demo-missing' 1 '| nope | FAIL |'
   run_scenario 'unknown group -> exit 2' 'no-such-group' 2 ''
   run_test_gate_scenario
+  run_unparsable_manifest_scenario
 
   harness_assert_verify || failures=$((failures + 1))
 
