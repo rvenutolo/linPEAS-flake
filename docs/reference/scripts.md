@@ -672,7 +672,7 @@ regex, every nix module that attribute is defined or transposed by.
 
 ### scripts/check-gh-api-version-header.sh
 
-Lint: every `gh api` invocation and `api.github.com`
+Lint: every `gh api` invocation and every `api.github.com`
 request in scripts/\*.sh passes an explicit
 `X-GitHub-Api-Version: <date>` header.
 

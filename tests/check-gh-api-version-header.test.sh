@@ -16,13 +16,13 @@ readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-gh-api-version-header"
 failures=0
 
 # @arg $1 scenario name
-# @arg $2 fixture subdir
+# @arg $2 scan root to point SCRIPTS_DIR_OVERRIDE at
 # @arg $3 expected exit
 # @arg $4 expected stderr substring (empty skips)
 # @arg $5 expected stdout substring (empty skips)
 function run_scenario() {
   local -r name="$1"
-  local -r fixture_dir="$2"
+  local -r scan_root="$2"
   local -r expected_exit="$3"
   local -r expected_stderr="$4"
   local -r expected_stdout="$5"
@@ -33,7 +33,7 @@ function run_scenario() {
   outcome_file="$(mktemp)"
 
   local actual_exit=0
-  SCRIPTS_DIR_OVERRIDE="${FIXTURES}/${fixture_dir}" \
+  SCRIPTS_DIR_OVERRIDE="${scan_root}" \
     "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
 
@@ -74,28 +74,63 @@ function main() {
   # every mention sat in a comment are the same verdict but very
   # different facts, and only the summary separates them.
   run_scenario 'gh api with explicit header passes' \
-    'good' 0 '' \
+    "${FIXTURES}/good" 0 '' \
     'scanned 1 script(s); 2 API call site(s) carry an explicit header; 1 comment mention(s) skipped'
   run_scenario 'bare gh api fails' \
-    'bad-no-header' 1 'missing X-GitHub-Api-Version' ''
+    "${FIXTURES}/bad-no-header" 1 'missing X-GitHub-Api-Version' ''
   run_scenario 'gh api on continuation lines fails' \
-    'bad-continuation' 1 'missing X-GitHub-Api-Version' ''
+    "${FIXTURES}/bad-continuation" 1 'missing X-GitHub-Api-Version' ''
   run_scenario 'gh api in comments only passes' \
-    'good-comment-only' 0 '' \
+    "${FIXTURES}/good-comment-only" 0 '' \
     'scanned 1 script(s); 0 API call site(s) carry an explicit header; 3 comment mention(s) skipped'
   run_scenario 'api.github.com request without header fails' \
-    'bad-apigithub' 1 'missing X-GitHub-Api-Version' ''
+    "${FIXTURES}/bad-apigithub" 1 'missing X-GitHub-Api-Version' ''
+  # The blind spot a text matcher cannot close: `gh` sits behind a `(`,
+  # so no start-of-line or whitespace anchor reaches it. Most call sites
+  # in the live tree are written this way.
+  run_scenario 'gh api inside a command substitution fails' \
+    "${FIXTURES}/bad-cmdsubst" 1 'missing X-GitHub-Api-Version' ''
+  # The other direction of the same mistake: a diagnostic that names the
+  # command it is reporting on is a string, and reporting it would push
+  # every such message away from naming the command that failed.
+  run_scenario 'gh api inside a diagnostic string passes' \
+    "${FIXTURES}/good-string-mention" 0 '' \
+    'scanned 1 script(s); 0 API call site(s) carry an explicit header; 1 comment mention(s) skipped'
+  # A header the rule can only see by resolving the variable it arrives
+  # in. Reading literal arguments alone reports a header that is there.
+  run_scenario 'header supplied through a variable passes' \
+    "${FIXTURES}/good-header-var" 0 '' \
+    'scanned 1 script(s); 1 API call site(s) carry an explicit header; 2 comment mention(s) skipped'
+  # An expansion for a command word names no command the parser can
+  # resolve. The summary says so, naming the file, rather than scoring a
+  # shape it never read.
+  run_scenario 'unresolved command word is named, not scored' \
+    "${FIXTURES}/good-unresolved" 0 '' \
+    '1 unresolved command word(s) [unresolved-word.sh]'
   # A directory that is not there was never scanned, so it holds no
   # offenders: the could-not-run code, not a violation report.
   run_scenario 'missing scripts dir could not run' \
-    'does-not-exist' 2 'scripts dir not found' ''
+    "${FIXTURES}/does-not-exist" 2 'scripts dir not found' ''
+  # A file the parser cannot read is source this run never saw, so it
+  # takes the could-not-run code rather than being scored clean. The tree
+  # is built here rather than committed: an unparsable `.sh` under tests/
+  # is one treefmt cannot format, and the suite formats what it holds.
+  local unparsable_root
+  unparsable_root="$(mktemp --directory)"
+  printf '#!/usr/bin/env bash\nif [[ -z\n' >"${unparsable_root}/broken.sh"
+  run_scenario 'unparsable script could not run' \
+    "${unparsable_root}" 2 'cannot parse' ''
+  rm --recursive --force -- "${unparsable_root}"
 
-  # Self-scan: the live scripts/ dir must lint clean. Guards against
-  # any future script regressing on the X-GitHub-Api-Version header.
-  # Only the live tree holds this checker itself, so the self-exclusion
-  # clause is what marks the summary as covering the real scripts/ dir;
-  # the counts around it grow with the repo and are not asserted.
-  local -r live_scope='self-excluded: check-gh-api-version-header.sh'
+  # Self-scan: the live scripts/ dir must lint clean. Guards against any
+  # future script regressing on the X-GitHub-Api-Version header. The scan
+  # root is what separates a run over the repo from a run over a fixture:
+  # every other field on the summary line is a count both kinds of run can
+  # print, and the counts here grow with the repo and are not asserted.
+  # The live tree includes this checker itself — reading command words
+  # from the parse tree means its own prose naming `gh api` is not an
+  # invocation, so no file is skipped to keep the run green.
+  local -r live_scope='scan root: scripts'
   local stderr_file stdout_file outcome_file
   stderr_file="$(mktemp)"
   stdout_file="$(mktemp)"
