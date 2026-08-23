@@ -2,8 +2,8 @@
 
 This file holds the repo-specific facts the audit shares with every reader.
 Commands and lists drift; where this file names a generator, recipe, or path,
-**trust live output (`just --list`, `ls scripts/`) over this table** if they
-disagree, and note the drift as its own finding.
+**trust live output (`just --list`, `ls scripts/`) over what is written here**
+if they disagree, and note the drift as its own finding.
 
 ## 1. Ground-truth commands
 
@@ -16,6 +16,7 @@ just --list                    # every recipe (and what each regenerates)
 ls scripts/                    # *.sh inventory (check-*, refresh-*, and helpers)
 ls .github/workflows/          # workflow filenames
 grep -H 'cron:' .github/workflows/*.yml   # authoritative cron schedules
+grep -c '"context"' .github/rulesets/protect-main.json  # required-check context count
 git grep -n '<symbol>'         # existence of options, env vars, secret names, flags
 ```
 
@@ -23,6 +24,12 @@ The authoritative cron table for prose to match is
 `docs/architecture/ci.md` (kept in sync by `check-cron-table.sh`). When a
 diagram or runbook names a schedule, verify against both the workflow `cron:`
 line and that table.
+
+`.github/rulesets/protect-main.json` is the in-tree mirror of the live
+`protect-main` ruleset and the source of truth for required-check **counts** as
+well as names — a doc stating how many required checks a PR must pass is
+checked against it, and the collector emits that count as its
+**REQUIRED-CHECK CONTEXTS** section.
 
 For CI job / required-check names, the collector emits a **VALID CI JOB / CHECK
 NAMES** union allowlist — every workflow job id plus every lint-group member.
@@ -105,13 +112,21 @@ edits inside their `BEGIN/END` markers; a fix means fixing the generator.
 | ephemeral-refs-gap block in `docs/development/linting.md`                                                                                                                                           | `refresh-ephemeral-refs-gap.sh` (no recipe)                                                                                  |
 | pin-parity block in `docs/architecture/auto-update.md`                                                                                                                                              | `refresh-pin-parity.sh` (no recipe)                                                                                          |
 | `docs/_data/dashboard.yml` (untracked/gitignored — regenerated at site build; drives `dashboard.md`, `releases.md`; no freshness gate — `dashboard-data-tests` covers generator failure modes only) | `just site-data` / `gen-dashboard-data.sh`                                                                                   |
-| released sections of `CHANGELOG.md` (`## Unreleased` is hand-written)                                                                                                                               | git-cliff in `release-on-bump.yml`'s changelog job; freshness gate `check-changelog-fresh.sh` (no recipe, no `refresh-*.sh`) |
+| `CHANGELOG.md` (**whole file**)                                                                                                                                                                     | git-cliff in `release-on-bump.yml`'s changelog job; freshness gate `check-changelog-fresh.sh` (no recipe, no `refresh-*.sh`) |
 
 Hand-written prose *surrounding* a generated block is in scope — except
 where the row says **whole file**. `docs/reference/test-harnesses.md` carries no
 `BEGIN`/`END` markers at all: its generator emits the heading, the
 do-not-hand-edit line, the intro paragraph and the regenerate line along with
 the census. Nothing in that file is hand-written, so nothing in it is in scope.
+
+`CHANGELOG.md` is whole-file too, and for the same reason: `cliff.toml`'s
+`header` produces the `# Changelog` preamble and its `body` template produces
+both the released `## [<tag>]` sections and the `## Unreleased` heading, so no
+part of the file is authored prose. Only the released portion is freshness-gated
+— `check-changelog-fresh.sh` skips `## Unreleased` because it changes with every
+merged commit — but ungated is not hand-written, and a fix there means fixing
+`cliff.toml`.
 
 ## 4. Ephemeral-token regex (prose-quality dimension)
 
@@ -188,8 +203,12 @@ not is a false positive. The lint's complete class set is in
 `RE_REVIEW` and `RE_CLAUDE` block, `RE_CAUSAL` warns. The sweep transcribes
 the blocking classes from those constants, left boundary guards included, so a
 banned shape sitting inside a larger token (`UTF-8`, `PDF-1.7`, `ID5:`,
-`abc#12`) is no more a sweep hit than a gate failure. Three standing caveats
-where this page, the collector sweep, and the real lint still diverge:
+`abc#12`) is no more a sweep hit than a gate failure. The advisory
+`causal-history` class is matched case-insensitively on both sides, matching
+`RE_CAUSAL`'s `--ignore-case` pass in the lint, so a sentence-initial
+`Previously` is a hit in the sweep exactly as it is in the lint; the blocking
+classes stay case-sensitive on both sides. Three standing caveats where this
+page, the collector sweep, and the real lint still diverge:
 
 - `causal-history` is advisory-only even in the real lint — it never fails a
     gate, so a hit there is a style nit.

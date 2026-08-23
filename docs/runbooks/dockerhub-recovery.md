@@ -66,9 +66,12 @@ The push loop inside `release-on-bump.yml` per-arch jobs runs
 
 **Skip this step if you will re-run with `force-republish`** (step 3,
 second bullet). On that path the image, manifest, verify, and changelog
-jobs re-run against the current pin while the `release` job stays gated
-by the "tag exists" guard, so the release and its assets survive and
-nothing needs deleting.
+jobs re-run against the current pin while the `release` job's
+release-creation step stays gated by the "tag exists" guard, so the
+release and its assets survive and nothing needs deleting. The job itself
+still runs: its `sign pin file (cosign sign-blob, keyless)` step is
+ungated and re-uploads `linpeas-pin.json.sigstore` with `--clobber`,
+which is how this path recovers a missing sidecar.
 
 Delete only when recovering by re-pushing the pin commit (step 3, first
 bullet). Release-creation is gated on tag-doesn't-exist, so an orphan
@@ -127,9 +130,9 @@ Either:
     still `HEAD` on `main`. Use the `force-republish` input when
     re-running so the image, manifest, and verify jobs re-run for the
     current pin even though the GitHub release already exists. The
-    `release` job stays gated by the "tag exists" guard and preserves the
-    existing release assets — if the release itself must be recreated,
-    delete it first, then re-run.
+    `release` job's release-creation step stays gated by the "tag exists"
+    guard, so the existing release assets are preserved — if the release
+    itself must be recreated, delete it first, then re-run.
 
 ### 4. Confirm green end-to-end<a name="4-confirm-green-end-to-end"></a>
 

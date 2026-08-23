@@ -14,11 +14,12 @@ Run a multi-agent, refute-all review of this repository using the
     report, per-dimension gates).
 1. Run each selected dimension as its own gated `Workflow` — wait for "go",
     fan out finder slices, refute every finding with 3 default-refuted
-    skeptics, keep ≥2/3 survivors. Seed later dimensions with earlier confirmed
-    findings.
-1. Append survivors — plus the refutation log and any contested (2-1) kills,
-    which are never dropped silently — to one severity-ranked report under
-    `.claude/reports/`.
+    skeptics, keeping a finding when at least two of the skeptics that
+    returned could not refute it. Seed later dimensions with earlier
+    confirmed findings.
+1. Append survivors — plus the refutation log and any contested kills (one
+    live skeptic dissenting), which are never dropped silently — to one
+    severity-ranked report under `.claude/reports/`.
 
 This is a READ-ONLY review: edit nothing, mutate nothing (not even a generated
 file's mtime); end by confirming `git status` is clean. If the user passed an

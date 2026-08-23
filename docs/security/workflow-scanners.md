@@ -142,7 +142,7 @@ and "Stale-pin failure attribution" is the notify-body reason split.
 | actionlint                   | workflow syntax, `run:`-block shellcheck, expression errors                  |
 | actionlint-shellcheck-active | guards that actionlint's shellcheck integration stays enabled                |
 | actionlint-pyflakes-active   | guards that actionlint's pyflakes integration stays enabled                  |
-| uses-sha-pinned              | every `uses:` pinned to a full commit SHA                                    |
+| uses-sha-pinned              | every `uses:` pinned to a full commit SHA or a `./` self-reference           |
 | patch-tag-pins               | the patch-tag pin-comment convention on SHA pins                             |
 | pin-diff-isolated            | pin bumps isolated to their own diff                                         |
 | ratchet-pin-audit            | a publisher force-moving a tag to a new SHA after we pinned it (daily cron)  |
@@ -152,7 +152,7 @@ and "Stale-pin failure attribution" is the notify-body reason split.
 | pull-request-target-absent   | bans the dangerous `pull_request_target` trigger                             |
 | workflow-concurrency         | top-level `concurrency.group` present                                        |
 | workflow-on-branches         | explicit branch scoping on `on:` triggers                                    |
-| nix-run-pinned               | `nix run` invocations pinned through the flake                               |
+| nix-run-pinned               | every `nix` subcommand pinned through the flake, never bare `nixpkgs#`       |
 | cosign-identity-pinned       | every `cosign verify*` subcommand pins identity and OIDC issuer              |
 | manifest-digest-pinned       | multi-arch manifest sources pinned by digest, not tag                        |
 | settings-posture-drift-check | repo settings vs. the expected hardened posture (daily cron)                 |

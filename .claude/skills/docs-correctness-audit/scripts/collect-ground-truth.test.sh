@@ -224,12 +224,20 @@ cs="$(mktemp -d)"
   cp "${REAL_REPO}/lychee.toml" .
   mkdir -p docs
   printf '# Causal\n\nThis was previously a different shape.\n' >docs/flagged.md
+  printf '# Sentence initial\n\nPreviously the gate ran on push.\n' >docs/initial.md
   printf '# Bare\n\nCompromise prior to publication is out of scope.\nThe operator swapped the token.\nThe interface was reshaped by the caller.\n' >docs/bare.md
+  printf '# Blocking stays cased\n\nSee gap-12 for the deferred arm.\n' >docs/cased.md
   git add -A && git commit -qm init
 )
 # shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
 cau="$(cd "${cs}" && source "${COLLECTOR}" && sweep_ephemeral_tokens)"
 case "${cau}" in *"(causal-history)"*"previously"*) check "flags previously" 0 ;; *) check "flags previously" 1 ;; esac
+# The lint's advisory pass runs --ignore-case, so the sweep must too: the
+# commonest causal form is sentence-initial, and a cased sweep misses all of it.
+case "${cau}" in *"(causal-history)"*"Previously"*) check "flags sentence-initial Previously" 0 ;; *) check "flags sentence-initial Previously" 1 ;; esac
+# Case folding must stay scoped to the advisory class — the blocking classes
+# are cased in the lint, so a lowercased planning label is not a sweep hit.
+case "${cau}" in *"gap-12"*) check "blocking classes stay case-sensitive" 1 ;; *) check "blocking classes stay case-sensitive" 0 ;; esac
 case "${cau}" in *"prior to"*) check "does not flag bare 'prior to'" 1 ;; *) check "does not flag bare 'prior to'" 0 ;; esac
 case "${cau}" in *"swapped"*) check "does not flag bare 'swapped'" 1 ;; *) check "does not flag bare 'swapped'" 0 ;; esac
 case "${cau}" in *"reshaped"*) check "does not flag bare 'was reshaped'" 1 ;; *) check "does not flag bare 'was reshaped'" 0 ;; esac

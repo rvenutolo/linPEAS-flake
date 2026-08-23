@@ -88,8 +88,10 @@ _eph_prepare() {
   done
 }
 
-_emit_eph() { # $1=category $2=ERE — emits "file:line\t(category) <trimmed line>"
-  (cd "${EPH_SCAN_DIR}" && grep -HnE "$2" -- "${EPH_FILES[@]}" 2>/dev/null) |
+_emit_eph() { # $1=category $2=ERE $3=optional extra grep flag — emits "file:line\t(category) <trimmed line>"
+  local -a flags=(-HnE)
+  if [[ -n ${3:-} ]]; then flags+=("$3"); fi
+  (cd "${EPH_SCAN_DIR}" && grep "${flags[@]}" "$2" -- "${EPH_FILES[@]}" 2>/dev/null) |
     sed -E "s/^([^:]+:[0-9]+):[[:space:]]*/\1	($1) /" || true
 }
 sweep_ephemeral_tokens() {
@@ -117,8 +119,11 @@ sweep_ephemeral_tokens() {
       # Mirrors RE_CAUSAL in scripts/lib/ephemeral-refs-scope.sh. Bare verbs
       # and prepositions (`prior to`, `swapped`, `was reshaped`) are excluded
       # there on purpose, so including them here would report hits the real
-      # lint never raises.
-      _emit_eph causal-history 'previously|Migration note|Tightened from|switched (from|to)|legacy .* was deleted|added in #?[0-9]+|post-PR #?[0-9]+'
+      # lint never raises. The lint runs this class with --ignore-case, so the
+      # sweep does too: the commonest form is sentence-initial (`Previously,`),
+      # and a case-sensitive sweep silently misses every one of them. The
+      # blocking classes stay case-sensitive on both sides.
+      _emit_eph causal-history 'previously|Migration note|Tightened from|switched (from|to)|legacy .* was deleted|added in #?[0-9]+|post-PR #?[0-9]+' --ignore-case
       # RE_ISSUE's guards subsume the entity and anchor suppressions below;
       # both are kept so a shape the guard admits stays suppressed. Hex colors
       # need their own filter either way: RE_ISSUE admits `#333`, and the lint

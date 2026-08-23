@@ -48,10 +48,13 @@ The published OCI image is a multi-arch manifest covering `linux/amd64`
 and `linux/arm64`. **SLSA attestations are per-arch**, not per-manifest.
 This means:
 
-- `gh attestation verify oci://docker.io/rvenutolo/linpeas:<tag> --repo rvenutolo/linPEAS-flake` may
-    not resolve cleanly against the manifest index alone — point the verify
-    at the arch-specific image (or pull on the target arch and use the
-    resolved `RepoDigests` value).
+- `gh attestation verify oci://docker.io/rvenutolo/linpeas:<tag> --repo rvenutolo/linPEAS-flake`
+    fails with a not-found error: the tag resolves to the manifest index,
+    which carries no attestation. The `RepoDigests` value a tag pull
+    records is that same index digest, so it fails the same way. Resolve
+    the per-arch digest from the index and verify that instead — see
+    [`docs/security/verification.md`](docs/security/verification.md#multi-arch-attestations)
+    for the resolution procedure.
 
 - Each arch image was independently built from the same commit of this
     repo, so the attestations cover the same source provenance.
@@ -70,7 +73,7 @@ This means:
     ```
 
     To check build provenance rather than the signature, resolve to the
-    arch-image digest and run `gh attestation verify` against that — the
+    per-arch digest and run `gh attestation verify` against that — the
     attestation is attached per arch, not to the index.
 
 The release pipeline re-checks the published manifest tags after it
@@ -80,12 +83,10 @@ per-arch digests match the values that were attested. A drift at this
 step fails the release, so a tag repointed before the release completes
 does not ship.
 
-The residual risk is consumer-side and post-release. A consumer who pulls
-by the manifest tag and then verifies against the **arch-resolved** digest
-(via `docker manifest inspect` or the `RepoDigests` value returned by
-`docker inspect`) is protected. A consumer who trusts the manifest tag
-implicitly — without resolving to the per-arch digest and without
-`cosign verify` — is not.
+The residual risk is consumer-side and post-release. A consumer who
+resolves the **per-arch** digest out of the index and verifies that is
+protected. A consumer who trusts the manifest tag implicitly — or who
+verifies whatever digest a tag pull happened to record — is not.
 
 ## Auto-merge surface
 

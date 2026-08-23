@@ -73,6 +73,12 @@ upstream tagging convention.
     floating-major digest moves to be reachable from the upstream
     default branch.
 
+    Self-reference pins — a `uses:` whose owner/repo is this repo's own —
+    are excluded for a different reason: they name no upstream tag at
+    all, since Renovate's `pinDigests` rule tracks this repo's own `main`
+    HEAD. The digest-provenance gate excludes them too, so their PR-time
+    surface is `scripts/check-uses-sha-pinned.sh` alone.
+
 - Bump path: Renovate's `helpers:pinGitHubActionDigests` preset.
     Renovate's github-actions manager parses the trailing comment as
     `currentValue` and rewrites both the SHA and the comment on each

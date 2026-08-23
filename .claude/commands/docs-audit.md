@@ -19,6 +19,11 @@ Run a documentation correctness audit of this repository using the
     hand-written claims about CI jobs / required checks, which freshness gates do
     not cover.
 1. Write a severity-ranked findings report to `.claude/reports/`.
+1. Close by telling the user to record the audit point: the final fix PR runs
+    `just docs-audit-done` and stages `.github/docs-audit-state`. This audit is
+    read-only and cannot write that marker itself, and the monthly reminder
+    measures drift pressure from it — an audit that never records its point
+    leaves pressure climbing.
 
 This is a READ-ONLY audit: do not edit any documentation in this pass. If the
 user passed an argument naming a subset (e.g. a single cluster like

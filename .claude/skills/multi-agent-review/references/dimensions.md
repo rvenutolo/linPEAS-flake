@@ -46,9 +46,9 @@ Refuters: verify eval behavior empirically (`nix eval`, `nix build`, `nix path-i
 ## 2. Shell script correctness — *deep*
 
 Per-script logic trace across every `scripts/*.sh` **and**
-`scripts/lib/*.sh` (~106; size the slices from
-`ls scripts/*.sh scripts/lib/*.sh | wc -l` rather than this figure, which
-rots). The `scripts/lib/` libraries are load-bearing — the ephemeral-refs
+`scripts/lib/*.sh` (size the slices from
+`ls scripts/*.sh scripts/lib/*.sh | wc -l` — the count moves with every
+script added, so no figure is written here). The `scripts/lib/` libraries are load-bearing — the ephemeral-refs
 regex classes, payload helpers, and enumeration guards all live there — so
 a run that skips them silently reviews none of that.
 

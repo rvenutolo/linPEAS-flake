@@ -8,13 +8,23 @@ canonical SHA its tag now resolves to, the workflow opens (or
 updates) a single deduped umbrella issue labeled `ratchet-drift`.
 The issue auto-closes on the next clean run.
 
-Two classes of ref are skipped before any API call: floating-major pins
-(`# vN`), because such a tag retargets on every release and a benign move
-is indistinguishable from an attack; and this repo's own composite-action
-self-references, which have no upstream tag to compare against. Their
-integrity comes instead from the immutable digest pin plus the PR-time
-`check-pin-digest-provenance.sh` gate — see
-[pin convention](../architecture/pin-convention.md).
+Two classes of ref are skipped before any API call, and they do not share
+a backing check.
+
+Floating-major pins (`# vN`) are skipped because such a tag retargets on
+every release, so a benign move is indistinguishable from an attack.
+Their integrity rests on the immutable digest pin, Renovate currency, and
+the PR-time `check-pin-digest-provenance.sh` gate, which requires a
+floating-major digest move to be reachable from the upstream default
+branch — see [pin convention](../architecture/pin-convention.md).
+
+This repo's own composite-action self-references are skipped because they
+have no upstream tag to compare against: Renovate's `pinDigests` rule
+tracks this repo's own `main` HEAD, not an upstream release. The
+digest-provenance gate skips them for the same reason, so the PR-time
+surface is `check-uses-sha-pinned.sh` alone, which still requires a full
+40-hex SHA — see
+[repo config](../security/repo-config.md).
 
 This runbook is linked inline from the auto-filed issue body.
 
