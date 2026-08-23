@@ -206,6 +206,26 @@ There is no exemption marker. Every script can describe its own exit codes, so a
 
 Enforced by `scripts/check-exit-contract-documented.sh`. Wired as the `lint-script-hygiene` CI job (member check `exit-contract-documented`).
 
+## tool-guarded
+
+Every third-party tool a script under `scripts/` invokes is guarded somewhere in that same script.
+
+[guard-exit-code](#guard-exit-code) settles which code a guard reports and [exit-contract-documented](#exit-contract-documented) settles whether the header admits it. This rule settles the case neither reaches: a tool with no guard at all. There is no branch to assign a code to, so the absent tool becomes whatever the surrounding code does with a non-zero status, and each of those readings is a different wrong answer.
+
+A shape probe written as `<tool> ... || die` reports the payload as malformed, and the operator opens a file that is intact looking for a field that is present. A guard that treats success as the violation — `if <tool> ...; then report` — scores every input clean, because an absent tool cannot succeed; that run exits 0 having examined nothing, which is the only failure here that no caller can see. An enumeration ending in `|| true` comes back empty, and a lint asserting over an empty set asserts nothing. An unchecked command substitution ends the run under the tool's own status, 127 for an absent one, which the convention does not catalogue.
+
+A guard is `require_tool <tool>`, a `command -v <tool>` availability test, or a library helper that guards the tool for its caller. `require_json_payload` is the one such helper today: it calls `require_tool jq` before its first read, so demanding a second guard at each call site would make the shared helper's own guarantee look untrusted.
+
+Scope is tools a shell can genuinely lack — `actionlint`, `check-jsonschema`, `cosign`, `curl`, `docker`, `gh`, `jq`, `just`, `nix`, `shellcheck`, `shfmt`, `treefmt`, `yq`. POSIX utilities and coreutils staples are assumed present: guarding `grep` in every script that greps would cost a hundred lines describing an environment that does not occur, and a rule nobody believes is a rule that gets exempted.
+
+Detection reads command words from the `shfmt` parse tree rather than matching text. A tool name appears in comments, in message strings, and in `@description` prose, and none of those is an invocation; a `||` inside a `sed` or `awk` program is program text that a line-oriented scan reads as shell control flow. The parser knows which words are commands.
+
+The rule is presence, not position. A parse tree reports where a word was written, which in shell is not when it runs — nearly every script here defines its functions above the `main` that calls them, so a tool invoked inside a function routinely executes after a guard written hundreds of lines below it. Ordering those correctly needs a call graph; comparing line numbers instead reports the tree's ordinary layout as a defect.
+
+There is no exemption marker. A hit is fixed by adding the guard.
+
+Enforced by `scripts/check-tool-guarded.sh`. Wired as the `lint-script-hygiene` CI job (member check `tool-guarded`).
+
 ## path-hygiene
 
 No path git reports for the tree — tracked, or untracked and not ignored — may carry a byte in the 0x01-0x1F control range or DEL (0x7F).

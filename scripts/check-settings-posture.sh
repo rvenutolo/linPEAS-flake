@@ -46,6 +46,10 @@ source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/payload.sh
 source "${_lib_dir}/lib/payload.sh"
 
+# Every posture field is read from the API. An absent `gh` leaves the
+# run with no payload and an exit code outside the convention.
+require_tool gh
+
 readonly THIS_REPO='rvenutolo/linPEAS-flake'
 
 drift_count=0

@@ -124,6 +124,11 @@ source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/payload.sh
 source "${_lib_dir}/lib/payload.sh"
 
+# Every lock read below goes through `jq`. Absent, it ends the run
+# under exit 127 with no sentence naming the tool, and the shape
+# probes further down would report the lock as malformed instead.
+require_tool jq
+
 readonly BASE_REF="${BASE_REF:-origin/main}"
 
 function die_op() {

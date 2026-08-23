@@ -40,6 +40,11 @@ source "${_lib_dir}/lib/awk-path.sh"
 # shellcheck source=scripts/lib/payload.sh
 source "${_lib_dir}/lib/payload.sh"
 
+# The API read below is this check's only source of truth. An absent
+# `gh` would otherwise end the run under the tool's own status, which
+# the exit-code convention does not catalogue.
+require_tool gh
+
 readonly THIS_REPO='rvenutolo/linPEAS-flake'
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || printf '.')"

@@ -19,6 +19,14 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/awk-path.sh
 source "${_lib_dir}/lib/awk-path.sh"
+# shellcheck source=scripts/lib/log.sh
+source "${_lib_dir}/lib/log.sh"
+
+# The paths/paths-ignore probe treats a successful `yq` as the
+# violation, so an absent one cannot succeed and every workflow is
+# scored clean. That reading exits 0 having examined nothing, which is
+# the one failure here no caller can see.
+require_tool yq
 
 readonly doc='docs/security/required-checks.md'
 
