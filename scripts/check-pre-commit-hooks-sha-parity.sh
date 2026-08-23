@@ -100,8 +100,16 @@ require_json_payload "${flake_lock_source}" "${flake_lock_json}" '
 # verdict below rather than a could-not-run — the gate above only
 # rejects a payload the read cannot trust the shape of, not one that
 # simply lacks this particular node.
-lock_rev="$(jq --raw-output \
-  '.nodes["pre-commit-hooks"].locked.rev // empty' <<<"${flake_lock_json}")"
+# The gate proves `.nodes` is an object, not that this node is one, so
+# the walk into `.locked` can still die on a lock file whose node holds
+# a scalar. That is a lock file this check could not read — exit 5 out
+# of jq is outside the convention, and exit 1 would claim a rev that was
+# never read.
+if ! lock_rev="$(jq --raw-output \
+  '.nodes["pre-commit-hooks"].locked.rev // empty' <<<"${flake_lock_json}")"; then
+  printf 'cannot read nodes["pre-commit-hooks"].locked.rev from %s\n' "${FLAKE_LOCK}" >&2
+  exit 2
+fi
 
 if [[ -z ${lock_rev} ]]; then
   printf 'no nodes["pre-commit-hooks"].locked.rev in %s\n' "${FLAKE_LOCK}" >&2

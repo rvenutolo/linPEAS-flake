@@ -70,9 +70,17 @@ function main() {
   # the failure mode "API version mismatch" rather than a downstream
   # "asset URL empty, weird" failure. See:
   # https://docs.github.com/en/rest/overview/api-versions
-  release_json="$(gh api \
+  # `gh` is on PATH — an absent one is reported by the guard above — so
+  # a failure here is the API refusing, the token expiring, or the
+  # network being gone. That is a release this run never read, not a
+  # release it read and rejected, and the two must not leave the same
+  # status behind.
+  if ! release_json="$(gh api \
     --header 'X-GitHub-Api-Version: 2022-11-28' \
-    repos/peass-ng/PEASS-ng/releases/latest)"
+    repos/peass-ng/PEASS-ng/releases/latest)"; then
+    log_err 'could not fetch repos/peass-ng/PEASS-ng/releases/latest'
+    exit 2
+  fi
   # Subject for the same reason the pin gate above carries one: the
   # dashboard generator names this identical API route when it fetches
   # upstream's latest release live.
@@ -80,6 +88,7 @@ function main() {
     if type != "object" then "payload is \(type), want object"
     elif (.tag_name | type) != "string" then ".tag_name is \(.tag_name | type), want string"
     elif (.assets | type) != "array" then ".assets is \(.assets | type), want array"
+    elif any(.assets[]; type != "object") then "an .assets entry is not an object"
     else empty
     end' 'bump-linpeas upstream release'
 
@@ -161,7 +170,13 @@ function main() {
 
   local sri_hash
   # `--type sha256` is the default and is deprecated; default to SRI sha256.
-  sri_hash="$(nix hash file --sri "${tmpfile}")"
+  # A `nix` that is present and fails has hashed nothing. Unchecked, its
+  # exit 1 ends the bump with the status a rejected release carries,
+  # and the pin would be written from a hash that was never computed.
+  if ! sri_hash="$(nix hash file --sri "${tmpfile}")"; then
+    log_err "could not hash the downloaded asset: ${tmpfile}"
+    exit 2
+  fi
 
   # Pin schema: key is `hash`, not `sha256`.
   # The shape emitted here (3 top-level keys, sorted alphabetically by

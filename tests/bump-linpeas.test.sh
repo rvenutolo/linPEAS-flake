@@ -128,6 +128,51 @@ function run_absent_pin_scenario() {
   rm --recursive --force -- "${stub_dir}" "${stdout_file}" "${stderr_file}" "${outcome_file}"
 }
 
+# @description Run a scenario whose stubbed `gh` is present and fails,
+# so no release payload is produced at all. An unchecked fetch would end
+# the bump with gh's own exit 1 — the status a release this script read
+# and rejected carries — and nothing about upstream would have been read.
+# @arg $1 scenario name  @arg $2 expected stderr substring
+function run_failing_gh_scenario() {
+  local -r name="$1" substring="$2"
+  local -r pin_path="${FIXTURES}/good-pin.json"
+  local stub_dir stdout_file stderr_file outcome_file pin_before pin_after
+  stub_dir="$(mktemp --directory)"
+  stdout_file="$(mktemp)"
+  stderr_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  printf '#!/usr/bin/env bash\nexit 1\n' >"${stub_dir}/gh"
+  chmod +x "${stub_dir}/gh"
+  pin_before="$(cat -- "${pin_path}")"
+
+  local rc=0
+  PATH="${stub_dir}:${PATH}" \
+    PIN_FILE_OVERRIDE="${pin_path}" \
+    bash "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${rc}" >"${outcome_file}"
+  harness_assert_record "${name}" "${substring}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+
+  pin_after="$(cat -- "${pin_path}")"
+  if [[ ${pin_before} != "${pin_after}" ]]; then
+    printf 'FAIL: %s — the pin fixture was modified\n' "${name}" >&2
+    failures=$((failures + 1))
+  elif ((rc != 2)); then
+    printf 'FAIL: %s — expected exit 2, got %d\n' "${name}" "${rc}" >&2
+    sed 's/^/    /' "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet -- "${substring}" "${stderr_file}"; then
+    printf 'FAIL: %s — stderr missing %q\n' "${name}" "${substring}" >&2
+    sed 's/^/    /' "${stderr_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s\n' "${name}"
+  fi
+
+  rm --recursive --force -- "${stub_dir}"
+  rm --force -- "${stdout_file}" "${stderr_file}" "${outcome_file}"
+}
+
 function main() {
   if [[ ! -f ${SCRIPT} ]]; then
     printf 'FAIL: script not found at %s\n' "${SCRIPT}" >&2
@@ -193,6 +238,11 @@ function main() {
   run_scenario 'well-formed payloads already at latest, no bump needed' \
     'good-pin.json' 'good-release.json' 0 \
     'already at latest, nothing to do'
+
+  run_failing_gh_scenario 'failing gh is a tooling error, not a rejected release' \
+    'could not fetch repos/peass-ng/PEASS-ng/releases/latest'
+  run_scenario 'non-object assets entry is a tooling error' \
+    'good-pin.json' 'bad-release-scalar-asset.json' 2 'an .assets entry is not an object'
 
   harness_assert_verify || failures=$((failures + 1))
 
