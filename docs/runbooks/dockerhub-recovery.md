@@ -124,8 +124,10 @@ curl --fail --silent --show-error \
 
 Either:
 
-- Push the same `linpeas-pin.json` commit again (no-op edit +
-    `chore: retrigger release` commit), OR
+- Push a new commit that modifies `linpeas-pin.json` itself (a
+    whitespace-only edit + `chore: retrigger release` commit). The
+    workflow's `push` trigger filters on that path, so an empty commit or
+    an edit to any other file starts nothing, OR
 - Re-run the workflow from the Actions UI if the pin commit is
     still `HEAD` on `main`. Use the `force-republish` input when
     re-running so the image, manifest, and verify jobs re-run for the

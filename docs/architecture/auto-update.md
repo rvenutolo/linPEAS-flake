@@ -77,10 +77,10 @@ No third-party flake-lock action is used: such actions take the write credential
 Both mechanisms above refresh inputs, and neither announces having stopped.
 A disabled workflow, a broken trigger, or a Renovate manager whose matcher no
 longer matches leaves every input frozen while every check stays green. Both
-halves of that have already happened in this repo: a login-shape change
-silently disabled `renovate-flake-lock-refresh.yml` for its entire lifetime,
-and Renovate sat in Mend silent mode long enough for `pre-commit-hooks` to
-go months past its staleness tier without anything saying so.
+halves are live risks here: a bot login-shape change can silently disable
+`renovate-flake-lock-refresh.yml` outright, and Renovate in Mend silent mode
+can leave `pre-commit-hooks` far past its staleness tier, with nothing in
+either case saying so.
 
 `scripts/check-flake-lock-staleness.sh`, run daily by
 `flake-lock-staleness-check.yml`, watches the freeze rather than any single

@@ -63,11 +63,15 @@ permissions, tag protection).
 
 ## Merge policy
 
-Merge-commit only. Enforced at both layers:
+Merge-commit only. Set at both layers, but only the ruleset layer is
+drift-probed:
 
 - **Repo:** `allow_merge_commit=true`, `allow_rebase_merge=false`,
-    `allow_squash_merge=false`.
-- **Ruleset:** `pull_request.allowed_merge_methods=["merge"]`.
+    `allow_squash_merge=false` — set manually in the UI; the read-only
+    drift checker cannot see these flags, so they are not probed (see
+    [`settings-posture.md`](settings-posture.md)).
+- **Ruleset:** `pull_request.allowed_merge_methods=["merge"]` — asserted
+    by `check-protect-main.sh`.
 
 Why: see [`../development/git.md`](../development/git.md#merge-policy).
 
