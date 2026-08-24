@@ -7,7 +7,8 @@ Live status of the `linPEAS-flake` pin, releases, and upstream parity.
     `linpeas-pin.json` file and the GitHub API. It is **not** a trust
     anchor. Always verify release artifacts with
     `gh attestation verify <artifact> --repo rvenutolo/linPEAS-flake`
-    against the actual release downloads. See
+    against the actual release downloads — for the OCI image, against a
+    per-arch digest rather than a tag. See
     [Security → Verification](security/verification.md).
 
 ## Current pin
@@ -59,11 +60,11 @@ No bump PRs found yet.
 - **Tag:** [{{ dashboard.release.latest_tag }}](https://github.com/rvenutolo/linPEAS-flake/releases/tag/{{ dashboard.release.latest_tag }})
 - **OCI image:** `{{ dashboard.release.image_ref }}`
 
-Verify:
-
-```bash
-gh attestation verify oci://{{ dashboard.release.image_ref }} --repo rvenutolo/linPEAS-flake
-```
+That reference is a manifest tag, and the tag resolves to a manifest index
+that carries no attestation — `gh attestation verify` against it fails with
+a not-found error. Resolve your platform's per-arch image digest from the
+index first and verify that digest:
+[Security → Verification → Multi-arch attestations](security/verification.md#multi-arch-attestations).
 {% else %}
 No releases published yet.
 {% endif %}

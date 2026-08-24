@@ -179,7 +179,12 @@ fl="$(mktemp -d)"
   mkdir -p docs
   printf '# A\n[bad](./nope.md)\n[badanchor](./b.md#missing)\n[ok](./b.md#real)\n[ext](https://example.com)\n' >docs/links.md
   printf '# Real\n' >docs/b.md
-  git add -A && git commit -qm init
+  # Tracked .claude/ tooling is a doc cluster, so its links are in scope;
+  # the seeded-defect fixtures carry planted breakage and are not.
+  mkdir -p .claude/skills/t/evals/seeded-defects/fixtures
+  printf '# Skill\n[tooling-dead](./gone-tooling.md)\n' >.claude/skills/t/SKILL.md
+  printf '# Seed\n[seeded-dead](./gone-seeded.md)\n' >.claude/skills/t/evals/seeded-defects/fixtures/f.md
+  git add -A && git add --force .claude && git commit -qm init # force past the inherited global gitignore, mirroring the real repo's tracked .claude skill
 )
 # shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
 lnk="$(cd "${fl}" && source "${COLLECTOR}" && sweep_internal_links)"
@@ -187,6 +192,8 @@ case "${lnk}" in *"nope.md"*) check "flags broken relative link" 0 ;; *) check "
 case "${lnk}" in *"missing"*) check "flags broken anchor" 0 ;; *) check "flags broken anchor" 1 ;; esac
 case "${lnk}" in *"example.com"*) check "skips external URL" 1 ;; *) check "skips external URL" 0 ;; esac
 case "${lnk}" in *"#real"*) check "resolves valid anchor (no error)" 1 ;; *) check "resolves valid anchor (no error)" 0 ;; esac
+case "${lnk}" in *"gone-tooling.md"*) check "flags broken link in tracked .claude/ tooling" 0 ;; *) check "flags broken link in tracked .claude/ tooling" 1 ;; esac
+case "${lnk}" in *"gone-seeded.md"*) check "skips seeded-defect fixtures" 1 ;; *) check "skips seeded-defect fixtures" 0 ;; esac
 rm -rf "${fl}"
 
 # --- ci.yml job listing is scoped to the jobs: block ---

@@ -435,8 +435,10 @@ expansion is not seen at all.
 
 A loop whose empty match set genuinely is the normal state — sweeping a
 leftover scratch file, say — opts out with an inline
-`# glob-exempt: <rationale>` on the line above; the marker has to open
-the comment — a sentence naming it is prose, not an exemption — the
+`# glob-exempt: <rationale>` trailing the site's own line or sitting
+anywhere in the contiguous comment block directly above it; the marker
+has to open the comment — a sentence naming it is prose, not an
+exemption — the
 rationale must be non-empty, the marker word is keyed to the kind of
 site so the sibling `# enumerate-exempt:` excuses nothing here, and a
 clean run prints the exemption count. Full rationale:
@@ -489,9 +491,11 @@ examples guard a job-count assertion (`check-egress-allowlist.sh`) and a
 reverse allowlist-staleness pass (`check-permission-scopes.sh`). Any of
 the four banned shapes — the in-loop re-read, the one-hop function read,
 the missing `filter_into` call, or the aliasing assignment — opts out
-with an inline `# filter-exempt: <rationale>` on the line above; the
-marker has to open the comment — a sentence naming it is prose, not an
-exemption — the rationale must be non-empty, the marker word is keyed to
+with an inline `# filter-exempt: <rationale>` trailing the site's own
+line or sitting anywhere in the contiguous comment block directly above
+it; the marker has to open the comment — a sentence naming it is prose,
+not an exemption — the rationale must be non-empty, the marker word is
+keyed to
 this shape so neither sibling marker excuses it, and a clean run prints
 the exemption count. Full rationale:
 [Workflow hardening → enumerate-helper-required](../security/workflow-hardening.md#enumerate-helper-required).

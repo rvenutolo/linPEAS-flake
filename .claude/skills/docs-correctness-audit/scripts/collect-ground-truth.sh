@@ -148,7 +148,10 @@ sweep_internal_links() {
   local repo_root tmp errs
   repo_root="$(git rev-parse --show-toplevel)"
   local files=()
-  mapfile -t files < <(git ls-files '*.md' | grep -vE '^(\.claude/|tests/fixtures/|docs/_data/)' || true) # mirrors ephemeral sweep scope; neither depends on lychee.toml for docs-scope decisions
+  # Wider than the ephemeral sweep: tracked .claude/ tooling quotes banned
+  # token shapes as pattern data, but its links are ordinary links, so they
+  # stay in. Only the seeded-defect fixtures (planted violations) drop out.
+  mapfile -t files < <(git ls-files '*.md' | grep -vE '^(tests/fixtures/|docs/_data/|\.claude/skills/[^/]+/evals/seeded-defects/fixtures/)' || true) # does not depend on lychee.toml for docs-scope decisions
   if [[ ${#files[@]} -eq 0 ]]; then
     echo '(none)'
     return 0

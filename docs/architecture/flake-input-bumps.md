@@ -472,8 +472,8 @@ branch. The `identify` job gates on ALL of:
     other gates below, an author that does not match FAILS the
     `identify` job rather than skipping it — every PR reaching this point
     is on a `renovate/` branch, so an author Renovate does not own is an
-    anomaly, and a silent skip is what let an earlier login-shape change
-    disable the whole workflow undetected.
+    anomaly, and a silent skip would be indistinguishable from a
+    login-shape change disabling the whole workflow undetected.
 - PR head branch starts with `renovate/`.
 - PR diff touches `flake.nix`.
 - PR title contains a known dep name (`cachix/git-hooks.nix` →
