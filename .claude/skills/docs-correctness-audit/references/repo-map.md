@@ -71,14 +71,15 @@ directory globs: a tracked doc outside `.claude/` that falls in none of those
 directories — a new top-level `docs/` page as readily as a new root-level one —
 matches no row and would otherwise be assigned to no reader while still
 appearing in the collector's sweeps. Verify the map covers
-everything with `git ls-files '*.md'` minus `tests/fixtures/` — every result
-must fall in some row.
+everything with `git ls-files '*.md'` minus `tests/fixtures/` and
+`skills/*/evals/seeded-defects/fixtures/` — every result must fall in some
+row.
 
 Part of `.claude/` is tracked and committed — the `docs-correctness-audit` and
 `multi-agent-review` skills and their slash commands. Those are maintained
 artifacts with real commit history, and they restate facts that live elsewhere
-in the tree: the doc cluster map, the generated-doc table below, and the
-ephemeral-token regex on this very page. Nothing gates any of those
+in the tree: the generated-doc table below and the ephemeral-token regex on
+this very page. Nothing gates either of those
 duplications, so when a generator is added or removed the table here goes
 stale silently and the next audit runs against a stale map. The
 `claude-tooling` row is what puts them in scope. The fixtures under
@@ -243,8 +244,11 @@ enforcer (script / CI job / hook) that still exists?
 
 The collector emits an authoritative **`UNRESOLVED INTERNAL LINKS / ANCHORS`**
 section produced by `lychee --offline --include-fragments=anchor-only`, reusing
-`lychee.toml`. It runs over all tracked `*.md` files, excluding `.claude/`
-tooling, `tests/fixtures/` and `docs/_data/`. External URLs are skipped entirely — only
+`lychee.toml`. It runs over all tracked `*.md` files — the tracked `.claude/`
+tooling included, since its links are ordinary links even though its prose
+quotes banned token shapes — excluding only `tests/fixtures/`, `docs/_data/`
+and the seeded-defect fixtures under `skills/*/evals/seeded-defects/fixtures/`,
+which carry planted breakage. External URLs are skipped entirely — only
 relative file paths and heading anchors are checked. A listed entry is
 authoritative drift: the link target does not exist (high severity). Flag every
 entry without re-deriving by eye.
