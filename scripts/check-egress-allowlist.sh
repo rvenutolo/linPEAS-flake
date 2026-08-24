@@ -170,7 +170,7 @@
 #          matched only when `nix` is followed by whitespace and a known
 #          subcommand, so `nixpkgs-fmt`, `nixos.org`, and a `nix` path
 #          segment inside a URL such as
-#          `releases.nixos.org/nix/nix-2.34.7/install` do not count), or
+#          `releases.nixos.org/nix/nix-<version>/install` do not count), or
 #        - an in-job `# egress-nix-exempt: <reason>` comment with a
 #          non-empty reason.
 #      An empty-reason marker is rejected outright, and a marker on a job
@@ -653,7 +653,7 @@ for f in "${selected_files[@]}"; do
       # `nix` must be followed by whitespace and a recognized subcommand,
       # with a non-identifier (or start-of-string) character before it:
       # `nixpkgs-fmt`, `nixos.org`, and the `nix` path segment inside
-      # `releases.nixos.org/nix/nix-2.34.7/install` all fail this, since
+      # `releases.nixos.org/nix/nix-<version>/install` all fail this, since
       # none has whitespace directly after the bare word `nix`. This is a
       # textual match over the job's concatenated `run:` text, so a nix
       # subcommand written inside a shell comment (e.g. `# we do not nix
