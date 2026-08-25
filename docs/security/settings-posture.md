@@ -1,6 +1,6 @@
 # Settings Posture — `rvenutolo/linPEAS-flake`
 
-This document is the **source of truth** for every GitHub-side settings knob this repo depends on. Most rows are verifiable by a single `gh api` query; the tag-protection ruleset row is verified by a script, and the manual-UI rows (fork-PR approval gate, merge-method flags, maintainer 2FA) either expose no REST endpoint, gate the field behind `contents: write` (which the read-only drift-check App cannot hold), or sit outside the token's scope entirely (maintainer 2FA) — each is called out where it appears. If a value drifts, treat it as a security incident.
+This document is the **source of truth** for every GitHub-side settings knob this repo depends on. Most rows are verifiable by a single `gh api` query, and the tag-protection ruleset row is verified by a script. The rest are manual-UI rows — the fork-PR approval gate, the merge-method flags, and maintainer 2FA — each called out where it appears and each unreachable by the drift check for one of the three reasons given under [Drift detection](#drift-detection). If a value drifts, treat it as a security incident.
 
 ## Security & analysis
 

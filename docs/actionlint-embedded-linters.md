@@ -6,9 +6,11 @@ Actions workflows:
 - **shellcheck** — bash static analysis, against shell `run:` blocks.
 - **pyflakes** — python static analysis, against `shell: python` blocks.
 
-Both are wired. No python `run:` block exists in this repo today, so the
-pyflakes half currently has nothing to lint — but it is live, and the day
-a python block lands it reports without any further wiring.
+Both are wired, and both report today — the canary fixtures below carry a
+planted finding each. No python `run:` block exists in
+`.github/workflows/` though, so outside its fixture the pyflakes half has
+nothing to lint; the day a python block lands in a real workflow it
+reports without any further wiring.
 
 ## Why pinned
 

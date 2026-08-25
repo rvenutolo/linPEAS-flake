@@ -219,6 +219,11 @@ drift that has not happened yet. The class carries only the phrases a
 regex can judge, because an advisory that is usually wrong teaches a
 reader to scroll past the one that is right.
 
+The generic `<2-3 uppercase letters>-<digits>` ticket shape is excluded
+from the blocking classes for the same reason, and is not matched at all:
+it false-positives on stable literals such as `SHA-256` and `UTF-8`. Only
+the enumerated planning and review labels above are blocked.
+
 ### Exemptions
 
 - **Every extension no extractor claims.** Only `.md`, `.sh`, `.nix`,
@@ -336,15 +341,6 @@ reading is indistinguishable, by exit code alone, from a gate that read
 everything and found nothing, so breadth is asserted rather than
 inferred. `LINT_ALLOW_EMPTY_SCAN=1` accepts that too — the same operator
 escape hatch an empty source set has.
-
-### Why the fuzzy shapes are advisory
-
-Causal-history phrases are **advisory only**, not blocking: they
-false-positive on legitimate prose, so they warn rather than fail. The
-generic `<2-3 uppercase letters>-<digits>` ticket shape is intentionally
-**excluded** from the blocking gate because it false-positives on stable
-literals such as `SHA-256` and `UTF-8`; only the enumerated
-planning/review labels above are matched.
 
 ## Guarded temp-file creation
 

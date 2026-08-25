@@ -137,7 +137,7 @@ invariant. Their nearest-named matrix rows cover different rules —
 `-pyflakes=` wrapper pins,
 and "Stale-pin failure attribution" is the notify-body reason split.
 
-| Lint                         | Catches                                                                      |
+| Lint / watchdog              | Catches                                                                      |
 | ---------------------------- | ---------------------------------------------------------------------------- |
 | actionlint                   | workflow syntax, `run:`-block shellcheck, expression errors                  |
 | actionlint-shellcheck-active | guards that actionlint's shellcheck integration stays enabled                |

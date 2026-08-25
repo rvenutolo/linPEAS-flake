@@ -55,8 +55,8 @@ from the PR title by handing it to
 `scripts/classify-renovate-flake-input.sh`, whose `case` arms recognise
 three title shapes — `cachix/git-hooks.nix`, `NixOS/nixpkgs-unstable`,
 and `NixOS/nixpkgs`, matched case-insensitively against a lowercased
-title, with the unstable arm ahead of the stable one because the stable
-string is a substring of the unstable one — then runs
+title, in the arm order [the auto-refresh section](#renovate-flake-lock-refresh-auto-refresh)
+explains — then runs
 `nix flake update <name>`, and commits the refreshed
 `flake.lock` back to the PR branch (App-signed via REST
 `PUT /contents`). Watch the PR for a follow-on
@@ -189,9 +189,9 @@ A title that stops carrying one of those substrings is what silently
 stops the auto-refresh.
 
 The classifier keeps its `NixOS/nixpkgs-unstable` arm even though no
-manager emits that title: `NixOS/nixpkgs` is a substring of
-`NixOS/nixpkgs-unstable`, so deleting the arm as dead code would send any
-title naming unstable to the stable arm and refresh the wrong input.
+manager emits that title; [the auto-refresh
+section](#renovate-flake-lock-refresh-auto-refresh) explains why deleting
+it as dead code would refresh the wrong input.
 
 Diff: exactly one line in `flake.nix` changed. `flake.lock` is **not**
 touched. CI required checks fail on `flake-check` (lock-out-of-date

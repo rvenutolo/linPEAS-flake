@@ -128,13 +128,18 @@ Either:
     whitespace-only edit + `chore: retrigger release` commit). The
     workflow's `push` trigger filters on that path, so an empty commit or
     an edit to any other file starts nothing, OR
-- Re-run the workflow from the Actions UI if the pin commit is
-    still `HEAD` on `main`. Use the `force-republish` input when
-    re-running so the image, manifest, and verify jobs re-run for the
-    current pin even though the GitHub release already exists. The
-    `release` job's release-creation step stays gated by the "tag exists"
-    guard, so the existing release assets are preserved — if the release
-    itself must be recreated, delete it first, then re-run.
+- Dispatch the workflow from the Actions UI — the **Run workflow**
+    button, i.e. `workflow_dispatch` — if the pin commit is still `HEAD`
+    on `main`, setting `force-republish: true` so the image, manifest,
+    and verify jobs run for the current pin even though the GitHub
+    release already exists. **"Re-run jobs" is not a substitute:** it
+    replays the original run's inputs and cannot set a new one, so on a
+    push-triggered run `force-republish` stays false, `tag-exists` stays
+    true, and all three jobs skip — the recovery looks green while doing
+    nothing. The `release` job's release-creation step stays gated by the
+    "tag exists" guard, so the existing release assets are preserved — if
+    the release itself must be recreated, delete it first, then
+    dispatch.
 
 ### 4. Confirm green end-to-end<a name="4-confirm-green-end-to-end"></a>
 
