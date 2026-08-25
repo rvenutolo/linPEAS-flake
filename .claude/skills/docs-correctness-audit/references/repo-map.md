@@ -13,12 +13,21 @@ checked against one authoritative list:
 ```sh
 nix flake show --json          # flake output inventory (the bundle's FLAKE OUTPUTS section is authoritative)
 just --list                    # every recipe (and what each regenerates)
-ls scripts/                    # *.sh inventory (check-*, refresh-*, and helpers)
+ls scripts/*.sh scripts/lib/*.sh  # *.sh inventory: entry points AND sourced libraries
 ls .github/workflows/          # workflow filenames
 grep -H 'cron:' .github/workflows/*.yml   # authoritative cron schedules
 grep -c '"context"' .github/rulesets/protect-main.json  # required-check context count
 git grep -n '<symbol>'         # existence of options, env vars, secret names, flags
 ```
+
+The script inventory names both trees because tracked docs cite the sourced
+libraries under `scripts/lib/` by path as readily as the top-level entry
+points — `make_temp` (`scripts/lib/temp.sh`), `enumerate_into`
+(`scripts/lib/enumerate.sh`) and their siblings carry invariants of their own.
+A `scripts/*.sh` glob does not recurse, so an inventory that stops at the top
+level makes every such citation read as a script that does not exist. The
+collector emits them under a `lib/` prefix in its **SCRIPTS** section, which is
+what keeps a library entry distinguishable from an entry-point one.
 
 The authoritative cron table for prose to match is
 `docs/architecture/ci.md` (kept in sync by `check-cron-table.sh`). When a

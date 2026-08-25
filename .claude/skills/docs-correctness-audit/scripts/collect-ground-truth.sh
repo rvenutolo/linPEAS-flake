@@ -2,7 +2,8 @@
 # collect-ground-truth.sh — bundled with the docs-correctness-audit skill.
 #
 # @description Emit, in one labeled dump, the repo ground-truth bundle the audit
-# shares with every cluster reader: flake outputs, just recipes, scripts,
+# shares with every cluster reader: flake outputs, just recipes, scripts
+# (entry points and sourced libraries),
 # workflows, the ci.yml top-level job list, lint-group membership, a union
 # allowlist of all valid CI job/check names, workflow crons, the
 # required-check context count, an ephemeral-token sweep over tracked
@@ -206,6 +207,20 @@ print("outputs: " + ", ".join(names))
 '
 }
 
+list_scripts() { # emits one `scripts/`-relative path per shell script, cwd = repo root
+  # Both trees. Tracked docs cite the sourced libraries under scripts/lib/ by
+  # path as readily as the top-level entry points, and a `scripts/*.sh` glob
+  # does not recurse — so an inventory that stops at the top level makes every
+  # such citation read to a reader as a script that does not exist. The `lib/`
+  # prefix is what keeps a library entry distinguishable from an entry-point
+  # one; a bare basename would collapse the distinction the citations rely on.
+  local f
+  for f in scripts/*.sh scripts/lib/*.sh; do
+    [[ -e ${f} ]] || continue
+    printf '%s\n' "${f#scripts/}"
+  done
+}
+
 list_ci_jobs() { # $1=workflow path — emits "<line>:  <job-id>" for the jobs: block only
   # Scoped to the jobs: block. A bare 2-space-key grep also returns `on:`
   # trigger names and `concurrency:` keys, which read as job ids to someone
@@ -234,8 +249,8 @@ main() {
   section "JUST RECIPES (just --list)"
   just --list 2>/dev/null | sed 's/^ *//'
 
-  section "SCRIPTS (scripts/*.sh)"
-  for f in scripts/*.sh; do basename "${f}"; done
+  section "SCRIPTS (scripts/*.sh + scripts/lib/*.sh)"
+  list_scripts
 
   section "WORKFLOWS (.github/workflows)"
   ls .github/workflows/

@@ -220,6 +220,33 @@ case "${jobs_out}" in *"group"*) check "excludes concurrency keys" 1 ;; *) check
 case "${jobs_out}" in *"cancel-in-progress"*) check "excludes cancel-in-progress" 1 ;; *) check "excludes cancel-in-progress" 0 ;; esac
 rm -rf "${cj}"
 
+# --- script inventory reaches scripts/lib/ ---
+# Tracked docs cite the sourced libraries by path. A `scripts/*.sh` glob does
+# not recurse, so an inventory that stops at the top level makes every such
+# citation read as a script that does not exist — a false "ghost script" a
+# reader has no way to disprove from the bundle.
+ls_dir="$(mktemp -d)"
+mkdir -p "${ls_dir}/scripts/lib"
+: >"${ls_dir}/scripts/check-thing.sh"
+: >"${ls_dir}/scripts/refresh-thing.sh"
+: >"${ls_dir}/scripts/lib/temp.sh"
+: >"${ls_dir}/scripts/not-shell.md"
+# shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
+scr="$(cd "${ls_dir}" && source "${COLLECTOR}" && list_scripts)"
+case "${scr}" in *"check-thing.sh"*) check "lists a top-level entry point" 0 ;; *) check "lists a top-level entry point" 1 ;; esac
+case "${scr}" in *"lib/temp.sh"*) check "lists a sourced library" 0 ;; *) check "lists a sourced library" 1 ;; esac
+# The prefix is the point: a bare basename collapses lib/temp.sh into temp.sh
+# and a reader can no longer tell which tree a citation names.
+case "${scr}" in *$'\n'"temp.sh"* | "temp.sh"*) check "keeps the lib/ prefix" 1 ;; *) check "keeps the lib/ prefix" 0 ;; esac
+case "${scr}" in *"not-shell.md"*) check "lists only shell scripts" 1 ;; *) check "lists only shell scripts" 0 ;; esac
+# An unmatched glob must vanish rather than reach the output as its own pattern.
+empty_dir="$(mktemp -d)"
+mkdir -p "${empty_dir}/scripts"
+# shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
+scr_empty="$(cd "${empty_dir}" && source "${COLLECTOR}" && list_scripts)"
+case "${scr_empty}" in *"*"*) check "emits no literal glob when a tree is empty" 1 ;; *) check "emits no literal glob when a tree is empty" 0 ;; esac
+rm -rf "${ls_dir}" "${empty_dir}"
+
 # --- causal-history sweep mirrors RE_CAUSAL, no wider ---
 # The real lint (scripts/lib/ephemeral-refs-scope.sh) excludes bare verbs and
 # prepositions on purpose. A sweep that reports them hands the audit hits the
