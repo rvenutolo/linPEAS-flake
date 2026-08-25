@@ -87,7 +87,8 @@ bash <this-skill-dir>/scripts/collect-ground-truth.sh
 ```
 
 It emits one labeled bundle of eleven sections — flake outputs, `just` recipes,
-`scripts/*.sh`, workflows, the **ci.yml top-level job list**, **lint-group
+the `scripts/` inventory (entry points *and* the `scripts/lib/` libraries they
+source), workflows, the **ci.yml top-level job list**, **lint-group
 membership**, the **`VALID CI JOB / CHECK NAMES`** union allowlist (the
 ghost/mislabel detector this audit turns on), workflow crons, the required-check
 context count, an **`EPHEMERAL-TOKEN HITS`** sweep of banned token shapes over
@@ -115,7 +116,8 @@ Read-only fan-out needs no orchestration opt-in — it is plain parallel reads.
 ### 3. Each reader checks three dimensions
 
 1. **Factual drift (exhaustive).** Extract *every* concrete reference in the
-    doc — file paths, flake outputs, `just` recipes, `scripts/*.sh`, shell
+    doc — file paths, flake outputs, `just` recipes, `scripts/*.sh` and the
+    `scripts/lib/*.sh` libraries they source, shell
     commands, env vars, secret names, workflow/job names, config options,
     internal links/anchors — and verify each exists / is described correctly
     against ground truth and the real files. A doc naming a removed
