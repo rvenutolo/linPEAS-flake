@@ -6,6 +6,19 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20260824-c1d29dcd] - 2026-08-25
+
+### Chores
+- Bump linpeas to 20260824-c1d29dcd ([#960](https://github.com/rvenutolo/linPEAS-flake/pull/960))
+
+### Documentation
+- Drop the Nix version floor from the install guidance ([#959](https://github.com/rvenutolo/linPEAS-flake/pull/959))
+- Correct the drift the docs-correctness audit surfaced ([#958](https://github.com/rvenutolo/linPEAS-flake/pull/958))
+- Fix the findings from the docs-correctness audit ([#956](https://github.com/rvenutolo/linPEAS-flake/pull/956))
+
+### Fixes
+- Reach scripts/lib in the docs-audit ground-truth inventory ([#957](https://github.com/rvenutolo/linPEAS-flake/pull/957))
+
 ## [20260824-195558b2] - 2026-08-24
 
 ### Chores
