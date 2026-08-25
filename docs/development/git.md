@@ -94,8 +94,9 @@ just lint-links  # lychee link check (inputs in the recipe, exclusions in lychee
 ```
 
 Entering the devShell — `nix develop` or direnv — wires the git hooks for
-you, so the same hooks run against staged files on every commit (`just lint` runs them against every file in the repo). Only when working
-outside the devShell do you need to install them yourself, once:
+you, so the same hooks run against staged files on every commit. To run
+them against every file in the repo instead, use `just lint`. Only when
+working outside the devShell do you need to install them yourself, once:
 
 ```sh
 pre-commit install

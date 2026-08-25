@@ -1,6 +1,6 @@
 # CI architecture
 
-Every push to `main` and every PR runs a required set of jobs that gate auto-merge. Separate non-blocking workflows run informational checks: weekly image CVE scans, a monthly docs-audit reminder, and PR-time SAST.
+Every PR runs a required set of jobs that gate auto-merge; most of them re-run on push to `main`, though a few are PR-only because they have nothing to inspect on a push (`dependency-review` reads the PR diff, `lint-pr-title` reads the PR title). Separate non-blocking workflows run informational checks: weekly image CVE scans, a monthly docs-audit reminder, and PR-time SAST.
 
 ## Build and smoke gates
 
