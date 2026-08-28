@@ -23,7 +23,8 @@ on:
           Tag of an existing release to backfill with missing
           .sigstore + .intoto.jsonl sidecars and (if absent) per-arch
           CycloneDX SBOMs. Mutually exclusive with force-republish.
-          Skips image build/push, manifest re-creation is idempotent,
+          Skips image build/push, manifest re-creation is idempotent
+          and leaves :latest alone unless this is the newest release,
           changelog job is skipped. Used to bring historic releases up
           to current sidecar coverage (Scorecard Signed-Releases). See
           docs/runbooks/scorecard-signed-releases-backfill.md.
@@ -55,6 +56,7 @@ jobs:
     outputs:
       version: ${{ steps.read.outputs.version }}
       tag-exists: ${{ steps.exists.outputs.exists }}
+      write-latest: ${{ steps.latest.outputs.write-latest }}
     steps:
       - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
         with:
@@ -112,6 +114,35 @@ jobs:
             version="$(jq --raw-output .version linpeas-pin.json)"
           fi
           printf 'version=%s\n' "${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: decide whether :latest follows this run
+        id: latest
+        # `:latest` tracks the newest GitHub release, not whichever tag
+        # this run happens to process. A push or force-republish always
+        # publishes the current pin, so `:latest` follows it. A backfill
+        # re-processes an existing tag: `:latest` follows only when that
+        # tag is the newest release (`gh release view` with no tag argument
+        # resolves the same way verify-latest-release.yml reads it), so
+        # backfilling a historic tag leaves `:latest` on the current
+        # image instead of repointing it at the old one.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BACKFILL_TAG: ${{ inputs.backfill-tag }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          if [[ -z "${BACKFILL_TAG}" ]]; then
+            printf 'write-latest=true\n' >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          newest="$(gh release view --json tagName --jq .tagName)"
+          if [[ "${BACKFILL_TAG}" == "${newest}" ]]; then
+            printf 'write-latest=true\n' >> "${GITHUB_OUTPUT}"
+          else
+            printf 'backfill of %s leaves :latest on newest release %s\n' \
+              "${BACKFILL_TAG}" "${newest}"
+            printf 'write-latest=false\n' >> "${GITHUB_OUTPUT}"
+          fi
 
       - name: download existing pin asset (backfill mode)
         if: inputs.backfill-tag != ''
@@ -1057,6 +1088,7 @@ jobs:
         id: create
         env:
           VERSION: ${{ needs.release.outputs.version }}
+          WRITE_LATEST: ${{ needs.release.outputs.write-latest }}
           GHCR_AMD64_DIGEST: ${{ needs.image-amd64.outputs.ghcr_digest }}
           GHCR_ARM64_DIGEST: ${{ needs.image-arm64.outputs.ghcr_digest }}
           HUB_AMD64_DIGEST: ${{ needs.image-amd64.outputs.hub_digest }}
@@ -1064,7 +1096,14 @@ jobs:
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
-          for dst in "${VERSION}" latest; do
+          # `:latest` is written only when the release job decided this
+          # run's tag is the newest release; a historic backfill leaves it
+          # untouched.
+          dsts=("${VERSION}")
+          if [[ "${WRITE_LATEST}" == "true" ]]; then
+            dsts+=(latest)
+          fi
+          for dst in "${dsts[@]}"; do
             docker buildx imagetools create \
               --tag "ghcr.io/rvenutolo/linpeas:${dst}" \
               "ghcr.io/rvenutolo/linpeas@${GHCR_AMD64_DIGEST}" \
@@ -1075,10 +1114,10 @@ jobs:
               "docker.io/rvenutolo/linpeas@${HUB_ARM64_DIGEST}"
           done
           # Capture the OCI index digest of `:VERSION` on each registry.
-          # The `:latest` and `:VERSION` tags resolve to identical bytes
-          # (created from the same source refs), so a single signature per
-          # registry covers both — the signature is bound to the index
-          # digest, not the tag.
+          # When `:latest` is written it resolves to the same bytes as
+          # `:VERSION` (created from the same source refs), so a single
+          # signature per registry covers both — the signature is bound to
+          # the index digest, not the tag.
           ghcr_index_digest="$(
             docker buildx imagetools inspect --raw \
               "ghcr.io/rvenutolo/linpeas:${VERSION}" \
@@ -1104,9 +1143,9 @@ jobs:
 
       - name: cosign sign multi-arch index (keyless)
         # Signs the OCI index digest on each registry. cosign writes a
-        # `.sig` tag at `<digest>` so that `cosign verify` against either
-        # `:VERSION` or `:latest` (which resolve to the same digest)
-        # succeeds. Index-level signing complements the per-arch
+        # `.sig` tag at `<digest>` so that `cosign verify` against
+        # `:VERSION` — and `:latest`, whenever it resolves to the same
+        # digest — succeeds. Index-level signing complements the per-arch
         # signatures from the image-* jobs.
         env:
           COSIGN_YES: "true"
@@ -1549,6 +1588,7 @@ jobs:
         # each `manifests[].digest` matches the attested per-arch digest.
         env:
           VERSION: ${{ needs.release.outputs.version }}
+          WRITE_LATEST: ${{ needs.release.outputs.write-latest }}
           GHCR_AMD64_DIGEST: ${{ needs.image-amd64.outputs.ghcr_digest }}
           HUB_AMD64_DIGEST: ${{ needs.image-amd64.outputs.hub_digest }}
           GHCR_ARM64_DIGEST: ${{ needs.image-arm64.outputs.ghcr_digest }}
@@ -1575,12 +1615,20 @@ jobs:
           }
           check "ghcr.io/rvenutolo/linpeas:${VERSION}" \
             "${GHCR_AMD64_DIGEST}" "${GHCR_ARM64_DIGEST}"
-          check "ghcr.io/rvenutolo/linpeas:latest" \
-            "${GHCR_AMD64_DIGEST}" "${GHCR_ARM64_DIGEST}"
           check "docker.io/rvenutolo/linpeas:${VERSION}" \
             "${HUB_AMD64_DIGEST}" "${HUB_ARM64_DIGEST}"
-          check "docker.io/rvenutolo/linpeas:latest" \
-            "${HUB_AMD64_DIGEST}" "${HUB_ARM64_DIGEST}"
+          # `:latest` was written by the manifest job only when this run's
+          # tag is the newest release; on a historic backfill it still
+          # points at the current image, so this run's digests are not
+          # what it should resolve to.
+          if [[ "${WRITE_LATEST}" == "true" ]]; then
+            check "ghcr.io/rvenutolo/linpeas:latest" \
+              "${GHCR_AMD64_DIGEST}" "${GHCR_ARM64_DIGEST}"
+            check "docker.io/rvenutolo/linpeas:latest" \
+              "${HUB_AMD64_DIGEST}" "${HUB_ARM64_DIGEST}"
+          else
+            printf ':latest not written by this run (historic backfill); parity not asserted\n'
+          fi
 
   notify:
     name: notify
