@@ -60,8 +60,11 @@ That rewrap decides where each rule can be enforced:
     line can exceed the limit only where GitHub declined to rewrap — inside a
     code fence, in a table row, or in a single over-long token — all content
     that must not be wrapped. The `commitlint` job therefore lints `push` to
-    `main` with `.commitlintrc.merge.yml`, which is `.commitlintrc.yml`'s
-    ruleset minus `body-max-line-length` and `footer-max-line-length`.
+    `main` with `.commitlintrc.merge.yml`, which names the same base preset
+    as `.commitlintrc.yml` and disables `body-max-line-length` and
+    `footer-max-line-length`. It does not extend `.commitlintrc.yml`: it
+    runs only on `push`, so a path-resolution failure would surface after
+    a merge.
 
 Both configs must be named explicitly via the action's `configFile` input. The
 input defaults to a file this repo does not have, and the action then falls back

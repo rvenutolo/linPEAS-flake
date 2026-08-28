@@ -448,8 +448,9 @@ input:
     cron's lockfile PR rather than a Renovate one, carrying any
     `flake-parts` and `treefmt-nix` movement with it: close to conclusive.
     Formatter and linter churn is exactly what the required checks
-    execute, and the image build is unaffected by definition
-    (allocation gates it to stable).
+    execute, and the image build is unaffected by definition (the image
+    derivation reads stable `pkgs` only — see the ownership note at the
+    top of this page).
 - **`cachix/git-hooks.nix` bump:** conclusive for the hook config,
     which is the entire surface the input touches.
 

@@ -55,7 +55,7 @@ Defence-in-depth instead: the `protect-main` ruleset's
 `pull_request.allowed_merge_methods=["merge"]` rule
 ([`docs/security/required-checks.md`](required-checks.md)) rejects any
 rebase/squash merge at push time regardless of the repo-level flags,
-and `pr-title-lint` enforces the Conventional-Commits shape that
+and the `lint-pr-title` check in `pr-title-lint.yml` enforces the Conventional-Commits shape that
 `merge_commit_title=PR_TITLE` relies on. A UI flip to enable
 squash/rebase as a repo default does not silently land non-merge
 commits on `main` — the ruleset rejects the merge. Drift on the
@@ -69,7 +69,7 @@ branch commits verbatim on `main`; the merge commit itself is
 web-flow-signed by GitHub, so `required_signatures` is satisfied for
 both the branch commits (signed by the author) and the merge commit.
 `merge_commit_title=PR_TITLE` means the PR title is the merge-commit
-subject — `pr-title-lint` enforces it as Conventional Commits.
+subject — the `lint-pr-title` check enforces it as Conventional Commits.
 
 ## Environments
 

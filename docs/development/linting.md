@@ -13,7 +13,7 @@ Wired in `treefmt.nix`. Run via `nix fmt` or `just fmt`. Pre-commit hook
 | nixfmt    | `*.nix`                                                           |
 | prettier  | JSON and YAML only                                                |
 | mdformat  | `*.md` (with gfm + frontmatter + mkdocs + footnote + toc plugins) |
-| shfmt     | shell scripts, 2-space indent                                     |
+| shfmt     | shell scripts and `.envrc`, 2-space indent                        |
 | taplo     | TOML                                                              |
 | just      | `justfile`                                                        |
 

@@ -267,4 +267,6 @@ and the seeded-defect fixtures under `.claude/skills/*/evals/seeded-defects/fixt
 which carry planted breakage. External URLs are skipped entirely — only
 relative file paths and heading anchors are checked. A listed entry is
 authoritative drift: the link target does not exist (high severity). Flag every
-entry without re-deriving by eye.
+entry without re-deriving by eye. The one non-result: when `lychee` is not on
+the collector's `PATH`, the section reads `(lychee not found — internal-link sweep skipped)` and nothing was checked — record links as unchecked in the
+coverage note rather than as clean.
