@@ -6,7 +6,7 @@ Each release publishes an OCI image to both Docker Hub (`docker.io/rvenutolo/lin
 
 linpeas enumerates Linux privilege-escalation vectors against whatever filesystem, process table, and namespaces it sees. A vanilla `docker run` only exposes the container's own namespaces, so the report describes the **container**, not the host. That is intentional and useful for several workflows:
 
-- **Container audit.** Drop the image into a running container (`docker exec` or a sidecar) to audit that container's privesc surface — SUID binaries baked into a base image, secrets in `/etc`, sudoers misconfigurations, etc.
+- **Container audit.** Join a running container's namespaces (`--pid=container:<target> --net=container:<target>`) or run it as a sidecar to audit that container's privesc surface — SUID binaries baked into a base image, secrets in `/etc`, sudoers misconfigurations, etc.
 - **CI pipeline scanning.** Run linpeas inside an ephemeral build container in CI as a pre-deploy hardening gate.
 - **Base-image hardening review.** Bring up a candidate base image, exec linpeas inside it, fail the review on findings above a threshold.
 - **Forensics on a captured container filesystem.** Mount the suspect filesystem into the linpeas image and run with `-f <path>`.
@@ -26,7 +26,7 @@ docker run --rm \
 
 This form exists for environments where Docker is the only available shipping vehicle.
 
-## Run (container audit, default)
+## Run (default invocation, smoke test)
 
 The default invocation below scans the **linpeas image itself** — a near-empty Nix-built container with no services, secrets, or users. It is useful as a smoke test confirming args reach the binary, not as a real audit. For real host or sidecar audits, see [README → Usage](https://github.com/rvenutolo/linPEAS-flake#usage).
 

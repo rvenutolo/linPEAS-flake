@@ -32,8 +32,9 @@ makes every such change a reviewable, security-relevant diff.
 
 ### Format
 
-The allowlist is a per-job YAML map: workflow filename → job id → sorted
-list of permitted write-scope **names**:
+The allowlist is a per-job YAML map: workflow filename → job id → a sorted
+list of permitted write-scope **names** (only the scope lists are
+order-checked):
 
 ```yaml
 example-workflow.yml:

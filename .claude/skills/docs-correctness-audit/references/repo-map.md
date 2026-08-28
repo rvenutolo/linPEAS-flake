@@ -49,13 +49,13 @@ high severity, and neither is caught by a freshness gate.
 
 ## 2. Doc cluster map (one read-only agent per row)
 
-| Cluster        | Files                                                                                                                                                                                                                                                                                                                                            |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| core-docs      | `docs/reference/*.md`, `docs/install/*.md`, `docs/runbooks/*.md`                                                                                                                                                                                                                                                                                 |
-| security       | `docs/security/*.md`                                                                                                                                                                                                                                                                                                                             |
-| arch+dev       | `docs/architecture/*.md`, `docs/development/*.md`                                                                                                                                                                                                                                                                                                |
-| root + misc    | `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`, `docs/index.md`, `docs/dashboard.md`, `docs/releases.md`, `docs/invariant-index.md`, `docs/actionlint-embedded-linters.md`, `tests/README.md`, `.github/PULL_REQUEST_TEMPLATE.md` — **plus any tracked `*.md` outside `.claude/` and `tests/fixtures/` that no other row claims** |
-| claude-tooling | every tracked `.claude/` Markdown file (`git ls-files '.claude/*.md'` — git's `*` crosses `/`, where `.claude/**/*.md` would skip files sitting directly in `.claude/`) except `skills/*/evals/seeded-defects/fixtures/*.md`                                                                                                                     |
+| Cluster        | Files                                                                                                                                                                                                                                                                                                                                                                                         |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| core-docs      | `docs/reference/*.md`, `docs/install/*.md`, `docs/runbooks/*.md`                                                                                                                                                                                                                                                                                                                              |
+| security       | `docs/security/*.md`                                                                                                                                                                                                                                                                                                                                                                          |
+| arch+dev       | `docs/architecture/*.md`, `docs/development/*.md`                                                                                                                                                                                                                                                                                                                                             |
+| root + misc    | `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md` (whole-file generated — verify-only, see §3), `docs/index.md`, `docs/dashboard.md`, `docs/releases.md`, `docs/invariant-index.md`, `docs/actionlint-embedded-linters.md`, `tests/README.md`, `.github/PULL_REQUEST_TEMPLATE.md` — **plus any tracked `*.md` outside `.claude/` and `tests/fixtures/` that no other row claims** |
+| claude-tooling | every tracked `.claude/` Markdown file (`git ls-files '.claude/*.md'` — git's `*` crosses `/`, where `.claude/**/*.md` would skip files sitting directly in `.claude/`) except `skills/*/evals/seeded-defects/fixtures/*.md`                                                                                                                                                                  |
 
 Five clusters, not one per `docs/` subdirectory: most of a reader's cost is
 fixed per-agent overhead (re-reading the ground-truth bundle, tool setup), so
@@ -144,9 +144,10 @@ Tracked docs describe the **current** state; history lives in git. Flag these
 banned shapes in tracked docs and comments:
 
 - Planning labels: `GAP-\d+`, `P\d+\.\d+`, `Wave-P?\d+`, `Phase \d+`,
-    `AU-P-\d+`, `SC-POST-\d+`, `plan \d+`, `F-\d+`, `finding F-\d+`
+    `AU-P-\d+`, `SC-POST-\d+`, `plan \d+`, `F-\d+`
 - Review-pass labels: `\(D\d+\)`, `\(L\d+[,)]`, `Per D\d+`, `D\d+:`
-- Ad-hoc ticket shapes: `DH-\d+`, `NC-[A-Z]\d+`, any
+- Ad-hoc ticket shapes (sweep-only — no blocking class; see the caveat
+    below): `DH-\d+`, `NC-[A-Z]\d+`, any
     `<2-3 uppercase letters>-<digits>` not externally meaningful
 - Dates in prose: `\d{4}-\d{2}-\d{2}`, `<Month> \d{4}`, `Q[1-4] \d{4}`.
     The `X-GitHub-Api-Version: <date>` literal is suppressed by the collector
