@@ -191,6 +191,19 @@ the notify jobs.
     SLSA attestation with `gh attestation verify`; mismatched attestation
     is the canonical detection signal.
 
+- `SETTINGS_DRIFT_APP_PRIVATE_KEY` / `vars.SETTINGS_DRIFT_APP_CLIENT_ID` —
+    a second, read-only GitHub App used by
+    `settings-posture-drift-check.yml` and
+    `allowed-actions-api-drift-check.yml` to probe repository settings
+    that `GITHUB_TOKEN` cannot read. Kept separate from the bump App so a
+    leak grants no write capability. Registration and rotation:
+    [`docs/runbooks/settings-drift-app.md`](docs/runbooks/settings-drift-app.md).
+
+- `SCORECARD_PAT` — a fine-grained read-only personal access token
+    consumed as `GITHUB_AUTH_TOKEN` by `scorecard-drift-check.yml`; the
+    Scorecard checks need it to read branch protection and workflow run
+    history. Rotation: [`docs/runbooks/scorecard-pat-rotation.md`](docs/runbooks/scorecard-pat-rotation.md).
+
 ## SBOM attestations
 
 In addition to build-provenance attestations, each release carries SBOM

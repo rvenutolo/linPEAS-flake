@@ -3,7 +3,7 @@
 Fixed option set for the scoping `AskUserQuestion`. Each dimension is one
 `Workflow` run: a **finder** fan-out (1–6 parallel slices, each a distinct
 lens; dimension 6 batches its index entries into 3–5 finder groups) → **refute-all** stage (3 independent skeptics per finding,
-default-refuted, keep if ≥2/3 survive) → survivors appended to the report.
+default-refuted, keep if at least two of the skeptics that returned fail to refute) → survivors appended to the report.
 
 Per-dimension option style for `AskUserQuestion` (offer these, recommend the
 bolded default): **deep** (full fan-out), light (1–2 slices, headline issues
@@ -104,11 +104,11 @@ Refuters: reproduce the coverage gap concretely — mutate the real script and r
 
 ## 6. Invariant ↔ enforcement coherence — *deep*
 
-Per `docs/invariant-index.md` entry: read stated rule → read the named `enforcer`/`ci`/`hook` annotation → verdict **enforced / partial / no-op**. No-ops are high severity (repo rule: no silent no-ops in security posture).
+Per `docs/invariant-index.md` entry: read stated rule → read the named `enforcer`/`ci`/`hook` annotation → verdict **enforced / partial / no-op**. No-ops are high severity: an enforcer that silently does nothing is a false sense of coverage.
 
 Slices:
 
-- batch the index entries into 3–5 groups (by enforcer kind: `ci` job, git hook, standalone `check-*` script) and give each group one finder
+- this bullet is not a slice: the controller derives `SLICES` at scoping time by batching the index entries into 3–5 groups (by enforcer kind: `ci` job, git hook, standalone `check-*` script), one `SLICES` entry — and so one finder — per group
 
 Refuters: run the named enforcer against a crafted violation — does it actually fail? A no-op or partial verdict survives only when the violation slips through in practice; kill it if the enforcer really catches it.
 
