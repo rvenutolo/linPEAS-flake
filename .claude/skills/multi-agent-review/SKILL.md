@@ -90,10 +90,11 @@ hand-editing each finder prompt.
 One dimension = one `Workflow` call. Fan out the dimension's slices as finders,
 dedup, then refute each survivor with 3 skeptics; keep a finding when at least
 two of the skeptics that returned could not refute it. The controller
-injects four per-dimension values from `references/dimensions.md`: `SLICES`,
-`FINDER_PROMPT(s)`, `REFUTER_GUIDANCE` (that dimension's refuter paragraph
-*verbatim* — this is what scopes the skeptic to the dimension's claim type), and
-`SEED_FINDINGS` (earlier confirmed findings as text, or `''`). **No backticks
+injects four per-dimension values: `SLICES` and `REFUTER_GUIDANCE` come from
+`references/dimensions.md` (the refuter paragraph is injected *verbatim* — this
+is what scopes the skeptic to the dimension's claim type); `FINDER_PROMPT(s)` is
+composed by the controller from the dimension's Slices and hunt guidance; and
+`SEED_FINDINGS` is earlier confirmed findings as text, or `''`. **No backticks
 inside the template literals** (they break the JS parser — concatenate strings).
 
 ```javascript

@@ -16,7 +16,7 @@ On its weekly Friday cron (and on `workflow_dispatch`), the workflow:
 
 ## How you'll be notified
 
-During burn-in (`continue-on-error: true` on the compare job), workflow runs report green in the Actions UI even on mismatch — the only alert channel is the auto-opened GitHub issue. If `gh issue create` itself fails, the step logs a `WARN` and the remaining signals are the `compare` job's own status and the `repro-diff` artifact.
+During burn-in (`continue-on-error: true` on the compare job), workflow runs report green in the Actions UI even on mismatch — the primary alert channel is the auto-opened GitHub issue. If `gh issue create` itself fails, the step logs a `WARN` and the fallback signals are the `compare` job's own status and the `repro-diff` artifact.
 
 To ensure mismatches are seen:
 

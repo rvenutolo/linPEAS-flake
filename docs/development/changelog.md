@@ -33,7 +33,7 @@ shipping.
 
 The changelog commit is pushed using the same `linpeas-flake-bumper`
 GitHub App identity that `update-linpeas.yml`'s `push-and-merge` job
-uses: `BUMP_APP_CLIENT_ID` + `BUMP_APP_PRIVATE_KEY`. No new secret
+uses: `vars.BUMP_APP_CLIENT_ID` + `secrets.BUMP_APP_PRIVATE_KEY`. No new secret
 surface is introduced.
 
 ## cliff.toml load-bearing rules
@@ -194,7 +194,7 @@ order:
     git-cliff to walk all tags), then install Nix via
     `./.github/actions/setup-nix`.
 1. Mint a short-lived App installation token using
-    `BUMP_APP_CLIENT_ID` + `BUMP_APP_PRIVATE_KEY`.
+    `vars.BUMP_APP_CLIENT_ID` + `secrets.BUMP_APP_PRIVATE_KEY`.
 1. Re-assert the canonical pin shape on `VERSION` at the credential
     boundary, failing the job on a malformed value.
 1. Run `nix shell .#git-cliff --command git-cliff --config cliff.toml --output CHANGELOG.md`.

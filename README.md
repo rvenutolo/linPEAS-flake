@@ -49,19 +49,19 @@ nix profile add github:rvenutolo/linPEAS-flake
 ### With Docker
 
 **Host audit** — use when Docker is the only install vehicle on the
-host. Joins host namespaces and bind-mounts rootfs read-only so
-linpeas sees the host instead of the container.
+host. Bind-mounts the host rootfs read-only and sweeps it with `-f`, so
+linpeas scans the host filesystem instead of the container's.
 
 ```sh
 docker run --rm \
-  --pid=host --net=host --ipc=host --userns=host --privileged \
   -v /:/host:ro \
   rvenutolo/linpeas:latest -f /host
 ```
 
 `-f` scopes linpeas to a filesystem scan of the mounted tree —
-processes, software, permissions, interesting files, API keys —
-rather than the full privesc check set.
+crons, services, software, permissions, interesting files, API keys —
+and disables the live process, network, and user checks, so host
+namespace flags change nothing under it.
 
 **Container / sidecar audit** — audit a *different* running
 container. Real use cases: CI hardening, base-image review, forensics

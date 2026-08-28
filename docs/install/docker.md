@@ -11,16 +11,15 @@ linpeas enumerates Linux privilege-escalation vectors against whatever filesyste
 - **Base-image hardening review.** Bring up a candidate base image, exec linpeas inside it, fail the review on findings above a threshold.
 - **Forensics on a captured container filesystem.** Mount the suspect filesystem into the linpeas image and run with `-f <path>`.
 
-For a **host** audit, linpeas needs to see the host. Either install via Nix (`nix run github:rvenutolo/linPEAS-flake`), or run the image with host namespaces explicitly:
+For a **host** audit, linpeas needs to see the host. A live audit — running processes, network, users — needs linpeas on the host itself: install via Nix (`nix run github:rvenutolo/linPEAS-flake`). From the image, the reachable form is a filesystem sweep of the host tree, bind-mounted read-only:
 
 ```bash
 docker run --rm \
-  --pid=host --net=host --ipc=host --userns=host --privileged \
   -v /:/host:ro \
   rvenutolo/linpeas:latest -f /host
 ```
 
-`-f` scopes linpeas to a filesystem scan of the mounted tree — processes, software, permissions, interesting files, API keys — rather than the full privesc check set. Omitting `-f` and the bind mount instead scans the container's own near-empty filesystem.
+`-f` scopes linpeas to a filesystem scan of the mounted tree — crons, timers, services, sockets, software, permissions, interesting files, API keys — and disables the live process, network, and user checks. Host namespace flags (`--pid=host`, `--net=host`, `--ipc=host`) therefore change nothing under `-f` and are not needed. Omitting `-f` and the bind mount instead scans the container's own near-empty filesystem.
 
 **Do not reach for `-d`.** It is upstream's network host-discovery flag (`-d <IP/NETMASK>`), and it exits before any privesc check runs.
 
