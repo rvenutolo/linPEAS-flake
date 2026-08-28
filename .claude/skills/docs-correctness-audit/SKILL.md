@@ -15,7 +15,7 @@ user-invocable: false
 # Documentation correctness audit
 
 Review every Markdown doc in this repo against the *actual* state of the code,
-config, and CI, then emit one prioritized findings report. **Phase 1 is
+config, and CI, then emit one prioritized findings report. **The report stage is
 read-only — no edits.** The point is to let the user triage before any churn.
 
 This skill is tuned to this repo. Concrete ground-truth commands, the doc
@@ -47,7 +47,7 @@ agree on one source of truth.
     content is not authored prose; the generator is the source of truth. Flag only
     (a) hand-written prose *outside* the `BEGIN/END` generated markers, or (b) a
     real generator-vs-reality gap (rare; mark low-confidence). A fix to generated
-    content means fixing the generator, not the doc — out of scope for phase 1.
+    content means fixing the generator, not the doc — out of scope for the report stage.
 - **"CI gates it" is NOT proof the prose is correct — this is the signature
     drift of this repo, so make it the spine of the audit.** Freshness checks
     (`*-fresh`) gate only the *generated block bodies*; they say nothing about
@@ -231,7 +231,7 @@ findings must still show what was cross-checked, not just "clean".
 ## LOW
 ...
 
-## Notes for phase 2
+## Notes for the fix pass
 - <batching suggestion, decisions the user must make, generated-doc/generator fixes>
 ```
 

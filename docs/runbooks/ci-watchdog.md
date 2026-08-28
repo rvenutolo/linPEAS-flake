@@ -39,8 +39,8 @@ of a harden-runner egress block, which is a permanent configuration bug.
 
 Nothing else in this repo re-runs a failed job. A bot PR with auto-merge
 enabled that hits a transient infrastructure failure will sit open forever,
-because auto-merge waits for checks that will never re-run. This has parked
-bump PRs open indefinitely.
+because auto-merge waits for checks that will never re-run. Such a PR stays
+parked open indefinitely.
 
 ## When you get a `ci-watchdog: PR #N exhausted retries` issue
 

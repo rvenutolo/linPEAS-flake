@@ -14,8 +14,8 @@
 # file nothing writes scores a hand-edited doc's every line at zero, which
 # is the same defect pointed the other way and the harder one to notice.
 #
-# Ownership is declared, not inferred. No generator here writes a whole
-# file: each splices a `<!-- BEGIN x -->` block into a doc that also
+# Ownership is declared, not inferred. Some generators write a whole
+# file; others splice a `<!-- BEGIN x -->` block into a doc that also
 # carries hand-authored prose, so "generator-owned" is a judgment about
 # how much of the file the block is, and any coverage threshold would be
 # a magic number that moves as the prose around the block grows. The
