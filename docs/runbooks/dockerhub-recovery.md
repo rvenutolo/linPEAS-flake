@@ -165,8 +165,9 @@ confirm:
 - `verify` passed per-arch attestation re-verify, manifest re-resolution,
     and `:latest` matches `:VERSION` per-arch digests.
 
-Those are the seven jobs the workflow's own failure issue enumerates, so a
-green run means all seven, not just the ones Docker Hub touches.
+Those are the seven jobs the workflow's own failure issue enumerates (the
+two per-arch image jobs share a bullet above), so a green run means all
+seven, not just the ones Docker Hub touches.
 
 Close the `release-on-bump-failure` issue with a one-line root-cause
 comment (e.g., `transient: docker.io 502 on push, retry green`).

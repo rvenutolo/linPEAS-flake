@@ -1,7 +1,7 @@
 # linPEAS-flake
 
 [![CI](https://github.com/rvenutolo/linPEAS-flake/actions/workflows/ci.yml/badge.svg)](https://github.com/rvenutolo/linPEAS-flake/actions/workflows/ci.yml)
-[![Pages](https://github.com/rvenutolo/linPEAS-flake/actions/workflows/pages.yml/badge.svg)](https://rvenutolo.github.io/linPEAS-flake/)
+[![Pages](https://github.com/rvenutolo/linPEAS-flake/actions/workflows/pages.yml/badge.svg)](https://github.com/rvenutolo/linPEAS-flake/actions/workflows/pages.yml)
 [![Latest release](https://img.shields.io/github/v/release/rvenutolo/linPEAS-flake)](https://github.com/rvenutolo/linPEAS-flake/releases)
 [![Last commit](https://img.shields.io/github/last-commit/rvenutolo/linPEAS-flake)](https://github.com/rvenutolo/linPEAS-flake/commits/main)
 [![Open issues](https://img.shields.io/github/issues/rvenutolo/linPEAS-flake)](https://github.com/rvenutolo/linPEAS-flake/issues)
@@ -111,7 +111,8 @@ consumers can reference it.
 }
 ```
 
-See [`docs/install/consume-from-flake.md`](docs/install/consume-from-flake.md)
+See [`docs/install/nix.md`](docs/install/nix.md#as-an-overlay) for the overlay
+walkthrough and [`docs/install/consume-from-flake.md`](docs/install/consume-from-flake.md)
 for pinning guidance that applies to overlay use as well.
 
 ## How updates work
