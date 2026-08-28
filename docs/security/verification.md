@@ -21,6 +21,7 @@ How to verify a release of this wrapper yourself. None of this trusts the Pages 
 - [Cosign keyless signatures](#cosign-keyless-signatures)
   - [Identity pinning](#identity-pinning)
   - [User-facing verification commands](#user-facing-verification-commands)
+- [Release-asset blob signatures](#release-asset-blob-signatures)
 - [Release-asset provenance sidecars](#release-asset-provenance-sidecars)
 - [gh-attestation-repo invariant](#gh-attestation-repo-invariant)
   - [Word-position pinning](#word-position-pinning)
@@ -362,7 +363,7 @@ cosign verify \
 No `gh` CLI required. Pairs with the existing `gh attestation verify`
 path — pick whichever toolchain fits the consumer's pipeline.
 
-#### Release-asset blob signatures<a name="release-asset-blob-signatures"></a>
+## Release-asset blob signatures<a name="release-asset-blob-signatures"></a>
 
 Each GitHub Release asset has a sibling `.sigstore` bundle:
 
