@@ -100,9 +100,10 @@ per hour per repository; transient 5xx is also possible.
 
 ### `ratchet-tool-failure`
 
-Ratchet exited non-zero but the per-ref re-derivation could not
-reproduce any drift; OR a drift line failed shape validation; OR
-the workflow glob matched zero files.
+Ratchet exited non-zero (the per-ref re-derivation is skipped in that
+case, so no drift is reported alongside); OR `classify-pin-ref.sh`
+failed or returned an unrecognized verdict for a ref; OR a drift line
+failed shape validation; OR the workflow glob matched zero files.
 
 1. Inspect the run log; look at the raw ratchet stderr.
 1. If ratchet's output format changed (most likely cause after a
