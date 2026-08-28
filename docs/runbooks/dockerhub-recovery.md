@@ -65,7 +65,7 @@ The push loop inside `release-on-bump.yml` per-arch jobs runs
 ### 1. Delete the GitHub release + tag (re-push path only)<a name="1-delete-the-github-release--tag-re-push-path-only"></a>
 
 **Skip this step if you will re-run with `force-republish`** (step 3,
-second bullet). On that path the image, manifest, verify, and changelog
+first bullet). On that path the image, manifest, verify, and changelog
 jobs re-run against the current pin while the `release` job's
 release-creation step stays gated by the "tag exists" guard, so the
 release and its assets survive and nothing needs deleting. The job itself
@@ -73,7 +73,7 @@ still runs: its `sign pin file (cosign sign-blob, keyless)` step is
 ungated and re-uploads `linpeas-pin.json.sigstore` with `--clobber`,
 which is how this path recovers a missing sidecar.
 
-Delete only when recovering by re-pushing the pin commit (step 3, first
+Delete only when recovering by landing a retrigger PR (step 3, second
 bullet). Release-creation is gated on tag-doesn't-exist, so an orphan
 release left in place makes the re-push skip the release step and leaves
 the recovery incomplete.
@@ -124,10 +124,6 @@ curl --fail --silent --show-error \
 
 Either:
 
-- Push a new commit that modifies `linpeas-pin.json` itself (a
-    whitespace-only edit + `chore: retrigger release` commit). The
-    workflow's `push` trigger filters on that path, so an empty commit or
-    an edit to any other file starts nothing, OR
 - Dispatch the workflow from the Actions UI — the **Run workflow**
     button, i.e. `workflow_dispatch` — if the pin commit is still `HEAD`
     on `main`, setting `force-republish: true` so the image, manifest,
@@ -139,7 +135,17 @@ Either:
     nothing. The `release` job's release-creation step stays gated by the
     "tag exists" guard, so the existing release assets are preserved — if
     the release itself must be recreated, delete it first, then
-    dispatch.
+    dispatch. This route is faster and leaves no retrigger commit
+    behind, OR
+
+- Open a PR that touches `linpeas-pin.json` itself with a
+    prettier-stable edit (one blank line between two properties survives
+    `treefmt`; other whitespace changes are reverted and fail the
+    `flake-check` formatting gate) and a `chore: retrigger release`
+    subject. `main` accepts no direct push — the `protect-main` ruleset
+    has no bypass actors — so the commit lands only after the required
+    checks pass. The workflow's `push` trigger filters on that path, so
+    an empty commit or an edit to any other file starts nothing.
 
 ### 4. Confirm green end-to-end<a name="4-confirm-green-end-to-end"></a>
 

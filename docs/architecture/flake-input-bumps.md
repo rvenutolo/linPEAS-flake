@@ -119,8 +119,11 @@ rather than on the bump's own checks. Walk the list when one does.
     Skim the Security tab post-merge.
 - **Image base-layer tool renames.** If a tool the image expects
     is gone from the new nixpkgs (rename, removal,
-    refactor-to-a-module), `image-smoke`'s `linpeas -h` run inside
-    the image will surface `command not found`. Walk
+    refactor-to-a-module), `image-smoke`'s "verify external tools
+    present in image" step (`command -v` for `grep sed awk find ps`)
+    or its real-target `-o system_information` scan will surface
+    `command not found`. The `-h` run does not: a missing `sed`,
+    `awk`, `find`, or `ps` leaves `-h` silent. Walk
     `pkgs.buildEnv.paths` in `nix/image.nix` against the smoke output.
 - **`gh attestation verify` trust-root staleness.** Newer
     `ubuntu-latest` images carry a newer `gh` CLI, which ships an
@@ -306,8 +309,11 @@ is visible to the build.
 nix develop --command just verify
 ```
 
-`just verify` runs the batched lint groups, the full harness suite, and
-the doc-freshness checks — the same set CI gates on. Individual
+`just verify` runs the batched lint groups, the full harness suite,
+the doc-freshness checks, and every standalone required-check enforcer
+(`check-protect-main.sh`, `check-tag-protection.sh`, the changelog
+checks, and the rest of the `justfile` recipe) — the same set CI gates
+on. Individual
 harnesses can still be run directly
 (`nix develop --command bash tests/<name>.test.sh`) while iterating on
 a single failure. If any fail, do **not** disable the test — debug
@@ -315,20 +321,36 @@ the regression. The lint scripts encode binding security invariants.
 
 ### 8. Image smoke
 
+Reproduce the two checks the `image-smoke` job runs. `-h` alone is not
+a smoke test: it exits 0 and stays silent when `sed`, `awk`, `find`, or
+`ps` is missing from the image.
+
 ```bash
 nix build .#linpeas-image --out-link result-image
 VERSION="$(jq --raw-output .version linpeas-pin.json)"
 docker rmi "rvenutolo/linpeas:${VERSION}" 2>/dev/null || true
 docker load --input result-image
-docker run --rm "rvenutolo/linpeas:${VERSION}" -h 2>&1 \
-  | grep --count 'command not found'
-# Expect 0
+
+# 1. Every external helper the image deliberately bundles is present.
+for tool in grep sed awk find ps; do
+  docker run --rm --entrypoint /bin/sh "rvenutolo/linpeas:${VERSION}" \
+    -c "command -v ${tool} >/dev/null" || echo "FAIL: ${tool} missing"
+done
+
+# 2. A real check against a separate target container emits no
+#    "<cmd>: command not found" line.
+docker run --detach --name linpeas-target --rm ubuntu:24.04 sleep 300
+docker run --rm --pid=container:linpeas-target --volumes-from linpeas-target \
+  "rvenutolo/linpeas:${VERSION}" -o system_information 2>&1 \
+  | grep --count --extended-regexp ': command not found'
+docker rm --force linpeas-target
+# Expect no FAIL line from 1 and a count of 0 from 2
 ```
 
-A non-zero count means a tool the image expects is missing from the
-new nixpkgs. Compare `pkgs.buildEnv.paths` in `nix/image.nix` against the
-missing tool's package name — usually a rename. Update the path list
-in the same PR.
+A `FAIL` line or a non-zero count means a tool the image expects is
+missing from the new nixpkgs. Compare `pkgs.buildEnv.paths` in
+`nix/image.nix` against the missing tool's package name — usually a
+rename. Update the path list in the same PR.
 
 ### 9. Run `flake check`
 
