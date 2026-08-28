@@ -110,7 +110,7 @@ each script invocation, and end `main` with
 the harness on any substring that does not discriminate.
 
 The gate reaches a harness only if it asserts with a quiet `grep`, which
-is how `tests/_harness_assert_wired.test.sh` tells an assertion from a
+is how `scripts/check-harness-assert-wired.sh` tells an assertion from a
 data extraction. A harness that asserts another way — a
 `[[ ${out} != *"${want}"* ]]` test, say — is not scored at all, so it
 needs neither the wiring nor an `EXEMPT` entry.
@@ -121,7 +121,7 @@ stderr), because a scenario indistinguishable from a sibling proves
 nothing the sibling did not already prove. The relief valve is
 `harness_assert_parity_exempt <scenario> <other> <rationale>`, and only
 harnesses named on the `PARITY_EXEMPT_ALLOWED` array in
-`tests/_harness_assert_wired.test.sh` may register one — reaching for
+`scripts/check-harness-assert-wired.sh` may register one — reaching for
 it means widening that allowlist in the same change, which is the
 review moment it deserves.
 
@@ -221,7 +221,7 @@ runs the pair.
     `main`. A harness that asserts produced artifact content — a
     rewritten workflow file, a generated doc — rather than captured
     scenario output belongs on the `EXEMPT` array in
-    `tests/_harness_assert_wired.test.sh` with a rationale comment
+    `scripts/check-harness-assert-wired.sh` with a rationale comment
     instead. A harness that asserts without a quiet `grep` is outside
     what the gate scores and needs neither.
 
