@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
-# tests/_harness_assert_wired.test.sh
-# @subject tests/*.test.sh
-# @fixtures tests/fixtures/harness-assert-wired
-# The fixture tree is reached only by pointing TESTS_DIR_OVERRIDE at it,
-# so no path literal in this file names it.
+# scripts/check-harness-assert-wired.sh
 #
-# Meta-harness: every harness that asserts behavior by grepping a
-# captured output stream is wired to the cross-scenario discrimination
-# gate in scripts/lib/harness-assert.sh.
-#
+# @description Lint: every output-asserting test harness under
+# `tests/*.test.sh` is wired to the cross-scenario discrimination gate
+# in `scripts/lib/harness-assert.sh`, no harness registers a
+# discrimination exemption, and every parity exemption comes from an
+# allowlisted harness.
+
 # The gate only guards the harnesses that call it. A harness that greps
 # scenario output without recording it is invisible to the gate, so its
 # assertions may match text the nominal path also prints — green while
@@ -33,18 +31,21 @@
 # collapse the gate cannot separate is legible only while it is small
 # enough to name.
 #
-# Honors TESTS_DIR_OVERRIDE for fixtures. Exits 0 when every
-# output-asserting harness is wired, no harness registers a
-# discrimination exemption, and every parity exemption comes from an
-# allowlisted harness; 1 otherwise.
+# The scan is non-recursive on purpose: fixture harnesses under
+# tests/fixtures/ exist to violate rules and stay out of scope.
+#
+# Honors TESTS_DIR_OVERRIDE for fixtures. Exits 0 clean — every
+# output-asserting harness wired, no discrimination exemption
+# registered, every parity exemption allowlisted — 1 on any drift, 2
+# when the scan root holds no harness, because a gate that read nothing
+# has verified nothing.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
-
-REPO_ROOT="$(git rev-parse --show-toplevel)"
-readonly REPO_ROOT
+_lib_dir="${BASH_SOURCE[0]%/*}"
+if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
-source "${REPO_ROOT}/scripts/lib/enumerate.sh"
+source "${_lib_dir}/lib/enumerate.sh"
 
 readonly TESTS_DIR="${TESTS_DIR_OVERRIDE:-tests}"
 
@@ -95,7 +96,6 @@ readonly -a EXEMPT=(
   'check-gh-attestation-repo.test.sh'   # asserts produced artifact content rather than captured scenario output: greps a selected-paths list variable
   'refresh-just-recipes.test.sh'        # asserts produced artifact content rather than captured scenario output: greps the generated doc
   'refresh-scripts-reference.test.sh'   # asserts produced artifact content rather than captured scenario output: greps the generated doc
-  '_harness_assert_wired.test.sh'       # asserts produced artifact content rather than captured scenario output: greps harness source text, and its own detection literals self-match
   'lib-harness-assert.test.sh'          # the gate library's own spec test: it must not be gated by the library it tests, and its generated library-driving snippets are indistinguishable from live calls to any textual rule
 )
 
@@ -206,7 +206,6 @@ function main() {
     "${wired}"
   printf 'harness-assert-wired: %d harness(es) register a parity exemption, each on the reviewed allowlist\n' \
     "${parity_named}"
-  printf '\nall tests passed\n'
   exit 0
 }
 

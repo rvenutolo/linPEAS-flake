@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# tests/harness-assert-wired-spec.test.sh
-# @subject tests/_harness_assert_wired.test.sh
+# tests/check-harness-assert-wired.test.sh
 #
-# Drives the harness-wiring meta-harness against the fixture trees under
+# Drives the harness-wiring lint against the fixture trees under
 # tests/fixtures/harness-assert-wired, one scan root per detection branch.
 #
-# The meta-harness is the lint that holds every output-asserting harness
+# The lint holds every output-asserting harness
 # to the cross-scenario discrimination gate, and the tree it scans by
 # default is clean by construction. A clean scan exits 0 whatever the
 # detection rules do, so on that path the rules run unexercised: breaking
@@ -17,7 +16,7 @@
 # Rows cover the branches that print — the wiring verdict's three states,
 # the discrimination-exemption ratchet, the parity ratchet on both sides
 # of its reviewed allowlist, and the three count lines — and the branches
-# whose whole effect is silence: a basename the meta-harness holds out of
+# whose whole effect is silence: a basename the lint holds out of
 # scope, and a grep that extracts text rather than asserting a match. A
 # silent branch is scored by the count the run reports and by a basename
 # the output must never carry.
@@ -29,7 +28,7 @@ readonly REPO_ROOT
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 
-readonly SCRIPT="${REPO_ROOT}/tests/_harness_assert_wired.test.sh"
+readonly SCRIPT="${REPO_ROOT}/scripts/check-harness-assert-wired.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/harness-assert-wired"
 
 cd "${REPO_ROOT}"
@@ -81,11 +80,11 @@ readonly -a ROWS=(
 # is the verdict these rows exist to make impossible. Score the table's own
 # breadth before scoring anything it holds.
 if ((${#ROWS[@]} == 0)); then
-  printf 'harness-assert-wired-spec: the row table is empty — no branch was exercised\n' >&2
+  printf 'check-harness-assert-wired: the row table is empty — no branch was exercised\n' >&2
   exit 2
 fi
 
-# @description Run the meta-harness against one fixture scan root, score
+# @description Run the lint against one fixture scan root, score
 # the outcome, and record it with the cross-scenario discrimination gate.
 # Scores in the calling scope rather than returning through a command
 # substitution: a substitution forks a subshell, and the gate's pool state
@@ -106,7 +105,7 @@ function run_row() {
   # The exit code joins the recorded output so the gate compares verdicts
   # too: two roots whose diagnostics happen to coincide still differ here
   # when one of them is the clean path.
-  printf 'harness-assert-wired-spec: exit=%d\n' "${rc}" >"${outcome}"
+  printf 'check-harness-assert-wired: exit=%d\n' "${rc}" >"${outcome}"
 
   harness_assert_record "${name}" "${subs[0]}" "${outcome}" "${out}" "${err}"
   local i
@@ -143,17 +142,17 @@ for row in "${ROWS[@]}"; do
   fields=()
   IFS='|' read -r -a fields <<<"${row}"
   root="${FIXTURES}/${fields[1]}"
-  # An absent root would make the meta-harness scan nothing and exit 0,
+  # An absent root would make the lint scan nothing and exit 0,
   # which reads as "this branch does not fire" — a could-not-run wearing a
   # clean verdict, so it is refused before any row is scored.
   if [[ ! -d ${root} ]]; then
-    printf 'harness-assert-wired-spec: missing fixture scan root: %s\n' "${root}" >&2
+    printf 'check-harness-assert-wired: missing fixture scan root: %s\n' "${root}" >&2
     exit 2
   fi
   run_row "${fields[0]}" "${root}" "${fields[2]}" "${fields[3]}" "${fields[@]:4}"
 done
 
-printf '\nharness-assert-wired-spec: %d detection branch(es) exercised, %d diagnostic substring(s) asserted\n' \
+printf '\ncheck-harness-assert-wired: %d detection branch(es) exercised, %d diagnostic substring(s) asserted\n' \
   "${#ROWS[@]}" "${asserted}"
 
 harness_assert_verify || failures=$((failures + 1))

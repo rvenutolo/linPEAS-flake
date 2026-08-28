@@ -781,6 +781,14 @@ Lint: every job in .github/workflows/\*.yml begins
 with `step-security/harden-runner@<sha>` as its first step, so the
 eBPF monitor installs before any I/O.
 
+### scripts/check-harness-assert-wired.sh
+
+Lint: every output-asserting test harness under
+`tests/*.test.sh` is wired to the cross-scenario discrimination gate
+in `scripts/lib/harness-assert.sh`, no harness registers a
+discrimination exemption, and every parity exemption comes from an
+allowlisted harness.
+
 ### scripts/check-harness-preamble.sh
 
 Lint: every test harness matching `tests/*.test.sh`

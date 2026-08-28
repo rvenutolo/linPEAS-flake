@@ -53,6 +53,23 @@ in
     pass_filenames = false;
     language = "system";
   };
+  # Every output-asserting tests/*.test.sh is wired to the discrimination
+  # gate, and both exemption ratchets hold. See
+  # docs/security/workflow-hardening.md.
+  harness-assert-wired = {
+    enable = true;
+    name = "harness-assert-wired";
+    description = "Every output-asserting tests/*.test.sh is wired to the discrimination gate.";
+    entry = "${pkgs-unstable.writeShellScript "harness-assert-wired-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-harness-assert-wired.sh
+    ''}";
+    files = "^(tests/[^/]*\\.test\\.sh|scripts/lib/harness-assert\\.sh|scripts/check-harness-assert-wired\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Every scripts/check-*.sh has tests/check-*.test.sh and
   # vice versa. See docs/security/workflow-hardening.md.
   script-has-test = {

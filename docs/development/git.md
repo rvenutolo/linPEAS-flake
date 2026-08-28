@@ -154,6 +154,7 @@ Hooks (alphabetical):
 | `gh-attestation-repo`            | gh attestation verify pins --repo rvenutolo/linPEAS-flake.                                                                                               |
 | `harden-runner-block`            | Every harden-runner step uses egress-policy: block with non-empty allowed-endpoints.                                                                     |
 | `harden-runner-first`            | Every workflow job's first step is step-security/harden-runner.                                                                                          |
+| `harness-assert-wired`           | Every output-asserting tests/\*.test.sh is wired to the discrimination gate.                                                                             |
 | `job-timeout-minutes`            | Every workflow job declares an explicit timeout-minutes.                                                                                                 |
 | `just-recipes-fresh`             | just-recipes blocks in README.md and docs/reference/just-recipes.md match the justfile.                                                                  |
 | `lint-shell-tools`               | devShells.lint declares every tool the .#lint lint groups need.                                                                                          |
