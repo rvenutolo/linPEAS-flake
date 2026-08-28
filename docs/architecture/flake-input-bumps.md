@@ -321,7 +321,7 @@ the regression. The lint scripts encode binding security invariants.
 
 ### 8. Image smoke
 
-Reproduce the two checks the `image-smoke` job runs. `-h` alone is not
+Reproduce the two behavioral checks `image-smoke` runs after `-h`. `-h` alone is not
 a smoke test: it exits 0 and stays silent when `sed`, `awk`, `find`, or
 `ps` is missing from the image.
 

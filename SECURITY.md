@@ -252,6 +252,10 @@ Repository settings knobs the security model depends on (probe-verifiable from `
 
 Not probe-verifiable (manual UI check):
 
+- Fork-PR approval gate: first-time contributors require approval before workflows run.
+- Merge-method flags: merge commit only; squash and rebase disabled.
 - Account: 2FA enabled on the maintainer account with non-SMS second factor (specifics not recorded).
+
+Each of these is called out, with the reason the drift check cannot reach it, under [Drift detection](docs/security/settings-posture.md#drift-detection).
 
 Any drift on any of the above is treated as a security incident. The `docs/security/settings-posture.md` file is the source of truth and includes copy-pasteable probe commands.

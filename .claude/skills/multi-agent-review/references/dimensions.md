@@ -18,7 +18,7 @@ input, `git show`, `yq` reads). "Read-only" bans mutation, not investigation.
 
 Each dimension below carries a **Refuters:** paragraph — the controller injects
 it verbatim as the template's `REFUTER_GUIDANCE`, which scopes the skeptic to
-that dimension's claim type. The **Slices:** list is that dimension's `SLICES`.
+that dimension's claim type. The **Slices:** list is that dimension's `SLICES`; the controller shapes each bullet into `{ key: <short-slug>, text: <bullet> }` so the finder label `find:<key>` is meaningful.
 
 Finder returns the structured finding schema:
 
