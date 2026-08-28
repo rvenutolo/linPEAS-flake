@@ -38,7 +38,7 @@ Slices:
 
 - derivation/output coherence — `flake.nix`, `nix/packages.nix`, `nix/image.nix`, `nix/wrappers.nix`
 - pin fetch/verify logic — `nix/pin.nix`, `nix/linpeas.nix`, `linpeas-pin.json`
-- devShells + checks wiring — `nix/devshell*.nix`, `nix/checks.nix`, `nix/hooks/*`, `nix/treefmt-config.nix`
+- devShells + checks wiring — `nix/devshell*.nix`, `nix/checks.nix`, `nix/hooks/*`, `nix/treefmt-config.nix`, `treefmt.nix`
 - hammer-shim / manifest parity — `nix/hammer-shim.nix`, `nix/manifests.nix`
 
 Refuters: verify eval behavior empirically (`nix eval`, `nix build`, `nix path-info`) — a derivation that *looks* wrong in trace often builds identically. Kill "supply-chain downgrade"-style claims unless a concrete eval reproduces them.
