@@ -8,9 +8,11 @@ Three independent automations keep the pin current and the release artifacts in 
 flowchart TD
   cron["update-linpeas.yml<br/>(daily cron)"]
   api["gh api repos/peass-ng/PEASS-ng/releases/latest"]
+  tagcheck["validate tag regex"]
   compare{"upstream tag<br/>== current pin?"}
-  fetch["curl --location asset_url<br/>cross-check .digest<br/>(hard fail on absent)"]
-  validate["validate URL prefix<br/>validate tag regex"]
+  urlcheck["validate URL prefix"]
+  fetch["curl --location asset_url"]
+  digest["cross-check .digest<br/>(hard fail on absent)"]
   hash["nix hash file --sri"]
   write["make_temp + mv<br/>linpeas-pin.json"]
   show["./scripts/refresh-flake-show.sh"]
@@ -18,9 +20,9 @@ flowchart TD
   automerge["gh pr merge --auto --merge"]
   done(["no-op"])
 
-  cron --> api --> compare
+  cron --> api --> tagcheck --> compare
   compare -- yes --> done
-  compare -- no --> fetch --> validate --> hash --> write --> show --> pr --> automerge
+  compare -- no --> urlcheck --> fetch --> digest --> hash --> write --> show --> pr --> automerge
 ```
 
 ## Release on bump

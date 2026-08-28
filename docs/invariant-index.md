@@ -5,7 +5,8 @@ that holds the canonical wording for that rule. Linted by
 `scripts/check-orphan-invariants.sh` — every entry here must resolve
 to an existing file under `docs/`, and every `docs/**/*.md` (minus
 an explicit EXEMPT allowlist) must appear here. That allowlist covers
-three kinds of page: generator-owned ones, whose content is a rendering
+three kinds of page: generator-owned ones and the live-status template
+pages (`dashboard.md`, `releases.md`), whose content is a rendering
 rather than a rule; overview ones, which route to rules held elsewhere
 (`security/threat-model.md`, `index.md`); and `install/consume-from-flake.md`,
 which only tells a consumer how to use the flake — plus this index

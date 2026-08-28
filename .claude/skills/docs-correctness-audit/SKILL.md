@@ -2,7 +2,7 @@
 name: docs-correctness-audit
 description: >-
   Read-only documentation correctness audit for this repo: cross-checks every
-  tracked Markdown doc (README, docs/**, CHANGELOG, SECURITY, CONTRIBUTING,
+  tracked Markdown doc (README, docs/**, SECURITY, CONTRIBUTING,
   tests/README.md, the PR template, and the tracked `.claude/` tooling)
   against the actual code, CI, config, and workflows, then emits one
   severity-ranked findings report without editing anything. Invoke ONLY via the
