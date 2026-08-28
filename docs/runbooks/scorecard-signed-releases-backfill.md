@@ -49,10 +49,9 @@ The workflow:
     and uploads all three asset shapes.
 - Rebuilds the multi-arch index from the existing per-arch digests
     (byte-identical to the original publish) and re-signs it
-    (idempotent at registry). The `manifest` job creates that index under
-    **both** `:<tag>` and `:latest` on each registry, so backfilling a
-    historic tag repoints `:latest` at that tag's images until a newer
-    publish moves it again.
+    (idempotent at registry). `:latest` is left alone unless the
+    backfilled tag is the newest release, so a historic backfill never
+    repoints it.
 - Skips the changelog job (release notes are NOT rewritten).
 
 Run sequentially per tag (workflow concurrency group
@@ -82,14 +81,6 @@ Expect:
     checks scoring below 10.
 - Workflow run green.
 - Issue auto-closed by `notify-workflow-result` deduper.
-
-If any backfilled tag is older than the current pin, `:latest` now points
-at a historic image on both registries. Restore it by re-publishing the
-current pin:
-
-```bash
-gh workflow run release-on-bump.yml --ref main -F force-republish=true
-```
 
 ## Partial image set
 
