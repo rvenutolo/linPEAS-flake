@@ -6,9 +6,8 @@ against a committed fixture tree with expected exit codes and stderr
 substrings; the rest build their tree at runtime or target a library, a
 file set, or another harness.
 
-Most tests run via `just verify` (also runs the underlying scripts
-against the live tree); it reaches the majority of `tests/*.test.sh`
-harnesses but not all of them.
+`just verify` runs most `tests/*.test.sh` harnesses — not all — and
+also runs the underlying scripts against the live tree.
 
 ## Layout
 

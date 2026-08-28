@@ -25,10 +25,11 @@
 # `merge_commit_title=PR_TITLE` relies on.
 #
 # Exits 0 on full match, 1 on any drift. Logs the specific drift to
-# stderr. Exits 2 when the comparison could not be made at all: `jq` is
-# absent from PATH, or a probed endpoint's payload — live, or injected
-# through one of the overrides below — is missing, unreadable, empty,
-# not JSON, or carries a field this check reads at the wrong type.
+# stderr. Exits 2 when the comparison could not be made at all: `gh` or
+# `jq` is absent from PATH, a live endpoint could not be fetched, or a
+# probed endpoint's payload — live, or injected through one of the
+# overrides below — is missing, unreadable, empty, not JSON, or carries
+# a field this check reads at the wrong type.
 #
 # Env overrides (test-only): each points at a fixture JSON capturing
 # the response shape of one API endpoint.

@@ -54,8 +54,9 @@ release pipelines. The workflow does not page on failure.
 If a prune mass-deleted entries by mistake (e.g. cron date arithmetic
 drift), no action is required — no CI job reads an Actions cache, so
 nothing is lost but the entries themselves; any action that does cache
-opaquely repopulates on its next run. Cache rebuilds are not paid in
-OCI image publication time.
+opaquely repopulates on its next run. No release-path job waits on a
+cache warm-up, so a mass deletion costs nothing in image-publication
+latency.
 
 If the action-token rate-limits during a prune run, the workflow
 fails cleanly and re-runs on the next cron tick. Manual recovery:

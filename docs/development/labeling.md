@@ -4,8 +4,8 @@
 `nix`, `scripts`, `tests`, `security`, `pin`, `renovate`) per
 `.github/labeler.yml` globs. Catalog of record for the area, release-note (`bug`, `enhancement`, `idea`), and `size/*` labels:
 `.github/labels.yml`; failure-notification labels are created on demand
-by the `notify-workflow-result` composite and by Renovate, and are
-deliberately not in the manifest. Not a required
+by the `notify-workflow-result` composite, and Renovate creates its own
+`dependencies` PR label — neither is in the manifest, deliberately. Not a required
 check — auto-labeling is cosmetic and must not block merge.
 
 `.github/labels.yml` is the canonical label-color/description source.

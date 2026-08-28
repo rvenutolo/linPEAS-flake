@@ -17,11 +17,13 @@
 # probing the API directly.
 #
 # Exits 0 on full match, 1 on any drift, 2 when the comparison could not
-# be made at all: the allowlist doc is missing, or its canonical fenced
-# block yields no patterns. Without the doc there is no expected side to
-# compare against, so reporting drift would send a maintainer to the
-# live API state when the doc is what needs fixing. Logs the specific
-# drift to stderr.
+# be made at all: `gh` or `jq` is absent from PATH, the allowlist doc is
+# missing or its canonical fenced block yields no patterns, the live API
+# call fails, or the selected-actions payload is missing a field this
+# check reads or carries it at the wrong type. Without the doc there is
+# no expected side to compare against, so reporting drift would send a
+# maintainer to the live API state when the doc is what needs fixing.
+# Logs the specific drift to stderr.
 #
 # Env overrides (test-only):
 #   SELECTED_ACTIONS_JSON_OVERRIDE — path to fixture JSON for

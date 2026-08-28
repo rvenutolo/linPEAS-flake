@@ -21,7 +21,9 @@ The same command works locally for manual rebuilds.
 
 The changelog job runs as part of `release-on-bump.yml`, triggered on
 every push to `main` that changes `linpeas-pin.json`. It also runs on
-`workflow_dispatch` (see Recovery below). A changelog failure does not
+`workflow_dispatch` when `force-republish: true` is passed; a
+`backfill-tag` dispatch skips it (see Recovery below). A changelog
+failure does not
 block image publication — the job depends only on `release`
 (`needs: [release]`), so it runs in parallel with the image and manifest
 jobs and a transient cliff error cannot prevent the OCI image from
@@ -220,9 +222,12 @@ flow mirrors `update-linpeas.yml push-and-merge` exactly.
 ### Missed entry
 
 A missed changelog entry (changelog job failed or was skipped) can be
-recovered by triggering `release-on-bump.yml` via `workflow_dispatch`.
-The job re-runs git-cliff over the full tag history and commits the
-corrected file.
+recovered by triggering `release-on-bump.yml` via `workflow_dispatch`
+with `force-republish: true`. The input is required: the release tag
+already exists on every recovery path, so the job's
+`tag-exists == 'false' || force-republish` gate skips it on a bare
+dispatch. With the input set, the job re-runs git-cliff over the full
+tag history and commits the corrected file.
 
 ### File lost entirely
 
