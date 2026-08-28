@@ -2,7 +2,7 @@
 
 This file holds the repo-specific facts the audit shares with every reader.
 Commands and lists drift; where this file names a generator, recipe, or path,
-**trust live output (`just --list`, `ls scripts/`) over what is written here**
+**trust live output (`just --list`, `ls scripts/*.sh scripts/lib/*.sh`) over what is written here**
 if they disagree, and note the drift as its own finding.
 
 ## 1. Ground-truth commands
@@ -242,8 +242,10 @@ page, the collector sweep, and the real lint still diverge:
 enforces that each index pointer resolves to an existing file under `docs/`,
 and that every non-`EXEMPT` docs file has an entry. The script's `EXEMPT`
 array is the authority on what is exempt; per the index preamble's own
-taxonomy it holds generator-owned pages, overview pages that route to rules
-held elsewhere, the index itself, and two install guides
+taxonomy it holds generator-owned pages, the live-status template pages
+(`dashboard.md`, `releases.md`) whose content is a rendering rather than a
+rule, overview pages that route to rules held elsewhere, the index itself,
+and two install guides
 (`install/consume-from-flake.md` wholesale; `install/nix.md` from the reverse
 sweep only — it still carries an index entry) — not every generated page (a
 generated page can still carry an index entry). Heading

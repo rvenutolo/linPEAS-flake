@@ -102,7 +102,8 @@ nix develop --command ./scripts/check-settings-posture.sh
 ```
 
 Exits 0 on full match, 1 on any drift, and 2 when the comparison could
-not be made at all — `jq` is absent from PATH, or a probed endpoint
-returned a payload that is missing, unreadable, empty, not JSON, or
-carrying a field this check reads at the wrong type. Every mismatched
-setting is logged to stderr.
+not be made at all — `gh` or `jq` is absent from PATH, a probed
+endpoint could not be fetched, or a probed endpoint returned a payload
+that is missing, unreadable, empty, not JSON, or carrying a field this
+check reads at the wrong type. Every mismatched setting is logged to
+stderr.
