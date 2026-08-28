@@ -55,7 +55,7 @@ high severity, and neither is caught by a freshness gate.
 | security       | `docs/security/*.md`                                                                                                                                                                                                                                                                                                                                                                          |
 | arch+dev       | `docs/architecture/*.md`, `docs/development/*.md`                                                                                                                                                                                                                                                                                                                                             |
 | root + misc    | `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md` (whole-file generated — verify-only, see §3), `docs/index.md`, `docs/dashboard.md`, `docs/releases.md`, `docs/invariant-index.md`, `docs/actionlint-embedded-linters.md`, `tests/README.md`, `.github/PULL_REQUEST_TEMPLATE.md` — **plus any tracked `*.md` outside `.claude/` and `tests/fixtures/` that no other row claims** |
-| claude-tooling | every tracked `.claude/` Markdown file (`git ls-files '.claude/*.md'` — git's `*` crosses `/`, where `.claude/**/*.md` would skip files sitting directly in `.claude/`) except `skills/*/evals/seeded-defects/fixtures/*.md`                                                                                                                                                                  |
+| claude-tooling | every tracked `.claude/` Markdown file (`git ls-files '.claude/*.md'` — git's `*` crosses `/`, where `.claude/**/*.md` would skip files sitting directly in `.claude/`) except `.claude/skills/*/evals/seeded-defects/fixtures/*.md`                                                                                                                                                          |
 
 Five clusters, not one per `docs/` subdirectory: most of a reader's cost is
 fixed per-agent overhead (re-reading the ground-truth bundle, tool setup), so
@@ -81,7 +81,7 @@ directories — a new top-level `docs/` page as readily as a new root-level one 
 matches no row and would otherwise be assigned to no reader while still
 appearing in the collector's sweeps. Verify the map covers
 everything with `git ls-files '*.md'` minus `tests/fixtures/` and
-`skills/*/evals/seeded-defects/fixtures/` — every result must fall in some
+`.claude/skills/*/evals/seeded-defects/fixtures/` — every result must fall in some
 row.
 
 Part of `.claude/` is tracked and committed — the `docs-correctness-audit` and
@@ -92,7 +92,7 @@ this very page. Nothing gates either of those
 duplications, so when a generator is added or removed the table here goes
 stale silently and the next audit runs against a stale map. The
 `claude-tooling` row is what puts them in scope. The fixtures under
-`skills/*/evals/seeded-defects/fixtures/` stay out: they exist to carry planted
+`.claude/skills/*/evals/seeded-defects/fixtures/` stay out: they exist to carry planted
 defects, so reporting them would be reporting the harness working.
 
 `.claude/CLAUDE.md` and the global CLAUDE.md stay read-only reference for the
@@ -262,7 +262,7 @@ section produced by `lychee --offline --include-fragments=anchor-only`, reusing
 `lychee.toml`. It runs over all tracked `*.md` files — the tracked `.claude/`
 tooling included, since its links are ordinary links even though its prose
 quotes banned token shapes — excluding only `tests/fixtures/`, `docs/_data/`
-and the seeded-defect fixtures under `skills/*/evals/seeded-defects/fixtures/`,
+and the seeded-defect fixtures under `.claude/skills/*/evals/seeded-defects/fixtures/`,
 which carry planted breakage. External URLs are skipped entirely — only
 relative file paths and heading anchors are checked. A listed entry is
 authoritative drift: the link target does not exist (high severity). Flag every

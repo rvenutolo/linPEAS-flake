@@ -32,7 +32,7 @@ PRs are auto-labeled with `size/XS`, `size/S`, `size/M`, `size/L`, or
 
 ### Ignore-list parity
 
-Generator-owned files (changelog, flake-outputs, derived doc blocks,
+Generator-owned files (changelog, flake-outputs, derived reference docs,
 fixture trees) are excluded from the size calculation so that
 auto-regenerations do not inflate PR size. The ignore list is supplied
 to `pascalgn/size-label-action` via the `IGNORED` env var inline in

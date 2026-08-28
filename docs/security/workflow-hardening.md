@@ -216,7 +216,7 @@ Enforced by `scripts/check-exit-contract-documented.sh`. Wired as the `lint-scri
 
 ## tool-guarded
 
-Every third-party tool a script under `scripts/` invokes is guarded somewhere in that same script.
+Every third-party tool a script under `scripts/` invokes is guarded somewhere in that same script. Scope is the top-level `scripts/*.sh` only — `scripts/lib/` is out of scope, unlike the recursive sweeps of [no-opaque-procsub](#no-opaque-procsub) and [guard-exit-code](#guard-exit-code).
 
 [guard-exit-code](#guard-exit-code) settles which code a guard reports and [exit-contract-documented](#exit-contract-documented) settles whether the header admits it. This rule settles the case neither reaches: a tool with no guard at all. There is no branch to assign a code to, so the absent tool becomes whatever the surrounding code does with a non-zero status, and each of those readings is a different wrong answer.
 
