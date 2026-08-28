@@ -27,6 +27,8 @@ flowchart LR
   pr --> image
   pr --> imagearm
   flakecheck --> merge
+  build --> merge
+  buildarm --> merge
   smoke --> merge
   smokearm --> merge
   image --> merge

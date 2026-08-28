@@ -45,7 +45,13 @@ flowchart TD
   preflight --> image_arm64
   image_amd64 --> manifest
   image_arm64 --> manifest
+  release --> manifest
+  preflight --> manifest
   manifest --> verify
+  release --> verify
+  preflight --> verify
+  image_amd64 --> verify
+  image_arm64 --> verify
   release --> changelog
   verify --> notify
   changelog --> notify

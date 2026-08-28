@@ -10,7 +10,7 @@ On its weekly Friday cron (and on `workflow_dispatch`), the workflow:
 1. Builds `.#linpeas` and `.#linpeas-image` twice on independent `ubuntu-latest` runners.
 1. Records five values per build: linpeas store path, linpeas NAR hash, image store path, image tar SHA-256, and image manifest digest.
 1. Compares the three hash values pairwise (`linpeas_nar_hash`, `image_tar_sha256`, `image_manifest_digest`); the two store paths are reported for context only and do not affect the result.
-1. On any mismatch: runs `diffoscope` on both pairs (the image tars and the linpeas tarballs), each under its own 20-minute cap, uploads `image.html`/`image.txt`, `linpeas.html`/`linpeas.txt` and `summary.txt` as the `repro-diff` artifact (30-day retention), and opens a GitHub issue labelled `reproducibility`.
+1. On any mismatch: runs `diffoscope` on both pairs (the image tars and the linpeas tarballs), each under its own 20-minute cap. The reports — `image.html`/`image.txt`, `linpeas.html`/`linpeas.txt` and `summary.txt` — are uploaded as the `repro-diff` artifact (30-day retention), and a GitHub issue labelled `reproducibility` is opened.
 
 `diffoscope` is resolved from this repo's own flake — the compare job installs Nix through the `./.github/actions/setup-nix` composite and invokes `nix shell .#diffoscopeMinimal --command diffoscope`. The version that runs therefore tracks `flake.lock`, not whatever a distribution archive currently ships, and the job reaches only the hosts already in its `allowed-endpoints` list.
 

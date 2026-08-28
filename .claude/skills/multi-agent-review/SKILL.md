@@ -33,7 +33,7 @@ it is the source of truth for what each dimension covers.
     Subagents reading code flag plausible-but-wrong issues. Every finding faces 3
     independent skeptics prompted to *refute it*, each defaulting to refuted
     unless it can reproduce the defect against the real artifact; keep the finding
-    only if ≥2 of 3 fail to refute. This is what makes the report trustworthy, so
+    only if at least two of the skeptics that returned fail to refute. This is what makes the report trustworthy, so
     never skip it, even under time pressure.
 - **Empirical repro beats trace-reading — for both finders and refuters.** Code
     that looks broken in trace often works (and vice-versa). A finding must carry
