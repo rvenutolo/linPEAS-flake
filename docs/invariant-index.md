@@ -5,11 +5,11 @@ that holds the canonical wording for that rule. Linted by
 `scripts/check-orphan-invariants.sh` — every entry here must resolve
 to an existing file under `docs/`, and every `docs/**/*.md` (minus
 an explicit EXEMPT allowlist) must appear here. That allowlist covers
-three kinds of page: pages whose entire body is generator-owned and the live-status template
+pages whose entire body is generator-owned; the live-status template
 pages (`dashboard.md`, `releases.md`), whose content is a rendering
-rather than a rule; overview ones, which route to rules held elsewhere
-(`security/threat-model.md`, `index.md`); and `install/consume-from-flake.md`,
-which only tells a consumer how to use the flake — plus this index
+rather than a rule; overview pages, which route to rules held elsewhere
+(`security/threat-model.md`, `index.md`); `install/consume-from-flake.md`,
+which only tells a consumer how to use the flake; and this index
 itself, which cannot hold an entry pointing at itself. `install/nix.md` is exempt
 from the reverse sweep alone — its declared-systems rule is indexed below.
 `install/docker.md` is **not** exempt: it holds the OCI-image and manifest

@@ -188,8 +188,8 @@ over all tracked `*.md` files, excluding `.claude/` tooling, `tests/fixtures/`,
 The `.claude/` exclusion is deliberate and does not conflict with the
 `claude-tooling` cluster: those files quote the banned shapes as pattern data —
 the bullet list above is a list of them — so a shape-matching sweep reports the
-specification as a violation. `scripts/check-ephemeral-refs.sh` allowlists the
-tree for the same reason. The `claude-tooling` reader covers that prose by
+specification as a violation. `is_allowlisted()` in
+`scripts/lib/ephemeral-refs-scope.sh` skips the tree for the same reason. The `claude-tooling` reader covers that prose by
 reading meaning instead of matching shapes.
 
 **It reads prose only.** Fenced code blocks (backtick or tilde), generated
