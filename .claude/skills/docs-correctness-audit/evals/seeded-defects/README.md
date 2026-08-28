@@ -71,7 +71,8 @@ column) is exactly the signal being measured.
 ## Expected recall profile
 
 - **Collector-driven** seeds (`broken-link`, `ghost-job`, `wrong-check-count`,
-    `ephemeral-token`) lean on the deterministic ephemeral/link/CI-name sweeps —
+    `ephemeral-token`) lean on the deterministic ephemeral / link / CI-name / required-check-count
+    sections of the bundle —
     expect high, stable recall.
 - **Reasoning-driven** seeds (`mislabel-member`, `drifted-cron`, `stale-path`)
     lean on reader judgment — expect the flaky tail. A low number there is a

@@ -66,8 +66,9 @@ agree on one source of truth.
     check" that exists in *no* workflow and *no* lint group at all. Catch both by
     checking every hand-written job / required-check / check name against the
     collector's **VALID CI JOB / CHECK NAMES** union allowlist (every workflow job
-    id + every lint-group member): a name absent from that list is a ghost; a name
-    present only as a lint-group member but called a standalone job is a mislabel.
+    id + every lint-group member + every harness-group member): a name absent from
+    that list is a ghost; a name present only as a lint-group or harness-group
+    member but called a standalone job is a mislabel.
     Do this *even when every freshness check is green* — a green pipeline beside a
     sentence naming a job that doesn't exist is exactly what this audit surfaces.
 - **Ephemeral references rot.** This repo bans dates, PR/issue numbers, planning
@@ -186,8 +187,8 @@ behavior).
 ### 6. Tell the user to record the audit point
 
 Close the report by naming the step that ends the cycle: once these findings
-are fixed, the final fix PR runs `just docs-audit-done` and stages
-`.github/docs-audit-state`. That marker is the base the monthly reminder
+are fixed, the final fix PR runs `just docs-audit-done` and commits the
+updated `.github/docs-audit-state`. That marker is the base the monthly reminder
 measures drift pressure from, so an audit that never records its point leaves
 pressure climbing and the reminder issue open. Say it explicitly — this skill
 is read-only and cannot write the marker itself.
