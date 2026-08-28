@@ -148,7 +148,11 @@ flowchart TD
 
 ## Cache
 
-Nix-based jobs pull from the public `cache.nixos.org` substituter; there is no repo-specific Nix binary cache layered on top. All third-party actions are SHA-pinned, with `# vX.Y.Z` patch-tag comments except for refs carrying an inline `# patch-tag-exception:` marker — see [pin convention](pin-convention.md). Renovate maintains them via `helpers:pinGitHubActionDigests` + explicit `pinDigests: true` in `renovate.json`.
+Nix-based jobs pull from the public `cache.nixos.org` substituter; there is no repo-specific Nix binary cache layered on top.
+
+## Action pins
+
+All third-party actions are SHA-pinned, with `# vX.Y.Z` patch-tag comments except for refs carrying an inline `# patch-tag-exception:` marker — see [pin convention](pin-convention.md). Renovate maintains them via `helpers:pinGitHubActionDigests` + explicit `pinDigests: true` in `renovate.json`.
 
 ## Cron schedule
 
