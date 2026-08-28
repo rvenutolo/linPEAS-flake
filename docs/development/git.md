@@ -62,9 +62,12 @@ That rewrap decides where each rule can be enforced:
     that must not be wrapped. The `commitlint` job therefore lints `push` to
     `main` with `.commitlintrc.merge.yml`, which names the same base preset
     as `.commitlintrc.yml` and disables `body-max-line-length` and
-    `footer-max-line-length`. It does not extend `.commitlintrc.yml`: it
-    runs only on `push`, so a path-resolution failure would surface after
-    a merge.
+    `footer-max-line-length`. It names the base preset directly rather than
+    extending `.commitlintrc.yml` by relative path, so a resolution failure
+    cannot first surface on `main` after a merge; a second `commitlint` step
+    also loads it on `pull_request` purely to prove the action can read it
+    while the file is still amendable. `scripts/check-commitlint-config-explicit.sh`
+    pins the two configs' agreement on that preset.
 
 Both configs must be named explicitly via the action's `configFile` input. The
 input defaults to a file this repo does not have, and the action then falls back

@@ -55,8 +55,13 @@ flowchart TD
   image_amd64 --> verify
   image_arm64 --> verify
   release --> changelog
-  verify --> notify
+  release --> notify
+  preflight --> notify
+  image_amd64 --> notify
+  image_arm64 --> notify
+  manifest --> notify
   changelog --> notify
+  verify --> notify
 ```
 
 `notify` runs on `always()` and reads the result of every job above it,

@@ -13,10 +13,11 @@
 # `commit-msg` hook.
 #
 # The base preset is named directly rather than extending
-# `.commitlintrc.yml` by relative path: this file is exercised only on
-# `push`, so a resolution failure would surface after a merge, which is
-# the failure mode the split exists to remove. The duplication is pinned
-# by `scripts/check-commitlint-config-explicit.sh`.
+# `.commitlintrc.yml` by relative path: this file governs `push`, where a
+# resolution failure would surface on `main` after a merge, which is the
+# failure mode the split exists to remove. The `commitlint` job also loads
+# it on `pull_request` as a load-proof only. The duplication is pinned by
+# `scripts/check-commitlint-config-explicit.sh`.
 extends:
   - "@commitlint/config-conventional"
 rules:

@@ -1,4 +1,4 @@
-# Ratchet Pin Audit Runbook
+# Ratchet pin audit runbook
 
 The `ratchet-pin-audit` workflow runs on a daily cron (see [CI — cron schedule](../architecture/ci.md#cron-schedule)). It runs
 `ratchet lint` (from the devshell) against every workflow file under

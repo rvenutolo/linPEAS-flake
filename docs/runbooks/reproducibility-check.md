@@ -1,4 +1,4 @@
-# Reproducibility Check Runbook
+# Reproducibility check runbook
 
 **Workflow:** [`.github/workflows/reproducibility-check.yml`](https://github.com/rvenutolo/linPEAS-flake/blob/main/.github/workflows/reproducibility-check.yml)
 **Status:** Burn-in (non-blocking). Promotion criteria below.
