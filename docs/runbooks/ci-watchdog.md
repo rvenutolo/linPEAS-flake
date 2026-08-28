@@ -19,7 +19,9 @@ Separately from that 3-attempt run bound, the watchdog's own API requests
 retry on a 5xx. Rate limits, conflicts, already-exists responses, and
 malformed, unauthorized, or missing-resource requests are exempt: a 400,
 401, or 404 will not become valid on a second try, a 409 means the re-run
-already took effect, and retrying a 403 rate limit only makes it worse.
+already took effect, a 422 lets `createLabel`'s try/catch see the
+already-exists conflict immediately, and retrying a 403 rate limit only
+makes it worse.
 
 An error that survives that retry is confined to the PR it happened on. The
 sweep processes every remaining PR and then fails the job, naming the PRs

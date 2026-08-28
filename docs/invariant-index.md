@@ -5,7 +5,7 @@ that holds the canonical wording for that rule. Linted by
 `scripts/check-orphan-invariants.sh` — every entry here must resolve
 to an existing file under `docs/`, and every `docs/**/*.md` (minus
 an explicit EXEMPT allowlist) must appear here. That allowlist covers
-three kinds of page: generator-owned ones and the live-status template
+three kinds of page: pages whose entire body is generator-owned and the live-status template
 pages (`dashboard.md`, `releases.md`), whose content is a rendering
 rather than a rule; overview ones, which route to rules held elsewhere
 (`security/threat-model.md`, `index.md`); and `install/consume-from-flake.md`,
@@ -24,7 +24,10 @@ file's job keys, so an enforcer that runs only in a scheduled workflow
 says `ci: -` and names the workflow in its prose. A job that only runs
 an enforcer's test harness is not recorded there either, so a rule
 whose enforcer runs nowhere in `ci.yml` says `ci: -` even when
-`harness-group` exercises its harness.
+`harness-group` exercises its harness. The `enforcer:` field names
+scripts, so a rule whose only enforcer is a `tests/*.test.sh` harness
+says `enforcer: -` as well and renders as unenforced in the matrix; its
+prose names the harness.
 
 Behavior rules for the AI assistant and other non-binding guidance live
 mostly in an untracked assistant-tooling tree. The committed part of
@@ -42,7 +45,7 @@ scope for this index either way.
 - **Allowed-actions allowlist** — vendor list canonical; drift = incident; the live probe runs as the daily `allowed-actions-api-drift-check` workflow, which is not a required check. → [security/allowed-actions.md](security/allowed-actions.md) <!-- enforcer: scripts/check-allowed-actions-api.sh; ci: -; hook: - -->
 - **Bump-script integrity** — URL prefix, `.digest`, atomic write, API-version header. → [security/verification.md](security/verification.md) <!-- enforcer: scripts/check-gh-api-version-header.sh, scripts/check-bump-script-integrity.sh; ci: lint-script-hygiene; hook: gh-api-version-header, bump-script-integrity -->
 - **verify-latest-release parity + attribution** — SRI drift = incident; per-reason notify bodies. → [security/verification.md](security/verification.md) <!-- enforcer: -; ci: -; hook: - -->
-- **Failure-reason ladder coverage** — every `id:`-carrying step in the verify job is mapped to a reason token by the attribution ladder, in execution order, with every token documented; a step may opt out only with an inline `# reason-ladder-exempt: <reason>` marker, and a marker on a step assertion 1 already covers, or on the attribution step itself, excuses nothing and is reported as drift rather than accepted. → [security/verification.md](security/verification.md) <!-- enforcer: scripts/check-verify-reason-ladder.sh; ci: lint-workflow-security; hook: verify-reason-ladder -->
+- **Failure-reason ladder coverage** — every `id:`-carrying step in the verify job is mapped to a reason token by the attribution ladder, in execution order, with every token documented; a step may opt out only with an inline `# reason-ladder-exempt: <reason>` marker, and a marker on a step the attribution env already reads, or on the attribution step itself, excuses nothing and is reported as drift rather than accepted. → [security/verification.md](security/verification.md) <!-- enforcer: scripts/check-verify-reason-ladder.sh; ci: lint-workflow-security; hook: verify-reason-ladder -->
 - **Gitleaks / TruffleHog / Dependency review / Trivy / Grype / SBOM** — scanner scope, thresholds, and notify-job split; Gitleaks, TruffleHog, and Dependency review are required checks, the CVE scans and SBOM attestation are advisory. → [security/verification.md](security/verification.md) <!-- enforcer: -; ci: -; hook: - -->
 - **Cosign keyless signing + identity pinning** — per-arch + multi-arch index signed; verify must pin workflow ref + OIDC issuer. → [security/verification.md](security/verification.md) <!-- enforcer: scripts/check-cosign-identity-pinned.sh; ci: lint-workflow-security; hook: cosign-identity-pinned -->
 - **gh attestation verify --repo pin** — every `gh attestation verify` invocation passes `--repo rvenutolo/linPEAS-flake`. → [security/verification.md](security/verification.md) <!-- enforcer: scripts/check-gh-attestation-repo.sh; ci: lint-workflow-security; hook: gh-attestation-repo -->

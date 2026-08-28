@@ -45,7 +45,7 @@ See [`SECURITY.md`](https://github.com/rvenutolo/linPEAS-flake/blob/main/SECURIT
 
 {% raw %}
 
-- Bump workflows authenticate as the `linpeas-flake-bumper` **GitHub App**, not as a PAT. The App is installed only on `rvenutolo/linPEAS-flake` with `Contents: Read and write` + `Pull requests: Read and write` permissions (`Metadata: Read` is implicit). No `Workflows` permission. Switching back to any PAT-based flow is a regression — web-flow signing of REST `PUT /contents` requires an App installation token.
+- Bump workflows authenticate as the `linpeas-flake-bumper` **GitHub App**, not as a PAT. The App is installed only on `rvenutolo/linPEAS-flake` with `Contents: Read and write` + `Pull requests: Read and write` permissions (`Metadata: Read` is implicit). No `Workflows` permission. Switching to any PAT-based flow is a regression — web-flow signing of REST `PUT /contents` requires an App installation token.
 - Storage:
   - `vars.BUMP_APP_CLIENT_ID` — public, GitHub App Client ID (e.g. `Iv23...`). Client ID (not the numeric App ID) is what `actions/create-github-app-token` accepts.
   - `secrets.BUMP_APP_PRIVATE_KEY` — App's PEM private key. Rotate on suspected compromise; no forced cadence.
