@@ -265,7 +265,7 @@ main() {
     echo '(no .github/lint-groups.yml)'
   fi
 
-  section "VALID CI JOB / CHECK NAMES (union: every workflow job id + every lint-group member)"
+  section "VALID CI JOB / CHECK NAMES (union: every workflow job id + every lint-group member + every harness-group member)"
   {
     # job ids from the jobs: block of every workflow (not just ci.yml)
     for wf in .github/workflows/*.yml; do
@@ -285,9 +285,17 @@ main() {
       grep -E '^[[:space:]]*-[[:space:]]' .github/lint-groups.yml |
         sed -E "s/^[[:space:]]*-[[:space:]]*//; s/[[:space:]].*$//; s/[\"']//g"
     fi
+    # harness-group member ids: first pipe-delimited field of every
+    # HARNESSES entry in scripts/run-harness-group.sh
+    if [[ -f scripts/run-harness-group.sh ]]; then
+      sed -n "/^readonly -a HARNESSES=(/,/^)/p" scripts/run-harness-group.sh |
+        grep -oE "^[[:space:]]*'[^|']+\|" |
+        sed -E "s/^[[:space:]]*'//; s/\|$//"
+    fi
   } | sort -u
   echo '(GHOST CHECK: a name a doc calls a "CI job" or "required check" that is'
-  echo ' ABSENT from this list exists in no workflow and no lint group — high severity.)'
+  echo ' ABSENT from this list exists in no workflow, no lint group and no harness'
+  echo ' group — high severity.)'
 
   section "WORKFLOW CRONS (authoritative schedules; ci.md table must match)"
   grep -H 'cron:' .github/workflows/*.yml 2>/dev/null | sed 's#\.github/workflows/##'

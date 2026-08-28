@@ -20,7 +20,7 @@ Run a documentation correctness audit of this repository using the
     not cover.
 1. Write a severity-ranked findings report to `.claude/reports/`.
 1. Close by telling the user to record the audit point: the final fix PR runs
-    `just docs-audit-done` and stages `.github/docs-audit-state`. This audit is
+    `just docs-audit-done` and commits the updated `.github/docs-audit-state`. This audit is
     read-only and cannot write that marker itself, and the monthly reminder
     measures drift pressure from it — an audit that never records its point
     leaves pressure climbing.
