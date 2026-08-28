@@ -233,7 +233,7 @@ When a job legitimately needs a new endpoint, add it to that job's `allowed-endp
 Repository settings knobs the security model depends on (probe-verifiable from `docs/security/settings-posture.md`):
 
 - `secret_scanning`, `secret_scanning_push_protection`, `dependabot_security_updates` all **enabled**.
-- Actions: `sha_pinning_required: true`. Belt-and-braces against Renovate misconfiguration — every `uses:` must be SHA-pinned at GitHub level, not just by Renovate convention. Smoke-tested: unpinned `uses: actions/checkout@v4` was rejected by GitHub with "all actions must be pinned to a full-length commit SHA".
+- Actions: `sha_pinning_required: true`. Belt-and-braces against Renovate misconfiguration — every `uses:` must be SHA-pinned at GitHub level, not just by Renovate convention. GitHub rejects an unpinned `uses: actions/checkout@v4` with "all actions must be pinned to a full-length commit SHA".
 - Workflow tokens: `default_workflow_permissions: read`, `can_approve_pull_request_reviews: false`. Prevents a compromised workflow from self-approving a PR.
 - `github-pages` environment: `can_admins_bypass: false`.
 

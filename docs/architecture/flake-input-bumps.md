@@ -9,7 +9,7 @@ flake-input pins in `flake.nix`:
     NixOS GA tag (`YY.MM`) lands plus the global 7-day
     `minimumReleaseAge` quarantine. **Blast: the linpeas runtime
     derivation and the image's bundled payload. No tooling.**
-- **`nixpkgs-unstable`** — a third input, but **Renovate does not track
+- **`nixpkgs-unstable`** — also declared, but **Renovate does not track
     it**. Its URL names a branch that never renames
     (`github:NixOS/nixpkgs/nixos-unstable`), so the weekly
     `update-flake-lock.yml` cron's bare `nix flake update` already floats it

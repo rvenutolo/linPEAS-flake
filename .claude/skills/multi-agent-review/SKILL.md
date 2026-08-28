@@ -205,7 +205,9 @@ dimension. Every reported finding must be self-contained and carry its
 live skeptic could not refute — list it under **Contested kills**, never fold it
 silently into the clean-kill log. The tallies are computed over the skeptics
 that actually returned (`live`), so a run where one agent dies reports two
-votes, not three; quote `votes` rather than assuming a denominator.
+votes, not three; quote `votes` rather than assuming a denominator. A
+`votes.total` of 0 (every skeptic died) is a non-verdict, not a kill —
+re-refute that finding instead of logging it.
 
 ## Spot-check protocol (offer to the user)
 

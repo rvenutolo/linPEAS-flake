@@ -13,8 +13,9 @@ posture is non-negotiable.
     policy.
 - Read [`SECURITY.md`](SECURITY.md) — SHA-pinning, attestation chain,
     bump credentials.
-- Run `just verify` locally — runs the batched lint groups, harnesses, and
-    doc-freshness checks CI runs. Hook-only lints run under `just lint`.
+- Run `just verify` locally — runs the batched lint groups, harnesses,
+    doc-freshness checks, and standalone enforcers CI runs. Hook-only lints
+    run under `just lint`.
 
 ## Local development
 
@@ -25,7 +26,7 @@ just check            # nix flake check (formatting + pre-commit + lint-shell-to
 just fmt              # treefmt — prettier + nixfmt + shfmt + taplo + mdformat + just
 just lint             # pre-commit run --all-files
 just lint-links       # lychee over every markdown file lychee.toml does not exclude
-just verify           # batched lint groups + harnesses + doc-freshness
+just verify           # lint groups + harnesses + doc-freshness + standalone enforcers
 just bump             # manually refresh linpeas pin from upstream latest
 ```
 

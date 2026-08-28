@@ -68,8 +68,8 @@ forgery on `main`.
     non-fast-forward update, and arbitrary update of release-tag refs,
     with no bypass actors — release tags are immutable once minted, but
     minting one is not itself a restricted operation; drift-check lint
-    asserts the ruleset is intact and that no bypass actors can delete or
-    move release tags.
+    asserts the ruleset is intact and that its bypass-actor list is
+    empty.
 - Releases are web-flow signed; no PAT, no `git push` from the bot.
 - `protect-main` ruleset enforces required checks and signed commits.
 
