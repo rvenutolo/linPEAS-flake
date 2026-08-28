@@ -155,8 +155,9 @@ banned shapes in tracked docs and comments:
     test-fixture data is exempt because `is_allowlisted()` skips
     `tests/fixtures/**` wholesale.
 - Causal-history phrases: `previously`, `Migration note`, `Tightened from`,
-    `switched from/to`, `legacy <X> was deleted`,
-    `now enforced via X (previously Y)`, `added in #?\d+`, `post-PR #?\d+`.
+    `switched from/to`, `legacy <X> was deleted`, `added in #?\d+`,
+    `post-PR #?\d+` (a phrase like `now enforced via X (previously Y)` is
+    caught by the bare `previously` alternative).
     Rewrite to motivate the current rule by current behavior. Bare verbs and
     prepositions (`prior to`, `swapped`, `was reshaped`) are **not** on this
     list: each reads as repo history or as present-tense prose depending only
@@ -241,8 +242,10 @@ enforces that each index pointer resolves to an existing file under `docs/`,
 and that every non-`EXEMPT` docs file has an entry. The script's `EXEMPT`
 array is the authority on what is exempt; per the index preamble's own
 taxonomy it holds generator-owned pages, overview pages that route to rules
-held elsewhere, the index itself, and two install guides — not every
-generated page (a generated page can still carry an index entry). Heading
+held elsewhere, the index itself, and two install guides
+(`install/consume-from-flake.md` wholesale; `install/nix.md` from the reverse
+sweep only — it still carries an index entry) — not every generated page (a
+generated page can still carry an index entry). Heading
 anchors are a separate lint, `check-doc-anchors.sh`.
 For the consistency dimension, mirror that intent and additionally check the
 *semantic* agreement the script cannot: does the index one-liner still match

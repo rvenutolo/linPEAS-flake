@@ -384,7 +384,7 @@ A harness proves behavior by grepping one scenario's captured output for a subst
 
 `harness_assert_exempt <substring> <other-scenario|*> <rationale>` registers a reviewed exception: the named form where one failure path emits no token another lacks, the `*` form for a banner a script prints across a whole outcome class. The rationale is mandatory so every weakening is reviewable, and the number of live registrations is held at zero — see [harness exemption ratchet](#harness-exemption-ratchet). A harness that asserts produced artifact content — a rewritten workflow file, a generated doc — rather than captured scenario output is listed on the `EXEMPT` array in `tests/_harness_assert_wired.test.sh` with a rationale comment.
 
-Enforced by `scripts/lib/harness-assert.sh`, which runs inside every wired harness, and by `tests/_harness_assert_wired.test.sh`, which asserts the wiring; both are reached by the `harness-group` CI job.
+Enforced by `scripts/lib/harness-assert.sh`, which runs inside every wired harness, and by `tests/_harness_assert_wired.test.sh`, which asserts the wiring; both are reached by the `harness-group` CI job. The enforcement matrix records this rule as unenforced: its enforcer column admits only `scripts/` entry points, and this rule's enforcer is a test harness.
 
 ## harness exemption ratchet
 
@@ -396,7 +396,7 @@ Wiring is scored on a call because the gate reads harness source text. A header 
 
 Both ratchets cover every harness that is not on the `EXEMPT` array in `tests/_harness_assert_wired.test.sh`, including those asserting by other means than the quiet-grep idiom — an exemption registered by a harness the wiring verdict does not score weakens the same library. The `EXEMPT` entries are skipped before either ratchet runs, so they are out of ratchet scope as well as out of the wiring verdict, and each carries its reason inline. `tests/lib-harness-assert.test.sh` is the one entry held out for a reason other than artifact-content assertion: the gate library's own spec test must not be gated by the library it tests, and its generated library-driving snippets are indistinguishable from live calls to any textual rule.
 
-Enforced by `tests/_harness_assert_wired.test.sh`, reached by the `harness-group` CI job.
+Enforced by `tests/_harness_assert_wired.test.sh`, reached by the `harness-group` CI job. The enforcement matrix records this rule as unenforced: its enforcer column admits only `scripts/` entry points, and this rule's enforcer is a test harness.
 
 ## harness census parity
 
@@ -410,7 +410,7 @@ A collapsed group is a measurement fault before it is a coverage fault, and read
 
 Both moves that reach parity are therefore about what gets recorded. Each record captures the whole observable outcome, so a distinction the script already draws is visible to the gate. Where scenarios still collapse, the script's own summary line widens to state the scope it verified — files scanned, mechanism matched, exemption applied, tags excluded — which is output a maintainer reads on its own merits and which separates the scenarios because it reports something that genuinely differs between them.
 
-Enforced by `scripts/lib/harness-assert.sh`, which runs inside every wired harness, and by `tests/_harness_assert_wired.test.sh`, which holds registration to the allowlist; both are reached by the `harness-group` CI job.
+Enforced by `scripts/lib/harness-assert.sh`, which runs inside every wired harness, and by `tests/_harness_assert_wired.test.sh`, which holds registration to the allowlist; both are reached by the `harness-group` CI job. The enforcement matrix records this rule as unenforced: its enforcer column admits only `scripts/` entry points, and this rule's enforcer is a test harness.
 
 ## harness subject declaration
 

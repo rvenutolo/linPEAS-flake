@@ -206,8 +206,10 @@ live skeptic could not refute — list it under **Contested kills**, never fold 
 silently into the clean-kill log. The tallies are computed over the skeptics
 that actually returned (`live`), so a run where one agent dies reports two
 votes, not three; quote `votes` rather than assuming a denominator. A
-`votes.total` of 0 (every skeptic died) is a non-verdict, not a kill —
-re-refute that finding instead of logging it.
+`votes.total` of 0 (every skeptic died) is a non-verdict, not a kill — the
+template still files it under `refuted` (zero non-refuting votes reads as a
+unanimous kill), so check `votes.total` before logging and re-refute that
+finding instead.
 
 ## Spot-check protocol (offer to the user)
 

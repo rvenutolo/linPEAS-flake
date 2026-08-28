@@ -162,7 +162,7 @@ confirm:
 - `manifest` built and pushed.
 - `changelog` re-ran, which it does on the `force-republish` path used
     above.
-- `verify` passed per-arch attestation re-verify, manifest reresolve,
+- `verify` passed per-arch attestation re-verify, manifest re-resolution,
     and `:latest` matches `:VERSION` per-arch digests.
 
 Those are the seven jobs the workflow's own failure issue enumerates, so a

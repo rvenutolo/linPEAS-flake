@@ -47,7 +47,7 @@ See [`SECURITY.md`](https://github.com/rvenutolo/linPEAS-flake/blob/main/SECURIT
 
 - Bump workflows authenticate as the `linpeas-flake-bumper` **GitHub App**, not as a PAT. The App is installed only on `rvenutolo/linPEAS-flake` with `Contents: Read and write` + `Pull requests: Read and write` permissions (`Metadata: Read` is implicit). No `Workflows` permission. Switching back to any PAT-based flow is a regression — web-flow signing of REST `PUT /contents` requires an App installation token.
 - Storage:
-  - `vars.BUMP_APP_CLIENT_ID` — public, GitHub App Client ID (e.g. `Iv23...`). Preferred over App ID (numeric) per the `actions/create-github-app-token` v3 deprecation.
+  - `vars.BUMP_APP_CLIENT_ID` — public, GitHub App Client ID (e.g. `Iv23...`). Client ID (not the numeric App ID) is what `actions/create-github-app-token` accepts.
   - `secrets.BUMP_APP_PRIVATE_KEY` — App's PEM private key. Rotate on suspected compromise; no forced cadence.
 - Tokens minted via `actions/create-github-app-token` are scoped to one job, valid one hour, and revoked at job end. They live only as `${{ steps.app-token.outputs.token }}` passed via `GH_TOKEN`. Never reach `.git/config`; there must never be a `git push` using them. Commits land via REST `PUT /repos/{owner}/{repo}/contents/{path}` → web-flow-signed by GitHub.
 - `BUMP_APP_PRIVATE_KEY` enters env only in the credential-holding write jobs — `push-and-merge` (`update-linpeas.yml`, `update-flake-lock.yml`), `push-refresh` (`renovate-flake-lock-refresh.yml`) and `changelog` (`release-on-bump.yml`) — never in `compute-pin` / `compute-lock` / `compute-refresh`. Those compute jobs must remain `permissions: contents: read`, must not reference the secret, and must keep untrusted Nix actions inside their own boundary.
