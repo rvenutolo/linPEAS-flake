@@ -17,10 +17,13 @@ digest-pinning rules and is indexed below like any other rule-bearing page. The 
 
 Each entry carries an `enforcer: ...; ci: ...; hook: ...` annotation
 that `scripts/refresh-enforcement-matrix.sh` renders into
-`security/enforcement-matrix.md`. `ci:` names the CI job that runs the
-enforcer; a job that only runs an enforcer's test harness is not
-recorded there, so a rule whose enforcer runs nowhere in CI says
-`ci: -` even when `harness-group` exercises its harness.
+`security/enforcement-matrix.md`. `ci:` names the `ci.yml` job that
+runs the enforcer — the generator validates the value against that
+file's job keys, so an enforcer that runs only in a scheduled workflow
+says `ci: -` and names the workflow in its prose. A job that only runs
+an enforcer's test harness is not recorded there either, so a rule
+whose enforcer runs nowhere in `ci.yml` says `ci: -` even when
+`harness-group` exercises its harness.
 
 Behavior rules for the AI assistant and other non-binding guidance live
 mostly in an untracked assistant-tooling tree. The committed part of
@@ -39,7 +42,7 @@ scope for this index either way.
 - **Bump-script integrity** — URL prefix, `.digest`, atomic write, API-version header. → [security/verification.md](security/verification.md) <!-- enforcer: scripts/check-gh-api-version-header.sh, scripts/check-bump-script-integrity.sh; ci: lint-script-hygiene; hook: gh-api-version-header, bump-script-integrity -->
 - **verify-latest-release parity + attribution** — SRI drift = incident; per-reason notify bodies. → [security/verification.md](security/verification.md) <!-- enforcer: -; ci: -; hook: - -->
 - **Failure-reason ladder coverage** — every `id:`-carrying step in the verify job is mapped to a reason token by the attribution ladder, in execution order, with every token documented; a step may opt out only with an inline `# reason-ladder-exempt: <reason>` marker, and a marker on a step assertion 1 already covers, or on the attribution step itself, excuses nothing and is reported as drift rather than accepted. → [security/verification.md](security/verification.md) <!-- enforcer: scripts/check-verify-reason-ladder.sh; ci: lint-workflow-security; hook: verify-reason-ladder -->
-- **Gitleaks / Dependency review / Trivy / Grype / SBOM** — scanner scope, thresholds, and notify-job split; Gitleaks and Dependency review are required checks, the CVE scans and SBOM attestation are advisory. → [security/verification.md](security/verification.md) <!-- enforcer: -; ci: -; hook: - -->
+- **Gitleaks / TruffleHog / Dependency review / Trivy / Grype / SBOM** — scanner scope, thresholds, and notify-job split; Gitleaks, TruffleHog, and Dependency review are required checks, the CVE scans and SBOM attestation are advisory. → [security/verification.md](security/verification.md) <!-- enforcer: -; ci: -; hook: - -->
 - **Cosign keyless signing + identity pinning** — per-arch + multi-arch index signed; verify must pin workflow ref + OIDC issuer. → [security/verification.md](security/verification.md) <!-- enforcer: scripts/check-cosign-identity-pinned.sh; ci: lint-workflow-security; hook: cosign-identity-pinned -->
 - **gh attestation verify --repo pin** — every `gh attestation verify` invocation passes `--repo rvenutolo/linPEAS-flake`. → [security/verification.md](security/verification.md) <!-- enforcer: scripts/check-gh-attestation-repo.sh; ci: lint-workflow-security; hook: gh-attestation-repo -->
 - **cosign verify identity + issuer pin** — every `cosign verify*` subcommand pins `--certificate-identity[-regexp]` AND `--certificate-oidc-issuer`. → [security/verification.md](security/verification.md) <!-- enforcer: scripts/check-cosign-identity-pinned.sh; ci: lint-workflow-security; hook: cosign-identity-pinned -->

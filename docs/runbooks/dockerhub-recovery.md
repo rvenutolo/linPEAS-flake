@@ -127,11 +127,11 @@ Either:
 - Dispatch the workflow from the Actions UI — the **Run workflow**
     button, i.e. `workflow_dispatch` — if the pin commit is still `HEAD`
     on `main`, setting `force-republish: true` so the image, manifest,
-    and verify jobs run for the current pin even though the GitHub
+    verify, and changelog jobs run for the current pin even though the GitHub
     release already exists. **"Re-run jobs" is not a substitute:** it
     replays the original run's inputs and cannot set a new one, so on a
     push-triggered run `force-republish` stays false, `tag-exists` stays
-    true, and all three jobs skip — the recovery looks green while doing
+    true, and all four jobs skip — the recovery looks green while doing
     nothing. The `release` job's release-creation step stays gated by the
     "tag exists" guard, so the existing release assets are preserved — if
     the release itself must be recreated, delete it first, then
