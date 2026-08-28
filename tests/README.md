@@ -1,8 +1,10 @@
 # Tests
 
-Bash test harnesses for the script-based invariant checks under
-`scripts/`. Each test exercises its target script against a tree of
-fixtures with expected exit codes and stderr substrings.
+Bash test harnesses for the invariant checks under `scripts/` and the
+shared libraries under `scripts/lib/`. Most exercise a target script
+against a committed fixture tree with expected exit codes and stderr
+substrings; the rest build their tree at runtime or target a library, a
+file set, or another harness.
 
 Most tests run via `just verify` (also runs the underlying scripts
 against the live tree); it reaches the majority of `tests/*.test.sh`

@@ -29,7 +29,7 @@ upstream tag replacement (intentional or compromise).
 
 ## Trust model and SLSA attestation semantics
 
-Every release artifact (OCI image, pin file) carries a SLSA
+Every release artifact (OCI image, pin file, per-arch CycloneDX SBOM) carries a SLSA
 build-provenance attestation, verifiable with
 `gh attestation verify <artifact> --repo rvenutolo/linPEAS-flake`. These
 attestations prove **build provenance**: the published artifact was

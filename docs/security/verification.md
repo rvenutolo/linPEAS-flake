@@ -288,7 +288,10 @@ output and open / update deduped issues via
 ## OCI image CVE scan (Grype)<a name="oci-image-cve-scan-grype"></a>
 
 `image-cve-scan.yml`'s `image-cve-scan-grype` job (weekly cron +
-path-filtered push to `main` + dispatch) uploads SARIF (CRITICAL + HIGH) to the Security tab under
+path-filtered push to `main` + dispatch) uploads SARIF (fixed-only
+findings, all severities; results below HIGH carry `warning` level
+because `severity-cutoff: high` sets the result level rather than
+filtering) to the Security tab under
 category `grype-image-cve`, using Grype as a second-opinion scanner
 alongside Trivy. The job fails (and emits a notify issue) on a CRITICAL
 finding, and — like Trivy — on any infrastructure failure ahead of the

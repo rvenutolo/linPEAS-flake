@@ -75,15 +75,18 @@ most recent report makes the next tick treat its observation as new.
 
 ## When the watchdog job goes red
 
-Check the job log for a line starting with `Sweep`. Its presence, or
-absence, tells you which of three things happened:
+Search the job log for `Sweep`. Both verdicts are emitted through
+`core.setFailed`, so the raw log renders them as `::error::Sweep ...`
+rather than as a line starting with the word. Its presence, or absence,
+tells you which of three things happened:
 
 - **No `Sweep` line at all.** The job died before the loop finished, so
-    nothing was attempted. Usually enumerating open PRs failed — that call
-    sits outside the per-PR try/catch, so it aborts before any PR is
-    processed — but harden-runner, checkout, or the job timeout produce the
-    same silence. Read the log's stack trace directly; the per-PR guidance
-    below does not apply.
+    the sweep produced no verdict. Usually enumerating open PRs failed —
+    that call sits outside the per-PR try/catch, so it aborts before any PR
+    is processed — but harden-runner, checkout, or the job timeout produce
+    the same silence (a timeout can fire mid-loop, after some PRs were
+    already re-run). Read the log's stack trace directly; the per-PR
+    guidance below does not apply.
 - **`Sweep halted by rate limit; ...`.** The sweep hit a rate limit partway
     through and stopped rather than keep spending an exhausted budget. The PRs
     listed as "not attempted" were never touched this run — they are not

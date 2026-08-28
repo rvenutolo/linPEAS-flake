@@ -86,7 +86,7 @@ section for details.
 Run before pushing:
 
 ```sh
-just verify      # batched lint groups + harnesses + doc-freshness (what CI runs)
+just verify      # lint groups + harnesses + doc-freshness + standalone enforcers (what CI runs)
 just check       # nix flake check
 just fmt         # nix fmt (treefmt: shfmt, prettier, …)
 just lint        # pre-commit run --all-files
