@@ -119,6 +119,12 @@ fixtures together.
 
 Enforced by `renovate-invariants` required CI job.
 
+`scripts/check-renovate-config-validator.sh` runs Renovate's own
+`renovate-config-validator` against `renovate.json`, so a key the
+assertions above never look at still cannot ship malformed. It runs as
+the `renovate-config-validator` pre-commit hook and as the same-named
+member of the `lint-doc-invariants` CI job.
+
 `scripts/check-renovate-markers-matched.sh` enforces a complementary
 file-level rule: every file in the tree that carries a `# renovate: datasource=…` marker must be consumed by a live customManager — a
 `managerFilePatterns` entry must scope the marker's file and a

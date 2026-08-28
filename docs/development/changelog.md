@@ -38,7 +38,7 @@ surface is introduced.
 
 ## cliff.toml load-bearing rules
 
-Four settings in `cliff.toml` must not be changed without understanding
+Five settings in `cliff.toml` must not be changed without understanding
 their effect:
 
 ### tag_pattern
@@ -100,6 +100,18 @@ subjects — are rewritten to a clickable `[#NNN](…)` link in the
 rendered changelog. This preprocessor is the **sole** source of PR
 links: rendering a second link (e.g. a body-template `pr_number` block)
 would double-link every entry as `([#N](…)) ([#N](…))`.
+
+### scorecard-count preprocessor
+
+```toml
+{ pattern = '15-check allowlist', replace = "10-check allowlist" },
+```
+
+Rewrites one mislabeled historical commit subject so the rendered
+changelog states the scorecard allowlist size correctly. The
+[link-duplication guard](#link-duplication-guard) below asserts on every
+PR that no `15-check allowlist` survives regeneration, so removing this
+preprocessor fails the required `changelog-links` job.
 
 ## Link-duplication guard
 

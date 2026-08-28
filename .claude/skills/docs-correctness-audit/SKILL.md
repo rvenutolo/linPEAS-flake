@@ -3,7 +3,8 @@ name: docs-correctness-audit
 description: >-
   Read-only documentation correctness audit for this repo: cross-checks every
   tracked Markdown doc (README, docs/**, SECURITY, CONTRIBUTING,
-  tests/README.md, the PR template, and the tracked `.claude/` tooling)
+  tests/README.md, the PR template, CHANGELOG (verify-only), and the tracked
+  `.claude/` tooling)
   against the actual code, CI, config, and workflows, then emits one
   severity-ranked findings report without editing anything. Invoke ONLY via the
   /docs-audit slash command. Do NOT auto-trigger on natural-language mentions of
@@ -127,7 +128,9 @@ Read-only fan-out needs no orchestration opt-in — it is plain parallel reads.
     discipline above (member-vs-standalone is real drift, not pedantry).
     Internal link and heading-anchor resolution is given authoritatively by the
     collector's **`UNRESOLVED INTERNAL LINKS / ANCHORS`** section — flag every
-    listed entry as high severity; do not re-derive by running lychee again.
+    listed entry as high severity; do not re-derive by running lychee again. A
+    section reading `(lychee not found — …)` is a non-result, not a clean
+    one — say so in the coverage note.
 1. **Internal consistency.** Docs contradicting each other (same fact stated two
     ways); invariant-index entries vs their tracked-doc sections; a claimed
     invariant with no backing check.
@@ -151,7 +154,9 @@ Read-only fan-out needs no orchestration opt-in — it is plain parallel reads.
 **Completeness gate first.** A cluster is "clean" only if its coverage note
 shows *what* was cross-checked against ground truth — not that freshness checks
 passed. A clean verdict with no coverage note is not clean; re-dispatch that
-cluster to read its CI/job/required-check prose against the `ci.yml` job list.
+cluster to read its CI/job/required-check prose against the collector's
+**VALID CI JOB / CHECK NAMES** union allowlist (with the `ci.yml` job list for
+the member-vs-standalone distinction).
 Under-inspection that concludes "all good" is the failure mode this audit most
 needs to prevent: a from-scratch reviewer will out-find a reader who trusts the
 green pipeline.
