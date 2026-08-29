@@ -52,7 +52,8 @@ treat it as a real failure.
 1. Open the run URLs listed in the issue body and read the failing job's log.
 1. If the PR is genuinely broken (a dependency bump that breaks the build, a
     lint that genuinely fires), fix it or close the PR. The watchdog will not
-    touch it again unless a new commit resets the attempt counter.
+    re-run its jobs again unless a new commit resets the attempt counter; it
+    keeps watching the PR and updates the issue when what it observes changes.
 1. If it is a real infrastructure failure that outlasted the 3-attempt budget (a
     multi-hour upstream outage), re-run manually once the outage clears:
     `gh run rerun <run-id> --failed`.

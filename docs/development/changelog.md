@@ -232,8 +232,10 @@ order:
     `main` and commit `CHANGELOG.md` via REST `PUT /contents` as the
     App identity (GitHub web-flow-signs the commit).
 1. Open a PR against `main` and enable auto-merge
-    (`gh pr merge --auto --merge --delete-branch`). The PR lands once
-    the `protect-main` required status checks pass.
+    (`gh pr merge --auto --merge --delete-branch`), then block until
+    the PR merges: the wait is bounded, and a closed PR or a stall fails
+    the job so `notify` files an issue. The PR lands once the
+    `protect-main` required status checks pass.
 1. If changed, patch the just-published release's body: build
     `.release-body.md` from `.release-notes.md` plus the upstream
     tracking footer and apply it with
