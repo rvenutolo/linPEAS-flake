@@ -30,8 +30,8 @@ it is the source of truth for what each dimension covers.
 ## Why these disciplines matter
 
 - **Refute-all is the verification — nothing reaches the report unrefuted.**
-    Subagents reading code flag plausible-but-wrong issues. Every finding faces 3
-    independent skeptics prompted to *refute it*, each defaulting to refuted
+    Subagents reading code flag plausible-but-wrong issues. Every finding — up to the per-dimension refutation cap, the top 25 by
+    severity — faces 3 independent skeptics prompted to *refute it*, each defaulting to refuted
     unless it can reproduce the defect against the real artifact; keep the finding
     only if at least two of the skeptics that returned fail to refute. This is what makes the report trustworthy, so
     never skip it, even under time pressure.

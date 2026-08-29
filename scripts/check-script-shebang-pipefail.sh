@@ -2,8 +2,9 @@
 # scripts/check-script-shebang-pipefail.sh
 #
 # @description Lint: every executable script under `scripts/` starts
-# with `#!/usr/bin/env bash` (exact first line) and contains
-# `set -Eeuo pipefail` somewhere in the file; every sourced library
+# with `#!/usr/bin/env bash` (exact first line) and carries
+# `set -Eeuo pipefail` as its own line (line-anchored; a trailing
+# addition such as `-x` is accepted); every sourced library
 # under `scripts/lib/` satisfies the inverse.
 
 # A script that silently swallows a failure can corrupt

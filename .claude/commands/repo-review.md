@@ -13,8 +13,9 @@ Run a multi-agent, refute-all review of this repository using the
     run-wide defaults (refute-all verification, single `.claude/reports/`
     report, per-dimension gates).
 1. Run each selected dimension as its own gated `Workflow` — wait for "go",
-    fan out finder slices, refute every finding with 3 default-refuted
-    skeptics, keeping a finding when at least two of the skeptics that
+    fan out finder slices, refute every finding (up to the per-dimension
+    cap of 25, most-severe first; report the cap when it fires) with 3
+    default-refuted skeptics, keeping a finding when at least two of the skeptics that
     returned could not refute it. Seed later dimensions with earlier
     confirmed findings.
 1. Append survivors — plus the refutation log and any contested kills (one

@@ -314,8 +314,9 @@ the doc-freshness checks, and every standalone required-check enforcer
 (`check-protect-main.sh`, `check-tag-protection.sh`, the changelog
 checks, and the rest of the `justfile` recipe) — the in-repo enforcer
 set CI gates on. The action-driven checks (`markdownlint`, `typos`,
-`editorconfig`, `commitlint`) and `check-flake-systems-eval.sh` run only
-in CI. Individual
+`editorconfig`, `commitlint`) are not part of `just verify` — they run as
+CI jobs and, locally, through the pre-commit hook set (`just lint` /
+`just check`); only `check-flake-systems-eval.sh` runs nowhere but CI. Individual
 harnesses can still be run directly
 (`nix develop --command bash tests/<name>.test.sh`) while iterating on
 a single failure. If any fail, do **not** disable the test — debug
@@ -408,6 +409,17 @@ For `NixOS/nixpkgs` bumps specifically:
     immediately.
 - The next `update-flake-lock.yml` cron run (weekly, Friday)
     will refresh within-`YY.MM` patches automatically.
+
+## pre-commit-hooks SHA parity
+
+`flake.nix` embeds the `cachix/git-hooks.nix` revision in the
+`pre-commit-hooks` input URL so Renovate can track it, and `flake.lock`
+records the same revision as `pre-commit-hooks.locked.rev`. The two must
+agree: a URL bumped without a lock refresh (or the reverse) evaluates one
+revision while advertising another. Enforced by
+`scripts/check-pre-commit-hooks-sha-parity.sh`, wired as the
+`pre-commit-hooks-sha-parity` pre-commit hook and as a member check of the
+`lint-script-hygiene` CI job.
 
 ## Interaction between the pins
 

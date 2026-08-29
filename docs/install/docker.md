@@ -47,7 +47,10 @@ docker run --rm rvenutolo/linpeas:{{ dashboard.release.latest_tag or "<tag>" }} 
 docker run --rm ghcr.io/rvenutolo/linpeas:{{ dashboard.release.latest_tag or "<tag>" }} -a
 ```
 
-Tags exactly match upstream `peass-ng/PEASS-ng` tags.
+Version tags exactly match upstream `peass-ng/PEASS-ng` tags. Each
+registry additionally carries `:latest` (when that release is the newest)
+and the per-arch `<tag>-amd64` / `<tag>-arm64` tags the multi-arch
+manifest is assembled from.
 
 ## Image contents
 

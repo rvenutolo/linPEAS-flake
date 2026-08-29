@@ -5,7 +5,8 @@ description: Read-only documentation correctness audit — severity-ranked findi
 Run a documentation correctness audit of this repository using the
 `docs-correctness-audit` skill. Invoke that skill and follow it exactly:
 
-1. Run its bundled `scripts/collect-ground-truth.sh` once to gather the
+1. Run the collector bundled with that skill (`<skill-dir>/scripts/collect-ground-truth.sh`,
+    resolved from the SKILL.md's own directory) once to gather the
     authoritative ground-truth bundle (flake outputs, recipes, scripts,
     workflows, ci.yml job list, lint-group membership, the valid CI job /
     check-name union allowlist, crons, required-check count, the

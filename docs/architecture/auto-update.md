@@ -83,6 +83,11 @@ flowchart LR
   renovate --> pr2 --> ci --> merge
 ```
 
+Both upkeep diagrams above omit each workflow's `notify` job: like the
+release pipeline's, it runs on `always()` after the others and files or
+closes a deduped failure issue, so it is observability rather than a
+step in the flow.
+
 No third-party flake-lock action is used: such actions take the write credential as a `with: token:` input, which would put it inside an externally-controlled action boundary. The split-job design instead confines Nix evaluation to a `contents: read` job; the `push-and-merge` job authenticates to the GitHub API as the `linpeas-flake-bumper` App via a short-lived installation token (`actions/create-github-app-token`), then commits files via REST `PUT /contents`. No `git push`, no PAT in `.git/config`. REST commits authenticated by an App installation token are auto-signed by GitHub's web-flow GPG key, so the bump branch satisfies `required_signatures` on `main`.
 
 ## Flake-input staleness watchdog

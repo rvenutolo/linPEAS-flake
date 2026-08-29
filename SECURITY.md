@@ -164,7 +164,9 @@ the notify jobs.
     `linpeas-flake-bumper` GitHub App's PEM private key and public client
     ID. Used by `update-linpeas.yml`, `update-flake-lock.yml`,
     `renovate-flake-lock-refresh.yml`, and `release-on-bump.yml` to open
-    and auto-merge bump and changelog PRs.
+    and auto-merge bump and changelog PRs — and, in
+    `renovate-flake-lock-refresh.yml`, to commit the refreshed `flake.lock`
+    onto an existing Renovate PR branch rather than open one.
     The App is installed only on this repository with `Contents: Read and write` and `Pull requests: Read and write` permissions. Installation
     tokens are minted per job by `actions/create-github-app-token`, live
     one hour, and revoke at job end. See
@@ -202,9 +204,9 @@ the notify jobs.
     [`docs/runbooks/settings-drift-app.md`](docs/runbooks/settings-drift-app.md).
 
 - `SCORECARD_PAT` — a fine-grained read-only personal access token
-    consumed as `GITHUB_AUTH_TOKEN` by `scorecard-drift-check.yml`; the
-    Scorecard checks need it to read branch protection and workflow run
-    history. Rotation: [`docs/runbooks/scorecard-pat-rotation.md`](docs/runbooks/scorecard-pat-rotation.md).
+    consumed as `GITHUB_AUTH_TOKEN` by `scorecard-drift-check.yml` on the
+    scorecard step only; the `Webhooks` check needs `admin:repo_hook` read,
+    which the workflow-level `GITHUB_TOKEN` cannot be granted. Rotation: [`docs/runbooks/scorecard-pat-rotation.md`](docs/runbooks/scorecard-pat-rotation.md).
 
 ## SBOM attestations
 
@@ -248,6 +250,7 @@ When a job legitimately needs a new endpoint, add it to that job's `allowed-endp
 Repository settings knobs the security model depends on (probe-verifiable from `docs/security/settings-posture.md`):
 
 - `secret_scanning`, `secret_scanning_push_protection`, `dependabot_security_updates` all **enabled**.
+- Actions: `allowed_actions: selected`, with the vendor allowlist in [`docs/security/allowed-actions.md`](docs/security/allowed-actions.md).
 - Actions: `sha_pinning_required: true`. Belt-and-braces against Renovate misconfiguration — every `uses:` must be SHA-pinned at GitHub level, not just by Renovate convention. GitHub rejects an unpinned `uses: actions/checkout@v4` with "all actions must be pinned to a full-length commit SHA".
 - Workflow tokens: `default_workflow_permissions: read`, `can_approve_pull_request_reviews: false`. Prevents a compromised workflow from self-approving a PR.
 - `github-pages` environment: `can_admins_bypass: false`.
