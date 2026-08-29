@@ -72,7 +72,8 @@ agree on one source of truth.
     Do this *even when every freshness check is green* — a green pipeline beside a
     sentence naming a job that doesn't exist is exactly what this audit surfaces.
 - **Ephemeral references rot.** This repo bans dates, PR/issue numbers, planning
-    labels, and causal-history phrasing in tracked docs (the rationale: tracked
+    labels, review-pass labels and literal `.claude/` paths, and warns on
+    causal-history phrasing in tracked docs (the rationale: tracked
     files describe the *current* state; history lives in git). Flag violations of
     the banned-token regex in `references/repo-map.md`.
 
