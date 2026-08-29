@@ -3,8 +3,10 @@
 #
 # @description Regenerate the scripts-reference managed block in
 # docs/reference/scripts.md from in-script shdoc-style annotations
-# parsed by scripts/_script_docs.awk. Groups entries by basename
-# prefix into Check / Refresh / Other sections.
+# parsed by scripts/_script_docs.awk. Groups entry-point entries by
+# basename prefix into Check / Refresh / Other sections, then renders
+# each library under scripts/lib/ with one entry per annotated function
+# in a Libraries section.
 # @generates docs/reference/scripts.md
 # @option --check exit 1 if drift; exit 2 if the doc or the awk parser is
 # missing; do not mutate the working tree
@@ -39,10 +41,11 @@ doc_new=''
 check_bucket=''
 refresh_bucket=''
 other_bucket=''
+library_bucket=''
 fmt_target=''
 
 function cleanup() {
-  rm --force -- "${block_file}" "${doc_new}" "${check_bucket}" "${refresh_bucket}" "${other_bucket}" "${fmt_target}"
+  rm --force -- "${block_file}" "${doc_new}" "${check_bucket}" "${refresh_bucket}" "${other_bucket}" "${library_bucket}" "${fmt_target}"
   if [[ -n ${repo_root} ]]; then
     local stray
     shopt -s nullglob
@@ -53,24 +56,27 @@ function cleanup() {
   fi
 }
 
-# @description Emit a single script's markdown entry to stdout.
-# @arg $1 script basename (e.g. check-foo.sh)
-# @arg $2 JSON blob from _script_docs.awk
-function emit_entry() {
-  local -r name="$1"
-  local -r json="$2"
-  local description args_len options_len example
+# @description Emit the shared body of one annotated unit — description,
+# args, options, exit codes, stdout, example — to stdout. Serves both a
+# script header and a library function; the caller prints the heading.
+# @arg $1 JSON object from _script_docs.awk (the top level, or one
+# element of its `functions` array)
+function emit_body() {
+  local -r json="$1"
+  local description args_len options_len exitcodes_len stdout_len example
   description="$(jq --raw-output '.description' <<<"${json}")"
   args_len="$(jq --raw-output '.args | length' <<<"${json}")"
   options_len="$(jq --raw-output '.options | length' <<<"${json}")"
+  exitcodes_len="$(jq --raw-output '.exitcodes | length' <<<"${json}")"
+  stdout_len="$(jq --raw-output '.stdout | length' <<<"${json}")"
   example="$(jq --raw-output '.example' <<<"${json}")"
 
-  printf '### scripts/%s\n\n' "${name}"
   printf '%s\n\n' "${description}"
 
+  local i
   if [[ ${args_len} -gt 0 ]]; then
     printf '**Args:**\n\n'
-    local i arg_name arg_text
+    local arg_name arg_text
     for ((i = 0; i < args_len; i++)); do
       arg_name="$(jq --raw-output ".args[${i}].name" <<<"${json}")"
       arg_text="$(jq --raw-output ".args[${i}].text" <<<"${json}")"
@@ -82,7 +88,7 @@ function emit_entry() {
 
   if [[ ${options_len} -gt 0 ]]; then
     printf '**Options:**\n\n'
-    local i opt_flag opt_text
+    local opt_flag opt_text
     for ((i = 0; i < options_len; i++)); do
       opt_flag="$(jq --raw-output ".options[${i}].flag" <<<"${json}")"
       opt_text="$(jq --raw-output ".options[${i}].text" <<<"${json}")"
@@ -92,11 +98,85 @@ function emit_entry() {
     printf '\n'
   fi
 
+  if [[ ${exitcodes_len} -gt 0 ]]; then
+    printf '**Exit codes:**\n\n'
+    local exit_code exit_text
+    for ((i = 0; i < exitcodes_len; i++)); do
+      exit_code="$(jq --raw-output ".exitcodes[${i}].code" <<<"${json}")"
+      exit_text="$(jq --raw-output ".exitcodes[${i}].text" <<<"${json}")"
+      # shellcheck disable=SC2016 # literal backticks in markdown output
+      printf -- '- `%s` — %s\n' "${exit_code}" "${exit_text}"
+    done
+    printf '\n'
+  fi
+
+  if [[ ${stdout_len} -gt 0 ]]; then
+    printf '**Stdout:**\n\n'
+    local stdout_text
+    for ((i = 0; i < stdout_len; i++)); do
+      stdout_text="$(jq --raw-output ".stdout[${i}]" <<<"${json}")"
+      printf -- '- %s\n' "${stdout_text}"
+    done
+    printf '\n'
+  fi
+
   if [[ -n ${example} ]]; then
     # shellcheck disable=SC2016 # literal backticks in markdown fence
     printf '```bash\n%s\n```\n\n' "${example}"
   fi
 }
+
+# @description Emit a single entry-point script's markdown entry to stdout.
+# @arg $1 script basename (e.g. check-foo.sh)
+# @arg $2 JSON blob from _script_docs.awk
+function emit_entry() {
+  local -r name="$1"
+  local -r json="$2"
+  printf '### scripts/%s\n\n' "${name}"
+  emit_body "${json}"
+}
+
+# @description Emit a library's markdown entry to stdout: the file header
+# under an H3, then one H4 per annotated function.
+# @arg $1 library basename (e.g. temp.sh)
+# @arg $2 JSON blob from _script_docs.awk in library scope
+function emit_library() {
+  local -r name="$1"
+  local -r json="$2"
+  printf '### scripts/lib/%s\n\n' "${name}"
+  emit_body "${json}"
+  local functions_len i fn_name fn_json
+  functions_len="$(jq --raw-output '.functions | length' <<<"${json}")"
+  for ((i = 0; i < functions_len; i++)); do
+    fn_name="$(jq --raw-output ".functions[${i}].name" <<<"${json}")"
+    fn_json="$(jq --compact-output ".functions[${i}]" <<<"${json}")"
+    printf '#### %s()\n\n' "${fn_name}"
+    emit_body "${fn_json}"
+  done
+}
+
+# The shape every field read in emit_body relies on. A parser emitting
+# another shape would otherwise kill the render mid-entry with jq's own
+# status, and a generated document is not the place to discover that the
+# parser changed. Applied to the top level and to each `functions` element.
+# shellcheck disable=SC2016 # jq program, not shell expansion
+readonly PARSER_SHAPE='
+  def body_ok:
+    type == "object"
+    and (.description | type) == "string"
+    and (.example | type) == "string"
+    and (.args | type) == "array"
+    and all(.args[]; (.name | type) == "string" and (.text | type) == "string")
+    and (.options | type) == "array"
+    and all(.options[]; (.flag | type) == "string" and (.text | type) == "string")
+    and (.exitcodes | type) == "array"
+    and all(.exitcodes[]; (.code | type) == "string" and (.text | type) == "string")
+    and (.stdout | type) == "array"
+    and all(.stdout[]; type == "string");
+  body_ok
+  and (.functions | type) == "array"
+  and all(.functions[]; (.name | type) == "string" and body_ok)
+'
 
 function main() {
   local check_only='false'
@@ -154,6 +234,7 @@ function main() {
   check_bucket="$(make_temp)"
   refresh_bucket="$(make_temp)"
   other_bucket="$(make_temp)"
+  library_bucket="$(make_temp)"
 
   # Walk scripts in sorted order, skipping `_*.sh` helpers. The match set is
   # asserted non-empty rather than iterated as-is: a scripts root that exists
@@ -188,20 +269,7 @@ function main() {
       log_err "parse failure (missing @description?) in ${script}"
       exit 2
     fi
-    # The eight field reads in emit_entry walk this document with no
-    # further guard apiece. Proving the shape once here is what makes
-    # them total: a parser emitting another shape would otherwise kill
-    # the render mid-entry with jq's own status, and a generated
-    # document is not the place to discover that the parser changed.
-    if ! jq --exit-status '
-      type == "object"
-      and (.description | type) == "string"
-      and (.example | type) == "string"
-      and (.args | type) == "array"
-      and all(.args[]; (.name | type) == "string" and (.text | type) == "string")
-      and (.options | type) == "array"
-      and all(.options[]; (.flag | type) == "string" and (.text | type) == "string")
-    ' <<<"${json}" >/dev/null 2>&1; then
+    if ! jq --exit-status "${PARSER_SHAPE}" <<<"${json}" >/dev/null 2>&1; then
       log_err "unexpected parser output shape for ${script}"
       exit 2
     fi
@@ -211,6 +279,30 @@ function main() {
     *) bucket="${other_bucket}" ;;
     esac
     emit_entry "${name}" "${json}" >>"${bucket}"
+  done
+
+  # The sourced libraries live one level down and are parsed in library
+  # scope, which reads the per-function annotation blocks the header-only
+  # parse ignores. Asserted non-empty for the same reason as the entry
+  # points: an empty lib/ would silently drop the whole section.
+  local -a libraries sorted_libraries
+  glob_into libraries 'scripts/lib directory' "${scripts_dir}/lib/*.sh"
+  if ! sorted_out="$(printf '%s\n' "${libraries[@]}" | LC_ALL=C sort)"; then
+    log_err "could not sort the library list under ${scripts_dir}/lib"
+    exit 2
+  fi
+  mapfile -t sorted_libraries <<<"${sorted_out}"
+  for script in "${sorted_libraries[@]}"; do
+    name="$(basename -- "${script}")"
+    if ! json="$(awk -v scope=library -f "${awk_parser}" <"${script}" 2>/dev/null)"; then
+      log_err "parse failure in library ${script} (a function without @description?)"
+      exit 2
+    fi
+    if ! jq --exit-status "${PARSER_SHAPE}" <<<"${json}" >/dev/null 2>&1; then
+      log_err "unexpected parser output shape for library ${script}"
+      exit 2
+    fi
+    emit_library "${name}" "${json}" >>"${library_bucket}"
   done
 
   {
@@ -230,6 +322,10 @@ function main() {
     if [[ -s ${other_bucket} ]]; then
       printf '## Other\n\n'
       cat -- "${other_bucket}"
+    fi
+    if [[ -s ${library_bucket} ]]; then
+      printf '## Libraries\n\n'
+      cat -- "${library_bucket}"
     fi
     printf '{%% endraw %%}\n'
     printf '<!-- END scripts-reference -->\n'

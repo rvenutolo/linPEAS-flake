@@ -19,7 +19,11 @@ function log() {
   printf -v __log_ts '%(%Y-%m-%dT%H:%M:%S%z)T' -1
   printf '[%s] %-5s %s\n' "${__log_ts}" "$1" "$2" >&2
 }
+# @description Emit an INFO line via `log`.
+# @arg $@ message words, joined by spaces
 function log_info() { log INFO "$*"; }
+# @description Emit an ERROR line via `log`.
+# @arg $@ message words, joined by spaces
 function log_err() { log ERROR "$*"; }
 
 # @description Verify a required CLI tool is on PATH; exit 2 if missing.
