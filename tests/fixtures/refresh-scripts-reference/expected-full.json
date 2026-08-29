@@ -2,5 +2,8 @@
   "args": [{ "name": "$1", "text": "NAME the name to greet" }],
   "description": "Greet a named entity and demonstrate every supported tag.\nSecond line of the description, continued.",
   "example": "  full.sh --foo Alice\n  full.sh Bob",
-  "options": [{ "flag": "--foo", "text": "enable the foo behavior" }]
+  "exitcodes": [],
+  "functions": [],
+  "options": [{ "flag": "--foo", "text": "enable the foo behavior" }],
+  "stdout": []
 }

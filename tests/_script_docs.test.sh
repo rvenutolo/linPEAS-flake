@@ -105,11 +105,79 @@ function test_generates_tags_recognized_but_bogus_still_warns() {
   fi
 }
 
+function test_library_scope_matches_expected() {
+  # library.sh covers: header ended by a blank line, a shellcheck directive
+  # that must neither continue the description nor open a block, two tags
+  # on one line, @stdout, @exitcode, both function declaration styles, and
+  # a trailing plain comment run that must not open a block.
+  local -r name='library.sh parses to expected JSON in library scope'
+  local actual sorted_actual sorted_expected
+  actual="$(awk -v scope=library --file "${PARSER}" <"${FIXTURES}/library.sh")"
+  sorted_actual="$(printf '%s\n' "${actual}" | jq --sort-keys '.')"
+  sorted_expected="$(jq --sort-keys '.' <"${FIXTURES}/expected-library.json")"
+  if diff <(printf '%s\n' "${sorted_expected}") \
+    <(printf '%s\n' "${sorted_actual}") >/dev/null; then
+    pass "${name}"
+  else
+    fail "${name}"
+    diff <(printf '%s\n' "${sorted_expected}") \
+      <(printf '%s\n' "${sorted_actual}") >&2 || true
+  fi
+}
+
+function test_default_scope_ignores_library_functions() {
+  # The same library parsed without the scope flag must yield the header
+  # only: entry-point scripts keep header-only rendering, and their own
+  # function-level blocks stay invisible.
+  local -r name='default scope leaves functions empty for library.sh'
+  local actual fn_count desc
+  actual="$(awk --file "${PARSER}" <"${FIXTURES}/library.sh")"
+  fn_count="$(printf '%s\n' "${actual}" | jq '.functions | length')"
+  desc="$(printf '%s\n' "${actual}" | jq --raw-output '.description')"
+  if [[ ${fn_count} -ne 0 ]]; then
+    fail "${name} — default scope emitted ${fn_count} function(s)"
+  elif [[ ${desc} != 'A library fixture exercising library-scope parsing.'* ]]; then
+    fail "${name} — header description replaced: ${desc}"
+  else
+    pass "${name}"
+  fi
+}
+
+function test_library_unannotated_function_exits_2() {
+  local -r name='library-unannotated.sh exits 2 with stderr "has no @description" and no JSON'
+  local outcome_file stdout_file stderr_file actual_exit=0
+  outcome_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  stderr_file="$(mktemp)"
+  awk -v scope=library --file "${PARSER}" <"${FIXTURES}/library-unannotated.sh" \
+    >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" 'has no @description' \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  if [[ ${actual_exit} -ne 2 ]]; then
+    fail "${name} — expected exit 2, got ${actual_exit}"
+    cat -- "${stderr_file}" >&2
+  elif ! grep --fixed-strings --quiet -- 'function bare has no @description' \
+    "${stderr_file}"; then
+    fail "${name} — stderr missing phrase"
+    cat -- "${stderr_file}" >&2
+  elif [[ -s ${stdout_file} ]]; then
+    fail "${name} — a failed parse still emitted a document"
+    cat -- "${stdout_file}" >&2
+  else
+    pass "${name}"
+  fi
+  rm --force -- "${outcome_file}" "${stdout_file}" "${stderr_file}"
+}
+
 function main() {
   test_full_matches_expected
   test_no_description_exits_2
   test_function_body_description_ignored
   test_generates_tags_recognized_but_bogus_still_warns
+  test_library_scope_matches_expected
+  test_default_scope_ignores_library_functions
+  test_library_unannotated_function_exits_2
   harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then

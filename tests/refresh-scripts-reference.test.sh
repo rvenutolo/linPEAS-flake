@@ -57,10 +57,21 @@ function main() {
 
   if grep --quiet '^## Check scripts$' "${DOC}" &&
     grep --quiet '^## Refresh scripts$' "${DOC}" &&
-    grep --quiet '^## Other$' "${DOC}"; then
-    pass 'all three section H2s present'
+    grep --quiet '^## Other$' "${DOC}" &&
+    grep --quiet '^## Libraries$' "${DOC}"; then
+    pass 'all four section H2s present'
   else
     fail 'one or more section H2s missing'
+  fi
+
+  # 2b. Libraries render per file and per function: the H3 names the
+  # library path and each annotated function gets an H4 with its contract.
+  if grep --quiet '^### scripts/lib/temp\.sh$' "${DOC}" &&
+    grep --quiet '^#### make_temp()$' "${DOC}" &&
+    grep --quiet '^\*\*Exit codes:\*\*$' "${DOC}"; then
+    pass 'library H3, function H4 and exit-code list rendered'
+  else
+    fail 'library rendering missing an H3, H4 or exit-code list'
   fi
 
   # 3. Drift scenario: inject bogus H3 inside managed block.
@@ -101,6 +112,39 @@ EOF
   else
     fail "--check expected exit 2 on missing @description, got ${rc}"
   fi
+
+  # 4b. Library hard-fail scenario: an entry point parses cleanly, but a
+  # library under lib/ has a function with no annotation block; --check
+  # must exit 2 and name the library rather than the entry point.
+  fixture_dir="$(mktemp --directory)"
+  mkdir -- "${fixture_dir}/lib"
+  cat >"${fixture_dir}/some-script.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description something
+set -Eeuo pipefail
+echo hi
+EOF
+  cat >"${fixture_dir}/lib/bare.sh" <<'EOF'
+# @description a library with an unannotated function
+
+function bare() {
+  :
+}
+EOF
+  local lib_stderr
+  lib_stderr="$(mktemp)"
+  rc=0
+  SCRIPTS_DIR_OVERRIDE="${fixture_dir}" "${SCRIPT}" --check 2>"${lib_stderr}" || rc=$?
+  rm --recursive --force -- "${fixture_dir}"
+  fixture_dir=''
+  if [[ ${rc} -eq 2 ]] &&
+    grep --fixed-strings --quiet 'parse failure in library' "${lib_stderr}"; then
+    pass '--check exits 2 when a library function lacks @description'
+  else
+    fail "--check expected exit 2 naming the library, got ${rc}"
+    sed 's/^/    /' "${lib_stderr}" >&2
+  fi
+  rm --force -- "${lib_stderr}"
 
   # 5. Parser-shape scenario: a parser that emits JSON of another shape
   # is a document the renderer could not read, not drift. The override

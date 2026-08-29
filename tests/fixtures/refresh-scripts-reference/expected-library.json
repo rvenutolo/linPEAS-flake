@@ -1,0 +1,34 @@
+{
+  "args": [],
+  "description": "A library fixture exercising library-scope parsing.\nSecond header line.",
+  "example": "",
+  "exitcodes": [],
+  "functions": [
+    {
+      "args": [
+        { "name": "$1", "text": "alpha" },
+        { "name": "$2", "text": "beta" }
+      ],
+      "description": "First function, with two args on one line and a stdout.",
+      "example": "",
+      "exitcodes": [],
+      "name": "first",
+      "options": [],
+      "stdout": ["the joined pair"]
+    },
+    {
+      "args": [],
+      "description": "Second function, declared without the keyword.",
+      "example": "",
+      "exitcodes": [
+        { "code": "0", "text": "on success" },
+        { "code": "2", "text": "when the input is missing" }
+      ],
+      "name": "second",
+      "options": [],
+      "stdout": []
+    }
+  ],
+  "options": [],
+  "stdout": []
+}

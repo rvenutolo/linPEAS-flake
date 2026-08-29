@@ -3,9 +3,9 @@
 Auto-generated from in-script `@description` / `@arg` / `@option` /
 `@example` annotations by `scripts/refresh-scripts-reference.sh` (run
 via `just show-scripts`).
-Scope is the entry-point scripts directly under `scripts/`; the sourced
-libraries under `scripts/lib/` are described in
-[`docs/development/linting.md`](../development/linting.md).
+Entry-point scripts directly under `scripts/` render their header
+annotations; the sourced libraries under `scripts/lib/` render one entry
+per annotated function in the Libraries section.
 Do not edit between the markers.
 
 <!-- BEGIN scripts-reference -->
@@ -1477,8 +1477,10 @@ in the flake.
 
 Regenerate the scripts-reference managed block in
 docs/reference/scripts.md from in-script shdoc-style annotations
-parsed by scripts/\_script_docs.awk. Groups entries by basename
-prefix into Check / Refresh / Other sections.
+parsed by scripts/\_script_docs.awk. Groups entry-point entries by
+basename prefix into Check / Refresh / Other sections, then renders
+each library under scripts/lib/ with one entry per annotated function
+in a Libraries section.
 
 **Options:**
 
@@ -1753,6 +1755,551 @@ Run every invariant-lint check in a named group from
 .github/lint-groups.yml inside one devShell, printing a per-check
 pass/fail summary table to stdout and $GITHUB_STEP_SUMMARY. Runs all
 checks even if one fails; exits 1 if any failed, 2 on config error.
+
+## Libraries
+
+### scripts/lib/awk-path.sh
+
+Make a path unambiguous as an `awk` file operand.
+`awk` reads an operand whose text is `name=value` as a variable
+assignment rather than a filename, then finds no file operand, reads
+stdin, and exits 0 having scanned nothing — so a relative path whose
+first component contains `=` scores as an empty file. `--` is no help:
+POSIX makes operand assignment parsing independent of it, and gawk
+treats a `--` placed after the program as a filename.
+Source after `set -Eeuo pipefail`.
+
+#### awk_path()
+
+Print a path in a form `awk` cannot read as an assignment.
+The prefix is conditional because `./` ahead of an absolute path
+resolves as a relative one.
+
+**Args:**
+
+- `$1` — path
+
+**Stdout:**
+
+- the path, `./`-prefixed when relative
+
+### scripts/lib/enumerate.sh
+
+NUL-safe filesystem enumeration with producer-status and
+breadth assertions. A path is the one shell datum whose byte space
+includes the newline delimiter, so a line-oriented handoff can drop a
+file that exists: `git ls-files` C-quotes such a name onto one line,
+`find` splits it across two, and either way the consumer's `[[ -f ]]`
+gate skips it while the scan still reports a plausible file count.
+Source after `set -Eeuo pipefail`.
+
+#### enumerate_into()
+
+Run a NUL-emitting enumeration into an array, asserting
+both that the producer succeeded and that it found something. Breadth
+is asserted rather than inferred, because a producer that exits 0 with
+empty output is exactly the failure a status check cannot see:
+`GIT_INDEX_FILE=/nonexistent git ls-files` exits 0 and emits nothing,
+which reads as a clean tree. The producer writes to a temp file rather
+than a process substitution: a procsub discards the status this
+function exists to check, and is banned repo-wide for that reason. The
+temp file is removed on every return path instead of under a trap,
+because traps are global in bash and callers install their own.
+The temp file comes from `make_temp`, not from a bare `mktemp`:
+an unwritable `TMPDIR` makes `mktemp` exit non-zero, and an unguarded
+failed assignment kills the calling script with mktemp's own exit
+status (1) — a could-not-run reported as "ran and found a violation"
+inside the one function whose job is making sure that never happens.
+The read loop's `|| [[ -n ${__enum_item} ]]` clause keeps a final
+record that has no trailing NUL: `read -r -d ''` reports that record as
+a failure even though it populated the variable, so a loop keyed only
+on read's exit status silently drops the last path of a truncated or
+malformed producer — the exact silent-drop failure this library exists
+to end. `git ls-files -z` and `find -print0` both terminate every
+record including the last, so this only fires on a broken producer.
+
+**Args:**
+
+- `$1` — name of the array to fill
+- `$2` — human-readable label naming the producer, used verbatim in both
+- `$@` — the producer command and its arguments
+
+**Exit codes:**
+
+- `2` — the producer failed, or the scan set was empty while
+
+#### glob_into()
+
+Fill an array from one or more globs, asserting the match
+set is non-empty. The glob analogue of `enumerate_into`: under
+`nullglob` a pattern that matches nothing expands to nothing, the loop
+body never runs, no violation is found and the lint exits 0 — a scan
+root that exists and holds nothing is scored a clean tree. Patterns
+arrive as strings and are expanded here rather than at the call site,
+because a caller that has not set `nullglob` would otherwise hand this
+function the literal unexpanded pattern and it would count as one
+match — the helper vouching for exactly the tree it exists to catch.
+`globstar` is left as the caller set it, so a `**` pattern keeps the
+reach it already had.
+
+**Args:**
+
+- `$1` — name of the array to fill
+- `$2` — human-readable label naming the scan set, used in the diagnostic
+- `$@` — the glob patterns, quoted so they reach this function unexpanded
+
+**Exit codes:**
+
+- `2` — the match set was empty while LINT_ALLOW_EMPTY_SCAN was unset
+
+#### filter_into()
+
+Narrow an enumerated path list to what a filter selects,
+asserting the selection is not empty. `enumerate_into` and `glob_into`
+assert the breadth of a scan set as it is produced; a filter applied
+afterwards can throw all of it away again, and neither helper can see
+that happen. A filter naming a file the tree does not hold leaves no
+path to walk: the loop body never runs, no violation is found, and the
+run exits 0 — the same clean line a genuinely clean tree prints. So the
+selection is asserted where it is made. An empty filter value selects
+everything, which keeps a caller that may or may not be filtering on
+one code path rather than branching around this call.
+
+**Args:**
+
+- `$1` — name of the array to fill
+- `$2` — human-readable label naming the scan set, used in the diagnostic
+- `$3` — the filter value: a basename to select, or empty to select all
+- `$@` — the paths to select from
+
+**Exit codes:**
+
+- `2` — the selection was empty while LINT_ALLOW_EMPTY_SCAN was unset
+
+### scripts/lib/ephemeral-refs-scope.sh
+
+The ephemeral-reference ban's scan scope: which file types
+an extractor claims, which paths are skipped outright, and the class
+regexes a scan matches against. Shared by the lint that enforces the
+ban and by the generator that reports which types the ban leaves
+unread, so a class that widens widens for both and the two stay
+derived from one record set rather than two lists that drift. Source
+after
+`set -Eeuo pipefail`.
+
+#### ephemeral_refs_pathspec_into()
+
+Fill an array with the `git ls-files` pathspec selecting
+every claimed file type. Filled through a nameref rather than printed,
+because a pathspec is passed to git as separate arguments and a
+command substitution would split `*.md` on the caller's IFS and glob it
+against the working directory before git ever saw it.
+
+**Args:**
+
+- `$1` — name of the array to fill
+
+#### language_of()
+
+Language of one source, by extension. Extension is the
+whole classifier: a shell library without a `.sh` suffix, and shell
+embedded in a workflow `run:` block, are out of scope by construction
+rather than by a content sniff that would have to guess.
+
+**Args:**
+
+- `$1` — src_rel source path relative to REPO_ROOT
+
+**Stdout:**
+
+- one of `md`, `sh`, `nix`, `yaml`, `other`
+
+#### is_allowlisted()
+
+True when the given source path is on the skip-entirely
+file allowlist (`CHANGELOG.md`, `docs/releases.md`,
+`tests/fixtures/**`, `.claude/**`).
+
+**Args:**
+
+- `$1` — src_rel source path relative to REPO_ROOT
+
+### scripts/lib/generates.sh
+
+`@generates` / `@generates-block` annotation parsing.
+Source after `set -Eeuo pipefail`.
+
+#### generator_declarations()
+
+Read the comment header of each named script and emit one
+record per output declaration, in file order. Parsing only: the caller
+chooses which scripts to hand over, and the caller tallies what it
+needs — duplicates are emitted as separate records because one caller
+counts declarations while deduplicating paths into a map.
+
+The header ends at the first line that is neither a comment nor blank,
+so an annotation sitting in the body beside the code is not a
+declaration; blank lines separate paragraphs of a header rather than
+ending it. The plain name is a proper prefix of the block name, so the
+two are kept apart by two independent means at once: each pattern
+demands whitespace between the annotation name and its path, which is
+what stops the plain pattern from matching a block line, and the
+if/elif chain settles the longer name first so the kinds stay right
+even if that whitespace requirement is ever loosened.
+
+A read fault is reported by the return status rather than left to
+errexit, because every call site captures this in a command
+substitution inside an `if` — a context where errexit is suppressed —
+so a fault that only set `$?` would reach the caller as a short record
+stream, indistinguishable from scripts that declared nothing, and be
+scored as agreement.
+
+**Args:**
+
+- `$@` — script paths to parse
+
+**Exit codes:**
+
+- `0` — every named path was read, including when none declared anything
+- `1` — at least one named path could not be read
+
+**Stdout:**
+
+- one record per declaration, `<kind>\037<path>\037<script-path>`,
+
+### scripts/lib/harness-assert.sh
+
+Cross-scenario discrimination gate for test harnesses.
+A harness asserts behavior by grepping a scenario's captured output for
+a substring. If that substring also appears in a sibling scenario's
+output, the assertion passes whether or not the asserted behavior
+exists — green while verifying nothing. Record each scenario here and
+call `harness_assert_verify` at the end of the run to fail on any such
+substring, and on any two scenarios whose whole observable outcome is
+the same — a pair that verifies one thing between them however each is
+named. Source after `set -Eeuo pipefail`.
+
+#### harness_assert_exempt()
+
+Register a substring as legitimately shared with one named
+scenario, or with every scenario when the second argument is `*`. Use the
+wildcard for a global banner a script prints on every run of a whole
+outcome class: such a substring still separates that class from its
+opposite, which is the axis the assertion is about. Use the named form
+when one failure path emits no token another lacks. The rationale is
+mandatory so the weakening is reviewable.
+
+**Args:**
+
+- `$1` — substring
+- `$2` — other scenario name or `*`
+- `$3` — rationale
+
+#### harness_assert_parity_exempt()
+
+Register two scenarios as legitimately producing one
+observable outcome. Two scenarios the gate cannot tell apart verify one
+thing between them, so the pair needs a reason that a reviewer can
+check: the scenarios must differ in what they exercise even though
+nothing they emit says so, and no honest output could separate them.
+The rationale is mandatory, and the pair matches in either order.
+
+**Args:**
+
+- `$1` — scenario name
+- `$2` — other scenario name
+- `$3` — rationale
+
+#### harness_assert_record()
+
+Record one scenario's asserted substring and the output
+stream(s) the harness asserts against. Pass '' as the substring for a
+scenario that asserts only an exit code — its output still belongs in
+the comparison pool, because that is usually the output a failure-path
+substring wrongly matches.
+
+**Args:**
+
+- `$1` — scenario name
+- `$2` — asserted substring ('' if none)
+- `$@` — one or more captured output files
+
+#### harness_assert_also()
+
+Attach another asserted substring to the most recent
+record. Use when one invocation asserts several properties of its
+output: recording that invocation once per property makes those records
+byte-identical siblings, which the pairwise rule cannot separate and
+the census scores as collapsed coverage. Each attached substring is
+held to the same rule as the record's own.
+
+**Args:**
+
+- `$1` — substring
+
+#### harness_assert_declares()
+
+Return 0 if the record at the given index asserts the
+given substring. Membership is a whole-line match against the record's
+substring list, so one substring being another's prefix does not count
+as the same assertion.
+
+**Args:**
+
+- `$1` — substring
+- `$2` — record index
+
+#### harness_assert_is_exempt()
+
+Return 0 if the substring/other-scenario pair is exempt,
+either by an exact pair or by a `*` wildcard registered for the substring.
+
+**Args:**
+
+- `$1` — substring
+- `$2` — other scenario name
+
+#### harness_assert_parity_is_exempt()
+
+Return 0 if the two named scenarios are registered as a
+parity exemption, in either order.
+
+**Args:**
+
+- `$1` — scenario name
+- `$2` — other scenario name
+
+#### harness_assert_verify()
+
+Apply the pairwise rule, the identical-output rule and the
+parity rule to everything recorded, print the census, and drop the pool.
+Exit 1 if any asserted substring also occurs in a sibling scenario's
+output, if two records share one output while asserting different
+substrings, if two records share one output without a parity exemption,
+or if nothing was recorded at all. The census names every group of
+scenarios sharing one output before reporting the counts.
+
+### scripts/lib/log.sh
+
+Shared logging + ERR-trap helpers for repo bash scripts.
+Source after `set -Eeuo pipefail`. The ERR trap captures the failing
+exit code as its first action: it is read into the format string before
+any other expansion, so nothing between the failure and the report can
+reset `$?`. Timestamps come from bash's `printf` time format, so no
+helper here needs a tool on PATH.
+
+#### log()
+
+Emit a timestamped level-tagged line to stderr.
+The timestamp comes from bash's own `printf` time format rather than
+`date`, so a diagnostic about a missing tool is not itself preceded by
+a `date: command not found` line and an empty timestamp. The format
+string is identical to the one `date` was given.
+
+**Args:**
+
+- `$1` — level
+- `$2` — message
+
+#### log_info()
+
+Emit an INFO line via `log`.
+
+**Args:**
+
+- `$@` — message words, joined by spaces
+
+#### log_err()
+
+Emit an ERROR line via `log`.
+
+**Args:**
+
+- `$@` — message words, joined by spaces
+
+#### require_tool()
+
+Verify a required CLI tool is on PATH; exit 2 if missing.
+Exit 2 means "could not run", which is what an absent tool is; exit 1
+stays reserved for a violation the caller found. A freshness hook's
+caller reads exit 1 as "the doc is stale, run the generator and commit",
+so a missing jq reported as 1 sends the operator to regenerate a doc
+instead of to install jq.
+
+**Args:**
+
+- `$1` — tool name
+
+#### install_err_trap()
+
+Install the shared ERR trap in the calling shell. Captures
+the real failing exit code before any command substitution clobbers $?.
+
+### scripts/lib/payload.sh
+
+Shape gate for an externally-supplied JSON payload.
+Source after `set -Eeuo pipefail` and after `lib/log.sh`.
+
+#### require_json_payload()
+
+Reject a payload whose shape the reads below cannot rely
+on, as a could-not-run rather than as a finding.
+
+A payload arriving from an API response, a tool's JSON output, or a
+file written by automation carries no shape guarantee. Reading one
+unguarded surfaces a malformed payload two ways, both wrong: `jq` dies
+with a raw diagnostic under an exit code the convention does not
+catalogue, or — worse — an absent field reads as an empty string and
+the caller reports substantive drift. Exit 1 sends a maintainer after
+posture nobody changed, and the exit code alone does not tell the two
+apart.
+
+One gate in front of every read, rather than a guard per read: a read
+added later is then total by construction instead of depending on its
+author remembering the convention.
+
+The source is named by kind — an override variable name or an API path
+— never by fixture path. A fixture path in output lets two harness
+scenarios be told apart by their fixture rather than by their
+behavior.
+
+An empty or whitespace-only payload also fails the parse check below —
+`jq --exit-status` reports no-output as a failure regardless of why
+the input produced none — so this check is not what stands between
+such a payload and acceptance. It exists for diagnostic precision: a
+producer that wrote nothing and a producer that wrote garbage are
+different faults with different operator remedies, and the parse
+check's own diagnostic names only the garbage case.
+
+**Args:**
+
+- `$1` — source kind, used verbatim in every diagnostic
+- `$2` — the payload
+- `$3` — optional jq program emitting a message for the first field
+- `$4` — optional subject, prefixed to every diagnostic as `<subject>: `.
+
+**Exit codes:**
+
+- `2` — the payload is empty, unparsable, or the shape program
+
+#### payload_source_into()
+
+Name a payload's source by kind, filling a caller variable.
+
+The rule every caller of `require_json_payload` needs first: a source is
+named by kind — the override variable's name when a fixture supplies the
+payload, the API route or the config's repo-relative name otherwise — and
+never by resolved path. A path in a diagnostic lets two harness scenarios
+be told apart by their fixture rather than by their behavior, which is
+what the census-parity gate exists to forbid.
+
+The result is written into a caller variable rather than printed, because
+a function whose result is read as `$(...)` cannot fail. In argument
+position a command substitution discards its own status: the guard below
+would print, the shape gate would receive an empty source name, and the
+run would end 0. Filling a named variable keeps this function in the
+caller's shell, where `exit` ends the script that has the problem. This
+is the same reasoning the shape check above states for capturing its jq
+output instead of reading it through a process substitution.
+
+The override is resolved by indirect expansion rather than by an
+environment-only lookup, so that it is seen exactly as its consumer sees it:
+every caller reads its override with plain `${VAR:-}`, which sees a shell
+variable as well as an exported one. A namer blind to a variable its reader
+honors would name the fallback for a payload that did come from the
+override.
+
+The target is bound with a nameref rather than written with `printf -v`,
+so that a caller naming one of this function's own locals collides in the
+open — bash warns about the circular reference on stderr — where
+`printf -v` would write the local without a word and leave the caller's
+variable untouched. The locals carry a `__psrc_` prefix no call site uses,
+which keeps that collision theoretical. `scripts/lib/enumerate.sh` binds
+`enumerate_into`'s output the same way, so the two read alike.
+
+**Args:**
+
+- `$1` — name of the caller variable to fill
+- `$2` — name of the override variable, exported or shell-scoped
+- `$3` — source name used when the override is unset or empty
+
+**Exit codes:**
+
+- `2` — $2 is not a valid shell identifier
+
+#### read_json_payload_into()
+
+Read a file payload into a caller variable, reporting a
+payload the caller could not read as a could-not-run rather than as a
+finding.
+
+The result is filled through a nameref rather than printed, for the
+reason `payload_source_into` states: a reader whose value is taken as
+`$(...)` cannot fail. A read that dies inside a command substitution
+leaves the caller assigning an empty string under a status it does not
+check, and the run continues into the shape gate, which then reports an
+empty payload — or, where the caller's own reads tolerate absence, into
+a drift verdict about posture nobody changed. Filling a named variable
+keeps `exit 2` in the shell that has the problem.
+
+Three conditions, three sentences: a payload that is absent, one whose
+permissions forbid the read, and one whose read fails for any other
+reason are different faults with different operator remedies. The third
+sentence covers two guards rather than one: a directory, a FIFO, or a
+device node all pass the existence and readable checks, and none of
+them is something `cat` can be trusted to fail on promptly — a
+directory does, but a FIFO with no writer, or a device such as
+`/dev/random`, blocks or streams instead of erroring, which would turn
+a could-not-run into a hang. The explicit not-a-regular-file check
+below reaches that verdict by `stat`, before any read is attempted, so
+the only thing left for the final `cat` guard to catch is a regular
+file whose read still fails for some other reason. Both guards stay
+exercisable where mode bits are no lever — none of these path kinds
+depend on the permission bits `-r` already checked.
+
+The source is named by kind, never by resolved path, exactly as
+`require_json_payload` requires; pass the value `payload_source_into`
+filled.
+
+**Args:**
+
+- `$1` — name of the caller variable to fill
+- `$2` — path to read
+- `$3` — source kind, used verbatim in every diagnostic
+- `$4` — optional subject, prefixed to every diagnostic as `<subject>: `
+
+**Exit codes:**
+
+- `2` — the path is absent, unreadable, or the read failed
+
+### scripts/lib/temp.sh
+
+Guarded temp-file creation. Source after `set -Eeuo pipefail`.
+
+#### make_temp()
+
+Create a temp file or directory, reporting a failure as a
+could-not-run rather than as a finding. An unwritable TMPDIR makes
+`mktemp` exit 1, and an unguarded `x="$(mktemp)"` under `set -e` kills
+the caller with that same 1 — the status a lint uses for "this file
+carries a violation". A pre-commit hook reads that as "the tree is
+stale, fix it and commit", sending the operator to edit content the
+check never read. Exiting 2 from inside the command substitution
+propagates through the enclosing assignment, so the call site needs no
+guard of its own. No label argument: the caller's ERR trap already
+prints the failing line and BASH_COMMAND, so the site names itself.
+
+**Args:**
+
+- `$@` — passed through to `mktemp` verbatim
+
+**Exit codes:**
+
+- `2` — the temp file or directory could not be created
+
+**Stdout:**
+
+- the created path
 
 {% endraw %}
 
