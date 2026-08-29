@@ -312,8 +312,10 @@ nix develop --command just verify
 `just verify` runs the batched lint groups, the full harness suite,
 the doc-freshness checks, and every standalone required-check enforcer
 (`check-protect-main.sh`, `check-tag-protection.sh`, the changelog
-checks, and the rest of the `justfile` recipe) — the same set CI gates
-on. Individual
+checks, and the rest of the `justfile` recipe) — the in-repo enforcer
+set CI gates on. The action-driven checks (`markdownlint`, `typos`,
+`editorconfig`, `commitlint`) and `check-flake-systems-eval.sh` run only
+in CI. Individual
 harnesses can still be run directly
 (`nix develop --command bash tests/<name>.test.sh`) while iterating on
 a single failure. If any fail, do **not** disable the test — debug
