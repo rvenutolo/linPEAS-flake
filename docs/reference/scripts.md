@@ -3,6 +3,9 @@
 Auto-generated from in-script `@description` / `@arg` / `@option` /
 `@example` annotations by `scripts/refresh-scripts-reference.sh` (run
 via `just show-scripts`).
+Scope is the entry-point scripts directly under `scripts/`; the sourced
+libraries under `scripts/lib/` are described in
+[`docs/development/linting.md`](../development/linting.md).
 Do not edit between the markers.
 
 <!-- BEGIN scripts-reference -->

@@ -1,6 +1,6 @@
 {
   "skill_name": "docs-correctness-audit",
-  "note": "Invoke-only skill (run via the /docs-audit slash command or by naming the skill). These evals exercise REPORT QUALITY when invoked, not natural-language triggering — auto-triggering was intentionally removed. Eval prompts are phrased the way a user would type them into /docs-audit; do not add triggering assertions.",
+  "note": "Invoke-only skill (run via the /docs-audit slash command). These evals exercise REPORT QUALITY when invoked, not natural-language triggering — auto-triggering was intentionally removed. Eval prompts are phrased the way a user would type them into /docs-audit; do not add triggering assertions.",
   "evals": [
     {
       "id": 0,
