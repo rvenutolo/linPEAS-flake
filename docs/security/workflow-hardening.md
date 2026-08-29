@@ -84,11 +84,11 @@ Enforced by `scripts/check-verify-reason-ladder.sh`. Wired as the `lint-workflow
 
 ## script-shebang-pipefail
 
-Every executable under `scripts/` starts with `#!/usr/bin/env bash` (exact first line) and contains `set -Eeuo pipefail` somewhere in the file.
+Every executable under `scripts/` starts with `#!/usr/bin/env bash` (exact first line) and carries `set -Eeuo pipefail` as its own line.
 
 A script that silently swallows a failure can corrupt `linpeas-pin.json`, skip a security check, or leave a stale build artifact behind. `set -Eeuo pipefail` plus a portable shebang are the hardening minimum: `-e` aborts on any command failure, `-E` propagates ERR traps into subshells, `-u` rejects unset variables, `-o pipefail` makes a pipeline fail when any stage fails (not just the last).
 
-The lint accepts longer set lines (e.g. `set -Eeuo pipefail -x`) as long as the exact `-Eeuo pipefail` token is present.
+The lint accepts a trailing addition on that line (e.g. `set -Eeuo pipefail -x`); a reordered or indented spelling is not accepted, because the match is anchored to the start of the line.
 
 The scan recurses, and a file under a `lib/` component is held to the inverse rule instead. A sourced library runs inside whichever shell sources it, so the executable rule is not merely unnecessary there — it is wrong. A library that sets `set -Eeuo pipefail` itself overrides whatever the caller chose, and a shebang advertises a file meant to be run rather than sourced. So a library must carry a `shellcheck shell=` directive (with no shebang, nothing else states the dialect), must not open with a shebang, and must not carry a shell-option line of its own. Each of the three failures prints its own message naming the half that broke.
 

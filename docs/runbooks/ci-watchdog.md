@@ -127,8 +127,10 @@ why. Work from those:
     clears on the next sweep.
 1. A `403` on `listWorkflowRunsForRepo`, `issues.listForRepo`, or similar
     read/write calls, on a PR in the "errored" list of a `Sweep completed`
-    message, is a permissions gap — check the job's `permissions:` block
-    against the call in the stack. If the message is instead
+    message, is usually a permissions gap — check the job's `permissions:`
+    block against the call in the stack. A 403 whose response carries
+    neither `x-ratelimit-remaining: 0` nor `retry-after` is not classified
+    as a rate limit, so a header-less secondary limit can also land here. If the message is instead
     `Sweep halted by rate limit`, the errored PR's 403 is the rate limit that
     triggered the halt; the PRs in its "not attempted" list get no
     `core.error` line at all because the sweep never reached them — nothing

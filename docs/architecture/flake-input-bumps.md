@@ -529,9 +529,12 @@ Credential split mirrors `update-flake-lock.yml`:
     refreshed `flake.lock` to PR branch via REST `PUT /contents` →
     web-flow signed by GitHub. No `git push`.
 
-Loop-breaker: `push-refresh` compares `git hash-object flake.lock`
-vs branch's blob SHA; bails on match. Protects against the
-ci → refresh → ci cycle.
+Loop-breaker: `compute-refresh`'s diff step sets `changed=false` when
+`nix flake update` produces no diff, which skips `push-refresh`
+outright. Inside `push-refresh` a second, per-path guard compares each
+committable path's `git hash-object` against its blob SHA on the
+branch and skips the ones already current; zero commits is a clean
+exit, not a failure. Protects against the ci → refresh → ci cycle.
 
 Reporting: the `notify` job runs whenever `identify` ran, and
 `scripts/classify-refresh-notify-result.sh` decides what the run
