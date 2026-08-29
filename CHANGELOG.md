@@ -6,6 +6,34 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20260829-c348cd6e] - 2026-08-29
+
+### Chores
+- Bump linpeas to 20260829-c348cd6e ([#979](https://github.com/rvenutolo/linPEAS-flake/pull/979))
+- Update flake.lock ([#968](https://github.com/rvenutolo/linPEAS-flake/pull/968))
+
+### Documentation
+- Fix the drift the eighth docs-correctness audit surfaced ([#978](https://github.com/rvenutolo/linPEAS-flake/pull/978))
+- Fix the drift the seventh docs-correctness audit surfaced ([#977](https://github.com/rvenutolo/linPEAS-flake/pull/977))
+- Fix the drift the sixth docs-correctness audit surfaced ([#976](https://github.com/rvenutolo/linPEAS-flake/pull/976))
+- Fix the drift the fifth docs-correctness audit surfaced ([#974](https://github.com/rvenutolo/linPEAS-flake/pull/974))
+- Fix the drift the fourth docs-correctness audit surfaced ([#972](https://github.com/rvenutolo/linPEAS-flake/pull/972))
+- Fix the drift the third docs-correctness audit surfaced ([#971](https://github.com/rvenutolo/linPEAS-flake/pull/971))
+- Fix the drift the second docs-correctness audit surfaced ([#970](https://github.com/rvenutolo/linPEAS-flake/pull/970))
+- Correct the drift the docs-correctness audit surfaced ([#969](https://github.com/rvenutolo/linPEAS-flake/pull/969))
+- Correct the drift the docs-correctness audit surfaced ([#967](https://github.com/rvenutolo/linPEAS-flake/pull/967))
+- Correct the drift the docs-correctness audit surfaced ([#966](https://github.com/rvenutolo/linPEAS-flake/pull/966))
+- Correct the drift the docs-correctness audit surfaced ([#965](https://github.com/rvenutolo/linPEAS-flake/pull/965))
+- Correct the drift the docs-correctness audit surfaced ([#964](https://github.com/rvenutolo/linPEAS-flake/pull/964))
+- State the reachable ratchet-tool-failure causes ([#963](https://github.com/rvenutolo/linPEAS-flake/pull/963))
+- Correct the drift the docs-correctness audit surfaced ([#962](https://github.com/rvenutolo/linPEAS-flake/pull/962))
+
+### Fixes
+- Leave :latest alone when backfilling a historic release ([#975](https://github.com/rvenutolo/linPEAS-flake/pull/975))
+
+### Refactor
+- Promote the harness-wiring gate to a lint-group member ([#973](https://github.com/rvenutolo/linPEAS-flake/pull/973))
+
 ## [20260824-c1d29dcd] - 2026-08-25
 
 ### Chores
