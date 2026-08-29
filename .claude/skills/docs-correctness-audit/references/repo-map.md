@@ -205,10 +205,13 @@ to end-of-file. That pass is
 load-bearing: without it, every doc that *documents* a banned shape as an
 example — `docs/development/linting.md`'s table of banned shapes, the generated
 hook table in `docs/development/git.md` — reports as though it carried one.
-Deterministic suppressions additionally remove `(fill|stroke|color):#hex`
-colors, `&#NNN;` HTML entities, `#N-` anchor targets,
-`(SHA|UTF|RFC|ISO|BASE)-NNN` standard acronyms, and the
-`X-GitHub-Api-Version: <date>` literal.
+Deterministic suppressions additionally drop any hit line carrying
+`(fill|stroke|color):#hex` colors, `&#NNN;` HTML entities, `#N-` anchor
+targets, `(SHA|UTF|RFC|ISO|BASE)-NNN` standard acronyms, or the
+`X-GitHub-Api-Version: <date>` literal. They act on the whole line, not
+the token, so a line that carries both a suppressed shape and a genuine
+banned token is dropped — a harmless false negative, since the sweep is
+advisory and the real lint is the authority.
 
 **The sweep is not authoritative — `scripts/check-ephemeral-refs.sh` is.** Run
 it and believe its exit code; anything the sweep reports that the real lint does

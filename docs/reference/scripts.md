@@ -5,7 +5,8 @@ Auto-generated from in-script `@description` / `@arg` / `@option` /
 via `just show-scripts`).
 Entry-point scripts directly under `scripts/` render their header
 annotations; the sourced libraries under `scripts/lib/` render one entry
-per annotated function in the Libraries section.
+per library — its file header, then one sub-entry per annotated
+function — in the Libraries section.
 Do not edit between the markers.
 
 <!-- BEGIN scripts-reference -->

@@ -78,7 +78,10 @@ the finder false-positive rate — dropping them leaves that section empty). Eac
 skeptic could not refute it, so a real finding may have been buried. Surface
 those in a **Contested kills** subsection, never silently. Then show the user a
 one-screen summary (counts + top findings, contested-kill count called out)
-before the next gate.
+before the next gate. If the run logged a refutation cap, state
+`<n> of <m> deduped findings refuted` in that dimension's report section
+and in the gate summary — findings past the cap reach neither survivors
+nor the refutation log, so an unstated cap silently under-reports.
 
 Seed later dimensions' finders with earlier **confirmed** findings — especially
 dimension 5 with dimensions 2 & 6 (a silent-pass bug is usually an untested
