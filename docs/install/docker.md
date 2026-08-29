@@ -1,6 +1,6 @@
 # Install with Docker
 
-Each release publishes an OCI image to both Docker Hub (`docker.io/rvenutolo/linpeas`) and GitHub Container Registry (`ghcr.io/rvenutolo/linpeas`) with the upstream tag and `:latest`.
+Each release publishes an OCI image to both Docker Hub (`docker.io/rvenutolo/linpeas`) and GitHub Container Registry (`ghcr.io/rvenutolo/linpeas`) with the upstream tag, plus `:latest` when that release is the newest.
 
 ## What this image is for
 

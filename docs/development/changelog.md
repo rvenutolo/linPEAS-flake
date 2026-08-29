@@ -38,7 +38,7 @@ surface is introduced.
 
 ## cliff.toml load-bearing rules
 
-Five settings in `cliff.toml` must not be changed without understanding
+Six settings in `cliff.toml` must not be changed without understanding
 their effect:
 
 ### tag_pattern
@@ -112,6 +112,21 @@ changelog states the scorecard allowlist size correctly. The
 [link-duplication guard](#link-duplication-guard) below asserts on every
 PR that no `15-check allowlist` survives regeneration, so removing this
 preprocessor fails the required `changelog-links` job.
+
+### spelling preprocessor
+
+```toml
+{ pattern = 'unparse[a]ble', replace = "unparsable" },
+```
+
+Corrects one merged commit subject whose "unparsable" carries an extra
+letter. Merge subjects are frozen in signed history and this one renders
+into `CHANGELOG.md`, so render time is the only place the word can be
+fixed. `_typos.toml` does not exclude `CHANGELOG.md` and `typos` is a
+required check, so removing this preprocessor turns that check red on
+the next regeneration. The pattern uses a character class rather than
+spelling the misspelled word because the same spell-check scans
+`cliff.toml` itself.
 
 ## Link-duplication guard
 

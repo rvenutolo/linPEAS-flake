@@ -103,8 +103,10 @@ Architecture → Auto-update, whose fourth entry is the stall watcher):
     committed via an auto-merging PR under the same App identity.
 
 Each is gated by CI (build success + SRI-hash integrity), not by content
-review. A compromise of any upstream feed produces an attested release
-within roughly 24 hours of upstream doing it. This is the documented and
+review. A compromise of the upstream `linpeas.sh` feed produces an
+attested release within roughly 24 hours of upstream doing it; a
+compromised flake input or Renovate-tracked dependency merges within
+roughly a week and ships with the next release. This is the documented and
 accepted trust model for a thin wrapper repo — it matches the trust model
 of `curl ... | bash`, with the addition of reproducible, hash-pinned
 downloads and build-provenance attestations.

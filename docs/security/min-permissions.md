@@ -6,7 +6,7 @@ Strict least-privilege rule for every workflow in `.github/workflows/`.
 
 1. **Top-level `permissions:` is the empty map `{}`.** No scopes are granted at workflow scope; every scope must be declared per-job.
 1. **Every job declares its own `permissions:` block.** Inheritance from the (empty) top is not allowed; an omitted block fails the lint.
-1. **No `read-all` / `write-all` / scalar permissions form at top.** Subsumed by rule 1 but reported with a clearer message when the input is one of those forms.
+1. **No scalar top-level `permissions:` (`read-all` / `write-all`).** Subsumed by rule 1, but reported with a clearer message when the input is one of those forms.
 
 ## Why
 

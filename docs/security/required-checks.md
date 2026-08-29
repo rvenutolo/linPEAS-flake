@@ -89,9 +89,9 @@ When the ruleset's required-check list changes:
 ## protect-main ruleset (in-tree mirror)
 
 `.github/rulesets/protect-main.json` is the in-tree mirror of the live
-`protect-main` branch ruleset. Live posture +
-mirror-parity asserted by `scripts/check-protect-main.sh` via the
-`protect-main-drift-check` required CI job. Mirrors the
+`protect-main` branch ruleset. Both the live posture and mirror parity
+are asserted by `scripts/check-protect-main.sh`, run as the required
+`protect-main-drift-check` CI job. Mirrors the
 `tag-protection-drift-check` pattern.
 
 Asserted invariants: name `protect-main`; target `branch`; enforcement
