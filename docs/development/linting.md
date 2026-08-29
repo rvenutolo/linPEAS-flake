@@ -63,6 +63,26 @@ the `exclude` regex list with a comment rather than expanding `accept`.
 `include_verbatim = false` skips fenced-code-block content so command
 examples are not crawled.
 
+## Markdown anchor resolution
+
+Every `#anchor` link in a tracked Markdown file that points at an in-tree
+`.md` file (or at its own file) must match a heading slug in the target.
+Lychee resolves file paths but is not a pre-commit hook here, so a renamed
+heading would otherwise surface only on the weekly link run. Enforced by
+`scripts/check-doc-anchors.sh`, wired as the `check-doc-anchors` pre-commit
+hook and as a member check of the `lint-doc-invariants` CI job; a run that
+finds zero anchor links fails unless `LINT_ALLOW_EMPTY_SCAN=1` states that
+the empty scan is deliberate.
+
+## Config schema validation
+
+`renovate.json`, every workflow YAML, every composite-action YAML and
+`.markdownlint.json` are validated against pinned JSON Schemas so a
+misspelled key fails locally instead of being silently ignored by the
+consumer. Enforced by `scripts/check-jsonschema.sh` (driving the
+`check-jsonschema` tool), wired as the `check-jsonschema` pre-commit hook and
+as a member check of the `lint-doc-invariants` CI job.
+
 ## Typos
 
 `_typos.toml` excludes `tests/fixtures/**` because fixtures contain

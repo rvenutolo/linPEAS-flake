@@ -209,8 +209,9 @@ Upstream PEASS-ng releases ship no signatures (GPG, cosign, SLSA). Integrity
 rests on:
 
 1. SRI hash pinning in `linpeas-pin.json` — Nix refuses to build on mismatch.
-1. Flake-eval-time assertions on `pin.version` (`YYYYMMDD-<hex>`) and `pin.url`
-    (peass-ng release prefix) — derivation eval fails on a malformed pin.
+1. Flake-eval-time assertions on `pin.version` (`YYYYMMDD-<hex>`), on `pin.url`
+    (peass-ng release prefix), and on `pin.version` appearing as the release-tag
+    path segment of `pin.url` — derivation eval fails on a malformed pin.
 1. GitHub Releases API `digest` field cross-check inside the bump workflow
     (hard fail if absent — never a silent skip).
 1. Asset-URL prefix validation inside the bump workflow.

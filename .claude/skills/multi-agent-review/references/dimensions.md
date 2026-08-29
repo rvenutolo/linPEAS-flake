@@ -2,7 +2,7 @@
 
 Fixed option set for the scoping `AskUserQuestion`. Each dimension is one
 `Workflow` run: a **finder** fan-out (1–6 parallel slices, each a distinct
-lens; dimension 6 batches its index entries into 3–5 finder groups) → **refute-all** stage (3 independent skeptics per finding,
+lens; dimension 6 batches its index entries into 3–5 finder groups) → **refute-all** stage (3 independent skeptics per finding, capped at the top 25 per dimension by severity,
 default-refuted, keep if at least two of the skeptics that returned fail to refute) → survivors appended to the report.
 
 Per-dimension option style for `AskUserQuestion` (offer these, recommend the
@@ -47,8 +47,9 @@ Refuters: verify eval behavior empirically (`nix eval`, `nix build`, `nix path-i
 
 Per-script logic trace across every `scripts/*.sh` **and**
 `scripts/lib/*.sh` (size the slices from
-`ls scripts/*.sh scripts/lib/*.sh | wc -l` — the count moves with every
-script added, so no figure is written here). The `scripts/lib/` libraries are load-bearing — the ephemeral-refs
+`ls scripts/*.sh scripts/lib/*.sh scripts/*.awk | wc -l` — the count moves
+with every script added, so no figure is written here). The `scripts/*.awk`
+programs the generators and lints drive are in scope with them. The `scripts/lib/` libraries are load-bearing — the ephemeral-refs
 regex classes, payload helpers, and enumeration guards all live there — so
 a run that skips them silently reviews none of that.
 
@@ -56,7 +57,7 @@ Slices:
 
 - `check-*` validators
 - `refresh-*` generators
-- `scripts/lib/*.sh` libraries + helpers / runners / everything else
+- `scripts/lib/*.sh` libraries + `scripts/*.awk` programs + helpers / runners / everything else
 
 Hunt: edge cases, silent failures, quoting/`set -o pipefail` gaps, `done < <(...)` process-substitution exit-swallowing, `yq | tag` conflating absent vs present-null, divergence from the behavior the header comment claims.
 
