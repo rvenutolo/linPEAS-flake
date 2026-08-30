@@ -32,6 +32,7 @@ below.
     [`../tuning-results.md`](../tuning-results.md)), fresh session each:
 
     ```sh
+    harness="$PWD"   # this directory; the cp below needs it from inside the worktree
     cd "$(cat results/worktree-path.txt)"
     claude            # then run: /docs-audit
     ```
@@ -40,7 +41,7 @@ below.
 
     ```sh
     cp .claude/reports/*-docs-correctness-findings.md \
-      <harness>/results/run-1.md   # run-2.md, run-3.md, ...
+      "$harness"/results/run-1.md   # run-2.md, run-3.md, ...
     ```
 
 1. Score — back in the original checkout's harness directory, not the

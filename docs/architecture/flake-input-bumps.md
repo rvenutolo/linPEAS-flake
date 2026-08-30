@@ -320,8 +320,13 @@ CI jobs and, locally, through the pre-commit hook set (`just lint` /
 `check-flake-systems-eval.sh` runs nowhere but CI; the drift-check
 enforcers (daily: `check-settings-posture.sh`,
 `check-allowed-actions-api.sh`, `check-flake-lock-staleness.sh`; weekly:
-`check-scorecard-threshold.sh`) are likewise CI-only because each needs a live GitHub API — locally only
-their harnesses run. Individual
+`check-scorecard-threshold.sh`) are likewise CI-only, for two reasons:
+`check-settings-posture.sh` and `check-allowed-actions-api.sh` need an
+admin-scoped App token against the live API, while
+`check-flake-lock-staleness.sh` is keyed on wall-clock age rather than on
+the tree and `check-scorecard-threshold.sh` reads the scorecard CLI's JSON
+on stdin, which only the scheduled run produces. Locally only their
+harnesses run. Individual
 harnesses can still be run directly
 (`nix develop --command bash tests/<name>.test.sh`) while iterating on
 a single failure. If any fail, do **not** disable the test — debug

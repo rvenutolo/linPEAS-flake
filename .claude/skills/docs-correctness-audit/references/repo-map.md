@@ -194,8 +194,8 @@ specification as a violation. `is_allowlisted()` in
 `scripts/lib/ephemeral-refs-scope.sh` skips the tree for the same reason. The `claude-tooling` reader covers that prose by
 reading meaning instead of matching shapes.
 
-**It reads prose only.** Fenced code blocks (backtick or tilde), generated
-`BEGIN`/`END` bodies, and inline code spans are blanked before matching (line
+**It reads prose only.** Fenced code blocks (backtick or tilde), inline code
+spans, and generated `BEGIN`/`END` bodies are blanked before matching (line
 numbering preserved) — the same three regions `scripts/check-ephemeral-refs.sh`
 exempts, in the same order: fences are recognized first, and inline code spans
 are blanked before a `BEGIN` is looked for, so a marker quoted in a span or a

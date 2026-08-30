@@ -79,7 +79,7 @@ skeptic could not refute it, so a real finding may have been buried. Surface
 those in a **Contested kills** subsection, never silently. Then show the user a
 one-screen summary (counts + top findings, contested-kill count called out)
 before the next gate. If the run logged a refutation cap, state
-`<n> of <m> deduped findings refuted` in that dimension's report section
+`<n> of <m> deduped findings sent to refute-all (cap <n>)` in that dimension's report section
 and in the gate summary — findings past the cap reach neither survivors
 nor the refutation log, so an unstated cap silently under-reports.
 

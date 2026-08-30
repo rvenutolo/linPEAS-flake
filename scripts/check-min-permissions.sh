@@ -14,8 +14,8 @@
 #      from top-level (which is empty anyway) is not allowed; an
 #      omitted block is a lint failure.
 #   3. Top-level cannot be `read-all`, `write-all`, or any scalar/
-#      list form. (Subsumed by rule 1 but reported with a clearer
-#      message when the input shape is one of those.)
+#      list form. (Subsumed by rule 1; a scalar gets a dedicated
+#      message, any other shape is reported by its YAML tag.)
 #
 # See docs/security/min-permissions.md.
 #

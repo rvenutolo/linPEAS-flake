@@ -75,7 +75,8 @@ which is how this path recovers a missing sidecar.
 
 Delete only when recovering by landing a retrigger PR (step 3, second
 bullet). Release-creation is gated on tag-doesn't-exist, so an orphan
-release left in place makes the re-push skip the release step and leaves
+release left in place makes the re-push skip release creation and the
+same five jobs as above (image, manifest, changelog, verify), leaving
 the recovery incomplete.
 
 ```bash

@@ -111,8 +111,10 @@ failed shape validation; OR the workflow glob matched zero files.
     `nix flake update` and adapt the parser in
     `.github/workflows/ratchet-pin-audit.yml` (the `audit pins`
     step). The structural invariant
-    `scripts/check-ratchet-pin-audit.sh` pins the four `reason=`
-    tokens, not the heuristic strings — so updating heuristics is
+    `scripts/check-ratchet-pin-audit.sh` pins the four reason values
+    the notify body documents (`drift-detected`,
+    `upstream-api-failure`, `ratchet-tool-failure`, `unknown`), not
+    the heuristic strings — so updating heuristics is
     a single-file change.
 1. If the workflow glob matched zero files, a refactor moved
     workflows out from under `.github/workflows/`. Adjust the glob

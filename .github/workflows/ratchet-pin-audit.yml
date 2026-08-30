@@ -4,8 +4,9 @@ name: ratchet-pin-audit
 # publisher force-moves a tag to a different SHA after we pinned to
 # it. `check-uses-sha-pinned.sh` enforces that every `uses:` is a
 # SHA; Renovate keeps SHAs aligned with canonical release tags;
-# neither catches the tag-vs-pin drift attack. `ratchet lint` is
-# the canonical detector (in ratchet 0.11.4; `check` is an alias).
+# neither catches the tag-vs-pin drift attack. `ratchet lint` is a
+# local pin-shape tripwire (in ratchet 0.11.4; `check` is an alias);
+# the per-ref `gh api` re-derivation below is the drift detector.
 # Drift → deduped umbrella issue (`ratchet-drift` label)
 # opened/edited/closed by the notify-workflow-result composite,
 # mirroring stale-pin-check.

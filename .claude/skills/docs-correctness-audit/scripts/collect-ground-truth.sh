@@ -23,7 +23,7 @@ section() { printf '\n===== %s =====\n' "$1"; }
 #
 # The sweep reads prose only. Before matching, it blanks the three regions the
 # repo's own lint (scripts/check-ephemeral-refs.sh) exempts: fenced code blocks,
-# generated BEGIN/END bodies, and inline code spans. Without that pass the sweep
+# inline code spans, and generated BEGIN/END bodies. Without that pass the sweep
 # reports a doc that *documents* a banned shape as an example — a table of
 # banned token shapes, a generated hook table — as though it carried one, which
 # is a false positive on every hit. Blanking preserves line numbering, so a
@@ -319,13 +319,13 @@ main() {
 
   section "EPHEMERAL-TOKEN HITS (banned shapes in tracked-doc PROSE; see repo-map §4)"
   sweep_ephemeral_tokens
-  echo '(Prose only: fenced code blocks, generated BEGIN/END bodies, and inline'
-  echo ' code spans are blanked before matching, mirroring check-ephemeral-refs.sh.'
+  echo '(Prose only: fenced code blocks, inline code spans, and generated'
+  echo ' BEGIN/END bodies are blanked before matching, mirroring check-ephemeral-refs.sh.'
   echo ' Per-class suppressions: pr-ref drops fill:/stroke:/color:#hex, &#NNN;,'
   echo ' #N-anchor targets; ad-hoc-ticket drops SHA/UTF/RFC/ISO/BASE-NNN; date'
   echo ' drops the X-GitHub-Api-Version date literal.'
   echo ' Excludes .claude/ tooling, CHANGELOG.md + docs/releases.md (historical records),'
-  echo ' tests/fixtures.'
+  echo ' tests/fixtures, docs/_data.'
   # shellcheck disable=SC2016 # literal backticks in human-readable prose
   echo ' NOT authoritative — `scripts/check-ephemeral-refs.sh` is. Run it and'
   echo ' believe its exit code; treat anything here it does not report as a'
