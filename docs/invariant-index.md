@@ -10,11 +10,13 @@ pages (`dashboard.md`, `releases.md`), whose content is a rendering
 rather than a rule; overview pages, which route to rules held elsewhere
 (`security/threat-model.md`, `index.md`); `install/consume-from-flake.md`,
 which only tells a consumer how to use the flake; and this index
-itself, which cannot hold an entry pointing at itself. `install/nix.md` is on the allowlist too, but unlike the others it
+itself, which cannot hold an entry pointing at itself.
+`install/nix.md` is on the allowlist too, but unlike the others it
 still carries an entry below (its declared-systems rule), so its
 exemption is inert.
-`install/docker.md` is **not** exempt: it holds the OCI-image and manifest
-digest-pinning rules and is indexed below like any other rule-bearing page. The array in
+`install/docker.md` is **not** exempt: it holds the OCI-image and
+manifest digest-pinning rules and is indexed below like any other
+rule-bearing page. The array in
 `scripts/check-orphan-invariants.sh` is the authoritative list.
 
 Each entry carries an `enforcer: ...; ci: ...; hook: ...` annotation

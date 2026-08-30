@@ -1,6 +1,6 @@
 # Settings Posture — `rvenutolo/linPEAS-flake`
 
-This document is the **source of truth** for every GitHub-side settings knob this repo depends on. Most rows are asserted by `scripts/check-settings-posture.sh`, each read from one of four `gh api` payloads; the tag-protection ruleset row is asserted by `scripts/check-tag-protection.sh`. Three areas are manual-UI only — the fork-PR approval gate, the merge-method flags, and maintainer 2FA. Each is called out where it appears, and [Drift detection](#drift-detection) gives the reason the drift check cannot reach it. If a value drifts, treat it as a security incident.
+This document is the **source of truth** for every GitHub-side settings knob this repo depends on. Every API-probed row is asserted by `scripts/check-settings-posture.sh`, each read from one of four `gh api` payloads; the tag-protection ruleset row is asserted by `scripts/check-tag-protection.sh`. Three areas are manual-UI only — the fork-PR approval gate, the merge-method flags, and maintainer 2FA. Each is called out where it appears, and [Drift detection](#drift-detection) gives the reason the drift check cannot reach it. If a value drifts, treat it as a security incident.
 
 ## Security & analysis
 
@@ -48,7 +48,7 @@ fields behind `contents: write` — i.e. push access. The `settings-drift-checke
 ([`docs/runbooks/settings-drift-app.md`](../runbooks/settings-drift-app.md))
 is read-only by construction; granting `contents: write` would let its
 installation token push arbitrary code, which is a far worse blast
-radius than the settings-mutation it would unlock. So merge-method
+radius than the merge-method drift detection it would unlock. So merge-method
 posture is not API-probed.
 
 Defence-in-depth instead: the `protect-main` ruleset's

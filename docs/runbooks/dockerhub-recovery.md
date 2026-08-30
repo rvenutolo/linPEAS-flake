@@ -65,10 +65,11 @@ The push loop inside `release-on-bump.yml` per-arch jobs runs
 ### 1. Delete the GitHub release + tag (re-push path only)<a name="1-delete-the-github-release--tag-re-push-path-only"></a>
 
 **Skip this step if you will re-run with `force-republish`** (step 3,
-first bullet). On that path the `image-amd64`, `image-arm64`, `manifest`, `verify`, and
-`changelog` jobs re-run against the current pin while the `release` job's
+first bullet). On that path the `image-amd64`, `image-arm64`, `manifest`,
+`changelog`, and `verify` jobs re-run against the current pin while the `release` job's
 release-creation step stays gated by the "tag exists" guard, so the
-release and its assets survive and nothing needs deleting. The job itself
+release and its assets survive and nothing needs deleting. The
+`release` job itself
 still runs: its `sign pin file (cosign sign-blob, keyless)` step is
 ungated and re-uploads `linpeas-pin.json.sigstore` with `--clobber`,
 which is how this path recovers a missing sidecar.

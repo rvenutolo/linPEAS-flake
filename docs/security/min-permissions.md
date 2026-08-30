@@ -58,7 +58,7 @@ against the allowlist in both directions and fails on any of:
     grants, or names a workflow or job that no longer exists. Stale entries
     rot the allowlist into a misleading record of the actual write surface.
 - **Unsorted scope list** — a job's scope list departs from sorted
-    order, which keeps allowlist diffs minimal and duplicate-prone
+    order. Sorting keeps allowlist diffs minimal and duplicate-prone
     append-anywhere edits out.
 - **Scalar job permissions** — a job whose `permissions:` is a scalar
     other than `read-all`; a scalar grant bypasses the per-scope

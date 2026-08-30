@@ -44,7 +44,8 @@ agree on one source of truth.
     in trace often works; a 30-second probe beats a confident wrong "fix". Each
     reported finding must cite the source of truth that proves it.
 - **Generated docs are CI-enforced — never flag their bodies.** Several docs are
-    produced by `refresh-*.sh` generators and gated for freshness by CI. Their
+    produced by generators (mostly `refresh-*.sh`) and, except where the table in
+    `references/repo-map.md` §3 says otherwise, gated for freshness by CI. Their
     content is not authored prose; the generator is the source of truth. Flag only
     (a) hand-written prose *outside* the `BEGIN/END` generated markers, or (b) a
     real generator-vs-reality gap (rare; mark low-confidence). A fix to generated
