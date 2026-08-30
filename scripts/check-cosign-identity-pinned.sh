@@ -9,7 +9,7 @@
 
 # Lint: every cosign verify subcommand — `verify`, `verify-blob`,
 # `verify-attestation`, `verify-blob-attestation`, including the
-# `nix run nixpkgs#cosign -- verify` shape — across workflows, scripts,
+# `nix shell .#cosign --command cosign -- verify` shape — across workflows, scripts,
 # and shell-fenced markdown blocks pins BOTH:
 #   --certificate-identity (or --certificate-identity-regexp)
 #   --certificate-oidc-issuer

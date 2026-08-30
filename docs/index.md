@@ -75,7 +75,7 @@ Personal Nix-flake wrapper around [peass-ng/PEASS-ng](https://github.com/peass-n
 
 ## What this is
 
-A thin Nix wrapper. Upstream releases `linpeas.sh`; this repo pins the asset by SRI hash, asserts pin shape at flake-eval, cross-checks the GitHub Releases API `.digest` field on each bump, and re-verifies upstream parity weekly. Three automations keep the flake current, and a fourth watches that they are still running — see [Architecture → Auto-update](architecture/auto-update.md).
+A thin Nix wrapper. Upstream releases `linpeas.sh`; this repo pins the asset by SRI hash, asserts pin shape at flake-eval, cross-checks the GitHub Releases API `.digest` field on each bump, and re-verifies upstream parity weekly. Three automations keep the flake current, and a fourth watches that the weekly dependency upkeep is still refreshing inputs — see [Architecture → Auto-update](architecture/auto-update.md).
 
 ## Trust model in 60 seconds
 
