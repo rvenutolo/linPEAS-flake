@@ -253,8 +253,8 @@ taxonomy it holds generator-owned pages, the live-status template pages
 rule, overview pages that route to rules held elsewhere, the index itself,
 and two install guides
 (`install/consume-from-flake.md`, which carries no index entry at all, and
-`install/nix.md`, which is exempt from the reverse sweep alone because it
-does carry one) — not every generated page (a
+`install/nix.md`, for which only the reverse sweep's requirement is
+waived, because it does carry one) — not every generated page (a
 generated page can still carry an index entry). Heading
 anchors are a separate lint, `check-doc-anchors.sh`.
 For the consistency dimension, mirror that intent and additionally check the

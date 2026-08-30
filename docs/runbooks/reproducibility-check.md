@@ -1,7 +1,10 @@
 # Reproducibility check runbook
 
 **Workflow:** [`.github/workflows/reproducibility-check.yml`](https://github.com/rvenutolo/linPEAS-flake/blob/main/.github/workflows/reproducibility-check.yml)
-**Status:** Burn-in (non-blocking). Promotion criteria below.
+**Status:** Burn-in (non-blocking). Promotion criteria below. This
+header is maintained by hand — no check compares it against the
+workflow, so the promotion and demotion checklists each end by updating
+it.
 
 ## What this workflow does
 

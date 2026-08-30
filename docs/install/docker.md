@@ -11,7 +11,7 @@ linpeas enumerates Linux privilege-escalation vectors against whatever filesyste
 - **Base-image hardening review.** Bring up a candidate base image, exec linpeas inside it, fail the review on findings above a threshold.
 - **Forensics on a captured container filesystem.** Mount the suspect filesystem into the linpeas image and run with `-f <path>`.
 
-For a **host** audit, linpeas needs to see the host. A live audit — running processes, network, users — needs linpeas on the host itself: install via Nix (`nix run github:rvenutolo/linPEAS-flake`). From the image, the reachable form is a filesystem sweep of the host tree, bind-mounted read-only:
+For a **host** audit, linpeas needs to see the host. A live audit — running processes, network, users — needs linpeas on the host itself: run it on the host via Nix (`nix run github:rvenutolo/linPEAS-flake`); see [Install with Nix](nix.md) for a persistent install. From the image, the reachable form is a filesystem sweep of the host tree, bind-mounted read-only:
 
 ```bash
 docker run --rm \
