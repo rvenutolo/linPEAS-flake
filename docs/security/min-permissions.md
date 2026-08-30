@@ -62,7 +62,9 @@ against the allowlist in both directions and fails on any of:
     append-anywhere edits out.
 - **Scalar job permissions** — a job whose `permissions:` is a scalar
     other than `read-all`; a scalar grant bypasses the per-scope
-    allowlist entirely (`read-all` is tolerated by this lint).
+    allowlist entirely (`read-all` is tolerated by this lint, but
+    `min-permissions` still rejects any non-map `permissions:`, so the
+    combined posture forbids it).
 
 Wired into the `lint-workflow-security` CI group and as the
 `permission-scopes` pre-commit hook.

@@ -39,8 +39,8 @@ with one exception — the `nixpkgs-hammering` hook exports
 the linpeas derivation against stable. The stable-`pkgs` consumers in the
 tree are `nix/linpeas.nix`, `nix/image.nix` and that shim. A stable bump
 therefore cannot move `nixfmt`,
-`prettier`, `mdformat`, `shfmt`, `taplo`, `zizmor`, `statix`, `deadnix`,
-`actionlint`, `shellcheck`, or `mkdocs`.
+`prettier`, `mdformat`, `shfmt`, `taplo`, `just`, `zizmor`, `statix`,
+`deadnix`, `actionlint`, `shellcheck`, or `mkdocs`.
 
 Both Renovate bumps merge unattended once the required check set is green;
 see [Dependency-PR merge policy](auto-update.md#dependency-pr-merge-policy)
