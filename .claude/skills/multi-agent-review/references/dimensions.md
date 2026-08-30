@@ -46,9 +46,10 @@ Refuters: verify eval behavior empirically (`nix eval`, `nix build`, `nix path-i
 ## 2. Shell script correctness — *deep*
 
 Per-script logic trace across every `scripts/*.sh` **and**
-`scripts/lib/*.sh` (size the slices from
+`scripts/lib/*.sh` (budget each slice from
 `ls scripts/*.sh scripts/lib/*.sh scripts/*.awk | wc -l` — the count moves
-with every script added, so no figure is written here). The `scripts/*.awk`
+with every script added, so no figure is written here; the slice
+partition itself is fixed below). The `scripts/*.awk`
 programs the generators and lints drive are in scope with them. The `scripts/lib/` libraries are load-bearing — the ephemeral-refs
 regex classes, payload helpers, and enumeration guards all live there — so
 a run that skips them silently reviews none of that.
@@ -65,7 +66,7 @@ Refuters: reproduce the bug against the real script with a crafted input (`WORKF
 
 ## 3. CI / supply-chain security posture — *adversarial* (strict)
 
-Attacker-mindset agents, one per trust boundary across `.github/workflows/*` (size the slices from `ls .github/workflows/*.yml | wc -l` rather than a figure here, which rots).
+Attacker-mindset agents, one per trust boundary across `.github/workflows/*` (budget each slice from `ls .github/workflows/*.yml | wc -l` rather than a figure here, which rots; the boundary partition itself is fixed below).
 
 Slices:
 

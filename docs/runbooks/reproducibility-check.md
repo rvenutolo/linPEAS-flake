@@ -99,7 +99,7 @@ Promote the `compare` job to a required check once **all** are true:
 Promotion steps:
 
 1. Edit `.github/workflows/reproducibility-check.yml`: remove `continue-on-error: true` from the `compare` job.
-1. Add a `pull_request:` trigger targeting `main` to the same workflow, with no `paths:` / `paths-ignore:` filter (`scripts/check-required-checks-no-paths.sh` rejects a required check whose workflow carries one). The workflow currently runs only on its weekly cron and `workflow_dispatch`; a required status context whose workflow never runs on pull requests leaves every PR waiting for a report that never arrives.
+1. Add a `pull_request:` trigger targeting `main` to the same workflow, with no `paths:` / `paths-ignore:` filter (`scripts/check-required-checks-no-paths.sh` rejects a path filter on any workflow listed in [`docs/security/required-checks.md`](../security/required-checks.md), so it starts enforcing this once step 4 lands). The workflow currently runs only on its weekly cron and `workflow_dispatch`; a required status context whose workflow never runs on pull requests leaves every PR waiting for a report that never arrives.
 1. Run the workflow once manually via `workflow_dispatch` to confirm it still passes.
 1. Add `compare` to the branch protection ruleset required-checks list, updating `.github/rulesets/protect-main.json`, the required-contexts table in [`docs/security/required-checks.md`](../security/required-checks.md), and `docs/_data/ci-check-categories.yml` in the same change (`protect-main-drift-check` and the CI-summary freshness gate fail otherwise; see that page for the edit flow).
 1. Update this runbook's **Status** header to `Required`.

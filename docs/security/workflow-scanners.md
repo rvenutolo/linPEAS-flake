@@ -94,7 +94,8 @@ than re-scanning the tree.)
 - **Triggers:** weekly Friday cron and manual dispatch only. It does **not**
     scan on PRs or pushes.
 - **Status:** weekly watchdog. A check scoring below the threshold of 10
-    fails the run
+    — or a scorecard payload the threshold script cannot read as JSON at
+    all — fails the run
     and opens a deduped `scorecard-drift` tracking issue; the next clean run
     closes it. The check set is curated — review-flow checks not applicable to a
     solo repo, checks duplicating an in-tree signal whether blocking or

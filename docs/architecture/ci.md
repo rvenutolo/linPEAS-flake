@@ -56,8 +56,8 @@ Functional gates:
 | `image-smoke`         | `ubuntu-latest`    | builds OCI image, `docker load`, `docker run --rm <img> -h` exits 0; asserts `grep sed awk find ps` are present in the image; runs `-o system_information` against a separate target container and fails on any `: command not found` line                                                                  |
 | `image-smoke-arm64`   | `ubuntu-24.04-arm` | aarch64 run of the same three `image-smoke` steps                                                                                                                                                                                                                                                           |
 
-Self-enforcing invariant gates. The three `lint-*` rows are batched
-group jobs; their member lints are enumerated in
+Self-enforcing invariant gates. The three `lint-*` rows in this table
+are batched group jobs (`lint-pr-title`, further down, is not); their member lints are enumerated in
 `.github/lint-groups.yml`, which is the source of truth for what each
 group runs:
 
@@ -128,7 +128,7 @@ flowchart TD
   trigger["pages.yml<br/>push to main /<br/>PR / release / cron / dispatch"]
   data["bash scripts/gen-dashboard-data.sh"]
   build["nix build 'path:$(pwd)#site'<br/>(path: ref — git ref hides the<br/>gitignored dashboard.yml)"]
-  smoke[{% raw %}"smoke: index.html exists<br/>+ no raw {{ }} in dashboard/index.html"{% endraw %}]
+  smoke[{% raw %}"smoke: index.html + dashboard/index.html exist<br/>+ no raw {{ }} in dashboard/index.html"{% endraw %}]
   isPR{"event == pull_request?"}
   deploy["actions/deploy-pages<br/>OIDC, github-pages env"]
   pr_only["build only"]

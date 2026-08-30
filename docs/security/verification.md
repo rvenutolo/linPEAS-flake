@@ -37,8 +37,10 @@ How to verify a release of this wrapper yourself. None of this trusts the Pages 
 
 - `gh` (GitHub CLI) ≥ 2.49 — `gh attestation verify` subcommand, and
     `gh release download` for the signed release assets.
-- `cosign` ≥ 2.2 — `cosign verify` for image signatures and
-    `cosign verify-blob` for the `.sigstore` release-asset bundles.
+- `cosign` ≥ 3.0 — `cosign verify` for image signatures and
+    `cosign verify-blob` for the `.sigstore` release-asset bundles,
+    which the release pipeline produces with cosign 3.x (an older 2.x
+    client is not guaranteed to read its bundle format).
 
 Either toolchain alone is enough for the image: `gh attestation verify` and
 `cosign verify` check different signatures over the same digest.
@@ -377,6 +379,7 @@ signatures:
 
 ```bash
 gh release download <tag> \
+  --repo rvenutolo/linPEAS-flake \
   --pattern linpeas-pin.json \
   --pattern linpeas-pin.json.sigstore
 

@@ -237,8 +237,8 @@ jobs:
           gh release upload "${VERSION}" linpeas-pin.json --clobber
 
       - name: sign pin file (cosign sign-blob, keyless)
-        # Produces a .sigstore bundle (cosign ≥ 2.2 default container
-        # for signature + Fulcio cert + Rekor entry) as a sibling
+        # Produces a .sigstore bundle (signature + Fulcio cert + Rekor
+        # entry in one container) as a sibling
         # release asset. Scorecard Signed-Releases recognises
         # .sigstore as a signature artifact, closing the gap reported
         # for older releases that only had attest-build-provenance
