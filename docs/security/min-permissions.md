@@ -6,7 +6,7 @@ Strict least-privilege rule for every workflow in `.github/workflows/`.
 
 1. **Top-level `permissions:` is the empty map `{}`.** No scopes are granted at workflow scope; every scope must be declared per-job.
 1. **Every job declares its own `permissions:` block.** Inheritance from the (empty) top is not allowed; an omitted block fails the lint.
-1. **No scalar or list top-level `permissions:` (`read-all` / `write-all`, or a sequence).** Subsumed by rule 1, but reported with a clearer message when the input is one of those shapes.
+1. **No scalar or list top-level `permissions:` (`read-all` / `write-all`, or a sequence).** Subsumed by rule 1; a scalar is reported with a dedicated message, any other shape (a sequence included) by its YAML tag.
 
 ## Why
 
@@ -60,6 +60,9 @@ against the allowlist in both directions and fails on any of:
 - **Unsorted scope list** — a job's scope list departs from sorted
     order, which keeps allowlist diffs minimal and duplicate-prone
     append-anywhere edits out.
+- **Scalar job permissions** — a job whose `permissions:` is a scalar
+    other than `read-all`; a scalar grant bypasses the per-scope
+    allowlist entirely (`read-all` is tolerated by this lint).
 
 Wired into the `lint-workflow-security` CI group and as the
 `permission-scopes` pre-commit hook.

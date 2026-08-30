@@ -65,7 +65,8 @@ examples are not crawled.
 
 ## Markdown anchor resolution
 
-Every `#anchor` link in a tracked Markdown file that points at an in-tree
+Every `#anchor` link in `README.md` or `docs/**/*.md` (plus `.claude/CLAUDE.md`
+locally, when present) that points at an in-tree
 `.md` file (or at its own file) must match a heading slug in the target.
 Lychee resolves file paths but is not a pre-commit hook here, so a renamed
 heading would otherwise surface only on the weekly link run. Enforced by

@@ -77,8 +77,9 @@ docker run --rm \
 
 Both registries (`docker.io/rvenutolo/linpeas` and
 `ghcr.io/rvenutolo/linpeas`) serve the **same** image bytes — every
-release pushes to both with identical content digests and matching
-SLSA attestations. See [`docs/install/docker.md`](docs/install/docker.md)
+release pushes the same loaded image to both, so the content digests
+match, and each registry's per-arch digests carry their own SLSA
+attestations. See [`docs/install/docker.md`](docs/install/docker.md)
 for per-scenario guidance and provenance-verification steps.
 
 ### As a flake input

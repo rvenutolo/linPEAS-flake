@@ -37,13 +37,13 @@ These are third-party scanners, distinct from the in-tree shell lints in the
 next section. The weekly Friday cron cluster runs them in a fixed order (see
 [CI — cron schedule](../architecture/ci.md#cron-schedule) for the exact slots):
 
-1. codeql
-1. octoscan
+1. codeql (`codeql.yml`)
+1. octoscan (`octoscan.yml`)
 1. scorecard (`scorecard-drift-check.yml`)
 1. zizmor (`zizmor-drift-check.yml`)
 
 (scorecard shares the same Friday cluster but is classed as a
-posture watchdog in the layer table above, since it grades posture rather
+posture watchdog — the `scorecard-drift-check` row — in the layer table above, since it grades posture rather
 than re-scanning the tree.)
 
 ### codeql

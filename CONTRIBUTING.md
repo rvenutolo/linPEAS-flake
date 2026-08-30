@@ -40,7 +40,8 @@ Highlights:
 - `commitlint`, `lint-pr-title` — Conventional Commits client- and
     server-side.
 - `lint-workflow-security` — batched workflow-security lints; e.g.
-    member check `uses-sha-pinned`: every `uses:` is a full 40-hex SHA.
+    member check `uses-sha-pinned`: every non-local `uses:` is a full
+    40-hex SHA (path-relative `./…` composite refs excepted).
     The trailing `# vX.Y.Z` patch-tag comment is a separate rule,
     `patch-tag-pins`, which belongs to no lint group and therefore runs
     against the tree as a pre-commit hook only; no required check
