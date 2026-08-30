@@ -98,7 +98,8 @@ injects four per-dimension values: `SLICES` and `REFUTER_GUIDANCE` come from
 is what scopes the skeptic to the dimension's claim type); `FINDER_PROMPT(s)` is
 composed by the controller from the dimension's Slices and hunt guidance; and
 `SEED_FINDINGS` is earlier confirmed findings as text, or `''`. **No backticks
-inside the template literals** (they break the JS parser — concatenate strings).
+inside JS template literals in the script you compose** (they break
+parsing — use string concatenation).
 
 ```javascript
 export const meta = {

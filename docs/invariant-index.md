@@ -10,9 +10,9 @@ pages (`dashboard.md`, `releases.md`), whose content is a rendering
 rather than a rule; overview pages, which route to rules held elsewhere
 (`security/threat-model.md`, `index.md`); `install/consume-from-flake.md`,
 which only tells a consumer how to use the flake; and this index
-itself, which cannot hold an entry pointing at itself. `install/nix.md` is listed too, but
-only the reverse sweep's requirement is waived for it — its
-declared-systems rule is indexed below.
+itself, which cannot hold an entry pointing at itself. `install/nix.md` is on the allowlist too, but unlike the others it
+still carries an entry below (its declared-systems rule), so its
+exemption is inert.
 `install/docker.md` is **not** exempt: it holds the OCI-image and manifest
 digest-pinning rules and is indexed below like any other rule-bearing page. The array in
 `scripts/check-orphan-invariants.sh` is the authoritative list.
@@ -37,7 +37,7 @@ scope for this index either way.
 - **Workflow SHA pinning** — every non-local `uses:` SHA-pinned (path-relative `./…` refs excepted). → [security/repo-config.md](security/repo-config.md) <!-- enforcer: scripts/check-uses-sha-pinned.sh; ci: lint-workflow-security; hook: uses-sha-pinned -->
 - **action pin comment** — every SHA-pinned `uses:` carries an exact patch-tag comment (`# vX.Y.Z`) — never absent, never a non-version comment, never a floating major (`# vX`) — with inline `# patch-tag-exception: <reason>` markers for refs without a patch tag. → [architecture/pin-convention.md](architecture/pin-convention.md) <!-- enforcer: scripts/check-patch-tag-pins.sh; ci: -; hook: patch-tag-pins -->
 - **Pin digest provenance** — an action-pin SHA or container digest may not move under an unchanged version label (a repointed released tag); floating-major (`# vN`) digest moves must be reachable from the upstream default branch. → [security/repo-config.md](security/repo-config.md) <!-- enforcer: scripts/check-pin-digest-provenance.sh; ci: lint-doc-invariants; hook: - -->
-- **Renovate invariants** — pinDigests, minimumReleaseAge, no top-level automerge. → [security/repo-config.md](security/repo-config.md) <!-- enforcer: scripts/check-renovate-invariants.sh, scripts/check-renovate-config-validator.sh; ci: renovate-invariants, lint-doc-invariants; hook: renovate-config-validator -->
+- **Renovate invariants** — the `helpers:pinGitHubActionDigests` preset, a per-manager `pinDigests: true` for github-actions, `minimumReleaseAge` set, and no top-level `automerge`. → [security/repo-config.md](security/repo-config.md) <!-- enforcer: scripts/check-renovate-invariants.sh, scripts/check-renovate-config-validator.sh; ci: renovate-invariants, lint-doc-invariants; hook: renovate-config-validator -->
 - **No dead renovate markers** — every `# renovate:` marker's file is consumed by a live customManager (a `managerFilePatterns` entry scopes it and a `matchStrings` entry matches a line). → [security/repo-config.md](security/repo-config.md) <!-- enforcer: scripts/check-renovate-markers-matched.sh; ci: renovate-invariants; hook: - -->
 - **Tag-protection ruleset** — `release-tag-protection`, drift-check lint. → [security/repo-config.md](security/repo-config.md) <!-- enforcer: scripts/check-tag-protection.sh; ci: tag-protection-drift-check; hook: - -->
 - **Allowed-actions allowlist** — vendor list canonical; drift = incident; the live probe runs as the daily `allowed-actions-api-drift-check` workflow, which is not a required check. → [security/allowed-actions.md](security/allowed-actions.md) <!-- enforcer: scripts/check-allowed-actions-api.sh; ci: -; hook: - -->
@@ -124,7 +124,7 @@ scope for this index either way.
 
 - **Declared systems evaluate** — every system in `flake.lib.systems` force-evaluates in CI down to each package's derivation, failing with the system named. → [install/nix.md](install/nix.md) <!-- enforcer: scripts/check-flake-systems-eval.sh; ci: flake-check; hook: - -->
 - **OCI image** — `Entrypoint` not `Cmd`; bash+coreutils set. → [install/docker.md](install/docker.md) <!-- enforcer: -; ci: -; hook: - -->
-- **Manifest digest-pinning** — every multi-arch manifest-creating docker command takes its source refs as `@sha256:` digests, never mutable tags. → [install/docker.md](install/docker.md) <!-- enforcer: scripts/check-manifest-digest-pinned.sh; ci: lint-workflow-security; hook: manifest-digest-pinned -->
+- **Manifest digest-pinning** — every multi-arch manifest-creating docker command takes its source refs as immutable digests (an `@sha256:` literal or an `@${…DIGEST}` expansion), never mutable tags. → [install/docker.md](install/docker.md) <!-- enforcer: scripts/check-manifest-digest-pinned.sh; ci: lint-workflow-security; hook: manifest-digest-pinned -->
 - **DOCKERHUB_TOKEN split** — `_RW` vs `_DELETE`, never unsuffixed, in workflows and in the docs' shell-fenced tag-delete snippets. → [runbooks/dockerhub-recovery.md](runbooks/dockerhub-recovery.md) <!-- enforcer: scripts/check-dockerhub-token-scope-split.sh; ci: lint-doc-invariants; hook: - -->
 - **Docker Hub notify-body parity** — issue body mirrors runbook. → [runbooks/dockerhub-recovery.md](runbooks/dockerhub-recovery.md) <!-- enforcer: -; ci: -; hook: - -->
 - **settings-drift-checker App scope** — dedicated read-only App for admin-scoped settings probes; isolates blast radius from GITHUB_TOKEN and the bump App. → [runbooks/settings-drift-app.md](runbooks/settings-drift-app.md) <!-- enforcer: -; ci: -; hook: - -->
