@@ -11,7 +11,7 @@ linpeas enumerates Linux privilege-escalation vectors against whatever filesyste
 - **Base-image hardening review.** Bring up a candidate base image, exec linpeas inside it, fail the review on findings above a threshold.
 - **Forensics on a captured container filesystem.** Mount the suspect filesystem into the linpeas image and run with `-f <path>`.
 
-For a **host** audit, linpeas needs to see the host. A live audit — running processes, network, users — needs linpeas on the host itself: run it on the host via Nix (`nix run github:rvenutolo/linPEAS-flake`); see [Install with Nix](nix.md) for a persistent install. From the image, the reachable form is a filesystem sweep of the host tree, bind-mounted read-only:
+For a **host** audit, linpeas needs to see the host. A live audit — running processes, network, users — needs linpeas on the host itself: run it there via Nix (`nix run github:rvenutolo/linPEAS-flake`); see [Install with Nix](nix.md) for a persistent install. From the image, the reachable form is a filesystem sweep of the host tree, bind-mounted read-only:
 
 ```bash
 docker run --rm \
@@ -27,7 +27,7 @@ This form exists for environments where Docker is the only available shipping ve
 
 ## Run (default invocation, smoke test)
 
-The default invocation below scans the **linpeas image itself** — a near-empty Nix-built container with no services, secrets, or users. It is useful as a smoke test confirming args reach the binary, not as a real audit. For real host or sidecar audits, see [README → Usage](https://github.com/rvenutolo/linPEAS-flake#usage).
+The default invocation below scans the **linpeas image itself** — a near-empty Nix-built container with no services, secrets, or users. It is useful as a smoke test confirming args reach the binary, not as a real audit. For real host or sidecar audits, see [What this image is for](#what-this-image-is-for) above and the host sweep it links.
 
 ```bash
 # Docker Hub (default registry — no prefix needed)

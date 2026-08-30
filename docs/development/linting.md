@@ -346,7 +346,8 @@ file's.
     as an example — an allowlist entry, a scan-scope note, one of the
     class regexes — is documentation rather than a reference.
 
-Three further could-not-run cases follow from this. A shell source
+Three further hard-failure cases follow from this — two could-not-run
+(exit 2) and one doc defect (exit 1). A shell source
 `shfmt` cannot parse exits 2 with a named diagnostic, rather than being
 skipped or read as clean. A Nix block comment that never closes exits 1
 with `unterminated Nix block comment`: the extractor has no way back out
@@ -392,9 +393,9 @@ line's first `#`. Any earlier `#` on the line — inside a string, a
 trailing marker, and the miss reports the site rather than silently
 excusing it, which is the safe direction for this lint to fail in.
 
-A marker classification never consumed while walking a file, because the
-site it was reasoned about was rewritten into a compliant shape, moved,
-or left the file, is reported as its own finding rather than passed
+A marker the walk never consumes — because its site was rewritten into
+a compliant shape, moved, or left the file — is reported as its own
+finding rather than passed
 over. The clean run's summary line counts it as a third field alongside
 scripts scanned and exemptions applied. Full
 rationale:
@@ -526,10 +527,10 @@ read.
 
 All three markers — `# enumerate-exempt:`, `# glob-exempt:`, and
 `# filter-exempt:` — are censused the same way regardless of which
-rule's sites a file happens to hold: a marker classification never
-consumed while walking a file, because the site it was reasoned about
-was rewritten into a compliant shape, moved, or left the file, is
-reported on its own line rather than passed over. The clean run's
+rule's sites a file happens to hold: a marker the walk never consumes —
+because its site was rewritten into a compliant shape, moved, or left
+the file — is
+reported as its own finding rather than passed over. The clean run's
 summary line counts it as a fourth field alongside files scanned, sites
 classified and exemptions applied.
 

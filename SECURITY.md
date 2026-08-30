@@ -91,7 +91,7 @@ verifies whatever digest a tag pull happened to record — is not.
 ## Auto-merge surface
 
 Four independent automations merge to `main` without human review (a
-different grouping than the three-automations-plus-watcher framing in
+different grouping from the three-groups-plus-watcher framing in
 Architecture → Auto-update, whose fourth entry is the flake-input
 staleness watchdog):
 
@@ -126,30 +126,32 @@ Hub repo metadata.
 Several scheduled workflows track supply-chain hygiene independent of
 the release pipeline — `codeql.yml`, `octoscan.yml`,
 `image-cve-scan.yml`, `scorecard-drift-check.yml`, and
-`zizmor-drift-check.yml` (full cron inventory in
-[`docs/architecture/ci.md`](docs/architecture/ci.md)). The rest of this
-section covers `codeql.yml`; the other four are inventoried there.
+`zizmor-drift-check.yml` (cron slots in
+[`docs/architecture/ci.md`](docs/architecture/ci.md); per-scanner scope
+and the overlap rationale in
+[`docs/security/workflow-scanners.md`](docs/security/workflow-scanners.md)).
+The rest of this section covers `codeql.yml`.
 
-- **`codeql.yml`** scans GitHub Actions workflow definitions on every PR,
-    every push to `main`, and weekly. It runs unfiltered because the OpenSSF
-    Scorecard SAST check scores the fraction of recent merged PRs that ran a
-    SAST tool, so skipping path-narrow PRs would drag that fraction down.
-    The analyze step passes `fail-on: critical`
-    to `codeql-action/analyze`: a CRITICAL-severity finding fails the
-    workflow, and on push, cron, and dispatch runs a notify job opens a
-    deduped issue under the `codeql-critical` label (a PR run pages via
-    the failed check on the PR itself, so it files no issue). An
-    analyze failure that produced no finding (scan crash, runner
-    breakage) files under `codeql-infra` instead, so transient
-    infrastructure trouble is not paged as a security finding. Findings
-    **below** CRITICAL are advisory: they upload to the Security tab
-    without failing the workflow. A green
-    CodeQL run therefore proves the scan completed with zero CRITICAL
-    findings — **not** that zero findings exist. Closing the loop on
-    sub-critical findings requires a maintainer to review the Security
-    tab after a PR whose analysis reported below-CRITICAL findings. CodeQL complements
-    (does not replace) the `zizmor` pre-commit hook and the
-    SHA-pinning + `permissions:` discipline applied workflow-wide.
+**`codeql.yml`** scans GitHub Actions workflow definitions on every PR,
+every push to `main`, and weekly. It runs unfiltered because the OpenSSF
+Scorecard SAST check scores the fraction of recent merged PRs that ran a
+SAST tool, so skipping path-narrow PRs would drag that fraction down.
+The analyze step passes `fail-on: critical`
+to `codeql-action/analyze`: a CRITICAL-severity finding fails the
+workflow, and on push, cron, and dispatch runs a notify job opens a
+deduped issue under the `codeql-critical` label (a PR run pages via
+the failed check on the PR itself, so it files no issue). An
+analyze failure that produced no finding (scan crash, runner
+breakage) files under `codeql-infra` instead, so transient
+infrastructure trouble is not paged as a security finding. Findings
+**below** CRITICAL are advisory: they upload to the Security tab
+without failing the workflow. A green
+CodeQL run therefore proves the scan completed with zero CRITICAL
+findings — **not** that zero findings exist. Closing the loop on
+sub-critical findings requires a maintainer to review the Security
+tab after a PR whose analysis reported below-CRITICAL findings. CodeQL complements
+(does not replace) the `zizmor` pre-commit hook and the
+SHA-pinning + `permissions:` discipline applied workflow-wide.
 
 The `codeql.yml` workflow is not in branch protection's required-check
 set, and is deliberately advisory: gating merge on CodeQL would let a
@@ -180,15 +182,15 @@ the notify jobs.
     radius:
 
     - `DOCKERHUB_TOKEN_RW` — Read, Write on `rvenutolo/linpeas`. Used ONLY by `release-on-bump.yml` (the `image-amd64`, `image-arm64`, and `manifest` jobs). The `verify` job deliberately runs without it — `gh attestation verify` reads from Sigstore and the GitHub API, and `cosign verify` reads the published images with anonymous registry pulls, so no registry push credential enters that job's env. Cannot delete tags.
-    - `DOCKERHUB_TOKEN_DELETE` — Read, Write, Delete on `rvenutolo/linpeas`. Used ONLY by `dockerhub-sync.yml` (`peter-evans/dockerhub-description` needs Delete to PATCH repo metadata).
+    - `DOCKERHUB_TOKEN_DELETE` — Read, Write, Delete on `rvenutolo/linpeas`. Used ONLY by `dockerhub-sync.yml`.
 
     The `Delete` capability is required by the `peter-evans/dockerhub-description`
     action used in `dockerhub-sync.yml`, which calls the Docker Hub repo-metadata
     endpoint; a `Read, Write`-only PAT returns `403 Forbidden` on that endpoint.
     Rotation: on suspected compromise only —
     no calendar cadence. If compromise is suspected: revoke at
-    <https://hub.docker.com/settings/security>, generate a replacement,
-    update `gh secret set DOCKERHUB_TOKEN_RW --repo rvenutolo/linPEAS-flake` or
+    <https://hub.docker.com/settings/security>, generate a replacement, then store it with
+    `gh secret set DOCKERHUB_TOKEN_RW --repo rvenutolo/linPEAS-flake` or
     `gh secret set DOCKERHUB_TOKEN_DELETE --repo rvenutolo/linPEAS-flake` as
     appropriate. Compromise blast radius: a `DOCKERHUB_TOKEN_RW` leak allows
     pushing new tags but not deleting existing ones; a `DOCKERHUB_TOKEN_DELETE`

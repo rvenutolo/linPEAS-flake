@@ -66,8 +66,7 @@ That rewrap decides where each rule can be enforced:
     extending `.commitlintrc.yml` by relative path, so a resolution failure
     cannot first surface on `main` after a merge; a second `commitlint` step
     also loads it on `pull_request` purely to prove the action can read it
-    while the file is still amendable. `scripts/check-commitlint-config-explicit.sh`
-    pins the two configs' agreement on that preset.
+    while the file is still amendable.
 
 Both configs must be named explicitly via the action's `configFile` input. The
 input defaults to a file this repo does not have, and the action then falls back

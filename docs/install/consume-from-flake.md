@@ -25,6 +25,10 @@ Replace `<TAG>` with the latest release tag from
 
 Both `packages.<system>.default` and `packages.<system>.linpeas` are exposed; they alias the same derivation.
 
+The snippets follow only `nixpkgs`: the flake's separate
+`nixpkgs-unstable` input backs dev-shell and site outputs, so it stays
+in your lock file but never enters the linpeas package closure.
+
 ## flake-parts consumer
 
 ```nix

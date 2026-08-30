@@ -158,8 +158,9 @@ What stands between a bump and `main`:
 
 The gate this policy deliberately does not have is a human reading the
 diff. That trade is sharpest for the `nixpkgs` stable-branch bump,
-where part of the fallout — formatter rewrites, new linter rules —
-surfaces on a later cron run or contributor PR rather than on the
+where part of the fallout — CRITICAL CVEs in new image base layers, a
+bundled tool renamed out of the image, the dashboard rebuild —
+surfaces on a later cron run rather than on the
 bump's own checks. A green check set is therefore not proof that a
 stable-branch bump is inert; it is proof that nothing reproducible at
 PR time is broken. Recovery for the rest is a revert, and the fallout

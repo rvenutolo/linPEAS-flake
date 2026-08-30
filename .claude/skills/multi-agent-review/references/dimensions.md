@@ -110,7 +110,7 @@ Per `docs/invariant-index.md` entry: read stated rule → read the named `enforc
 
 Slices:
 
-- this bullet is not a slice: the controller derives `SLICES` at scoping time by batching the index entries into 3–5 groups (by enforcer kind: `ci` job, git hook, standalone `check-*` script), one `SLICES` entry — and so one finder — per group
+- this bullet is not a slice: the controller derives `SLICES` at scoping time by batching the index entries into 3–5 groups — by enforcer kind (`ci` job, git hook, standalone `check-*` script), splitting any kind too large for one finder — one `SLICES` entry, and so one finder, per group
 
 Refuters: run the named enforcer against a crafted violation — does it actually fail? A no-op or partial verdict survives only when the violation slips through in practice; kill it if the enforcer really catches it.
 
