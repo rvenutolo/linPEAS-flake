@@ -79,6 +79,13 @@ upstream tagging convention.
     HEAD. The digest-provenance gate excludes them too, so their PR-time
     surface is `scripts/check-uses-sha-pinned.sh` alone.
 
+- Bulk remediation: when comment drift is tree-wide,
+    `scripts/inventory-action-pin-tags.sh` builds a TSV of each pin's
+    resolved tag and `scripts/apply-patch-tag-pin-rewrite.sh` applies
+    the recorded rewrites in place — all-or-nothing, aborting on any
+    `API_FAILURE` row or a line whose content no longer matches the
+    inventory.
+
 - Bump path: Renovate's `helpers:pinGitHubActionDigests` preset.
     Renovate's github-actions manager parses the trailing comment as
     `currentValue` and rewrites both the SHA and the comment on each

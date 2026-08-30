@@ -118,7 +118,10 @@ needs neither the wiring nor an `EXEMPT` entry.
 The same gate also enforces parity: two scenarios in one harness must
 not produce byte-identical whole outcomes (exit code + stdout +
 stderr), because a scenario indistinguishable from a sibling proves
-nothing the sibling did not already prove. The relief valve is
+nothing the sibling did not already prove. The first remedies are to
+make the outputs differ, or to fold the two into one record with
+`harness_assert_also <substring>` (which attaches another asserted
+substring to the preceding record). The last-resort relief valve is
 `harness_assert_parity_exempt <scenario> <other> <rationale>`, and only
 harnesses named on the `PARITY_EXEMPT_ALLOWED` array in
 `scripts/check-harness-assert-wired.sh` may register one — reaching for

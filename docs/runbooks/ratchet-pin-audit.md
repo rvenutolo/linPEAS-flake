@@ -8,7 +8,7 @@ canonical SHA its tag now resolves to, the workflow opens (or
 updates) a single deduped umbrella issue labeled `ratchet-drift`.
 The issue auto-closes on the next clean run.
 
-Two classes of ref are skipped before any API call, and they do not share
+Two classes of upstream ref are skipped before any API call (a local `./` action, which names no upstream, is dropped earlier), and they do not share
 a backing check.
 
 Floating-major pins (`# vN`) are skipped because such a tag retargets on

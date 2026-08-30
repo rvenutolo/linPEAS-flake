@@ -15,7 +15,7 @@ nix flake show --json          # flake output inventory (the bundle's FLAKE OUTP
 just --list                    # every recipe (and what each regenerates)
 ls scripts/*.sh scripts/lib/*.sh  # *.sh inventory: entry points AND sourced libraries
 ls .github/workflows/          # workflow filenames
-grep -H 'cron:' .github/workflows/*.yml   # authoritative cron schedules
+grep -HE '^\s*- cron:' .github/workflows/*.yml   # authoritative cron schedules (anchored: a prose `cron:` inside a run: block is not a schedule)
 grep -c '"context"' .github/rulesets/protect-main.json  # required-check context count
 git grep -n '<symbol>'         # existence of options, env vars, secret names, flags
 ```
