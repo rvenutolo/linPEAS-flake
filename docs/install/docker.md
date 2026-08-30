@@ -37,7 +37,7 @@ docker run --rm rvenutolo/linpeas:latest -a
 docker run --rm ghcr.io/rvenutolo/linpeas:latest -a
 ```
 
-The image's `Entrypoint` is set to the linpeas binary, so any arguments after the image reference are passed straight to linpeas. Both registries serve the **same** image bytes — every release pushes to both with identical content digests and matching SLSA attestations.
+The image's `Entrypoint` is set to the linpeas binary, so any arguments after the image reference are passed straight to linpeas. Both registries serve the **same** image bytes — every release pushes the same loaded image to both, so the content digests match, and each registry's per-arch digests carry their own SLSA attestations.
 
 ## Pin to a specific tag
 
@@ -49,8 +49,9 @@ docker run --rm ghcr.io/rvenutolo/linpeas:{{ dashboard.release.latest_tag or "<t
 
 Version tags exactly match upstream `peass-ng/PEASS-ng` tags. Each
 registry additionally carries `:latest` (when that release is the newest)
-and the per-arch `<tag>-amd64` / `<tag>-arm64` tags the multi-arch
-manifest is assembled from.
+and the per-arch `<tag>-amd64` / `<tag>-arm64` tags naming the images
+the multi-arch manifest indexes (the manifest itself is built from their
+digests — see [Manifest digest-pinning](#manifest-digest-pinning)).
 
 ## Image contents
 

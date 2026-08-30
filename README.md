@@ -59,7 +59,8 @@ docker run --rm \
 ```
 
 `-f` scopes linpeas to a filesystem scan of the mounted tree —
-crons, services, software, permissions, interesting files, API keys —
+crons, timers, services, sockets, software, permissions, interesting
+files, API keys —
 and disables the live process, network, and user checks, so host
 namespace flags change nothing under it.
 

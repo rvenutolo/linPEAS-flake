@@ -1,7 +1,7 @@
 # Scripts reference
 
 Auto-generated from in-script `@description` / `@arg` / `@option` /
-`@example` annotations by `scripts/refresh-scripts-reference.sh` (run
+`@example` / `@exitcode` / `@stdout` annotations by `scripts/refresh-scripts-reference.sh` (run
 via `just show-scripts`).
 Entry-point scripts directly under `scripts/` render their header
 annotations; the sourced libraries under `scripts/lib/` render one entry

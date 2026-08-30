@@ -106,7 +106,7 @@ sweep_ephemeral_tokens() {
   hits="$(
     {
       # The blocking classes are transcribed from RE_PLANNING, RE_REVIEW,
-      # RE_DATE and RE_ISSUE in scripts/lib/ephemeral-refs-scope.sh, left
+      # RE_DATE, RE_ISSUE and RE_CLAUDE in scripts/lib/ephemeral-refs-scope.sh, left
       # boundary guards included. Without the guard a shape matches inside a
       # larger token — `UTF-8` -> `F-8`, `PDF-1.7` -> `F-1`, `ID5:` -> `D5:`,
       # `abc#12` -> `#12` — and the sweep reports candidates the gate never
@@ -151,7 +151,8 @@ sweep_internal_links() {
   local files=()
   # Wider than the ephemeral sweep: tracked .claude/ tooling quotes banned
   # token shapes as pattern data, but its links are ordinary links, so they
-  # stay in. Only the seeded-defect fixtures (planted violations) drop out.
+  # stay in. Only tests/fixtures/, docs/_data/ and the seeded-defect
+  # fixtures (planted violations) drop out.
   mapfile -t files < <(git ls-files '*.md' | grep -vE '^(tests/fixtures/|docs/_data/|\.claude/skills/[^/]+/evals/seeded-defects/fixtures/)' || true) # does not depend on lychee.toml for docs-scope decisions
   if [[ ${#files[@]} -eq 0 ]]; then
     echo '(none)'
@@ -240,7 +241,7 @@ list_ci_jobs() { # $1=workflow path — emits "<line>:  <job-id>" for the jobs: 
 list_workflow_crons() { # $1=workflows dir — emits "<file>:<schedule line>" for `- cron:` entries only
   # Anchored to the list-item shape. A bare `cron:` grep also returns prose
   # inside a run: block (an issue body that says "the `cron:` lines under
-  # ..."), which reads as a 22nd scheduled workflow to someone diffing this
+  # ..."), which reads as an extra scheduled workflow to someone diffing this
   # section against the ci.md cron table.
   grep -HE '^[[:space:]]*-[[:space:]]*cron:' "$1"/*.yml 2>/dev/null | sed "s#^$1/##"
 }
@@ -320,8 +321,9 @@ main() {
   sweep_ephemeral_tokens
   echo '(Prose only: fenced code blocks, generated BEGIN/END bodies, and inline'
   echo ' code spans are blanked before matching, mirroring check-ephemeral-refs.sh.'
-  echo ' Also suppressed: fill:/stroke:/color:#hex, &#NNN;, #N-anchor targets,'
-  echo ' SHA/UTF/RFC/ISO/BASE-NNN, X-GitHub-Api-Version date literal.'
+  echo ' Per-class suppressions: pr-ref drops fill:/stroke:/color:#hex, &#NNN;,'
+  echo ' #N-anchor targets; ad-hoc-ticket drops SHA/UTF/RFC/ISO/BASE-NNN; date'
+  echo ' drops the X-GitHub-Api-Version date literal.'
   echo ' Excludes .claude/ tooling, CHANGELOG.md + docs/releases.md (historical records),'
   echo ' tests/fixtures.'
   # shellcheck disable=SC2016 # literal backticks in human-readable prose

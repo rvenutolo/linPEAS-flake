@@ -26,7 +26,7 @@ below.
     Adds a detached worktree at HEAD under
     `${TMPDIR:-/tmp}/docs-audit-seeded-defects` — the tracked skill is checked
     out with it, so nothing is copied — applies all seeds, and writes
-    `results/manifest-resolved.json`.
+    `results/manifest-resolved.json` plus `results/worktree-path.txt`.
 
 1. Run the audit M times (default M=2, matching the ship gate in
     [`../tuning-results.md`](../tuning-results.md)), fresh session each:

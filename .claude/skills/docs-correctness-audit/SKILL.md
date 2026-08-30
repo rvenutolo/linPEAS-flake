@@ -142,8 +142,8 @@ Read-only fan-out needs no orchestration opt-in — it is plain parallel reads.
     skips both files wholesale (they structurally list PRs and dates).
     Ephemeral-token candidates come from the collector's
     **`EPHEMERAL-TOKEN HITS`** section (see `references/repo-map.md` §4 for
-    suppression and scope). That sweep reads prose only — fenced blocks,
-    generated bodies, and inline code spans are blanked first — but it is
+    suppression and scope). That sweep reads prose only — fenced blocks, then inline code
+    spans, then generated bodies are blanked first — but it is
     **not** the authority: `scripts/check-ephemeral-refs.sh` is. Run the real
     lint; anything the sweep reports that the lint does not is a false
     positive, and a doc that quotes a banned shape as an example is

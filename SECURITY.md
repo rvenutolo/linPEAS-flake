@@ -92,7 +92,8 @@ verifies whatever digest a tag pull happened to record — is not.
 
 Four independent automations merge to `main` without human review (a
 different grouping than the three-automations-plus-watcher framing in
-Architecture → Auto-update, whose fourth entry is the stall watcher):
+Architecture → Auto-update, whose fourth entry is the flake-input
+staleness watchdog):
 
 - `update-linpeas.yml` (daily) — upstream `linpeas.sh` content.
 - `update-flake-lock.yml` (weekly) — `nixpkgs` and other flake input revs.
