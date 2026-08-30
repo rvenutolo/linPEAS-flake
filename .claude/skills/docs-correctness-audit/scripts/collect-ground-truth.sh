@@ -237,6 +237,14 @@ list_ci_jobs() { # $1=workflow path — emits "<line>:  <job-id>" for the jobs: 
   ' "$1"
 }
 
+list_workflow_crons() { # $1=workflows dir — emits "<file>:<schedule line>" for `- cron:` entries only
+  # Anchored to the list-item shape. A bare `cron:` grep also returns prose
+  # inside a run: block (an issue body that says "the `cron:` lines under
+  # ..."), which reads as a 22nd scheduled workflow to someone diffing this
+  # section against the ci.md cron table.
+  grep -HE '^[[:space:]]*-[[:space:]]*cron:' "$1"/*.yml 2>/dev/null | sed "s#^$1/##"
+}
+
 main() {
   REPO_ROOT="$(git rev-parse --show-toplevel)"
   cd "${REPO_ROOT}"
@@ -298,7 +306,7 @@ main() {
   echo ' group — high severity.)'
 
   section "WORKFLOW CRONS (authoritative schedules; ci.md table must match)"
-  grep -H 'cron:' .github/workflows/*.yml 2>/dev/null | sed 's#\.github/workflows/##'
+  list_workflow_crons .github/workflows
 
   section "REQUIRED-CHECK CONTEXTS (ruleset)"
   ruleset='.github/rulesets/protect-main.json'

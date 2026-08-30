@@ -316,7 +316,12 @@ checks, and the rest of the `justfile` recipe) — the in-repo enforcer
 set CI gates on. The action-driven checks (`markdownlint`, `typos`,
 `editorconfig`, `commitlint`) are not part of `just verify` — they run as
 CI jobs and, locally, through the pre-commit hook set (`just lint` /
-`just check`); only `check-flake-systems-eval.sh` runs nowhere but CI. Individual
+`just check`). Of the required-check enforcers, only
+`check-flake-systems-eval.sh` runs nowhere but CI; the daily drift-check
+enforcers (`check-settings-posture.sh`, `check-allowed-actions-api.sh`,
+`check-scorecard-threshold.sh`, `check-flake-lock-staleness.sh`) are
+likewise CI-only because each needs a live GitHub API — locally only
+their harnesses run. Individual
 harnesses can still be run directly
 (`nix develop --command bash tests/<name>.test.sh`) while iterating on
 a single failure. If any fail, do **not** disable the test — debug

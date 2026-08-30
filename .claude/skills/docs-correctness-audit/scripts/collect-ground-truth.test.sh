@@ -277,6 +277,19 @@ case "${cau}" in *"swapped"*) check "does not flag bare 'swapped'" 1 ;; *) check
 case "${cau}" in *"reshaped"*) check "does not flag bare 'was reshaped'" 1 ;; *) check "does not flag bare 'was reshaped'" 0 ;; esac
 rm -rf "${cs}"
 
+# --- workflow-cron fixture ---
+# A `cron:` inside a run: block is prose, not a schedule; the section must
+# carry only `- cron:` list items.
+cr="$(mktemp -d)"
+mkdir -p "${cr}/wf"
+printf 'on:\n  schedule:\n    - cron: "0 8 * * *" # daily\n' >"${cr}/wf/real.yml"
+printf 'on:\n  workflow_dispatch:\njobs:\n  x:\n    steps:\n      - run: |\n          echo "the cron: lines under ci.md"\n' >"${cr}/wf/prose.yml"
+# shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
+crons="$(cd "${cr}" && source "${COLLECTOR}" && list_workflow_crons wf)"
+case "${crons}" in *'real.yml:    - cron: "0 8 * * *"'*) check "cron sweep lists schedule entries" 0 ;; *) check "cron sweep lists schedule entries" 1 ;; esac
+case "${crons}" in *"prose.yml"*) check "cron sweep skips prose cron: mentions" 1 ;; *) check "cron sweep skips prose cron: mentions" 0 ;; esac
+rm -rf "${cr}"
+
 if [[ ${fails} -ne 0 ]]; then
   printf '\n%d FAILED\n' "${fails}"
   exit 1

@@ -6,7 +6,7 @@ Strict least-privilege rule for every workflow in `.github/workflows/`.
 
 1. **Top-level `permissions:` is the empty map `{}`.** No scopes are granted at workflow scope; every scope must be declared per-job.
 1. **Every job declares its own `permissions:` block.** Inheritance from the (empty) top is not allowed; an omitted block fails the lint.
-1. **No scalar top-level `permissions:` (`read-all` / `write-all`).** Subsumed by rule 1, but reported with a clearer message when the input is one of those forms.
+1. **No scalar or list top-level `permissions:` (`read-all` / `write-all`, or a sequence).** Subsumed by rule 1, but reported with a clearer message when the input is one of those shapes.
 
 ## Why
 
@@ -16,7 +16,7 @@ Strict least-privilege rule for every workflow in `.github/workflows/`.
 
 `scripts/check-min-permissions.sh` parses every workflow with `yq` and rejects:
 
-- top-level `permissions:` missing, non-empty map, or scalar (`read-all` / `write-all`)
+- top-level `permissions:` missing, non-empty map, scalar (`read-all` / `write-all`), or any other shape such as a list
 - any job whose `permissions:` block is omitted or not a map
 
 Wired as the `lint-workflow-security` CI job (member check `min-permissions`) and as a pre-commit hook.

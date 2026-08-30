@@ -131,7 +131,7 @@ Either:
     release already exists. **"Re-run jobs" is not a substitute:** it
     replays the original run's inputs and cannot set a new one, so on a
     push-triggered run `force-republish` stays false, `tag-exists` stays
-    true, and all four jobs skip — the recovery looks green while doing
+    true, and all five jobs skip — the recovery looks green while doing
     nothing. The `release` job's release-creation step stays gated by the
     "tag exists" guard, so the existing release assets are preserved — if
     the release itself must be recreated, delete it first, then

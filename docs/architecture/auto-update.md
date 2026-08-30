@@ -1,6 +1,6 @@
 # Auto-update architecture
 
-Three automation groups — the daily pin bump, the release on bump, and the weekly dependency-upkeep pair — keep the pin current and the release artifacts in sync; a fourth watches that they are still running.
+Three automation groups — the daily pin bump, the release on bump, and the weekly dependency-upkeep pair — keep the pin current and the release artifacts in sync; a fourth watches that the dependency-upkeep pair is still refreshing inputs (the pin bump's own watchdog is [stale-pin-check](ci.md#stale-pin-failure-attribution)).
 
 ## Daily linpeas pin bump
 
@@ -119,10 +119,10 @@ old lock most likely means upstream is quiet, and a tight bound would report
 that as drift. Each input therefore gets the bound its upstream churn can
 support:
 
-| Tier | Bound    | Inputs                                           | Why                                                                                                                             |
-| ---- | -------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| Fast | 14 days  | `nixpkgs`, `nixpkgs-unstable`                    | Branch-tracked against an upstream committing at least daily. Two missed weekly cron cycles is already past anything healthy.   |
-| Slow | 120 days | `flake-parts`, `treefmt-nix`, `pre-commit-hooks` | Upstream commits in bursts. Loose enough that ordinary quiet never fires, tight enough that a stopped mechanism still surfaces. |
+| Tier | Bound    | Inputs                                           | Why                                                                                                                                                                                                                                                                                          |
+| ---- | -------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fast | 14 days  | `nixpkgs`, `nixpkgs-unstable`                    | Branch-tracked against an upstream committing at least daily. Two missed weekly cron cycles is already past anything healthy.                                                                                                                                                                |
+| Slow | 120 days | `flake-parts`, `treefmt-nix`, `pre-commit-hooks` | `flake-parts` and `treefmt-nix` commit in bursts; `pre-commit-hooks` is rev-pinned, so only Renovate can move it and this bound is what surfaces a Renovate manager that has gone quiet. Loose enough that ordinary quiet never fires, tight enough that a stopped mechanism still surfaces. |
 
 Scope is the top-level inputs only. A transitive node's rev is chosen by its
 parent's pin rather than by anything this repo runs, so its age reports on

@@ -23,7 +23,7 @@ To ensure mismatches are seen:
 - The repo owner watches "All Activity" or "Issues" notifications on this repo, OR
 - Add `--assignee` to the `gh issue create` invocation in the workflow once a maintainer wants direct paging.
 
-Currently no `--assignee` is set; mismatches rely on default repo notification settings. Revisit after the first real mismatch (the runbook's "What to do when it fails" section assumes the responder has already seen the issue).
+The `gh issue create` invocation sets no `--assignee`; mismatches rely on default repo notification settings. Revisit after the first real mismatch (the runbook's "What to do when it fails" section assumes the responder has already seen the issue).
 
 ## What to do when it fails
 
@@ -35,7 +35,7 @@ Currently no `--assignee` is set; mismatches rely on default repo notification s
 
 ### Bad-input failures (exit 2)
 
-`compare-repro.sh` exits 2 when a hash field is absent, null, or malformed in either build's `build.json`. That is not a divergence — the *measurement* broke.
+`compare-repro.sh` exits 2 when a hash field is absent, null, or malformed in either build's `build.json` — and likewise when it is called with the wrong argument count, `jq` is not on `PATH`, an input file is missing, or a payload is not a JSON object. None of those is a divergence — the *measurement* broke.
 
 - A `nix path-info --json` shape change is not the cause: both `measure` steps pipe it through `jq --exit-status` under `set -Eeuo pipefail`, so a shape change fails its own build job, and `compare` needs both builds and never runs.
 - What *can* reach `compare` is a `build.json` that uploaded or downloaded incompletely.

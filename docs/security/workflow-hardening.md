@@ -1,6 +1,6 @@
 # Workflow-hardening invariants
 
-Hardening invariants for this repo's workflows, scripts and test harnesses. Most rules are locked in by a script lint, run as a member check of a batched lint group job (`lint-workflow-security`, `lint-script-hygiene`, or `lint-doc-invariants`) and as a pre-commit hook. A few differ: some are enforced by a standalone CI job (`setup-nix-required`), some by CI only with no hook (`test-reachable`), and some are convention-only with no automated enforcer (lean lint-shell routing). See the [enforcement matrix](enforcement-matrix.md) for the authoritative per-rule mapping.
+Hardening invariants for this repo's workflows, scripts and test harnesses. Most rules are locked in by a script lint, run as a member check of a batched lint group job (`lint-workflow-security`, `lint-script-hygiene`, or `lint-doc-invariants`) and as a pre-commit hook. The exceptions: `setup-nix-required` is enforced by a standalone CI job; many of the script-hygiene rules (`test-reachable`, `tool-guarded`, `guard-exit-code`, and the others whose section says so) are CI-only with no hook; and a few are convention-only with no automated enforcer (lean lint-shell routing). See the [enforcement matrix](enforcement-matrix.md) for the authoritative per-rule mapping.
 
 See [workflow-scanner division of labor](workflow-scanners.md) for how these
 in-tree lints fit the broader layered scanning model (pre-commit → PR/push →

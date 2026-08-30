@@ -39,10 +39,10 @@ next section. The weekly Friday cron cluster runs them in a fixed order (see
 
 1. codeql
 1. octoscan
-1. scorecard-drift-check
-1. zizmor-drift-check
+1. scorecard (`scorecard-drift-check.yml`)
+1. zizmor (`zizmor-drift-check.yml`)
 
-(scorecard-drift-check shares the same Friday cluster but is classed as a
+(scorecard shares the same Friday cluster but is classed as a
 posture watchdog in the layer table above, since it grades posture rather
 than re-scanning the tree.)
 
