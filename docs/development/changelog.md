@@ -97,7 +97,7 @@ leading `^Merge ` rule skips any commit that uses GitHub's default
 ```
 
 Git-cliff runs the preprocessors before any commit parser, so the
-`[#N]` link the group rules below require is already in place. Commit subjects
+`[#N]` link the group rules require is already in place. Commit subjects
 that include `(#NNN)` — the format GitHub inserts into merge-commit
 subjects — are rewritten to a clickable `[#NNN](…)` link in the
 rendered changelog. This preprocessor is the **sole** source of PR

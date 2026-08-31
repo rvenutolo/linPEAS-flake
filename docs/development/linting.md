@@ -428,8 +428,9 @@ hand the helper an unexpanded pattern that would count as one match.
 Detection reads the same syntax tree the producer rule does — a
 `ForClause` whose `WordIter` items carry `*`, `?` or `[` in a bare `Lit`
 part, or an assignment whose `Array` elements carry one, at the word
-itself or one level in, among the `Lit` parts of an expansion's
-alternate or default word. A metacharacter inside quotes is not a
+itself or one level in, among the `Lit` parts of the word any parameter
+expansion there carries — its alternate, default, or pattern-operand
+word alike. A metacharacter inside quotes is not a
 pattern and does not count, and a pattern handed to `glob_into` is an
 argument of a call expression rather than a loop item, so a compliant
 call site cannot false-hit.
