@@ -526,7 +526,7 @@ Allowed alternatives:
 
 `cosign` is exposed under `packages.cosign` so `release-on-bump.yml` and `verify-latest-release.yml` can invoke it via the pinned shape. Future tools follow the same pattern.
 
-Enforced by `scripts/check-nix-run-pinned.sh`. Wired as the `lint-workflow-security` CI job (member check `nix-run-pinned`) and as a pre-commit hook.
+Enforced by `scripts/check-nix-run-pinned.sh`. Wired as the `lint-workflow-security` CI job (member check `nix-run-pinned`) and as a pre-commit hook. The scan set covers workflows, `scripts/*.sh`, docs, README, and SECURITY — composite `.github/actions/**/action.yml` files are outside it, so a nix invocation added to a composite action would go unlinted.
 
 ## setup-nix composite required
 
