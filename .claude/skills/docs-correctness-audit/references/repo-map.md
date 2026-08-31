@@ -194,8 +194,9 @@ The `.claude/` exclusion is deliberate and does not conflict with the
 `claude-tooling` cluster: those files quote the banned shapes as pattern data —
 the bullet list above is a list of them — so a shape-matching sweep reports the
 specification as a violation. `is_allowlisted()` in
-`scripts/lib/ephemeral-refs-scope.sh` skips the tree for the same reason. The `claude-tooling` reader covers that prose by
-reading meaning instead of matching shapes.
+`scripts/lib/ephemeral-refs-scope.sh` skips the tree for the same reason.
+The `claude-tooling` reader covers that prose by reading meaning instead
+of matching shapes.
 
 **It reads prose only.** Fenced code blocks (backtick or tilde), inline code
 spans, and generated `BEGIN`/`END` bodies are blanked before matching (line
@@ -277,5 +278,7 @@ which carry planted breakage. External URLs are skipped entirely — only
 relative file paths and heading anchors are checked. A listed entry is
 authoritative drift: the link target does not exist (high severity). Flag every
 entry without re-deriving by eye. The one non-result: when `lychee` is not on
-the collector's `PATH`, the section reads `(lychee not found — internal-link sweep skipped)` and nothing was checked — record links as unchecked in the
-coverage note rather than as clean.
+the collector's `PATH`, the section reads
+`(lychee not found — internal-link sweep skipped)` and nothing was
+checked — record links as unchecked in the coverage note rather than as
+clean.

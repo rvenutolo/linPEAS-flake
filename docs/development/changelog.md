@@ -20,9 +20,11 @@ The same command works locally for manual rebuilds.
 ## When the job runs
 
 The changelog job runs as part of `release-on-bump.yml`, triggered on
-every push to `main` that changes `linpeas-pin.json`. It also runs on
-`workflow_dispatch` when `force-republish: true` is passed; a
-`backfill-tag` dispatch skips it (see Recovery below). A changelog
+every push to `main` that changes `linpeas-pin.json` — provided the
+`release` job succeeded and the pin's release tag does not already
+exist (`tag-exists == 'false'`). It also runs on `workflow_dispatch`
+when `force-republish: true` is passed, which overrides the tag-exists
+gate; a `backfill-tag` dispatch skips it (see Recovery below). A changelog
 failure does not
 block image publication — the job depends only on `release`
 (`needs: [release]`), so it runs in parallel with the image and manifest
@@ -94,7 +96,8 @@ leading `^Merge ` rule skips any commit that uses GitHub's default
 { pattern = '\(#([0-9]+)\)', replace = "([#${1}](https://github.com/rvenutolo/linPEAS-flake/pull/${1}))" },
 ```
 
-Git-cliff runs this preprocessor before any other rule. Commit subjects
+Git-cliff runs the preprocessors before any commit parser, so the
+`[#N]` link the group rules below require is already in place. Commit subjects
 that include `(#NNN)` — the format GitHub inserts into merge-commit
 subjects — are rewritten to a clickable `[#NNN](…)` link in the
 rendered changelog. This preprocessor is the **sole** source of PR
@@ -247,7 +250,8 @@ order:
 The PR detour is mandatory: `protect-main` has `bypass_actors == []`
 and a `pull_request` rule, so direct `PUT /contents` to `branch=main`
 returns `HTTP 409 "Changes must be made through a pull request"`. The
-flow mirrors `update-linpeas.yml push-and-merge` exactly.
+flow mirrors `update-linpeas.yml push-and-merge`, with one addition:
+the changelog job blocks until the PR merges.
 
 ## Recovery procedures
 

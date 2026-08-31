@@ -83,7 +83,7 @@ flowchart LR
   renovate --> pr2 --> ci --> merge
 ```
 
-Both upkeep diagrams above omit each workflow's `notify` job: like the
+The daily-bump and weekly-lock diagrams both omit their workflow's `notify` job: like the
 release pipeline's, it runs on `always()` after the others and files or
 closes a deduped failure issue, so it is observability rather than a
 step in the flow.
