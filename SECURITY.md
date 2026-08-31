@@ -79,8 +79,10 @@ This means:
 The release pipeline re-checks the published manifest tags after it
 publishes them: the
 `verify manifest tags resolve to attested per-arch digests` step in
-`release-on-bump.yml`'s `verify` job re-fetches both the
-`:VERSION` and `:latest` manifests post-publish and confirms their
+`release-on-bump.yml`'s `verify` job re-fetches the `:VERSION`
+manifests post-publish — and the `:latest` manifests when this run
+wrote `:latest` (a historic backfill leaves `:latest` pointing at the
+current image, so its parity is not asserted) — and confirms their
 per-arch digests match the values that were attested. A drift at this
 step fails the release, so a tag repointed before the release completes
 does not ship.
@@ -194,7 +196,9 @@ the notify jobs.
         anonymous registry pulls, so no registry push credential enters
         that job's env. Cannot delete tags.
     - `DOCKERHUB_TOKEN_DELETE` — Read, Write, Delete on
-        `rvenutolo/linpeas`. Used ONLY by `dockerhub-sync.yml`.
+        `rvenutolo/linpeas`. Used ONLY by `dockerhub-sync.yml` (the sole
+        workflow consumer) and by the manual tag-delete snippets in
+        `docs/runbooks/dockerhub-recovery.md`.
 
     The `Delete` capability is required by the `peter-evans/dockerhub-description`
     action used in `dockerhub-sync.yml`, which calls the Docker Hub repo-metadata

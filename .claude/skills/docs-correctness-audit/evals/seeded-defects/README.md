@@ -72,12 +72,14 @@ column) is exactly the signal being measured.
 ## Expected recall profile
 
 - **Collector-driven** seeds (`broken-link`, `ghost-job`, `wrong-check-count`,
-    `ephemeral-token`) lean on the deterministic ephemeral / link / CI-name / required-check-count
-    sections of the bundle —
-    expect high, stable recall.
-- **Reasoning-driven** seeds (`mislabel-member`, `drifted-cron`, `stale-path`)
-    lean on reader judgment — expect the flaky tail. A low number there is a
-    measurement, not a bug in the harness.
+    `ephemeral-token`, `drifted-cron`, `stale-path`) lean on a deterministic
+    bundle section — the ephemeral / link / CI-name / required-check-count
+    sweeps, the cron table, and the script inventory — expect high, stable
+    recall.
+- **Reasoning-driven** seeds (`mislabel-member`) need a comparison the bundle
+    supports but does not perform — the union allowlist contains the name and
+    the mislabel is a semantic distinction — expect the flaky tail. A low
+    number there is a measurement, not a bug in the harness.
 
 ## Tests
 

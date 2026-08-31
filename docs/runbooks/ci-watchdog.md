@@ -54,7 +54,8 @@ treat it as a real failure.
 1. If the PR is genuinely broken (a dependency bump that breaks the build, a
     lint that genuinely fires), fix it or close the PR. The watchdog will not
     re-run its jobs again unless a new commit resets the attempt counter; it
-    keeps watching the PR and updates the issue when what it observes changes.
+    keeps watching the PR, but stays silent about the new runs unless they
+    too exhaust the attempt budget.
 1. If it is a real infrastructure failure that outlasted the 3-attempt budget (a
     multi-hour upstream outage), re-run manually once the outage clears:
     `gh run rerun <run-id> --failed`.
@@ -67,9 +68,10 @@ treat it as a real failure.
 Close the issue once the PR merges or is closed.
 
 The watchdog files ONE issue per stuck PR and comments on it only when a
-later tick observed something the last report did not — a different head
-commit, or a different set of exhausted runs (or a change to any of
-their attempt counts or conclusions). A run of ticks that sees the
+later tick again found exhausted runs and their set differs from the
+last report (different run ids, attempt counts, or conclusions — a
+pushed fix therefore goes silent until the new runs exhaust the budget
+too). A run of ticks that sees the
 same thing stays silent, so the issue's comment thread is a list of changes,
 not a heartbeat: if it has not grown, nothing about the PR has moved. Each
 report carries an invisible `ci-watchdog-observation` marker naming what it

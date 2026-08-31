@@ -3,7 +3,7 @@
 #
 # @description Emit, in one labeled dump, the repo ground-truth bundle the audit
 # shares with every cluster reader: flake outputs, just recipes, scripts
-# (entry points and sourced libraries),
+# (entry points, sourced libraries, and awk programs),
 # workflows, the ci.yml top-level job list, lint-group membership, a union
 # allowlist of all valid CI job/check names, workflow crons, the
 # required-check context count, an ephemeral-token sweep over tracked

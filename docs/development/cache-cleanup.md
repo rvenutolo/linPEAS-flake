@@ -40,8 +40,10 @@ Both jobs declare `actions: write` (cache deletion) and
 `contents: read` (branch enumeration). No other scopes — this exact
 write-scope set is enforced by `scripts/check-permission-scopes.sh` via
 the per-job allowlist in `.github/permission-scopes.yml`. The fork-guard
-`github.repository == 'rvenutolo/linPEAS-flake'` is on both jobs;
-forked-repo PRs do not trigger prune logic.
+`github.repository == 'rvenutolo/linPEAS-flake'` is on both jobs; it
+keeps the workflow inert in forks of this repository. A PR opened
+*from* a fork against `main` still runs `prune-on-pr-close`, since
+`github.repository` on a `pull_request` event names the base repo.
 
 ## Failure semantics
 

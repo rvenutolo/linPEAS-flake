@@ -76,9 +76,10 @@ this path recovers a missing sidecar.
 
 Delete only when recovering by landing a retrigger PR (step 3, second
 bullet). Release-creation is gated on tag-doesn't-exist, so an orphan
-release left in place makes the re-push skip release creation and the
-same five jobs as above (`image-amd64`, `image-arm64`, `manifest`,
-`changelog`, `verify`), leaving the recovery incomplete.
+release left in place makes the re-push skip release creation, and
+skips `image-amd64`, `image-arm64`, `manifest`, `changelog` and
+`verify` as well (the same five jobs `force-republish` re-runs),
+leaving the recovery incomplete.
 
 ```bash
 VERSION="<pin-version>"            # e.g. 20260516-deadbee

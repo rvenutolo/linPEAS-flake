@@ -21,12 +21,9 @@ On its weekly Friday cron (and on `workflow_dispatch`), the workflow:
 
 During burn-in (`continue-on-error: true` on the compare job), workflow runs report green in the Actions UI even on mismatch — the primary alert channel is the auto-opened GitHub issue. If `gh issue create` itself fails, the step logs a `WARN` and the fallback signals are the `compare` job's own status and the `repro-diff` artifact.
 
-To ensure mismatches are seen:
+To ensure mismatches are seen, the repo owner watches "All Activity" or "Issues" notifications on this repo.
 
-- The repo owner watches "All Activity" or "Issues" notifications on this repo, OR
-- Add `--assignee` to the `gh issue create` invocation in the workflow once a maintainer wants direct paging.
-
-The `gh issue create` invocation sets no `--assignee`; mismatches rely on default repo notification settings. Revisit after the first real mismatch (the runbook's "What to do when it fails" section assumes the responder has already seen the issue).
+The `gh issue create` invocation sets no `--assignee`; mismatches rely on default repo notification settings. Add `--assignee` to that invocation once a maintainer wants direct paging, and revisit after the first real mismatch (the runbook's "What to do when it fails" section assumes the responder has already seen the issue).
 
 ## What to do when it fails
 

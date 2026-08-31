@@ -83,7 +83,7 @@ readonly FIXTURES="${REPO_ROOT}/tests/fixtures/<script-name>"
 Neither of those two is universal. A harness that exercises a library or
 a cross-cutting rule rather than one script assigns no `SCRIPT`, and
 declares its subject with a `# @subject` header annotation instead.
-Exactly one of the two is required and never both — the census
+Exactly one of `SCRIPT=` and `# @subject` is required and never both — the census
 generator hard-fails a harness that declares no subject or declares one
 twice, and `doc-freshness` runs it. A harness that builds its tree at
 runtime assigns no `FIXTURES`; one that reaches a committed tree only
