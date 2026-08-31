@@ -90,8 +90,9 @@ dependency.
     images (`release-on-bump.yml`, `image-mode: full`); an image-less
     backfill release carries the pin-file attestation and sidecar only.
 - Trivy and Grype CVE scans run on a weekly cron, a path-filtered push
-    to `main`, and manual dispatch (`image-cve-scan.yml`), advisory-only — not in the required-check set. Each fails its own job on
-    CRITICAL findings and opens a deduped tracking issue.
+    to `main`, and manual dispatch (`image-cve-scan.yml`). They are
+    advisory only: neither is in the required-check set. Each fails its
+    own job on CRITICAL findings and opens a deduped tracking issue.
 - Docker Hub push credentials are split into `_RW` and `_DELETE` tokens,
     never an unsuffixed PAT.
 

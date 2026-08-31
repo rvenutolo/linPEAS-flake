@@ -2,15 +2,18 @@
 
 `.github/workflows/labeler.yml` applies area labels (`ci`, `docs`,
 `nix`, `scripts`, `tests`, `security`, `pin`, `renovate`) per
-`.github/labeler.yml` globs. Catalog of record for the area, release-note (`bug`, `enhancement`, `idea`), and `size/*` labels:
-`.github/labels.yml`; failure-notification labels are created on demand
-by the `notify-workflow-result` composite, and Renovate creates its own
-`dependencies` PR label — neither is in the manifest, deliberately. Not a required
-check — auto-labeling is cosmetic and must not block merge.
+`.github/labeler.yml` globs. `.github/labels.yml` is the catalog of
+record — canonical color and description source — for the area,
+release-note (`bug`, `enhancement`, `idea`), and `size/*` labels. Two
+label families stay out of that manifest deliberately:
+failure-notification labels are created on demand by the
+`notify-workflow-result` composite, and Renovate creates its own
+`dependencies` PR label. Auto-labeling is not a required check — it is
+cosmetic and must not block merge.
 
-`.github/labels.yml` is the canonical label-color/description source.
-Sync to repo manually with one-shot `gh label create --force` loop —
-no sync workflow (would require allowlisting `crazy-max/*`).
+There is no label-sync workflow (one would require allowlisting
+`crazy-max/*`); see [Label bootstrap](#label-bootstrap) for the manual
+`gh label create --force` loop.
 
 `.github/release.yml` groups auto-generated release notes by the area
 labels above plus `enhancement`, `bug`, and `idea`, with a `*` catch-all

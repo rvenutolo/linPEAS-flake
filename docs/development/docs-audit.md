@@ -1,6 +1,7 @@
 # Docs correctness audit
 
-Freshness gates (`*-fresh`) validate only the bodies of generated blocks.
+Freshness gates (`*-fresh`) validate only generated content — whole
+generator-owned files and spliced blocks alike.
 Nothing generates hand-written prose about CI, so a sentence naming a job
 that does not exist passes every gate in the repo. A reading agent is the
 only mechanism that catches that class of drift.

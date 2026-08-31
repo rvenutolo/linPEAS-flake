@@ -29,8 +29,9 @@ upstream tag replacement (intentional or compromise).
 
 ## Trust model and SLSA attestation semantics
 
-Every release artifact (each per-arch OCI image, the pin file, the per-arch CycloneDX SBOMs) carries a SLSA
-build-provenance attestation, verifiable with
+Every release artifact (each per-arch OCI image, the pin file, the
+per-arch CycloneDX SBOMs) carries a SLSA build-provenance attestation,
+verifiable with
 `gh attestation verify <artifact> --repo rvenutolo/linPEAS-flake`. These
 attestations prove **build provenance**: the published artifact was
 produced by this repository's release workflow at the recorded commit
@@ -142,30 +143,29 @@ The rest of this section covers `codeql.yml`.
 every push to `main`, and weekly. It runs unfiltered because the OpenSSF
 Scorecard SAST check scores the fraction of recent merged PRs that ran a
 SAST tool, so skipping path-narrow PRs would drag that fraction down.
-The analyze step passes `fail-on: critical`
-to `codeql-action/analyze`: a CRITICAL-severity finding fails the
-workflow, and on push, cron, and dispatch runs a notify job opens a
-deduped issue under the `codeql-critical` label (a PR run pages via
-the failed check on the PR itself, so it files no issue). An
-analyze failure that produced no finding (scan crash, runner
-breakage) files under `codeql-infra` instead, so transient
-infrastructure trouble is not paged as a security finding. Findings
-**below** CRITICAL are advisory: they upload to the Security tab
-without failing the workflow. A green
-CodeQL run therefore proves the scan completed with zero CRITICAL
-findings — **not** that zero findings exist. Closing the loop on
-sub-critical findings requires a maintainer to review the Security
-tab after a PR whose analysis reported below-CRITICAL findings. CodeQL complements
-(does not replace) the `zizmor` pre-commit hook and the
-SHA-pinning + `permissions:` discipline applied workflow-wide.
+The analyze step passes `fail-on: critical` to `codeql-action/analyze`:
+a CRITICAL-severity finding fails the workflow, and on push, cron, and
+dispatch runs a notify job opens a deduped issue under the
+`codeql-critical` label (a PR run pages via the failed check on the PR
+itself, so it files no issue). An analyze failure that produced no
+finding (scan crash, runner breakage) files under `codeql-infra`
+instead, so transient infrastructure trouble is not paged as a security
+finding. Findings **below** CRITICAL are advisory: they upload to the
+Security tab without failing the workflow. A green CodeQL run therefore
+proves the scan completed with zero CRITICAL findings — **not** that
+zero findings exist. Closing the loop on sub-critical findings requires
+a maintainer to review the Security tab after a PR whose analysis
+reported below-CRITICAL findings. CodeQL complements (does not replace)
+the `zizmor` pre-commit hook and the SHA-pinning + `permissions:`
+discipline applied workflow-wide.
 
 The `codeql.yml` workflow is not in branch protection's required-check
 set, and is deliberately advisory: gating merge on CodeQL would let a
-single CRITICAL false positive or a transient CodeQL infrastructure flake
-wedge every PR. The merge gate is the in-tree workflow lints plus the
-zizmor pre-commit hook. A CodeQL infrastructure failure must not block
-linpeas pin bumps; failure surfacing is via the deduped issues filed by
-the notify jobs.
+single CRITICAL false positive or a transient CodeQL infrastructure
+flake wedge every PR. The merge gate is the in-tree workflow lints plus
+the zizmor pre-commit hook. A CodeQL infrastructure failure must not
+block linpeas pin bumps; failure surfacing is via the deduped issues
+filed by the notify jobs.
 
 ## Secrets
 

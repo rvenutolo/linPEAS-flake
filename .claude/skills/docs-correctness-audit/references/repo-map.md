@@ -16,10 +16,16 @@ nix flake show --json          # flake output inventory (the bundle's FLAKE OUTP
 just --list                    # every recipe (and what each regenerates)
 ls scripts/*.sh scripts/lib/*.sh scripts/*.awk  # script inventory: entry points, sourced libraries, awk programs
 ls .github/workflows/          # workflow filenames
-grep -HE '^\s*- cron:' .github/workflows/*.yml   # authoritative cron schedules (anchored: a prose `cron:` inside a run: block is not a schedule)
+grep -HE '^[[:space:]]*-[[:space:]]*cron:' .github/workflows/*.yml   # authoritative cron schedules (anchored: a prose `cron:` inside a run: block is not a schedule)
 grep -c '"context"' .github/rulesets/protect-main.json  # required-check context count
 git grep -n '<symbol>'         # existence of options, env vars, secret names, flags
 ```
+
+The collector filters `nix flake show --json` through a `python3`
+one-liner into the one-line `outputs: …` form; when that pipeline fails
+it falls back to the raw `nix flake show` tree rendering, so a
+tree-shaped FLAKE OUTPUTS section means the filter fell back and should
+be read as a raw dump (and notes `python3` as a soft dependency).
 
 The script inventory names both shell trees and the awk programs because
 tracked docs cite the sourced libraries under `scripts/lib/` — `make_temp`
@@ -205,7 +211,11 @@ exempts, in the same order: fences are recognized first, and inline code spans
 are blanked before a `BEGIN` is looked for, so a marker quoted in a span or a
 fence is documentation, not a block opener. Like the lint, the sweep fails
 loud on an unterminated fence or generated block rather than silently blanking
-to end-of-file. That pass is
+to end-of-file — and in the collector that failure aborts the whole run
+mid-bundle: the sections after **`EPHEMERAL-TOKEN HITS`** (the links check
+included) never emit. A short bundle therefore means a malformed doc — record
+the offender as a high-severity finding and treat the never-emitted sections
+as unchecked rather than clean. That pass is
 load-bearing: without it, every doc that *documents* a banned shape as an
 example — `docs/development/linting.md`'s table of banned shapes, the generated
 hook table in `docs/development/git.md` — reports as though it carried one.
@@ -237,7 +247,7 @@ page, the collector sweep, and the real lint still diverge:
 - The sweep covers `*.md` only, while the real lint also reads shell, Nix and
     YAML comments.
 - **`ad-hoc-ticket` is sweep-only.** No blocking class implements it —
-    `RE_PLANNING` enumerates `GAP-`, `P<n>.<n>`, `Wave-P<n>`, `Phase <n>`,
+    `RE_PLANNING` enumerates `GAP-`, `P<n>.<n>`, `Wave-P?<n>`, `Phase <n>`,
     `AU-P-`, `SC-POST-`, `plan <n>` and `F-<n>`, and stops there. A generic
     `[A-Z]{2,3}-[0-9]+` matcher would fire on `UTF-8`, `SHA-256`, `RFC-822` and
     `ISO-8601`; the enumerated shapes carry explicit boundary guards precisely

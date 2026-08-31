@@ -16,7 +16,7 @@ state — and a new commit resets it, because a new commit produces a new run
 at attempt 1.
 
 Separately from that 3-attempt run bound, the watchdog's own API requests
-retry on a 5xx. Rate limits, conflicts, already-exists responses, and
+retry on anything not in the exempt list below — in practice a 5xx. Rate limits, conflicts, already-exists responses, and
 malformed, unauthorized, or missing-resource requests are exempt: a 400,
 401, or 404 will not become valid on a second try, a 409 means the re-run
 already took effect, a 422 lets `createLabel`'s try/catch see the
@@ -69,11 +69,13 @@ Close the issue once the PR merges or is closed.
 
 The watchdog files ONE issue per stuck PR and comments on it only when a
 later tick again found exhausted runs and their set differs from the
-last report (different run ids, attempt counts, or conclusions — a
+last report (different head commit, run ids, attempt counts, or
+conclusions — a
 pushed fix therefore goes silent until the new runs exhaust the budget
 too). A streak of ticks that sees the
 same thing stays silent, so the issue's comment thread is a list of changes,
-not a heartbeat: if it has not grown, nothing about the PR has moved. Each
+not a heartbeat: if it has not grown, no new exhaustion has been
+observed. Each
 report carries an invisible `ci-watchdog-observation` marker naming what it
 saw, which is what a later tick compares against; editing or deleting the
 most recent report makes the next tick treat its observation as new.
