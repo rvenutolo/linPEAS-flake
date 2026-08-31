@@ -31,9 +31,9 @@ green before a rule existed is re-evaluated. The posture watchdogs catch drift
 that accrues across commits — a force-moved tag, a loosened setting — that no
 individual diff reveals.
 
-## The four external scanners
+## The four external tools
 
-These are third-party scanners, distinct from the in-tree shell lints in the
+These are third-party tools, distinct from the in-tree shell lints in the
 next section. The weekly Friday cron cluster runs them in a fixed order (see
 [CI — cron schedule](../architecture/ci.md#cron-schedule) for the exact slots):
 

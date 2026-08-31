@@ -69,10 +69,10 @@ first bullet). On that path the `image-amd64`, `image-arm64`, `manifest`,
 `changelog`, and `verify` jobs re-run against the current pin while the `release` job's
 release-creation step stays gated by the "tag exists" guard, so the
 release and its assets survive and nothing needs deleting. The
-`release` job itself
-still runs: its `sign pin file (cosign sign-blob, keyless)` step is
-ungated and re-uploads `linpeas-pin.json.sigstore` with `--clobber`,
-which is how this path recovers a missing sidecar.
+`release` job itself still runs. Its
+`sign pin file (cosign sign-blob, keyless)` step is ungated and
+re-uploads `linpeas-pin.json.sigstore` with `--clobber`, which is how
+this path recovers a missing sidecar.
 
 Delete only when recovering by landing a retrigger PR (step 3, second
 bullet). Release-creation is gated on tag-doesn't-exist, so an orphan
@@ -100,7 +100,7 @@ For automation / scripted recovery, use the API:
 
 ```bash
 DOCKERHUB_USERNAME=rvenutolo
-DOCKERHUB_TOKEN="<paste DOCKERHUB_TOKEN_DELETE value>"
+DOCKERHUB_TOKEN_DELETE="<paste DOCKERHUB_TOKEN_DELETE value>"
 VERSION="<pin-version>"
 ARCH="<amd64 or arm64>"
 
@@ -112,7 +112,7 @@ TOKEN=$(curl --fail --silent --show-error \
     --header 'Content-Type: application/json' \
     --data "$(jq --null-input \
         --arg u "${DOCKERHUB_USERNAME}" \
-        --arg p "${DOCKERHUB_TOKEN}" \
+        --arg p "${DOCKERHUB_TOKEN_DELETE}" \
         '{username:$u, password:$p}')" \
   | jq --raw-output .token)
 

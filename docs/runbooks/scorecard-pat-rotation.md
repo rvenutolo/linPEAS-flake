@@ -13,7 +13,7 @@ This runbook is the durable record of how to create and rotate that PAT.
 
 - Annually, on or before the PAT's recorded expiry (max 1 year from creation).
 - Immediately on suspected compromise.
-- Immediately on revocation by GitHub (token shows as expired in scorecard logs as `401`/`403`).
+- Immediately on revocation by GitHub (the scorecard logs then show `401`/`403`).
 
 ## Required PAT shape
 

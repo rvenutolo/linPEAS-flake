@@ -72,7 +72,7 @@ Bake the answers in. Do not re-ask a settled parameter per dimension.
 For each selected dimension, in order: **wait for the user's "go"**, then launch
 one `Workflow` whose script is the template below. It returns
 `{ survivors, refuted }`: append `survivors` to the running report's dimension
-section and fold `refuted` into the Refutation log (the killed findings *are*
+section and fold `refuted`'s unanimous kills into the Refutation log (the killed findings *are*
 the finder false-positive rate — dropping them leaves that section empty). Each
 `refuted` entry carries `contested` — a `true` there means exactly one live
 skeptic could not refute it, so a real finding may have been buried. Surface

@@ -28,8 +28,9 @@ sweep processes every remaining PR and then fails the job, naming the PRs
 that errored. The one exception is a rate limit: continuing to request
 against an exhausted budget can make it worse, so the sweep halts instead
 and fails the job naming both the PRs that errored and the PRs it left
-untried. Either way, no PR is starved silently, and no error is swallowed
-except `createLabel`'s 422 when the escalation label already exists.
+untried. Either way, no PR is starved silently and no error is swallowed.
+The one swallowed status is `createLabel`'s 422, which means the
+escalation label already exists and is not an error at all.
 
 The watchdog re-runs **any** failure, without trying to classify it as
 transient. Classification would need a hand-maintained list of failure

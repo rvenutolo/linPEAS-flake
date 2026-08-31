@@ -2,8 +2,9 @@
 
 This file holds the repo-specific facts the audit shares with every reader.
 Commands and lists drift; where this file names a generator, recipe, or path,
-**trust live output (`just --list`, `ls scripts/*.sh scripts/lib/*.sh`) over what is written here**
-if they disagree, and note the drift as its own finding.
+**trust live output (`just --list`, `ls scripts/*.sh scripts/lib/*.sh scripts/*.awk`,
+`ls scripts/refresh-*.sh`, the named script's own source) over what is written
+here** if they disagree, and note the drift as its own finding.
 
 ## 1. Ground-truth commands
 
@@ -13,21 +14,23 @@ checked against one authoritative list:
 ```sh
 nix flake show --json          # flake output inventory (the bundle's FLAKE OUTPUTS section is authoritative)
 just --list                    # every recipe (and what each regenerates)
-ls scripts/*.sh scripts/lib/*.sh  # *.sh inventory: entry points AND sourced libraries
+ls scripts/*.sh scripts/lib/*.sh scripts/*.awk  # script inventory: entry points, sourced libraries, awk programs
 ls .github/workflows/          # workflow filenames
 grep -HE '^\s*- cron:' .github/workflows/*.yml   # authoritative cron schedules (anchored: a prose `cron:` inside a run: block is not a schedule)
 grep -c '"context"' .github/rulesets/protect-main.json  # required-check context count
 git grep -n '<symbol>'         # existence of options, env vars, secret names, flags
 ```
 
-The script inventory names both trees because tracked docs cite the sourced
-libraries under `scripts/lib/` by path as readily as the top-level entry
-points — `make_temp` (`scripts/lib/temp.sh`), `enumerate_into`
-(`scripts/lib/enumerate.sh`) and their siblings carry invariants of their own.
-A `scripts/*.sh` glob does not recurse, so an inventory that stops at the top
-level makes every such citation read as a script that does not exist. The
-collector emits them under a `lib/` prefix in its **SCRIPTS** section, which is
-what keeps a library entry distinguishable from an entry-point one.
+The script inventory names both shell trees and the awk programs because
+tracked docs cite the sourced libraries under `scripts/lib/` — `make_temp`
+(`scripts/lib/temp.sh`), `enumerate_into` (`scripts/lib/enumerate.sh`) and
+their siblings carry invariants of their own — and the `scripts/*.awk`
+programs (`_script_docs.awk`, `_attestation_invocations.awk`) by path as
+readily as the top-level entry points. A `scripts/*.sh` glob covers neither,
+so an inventory that stops at top-level `*.sh` makes every such citation read
+as a script that does not exist. The collector emits libraries under a `lib/`
+prefix in its **SCRIPTS** section, which is what keeps a library entry
+distinguishable from an entry-point one.
 
 The authoritative cron table for prose to match is
 `docs/architecture/ci.md` (kept in sync by `check-cron-table.sh`). When a

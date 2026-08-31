@@ -26,8 +26,10 @@ Replace `<TAG>` with the latest release tag from
 Both `packages.<system>.default` and `packages.<system>.linpeas` are exposed; they alias the same derivation.
 
 The snippets follow only `nixpkgs`: the flake's separate
-`nixpkgs-unstable` input backs dev-shell and site outputs, so it stays
-in your lock file but never enters the linpeas package closure.
+`nixpkgs-unstable` input backs the dev shells, the `site` output, the
+tooling packages (`cosign`, `diffoscopeMinimal`, `git-cliff`, `nix`),
+the `formatter`, and the lint tooling, so it stays in your lock file
+but never enters the linpeas package closure.
 
 ## flake-parts consumer
 
@@ -58,6 +60,12 @@ Pin to a release tag (shaped `YYYYMMDD-<sha>`), not `main`. Both are
 locked to a rev, but `nix flake update linpeas-flake` on a `main` input
 advances to whatever `main` now points at; a tag pin only moves when you
 change the tag.
+
+Note that `inputs.nixpkgs.follows = "nixpkgs"` (as in the snippets
+above) rebuilds linpeas against **your** nixpkgs rather than the stable
+channel this flake pins and tests against. That is normally what a
+flake consumer wants — one nixpkgs in the closure — but omit the
+`follows` line if you want the exact closure this repo's CI builds.
 
 Update the pin with:
 
