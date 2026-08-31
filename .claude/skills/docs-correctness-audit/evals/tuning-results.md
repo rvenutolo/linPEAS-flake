@@ -7,8 +7,9 @@ than one per `docs/` subdirectory. The `claude-tooling` reader in that map is
 outside this comparison: it reads the audit's own specification, not the
 user-facing docs, so no granularity choice there applies to it. The numbers below come
 from the seeded-defect recall harness in [`seeded-defects/`](seeded-defects/)
-(`plant.sh` → run the audit → `score.sh`), run twice per configuration against
-the same seven planted defects.
+(`plant.sh` → run the audit → `score.sh`); recall is measured over two runs
+per configuration against the same seven planted defects, while the token
+figures come from one measured run each (see the ship gate below).
 
 ## Configurations compared
 
@@ -22,15 +23,15 @@ the same seven planted defects.
 
 ## Result
 
-| Configuration        | Readers | Seed recall (2 runs) | Mean reader-tokens/run | Cut  |
-| -------------------- | ------- | -------------------- | ---------------------- | ---- |
-| per-subdirectory     | 7       | 14/14 (100%)         | ~339k                  | —    |
-| merged (shipped)     | 4       | 14/14 (100%)         | ~240k                  | ~29% |
-| security+root merged | 3       | 14/14 (100%)         | not comparable         | —    |
+| Configuration        | Readers | Seed recall (2 runs) | Reader-tokens/run (sum) | Cut  |
+| -------------------- | ------- | -------------------- | ----------------------- | ---- |
+| per-subdirectory     | 7       | 14/14 (100%)         | ~339k                   | —    |
+| merged (shipped)     | 4       | 14/14 (100%)         | ~240k                   | ~29% |
+| security+root merged | 3       | 14/14 (100%)         | not comparable          | —    |
 
 All three configurations catch all seven seeds in both runs — every category
 (ghost CI job, lint-group mislabel, cron drift, stale script ref, broken
-internal link, required-check count, ephemeral token). The merged map cuts mean
+internal link, required-check count, ephemeral token). The merged map cuts total
 reader-tokens ~29% because most of a reader's cost is fixed per-agent overhead
 (re-reading the ground-truth bundle, tool setup); three readers collapsed into
 one (`core-docs`) eliminate that overhead while the same documents still get
@@ -80,8 +81,8 @@ bash seeded-defects/plant.sh --clean
 ```
 
 A configuration ships only if seed recall holds at 14/14 across two runs (no
-seed category dropped) **and** mean reader-tokens fall below the
-per-subdirectory baseline. The recorded token figures are per-run means
-across readers from a single measured run per configuration (recall is the
-two-run figure), with no measured spread — so treat a token difference under
-roughly ten percent as inconclusive, not a win.
+seed category dropped) **and** reader-tokens fall below the
+per-subdirectory baseline. The recorded token figures are per-run sums across
+readers from a single measured run per configuration (recall is the two-run
+figure), with no measured spread — so treat a token difference under roughly
+ten percent as inconclusive, not a win.

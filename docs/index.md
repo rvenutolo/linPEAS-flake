@@ -15,30 +15,30 @@ Personal Nix-flake wrapper around [peass-ng/PEASS-ng](https://github.com/peass-n
 <div class="status-tiles" markdown>
 
 <div class="status-tile" markdown>
-**Pin**
+<span class="label">Pin</span>
 
-`{{ dashboard.pin.version }}`
+<span class="value">{{ dashboard.pin.version }}</span>
 
 </div>
 
 <div class="status-tile {{ 'ok' if dashboard.drift.days == 0 else 'fail' }}" markdown>
-**Drift**
+<span class="label">Drift</span>
 
-{{ dashboard.drift.days }} day{{ '' if dashboard.drift.days == 1 else 's' }}
+<span class="value">{{ dashboard.drift.days }} day{{ '' if dashboard.drift.days == 1 else 's' }}</span>
 
 </div>
 
 <div class="status-tile" markdown>
-**Latest release**
+<span class="label">Latest release</span>
 
-`{{ dashboard.release.latest_tag or "—" }}`
+<span class="value">{{ dashboard.release.latest_tag or "—" }}</span>
 
 </div>
 
 <div class="status-tile {{ 'ok' if dashboard.parity.conclusion == 'success' else 'fail' }}" markdown>
-**Upstream parity**
+<span class="label">Upstream parity</span>
 
-{{ dashboard.parity.conclusion }}
+<span class="value">{{ dashboard.parity.conclusion }}</span>
 
 </div>
 

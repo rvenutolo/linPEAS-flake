@@ -16,27 +16,27 @@ Live status of the `linPEAS-flake` pin, releases, and upstream parity.
 <div class="status-tiles" markdown>
 
 <div class="status-tile" markdown>
-**Pin version**
+<span class="label">Pin version</span>
 
-`{{ dashboard.pin.version }}`
+<span class="value">{{ dashboard.pin.version }}</span>
 </div>
 
 <div class="status-tile" markdown>
-**Upstream latest**
+<span class="label">Upstream latest</span>
 
-`{{ dashboard.drift.upstream_latest }}`
+<span class="value">{{ dashboard.drift.upstream_latest }}</span>
 </div>
 
 <div class="status-tile {{ 'ok' if dashboard.drift.days == 0 else 'fail' }}" markdown>
-**Drift gap**
+<span class="label">Drift gap</span>
 
-{{ dashboard.drift.days }} day{{ '' if dashboard.drift.days == 1 else 's' }}
+<span class="value">{{ dashboard.drift.days }} day{{ '' if dashboard.drift.days == 1 else 's' }}</span>
 </div>
 
 <div class="status-tile {{ 'ok' if dashboard.parity.conclusion == 'success' else 'fail' }}" markdown>
-**Upstream parity**
+<span class="label">Upstream parity</span>
 
-{{ dashboard.parity.conclusion }}
+<span class="value">{{ dashboard.parity.conclusion }}</span>
 </div>
 
 </div>
