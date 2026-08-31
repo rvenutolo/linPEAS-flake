@@ -1,4 +1,4 @@
-# Runbook: CI retry watchdog
+# CI retry watchdog runbook
 
 ## What it does
 
@@ -71,7 +71,7 @@ The watchdog files ONE issue per stuck PR and comments on it only when a
 later tick again found exhausted runs and their set differs from the
 last report (different run ids, attempt counts, or conclusions — a
 pushed fix therefore goes silent until the new runs exhaust the budget
-too). A run of ticks that sees the
+too). A streak of ticks that sees the
 same thing stays silent, so the issue's comment thread is a list of changes,
 not a heartbeat: if it has not grown, nothing about the PR has moved. Each
 report carries an invisible `ci-watchdog-observation` marker naming what it
@@ -156,4 +156,6 @@ exactly the reason this watchdog exists.
 
 ## Forcing a run
 
-`gh workflow run ci-watchdog.yml`
+```bash
+gh workflow run ci-watchdog.yml
+```

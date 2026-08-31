@@ -277,3 +277,11 @@ nix shell .#git-cliff --command git-cliff \
 
 Commit the result with subject `docs: update changelog` so the skip
 rule suppresses it from future changelog runs. Then push and verify.
+
+### Backfill dispatch
+
+A `backfill-tag` dispatch republishes sidecars and SBOMs for a release
+whose tag already exists, so the tag-exists gate skips the changelog job
+by design — the entry for that tag is already in the file. There is
+nothing to recover; use `force-republish: true` only when the entry is
+genuinely missing.

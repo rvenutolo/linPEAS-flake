@@ -1,4 +1,4 @@
-# Scorecard Signed-Releases backfill
+# Scorecard Signed-Releases backfill runbook
 
 Recovery procedure when the weekly `scorecard-drift-check` watchdog
 reports `Signed-Releases` below 10 because a historic release lacks

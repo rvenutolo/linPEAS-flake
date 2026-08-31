@@ -455,7 +455,7 @@
   lock-derived-docs = {
     enable = true;
     name = "lock-derived-docs";
-    description = "Every lock-writing workflow regenerates the docs a lock bump can staleness.";
+    description = "Every lock-writing workflow regenerates the docs a lock bump can make stale.";
     entry = "${pkgs-unstable.writeShellScript "lock-derived-docs-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'

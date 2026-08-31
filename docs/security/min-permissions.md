@@ -46,7 +46,7 @@ Only scope *names* whose value is `write` are listed. Read scopes (and
 `none`) are unconstrained — they carry no least-privilege risk, so they
 need no entry, and a job with no write scopes is omitted entirely.
 
-### Enforcement
+### Enforcement (permission-scopes)
 
 `scripts/check-permission-scopes.sh` cross-checks the live workflows
 against the allowlist in both directions and fails on any of:
