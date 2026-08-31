@@ -27,8 +27,9 @@ git add .github/docs-audit-state
 
 That writes the current commit into `.github/docs-audit-state`.
 `scripts/docs-audit-pressure.sh` diffs CI structure from there, so the
-number it reports means *commits nobody has audited yet* — zero right
-after an audit, growing only with unreviewed churn.
+number it reports means *CI-structure commits nobody has audited yet* —
+commits touching workflows, `scripts/`, or the lint-group manifest;
+zero right after an audit, growing only with unreviewed churn there.
 
 Run it when the findings are fixed, not when the audit is dispatched. The
 monthly reminder issue closes on the count this produces; marking at

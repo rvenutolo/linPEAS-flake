@@ -29,6 +29,9 @@ Finder returns the structured finding schema:
 `severity ∈ {critical, high, medium, low, advisory}`. `failure_scenario` is a
 concrete inputs/state → wrong-outcome the user can reproduce from the report
 alone. `evidence` cites the source of truth (file:line, command output).
+The template's schema marks only `file`, `claim`, and `failure_scenario` as
+required — `severity` and `evidence` are best-effort, and a finding that
+omits `severity` sorts below `advisory` at the per-dimension cap.
 
 ______________________________________________________________________
 

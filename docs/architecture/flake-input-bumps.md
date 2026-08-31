@@ -375,7 +375,11 @@ nix flake check --print-build-logs 2>&1 | tail -30
 
 All pre-commit hooks must pass. Representative ones for a flake-input
 bump: `actionlint`, `deadnix`, `nixfmt`, `treefmt`, `shellcheck`,
-`statix`, `uses-sha-pinned`, `yamllint`, `zizmor`, `flake-show-fresh`.
+`statix`, `yamllint`, `zizmor`, `nixpkgs-hammering`. Sandbox-guarded
+hooks (`uses-sha-pinned`, the `*-fresh` family, and the other
+`NIX_BUILD_TOP`-bailing entries) no-op under `nix flake check` — their
+coverage comes from `just verify` and the `doc-freshness` /
+lint-group CI jobs instead.
 The full, generated list is in
 [Git workflow → Pre-commit hooks](../development/git.md#pre-commit-hooks).
 

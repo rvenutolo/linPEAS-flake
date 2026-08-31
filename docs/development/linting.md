@@ -91,7 +91,9 @@ as a member check of the `lint-doc-invariants` CI job.
 with `tests/fixtures/**` — the fixtures because they contain
 intentionally malformed content (bad versions, malformed renovate
 configs); future fixtures may include realistic prose that would
-otherwise trigger typo flags.
+otherwise trigger typo flags. The file's one `[default.extend-words]`
+entry allows `intoto` — the in-toto provenance framework name carried
+by the `.intoto.jsonl` release-asset suffix.
 
 ## Zizmor
 
