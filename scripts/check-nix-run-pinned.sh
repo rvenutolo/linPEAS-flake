@@ -2,9 +2,9 @@
 # scripts/check-nix-run-pinned.sh
 #
 # @description Lint: ban any `nix` invocation against the bare
-# `nixpkgs` registry ref across workflows, scripts, and shell-fenced
-# markdown. Allowed alternatives use the repo's own flake or an
-# explicit commit pin.
+# `nixpkgs` registry ref across workflows, composite actions, scripts,
+# and shell-fenced markdown. Allowed alternatives use the repo's own
+# flake or an explicit commit pin.
 
 # Lint: ban any `nix` invocation against the bare `nixpkgs` registry
 # ref.
@@ -24,7 +24,8 @@
 #   - `nix run .#<pkg> -- <args>` — same.
 #   - `nix run nixpkgs/<rev>#<pkg>` — explicit commit pin.
 #
-# Detection scans workflows, scripts, and shell-fenced markdown
+# Detection scans workflows, composite actions under .github/actions/,
+# scripts, and shell-fenced markdown
 # blocks. The check matches a `nix` command word followed by a bare
 # `nixpkgs#` ref, with any subcommand and any flags in between.
 # A `/<rev>` between `nixpkgs` and `#` passes.
@@ -65,6 +66,7 @@ if [[ -n ${PATHS_OVERRIDE:-} ]]; then
 else
   enumerate_into paths 'git ls-files' git ls-files -z -- \
     '.github/workflows/*.yml' '.github/workflows/*.yaml' \
+    '.github/actions/**/*.yml' '.github/actions/**/*.yaml' \
     'scripts/*.sh' \
     'docs/**/*.md' \
     'docs/*.md' \

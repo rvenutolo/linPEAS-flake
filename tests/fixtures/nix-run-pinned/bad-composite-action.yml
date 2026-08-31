@@ -1,0 +1,7 @@
+name: bad composite
+description: fixture carrying an unpinned bare nixpkgs ref in a composite run block
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: nix shell nixpkgs#yq-go --command yq --version
