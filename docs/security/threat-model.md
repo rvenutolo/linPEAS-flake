@@ -88,7 +88,8 @@ dependency.
     `@sha256:` digest references — no tag-only manifests.
 - SBOM generation and attestation run on every release that publishes
     images (`release-on-bump.yml`, `image-mode: full`); an image-less
-    backfill release carries the pin-file attestation and sidecar only.
+    backfill release carries the pin-file attestation, its
+    `.intoto.jsonl` sidecar, and its `.sigstore` blob signature only.
 - Trivy and Grype CVE scans run on a weekly cron, a path-filtered push
     to `main`, and manual dispatch (`image-cve-scan.yml`). They are
     advisory only: neither is in the required-check set. Each fails its

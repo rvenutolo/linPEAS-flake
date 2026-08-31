@@ -263,13 +263,12 @@ check each one drives.
 ## Linpeas-pin release-trigger
 
 Any change to `linpeas-pin.json` that lands on `main` MUST cause a
-new release to be cut by `release-on-bump.yml`. The next
-`verify-latest-release` cron run after the change asserts that the
-release-asset copy of `linpeas-pin.json` matches the in-tree copy
-(attestation verification). A pin change that lands without firing
-the release pipeline leaves `main` in a state where the in-tree pin
-diverges from the latest-release-asset pin; the verify cron would
-fail on its next weekly run.
+new release to be cut by `release-on-bump.yml`. The weekly
+`verify-latest-release` cron re-verifies the published pin asset's
+attestation and re-checks the upstream SRI hash; it does not compare
+the release asset against the in-tree pin, so a pin change that lands
+without firing the release pipeline is prevented by the trigger
+contract below rather than detected downstream.
 
 Paired with the `pin-diff-isolated` invariant: the only mutator
 (`bump-linpeas.sh`) writes only `linpeas-pin.json`, so any pin

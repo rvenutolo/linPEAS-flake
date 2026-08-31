@@ -401,7 +401,8 @@ without `gh` CLI can verify with just `cosign`.
 
 ## Release-asset provenance sidecars<a name="release-asset-provenance-sidecars"></a>
 
-Every release asset is published alongside a sibling
+Every primary release asset — `linpeas-pin.json` and the per-arch
+CycloneDX SBOMs — is published alongside a sibling
 `<asset>.intoto.jsonl` file containing a SLSA Build Provenance v1
 attestation whose subject is the asset's content hash. The bundle is
 captured from `actions/attest-build-provenance` at release time and
@@ -419,9 +420,11 @@ The sidecar serves two consumers:
     against the same Fulcio + Rekor trust root used by the
     `.sigstore` signatures.
 
-The contract is: for every `<asset>` in a release, both
-`<asset>.sigstore` (cosign signature bundle) and
-`<asset>.intoto.jsonl` (build provenance bundle) MUST be present.
+The contract is: for every primary `<asset>` in a release — the pin
+file and each SBOM the release publishes — both `<asset>.sigstore`
+(cosign signature bundle) and `<asset>.intoto.jsonl` (build provenance
+bundle) MUST be present; the sidecars themselves carry no further
+sidecars.
 A release missing either sidecar is a regression. Nothing in-tree
 asserts this contract — the weekly parity cron's reason ladder covers
 the `.sigstore` blob signatures only, and the enforcement matrix records

@@ -28,7 +28,9 @@ sweep processes every remaining PR and then fails the job, naming the PRs
 that errored. The one exception is a rate limit: continuing to request
 against an exhausted budget can make it worse, so the sweep halts instead
 and fails the job naming both the PRs that errored and the PRs it left
-untried. Either way, no PR is starved silently and no error is swallowed.
+untried (that "not attempted" list is the raw PR enumeration behind the
+halt point, before the bot-author and auto-merge filters, so most
+entries are usually PRs the sweep would have skipped anyway). Either way, no PR is starved silently and no error is swallowed.
 The one swallowed status is `createLabel`'s 422, which means the
 escalation label already exists and is not an error at all.
 
@@ -67,7 +69,11 @@ treat it as a real failure.
 
 Close the issue once the PR merges or is closed.
 
-The watchdog files ONE issue per stuck PR and comments on it only when a
+The watchdog files ONE issue per stuck PR (deduped against *open*
+`ci-watchdog`-labeled issues — closing the issue while the PR is still
+stuck lets the next exhausting tick open a fresh one, which is why the
+close instruction above waits for the PR to merge or close) and
+comments on it only when a
 later tick again found exhausted runs and their set differs from the
 last report (different head commit, run ids, attempt counts, or
 conclusions — a
@@ -77,8 +83,10 @@ same thing stays silent, so the issue's comment thread is a list of changes,
 not a heartbeat: if it has not grown, no new exhaustion has been
 observed. Each
 report carries an invisible `ci-watchdog-observation` marker naming what it
-saw, which is what a later tick compares against; editing or deleting the
-most recent report makes the next tick treat its observation as new.
+saw, and a later tick compares against the newest surviving marker: editing
+the marker out of the most recent report makes the next tick treat its
+observation as new, while merely deleting that report falls back to the
+previous marker — which stays silent if it carries the same observation.
 
 ## When the watchdog job goes red
 
@@ -97,7 +105,10 @@ tells you which of three things happened:
 - **`Sweep halted by rate limit; ...`.** The sweep hit a rate limit partway
     through and stopped rather than keep spending an exhausted budget. The PRs
     listed as "not attempted" were never touched this run — they are not
-    errors, they are untried. The next scheduled run picks them up.
+    errors, they are untried, and the list is every open PR behind the
+    halt point before the bot-author and auto-merge filters, so most
+    entries are usually PRs the sweep would have skipped without touching
+    anyway. The next scheduled run picks them up.
 - **`Sweep completed; N PR(s) errored: ...`.** Every open PR was attempted.
     The named PRs errored while being processed; everything else succeeded or
     had nothing to do.

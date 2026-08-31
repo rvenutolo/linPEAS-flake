@@ -13,7 +13,7 @@ On its weekly Friday cron (and on `workflow_dispatch`), the workflow:
 1. Builds `.#linpeas` and `.#linpeas-image` twice on independent `ubuntu-latest` runners.
 1. Records five values per build: linpeas store path, linpeas NAR hash, image store path, image tar SHA-256, and image manifest digest.
 1. Compares the three hash values pairwise (`linpeas_nar_hash`, `image_tar_sha256`, `image_manifest_digest`); the two store paths are reported for context only and do not affect the result.
-1. On any mismatch: runs `diffoscope` on both pairs (the image tars and the linpeas tarballs), each under its own 20-minute cap. The reports — `image.html`/`image.txt`, `linpeas.html`/`linpeas.txt` and `summary.txt` — are uploaded as the `repro-diff` artifact (30-day retention), and a GitHub issue labelled `reproducibility` is opened.
+1. On any nonzero compare result — a hash mismatch or an exit-2 measurement failure: runs `diffoscope` on both pairs (the image tars and the linpeas tarballs), each under its own 20-minute cap. The reports — `image.html`/`image.txt`, `linpeas.html`/`linpeas.txt` and `summary.txt` — are uploaded as the `repro-diff` artifact (30-day retention), a GitHub issue labelled `reproducibility` is opened, and the `compare` job is failed by its `fail job (on mismatch)` step.
 
 `diffoscope` is resolved from this repo's own flake — the compare job installs Nix through the `./.github/actions/setup-nix` composite and invokes `nix shell .#diffoscopeMinimal --command diffoscope`. The version that runs therefore tracks `flake.lock`, not whatever a distribution archive currently ships, and the job reaches only the hosts already in its `allowed-endpoints` list.
 
@@ -39,7 +39,8 @@ The `gh issue create` invocation sets no `--assignee`; mismatches rely on defaul
 
 - A `nix path-info --json` shape change is not the cause: both `measure hashes` steps pipe it through `jq --exit-status` under `set -Eeuo pipefail`, so a shape change fails its own build job, and `compare` needs both builds and never runs.
 - What *can* reach `compare` is a `build.json` that uploaded or downloaded incompletely.
-- A `repro-diff` artifact is present on exit 2 — the diffoscope and upload steps gate on `exit_code != '0'`, which 2 satisfies — but it diffs builds whose measurement the compare script already rejected. Read the `build.json` files in the `repro-build-a` / `repro-build-b` artifacts instead.
+- A `repro-diff` artifact is present on exit 2 — the diffoscope and upload steps gate on `exit_code != '0'`, which 2 satisfies — but it diffs builds whose measurement the compare script already rejected. Read the `build.json` files in the `repro-build-a` / `repro-build-b` artifacts instead; those expire after 7 days (vs `repro-diff`'s 30), so exit-2 triage has a one-week window.
+- The `open issue (on mismatch)` and `fail job (on mismatch)` steps gate on the same `exit_code != '0'` condition, so exit 2 also files an issue and fails the job — and the issue body's "detected a mismatch" wording is not to be trusted until the `compare hashes` step's exit code is checked.
 - If a build job itself went red, triage its `measure hashes` step there.
 
 ## Exercising the diagnostic path on demand
@@ -50,7 +51,7 @@ The diffoscope step and the `repro-diff` upload run only when the builds diverge
 gh workflow run reproducibility-check.yml --ref <ref> --field force_diffoscope=true
 ```
 
-The input widens the `if:` on the diagnostic steps only — the diffoscope run and the `repro-diff` upload. `open issue (on mismatch)` and `fail job (on mismatch)` keep the mismatch-only condition, so a forced run can add execution but can never fabricate or suppress the reproducibility signal.
+The input widens the `if:` on the diagnostic steps only — the diffoscope run and the `repro-diff` upload. `open issue (on mismatch)` and `fail job (on mismatch)` keep the compare-nonzero condition unwidened by `force_diffoscope`, so a forced run can add execution but can never fabricate or suppress the reproducibility signal.
 
 A healthy forced run on a reproducible tree looks like this:
 
