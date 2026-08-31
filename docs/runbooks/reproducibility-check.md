@@ -37,14 +37,14 @@ The `gh issue create` invocation sets no `--assignee`; mismatches rely on defaul
 
 `compare-repro.sh` exits 2 when a hash field is absent, null, or malformed in either build's `build.json` — and likewise when it is called with the wrong argument count, `jq` is not on `PATH`, an input file is missing, or a payload is not a JSON object. None of those is a divergence — the *measurement* broke.
 
-- A `nix path-info --json` shape change is not the cause: both `measure` steps pipe it through `jq --exit-status` under `set -Eeuo pipefail`, so a shape change fails its own build job, and `compare` needs both builds and never runs.
+- A `nix path-info --json` shape change is not the cause: both `measure hashes` steps pipe it through `jq --exit-status` under `set -Eeuo pipefail`, so a shape change fails its own build job, and `compare` needs both builds and never runs.
 - What *can* reach `compare` is a `build.json` that uploaded or downloaded incompletely.
 - A `repro-diff` artifact is present on exit 2 — the diffoscope and upload steps gate on `exit_code != '0'`, which 2 satisfies — but it diffs builds whose measurement the compare script already rejected. Read the `build.json` files in the `repro-build-a` / `repro-build-b` artifacts instead.
-- If a build job itself went red, triage its `measure` step there.
+- If a build job itself went red, triage its `measure hashes` step there.
 
 ## Exercising the diagnostic path on demand
 
-The diffoscope steps run only when the builds diverge, so on a reproducible tree they are never exercised and a break in them stays latent until the one day they are needed. `workflow_dispatch` carries a `force_diffoscope` input that runs them regardless:
+The diffoscope step and the `repro-diff` upload run only when the builds diverge, so on a reproducible tree they are never exercised and a break in them stays latent until the one day they are needed. `workflow_dispatch` carries a `force_diffoscope` input that runs them regardless:
 
 ```bash
 gh workflow run reproducibility-check.yml --ref <ref> --field force_diffoscope=true

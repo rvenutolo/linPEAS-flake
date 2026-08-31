@@ -112,7 +112,7 @@ while IFS=$'\037' read -r name files scripts; do
     break
   done
   # The block's two declarations disagree: its trigger regex says a lock
-  # bump can staleness this doc, but nothing in the block names a generator
+  # bump can leave this doc stale, but nothing in the block names a generator
   # the bumper could run. Dropping such a block would take it out of both
   # directions of the set comparison at once, so the hook the bumper
   # regenerates nothing for would read as agreement.

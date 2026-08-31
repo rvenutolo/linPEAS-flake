@@ -29,7 +29,7 @@ upstream tag replacement (intentional or compromise).
 
 ## Trust model and SLSA attestation semantics
 
-Every release artifact (OCI image, pin file, per-arch CycloneDX SBOM) carries a SLSA
+Every release artifact (each per-arch OCI image, the pin file, the per-arch CycloneDX SBOMs) carries a SLSA
 build-provenance attestation, verifiable with
 `gh attestation verify <artifact> --repo rvenutolo/linPEAS-flake`. These
 attestations prove **build provenance**: the published artifact was
@@ -94,10 +94,7 @@ verifies whatever digest a tag pull happened to record — is not.
 
 ## Auto-merge surface
 
-Four independent automations merge to `main` without human review (a
-different grouping from the three-groups-plus-watcher framing in
-Architecture → Auto-update, whose fourth entry is the flake-input
-staleness watchdog):
+Four independent automations merge to `main` without human review:
 
 - `update-linpeas.yml` (daily) — upstream `linpeas.sh` content.
 - `update-flake-lock.yml` (weekly) — `nixpkgs` and other flake input revs.
@@ -106,6 +103,10 @@ staleness watchdog):
     tracked flake inputs, and the SchemaStore pin.
 - `release-on-bump.yml` (per release) — the regenerated `CHANGELOG.md`,
     committed via an auto-merging PR under the same App identity.
+
+This is a different grouping from the three-groups-plus-watcher framing
+in Architecture → Auto-update, whose fourth entry is the flake-input
+staleness watchdog rather than the changelog committer.
 
 Each is gated by CI (build success + SRI-hash integrity), not by content
 review. A compromise of the upstream `linpeas.sh` feed produces an

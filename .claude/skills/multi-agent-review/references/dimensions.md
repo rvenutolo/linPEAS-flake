@@ -58,7 +58,10 @@ Slices:
 
 - `check-*` validators
 - `refresh-*` generators
-- `scripts/lib/*.sh` libraries + `scripts/*.awk` programs + helpers / runners / everything else
+- `scripts/lib/*.sh` libraries + `scripts/*.awk` programs + the tracked
+    `.claude/` skill shell tooling (`git ls-files '.claude/*.sh'` —
+    CI-required via the `docs-audit-*` members of `harness-group`) +
+    helpers / runners / everything else
 
 Hunt: edge cases, silent failures, quoting/`set -o pipefail` gaps, `done < <(...)` process-substitution exit-swallowing, `yq | tag` conflating absent vs present-null, divergence from the behavior the header comment claims.
 
@@ -94,7 +97,8 @@ Refuters: `ci: gates it` ≠ prose is correct — freshness gates only generated
 
 ## 5. Test-harness quality — *deep*
 
-Pair each `tests/*.test.sh` with the script it covers. **Seed this dimension with dimensions 2 & 6 confirmed findings** — highest-yield: a silent-pass bug is usually an untested rejection path.
+Pair each `tests/*.test.sh` — plus each tracked `.claude/` harness test
+(`git ls-files '.claude/*.test.sh'`) — with the script it covers. **Seed this dimension with dimensions 2 & 6 confirmed findings** — highest-yield: a silent-pass bug is usually an untested rejection path.
 
 Slices:
 

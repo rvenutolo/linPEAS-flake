@@ -1,4 +1,4 @@
-# Runbook — `settings-drift-checker` GitHub App
+# `settings-drift-checker` GitHub App runbook
 
 The `settings-posture-drift-check` workflow (and any other drift-check that needs admin-scoped read access to repo settings) authenticates as a dedicated read-only GitHub App. This isolates the admin-read blast radius from both `secrets.GITHUB_TOKEN` (which never receives admin scope) and from the `linpeas-flake-bumper` App used for bump commits.
 

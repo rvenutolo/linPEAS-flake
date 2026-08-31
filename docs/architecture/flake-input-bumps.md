@@ -37,7 +37,9 @@ only; and `nix/hooks/*` reads `pkgs.lib` only,
 with one exception — the `nixpkgs-hammering` hook exports
 `NIX_PATH="nixpkgs=${inputs.nixpkgs}"` so `nix/hammer-shim.nix` evaluates
 the linpeas derivation against stable. The stable-`pkgs` consumers in the
-tree are `nix/linpeas.nix`, `nix/image.nix` and that shim. A stable bump
+tree are `nix/linpeas.nix`, the `linpeas-image` derivation in
+`nix/image.nix` (the `site` derivation in the same file builds from
+`pkgs-unstable`), and that shim. A stable bump
 therefore cannot move `nixfmt`,
 `prettier`, `mdformat`, `shfmt`, `taplo`, `just`, `zizmor`, `statix`,
 `deadnix`, `actionlint`, `shellcheck`, or `mkdocs`.
