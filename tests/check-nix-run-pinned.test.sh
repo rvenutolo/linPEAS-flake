@@ -64,7 +64,7 @@ function expect() {
 # still exercises every clean shape; it stops pretending four silent
 # passes are four different things to have proven.
 run_expect 'all-good-shapes' \
-  "${FIXTURES}/good-shell.sh"$'\n'"${FIXTURES}/good-pinned-rev.sh"$'\n'"${FIXTURES}/good-local-flake.sh"$'\n'"${FIXTURES}/good-prose.md" \
+  "${FIXTURES}/good-shell.sh"$'\n'"${FIXTURES}/good-pinned-rev.sh"$'\n'"${FIXTURES}/good-local-flake.sh"$'\n'"${FIXTURES}/good-prose.md"$'\n'"${FIXTURES}/good-composite-action.yml" \
   0 ""
 
 # The three fixtures below carry the identical violating line (`nix run
@@ -79,6 +79,7 @@ expect bad-shell-unpinned.sh 1 "nix shell nixpkgs#cosign --command cosign versio
 expect bad-develop-unpinned.sh 1 "nix develop nixpkgs#foo"
 expect bad-build-unpinned.sh 1 "nix build nixpkgs#bar"
 expect bad-trailing-ref.sh 1 "nix shell .#jq nixpkgs#cosign --command cosign version"
+expect bad-composite-action.yml 1 "nix shell nixpkgs#yq-go --command yq --version"
 
 # @description Drive the enumeration itself, not a fixture: with
 # PATHS_OVERRIDE unset the script enumerates via `git ls-files`, and an

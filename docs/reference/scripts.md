@@ -900,9 +900,9 @@ per-job `permissions:` block in every workflow.
 ### scripts/check-nix-run-pinned.sh
 
 Lint: ban any `nix` invocation against the bare
-`nixpkgs` registry ref across workflows, scripts, and shell-fenced
-markdown. Allowed alternatives use the repo's own flake or an
-explicit commit pin.
+`nixpkgs` registry ref across workflows, composite actions, scripts,
+and shell-fenced markdown. Allowed alternatives use the repo's own
+flake or an explicit commit pin.
 
 ### scripts/check-no-opaque-procsub.sh
 

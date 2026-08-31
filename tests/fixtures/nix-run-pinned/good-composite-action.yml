@@ -1,0 +1,7 @@
+name: good composite
+description: fixture invoking nix through the repo's own flake outputs
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: nix shell .#jq --command jq --version
