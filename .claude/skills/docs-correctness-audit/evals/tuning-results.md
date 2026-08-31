@@ -81,5 +81,6 @@ bash seeded-defects/plant.sh --clean
 
 A configuration ships only if seed recall holds at 14/14 across two runs (no
 seed category dropped) **and** mean reader-tokens fall below the
-per-subdirectory baseline. A measured difference inside the baseline's run-to-run noise is
+per-subdirectory baseline. The recorded figures are single-run means with no
+measured spread, so treat a difference under roughly ten percent as
 inconclusive, not a win.

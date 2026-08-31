@@ -15,7 +15,11 @@ posture is non-negotiable.
     bump credentials.
 - Run `just verify` locally — runs the batched lint groups, harnesses,
     doc-freshness checks, and standalone enforcers CI runs. Hook-only lints
-    run under `just lint`.
+    run under `just lint`. Two enforcers in the recipe
+    (`check-tag-protection.sh`, `check-protect-main.sh`) probe the upstream
+    repo's live rulesets over the GitHub API and need an authenticated `gh`;
+    on a fork or without `gh auth login` they report could-not-run (exit 2)
+    and fail the recipe while everything else still runs.
 
 ## Local development
 

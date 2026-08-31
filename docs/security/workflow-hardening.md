@@ -3,7 +3,7 @@
 Hardening invariants for this repo's workflows, scripts and test harnesses. Most rules are locked in by a script lint, run as a member check of a batched lint group job (`lint-workflow-security`, `lint-script-hygiene`, or `lint-doc-invariants`) and as a pre-commit hook. The exceptions:
 
 - `setup-nix-required` is enforced by a standalone CI job.
-- Many of the script-hygiene rules (`test-reachable`, `tool-guarded`, `guard-exit-code`, and the others whose section says so) are CI-only with no hook.
+- Many of the script-hygiene rules (`test-reachable`, `tool-guarded`, `guard-exit-code`, and the others the [enforcement matrix](enforcement-matrix.md)'s pre-commit column marks hook-less) are CI-only with no hook.
 - A few run under the `doc-freshness` or `harness-group` CI jobs instead of a lint group.
 - A few are convention-only with no automated enforcer (lean lint-shell routing).
 

@@ -85,7 +85,8 @@ agree on one source of truth.
 
 Run the bundled collector once and keep its output. It lives in this skill's
 own `scripts/` directory — resolve its absolute path from the directory of the
-SKILL.md you were given, then run it from the repo root:
+SKILL.md you were given, then run it from anywhere inside the repo checkout
+(it resolves and cds to the repo root itself):
 
 ```sh
 bash <this-skill-dir>/scripts/collect-ground-truth.sh
@@ -102,7 +103,11 @@ tracked docs, and an **`UNRESOLVED INTERNAL LINKS / ANCHORS`** check via
 so a path/recipe/output/job/cron named in a doc is checked against one
 authoritative list, not re-derived per agent (and not re-run by all of them).
 `references/repo-map.md` explains what each field means and how to use it; the
-collector is its executable form.
+collector is its executable form. If the bundle comes back short — the
+ephemeral sweep fails loud on an unterminated fence or generated block and
+aborts the collector before the later sections (the link check included)
+emit — the malformed doc is itself a high-severity finding: record it, and
+treat the never-emitted sections as unchecked rather than clean.
 
 ### 2. Fan out read-only readers, one per doc cluster
 

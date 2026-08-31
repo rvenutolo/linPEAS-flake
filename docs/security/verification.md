@@ -252,7 +252,7 @@ security-review entry.
 ## OCI image CVE scan (Trivy)<a name="oci-image-cve-scan-trivy"></a>
 
 `image-cve-scan.yml`'s `image-cve-scan-trivy` job (weekly cron +
-path-filtered push to `main` + dispatch) uploads SARIF (CRITICAL + HIGH) to code-scanning, then
+path-filtered push to `main` + dispatch) uploads SARIF (CRITICAL + HIGH) to the Security tab, then
 post-processes the SARIF to count CRITICAL findings and **fails the
 job** when count > 0. The job emits an `outputs.has-finding` boolean
 (`'true'` iff the count step ran and returned a non-zero count) so
@@ -422,8 +422,12 @@ The sidecar serves two consumers:
 The contract is: for every `<asset>` in a release, both
 `<asset>.sigstore` (cosign signature bundle) and
 `<asset>.intoto.jsonl` (build provenance bundle) MUST be present.
-A release missing either sidecar is a regression; the recovery
-procedure lives in
+A release missing either sidecar is a regression. Nothing in-tree
+asserts this contract — the weekly parity cron's reason ladder covers
+the `.sigstore` blob signatures only, and the enforcement matrix records
+no enforcer for the sidecar rows — so detection is indirect: a missing
+sidecar surfaces as a drop in the Scorecard Signed-Releases score. The
+recovery procedure lives in
 [docs/runbooks/scorecard-signed-releases-backfill.md](../runbooks/scorecard-signed-releases-backfill.md).
 
 ## gh-attestation-repo invariant<a name="gh-attestation-repo-invariant"></a>
