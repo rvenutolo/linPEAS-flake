@@ -18,8 +18,9 @@
 # index arithmetic still evades. A glob-driven scan fills its
 # array through `glob_into` — neither a `for` loop at its own head nor an
 # array assignment in its element list may expand a pattern, whether the
-# metacharacter is written bare in the word itself, sits one level in as
-# the alternate or default word of an expansion that word holds, or is
+# metacharacter is written bare in the word itself, sits one level in
+# among the Lit parts of the word any expansion there carries (its
+# alternate, default, or pattern-operand word alike), or is
 # held in a variable this same file assigns a pattern and read unquoted
 # at either place, unless an inline `# glob-exempt: <rationale>` marker
 # says an empty match set is that site's normal state. A read under a `+`

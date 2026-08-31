@@ -65,9 +65,11 @@ After backfill:
 gh release view <tag> --json assets --jq '.assets[].name' | sort
 ```
 
-Expect every primary artifact (`linpeas-pin.json`,
-`linpeas-image-<arch>.cdx.json`) to have BOTH a `.sigstore` and a
-`.intoto.jsonl` sibling.
+Expect every primary artifact the release actually carries —
+`linpeas-pin.json` always, plus `linpeas-image-<arch>.cdx.json` on an
+image-backed release — to have BOTH a `.sigstore` and a
+`.intoto.jsonl` sibling. On an image-less backfill the image jobs
+skip, so only the pin artifact and its two sidecars are expected.
 
 Then trigger the scorecard watchdog:
 
