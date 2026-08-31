@@ -86,7 +86,9 @@ as a member check of the `lint-doc-invariants` CI job.
 
 ## Typos
 
-`_typos.toml` excludes `tests/fixtures/**` because fixtures contain
+`_typos.toml` excludes generated and vendored paths (`flake.lock`,
+`linpeas-pin.json`, `docs/_data/**`, `result*`, `.direnv/**`) along
+with `tests/fixtures/**` — the fixtures because they contain
 intentionally malformed content (bad versions, malformed renovate
 configs); future fixtures may include realistic prose that would
 otherwise trigger typo flags.
@@ -211,7 +213,7 @@ read forty.
 | PR / issue refs    | `#123`, `PR #123`, `issue #123`                                               |
 | Dates-in-prose     | `2026-06-18`, `<Month> 2026`, `Q2 2026`                                       |
 | Planning labels    | `GAP-1`, `P1.2`, `Wave-P3`, `Phase 2`, `AU-P-4`, `SC-POST-5`, `plan 6`, `F-7` |
-| Review-pass labels | `(D3)`, `(L4,`, `Per D3`, `D5:`                                               |
+| Review-pass labels | `(D3)`, `(L4,` / `(L4)`, `Per D3`, `D5:`                                      |
 | Literal `.claude/` | any `.claude/` path — prose must not point into the Claude tooling tree       |
 
 The PR/issue-ref match is boundary-guarded so anchor targets

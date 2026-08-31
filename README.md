@@ -154,7 +154,8 @@ thin.
 ## Continuous integration
 
 Every PR runs a gated set of required checks before auto-merge; pushes
-to `main` re-run the same set post-merge. The authoritative check list lives in
+to `main` re-run the same set post-merge, except `lint-pr-title` and
+`dependency-review`, which are `pull_request`-only by trigger. The authoritative check list lives in
 [`docs/security/required-checks.md`](docs/security/required-checks.md);
 the full job inventory + cron schedule lives in
 [`docs/architecture/ci.md`](docs/architecture/ci.md).

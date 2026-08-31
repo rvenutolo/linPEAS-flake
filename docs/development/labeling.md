@@ -79,8 +79,10 @@ in the other scores a hand-authored file's every edit at zero.
 
 The five `size/*` labels are tracked in `.github/labels.yml`. The
 repo does not currently sync that manifest to GitHub automatically;
-labels are created manually with the loop below whenever a new one is
-added to that manifest:
+labels are created manually with the loop below whenever a new
+`size/*` label is added to that manifest (the same
+`gh label create --force` pattern applies to the area and release-note
+labels):
 
 ```sh
 gh label create size/XS --force --color 009800 --description "0-9 lines changed"

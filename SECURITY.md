@@ -255,8 +255,9 @@ content, plus job-specific endpoints. `cache.nixos.org` and
 `releases.nixos.org` are not part of that baseline — they appear only on
 jobs that install or invoke Nix, and `scripts/check-egress-allowlist.sh`
 rejects either host on a job that carries it without a Nix-reaching
-step, so copying them into a new job's allowlist by habit fails the lint
-rather than passing it. Block mode drops any egress to a host outside
+step or a rationale-bearing `# egress-nix-exempt:` comment, so copying
+them into a new job's allowlist by habit fails the lint rather than
+passing it. Block mode drops any egress to a host outside
 the allowlist, so a compromised step cannot exfiltrate a credential (App
 token, Docker Hub PAT, signing key) to an attacker-controlled host.
 Rotating host families — Actions cache/artifact storage

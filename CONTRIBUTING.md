@@ -41,8 +41,9 @@ The canonical list of required checks lives in
 [`docs/security/required-checks.md`](docs/security/required-checks.md).
 Highlights:
 
-- `commitlint`, `lint-pr-title` — Conventional Commits client- and
-    server-side.
+- `commitlint`, `lint-pr-title` — Conventional Commits on branch
+    commits and on the PR title respectively (both server-side; the
+    `commitlint` pre-commit hook is the local mirror).
 - `lint-workflow-security` — batched workflow-security lints; e.g.
     member check `uses-sha-pinned`: every non-local `uses:` is a full
     40-hex SHA (path-relative `./…` composite refs excepted).
