@@ -120,7 +120,7 @@ Guards 1–3 are lint-enforced by `scripts/check-bump-script-integrity.sh`
 ## verify-latest-release upstream parity<a name="verify-latest-release-upstream-parity"></a>
 
 The weekly verify cron re-fetches the pinned `linpeas.sh` URL, recomputes the SRI
-hash via `openssl dgst -sha256 -binary | base64 --wrap=0`, compares against
+hash via `openssl dgst -sha256 -binary <file> | base64 --wrap=0`, compares against
 `linpeas-pin.json`. Failure = security incident.
 
 ## verify-latest-release failure attribution<a name="verify-latest-release-failure-attribution"></a>

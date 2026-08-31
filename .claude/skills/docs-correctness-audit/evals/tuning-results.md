@@ -39,8 +39,8 @@ read once.
 
 Token figures are this harness's per-reader accounting (sum of subagent token
 usage), not a single controller-visible total; treat the **ratio**, not the
-absolute, as the portable result. The third row's cost cell is deliberately
-empty: that configuration was measured in a separate session, against a tree
+absolute, as the portable result. The third row's cost cell deliberately
+carries no number: that configuration was measured in a separate session, against a tree
 whose known drift had just been corrected, so its token total is not
 commensurable with the first two rows. Recall is still comparable, because
 14/14 is the ceiling — a configuration cannot beat it, only fall short.
