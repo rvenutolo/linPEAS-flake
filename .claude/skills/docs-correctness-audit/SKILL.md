@@ -48,8 +48,9 @@ agree on one source of truth.
     `references/repo-map.md` §3 says otherwise, gated for freshness by CI. Their
     content is not authored prose; the generator is the source of truth. Flag only
     (a) hand-written prose *outside* the `BEGIN/END` generated markers, or (b) a
-    real generator-vs-reality gap (rare; mark low-confidence). A fix to generated
-    content means fixing the generator, not the doc — out of scope for the report stage.
+    real generator-vs-reality gap (rare; mark low-confidence). Applying a fix to
+    generated content means fixing the generator, not the doc — report the gap,
+    but edit nothing during the report stage.
 - **"CI gates it" is NOT proof the prose is correct — this is the signature
     drift of this repo, so make it the spine of the audit.** Freshness checks
     (`*-fresh`) gate only the *generated block bodies*; they say nothing about

@@ -128,7 +128,9 @@ harnesses named on the `PARITY_EXEMPT_ALLOWED` array in
 it means widening that allowlist in the same change, which is the
 review moment it deserves.
 
-Environment-variable overrides scoped to test invocation:
+Environment-variable overrides scoped to test invocation (a selection
+of the most commonly needed, not the full set — each script's own
+source is the canonical list):
 
 | Variable                             | Script                                                                                                                              | Purpose                                                                                         |
 | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |

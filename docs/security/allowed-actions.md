@@ -29,7 +29,9 @@ wagoid/*
 
 ## Adding a vendor
 
-1. Edit this doc — append the new pattern.
+1. Edit this doc — insert the new pattern in case-insensitive
+    alphabetical order. The drift check compares the two sides as sorted
+    sets, so the ordering is a readability convention it cannot enforce.
 
 1. Edit the live setting — build `patterns_allowed` by copying the
     canonical block above **verbatim** (with your new pattern appended),

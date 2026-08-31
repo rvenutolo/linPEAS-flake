@@ -92,20 +92,15 @@ how branch commits and bot commits both satisfy this.
 
 ## Tag protection
 
-The `release-tag-protection` ruleset blocks deletion, non-fast-forward
-update, and arbitrary update of release-tag refs matching
-`refs/tags/[0-9]{8}-[0-9a-f]{7,40}`.
+The `release-tag-protection` ruleset (target=tag, enforcement=active,
+bypass_actors empty) blocks deletion, non-fast-forward update, and
+arbitrary update of release-tag refs matching
+`refs/tags/[0-9]{8}-[0-9a-f]{7,40}` (fallback include of
+`refs/tags/**` if GitHub ever rejects the regex).
 
-Drift is asserted by the `tag-protection-drift-check` CI job.
-
-Ruleset `release-tag-protection` (target=tag, enforcement=active,
-rules=[deletion, update, non_fast_forward], bypass_actors empty,
-include=`refs/tags/[0-9]{8}-[0-9a-f]{7,40}`; fallback `refs/tags/**` if
-regex ever rejected).
-
-Lint: `scripts/check-tag-protection.sh` via `tag-protection-drift-check`
-required CI job. GitHub rulesets API shape change → update script +
-fixtures together.
+Drift is asserted by `scripts/check-tag-protection.sh` via the
+`tag-protection-drift-check` required CI job. If the GitHub rulesets
+API shape changes, update the script and its fixtures together.
 
 ## Renovate invariants
 

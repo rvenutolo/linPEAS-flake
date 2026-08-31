@@ -77,7 +77,9 @@ This means:
     attestation is attached per arch, not to the index.
 
 The release pipeline re-checks the published manifest tags after it
-publishes them: the `verify manifest tags resolve to attested per-arch digests` step in `release-on-bump.yml`'s `verify` job re-fetches both the
+publishes them: the
+`verify manifest tags resolve to attested per-arch digests` step in
+`release-on-bump.yml`'s `verify` job re-fetches both the
 `:VERSION` and `:latest` manifests post-publish and confirms their
 per-arch digests match the values that were attested. A drift at this
 step fails the release, so a tag repointed before the release completes
@@ -112,9 +114,10 @@ accepted trust model for a thin wrapper repo — it matches the trust model
 of `curl ... | bash`, with the addition of reproducible, hash-pinned
 downloads and build-provenance attestations.
 
-`dockerhub-sync.yml` triggers on `release-on-bump` workflow_run
-completed-successfully (plus manual dispatch). It does NOT trigger on
-arbitrary README pushes. This narrows the `DOCKERHUB_TOKEN_DELETE`
+`dockerhub-sync.yml` triggers on `release-on-bump`
+`workflow_run: completed`, with the `sync` job gated on
+`conclusion == 'success'` (plus manual dispatch). It does NOT trigger
+on arbitrary README pushes. This narrows the `DOCKERHUB_TOKEN_DELETE`
 exposure window to release-time only.
 
 The `workflow_run` trigger does not introduce a TOCTOU concern:
@@ -170,7 +173,9 @@ the notify jobs.
     and auto-merge bump and changelog PRs — and, in
     `renovate-flake-lock-refresh.yml`, to commit the refreshed `flake.lock`
     onto an existing Renovate PR branch rather than open one.
-    The App is installed only on this repository with `Contents: Read and write` and `Pull requests: Read and write` permissions. Installation
+    The App is installed only on this repository with
+    `Contents: Read and write` and `Pull requests: Read and write`
+    permissions. Installation
     tokens are minted per job by `actions/create-github-app-token`, live
     one hour, and revoke at job end. See
     [`docs/security/repo-config.md`](docs/security/repo-config.md) for
@@ -181,8 +186,15 @@ the notify jobs.
     release pipeline and its post-release sync. The split limits blast
     radius:
 
-    - `DOCKERHUB_TOKEN_RW` — Read, Write on `rvenutolo/linpeas`. Used ONLY by `release-on-bump.yml` (the `image-amd64`, `image-arm64`, and `manifest` jobs). The `verify` job deliberately runs without it — `gh attestation verify` reads from Sigstore and the GitHub API, and `cosign verify` reads the published images with anonymous registry pulls, so no registry push credential enters that job's env. Cannot delete tags.
-    - `DOCKERHUB_TOKEN_DELETE` — Read, Write, Delete on `rvenutolo/linpeas`. Used ONLY by `dockerhub-sync.yml`.
+    - `DOCKERHUB_TOKEN_RW` — Read, Write on `rvenutolo/linpeas`. Used
+        ONLY by `release-on-bump.yml` (the `image-amd64`, `image-arm64`,
+        and `manifest` jobs). The `verify` job deliberately runs without
+        it — `gh attestation verify` reads from Sigstore and the GitHub
+        API, and `cosign verify` reads the published images with
+        anonymous registry pulls, so no registry push credential enters
+        that job's env. Cannot delete tags.
+    - `DOCKERHUB_TOKEN_DELETE` — Read, Write, Delete on
+        `rvenutolo/linpeas`. Used ONLY by `dockerhub-sync.yml`.
 
     The `Delete` capability is required by the `peter-evans/dockerhub-description`
     action used in `dockerhub-sync.yml`, which calls the Docker Hub repo-metadata
@@ -209,7 +221,8 @@ the notify jobs.
 - `SCORECARD_PAT` — a fine-grained read-only personal access token
     consumed as `GITHUB_AUTH_TOKEN` by `scorecard-drift-check.yml` on the
     scorecard step only; the `Webhooks` check needs `admin:repo_hook` read,
-    which the workflow-level `GITHUB_TOKEN` cannot be granted. Rotation: [`docs/runbooks/scorecard-pat-rotation.md`](docs/runbooks/scorecard-pat-rotation.md).
+    which the workflow-level `GITHUB_TOKEN` cannot be granted. Rotation:
+    [`docs/runbooks/scorecard-pat-rotation.md`](docs/runbooks/scorecard-pat-rotation.md).
 
 ## SBOM attestations
 
@@ -246,24 +259,43 @@ Rotating host families — Actions cache/artifact storage
 (`*.githubapp.com`), and the Actions runtime
 (`*.actions.githubusercontent.com`) — are matched by wildcard.
 
-When a job legitimately needs a new endpoint, add it to that job's `allowed-endpoints:`; never relax a job back to audit. `scripts/check-harden-runner-block.sh` (pre-commit and the `lint-workflow-security` CI job) fails any harden-runner step that is not `egress-policy: block` with a non-empty allowlist.
+When a job legitimately needs a new endpoint, add it to that job's
+`allowed-endpoints:`; never relax a job back to audit.
+`scripts/check-harden-runner-block.sh` (pre-commit and the
+`lint-workflow-security` CI job) fails any harden-runner step that is
+not `egress-policy: block` with a non-empty allowlist.
 
 ## Settings posture
 
-Repository settings knobs the security model depends on (probe-verifiable from `docs/security/settings-posture.md`):
+Repository settings knobs the security model depends on (each
+probe-verifiable — copy-pasteable commands in
+`docs/security/settings-posture.md`):
 
-- `secret_scanning`, `secret_scanning_push_protection`, `dependabot_security_updates` all **enabled**.
-- Actions: `allowed_actions: selected`, with the vendor allowlist in [`docs/security/allowed-actions.md`](docs/security/allowed-actions.md).
-- Actions: `sha_pinning_required: true`. Belt-and-braces against Renovate misconfiguration — every `uses:` must be SHA-pinned at GitHub level, not just by Renovate convention. GitHub rejects an unpinned `uses: actions/checkout@v4` with "all actions must be pinned to a full-length commit SHA".
-- Workflow tokens: `default_workflow_permissions: read`, `can_approve_pull_request_reviews: false`. Prevents a compromised workflow from self-approving a PR.
+- `secret_scanning`, `secret_scanning_push_protection`,
+    `dependabot_security_updates` all **enabled**.
+- Actions: `allowed_actions: selected`, with the vendor allowlist in
+    [`docs/security/allowed-actions.md`](docs/security/allowed-actions.md).
+- Actions: `sha_pinning_required: true`. Belt-and-braces against
+    Renovate misconfiguration — every `uses:` must be SHA-pinned at
+    GitHub level, not just by Renovate convention. GitHub rejects an
+    unpinned `uses: actions/checkout@v4` with "all actions must be
+    pinned to a full-length commit SHA".
+- Workflow tokens: `default_workflow_permissions: read`,
+    `can_approve_pull_request_reviews: false`. Prevents a compromised
+    workflow from self-approving a PR.
 - `github-pages` environment: `can_admins_bypass: false`.
 
 Not probe-verifiable (manual UI check):
 
 - Fork-PR approval gate: first-time contributors require approval before workflows run.
 - Merge-method flags: merge commit only; squash and rebase disabled.
-- Account: 2FA enabled on the maintainer account with non-SMS second factor (specifics not recorded).
+- Account: 2FA enabled on the maintainer account with non-SMS second
+    factor (specifics not recorded).
 
-Each of these is called out, with the reason the drift check cannot reach it, under [Drift detection](docs/security/settings-posture.md#drift-detection).
+Each of these is called out, with the reason the drift check cannot
+reach it, under
+[Drift detection](docs/security/settings-posture.md#drift-detection).
 
-Any drift on any of the above is treated as a security incident. The `docs/security/settings-posture.md` file is the source of truth and includes copy-pasteable probe commands.
+Any drift on any of the above is treated as a security incident. The
+`docs/security/settings-posture.md` file is the source of truth and
+includes copy-pasteable probe commands.
