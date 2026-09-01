@@ -180,7 +180,9 @@ runs the pair.
     The extension is whatever the subject lint reads — `.yml` for the
     workflow scanners, but `.sh`, `.json`, `.md` and others elsewhere.
 
-1. Add an `expect` line to the harness, for example:
+1. Add an assertion line — `expect`, or `run_scenario` with a leading
+    scenario name, matching whichever shape the harness already uses —
+    for example:
 
     ```bash
     expect bad-new-mode.yml 1 "stderr substring identifying the failure"
@@ -207,7 +209,8 @@ runs the pair.
 1. Write the script's invariant first; commit it.
 
 1. Create `tests/<script-name>.test.sh` mirroring the existing
-    harnesses' shape (env-var overrides, `expect` function).
+    harnesses' shape (env-var overrides; an `expect` or `run_scenario`
+    scenario runner).
 
 1. Declare exactly one subject. A harness that assigns
     `SCRIPT="${REPO_ROOT}/scripts/<name>.sh"` already declares its

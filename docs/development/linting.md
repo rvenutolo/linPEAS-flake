@@ -457,13 +457,14 @@ arriving at a loop head through a command substitution or an indirect
 expansion is not seen at all.
 
 A loop whose empty match set genuinely is the normal state — sweeping a
-leftover scratch file, say — opts out with an inline `# glob-exempt: <rationale>` trailing the site's own line or sitting anywhere in the
-contiguous comment block directly above it; the marker has to open the
+leftover scratch file, say — opts out with an inline
+`# glob-exempt: <rationale>` trailing the site's own line or sitting
+anywhere in the contiguous comment block directly above it; the marker has to open the
 comment — a sentence naming it is prose, not an exemption — the
 rationale must be non-empty, the marker word is keyed to the kind of
 site so the sibling `# enumerate-exempt:` excuses nothing here, and a
-clean run prints the exemption count. Full rationale: [Workflow
-hardening →
+clean run prints the exemption count. Full rationale:
+[Workflow hardening →
 enumerate-helper-required](../security/workflow-hardening.md#enumerate-helper-required).
 
 ## Filter-narrowed scan breadth
@@ -526,8 +527,9 @@ still flagged: the rule cannot tell that apart from a re-derived
 selection, so it takes a marker like any other in-loop or hop-reached
 read.
 
-All three markers — `# enumerate-exempt:`, `# glob-exempt:`, and `# filter-exempt:` — are censused the same way regardless of which rule's
-sites a file happens to hold: a marker the walk never consumes — because
+All three markers — `# enumerate-exempt:`, `# glob-exempt:`, and
+`# filter-exempt:` — are censused the same way regardless of which
+rule's sites a file happens to hold: a marker the walk never consumes — because
 its site was rewritten into a compliant shape, moved, or left the file —
 is reported as its own finding rather than passed over. The clean run's
 summary line counts it as a fourth field alongside files scanned, sites

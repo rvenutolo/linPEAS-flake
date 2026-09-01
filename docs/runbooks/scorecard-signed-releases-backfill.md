@@ -23,9 +23,9 @@ Do NOT use for:
     case — see the trigger conditions above: `force-republish` re-runs
     neither the provenance attestation nor the sidecar upload, both
     gated on the release not existing OR `backfill-tag`, so use
-    `backfill-tag=<current tag>`.) - A release with a PARTIAL per-arch
-    image set (some but not all six of the
-    `{ghcr.io,docker.io}:<tag>-{amd64,arm64}` tags and the
+    `backfill-tag=<current tag>`.)
+- A release with a PARTIAL per-arch image set (some but not all six of
+    the `{ghcr.io,docker.io}:<tag>-{amd64,arm64}` tags and the
     `{ghcr.io,docker.io}:<tag>` indexes present). The preflight fails
     loudly on this half-published state — see "Partial image set" below.
 
