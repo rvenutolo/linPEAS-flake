@@ -22,7 +22,7 @@ links here rather than embedding the snippets inline, so:
 - [When this applies](#when-this-applies)
 - [Prerequisites](#prerequisites)
 - [Step-by-step](#step-by-step)
-  - [1. Delete the GitHub release (re-push path only)](#1-delete-the-github-release-re-push-path-only)
+  - [1. Delete the GitHub release (retrigger-PR path only)](#1-delete-the-github-release-retrigger-pr-path-only)
   - [2. Delete the orphan docker.io arch tag](#2-delete-the-orphan-dockerio-arch-tag)
   - [3. Re-trigger the release pipeline](#3-re-trigger-the-release-pipeline)
   - [4. Confirm green end-to-end](#4-confirm-green-end-to-end)
@@ -38,9 +38,9 @@ The push loop inside `release-on-bump.yml` per-arch jobs runs
 `docker.io` first, then `ghcr.io`. The two failure modes are:
 
 - **docker.io push failed.** Nothing was pushed to either registry
-    for that arch, so that arch needs no registry-side cleanup; only the
-    GitHub release needs deleting before the retry (the tag stays — see
-    step 1).
+    for that arch, so that arch needs no registry-side cleanup; on the
+    retrigger-PR path only, the GitHub release needs deleting before
+    the retry (the tag always stays — see step 1).
 - **ghcr.io push failed after docker.io succeeded.** docker.io has
     the arch-suffixed tag (`{version}-{arch}`) but ghcr.io does not.
     The `manifest` job is skipped, so neither registry has the
@@ -65,10 +65,12 @@ The push loop inside `release-on-bump.yml` per-arch jobs runs
 
 ## Step-by-step<a name="step-by-step"></a>
 
-### 1. Delete the GitHub release (re-push path only)<a name="1-delete-the-github-release-re-push-path-only"></a>
+### 1. Delete the GitHub release (retrigger-PR path only)<a name="1-delete-the-github-release-retrigger-pr-path-only"></a>
 
 **Skip this step if you will re-run with `force-republish`** (step 3,
-first bullet). On that path the `image-amd64`, `image-arm64`, `manifest`,
+first bullet) **and the existing release's assets are intact** — if the
+release itself must be recreated, delete it first (step 3, first
+bullet, covers this). On that path the `image-amd64`, `image-arm64`, `manifest`,
 `changelog`, and `verify` jobs re-run against the current pin while the `release` job's
 release-creation step stays gated by the "tag exists" guard, so the
 release and its assets survive and nothing needs deleting. The

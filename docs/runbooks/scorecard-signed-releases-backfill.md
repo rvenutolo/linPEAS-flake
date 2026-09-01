@@ -20,7 +20,7 @@ Do NOT use for:
 - A current-tag release missing images, the manifest, or the pin
     `.sigstore` bundle — use `force-republish` instead. (A current
     release missing `linpeas-pin.json.intoto.jsonl` IS this runbook's
-    case — see above: `force-republish` re-runs neither the provenance
+    case — see the trigger conditions above: `force-republish` re-runs neither the provenance
     attestation nor the sidecar upload, both gated on the release not
     existing OR `backfill-tag`, so use `backfill-tag=<current tag>`.)
 - A release with a PARTIAL per-arch image set (some but not all six of

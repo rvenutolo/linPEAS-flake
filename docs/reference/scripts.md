@@ -81,11 +81,11 @@ Lint: every `awk` invocation in a script under
 `scripts/` that carries a file operand must spell that operand
 `"$(awk_path "${var}")"`. `awk` reads an operand shaped
 `name=value` as a variable assignment rather than a filename; it
-scans the whole tree: the `scripts/*.sh` git pathspec crosses `/`,
-so the sourced libraries under `scripts/lib/` are in scope too. It
 then finds no file operand, reads stdin, and exits 0 having scanned
 nothing — so a relative path whose first component contains `=`
-scores as an empty file instead of failing loud.
+scores as an empty file instead of failing loud. The lint scans
+every script the `scripts/*.sh` git pathspec matches — the pathspec
+crosses `/`, so sourced libraries under `scripts/lib/` are in scope.
 `scripts/lib/awk-path.sh`'s `awk_path()` closes that for a wrapped
 operand; this lint is the backstop that keeps every future `awk`
 call wrapped too, rather than trusting a one-time sweep to hold

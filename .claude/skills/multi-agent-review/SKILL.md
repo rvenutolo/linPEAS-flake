@@ -198,10 +198,12 @@ After the last dimension, confirm `git status` shows no modified tracked files.
 ## Refutation log
 <per dimension: what was found-then-killed and why — shows the finder's
   false-positive rate, not just survivors. Unanimous kills only
-  (`nonRefuted === 0`); cite each entry's `votes` for the live skeptic count.>
+  (`nonRefuted === 0` with `votes.total >= 2`); cite each entry's `votes` for
+  the live skeptic count.>
 
 ### Contested kills
-<killed findings where one skeptic could NOT refute (contested=true): each with
+<killed findings where one skeptic of at least two could NOT refute
+  (contested=true, votes.total >= 2): each with
   its file:line, the dissenting skeptic's reason, and why the majority killed it.
   These are near-misses — a real finding may be buried here; do not omit them.>
 ```
