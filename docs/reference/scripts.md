@@ -689,7 +689,9 @@ request in scripts/\*.sh passes an explicit
 Lint: every `gh attestation verify` invocation across
 workflows, composite actions, scripts, nix modules, the justfile, and
 docs passes `--repo rvenutolo/linPEAS-flake` so verification is bound
-to this repository.
+to this repository. Parsing lives in
+`scripts/_attestation_invocations.awk`; this script owns path
+selection and reporting.
 
 ### scripts/check-guard-exit-code.sh
 

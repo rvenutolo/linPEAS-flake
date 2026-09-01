@@ -105,9 +105,10 @@ Four independent automations merge to `main` without human review:
 - `release-on-bump.yml` (per release) — the regenerated `CHANGELOG.md`,
     committed via an auto-merging PR under the same App identity.
 
-This is a different grouping from the three-groups-plus-watcher framing
-in Architecture → Auto-update, whose fourth entry is the flake-input
-staleness watchdog rather than the changelog committer.
+This is a different grouping from the three-groups-plus-watchers framing
+in [Auto-update](docs/architecture/auto-update.md), whose watchdog
+entries cover flake-input staleness and the pin bump rather than the
+changelog committer.
 
 Each is gated by CI (build success + SRI-hash integrity), not by content
 review. A compromise of the upstream `linpeas.sh` feed produces an
@@ -135,8 +136,10 @@ the release pipeline — `codeql.yml`, `octoscan.yml`,
 `image-cve-scan.yml`, `scorecard-drift-check.yml`, and
 `zizmor-drift-check.yml` (cron slots in
 [`docs/architecture/ci.md`](docs/architecture/ci.md); per-scanner scope
-and the overlap rationale in
-[`docs/security/workflow-scanners.md`](docs/security/workflow-scanners.md)).
+and the overlap rationale for the four workflow scanners in
+[`docs/security/workflow-scanners.md`](docs/security/workflow-scanners.md),
+and for the image CVE scan in
+[`docs/security/verification.md`](docs/security/verification.md#oci-image-cve-scan-trivy)).
 The rest of this section covers `codeql.yml`.
 
 **`codeql.yml`** scans GitHub Actions workflow definitions on every PR,
