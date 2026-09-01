@@ -51,9 +51,9 @@ substitution on `flake.nix` and **do not refresh `flake.lock`**, so a
 bump PR is red until the lockfile catches up.
 
 The lockfile refresh is performed automatically by the
-`renovate-flake-lock-refresh` workflow, which fires when `ci`
-completes for a same-repo `pull_request` run on a `renovate/*`
-branch, detects the bumped input
+`renovate-flake-lock-refresh` workflow, which runs on every `ci`
+completion and acts only when the run was a same-repo `pull_request`
+on a `renovate/*` branch, detects the bumped input
 from the PR title by handing it to
 `scripts/classify-renovate-flake-input.sh`, whose `case` arms recognise
 three title shapes — `cachix/git-hooks.nix`, `NixOS/nixpkgs-unstable`,
@@ -383,8 +383,11 @@ hooks (`uses-sha-pinned`, the `*-fresh` family, and the other
 are covered by `just verify` and the `doc-freshness` / lint-group CI
 jobs instead, though not all: `patch-tag-pins` is pre-commit only,
 `check-cron-table`'s live coverage is the `cron-table-drift-check`
-workflow, and `octoscan`'s live coverage is the `octoscan.yml`
-workflow (its harness runs test-only in `harness-group`).
+workflow, `octoscan`'s live coverage is the `octoscan.yml`
+workflow (its harness runs test-only in `harness-group`), and the two
+actionlint canaries (`actionlint-shellcheck-active`,
+`actionlint-pyflakes-active`) are pre-commit only, with
+`harness-group` running their fixture tests alone.
 The full, generated list is in
 [Git workflow → Pre-commit hooks](../development/git.md#pre-commit-hooks).
 
@@ -532,6 +535,8 @@ branch. The `identify` job gates on ALL of:
     is on a `renovate/` branch, so an author Renovate does not own is an
     anomaly, and a silent skip would be indistinguishable from a
     login-shape change disabling the whole workflow undetected.
+- The workflow is running in `rvenutolo/linPEAS-flake` itself
+    (`github.repository` guard), keeping repo forks inert.
 - PR head branch starts with `renovate/`.
 - The triggering `ci` run's own event was `pull_request` — a
     `workflow_run` fired by a push or dispatch is ignored.

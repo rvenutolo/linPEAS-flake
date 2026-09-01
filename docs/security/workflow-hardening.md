@@ -257,7 +257,7 @@ Enforced by `scripts/check-path-hygiene.sh`. Wired as the `lint-script-hygiene` 
 
 ## awk-operand-explicit
 
-Every `awk` invocation in `scripts/*.sh` that carries a file operand spells that operand `"$(awk_path "${var}")"`.
+Every `awk` invocation in a script under `scripts/` — the `scripts/*.sh` git pathspec crosses `/`, so `scripts/lib/` is in scope — that carries a file operand spells that operand `"$(awk_path "${var}")"`.
 
 `awk` reads a command-line operand shaped `name=value` as a variable assignment rather than a filename. Given one, it finds no file operand, reads stdin instead, and exits 0 having scanned nothing — so a relative path whose first path component contains `=` (e.g. `a=b/file.sh`) silently scores as an empty file rather than failing loud. `--` is no defense: POSIX makes operand-assignment parsing independent of it, and gawk treats a `--` placed after the program as a filename rather than an end-of-options marker. `scripts/lib/awk-path.sh`'s `awk_path()` neutralizes the hazard by prefixing a relative path with `./` (conditionally — an absolute path is returned unchanged, since a `./` ahead of one resolves as a different, relative path); this lint is what keeps every future `awk` call wrapped, rather than trusting a one-time sweep of the existing call sites to hold forever.
 

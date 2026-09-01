@@ -22,7 +22,7 @@ links here rather than embedding the snippets inline, so:
 - [When this applies](#when-this-applies)
 - [Prerequisites](#prerequisites)
 - [Step-by-step](#step-by-step)
-  - [1. Delete the GitHub release + tag (re-push path only)](#1-delete-the-github-release--tag-re-push-path-only)
+  - [1. Delete the GitHub release (re-push path only)](#1-delete-the-github-release-re-push-path-only)
   - [2. Delete the orphan docker.io arch tag](#2-delete-the-orphan-dockerio-arch-tag)
   - [3. Re-trigger the release pipeline](#3-re-trigger-the-release-pipeline)
   - [4. Confirm green end-to-end](#4-confirm-green-end-to-end)
@@ -38,8 +38,9 @@ The push loop inside `release-on-bump.yml` per-arch jobs runs
 `docker.io` first, then `ghcr.io`. The two failure modes are:
 
 - **docker.io push failed.** Nothing was pushed to either registry
-    for that arch, so that arch needs no registry-side cleanup; only the GitHub
-    release / tag needs deleting before the retry.
+    for that arch, so that arch needs no registry-side cleanup; only the
+    GitHub release needs deleting before the retry (the tag stays — see
+    step 1).
 - **ghcr.io push failed after docker.io succeeded.** docker.io has
     the arch-suffixed tag (`{version}-{arch}`) but ghcr.io does not.
     The `manifest` job is skipped, so neither registry has the
@@ -64,7 +65,7 @@ The push loop inside `release-on-bump.yml` per-arch jobs runs
 
 ## Step-by-step<a name="step-by-step"></a>
 
-### 1. Delete the GitHub release + tag (re-push path only)<a name="1-delete-the-github-release--tag-re-push-path-only"></a>
+### 1. Delete the GitHub release (re-push path only)<a name="1-delete-the-github-release-re-push-path-only"></a>
 
 **Skip this step if you will re-run with `force-republish`** (step 3,
 first bullet). On that path the `image-amd64`, `image-arm64`, `manifest`,
@@ -77,8 +78,9 @@ re-uploads `linpeas-pin.json.sigstore` with `--clobber`, which is how
 this path recovers a missing sidecar.
 
 Delete only when recovering by landing a retrigger PR (step 3, second
-bullet). Release-creation is gated on tag-doesn't-exist, so an orphan
-release left in place makes the re-push skip release creation, and
+bullet). Release-creation is gated on the release not existing (a
+`gh release view` probe, surfaced as the `tag-exists` output), so an
+orphan release left in place makes the re-push skip release creation, and
 skips `image-amd64`, `image-arm64`, `manifest`, `changelog` and
 `verify` as well (the same five jobs `force-republish` re-runs),
 leaving the recovery incomplete.
@@ -92,9 +94,11 @@ gh release delete "${VERSION}" \
 
 Do not add `--cleanup-tag`: the `release-tag-protection` ruleset
 blocks tag deletion with no bypass actors, so the tag delete errors
-and the command fails. Leaving the tag in place is correct — the
-retry runs against the same pin commit, and release creation reuses
-the surviving tag, which already points at that commit.
+and the command fails. The tag survives, still pointing at the
+original pin commit, and release creation reuses it — an existing
+tag's commit wins over the step's `--target` pin, so the re-created
+release attaches to that original commit while the retry's
+attestations record the retrigger SHA.
 
 ### 2. Delete the orphan docker.io arch tag<a name="2-delete-the-orphan-dockerio-arch-tag"></a>
 
