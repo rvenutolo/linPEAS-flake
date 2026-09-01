@@ -44,8 +44,8 @@ next section. The weekly Friday cron cluster runs them in a fixed order (see
 
 (scorecard shares the same Friday cluster but is classed as a
 posture watchdog — the `scorecard-drift-check` row — in the layer
-table above, since it grades posture rather
-than re-scanning the tree.)
+table above, since it grades posture rather than re-scanning the
+tree.)
 
 ### codeql
 
@@ -76,9 +76,8 @@ than re-scanning the tree.)
     Friday cron (full tree); manual dispatch.
 - **Status:** advisory by design. It is the cheapest scanner and currently
     produces no findings, but it fails on *any* finding (no severity
-    threshold) against an
-    untuned rule set, so as a required check a single false positive would block
-    merge. Promotion would also force removing its PR paths filter. It stays
+    threshold) against an untuned rule set, so as a required check a
+    single false positive would block merge. Promotion would also force removing its PR paths filter. It stays
     advisory and path-filtered.
     - **Tuning trigger (operational):** if octoscan ever accumulates confirmed
         false positives — three or more distinct, or one duplicating an existing
@@ -96,10 +95,9 @@ than re-scanning the tree.)
 - **Triggers:** weekly Friday cron and manual dispatch only. It does **not**
     scan on PRs or pushes.
 - **Status:** weekly watchdog. A check scoring anything below a
-    perfect 10 (the policy is strict)
-    — or a scorecard payload the threshold script cannot read as JSON at
-    all — fails the run
-    and opens a deduped `scorecard-drift` tracking issue; the next clean run
+    perfect 10 (the policy is strict) — or a scorecard payload the
+    threshold script cannot read as JSON at all — fails the run and
+    opens a deduped `scorecard-drift` tracking issue; the next clean run
     closes it. The check set is curated — review-flow checks not applicable to a
     solo repo, checks duplicating an in-tree signal whether blocking or
     advisory, and checks no in-repo change can move, are dropped; the

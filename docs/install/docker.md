@@ -27,7 +27,7 @@ This form exists for environments where Docker is the only available shipping ve
 
 ## Run (default invocation, smoke test)
 
-The default invocation below scans the **linpeas image itself** — a near-empty Nix-built container with no services, secrets, or users. It is useful as a smoke test confirming args reach the binary, not as a real audit. For real host or sidecar audits, see [What this image is for](#what-this-image-is-for) above and the host sweep it links.
+The default invocation below scans the **linpeas image itself** — a near-empty Nix-built container with no services, secrets, or users. It is useful as a smoke test confirming args reach the binary, not as a real audit. For real host or sidecar audits, see [What this image is for](#what-this-image-is-for) above and the host sweep it shows.
 
 ```bash
 # Docker Hub (default registry — no prefix needed)

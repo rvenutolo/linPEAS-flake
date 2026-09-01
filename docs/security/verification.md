@@ -173,7 +173,8 @@ the `attribute failure reason` step. Reasons:
 
 `upstream-sri-drift`, `cross-registry-manifest-mismatch`, the
 `*-attest-failed` family and `images-cosign-failed` warrant the "treat as
-security incident" framing, with `manifest-tag-drift` a step below. Folding all reasons into a single failure body trains
+security incident" framing, with `manifest-tag-drift` a step below.
+Folding all reasons into a single failure body trains
 the maintainer to skim-read auto-filed issues — exactly the wrong reflex
 when the failure is a real SRI drift or a one-sided registry rollback.
 
@@ -246,14 +247,18 @@ security-review entry.
 `dependency-review`. `fail-on-severity: moderate`,
 `comment-summary-in-pr: on-failure`.
 
-- The repo carries no traditional package manifests, so the action mostly scans `.github/workflows/**` `uses:` against the GitHub Advisory DB + license policy. Belt-and-braces backup to SHA-pinning + Renovate + zizmor.
+- The repo carries no traditional package manifests, so the action
+    mostly scans `.github/workflows/**` `uses:` against the GitHub
+    Advisory DB + license policy. Belt-and-braces backup to SHA-pinning
+    - Renovate + zizmor.
 - If a future PR adds a real manifest (npm/cargo/pip/etc.), the action
     begins scanning it without any workflow change.
 
 ## OCI image CVE scan (Trivy)<a name="oci-image-cve-scan-trivy"></a>
 
 `image-cve-scan.yml`'s `image-cve-scan-trivy` job (weekly cron +
-path-filtered push to `main` + dispatch) uploads SARIF (CRITICAL + HIGH) to the Security tab, then
+path-filtered push to `main` + dispatch) uploads SARIF (CRITICAL +
+HIGH) to the Security tab, then
 post-processes the SARIF to count CRITICAL findings and **fails the
 job** when count > 0. The job emits an `outputs.has-finding` boolean
 (`'true'` iff the count step ran and returned a non-zero count) so
@@ -442,7 +447,7 @@ Enforced by `scripts/check-gh-attestation-repo.sh`, with parsing in `scripts/_at
 
 ### Word-position pinning<a name="word-position-pinning"></a>
 
-Binding the pin to a word position rather than to a substring is what stops text that merely sits near the command from vouching for it: a pin in a trailing comment, a pin belonging to a chained command, and a slug inside a quoted argument all leave the invocation unpinned. A record carrying the command plus at least one further word is always an invocation. A record holding the bare command name with no further word depends on where it came from: on a runnable line it is an unpinned invocation and is flagged, while inside a code span it is a prose mention and is ignored. A runnable line is inspected with its code spans removed, so a quoted occurrence is counted once, by the span scan.
+Binding the pin to a word position rather than to a substring is what stops text that merely sits near the command from vouching for it: a pin in a trailing comment, a pin belonging to a chained command, and a slug inside a quoted argument all leave the invocation unpinned. A record carrying the command plus at least one further word is always an invocation. A record holding the bare command triple with no further word depends on where it came from: on a runnable line it is an unpinned invocation and is flagged, while inside a code span it is a prose mention and is ignored. A runnable line is inspected with its code spans removed, so a quoted occurrence is counted once, by the span scan.
 
 ### Quoted regions read as command sources<a name="quoted-regions-read-as-command-sources"></a>
 
@@ -481,7 +486,7 @@ A payload holding the bare command triple and nothing else is a mention rather t
 
 ### Recognized shells and known misses<a name="recognized-shells-and-known-misses"></a>
 
-The rule sees the shapes it names. An attribute outside that set still hides its payload. A `c` cluster no word of whose command names a recognized shell is not read as a command source, so an invocation written that way is missed. Three shapes reach that state: the shell is named through a variable, as in `$SHELL -c`; it is one outside the recognized set (`bash`, `sh`, `dash`, `ash`, `zsh`, `ksh`, `mksh`, `fish`, `su`, `runuser`); or the cluster opens its command with no word before it at all. A quoted expansion such as `bash "$(dirname x)/f" -c` is ordinary word text and keeps the shell in the cluster's own command. That miss is preferred to the false positive reading every `c` cluster carries: a match key such as `grep -Ec 'gh attestation verify …'` names the command plus a further word, and a payload with a further word past the bare triple is always judged an invocation, so that reading fails a correct file. Reading the whole command rather than only the cluster's own flags widens the introducer in one direction: a command naming a shell as an ordinary word while carrying a `c` cluster of its own has that cluster's argument read as a command line. Nothing in this repository writes that shape. A legacy backtick substitution standing as the command word, as in `` `command -v bash` -c '…' ``, is not read as a shell — a backtick is ambiguous between substitution and code span, and the miss is preferred to reading prose spans as command sources. A shell named only inside a nested substitution of a command-word substitution, as in `$($(sh)) -c '…'`, is not read either: the command-initial exception reads a group's direct words only, so a shell one substitution further in stays unread. A payload split across a backslash-continued line, or across a code span the markdown scan has already removed, reads as ending its word and stays mention-scoped. A double-quoted YAML scalar folded across source lines is read only to the end of its first line: backslash continuation is joined before splitting, YAML line folding is not. An attribute in the introducer set is read the same way whether its value is a command or prose about one, so prose that names the command and goes on to further words is judged an invocation exactly as a real one would be.
+The rule sees the shapes it names. An attribute outside that set still hides its payload. A `c` cluster no word of whose command names a recognized shell is not read as a command source, so an invocation written that way is missed. Three shapes reach that state: the shell is named through a variable, as in `$SHELL -c`; it is one outside the recognized set (`bash`, `sh`, `dash`, `ash`, `zsh`, `ksh`, `mksh`, `fish`, `su`, `runuser`); or the cluster opens its command with no word before it at all. A quoted expansion such as `bash "$(dirname x)/f" -c` is ordinary word text and keeps the shell in the cluster's own command. That miss is preferred to the false positive reading every `c` cluster carries: a match key such as `grep -Ec 'gh attestation verify …'` names the command plus a further word, and a payload with a further word past the bare triple is always judged an invocation, so that reading fails a correct file. Reading the whole command rather than only the cluster's own flags widens the introducer in one direction: a command naming a shell as an ordinary word while carrying a `c` cluster of its own has that cluster's argument read as a command line. Nothing in this repository writes that shape. A legacy backtick substitution standing as the command word, as in `` `command -v bash` -c '…' ``, is not read as a shell — a backtick is ambiguous between substitution and code span, and the miss is preferred to reading prose spans as command sources. A shell named only inside a nested substitution of a command-word substitution, as in `$($(sh)) -c '…'`, is not read either: the command-initial exception reads a group's direct words only, so a shell one substitution further in stays unread. A payload whose own text is split across a backslash-continued line, or across a code span the markdown scan has already removed, reads as ending its word and stays mention-scoped. A double-quoted YAML scalar folded across source lines is read only to the end of its first line: backslash continuation is joined before splitting, YAML line folding is not. An attribute in the introducer set is read the same way whether its value is a command or prose about one, so prose that names the command and goes on to further words is judged an invocation exactly as a real one would be.
 
 ### Markdown lexing<a name="markdown-lexing"></a>
 

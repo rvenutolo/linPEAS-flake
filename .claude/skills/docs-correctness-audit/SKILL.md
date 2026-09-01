@@ -254,6 +254,7 @@ findings must still show what was cross-checked, not just "clean".
 - <batching suggestion, decisions the user must make, generated-doc/generator fixes>
 ```
 
-Each finding states the file:line, the dimension, what is wrong, the *evidence*
+Each finding states the file:line (its dimension lives in the severity
+index), what is wrong, the *evidence*
 (the command output or file line that proves it), and a proposed fix. Group by
 severity; lead with the severity index so the report is skimmable.
