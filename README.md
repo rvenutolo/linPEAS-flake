@@ -62,7 +62,7 @@ Upstream documents `-f` as scoping linpeas to a filesystem scan of
 the mounted tree — crons, timers, services, sockets, software,
 permissions, interesting files, API keys — with the live process,
 network, and user checks disabled, so host namespace flags change
-nothing under it; see [Docker usage](docs/install/docker.md).
+nothing under it.
 
 **Container / sidecar audit** — audit a *different* running
 container. Real use cases: CI hardening, base-image review, forensics

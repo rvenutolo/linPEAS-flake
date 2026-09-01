@@ -19,7 +19,7 @@ Run a multi-agent, refute-all review of this repository using the
     returned could not refute it. Seed later dimensions with earlier
     confirmed findings.
 1. Append survivors — plus the refutation log and any contested kills (one
-    live skeptic dissenting), which are never dropped silently — to one
+    live skeptic of at least two dissenting), which are never dropped silently — to one
     severity-ranked report under `.claude/reports/`.
 
 This is a READ-ONLY review: edit nothing, mutate nothing (not even a generated

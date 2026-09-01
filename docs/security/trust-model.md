@@ -65,7 +65,8 @@ See [`SECURITY.md`](https://github.com/rvenutolo/linPEAS-flake/blob/main/SECURIT
 
 The weekly `update-flake-lock` cron bumps every flake input and auto-merges
 the PR; no build-path gate verifies input *provenance* — `flake-check` and
-the build/smoke jobs all accept whatever the lock names. `check-flake-lock-provenance.sh` (run in the `lint-doc-invariants`
+the build/smoke jobs all accept whatever the lock names.
+`check-flake-lock-provenance.sh` (run in the `lint-doc-invariants`
 required group) closes that gap: it diffs the PR's `flake.lock` against
 `origin/main` and fails when an input's source identity changes without
 `flake.nix` declaring it.
@@ -135,11 +136,12 @@ walked from the lock's root node through each node's `inputs` in turn, one hop
 per array element, bounded twice — a nesting ceiling on depth and a step
 budget on total resolution cost. A ref that cannot be resolved — a dangling
 path element, an empty array, a cycle, an over-deep legal chain, or an
-exhausted step budget —
-fails closed with a `top-level input unresolvable` message rather than
+exhausted step budget — fails closed with a
+`top-level input unresolvable` message rather than
 comparing against nothing, and the message names what the resolver observed:
 `follows path names no such node`, `follows path exceeds nesting ceiling`, or
-`follows step budget exhausted`. A cycle and a legal chain deeper than the
+`follows step budget exhausted` — with the bare message, no parenthetical,
+reserved for an error the resolver did not raise itself. A cycle and a legal chain deeper than the
 ceiling report the same way, because the resolver carries no visited set and
 cannot tell them apart. A ref-shape change (string to array, or array
 to a differently-shaped array) whose resolved source identity is unchanged
