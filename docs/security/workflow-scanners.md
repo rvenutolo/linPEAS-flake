@@ -77,8 +77,8 @@ tree.)
 - **Status:** advisory by design. It is the cheapest scanner and currently
     produces no findings, but it fails on *any* finding (no severity
     threshold) against an untuned rule set, so as a required check a
-    single false positive would block merge. Promotion would also force removing its PR paths filter. It stays
-    advisory and path-filtered.
+    single false positive would block merge. Promotion would also force
+    removing its PR paths filter. It stays advisory and path-filtered.
     - **Tuning trigger (operational):** if octoscan ever accumulates confirmed
         false positives — three or more distinct, or one duplicating an existing
         zizmor or CodeQL finding one-to-one — narrow its rule set (`--ignore`,

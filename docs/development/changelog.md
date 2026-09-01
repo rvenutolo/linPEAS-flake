@@ -220,8 +220,8 @@ release tag is visible to git-cliff.
 
 ## End-to-end sequence
 
-The changelog job in `release-on-bump.yml` performs these steps in
-order:
+The changelog job in `release-on-bump.yml` follows this logical
+sequence (its harden-runner egress step comes first, as in every job):
 
 1. Check out the repo with `fetch-depth: 0` (full history required for
     git-cliff to walk all tags), then install Nix via
@@ -235,8 +235,10 @@ order:
     — produces no diff).
 1. If changed, render the latest section with `git-cliff --latest --strip header` into `.release-notes.md` for the release body.
 1. If changed, create a `chore/changelog-${VERSION}` branch from
-    `main` and commit `CHANGELOG.md` via REST `PUT /contents` as the
-    App identity (GitHub web-flow-signs the commit).
+    `main` — reusing and force-rebasing it if an open one for that
+    version already exists — and commit `CHANGELOG.md` via REST
+    `PUT /contents` as the App identity (GitHub web-flow-signs the
+    commit).
 1. Open a PR against `main` and enable auto-merge
     (`gh pr merge --auto --merge --delete-branch`), then block until
     the PR merges: the wait is bounded, and a closed PR or a stall fails
@@ -263,7 +265,11 @@ with `force-republish: true`. The input is required: the release tag
 already exists on every recovery path, so the job's
 `tag-exists == 'false' || force-republish` gate skips it on a bare
 dispatch. With the input set, the job re-runs git-cliff over the full
-tag history and commits the corrected file.
+tag history and commits the corrected file — unless a
+`chore/changelog-<version>` PR for that version already sits in closed
+or merged state, in which case the commit step fails by design (see
+[auto-merge-decline-gate](../security/workflow-hardening.md#auto-merge-decline-gate));
+an open changelog branch is reused and force-rebased instead.
 
 ### File lost entirely
 

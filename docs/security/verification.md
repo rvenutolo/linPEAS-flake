@@ -249,16 +249,16 @@ security-review entry.
 
 - The repo carries no traditional package manifests, so the action
     mostly scans `.github/workflows/**` `uses:` against the GitHub
-    Advisory DB + license policy. Belt-and-braces backup to SHA-pinning
-    - Renovate + zizmor.
+    Advisory DB + license policy. Belt-and-braces backup to
+    SHA-pinning + Renovate + zizmor.
 - If a future PR adds a real manifest (npm/cargo/pip/etc.), the action
     begins scanning it without any workflow change.
 
 ## OCI image CVE scan (Trivy)<a name="oci-image-cve-scan-trivy"></a>
 
 `image-cve-scan.yml`'s `image-cve-scan-trivy` job (weekly cron +
-path-filtered push to `main` + dispatch) uploads SARIF (CRITICAL +
-HIGH) to the Security tab, then
+path-filtered push to `main` + dispatch) uploads SARIF
+(CRITICAL + HIGH) to the Security tab, then
 post-processes the SARIF to count CRITICAL findings and **fails the
 job** when count > 0. The job emits an `outputs.has-finding` boolean
 (`'true'` iff the count step ran and returned a non-zero count) so

@@ -319,7 +319,7 @@ Enforced by `scripts/check-enumerate-helper-required.sh`. Wired as the `lint-scr
 
 ## payload-shape-scenario
 
-Every script matching a four-arm external-payload predicate — a literal `gh api` call, a `*_JSON_OVERRIDE`-shaped variable, a bare stdin slurp (`="$(cat)"`), or a scoped `flake.lock`/lock-content read (`cat -- ... flake.lock`, `git show ...:flake.lock`) — carries a harness scenario that feeds it a malformed payload and asserts exit 2, or a `# payload-subject-exempt: <rationale>` marker.
+Every script matching a four-arm external-payload predicate — a literal `gh api` call, a `*_JSON_OVERRIDE`-shaped variable, a bare stdin slurp (`="$(cat)"`), or a scoped `flake.lock`/lock-content read (`cat -- ...` of a `flake.lock` or `LOCK` path, `git show ...:flake.lock`) — carries a harness scenario that feeds it a malformed payload and asserts exit 2, or a `# payload-subject-exempt: <rationale>` marker.
 
 A shape gate (`require_json_payload`, or an equivalent hand-rolled `die_op` guard) that regresses or was never written is invisible to every other lint in this repo, because none of them runs the scripts under test — only a scenario that actually drives a malformed payload through the gate and checks the exit code proves the gate still fires. The lint therefore gates the scenario's *existence*, not the gate's source text: it never greps a script for `require_json_payload`, since a script that forgot the gate would then be undiscoverable by construction.
 

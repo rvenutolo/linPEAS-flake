@@ -137,11 +137,11 @@ the release pipeline — `codeql.yml`, `octoscan.yml`,
 `zizmor-drift-check.yml` (cron slots in
 [`docs/architecture/ci.md`](docs/architecture/ci.md); per-scanner scope
 and the overlap rationale for the four workflow scanners in
-[`docs/security/workflow-scanners.md`](docs/security/workflow-scanners.md),
-and for the image CVE scans in
-[`docs/security/verification.md`](docs/security/verification.md#oci-image-cve-scan-trivy)
-([Grype section](docs/security/verification.md#oci-image-cve-scan-grype))).
-The rest of this section covers `codeql.yml`.
+[`docs/security/workflow-scanners.md`](docs/security/workflow-scanners.md)).
+The image CVE scans are covered in `docs/security/verification.md` —
+the [Trivy](docs/security/verification.md#oci-image-cve-scan-trivy) and
+[Grype](docs/security/verification.md#oci-image-cve-scan-grype)
+sections. The rest of this section covers `codeql.yml`.
 
 **`codeql.yml`** scans GitHub Actions workflow definitions on every PR,
 every push to `main`, and weekly. It runs unfiltered because the OpenSSF
