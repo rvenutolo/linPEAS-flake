@@ -6,6 +6,47 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20260901-a029e205] - 2026-09-01
+
+### Chores
+- Bump linpeas to 20260901-a029e205 ([#1014](https://github.com/rvenutolo/linPEAS-flake/pull/1014))
+
+### Documentation
+- Fix the drift the thirty-sixth docs-correctness audit surfaced ([#1013](https://github.com/rvenutolo/linPEAS-flake/pull/1013))
+- Fix the drift the thirty-fifth docs-correctness audit surfaced ([#1012](https://github.com/rvenutolo/linPEAS-flake/pull/1012))
+- Fix the drift the thirty-fourth docs-correctness audit surfaced ([#1011](https://github.com/rvenutolo/linPEAS-flake/pull/1011))
+- Fix the drift the thirty-third docs-correctness audit surfaced ([#1010](https://github.com/rvenutolo/linPEAS-flake/pull/1010))
+- Fix the drift the thirty-second docs-correctness audit surfaced ([#1009](https://github.com/rvenutolo/linPEAS-flake/pull/1009))
+- Fix the drift the thirty-first docs-correctness audit surfaced ([#1008](https://github.com/rvenutolo/linPEAS-flake/pull/1008))
+- Fix the drift the thirtieth docs-correctness audit surfaced ([#1007](https://github.com/rvenutolo/linPEAS-flake/pull/1007))
+- Fix the drift the twenty-ninth docs-correctness audit surfaced ([#1006](https://github.com/rvenutolo/linPEAS-flake/pull/1006))
+- Fix the drift the twenty-eighth docs-correctness audit surfaced ([#1005](https://github.com/rvenutolo/linPEAS-flake/pull/1005))
+- Fix the drift the twenty-seventh docs-correctness audit surfaced ([#1002](https://github.com/rvenutolo/linPEAS-flake/pull/1002))
+- Fix the drift the twenty-sixth docs-correctness audit surfaced ([#1001](https://github.com/rvenutolo/linPEAS-flake/pull/1001))
+- Fix the drift the twenty-fifth docs-correctness audit surfaced ([#1000](https://github.com/rvenutolo/linPEAS-flake/pull/1000))
+- Fix the drift the twenty-fourth docs-correctness audit surfaced ([#999](https://github.com/rvenutolo/linPEAS-flake/pull/999))
+- Fix the drift the twenty-third docs-correctness audit surfaced ([#998](https://github.com/rvenutolo/linPEAS-flake/pull/998))
+- Fix the drift the twenty-second docs-correctness audit surfaced ([#996](https://github.com/rvenutolo/linPEAS-flake/pull/996))
+- Fix the drift the twenty-first docs-correctness audit surfaced ([#995](https://github.com/rvenutolo/linPEAS-flake/pull/995))
+- Fix the drift the twentieth docs-correctness audit surfaced ([#994](https://github.com/rvenutolo/linPEAS-flake/pull/994))
+- Fix the drift the nineteenth docs-correctness audit surfaced ([#993](https://github.com/rvenutolo/linPEAS-flake/pull/993))
+- Fix the drift the eighteenth docs-correctness audit surfaced ([#992](https://github.com/rvenutolo/linPEAS-flake/pull/992))
+- Fix the drift the seventeenth docs-correctness audit surfaced ([#991](https://github.com/rvenutolo/linPEAS-flake/pull/991))
+- Fix the drift the sixteenth docs-correctness audit surfaced ([#990](https://github.com/rvenutolo/linPEAS-flake/pull/990))
+- Fix the drift the fifteenth docs-correctness audit surfaced ([#989](https://github.com/rvenutolo/linPEAS-flake/pull/989))
+- Fix the drift the fourteenth docs-correctness audit surfaced ([#988](https://github.com/rvenutolo/linPEAS-flake/pull/988))
+- Fix the drift the thirteenth docs-correctness audit surfaced ([#987](https://github.com/rvenutolo/linPEAS-flake/pull/987))
+- Fix the drift the twelfth docs-correctness audit surfaced ([#986](https://github.com/rvenutolo/linPEAS-flake/pull/986))
+- Fix the drift the eleventh docs-correctness audit surfaced ([#985](https://github.com/rvenutolo/linPEAS-flake/pull/985))
+- Fix the drift the tenth docs-correctness audit surfaced ([#982](https://github.com/rvenutolo/linPEAS-flake/pull/982))
+- Fix the drift the ninth docs-correctness audit surfaced ([#981](https://github.com/rvenutolo/linPEAS-flake/pull/981))
+
+### Features
+- Render scripts/lib/ function contracts in the scripts reference ([#984](https://github.com/rvenutolo/linPEAS-flake/pull/984))
+
+### Fixes
+- Scan composite actions in check-nix-run-pinned ([#1004](https://github.com/rvenutolo/linPEAS-flake/pull/1004))
+
 ## [20260829-c348cd6e] - 2026-08-29
 
 ### Chores
