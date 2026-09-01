@@ -16,7 +16,8 @@ state — and a new commit resets it, because a new commit produces a new run
 at attempt 1.
 
 Separately from that 3-attempt run bound, the watchdog's own API requests
-retry on anything not in the exempt list below — in practice a 5xx. Rate limits, conflicts, already-exists responses, and
+retry on anything not in the exempt list below — in practice a 5xx.
+Rate limits, conflicts, already-exists responses, and
 malformed, unauthorized, or missing-resource requests are exempt: a 400,
 401, or 404 will not become valid on a second try, a 409 means the re-run
 already took effect, a 422 lets `createLabel`'s try/catch see the
@@ -87,7 +88,7 @@ the marker out of the most recent report makes the next tick treat its
 observation as new, while merely deleting that report falls back to the
 previous marker — which stays silent if it carries the same observation.
 
-## When the watchdog job goes red
+## When the watchdog's `retry` job goes red
 
 Search the job log for `Sweep`. Both verdicts are emitted through
 `core.setFailed`, so the raw log renders them as `::error::Sweep ...`

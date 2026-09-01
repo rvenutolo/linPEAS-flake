@@ -43,7 +43,8 @@ next section. The weekly Friday cron cluster runs them in a fixed order (see
 1. zizmor (`zizmor-drift-check.yml`)
 
 (scorecard shares the same Friday cluster but is classed as a
-posture watchdog — the `scorecard-drift-check` row — in the layer table above, since it grades posture rather
+posture watchdog — the `scorecard-drift-check` row — in the layer
+table above, since it grades posture rather
 than re-scanning the tree.)
 
 ### codeql
@@ -74,7 +75,8 @@ than re-scanning the tree.)
     `.github/workflows/**` and the octoscan scan script; push to `main`; weekly
     Friday cron (full tree); manual dispatch.
 - **Status:** advisory by design. It is the cheapest scanner and currently
-    produces no findings, but it fails on *any* finding (no severity threshold) against an
+    produces no findings, but it fails on *any* finding (no severity
+    threshold) against an
     untuned rule set, so as a required check a single false positive would block
     merge. Promotion would also force removing its PR paths filter. It stays
     advisory and path-filtered.
@@ -93,7 +95,8 @@ than re-scanning the tree.)
     single graded posture.
 - **Triggers:** weekly Friday cron and manual dispatch only. It does **not**
     scan on PRs or pushes.
-- **Status:** weekly watchdog. A check scoring anything below a perfect 10 (the policy is strict)
+- **Status:** weekly watchdog. A check scoring anything below a
+    perfect 10 (the policy is strict)
     — or a scorecard payload the threshold script cannot read as JSON at
     all — fails the run
     and opens a deduped `scorecard-drift` tracking issue; the next clean run

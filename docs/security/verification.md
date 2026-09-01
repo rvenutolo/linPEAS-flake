@@ -246,7 +246,7 @@ security-review entry.
 `dependency-review`. `fail-on-severity: moderate`,
 `comment-summary-in-pr: on-failure`.
 
-- Repo has no traditional package manifests today; the action mostly scans `.github/workflows/**` `uses:` against the GitHub Advisory DB + license policy. Belt-and-braces backup to SHA-pinning + Renovate + zizmor.
+- The repo carries no traditional package manifests, so the action mostly scans `.github/workflows/**` `uses:` against the GitHub Advisory DB + license policy. Belt-and-braces backup to SHA-pinning + Renovate + zizmor.
 - If a future PR adds a real manifest (npm/cargo/pip/etc.), the action
     begins scanning it without any workflow change.
 

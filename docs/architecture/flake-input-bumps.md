@@ -53,7 +53,7 @@ bump PR is red until the lockfile catches up.
 The lockfile refresh is performed automatically by the
 `renovate-flake-lock-refresh` workflow, which runs on every `ci`
 completion and acts only when the run was a same-repo `pull_request`
-on a `renovate/*` branch, detects the bumped input
+on a `renovate/*` branch. It detects the bumped input
 from the PR title by handing it to
 `scripts/classify-renovate-flake-input.sh`, whose `case` arms recognise
 three title shapes — `cachix/git-hooks.nix`, `NixOS/nixpkgs-unstable`,
@@ -516,8 +516,8 @@ input:
 lockfile-refresh step that hosted Renovate cannot run itself (no Nix
 on Renovate's SaaS runners; no `postUpgradeTasks` allowlist).
 
-Trigger: `workflow_run` of `ci` completing on a `renovate/*` head
-branch. The `identify` job gates on ALL of:
+Trigger: `workflow_run` of `ci` completing (any branch — the `on:`
+block carries no filter). The `identify` job gates on ALL of:
 
 - PR author is the Renovate App, decided by
     `scripts/classify-renovate-pr-author.sh`. GitHub reports the same App

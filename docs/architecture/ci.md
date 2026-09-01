@@ -56,7 +56,7 @@ Functional gates:
 | `image-smoke`         | `ubuntu-latest`    | builds OCI image, `docker load`, `docker run --rm <img> -h` exits 0; asserts `grep sed awk find ps` are present in the image; runs `-o system_information` against a separate target container and fails on any `: command not found` line                                                                                                                   |
 | `image-smoke-arm64`   | `ubuntu-24.04-arm` | aarch64 run of the same three `image-smoke` steps                                                                                                                                                                                                                                                                                                            |
 
-Self-enforcing invariant gates: the three `lint-*` rows in this table
+Self-enforcing invariant gates: the three `lint-*` rows in the table below
 are batched group jobs (`lint-pr-title`, further down, is not); their member lints are enumerated in
 `.github/lint-groups.yml`, which is the source of truth for what each
 group runs. Each of these three group jobs runs each member's

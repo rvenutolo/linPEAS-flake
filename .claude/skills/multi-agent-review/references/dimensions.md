@@ -65,7 +65,8 @@ Slices:
     `.claude/` skill shell tooling
     (`git ls-files '.claude/*.sh' | grep -v '\.test\.sh$'` — the
     `*.test.sh` halves belong to dimension 5; CI-required via the
-    `docs-audit-*` members of `harness-group`) +
+    `docs-audit-plant`, `docs-audit-score` and `docs-audit-ground-truth`
+    members of `harness-group`) +
     helpers / runners / everything else
 
 Hunt: edge cases, silent failures, quoting/`set -o pipefail` gaps, `done < <(...)` process-substitution exit-swallowing, `yq | tag` conflating absent vs present-null, divergence from the behavior the header comment claims.
