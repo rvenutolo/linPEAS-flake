@@ -51,8 +51,9 @@ substitution on `flake.nix` and **do not refresh `flake.lock`**, so a
 bump PR is red until the lockfile catches up.
 
 The lockfile refresh is performed automatically by the
-`renovate-flake-lock-refresh` workflow, which fires on every `ci`
-completion against a `renovate/*` branch, detects the bumped input
+`renovate-flake-lock-refresh` workflow, which fires when `ci`
+completes for a same-repo `pull_request` run on a `renovate/*`
+branch, detects the bumped input
 from the PR title by handing it to
 `scripts/classify-renovate-flake-input.sh`, whose `case` arms recognise
 three title shapes — `cachix/git-hooks.nix`, `NixOS/nixpkgs-unstable`,
@@ -60,10 +61,11 @@ and `NixOS/nixpkgs`, matched case-insensitively against a lowercased
 title, in the arm order [the auto-refresh section](#renovate-flake-lock-refresh-auto-refresh)
 explains — then runs
 `nix flake update <name>`, and commits the refreshed
-`flake.lock` back to the PR branch (App-signed via REST
-`PUT /contents`). Watch the PR for a follow-on
-`chore(flake): refresh flake.lock for <input>` commit a few minutes
-after `ci` first goes green.
+`flake.lock` — plus any regenerated lock-derived docs, one signed
+REST `PUT /contents` commit per file. Watch the PR for a follow-on
+`chore(flake): refresh flake.lock for <input>` commit (and
+`chore(flake): update <doc> for <input> lock refresh` siblings) a few
+minutes after `ci` first goes green.
 
 The manual runbook below is the **fallback** when the auto-refresh
 does not fire, and the reproduction path when a landed bump breaks
@@ -379,9 +381,10 @@ bump: `actionlint`, `deadnix`, `nixfmt`, `treefmt`, `shellcheck`,
 hooks (`uses-sha-pinned`, the `*-fresh` family, and the other
 `NIX_BUILD_TOP`-bailing entries) no-op under `nix flake check` — most
 are covered by `just verify` and the `doc-freshness` / lint-group CI
-jobs instead, though not all: `patch-tag-pins` is pre-commit only, and
+jobs instead, though not all: `patch-tag-pins` is pre-commit only,
 `check-cron-table`'s live coverage is the `cron-table-drift-check`
-workflow.
+workflow, and `octoscan`'s live coverage is the `octoscan.yml`
+workflow (its harness runs test-only in `harness-group`).
 The full, generated list is in
 [Git workflow → Pre-commit hooks](../development/git.md#pre-commit-hooks).
 
@@ -530,6 +533,12 @@ branch. The `identify` job gates on ALL of:
     anomaly, and a silent skip would be indistinguishable from a
     login-shape change disabling the whole workflow undetected.
 - PR head branch starts with `renovate/`.
+- The triggering `ci` run's own event was `pull_request` — a
+    `workflow_run` fired by a push or dispatch is ignored.
+- The PR branch lives in this repo
+    (`head_repository.full_name == github.repository`): a
+    fork-hardening gate, since a later job in the workflow holds an
+    App installation token.
 - PR diff touches `flake.nix`.
 - PR title contains a known dep name (`cachix/git-hooks.nix` →
     `pre-commit-hooks` input; `NixOS/nixpkgs` → `nixpkgs` input). The

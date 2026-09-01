@@ -19,9 +19,9 @@ docker run --rm \
   rvenutolo/linpeas:latest -f /host
 ```
 
-`-f` scopes linpeas to a filesystem scan of the mounted tree — crons, timers, services, sockets, software, permissions, interesting files, API keys — and disables the live process, network, and user checks. Host namespace flags (`--pid=host`, `--net=host`, `--ipc=host`) therefore change nothing under `-f` and are not needed. Omitting `-f` and the bind mount instead scans the container's own near-empty filesystem.
+Upstream documents `-f` as scoping linpeas to a filesystem scan of the mounted tree — crons, timers, services, sockets, software, permissions, interesting files, API keys — with the live process, network, and user checks disabled (an upstream contract of the pinned release; nothing in this repo exercises it beyond `-h`). Host namespace flags (`--pid=host`, `--net=host`, `--ipc=host`) therefore change nothing under `-f` and are not needed. Omitting `-f` and the bind mount instead scans the container's own near-empty filesystem.
 
-**Do not reach for `-d`.** It is upstream's network host-discovery flag (`-d <IP/NETMASK>`), and it exits before any privesc check runs.
+**Do not reach for `-d`.** Upstream documents it as the network host-discovery flag (`-d <IP/NETMASK>`), which exits before any privesc check runs.
 
 This form exists for environments where Docker is the only available shipping vehicle.
 

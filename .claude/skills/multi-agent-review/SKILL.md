@@ -107,7 +107,8 @@ export const meta = {
   description: 'Finder fan-out, dedup, then 3-skeptic refute-all for one dimension',
   phases: [{ title: 'Find' }, { title: 'Refute' }],
 }
-// severity is an enum so the report's ranking scale is honest at the schema layer.
+// severity is an enum so an out-of-scale value cannot enter the report; it is
+// optional, and a finding that omits it sorts last (?? 5).
 const FINDING = {
   type: 'object',
   properties: { findings: { type: 'array', items: { type: 'object',
@@ -214,7 +215,10 @@ votes, not three; quote `votes` rather than assuming a denominator. A
 `votes.total` of 0 (every skeptic died) is a non-verdict, not a kill — the
 template still files it under `refuted` (zero non-refuting votes reads as a
 unanimous kill), so check `votes.total` before logging and re-refute that
-finding instead.
+finding instead. A `votes` of `{nonRefuted: 1, total: 1}` is likewise a
+non-verdict: the lone returning skeptic did not refute, so the kill is an
+artifact of the `>= 2` threshold rather than any majority — re-refute it
+rather than logging it as a contested kill.
 
 ## Spot-check protocol (offer to the user)
 
