@@ -5,7 +5,9 @@ that holds the canonical wording for that rule. Linted by
 `scripts/check-orphan-invariants.sh` — every entry here must resolve
 to an existing file under `docs/`, and every `docs/**/*.md` (minus
 an explicit EXEMPT allowlist) must appear here. That allowlist covers
-pages whose entire body is generator-owned; the live-status template
+generator-owned pages that state no rule of their own — being generated
+is not itself the criterion, since `reference/flake-outputs.md` is
+generated and still carries an entry below; the live-status template
 pages (`dashboard.md`, `releases.md`), whose content is a rendering
 rather than a rule; overview pages, which route to rules held elsewhere
 (`security/threat-model.md`, `index.md`); `install/consume-from-flake.md`,
@@ -50,8 +52,8 @@ scope for this index either way.
 - **Cosign keyless signing** — per-arch images and the multi-arch index are cosign-signed keyless at release time; the verify-side identity pin is its own entry below. → [security/verification.md](security/verification.md) <!-- enforcer: -; ci: -; hook: - -->
 - **gh attestation verify --repo pin** — every `gh attestation verify` invocation passes `--repo rvenutolo/linPEAS-flake`. → [security/verification.md](security/verification.md) <!-- enforcer: scripts/check-gh-attestation-repo.sh; ci: lint-workflow-security; hook: gh-attestation-repo -->
 - **cosign verify identity + issuer pin** — every `cosign verify*` subcommand pins `--certificate-identity[-regexp]` AND `--certificate-oidc-issuer`. → [security/verification.md](security/verification.md) <!-- enforcer: scripts/check-cosign-identity-pinned.sh; ci: lint-workflow-security; hook: cosign-identity-pinned -->
-- **Release-asset blob signatures** — every GitHub Release asset has a sibling `.sigstore` bundle signed via cosign keyless; verified at release time and weekly. → [security/verification.md](security/verification.md) <!-- enforcer: -; ci: -; hook: - -->
-- **Release-asset provenance sidecar** — every GitHub Release asset has a sibling `.intoto.jsonl` SLSA build-provenance bundle (cosign keyless via `attest-build-provenance`); satisfies OSSF Scorecard `releasesHaveProvenance` probe. → [security/verification.md](security/verification.md) <!-- enforcer: -; ci: -; hook: - -->
+- **Release-asset blob signatures** — every primary GitHub Release asset has a sibling `.sigstore` bundle signed via cosign keyless; verified at release time and weekly. → [security/verification.md](security/verification.md) <!-- enforcer: -; ci: -; hook: - -->
+- **Release-asset provenance sidecar** — every primary GitHub Release asset has a sibling `.intoto.jsonl` SLSA build-provenance bundle (captured from `actions/attest-build-provenance`); satisfies OSSF Scorecard `releasesHaveProvenance` probe. → [security/verification.md](security/verification.md) <!-- enforcer: -; ci: -; hook: - -->
 - **Bump credentials blast-radius** — GitHub App, no PAT, no `git push`. → [security/trust-model.md](security/trust-model.md) <!-- enforcer: -; ci: -; hook: - -->
 - **PR-triggered workflow secret allowlist** — only `secrets.GITHUB_TOKEN`. → [security/trust-model.md](security/trust-model.md) <!-- enforcer: scripts/check-pr-workflows-no-secrets.sh; ci: pr-workflows-no-secrets; hook: - -->
 - **flake.lock input staleness** — every top-level `flake.lock` input must have moved within the bound declared for it (14 days for the branch-tracked high-churn pair, 120 days for the rest), so a refresh mechanism that has silently stopped surfaces as a filed issue rather than as a frozen-but-green tree; the age probe runs as the daily `flake-lock-staleness-check` workflow, which is not a required check; scope is top-level inputs only because a transitive node's age reports on its parent's pin, and an input the bound table does not name is an operational error rather than a pass. → [architecture/auto-update.md](architecture/auto-update.md) <!-- enforcer: scripts/check-flake-lock-staleness.sh; ci: -; hook: - -->

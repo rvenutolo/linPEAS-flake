@@ -60,9 +60,9 @@ agree on one source of truth.
     whose membership lives in `.github/lint-groups.yml`) or via
     `scripts/run-harness-group.sh` (`harness-group`, whose members are the test
     harnesses listed in that script's own `HARNESSES` array) — not standalone
-    jobs and not required status checks. Prose
-    that calls such a member a "required CI job" is real drift that *no* freshness
-    gate catches, because nothing generates that sentence. Two failure modes,
+    jobs and not required status checks. Prose that calls such a member a
+    "required CI job" is real drift that *no* freshness gate catches, because
+    nothing generates that sentence. Two failure modes,
     both high severity: (a) **mislabel** — a real lint-group *member* called a
     standalone "required CI job"; (b) **ghost** — a doc names a "CI job" / "required
     check" that exists in *no* workflow and *no* lint group at all. Catch both by
@@ -70,9 +70,9 @@ agree on one source of truth.
     collector's **VALID CI JOB / CHECK NAMES** union allowlist (every workflow job
     id + every lint-group member + every harness-group member): a name absent from
     that list is a ghost; a name present only as a lint-group or harness-group
-    member but called a standalone job is a mislabel.
-    Do this *even when every freshness check is green* — a green pipeline beside a
-    sentence naming a job that doesn't exist is exactly what this audit surfaces.
+    member but called a standalone job is a mislabel. Do this *even when every
+    freshness check is green* — a green pipeline beside a sentence naming a job
+    that doesn't exist is exactly what this audit surfaces.
 - **Ephemeral references rot.** This repo bans dates, PR/issue numbers, planning
     labels, review-pass labels and literal `.claude/` paths, and warns on
     causal-history phrasing in tracked docs (the rationale: tracked
@@ -92,22 +92,23 @@ SKILL.md you were given, then run it from anywhere inside the repo checkout
 bash <this-skill-dir>/scripts/collect-ground-truth.sh
 ```
 
-It emits one labeled bundle of eleven sections — flake outputs, `just` recipes,
-the `scripts/` inventory (entry points, the `scripts/lib/` libraries they
-source, *and* the `scripts/*.awk` programs), workflows, the **ci.yml top-level job list**, **lint-group
-membership**, the **`VALID CI JOB / CHECK NAMES`** union allowlist (the
-ghost/mislabel detector this audit turns on), workflow crons, the required-check
-context count, an **`EPHEMERAL-TOKEN HITS`** sweep of banned token shapes over
-tracked docs, and an **`UNRESOLVED INTERNAL LINKS / ANCHORS`** check via
-`lychee --offline`. Hand this same bundle to every reader
-so a path/recipe/output/job/cron named in a doc is checked against one
-authoritative list, not re-derived per agent (and not re-run by all of them).
-`references/repo-map.md` explains what each field means and how to use it; the
-collector is its executable form. If the bundle comes back short — the
-ephemeral sweep fails loud on an unterminated fence or generated block and
-aborts the collector before the later sections (the link check included)
-emit — the malformed doc is itself a high-severity finding: record it, and
-treat the never-emitted sections as unchecked rather than clean.
+It emits one labeled bundle of eleven sections — flake outputs, `just`
+recipes, the `scripts/` inventory (entry points, the `scripts/lib/` libraries
+they source, *and* the `scripts/*.awk` programs), workflows, the **ci.yml
+top-level job list**, **lint-group membership**, the
+**`VALID CI JOB / CHECK NAMES`** union allowlist (the ghost/mislabel detector
+this audit turns on), workflow crons, the required-check context count, an
+**`EPHEMERAL-TOKEN HITS`** sweep of banned token shapes over tracked docs, and
+an **`UNRESOLVED INTERNAL LINKS / ANCHORS`** check via `lychee --offline`.
+Hand this same bundle to every reader so a path/recipe/output/job/cron named
+in a doc is checked against one authoritative list, not re-derived per agent
+(and not re-run by all of them). `references/repo-map.md` explains what each
+field means and how to use it; the collector is its executable form. If the
+bundle comes back short — the ephemeral sweep fails loud on an unterminated
+fence or generated block and aborts the collector before the later sections
+(the link check included) emit — the malformed doc is itself a high-severity
+finding: record it, and treat the never-emitted sections as unchecked rather
+than clean.
 
 ### 2. Fan out read-only readers, one per doc cluster
 
@@ -161,19 +162,18 @@ Read-only fan-out needs no orchestration opt-in — it is plain parallel reads.
 ### 4. Controller verifies, completeness-gates, dedups, ranks
 
 **Completeness gate first.** A cluster is "clean" only if its coverage note
-shows *what* was cross-checked against ground truth — not that freshness checks
-passed. A clean verdict with no coverage note is not clean; re-dispatch that
-cluster to read its CI/job/required-check prose against the collector's
+shows *what* was cross-checked against ground truth — not that freshness
+checks passed. A clean verdict with no coverage note is not clean; re-dispatch
+that cluster to read its CI/job/required-check prose against the collector's
 **VALID CI JOB / CHECK NAMES** union allowlist. The union alone does not
 attribute a name to its origin, and the bundle's `ci.yml` list covers one
 workflow: settle member-vs-standalone by checking the name against the
 bundle's **LINT-GROUP MEMBERSHIP** section and the `HARNESSES` array in
 `scripts/run-harness-group.sh` versus the `jobs:` keys of every
 `.github/workflows/*.yml` — a name found only in a group / harness roster and
-in no workflow's `jobs:` block is the mislabel case.
-Under-inspection that concludes "all good" is the failure mode this audit most
-needs to prevent: a from-scratch reviewer will out-find a reader who trusts the
-green pipeline.
+in no workflow's `jobs:` block is the mislabel case. Under-inspection that
+concludes "all good" is the failure mode this audit most needs to prevent: a
+from-scratch reviewer will out-find a reader who trusts the green pipeline.
 
 Then, for each candidate finding, re-verify empirically (load-bearing discipline
 above) and drop false positives. **Group by root cause, not by location.** The
@@ -254,7 +254,7 @@ findings must still show what was cross-checked, not just "clean".
 - <batching suggestion, decisions the user must make, generated-doc/generator fixes>
 ```
 
-Each finding states the file:line (its dimension lives in the severity
-index), what is wrong, the *evidence*
-(the command output or file line that proves it), and a proposed fix. Group by
-severity; lead with the severity index so the report is skimmable.
+Each finding states the file:line (its dimension lives in the severity index),
+what is wrong, the *evidence* (the command output or file line that proves
+it), and a proposed fix. Group by severity; lead with the severity index so
+the report is skimmable.

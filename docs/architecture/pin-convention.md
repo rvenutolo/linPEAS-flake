@@ -77,12 +77,14 @@ by convention, specific to the ref's upstream tagging convention.
     Self-reference pins — a `uses:` whose owner/repo is this repo's own —
     are excluded for a different reason: they name no upstream tag at
     all, since Renovate's `pinDigests` rule tracks this repo's own `main`
-    HEAD. The digest-provenance gate excludes them too. These exclusions
-    are defensive: every live self-reference today is the `./`-relative
-    form (`uses: ./.github/actions/…`), which is content-addressed by the
-    checkout itself and skipped by `scripts/check-uses-sha-pinned.sh` as
-    well, so an `owner/repo@sha` self-reference is the only form the
-    exclusions would ever see.
+    HEAD. The digest-provenance gate excludes them too. Both
+    self-reference forms are live. The `./`-relative form
+    (`uses: ./.github/actions/…`) is content-addressed by the checkout
+    itself and skipped by `scripts/check-uses-sha-pinned.sh` as well. The
+    `owner/repo@sha` form is what these exclusions actually act on: it is
+    used where a `pull_request` event must not run a PR branch's copy of
+    the composite, and `scripts/check-uses-sha-pinned.sh` still holds it
+    to a full 40-hex SHA at PR time.
 
 - Bulk remediation: when comment drift is tree-wide,
     `scripts/inventory-action-pin-tags.sh` builds a TSV of each pin's
