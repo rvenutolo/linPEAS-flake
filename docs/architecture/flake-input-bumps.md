@@ -59,10 +59,9 @@ from the PR title by handing it to
 three title shapes — `cachix/git-hooks.nix`, `NixOS/nixpkgs-unstable`,
 and `NixOS/nixpkgs`, matched case-insensitively against a lowercased
 title, in the arm order [the auto-refresh section](#renovate-flake-lock-refresh-auto-refresh)
-explains — then runs
-`nix flake update <name>`, and commits the refreshed
-`flake.lock` — plus any regenerated lock-derived docs, one signed
-REST `PUT /contents` commit per file. Watch the PR for a follow-on
+explains. The workflow then runs `nix flake update <name>` and commits
+the refreshed `flake.lock` — plus any regenerated lock-derived docs,
+one signed REST `PUT /contents` commit per file. Watch the PR for a follow-on
 `chore(flake): refresh flake.lock for <input>` commit (and
 `chore(flake): update <doc> for <input> lock refresh` siblings) a few
 minutes after `ci` first goes green.

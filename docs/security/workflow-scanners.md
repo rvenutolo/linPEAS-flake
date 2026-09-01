@@ -73,8 +73,8 @@ than re-scanning the tree.)
     sandbox, where docker is unavailable); PR to `main` filtered to
     `.github/workflows/**` and the octoscan scan script; push to `main`; weekly
     Friday cron (full tree); manual dispatch.
-- **Status:** advisory by design. It is the cheapest scanner and is
-    noise-free today, but it fails on *any* finding (no severity threshold) against an
+- **Status:** advisory by design. It is the cheapest scanner and currently
+    produces no findings, but it fails on *any* finding (no severity threshold) against an
     untuned rule set, so as a required check a single false positive would block
     merge. Promotion would also force removing its PR paths filter. It stays
     advisory and path-filtered.

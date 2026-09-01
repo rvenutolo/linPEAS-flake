@@ -25,7 +25,8 @@ The collector filters `nix flake show --json` through a `python3`
 one-liner into the one-line `outputs: …` form; when that pipeline fails
 it falls back to the raw `nix flake show` tree rendering, so a
 tree-shaped FLAKE OUTPUTS section means the filter fell back and should
-be read as a raw dump (and notes `python3` as a soft dependency).
+be read as a raw dump; `python3` is therefore a soft dependency of
+the collector.
 
 The script inventory names both shell trees and the awk programs because
 tracked docs cite the sourced libraries under `scripts/lib/` — `make_temp`
@@ -219,7 +220,7 @@ as unchecked rather than clean. That pass is
 load-bearing: without it, every doc that *documents* a banned shape as an
 example — `docs/development/linting.md`'s table of banned shapes, the generated
 hook table in `docs/development/git.md` — reports as though it carried one.
-Each class additionally carries its own deterministic suppression:
+Three classes additionally carry a deterministic suppression:
 `pr-ref` drops hit lines carrying `(fill|stroke|color):#hex` colors,
 `&#NNN;` HTML entities, or `#N-` anchor targets; `ad-hoc-ticket` drops
 `(SHA|UTF|RFC|ISO|BASE)-NNN` standard acronyms; `date` drops the
