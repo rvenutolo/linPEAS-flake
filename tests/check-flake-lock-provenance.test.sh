@@ -32,6 +32,17 @@ readonly SCENARIO_TIMEOUT_SECS=20
 export BASE_FLAKE_NIX="${FIXTURES}/base.flake.nix"
 export HEAD_FLAKE_NIX="${FIXTURES}/base.flake.nix"
 
+# The gh CLI is replaced by a PATH stub whose behavior is selected with
+# GH_STUB_MODE, so no network is touched. The default mode is `deny`:
+# the stub exits 97 on any call, so every scenario that does not opt
+# into a mode proves the check made no API call at all — an identity
+# failure, a corroborated move, or a bump that moved no rev must all
+# settle without asking GitHub anything. Exported for the same reason
+# the flake.nix sides are: a scenario that forgets cannot fall through
+# to the real gh and make its verdict depend on the network.
+export PATH="${FIXTURES}/bin:${PATH}"
+export GH_STUB_MODE=deny
+
 failures=0
 
 # @arg $1 scenario name  @arg $2 base fixture  @arg $3 head fixture
@@ -79,6 +90,18 @@ function run_declared_scenario() {
   local -r name="$1" head="$2" head_nix="$3" expected_exit="$4" expected_msg="$5"
   HEAD_FLAKE_NIX="${FIXTURES}/${head_nix}" \
     run_pair_scenario "${name}" 'base.lock' "${head}" "${expected_exit}" "${expected_msg}"
+}
+
+# Runs a scenario under a named gh stub mode, so the ancestry probe sees
+# the compare-API answer the scenario is about. Every other scenario
+# stays under `deny`.
+# @arg $1 scenario name  @arg $2 base fixture  @arg $3 head fixture
+# @arg $4 gh stub mode  @arg $5 expected exit
+# @arg $6 expected output substring (empty skips)
+function run_ancestry_scenario() {
+  local -r name="$1" base="$2" head="$3" mode="$4" expected_exit="$5" expected_msg="$6"
+  GH_STUB_MODE="${mode}" \
+    run_pair_scenario "${name}" "${base}" "${head}" "${expected_exit}" "${expected_msg}"
 }
 
 # @arg $1 scenario name  @arg $2 head fixture basename  @arg $3 expected exit
