@@ -709,7 +709,7 @@ A hit is a conditional whose test is PURELY an availability predicate
 and whose branch body exits 1:
 
 if ! command -v X if ! require_tool X
-if \[[ ! -f|-r|-e|-d|-s P ]\] \[[ -f P ]\] || { ... }
+if \[[ ! -f|-r|-e|-d|-s|-x P ]\] \[[ -f P ]\] || { ... }
 
 Matching is branch-scoped rather than proximity-based: the branch body
 is walked from its opening keyword to the matching `fi` or closing

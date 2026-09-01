@@ -213,7 +213,7 @@ read forty.
 | Class              | Shapes                                                                        |
 | ------------------ | ----------------------------------------------------------------------------- |
 | PR / issue refs    | `#123`, `PR #123`, `issue #123`                                               |
-| Dates-in-prose     | `2026-06-18`, `<Month> 2026`, `Q2 2026`                                       |
+| Dates-in-prose     | `YYYY-MM-DD`, `<Month> YYYY`, `Q<N> YYYY`                                     |
 | Planning labels    | `GAP-1`, `P1.2`, `Wave-P3`, `Phase 2`, `AU-P-4`, `SC-POST-5`, `plan 6`, `F-7` |
 | Review-pass labels | `(D3)`, `(L4,` / `(L4)`, `Per D3`, `D5:`                                      |
 | Literal `.claude/` | any `.claude/` path — prose must not point into the Claude tooling tree       |

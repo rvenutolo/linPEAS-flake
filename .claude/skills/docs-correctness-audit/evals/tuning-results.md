@@ -34,7 +34,7 @@ All three configurations catch all seven seeds in both runs — every category
 internal link, required-check count, ephemeral token). The merged map cuts total
 reader-tokens ~29% because most of a reader's cost is fixed per-agent overhead
 (re-reading the ground-truth bundle, tool setup); three readers collapsed into
-one (`core-docs`) eliminate that overhead while the same documents still get
+`core-docs` and two into `arch+dev` eliminate that overhead while the same documents still get
 read once.
 
 Token figures are this harness's per-reader accounting (sum of subagent token
