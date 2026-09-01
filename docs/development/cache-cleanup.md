@@ -11,8 +11,7 @@ might create. Two automatic triggers (plus manual `workflow_dispatch`):
 
 ## Daily cron
 
-The `prune-stale` job runs daily and on manual
-`workflow_dispatch`. It removes:
+The `prune-stale` job runs daily. It removes:
 
 1. **Age-stale entries** — any cache entry whose `last_accessed_at`
     is older than 7 days. Active branches keep their caches warm; idle

@@ -28,9 +28,8 @@ sweep processes every remaining PR and then fails the job, naming the PRs
 that errored. The one exception is a rate limit: continuing to request
 against an exhausted budget can make it worse, so the sweep halts instead
 and fails the job naming both the PRs that errored and the PRs it left
-untried (that "not attempted" list is the raw PR enumeration behind the
-halt point, before the bot-author and auto-merge filters, so most
-entries are usually PRs the sweep would have skipped anyway). Either way, no PR is starved silently and no error is swallowed.
+untried (how to read that "not attempted" list is covered under the
+rate-limit entry below). Either way, no PR is starved silently and no error is swallowed.
 The one swallowed status is `createLabel`'s 422, which means the
 escalation label already exists and is not an error at all.
 

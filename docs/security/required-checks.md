@@ -4,7 +4,9 @@ In-tree restatement of the required-context set from the `protect-main`
 branch ruleset (`gh api repos/rvenutolo/linPEAS-flake/rules/branches/main`).
 Distinct from `.github/rulesets/protect-main.json`, which is the mirror
 diffed against the live ruleset; the `## Required contexts` table below is
-a third copy, diffed against that mirror. Update this file in the same
+another copy, diffed against that mirror, and
+`docs/_data/ci-check-categories.yml` restates the same set once more,
+parity-gated by `scripts/refresh-ci-summary.sh`. Update this file in the same
 change as any modification to the ruleset.
 
 ## Required contexts

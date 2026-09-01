@@ -227,6 +227,7 @@ filed by the notify jobs.
     consumed as `GITHUB_AUTH_TOKEN` by `scorecard-drift-check.yml` on the
     scorecard step only; the `Webhooks` check needs `admin:repo_hook` read,
     which the workflow-level `GITHUB_TOKEN` cannot be granted. Rotation:
+    recurring reminder cycle, plus on suspected compromise —
     [`docs/runbooks/scorecard-pat-rotation.md`](docs/runbooks/scorecard-pat-rotation.md).
 
 ## SBOM attestations

@@ -19,7 +19,7 @@ must end with a full 40-hex SHA, OR be a path-relative `./...`
 self-reference. Includes first-party GitHub-owned actions.
 
 Enforced by `scripts/check-uses-sha-pinned.sh` (member check
-`uses-sha-pinned` of the `lint-workflow-security` CI job; pre-commit hook same name with `NIX_BUILD_TOP` guard).
+`uses-sha-pinned` of the `lint-workflow-security` CI job; also a same-named pre-commit hook).
 Belt-and-braces backup to the GitHub-side `sha_pinning_required` setting.
 
 The trailing `# v<major>.<minor>[.<patch>]` comment beside each SHA is a
