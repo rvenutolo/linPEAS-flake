@@ -91,11 +91,12 @@ through an environment override declares it with
 `# @fixtures tests/fixtures/<name>`, so that tree is not reported as an
 orphan.
 
-Most check harnesses then define a single `expect` function that takes
-`<fixture> <want_exit> <want_stderr_substring>`, runs the script
-with environment overrides pointing it at the fixture, and asserts
-on exit code + stderr. The rest use per-scenario helpers
-(`expect_empty_scan`, `expect_failure`, `run_expect`) or a bare
+Most check harnesses then define a single scenario runner: either an
+`expect` function taking `<fixture> <want_exit> <want_stderr_substring>`,
+or a `run_scenario` function adding a leading scenario name to the same
+contract. Both run the script with environment overrides pointing it at
+the fixture and assert on exit code + stderr. The rest use per-scenario
+helpers (`expect_empty_scan`, `expect_failure`, `run_expect`) or a bare
 `pass`/`fail` counter — the shebang, `set`, `IFS` and readonly
 `REPO_ROOT` above are universal, but this assertion shape is a
 convention rather than a requirement.

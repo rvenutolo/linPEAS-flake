@@ -30,8 +30,8 @@ figures come from one measured run each (see the ship gate below).
 | security+root merged | 3       | 14/14 (100%)         | not comparable          | —    |
 
 All three configurations catch all seven seeds in both runs — every category
-(ghost CI job, lint-group mislabel, cron drift, stale script ref, broken
-internal link, required-check count, ephemeral token). The merged map cuts total
+(ghost CI job, lint-group mislabel, cron drift, stale ref,
+internal-link, required-check count, ephemeral). The merged map cuts total
 reader-tokens ~29% because most of a reader's cost is fixed per-agent overhead
 (re-reading the ground-truth bundle, tool setup); three readers collapsed into
 `core-docs` and two into `arch+dev` eliminate that overhead while the same documents still get

@@ -34,9 +34,10 @@ per the ratchet-pin-audit runbook.
 Some publishers tag only majors. Others pin the SHA of an annotated
 tag object rather than the release commit, so the inventory script's
 SHA-equality lookup against `gh api repos/<owner>/<repo>/tags` returns
-no match. For such refs, the comment may remain `# v<major>` (or
-`# v<patch>` if that tag already names the exact patch) provided the
-same line carries an inline marker:
+no match. For such refs a majors-only comment may remain `# v<major>`,
+provided the same line carries an inline marker (a tag-object pin whose
+comment already names the exact patch needs no marker — the hook's
+patch-tag regex passes it and the audit accepts either SHA):
 
 ```yaml
 - uses: some/action@<sha> # v2 # patch-tag-exception: publisher only tags majors
@@ -67,17 +68,21 @@ by convention, specific to the ref's upstream tagging convention.
     genuine force-move (which changes both SHAs) still is. Refs whose
     comment names a floating major (`vN`) are excluded from the
     comparison and logged: a deliberately-moving tag cannot be judged by
-    tag-vs-pin equality, so their integrity rests on the immutable digest
-    pin plus Renovate currency and the PR-time digest-provenance gate
-    (`scripts/check-pin-digest-provenance.sh`), which requires
+    tag-vs-pin equality, so their integrity rests on the fallback trio
+    under [Why patch tags](#why-patch-tags-not-major-tags); the PR-time
+    gate there, `scripts/check-pin-digest-provenance.sh`, requires
     floating-major digest moves to be reachable from the upstream
     default branch.
 
     Self-reference pins — a `uses:` whose owner/repo is this repo's own —
     are excluded for a different reason: they name no upstream tag at
     all, since Renovate's `pinDigests` rule tracks this repo's own `main`
-    HEAD. The digest-provenance gate excludes them too, so their PR-time
-    surface is `scripts/check-uses-sha-pinned.sh` alone.
+    HEAD. The digest-provenance gate excludes them too. These exclusions
+    are defensive: every live self-reference today is the `./`-relative
+    form (`uses: ./.github/actions/…`), which is content-addressed by the
+    checkout itself and skipped by `scripts/check-uses-sha-pinned.sh` as
+    well, so an `owner/repo@sha` self-reference is the only form the
+    exclusions would ever see.
 
 - Bulk remediation: when comment drift is tree-wide,
     `scripts/inventory-action-pin-tags.sh` builds a TSV of each pin's

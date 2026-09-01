@@ -12,6 +12,9 @@ How to commit, sign, and merge changes to `linPEAS-flake`.
 Examples: `feat/add-arm64-image`, `fix/pin-url-prefix-check`,
 `chore/bump-nixpkgs-unstable`.
 
+Renovate's own `renovate/*` branches are bot-managed and exempt from
+this convention (the flake-lock auto-refresh keys on that prefix).
+
 ## Commit signing
 
 Every commit on `main` must be signed. The `required_signatures` rule is
@@ -99,13 +102,18 @@ just lint-links  # lychee link check (inputs in the recipe, exclusions in lychee
 ```
 
 Entering the devShell — `nix develop` or direnv — wires the git hooks for
-you, so the same hooks run against staged files on every commit. To run
+you, so the same hooks run on every commit — against staged files, and
+for `commitlint` against the commit message. To run
 them against every file in the repo instead, use `just lint`. Only when
 working outside the devShell do you need to install them yourself, once:
 
 ```sh
-pre-commit install
+pre-commit install --hook-type pre-commit --hook-type commit-msg
 ```
+
+The second `--hook-type` matters: `commitlint` runs at the `commit-msg`
+stage, and a bare `pre-commit install` writes only the `pre-commit`
+hook, silently skipping the local Conventional-Commits gate.
 
 ## Merge policy
 

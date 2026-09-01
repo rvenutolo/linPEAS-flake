@@ -21,14 +21,13 @@ Do NOT use for:
     `.sigstore` bundle — use `force-republish` instead. (A current
     release missing `linpeas-pin.json.intoto.jsonl` IS this runbook's
     case — see the trigger conditions above: `force-republish` re-runs
-    neither the provenance
-    attestation nor the sidecar upload, both gated on the release not
-    existing OR `backfill-tag`, so use `backfill-tag=<current tag>`.)
-- A release with a PARTIAL per-arch image set (some but not all six of
-    the `{ghcr.io,docker.io}:<tag>-{amd64,arm64}` tags and the
+    neither the provenance attestation nor the sidecar upload, both
+    gated on the release not existing OR `backfill-tag`, so use
+    `backfill-tag=<current tag>`.) - A release with a PARTIAL per-arch
+    image set (some but not all six of the
+    `{ghcr.io,docker.io}:<tag>-{amd64,arm64}` tags and the
     `{ghcr.io,docker.io}:<tag>` indexes present). The preflight fails
-    loudly on this half-published state — see "Partial image set"
-    below.
+    loudly on this half-published state — see "Partial image set" below.
 
 An IMAGE-LESS release (all six absent) is fully supported: backfill
 writes the pin sidecars, the image jobs skip, and the run finishes
@@ -153,8 +152,6 @@ preflight refuses to guess at and hard-fails on.
 
 The backfilled `.intoto.jsonl` bundles carry the BACKFILL workflow's
 timestamp and SHA, not the original release's. This is correct: the
-attestation predicate's `subject` is content hash, and consumers
-verify content match, not emission time. Reviewers reading
-`gh attestation download <artifact> --repo rvenutolo/linPEAS-flake`
-may see a timestamp newer than the release
-date — that is expected.
+attestation predicate's `subject` is content hash, and consumers verify
+content match, not emission time. Reviewers reading `gh attestation download <artifact> --repo rvenutolo/linPEAS-flake` may see a timestamp
+newer than the release date — that is expected.

@@ -18,8 +18,8 @@ user-invocable: false
 Review this repo across **8 fixed dimensions**, one gated `Workflow` fan-out
 per dimension: parallel finder slices surface candidate findings, then
 independent skeptics try to *refute* each one, and only survivors reach the
-findings sections of a single severity-ranked report (unanimous kills land in
-its refutation log). **Read-only — no edits.** The deliverable is a
+findings sections of a single severity-ranked report (unanimous kills with at
+least two live skeptics land in its refutation log). **Read-only — no edits.** The deliverable is a
 report the user triages later, written so any single finding could be lifted
 into a GitHub issue without rework.
 
@@ -94,7 +94,8 @@ hand-editing each finder prompt.
 ### 3. Workflow script template
 
 One dimension = one `Workflow` call. Fan out the dimension's slices as finders,
-dedup, then refute each deduped finding with 3 skeptics; keep a finding when at least
+dedup, then refute each deduped finding — up to the per-dimension cap of
+25, most-severe first — with 3 skeptics; keep a finding when at least
 two of the skeptics that returned could not refute it. The controller
 injects four per-dimension values: `SLICES` and `REFUTER_GUIDANCE` come from
 `references/dimensions.md` (the refuter paragraph is injected *verbatim* — this

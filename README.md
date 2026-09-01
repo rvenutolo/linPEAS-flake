@@ -21,10 +21,6 @@
 Personal Nix-flake wrapper around [peass-ng/PEASS-ng](https://github.com/peass-ng/PEASS-ng) linpeas.sh.
 All credit for LinPEAS itself belongs to the PEASS-ng authors.
 
-## Maintenance
-
-The [Renovate dependency dashboard](https://github.com/rvenutolo/linPEAS-flake/issues?q=is%3Aissue+is%3Aopen+label%3Adependencies+%22Dependency+Dashboard%22) tracks pending dependency bumps, rate-limited PRs, and config errors. Check there if a bump appears stalled.
-
 ## Usage
 
 Each install artifact serves a different scenario. Pick the one that
@@ -125,15 +121,18 @@ trigger semantics, and credential split live in
 
 <!-- Chronological by cron — daily, then weekly; event-driven rows last. -->
 
-| Workflow                    | When                               | Purpose                                                                                                                                                           |
-| --------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `update-linpeas.yml`        | daily + dispatch                   | Bumps `linpeas-pin.json` to the latest upstream tag. Opens PR; auto-merges on green.                                                                              |
-| `stale-pin-check.yml`       | daily + dispatch                   | Files a deduped issue on a stalled bump, a malformed pin, an upstream API failure, or a malformed upstream tag (four distinct reason tokens).                     |
-| `pages.yml`                 | push, PR, release, daily, dispatch | Rebuilds the MkDocs site; deploys via OIDC on non-PR events. Not in the required-check set.                                                                       |
-| `update-flake-lock.yml`     | weekly Fri + dispatch              | Bumps every flake input via `nix flake update`; opens auto-merging PR.                                                                                            |
-| `verify-latest-release.yml` | weekly Fri + dispatch              | Re-verifies the latest release's attestations and re-fetches upstream `linpeas.sh` to confirm the pinned SRI hash.                                                |
-| Renovate                    | weekly Fri batch                   | Bumps action SHAs, the Nix installer pin, the octoscan digest, the SchemaStore pin, and tracked flake inputs after a 7-day cooldown.                              |
-| `release-on-bump.yml`       | pin push to `main` + dispatch      | Tags the release, builds + pushes per-arch OCI images (ghcr.io + docker.io), attests SLSA provenance + SBOMs. Manual dispatch covers republish/backfill recovery. |
+| Workflow                         | When                               | Purpose                                                                                                                                                           |
+| -------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `update-linpeas.yml`             | daily + dispatch                   | Bumps `linpeas-pin.json` to the latest upstream tag. Opens PR; auto-merges on green.                                                                              |
+| `stale-pin-check.yml`            | daily + dispatch                   | Files a deduped issue on a stalled bump, a malformed pin, an upstream API failure, or a malformed upstream tag (four distinct reason tokens).                     |
+| `flake-lock-staleness-check.yml` | daily + dispatch                   | Files a deduped issue when a top-level `flake.lock` input has not been refreshed inside its declared staleness bound.                                             |
+| `pages.yml`                      | push, PR, release, daily, dispatch | Rebuilds the MkDocs site; deploys via OIDC on non-PR events. Not in the required-check set.                                                                       |
+| `update-flake-lock.yml`          | weekly Fri + dispatch              | Bumps every flake input via `nix flake update`; opens auto-merging PR.                                                                                            |
+| `verify-latest-release.yml`      | weekly Fri + dispatch              | Re-verifies the latest release's attestations and re-fetches upstream `linpeas.sh` to confirm the pinned SRI hash.                                                |
+| Renovate                         | weekly Fri batch                   | Bumps action SHAs, the Nix installer pin, the octoscan digest, the SchemaStore pin, and tracked flake inputs after a 7-day cooldown.                              |
+| `release-on-bump.yml`            | pin push to `main` + dispatch      | Tags the release, builds + pushes per-arch OCI images (ghcr.io + docker.io), attests SLSA provenance + SBOMs. Manual dispatch covers republish/backfill recovery. |
+
+The [Renovate dependency dashboard](https://github.com/rvenutolo/linPEAS-flake/issues?q=is%3Aissue+is%3Aopen+label%3Adependencies+%22Dependency+Dashboard%22) tracks pending dependency bumps, rate-limited PRs, and config errors. Check there if a bump appears stalled.
 
 Bump-workflow commits are authored by the `linpeas-flake-bumper` GitHub
 App and web-flow-signed by GitHub, satisfying `required_signatures` on
@@ -200,11 +199,11 @@ Every release runs a `verify` job in `release-on-bump.yml` that runs
 from the Sigstore transparency log and the GitHub API, plus `cosign verify`
 against the published registries — both registry reads are anonymous, so no
 registry credential is required.
-A separate weekly cron workflow (`verify-latest-release.yml`) re-verifies the
-latest release's image and pin file **and re-fetches the pinned
-`linpeas.sh` from upstream to confirm the SRI hash still matches** — this
-detects upstream tag-replacement that attestation alone cannot see. Any
-failing check surfaces as a red workflow run.
+The weekly upstream parity check — item 5 under
+[Verification](#verification) — re-verifies the latest release and
+re-fetches the pinned `linpeas.sh`, catching upstream tag-replacement
+that attestation alone cannot see. Any failing check surfaces as a red
+workflow run.
 
 ## Verification
 

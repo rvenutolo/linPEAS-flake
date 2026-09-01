@@ -108,11 +108,14 @@ Promotion steps:
 If a real-world repro break cannot be fixed within one week of detection:
 
 1. Re-add `continue-on-error: true` to the `compare` job.
+1. Remove the `pull_request:` trigger added at promotion — a demoted,
+    non-required check has no reason to run on every PR.
 1. Remove `compare` from the ruleset required checks, updating
     `.github/rulesets/protect-main.json`, the required-contexts table in
     [`docs/security/required-checks.md`](../security/required-checks.md), and
-    `docs/_data/ci-check-categories.yml` in the same change (the same gates
-    that guard promotion fail otherwise).
+    `docs/_data/ci-check-categories.yml` in the same change, and run
+    `just show-ci-summary` to regenerate the README summary block (the
+    same gates that guard promotion fail otherwise).
 1. Update **Status** header to `Burn-in (demoted)`. Keep the date and the
     blocking issue number out of this file — `check-ephemeral-refs.sh` blocks
     both shapes in tracked prose. They belong in the demoting commit message
