@@ -202,7 +202,7 @@ function run_directory_lock_scenario() {
 
 function main() {
   # Every clean scenario asserts the whole summary line rather than the bare
-  # `provenance OK`. The eight of them resolve different graphs — different
+  # `provenance OK`. The ten of them resolve different graphs — different
   # entry-point ids, follows depths, and tolerated transitive churn — and the
   # verdict alone renders all of that as the same observable outcome.
   # The routine bumps move a rev, so they are the scenarios that reach the
