@@ -509,8 +509,8 @@ re-introducing the same defect. The sanctioned
 its own target matches the filter pattern.
 
 A read outside every loop and every hop-reached function stays legal
-without a marker — the rule tests position, not purpose. The two live
-examples guard a job-count assertion (`check-egress-allowlist.sh`) and a
+without a marker — the rule tests position, not purpose. The three live
+reads guard two job-count assertions (`check-egress-allowlist.sh`) and a
 reverse allowlist-staleness pass (`check-permission-scopes.sh`). Any of
 the four banned shapes — the in-loop re-read, the one-hop function read,
 the missing `filter_into` call, or the aliasing assignment — opts out

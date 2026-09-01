@@ -170,8 +170,8 @@ attribute a name to its origin, and the bundle's `ci.yml` list covers one
 workflow: settle member-vs-standalone by checking the name against the
 bundle's **LINT-GROUP MEMBERSHIP** section and the `HARNESSES` array in
 `scripts/run-harness-group.sh` versus the `jobs:` keys of every
-`.github/workflows/*.yml` — a name found only in a group / harness roster and
-in no workflow's `jobs:` block is the mislabel case. Under-inspection that
+`.github/workflows/*.yml` and `*.yaml` — a name found only in a group /
+harness roster and in no workflow's `jobs:` block is the mislabel case. Under-inspection that
 concludes "all good" is the failure mode this audit most needs to prevent: a
 from-scratch reviewer will out-find a reader who trusts the green pipeline.
 
