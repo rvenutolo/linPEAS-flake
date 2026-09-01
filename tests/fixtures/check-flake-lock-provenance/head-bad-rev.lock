@@ -1,8 +1,8 @@
 {
   "nodes": {
     "alpha": {
-      "locked": { "lastModified": 100, "narHash": "sha256-AAA", "owner": "orgA", "repo": "alpha", "rev": "aaa999aaa999aaa999aaa999aaa999aaa999aaa9", "type": "github" },
-      "original": { "owner": "evil", "ref": "main", "repo": "alpha", "type": "github" }
+      "locked": { "lastModified": 100, "narHash": "sha256-AAA", "owner": "orgA", "repo": "alpha", "rev": "not-a-sha", "type": "github" },
+      "original": { "owner": "orgA", "ref": "main", "repo": "alpha", "type": "github" }
     },
     "beta": {
       "inputs": { "gamma": "gamma" },

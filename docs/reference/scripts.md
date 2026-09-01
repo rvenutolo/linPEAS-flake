@@ -638,13 +638,16 @@ matches no script, which is a could-not-run rather than a clean tree.
 ### scripts/check-flake-lock-provenance.sh
 
 Lint: a `flake.lock` bump that `flake.nix` does not
-account for may only move `rev`/`narHash`/`lastModified`. Fails when a
+account for may only move `rev`/`narHash`/`lastModified`, and a moved
+`rev` must continue the history it claims to continue. Fails when a
 top-level input is added, removed, or repointed, or when any node
 present in both base and head has its source identity
 (owner/repo/type/url/ref/flake/...) changed, unless `flake.nix` itself
-declares a different `url` for that input between base and head.
-Gates the auto-merged weekly flake.lock update so a source-level
-repoint of an input cannot slip into the build/dev closure
+declares a different `url` for that input between base and head; and
+fails when an undeclared `rev` move on a GitHub-hosted node is not a
+fast-forward of the old `rev` per the GitHub compare API. Gates the
+auto-merged weekly flake.lock update so neither a source-level repoint
+nor a rewritten upstream history can slip into the build/dev closure
 undeclared.
 
 ### scripts/check-flake-lock-staleness.sh

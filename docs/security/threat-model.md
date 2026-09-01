@@ -35,6 +35,16 @@ upstream account compromise post-release.
     recorded SRI `hash` is that digest: the two encode the same 32 bytes,
     so the pin carries no separate digest field and needs none.
 - URL-prefix lock to `https://github.com/peass-ng/PEASS-ng/releases/download/`.
+- The flake inputs behind the build and dev closures are a second instance
+    of this boundary, bumped weekly by a bot rather than by
+    `bump-linpeas.sh`. `check-flake-lock-provenance.sh` gates that path: an
+    input's source identity may not move undeclared, and an undeclared `rev`
+    move must be a fast-forward of the old one per the GitHub compare API,
+    so a rewritten upstream history or a hijacked repository name under
+    unchanged coordinates fails the required check instead of auto-merging.
+    A malicious commit pushed on top of upstream's real history is outside
+    what any of this can see; see [the gate's section in the trust
+    model](trust-model.md#flakelock-input-provenance-gate).
 
 See [`docs/security/verification.md`](verification.md).
 

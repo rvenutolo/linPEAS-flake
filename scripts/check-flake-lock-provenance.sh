@@ -2,13 +2,16 @@
 # scripts/check-flake-lock-provenance.sh
 #
 # @description Lint: a `flake.lock` bump that `flake.nix` does not
-# account for may only move `rev`/`narHash`/`lastModified`. Fails when a
+# account for may only move `rev`/`narHash`/`lastModified`, and a moved
+# `rev` must continue the history it claims to continue. Fails when a
 # top-level input is added, removed, or repointed, or when any node
 # present in both base and head has its source identity
 # (owner/repo/type/url/ref/flake/...) changed, unless `flake.nix` itself
-# declares a different `url` for that input between base and head.
-# Gates the auto-merged weekly flake.lock update so a source-level
-# repoint of an input cannot slip into the build/dev closure
+# declares a different `url` for that input between base and head; and
+# fails when an undeclared `rev` move on a GitHub-hosted node is not a
+# fast-forward of the old `rev` per the GitHub compare API. Gates the
+# auto-merged weekly flake.lock update so neither a source-level repoint
+# nor a rewritten upstream history can slip into the build/dev closure
 # undeclared.
 
 # Compares the base `flake.lock` (origin/main, or BASE_LOCK_FILE)
@@ -45,6 +48,43 @@
 # flake reference from a url string here would duplicate that check
 # against a hand-written parser, and a parser that drifted would block
 # legitimate bumps while claiming provenance grounds.
+#
+# Ancestry probe: source identity alone leaves one move unexamined — the
+# same owner/repo/ref pointing at a `rev` that does not descend from the
+# old one. That is what an upstream force-push, a history rewrite under
+# a taken-over maintainer account, or a repo name claimed by someone
+# else after the original owner renamed away all look like, and each
+# passes the identity comparison cleanly because nothing but `rev`
+# changed. So for every node present on both sides whose identity is
+# unchanged but whose `locked.rev` moved without a `flake.nix`
+# declaration, the check asks the GitHub compare API for
+# `{old_rev}...{new_rev}`: `ahead` is the fast-forward a routine bump
+# produces and passes; `behind` or `diverged` means the new rev does not
+# descend from the old one and fails; an HTTP 404 means the repo does not
+# know one of the two commits (or does not exist) and fails too, since
+# either way the bump did not come from where the lock says. Any other
+# API failure, a malformed response, or a status the request cannot
+# legitimately produce (including `identical`, impossible for two
+# distinct revs) is an operational error, exit 2 — never a pass.
+#
+# The probe runs only after the identity verdict is clean, so a run that
+# already fails on identity makes no API call, and it skips two classes
+# by name rather than silently: a move `flake.nix` corroborates (a
+# channel move lands on a different release branch and compares
+# `diverged`; a pin-back compares `behind`; both are declared moves, not
+# smuggled ones) and a node whose `locked.type` is not `github` (no
+# compare API to ask). Both are counted in the summary line and the
+# non-github case is logged per node. Only `github`-typed nodes are
+# probed, so the check verifies exactly what it can and says what it
+# did not. What ancestry cannot see is a malicious commit fast-forwarded
+# onto the tracked branch — that is `ahead` like any other bump — so this
+# bounds rewrites and repojacks, not upstream compromise as such.
+#
+# Every rev is checked against `^[0-9a-f]{40}$` and owner/repo against a
+# plain-name pattern before either is interpolated into the API route:
+# a crafted lock must not be able to steer the token-bearing request at
+# a different endpoint. A lock nix wrote never trips this; one that does
+# is an operational error.
 #
 # The entry point is each lock's own top-level `.root` field, not a
 # hardcoded "root" node id — a lock's root node can be named anything.
@@ -100,9 +140,12 @@
 # an error the resolver did not raise itself.
 #
 # CI coupling: the lint-doc-invariants job fetches origin/main before
-# running this check. `actions/checkout` does not create
-# refs/remotes/origin/main on its own. If the base lock cannot be
-# resolved this script exits 2 (loud) — it never silently passes.
+# running this check (`actions/checkout` does not create
+# refs/remotes/origin/main on its own) and passes `GH_TOKEN` so the
+# ancestry probe runs under the authenticated rate limit (unauthenticated
+# calls cap at 60/hr, which a local run against one lock diff still
+# fits). If the base lock cannot be resolved this script exits 2 (loud)
+# — it never silently passes.
 #
 # Exit: 0 pass, 1 provenance violation, 2 operational error.
 #
@@ -130,6 +173,7 @@ source "${_lib_dir}/lib/payload.sh"
 require_tool jq
 
 readonly BASE_REF="${BASE_REF:-origin/main}"
+readonly GH_API_VERSION_HEADER="X-GitHub-Api-Version: 2022-11-28"
 
 function die_op() {
   printf 'flake-lock-provenance: %s\n' "$1" >&2
@@ -264,6 +308,76 @@ printf '%s' "${base_json}" | jq -e '.nodes | type == "object"' >/dev/null 2>&1 |
 printf '%s' "${head_json}" | jq -e '.nodes | type == "object"' >/dev/null 2>&1 ||
   die_op "head flake.lock: invalid JSON or .nodes not an object"
 
+# One compare-API call per probed node, run in the main shell — never
+# inside `$( )` — so die_op and require_json_payload can end the run
+# instead of exiting a subshell whose captured output the caller then
+# reads as a verdict. A failure is appended to ANCESTRY_FAILS rather
+# than reported here, so every probed node is named before the run
+# ends, the same way the identity verdict lists every repoint at once.
+# @arg $1 node id  @arg $2 owner  @arg $3 repo  @arg $4 old rev  @arg $5 new rev
+declare -a ANCESTRY_FAILS=()
+function check_ancestry() {
+  local -r node="$1" owner="$2" repo="$3" old="$4" new="$5"
+  local rev
+  for rev in "${old}" "${new}"; do
+    [[ ${rev} =~ ^[0-9a-f]{40}$ ]] ||
+      die_op "rev on ${node} is not a 40-hex commit id: ${rev}"
+  done
+  [[ ${owner} =~ ^[A-Za-z0-9_.-]+$ && ${repo} =~ ^[A-Za-z0-9_.-]+$ ]] ||
+    die_op "source of ${node} is not a plain owner/repo: ${owner}/${repo}"
+  command -v gh >/dev/null 2>&1 ||
+    die_op 'gh not found on PATH (needed for ancestry probe)'
+  # `per_page=1` trims the commit list the response carries alongside the
+  # verdict; `status`, `ahead_by`, and `behind_by` describe the whole
+  # range regardless, so the same predicate holds for a ten-thousand-
+  # commit nixpkgs week as for a two-commit bump. The response is then
+  # projected to those three fields before it reaches the shell: a
+  # nixpkgs compare still carries a megabyte of file diffs even at one
+  # commit per page, and the shape gate's whitespace scan over a payload
+  # that size runs for minutes. An absent field projects to null, which
+  # the shape gate below names; a body that is not a JSON object fails
+  # the projection and is reported as an API failure.
+  local -r route="repos/${owner}/${repo}/compare/${old}...${new}?per_page=1"
+  local body
+  # A 404 is the finding, not an operational failure: the repo does not
+  # hold one of the two revs (a rewritten history whose old commit has
+  # been collected, or a name now serving an unrelated repo), or the
+  # repo is gone. Either way the bump did not come from where the lock
+  # says. Any other API error still dies loud.
+  if ! body="$(gh api --header "${GH_API_VERSION_HEADER}" "${route}" \
+    --jq '{status: .status, ahead_by: .ahead_by, behind_by: .behind_by}' 2>&1)"; then
+    if grep --quiet --fixed-strings 'HTTP 404' <<<"${body}"; then
+      ANCESTRY_FAILS+=("FAIL: ancestry unknown: ${node} (${owner}/${repo}: compare API reports no such commit or repository for ${old}..${new})")
+      return 0
+    fi
+    die_op "compare API failed for ${owner}/${repo} ${old}...${new}: ${body}"
+  fi
+  require_json_payload "${route}" "${body}" '
+    if (.status | type) != "string" then "status: expected string, got \(.status | type)"
+    elif (.ahead_by | type) != "number" then "ahead_by: expected number, got \(.ahead_by | type)"
+    elif (.behind_by | type) != "number" then "behind_by: expected number, got \(.behind_by | type)"
+    else empty end'
+  local status ahead behind
+  status="$(jq --raw-output '.status' <<<"${body}")"
+  ahead="$(jq --raw-output '.ahead_by' <<<"${body}")"
+  behind="$(jq --raw-output '.behind_by' <<<"${body}")"
+  case "${status}" in
+  ahead)
+    printf 'note: ancestry verified: %s (%s/%s %s..%s: ahead by %s)\n' \
+      "${node}" "${owner}" "${repo}" "${old}" "${new}" "${ahead}" >&2
+    ;;
+  behind | diverged)
+    ANCESTRY_FAILS+=("FAIL: ancestry broken: ${node} (${owner}/${repo} ${old}..${new}: ${status}, ahead by ${ahead}, behind by ${behind})")
+    ;;
+  *)
+    # `identical` lands here on purpose: the probe set only holds nodes
+    # whose rev changed, so two distinct revs reporting identical is a
+    # response this request cannot legitimately produce.
+    die_op "unexpected compare status '${status}' for ${owner}/${repo}"
+    ;;
+  esac
+}
+
 function root_display() {
   # Renders `.root` for a human-readable error message ONLY — never
   # used for the equality decision or passed to jq as an --arg. @json
@@ -368,6 +482,9 @@ if ($base.root != $head.root) then
   { fails: ["FAIL: root node id changed: \($base.root) -> \($head.root)"],
     notes: [],
     summary: "",
+    probes: [],
+    unprobed: 0,
+    corroborated_moves: 0,
     root_mismatch: true }
 else
 ($base.root) as $broot
@@ -428,6 +545,34 @@ else
     | select(($base.nodes[$k] | srcid) != ($head.nodes[$k] | srcid))
     | select(corroborated($k))
     | "note: node repoint corroborated by flake.nix (tolerated): \($k) (\(nixmove($k)))" ] as $noderep_ok
+# Ancestry probe set: shared nodes whose identity is unchanged and whose
+# `locked.rev` moved with no `flake.nix` declaration. A node whose
+# identity moved is already a failure above and is never probed; a
+# corroborated move is counted, not probed; a non-github node is named
+# as unprobed, since there is no compare API to ask.
+| [ ($base.nodes | keys[])
+    | select(. != $broot)
+    | . as $k
+    | select($head.nodes | has($k))
+    | select(($base.nodes[$k] | srcid) == ($head.nodes[$k] | srcid))
+    | select(($base.nodes[$k].locked.rev // null) != ($head.nodes[$k].locked.rev // null))
+    | select(corroborated($k) | not) ] as $revmoved
+| [ $revmoved[] | . as $k
+    | select(($head.nodes[$k].locked.type // null) == "github")
+    | { node: $k,
+        owner: ($head.nodes[$k].locked.owner // null),
+        repo: ($head.nodes[$k].locked.repo // null),
+        old: ($base.nodes[$k].locked.rev // null),
+        new: ($head.nodes[$k].locked.rev // null) } ] as $probes
+| [ $revmoved[] | . as $k
+    | select(($head.nodes[$k].locked.type // null) != "github")
+    | "note: ancestry not probed (non-github source, tolerated): \($k) (type=\($head.nodes[$k].locked.type // "(absent)"))" ] as $unprobed
+| ([ ($base.nodes | keys[])
+    | select(. != $broot)
+    | . as $k
+    | select($head.nodes | has($k))
+    | select(($base.nodes[$k].locked.rev // null) != ($head.nodes[$k].locked.rev // null))
+    | select(corroborated($k)) ] | length) as $corr_moves
 | [ ($head.nodes | keys[]) | select(. != $hroot) | . as $k
     | select(($base.nodes | has($k)) | not)
     | "note: transitive node added (tolerated): \($k)" ] as $tadd
@@ -446,8 +591,11 @@ else
    | length) as $shared
 | ($addrem_ok + $noderep_ok) as $corroborated
 | { fails: ($added + $removed + $tlrep + $noderep),
-    notes: ($tadd + $trem + $corroborated),
+    notes: ($tadd + $trem + $corroborated + $unprobed),
     summary: ("entry \($base.root | @json); top-level inputs resolved: \($common | length) (\($viafollows) via follows, max depth \($tlacc.depth)); shared nodes compared: \($shared); transitive churn tolerated: \($tadd | length) added, \($trem | length) removed; flake.nix-corroborated moves: \($corroborated | length)"),
+    probes: $probes,
+    unprobed: ($unprobed | length),
+    corroborated_moves: $corr_moves,
     root_mismatch: false }
 end
 '
@@ -486,4 +634,29 @@ if [[ -n ${fails} ]]; then
   exit 1
 fi
 
-printf 'flake.lock provenance OK: %s\n' "${summary}"
+# Identity is clean. Now the ancestry probes — one API call per node in
+# the probe set, none at all when the set is empty (a bump that moved no
+# rev, or moved only corroborated or non-github ones).
+probe_lines="$(printf '%s' "${result}" | jq --compact-output '.probes[]')"
+probe_count="$(printf '%s' "${result}" | jq --raw-output '.probes | length')"
+unprobed_count="$(printf '%s' "${result}" | jq --raw-output '.unprobed')"
+corroborated_moves="$(printf '%s' "${result}" | jq --raw-output '.corroborated_moves')"
+while IFS= read -r probe; do
+  [[ -n ${probe} ]] || continue
+  check_ancestry \
+    "$(printf '%s' "${probe}" | jq --raw-output '.node')" \
+    "$(printf '%s' "${probe}" | jq --raw-output '.owner')" \
+    "$(printf '%s' "${probe}" | jq --raw-output '.repo')" \
+    "$(printf '%s' "${probe}" | jq --raw-output '.old')" \
+    "$(printf '%s' "${probe}" | jq --raw-output '.new')"
+done <<<"${probe_lines}"
+
+if ((${#ANCESTRY_FAILS[@]} > 0)); then
+  printf '%s\n' "${ANCESTRY_FAILS[@]}" >&2
+  printf "flake.lock provenance check FAILED — a bumped input's new rev does not descend from its old rev.\n" >&2
+  printf "A routine bump only moves forward along the input's history. Review the change.\n" >&2
+  exit 1
+fi
+
+printf 'flake.lock provenance OK: %s; ancestry probed: %s verified, skipped: %s corroborated, %s non-github\n' \
+  "${summary}" "${probe_count}" "${corroborated_moves}" "${unprobed_count}"

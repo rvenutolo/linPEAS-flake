@@ -6,18 +6,19 @@
         "narHash": "sha256-AAA",
         "owner": "orgA",
         "repo": "alpha",
-        "rev": "aaa999aaa999aaa999aaa999aaa999aaa999aaa9",
+        "rev": "aaa111aaa111aaa111aaa111aaa111aaa111aaa1",
         "type": "github"
       },
       "original": {
         "owner": "orgA",
-        "ref": "next",
+        "ref": "main",
         "repo": "alpha",
         "type": "github"
       }
     },
     "beta": {
       "inputs": {
+        "delta": "delta",
         "gamma": "gamma"
       },
       "locked": {
@@ -33,6 +34,20 @@
         "ref": "main",
         "repo": "beta",
         "type": "github"
+      }
+    },
+    "delta": {
+      "locked": {
+        "lastModified": 400,
+        "narHash": "sha256-DDD",
+        "ref": "refs/heads/main",
+        "rev": "ddd444ddd444ddd444ddd444ddd444ddd444ddd4",
+        "type": "git",
+        "url": "https://forge.example/orgD/delta.git"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://forge.example/orgD/delta.git"
       }
     },
     "gamma": {
