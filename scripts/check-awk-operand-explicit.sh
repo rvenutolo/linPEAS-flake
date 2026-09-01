@@ -2,11 +2,11 @@
 # scripts/check-awk-operand-explicit.sh
 #
 # @description Lint: every `awk` invocation in a script under
-# scripts/ (the `scripts/*.sh` git pathspec crosses `/`, so sourced
-# libraries are in scope) that
-# carries a file operand must spell that operand
+# `scripts/` that carries a file operand must spell that operand
 # `"$(awk_path "${var}")"`. `awk` reads an operand shaped
 # `name=value` as a variable assignment rather than a filename; it
+# scans the whole tree: the `scripts/*.sh` git pathspec crosses `/`,
+# so the sourced libraries under `scripts/lib/` are in scope too. It
 # then finds no file operand, reads stdin, and exits 0 having scanned
 # nothing — so a relative path whose first component contains `=`
 # scores as an empty file instead of failing loud.

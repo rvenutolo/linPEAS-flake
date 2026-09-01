@@ -164,10 +164,13 @@ Read-only fan-out needs no orchestration opt-in — it is plain parallel reads.
 shows *what* was cross-checked against ground truth — not that freshness checks
 passed. A clean verdict with no coverage note is not clean; re-dispatch that
 cluster to read its CI/job/required-check prose against the collector's
-**VALID CI JOB / CHECK NAMES** union allowlist (member-vs-standalone is
-settled by lint-group / harness-group membership against every workflow's
-`jobs:` blocks — not by the `ci.yml` list alone, since jobs defined in other
-workflows are standalone too).
+**VALID CI JOB / CHECK NAMES** union allowlist. The union alone does not
+attribute a name to its origin, and the bundle's `ci.yml` list covers one
+workflow: settle member-vs-standalone by checking the name against the
+bundle's **LINT-GROUP MEMBERSHIP** section and the `HARNESSES` array in
+`scripts/run-harness-group.sh` versus the `jobs:` keys of every
+`.github/workflows/*.yml` — a name found only in a group / harness roster and
+in no workflow's `jobs:` block is the mislabel case.
 Under-inspection that concludes "all good" is the failure mode this audit most
 needs to prevent: a from-scratch reviewer will out-find a reader who trusts the
 green pipeline.
@@ -234,7 +237,7 @@ findings must still show what was cross-checked, not just "clean".
 
 | Cluster | Cross-checked | Findings | Notes |
 |---------|---------------|----------|-------|
-| security | job/check names vs ci.yml job list, required checks vs ruleset, links | 2 | ... |
+| security | job/check names vs the union allowlist, required checks vs ruleset, links | 2 | ... |
 | ... | ... | ... | ... |
 
 ## HIGH

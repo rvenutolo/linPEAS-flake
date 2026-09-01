@@ -42,8 +42,8 @@ same line carries an inline marker:
 - uses: some/action@<sha> # v2 # patch-tag-exception: publisher only tags majors
 ```
 
-The marker reason must be non-empty and specific to the ref's
-upstream tagging convention.
+The marker reason must be non-empty (the half the lint checks) and,
+by convention, specific to the ref's upstream tagging convention.
 
 ## Enforcement
 

@@ -59,10 +59,11 @@ Functional gates:
 Self-enforcing invariant gates. The three `lint-*` rows in this table
 are batched group jobs (`lint-pr-title`, further down, is not); their member lints are enumerated in
 `.github/lint-groups.yml`, which is the source of truth for what each
-group runs. Each group job runs every member's
-`tests/check-<member>.test.sh` fixture harness before the member's
-enforcer and fails on either, so a harness regression reddens the
-required context even with a clean tree:
+group runs. Each of these three group jobs runs each member's
+`tests/check-<member>.test.sh` fixture harness, where one exists
+(`jsonschema` has none, by exemption), before that member's enforcer
+and fails on either, so a harness regression reddens the required
+context even with a clean tree:
 
 | Job                          | What it enforces                                                                                                                                                                                                                                                                                                                                                                                                  |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

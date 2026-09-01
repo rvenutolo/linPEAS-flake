@@ -64,8 +64,8 @@ See [`SECURITY.md`](https://github.com/rvenutolo/linPEAS-flake/blob/main/SECURIT
 ## flake.lock input-provenance gate
 
 The weekly `update-flake-lock` cron bumps every flake input and auto-merges
-the PR; the only build-path gate is `flake-check`, which does not verify input
-*provenance*. `check-flake-lock-provenance.sh` (run in the `lint-doc-invariants`
+the PR; no build-path gate verifies input *provenance* — `flake-check` and
+the build/smoke jobs all accept whatever the lock names. `check-flake-lock-provenance.sh` (run in the `lint-doc-invariants`
 required group) closes that gap: it diffs the PR's `flake.lock` against
 `origin/main` and fails when an input's source identity changes without
 `flake.nix` declaring it.
@@ -124,16 +124,18 @@ since a lock's root node can be named anything. A missing or non-string
 equality entirely inside the `jq` program that also does the node comparison:
 the id is never round-tripped through a shell variable or passed as a `jq`
 `--arg`, so a trailing newline or other control character smuggled into a node
-id is read byte-exact and cannot desync the script's view of the root from
-`nix`'s. If the base and head root ids differ, the check fails closed before
+id is read byte-exact and cannot desync the shell's view of the root from
+`jq`'s. If the base and head root ids differ, the check fails closed before
 any node comparison runs, so a crafted lock cannot repoint `.root` at a decoy
 node to dodge the top-level comparison.
 
 Top-level input refs resolve through `follows` paths before that comparison: a
 string ref names the target node id directly, and an array ref is a path
 walked from the lock's root node through each node's `inputs` in turn, one hop
-per array element, guarded against cycles by a depth ceiling. A ref that
-cannot be resolved — a dangling path element, a cycle, or an empty array —
+per array element, bounded twice — a nesting ceiling on depth and a step
+budget on total resolution cost. A ref that cannot be resolved — a dangling
+path element, an empty array, a cycle, an over-deep legal chain, or an
+exhausted step budget —
 fails closed with a `top-level input unresolvable` message rather than
 comparing against nothing, and the message names what the resolver observed:
 `follows path names no such node`, `follows path exceeds nesting ceiling`, or
@@ -210,7 +212,7 @@ A hand-authored `allowed-endpoints:` list has nothing binding it to what the job
 
 7. **Nix-host reachability**, the one assertion binding a host to a tool that must be able to *reach* it rather than a tool it must be *present for*. Any job whose `allowed-endpoints` carries `cache.nixos.org` or `releases.nixos.org` must either use the `./.github/actions/setup-nix` composite, invoke a `nix` subcommand in a `run:` block, or carry an in-job `# egress-nix-exempt: <reason>` comment with a non-empty reason. An empty reason is rejected outright, and a marker on a job whose allowlist carries neither host is reported as stale, since the rule it would exempt does not apply there. Full rationale: [Workflow hardening → nix-host reachability](workflow-hardening.md#nix-host-reachability).
 
-Known blind spot: detection reads the workflow file only, one level deep. A job that reaches cosign through a script or `just` recipe is invisible to the `run:`-text sign/verify rules — assertion 4's "neither detected" branch covers that case whenever the job's allowlist carries at least one sigstore host, which is why no call-graph resolver is warranted; a job with an empty sigstore host set that reaches cosign only indirectly is matched by no arm at all (an accepted blind spot).
+Known blind spot: detection reads the workflow file only, one level deep. A job that reaches cosign through a script or `just` recipe is invisible to the `run:`-text sign/verify rules — assertion 4's "neither detected" branch covers that case whenever the job's allowlist carries at least one sigstore host, and for that covered shape no call-graph resolver is warranted. The residual gap — a job with an empty sigstore host set that reaches cosign only indirectly — is matched by no arm at all and is accepted as a blind spot.
 
 Assertion 6 is the one place where the unguarded-host problem below does not arise: an exact-match rule leaves no host in a pure notify job's allowlist that no rule requires.
 

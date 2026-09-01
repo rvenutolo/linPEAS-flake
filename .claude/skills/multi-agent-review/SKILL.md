@@ -74,9 +74,11 @@ one `Workflow` whose script is the template below. It returns
 `{ survivors, refuted }`: append `survivors` to the running report's dimension
 section and fold `refuted`'s unanimous kills into the Refutation log (the killed findings *are*
 the finder false-positive rate — dropping them leaves that section empty). Each
-`refuted` entry carries `contested` — a `true` there means exactly one live
-skeptic could not refute it, so a real finding may have been buried. Surface
-those in a **Contested kills** subsection, never silently. Then show the user a
+`refuted` entry carries `contested` — a `true` there with `votes.total >= 2`
+means exactly one live skeptic of several could not refute it, so a real
+finding may have been buried. Surface those in a **Contested kills**
+subsection, never silently; any `votes.total < 2` is a non-verdict to
+re-refute instead (see Report structure). Then show the user a
 one-screen summary (counts + top findings, contested-kill count called out)
 before the next gate. If the run logged a refutation cap, state
 `<n> of <m> deduped findings sent to refute-all (cap <n>)` in that dimension's report section
@@ -215,10 +217,10 @@ votes, not three; quote `votes` rather than assuming a denominator. A
 `votes.total` of 0 (every skeptic died) is a non-verdict, not a kill — the
 template still files it under `refuted` (zero non-refuting votes reads as a
 unanimous kill), so check `votes.total` before logging and re-refute that
-finding instead. A `votes` of `{nonRefuted: 1, total: 1}` is likewise a
-non-verdict: the lone returning skeptic did not refute, so the kill is an
-artifact of the `>= 2` threshold rather than any majority — re-refute it
-rather than logging it as a contested kill.
+finding instead. The rule generalizes by denominator: any `votes.total < 2`
+is a non-verdict regardless of `nonRefuted` — a lone returning skeptic can
+neither confirm a kill nor constitute a majority, so re-refute the finding
+rather than logging it in either section.
 
 ## Spot-check protocol (offer to the user)
 
