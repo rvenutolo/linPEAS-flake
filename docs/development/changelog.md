@@ -266,10 +266,12 @@ already exists on every recovery path, so the job's
 `tag-exists == 'false' || force-republish` gate skips it on a bare
 dispatch. With the input set, the job re-runs git-cliff over the full
 tag history and commits the corrected file — unless a
-`chore/changelog-<version>` PR for that version already sits in closed
-or merged state, in which case the commit step fails by design (see
+`chore/changelog-<version>` PR for that version was already closed
+unmerged, in which case the commit step fails by design (see
 [auto-merge-decline-gate](../security/workflow-hardening.md#auto-merge-decline-gate));
-an open changelog branch is reused and force-rebased instead.
+an open changelog branch is reused and force-rebased instead. (A
+merged changelog PR means the entry already landed, so regeneration
+produces no diff and the commit step is skipped before that gate.)
 
 ### File lost entirely
 

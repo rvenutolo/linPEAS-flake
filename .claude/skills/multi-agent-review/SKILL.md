@@ -18,8 +18,9 @@ user-invocable: false
 Review this repo across **8 fixed dimensions**, one gated `Workflow` fan-out
 per dimension: parallel finder slices surface candidate findings, then
 independent skeptics try to *refute* each one, and only survivors reach the
-findings sections of a single severity-ranked report (unanimous kills with at
-least two live skeptics land in its refutation log). **Read-only — no edits.** The deliverable is a
+findings sections of a single severity-ranked report (unanimous kills
+with at least two live skeptics land in its refutation log).
+**Read-only — no edits.** The deliverable is a
 report the user triages later, written so any single finding could be lifted
 into a GitHub issue without rework.
 
@@ -31,9 +32,11 @@ it is the source of truth for what each dimension covers.
 ## Why these disciplines matter
 
 - **Refute-all is the verification — nothing reaches the report unrefuted.**
-    Subagents reading code flag plausible-but-wrong issues. Every finding — up to the per-dimension refutation cap, the top 25 by
-    severity — faces 3 independent skeptics prompted to *refute it*, each defaulting to refuted
-    unless it can reproduce the defect against the real artifact; keep the finding
+    Subagents reading code flag plausible-but-wrong issues. Every
+    finding — up to the per-dimension refutation cap, the top 25 by
+    severity — faces 3 independent skeptics prompted to *refute it*,
+    each defaulting to refuted unless it can reproduce the defect
+    against the real artifact; keep the finding
     only if at least two of the skeptics that returned fail to refute. This is what makes the report trustworthy, so
     never skip it, even under time pressure.
 - **Empirical repro beats trace-reading — for both finders and refuters.** Code

@@ -199,8 +199,8 @@ Every release runs a `verify` job in `release-on-bump.yml` that runs
 from the Sigstore transparency log and the GitHub API, plus `cosign verify`
 against the published registries — both registry reads are anonymous, so no
 registry credential is required.
-The weekly upstream parity check — item 5 under
-[Verification](#verification) — re-verifies the latest release and
+The weekly upstream parity check listed under
+[Verification](#verification) re-verifies the latest release and
 re-fetches the pinned `linpeas.sh`, catching upstream tag-replacement
 that attestation alone cannot see. Any failing check surfaces as a red
 workflow run.

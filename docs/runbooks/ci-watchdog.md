@@ -138,27 +138,29 @@ The status and the stack frame together identify which API call failed and
 why. Work from those:
 
 1. A `404` or `422` usually means the PR moved under the sweep — closed,
-    merged, or force-pushed between enumeration and processing.
-    Harmless; it clears on the next sweep. 1. A `403` on
-    `listWorkflowRunsForRepo`, `issues.listForRepo`, or similar
-    read/write calls, on a PR in the "errored" list of a `Sweep  completed` message, is usually a permissions gap — check the job's
-    `permissions:` block against the call in the stack. A 403 whose
-    response carries neither `x-ratelimit-remaining: 0` nor
-    `retry-after` is not classified as a rate limit, so a header-less
-    secondary limit can also land here. If the message is instead `Sweep  halted by rate limit`, the errored PR's 403 is the rate limit that
+    merged, or force-pushed between enumeration and processing. Harmless; it
+    clears on the next sweep.
+1. A `403` on `listWorkflowRunsForRepo`, `issues.listForRepo`, or similar
+    read/write calls, on a PR in the "errored" list of a `Sweep completed`
+    message, is usually a permissions gap — check the job's `permissions:`
+    block against the call in the stack. A 403 whose response carries
+    neither `x-ratelimit-remaining: 0` nor `retry-after` is not classified
+    as a rate limit, so a header-less secondary limit can also land
+    here. If the message is instead
+    `Sweep halted by rate limit`, the errored PR's 403 is the rate limit that
     triggered the halt; the PRs in its "not attempted" list get no
-    `core.error` line at all because the sweep never reached them —
-    nothing to check there, they are simply picked up on the next
-    scheduled run. 1. A `403` on `reRunWorkflowFailedJobs` specifically,
-    with a message like "Unable to retry this workflow run because it
-    was created over a month ago", is neither of those — GitHub refuses
-    to re-run runs past roughly a month old. This is not rare: a bot PR
-    can sit long enough for its run to age out, and once it does, every
-    sweep errors on it forever. The watchdog cannot fix this itself; the
-    PR needs a fresh commit to produce a new run, or should be closed.
-    1. A `5xx` that reached this log already exhausted the step's own
-        request retries, so it is a sustained GitHub incident rather than a
-        blip. Check the GitHub status page.
+    `core.error` line at all because the sweep never reached them — nothing
+    to check there, they are simply picked up on the next scheduled run.
+1. A `403` on `reRunWorkflowFailedJobs` specifically, with a message like
+    "Unable to retry this workflow run because it was created over a month
+    ago", is neither of those — GitHub refuses to re-run runs past roughly a
+    month old. This is not rare: a bot PR can sit long enough for its run to
+    age out, and once it does, every sweep errors on it forever. The watchdog
+    cannot fix this itself; the PR needs a fresh commit to produce a new run,
+    or should be closed.
+1. A `5xx` that reached this log already exhausted the step's own request
+    retries, so it is a sustained GitHub incident rather than a blip. Check
+    the GitHub status page.
 
 A PR that errors on **every** sweep is a real bug, not a transient. It is
 also the case worth acting on quickly: while it is failing it is not being
