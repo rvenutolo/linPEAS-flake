@@ -107,8 +107,9 @@ equivalence with upstream `linpeas.sh` — see
 Every `docker buildx imagetools create`, `docker manifest create`, and
 `docker manifest annotate` invocation in this repo MUST name its source
 images by immutable digest — an `@sha256:` literal or an `@${…DIGEST}`
-expansion — never a mutable tag. The rule is repo-wide: workflows,
-composite actions, scripts, and shell-fenced markdown are all scanned.
+expansion — never a mutable tag. The rule spans the workflows and
+composite actions under `.github/`, the `scripts/*.sh` entry points, and
+shell-fenced blocks in `README.md` and everything under `docs/`.
 Target list names are exempt, because they are tags by necessity.
 
 The rule's live instance is `release-on-bump.yml`'s `manifest` job, which
