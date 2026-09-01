@@ -38,7 +38,7 @@ The push loop inside `release-on-bump.yml` per-arch jobs runs
 `docker.io` first, then `ghcr.io`. The two failure modes are:
 
 - **docker.io push failed.** Nothing was pushed to either registry
-    for that arch. No registry-side cleanup needed; only the GitHub
+    for that arch, so that arch needs no registry-side cleanup; only the GitHub
     release / tag needs deleting before the retry.
 - **ghcr.io push failed after docker.io succeeded.** docker.io has
     the arch-suffixed tag (`{version}-{arch}`) but ghcr.io does not.
@@ -87,8 +87,14 @@ leaving the recovery incomplete.
 VERSION="<pin-version>"            # e.g. 20260516-deadbee
 gh release delete "${VERSION}" \
   --repo rvenutolo/linPEAS-flake \
-  --cleanup-tag --yes
+  --yes
 ```
+
+Do not add `--cleanup-tag`: the `release-tag-protection` ruleset
+blocks tag deletion with no bypass actors, so the tag delete errors
+and the command fails. Leaving the tag in place is correct — the
+retry runs against the same pin commit, and release creation reuses
+the surviving tag, which already points at that commit.
 
 ### 2. Delete the orphan docker.io arch tag<a name="2-delete-the-orphan-dockerio-arch-tag"></a>
 

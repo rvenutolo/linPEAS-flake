@@ -35,8 +35,9 @@ How to verify a release of this wrapper yourself. None of this trusts the Pages 
 
 ## Tools needed<a name="tools-needed"></a>
 
-- `gh` (GitHub CLI) ≥ 2.49 — `gh attestation verify` subcommand, and
-    `gh release download` for the signed release assets.
+- `gh` (GitHub CLI) ≥ 2.49 — the upstream release that introduced the
+    `gh attestation verify` subcommand — and `gh release download` for
+    the signed release assets.
 - `cosign` ≥ 3.0 — `cosign verify` for image signatures and
     `cosign verify-blob` for the `.sigstore` release-asset bundles,
     which the release pipeline produces with cosign 3.x (an older 2.x

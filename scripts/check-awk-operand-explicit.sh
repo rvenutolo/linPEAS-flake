@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # scripts/check-awk-operand-explicit.sh
 #
-# @description Lint: every `awk` invocation in scripts/*.sh that
+# @description Lint: every `awk` invocation in a script under
+# scripts/ (the `scripts/*.sh` git pathspec crosses `/`, so sourced
+# libraries are in scope) that
 # carries a file operand must spell that operand
 # `"$(awk_path "${var}")"`. `awk` reads an operand shaped
 # `name=value` as a variable assignment rather than a filename; it

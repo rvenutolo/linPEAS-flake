@@ -17,8 +17,12 @@ Trigger conditions:
 
 Do NOT use for:
 
-- A current-tag release missing assets due to a partial publish —
-    use `force-republish` instead.
+- A current-tag release missing images, the manifest, or the pin
+    `.sigstore` bundle — use `force-republish` instead. A current
+    release missing `linpeas-pin.json.intoto.jsonl` is NOT that case:
+    `force-republish` re-runs neither the provenance attestation nor
+    the sidecar upload (both are gated on tag-doesn't-exist OR
+    `backfill-tag`), so use `backfill-tag=<current tag>` for it.
 - A release with a PARTIAL per-arch image set (some but not all six of
     the `{ghcr.io,docker.io}:<tag>-{amd64,arm64}` tags and the
     `{ghcr.io,docker.io}:<tag>` indexes present). The preflight fails

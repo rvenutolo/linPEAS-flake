@@ -210,7 +210,7 @@ A hand-authored `allowed-endpoints:` list has nothing binding it to what the job
 
 7. **Nix-host reachability**, the one assertion binding a host to a tool that must be able to *reach* it rather than a tool it must be *present for*. Any job whose `allowed-endpoints` carries `cache.nixos.org` or `releases.nixos.org` must either use the `./.github/actions/setup-nix` composite, invoke a `nix` subcommand in a `run:` block, or carry an in-job `# egress-nix-exempt: <reason>` comment with a non-empty reason. An empty reason is rejected outright, and a marker on a job whose allowlist carries neither host is reported as stale, since the rule it would exempt does not apply there. Full rationale: [Workflow hardening → nix-host reachability](workflow-hardening.md#nix-host-reachability).
 
-Known blind spot: detection reads the workflow file only, one level deep. A job that reaches cosign through a script or `just` recipe is invisible to the `run:`-text sign/verify rules — assertion 4's "neither detected" branch covers that case regardless of detection, which is why no call-graph resolver is warranted.
+Known blind spot: detection reads the workflow file only, one level deep. A job that reaches cosign through a script or `just` recipe is invisible to the `run:`-text sign/verify rules — assertion 4's "neither detected" branch covers that case whenever the job's allowlist carries at least one sigstore host, which is why no call-graph resolver is warranted; a job with an empty sigstore host set that reaches cosign only indirectly is matched by no arm at all (an accepted blind spot).
 
 Assertion 6 is the one place where the unguarded-host problem below does not arise: an exact-match rule leaves no host in a pure notify job's allowlist that no rule requires.
 

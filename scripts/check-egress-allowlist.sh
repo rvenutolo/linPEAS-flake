@@ -112,10 +112,11 @@
 #        neither detected (the blind-spot case — cosign reached indirectly
 #        via `scripts/*.sh` or `just`):
 #          fulcio + rekor + tuf-repo-cdn required, as the conservative
-#          floor. This is what catches a job that actually signs but whose
-#          allowlist was never given any sigstore host at all — the real
-#          `manifest` job bug, which shipped with a partial (zero-of-three)
-#          sigstore set while its four signing siblings each carried three.
+#          floor. Reached only when the job carries at least one
+#          sigstore host: it catches a job that reaches cosign through
+#          a script but was given a partial sigstore set. A job with an
+#          empty sigstore set and no detectable cosign text is matched
+#          by no arm (accepted blind spot; docs/security/trust-model.md).
 #
 #   5. Reverse check: a denylist of hosts nothing in this repo justifies.
 #      Junk entries defeat allowlist review.

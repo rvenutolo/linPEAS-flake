@@ -86,7 +86,12 @@ flowchart LR
 The daily-bump and weekly-lock diagrams both omit their workflow's `notify` job: like the
 release pipeline's, it runs on `always()` after the others and files or
 closes a deduped failure issue, so it is observability rather than a
-step in the flow.
+step in the flow. The daily-bump diagram also elides the two-job
+credential split described below: the nodes through `write`/`show` run
+in `compute-pin` (`contents: read`, no App key), which hands the
+computed pin to `push-and-merge` — the only job holding the App
+token — via a `bump-result` artifact that the credentialed job
+re-validates before use; `pr` and `automerge` live there.
 
 No third-party flake-lock action is used: such actions take the write credential as a `with: token:` input, which would put it inside an externally-controlled action boundary. The split-job design instead confines Nix evaluation to a `contents: read` job; the `push-and-merge` job authenticates to the GitHub API as the `linpeas-flake-bumper` App via a short-lived installation token (`actions/create-github-app-token`), then commits files via REST `PUT /contents`. No `git push`, no PAT in `.git/config`. REST commits authenticated by an App installation token are auto-signed by GitHub's web-flow GPG key, so the bump branch satisfies `required_signatures` on `main`.
 
