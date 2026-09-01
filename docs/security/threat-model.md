@@ -39,9 +39,11 @@ upstream account compromise post-release.
     of this boundary, bumped weekly by a bot rather than by
     `bump-linpeas.sh`. `check-flake-lock-provenance.sh` gates that path: an
     input's source identity may not move undeclared, and an undeclared `rev`
-    move must be a fast-forward of the old one per the GitHub compare API,
+    move on a GitHub-hosted input must be a fast-forward of the old one per
+    the GitHub compare API,
     so a rewritten upstream history or a hijacked repository name under
-    unchanged coordinates fails the required check instead of auto-merging.
+    unchanged coordinates fails the required `lint-doc-invariants` check
+    instead of auto-merging.
     A malicious commit pushed on top of upstream's real history is outside
     what any of this can see; see [the gate's section in the trust
     model](trust-model.md#flakelock-input-provenance-gate).

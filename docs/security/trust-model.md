@@ -80,7 +80,9 @@ hybrid: a source-identity change on any node present in both base and head
 fails, while a node add/remove fails only for a top-level input (the entry
 node's `inputs`). On a normal bump the gate is invisible and the PR
 auto-merges as before; it fails — pausing `gh pr merge --auto` — only on an
-undeclared source repoint.
+undeclared source repoint, an undeclared `rev` move that does not descend
+from the old one, or a lock the resolver cannot read (a root-id change or
+an unresolvable `follows` ref).
 
 ### What `flake.nix` corroborates
 
@@ -162,8 +164,8 @@ and every one of them passes the identity comparison, because nothing but
 lock names.
 
 So once the identity verdict is clean, the check asks the GitHub compare API
-about every node present on both sides whose identity is unchanged but whose
-`locked.rev` moved without a `flake.nix` declaration:
+about every GitHub-hosted node present on both sides whose identity is
+unchanged but whose `locked.rev` moved without a `flake.nix` declaration:
 `GET /repos/{owner}/{repo}/compare/{old_rev}...{new_rev}`. `ahead` is the
 fast-forward a routine bump produces and passes, logged as a note naming the
 node and how far it moved. `behind` or `diverged` means the new rev does not
@@ -190,7 +192,8 @@ lock makes no API call, and a run that already fails on identity stops before
 probing. The `lint-doc-invariants` job passes `GH_TOKEN` so the calls run under
 the authenticated rate limit (unauthenticated calls cap at 60/hr, which a local
 run against one lock diff still fits). There is no retry: a transient API
-failure is a loud exit 2 on a required check, cleared by re-running the job.
+failure is a loud exit 2 on the required `lint-doc-invariants` job, cleared
+by re-running it.
 
 What ancestry does not see is a malicious commit fast-forwarded onto the
 tracked branch. That is `ahead` like any other bump. The probe bounds rewrites
