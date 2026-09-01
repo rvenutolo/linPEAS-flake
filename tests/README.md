@@ -113,8 +113,11 @@ the harness on any substring that does not discriminate.
 The gate reaches a harness only if it asserts with a quiet `grep`, which
 is how `scripts/check-harness-assert-wired.sh` tells an assertion from a
 data extraction. A harness that asserts another way — a
-`[[ ${out} != *"${want}"* ]]` test, say — is not scored at all, so it
-needs neither the wiring nor an `EXEMPT` entry.
+`[[ ${out} != *"${want}"* ]]` test, say — is outside the gate's *wiring
+verdict*, so it needs neither the wiring nor an `EXEMPT` entry. Both
+exemption ratchets still cover it: it may not register
+`harness_assert_exempt`, and a `harness_assert_parity_exempt` from it
+still needs a `PARITY_EXEMPT_ALLOWED` entry.
 
 The same gate also enforces parity: two scenarios in one harness must
 not produce byte-identical whole outcomes (exit code + stdout +
@@ -128,6 +131,18 @@ harnesses named on the `PARITY_EXEMPT_ALLOWED` array in
 `scripts/check-harness-assert-wired.sh` may register one — reaching for
 it means widening that allowlist in the same change, which is the
 review moment it deserves.
+
+A harness that enumerates the filesystem is held to the same
+scan-breadth rules as a repo script: `find` / `git ls-files` /
+`git ls-tree` runs go through `enumerate_into`, glob-driven scans
+through `glob_into`, and filter narrowing through `filter_into` (all in
+`scripts/lib/enumerate.sh`) — or carry an inline `# enumerate-exempt:`,
+`# glob-exempt:` or `# filter-exempt: <rationale>` marker. The scan set
+is `scripts/*.sh` plus `tests/*.test.sh`, less `tests/fixtures/`, so
+harnesses are in scope by name. Enforced by
+`scripts/check-enumerate-helper-required.sh` (member check
+`enumerate-helper-required` in the `lint-script-hygiene` CI group); see
+[enumerate-helper-required](../docs/security/workflow-hardening.md#enumerate-helper-required).
 
 Environment-variable overrides scoped to test invocation (a selection
 of the most commonly needed, not the full set — each script's own
@@ -204,6 +219,12 @@ runs the pair.
 1. Make sure `_typos.toml` still excludes `tests/fixtures/**` —
     fixture content is often intentionally malformed.
 
+1. Regenerate the census: run `scripts/refresh-test-harnesses.sh` and
+    commit the updated `docs/reference/test-harnesses.md`. A new fixture
+    directory changes it, and the `test-harnesses-fresh` pre-commit hook
+    only `--check`s the file — it rejects the commit rather than writing
+    it.
+
 ## Adding a new test harness
 
 1. Write the script's invariant first; commit it.
@@ -235,7 +256,8 @@ runs the pair.
     scenario output belongs on the `EXEMPT` array in
     `scripts/check-harness-assert-wired.sh` with a rationale comment
     instead. A harness that asserts without a quiet `grep` is outside
-    what the gate scores and needs neither.
+    the gate's wiring verdict and needs neither — but both exemption
+    ratchets still cover it.
 
 1. Register the harness so it actually runs.
     `scripts/check-test-reachable.sh` accepts four runners, and a
@@ -256,6 +278,12 @@ runs the pair.
         `tests/gen-dashboard-data.test.sh`. This is the right shape when
         the harness needs a dedicated job rather than a slot in a
         batched one.
+
+1. Regenerate the census: run `scripts/refresh-test-harnesses.sh` and
+    commit the updated `docs/reference/test-harnesses.md`. The
+    `test-harnesses-fresh` pre-commit hook only runs the generator in
+    `--check` mode, so it rejects the commit rather than writing the
+    file, and no `just` recipe wraps it.
 
 1. If the script is wired into a CI required check, also document
     it in `docs/security/required-checks.md` and ensure

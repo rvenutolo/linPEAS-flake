@@ -255,7 +255,9 @@ the enumerated planning and review labels above are blocked.
     `.yml` and `.yaml` are read; everything else is skipped whole. Which
     types those are is not guessed at and not counted by hand: they are
     derived by inverting the same type records the scan set is built
-    from, over the files the allowlist below does not already skip, and
+    from, over the files the allowlist below does not already skip, then
+    narrowed to those carrying a full-line `#` comment — a format with no
+    `#` convention can hide no comment-borne reference — and
     `scripts/refresh-ephemeral-refs-gap.sh` refuses to render them while
     a blocking shape sits inside one.
 

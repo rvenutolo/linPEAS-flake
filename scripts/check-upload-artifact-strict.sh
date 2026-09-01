@@ -8,8 +8,8 @@
 # Lint: every `actions/upload-artifact` step in every workflow under
 # `.github/workflows/*.yml` sets `with.if-no-files-found: error`.
 #
-# The action's default is `warn`, which silently uploads an empty
-# artifact when the source path doesn't match anything. That hides
+# The action's default is `warn`, which emits a warning and uploads
+# nothing when the source path doesn't match anything. That hides
 # build-output drift — a broken `path:` glob produces a green job
 # with no artifact, and the consumer side notices only when something
 # downstream goes missing. `error` turns the mismatch into a hard

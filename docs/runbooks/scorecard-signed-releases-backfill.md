@@ -123,24 +123,44 @@ rebuilding at the historic commit, then re-run the backfill:
     the one that introduced it and the one that later replaced it — so
     `--reverse` plus `head -1` takes the introducing commit.
 1. Locally check out that commit and run
-    `nix build .#linpeas-image --print-build-logs`.
+    `nix build .#linpeas-image --print-build-logs`. This builds the
+    **local system's** image only. Restoring a non-host arch needs a host
+    of that architecture, or a remote builder / `extra-platforms` with
+    binfmt configured; repeat per missing arch. Pushing only some of the
+    four per-arch tags leaves the release partial, which the preflight
+    hard-fails on.
 1. `docker load --input result` + retag + push to GHCR / Docker Hub
-    under `${tag}-${arch}` for the missing arch(es)/registry(ies). If
-    the `:<tag>` index is the missing object, rebuild it with
-    `docker buildx imagetools create --tag <reg>/rvenutolo/linpeas:<tag>`
-    over both per-arch digest refs.
+    under `${tag}-${arch}` for the missing arch(es)/registry(ies).
 1. Re-run `gh workflow run release-on-bump.yml --ref main -F backfill-tag=<tag>`.
 
 The rebuilt image must be byte-identical to the original for cosign
 image-digest verification to match. The weekly
 `reproducibility-check.yml` run only covers the *current* pin built
 from the default branch, so it says nothing about a historic `<tag>` —
-verify the rebuild directly by comparing the rebuilt per-arch digests
-against the digests recorded in the release's `:<tag>` index before
-pushing. If you cite the weekly check's signal at all, check for open
+verify the rebuild directly, against a record that predates the loss.
+If you cite the weekly check's signal at all, check for open
 `reproducibility`-labelled issues rather than workflow-level green:
 `continue-on-error` on its compare job keeps runs green even on
 mismatch during burn-in.
+
+Which record depends on what is missing:
+
+- **The `:<tag>` index survives.** Compare the rebuilt per-arch digests
+    against the digests the index records, before pushing. This is the
+    ordinary case, and the index is the authority.
+- **The `:<tag>` index is the missing object.** Do **not** reconstruct it
+    with `docker buildx imagetools create` over whatever the surviving
+    `${tag}-${arch}` tags currently resolve to. Those tags are mutable;
+    an index rebuilt from them records whatever they point at today, and
+    re-running the backfill would then bless it with fresh attestations
+    and a fresh signature — the outcome pulling by digest exists to
+    prevent. Recover the digests the release actually shipped from a
+    record made at publish time (the release's per-arch attestation
+    subjects, if you still hold the digests to look them up by; the
+    original run's step outputs, if its logs have not aged out) and
+    rebuild the index over those. If no such record survives, the release
+    cannot be safely backfilled: leave it partial and say so in the
+    tracking issue.
 
 Restoring images to an image-less release (making all six present — the
 four per-arch tags **and** both `:<tag>` indexes) is optional and uses

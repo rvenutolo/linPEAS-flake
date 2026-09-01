@@ -52,6 +52,16 @@ gh run watch
 
 Expected: green run, or red run with the `scorecard-drift` tracking issue surfacing real findings (not auth errors). If logs show `401`, `403`, or `Resource not accessible by personal access token`, the PAT permissions are wrong — return to "Required PAT shape" and recreate.
 
+## Revoke the superseded token
+
+Settings → **Developer settings** → **Fine-grained tokens** → delete the
+`linpeas-flake-scorecard-drift-check` token you replaced.
+
+Do this only once the verification run above is green, so a bad new PAT can
+still be rolled back — but do not skip it. Rotating on suspected compromise
+without this step leaves the compromised token live with its granted scopes
+until it expires, which can be up to a year out.
+
 ## Calendar reminder
 
 After every rotation, set a personal reminder for **11 months out** to begin the next rotation cycle.

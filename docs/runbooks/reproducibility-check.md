@@ -98,27 +98,36 @@ Promotion steps:
 
 1. Edit `.github/workflows/reproducibility-check.yml`: remove `continue-on-error: true` from the `compare` job.
 1. Add a `pull_request:` trigger targeting `main` to the same workflow, with no `paths:` / `paths-ignore:` filter (`scripts/check-required-checks-no-paths.sh` rejects a path filter on any workflow listed in [`docs/security/required-checks.md`](../security/required-checks.md), so it starts enforcing this once step 4 lands). The workflow currently runs only on its weekly cron and `workflow_dispatch`; a required status context whose workflow never runs on pull requests leaves every PR waiting for a report that never arrives.
-1. Run the workflow once manually via `workflow_dispatch` to confirm it still passes.
-1. Add `compare` to the branch protection ruleset required-checks list, updating `.github/rulesets/protect-main.json`, the required-contexts table in [`docs/security/required-checks.md`](../security/required-checks.md), and `docs/_data/ci-check-categories.yml` in the same change, and run `just show-ci-summary` to regenerate the README summary block (`protect-main-drift-check` and the CI-summary freshness gate fail otherwise; see that page for the edit flow).
+1. Push the branch, then dispatch against it: `gh workflow run reproducibility-check.yml --ref <promotion-branch>`. Dispatch resolves against a pushed ref, so running it before the push exercises `main`'s copy — the one that still carries `continue-on-error: true` — and confirms nothing about the change. The dispatched run must now show `compare` red on a mismatch rather than green.
+1. Update `.github/rulesets/protect-main.json`, the required-contexts table in [`docs/security/required-checks.md`](../security/required-checks.md), and `docs/_data/ci-check-categories.yml` in the same change, and run `just show-ci-summary` to regenerate the README summary block (the CI-summary freshness gate fails otherwise; see that page for the edit flow).
 1. Update this runbook's **Status** header to `Required`.
 1. Commit changes on a single PR titled `ci: promote reproducibility check to required`.
+1. Add `compare` to the **live** ruleset. `.github/rulesets/protect-main.json` is only the in-tree mirror: `scripts/check-protect-main.sh` fetches the live ruleset and diffs it against that file, so a PR carrying the mirror edit alone holds `protect-main-drift-check` red until the live `PUT` lands. Plan the two as one maintenance window, and land or rebase other open PRs first — once `compare` is required, every PR waits on it until the promotion PR's `pull_request:` trigger reaches `main`.
 
 ## Demotion criteria
 
 If a real-world repro break cannot be fixed within one week of detection:
 
 1. Re-add `continue-on-error: true` to the `compare` job.
-1. Remove the `pull_request:` trigger added at promotion — a demoted,
-    non-required check has no reason to run on every PR.
-1. Remove `compare` from the ruleset required checks, updating
-    `.github/rulesets/protect-main.json`, the required-contexts table in
+1. Remove `compare` from the required checks **before** removing the
+    trigger, mirroring promotion's ordering in reverse: drop it from the
+    live ruleset and from `.github/rulesets/protect-main.json`, the
+    required-contexts table in
     [`docs/security/required-checks.md`](../security/required-checks.md), and
     `docs/_data/ci-check-categories.yml` in the same change, and run
     `just show-ci-summary` to regenerate the README summary block (the
-    same gates that guard promotion fail otherwise).
+    same gates that guard promotion fail otherwise). Removing the trigger
+    first would leave `compare` required and unproducible, blocking every
+    open PR.
+1. Remove the `pull_request:` trigger added at promotion — a demoted,
+    non-required check has no reason to run on every PR.
 1. Update **Status** header to `Burn-in (demoted)`. Keep the date and the
     blocking issue number out of this file — `check-ephemeral-refs.sh` blocks
     both shapes in tracked prose. They belong in the demoting commit message
     and in the tracking issue.
 1. Note under a `## Active demotions` section which check is demoted and what
     has to be true to re-promote it, linking the issue by title.
+1. Commit changes on a single PR titled
+    `ci: demote reproducibility check from required`, then confirm the
+    demotion took: open a throwaway PR and check that `compare` no longer
+    appears in its check list.

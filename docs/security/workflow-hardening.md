@@ -39,7 +39,7 @@ Every `actions/checkout` step sets `with.persist-credentials: false` (boolean, n
 
 Without it, `actions/checkout` writes `GITHUB_TOKEN` into `.git/config` and leaves it on disk for the remainder of the job. Any later step in the same job — a third-party action, a misbehaving binary, a shell injection in a `run:` block — can read the token from the working tree and use its scopes. `persist-credentials: false` drops the credential after the initial clone/fetch, narrowing the blast radius of a compromised later step.
 
-Boolean `false` is required; the string `"false"` does not satisfy `actions/checkout`'s parsing.
+Boolean `false` is required rather than the string `"false"`. Actions serializes every `with:` value to a string before the action runs, so both spellings reach `actions/checkout` identically — only the YAML node type distinguishes a deliberate setting from a copy-pasted string, and the lint keys on that tag to keep the spelling unambiguous across the workflow set.
 
 Enforced by `scripts/check-checkout-persist-credentials.sh`. Wired as the `lint-workflow-security` CI job (member check `checkout-persist-credentials`) and as a pre-commit hook.
 
@@ -47,7 +47,7 @@ Enforced by `scripts/check-checkout-persist-credentials.sh`. Wired as the `lint-
 
 Every `actions/upload-artifact` step sets `with.if-no-files-found: error`.
 
-The action's default is `warn`, which silently uploads an empty artifact when the `path:` glob matches nothing. That hides build-output drift: a broken path produces a green job with no artifact, and the consumer side only notices when something downstream goes missing — sometimes many runs later. `error` turns the path-mismatch into a hard upload failure, surfacing the bug at its source.
+The action's default is `warn`, which emits a warning and uploads nothing when the `path:` glob matches nothing. That hides build-output drift: a broken path produces a green job with no artifact, and the consumer side only notices when something downstream goes missing — sometimes many runs later. `error` turns the path-mismatch into a hard upload failure, surfacing the bug at its source.
 
 Enforced by `scripts/check-upload-artifact-strict.sh`. Wired as the `lint-workflow-security` CI job (member check `upload-artifact-strict`) and as a pre-commit hook.
 
@@ -504,7 +504,7 @@ Enforced by `scripts/check-run-block-strict.sh`. Wired as the `lint-workflow-sec
 
 Every workflow job that holds a guard-required write scope includes a fork-guard `if:` clause containing `github.repository == 'rvenutolo/linPEAS-flake'`.
 
-Guard-required write scopes are any of: `contents: write`, `packages: write`, `id-token: write`, `attestations: write`, `actions: write`. A fork that inherits these workflows can otherwise fire them under its own `GITHUB_TOKEN` (or repo-scoped secrets, if any were configured) — accidentally cutting a release, pushing to the fork's container registry, minting OIDC tokens, or (for `actions: write`) pruning/mutating the canonical repo's Actions cache namespace or cancelling its runs. The repository check pins execution to the canonical repo.
+Guard-required write scopes are any of: `contents: write`, `packages: write`, `id-token: write`, `attestations: write`, `actions: write`. A fork that inherits these workflows can otherwise fire them under its own `GITHUB_TOKEN` (or repo-scoped secrets, if any were configured) — accidentally cutting a release, pushing to the fork's container registry, minting OIDC tokens, or (for `actions: write`) deleting the fork's own Actions caches and cancelling its runs on a schedule the fork owner never asked for. The repository check pins execution to the canonical repo.
 
 A job that mints a GitHub App installation token (via `actions/create-github-app-token`, or referencing `secrets.BUMP_APP_PRIVATE_KEY`) is likewise privileged despite declaring a read-only `GITHUB_TOKEN`: the App token carries its own write scopes, so the job can commit via the REST contents API, open pull requests, and enable auto-merge — all under the canonical repo's identity. Such a job must carry the same fork guard, otherwise a fork holding the App's private key as a secret could drive those writes against the canonical repo.
 

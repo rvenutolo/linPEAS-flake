@@ -55,11 +55,15 @@ The push loop inside `release-on-bump.yml` per-arch jobs runs
 - A Docker Hub access token with **Delete** scope. Use the
     `DOCKERHUB_TOKEN_DELETE` repository secret value
     (the `_RW` token returns `401` on the tag-delete endpoint).
-    Fetch the secret value via the Docker Hub UI or your local
-    secret vault — **do not** print `gh secret` values inside the
-    auto-filed issue body.
-- `DOCKERHUB_USERNAME` matching the repo owner (`rvenutolo`).
-- A failing run identified in the `release-on-bump-failure` issue —
+    Fetch the secret value from your local secret vault — **do not**
+    print `gh secret` values inside the auto-filed issue body. Docker
+    Hub shows an access token once at creation and never re-displays
+    it, so if no copy survives, create a fresh Delete-scoped token at
+    <https://hub.docker.com/settings/security>, use it for the commands
+    below, and `gh secret set DOCKERHUB_TOKEN_DELETE` to resync the repo
+    secret.
+    - `DOCKERHUB_USERNAME` matching the repo owner (`rvenutolo`).
+    - A failing run identified in the `release-on-bump-failure` issue —
     record `VERSION` (the pin version, e.g. `20260516-deadbee`) and
     `ARCH` (`amd64` or `arm64`) before starting.
 
@@ -148,10 +152,9 @@ Either:
     push-triggered run `force-republish` stays false, `tag-exists` stays
     true, and all five jobs skip — the recovery looks green while doing
     nothing. The `release` job's release-creation step stays gated by the
-    "tag exists" guard, so the existing release assets are preserved — if
-    the release itself must be recreated, delete it first, then
-    dispatch. This route is faster and leaves no retrigger commit
-    behind, OR
+    "tag exists" guard, so the existing release assets are preserved and
+    step 1 does not apply on this route. This route is faster and leaves
+    no retrigger commit behind, OR
 
 - Open a PR that touches `linpeas-pin.json` itself with a
     prettier-stable edit (one blank line between two properties survives

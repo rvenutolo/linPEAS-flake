@@ -23,15 +23,19 @@ that dimension's claim type. The **Slices:** list is that dimension's `SLICES`; 
 Finder returns the structured finding schema:
 
 ```text
-{ file, line, severity, claim, evidence, failure_scenario }
+{ file, line, severity, claim, evidence, failure_scenario, title, suggested_direction }
 ```
 
 `severity ∈ {critical, high, medium, low, advisory}`. `failure_scenario` is a
 concrete inputs/state → wrong-outcome the user can reproduce from the report
 alone. `evidence` cites the source of truth (file:line, command output).
 The template's schema marks only `file`, `claim`, and `failure_scenario` as
-required — `severity` and `evidence` are best-effort, and a finding that
-omits `severity` sorts below `advisory` at the per-dimension cap.
+required — `severity`, `evidence`, `title` and `suggested_direction` are
+best-effort, and a finding that omits `severity` sorts below `advisory` at
+the per-dimension cap. `title` and `suggested_direction` are what the report
+template's finding heading and closing line render; when a finder omits them,
+the controller derives the heading from `claim` and writes the direction
+itself.
 
 ______________________________________________________________________
 
@@ -75,7 +79,7 @@ Refuters: reproduce the bug against the real script with a crafted input (`WORKF
 
 ## 3. CI / supply-chain security posture — *adversarial* (strict)
 
-Attacker-mindset agents, one per trust boundary across `.github/workflows/*` (budget each slice from `ls .github/workflows/*.yml .github/workflows/*.yaml | wc -l` rather than a figure here, which rots; the boundary partition itself is fixed below).
+Attacker-mindset agents, one per trust boundary across `.github/workflows/*` (budget each slice from `ls .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null | wc -l` rather than a figure here, which rots; the boundary partition itself is fixed below).
 
 Slices:
 
@@ -109,10 +113,10 @@ Pair each `tests/*.test.sh` — plus each tracked `.claude/` harness test
 Slices:
 
 - spec-vs-characterization: does the test assert what the header comment/spec promises, or just today's output?
-- mutation smell: gut a rejection clause in the covered script — does a test go red? If not, the test can't fail.
+- mutation smell: gut a rejection clause in the covered script — does a test go red? (In a throwaway `git worktree`, never in the checkout — see the refuter note below.) If not, the test can't fail.
 - fixture gaps + negative-fixture-per-rejection-clause coverage
 
-Refuters: reproduce the coverage gap concretely — mutate the real script and run the real test; keep the finding only if the test stays green when it should fail. A test that *looks* weak often still catches the mutation.
+Refuters: reproduce the coverage gap concretely. The mutation must happen outside the checkout — `git worktree add --detach` a throwaway tree, mutate the script *there*, and run that tree's copy of the test (the harnesses resolve their subject from `git rev-parse --show-toplevel`, so a bare file copy will not do, and no `*_OVERRIDE` redirects a script's own path). Keep the finding only if the test stays green when it should fail. A test that *looks* weak often still catches the mutation.
 
 ## 6. Invariant ↔ enforcement coherence — *deep*
 

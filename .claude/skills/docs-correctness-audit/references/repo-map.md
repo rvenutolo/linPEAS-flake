@@ -21,6 +21,14 @@ grep -c '"context"' .github/rulesets/protect-main.json  # required-check context
 git grep -n '<symbol>'         # existence of options, env vars, secret names, flags
 ```
 
+Both workflow globs are spelled out, `*.yml` and `*.yaml`, to match the
+scan sets the repo's own workflow lints use. No `*.yaml` workflow exists
+today, so that half of the glob goes unmatched and reaches the command as a
+literal path: expect a `No such file or directory` warning and a non-zero
+exit from those two commands. The output on stdout is still complete — the
+collector drops non-existent paths before scanning, which a hand-run command
+does not.
+
 The collector filters `nix flake show --json` through a `python3` one-liner
 into the one-line `outputs: …` form; when that pipeline fails it falls back to
 the raw `nix flake show` tree rendering, so a tree-shaped FLAKE OUTPUTS
@@ -288,8 +296,8 @@ reusing `lychee.toml`. It runs over all tracked `*.md` files — the tracked
 `.claude/` tooling included, since its links are ordinary links even though
 its prose quotes banned token shapes — excluding only `tests/fixtures/`,
 `docs/_data/` and the seeded-defect fixtures under
-`.claude/skills/*/evals/seeded-defects/fixtures/`, which carry planted
-breakage. External URLs are skipped entirely — only relative file paths and
+`.claude/skills/*/evals/seeded-defects/fixtures/`, which are the recall
+harness's scoring inputs rather than repo documentation. External URLs are skipped entirely — only relative file paths and
 heading anchors are checked. A listed entry is authoritative drift: the link
 target does not exist (high severity). Flag every entry without re-deriving by
 eye. The one non-result: when `lychee` is not on the collector's `PATH`, the

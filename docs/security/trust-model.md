@@ -57,7 +57,7 @@ See [`SECURITY.md`](https://github.com/rvenutolo/linPEAS-flake/blob/main/SECURIT
 - Tokens minted via `actions/create-github-app-token` are scoped to one job, valid one hour, and revoked at job end. They live only as `${{ steps.app-token.outputs.token }}` passed via `GH_TOKEN`. Never reach `.git/config`; there must never be a `git push` using them. Commits land via REST `PUT /repos/{owner}/{repo}/contents/{path}` → web-flow-signed by GitHub.
 - `BUMP_APP_PRIVATE_KEY` enters env only in the credential-holding write jobs — `push-and-merge` (`update-linpeas.yml`, `update-flake-lock.yml`), `push-refresh` (`renovate-flake-lock-refresh.yml`) and `changelog` (`release-on-bump.yml`) — never in `compute-pin` / `compute-lock` / `compute-refresh`. Those compute jobs must remain `permissions: contents: read`, must not reference the secret, and must keep untrusted Nix actions inside their own boundary.
 - `docs/security/required-checks.md` mirrors the `protect-main` branch ruleset's required-check set. Update in same change as GitHub-side list changes.
-- No `paths:` / `paths-ignore:` filter on any workflow listed in `docs/security/required-checks.md`. Enforced by `required-checks-no-paths` CI job.
+- No `paths:` / `paths-ignore:` filter under `on.pull_request:` on any workflow listed in `docs/security/required-checks.md`. Enforced by `required-checks-no-paths` CI job.
 
 {% endraw %}
 
