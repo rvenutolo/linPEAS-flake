@@ -17,8 +17,8 @@ at attempt 1.
 
 Separately from that 3-attempt run bound, the watchdog's own API requests
 retry on anything not in the exempt list below — in practice a 5xx.
-Rate limits, conflicts, already-exists responses, and
-malformed, unauthorized, or missing-resource requests are exempt: a 400,
+Malformed, unauthorized, or missing-resource requests, conflicts,
+already-exists responses, and rate limits are exempt: a 400,
 401, or 404 will not become valid on a second try, a 409 means the re-run
 already took effect, a 422 lets `createLabel`'s try/catch see the
 already-exists conflict immediately, and retrying a 403 rate limit only
@@ -30,7 +30,8 @@ that errored. The one exception is a rate limit: continuing to request
 against an exhausted budget can make it worse, so the sweep halts instead
 and fails the job naming both the PRs that errored and the PRs it left
 untried (how to read that "not attempted" list is covered under the
-rate-limit entry below). Either way, no PR is starved silently and no error is swallowed.
+rate-limit entry below). Either way, no PR is starved silently and no
+error is swallowed.
 The one swallowed status is `createLabel`'s 422, which means the
 escalation label already exists and is not an error at all.
 
@@ -74,7 +75,7 @@ The watchdog files ONE issue per stuck PR (deduped against *open*
 stuck lets the next exhausting tick open a fresh one, which is why the
 close instruction above waits for the PR to merge or close) and
 comments on it only when a
-later tick again found exhausted runs and their set differs from the
+later tick again finds exhausted runs and their set differs from the
 last report (different head commit, run ids, attempt counts, or
 conclusions — a
 pushed fix therefore goes silent until the new runs exhaust the budget
@@ -146,7 +147,8 @@ why. Work from those:
     message, is usually a permissions gap — check the job's `permissions:`
     block against the call in the stack. A 403 whose response carries
     neither `x-ratelimit-remaining: 0` nor `retry-after` is not classified
-    as a rate limit, so a header-less secondary limit can also land here. If the message is instead
+    as a rate limit, so a header-less secondary limit can also land
+    here. If the message is instead
     `Sweep halted by rate limit`, the errored PR's 403 is the rate limit that
     triggered the halt; the PRs in its "not attempted" list get no
     `core.error` line at all because the sweep never reached them — nothing

@@ -20,7 +20,8 @@ Do NOT use for:
 - A current-tag release missing images, the manifest, or the pin
     `.sigstore` bundle — use `force-republish` instead. (A current
     release missing `linpeas-pin.json.intoto.jsonl` IS this runbook's
-    case — see the trigger conditions above: `force-republish` re-runs neither the provenance
+    case — see the trigger conditions above: `force-republish` re-runs
+    neither the provenance
     attestation nor the sidecar upload, both gated on the release not
     existing OR `backfill-tag`, so use `backfill-tag=<current tag>`.)
 - A release with a PARTIAL per-arch image set (some but not all six of
@@ -154,5 +155,6 @@ The backfilled `.intoto.jsonl` bundles carry the BACKFILL workflow's
 timestamp and SHA, not the original release's. This is correct: the
 attestation predicate's `subject` is content hash, and consumers
 verify content match, not emission time. Reviewers reading
-`gh attestation download <artifact> --repo rvenutolo/linPEAS-flake` may see a timestamp newer than the release
+`gh attestation download <artifact> --repo rvenutolo/linPEAS-flake`
+may see a timestamp newer than the release
 date — that is expected.

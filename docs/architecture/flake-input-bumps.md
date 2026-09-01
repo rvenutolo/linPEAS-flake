@@ -55,7 +55,7 @@ The lockfile refresh is performed automatically by the
 completion and acts only when the run was a same-repo `pull_request`
 on a `renovate/*` branch. It detects the bumped input
 from the PR title by handing it to
-`scripts/classify-renovate-flake-input.sh`, whose `case` arms recognise
+`scripts/classify-renovate-flake-input.sh`, whose `case` arms recognize
 three title shapes — `cachix/git-hooks.nix`, `NixOS/nixpkgs-unstable`,
 and `NixOS/nixpkgs`, matched case-insensitively against a lowercased
 title, in the arm order [the auto-refresh section](#renovate-flake-lock-refresh-auto-refresh)
@@ -190,7 +190,7 @@ Only the dependency-name substring is matched, so the surrounding wording
 is not load-bearing — the `identify` job shells out to
 `scripts/classify-renovate-flake-input.sh`, whose `case` arms glob on
 `cachix/git-hooks.nix`, `NixOS/nixpkgs-unstable` and `NixOS/nixpkgs`
-(matched against a lowercased title, so capitalisation does not matter).
+(matched against a lowercased title, so capitalization does not matter).
 A title that stops carrying one of those substrings is what silently
 stops the auto-refresh.
 

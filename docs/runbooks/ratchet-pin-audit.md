@@ -151,7 +151,8 @@ canonical-SHA re-derivation.
 
 That version number is load-bearing, not incidental: it is what makes
 the sentence above a claim about a specific tool version rather than a
-permanent claim about ratchet in general. `ratchet` comes from nixpkgs as a bare devShell entry
+permanent claim about ratchet in general. `ratchet` comes from nixpkgs
+as a bare devShell entry
 with no pin in the tree, so it floats with the `nixpkgs-unstable` input
 — the devShell is built from `pkgs-unstable` — while this
 page and `ratchet-pin-audit.yml` assert a number.

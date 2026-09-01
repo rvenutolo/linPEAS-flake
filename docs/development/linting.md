@@ -523,9 +523,7 @@ this shape so neither sibling marker excuses it, and a clean run prints
 the exemption count. Full rationale:
 [Workflow hardening → enumerate-helper-required](../security/workflow-hardening.md#enumerate-helper-required).
 
-A two-hop chain — a function called only by another function the loop
-calls — still evades, stated as the boundary rather than implied away. A
-purely diagnostic in-loop read (a `printf` naming the filter, say) is
+A purely diagnostic in-loop read (a `printf` naming the filter, say) is
 still flagged: the rule cannot tell that apart from a re-derived
 selection, so it takes a marker like any other in-loop or hop-reached
 read.
