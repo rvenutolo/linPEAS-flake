@@ -68,8 +68,9 @@ the PR; no build-path gate verifies input *provenance* — `flake-check` and
 the build/smoke jobs all accept whatever the lock names.
 `check-flake-lock-provenance.sh` (run in the `lint-doc-invariants`
 required group) closes that gap: it diffs the PR's `flake.lock` against
-`origin/main` and fails when an input's source identity changes without
-`flake.nix` declaring it.
+`origin/main`, fails when an input's source identity changes without
+`flake.nix` declaring it, and fails when an undeclared `rev` move does not
+continue the history the old `rev` was on.
 
 Only `locked.rev`, `locked.narHash`, and `locked.lastModified` may move on
 their own. Per node the check compares `original`, the `flake` flag, and the
@@ -148,6 +149,54 @@ to a differently-shaped array) whose resolved source identity is unchanged
 passes by design: the gate guards source identity, not `follows`-graph shape,
 so a routine `follows` restructuring that still lands on the same source is
 not a provenance event.
+
+### What the ancestry probe verifies
+
+Source identity leaves one move unexamined: the same `owner`/`repo`/`ref`
+pointing at a `rev` that does not descend from the old one. An upstream
+force-push, a history rewrite under a taken-over maintainer account, and a
+repository name claimed by someone else after the original owner renamed
+away all produce exactly that — a new `rev` under unchanged coordinates —
+and every one of them passes the identity comparison, because nothing but
+`rev` changed. `flake-check` does not look either: it evaluates whatever the
+lock names.
+
+So once the identity verdict is clean, the check asks the GitHub compare API
+about every node present on both sides whose identity is unchanged but whose
+`locked.rev` moved without a `flake.nix` declaration:
+`GET /repos/{owner}/{repo}/compare/{old_rev}...{new_rev}`. `ahead` is the
+fast-forward a routine bump produces and passes, logged as a note naming the
+node and how far it moved. `behind` or `diverged` means the new rev does not
+descend from the old one and fails. An HTTP 404 fails too: the repository does
+not hold one of the two commits, or is not the repository it was, and either
+way the bump did not come from where the lock says. Any other API failure, a
+malformed response, or a status the request cannot legitimately produce
+(`identical` included — two distinct revs cannot be identical) is an
+operational error, exit 2, never a pass. A rev that is not a 40-hex commit id
+or an owner/repo that is not a plain name is refused before it reaches the
+route, so a crafted lock cannot steer the token-bearing request elsewhere.
+
+Two classes are skipped by name rather than silently, and both are counted in
+the summary line. A move `flake.nix` corroborates is not probed: a channel move
+lands on a different release branch and would compare `diverged`, a pin to an
+older commit would compare `behind`, and both are the declared consequence of
+the `flake.nix` edit that vouched for them — the same reasoning that exempts
+them from the identity check. A node whose `locked.type` is not `github` has no
+compare API to ask; it is logged per node as unprobed. Every input in this
+repo's lock is GitHub-hosted, so today the probe covers all of them.
+
+The probe runs only when a rev actually moved, so a PR that does not touch the
+lock makes no API call, and a run that already fails on identity stops before
+probing. The `lint-doc-invariants` job passes `GH_TOKEN` so the calls run under
+the authenticated rate limit (unauthenticated calls cap at 60/hr, which a local
+run against one lock diff still fits). There is no retry: a transient API
+failure is a loud exit 2 on a required check, cleared by re-running the job.
+
+What ancestry does not see is a malicious commit fast-forwarded onto the
+tracked branch. That is `ahead` like any other bump. The probe bounds rewrites
+and repojacks — the cases where the new history is not the old one — not an
+upstream that was compromised in place; nothing short of reviewing the
+upstream diff covers that.
 
 The `lint-doc-invariants` job fetches `origin/main` before the check runs
 (`actions/checkout` does not create that ref on its own); if the base lock or

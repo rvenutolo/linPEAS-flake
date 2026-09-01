@@ -1,7 +1,7 @@
 {
   "nodes": {
     "alpha": {
-      "locked": { "lastModified": 100, "narHash": "sha256-AAA", "owner": "orgA", "repo": "alpha", "rev": "aaa111", "type": "github" },
+      "locked": { "lastModified": 100, "narHash": "sha256-AAA", "owner": "orgA", "repo": "alpha", "rev": "aaa111aaa111aaa111aaa111aaa111aaa111aaa1", "type": "github" },
       "original": { "owner": "orgA", "ref": "main", "repo": "alpha", "type": "github" }
     },
     "root": { "inputs": { "alpha": "alpha" } }

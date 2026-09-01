@@ -212,8 +212,12 @@ the repoint is *declared*: the gate reads `flake.nix` on both sides and
 tolerates a lock move for an input whose declared `url` moved with it,
 logging a note that names both. The corroboration is per input name, so a
 lock carrying a second, undeclared repoint alongside the declared one still
-fails. See [the gate's section in the trust
-model](../security/trust-model.md#flakelock-input-provenance-gate).
+fails. A declared move is also exempt from the gate's revision-ancestry
+probe, which is why a channel move (whose new `rev` sits on a different
+release branch and would compare `diverged`) or a pin to an older commit
+(`behind`) does not trip it, while the other inputs' rev moves in the same
+lock refresh are still verified as fast-forwards. See [the gate's section in
+the trust model](../security/trust-model.md#flakelock-input-provenance-gate).
 
 ## Step-by-step
 

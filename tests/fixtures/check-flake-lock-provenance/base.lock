@@ -1,16 +1,16 @@
 {
   "nodes": {
     "alpha": {
-      "locked": { "lastModified": 100, "narHash": "sha256-AAA", "owner": "orgA", "repo": "alpha", "rev": "aaa111", "type": "github" },
+      "locked": { "lastModified": 100, "narHash": "sha256-AAA", "owner": "orgA", "repo": "alpha", "rev": "aaa111aaa111aaa111aaa111aaa111aaa111aaa1", "type": "github" },
       "original": { "owner": "orgA", "ref": "main", "repo": "alpha", "type": "github" }
     },
     "beta": {
       "inputs": { "gamma": "gamma" },
-      "locked": { "lastModified": 200, "narHash": "sha256-BBB", "owner": "orgB", "repo": "beta", "rev": "bbb222", "type": "github" },
+      "locked": { "lastModified": 200, "narHash": "sha256-BBB", "owner": "orgB", "repo": "beta", "rev": "bbb222bbb222bbb222bbb222bbb222bbb222bbb2", "type": "github" },
       "original": { "owner": "orgB", "ref": "main", "repo": "beta", "type": "github" }
     },
     "gamma": {
-      "locked": { "lastModified": 300, "narHash": "sha256-CCC", "owner": "orgC", "repo": "gamma", "rev": "ccc333", "type": "github" },
+      "locked": { "lastModified": 300, "narHash": "sha256-CCC", "owner": "orgC", "repo": "gamma", "rev": "ccc333ccc333ccc333ccc333ccc333ccc333ccc3", "type": "github" },
       "original": { "owner": "orgC", "repo": "gamma", "type": "github" }
     },
     "root": { "inputs": { "alpha": "alpha", "beta": "beta" } }

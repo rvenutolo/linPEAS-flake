@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Fake gh for check-flake-lock-provenance tests. Behavior selected by
+# GH_STUB_MODE. Only the compare route is answered; every other argv is
+# an unexpected call in every mode, and `deny` (the default) rejects the
+# compare route too — that is how a scenario proves the check made no
+# API call at all.
+set -Eeuo pipefail
+case "$*" in
+  *"/compare/"*) ;;
+  *)
+    printf 'unexpected gh call in this scenario: %s\n' "$*" >&2
+    exit 97
+    ;;
+esac
+case "${GH_STUB_MODE:-deny}" in
+  deny)
+    printf 'unexpected gh call in this scenario: %s\n' "$*" >&2
+    exit 97
+    ;;
+  ahead)
+    printf '{"status":"ahead","ahead_by":3,"behind_by":0,"total_commits":3}\n'
+    ;;
+  behind)
+    printf '{"status":"behind","ahead_by":0,"behind_by":3,"total_commits":0}\n'
+    ;;
+  diverged)
+    printf '{"status":"diverged","ahead_by":2,"behind_by":3,"total_commits":2}\n'
+    ;;
+  unexpected-status)
+    printf '{"status":"sideways","ahead_by":0,"behind_by":0,"total_commits":0}\n'
+    ;;
+  malformed)
+    printf '{"message":"ok"}\n'
+    ;;
+  not-found)
+    printf 'gh: Not Found (HTTP 404)\n' >&2
+    exit 1
+    ;;
+  api-error)
+    printf 'gh: HTTP 500 upstream boom\n' >&2
+    exit 1
+    ;;
+  *)
+    printf 'gh stub: unknown GH_STUB_MODE %s\n' "${GH_STUB_MODE}" >&2
+    exit 97
+    ;;
+esac
