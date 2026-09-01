@@ -16,17 +16,16 @@ nix flake show --json          # flake output inventory (the bundle's FLAKE OUTP
 just --list                    # every recipe (and what each regenerates)
 ls scripts/*.sh scripts/lib/*.sh scripts/*.awk  # script inventory: entry points, sourced libraries, awk programs
 ls .github/workflows/          # workflow filenames
-grep -HE '^[[:space:]]*-[[:space:]]*cron:' .github/workflows/*.yml   # authoritative cron schedules (anchored: a prose `cron:` inside a run: block is not a schedule)
+grep -HE '^[[:space:]]*-[[:space:]]*cron:' .github/workflows/*.yml .github/workflows/*.yaml   # authoritative cron schedules (anchored: a prose `cron:` inside a run: block is not a schedule)
 grep -c '"context"' .github/rulesets/protect-main.json  # required-check context count
 git grep -n '<symbol>'         # existence of options, env vars, secret names, flags
 ```
 
-The collector filters `nix flake show --json` through a `python3`
-one-liner into the one-line `outputs: …` form; when that pipeline fails
-it falls back to the raw `nix flake show` tree rendering, so a
-tree-shaped FLAKE OUTPUTS section means the filter fell back and should
-be read as a raw dump; `python3` is therefore a soft dependency of
-the collector.
+The collector filters `nix flake show --json` through a `python3` one-liner
+into the one-line `outputs: …` form; when that pipeline fails it falls back to
+the raw `nix flake show` tree rendering, so a tree-shaped FLAKE OUTPUTS
+section means the filter fell back and should be read as a raw dump; `python3`
+is therefore a soft dependency of the collector.
 
 The script inventory names both shell trees and the awk programs because
 tracked docs cite the sourced libraries under `scripts/lib/` — `make_temp`
@@ -50,14 +49,17 @@ well as names — a doc stating how many required checks a PR must pass is
 checked against it, and the collector emits that count as its
 **REQUIRED-CHECK CONTEXTS** section.
 
-For CI job / required-check names, the collector emits a **VALID CI JOB / CHECK
-NAMES** union allowlist — every workflow job id plus every lint-group member
-plus every harness-group member (the first field of each `HARNESSES` entry in
-`scripts/run-harness-group.sh`). Any name a doc calls a "CI job" or "required
-check" that is absent from that list is a **ghost** reference (exists nowhere);
-a name present only as a lint-group or harness-group member but described as a
-standalone job is a **mislabel**. Both are
-high severity, and neither is caught by a freshness gate.
+For CI job / required-check names, the collector emits a **VALID CI JOB /
+CHECK NAMES** union allowlist — every workflow job id plus every lint-group
+member plus every harness-group member (the first field of each `HARNESSES`
+entry in `scripts/run-harness-group.sh`). Both workflow globs are enumerated,
+`*.yml` and `*.yaml`, matching the scan sets the repo's own workflow lints
+use: a suffix the collector does not read contributes no job ids, which turns
+every job in that file into a false ghost. Any name a doc calls a "CI job" or
+"required check" that is absent from that list is a **ghost** reference
+(exists nowhere); a name present only as a lint-group or harness-group member
+but described as a standalone job is a **mislabel**. Both are high severity,
+and neither is caught by a freshness gate.
 
 ## 2. Doc cluster map (one read-only agent per row)
 
@@ -77,39 +79,42 @@ count without losing the load-bearing detections. `security` and `root + misc`
 stay standalone because they hold the dense, high-severity drift surfaces
 (member-vs-job CI prose; required-check counts, ghost jobs, broken links). The
 recall-vs-cost evidence for this map is in
-[`../evals/tuning-results.md`](../evals/tuning-results.md), which also records a
-measured three-reader variant that merges `security` into `root + misc`: it held
-seed recall at 14/14, so the split is a judgement about depth on non-seeded
-drift, not a measured recall win. Keep them un-merged unless someone re-measures
-cost head-to-head. That recall-vs-cost tuning covers the four
-user-facing clusters; `claude-tooling` is
-separate from all of them because it is not user-facing documentation at all —
-it is the audit's own specification, so its reader checks this file against the
-tree rather than checking the tree against prose.
+[`../evals/tuning-results.md`](../evals/tuning-results.md), which also records
+a measured three-reader variant that merges `security` into `root + misc`: it
+held seed recall at 14/14, so the split is a judgement about depth on
+non-seeded drift, not a measured recall win. Keep them un-merged unless
+someone re-measures cost head-to-head. That recall-vs-cost tuning covers the
+four user-facing clusters; `claude-tooling` is separate from all of them
+because it is not user-facing documentation at all — it is the audit's own
+specification, so its reader checks this file against the tree rather than
+checking the tree against prose.
 
 `root + misc` carries the catch-all clause because the four other rows are
 directory globs: a tracked doc outside `.claude/` that falls in none of those
-directories — a new top-level `docs/` page as readily as a new root-level one —
-matches no row and would otherwise be assigned to no reader while still
-appearing in the collector's sweeps. Verify the map covers
-everything with `git ls-files '*.md'` minus `tests/fixtures/` and
-`.claude/skills/*/evals/seeded-defects/fixtures/` — every result must fall in some
-row.
+directories — a new top-level `docs/` page as readily as a new root-level one
+— matches no row and would otherwise be assigned to no reader while still
+appearing in the collector's sweeps. Verify the map covers everything with
+`git ls-files '*.md'` minus `tests/fixtures/` and
+`.claude/skills/*/evals/seeded-defects/fixtures/` — every result must fall in
+some row.
 
 Part of `.claude/` is tracked and committed — the `docs-correctness-audit` and
 `multi-agent-review` skills and their slash commands. Those are maintained
 artifacts with real commit history, and they restate facts that live elsewhere
 in the tree: the generated-doc table below and the ephemeral-token regex on
-this very page. Nothing gates either of those
-duplications, so when a generator is added or removed the table here goes
-stale silently and the next audit runs against a stale map. The
-`claude-tooling` row is what puts them in scope. The fixtures under
-`.claude/skills/*/evals/seeded-defects/fixtures/` stay out: they exist to carry planted
-defects, so reporting them would be reporting the harness working.
+this very page. Nothing gates either of those duplications, so when a
+generator is added or removed the table here goes stale silently and the next
+audit runs against a stale map. The `claude-tooling` row is what puts them in
+scope. The fixtures under `.claude/skills/*/evals/seeded-defects/fixtures/`
+stay out: they exist to carry planted defects, so reporting them would be
+reporting the harness working.
 
-`.claude/CLAUDE.md` and the global CLAUDE.md stay read-only reference for the
-rules (esp. the ephemeral-token regex); the global one lives outside the repo
-and is never edited.
+`.claude/CLAUDE.md` and the global CLAUDE.md are untracked and stay read-only
+— the global one lives outside the repo entirely. They set the scope of the
+rules, not their wording: they are **not** the authority for the
+ephemeral-token regex or for how it is enforced. §4 below and
+`scripts/lib/ephemeral-refs-scope.sh` are, and because nothing gates an
+untracked file, those copies can lag the lint.
 
 ## 3. Generated docs — verify-only, never edit the generated body
 
@@ -198,36 +203,36 @@ over all tracked `*.md` files, excluding `.claude/` tooling, `tests/fixtures/`,
 (historical records).
 
 The `.claude/` exclusion is deliberate and does not conflict with the
-`claude-tooling` cluster: those files quote the banned shapes as pattern data —
-the bullet list above is a list of them — so a shape-matching sweep reports the
-specification as a violation. `is_allowlisted()` in
-`scripts/lib/ephemeral-refs-scope.sh` skips the tree for the same reason.
-The `claude-tooling` reader covers that prose by reading meaning instead
-of matching shapes.
+`claude-tooling` cluster: those files quote the banned shapes as pattern data
+— the bullet list above is a list of them — so a shape-matching sweep reports
+the specification as a violation. `is_allowlisted()` in
+`scripts/lib/ephemeral-refs-scope.sh` skips the tree for the same reason. The
+`claude-tooling` reader covers that prose by reading meaning instead of
+matching shapes.
 
 **It reads prose only.** Fenced code blocks (backtick or tilde), inline code
 spans, and generated `BEGIN`/`END` bodies are blanked before matching (line
-numbering preserved) — the same three regions `scripts/check-ephemeral-refs.sh`
-exempts, in the same order: fences are recognized first, and inline code spans
-are blanked before a `BEGIN` is looked for, so a marker quoted in a span or a
-fence is documentation, not a block opener. Like the lint, the sweep fails
-loud on an unterminated fence or generated block rather than silently blanking
-to end-of-file — and in the collector that failure aborts the whole run
-mid-bundle: the sections after **`EPHEMERAL-TOKEN HITS`** (the links check
-included) never emit. A short bundle therefore means a malformed doc — record
-the offender as a high-severity finding and treat the never-emitted sections
-as unchecked rather than clean. That pass is
-load-bearing: without it, every doc that *documents* a banned shape as an
-example — `docs/development/linting.md`'s table of banned shapes, the generated
-hook table in `docs/development/git.md` — reports as though it carried one.
-Three classes additionally carry a deterministic suppression:
-`pr-ref` drops hit lines carrying `(fill|stroke|color):#hex` colors,
-`&#NNN;` HTML entities, or `#N-` anchor targets; `ad-hoc-ticket` drops
+numbering preserved) — the same three regions
+`scripts/check-ephemeral-refs.sh` exempts, in the same order: fences are
+recognized first, and inline code spans are blanked before a `BEGIN` is looked
+for, so a marker quoted in a span or a fence is documentation, not a block
+opener. Like the lint, the sweep fails loud on an unterminated fence or
+generated block rather than silently blanking to end-of-file — and in the
+collector that failure aborts the whole run mid-bundle: the sections after
+**`EPHEMERAL-TOKEN HITS`** (the links check included) never emit. A short
+bundle therefore means a malformed doc — record the offender as a
+high-severity finding and treat the never-emitted sections as unchecked rather
+than clean. That pass is load-bearing: without it, every doc that *documents*
+a banned shape as an example — `docs/development/linting.md`'s table of banned
+shapes, the generated hook table in `docs/development/git.md` — reports as
+though it carried one. Three classes additionally carry a deterministic
+suppression: `pr-ref` drops hit lines carrying `(fill|stroke|color):#hex`
+colors, `&#NNN;` HTML entities, or `#N-` anchor targets; `ad-hoc-ticket` drops
 `(SHA|UTF|RFC|ISO|BASE)-NNN` standard acronyms; `date` drops the
-`X-GitHub-Api-Version: <date>` literal. Each acts on the whole line of
-its own class, not the token, so a line that carries both a suppressed shape and a genuine
-banned token is dropped — a harmless false negative, since the sweep is
-advisory and the real lint is the authority.
+`X-GitHub-Api-Version: <date>` literal. Each acts on the whole line of its own
+class, not the token, so a line that carries both a suppressed shape and a
+genuine banned token is dropped — a harmless false negative, since the sweep
+is advisory and the real lint is the authority.
 
 **The sweep is not authoritative — `scripts/check-ephemeral-refs.sh` is.** Run
 it and believe its exit code; anything the sweep reports that the real lint does
@@ -259,37 +264,35 @@ page, the collector sweep, and the real lint still diverge:
 
 ## 5. Invariant-index consistency
 
-`docs/invariant-index.md` is the binding-rules index; `check-orphan-invariants.sh`
-enforces that each index pointer resolves to an existing file under `docs/`,
-and that every non-`EXEMPT` docs file has an entry. The script's `EXEMPT`
-array is the authority on what is exempt; per the index preamble's own
-taxonomy it holds generator-owned pages, the live-status template pages
-(`dashboard.md`, `releases.md`) whose content is a rendering rather than a
-rule, overview pages that route to rules held elsewhere, the index itself,
-and two install guides
-(`install/consume-from-flake.md`, which carries no index entry at all, and
-`install/nix.md`, whose exemption is inert because it does carry
-one) — not every generated page (a
-generated page can still carry an index entry). Heading
-anchors are a separate lint, `check-doc-anchors.sh`.
-For the consistency dimension, mirror that intent and additionally check the
-*semantic* agreement the script cannot: does the index one-liner still match
-what the linked section says, and does a claimed invariant have a backing
-enforcer (script / CI job / hook) that still exists?
+`docs/invariant-index.md` is the binding-rules index;
+`check-orphan-invariants.sh` enforces that each index pointer resolves to an
+existing file under `docs/`, and that every non-`EXEMPT` docs file has an
+entry. The script's `EXEMPT` array is the authority on what is exempt; per the
+index preamble's own taxonomy it holds generator-owned pages, the live-status
+template pages (`dashboard.md`, `releases.md`) whose content is a rendering
+rather than a rule, overview pages that route to rules held elsewhere, the
+index itself, and two install guides (`install/consume-from-flake.md`, which
+carries no index entry at all, and `install/nix.md`, whose exemption is inert
+because it does carry one) — not every generated page (a generated page can
+still carry an index entry). Heading anchors are a separate lint,
+`check-doc-anchors.sh`. For the consistency dimension, mirror that intent and
+additionally check the *semantic* agreement the script cannot: does the index
+one-liner still match what the linked section says, and does a claimed
+invariant have a backing enforcer (script / CI job / hook) that still exists?
 
 ## 6. Internal links / anchors
 
 The collector emits an authoritative **`UNRESOLVED INTERNAL LINKS / ANCHORS`**
-section produced by `lychee --offline --include-fragments=anchor-only`, reusing
-`lychee.toml`. It runs over all tracked `*.md` files — the tracked `.claude/`
-tooling included, since its links are ordinary links even though its prose
-quotes banned token shapes — excluding only `tests/fixtures/`, `docs/_data/`
-and the seeded-defect fixtures under `.claude/skills/*/evals/seeded-defects/fixtures/`,
-which carry planted breakage. External URLs are skipped entirely — only
-relative file paths and heading anchors are checked. A listed entry is
-authoritative drift: the link target does not exist (high severity). Flag every
-entry without re-deriving by eye. The one non-result: when `lychee` is not on
-the collector's `PATH`, the section reads
-`(lychee not found — internal-link sweep skipped)` and nothing was
-checked — record links as unchecked in the coverage note rather than as
+section produced by `lychee --offline --include-fragments=anchor-only`,
+reusing `lychee.toml`. It runs over all tracked `*.md` files — the tracked
+`.claude/` tooling included, since its links are ordinary links even though
+its prose quotes banned token shapes — excluding only `tests/fixtures/`,
+`docs/_data/` and the seeded-defect fixtures under
+`.claude/skills/*/evals/seeded-defects/fixtures/`, which carry planted
+breakage. External URLs are skipped entirely — only relative file paths and
+heading anchors are checked. A listed entry is authoritative drift: the link
+target does not exist (high severity). Flag every entry without re-deriving by
+eye. The one non-result: when `lychee` is not on the collector's `PATH`, the
+section reads `(lychee not found — internal-link sweep skipped)` and nothing
+was checked — record links as unchecked in the coverage note rather than as
 clean.

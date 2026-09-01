@@ -149,7 +149,7 @@ Scorecard SAST check scores the fraction of recent merged PRs that ran a
 SAST tool, so skipping path-narrow PRs would drag that fraction down.
 The analyze step passes `fail-on: critical` to `codeql-action/analyze`:
 a CRITICAL-severity finding fails the workflow, and on push, cron, and
-dispatch runs a notify job opens a deduped issue under the
+dispatch runs, a notify job opens a deduped issue under the
 `codeql-critical` label (a PR run pages via the failed check on the PR
 itself, so it files no issue). An analyze failure that produced no
 finding (scan crash, runner breakage) files under `codeql-infra`

@@ -132,7 +132,10 @@ trigger semantics, and credential split live in
 | Renovate                         | weekly Fri batch                   | Bumps action SHAs, the Nix installer pin, the octoscan digest, the SchemaStore pin, and tracked flake inputs after a 7-day cooldown.                              |
 | `release-on-bump.yml`            | pin push to `main` + dispatch      | Tags the release, builds + pushes per-arch OCI images (ghcr.io + docker.io), attests SLSA provenance + SBOMs. Manual dispatch covers republish/backfill recovery. |
 
-The [Renovate dependency dashboard](https://github.com/rvenutolo/linPEAS-flake/issues?q=is%3Aissue+is%3Aopen+label%3Adependencies+%22Dependency+Dashboard%22) tracks pending dependency bumps, rate-limited PRs, and config errors. Check there if a bump appears stalled.
+The
+[Renovate dependency dashboard](https://github.com/rvenutolo/linPEAS-flake/issues?q=is%3Aissue+is%3Aopen+label%3Adependencies+%22Dependency+Dashboard%22)
+tracks pending dependency bumps, rate-limited PRs, and config errors.
+Check there if a bump appears stalled.
 
 Bump-workflow commits are authored by the `linpeas-flake-bumper` GitHub
 App and web-flow-signed by GitHub, satisfying `required_signatures` on
@@ -154,7 +157,8 @@ thin.
 
 Every PR runs a gated set of required checks before auto-merge; pushes
 to `main` re-run the same set post-merge, except `lint-pr-title` and
-`dependency-review`, which are `pull_request`-only by trigger. The authoritative check list lives in
+`dependency-review`, which are `pull_request`-only by trigger. The
+authoritative check list lives in
 [`docs/security/required-checks.md`](docs/security/required-checks.md);
 the full job inventory + cron schedule lives in
 [`docs/architecture/ci.md`](docs/architecture/ci.md).

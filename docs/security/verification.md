@@ -373,7 +373,8 @@ path — pick whichever toolchain fits the consumer's pipeline.
 
 ## Release-asset blob signatures<a name="release-asset-blob-signatures"></a>
 
-Each GitHub Release asset has a sibling `.sigstore` bundle:
+Each primary release asset — the pin file and each SBOM the release
+publishes — has a sibling `.sigstore` bundle:
 
 - `linpeas-pin.json` + `linpeas-pin.json.sigstore`
 - `linpeas-image-amd64.cdx.json` + `linpeas-image-amd64.cdx.json.sigstore`

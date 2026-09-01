@@ -244,7 +244,17 @@ list_workflow_crons() { # $1=workflows dir — emits "<file>:<schedule line>" fo
   # inside a run: block (an issue body that says "the `cron:` lines under
   # ..."), which reads as an extra scheduled workflow to someone diffing this
   # section against the ci.md cron table.
-  grep -HE '^[[:space:]]*-[[:space:]]*cron:' "$1"/*.yml 2>/dev/null | sed "s#^$1/##"
+  # Both suffixes, matching the scan sets the repo's own workflow lints use.
+  # An unmatched glob would reach grep as a literal path and exit 2, so drop
+  # the non-existent ones before the scan rather than relying on 2>/dev/null.
+  local -a files=()
+  local f
+  for f in "$1"/*.yml "$1"/*.yaml; do
+    [[ -f ${f} ]] && files+=("${f}")
+  done
+  [[ ${#files[@]} -gt 0 ]] || return 0
+  grep -HE '^[[:space:]]*-[[:space:]]*cron:' "${files[@]}" 2>/dev/null |
+    sed "s#^$1/##"
 }
 
 main() {
@@ -278,7 +288,8 @@ main() {
   section "VALID CI JOB / CHECK NAMES (union: every workflow job id + every lint-group member + every harness-group member)"
   {
     # job ids from the jobs: block of every workflow (not just ci.yml)
-    for wf in .github/workflows/*.yml; do
+    for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
+      [[ -f ${wf} ]] || continue
       awk '
         /^jobs:[[:space:]]*$/ { in_jobs = 1; next }
         /^[A-Za-z]/ { in_jobs = 0 }
