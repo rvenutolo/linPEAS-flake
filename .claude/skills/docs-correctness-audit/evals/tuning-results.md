@@ -42,8 +42,9 @@ stale ref, internal-link, required-check count, ephemeral). The
 rows above. It has since been measured under the shipped four-reader map only,
 where it hit 2/2 across two runs; the other two configurations have not been
 re-run with it, and two runs is too thin to call the category non-flaky.
-The `near-miss-exclusive` seed is newer still and unmeasured in every
-configuration. The merged map cuts total
+`near-miss-exclusive` was added later still and measured the same way, in a
+two-run pass over all nine seeds that scored 18/18; it also hit 2/2, and the
+same two caveats apply to it. The merged map cuts total
 reader-tokens ~29% because most of a reader's cost is fixed per-agent overhead
 (re-reading the ground-truth bundle, tool setup); three readers collapsed into
 `core-docs` and two into `arch+dev` eliminate that overhead while the same documents still get
@@ -61,8 +62,8 @@ commensurable with the first two rows. Recall is still comparable, because
 
 Merging trades some thoroughness on **low-severity, non-seeded** drift: a reader
 covering more files spreads attention thinner and skips minor prose-imprecision
-findings that a dedicated reader surfaces. All seed detections held
-across every run of every configuration. One structural blind spot: the
+findings that a dedicated reader surfaces. The seven seeds measured in that
+comparison held across every run of every configuration. One structural blind spot: the
 seed set plants nothing under `reference/`, `install/`, or `runbooks/`,
 so the `core-docs` merge's recall-neutrality is inferred from the map's
 structure, not measured — no seed exists that the merge could have

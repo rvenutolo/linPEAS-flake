@@ -299,8 +299,8 @@ findings must still show what was cross-checked, not just "clean".
 ## Notes for the fix pass
 - <batching suggestion, decisions the user must make, generated-doc/generator fixes>
 - Standing item: when a fix widens a claim that was too narrow, drop or scope
-  the quantifier instead of sharpening it — overshooting into a fresh false
-  exclusive is this repo's most common self-inflicted defect.
+  the quantifier instead of sharpening it. Overshooting into a fresh false
+  exclusive is a defect this repo's fix passes have repeatedly shipped.
 ```
 
 Each finding states the file:line (its dimension lives in the severity index),

@@ -86,9 +86,11 @@ column) is exactly the signal being measured.
     harness. The class is seeded at both ends: `false-exclusive` is flatly
     false (no job lacks the step it names), while `near-miss-exclusive` is true
     of every member of its set but one, and that one exception is listed in the
-    same table the claim sits under. Expect the near-miss to be the weaker of
-    the two — a reader who spot-checks two or three members finds nothing
-    wrong.
+    same table the claim sits under. The near-miss was expected to be the
+    weaker of the two, on the reasoning that a reader who spot-checks two or
+    three members finds nothing wrong; measured, both hit 2/2. Two runs is too
+    thin to retire the concern, so treat the expectation as open rather than
+    refuted.
 
 ## Tests
 
