@@ -57,10 +57,11 @@ tree.)
     reachable through variable flow that pattern matchers miss.
 - **Triggers:** every PR to `main` (no paths filter); push to `main`; weekly
     Friday cron (full tree); manual dispatch. It runs on every PR — not just
-    workflow-touching ones — so the Scorecard SAST check sees a SAST tool on
-    every merged PR (it scores the fraction analysed). The `actions` pack
-    re-analyses the whole tree each run (~1 min), so a PR touching neither a
-    workflow nor an action still produces a valid analysis.
+    workflow-touching ones — so the OpenSSF Scorecard SAST check, which the
+    in-tree `scorecard-drift-check` deliberately does not grade, sees a SAST
+    tool on every merged PR (it scores the fraction analysed). The `actions`
+    pack re-analyses the whole tree each run (~1 min), so a PR touching
+    neither a workflow nor an action still produces a valid analysis.
 - **Status:** advisory. Deliberately not a required check — gating merge on it
     would let a single CRITICAL false positive or a transient CodeQL infra flake
     wedge every PR; the merge gate is the in-tree workflow lints plus the zizmor

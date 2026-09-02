@@ -90,15 +90,17 @@ recall-vs-cost evidence for this map is in
 a measured three-reader variant that merges `security` into `root + misc`: it
 held full seed recall on the seed set measured at the time, so the split is a
 judgement about depth on non-seeded drift, not a measured recall win. Keep
-them un-merged unless someone re-measures cost head-to-head. That recall-vs-cost tuning covers the
-four user-facing clusters; `claude-tooling` is separate from all of them
-because it is not user-facing documentation at all — it is the audit's own
-specification, so its reader checks this file against the tree rather than
-checking the tree against prose.
+them un-merged unless someone re-measures cost head-to-head. That
+recall-vs-cost tuning covers the four user-facing clusters;
+`claude-tooling` is separate from all of them because it is not
+user-facing documentation at all — it is the audit's own specification,
+so its reader checks this file against the tree rather than checking the
+tree against prose.
 
 `root + misc` carries the catch-all clause because the three `docs/` rows are
-directory globs and `claude-tooling` covers only `.claude/`: a tracked doc outside `.claude/` that falls in none of those
-directories — a new top-level `docs/` page as readily as a new root-level one
+directory globs and `claude-tooling` covers only `.claude/`: a tracked doc
+outside `.claude/` that falls in none of those directories — a new
+top-level `docs/` page as readily as a new root-level one
 — matches no row and would otherwise be assigned to no reader while still
 appearing in the collector's sweeps. Verify the map covers everything with
 `git ls-files '*.md'` minus `tests/fixtures/` and

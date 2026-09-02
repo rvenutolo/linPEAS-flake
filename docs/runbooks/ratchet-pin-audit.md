@@ -27,8 +27,7 @@ have no upstream tag to compare against: Renovate's `pinDigests` rule
 tracks this repo's own `main` HEAD, not an upstream release. The
 digest-provenance gate skips them for the same reason, so the PR-time
 surface is `check-uses-sha-pinned.sh` alone, which still requires a full
-40-hex SHA — see
-[repo config](../security/repo-config.md).
+40-hex SHA — see [repo config](../security/repo-config.md).
 
 This runbook is linked inline from the auto-filed issue body.
 
@@ -95,8 +94,8 @@ Steps:
 The per-ref canonical-SHA re-derivation
 (`gh api …/git/refs/tags/{tag}`) failed or rate-limited, or ratchet's
 own output matched the upstream-failure heuristic. The `github.token`
-is capped at 1,000 requests
-per hour per repository; transient 5xx is also possible.
+is capped at 1,000 requests per hour per repository; transient 5xx is
+also possible.
 
 1. Re-run the workflow once via `workflow_dispatch`.
 1. If it fails again with the same reason, check the

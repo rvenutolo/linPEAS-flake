@@ -107,7 +107,7 @@ Slices:
 - `CHANGELOG` vs release reality
 - generated blocks (`BEGIN/END` markers, `refresh-*` output) — drift = generator bug
 
-Refuters: `ci: gates it` ≠ prose is correct — freshness gates only generated block bodies, so a hand-written prose claim can drift while CI stays green. Kill a finding only when the doc actually matches current code/CI; keep it when the mismatch reproduces by reading both.
+Refuters: `ci: gates it` ≠ prose is correct — freshness gates only generated content — block bodies and whole generated files — so a hand-written prose claim can drift while CI stays green. Kill a finding only when the doc actually matches current code/CI; keep it when the mismatch reproduces by reading both.
 
 ## 5. Test-harness quality — *deep*
 
@@ -120,7 +120,7 @@ Slices:
 - mutation smell: gut a rejection clause in the covered script — does a test go red? (In a throwaway `git worktree`, never in the checkout — see the refuter note below.) If not, the test can't fail.
 - fixture gaps + negative-fixture-per-rejection-clause coverage
 
-Refuters: reproduce the coverage gap concretely. This dimension carries the one sanctioned exception to "do not modify the checkout": a detached `git worktree` under `$TMPDIR` is not the checkout. The mutation must happen there, not in the checkout: `git worktree add --detach` a throwaway tree under `$TMPDIR`, mutate the script *there*, run that tree's copy of the test, and `git worktree remove` it afterwards. The repo's `*_OVERRIDE` variables are no shortcut here — they redirect a checker's *scanned input* (`BUMP_SCRIPT_OVERRIDE` and `SCRIPTS_DIR_OVERRIDE` both point at the corpus a lint reads), never the covered script's own path. Nor will a bare file copy do: the harnesses resolve their subject from `git rev-parse --show-toplevel`, so the mutation has to sit under a real repo root. Keep the finding only if the test stays green when it should fail. A test that *looks* weak often still catches the mutation.
+Refuters: reproduce the coverage gap concretely. This dimension carries the one sanctioned exception to "do not modify the checkout": a detached `git worktree` under `$TMPDIR` is not the checkout. The mutation must happen there, not in the checkout: `git worktree add --detach` a throwaway tree under `$TMPDIR`, mutate the script *there*, run that tree's copy of the test, and `git worktree remove` it afterwards. The repo's `*_OVERRIDE` variables are no shortcut here — they redirect a checker's *scanned input* (`BUMP_SCRIPT_OVERRIDE` and `SCRIPTS_DIR_OVERRIDE` both point at the corpus a lint reads), never the covered script's own path. Nor will a bare file copy do: the `tests/` harnesses resolve their subject from `git rev-parse --show-toplevel`, so a mutation there has to sit under a real repo root. Keep the finding only if the test stays green when it should fail. A test that *looks* weak often still catches the mutation.
 
 ## 6. Invariant ↔ enforcement coherence — *deep*
 

@@ -173,9 +173,8 @@ Which record depends on what is missing:
     outputs, if its logs have not aged out. (Attestation lookup is keyed
     *by* subject digest, so it confirms a digest you already hold rather
     than recovering an unknown one.) Rebuild the index over those. If no
-    such record survives, the release
-    cannot be safely backfilled: leave it partial and say so in the
-    `scorecard-drift` tracking issue.
+    such record survives, the release cannot be safely backfilled: leave
+    it partial and say so in the `scorecard-drift` tracking issue.
 
 Restoring images to an image-less release (making all six present — the
 four per-arch tags **and** both `:<tag>` indexes) is optional and uses
