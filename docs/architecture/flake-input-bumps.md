@@ -332,9 +332,9 @@ enforcers (daily: `check-settings-posture.sh`,
 `check-scorecard-threshold.sh`) are likewise CI-only, for two reasons:
 `check-settings-posture.sh` and `check-allowed-actions-api.sh` need an
 admin-scoped App token against the live API, while
-`check-flake-lock-staleness.sh` and `check-scorecard-threshold.sh` are
-keyed on inputs the tree does not carry — wall-clock age rather than
-file content, and the scorecard CLI's JSON
+`check-flake-lock-staleness.sh` and `check-scorecard-threshold.sh` each
+answer to an input from outside the tree — the wall clock, against which
+`flake.lock`'s `locked.lastModified` is measured, and the scorecard CLI's JSON
 on stdin, which only the scheduled run produces. Locally only their
 harnesses run. Individual
 harnesses can still be run directly

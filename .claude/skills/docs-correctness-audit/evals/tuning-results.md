@@ -75,14 +75,23 @@ Paths below are relative to this file's directory — `cd` to the skill's
 
 ```sh
 bash seeded-defects/plant.sh
-# run /docs-audit against the planted worktree, save the report, repeat
+# In the planted worktree, edit the cluster map in
+# references/repo-map.md §2 to the configuration under test — that table
+# is the only thing that sets reader granularity; no flag or env var
+# switches it, so measuring a second configuration means varying that
+# section and re-running.
+# Then run /docs-audit against the planted worktree, save the report, repeat.
 bash seeded-defects/score.sh <report1.md> <report2.md>
 bash seeded-defects/plant.sh --clean
 ```
 
+Reader-tokens come from the per-agent usage the harness reports when each
+cluster reader finishes; sum them across the readers of one run.
+
 A configuration ships only if seed recall holds at 14/14 across two runs (no
 seed category dropped) **and** reader-tokens fall below the
-per-subdirectory baseline. The recorded token figures are per-run sums across
+per-subdirectory baseline. A configuration whose cost was never measured
+head-to-head is *unevaluated* against that gate, not failed by it. The recorded token figures are per-run sums across
 readers from a single measured run per configuration (recall is the two-run
 figure), with no measured spread — so treat a token difference under roughly
 ten percent as inconclusive, not a win.

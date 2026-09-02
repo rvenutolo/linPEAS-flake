@@ -56,11 +56,17 @@ prose: `refresh-precommit-table.sh`, `refresh-pin-parity.sh`,
 `refresh-ephemeral-refs-gap.sh`. `refresh-just-recipes.sh` is on both
 sides — it owns `docs/reference/just-recipes.md` and splices a block into
 `README.md`. Which side of the line a doc falls on is therefore a
-judgment. Recording it at the generator keeps that judgment reviewable
+judgment: several `@generates` pages also splice between markers into a fixed
+hand-written header — `docs/architecture/ci-dag.md`,
+`docs/reference/flake-outputs.md`, `docs/reference/treefmt-config.md`,
+`docs/reference/scripts.md`, `docs/security/enforcement-matrix.md`. They are
+annotated `@generates` because the block *is* the page; the four files named
+below are annotated the other way because the prose is.
+Recording it at the generator keeps that judgment reviewable
 next to the code that makes it, where a coverage threshold would be a
-magic number that moves as the prose around the block grows. Files
-carrying a block inside hand-written
-prose (`README.md`, `docs/architecture/auto-update.md`,
+magic number that moves as the prose around the block grows. Files whose
+*substance* is hand-written prose around a block
+(`README.md`, `docs/architecture/auto-update.md`,
 `docs/development/git.md`, `docs/development/linting.md`) stay off the
 list on purpose: ignoring them wholesale would also drop hand-edits to the
 surrounding prose from the size count, which is the same failure in the

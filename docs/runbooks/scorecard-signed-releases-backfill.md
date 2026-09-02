@@ -126,11 +126,20 @@ rebuilding at the historic commit, then re-run the backfill:
     `nix build .#linpeas-image --print-build-logs`. This builds the
     **local system's** image only. Restoring a non-host arch needs a host
     of that architecture, or a remote builder / `extra-platforms` with
-    binfmt configured; repeat per missing arch. Pushing only some of the
-    four per-arch tags leaves the release partial, which the preflight
-    hard-fails on.
+    binfmt configured; repeat per missing arch. The preflight probes six
+    objects — the four per-arch tags and both `:<tag>` indexes — and
+    hard-fails on any count between one and five, so every missing object
+    has to be restored, not just the arch tags.
+1. Before pushing anything, verify each rebuilt per-arch image against a
+    record that predates the loss — see
+    [Verifying the rebuild](#verifying-the-rebuild) below, which also covers
+    the case where that record is the missing object.
 1. `docker load --input result` + retag + push to GHCR / Docker Hub
     under `${tag}-${arch}` for the missing arch(es)/registry(ies).
+1. Restore a missing `:<tag>` index, if that is one of the missing objects,
+    over the digests recovered in step 3 — never over whatever the arch tags
+    currently resolve to. If no pre-eviction record of those digests survives,
+    stop here: the release cannot be safely backfilled (see below).
 1. Re-run `gh workflow run release-on-bump.yml --ref main -F backfill-tag=<tag>`.
 
 The rebuilt image must be byte-identical to the original for cosign
@@ -142,6 +151,8 @@ If you cite the weekly check's signal at all, check for open
 `reproducibility`-labelled issues rather than workflow-level green:
 `continue-on-error` on its compare job keeps runs green even on
 mismatch during burn-in.
+
+### Verifying the rebuild<a name="verifying-the-rebuild"></a>
 
 Which record depends on what is missing:
 
@@ -155,12 +166,13 @@ Which record depends on what is missing:
     re-running the backfill would then bless it with fresh attestations
     and a fresh signature — the outcome pulling by digest exists to
     prevent. Recover the digests the release actually shipped from a
-    record made at publish time (the release's per-arch attestation
-    subjects, if you still hold the digests to look them up by; the
-    original run's step outputs, if its logs have not aged out) and
-    rebuild the index over those. If no such record survives, the release
+    record made at publish time — in practice the original run's step
+    outputs, if its logs have not aged out. (Attestation lookup is keyed
+    *by* subject digest, so it confirms a digest you already hold rather
+    than recovering an unknown one.) Rebuild the index over those. If no
+    such record survives, the release
     cannot be safely backfilled: leave it partial and say so in the
-    tracking issue.
+    `scorecard-drift` tracking issue.
 
 Restoring images to an image-less release (making all six present — the
 four per-arch tags **and** both `:<tag>` indexes) is optional and uses

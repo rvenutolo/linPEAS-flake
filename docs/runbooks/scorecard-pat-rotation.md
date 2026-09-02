@@ -30,7 +30,10 @@ This runbook is the durable record of how to create and rotate that PAT.
 ## Create the token
 
 1. GitHub → top-right avatar → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**.
-1. Name: `linpeas-flake-scorecard-drift-check`.
+1. Name: `linpeas-flake-scorecard-drift-check-<yyyymm>`, using the current
+    year and month. The suffix is what lets the revoke step below tell the
+    replacement from the token it supersedes; both are otherwise identical in
+    the token list.
 1. Expiration: 1 year from today.
 1. Resource owner: `rvenutolo`.
 1. Repository access: Only select repositories → `linPEAS-flake`.
@@ -54,8 +57,11 @@ Expected: green run, or red run with the `scorecard-drift` tracking issue surfac
 
 ## Revoke the superseded token
 
-Settings → **Developer settings** → **Fine-grained tokens** → delete the
-`linpeas-flake-scorecard-drift-check` token you replaced.
+GitHub → top-right avatar → **Settings** → **Developer settings** →
+**Personal access tokens** → **Fine-grained tokens** → delete the token you
+replaced. Both entries share the `linpeas-flake-scorecard-drift-check`
+prefix, so pick the one with the older suffix — confirm against the
+**Created** column before deleting.
 
 Do this only once the verification run above is green, so a bad new PAT can
 still be rolled back — but do not skip it. Rotating on suspected compromise

@@ -17,8 +17,8 @@
 #   - actions: write        — manage caches / cancel runs; a fork
 #                             inheriting the workflow would fire it under
 #                             the fork's own token, deleting the fork's
-#                             caches and cancelling its runs on a schedule
-#                             its owner never asked for
+#                             caches and re-running its failed jobs on a
+#                             schedule its owner never asked for
 #
 # A job that mints a GitHub App installation token also counts as
 # privileged even when it declares a read-only GITHUB_TOKEN: the App

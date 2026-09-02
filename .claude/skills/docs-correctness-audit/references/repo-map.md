@@ -9,7 +9,14 @@ here** if they disagree, and note the drift as its own finding.
 ## 1. Ground-truth commands
 
 Run these once and pass the results to every reader so a thing named in a doc is
-checked against one authoritative list:
+checked against one authoritative list.
+
+The cron command spells both workflow globs, `*.yml` and `*.yaml`, to match the
+scan sets the repo's own workflow lints use. No `*.yaml` workflow exists today,
+so that half goes unmatched and reaches `grep` as a literal path: expect a
+`No such file or directory` warning and exit 2. Its stdout is still complete —
+the collector drops non-existent paths before scanning, which a hand-run
+command does not.
 
 ```sh
 nix flake show --json          # flake output inventory (the bundle's FLAKE OUTPUTS section is authoritative)
@@ -20,14 +27,6 @@ grep -HE '^[[:space:]]*-[[:space:]]*cron:' .github/workflows/*.yml .github/workf
 grep -c '"context"' .github/rulesets/protect-main.json  # required-check context count
 git grep -n '<symbol>'         # existence of options, env vars, secret names, flags
 ```
-
-Both workflow globs are spelled out, `*.yml` and `*.yaml`, to match the
-scan sets the repo's own workflow lints use. No `*.yaml` workflow exists
-today, so that half of the glob goes unmatched and reaches the command as a
-literal path: expect a `No such file or directory` warning and a non-zero
-exit from those two commands. The output on stdout is still complete — the
-collector drops non-existent paths before scanning, which a hand-run command
-does not.
 
 The collector filters `nix flake show --json` through a `python3` one-liner
 into the one-line `outputs: …` form; when that pipeline fails it falls back to
@@ -114,8 +113,9 @@ this very page. Nothing gates either of those duplications, so when a
 generator is added or removed the table here goes stale silently and the next
 audit runs against a stale map. The `claude-tooling` row is what puts them in
 scope. The fixtures under `.claude/skills/*/evals/seeded-defects/fixtures/`
-stay out: they exist to carry planted defects, so reporting them would be
-reporting the harness working.
+stay out: they are the recall harness's scoring inputs — sample audit reports
+`score.sh` grades against a manifest — rather than repo documentation, so
+reporting them would be reporting the harness working.
 
 `.claude/CLAUDE.md` and the global CLAUDE.md are untracked and stay read-only
 — the global one lives outside the repo entirely. They set the scope of the

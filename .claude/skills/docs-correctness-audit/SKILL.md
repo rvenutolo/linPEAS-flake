@@ -186,7 +186,10 @@ by severity:
 
 - **high** — a wrong or broken fact: dead link, wrong command/path/flag, a
     drifted CI/cron/config value, a claimed-but-absent check or script.
-- **med** — an internal contradiction, or an ephemeral-token violation.
+- **med** — an internal contradiction, or a *blocking-class* ephemeral-token
+    violation (`RE_ISSUE`, `RE_DATE`, `RE_PLANNING`, `RE_REVIEW`, `RE_CLAUDE`).
+    The advisory-only classes — `causal-history`, and the sweep-only
+    `ad-hoc-ticket` — are low at most.
 - **low** — prose / clarity / minor wording.
 
 ### 5. Write the report (no edits)
