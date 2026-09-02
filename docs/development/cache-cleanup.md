@@ -61,6 +61,10 @@ opaquely repopulates on its next run. No release-path job waits on a
 cache warm-up, so a mass deletion costs nothing in image-publication
 latency.
 
-If the action-token rate-limits during a prune run, the workflow
-fails cleanly and re-runs on the next cron tick. Manual recovery:
+If the action-token rate-limits on one of the delete calls, the
+workflow fails cleanly and re-runs on the next cron tick. A rate limit
+that lands on a cache enumeration instead is swallowed — both
+enumerations feed a `while` loop from a process substitution, whose exit
+status is discarded even under `set -Eeuo pipefail` — so that run
+reports zero deletions and goes green. Manual recovery either way:
 `gh workflow run actions-cache-prune.yml`.

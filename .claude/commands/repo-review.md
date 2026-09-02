@@ -12,7 +12,7 @@ Run a multi-agent, refute-all review of this repository using the
     deep/light/skip (dim 3 adversarial, dim 7 advisory), and confirm the
     run-wide defaults (refute-all verification, single `.claude/reports/`
     report, per-dimension gates).
-1. Run each selected dimension as its own gated `Workflow` — wait for "go",
+1. Run each selected dimension as its own gated `Workflow`, dimension 6 before dimension 5 so 6's confirmed findings can seed 5 — wait for "go",
     fan out finder slices, refute every finding (up to the per-dimension
     cap of 25, most-severe first; report the cap when it fires) with 3
     default-refuted skeptics, keeping a finding when at least two of the skeptics that

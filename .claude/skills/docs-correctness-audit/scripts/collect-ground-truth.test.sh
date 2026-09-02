@@ -196,6 +196,26 @@ case "${lnk}" in *"gone-tooling.md"*) check "flags broken link in tracked .claud
 case "${lnk}" in *"gone-seeded.md"*) check "skips seeded-defect fixtures" 1 ;; *) check "skips seeded-defect fixtures" 0 ;; esac
 rm -rf "${fl}"
 
+# --- a lychee that cannot run at all must not read as a clean sweep ---
+# lychee exits non-zero without printing an [ERROR] line when it refuses an
+# input (a tracked doc deleted but not staged reaches this: git ls-files
+# still names it). A status-blind sweep reports "(none)" — indistinguishable
+# from a clean run — so the marker has to be distinct.
+fx="$(mktemp -d)"
+(
+  cd "${fx}"
+  git init -q && git config user.email t@t && git config user.name t
+  cp "${REAL_REPO}/lychee.toml" .
+  mkdir -p docs
+  printf '# A\n' >docs/a.md
+  git add -A && git commit -qm init
+  rm docs/a.md # tracked in the index, absent from the worktree
+)
+# shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
+fail_out="$(cd "${fx}" && source "${COLLECTOR}" && sweep_internal_links)"
+case "${fail_out}" in *"lychee failed"*) check "an unusable lychee run is not reported as clean" 0 ;; *) check "an unusable lychee run is not reported as clean" 1 ;; esac
+rm -rf "${fx}"
+
 # --- ci.yml job listing is scoped to the jobs: block ---
 # A bare 2-space-key grep also returns `on:` trigger names and `concurrency:`
 # keys. Those read as job ids to a reader checking a doc's "CI job X" claim,

@@ -139,8 +139,8 @@ Read-only fan-out needs no orchestration opt-in — it is plain parallel reads.
     Internal link and heading-anchor resolution is given authoritatively by the
     collector's **`UNRESOLVED INTERNAL LINKS / ANCHORS`** section — flag every
     listed entry as high severity; do not re-derive by running lychee again. A
-    section reading `(lychee not found — …)` is a non-result, not a clean
-    one — say so in the coverage note.
+    section reading `(lychee not found — …)` or `(lychee failed — …)` is a
+    non-result, not a clean one — say so in the coverage note.
 1. **Internal consistency.** Docs contradicting each other (same fact stated two
     ways); invariant-index entries vs their tracked-doc sections; a claimed
     invariant with no backing check.

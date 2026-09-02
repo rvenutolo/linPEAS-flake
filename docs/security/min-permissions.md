@@ -100,6 +100,11 @@ Wired into the `lint-workflow-security` CI group and as the
     scripts on a public repo, `contents: read` is sufficient; for ghcr
     push, `packages: write`; for attestations, `id-token: write` +
     `attestations: write`; etc.
+- If the job grants any `write` scope, add it to
+    `.github/permission-scopes.yml` in the same change, as
+    `<workflow>.yml: <job>: [sorted, scope, names]`. An unlisted write
+    scope is reported as an over-grant, which is a different failure
+    from a missing block and is not fixed by adding one.
 
-The lint catches the posture violation at pre-commit time; CI catches it
-on PR. Either way, the missing block is surfaced before merge.
+The lint catches each of those at pre-commit time; CI catches them on
+PR. Either way, the violation is surfaced before merge.

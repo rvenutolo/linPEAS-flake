@@ -22,13 +22,17 @@ exclude = [
 ]
 
 exclude_path = [
-  # Every directory entry carries a trailing slash, and ".git" a leading one
-  # too. Entries are matched as substrings of the relative input path, so a
-  # bare directory name swallows any file whose path merely contains it: a
+  # Entries are REGULAR EXPRESSIONS, matched against each input path as it
+  # was passed to lychee — an absolute path when the caller passes one. So an
+  # entry naming a bare directory also matches any file whose path merely
+  # contains that text, and an unescaped dot is a wildcard. Every directory
+  # entry therefore carries a trailing slash, and ".git" a leading one too: a
   # bare ".git" takes docs/development/git.md, and a bare "result" takes the
   # tuning-results.md page under the audit skill's evals tree. Both are
   # maintained docs, and a swallowed file is dropped from the sweep with no
-  # diagnostic — it simply stops being link-checked.
+  # diagnostic — it simply stops being link-checked. A directory name that
+  # also appears in the checkout's own parent path would swallow the whole
+  # tree the same way.
   "/.git/",
   ".direnv/",
   "result/",

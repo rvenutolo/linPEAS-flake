@@ -297,10 +297,17 @@ reusing `lychee.toml`. It runs over all tracked `*.md` files — the tracked
 its prose quotes banned token shapes — excluding only `tests/fixtures/`,
 `docs/_data/` and the seeded-defect fixtures under
 `.claude/skills/*/evals/seeded-defects/fixtures/`, which are the recall
-harness's scoring inputs rather than repo documentation. External URLs are skipped entirely — only relative file paths and
-heading anchors are checked. A listed entry is authoritative drift: the link
-target does not exist (high severity). Flag every entry without re-deriving by
-eye. The one non-result: when `lychee` is not on the collector's `PATH`, the
-section reads `(lychee not found — internal-link sweep skipped)` and nothing
-was checked — record links as unchecked in the coverage note rather than as
-clean.
+harness's scoring inputs rather than repo documentation. That list is only the
+first of two filters: the run passes `--config lychee.toml`, whose
+`exclude_path` entries are **regular expressions matched against each input
+path as it was passed** (absolute, here), so any entry matching a tracked doc
+removes it from the sweep with no diagnostic. The two agree today — verify with
+`lychee --dump-inputs` if a coverage claim depends on it. External URLs are
+skipped entirely — only relative file paths and heading anchors are checked. A
+listed entry is authoritative drift: the link target does not exist (high
+severity). Flag every entry without re-deriving by eye. Two non-result markers
+mean nothing was checked, and neither is a clean read: `(lychee not found — internal-link sweep skipped)` when `lychee` is off the collector's `PATH`, and
+`(lychee failed — internal-link sweep unusable; exit N)` when lychee ran but
+could not complete — a tracked doc deleted from the worktree but still in the
+index produces the second. Record links as unchecked in the coverage note
+whenever either appears.

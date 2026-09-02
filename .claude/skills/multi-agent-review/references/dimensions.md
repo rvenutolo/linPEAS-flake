@@ -112,7 +112,7 @@ Refuters: `ci: gates it` ≠ prose is correct — freshness gates only generated
 ## 5. Test-harness quality — *deep*
 
 Pair each `tests/*.test.sh` — plus each tracked `.claude/` harness test
-(`git ls-files '.claude/*.test.sh'`) — with the script it covers. **Seed this dimension with dimensions 2 & 6 confirmed findings** — highest-yield: a silent-pass bug is usually an untested rejection path.
+(`git ls-files '.claude/*.test.sh'`) — with the script it covers. **Run this dimension after dimension 6 and seed it with dimensions 2 & 6 confirmed findings** — highest-yield: a silent-pass bug is usually an untested rejection path.
 
 Slices:
 

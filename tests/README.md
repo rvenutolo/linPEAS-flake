@@ -148,24 +148,24 @@ Environment-variable overrides scoped to test invocation (a selection
 of the most commonly needed, not the full set — each script's own
 source is the canonical list):
 
-| Variable                             | Script                                                                                                                              | Purpose                                                                                         |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `WORKFLOWS_DIR_OVERRIDE`             | every script that scans the workflows tree — enumerate with `grep -rlE '^[^#]*WORKFLOWS_DIR_OVERRIDE' scripts/`                     | swap the workflows scan root                                                                    |
-| `WORKFLOW_FILE_FILTER`               | every workflow-scanning lint that supports single-file narrowing — enumerate with `grep -rlE '^[^#]*WORKFLOW_FILE_FILTER' scripts/` | restrict to a single fixture file                                                               |
-| `LINT_ALLOW_EMPTY_SCAN`              | every scan-breadth-asserting lint — enumerate with `grep -rlE '^[^#]*LINT_ALLOW_EMPTY_SCAN' scripts/`                               | accept a deliberately empty scan set (see `docs/development/linting.md`)                        |
-| `RENOVATE_JSON_OVERRIDE`             | `check-renovate-invariants.sh`, `check-renovate-markers-matched.sh`, `check-renovate-config-validator.sh`                           | swap the renovate.json path                                                                     |
-| `SCAN_ROOT`                          | `check-renovate-markers-matched.sh`                                                                                                 | swap the scanned tree root                                                                      |
-| `SCAN_ROOT_OVERRIDE`                 | `check-doc-cron-restatement.sh`                                                                                                     | swap the scanned tree root                                                                      |
-| `RELEASE_TAG_RULESET_JSON_OVERRIDE`  | `check-tag-protection.sh`                                                                                                           | swap the release-tag-protection ruleset JSON                                                    |
-| `PROTECT_MAIN_RULESET_JSON_OVERRIDE` | `check-protect-main.sh`                                                                                                             | swap the protect-main ruleset JSON                                                              |
-| `PIN_FILE_OVERRIDE`                  | `bump-linpeas.sh`, `gen-dashboard-data.sh`                                                                                          | swap the linpeas-pin.json path                                                                  |
-| `UPSTREAM_RELEASE_JSON_OVERRIDE`     | `gen-dashboard-data.sh`                                                                                                             | swap upstream release JSON (singular: the latest-release payload)                               |
-| `UPSTREAM_RELEASES_JSON_OVERRIDE`    | `gen-dashboard-data.sh`                                                                                                             | swap upstream releases-list JSON (plural: the release enumeration)                              |
-| `LATEST_RELEASE_JSON_OVERRIDE`       | `gen-dashboard-data.sh`                                                                                                             | swap rvenutolo release JSON                                                                     |
-| `THIS_REPO_RELEASES_JSON_OVERRIDE`   | `gen-dashboard-data.sh`                                                                                                             | swap rvenutolo releases-list JSON                                                               |
-| `BUMP_PR_JSON_OVERRIDE`              | `gen-dashboard-data.sh`                                                                                                             | swap the last-bump PR search payload                                                            |
-| `PARITY_JSON_OVERRIDE`               | `gen-dashboard-data.sh`                                                                                                             | swap the parity-run payload                                                                     |
-| `OUT_FILE_OVERRIDE`                  | `gen-dashboard-data.sh`                                                                                                             | redirect the generated YAML — use it so a test never writes the real `docs/_data/dashboard.yml` |
+| Variable                             | Script                                                                                                                                                                                                   | Purpose                                                                                         |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `WORKFLOWS_DIR_OVERRIDE`             | every workflow-scanning lint that takes this scan-root override — others use a differently-named one — enumerate with `grep -rlE '^[^#]*WORKFLOWS_DIR_OVERRIDE' scripts/`                                | swap the workflows scan root                                                                    |
+| `WORKFLOW_FILE_FILTER`               | every workflow-scanning lint that supports single-file narrowing — enumerate with `grep -rlE '^[^#]*WORKFLOW_FILE_FILTER' scripts/`                                                                      | restrict to a single fixture file                                                               |
+| `LINT_ALLOW_EMPTY_SCAN`              | every lint that enumerates through `scripts/lib/enumerate.sh`, which honours the variable without the caller naming it — enumerate with `grep -lE 'glob_into\|enumerate_into\|filter_into' scripts/*.sh` | accept a deliberately empty scan set (see `docs/development/linting.md`)                        |
+| `RENOVATE_JSON_OVERRIDE`             | `check-renovate-invariants.sh`, `check-renovate-markers-matched.sh`, `check-renovate-config-validator.sh`                                                                                                | swap the renovate.json path                                                                     |
+| `SCAN_ROOT`                          | `check-renovate-markers-matched.sh`                                                                                                                                                                      | swap the scanned tree root                                                                      |
+| `SCAN_ROOT_OVERRIDE`                 | `check-doc-cron-restatement.sh`                                                                                                                                                                          | swap the scanned tree root                                                                      |
+| `RELEASE_TAG_RULESET_JSON_OVERRIDE`  | `check-tag-protection.sh`                                                                                                                                                                                | swap the release-tag-protection ruleset JSON                                                    |
+| `PROTECT_MAIN_RULESET_JSON_OVERRIDE` | `check-protect-main.sh`                                                                                                                                                                                  | swap the protect-main ruleset JSON                                                              |
+| `PIN_FILE_OVERRIDE`                  | `bump-linpeas.sh`, `gen-dashboard-data.sh`                                                                                                                                                               | swap the linpeas-pin.json path                                                                  |
+| `UPSTREAM_RELEASE_JSON_OVERRIDE`     | `gen-dashboard-data.sh`                                                                                                                                                                                  | swap upstream release JSON (singular: the latest-release payload)                               |
+| `UPSTREAM_RELEASES_JSON_OVERRIDE`    | `gen-dashboard-data.sh`                                                                                                                                                                                  | swap upstream releases-list JSON (plural: the release enumeration)                              |
+| `LATEST_RELEASE_JSON_OVERRIDE`       | `gen-dashboard-data.sh`                                                                                                                                                                                  | swap rvenutolo release JSON                                                                     |
+| `THIS_REPO_RELEASES_JSON_OVERRIDE`   | `gen-dashboard-data.sh`                                                                                                                                                                                  | swap rvenutolo releases-list JSON                                                               |
+| `BUMP_PR_JSON_OVERRIDE`              | `gen-dashboard-data.sh`                                                                                                                                                                                  | swap the last-bump PR search payload                                                            |
+| `PARITY_JSON_OVERRIDE`               | `gen-dashboard-data.sh`                                                                                                                                                                                  | swap the parity-run payload                                                                     |
+| `OUT_FILE_OVERRIDE`                  | `gen-dashboard-data.sh`                                                                                                                                                                                  | redirect the generated YAML — use it so a test never writes the real `docs/_data/dashboard.yml` |
 
 Each script defines its own overrides — check the script for the
 canonical list before writing a new test. The two scan-root overrides
@@ -229,7 +229,10 @@ runs the pair.
 
 ## Adding a new test harness
 
-1. Write the script's invariant first; commit it.
+1. Write the script's invariant first. Do not commit it on its own —
+    the `script-has-test` hook runs over the whole tree whenever a
+    `scripts/check-*.sh` is staged and rejects a check script with no
+    matching harness, so the script and its harness land in one commit.
 
 1. Create `tests/<script-name>.test.sh` mirroring the existing
     harnesses' shape (env-var overrides; an `expect` or `run_scenario`
@@ -287,6 +290,12 @@ runs the pair.
     `test-harnesses-fresh` pre-commit hook only runs the generator in
     `--check` mode, so it rejects the commit rather than writing the
     file, and no `just` recipe wraps it.
+
+1. Regenerate the script reference: run `just show-scripts` and commit
+    the updated `docs/reference/scripts.md`. `scripts-reference-fresh`
+    fires on any staged `scripts/*.sh`, so a new check script blocks the
+    commit until its annotations are rendered — the census step above
+    covers only the harness table.
 
 1. If the script is wired into a CI required check, also document
     it in `docs/security/required-checks.md` and ensure

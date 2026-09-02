@@ -34,8 +34,8 @@ This runbook is linked inline from the auto-filed issue body.
 
 ## Why this exists
 
-`scripts/check-uses-sha-pinned.sh` enforces that every `uses:` ref
-is a full SHA. Renovate keeps those SHAs aligned with upstream
+`scripts/check-uses-sha-pinned.sh` enforces that every non-local
+`uses:` ref is a full SHA. Renovate keeps those SHAs aligned with upstream
 release tags. Neither mechanism catches the case where an action
 publisher **force-moves a tag to a different SHA after we pinned to
 it** — the tag-vs-pin drift attack. The per-ref re-derivation in this
@@ -110,16 +110,19 @@ failed or returned an unrecognized verdict for a ref; OR a drift line
 failed shape validation; OR the workflow glob matched zero files.
 
 1. Inspect the run log; look at the raw ratchet stderr.
-1. If ratchet's output format changed (most likely cause after a
-    ratchet upgrade), bump ratchet locally via
-    `nix flake update` and adapt the parser in
-    `.github/workflows/ratchet-pin-audit.yml` (the `audit pins`
-    step). The structural invariant
+1. If ratchet started exiting non-zero on a workflow set it
+    previously accepted (most likely after a ratchet upgrade), bump
+    ratchet locally via `nix flake update` and re-run. The step does
+    not parse ratchet's stdout — drift comes from the per-ref
+    `gh api` re-derivation — so an output-format change alone cannot
+    produce this reason.
+1. If the run log shows an upstream failure that landed here instead
+    of under `upstream-api-failure`, widen the heuristic grep in the
+    `audit pins` step. The structural invariant
     `scripts/check-ratchet-pin-audit.sh` pins the four reason values
     the notify body documents (`drift-detected`,
     `upstream-api-failure`, `ratchet-tool-failure`, `unknown`), not
-    the heuristic strings — so updating heuristics is
-    a single-file change.
+    the heuristic strings — so widening it is a single-file change.
 1. If the workflow glob matched zero files, a refactor moved
     workflows out from under `.github/workflows/`. Adjust the glob
     in the `audit pins` step, keeping both `*.yml` and `*.yaml`

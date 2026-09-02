@@ -213,7 +213,14 @@ check named `gitleaks` in the `protect-main` ruleset.
 - Uses only `secrets.GITHUB_TOKEN` — PR-triggered workflow secret
     allowlist invariant holds.
 - New leaked-secret finding = security incident. Triage:
-    rotate → purge with `git filter-repo` → force-push (admin bypass).
+    rotate → purge with `git filter-repo` → force-push. The force-push
+    needs the `protect-main` ruleset set to `disabled` via `gh api` for
+    the duration: its `bypass_actors` list is empty, so the
+    `non_fast_forward` rule blocks a repository admin as well. Re-sign
+    the rewritten commits before pushing — history rewriting drops the
+    original signatures and `required_signatures` rejects unsigned
+    objects — and expect `protect-main-drift-check` to stay red until
+    the ruleset is re-enabled.
 - Vendor `gitleaks/*` is in the `allowed_actions` allowlist; do not
     remove without replacing the workflow.
 
@@ -234,7 +241,9 @@ security-review entry.
     allowlist invariant holds.
 - A verified finding is a live credential and therefore a security
     incident. Triage is the same as for gitleaks:
-    rotate → purge with `git filter-repo` → force-push (admin bypass).
+    rotate → purge with `git filter-repo` → force-push behind a
+    temporarily disabled `protect-main` ruleset, with the same
+    re-signing requirement.
     Rotate first — the secret is confirmed valid, so history rewriting
     is the slower half of the response.
 - Vendor `trufflesecurity/*` is in the `allowed_actions` allowlist; do

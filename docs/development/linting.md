@@ -68,8 +68,9 @@ examples are not crawled.
 Every `#anchor` link in `README.md` or `docs/**/*.md` (plus `.claude/CLAUDE.md`
 locally, when present) that points at an in-tree
 `.md` file (or at its own file) must match a heading slug in the target.
-Lychee resolves file paths but is not a pre-commit hook here, so a renamed
-heading would otherwise surface only on the weekly link run. Enforced by
+Lychee resolves file paths, but neither `just lint-links` nor `links.yml`
+passes `--include-fragments`, so it never checks anchors at all — without this
+lint a renamed heading would reach `main` unreported. Enforced by
 `scripts/check-doc-anchors.sh`, wired as the `check-doc-anchors` pre-commit
 hook and as a member check of the `lint-doc-invariants` CI job; a run that
 finds zero anchor links fails unless `LINT_ALLOW_EMPTY_SCAN=1` states that
@@ -557,9 +558,11 @@ between the markers on every `nix fmt` / `treefmt` invocation. Files
 without markers are untouched. `slug=github` matches the GFM anchor
 scheme used by MkDocs-Material and `gh`-rendered previews;
 `minlevel=2` skips the H1 title; `maxlevel=3` keeps the TOC shallow
-on long runbooks. The plugin also writes explicit `<a name="...">`
-anchors next to each in-range heading so the slugs are stable across
-heading-text edits.
+on long runbooks. The plugin also writes an explicit `<a name="...">`
+anchor next to each in-range heading. MkDocs-Material's own toc slugify
+collapses separator runs, so on some headings it disagrees with the GFM
+slug; the explicit anchor gives both resolvers one target to reach, and
+`scripts/check-doc-anchors.sh` accepts it as a target too.
 
 Seeded files: `docs/security/verification.md`,
 `docs/runbooks/dockerhub-recovery.md`,
