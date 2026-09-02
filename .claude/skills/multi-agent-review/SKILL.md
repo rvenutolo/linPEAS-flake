@@ -73,7 +73,9 @@ Bake the answers in. Do not re-ask a settled parameter per dimension.
 
 ### 2. Run each selected dimension as a gated `Workflow`
 
-For each selected dimension, in order: **wait for the user's "go"**, then launch
+For each selected dimension, in order — except run dimension 6 before
+dimension 5, so 6's confirmed findings can seed 5 (below) — **wait for the
+user's "go"**, then launch
 one `Workflow` whose script is the template below. It returns
 `{ survivors, refuted }`: append `survivors` to the running report's dimension
 section and fold `refuted`'s unanimous kills into the Refutation log (the killed findings *are*
@@ -121,7 +123,8 @@ const FINDING = {
   properties: { findings: { type: 'array', items: { type: 'object',
     properties: { file:{type:'string'}, line:{type:'integer'},
       severity:{type:'string', enum:['critical','high','medium','low','advisory']},
-      claim:{type:'string'}, evidence:{type:'string'}, failure_scenario:{type:'string'} },
+      claim:{type:'string'}, evidence:{type:'string'}, failure_scenario:{type:'string'},
+      title:{type:'string'}, suggested_direction:{type:'string'} },
     required: ['file','claim','failure_scenario'] } } },
   required: ['findings'],
 }

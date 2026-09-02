@@ -15,9 +15,13 @@ Strict least-privilege rule for every workflow in `.github/workflows/`.
 
 ## Why
 
-`GITHUB_TOKEN`'s default scope set is broad. Reviewer-only enforcement
-is fragile — a workflow added without an explicit `permissions:` block
-silently inherits repo defaults and breaks least-privilege posture.
+A job without an explicit `permissions:` block inherits the repo-wide
+default. That default is pinned to `read` here and probed daily
+(see [settings posture](settings-posture.md)), so the inherited set is
+still broader than any single job needs, and one UI flip to `write`
+would widen every such job at once. Reviewer-only enforcement is
+fragile: the omission is invisible in review precisely because nothing
+is written down.
 Locking every job to an explicit, narrowly-scoped block keeps the blast
 radius of a compromised step bounded to scopes that job actually needs.
 

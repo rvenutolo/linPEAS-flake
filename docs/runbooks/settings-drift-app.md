@@ -90,9 +90,11 @@ To rotate:
     gh secret set SETTINGS_DRIFT_APP_PRIVATE_KEY --body "$(cat new-key.pem)" --repo rvenutolo/linPEAS-flake
     ```
 
-1. App page → delete the old key.
+1. Re-dispatch the workflow and confirm the `drift-check` job passes.
 
-1. Re-dispatch the workflow to confirm the new key works.
+1. App page → delete the old key. Only after the run above is green: a
+    truncated or wrong `.pem` in step 2 fails exactly as a missing key
+    does, and the old key is the only thing left to roll back to.
 
 ## Reuse for related drift checks<a name="reuse-for-related-drift-checks"></a>
 
