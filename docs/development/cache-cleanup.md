@@ -38,9 +38,9 @@ than waiting for the daily cron sweep.
 ## Permissions
 
 Both jobs declare `actions: write` (cache deletion) and
-`contents: read` (repository reads — `prune-stale` lists branches and
-open PRs; `prune-on-pr-close` reads only the cache entries scoped to two
-known refs). The `actions: write` grant is what
+`contents: read`, which `prune-stale` uses to list branches and open
+PRs; `prune-on-pr-close` reads nothing outside the Actions-cache API
+and carries the scope only for parity. The `actions: write` grant is what
 `scripts/check-permission-scopes.sh` pins, via the per-job allowlist in
 `.github/permission-scopes.yml`; read scopes are outside that lint. The
 fork-guard `github.repository == 'rvenutolo/linPEAS-flake'` is on both

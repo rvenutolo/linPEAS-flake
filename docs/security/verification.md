@@ -111,8 +111,9 @@ Look for `"conclusion": "success"` within the last 7 days. Current state on the 
     Never `>`, and never a bare `mktemp` — the script-hygiene lint rejects that
     shape under `scripts/`; the guarded helper in `scripts/lib/temp.sh` holds
     the one sanctioned bare invocation.
-1. Every `gh api` call must pass `--header "X-GitHub-Api-Version: 2022-11-28"`.
-    Apply to any new security-sensitive GitHub-REST caller.
+1. Every `gh api` call in `scripts/*.sh` must pass
+    `--header "X-GitHub-Api-Version: 2022-11-28"`. Apply to any new
+    security-sensitive GitHub-REST caller.
 
 Guards 1–3 are lint-enforced by `scripts/check-bump-script-integrity.sh`
 (regex-presence over `scripts/bump-linpeas.sh`); guard 4 by
