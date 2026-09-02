@@ -37,10 +37,13 @@ worth checking first: an upstream PEASS-ng API rate-limit, a
 (which can only affect `push-and-merge`), the asset-URL prefix check
 tripping because peass-ng moved their release host, a missing or
 non-`sha256:` `digest` field upstream, or an artifact handoff failure
-between the two jobs. The first four are upstream or credential
-conditions that the next cron tick retries on its own; only the
-credential case needs action. Re-run manually with
-`gh workflow run update-linpeas.yml` once the cause is cleared.
+between the two jobs. The rate-limit and missing-digest cases are upstream conditions the next
+cron tick retries on its own. The credential case and the moved-release-host
+case each need action first: the expected prefix is a hardcoded literal in
+`scripts/bump-linpeas.sh` and again in the workflow's own re-validation step,
+so a genuine host move fails every subsequent tick identically until both are
+edited. Re-run manually with `gh workflow run update-linpeas.yml` once the
+cause is cleared.
 
 ## Release on bump
 

@@ -89,7 +89,7 @@ adding a third-party action. An entry is a section in the PR body, titled
 - **Which attack vectors it exposes** — the ones that stop being covered
     when a defence is removed, or the ones the new dependency brings — in
     the terms the relevant
-    [threat model](docs/security/threat-model.md) row uses.
+    [threat model](docs/security/threat-model.md) boundary section uses.
 - **What compensating control remains**, or an explicit statement that
     none does. For a new credential this is where its scope and rotation
     policy go.
