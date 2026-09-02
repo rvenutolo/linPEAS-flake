@@ -9,8 +9,8 @@ user-facing docs, so no granularity choice there applies to it. The numbers belo
 from the seeded-defect recall harness in [`seeded-defects/`](seeded-defects/)
 (`plant.sh` → run the audit → `score.sh`); recall is measured over two runs
 per configuration against the same planted seed set — the seven categories
-present when the comparison was run, while the token
-figures come from one measured run each (see the ship gate below).
+present when the comparison was run — while the token figures come from one
+measured run each (see the ship gate below).
 
 The sibling [`evals.json`](evals.json) is a different instrument: a
 report-quality eval manifest — prompts phrased the way a user would type them into
@@ -38,8 +38,10 @@ recall measurement, so none of the numbers below come from it.
 All three configurations caught every measured seed in both runs — the seven
 categories that existed then (ghost CI job, lint-group mislabel, cron drift,
 stale ref, internal-link, required-check count, ephemeral). The
-`false-exclusive` seed was added after this comparison and is unmeasured here;
-its recall is an open question, not a recorded 100%. The merged map cuts total
+`false-exclusive` seed was added after this comparison, so it is absent from the
+rows above. It has since been measured under the shipped four-reader map only,
+where it hit 2/2 across two runs; the other two configurations have not been
+re-run with it, and two runs is too thin to call the category non-flaky. The merged map cuts total
 reader-tokens ~29% because most of a reader's cost is fixed per-agent overhead
 (re-reading the ground-truth bundle, tool setup); three readers collapsed into
 `core-docs` and two into `arch+dev` eliminate that overhead while the same documents still get

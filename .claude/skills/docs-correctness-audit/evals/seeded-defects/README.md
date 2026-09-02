@@ -78,9 +78,10 @@ column) is exactly the signal being measured.
     recall.
 - **Reasoning-driven** seeds (`mislabel-member`, `false-exclusive`) need a
     comparison the bundle supports but does not perform — the union allowlist
-    contains the name and the mislabel is a semantic distinction; the job list
-    refutes the exclusive but only if a reader thinks to range `Only` over it —
-    expect the flaky tail. A low number there is a measurement, not a bug in the
+    contains the name and the mislabel is a semantic distinction; the
+    `false-exclusive` payload turns on step-level detail the bundle carries
+    nowhere, so refuting it means opening the workflow — expect the flaky
+    tail. A low number there is a measurement, not a bug in the
     harness. `false-exclusive` plants the flatly-false end of that class; the
     "true except for one member" end is the harder case the harness does not
     seed, so its recall is unmeasured rather than good.
