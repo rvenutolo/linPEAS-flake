@@ -274,8 +274,8 @@ page, the collector sweep, and the real lint still diverge:
     `AU-P-`, `SC-POST-`, `plan <n>` and `F-<n>`, and stops there. A generic
     `[A-Z]{2,3}-[0-9]+` matcher would fire on `UTF-8`, `SHA-256`, `RFC-822` and
     `ISO-8601`; the enumerated shapes carry explicit boundary guards precisely
-    because that shape is noisy. `ad-hoc-ticket` is the one class the sweep
-    runs without such a guard, which is why it leans on the
+    because that shape is noisy. `ad-hoc-ticket` runs without
+    such a guard, which is why it leans on the
     `(SHA|UTF|RFC|ISO|BASE)-NNN` suppression instead. Every `ad-hoc-ticket`
     hit is therefore a judgement call for the reader, never a gate failure.
 

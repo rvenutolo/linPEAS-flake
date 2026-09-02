@@ -38,7 +38,7 @@ than waiting for the daily cron sweep.
 
 Both jobs declare `actions: write` (cache deletion) and
 `contents: read` (branch enumeration — used by `prune-stale`;
-`prune-on-pr-close` deletes two known refs and enumerates nothing). No other scopes — this exact
+`prune-on-pr-close` enumerates no branches, only the cache entries scoped to two known refs). No other scopes — this exact
 write-scope set is enforced by `scripts/check-permission-scopes.sh` via
 the per-job allowlist in `.github/permission-scopes.yml`. The fork-guard
 `github.repository == 'rvenutolo/linPEAS-flake'` is on both jobs; it
