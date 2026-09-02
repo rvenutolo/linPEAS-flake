@@ -107,4 +107,5 @@ Wired into the `lint-workflow-security` CI group and as the
     from a missing block and is not fixed by adding one.
 
 The `min-permissions` and `permission-scopes` lints catch these at
-pre-commit time; CI catches them on PR. Either way, the violation is surfaced before merge.
+pre-commit time; CI catches them on PR. Either way, the violation is
+surfaced before merge.

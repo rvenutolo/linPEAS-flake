@@ -243,6 +243,9 @@ rebase + squash are disabled to preserve branch-commit signatures.
 Full runbook — branch naming, commit signing, pre-commit hook list,
 local lint commands — lives in
 [`docs/development/git.md`](docs/development/git.md).
+[`CONTRIBUTING.md`](CONTRIBUTING.md) covers what to run before opening a
+PR, what CI gates on, the merge policy, and when a change needs a
+security-review entry.
 
 ## Repository configuration
 

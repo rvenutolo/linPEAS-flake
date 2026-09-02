@@ -1,15 +1,20 @@
 # Docker Hub recovery runbook
 
-Steps to recover from a half-published release where one registry
-(`docker.io` or `ghcr.io`) accepted a per-arch push but the other
+Steps to recover from a release whose two registries disagree — most
+often a half-published one where one registry (`docker.io` or
+`ghcr.io`) accepted a per-arch push but the other
 failed, leaving an orphan arch-suffixed tag that a naive retry of
 `release-on-bump.yml` would silently overwrite, invalidating any
 attestations and signatures already issued over the original bytes —
 the failing arch's attest steps never ran, but the sibling arch's job
 may have completed fully before the failure.
 
+A post-publication tag rewrite lands here too — see the third path
+under [When this applies](#when-this-applies).
+
 This runbook is referenced from the auto-filed
-`release-on-bump-failure` issue body. The issue body intentionally
+`release-on-bump-failure` issue body, and from
+`verify-latest-release.yml`'s `cross-registry-manifest-mismatch` arm. The issue body intentionally
 links here rather than embedding the snippets inline, so:
 
 - The snippets stay correct (JSON construction via `jq -n` is
@@ -36,7 +41,7 @@ links here rather than embedding the snippets inline, so:
 ## When this applies<a name="when-this-applies"></a>
 
 The push loop inside `release-on-bump.yml` per-arch jobs runs
-`docker.io` first, then `ghcr.io`. The two failure modes are:
+`docker.io` first, then `ghcr.io`. Its two failure modes are:
 
 - **docker.io push failed.** Nothing was pushed to either registry
     for that arch, so that arch needs no registry-side cleanup; on the
@@ -63,13 +68,20 @@ first instead:
 1. Revoke `DOCKERHUB_TOKEN_RW` and `DOCKERHUB_TOKEN_DELETE` per the
     rotation guidance in
     [SECURITY.md](https://github.com/rvenutolo/linPEAS-flake/blob/main/SECURITY.md).
-    Nothing below runs until they are reissued.
+    No republish below runs until they are reissued.
 1. Capture both registries' current manifests before changing
     anything — `docker manifest inspect` against each — so the
     rewritten bytes are recoverable evidence rather than something the
-    republish overwrites.
+    republish overwrites. Both repositories are public, so this step
+    needs no credential and does not wait on the reissue.
 1. Only then apply the republish path below, with reissued
-    credentials.
+    credentials. Take it at
+    [Step-by-step step 3](#3-re-trigger-the-release-pipeline) and use the
+    `force-republish` dispatch: steps 1 and 2 of that section are scoped
+    to the half-published case. The Prerequisites below assume a
+    `release-on-bump-failure` issue; on this path `VERSION` comes from
+    `gh release view --json tagName` instead, and there is no single
+    `ARCH`.
 
 ## Prerequisites<a name="prerequisites"></a>
 
@@ -275,3 +287,9 @@ parity with this runbook's "Common Docker Hub failure modes" section:
 
 Nothing enforces this parity, so an edit here has to reach both
 workflows by hand.
+
+The third path under [When this applies](#when-this-applies) carries a
+one-directional dependency of the same kind: it restates
+`verify-latest-release.yml`'s `cross-registry-manifest-mismatch`
+guidance, so a reword there leaves this page stale with nothing to
+notice.

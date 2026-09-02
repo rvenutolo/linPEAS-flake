@@ -235,7 +235,7 @@ reached the issuing provider to confirm is live — not a pattern match.
 Gitleaks and TruffleHog are a deliberate pair: they carry different
 detector sets, and a secret shape one misses is the reason the other
 runs. Neither substitutes for the other, and dropping either needs a
-security-review entry.
+[security-review entry](https://github.com/rvenutolo/linPEAS-flake/blob/main/CONTRIBUTING.md#security-review-entries).
 
 - Uses only `secrets.GITHUB_TOKEN` — PR-triggered workflow secret
     allowlist invariant holds.

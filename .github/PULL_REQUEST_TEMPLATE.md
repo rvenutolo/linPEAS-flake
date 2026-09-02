@@ -19,4 +19,5 @@ below becomes the merge-commit body. -->
 - [ ] Every branch commit independently satisfies Conventional Commits (`commitlint` will enforce)
 - [ ] All branch commits are signed (`required_signatures` is enforced on `main`)
 - [ ] If touching a security invariant, the corresponding entry in `docs/invariant-index.md` is updated in the same change
+- [ ] If removing or weakening a defence, or adding a credential or third-party action, this PR body carries a `Security review` section (see `CONTRIBUTING.md`)
 - [ ] If adding a new external `uses:` action, the vendor is on the `allowed_actions` allowlist (`docs/security/allowed-actions.md`)

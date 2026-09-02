@@ -184,17 +184,20 @@ sweep_internal_links() {
   rm -rf "${tmp}"
   errs="$(printf '%s\n' "${raw}" | grep '\[ERROR\]' | sed "s#file://${repo_root}/##g" || true)"
   skipped="$(printf '%s\n' "${raw}" | grep -c 'No files found for this input source' || true)"
+  # A shrunken input set is independent of whether the links that WERE read
+  # resolved, so this reports first and does not compete with the error list.
+  if ((skipped > 0)); then
+    printf '(lychee skipped %d of %d input(s) — internal-link sweep incomplete)\n' \
+      "${skipped}" "${#files[@]}"
+    printf '%s\n' "${raw}" | grep 'No files found for this input source' |
+      sed "s#file://${repo_root}/##g;s#${repo_root}/##g"
+  fi
   if [[ -n ${errs} ]]; then
     printf '%s\n' "${errs}"
   elif ((lychee_rc != 0)); then
     printf '(lychee failed — internal-link sweep unusable; exit %d)\n' "${lychee_rc}"
     printf '%s\n' "${raw}"
-  elif ((skipped > 0)); then
-    printf '(lychee skipped %d of %d input(s) — internal-link sweep incomplete)\n' \
-      "${skipped}" "${#files[@]}"
-    printf '%s\n' "${raw}" | grep 'No files found for this input source' |
-      sed "s#file://${repo_root}/##g;s#${repo_root}/##g"
-  else
+  elif ((skipped == 0)); then
     echo '(none)'
   fi
 }
