@@ -43,7 +43,7 @@ Installs `packages.<system>.default`. Nix names the resulting profile element af
 
 ## Platform support
 
-The flake declares packages for both Linux systems via flake-parts' `perSystem` (the `systems` list in `flake.nix`). Both are built and CI-tested by the same steps; only the runner label (and its timeout budget) differs:
+The flake declares packages for both Linux systems via flake-parts' `perSystem` (the `systems` list in `flake.nix`). Both are built and CI-tested by the same steps; the jobs differ only in runner label, in the larger timeout budget the arm64 build and image-smoke jobs carry, and in the arch suffix on the build artifact's name:
 
 | System          | Flake builds | CI tested                |
 | --------------- | ------------ | ------------------------ |

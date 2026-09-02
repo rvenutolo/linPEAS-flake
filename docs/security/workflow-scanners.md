@@ -75,10 +75,9 @@ tree.)
     sandbox, where docker is unavailable); PR to `main` filtered to
     `.github/workflows/**` and the octoscan scan script; push to `main`; weekly
     Friday cron (full tree); manual dispatch.
-- **Status:** advisory by design. It is the cheapest scanner and currently
-    produces no findings, but it fails on *any* finding (no severity
-    threshold), so as a required check a single false positive would block
-    merge. Its rule set is narrowed only by the suppression set in
+- **Status:** advisory by design. It is the cheapest scanner, but it fails
+    on *any* finding (no severity threshold), so as a required check a
+    single false positive would block merge. Its rule set is narrowed only by the suppression set in
     `scripts/octoscan-scan.sh` — two disabled rules (`local-action`,
     `dangerous-write`) and a single `--ignore` regex carrying two
     alternatives, each with its rationale in that script's header.
@@ -114,8 +113,8 @@ tree.)
 - **Unique signal:** GitHub-Actions-specific static analysis
     (template-injection, excessive permissions, dangerous triggers) tuned to
     Actions semantics.
-- **Triggers:** runs as a **pre-commit hook on every commit that touches
-    `.github/workflows/**`** (`--min-severity=low`, scanning the changed
+- **Triggers:** runs as a **pre-commit hook on every commit that touches a
+    workflow YAML under `.github/workflows/`** (`--min-severity=low`, scanning the changed
     workflow files), plus a weekly Friday cron and manual dispatch. It
     does **not** scan on PRs or pushes — commit-time prevention is its primary
     mode.

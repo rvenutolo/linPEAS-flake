@@ -193,7 +193,8 @@ is not load-bearing — the `identify` job shells out to
 (matched against a lowercased title, so capitalization does not matter).
 A title that stops carrying one of those substrings is classified as
 `unmapped`: no refresh is attempted, and `notify` files an issue under the
-`renovate-flake-lock-refresh-failure` label naming the new title shape.
+`renovate-flake-lock-refresh-failure` label that links the PR; the new
+title shape is read from there.
 
 The classifier keeps its `NixOS/nixpkgs-unstable` arm even though no
 manager emits that title; [the auto-refresh
