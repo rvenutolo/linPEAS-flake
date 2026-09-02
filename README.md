@@ -284,7 +284,7 @@ reference / non-flake setups.
 ```sh
 # Entry points.
 nix develop          # enter dev shell (or direnv allow)
-pre-commit install   # one-time, wires git hooks
+pre-commit install --hook-type pre-commit --hook-type commit-msg   # one-time, wires the pre-commit and commit-msg hooks
 
 # just recipes (alphabetical).
 # BEGIN just-recipes
