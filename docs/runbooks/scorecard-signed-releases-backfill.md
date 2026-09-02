@@ -188,5 +188,6 @@ preflight refuses to guess at and hard-fails on.
 The backfilled `.intoto.jsonl` bundles carry the BACKFILL workflow's
 timestamp and SHA, not the original release's. This is correct: the
 attestation predicate's `subject` is content hash, and consumers verify
-content match, not emission time. Reviewers reading `gh attestation download <artifact> --repo rvenutolo/linPEAS-flake` may see a timestamp
-newer than the release date — that is expected.
+content match, not emission time. Reviewers reading
+`gh attestation download <artifact> --repo rvenutolo/linPEAS-flake` may
+see a timestamp newer than the release date — that is expected.

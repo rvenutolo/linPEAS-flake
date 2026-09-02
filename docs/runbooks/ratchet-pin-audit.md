@@ -1,6 +1,7 @@
 # Ratchet pin audit runbook
 
-The `ratchet-pin-audit` workflow runs on a daily cron (see [CI — cron schedule](../architecture/ci.md#cron-schedule)). It runs
+The `ratchet-pin-audit` workflow runs on a daily cron (see
+[CI — cron schedule](../architecture/ci.md#cron-schedule)). It runs
 `ratchet lint` (from the devshell) against every workflow file under
 `.github/workflows/` and re-derives the canonical SHA for each
 SHA-pinned action ref. On *any* failure — detected drift, an upstream
@@ -155,9 +156,10 @@ permanent claim about ratchet in general. `ratchet` comes from nixpkgs
 as a bare devShell entry with no pin in the tree, so it floats with the
 `nixpkgs-unstable` input — the devShell is built from `pkgs-unstable` —
 while this page and `ratchet-pin-audit.yml` assert a number.
-`scripts/check-ratchet-pin-audit.sh` therefore compares every `ratchet <X.Y.Z>` literal in both files against `ratchet --version` from the
-devShell and fails on a mismatch. A lockfile refresh that changes the
-version turns that check red, which is the prompt to re-read this
+`scripts/check-ratchet-pin-audit.sh` therefore compares every
+`ratchet <X.Y.Z>` literal in both files against `ratchet --version` from
+the devShell and fails on a mismatch. A lockfile refresh that changes
+the version turns that check red, which is the prompt to re-read this
 paragraph: if a later ratchet gains upstream API checks, the rationale
 for the `gh api` re-derivation stops holding and the workflow's extra
 work starts looking redundant. Dropping every literal instead of

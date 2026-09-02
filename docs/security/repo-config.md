@@ -14,13 +14,15 @@ vendor list and the procedure for adding a new vendor.
 
 ## Workflow action SHA pinning
 
-Every `uses:` in `.github/workflows/*.yml` (or `.yaml`) and `.github/actions/**/*.yml` (or `.yaml`)
-must end with a full 40-hex SHA, OR be a path-relative `./...`
-self-reference. Includes first-party GitHub-owned actions.
+Every `uses:` in `.github/workflows/*.yml` (or `.yaml`) and
+`.github/actions/**/*.yml` (or `.yaml`) must end with a full 40-hex SHA,
+OR be a path-relative `./...` self-reference. Includes first-party
+GitHub-owned actions.
 
 Enforced by `scripts/check-uses-sha-pinned.sh` (member check
-`uses-sha-pinned` of the `lint-workflow-security` CI job; also a same-named pre-commit hook).
-Belt-and-braces backup to the GitHub-side `sha_pinning_required` setting.
+`uses-sha-pinned` of the `lint-workflow-security` CI job; also a
+same-named pre-commit hook). Belt-and-braces backup to the GitHub-side
+`sha_pinning_required` setting.
 
 The trailing `# v<major>.<minor>[.<patch>]` comment beside each SHA is a
 separate rule with a separate enforcer: `scripts/check-patch-tag-pins.sh`,
@@ -40,7 +42,8 @@ not as a personal access token.
 - **Client ID:** `vars.BUMP_APP_CLIENT_ID` (public).
 - **Private key:** `secrets.BUMP_APP_PRIVATE_KEY` (PEM).
 - **Installation:** scoped to this repository only.
-- **Permissions:** `Contents: Read and write`, `Pull requests: Read and write`. No `Workflows` permission.
+- **Permissions:** `Contents: Read and write`,
+    `Pull requests: Read and write`. No `Workflows` permission.
 - **Token lifetime:** one hour; minted per job by
     `actions/create-github-app-token` and automatically revoked at job end.
 
@@ -121,15 +124,16 @@ the `renovate-config-validator` pre-commit hook and as the same-named
 member of the `lint-doc-invariants` CI job.
 
 `scripts/check-renovate-markers-matched.sh` enforces a complementary
-file-level rule: every file in the tree that carries a `# renovate: datasource=…` marker must be consumed by a live customManager — a
-`managerFilePatterns` entry must scope the marker's file and a
-`matchStrings` entry must match a line in it. The rule is file-level,
-which covers both inline markers (value and comment on the same line)
-and above-style markers (comment on its own line, matched value on the
-next) without a line-adjacency heuristic. A customManager that matches
-none of its declarations silently freezes the dependency outside
-automation coverage; this check fails CI before that can happen. Wired
-into the `renovate-invariants` CI job.
+file-level rule: every file in the tree that carries a
+`# renovate: datasource=…` marker must be consumed by a live
+customManager — a `managerFilePatterns` entry must scope the marker's
+file and a `matchStrings` entry must match a line in it. The rule is
+file-level, which covers both inline markers (value and comment on the
+same line) and above-style markers (comment on its own line, matched
+value on the next) without a line-adjacency heuristic. A customManager
+that matches none of its declarations silently freezes the dependency
+outside automation coverage; this check fails CI before that can happen.
+Wired into the `renovate-invariants` CI job.
 
 ## Pin digest provenance
 

@@ -22,18 +22,23 @@ exclude = [
 ]
 
 exclude_path = [
-  # Anchored: a bare ".git" is matched as a path substring, which also
-  # swallows docs/development/git.md and leaves that page link-unchecked.
+  # Every directory entry carries a trailing slash, and ".git" a leading one
+  # too. Entries are matched as substrings of the relative input path, so a
+  # bare directory name swallows any file whose path merely contains it: a
+  # bare ".git" takes docs/development/git.md, and a bare "result" takes the
+  # tuning-results.md page under the audit skill's evals tree. Both are
+  # maintained docs, and a swallowed file is dropped from the sweep with no
+  # diagnostic — it simply stops being link-checked.
   "/.git/",
-  ".direnv",
-  "result",
-  "result-image",
-  "docs/_data",
-  "site",
+  ".direnv/",
+  "result/",
+  "result-image/",
+  "docs/_data/",
+  "site/",
   # Negative-test fixtures contain intentionally-broken relative links
   # that drive check-orphan-invariants and refresh-enforcement-matrix;
   # they are not real docs and must not be link-checked.
-  "tests/fixtures",
+  "tests/fixtures/",
   # Untracked working notes. Part of the Claude tooling tree IS tracked — the
   # docs-correctness-audit and multi-agent-review skills and their slash
   # commands — and those are maintained docs whose links belong in scope, so
@@ -44,14 +49,14 @@ exclude_path = [
   # add or remove them. A scratch area missing from this list costs local
   # noise, never a red job — a clean checkout holds only the tracked half.
   ".claude/CLAUDE.md",
-  ".claude/plans",
-  ".claude/reports",
-  ".claude/scratch",
-  ".claude/sdd",
+  ".claude/plans/",
+  ".claude/reports/",
+  ".claude/scratch/",
+  ".claude/sdd/",
   # Seeded-defect fixtures are the recall harness's scoring inputs, not repo
   # documentation — sample audit reports score.sh grades against a manifest.
-  ".claude/skills/docs-correctness-audit/evals/seeded-defects/fixtures",
-  ".claude/skills/docs-correctness-audit-workspace",
-  ".claude/specs",
-  ".claude/worktrees",
+  ".claude/skills/docs-correctness-audit/evals/seeded-defects/fixtures/",
+  ".claude/skills/docs-correctness-audit-workspace/",
+  ".claude/specs/",
+  ".claude/worktrees/",
 ]
