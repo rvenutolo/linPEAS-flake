@@ -83,6 +83,18 @@
       "expected_severity": "high",
       "sentinel": "",
       "line_tol": 3
+    },
+    {
+      "id": "false-exclusive",
+      "category": "false exclusive",
+      "file": "docs/architecture/ci.md",
+      "anchor": "## Runner egress",
+      "op": "insert-after",
+      "from": "",
+      "payload": "Only `flake-check` carries a `harden-runner` step; every other job runs with unrestricted egress.",
+      "expected_severity": "high",
+      "sentinel": "",
+      "line_tol": 3
     }
   ]
 }

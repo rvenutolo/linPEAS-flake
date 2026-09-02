@@ -73,6 +73,19 @@ agree on one source of truth.
     member but called a standalone job is a mislabel. Do this *even when every
     freshness check is green* — a green pipeline beside a sentence naming a job
     that doesn't exist is exactly what this audit surfaces.
+- **Exclusive quantifiers are claims — check them like paths.** Words that
+    assert a boundary — `only`, `always`, `never`, `every`, `the one` — and bare
+    counts (`two X`, `three Y`) are as checkable as a file path, and rot the
+    same way: the sentence stays put while the set it
+    quantifies grows. They also have a self-inflicted variant. A fix pass
+    correcting a too-narrow claim routinely overshoots into a false exclusive,
+    so prose that a previous audit cycle edited is where these cluster. Verify
+    each quantifier against the enumeration it ranges over — the bundle's job
+    list, a lint-group roster, a script's actual flags — and report the
+    mismatch. Severity follows the size of the gap: flatly false is high, "true
+    except for one member" is low. Propose fixes that *drop or scope* the
+    quantifier rather than sharpen it; a sentence that needs an exact count to
+    stay true will drift again.
 - **Ephemeral references rot.** This repo bans dates, PR/issue numbers, planning
     labels, review-pass labels and literal `.claude/` paths, and warns on
     causal-history phrasing in tracked docs (the rationale: tracked
@@ -80,6 +93,28 @@ agree on one source of truth.
     the banned-token regex in `references/repo-map.md`.
 
 ## Procedure
+
+### 0. Aim first at prose the last fix pass touched
+
+`.github/docs-audit-state` records `LAST_AUDIT_SHA` — the commit the previous
+cycle audited, once that cycle's fixes had landed. Read it, then list what has
+changed in tracked prose since:
+
+```sh
+sha="$(sed -n 's/^LAST_AUDIT_SHA=//p' .github/docs-audit-state)"
+git log --oneline "${sha}..HEAD" -- '*.md'
+git diff --stat "${sha}..HEAD" -- '*.md'
+```
+
+Hand that file list to the readers as a **priority set, not a scope limit** —
+every tracked doc is still in scope. Prose rewritten by an earlier cycle's fix
+commits is the highest-yield place to look, because nothing gates a prose fix:
+it is written against the one sentence being corrected, not against the
+paragraph, the sibling docs, or the code a second time. Read those hunks
+(`git show <sha>`) against the artifact they describe, never against the
+sentence they replaced — a fix that swapped one wrong claim for another reads
+as an improvement in the diff. If the state file is absent or its sha is
+unreachable, record that in the report and audit everything at equal priority.
 
 ### 1. Collect ground truth once
 
@@ -136,6 +171,9 @@ Read-only fan-out needs no orchestration opt-in — it is plain parallel reads.
     YAML, is high severity. Job names, required-check names, and phrasings like
     "required CI job X" are first-class references here — apply the CI-prose
     discipline above (member-vs-standalone is real drift, not pedantry).
+    Quantifiers (`only`, `always`, `never`, bare counts) are concrete
+    references too, not softeners: resolve each against the set it ranges over,
+    per the discipline above.
     Internal link and heading-anchor resolution is given authoritatively by the
     collector's **`UNRESOLVED INTERNAL LINKS / ANCHORS`** section — flag every
     listed entry as high severity; do not re-derive by running lychee again. A
@@ -260,6 +298,9 @@ findings must still show what was cross-checked, not just "clean".
 
 ## Notes for the fix pass
 - <batching suggestion, decisions the user must make, generated-doc/generator fixes>
+- Standing item: when a fix widens a claim that was too narrow, drop or scope
+  the quantifier instead of sharpening it — overshooting into a fresh false
+  exclusive is this repo's most common self-inflicted defect.
 ```
 
 Each finding states the file:line (its dimension lives in the severity index),

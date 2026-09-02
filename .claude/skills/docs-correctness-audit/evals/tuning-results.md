@@ -8,7 +8,8 @@ outside this comparison: it reads the audit's own specification, not the
 user-facing docs, so no granularity choice there applies to it. The numbers below come
 from the seeded-defect recall harness in [`seeded-defects/`](seeded-defects/)
 (`plant.sh` → run the audit → `score.sh`); recall is measured over two runs
-per configuration against the same seven planted defects, while the token
+per configuration against the same planted seed set — the seven categories
+present when the comparison was run, while the token
 figures come from one measured run each (see the ship gate below).
 
 The sibling [`evals.json`](evals.json) is a different instrument: a
@@ -34,9 +35,11 @@ recall measurement, so none of the numbers below come from it.
 | merged (shipped)     | 4       | 14/14 (100%)         | ~240k                   | ~29% |
 | security+root merged | 3       | 14/14 (100%)         | not comparable          | —    |
 
-All three configurations catch all seven seeds in both runs — every category
-(ghost CI job, lint-group mislabel, cron drift, stale ref,
-internal-link, required-check count, ephemeral). The merged map cuts total
+All three configurations caught every measured seed in both runs — the seven
+categories that existed then (ghost CI job, lint-group mislabel, cron drift,
+stale ref, internal-link, required-check count, ephemeral). The
+`false-exclusive` seed was added after this comparison and is unmeasured here;
+its recall is an open question, not a recorded 100%. The merged map cuts total
 reader-tokens ~29% because most of a reader's cost is fixed per-agent overhead
 (re-reading the ground-truth bundle, tool setup); three readers collapsed into
 `core-docs` and two into `arch+dev` eliminate that overhead while the same documents still get
@@ -66,8 +69,8 @@ and the reason is a judgement rather than a measurement. Merging them was
 measured and did **not** regress seed recall: the single combined reader caught
 all five seeds in its half of the tree, twice. What the harness cannot measure is
 depth on non-seeded drift, and those two clusters carry the densest such surface
-(member-vs-job CI prose, required-check counts, ghost jobs, broken links). Seven
-planted single-instance defects say nothing about how thoroughly a reader mines a
+(member-vs-job CI prose, required-check counts, ghost jobs, broken links). A handful of
+planted single-instance defects says nothing about how thoroughly a reader mines a
 file it has already skimmed, so the four-reader map stands as the conservative
 default — not as a measured optimum. Anyone wanting the three-reader map should
 argue it on cost measured head-to-head in one session, which the row above is
@@ -95,8 +98,8 @@ each cluster reader finishes; sum them across the readers of one run. The
 recall harness itself records only recall — `score.sh` reads report files and
 the manifest, and its output carries no token column.
 
-A configuration ships only if seed recall holds at 14/14 across two runs (no
-seed category dropped) **and** reader-tokens fall below the per-subdirectory
+A configuration ships only if seed recall stays at 100% across two runs (no
+seed category dropped, whatever the seed set currently holds) **and** reader-tokens fall below the per-subdirectory
 baseline. A configuration whose cost was never measured head-to-head is
 *unevaluated* against that gate, not failed by it. The recorded token figures
 are per-run sums across readers from a single measured run per configuration
