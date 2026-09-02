@@ -21,7 +21,11 @@ Every commit on `main` must be signed. The `required_signatures` rule is
 enforced by the `protect-main` ruleset.
 
 - **Branch commits** sign locally via your SSH or GPG key. Configure once:
-    `git config commit.gpgsign true` (and set `user.signingkey`).
+    `git config commit.gpgsign true` and set `user.signingkey`. For an SSH
+    key also run `git config gpg.format ssh` — `gpg.format` defaults to
+    `openpgp`, and without that setting every commit fails to sign and
+    `required_signatures` blocks the branch. A GPG key needs no
+    `gpg.format` change.
 - **Bot commits** originate from REST `PUT /repos/{owner}/{repo}/contents/{path}`
     authenticated as the `linpeas-flake-bumper` GitHub App. GitHub web-flow-signs
     every such commit.

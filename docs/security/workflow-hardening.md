@@ -5,7 +5,7 @@ Hardening invariants for this repo's workflows, scripts and test harnesses. Most
 - `setup-nix-required` is enforced by a standalone CI job.
 - Many of the script-hygiene rules (`test-reachable`, `tool-guarded`, `guard-exit-code`, and the others the [enforcement matrix](enforcement-matrix.md)'s pre-commit column marks hook-less) are CI-only with no hook.
 - A few run under the `doc-freshness` or `harness-group` CI jobs instead of a lint group.
-- A few are convention-only with no automated enforcer (lean lint-shell routing).
+- One rule is convention-only with no automated enforcer: lean lint-shell routing.
 
 See the [enforcement matrix](enforcement-matrix.md) for the authoritative per-rule mapping.
 
@@ -17,7 +17,7 @@ weekly sweep → watchdog) alongside the external scanners.
 
 Every job declares an explicit `timeout-minutes` as a positive integer.
 
-GitHub Actions defaults a job timeout to 6 hours. A hung job at that ceiling burns the runner budget and stalls the merge queue. Requiring an explicit per-job value bounds the blast radius of any wedge and forces a deliberate choice when a job is added.
+GitHub Actions defaults a job timeout to 6 hours. A hung job at that ceiling burns the runner budget and holds a required context pending for six hours, so `gh pr merge --auto` never fires and the unattended bump and lock-refresh pipelines stall behind it. Requiring an explicit per-job value bounds the blast radius of any wedge and forces a deliberate choice when a job is added.
 
 Reusable-workflow callers (jobs that use `uses: ./.github/workflows/<file>.yml`) are exempt because `timeout-minutes` is not valid on that shape; the timeout belongs in the called workflow's jobs.
 
@@ -391,7 +391,7 @@ A harness proves behavior by grepping one scenario's captured output for a subst
 
 `harness_assert_exempt <substring> <other-scenario|*> <rationale>` registers a reviewed exception: the named form where one failure path emits no token another lacks, the `*` form for a banner a script prints across a whole outcome class. The rationale is mandatory so every weakening is reviewable, and the number of live registrations is held at zero — see [harness exemption ratchet](#harness-exemption-ratchet). A harness that asserts produced artifact content — a rewritten workflow file, a generated doc — rather than captured scenario output is listed on the `EXEMPT` array in `scripts/check-harness-assert-wired.sh` with a rationale comment.
 
-Enforced by `scripts/lib/harness-assert.sh`, which runs inside every wired harness and is reached by the `harness-group` CI job, and by `scripts/check-harness-assert-wired.sh`, which asserts the wiring. Wired as the `lint-script-hygiene` CI job (member check `harness-assert-wired`) and as a pre-commit hook.
+Enforced by `scripts/lib/harness-assert.sh`, which runs inside every wired harness and is therefore reached by whichever CI job runs that harness — `harness-group`, one of the three lint-group jobs via `scripts/run-lint-group.sh`, or `doc-freshness`, and by `scripts/check-harness-assert-wired.sh`, which asserts the wiring. Wired as the `lint-script-hygiene` CI job (member check `harness-assert-wired`) and as a pre-commit hook.
 
 ## harness exemption ratchet
 
@@ -417,7 +417,7 @@ A collapsed group is a measurement fault before it is a coverage fault, and read
 
 Both moves that reach parity are therefore about what gets recorded. Each record captures the whole observable outcome, so a distinction the script already draws is visible to the gate. Where scenarios still collapse, the script's own summary line widens to state the scope it verified — files scanned, mechanism matched, exemption applied, tags excluded — which is output a maintainer reads on its own merits and which separates the scenarios because it reports something that genuinely differs between them.
 
-Enforced by `scripts/lib/harness-assert.sh`, which runs inside every wired harness and is reached by the `harness-group` CI job, and by `scripts/check-harness-assert-wired.sh`, which holds registration to the allowlist. Wired as the `lint-script-hygiene` CI job (member check `harness-assert-wired`) and as a pre-commit hook.
+Enforced by `scripts/lib/harness-assert.sh`, which runs inside every wired harness and is therefore reached by whichever CI job runs that harness — `harness-group`, one of the three lint-group jobs via `scripts/run-lint-group.sh`, or `doc-freshness`, and by `scripts/check-harness-assert-wired.sh`, which holds registration to the allowlist. Wired as the `lint-script-hygiene` CI job (member check `harness-assert-wired`) and as a pre-commit hook.
 
 ## harness subject declaration
 
@@ -488,7 +488,7 @@ Enforced by `scripts/check-ci-job-in-summary.sh`. Wired as the `lint-doc-invaria
 
 Every block-scalar or newline-carrying `run:` block under `.github/workflows/*.yml` (or `.yaml`) and `.github/actions/**/action.yml` (or `.yaml`) starts with `set -Eeuo pipefail` as its first non-blank, non-comment line.
 
-Bash inside Actions `run:` blocks defaults to `-e` off. A failed command in the middle of a block that runs several commands silently continues, producing wrong results in security-critical jobs (release signing, attestation verify, pin write-back). The strict-mode prelude closes that gap.
+Actions runs a workflow `run:` block as `bash -e {0}` and a composite `shell: bash` block as `bash --noprofile --norc -eo pipefail {0}`. Neither shape enables `-u` or `-E`, and a workflow block gets no `pipefail`, so a failing pipeline stage or an unset-variable expansion produces wrong results without failing the step — in security-critical jobs (release signing, attestation verify, pin write-back) that is a silent bad output. The strict-mode prelude closes that gap uniformly.
 
 Composite actions are covered for the same reason, and the exposure is larger there: a composite runs inside every job that calls it, so one block that swallows a failure swallows it across the whole workflow set. Composite steps hang off `runs.steps` instead of `jobs.<id>.steps`, so the lint reads both document shapes and names which one a violation came from (`job <id> step[n]` versus `composite step[n]`).
 

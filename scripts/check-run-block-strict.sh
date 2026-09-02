@@ -11,13 +11,16 @@
 # `.github/actions/**/action.yml` (or `.yaml`) starts with
 # `set -Eeuo pipefail` as its first non-blank, non-comment line.
 #
-# Bash inside `run:` blocks defaults to `-e` off. A failed command in
-# the middle of a block that runs several commands silently
-# continues, producing wrong results in security-critical jobs
-# (release signing, attestation verify, pin write-back). The
-# strict-mode prelude (`-e` aborts on failure, `-E` propagates ERR
-# traps into subshells, `-u` rejects unset variables, `-o pipefail`
-# makes pipelines fail on any stage) closes that gap.
+# Actions runs a workflow `run:` block as `bash -e {0}` and a composite
+# `shell: bash` block as `bash --noprofile --norc -eo pipefail {0}`.
+# Neither shape enables `-u` or `-E`, and a workflow block gets no
+# `pipefail`, so a failing pipeline stage or an unset-variable
+# expansion produces wrong results without failing the step — in
+# security-critical jobs (release signing, attestation verify, pin
+# write-back) that is a silent bad output. The strict-mode prelude
+# (`-e` aborts on failure, `-E` propagates ERR traps into subshells,
+# `-u` rejects unset variables, `-o pipefail` makes pipelines fail on
+# any stage) closes that gap uniformly.
 #
 # Composite actions carry the same exposure with a wider blast radius:
 # one composite runs inside every job that calls it, so a block there

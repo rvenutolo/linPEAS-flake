@@ -146,7 +146,7 @@ sweep_internal_links() {
     echo '(lychee not found — internal-link sweep skipped)'
     return 0
   fi
-  local repo_root tmp errs
+  local repo_root tmp errs raw lychee_rc
   repo_root="$(git rev-parse --show-toplevel)"
   local files=()
   # Wider than the ephemeral sweep: tracked .claude/ tooling quotes banned
@@ -154,22 +154,35 @@ sweep_internal_links() {
   # stay in. Only tests/fixtures/, docs/_data/ and the seeded-defect
   # fixtures drop out — the last are the recall harness's scoring inputs
   # rather than repo documentation.
-  mapfile -t files < <(git ls-files '*.md' | grep -vE '^(tests/fixtures/|docs/_data/|\.claude/skills/[^/]+/evals/seeded-defects/fixtures/)' || true) # does not depend on lychee.toml for docs-scope decisions
+  mapfile -t files < <(git ls-files '*.md' | grep -vE '^(tests/fixtures/|docs/_data/|\.claude/skills/[^/]+/evals/seeded-defects/fixtures/)' || true) # first of two filters; lychee.toml exclude_path narrows it again
   if [[ ${#files[@]} -eq 0 ]]; then
     echo '(none)'
     return 0
   fi
   tmp="$(mktemp -d)"
-  errs="$(
+  # Capture lychee's own status, not the pipeline's. lychee exits 1 for
+  # "found broken links" and also for "could not run at all" (an input it
+  # cannot parse, a bad config), and the second shape prints no [ERROR]
+  # line — so a status-blind pipeline reports an empty error list, which is
+  # byte-identical to a clean sweep. A tracked doc deleted but not staged
+  # reaches that path: git ls-files names it, lychee refuses the input, and
+  # the bundle would claim a clean link check over zero files.
+  raw="$(
     cd "${tmp}" &&
       lychee --config "${repo_root}/lychee.toml" --offline \
         --include-fragments=anchor-only --cache=false --no-progress \
-        "${files[@]/#/${repo_root}/}" 2>&1 |
-      grep '\[ERROR\]' |
-        sed "s#file://${repo_root}/##g" || true
-  )"
+        "${files[@]/#/${repo_root}/}" 2>&1
+  )" && lychee_rc=0 || lychee_rc=$?
   rm -rf "${tmp}"
-  if [[ -z ${errs} ]]; then echo '(none)'; else printf '%s\n' "${errs}"; fi
+  errs="$(printf '%s\n' "${raw}" | grep '\[ERROR\]' | sed "s#file://${repo_root}/##g" || true)"
+  if [[ -n ${errs} ]]; then
+    printf '%s\n' "${errs}"
+  elif ((lychee_rc != 0)); then
+    printf '(lychee failed — internal-link sweep unusable; exit %d)\n' "${lychee_rc}"
+    printf '%s\n' "${raw}"
+  else
+    echo '(none)'
+  fi
 }
 
 # @description Read `nix flake show --json` on stdin, emit "outputs: a, b, c".

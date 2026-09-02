@@ -83,7 +83,9 @@ forgery on `main`.
     minting one is not itself a restricted operation; drift-check lint
     asserts the ruleset is intact and that its bypass-actor list is
     empty.
-- Releases are web-flow signed; no PAT, no `git push` from the bot.
+- Bot commits land via REST `PUT /contents` and are web-flow signed; the
+    release tag is created through the API rather than a `git push`, and no PAT
+    is involved.
 - `protect-main` ruleset enforces required checks and signed commits.
 
 See [`docs/security/repo-config.md`](repo-config.md)
