@@ -110,15 +110,21 @@ failed or returned an unrecognized verdict for a ref; OR a drift line
 failed shape validation; OR the workflow glob matched zero files.
 
 1. Inspect the run log; look at the raw ratchet stderr.
-1. If ratchet started exiting non-zero on a workflow set it
-    previously accepted (most likely after a ratchet upgrade), bump
-    ratchet locally via `nix flake update` and re-run. The step does
-    not parse ratchet's stdout — drift comes from the per-ref
-    `gh api` re-derivation — so an output-format change alone cannot
-    produce this reason.
-1. If the run log shows an upstream failure that landed here instead
-    of under `upstream-api-failure`, widen the heuristic grep in the
-    `audit pins` step. The structural invariant
+1. Look first for an unpinned-ref finding. `ratchet lint` exits
+    non-zero on an unpinned `uses:` as readily as on a tool error, and
+    `check-uses-sha-pinned.sh` should have blocked that at PR time —
+    so a finding here means the PR gate was bypassed or skipped. Treat
+    it as a gate failure, not a tool failure.
+1. If ratchet instead started exiting non-zero on a workflow set it
+    accepted before, most likely after a ratchet upgrade, bump ratchet
+    locally via `nix flake update` and re-run. Drift itself comes from
+    the per-ref `gh api` re-derivation rather than from ratchet's
+    output, so an output-format change cannot fabricate a drift
+    report.
+1. The step does grep ratchet's output to tell an upstream failure
+    from a tool failure, so a reworded ratchet error can still land an
+    upstream failure under this reason. If the run log shows one,
+    widen the heuristic grep in the `audit pins` step. The structural invariant
     `scripts/check-ratchet-pin-audit.sh` pins the four reason values
     the notify body documents (`drift-detected`,
     `upstream-api-failure`, `ratchet-tool-failure`, `unknown`), not

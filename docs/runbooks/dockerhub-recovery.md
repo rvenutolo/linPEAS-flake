@@ -51,6 +51,26 @@ The push loop inside `release-on-bump.yml` per-arch jobs runs
     signature may already reference and leaving the retry's digests
     ambiguous.
 
+A third path arrives here from elsewhere: `verify-latest-release.yml`
+files `cross-registry-manifest-mismatch` against this runbook when a
+published release's two registries disagree, and its issue body says to
+treat the Docker Hub token as compromised until proven otherwise. That
+is a post-publication tag rewrite, not a half-finished push, and the
+steps below assume the opposite — they spend `DOCKERHUB_TOKEN_DELETE`
+on the working assumption that the credential is sound. Take these
+first instead:
+
+1. Revoke `DOCKERHUB_TOKEN_RW` and `DOCKERHUB_TOKEN_DELETE` per the
+    rotation guidance in
+    [SECURITY.md](https://github.com/rvenutolo/linPEAS-flake/blob/main/SECURITY.md).
+    Nothing below runs until they are reissued.
+1. Capture both registries' current manifests before changing
+    anything — `docker manifest inspect` against each — so the
+    rewritten bytes are recoverable evidence rather than something the
+    republish overwrites.
+1. Only then apply the republish path below, with reissued
+    credentials.
+
 ## Prerequisites<a name="prerequisites"></a>
 
 - A Docker Hub access token with **Delete** scope. Use the

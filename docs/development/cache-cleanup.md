@@ -63,8 +63,9 @@ latency.
 
 If the action-token rate-limits on one of the delete calls, the
 workflow fails cleanly and re-runs on the next cron tick. A rate limit
-that lands on a cache enumeration instead is swallowed — both
-enumerations feed a `while` loop from a process substitution, whose exit
-status is discarded even under `set -Eeuo pipefail` — so that run
-reports zero deletions and goes green. Manual recovery either way:
+that lands on a cache enumeration instead is swallowed — every cache
+enumeration, one per prune step across both jobs, feeds a `while` loop
+from a process substitution, whose exit status is discarded even under
+`set -Eeuo pipefail` — so that run reports zero deletions and goes
+green. Manual recovery either way:
 `gh workflow run actions-cache-prune.yml`.

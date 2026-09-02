@@ -106,5 +106,5 @@ Wired into the `lint-workflow-security` CI group and as the
     scope is reported as an over-grant, which is a different failure
     from a missing block and is not fixed by adding one.
 
-The lint catches each of those at pre-commit time; CI catches them on
-PR. Either way, the violation is surfaced before merge.
+The `min-permissions` and `permission-scopes` lints catch these at
+pre-commit time; CI catches them on PR. Either way, the violation is surfaced before merge.

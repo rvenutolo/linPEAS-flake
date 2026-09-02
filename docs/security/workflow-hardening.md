@@ -391,7 +391,7 @@ A harness proves behavior by grepping one scenario's captured output for a subst
 
 `harness_assert_exempt <substring> <other-scenario|*> <rationale>` registers a reviewed exception: the named form where one failure path emits no token another lacks, the `*` form for a banner a script prints across a whole outcome class. The rationale is mandatory so every weakening is reviewable, and the number of live registrations is held at zero — see [harness exemption ratchet](#harness-exemption-ratchet). A harness that asserts produced artifact content — a rewritten workflow file, a generated doc — rather than captured scenario output is listed on the `EXEMPT` array in `scripts/check-harness-assert-wired.sh` with a rationale comment.
 
-Enforced by `scripts/lib/harness-assert.sh`, which runs inside every wired harness and is therefore reached by whichever CI job runs that harness — `harness-group`, one of the three lint-group jobs via `scripts/run-lint-group.sh`, or `doc-freshness`, and by `scripts/check-harness-assert-wired.sh`, which asserts the wiring. Wired as the `lint-script-hygiene` CI job (member check `harness-assert-wired`) and as a pre-commit hook.
+Enforced by `scripts/lib/harness-assert.sh`, which runs inside every wired harness and is therefore reached by whichever CI job runs that harness — any of the four runners in [test-runner reachability](#test-runner-reachability), standalone jobs such as `dashboard-data-tests` included, and by `scripts/check-harness-assert-wired.sh`, which asserts the wiring. Wired as the `lint-script-hygiene` CI job (member check `harness-assert-wired`) and as a pre-commit hook.
 
 ## harness exemption ratchet
 
@@ -417,7 +417,7 @@ A collapsed group is a measurement fault before it is a coverage fault, and read
 
 Both moves that reach parity are therefore about what gets recorded. Each record captures the whole observable outcome, so a distinction the script already draws is visible to the gate. Where scenarios still collapse, the script's own summary line widens to state the scope it verified — files scanned, mechanism matched, exemption applied, tags excluded — which is output a maintainer reads on its own merits and which separates the scenarios because it reports something that genuinely differs between them.
 
-Enforced by `scripts/lib/harness-assert.sh`, which runs inside every wired harness and is therefore reached by whichever CI job runs that harness — `harness-group`, one of the three lint-group jobs via `scripts/run-lint-group.sh`, or `doc-freshness`, and by `scripts/check-harness-assert-wired.sh`, which holds registration to the allowlist. Wired as the `lint-script-hygiene` CI job (member check `harness-assert-wired`) and as a pre-commit hook.
+Enforced by `scripts/lib/harness-assert.sh`, which runs inside every wired harness and is therefore reached by whichever CI job runs that harness — any of the four runners in [test-runner reachability](#test-runner-reachability), standalone jobs such as `dashboard-data-tests` included, and by `scripts/check-harness-assert-wired.sh`, which holds registration to the allowlist. Wired as the `lint-script-hygiene` CI job (member check `harness-assert-wired`) and as a pre-commit hook.
 
 ## harness subject declaration
 

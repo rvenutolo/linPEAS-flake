@@ -194,6 +194,9 @@ case "${lnk}" in *"example.com"*) check "skips external URL" 1 ;; *) check "skip
 case "${lnk}" in *"#real"*) check "resolves valid anchor (no error)" 1 ;; *) check "resolves valid anchor (no error)" 0 ;; esac
 case "${lnk}" in *"gone-tooling.md"*) check "flags broken link in tracked .claude/ tooling" 0 ;; *) check "flags broken link in tracked .claude/ tooling" 1 ;; esac
 case "${lnk}" in *"gone-seeded.md"*) check "skips seeded-defect fixtures" 1 ;; *) check "skips seeded-defect fixtures" 0 ;; esac
+# A run that found broken links is a RESULT, not a failed sweep. Without this
+# the substring checks above stay green even if the marker is emitted too.
+case "${lnk}" in *"lychee failed"* | *"lychee skipped"*) check "a broken-link run is not marked unusable" 1 ;; *) check "a broken-link run is not marked unusable" 0 ;; esac
 rm -rf "${fl}"
 
 # --- a lychee that cannot run at all must not read as a clean sweep ---
@@ -215,6 +218,24 @@ fx="$(mktemp -d)"
 fail_out="$(cd "${fx}" && source "${COLLECTOR}" && sweep_internal_links)"
 case "${fail_out}" in *"lychee failed"*) check "an unusable lychee run is not reported as clean" 0 ;; *) check "an unusable lychee run is not reported as clean" 1 ;; esac
 rm -rf "${fx}"
+
+# --- a sweep whose inputs are all excluded must not read as clean either ---
+# lychee skips an excluded input with a warning and still exits 0, so an
+# exclude_path entry matching a tracked doc shrinks the sweep silently.
+fz="$(mktemp -d)"
+(
+  cd "${fz}"
+  git init -q && git config user.email t@t && git config user.name t
+  printf 'exclude_path = ["docs/"]\n' >lychee.toml
+  mkdir -p docs
+  printf '# A\n[ok](./b.md)\n' >docs/a.md
+  printf '# B\n' >docs/b.md
+  git add -A && git commit -qm init
+)
+# shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
+skip_out="$(cd "${fz}" && source "${COLLECTOR}" && sweep_internal_links)"
+case "${skip_out}" in *"lychee skipped"*) check "an all-excluded sweep is not reported as clean" 0 ;; *) check "an all-excluded sweep is not reported as clean" 1 ;; esac
+rm -rf "${fz}"
 
 # --- ci.yml job listing is scoped to the jobs: block ---
 # A bare 2-space-key grep also returns `on:` trigger names and `concurrency:`
