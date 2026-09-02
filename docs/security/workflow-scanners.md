@@ -7,9 +7,10 @@ posture, not redundancy to trim.
 
 !!! warning "Do not trim a layer"
 
-    Removing any layer below requires a security-review entry. Do not drop one
-    because another "already covers it" — the whole point is that no single
-    layer covers every vector.
+    Removing any layer below requires a
+    [security-review entry](https://github.com/rvenutolo/linPEAS-flake/blob/main/CONTRIBUTING.md#security-review-entries).
+    Do not drop one because another "already covers it" — the whole point is
+    that no single layer covers every vector.
 
 ## The layered model
 

@@ -59,7 +59,10 @@ by convention, specific to the ref's upstream tagging convention.
 
 - Runtime check: [ratchet-pin-audit](../runbooks/ratchet-pin-audit.md)
     (daily). Patch-tag immutability means the audit stays quiet under
-    routine publisher releases; a fire is a real upstream tag-move.
+    routine publisher releases; a fire is a real upstream tag-move. The
+    audit globs `.github/workflows/` only, so a pin inside a composite
+    action under `.github/actions/` rests on the PR-time gates alone —
+    those do scan both roots.
 
     The audit compares each pin against the tag it names, accepting a pin
     that equals **either** the annotated-tag-object SHA or the commit that

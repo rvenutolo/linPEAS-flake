@@ -578,6 +578,28 @@ generated block is also enforced in CI by the required `doc-freshness`
 context via `tests/refresh-flake-show.test.sh`, so a stale doc is caught
 even when the pre-commit hook is bypassed.
 
+## Generated-document ownership
+
+Eleven documents or document regions are written by a generator and must not
+be hand-edited: the flake-show block above, `docs/reference/scripts.md`,
+`docs/reference/just-recipes.md` and the README recipe block,
+`docs/reference/treefmt-config.md`, `docs/reference/test-harnesses.md`, the
+pre-commit hook table in [`git.md`](git.md), the CI summary block in
+`README.md`, [`docs/architecture/ci-dag.md`](../architecture/ci-dag.md), the
+pin-parity block in
+[`auto-update.md`](../architecture/auto-update.md), the ephemeral-refs-gap
+block above, and [`docs/security/enforcement-matrix.md`](../security/enforcement-matrix.md).
+Each has a `refresh-*.sh` generator, a `*-fresh` pre-commit hook, and a
+`tests/refresh-*.test.sh` harness run by the required `doc-freshness` context,
+so a hand edit is reverted by the next regeneration and a stale document fails
+the merge either way. Fixing content inside one of these regions means editing
+its generator — or, for the enforcement matrix, the `enforcer:` / `ci:` /
+`hook:` annotations in
+[`docs/invariant-index.md`](../invariant-index.md) it renders from.
+
+`CHANGELOG.md` is generator-owned on the same terms but by git-cliff rather
+than a `refresh-*.sh` script; see [changelog.md](changelog.md).
+
 ## Payload shape-gate scenario coverage
 
 `scripts/check-payload-shape-scenario.sh` requires every script

@@ -146,7 +146,7 @@ sweep_internal_links() {
     echo '(lychee not found — internal-link sweep skipped)'
     return 0
   fi
-  local repo_root tmp errs raw lychee_rc
+  local repo_root tmp errs raw lychee_rc skipped
   repo_root="$(git rev-parse --show-toplevel)"
   local files=()
   # Wider than the ephemeral sweep: tracked .claude/ tooling quotes banned
@@ -160,13 +160,21 @@ sweep_internal_links() {
     return 0
   fi
   tmp="$(mktemp -d)"
-  # Capture lychee's own status, not the pipeline's. lychee exits 1 for
-  # "found broken links" and also for "could not run at all" (an input it
-  # cannot parse, a bad config), and the second shape prints no [ERROR]
-  # line — so a status-blind pipeline reports an empty error list, which is
-  # byte-identical to a clean sweep. A tracked doc deleted but not staged
-  # reaches that path: git ls-files names it, lychee refuses the input, and
-  # the bundle would claim a clean link check over zero files.
+  # Capture lychee's own status, not the pipeline's. lychee exits non-zero
+  # both for "found broken links" (2) and for "could not run at all" (1 — an
+  # input it cannot parse, a bad config), and only the first shape prints an
+  # [ERROR] line — so a status-blind pipeline reports an empty error list,
+  # which is byte-identical to a clean sweep. A tracked doc deleted but not
+  # staged reaches that path: git ls-files names it, lychee refuses the
+  # input, and the bundle would claim a clean link check over zero files.
+  # The branch below keys off the error lines first rather than off the exit
+  # code, so it stays correct if those codes ever change.
+  #
+  # A per-input refusal is quieter still: lychee skips the input with a
+  # "No files found for this input source" warning and still exits 0. An
+  # exclude_path entry matching a tracked doc — or matching the checkout's
+  # own parent directory — therefore shrinks the sweep silently, possibly to
+  # nothing, which again reads as a clean run. Count those warnings too.
   raw="$(
     cd "${tmp}" &&
       lychee --config "${repo_root}/lychee.toml" --offline \
@@ -175,11 +183,17 @@ sweep_internal_links() {
   )" && lychee_rc=0 || lychee_rc=$?
   rm -rf "${tmp}"
   errs="$(printf '%s\n' "${raw}" | grep '\[ERROR\]' | sed "s#file://${repo_root}/##g" || true)"
+  skipped="$(printf '%s\n' "${raw}" | grep -c 'No files found for this input source' || true)"
   if [[ -n ${errs} ]]; then
     printf '%s\n' "${errs}"
   elif ((lychee_rc != 0)); then
     printf '(lychee failed — internal-link sweep unusable; exit %d)\n' "${lychee_rc}"
     printf '%s\n' "${raw}"
+  elif ((skipped > 0)); then
+    printf '(lychee skipped %d of %d input(s) — internal-link sweep incomplete)\n' \
+      "${skipped}" "${#files[@]}"
+    printf '%s\n' "${raw}" | grep 'No files found for this input source' |
+      sed "s#file://${repo_root}/##g;s#${repo_root}/##g"
   else
     echo '(none)'
   fi

@@ -140,7 +140,7 @@ edits inside their `BEGIN/END` markers; a fix means fixing the generator.
 | `docs/reference/treefmt-config.md`                                                                                                                                                                  | `just show-treefmt` / `refresh-treefmt-config.sh`                                                                            |
 | `docs/reference/test-harnesses.md`                                                                                                                                                                  | `refresh-test-harnesses.sh` (no recipe; **whole file**)                                                                      |
 | `docs/reference/just-recipes.md` + README recipe block (the README half sits inside a fenced block and uses bash-comment `# BEGIN/END just-recipes` markers, not HTML ones)                         | `just show-recipes` / `refresh-just-recipes.sh`                                                                              |
-| `docs/security/enforcement-matrix.md`                                                                                                                                                               | `just show-enforcement-matrix` / `refresh-enforcement-matrix.sh`                                                             |
+| `docs/security/enforcement-matrix.md` (**whole file**)                                                                                                                                              | `just show-enforcement-matrix` / `refresh-enforcement-matrix.sh`                                                             |
 | `docs/architecture/ci-dag.md`                                                                                                                                                                       | `just show-ci-dag` / `refresh-ci-dag.sh`                                                                                     |
 | pre-commit hook table in `docs/development/git.md`                                                                                                                                                  | `just show-hooks` / `refresh-precommit-table.sh`                                                                             |
 | CI summary block in `README.md`                                                                                                                                                                     | `just show-ci-summary` / `refresh-ci-summary.sh`                                                                             |
@@ -154,6 +154,14 @@ where the row says **whole file**. `docs/reference/test-harnesses.md` carries no
 `BEGIN`/`END` markers at all: its generator emits the heading, the
 do-not-hand-edit line, the intro paragraph and the regenerate line along with
 the census. Nothing in that file is hand-written, so nothing in it is in scope.
+
+`docs/security/enforcement-matrix.md` is whole-file too, markers
+notwithstanding: `render_matrix` redirects the entire file, emitting the H1,
+the do-not-edit comment and both marker lines around the table. The markers
+make it look block-generated, but there is no hand-written prose outside them.
+Its rows are driven by the `enforcer:` / `ci:` / `hook:` annotations in
+`docs/invariant-index.md`, so a wrong row is a finding against that index
+entry, not against this page.
 
 `CHANGELOG.md` is whole-file too, and for the same reason: `cliff.toml`'s
 `header` produces the `# Changelog` preamble and its `body` template produces
@@ -305,9 +313,12 @@ removes it from the sweep with no diagnostic. The two agree today — verify wit
 `lychee --dump-inputs` if a coverage claim depends on it. External URLs are
 skipped entirely — only relative file paths and heading anchors are checked. A
 listed entry is authoritative drift: the link target does not exist (high
-severity). Flag every entry without re-deriving by eye. Two non-result markers
-mean nothing was checked, and neither is a clean read: `(lychee not found — internal-link sweep skipped)` when `lychee` is off the collector's `PATH`, and
-`(lychee failed — internal-link sweep unusable; exit N)` when lychee ran but
-could not complete — a tracked doc deleted from the worktree but still in the
-index produces the second. Record links as unchecked in the coverage note
-whenever either appears.
+severity). Flag every entry without re-deriving by eye. Three non-result
+markers mean the sweep did not cover what it claims to, and none is a clean
+read: `(lychee not found — internal-link sweep skipped)` when `lychee` is off
+the collector's `PATH`; `(lychee failed — internal-link sweep unusable; exit N)` when lychee ran but could not complete — a tracked doc deleted from
+the worktree but still in the index produces this one; and `(lychee skipped N of M input(s) — internal-link sweep incomplete)` when lychee refused
+individual inputs, which is what an `exclude_path` entry matching a tracked
+doc looks like. Record links as unchecked in the coverage note whenever any of
+them appears. Only `(none)` means every input was read and every link
+resolved.
