@@ -4,10 +4,11 @@
 `nix`, `scripts`, `tests`, `security`, `pin`, `renovate`) per
 `.github/labeler.yml` globs. `.github/labels.yml` is the catalog of
 record — canonical color and description source — for the area,
-release-note (`bug`, `enhancement`, `idea`), and `size/*` labels. Two
-label families stay out of that manifest deliberately:
-failure-notification labels are created on demand by the
-`notify-workflow-result` composite, and Renovate creates its own
+release-note (`bug`, `enhancement`, `idea`), and `size/*` labels. Some
+labels stay out of that manifest deliberately: failure-notification
+labels are created on demand by the `notify-workflow-result` composite,
+the monthly reminder's `docs-audit` label is created by
+`docs-audit-reminder.yml` itself, and Renovate creates its own
 `dependencies` PR label. Auto-labeling is not a required check — it is
 cosmetic and must not block merge.
 

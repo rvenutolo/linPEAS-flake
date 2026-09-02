@@ -23,8 +23,9 @@ The `prune-stale` job runs daily. It removes:
 
 ## PR-close prune
 
-The `prune-on-pr-close` job runs on every `pull_request: closed` event for
-a PR targeting `main` (merged or abandoned). It removes all cache entries
+The `prune-on-pr-close` job runs on a `pull_request: closed` event for
+a PR targeting `main` (merged or abandoned), subject to the fork guard
+described under Permissions below. It removes all cache entries
 scoped to:
 
 - `refs/pull/${PR_NUMBER}/merge`
@@ -37,11 +38,13 @@ than waiting for the daily cron sweep.
 ## Permissions
 
 Both jobs declare `actions: write` (cache deletion) and
-`contents: read` (branch enumeration — used by `prune-stale`;
-`prune-on-pr-close` enumerates no branches, only the cache entries scoped to two known refs). No other scopes — this exact
-write-scope set is enforced by `scripts/check-permission-scopes.sh` via
-the per-job allowlist in `.github/permission-scopes.yml`. The fork-guard
-`github.repository == 'rvenutolo/linPEAS-flake'` is on both jobs; it
+`contents: read` (repository reads — `prune-stale` lists branches and
+open PRs; `prune-on-pr-close` reads only the cache entries scoped to two
+known refs). The `actions: write` grant is what
+`scripts/check-permission-scopes.sh` pins, via the per-job allowlist in
+`.github/permission-scopes.yml`; read scopes are outside that lint. The
+fork-guard `github.repository == 'rvenutolo/linPEAS-flake'` is on both
+jobs; it
 keeps the workflow inert in forks of this repository. A PR opened
 *from* a fork against `main` still runs `prune-on-pr-close`, since
 `github.repository` on a `pull_request` event names the base repo.
@@ -64,8 +67,8 @@ latency.
 If the action-token rate-limits on one of the delete calls, the
 workflow fails cleanly and re-runs on the next cron tick. A rate limit
 that lands on a cache enumeration instead is swallowed — every cache
-enumeration, one per prune step across both jobs, feeds a `while` loop
-from a process substitution, whose exit status is discarded even under
+enumeration feeds a `while` loop from a process substitution, whose
+exit status is discarded even under
 `set -Eeuo pipefail` — so that run reports zero deletions and goes
 green. Manual recovery either way:
 `gh workflow run actions-cache-prune.yml`.
