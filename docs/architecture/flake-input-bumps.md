@@ -322,10 +322,11 @@ nix develop --command just verify
 the doc-freshness checks, and every standalone required-check enforcer
 (`check-protect-main.sh`, `check-tag-protection.sh`, the changelog
 checks, and the rest of the `justfile` recipe) — the in-repo enforcer
-set CI gates on. The action-driven checks (`markdownlint`, `typos`,
-`editorconfig`, `commitlint`) are not part of `just verify` — they run as
-CI jobs and, locally, through the pre-commit hook set (`just lint` /
-`just check`). Of the required-check enforcers, only
+set CI gates on. The action-driven checks are not part of `just verify`:
+`markdownlint`, `typos`, `editorconfig` and `commitlint` run as CI jobs and,
+locally, through the pre-commit hook set (`just lint` / `just check`), while
+`gitleaks`, `trufflehog`, `dependency-review` and `lint-pr-title` have no
+local hook and run only in CI. Of the required-check enforcers, only
 `check-flake-systems-eval.sh` runs nowhere but CI; the drift-check
 enforcers (daily: `check-settings-posture.sh`,
 `check-allowed-actions-api.sh`, `check-flake-lock-staleness.sh`; weekly:

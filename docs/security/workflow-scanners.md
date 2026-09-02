@@ -77,15 +77,19 @@ tree.)
     Friday cron (full tree); manual dispatch.
 - **Status:** advisory by design. It is the cheapest scanner and currently
     produces no findings, but it fails on *any* finding (no severity
-    threshold) against an untuned rule set, so as a required check a
-    single false positive would block merge. Promotion would also force
-    removing its PR paths filter. It stays advisory and path-filtered.
-    - **Tuning trigger (operational):** if octoscan ever accumulates confirmed
-        false positives — three or more distinct, or one duplicating an existing
-        zizmor or CodeQL finding one-to-one — narrow its rule set (`--ignore`,
-        `--disable-rules`, or `--filter-triggers external`) and document each
-        suppression in the octoscan workflow file. Until that data exists, no
-        action.
+    threshold), so as a required check a single false positive would block
+    merge. Its rule set is narrowed only by the suppression set in
+    `scripts/octoscan-scan.sh` — two disabled rules (`local-action`,
+    `dangerous-write`) and two `--ignore` patterns, each with its rationale in
+    that script's header. Promotion would also force removing its PR paths
+    filter. It stays advisory and path-filtered.
+    - **Adding a suppression (operational):** a further rule or pattern is
+        suppressed only for a confirmed false positive — three or more
+        distinct occurrences, or one duplicating an existing zizmor or CodeQL
+        finding one-to-one. Add it to `DISABLE_RULES` or `IGNORE_PATTERN` in
+        `scripts/octoscan-scan.sh` (`--filter-triggers external` is the
+        remaining unused lever) and document it in that script's
+        `Suppressions` header beside the flag it adds.
 
 ### scorecard
 

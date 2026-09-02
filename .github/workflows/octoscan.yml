@@ -139,9 +139,9 @@ jobs:
             Remediation: review the finding in the Security tab under
             the `octoscan` tool group and apply the suggested fix to
             the offending workflow file. If the finding is a known
-            false positive, add a targeted `--ignore` pattern (or
-            disable the rule via `--disable-rules`) on the `scan`
-            step.
+            false positive, add a targeted pattern to `IGNORE_PATTERN`
+            (or the rule to `DISABLE_RULES`) in scripts/octoscan-scan.sh
+            and document it in that script's Suppressions header.
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
   # Infrastructure failure: scan never produced a findings result

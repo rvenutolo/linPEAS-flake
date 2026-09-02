@@ -225,7 +225,7 @@ Use this template:
 # Docs correctness sweep — findings report
 
 **Date:** <YYYY-MM-DD>
-**Phase:** 1 (report only — no edits applied)
+**Stage:** report only — no edits applied
 **Scope:** <N files>
 **Method:** parallel read-only audits per cluster; every finding re-verified
 empirically against the real artifact before inclusion.
