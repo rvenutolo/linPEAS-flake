@@ -7,8 +7,10 @@ record — canonical color and description source — for the area,
 release-note (`bug`, `enhancement`, `idea`), and `size/*` labels. Some
 labels stay out of that manifest deliberately: failure-notification
 labels are created on demand by the `notify-workflow-result` composite,
-the monthly reminder's `docs-audit` label is created by
-`docs-audit-reminder.yml` itself, and Renovate creates its own
+`ci-watchdog.yml` and `docs-audit-reminder.yml` each create their own
+escalation label (`ci-watchdog`, `docs-audit`) inline,
+`reproducibility-check.yml` applies a `reproducibility` label that
+nothing in the tree creates, and Renovate creates its own
 `dependencies` PR label. Auto-labeling is not a required check — it is
 cosmetic and must not block merge.
 
