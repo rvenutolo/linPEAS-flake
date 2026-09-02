@@ -110,9 +110,9 @@ each script invocation, and end `main` with
 `harness_assert_verify || failures=$((failures + 1))`. The gate fails
 the harness on any substring that does not discriminate.
 
-The gate reaches a harness only if it asserts with a quiet `grep`, which
-is how `scripts/check-harness-assert-wired.sh` tells an assertion from a
-data extraction. A harness that asserts another way — a
+The gate's *wiring verdict* reaches a harness only if it asserts with a
+quiet `grep`, which is how `scripts/check-harness-assert-wired.sh` tells
+an assertion from a data extraction. A harness that asserts another way — a
 `[[ ${out} != *"${want}"* ]]` test, say — is outside the gate's *wiring
 verdict*, so it needs neither the wiring nor an `EXEMPT` entry. Both
 exemption ratchets still cover it: it may not register
@@ -136,8 +136,8 @@ A harness that enumerates the filesystem is held to the same
 scan-breadth rules as a repo script: `find` / `git ls-files` /
 `git ls-tree` runs go through `enumerate_into`, glob-driven scans
 through `glob_into`, and filter narrowing through `filter_into` (all in
-`scripts/lib/enumerate.sh`) — or carry an inline `# enumerate-exempt:`,
-`# glob-exempt:` or `# filter-exempt: <rationale>` marker. The scan set
+`scripts/lib/enumerate.sh`) — or carry an inline `# enumerate-exempt: <rationale>`,
+`# glob-exempt: <rationale>` or `# filter-exempt: <rationale>` marker. The scan set
 is `scripts/*.sh` plus `tests/*.test.sh`, less `tests/fixtures/`, so
 harnesses are in scope by name. Enforced by
 `scripts/check-enumerate-helper-required.sh` (member check
@@ -219,7 +219,8 @@ runs the pair.
 1. Make sure `_typos.toml` still excludes `tests/fixtures/**` —
     fixture content is often intentionally malformed.
 
-1. Regenerate the census: run `scripts/refresh-test-harnesses.sh` and
+1. Regenerate the census: run
+    `nix develop --command bash scripts/refresh-test-harnesses.sh` and
     commit the updated `docs/reference/test-harnesses.md`. A new fixture
     directory changes it, and the `test-harnesses-fresh` pre-commit hook
     only `--check`s the file — it rejects the commit rather than writing
@@ -279,7 +280,8 @@ runs the pair.
         the harness needs a dedicated job rather than a slot in a
         batched one.
 
-1. Regenerate the census: run `scripts/refresh-test-harnesses.sh` and
+1. Regenerate the census: run
+    `nix develop --command bash scripts/refresh-test-harnesses.sh` and
     commit the updated `docs/reference/test-harnesses.md`. The
     `test-harnesses-fresh` pre-commit hook only runs the generator in
     `--check` mode, so it rejects the commit rather than writing the

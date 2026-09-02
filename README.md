@@ -121,7 +121,7 @@ trigger semantics, and credential split live in
 
 <!-- Chronological by cron — daily, then weekly; event-driven rows last. -->
 
-| Workflow                         | When                               | Purpose                                                                                                                                                           |
+| Automation                       | When                               | Purpose                                                                                                                                                           |
 | -------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `update-linpeas.yml`             | daily + dispatch                   | Bumps `linpeas-pin.json` to the latest upstream tag. Opens PR; auto-merges on green.                                                                              |
 | `stale-pin-check.yml`            | daily + dispatch                   | Files a deduped issue on a stalled bump, a malformed pin, an upstream API failure, or a malformed upstream tag (four distinct reason tokens).                     |

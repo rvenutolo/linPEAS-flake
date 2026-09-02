@@ -11,10 +11,14 @@ only), skip. Dimension 3 offers **adversarial** instead of deep; dimension 7 is
 **advisory** only (findings always severity `advisory`).
 
 All finder/refuter prompts are **read-only** in the sense that matters: they
-must not modify the tree — no Edit/Write, no generator or formatter run that
-rewrites a tracked file. Read-only **Bash is expected**, especially for refuters
-doing empirical repro (`nix eval`/`build`, running a script against a crafted
+must not modify the checkout — no Edit/Write, no generator or formatter run that
+rewrites a tracked file, and `nix build --no-link` so no `result` symlink lands
+either. Read-only **Bash is expected**, especially for refuters doing empirical
+repro (`nix eval`, `nix build --no-link`, running a script against a crafted
 input, `git show`, `yq` reads). "Read-only" bans mutation, not investigation.
+One bounded exception: a detached `git worktree` under `$TMPDIR` is not the
+checkout, so dimension 5 may mutate a script there — and must
+`git worktree remove` it when done.
 
 Each dimension below carries a **Refuters:** paragraph — the controller injects
 it verbatim as the template's `REFUTER_GUIDANCE`, which scopes the skeptic to
@@ -116,7 +120,7 @@ Slices:
 - mutation smell: gut a rejection clause in the covered script — does a test go red? (In a throwaway `git worktree`, never in the checkout — see the refuter note below.) If not, the test can't fail.
 - fixture gaps + negative-fixture-per-rejection-clause coverage
 
-Refuters: reproduce the coverage gap concretely. The mutation must happen outside the checkout — `git worktree add --detach` a throwaway tree, mutate the script *there*, and run that tree's copy of the test (the harnesses resolve their subject from `git rev-parse --show-toplevel`, so a bare file copy will not do, and no `*_OVERRIDE` redirects a script's own path). Keep the finding only if the test stays green when it should fail. A test that *looks* weak often still catches the mutation.
+Refuters: reproduce the coverage gap concretely. Where the covered script honours an override that redirects the code under test — `SCRIPTS_DIR_OVERRIDE`, `BUMP_SCRIPT_OVERRIDE`, `AWK_LIB_OVERRIDE` and friends — point it at a fixture tree; that is cheaper and equally conclusive. Otherwise the mutation must happen outside the checkout: `git worktree add --detach` a throwaway tree under `$TMPDIR`, mutate the script *there*, run that tree's copy of the test, and `git worktree remove` it afterwards. A bare file copy will not do — the harnesses resolve their subject from `git rev-parse --show-toplevel`, so the mutation has to sit under a real repo root. Keep the finding only if the test stays green when it should fail. A test that *looks* weak often still catches the mutation.
 
 ## 6. Invariant ↔ enforcement coherence — *deep*
 

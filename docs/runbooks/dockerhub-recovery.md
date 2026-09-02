@@ -21,6 +21,7 @@ links here rather than embedding the snippets inline, so:
 
 - [When this applies](#when-this-applies)
 - [Prerequisites](#prerequisites)
+  - [No local copy of the token](#no-local-copy-of-the-token)
 - [Step-by-step](#step-by-step)
   - [1. Delete the GitHub release (retrigger-PR path only)](#1-delete-the-github-release-retrigger-pr-path-only)
   - [2. Delete the orphan docker.io arch tag](#2-delete-the-orphan-dockerio-arch-tag)
@@ -54,18 +55,31 @@ The push loop inside `release-on-bump.yml` per-arch jobs runs
 
 - A Docker Hub access token with **Delete** scope. Use the
     `DOCKERHUB_TOKEN_DELETE` repository secret value
-    (the `_RW` token returns `401` on the tag-delete endpoint).
-    Fetch the secret value from your local secret vault — **do not**
-    print `gh secret` values inside the auto-filed issue body. Docker
-    Hub shows an access token once at creation and never re-displays
-    it, so if no copy survives, create a fresh Delete-scoped token at
-    <https://hub.docker.com/settings/security>, use it for the commands
-    below, and `gh secret set DOCKERHUB_TOKEN_DELETE` to resync the repo
-    secret.
-    - `DOCKERHUB_USERNAME` matching the repo owner (`rvenutolo`).
-    - A failing run identified in the `release-on-bump-failure` issue —
+    (the `_RW` token returns `401` on the tag-delete endpoint). Fetch it
+    from your local secret vault — **do not** print `gh secret` values
+    inside the auto-filed issue body. If no copy survives, see
+    [No local copy of the token](#no-local-copy-of-the-token) below.
+- `DOCKERHUB_USERNAME` matching the repo owner (`rvenutolo`).
+- A failing run identified in the `release-on-bump-failure` issue —
     record `VERSION` (the pin version, e.g. `20260516-deadbee`) and
     `ARCH` (`amd64` or `arm64`) before starting.
+
+### No local copy of the token<a name="no-local-copy-of-the-token"></a>
+
+Docker Hub shows an access token once at creation and never re-displays
+it, so a lost copy cannot be recovered — it can only be replaced. That
+replacement is a rotation, and this repo rotates Docker Hub credentials
+on suspected compromise only (see
+[DOCKERHUB_TOKEN split](#dockerhub_token-split-rw--delete) below and
+`SECURITY.md`), so treat it as one and follow the same order: revoke the
+superseded token at <https://hub.docker.com/settings/security> first,
+then create a fresh Delete-scoped token, then resync the repo secret.
+
+```bash
+gh secret set DOCKERHUB_TOKEN_DELETE --repo rvenutolo/linPEAS-flake
+```
+
+Use the new token for the commands below.
 
 ## Step-by-step<a name="step-by-step"></a>
 

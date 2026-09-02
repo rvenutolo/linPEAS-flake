@@ -12,10 +12,12 @@
 # composite actions, scripts, nix modules, the justfile, and docs passes
 # `--repo rvenutolo/linPEAS-flake`.
 #
-# Without `--repo`, the verifier accepts any attestation Sigstore
-# can find for the artifact digest — including one issued from a
-# different repo. The `--repo` pin binds the verification to this
-# repository, so an attestation forged elsewhere fails the check.
+# `gh attestation verify` requires either `--owner` or `--repo`, so an
+# unpinned invocation does not run at all. The bypass this lint
+# forecloses is the `--owner`-only spelling: it binds verification to
+# the account, so an attestation issued by any other repo under the
+# same owner satisfies it. The `--repo` pin narrows that to this
+# repository, so a bundle issued elsewhere fails the check.
 #
 # Detection is token-granular. Each runnable string is split into shell
 # words, honouring single quotes, double quotes, and backslash escapes.

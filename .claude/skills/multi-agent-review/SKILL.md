@@ -43,10 +43,14 @@ it is the source of truth for what each dimension covers.
     that looks broken in trace often works (and vice-versa). A finding must carry
     a concrete `failure_scenario` (inputs/state → wrong outcome) the refuters
     actually ran. A 30-second probe beats a confident wrong claim.
-- **Report-only, mutate nothing.** Not even a generated file's mtime. If
-    verifying a fact would write to the tree, inspect a read-only command's output
-    or copy the artifact out. End the run by confirming `git status` shows no
-    modified tracked files.
+- **Report-only, mutate the checkout not at all.** Not even a generated file's
+    mtime. If verifying a fact would write to the tree, inspect a read-only
+    command's output or copy the artifact out; use `nix build --no-link` so no
+    `result` symlink lands, since the closing check would not catch it — it is
+    gitignored. The one bounded exception is dimension 5's mutation testing,
+    which happens in a detached `git worktree` under `$TMPDIR` and is torn down
+    afterwards. End the run by confirming `git status` shows no modified tracked
+    files.
 - **Per-dimension gates keep the user in control.** Each dimension runs only
     after the user says "go". Between gates, wait — no self-scheduled wakeups.
     This is a token-heavy flow; the user paces it.
@@ -151,8 +155,10 @@ if (deduped.length > CAP) log('capped: refuting top ' + CAP + ' of ' + deduped.l
 // is-it-enforced skeptic would wrongly kill an is-it-buggy finding.
 const graded = (await parallel(toRefute.map(f => () =>
   parallel([0,1,2].map(i => () =>
-    agent('You may run read-only commands to reproduce (nix eval/build, run the script '
-      + 'against a crafted input, git show) but MUST NOT modify the tree. ' + REFUTER_GUIDANCE
+    agent('You may run read-only commands to reproduce (nix eval, nix build --no-link, '
+      + 'run the script against a crafted input, git show) but MUST NOT modify the '
+      + 'checkout. A detached git worktree under $TMPDIR is not the checkout; remove it '
+      + 'when done. ' + REFUTER_GUIDANCE
       + ' Default refuted=true unless you reproduce the defect against the real artifact. '
       + 'Finding: ' + JSON.stringify(f),
       { label: 'refute:' + (f.file || '?'), phase: 'Refute', schema: VERDICT })))
@@ -193,13 +199,13 @@ After the last dimension, confirm `git status` shows no modified tracked files.
 <counts per dimension × severity; top findings priority-ordered, each a
   self-contained file:line + one-line claim>
 
-## Dimension <n> — <name>
+## Dimension <n> — <name>   <sections ordered numerically, regardless of run order>
 <slices run; how many raw findings the refute-all killed>
 ### <n>.<m> — <file:line> · <severity> · <title>
 - Claim: …
 - Evidence: <source of truth that proves it>
 - Failure scenario: <inputs/state → wrong outcome, reproducible from here>
-- Suggested direction: …
+- Suggested direction: …   <a finder may omit `title`/`suggested_direction`; the controller then derives the heading from `claim` and writes the direction itself>
 
 ## Advisory (dimension 7)   <kept visually separate from defect sections>
 

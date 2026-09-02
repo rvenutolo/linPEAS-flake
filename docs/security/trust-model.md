@@ -220,7 +220,7 @@ Exception for a non-`GITHUB_TOKEN` secret requires documenting here BEFORE relax
 - Keep as first step, before `actions/checkout`, `cachix/install-nix-action`, or any network step. eBPF monitor must install before any I/O.
 - Do not add to composite actions — caller job already has it.
 
-Enforced by `scripts/check-harden-runner-first.sh` via the `lint-workflow-security` CI job (member check `harden-runner-first`) and a pre-commit hook. Lint parses every job in `.github/workflows/*.yml` with `yq` and rejects any job whose first step is not `step-security/harden-runner@<40-hex-sha>`.
+Enforced by `scripts/check-harden-runner-first.sh` via the `lint-workflow-security` CI job (member check `harden-runner-first`) and a pre-commit hook. Lint parses every job in `.github/workflows/*.yml` (or `.yaml`) with `yq` and rejects any job whose first step is not `step-security/harden-runner@<40-hex-sha>`.
 
 The block-mode contract is enforced by `scripts/check-harden-runner-block.sh` via the same `lint-workflow-security` CI job (member check `harden-runner-block`) and a pre-commit hook: it rejects any harden-runner step that is not `egress-policy: block` with a non-empty `allowed-endpoints:`. A missed host surfaces as a blocked-egress CI failure and is fixed forward by adding the host to that job's allowlist.
 

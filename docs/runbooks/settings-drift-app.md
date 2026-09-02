@@ -92,9 +92,11 @@ To rotate:
 
 1. Re-dispatch the workflow and confirm the `drift-check` job passes.
 
-1. App page → delete the old key. Only after the run above is green: a
-    truncated or wrong `.pem` in step 2 fails exactly as a missing key
-    does, and the old key is the only thing left to roll back to.
+1. App page → delete the old key. Only after the run above is green: the
+    new key is not yet proven to work, and the old key is what keeps the
+    workflow authenticating in the meantime. A truncated or wrong `.pem`
+    in step 2 fails exactly as a missing key does — keep `new-key.pem` on
+    disk until the run is green so step 2 can simply be re-run.
 
 ## Reuse for related drift checks<a name="reuse-for-related-drift-checks"></a>
 
