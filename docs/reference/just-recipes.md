@@ -1,8 +1,8 @@
 # Just recipes
 
 `just` is the task runner for this repo. Recipes are defined in the
-top-level `justfile` and discoverable interactively by running `just`
-with no arguments inside the devshell:
+top-level `justfile` and discoverable by running `just` with no
+arguments inside the devshell:
 
 ```sh
 nix develop --command just

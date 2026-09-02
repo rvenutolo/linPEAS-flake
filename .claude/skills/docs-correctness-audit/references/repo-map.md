@@ -14,9 +14,9 @@ checked against one authoritative list.
 The cron command spells both workflow globs, `*.yml` and `*.yaml`, to match the
 scan sets the repo's own workflow lints use. No `*.yaml` workflow exists today,
 so that half goes unmatched and reaches `grep` as a literal path: expect a
-`No such file or directory` warning and exit 2. Its stdout is still complete —
-the collector drops non-existent paths before scanning, which a hand-run
-command does not.
+`No such file or directory` warning and exit 2; its stdout is still complete.
+The collector never hits this: it drops non-existent paths before scanning,
+which a hand-run command does not.
 
 ```sh
 nix flake show --json          # flake output inventory (the bundle's FLAKE OUTPUTS section is authoritative)
@@ -120,9 +120,10 @@ reporting them would be reporting the harness working.
 `.claude/CLAUDE.md` and the global CLAUDE.md are untracked and stay read-only
 — the global one lives outside the repo entirely. They set the scope of the
 rules, not their wording: they are **not** the authority for the
-ephemeral-token regex or for how it is enforced. §4 below and
-`scripts/lib/ephemeral-refs-scope.sh` are, and because nothing gates an
-untracked file, those copies can lag the lint.
+ephemeral-token regex or for how it is enforced.
+`scripts/lib/ephemeral-refs-scope.sh` and `scripts/check-ephemeral-refs.sh`
+are; §4 below is the reading aid transcribed from them. Because nothing gates
+an untracked file, those copies can lag the lint.
 
 ## 3. Generated docs — verify-only, never edit the generated body
 

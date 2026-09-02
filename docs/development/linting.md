@@ -581,8 +581,9 @@ even when the pre-commit hook is bypassed.
 ## Generated-document ownership
 
 Twelve regions are written by a `refresh-*.sh` generator and must not be
-hand-edited — one per document path those generators declare, which
-`grep -h '^# @generates' scripts/refresh-*.sh` lists. Two are whole files:
+hand-edited — one per `@generates` / `@generates-block` declaration those
+generators carry, which `grep -h '^# @generates' scripts/refresh-*.sh` lists
+(`README.md` carries two of them). Two are whole files:
 [`docs/reference/test-harnesses.md`](../reference/test-harnesses.md) and
 [`docs/security/enforcement-matrix.md`](../security/enforcement-matrix.md),
 whose generators emit the heading and every line around the table. The other

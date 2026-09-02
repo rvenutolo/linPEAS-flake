@@ -123,9 +123,10 @@ longer matches leaves every input frozen while every check stays green. Both
 halves are live risks here: a Renovate branch-prefix change would stop the `identify` job's
 `renovate/` branch-prefix gate in `renovate-flake-lock-refresh.yml` from ever passing,
 and Renovate in Mend silent mode can leave `pre-commit-hooks` far past its
-staleness tier, with nothing in either case saying so. (A bot login-shape
-change is the one failure that does announce itself: the `identify` job fails
-on an author the classifier rejects and `notify` files an issue.)
+staleness tier, with nothing in either case saying so. (Two failures do
+announce themselves: a bot login-shape change, where the `identify` job fails
+on an author the classifier rejects, and a Renovate title-shape change, where
+`identify` reports the PR as `unmapped`; `notify` files an issue for either.)
 
 `scripts/check-flake-lock-staleness.sh`, run daily by
 `flake-lock-staleness-check.yml`, watches the freeze rather than any single

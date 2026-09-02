@@ -80,16 +80,17 @@ tree.)
     threshold), so as a required check a single false positive would block
     merge. Its rule set is narrowed only by the suppression set in
     `scripts/octoscan-scan.sh` — two disabled rules (`local-action`,
-    `dangerous-write`) and two `--ignore` patterns, each with its rationale in
-    that script's header. Promotion would also force removing its PR paths
-    filter. It stays advisory and path-filtered.
+    `dangerous-write`) and a single `--ignore` regex carrying two
+    alternatives, each with its rationale in that script's header.
+    Promotion would also force removing its PR paths filter. It stays
+    advisory and path-filtered.
     - **Adding a suppression (operational):** a further rule or pattern is
         suppressed only for a confirmed false positive — three or more
         distinct occurrences, or one duplicating an existing zizmor or CodeQL
         finding one-to-one. Add it to `DISABLE_RULES` or `IGNORE_PATTERN` in
         `scripts/octoscan-scan.sh` (`--filter-triggers external` is the
         remaining unused lever) and document it in that script's
-        `Suppressions` header beside the flag it adds.
+        `Suppressions` header beside the flag it extends.
 
 ### scorecard
 

@@ -191,8 +191,9 @@ is not load-bearing — the `identify` job shells out to
 `scripts/classify-renovate-flake-input.sh`, whose `case` arms glob on
 `cachix/git-hooks.nix`, `NixOS/nixpkgs-unstable` and `NixOS/nixpkgs`
 (matched against a lowercased title, so capitalization does not matter).
-A title that stops carrying one of those substrings is what silently
-stops the auto-refresh.
+A title that stops carrying one of those substrings is classified as
+`unmapped`: no refresh is attempted, and `notify` files an issue under the
+`renovate-flake-lock-refresh-failure` label naming the new title shape.
 
 The classifier keeps its `NixOS/nixpkgs-unstable` arm even though no
 manager emits that title; [the auto-refresh
@@ -323,10 +324,13 @@ the doc-freshness checks, and every standalone required-check enforcer
 (`check-protect-main.sh`, `check-tag-protection.sh`, the changelog
 checks, and the rest of the `justfile` recipe) — the in-repo enforcer
 set CI gates on. The action-driven checks are not part of `just verify`:
-`markdownlint`, `typos`, `editorconfig` and `commitlint` run as CI jobs and,
-locally, through the pre-commit hook set (`just lint` / `just check`), while
-`gitleaks`, `trufflehog`, `dependency-review` and `lint-pr-title` have no
-local hook and run only in CI. Of the required-check enforcers, only
+`markdownlint`, `typos` and `editorconfig` run as CI jobs and, locally,
+through the pre-commit hook set (`just lint` / `just check`); `commitlint`
+runs as a CI job and, locally, only through the installed `commit-msg` git
+hook on an actual commit (a `commit-msg`-stage hook, which
+`pre-commit run --all-files` skips); `gitleaks`, `trufflehog`,
+`dependency-review` and `lint-pr-title` have no local hook and run only in
+CI. Of the required-check enforcers, only
 `check-flake-systems-eval.sh` runs nowhere but CI; the drift-check
 enforcers (daily: `check-settings-posture.sh`,
 `check-allowed-actions-api.sh`, `check-flake-lock-staleness.sh`; weekly:
@@ -336,8 +340,9 @@ admin-scoped App token against the live API, while
 `check-flake-lock-staleness.sh` and `check-scorecard-threshold.sh` each
 answer to an input from outside the tree — the wall clock, against which
 `flake.lock`'s `locked.lastModified` is measured, and the scorecard CLI's JSON
-on stdin, which only the scheduled run produces. Locally only their
-harnesses run. Individual
+on stdin, which only the scheduled run produces. Locally only those four
+drift-check enforcers' harnesses run; `check-flake-systems-eval.sh` and its
+harness run only in the `flake-check` job. Individual
 harnesses can still be run directly
 (`nix develop --command bash tests/<name>.test.sh`) while iterating on
 a single failure. If any fail, do **not** disable the test — debug
