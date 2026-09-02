@@ -23,13 +23,16 @@ rule-bearing page. The array in
 
 Each entry carries an `enforcer: ...; ci: ...; hook: ...` annotation
 that `scripts/refresh-enforcement-matrix.sh` renders into
-`security/enforcement-matrix.md`. `ci:` names the `ci.yml` job that
-runs the enforcer — the generator validates the value against that
-file's job keys, so an enforcer that runs only in a scheduled workflow
+`security/enforcement-matrix.md`. `ci:` names the `ci.yml` job(s) that
+enforce the rule — for a script enforcer, the job that runs it; for a
+rule held by evaluation, a smoke test, or a third-party action, the job
+that carries it. The generator validates the value against that file's
+job keys only, so an enforcer that runs only in a scheduled workflow
 says `ci: -` and names the workflow in its prose. A job that only runs
 an enforcer's test harness is not recorded there either, so a rule
 whose enforcer runs nowhere in `ci.yml` says `ci: -` even when
-`harness-group` exercises its harness.
+`harness-group` exercises its harness. `hook:` follows the same reading
+for pre-commit hook ids.
 
 Behavior rules for the AI assistant and other non-binding guidance live
 mostly in an untracked assistant-tooling tree. The committed part of

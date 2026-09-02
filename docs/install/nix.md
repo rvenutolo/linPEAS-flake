@@ -50,7 +50,7 @@ The flake declares packages for both Linux systems via flake-parts' `perSystem` 
 | `x86_64-linux`  | yes          | yes (`ubuntu-latest`)    |
 | `aarch64-linux` | yes          | yes (`ubuntu-24.04-arm`) |
 
-Both `linpeas-image` and `site` are gated on a Linux stdenv — the image because containers run a Linux kernel regardless of host OS — so adding a non-Linux system to `flake.lib.systems` would not publish them there.
+Both `linpeas-image` and `site` are gated on a Linux stdenv — the image because containers run a Linux kernel regardless of host OS — so adding a non-Linux system to the `systems` list in `flake.nix` would not publish them there.
 
 The `systems` list in `flake.nix` is the single source of truth for the declared systems above; the flake re-exports it as `flake.lib.systems`, the attribute the checker reads. CI's `flake-check` job runs `scripts/check-flake-systems-eval.sh`, which reads `flake.lib.systems` and force-evaluates each declared system's packages down to every package's derivation — not just the attribute names — failing with the system named if one breaks. `nix flake check` alone does not force per-system module thunks (e.g. a second nixpkgs input imported per `perSystem`), so a platform that silently stopped evaluating would otherwise pass CI undetected.
 
