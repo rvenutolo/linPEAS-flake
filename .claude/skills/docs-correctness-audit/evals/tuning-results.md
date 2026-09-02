@@ -11,6 +11,11 @@ from the seeded-defect recall harness in [`seeded-defects/`](seeded-defects/)
 per configuration against the same seven planted defects, while the token
 figures come from one measured run each (see the ship gate below).
 
+The sibling [`evals.json`](evals.json) is a different instrument: a
+report-quality eval manifest — eight prompts phrased as `/docs-audit`
+invocations, each with the assertions its report must satisfy — rather than a
+recall measurement, so none of the numbers below come from it.
+
 ## Configurations compared
 
 - **per-subdirectory** — seven readers: `reference`, `security`,

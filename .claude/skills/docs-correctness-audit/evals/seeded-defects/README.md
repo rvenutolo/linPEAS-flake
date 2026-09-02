@@ -7,8 +7,8 @@ disposable `git worktree`; you run the audit M times against that copy;
 
 ## Run trigger
 
-**The audit loop is manual only, and not wired into CI** — a full audit is
-~9 min and, across the four user-facing clusters, ~240k reader-tokens per run
+**The audit loop is manual only, and not wired into CI** — a full audit runs
+on the order of ten minutes and, across the four user-facing clusters, ~240k reader-tokens per run
 summed across readers (see [`../tuning-results.md`](../tuning-results.md) for the measured table;
 the `claude-tooling` reader is additional and unmeasured); M runs
 multiply that. Run it when you want a recall number (e.g. before/after a skill

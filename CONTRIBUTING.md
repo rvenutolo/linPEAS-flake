@@ -21,7 +21,10 @@ posture is non-negotiable.
     Both hardcode `rvenutolo/linPEAS-flake` and never read your remote, so a
     fork clone probes the same rulesets and passes; the endpoint needs no
     elevated scope. Without `gh auth login` they report could-not-run
-    (exit 2) and fail the recipe while everything else still runs.
+    (exit 2) and fail the recipe while everything else still runs — except
+    that the `pin-digest-provenance` and `flake-lock-provenance` members of
+    `lint-doc-invariants` also reach the API, but only on a branch that moves
+    an action pin or `flake.lock`.
 
 ## Local development
 

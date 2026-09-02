@@ -661,6 +661,6 @@ that step whether or not the marker existed, or on the attribution
 step's own id, which coverage skips unconditionally regardless of any
 marker. Either shape is reported as drift and fails the run. Unlike
 this lint's sibling exemption markers, an unearned exemption here adds
-no field to the clean summary line, which stays the same three-count
-line it always was. Full rationale: [Verification → Ladder coverage is
+no field to the clean summary line, which stays a three-count line.
+Full rationale: [Verification → Ladder coverage is
 linted](../security/verification.md#ladder-coverage-is-linted).

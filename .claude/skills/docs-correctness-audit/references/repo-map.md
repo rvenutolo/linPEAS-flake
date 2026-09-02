@@ -96,8 +96,8 @@ because it is not user-facing documentation at all — it is the audit's own
 specification, so its reader checks this file against the tree rather than
 checking the tree against prose.
 
-`root + misc` carries the catch-all clause because the four other rows are
-directory globs: a tracked doc outside `.claude/` that falls in none of those
+`root + misc` carries the catch-all clause because the three `docs/` rows are
+directory globs and `claude-tooling` covers only `.claude/`: a tracked doc outside `.claude/` that falls in none of those
 directories — a new top-level `docs/` page as readily as a new root-level one
 — matches no row and would otherwise be assigned to no reader while still
 appearing in the collector's sweeps. Verify the map covers everything with
