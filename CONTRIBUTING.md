@@ -78,18 +78,21 @@ walkthrough.
 
 ## Security-review entries
 
-Several docs make "a security-review entry" the price of removing or
-weakening a defence — dropping a scanner, loosening a lint's severity,
-un-pinning a third-party action, adding a long-lived credential. An entry
-is a section in the PR body, titled `Security review`, carrying three
-things:
+Several docs make "a security-review entry" the price of weakening a
+defence or of taking on a new trust dependency — dropping a scanner,
+loosening a lint's severity, un-pinning an action, adding a new secret,
+adding a third-party action. An entry is a section in the PR body, titled
+`Security review`, carrying three things:
 
-- **What is being removed or weakened**, named precisely enough to grep
-    for: the layer, lint, gate, or setting.
-- **Which attack vectors stop being covered**, in the terms the relevant
+- **What is changing**, named precisely enough to grep for: the layer,
+    lint, gate, setting, credential, or action.
+- **Which attack vectors it exposes** — the ones that stop being covered
+    when a defence is removed, or the ones the new dependency brings — in
+    the terms the relevant
     [threat model](docs/security/threat-model.md) row uses.
 - **What compensating control remains**, or an explicit statement that
-    none does.
+    none does. For a new credential this is where its scope and rotation
+    policy go.
 
 The entry lives in the PR body so it survives in the merge commit and is
 recoverable with `gh pr view`. Nothing lints for it — a reviewer asking

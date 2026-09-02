@@ -25,6 +25,23 @@ flowchart TD
   compare -- no --> urlcheck --> fetch --> digest --> hash --> write --> show --> pr --> automerge
 ```
 
+A failure anywhere in that chain files a deduped issue labelled
+`update-linpeas-failure`, titled `update-linpeas: cron failed`, through
+the `notify-workflow-result` composite. A no-op day — upstream tag equal
+to the current pin — collapses to success and files nothing, because
+`push-and-merge` skipping is not a failure.
+
+The issue body names the trigger, both job conclusions, and the causes
+worth checking first: an upstream PEASS-ng API rate-limit, a
+`BUMP_APP_PRIVATE_KEY` that is invalid or whose App was uninstalled
+(which can only affect `push-and-merge`), the asset-URL prefix check
+tripping because peass-ng moved their release host, a missing or
+non-`sha256:` `digest` field upstream, or an artifact handoff failure
+between the two jobs. The first four are upstream or credential
+conditions that the next cron tick retries on its own; only the
+credential case needs action. Re-run manually with
+`gh workflow run update-linpeas.yml` once the cause is cleared.
+
 ## Release on bump
 
 ```mermaid

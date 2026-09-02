@@ -177,4 +177,6 @@ Each layer's blind spot is another layer's core competency:
     independently.
 
 Trimming a layer because another "overlaps" removes a unique angle. Any such
-change needs a security-review entry recording which vectors become uncovered.
+change needs a
+[security-review entry](https://github.com/rvenutolo/linPEAS-flake/blob/main/CONTRIBUTING.md#security-review-entries)
+recording which vectors become uncovered.

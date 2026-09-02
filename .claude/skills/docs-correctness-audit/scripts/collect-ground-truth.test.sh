@@ -196,7 +196,7 @@ case "${lnk}" in *"gone-tooling.md"*) check "flags broken link in tracked .claud
 case "${lnk}" in *"gone-seeded.md"*) check "skips seeded-defect fixtures" 1 ;; *) check "skips seeded-defect fixtures" 0 ;; esac
 # A run that found broken links is a RESULT, not a failed sweep. Without this
 # the substring checks above stay green even if the marker is emitted too.
-case "${lnk}" in *"lychee failed"* | *"lychee skipped"*) check "a broken-link run is not marked unusable" 1 ;; *) check "a broken-link run is not marked unusable" 0 ;; esac
+case "${lnk}" in *"lychee failed"*) check "a broken-link run is not marked unusable" 1 ;; *) check "a broken-link run is not marked unusable" 0 ;; esac
 rm -rf "${fl}"
 
 # --- a lychee that cannot run at all must not read as a clean sweep ---
@@ -236,6 +236,25 @@ fz="$(mktemp -d)"
 skip_out="$(cd "${fz}" && source "${COLLECTOR}" && sweep_internal_links)"
 case "${skip_out}" in *"lychee skipped"*) check "an all-excluded sweep is not reported as clean" 0 ;; *) check "an all-excluded sweep is not reported as clean" 1 ;; esac
 rm -rf "${fz}"
+
+# --- broken links and a shrunken input set are independent signals ---
+# Reporting only the errors would hide that the sweep covered fewer files
+# than it claims, which is the state a reader is least able to detect.
+fy="$(mktemp -d)"
+(
+  cd "${fy}"
+  git init -q && git config user.email t@t && git config user.name t
+  printf 'exclude_path = ["docs/skipme/"]\n' >lychee.toml
+  mkdir -p docs/skipme
+  printf '# A\n[bad](./gone.md)\n' >docs/a.md
+  printf '# S\n' >docs/skipme/s.md
+  git add -A && git commit -qm init
+)
+# shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
+both_out="$(cd "${fy}" && source "${COLLECTOR}" && sweep_internal_links)"
+case "${both_out}" in *"lychee skipped"*) check "a skipped input is reported even when links are broken" 0 ;; *) check "a skipped input is reported even when links are broken" 1 ;; esac
+case "${both_out}" in *"gone.md"*) check "the broken link is reported alongside the skip" 0 ;; *) check "the broken link is reported alongside the skip" 1 ;; esac
+rm -rf "${fy}"
 
 # --- ci.yml job listing is scoped to the jobs: block ---
 # A bare 2-space-key grep also returns `on:` trigger names and `concurrency:`

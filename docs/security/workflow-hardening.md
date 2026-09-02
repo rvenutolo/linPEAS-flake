@@ -4,7 +4,7 @@ Hardening invariants for this repo's workflows, scripts and test harnesses. Most
 
 - `setup-nix-required` is enforced by a standalone CI job.
 - Many of the script-hygiene rules (`test-reachable`, `tool-guarded`, `guard-exit-code`, and the others the [enforcement matrix](enforcement-matrix.md)'s pre-commit column marks hook-less) are CI-only with no hook.
-- A few run under the `doc-freshness` or `harness-group` CI jobs instead of a lint group.
+- One rule runs under the `doc-freshness` CI job instead of a lint group: harness subject declaration.
 - One rule is convention-only with no automated enforcer: lean lint-shell routing.
 
 See the [enforcement matrix](enforcement-matrix.md) for the authoritative per-rule mapping.

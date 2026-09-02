@@ -309,16 +309,21 @@ harness's scoring inputs rather than repo documentation. That list is only the
 first of two filters: the run passes `--config lychee.toml`, whose
 `exclude_path` entries are **regular expressions matched against each input
 path as it was passed** (absolute, here), so any entry matching a tracked doc
-removes it from the sweep with no diagnostic. The two agree today — verify with
+removes it from the sweep — lychee warns once per refused input, which the
+collector counts and surfaces as the `(lychee skipped …)` marker described
+below. The two agree today — verify with
 `lychee --dump-inputs` if a coverage claim depends on it. External URLs are
 skipped entirely — only relative file paths and heading anchors are checked. A
 listed entry is authoritative drift: the link target does not exist (high
 severity). Flag every entry without re-deriving by eye. Three non-result
 markers mean the sweep did not cover what it claims to, and none is a clean
 read: `(lychee not found — internal-link sweep skipped)` when `lychee` is off
-the collector's `PATH`; `(lychee failed — internal-link sweep unusable; exit N)` when lychee ran but could not complete — a tracked doc deleted from
-the worktree but still in the index produces this one; and `(lychee skipped N of M input(s) — internal-link sweep incomplete)` when lychee refused
-individual inputs, which is what an `exclude_path` entry matching a tracked
-doc looks like. Record links as unchecked in the coverage note whenever any of
+the collector's `PATH`;
+`(lychee failed — internal-link sweep unusable; exit N)`
+when lychee ran but could not complete — a tracked doc deleted from the
+worktree but still in the index produces this one; and
+`(lychee skipped N of M input(s) — internal-link sweep incomplete)`
+when lychee refused individual inputs, which is what an `exclude_path`
+entry matching a tracked doc looks like. Record links as unchecked in the coverage note whenever any of
 them appears. Only `(none)` means every input was read and every link
 resolved.

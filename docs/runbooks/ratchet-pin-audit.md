@@ -124,8 +124,8 @@ failed shape validation; OR the workflow glob matched zero files.
 1. The step does grep ratchet's output to tell an upstream failure
     from a tool failure, so a reworded ratchet error can still land an
     upstream failure under this reason. If the run log shows one,
-    widen the heuristic grep in the `audit pins` step. The structural invariant
-    `scripts/check-ratchet-pin-audit.sh` pins the four reason values
+    widen the heuristic grep in the `audit pins` step. The structural
+    invariant `scripts/check-ratchet-pin-audit.sh` pins the four reason values
     the notify body documents (`drift-detected`,
     `upstream-api-failure`, `ratchet-tool-failure`, `unknown`), not
     the heuristic strings — so widening it is a single-file change.
