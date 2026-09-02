@@ -790,7 +790,7 @@ preventing network-level egress to unlisted hosts.
 
 ### scripts/check-harden-runner-first.sh
 
-Lint: every job in .github/workflows/\*.yml begins
+Lint: every job in .github/workflows/\*.yml (or .yaml) begins
 with `step-security/harden-runner@<sha>` as its first step, so the
 eBPF monitor installs before any I/O.
 

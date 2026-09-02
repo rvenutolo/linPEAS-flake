@@ -188,8 +188,9 @@ by severity:
     drifted CI/cron/config value, a claimed-but-absent check or script.
 - **med** — an internal contradiction, or a *blocking-class* ephemeral-token
     violation (`RE_ISSUE`, `RE_DATE`, `RE_PLANNING`, `RE_REVIEW`, `RE_CLAUDE`).
-    The advisory-only classes — `causal-history`, and the sweep-only
-    `ad-hoc-ticket` — are low at most.
+    The `causal-history` class is advisory-only in the lint, and
+    `ad-hoc-ticket` exists only in the collector sweep with no lint class at
+    all — both are low at most.
 - **low** — prose / clarity / minor wording.
 
 ### 5. Write the report (no edits)

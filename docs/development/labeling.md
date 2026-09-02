@@ -58,10 +58,14 @@ sides — it owns `docs/reference/just-recipes.md` and splices a block into
 `README.md`. Which side of the line a doc falls on is therefore a
 judgment: several `@generates` pages also splice between markers into a fixed
 hand-written header — `docs/architecture/ci-dag.md`,
-`docs/reference/flake-outputs.md`, `docs/reference/treefmt-config.md`,
-`docs/reference/scripts.md`, `docs/security/enforcement-matrix.md`. They are
-annotated `@generates` because the block *is* the page; the four files named
-below are annotated the other way because the prose is.
+`docs/reference/flake-outputs.md`, `docs/reference/just-recipes.md`,
+`docs/reference/scripts.md`, `docs/reference/treefmt-config.md`. Their
+generators refuse to run when the marker is absent, so that header is preserved
+rather than emitted; they are annotated `@generates` because the block *is* the
+page, while the four files named below are annotated the other way because the
+prose is. (`docs/security/enforcement-matrix.md` and
+`docs/reference/test-harnesses.md` are the pure cases — their generators write
+the whole file, header included.)
 Recording it at the generator keeps that judgment reviewable
 next to the code that makes it, where a coverage threshold would be a
 magic number that moves as the prose around the block grows. Files whose

@@ -112,12 +112,12 @@ the harness on any substring that does not discriminate.
 
 The gate's *wiring verdict* reaches a harness only if it asserts with a
 quiet `grep`, which is how `scripts/check-harness-assert-wired.sh` tells
-an assertion from a data extraction. A harness that asserts another way — a
-`[[ ${out} != *"${want}"* ]]` test, say — is outside the gate's *wiring
-verdict*, so it needs neither the wiring nor an `EXEMPT` entry. Both
-exemption ratchets still cover it: it may not register
-`harness_assert_exempt`, and a `harness_assert_parity_exempt` from it
-still needs a `PARITY_EXEMPT_ALLOWED` entry.
+an assertion from a data extraction. A harness that asserts another way —
+a `[[ ${out} != *"${want}"* ]]` test, say — is outside that verdict, so
+it needs neither the wiring nor an `EXEMPT` entry. Both exemption
+ratchets still cover it: it may not register `harness_assert_exempt`, and
+a `harness_assert_parity_exempt` from it still needs a
+`PARITY_EXEMPT_ALLOWED` entry.
 
 The same gate also enforces parity: two scenarios in one harness must
 not produce byte-identical whole outcomes (exit code + stdout +
@@ -135,11 +135,11 @@ review moment it deserves.
 A harness that enumerates the filesystem is held to the same
 scan-breadth rules as a repo script: `find` / `git ls-files` /
 `git ls-tree` runs go through `enumerate_into`, glob-driven scans
-through `glob_into`, and filter narrowing through `filter_into` (all in
-`scripts/lib/enumerate.sh`) — or carry an inline `# enumerate-exempt: <rationale>`,
-`# glob-exempt: <rationale>` or `# filter-exempt: <rationale>` marker. The scan set
-is `scripts/*.sh` plus `tests/*.test.sh`, less `tests/fixtures/`, so
-harnesses are in scope by name. Enforced by
+through `glob_into`, and filter narrowing through `filter_into` (all in `scripts/lib/enumerate.sh`) — or carry an inline
+`# enumerate-exempt: <rationale>`, `# glob-exempt: <rationale>` or
+`# filter-exempt: <rationale>` marker. The scan set is `scripts/*.sh` plus
+`tests/*.test.sh`, less `tests/fixtures/`, so harnesses are in scope by
+name. Enforced by
 `scripts/check-enumerate-helper-required.sh` (member check
 `enumerate-helper-required` in the `lint-script-hygiene` CI group); see
 [enumerate-helper-required](../docs/security/workflow-hardening.md#enumerate-helper-required).
@@ -210,7 +210,8 @@ runs the pair.
     harness_assert_record 'bad-new-mode' "${expected_stderr}" "${stderr_file}"
     ```
 
-1. Run `bash tests/<script-name>.test.sh` locally to verify. A
+1. Run `nix develop --command bash tests/<script-name>.test.sh` locally to
+    verify. A
     `does not discriminate` line means the chosen substring also
     appears in another scenario's output — pick a token unique to the
     failure path (typically the level tag plus the label rather than
