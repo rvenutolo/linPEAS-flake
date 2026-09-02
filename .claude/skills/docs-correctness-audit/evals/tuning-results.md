@@ -29,11 +29,11 @@ recall measurement, so none of the numbers below come from it.
 
 ## Result
 
-| Configuration        | Readers | Seed recall (2 runs) | Reader-tokens/run (sum) | Cut  |
-| -------------------- | ------- | -------------------- | ----------------------- | ---- |
-| per-subdirectory     | 7       | 14/14 (100%)         | ~339k                   | —    |
-| merged (shipped)     | 4       | 14/14 (100%)         | ~240k                   | ~29% |
-| security+root merged | 3       | 14/14 (100%)         | not comparable          | —    |
+| Configuration        | Readers | Seed recall (2 runs, seven-seed set) | Reader-tokens/run (sum) | Cut  |
+| -------------------- | ------- | ------------------------------------ | ----------------------- | ---- |
+| per-subdirectory     | 7       | 100%                                 | ~339k                   | —    |
+| merged (shipped)     | 4       | 100%                                 | ~240k                   | ~29% |
+| security+root merged | 3       | 100%                                 | not comparable          | —    |
 
 All three configurations caught every measured seed in both runs — the seven
 categories that existed then (ghost CI job, lint-group mislabel, cron drift,
@@ -56,7 +56,7 @@ absolute, as the portable result. The third row's cost cell deliberately
 carries no number: that configuration was measured in a separate session, against a tree
 whose known drift had just been corrected, so its token total is not
 commensurable with the first two rows. Recall is still comparable, because
-14/14 is the ceiling — a configuration cannot beat it, only fall short.
+full recall is the ceiling — a configuration cannot beat it, only fall short.
 
 ## Tradeoff and guardrail
 

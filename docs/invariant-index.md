@@ -33,7 +33,7 @@ whose enforcer runs nowhere in `ci.yml` says `ci: -` even when
 
 Behavior rules for the AI assistant and other non-binding guidance live
 mostly in an untracked assistant-tooling tree. The committed part of
-`.claude/` is audit tooling rather than a binding rule, so it is out of
+`.claude/` is assistant tooling rather than a binding rule, so it is out of
 scope for this index either way.
 
 ## Security

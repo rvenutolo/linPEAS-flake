@@ -29,7 +29,7 @@ The `good` / `bad-` prefix is the portable part; the extension follows
 whatever the subject lint reads. Workflow-scanning lints use `.yml`, but
 fixtures across this tree are also `.yaml`, `.sh`, `.json`, `.md`,
 `.lock`, `.toml`, `.nix`, `.awk`, `.txt`, `.tsv`, and extensionless
-command shims.
+files (command shims, a `justfile`, a `README`).
 
 Neither shape is guaranteed: a handful of directories are named for the
 invariant rather than for the harness, so read the harness's `FIXTURES`

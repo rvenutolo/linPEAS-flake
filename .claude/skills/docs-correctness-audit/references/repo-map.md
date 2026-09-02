@@ -88,9 +88,9 @@ stay standalone because they hold the dense, high-severity drift surfaces
 recall-vs-cost evidence for this map is in
 [`../evals/tuning-results.md`](../evals/tuning-results.md), which also records
 a measured three-reader variant that merges `security` into `root + misc`: it
-held seed recall at 14/14, so the split is a judgement about depth on
-non-seeded drift, not a measured recall win. Keep them un-merged unless
-someone re-measures cost head-to-head. That recall-vs-cost tuning covers the
+held full seed recall on the seed set measured at the time, so the split is a
+judgement about depth on non-seeded drift, not a measured recall win. Keep
+them un-merged unless someone re-measures cost head-to-head. That recall-vs-cost tuning covers the
 four user-facing clusters; `claude-tooling` is separate from all of them
 because it is not user-facing documentation at all — it is the audit's own
 specification, so its reader checks this file against the tree rather than
