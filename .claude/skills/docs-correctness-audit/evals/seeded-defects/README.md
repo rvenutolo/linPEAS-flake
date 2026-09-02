@@ -76,15 +76,19 @@ column) is exactly the signal being measured.
     bundle section — the ephemeral / link / CI-name / required-check-count
     sweeps, the cron table, and the script inventory — expect high, stable
     recall.
-- **Reasoning-driven** seeds (`mislabel-member`, `false-exclusive`) need a
+- **Reasoning-driven** seeds (`mislabel-member`, `false-exclusive`,
+    `near-miss-exclusive`) need a
     comparison the bundle supports but does not perform — the union allowlist
     contains the name and the mislabel is a semantic distinction; the
     `false-exclusive` payload turns on step-level detail the bundle carries
     nowhere, so refuting it means opening the workflow — expect the flaky
     tail. A low number there is a measurement, not a bug in the
-    harness. `false-exclusive` plants the flatly-false end of that class; the
-    "true except for one member" end is the harder case the harness does not
-    seed, so its recall is unmeasured rather than good.
+    harness. The class is seeded at both ends: `false-exclusive` is flatly
+    false (no job lacks the step it names), while `near-miss-exclusive` is true
+    of every member of its set but one, and that one exception is listed in the
+    same table the claim sits under. Expect the near-miss to be the weaker of
+    the two — a reader who spot-checks two or three members finds nothing
+    wrong.
 
 ## Tests
 

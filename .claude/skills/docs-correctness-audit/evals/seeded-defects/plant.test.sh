@@ -27,9 +27,9 @@ manifest="$results/manifest-resolved.json"
 
 check "worktree exists" "[ -d '$wt' ]"
 check "skill present in worktree" "[ -f '$wt/.claude/skills/docs-correctness-audit/SKILL.md' ]"
-check "manifest has 8 seeds" "[ \"\$(jq 'length' '$manifest')\" = 8 ]"
+check "manifest has 9 seeds" "[ \"\$(jq 'length' '$manifest')\" = 9 ]"
 check "every seed has a numeric line" \
-  "[ \"\$(jq '[.[] | select((.line|type)==\"number\" and .line>0)] | length' '$manifest')\" = 8 ]"
+  "[ \"\$(jq '[.[] | select((.line|type)==\"number\" and .line>0)] | length' '$manifest')\" = 9 ]"
 
 # Every sentinel (non-empty) must be present in the worktree at its recorded file.
 while IFS=$'\t' read -r f s; do

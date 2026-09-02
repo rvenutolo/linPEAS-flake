@@ -95,6 +95,18 @@
       "expected_severity": "high",
       "sentinel": "",
       "line_tol": 3
+    },
+    {
+      "id": "near-miss-exclusive",
+      "category": "near-miss exclusive",
+      "file": "docs/architecture/ci.md",
+      "anchor": "Daily crons fire in this UTC order:",
+      "op": "insert-after",
+      "from": "",
+      "payload": "Every Friday cron only reads the repo: the weekly window is verification and scanning work, so a weekly run never opens a pull request.",
+      "expected_severity": "low",
+      "sentinel": "",
+      "line_tol": 3
     }
   ]
 }
