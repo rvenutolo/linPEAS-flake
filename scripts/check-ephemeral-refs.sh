@@ -53,13 +53,15 @@
 # for a given source line, either a blank line or a substring of that
 # same raw line — Markdown emits the line with exempt regions blanked,
 # shell emits `#` prepended to the text `shfmt` reports (and the raw
-# line carries that `#`), Nix and YAML emit the line with its indent
-# stripped. Blanking only removes text, and removing text cannot create
-# a match. The one regex feature that could read differently is the
-# left boundary guard: where an extracted match binds `^`, the same
-# position in the raw line is preceded by whitespace or by line start,
-# because a comment opener requires one and a Markdown line *is* the raw
-# line — and whitespace satisfies the guard's negated class. So a match
+# line carries that `#`), Nix and YAML emit the comment text with its
+# indent stripped, and a Nix block comment also loses its `/*` and `*/`
+# delimiters. Blanking only removes text, and removing text cannot
+# create a match. The one regex feature that could read differently is
+# the left boundary guard: where an extracted match binds `^`, the same
+# position in the raw line is preceded by whitespace, by line start, or
+# by a `/*` opener — a comment opener requires whitespace or line start
+# before it, and a Markdown line *is* the raw line — and none of those
+# is in the guard's negated class. So a match
 # in the extracted stream implies a match in the raw file, and skipping
 # a file the union does not match is sound. Widening a class regex
 # without widening the union it is joined into would break that, which

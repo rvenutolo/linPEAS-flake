@@ -62,11 +62,10 @@ registries disagree, `verify-latest-release.yml` files its
 `verify-latest-release-failure` issue with
 `Reason: cross-registry-manifest-mismatch` and points it at this runbook.
 That body says to treat the Docker Hub token as compromised until proven
-otherwise. That
-is a post-publication tag rewrite, not a half-finished push, and the
-steps below assume the opposite — they spend `DOCKERHUB_TOKEN_DELETE`
-on the working assumption that the credential is sound. Take these
-first instead:
+otherwise. A cross-registry mismatch is a post-publication tag rewrite,
+not a half-finished push, and the steps below assume the opposite —
+they spend `DOCKERHUB_TOKEN_DELETE` on the working assumption that the
+credential is sound. Take these first instead:
 
 1. Revoke `DOCKERHUB_TOKEN_RW` and `DOCKERHUB_TOKEN_DELETE` per the
     rotation guidance in

@@ -104,8 +104,9 @@ recall harness itself records only recall — `score.sh` reads report files and
 the manifest, and its output carries no token column.
 
 A configuration ships only if seed recall stays at 100% across two runs (no
-seed category dropped, whatever the seed set currently holds) **and** reader-tokens fall below the per-subdirectory
-baseline. A configuration whose cost was never measured head-to-head is
+seed category dropped, whatever the seed set currently holds) **and**
+reader-tokens fall below the per-subdirectory baseline. A configuration
+whose cost was never measured head-to-head is
 *unevaluated* against that gate, not failed by it. The recorded token figures
 are per-run sums across readers from a single measured run per configuration
 (recall is the two-run figure), with no measured spread — so treat a token
