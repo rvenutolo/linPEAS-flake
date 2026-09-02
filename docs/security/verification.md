@@ -291,7 +291,7 @@ output and open / update deduped issues via
 - CRITICAL threshold is hardcoded to CVSS `>= 9.0` per GitHub's current
     Code Scanning mapping. The `jq tonumber? // 0` guard drops non-numeric
     SARIF severities (e.g. textual `"high"` from some scanners) instead
-    of erroring under `set -euo pipefail`. Revisit the threshold if
+    of erroring under `set -Eeuo pipefail`. Revisit the threshold if
     GitHub revises the CVSS-to-bucket mapping.
 
 ## OCI image CVE scan (Grype)<a name="oci-image-cve-scan-grype"></a>

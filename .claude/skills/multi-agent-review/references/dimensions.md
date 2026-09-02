@@ -52,7 +52,7 @@ Slices:
 - devShells + checks wiring — `nix/devshell*.nix`, `nix/checks.nix`, `nix/hooks/*`, `nix/treefmt-config.nix`, `treefmt.nix`
 - hammer-shim / manifest parity — `nix/hammer-shim.nix`, `nix/manifests.nix`
 
-Refuters: verify eval behavior empirically (`nix eval`, `nix build`, `nix path-info`) — a derivation that *looks* wrong in trace often builds identically. Kill "supply-chain downgrade"-style claims unless a concrete eval reproduces them.
+Refuters: verify eval behavior empirically (`nix eval`, `nix build --no-link`, `nix path-info`) — a derivation that *looks* wrong in trace often builds identically. Kill "supply-chain downgrade"-style claims unless a concrete eval reproduces them.
 
 ## 2. Shell script correctness — *deep*
 
@@ -120,7 +120,7 @@ Slices:
 - mutation smell: gut a rejection clause in the covered script — does a test go red? (In a throwaway `git worktree`, never in the checkout — see the refuter note below.) If not, the test can't fail.
 - fixture gaps + negative-fixture-per-rejection-clause coverage
 
-Refuters: reproduce the coverage gap concretely. Where the covered script honours an override that redirects the code under test — `SCRIPTS_DIR_OVERRIDE`, `BUMP_SCRIPT_OVERRIDE`, `AWK_LIB_OVERRIDE` and friends — point it at a fixture tree; that is cheaper and equally conclusive. Otherwise the mutation must happen outside the checkout: `git worktree add --detach` a throwaway tree under `$TMPDIR`, mutate the script *there*, run that tree's copy of the test, and `git worktree remove` it afterwards. A bare file copy will not do — the harnesses resolve their subject from `git rev-parse --show-toplevel`, so the mutation has to sit under a real repo root. Keep the finding only if the test stays green when it should fail. A test that *looks* weak often still catches the mutation.
+Refuters: reproduce the coverage gap concretely. This dimension carries the one sanctioned exception to "do not modify the checkout": a detached `git worktree` under `$TMPDIR` is not the checkout. The mutation must happen there, not in the checkout: `git worktree add --detach` a throwaway tree under `$TMPDIR`, mutate the script *there*, run that tree's copy of the test, and `git worktree remove` it afterwards. The repo's `*_OVERRIDE` variables are no shortcut here — they redirect a checker's *scanned input* (`BUMP_SCRIPT_OVERRIDE` and `SCRIPTS_DIR_OVERRIDE` both point at the corpus a lint reads), never the covered script's own path. Nor will a bare file copy do: the harnesses resolve their subject from `git rev-parse --show-toplevel`, so the mutation has to sit under a real repo root. Keep the finding only if the test stays green when it should fail. A test that *looks* weak often still catches the mutation.
 
 ## 6. Invariant ↔ enforcement coherence — *deep*
 

@@ -43,8 +43,8 @@ it is the source of truth for what each dimension covers.
     that looks broken in trace often works (and vice-versa). A finding must carry
     a concrete `failure_scenario` (inputs/state → wrong outcome) the refuters
     actually ran. A 30-second probe beats a confident wrong claim.
-- **Report-only, mutate the checkout not at all.** Not even a generated file's
-    mtime. If verifying a fact would write to the tree, inspect a read-only
+- **Report-only — never mutate the checkout.** Not even a generated file's
+    mtime. If verifying a fact would write to the checkout, inspect a read-only
     command's output or copy the artifact out; use `nix build --no-link` so no
     `result` symlink lands, since the closing check would not catch it — it is
     gitignored. The one bounded exception is dimension 5's mutation testing,
@@ -157,8 +157,7 @@ const graded = (await parallel(toRefute.map(f => () =>
   parallel([0,1,2].map(i => () =>
     agent('You may run read-only commands to reproduce (nix eval, nix build --no-link, '
       + 'run the script against a crafted input, git show) but MUST NOT modify the '
-      + 'checkout. A detached git worktree under $TMPDIR is not the checkout; remove it '
-      + 'when done. ' + REFUTER_GUIDANCE
+      + 'checkout. ' + REFUTER_GUIDANCE
       + ' Default refuted=true unless you reproduce the defect against the real artifact. '
       + 'Finding: ' + JSON.stringify(f),
       { label: 'refute:' + (f.file || '?'), phase: 'Refute', schema: VERDICT })))

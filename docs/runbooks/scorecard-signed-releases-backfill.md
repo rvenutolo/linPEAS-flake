@@ -114,8 +114,9 @@ pulling by digest exists to prevent. An index that records anything
 other than exactly one `linux/<arch>` manifest per arch also fails the
 preflight rather than being guessed at.
 
-To resolve a partial set, restore the missing per-arch images by
-rebuilding at the historic commit, then re-run the backfill:
+To resolve a partial set, restore the missing objects — per-arch images by
+rebuilding at the historic commit, an index from the digests it recorded —
+then re-run the backfill:
 
 1. Identify the commit that pinned `<tag>`:
     `git log -S'<tag>' --reverse --format='%H %s' -- linpeas-pin.json | head -1`.
@@ -126,20 +127,22 @@ rebuilding at the historic commit, then re-run the backfill:
     `nix build .#linpeas-image --print-build-logs`. This builds the
     **local system's** image only. Restoring a non-host arch needs a host
     of that architecture, or a remote builder / `extra-platforms` with
-    binfmt configured; repeat per missing arch. The preflight probes six
-    objects — the four per-arch tags and both `:<tag>` indexes — and
-    hard-fails on any count between one and five, so every missing object
-    has to be restored, not just the arch tags.
+    binfmt configured; repeat per missing arch. Every missing object has to
+    be restored, not just the arch tags — see
+    [Partial image set](#partial-image-set) for why five of six still fails.
 1. Before pushing anything, verify each rebuilt per-arch image against a
-    record that predates the loss — see
-    [Verifying the rebuild](#verifying-the-rebuild) below, which also covers
-    the case where that record is the missing object.
+    record that predates the loss, and recover the digests the release
+    shipped — see [Verifying the rebuild](#verifying-the-rebuild) below. If
+    no such record survives, stop here: the release cannot be safely
+    backfilled. Leave it partial and say so in the `scorecard-drift`
+    tracking issue — pushing unverified bytes under its tags is the outcome
+    that section exists to prevent.
 1. `docker load --input result` + retag + push to GHCR / Docker Hub
     under `${tag}-${arch}` for the missing arch(es)/registry(ies).
 1. Restore a missing `:<tag>` index, if that is one of the missing objects,
-    over the digests recovered in step 3 — never over whatever the arch tags
-    currently resolve to. If no pre-eviction record of those digests survives,
-    stop here: the release cannot be safely backfilled (see below).
+    over the digests recovered per
+    [Verifying the rebuild](#verifying-the-rebuild) — never over whatever the
+    arch tags currently resolve to.
 1. Re-run `gh workflow run release-on-bump.yml --ref main -F backfill-tag=<tag>`.
 
 The rebuilt image must be byte-identical to the original for cosign

@@ -15,20 +15,23 @@ Strict least-privilege rule for every workflow in `.github/workflows/`.
 
 ## Why
 
-Rule 1 is what stops a job from inheriting the repo-wide default: a
-workflow with no top-level `permissions:` at all hands every one of its
-jobs that default instead. It is pinned to `read` here and probed daily
-(see [settings posture](settings-posture.md)), but one UI flip to
-`write` would widen every such job at once, and nothing in the workflow
-file would record it.
+Rule 1 is what stops a job from inheriting the repo-wide default: in a
+workflow with no top-level `permissions:` at all, every job that declares
+none of its own takes that default instead. The default is pinned to
+`read` here and probed daily (see
+[settings posture](settings-posture.md)), but one UI flip to `write`
+would widen every such job at once, and nothing in the workflow file
+would record it.
 
 Rule 2 then forbids leaning on the empty top-level block. A job that
 declares no scopes states nothing about what it needs, so the posture
 rests entirely on rule 1 holding at the top of the file. Reviewer-only
 enforcement is fragile: the omission is invisible in review precisely
 because nothing is written down.
-Locking every job to an explicit, narrowly-scoped block keeps the blast
-radius of a compromised step bounded to scopes that job actually needs.
+
+Together the two rules keep every job's token surface stated in the file
+it runs from. Narrowing that surface is the per-job allowlist's job,
+below.
 
 ## Enforcement
 

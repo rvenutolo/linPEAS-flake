@@ -67,19 +67,19 @@ The push loop inside `release-on-bump.yml` per-arch jobs runs
 ### No local copy of the token<a name="no-local-copy-of-the-token"></a>
 
 Docker Hub shows an access token once at creation and never re-displays
-it, so a lost copy cannot be recovered — it can only be replaced. That
-replacement is a rotation, and this repo rotates Docker Hub credentials
-on suspected compromise only (see
-[DOCKERHUB_TOKEN split](#dockerhub_token-split-rw--delete) below and
-`SECURITY.md`), so treat it as one and follow the same order: revoke the
-superseded token at <https://hub.docker.com/settings/security> first,
-then create a fresh Delete-scoped token, then resync the repo secret.
+it, so a lost copy cannot be recovered — it can only be replaced. Create
+a fresh Delete-scoped token at <https://hub.docker.com/settings/security>,
+resync the repo secret, confirm the recovery commands below authenticate,
+and only then delete the token you replaced — the old one is the rollback
+target until the new one is proven, and `dockerhub-sync.yml` consumes this
+secret on every release.
 
 ```bash
 gh secret set DOCKERHUB_TOKEN_DELETE --repo rvenutolo/linPEAS-flake
 ```
 
-Use the new token for the commands below.
+Under *suspected compromise* the order inverts — revoke first, per
+`SECURITY.md` — but a lost local copy is not a compromise.
 
 ## Step-by-step<a name="step-by-step"></a>
 

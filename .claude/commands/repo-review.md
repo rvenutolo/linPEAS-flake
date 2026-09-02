@@ -22,8 +22,11 @@ Run a multi-agent, refute-all review of this repository using the
     live skeptic of at least two dissenting), which are never dropped silently — to one
     severity-ranked report under `.claude/reports/`.
 
-This is a READ-ONLY review: edit nothing, mutate nothing (not even a generated
-file's mtime); end by confirming `git status` shows no modified tracked files. If the user passed an
+This is a READ-ONLY review: edit nothing, mutate nothing in the checkout (not
+even a generated file's mtime — use `nix build --no-link` so no `result`
+symlink lands); end by confirming `git status` shows no modified tracked files.
+The one exception is dimension 5's mutation testing, which runs in a detached
+`git worktree` under `$TMPDIR` and tears it down afterwards. If the user passed an
 argument naming a subset (e.g. `2,5` or `nix`), scope to those dimensions but
 keep the same method.
 

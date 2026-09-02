@@ -14,7 +14,7 @@
 #   - packages: write       — push container images / packages
 #   - id-token: write       — mint OIDC tokens (cosign signing)
 #   - attestations: write   — record SLSA attestations
-#   - actions: write        — manage caches / cancel runs; a fork
+#   - actions: write        — manage caches / re-run runs; a fork
 #                             inheriting the workflow would fire it under
 #                             the fork's own token, deleting the fork's
 #                             caches and re-running its failed jobs on a
