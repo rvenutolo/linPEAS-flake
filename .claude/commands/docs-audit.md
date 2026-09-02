@@ -5,6 +5,11 @@ description: Read-only documentation correctness audit — severity-ranked findi
 Run a documentation correctness audit of this repository using the
 `docs-correctness-audit` skill. Invoke that skill and follow it exactly:
 
+1. Read the skill's `references/repo-map.md` (cluster map, generated-doc
+    table, ephemeral-token regex) before dispatching anything.
+1. Aim first at prose the last fix pass touched: read `LAST_AUDIT_SHA` from
+    `.github/docs-audit-state` and list tracked Markdown changed since, then
+    hand the readers that file list as a priority set — not a scope limit.
 1. Run the collector bundled with that skill (`<skill-dir>/scripts/collect-ground-truth.sh`,
     resolved from the SKILL.md's own directory) once to gather the
     authoritative ground-truth bundle (flake outputs, recipes, scripts,
