@@ -1,9 +1,9 @@
 # Docker Hub recovery runbook
 
-Steps to recover from a release whose two registries disagree — most
-often a half-published one where one registry (`docker.io` or
-`ghcr.io`) accepted a per-arch push but the other
-failed, leaving an orphan arch-suffixed tag that a naive retry of
+Steps to recover from a release the pipeline left incomplete, or whose
+two registries disagree. Most often that is a half-published one where
+one registry (`docker.io` or `ghcr.io`) accepted a per-arch push but the
+other failed, leaving an orphan arch-suffixed tag that a naive retry of
 `release-on-bump.yml` would silently overwrite, invalidating any
 attestations and signatures already issued over the original bytes —
 the failing arch's attest steps never ran, but the sibling arch's job
@@ -14,8 +14,9 @@ under [When this applies](#when-this-applies).
 
 This runbook is referenced from the auto-filed
 `release-on-bump-failure` issue body, and from
-`verify-latest-release.yml`'s `cross-registry-manifest-mismatch` arm. The issue body intentionally
-links here rather than embedding the snippets inline, so:
+`verify-latest-release.yml`'s `cross-registry-manifest-mismatch` arm.
+The `release-on-bump-failure` body intentionally links here rather than
+embedding the snippets inline, so:
 
 - The snippets stay correct (JSON construction via `jq -n` is
     quote-safe, unlike shell-interpolated JSON).
@@ -56,10 +57,12 @@ The push loop inside `release-on-bump.yml` per-arch jobs runs
     signature may already reference and leaving the retry's digests
     ambiguous.
 
-A third path arrives here from elsewhere: `verify-latest-release.yml`
-files `cross-registry-manifest-mismatch` against this runbook when a
-published release's two registries disagree, and its issue body says to
-treat the Docker Hub token as compromised until proven otherwise. That
+A third path arrives here from elsewhere: when a published release's two
+registries disagree, `verify-latest-release.yml` files its
+`verify-latest-release-failure` issue with
+`Reason: cross-registry-manifest-mismatch` and points it at this runbook.
+That body says to treat the Docker Hub token as compromised until proven
+otherwise. That
 is a post-publication tag rewrite, not a half-finished push, and the
 steps below assume the opposite — they spend `DOCKERHUB_TOKEN_DELETE`
 on the working assumption that the credential is sound. Take these
@@ -234,7 +237,10 @@ two per-arch image jobs share a bullet above), so a green run means all
 seven, not just the ones Docker Hub touches.
 
 Close the `release-on-bump-failure` issue with a one-line root-cause
-comment (e.g., `transient: docker.io 502 on push, retry green`).
+comment (e.g., `transient: docker.io 502 on push, retry green`). On the
+third path there is no such issue: close the
+`verify-latest-release-failure` one instead, and only after a fresh
+`verify-latest-release` run passes.
 
 ## Common Docker Hub failure modes<a name="common-docker-hub-failure-modes"></a>
 

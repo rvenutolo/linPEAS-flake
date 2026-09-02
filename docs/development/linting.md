@@ -580,23 +580,33 @@ even when the pre-commit hook is bypassed.
 
 ## Generated-document ownership
 
-Eleven regions are written by a `refresh-*.sh` generator and must not be
-hand-edited. Two are whole files —
+Twelve regions are written by a `refresh-*.sh` generator and must not be
+hand-edited — one per document path those generators declare, which
+`grep -h '@generates' scripts/refresh-*.sh` lists. Two are whole files:
 [`docs/reference/test-harnesses.md`](../reference/test-harnesses.md) and
 [`docs/security/enforcement-matrix.md`](../security/enforcement-matrix.md),
 whose generators emit the heading and every line around the table. The other
-nine are marked-off blocks inside a hand-written page: the flake-show block
-above; the scripts-reference block in
-[`docs/reference/scripts.md`](../reference/scripts.md); the just-recipes block
-in [`docs/reference/just-recipes.md`](../reference/just-recipes.md) and the
-matching block in `README.md`; the treefmt-config block in
-[`docs/reference/treefmt-config.md`](../reference/treefmt-config.md); the
-ci-dag block in [`docs/architecture/ci-dag.md`](../architecture/ci-dag.md); the
-pre-commit hook table in [`git.md`](git.md); the CI summary block in
-`README.md`; the pin-parity block in
-[`auto-update.md`](../architecture/auto-update.md); and the ephemeral-refs-gap
-block above. Prose outside a block is ordinary hand-written documentation and
-is edited normally.
+ten are marked-off blocks inside a hand-written page:
+
+1. the flake-show block above;
+1. the scripts-reference block in
+    [`docs/reference/scripts.md`](../reference/scripts.md);
+1. the just-recipes block in
+    [`docs/reference/just-recipes.md`](../reference/just-recipes.md);
+1. the matching recipe block in `README.md`;
+1. the treefmt-config block in
+    [`docs/reference/treefmt-config.md`](../reference/treefmt-config.md);
+1. the ci-dag block in
+    [`docs/architecture/ci-dag.md`](../architecture/ci-dag.md);
+1. the pre-commit hook table in [`git.md`](git.md);
+1. the CI summary block in `README.md`;
+1. the pin-parity block in
+    [`auto-update.md`](../architecture/auto-update.md);
+1. the ephemeral-refs-gap block above.
+
+`refresh-just-recipes.sh` owns two of those, which is why eleven generators
+produce twelve regions. Prose outside a block is ordinary hand-written
+documentation and is edited normally.
 
 Each has a `*-fresh` pre-commit hook, which is the gate a hand edit actually
 trips: the hooks exit 0 under `NIX_BUILD_TOP`, so they run on the commit path
@@ -613,7 +623,7 @@ for the enforcement matrix, the `enforcer:` / `ci:` / `hook:` annotations in
 [`docs/invariant-index.md`](../invariant-index.md) it renders from.
 
 `CHANGELOG.md` is generator-owned too, on different terms: git-cliff writes
-it, no pre-commit hook covers it, and freshness is asserted by
+it, no `*-fresh` hook covers it, and freshness is asserted by
 `scripts/check-changelog-fresh.sh` in the required `changelog-links` job over
 the released sections only — `## Unreleased` changes with every merged commit.
 See [changelog.md](changelog.md).

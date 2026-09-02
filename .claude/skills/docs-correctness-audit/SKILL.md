@@ -140,8 +140,11 @@ Read-only fan-out needs no orchestration opt-in — it is plain parallel reads.
     collector's **`UNRESOLVED INTERNAL LINKS / ANCHORS`** section — flag every
     listed entry as high severity; do not re-derive by running lychee again. A
     section reading `(lychee not found — …)`, `(lychee failed — …)` or
-    `(lychee skipped N of M input(s) — …)` is a non-result, not a clean one —
-    only `(none)` means every input was read. Say so in the coverage note.
+    `(lychee skipped N of M input(s) — …)` means the sweep is not clean — only
+    `(none)` means every input was read. The skip marker reports
+    independently, so it can head a real error list: when it does, both apply
+    — flag the listed entries and record the sweep as incomplete. Say so in
+    the coverage note.
 1. **Internal consistency.** Docs contradicting each other (same fact stated two
     ways); invariant-index entries vs their tracked-doc sections; a claimed
     invariant with no backing check.

@@ -317,7 +317,8 @@ skipped entirely — only relative file paths and heading anchors are checked. A
 listed entry is authoritative drift: the link target does not exist (high
 severity). Flag every entry without re-deriving by eye. Three non-result
 markers mean the sweep did not cover what it claims to, and none is a clean
-read: `(lychee not found — internal-link sweep skipped)` when `lychee` is off
+read — the skip marker reports independently, so it can head a real error
+list rather than replacing one: `(lychee not found — internal-link sweep skipped)` when `lychee` is off
 the collector's `PATH`;
 `(lychee failed — internal-link sweep unusable; exit N)`
 when lychee ran but could not complete — a tracked doc deleted from the
