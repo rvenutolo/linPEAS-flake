@@ -60,8 +60,8 @@ Expected: green run, or red run with the `scorecard-drift` tracking issue surfac
 GitHub → top-right avatar → **Settings** → **Developer settings** →
 **Personal access tokens** → **Fine-grained tokens** → delete the token you
 replaced. Both entries share the `linpeas-flake-scorecard-drift-check`
-prefix, so pick the unsuffixed entry, or the one with the older suffix if
-both rotations post-date the suffix convention.
+prefix, so delete the unsuffixed entry if one exists, otherwise the one
+with the older `-<yyyymm>` suffix.
 
 Do this only once the verification run above is green, so a bad new PAT can
 still be rolled back — but do not skip it. Rotating on suspected compromise

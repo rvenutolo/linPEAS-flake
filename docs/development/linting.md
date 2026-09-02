@@ -582,7 +582,7 @@ even when the pre-commit hook is bypassed.
 
 Twelve regions are written by a `refresh-*.sh` generator and must not be
 hand-edited — one per document path those generators declare, which
-`grep -h '@generates' scripts/refresh-*.sh` lists. Two are whole files:
+`grep -h '^# @generates' scripts/refresh-*.sh` lists. Two are whole files:
 [`docs/reference/test-harnesses.md`](../reference/test-harnesses.md) and
 [`docs/security/enforcement-matrix.md`](../security/enforcement-matrix.md),
 whose generators emit the heading and every line around the table. The other
@@ -605,8 +605,12 @@ ten are marked-off blocks inside a hand-written page:
 1. the ephemeral-refs-gap block above.
 
 `refresh-just-recipes.sh` owns two of those, which is why eleven generators
-produce twelve regions. Prose outside a block is ordinary hand-written
-documentation and is edited normally.
+produce twelve regions. This list splits by what the generator emits; the
+annotations split by size-label ownership, where a page whose block is the
+whole of its content is `@generates` even though it splices into a fixed
+header — see [labeling.md](labeling.md#ignore-list-parity) for that 7/5
+split. Prose outside a block is ordinary hand-written documentation and is
+edited normally.
 
 Each has a `*-fresh` pre-commit hook, which is the gate a hand edit actually
 trips: the hooks exit 0 under `NIX_BUILD_TOP`, so they run on the commit path

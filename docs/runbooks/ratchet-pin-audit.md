@@ -62,10 +62,13 @@ Steps:
     diff between `pinned` and `canonical` matches their stated
     change): update each drifted pin in place. Replace the old
     `pinned` SHA with the `canonical` SHA from the issue body across
-    every workflow file that uses the action:
+    every workflow file and composite action that uses it — the audit
+    scans only `.github/workflows/`, so a composite under
+    `.github/actions/` carrying the same pin is not in the issue body
+    and would otherwise keep the old SHA:
 
     ```shell
-    find .github/workflows \
+    find .github/workflows .github/actions \
       \( -name '*.yml' -o -name '*.yaml' \) \
       -exec sed --in-place \
         's|<repo>@<old-sha>|<repo>@<new-sha>|g' {} +
