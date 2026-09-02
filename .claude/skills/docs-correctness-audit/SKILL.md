@@ -27,8 +27,8 @@ agree on one source of truth.
 
 ## Why these disciplines matter
 
-- **Report-first, no edits — read-only means do not even touch.** A 40+ file
-    repo has many small drifts. Editing as you find churns the tree and buries the
+- **Report-first, no edits — read-only means do not even touch.** A repo this
+    size has many small drifts. Editing as you find churns the tree and buries the
     signal. A ranked report lets the human decide what to fix, in what order;
     fixing is a separate, later pass. Mutate *nothing* — not even a generated
     file's mtime. Running a generator or a build that rewrites a store-linked file
@@ -53,7 +53,7 @@ agree on one source of truth.
     but edit nothing during the report stage.
 - **"CI gates it" is NOT proof the prose is correct — this is the signature
     drift of this repo, so make it the spine of the audit.** Freshness checks
-    (`*-fresh`) gate only the *generated block bodies*; they say nothing about
+    (`*-fresh`) gate only the *generated bodies*; they say nothing about
     hand-written prose that *describes* CI. The trap: many per-rule checks are
     **member checks** that run inside a group job — via `scripts/run-lint-group.sh`
     (`lint-workflow-security`, `lint-script-hygiene`, `lint-doc-invariants`,

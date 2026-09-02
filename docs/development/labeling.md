@@ -5,13 +5,15 @@
 `.github/labeler.yml` globs. `.github/labels.yml` is the catalog of
 record — canonical color and description source — for the area,
 release-note (`bug`, `enhancement`, `idea`), and `size/*` labels. Some
-labels stay out of that manifest deliberately: failure-notification
-labels are created on demand by the `notify-workflow-result` composite,
-`ci-watchdog.yml` and `docs-audit-reminder.yml` each create their own
-escalation label (`ci-watchdog`, `docs-audit`) inline,
-`reproducibility-check.yml` applies a `reproducibility` label that
-nothing in the tree creates, and Renovate creates its own
-`dependencies` PR label. Auto-labeling is not a required check — it is
+labels stay out of that manifest deliberately: the failure, drift and
+finding labels workflows hand to the `notify-workflow-result` composite
+are created on demand by the composite, `ci-watchdog.yml` and
+`docs-audit-reminder.yml` each create their own escalation label
+(`ci-watchdog`, `docs-audit`) inline, `reproducibility-check.yml`
+applies a `reproducibility` label that nothing in the tree creates, and
+Renovate and `update-flake-lock.yml` both apply a `dependencies` PR
+label that, like `reproducibility`, nothing in the tree creates.
+Auto-labeling is not a required check — it is
 cosmetic and must not block merge.
 
 There is no label-sync workflow (one would require allowlisting
@@ -67,8 +69,8 @@ generators refuse to run when the marker is absent, so that header is preserved
 rather than emitted; they are annotated `@generates` because the block *is* the
 page, while the four files named below are annotated the other way because the
 prose is. (`docs/security/enforcement-matrix.md` and
-`docs/reference/test-harnesses.md` are the pure cases — their generators write
-the whole file, header included.)
+`docs/reference/test-harnesses.md` are the pure cases among the doc pages —
+their generators write the whole file, header included.)
 Recording it at the generator keeps that judgment reviewable
 next to the code that makes it, where a coverage threshold would be a
 magic number that moves as the prose around the block grows. Files whose

@@ -174,9 +174,9 @@ holding a copy that goes stale.
 emits, for a given source line, either a blank line or a substring of
 that same raw line: Markdown emits the line with exempt regions blanked,
 shell emits `#` prepended to the comment text `shfmt` reports — and the
-raw line carries that `#` — while Nix emits the line with its indent
-stripped. Blanking only removes text, and removing text cannot create a
-match. The one regex feature that could read differently is the left
+raw line carries that `#` — while Nix and YAML emit the line with its
+indent stripped. Blanking only removes text, and removing text cannot create
+a match. The one regex feature that could read differently is the left
 boundary guard `(^|[^-&[:alnum:]_])`: where an extracted match binds
 `^`, the same position in the raw line is preceded by whitespace or by
 line start, because a comment opener requires one and a Markdown line

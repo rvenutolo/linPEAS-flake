@@ -173,7 +173,7 @@ are listed one script at a time rather than behind an enumerating grep,
 because each lint spells the variable differently: a grep for the
 shorter of the two names both scripts, one of which ignores the
 variable it matched and would scan the live repo instead of the fixture.
-The `^[^#]*` anchor on the enumerating greps that remain keeps them off
+The `^[^#]*` anchor on the two override-variable greps keeps them off
 comment-only mentions: a lint can name another lint's override variable
 in a rule comment without consuming it,
 which a bare substring grep reports as a consumer. The two ruleset

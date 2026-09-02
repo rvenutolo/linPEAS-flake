@@ -145,7 +145,9 @@ the `attribute failure reason` step. Reasons:
     [dockerhub-recovery.md](../runbooks/dockerhub-recovery.md).
 - `ghcr-attest-failed` / `hub-attest-failed` /
     `pin-attest-failed` — attestation
-    verification failed for a specific artifact.
+    verification failed for a specific artifact. Either tampering or a
+    Sigstore TUF trust-root rotation lag on the runner image; re-run the
+    cron 24h later to distinguish before treating it as tampering.
 - `release-tag-fetch-failed` / `release-asset-download-failed` —
     transient GitHub API / asset visibility lag.
 - `pin-blob-sig-failed` — cosign verify-blob failed for
@@ -163,7 +165,7 @@ the `attribute failure reason` step. Reasons:
 - `images-cosign-failed` — `cosign verify` of the published per-arch and
     index images failed against the pinned workflow identity and OIDC issuer.
     Treat as a signing-chain incident, adjacent in severity to the
-    `*-attest-failed` reasons.
+    `*-attest-failed` reasons and subject to the same re-run-first caveat.
 - `unattributed` — the job failed but no ladder arm matched the failed
     step. The ladder has a gap: the failure is real and unexplained, so
     triage it by hand and fix the attribution step. This is the token to
@@ -173,9 +175,10 @@ the `attribute failure reason` step. Reasons:
     which happens when it is cancelled or skipped before the attribution
     step runs. Not a verification result; re-run the cron.
 
-`upstream-sri-drift`, `cross-registry-manifest-mismatch`, the
-`*-attest-failed` family and `images-cosign-failed` warrant the "treat as
-security incident" framing, with `manifest-tag-drift` a step below.
+`upstream-sri-drift` and `cross-registry-manifest-mismatch` warrant the
+"treat as security incident" framing outright; the `*-attest-failed`
+family and `images-cosign-failed` warrant it once a 24h re-run has ruled
+out trust-root rotation lag, with `manifest-tag-drift` a step below.
 Folding all reasons into a single failure body trains
 the maintainer to skim-read auto-filed issues — exactly the wrong reflex
 when the failure is a real SRI drift or a one-sided registry rollback.

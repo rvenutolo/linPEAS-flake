@@ -34,8 +34,10 @@ individual diff reveals.
 
 ## The four external tools
 
-These are third-party tools, distinct from the in-tree shell lints in the
-next section. The weekly Friday cron cluster runs them in a fixed order (see
+These are third-party security scanners, distinct from the in-tree lints
+and posture watchdogs indexed in the next section (which also lists the
+upstream `actionlint` hook alongside them). The weekly Friday cron cluster
+runs them in a fixed order (see
 [CI — cron schedule](../architecture/ci.md#cron-schedule) for the exact slots):
 
 1. codeql (`codeql.yml`)
@@ -77,10 +79,11 @@ tree.)
     Friday cron (full tree); manual dispatch.
 - **Status:** advisory by design. It is the cheapest scanner, but it fails
     on *any* finding (no severity threshold), so as a required check a
-    single false positive would block merge. Its rule set is narrowed only by the suppression set in
-    `scripts/octoscan-scan.sh` — two disabled rules (`local-action`,
-    `dangerous-write`) and a single `--ignore` regex carrying two
-    alternatives, each with its rationale in that script's header.
+    single false positive would block merge. Its rule set is narrowed only
+    by the suppression set in `scripts/octoscan-scan.sh` — two disabled
+    rules (`local-action`, `dangerous-write`) and a single `--ignore` regex
+    carrying two alternatives, each with its rationale in that script's
+    header.
     Promotion would also force removing its PR paths filter. It stays
     advisory and path-filtered.
     - **Adding a suppression (operational):** a further rule or pattern is
@@ -114,10 +117,10 @@ tree.)
     (template-injection, excessive permissions, dangerous triggers) tuned to
     Actions semantics.
 - **Triggers:** runs as a **pre-commit hook on every commit that touches a
-    workflow YAML under `.github/workflows/`** (`--min-severity=low`, scanning the changed
-    workflow files), plus a weekly Friday cron and manual dispatch. It
-    does **not** scan on PRs or pushes — commit-time prevention is its primary
-    mode.
+    workflow YAML under `.github/workflows/`** (`--min-severity=low`,
+    scanning the changed workflow files), plus a weekly Friday cron and
+    manual dispatch. It does **not** scan on PRs or pushes — commit-time
+    prevention is its primary mode.
 - **Status:** commit-time prevention + weekly watchdog. The drift-check covers
     the pre-commit blind spots (`--no-verify`, web-UI and bot edits, upstream
     rule changes); on a finding it opens a deduped `zizmor-drift` issue, closed
