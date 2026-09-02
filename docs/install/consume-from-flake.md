@@ -23,7 +23,8 @@ For one-shot use see `nix run` and the Docker image in the project README.
 Replace `<TAG>` with the latest release tag from
 [releases](https://github.com/rvenutolo/linPEAS-flake/releases).
 
-Both `packages.<system>.default` and `packages.<system>.linpeas` are exposed; they alias the same derivation.
+Both `packages.<system>.default` and `packages.<system>.linpeas` are
+exposed; they alias the same derivation.
 
 The snippets follow only `nixpkgs`: the flake's separate
 `nixpkgs-unstable` input backs the dev shells, the `site` output, the

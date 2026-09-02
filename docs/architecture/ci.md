@@ -170,7 +170,7 @@ All schedules fit the maintainer's monitoring windows: daily crons run 08:00–1
 | `actions-cache-prune`             | `0 8 * * *`     | 08:00 daily  | Bound the lifetime of any Actions-cache entry a third-party action creates (nothing in-repo writes one)                                                  |
 | `update-linpeas`                  | `5 8 * * *`     | 08:05 daily  | Check upstream peass-ng for new release; open auto-merge bump PR                                                                                         |
 | `stale-pin-check`                 | `0 9 * * *`     | 09:00 daily  | Auto-file issue if pin is N days behind upstream                                                                                                         |
-| `ratchet-pin-audit`               | `15 9 * * *`    | 09:15 daily  | Audit third-party action pins are SHA-pinned + Renovate-tracked                                                                                          |
+| `ratchet-pin-audit`               | `15 9 * * *`    | 09:15 daily  | Re-derive each pinned action ref's canonical SHA; fire on an upstream tag force-move                                                                     |
 | `settings-posture-drift-check`    | `25 9 * * *`    | 09:25 daily  | Diff live repo settings vs committed baseline                                                                                                            |
 | `allowed-actions-api-drift-check` | `35 9 * * *`    | 09:35 daily  | Diff live Actions allowlist vs committed baseline                                                                                                        |
 | `flake-lock-staleness-check`      | `45 9 * * *`    | 09:45 daily  | Assert every top-level flake input is still being refreshed                                                                                              |
@@ -240,13 +240,13 @@ if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclu
 - Do NOT reintroduce `push:` trigger.
 - Keep the `if:` gate on the `sync` job.
 
+The `notify` job uses `if: always()` and reads `needs.sync.result`, so a
+skipped `sync` is inert in `notify-workflow-result` while a cancelled one
+is filed as an infrastructure failure.
+
 Like the cron-notify rule above, this is a maintainer-discipline
 invariant — no lint asserts the trigger shape or the `if:` gate (the
 only script naming this workflow checks token-scope split).
-
-- `notify` job uses `if: always()` and reads `needs.sync.result`; skipped =
-    inert in `notify-workflow-result`, cancelled = filed as an
-    infrastructure failure.
 
 ## GitHub Pages site invariants
 

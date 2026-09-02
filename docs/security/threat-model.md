@@ -57,7 +57,8 @@ execution, secret exfiltration from third-party actions.
 
 **Mitigations:**
 
-- Every `uses:` is pinned to a full 40-hex SHA (not a tag) or is a path-relative `./` self-reference.
+- Every `uses:` is pinned to a full 40-hex SHA (not a tag) or is a
+    path-relative `./` self-reference.
 - `uses:` vendors are restricted by the repo Actions allowlist
     (`allowed_actions: selected`).
 - Top-level `permissions: {}`; every job declares an explicit
