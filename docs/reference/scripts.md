@@ -739,8 +739,8 @@ Every creation therefore routes through `make_temp`
 library holds the one sanctioned bare invocation and is the only file
 this rule skips. Matching is by command position — line start, a
 command substitution, a pipe, a separator, a negation, a group
-opening, or a loop/branch keyword — so prose naming the command,
-including a parenthetical, is not a hit.
+opening, or one of the keywords `then`, `do` and `else` — so prose
+naming the command, including a parenthetical, is not a hit.
 
 Escape hatch: `# exit-code-exempt: <rationale>`, on the exit line of a
 guard whose missing input genuinely IS the finding, or on the line of a

@@ -7,11 +7,12 @@ The `ratchet-pin-audit` workflow runs on a daily cron (see
 SHA-pinned action ref it does not skip (see below). On *any* failure —
 detected drift, an upstream API failure, a ratchet tool failure, an
 unclassified error, or a cancelled run — the workflow opens a single
-deduped umbrella issue labeled `ratchet-drift`, or comments a run link
-on the one already open. The issue body's `Reason:` line names the
-reason of the run that opened it; a later failure adds only the link,
-so when the issue has been re-commented, read the newest run's log for
-its reason. Match the reason against the sections below. The issue
+deduped umbrella issue labeled `ratchet-drift`, or comments on the one
+already open. The issue body's `Reason:` line names the reason of the
+run that opened it; a later failure's comment carries only the run
+link (a later cancelled run's comment says it was cancelled), so when
+the issue has been re-commented, read the newest run's log for its
+reason. Match the reason against the sections below. The issue
 auto-closes on the next clean run.
 
 Two classes of upstream ref are skipped before any API call (a local
@@ -54,7 +55,7 @@ against the sections below.
 ### `drift-detected`
 
 At least one drifted ref is listed in the body of the issue as it was
-opened, one per line, in the shape `<ref>@tag pinned=<sha> canonical=<sha>`,
+opened, one per line, in the shape `<ref>@<tag> pinned=<sha> canonical=<sha>`,
 where `<ref>` is the literal pinned action — a monorepo action keeps its
 subpath, as in `github/codeql-action/analyze`.
 
@@ -155,14 +156,20 @@ failed shape validation; OR the workflow glob matched zero files.
 
 ### `unknown`
 
-The check step produced no `reason=` output. Either it exited non-zero
-on an unhandled error inside the run block, or the run was cancelled —
-most often its `timeout-minutes` was exceeded — which the issue body
-flags with a `[!WARNING]` banner naming it an infrastructure failure
-rather than a finding. Read the banner first: a cancelled run says
-nothing about pin drift, so re-run it. For an unhandled error, inspect
-the run log directly, add classification for the new failure mode, and
-update both the workflow and this runbook.
+The `check` job produced no `reason=` output. Three run shapes do
+that: the `audit pins` step exited non-zero on an unhandled error
+inside its run block; a step before it failed (the Nix install or the
+checkout), so the audit never ran; or the run was cancelled — most
+often its `timeout-minutes` was exceeded. The notify composite flags a
+cancelled run as an infrastructure failure rather than a finding: with
+a `[!WARNING]` banner at the top of the issue body when the cancelled
+run is the one that opened the issue, and in its comment when it
+re-commented an already-open one. Look for that flag first: a
+cancelled run says nothing about pin drift, so re-run it. For a failed
+earlier step, read its log and re-run once it is fixed; it says nothing
+about pin drift either. For an unhandled error, inspect the run log
+directly, add classification for the new failure mode, and update both
+the workflow and this runbook.
 
 ## Recovery
 

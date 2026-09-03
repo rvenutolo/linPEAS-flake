@@ -393,8 +393,8 @@ Matching is by command position: a whole-line comment is blanked before
 the rule runs, and a bare `(` is not an introducer, so a parenthetical
 naming the command is not a hit — while a trailing comment or a string
 operand that puts the word in command position (after a separator, a
-pipe, a negation, a group opening, `$(` or a loop/branch keyword) is
-one. The one
+pipe, a negation, a group opening, `$(`, or one of the keywords `then`,
+`do` and `else`) is one. The one
 sanctioned bare invocation lives in `scripts/lib/temp.sh`, which the rule
 skips by its repo-relative path — a second file of that name elsewhere
 under the scan root is an ordinary script and its bare call is a

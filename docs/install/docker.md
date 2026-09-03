@@ -37,7 +37,7 @@ docker run --rm rvenutolo/linpeas:latest -a
 docker run --rm ghcr.io/rvenutolo/linpeas:latest -a
 ```
 
-The image's `Entrypoint` is set to the linpeas binary, so any arguments after the image reference are passed straight to linpeas. Both registries serve the **same** image bytes — every release pushes the same loaded image to both, so the content digests match, and each registry's per-arch digests carry their own SLSA attestations.
+The image's `Entrypoint` is set to the linpeas binary, so any arguments after the image reference are passed straight to linpeas. Both registries serve the **same** image bytes: whenever the release pipeline publishes an image it loads each arch's build once and pushes it to both registries, so the content digests match, and each registry's per-arch digests carry their own SLSA attestations.
 
 ## Pin to a specific tag
 

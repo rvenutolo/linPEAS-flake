@@ -298,8 +298,10 @@ jobs:
               is needed (output format drift) or a refactor moved
               workflow files. Bump `pkgs-unstable.ratchet` via
               `nix flake update` and re-run.
-            - `unknown` — the check step exited non-zero without setting
-              an output. Inspect the run log directly.
+            - `unknown` — the `check` job produced no `reason` output:
+              the audit step hit an unhandled error, a step before it
+              failed, or the run was cancelled (a banner above, or the
+              run's comment, says so). Inspect the run log directly.
 
             This issue auto-closes once the next daily run sees a clean
             audit (`result=success`, `reason=none`).
