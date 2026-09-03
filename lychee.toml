@@ -58,9 +58,12 @@ exclude_path = [
   ".claude/scratch/",
   ".claude/sdd/",
   # Seeded-defect fixtures are the recall harness's own fixtures, not repo
-  # documentation — sample audit reports score.sh grades against a manifest,
-  # and a seed set plant.sh is tested against.
-  ".claude/skills/docs-correctness-audit/evals/seeded-defects/fixtures/",
+  # documentation. Full rationale, and the pattern this one must agree with,
+  # live with the audit skill's collector; its harness asserts the two select
+  # the same set. Any skill may grow such a tree, so the skill segment is a
+  # wildcard rather than one name — a second one must not be link-checked
+  # for the breakage it is planted with.
+  "\\.claude/skills/[^/]+/evals/seeded-defects/fixtures/",
   ".claude/skills/docs-correctness-audit-workspace/",
   ".claude/specs/",
   ".claude/worktrees/",
