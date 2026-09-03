@@ -26,15 +26,20 @@ that `scripts/refresh-enforcement-matrix.sh` renders into
 `security/enforcement-matrix.md`. `ci:` names the `ci.yml` job(s) that
 enforce the rule — for a script enforcer, the job that runs it; for a
 rule held by evaluation, a smoke test, or a third-party action, the job
-that carries it. The generator validates the value against that file's
-job keys only, so an enforcer that runs only in a scheduled workflow
-says `ci: -` and names the workflow in its prose. A job that reaches
-an enforcer only through its test harness is not recorded there
-either: `harness-group` counts only for the rules whose roster entry in
-`scripts/run-harness-group.sh` names an enforce script to run after the
-harness passes, so a rule whose harness merely exercises the enforcer —
-even against the checkout, as `check-flake-lock-staleness.test.sh` does
-— says `ci: -`. `doc-freshness` is different by construction: its
+that carries it. For most values the generator validates only that the
+name is a key in that file, so an enforcer that runs only in a
+scheduled workflow says `ci: -` and names the workflow in its prose. A
+job that reaches an enforcer only through its test harness is not
+recorded there either: `harness-group` counts only for the rules whose
+roster entry in `scripts/run-harness-group.sh` names an enforce script
+to run after the harness passes, so a rule whose harness merely
+exercises the enforcer — even against the checkout, as
+`check-flake-lock-staleness.test.sh` does — says `ci: -`. That one
+value is asserted rather than described: the generator reads the roster
+through `scripts/run-harness-group.sh --print-roster` and fails if an
+entry claims `ci: harness-group` without naming an enforce script the
+roster runs, or if a roster enforce script is annotated nowhere.
+`doc-freshness` is different by construction: its
 `tests/refresh-*.test.sh` harnesses run the generators over the real
 tree and are the job's whole purpose, so the generator-owned rules
 record it. `hook:` names

@@ -1761,6 +1761,10 @@ printing a per-harness pass/fail summary table to stdout and
 $GITHUB_STEP_SUMMARY. Runs all harnesses even if one fails; exits 1
 if any failed.
 
+**Options:**
+
+- `--print-roster` — print the HARNESSES roster, one pipe-delimited entry per line, and exit 0 without running anything
+
 ### scripts/run-lint-group.sh
 
 Run every invariant-lint check in a named group from

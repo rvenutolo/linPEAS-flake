@@ -104,6 +104,14 @@ function run_scenario() {
   rm --force -- "${outcome_file}" "${out_file}" "${step_file}"
 }
 
+# The roster-mode scenarios below assert on captured output rather than on
+# the summary table, so they report through these instead of run_scenario.
+function pass_roster() { printf 'PASS: %s\n' "$1"; }
+function fail_roster() {
+  printf 'FAIL: %s\n' "$1" >&2
+  failures=$((failures + 1))
+}
+
 # Seeds the five exact harness names in the runner's HARNESSES list. Exit
 # codes per component are passed in; the allowed-actions and
 # settings-posture enforce stubs (which the runner must never call for
@@ -284,6 +292,87 @@ function main() {
     "missing test harness: ${work}/root/.claude/skills/docs-correctness-audit/evals/seeded-defects/plant.test.sh" \
     "${forbidden_allowed}" "${forbidden_settings}"
   rm --recursive --force -- "${work}"
+
+  # Scenario 9: --print-roster prints the roster and runs nothing. The mode
+  # exists so scripts/refresh-enforcement-matrix.sh can assert the
+  # `ci: harness-group` annotation against the enforce field that decides
+  # it, instead of scraping the array with a regex. The assertion is on the
+  # shape every consumer parses — three pipe-delimited fields per line, the
+  # third possibly empty — plus at least one entry actually carrying an
+  # enforce script, since a roster where that field is empty everywhere
+  # would satisfy a shape-only check while telling the consumer nothing.
+  local roster_out roster_err roster_outcome roster_rc=0
+  local roster_lines malformed enforce_lines table_rows
+  roster_out="$(mktemp)"
+  roster_err="$(mktemp)"
+  roster_outcome="$(mktemp)"
+  "${SCRIPT}" --print-roster >"${roster_out}" 2>"${roster_err}" || roster_rc=$?
+  roster_lines="$(wc -l <"${roster_out}" | tr -d '[:space:]')"
+  malformed="$(grep --count --invert-match --extended-regexp \
+    '^[^|[:space:]]+\|[^|[:space:]]+\|[^|[:space:]]*$' -- "${roster_out}" || true)"
+  enforce_lines="$(grep --count --extended-regexp '\|[^|[:space:]]+$' -- "${roster_out}" || true)"
+  # "runs nothing" is the other half of the claim, and it is checked
+  # rather than assumed: a run emits the summary table, so the table's
+  # absence is what separates printing the roster from printing it after
+  # executing every harness in the tree.
+  table_rows="$(grep --count --fixed-strings \
+    -- '| harness | result | time |' "${roster_out}" || true)"
+  printf 'harness-assert-outcome: exit=%d entries=%s malformed=%s with-enforce=%s table-rows=%s\n' \
+    "${roster_rc}" "${roster_lines}" "${malformed}" "${enforce_lines}" \
+    "${table_rows}" >"${roster_outcome}"
+  harness_assert_record '--print-roster prints the roster and runs nothing' \
+    '' "${roster_outcome}" "${roster_out}" "${roster_err}"
+  if [[ ${roster_rc} -eq 0 ]] && [[ ${roster_lines} -gt 0 ]] &&
+    [[ ${malformed} -eq 0 ]] && [[ ${enforce_lines} -gt 0 ]] &&
+    [[ ${table_rows} -eq 0 ]]; then
+    pass_roster "--print-roster printed ${roster_lines} well-formed entries, ${enforce_lines} with an enforce script, no summary table"
+  else
+    fail_roster "--print-roster: exit ${roster_rc}, ${roster_lines} entries, ${malformed} malformed, ${enforce_lines} with an enforce script, ${table_rows} table header(s)"
+    cat -- "${roster_err}" >&2
+  fi
+  rm --force -- "${roster_out}" "${roster_err}" "${roster_outcome}"
+
+  # Scenario 10: an unrecognized argument is a usage error, not a run. A
+  # mode reached by name is only load-bearing if a caller that misspells it
+  # fails loudly rather than silently running every harness.
+  local bad_out bad_err bad_outcome bad_rc=0
+  bad_out="$(mktemp)"
+  bad_err="$(mktemp)"
+  bad_outcome="$(mktemp)"
+  "${SCRIPT}" --print-rooster >"${bad_out}" 2>"${bad_err}" || bad_rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${bad_rc}" >"${bad_outcome}"
+  harness_assert_record 'unknown argument is a usage error' \
+    'unknown argument: --print-rooster' "${bad_outcome}" "${bad_out}" "${bad_err}"
+  if [[ ${bad_rc} -eq 2 ]] &&
+    grep --fixed-strings --quiet -- 'unknown argument: --print-rooster' "${bad_err}" &&
+    [[ ! -s ${bad_out} ]]; then
+    pass_roster 'unknown argument exits 2 without running a harness'
+  else
+    fail_roster "unknown argument: want exit 2 and no stdout, got exit ${bad_rc}"
+    cat -- "${bad_err}" >&2
+  fi
+  rm --force -- "${bad_out}" "${bad_err}" "${bad_outcome}"
+
+  # Scenario 11: a trailing argument after the mode is a usage error too.
+  # Without this the extra-argument guard could be dropped and the mode
+  # would still answer, quietly accepting a call whose author meant
+  # something the script does not do.
+  local extra_out extra_err extra_outcome extra_rc=0
+  extra_out="$(mktemp)"
+  extra_err="$(mktemp)"
+  extra_outcome="$(mktemp)"
+  "${SCRIPT}" --print-roster stray >"${extra_out}" 2>"${extra_err}" || extra_rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${extra_rc}" >"${extra_outcome}"
+  harness_assert_record 'extra argument after the mode is a usage error' \
+    'unexpected extra arguments after --print-roster' \
+    "${extra_outcome}" "${extra_out}" "${extra_err}"
+  if [[ ${extra_rc} -eq 2 ]] && [[ ! -s ${extra_out} ]]; then
+    pass_roster 'extra argument after --print-roster exits 2 without printing'
+  else
+    fail_roster "extra argument: want exit 2 and no stdout, got exit ${extra_rc}"
+    cat -- "${extra_err}" >&2
+  fi
+  rm --force -- "${extra_out}" "${extra_err}" "${extra_outcome}"
 
   harness_assert_verify || failures=$((failures + 1))
 

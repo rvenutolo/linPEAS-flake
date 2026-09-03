@@ -14,6 +14,31 @@ source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/refresh-enforcement-matrix.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/refresh-enforcement-matrix"
 
+# The reverse-direction scenarios below drive fixture indexes that name
+# none of the real repo's enforcers. The live roster's enforce script is
+# one of those, so without a fixture roster every such scenario would trip
+# the roster-to-index half of the harness-group assertion on a fact none of
+# them is about. A roster whose entries are all test-only leaves that half
+# with nothing to demand while still exercising the producer contract.
+# @arg $1 path to write  @arg $2... roster entries the stub prints
+function write_roster_stub() {
+  local -r path="$1"
+  shift
+  cat >"${path}" <<'STUB'
+#!/usr/bin/env bash
+if [[ ${1:-} != '--print-roster' ]]; then
+  printf 'unknown argument: %s\n' "${1:-}" >&2
+  exit 2
+fi
+STUB
+  {
+    printf 'cat <<%s\n' "'ENTRIES'"
+    printf '%s\n' "$@"
+    printf 'ENTRIES\n'
+  } >>"${path}"
+  chmod +x "${path}"
+}
+
 # Inline hook list keeps the harness independent of `nix eval` for the
 # fixture scenarios. The real-index assertion deliberately omits the
 # override so it exercises the live flake.
@@ -64,6 +89,12 @@ function run_scenario() {
 }
 
 function main() {
+  # Test-only roster for every fixture-index scenario that leaves the
+  # reverse checks on. See write_roster_stub.
+  local test_only_roster
+  test_only_roster="$(mktemp)"
+  write_roster_stub "${test_only_roster}" 'stub-a|stub-a.test.sh|' 'stub-b|stub-b.test.sh|'
+
   # Assertion 1: real index → real matrix → --check is clean (round-trip).
   "${SCRIPT}" >/dev/null
   if "${SCRIPT}" --check >/dev/null 2>&1; then
@@ -84,7 +115,8 @@ function main() {
 
   # Assertion 4: orphan script (real check-*.sh not referenced) → exit 2.
   # Reverse check intentionally enabled here.
-  PRECOMMIT_HOOK_NAMES_OVERRIDE="${FIXTURE_HOOKS}" \
+  ROSTER_SOURCE_OVERRIDE="${test_only_roster}" \
+    PRECOMMIT_HOOK_NAMES_OVERRIDE="${FIXTURE_HOOKS}" \
     run_scenario 'orphan check-*.sh fails' \
     'bad-orphan-script.md' 2 'orphan script:'
 
@@ -143,7 +175,8 @@ function main() {
   cx_err="$(mktemp)"
   cx_stdout="$(mktemp)"
   cx_outcome="$(mktemp)"
-  PRECOMMIT_HOOK_NAMES_OVERRIDE='shellcheck' \
+  ROSTER_SOURCE_OVERRIDE="${test_only_roster}" \
+    PRECOMMIT_HOOK_NAMES_OVERRIDE='shellcheck' \
     INVARIANT_INDEX_OVERRIDE="${FIXTURES}/exempt-coupling/index.md" \
     CI_YML_OVERRIDE="${FIXTURES}/exempt-coupling/ci.yml" \
     SCRIPTS_DIR_OVERRIDE="${cx_scripts}" \
@@ -161,7 +194,8 @@ function main() {
   fi
 
   cx_rc=0
-  EXEMPT_OVERRIDE='aux-sandbox' \
+  ROSTER_SOURCE_OVERRIDE="${test_only_roster}" \
+    EXEMPT_OVERRIDE='aux-sandbox' \
     PRECOMMIT_HOOK_NAMES_OVERRIDE='shellcheck' \
     INVARIANT_INDEX_OVERRIDE="${FIXTURES}/exempt-coupling/index.md" \
     CI_YML_OVERRIDE="${FIXTURES}/exempt-coupling/ci.yml" \
@@ -196,7 +230,8 @@ EOF
   gg_err="$(mktemp)"
   gg_stdout="$(mktemp)"
   gg_outcome="$(mktemp)"
-  PRECOMMIT_HOOK_NAMES_OVERRIDE='shellcheck' \
+  ROSTER_SOURCE_OVERRIDE="${test_only_roster}" \
+    PRECOMMIT_HOOK_NAMES_OVERRIDE='shellcheck' \
     INVARIANT_INDEX_OVERRIDE="${FIXTURES}/exempt-coupling/index.md" \
     CI_YML_OVERRIDE="${FIXTURES}/exempt-coupling/ci.yml" \
     SCRIPTS_DIR_OVERRIDE="${gg_scripts}" \
@@ -267,6 +302,99 @@ EOF
   fi
   rm --recursive --force -- "${nix_shim}"
   rm --force -- "${nix_err}" "${nix_out}" "${nix_outcome}"
+
+  # Harness-group assertion. `harness-group` is a real ci.yml job, so every
+  # other cross-check accepts `ci: harness-group` on any entry that writes
+  # it. What decides whether the job actually enforces a rule is the third
+  # field of the roster in scripts/run-harness-group.sh: an entry naming an
+  # enforce script has it run against the checkout, a test-only entry does
+  # not. Each scenario below pairs a fixture index with a roster and
+  # changes only one of the two, so the failure it produces is
+  # attributable to the annotation or to the roster, never to both.
+  local hg_scripts hg_roster hg_out hg_err hg_stdout hg_outcome hg_rc
+  hg_scripts="$(mktemp --directory)"
+  : >"${hg_scripts}/check-thing.sh"
+  hg_roster="$(mktemp)"
+  hg_out="$(mktemp)"
+  hg_err="$(mktemp)"
+  hg_stdout="$(mktemp)"
+  hg_outcome="$(mktemp)"
+
+  # Roster runs check-thing.sh and an entry annotates it: both directions
+  # are satisfied, so the run reaches the render.
+  hg_rc=0
+  write_roster_stub "${hg_roster}" 'thing|thing.test.sh|check-thing.sh' 'other|other.test.sh|'
+  ROSTER_SOURCE_OVERRIDE="${hg_roster}" \
+    PRECOMMIT_HOOK_NAMES_OVERRIDE='shellcheck' \
+    INVARIANT_INDEX_OVERRIDE="${FIXTURES}/harness-group/annotated-index.md" \
+    CI_YML_OVERRIDE="${FIXTURES}/harness-group/ci.yml" \
+    SCRIPTS_DIR_OVERRIDE="${hg_scripts}" \
+    MATRIX_OUTPUT_OVERRIDE="${hg_out}" \
+    EXEMPT_OVERRIDE='lint-script-hygiene' \
+    "${SCRIPT}" >"${hg_stdout}" 2>"${hg_err}" || hg_rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${hg_rc}" >"${hg_outcome}"
+  harness_assert_record 'roster enforces the annotated rule' \
+    '' "${hg_outcome}" "${hg_stdout}" "${hg_err}"
+  if [[ ${hg_rc} -eq 0 ]]; then
+    pass 'annotation backed by a roster enforce field passes'
+  else
+    fail "harness-group: backed annotation should pass, got exit ${hg_rc}"
+    cat -- "${hg_err}" >&2
+  fi
+
+  # Same index, roster demoted to test-only: the entry now claims a job
+  # that enforces nothing. This is the direction that catches an annotation
+  # written from the job name alone.
+  hg_rc=0
+  write_roster_stub "${hg_roster}" 'thing|thing.test.sh|' 'other|other.test.sh|'
+  ROSTER_SOURCE_OVERRIDE="${hg_roster}" \
+    PRECOMMIT_HOOK_NAMES_OVERRIDE='shellcheck' \
+    INVARIANT_INDEX_OVERRIDE="${FIXTURES}/harness-group/annotated-index.md" \
+    CI_YML_OVERRIDE="${FIXTURES}/harness-group/ci.yml" \
+    SCRIPTS_DIR_OVERRIDE="${hg_scripts}" \
+    MATRIX_OUTPUT_OVERRIDE="${hg_out}" \
+    EXEMPT_OVERRIDE='lint-script-hygiene' \
+    "${SCRIPT}" >"${hg_stdout}" 2>"${hg_err}" || hg_rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${hg_rc}" >"${hg_outcome}"
+  harness_assert_record 'annotation claims a test-only roster entry' \
+    'claims ci: harness-group' "${hg_outcome}" "${hg_stdout}" "${hg_err}"
+  if [[ ${hg_rc} -eq 2 ]] &&
+    grep --fixed-strings --quiet -- 'claims ci: harness-group' "${hg_err}"; then
+    pass 'annotation on a test-only roster entry is rejected'
+  else
+    fail "harness-group: want exit 2 naming the bullet, got exit ${hg_rc}"
+    cat -- "${hg_err}" >&2
+  fi
+
+  # Roster still enforces check-thing.sh, but the index attributes it to a
+  # different job. The reverse direction catches an enforcer that gained a
+  # live enforcement pass nothing records.
+  hg_rc=0
+  write_roster_stub "${hg_roster}" 'thing|thing.test.sh|check-thing.sh' 'other|other.test.sh|'
+  ROSTER_SOURCE_OVERRIDE="${hg_roster}" \
+    PRECOMMIT_HOOK_NAMES_OVERRIDE='shellcheck' \
+    INVARIANT_INDEX_OVERRIDE="${FIXTURES}/harness-group/unannotated-index.md" \
+    CI_YML_OVERRIDE="${FIXTURES}/harness-group/ci.yml" \
+    SCRIPTS_DIR_OVERRIDE="${hg_scripts}" \
+    MATRIX_OUTPUT_OVERRIDE="${hg_out}" \
+    EXEMPT_OVERRIDE='harness-group' \
+    "${SCRIPT}" >"${hg_stdout}" 2>"${hg_err}" || hg_rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${hg_rc}" >"${hg_outcome}"
+  harness_assert_record 'roster enforcer is annotated for another job' \
+    'but no invariant-index entry naming it says ci: harness-group' \
+    "${hg_outcome}" "${hg_stdout}" "${hg_err}"
+  if [[ ${hg_rc} -eq 2 ]] &&
+    grep --fixed-strings --quiet -- 'check-thing.sh' "${hg_err}"; then
+    pass 'roster enforcer with no harness-group annotation is rejected'
+  else
+    fail "harness-group reverse: want exit 2 naming check-thing.sh, got exit ${hg_rc}"
+    cat -- "${hg_err}" >&2
+  fi
+
+  rm --recursive --force -- "${hg_scripts}"
+  rm --force -- "${hg_roster}" "${hg_out}" "${hg_err}" "${hg_stdout}" "${hg_outcome}"
+
+  rm --force -- "${test_only_roster}"
 
   harness_assert_verify || failures=$((failures + 1))
 
