@@ -375,8 +375,8 @@ escape hatch an empty source set has.
 
 ## Guarded temp-file creation
 
-`scripts/check-guard-exit-code.sh` bans a bare `mktemp` anywhere under
-`scripts/`. An unwritable `TMPDIR` makes `mktemp` exit 1, and under
+Among its exit-code rules, `scripts/check-guard-exit-code.sh` bans a bare
+`mktemp` anywhere under `scripts/`. An unwritable `TMPDIR` makes `mktemp` exit 1, and under
 `set -Eeuo pipefail` an unguarded `tmp="$(mktemp)"` hands that 1 to the
 caller — the code that means "the repo carries a violation", for a run
 that inspected nothing. Scratch files come from `make_temp`
@@ -408,7 +408,8 @@ A marker the walk never consumes — because its site was rewritten into
 a compliant shape, moved, or left the file — is reported as its own
 finding rather than passed
 over. The clean run's summary line counts it as a third field alongside
-scripts scanned and exemptions applied. Full
+scripts scanned and exemptions applied, ahead of the sanctioned-site count
+that keeps the path-keyed exemption visible. Full
 rationale:
 [Workflow hardening → guard-exit-code](../security/workflow-hardening.md#guard-exit-code).
 
