@@ -71,8 +71,11 @@ function main() {
     'bad-file-guard' 1 '[[ ! -f ${doc} ]]'
   # Absence mixed with a content predicate under `||` reaches the branch
   # without anything being missing, so the exit stays a drift verdict.
+  # Asserted through the sanctioned tally: this fixture and the
+  # sanctioned-helper one below both scan a single clean file, so the
+  # prefix of the summary line no longer separates them.
   run_scenario 'compound availability-plus-content test is not a hit' \
-    'good-compound-test' 0 '1 script(s) scanned, 0 exemption(s)'
+    'good-compound-test' 0 '1 script(s) scanned, 0 exemption(s), 0 orphan marker(s), 0 sanctioned site(s)'
   run_scenario 'rationale-bearing exemption is counted, not flagged' \
     'good-exempted' 0 '1 script(s) scanned, 1 exemption(s)'
   # The marker word appears on the exit line, but only inside a sentence
@@ -103,6 +106,17 @@ function main() {
   # a violation of content the run never read.
   run_scenario 'a bare temp-file creation is a hit' \
     'bad-bare-mktemp' 1 'bad-bare-mktemp/scripts/take-temp.sh:8: creates a temp file with a bare mktemp'
+  # The exemption is keyed on the whole path, so a namesake outside lib/
+  # is an ordinary script. The asserted path is what discriminates this
+  # from the bare-creation scenario above, whose message it otherwise
+  # repeats word for word.
+  run_scenario 'a temp.sh outside lib/ does not inherit the exemption' \
+    'bad-stray-temp' 1 'bad-stray-temp/scripts/util/temp.sh:8: creates a temp file with a bare mktemp'
+  # The other half of the same predicate: the helper at the sanctioned
+  # path keeps its bare invocation. The tally is what proves the
+  # exemption fired rather than the file merely scanning clean.
+  run_scenario 'the guarded helper at lib/temp.sh stays exempt' \
+    'good-sanctioned-temp' 0 '1 sanctioned site(s)'
   # Each fixture below scans a different number of files so that no two
   # clean scenarios share the summary line, which is their whole output.
   run_scenario 'every guarded-helper form passes' \
