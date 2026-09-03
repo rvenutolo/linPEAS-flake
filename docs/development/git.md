@@ -162,7 +162,7 @@ Hooks (alphabetical):
 | `deadnix`                        | Unused Nix bindings.                                                                                                                                     |
 | `editorconfig-checker`           | .editorconfig compliance (charset, line endings, trailing whitespace, final newline).                                                                    |
 | `egress-allowlist`               | Every job's allowed-endpoints list matches its tool inventory and carries no denylisted host.                                                            |
-| `enforcement-matrix-fresh`       | docs/security/enforcement-matrix.md matches the annotated invariant index and real enforcers.                                                            |
+| `enforcement-matrix-fresh`       | docs/security/enforcement-matrix.md matches the annotated invariant index, real enforcers, and the harness roster.                                       |
 | `ephemeral-refs-gap-fresh`       | The scope-gap block in docs/development/linting.md matches the file types no ephemeral-refs extractor claims, and none of them carries a blocking shape. |
 | `flake-show-fresh`               | flake-show block in docs/reference/flake-outputs.md matches current flake outputs.                                                                       |
 | `fork-guard-release`             | Release-grade jobs include github.repository fork guard.                                                                                                 |

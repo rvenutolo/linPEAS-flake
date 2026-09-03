@@ -241,7 +241,7 @@ in
   enforcement-matrix-fresh = {
     enable = true;
     name = "enforcement-matrix-fresh";
-    description = "docs/security/enforcement-matrix.md matches the annotated invariant index and real enforcers.";
+    description = "docs/security/enforcement-matrix.md matches the annotated invariant index, real enforcers, and the harness roster.";
     entry = "${pkgs-unstable.writeShellScript "enforcement-matrix-fresh" ''
       set -Eeuo pipefail
       IFS=$'\n\t'
@@ -249,7 +249,7 @@ in
       export PATH="${toolPath}:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-enforcement-matrix.sh --check
     ''}";
-    files = "^(docs/invariant-index\\.md|docs/security/enforcement-matrix\\.md|scripts/check-.*\\.sh|scripts/refresh-enforcement-matrix\\.sh|\\.github/workflows/ci\\.yml|flake\\.nix|nix/hooks/.*\\.nix|nix/manifests\\.nix)$";
+    files = "^(docs/invariant-index\\.md|docs/security/enforcement-matrix\\.md|scripts/check-.*\\.sh|scripts/refresh-enforcement-matrix\\.sh|scripts/run-harness-group\\.sh|\\.github/workflows/ci\\.yml|flake\\.nix|nix/hooks/.*\\.nix|nix/manifests\\.nix)$";
     pass_filenames = false;
     language = "system";
   };

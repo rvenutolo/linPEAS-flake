@@ -5,6 +5,7 @@
 # printing a per-harness pass/fail summary table to stdout and
 # $GITHUB_STEP_SUMMARY. Runs all harnesses even if one fails; exits 1
 # if any failed.
+# @option --print-roster print the HARNESSES roster, one pipe-delimited entry per line, and exit 0 without running anything
 
 # Harness details: ratchet-pin-audit runs its test then its live enforce
 # script (safe on PR). allowed-actions-api and settings-posture need
@@ -13,6 +14,24 @@
 # downloads a release asset and rewrites linpeas-pin.json on its live
 # path, so it also runs test-only here — its own bump runs from
 # release-on-bump.yml, never from this shared job.
+#
+# The roster as a shared declaration — `--print-roster` writes every
+# entry to stdout verbatim, one per line, and exits 0 without running a
+# harness. The third field decides a fact other checks need: an entry
+# naming an enforce script has that script run against the live checkout
+# here, and a test-only entry does not, which is what makes
+# `ci: harness-group` true or false for an invariant.
+# scripts/refresh-enforcement-matrix.sh reads the roster through this
+# mode so that annotation is asserted against the roster rather than
+# against a regex scrape of the array. The whole roster is printed, not
+# just the enforce fields, so the output is never legitimately empty and
+# a caller can treat no output as a broken producer. Any other argument
+# exits 2, so a renamed or dropped mode fails loud in the caller.
+#
+# Exit codes:
+#   0 — every harness passed, or --print-roster completed.
+#   1 — at least one harness failed its test or its enforce stage.
+#   2 — usage error: an unknown or extra argument.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -77,6 +96,25 @@ readonly -a HARNESSES=(
   'docs-audit-score|.claude/skills/docs-correctness-audit/evals/seeded-defects/score.test.sh|'
   'docs-audit-ground-truth|.claude/skills/docs-correctness-audit/scripts/collect-ground-truth.test.sh|'
 )
+
+# Argument handling sits directly after the roster so the mode stays
+# readable without the tests, scripts, or repo root the run path needs.
+if (($# > 0)); then
+  case "$1" in
+  --print-roster)
+    if (($# > 1)); then
+      printf 'unexpected extra arguments after %s\n' "$1" >&2
+      exit 2
+    fi
+    printf '%s\n' "${HARNESSES[@]}"
+    exit 0
+    ;;
+  *)
+    printf 'unknown argument: %s\n' "$1" >&2
+    exit 2
+    ;;
+  esac
+fi
 
 function main() {
   local failed=0 passed=0

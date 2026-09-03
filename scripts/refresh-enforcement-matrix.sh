@@ -14,6 +14,14 @@
 # the reverse direction (no orphan scripts/jobs/hooks beyond an
 # explicit EXEMPT list).
 #
+# `ci: harness-group` gets a second, stronger cross-check. Every other
+# ci value is satisfied by naming a real ci.yml job, but the
+# harness-group job runs an enforcer against the checkout only for the
+# roster entries in scripts/run-harness-group.sh that carry an enforce
+# script, so the job's name alone does not decide whether it enforces a
+# given rule. cross_check_harness_group ties the annotation to that
+# roster field in both directions.
+#
 # Annotation format:
 #   `;` separates the three top-level fields (enforcer:, ci:, hook:)
 #   `,` separates multiple items WITHIN one field
@@ -39,12 +47,17 @@
 #                                  scripts/check-ci-job-in-summary.sh
 #                                  --print-exempt, which supplies the
 #                                  ci-job exemption list
+#   ROSTER_SOURCE_OVERRIDE         alternate `--print-roster` provider
+#                                  in place of
+#                                  scripts/run-harness-group.sh, which
+#                                  supplies the harness roster
 #   SKIP_REVERSE_CHECK             if "1", skip orphan-script /
-#                                  orphan-job / orphan-hook checks.
-#                                  Used by the fixture round-trip
-#                                  test where the index intentionally
-#                                  references only a subset of real
-#                                  enforcers.
+#                                  orphan-job / orphan-hook checks and
+#                                  the roster-to-index half of the
+#                                  harness-group assertion. Used by the
+#                                  fixture round-trip test where the
+#                                  index intentionally references only a
+#                                  subset of real enforcers.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -72,11 +85,12 @@ ci_exempt_file=""
 tsv=""
 hook_names=""
 ci_jobs=""
+roster=""
 tmp_out=""
 fmt_target=""
 
 function cleanup() {
-  rm --force -- "${ref_scripts}" "${ref_jobs}" "${ref_hooks}" "${ci_exempt_file}" "${tsv}" "${hook_names}" "${ci_jobs}" "${tmp_out}" "${fmt_target}"
+  rm --force -- "${ref_scripts}" "${ref_jobs}" "${ref_hooks}" "${ci_exempt_file}" "${tsv}" "${hook_names}" "${ci_jobs}" "${roster}" "${tmp_out}" "${fmt_target}"
   if [[ -n ${repo_root} ]]; then
     local stray
     shopt -s nullglob
@@ -338,6 +352,119 @@ function load_ci_jobs_exempt() {
     exit 2
   fi
   sort --unique --output="${out_file}" -- "${out_file}"
+}
+
+# The ci.yml job whose roster decides whether an invariant's enforcer is
+# actually run against the checkout.
+readonly HARNESS_GROUP_JOB='harness-group'
+
+# Print the comma-separated items of one annotation field, one per line,
+# trimmed, with empties and the `-` sentinel dropped.
+function field_items() {
+  local -r field="$1"
+  local IFS_BAK="${IFS}" item
+  IFS=','
+  # shellcheck disable=SC2206
+  local items=(${field})
+  IFS="${IFS_BAK}"
+  for item in ${items[@]+"${items[@]}"}; do
+    item="$(trim "${item}")"
+    [[ -z ${item} || ${item} == "-" ]] && continue
+    printf '%s\n' "${item}"
+  done
+}
+
+# load_harness_roster <out_file> <provider>
+# Read the harness roster from scripts/run-harness-group.sh via its
+# `--print-roster` mode, so both this lint and the job itself work from
+# one declaration rather than from a regex scrape of a sibling's array.
+function load_harness_roster() {
+  local -r out_file="$1" provider="$2"
+  local rc=0
+  if [[ ! -x ${provider} ]]; then
+    log_err "harness roster source ${provider@Q} is missing or not executable"
+    exit 2
+  fi
+  "${provider}" --print-roster >"${out_file}" || rc=$?
+  if ((rc != 0)); then
+    log_err "harness roster source ${provider@Q} --print-roster failed with exit ${rc}"
+    exit 2
+  fi
+  # The roster prints every entry, not just the ones carrying an enforce
+  # script, so it is never legitimately empty. No output means the
+  # producer broke, and scoring that as "no enforcers to check" would
+  # turn this whole assertion into a silent pass.
+  if [[ ! -s ${out_file} ]]; then
+    log_err "harness roster source ${provider@Q} --print-roster produced no entries"
+    exit 2
+  fi
+}
+
+# cross_check_harness_group <tsv> <roster_file> <check_reverse>
+# Tie the `ci: harness-group` annotation to the roster field that decides
+# it. A roster entry naming an enforce script has that script run against
+# the live checkout by the harness-group job; a test-only entry runs a
+# spec test against fixtures and enforces nothing. Existing checks only
+# ask whether `harness-group` is a real ci.yml job, which it always is, so
+# without this an entry may claim the job enforces a rule it never runs.
+#
+# Forward (always): an entry claiming `ci: harness-group` must name at
+# least one enforcer that the roster runs. An entry may pair several
+# enforcers with several jobs, so one match is the honest bar — the rest
+# belong to the other jobs it lists.
+#
+# Reverse (with the other orphan checks): every enforce script in the
+# roster must be annotated `ci: harness-group` somewhere in the index.
+function cross_check_harness_group() {
+  local -r tsv="$1" roster_file="$2" check_reverse="$3"
+  local -i failed=0
+  local -a enforcers=() annotated=()
+  local enforce_field
+  # Only the third field decides anything here; the name and test-harness
+  # fields are read into `_` so shellcheck sees them as deliberate.
+  while IFS='|' read -r _ _ enforce_field; do
+    [[ -n ${enforce_field} ]] || continue
+    enforcers+=("${enforce_field##*/}")
+  done <"${roster_file}"
+
+  local name link enforcer ci hook item base ci_items enforcer_items
+  local -i matched
+  while IFS=$'\t' read -r name link enforcer ci hook; do
+    ci_items="$(field_items "${ci}")"
+    if ! printf '%s\n' "${ci_items}" |
+      grep --quiet --fixed-strings --line-regexp -- "${HARNESS_GROUP_JOB}"; then
+      continue
+    fi
+    matched=0
+    enforcer_items="$(field_items "${enforcer}")"
+    if [[ -n ${enforcer_items} ]]; then
+      while IFS= read -r item; do
+        base="${item##*/}"
+        if is_in_list "${base}" ${enforcers[@]+"${enforcers[@]}"}; then
+          matched=1
+          annotated+=("${base}")
+        fi
+      done <<<"${enforcer_items}"
+    fi
+    if ((matched == 0)); then
+      log_err "bullet ${name@Q}: claims ci: ${HARNESS_GROUP_JOB}, but none of its enforcers (${enforcer}) is an enforce script in the run-harness-group roster"
+      failed=$((failed + 1))
+    fi
+  done <"${tsv}"
+
+  if [[ ${check_reverse} == '1' ]]; then
+    local e
+    for e in ${enforcers[@]+"${enforcers[@]}"}; do
+      if ! is_in_list "${e}" ${annotated[@]+"${annotated[@]}"}; then
+        log_err "roster enforce script ${e@Q} runs against the checkout in the ${HARNESS_GROUP_JOB} job, but no invariant-index entry naming it says ci: ${HARNESS_GROUP_JOB}"
+        failed=$((failed + 1))
+      fi
+    done
+  fi
+
+  if ((failed > 0)); then
+    exit 2
+  fi
 }
 
 # cross_check_forward <tsv> <scripts_dir> <ci_jobs_file> <hook_names_file>
@@ -617,18 +744,25 @@ function parse_and_render() {
   local -r index_file="$1" output_file="$2" ci_yml="$3" scripts_dir="$4" check_only="$5"
   # tsv, hook_names, ci_jobs, tmp_out are script-scoped (declared at top) so
   # the EXIT trap can clean them up; do not redeclare them local here.
-  local sibling
+  local sibling roster_source repo_top check_reverse
   tsv="$(make_temp)"
   hook_names="$(make_temp)"
   ci_jobs="$(make_temp)"
+  roster="$(make_temp)"
   tmp_out="$(make_temp)"
-  sibling="${EXEMPT_SOURCE_OVERRIDE:-$(git rev-parse --show-toplevel)/scripts/check-ci-job-in-summary.sh}"
+  repo_top="$(git rev-parse --show-toplevel)"
+  sibling="${EXEMPT_SOURCE_OVERRIDE:-${repo_top}/scripts/check-ci-job-in-summary.sh}"
+  roster_source="${ROSTER_SOURCE_OVERRIDE:-${repo_top}/scripts/run-harness-group.sh}"
+  check_reverse='1'
+  [[ ${SKIP_REVERSE_CHECK:-0} == "1" ]] && check_reverse='0'
 
   parse_index "${index_file}" "${tsv}"
   load_hook_names "${hook_names}"
   load_ci_jobs "${ci_yml}" "${ci_jobs}"
+  load_harness_roster "${roster}" "${roster_source}"
   cross_check_forward "${tsv}" "${scripts_dir}" "${ci_jobs}" "${hook_names}"
-  if [[ ${SKIP_REVERSE_CHECK:-0} != "1" ]]; then
+  cross_check_harness_group "${tsv}" "${roster}" "${check_reverse}"
+  if [[ ${check_reverse} == '1' ]]; then
     cross_check_reverse "${tsv}" "${scripts_dir}" "${ci_jobs}" "${hook_names}" "${sibling}"
   fi
   render_matrix "${tsv}" "${tmp_out}"
@@ -658,11 +792,11 @@ function parse_and_render() {
   if [[ ${check_only} == 'true' ]]; then
     if [[ ! -f ${output_file} ]] || ! cmp --silent -- "${output_file}" "${tmp_out}"; then
       log_err "enforcement matrix in ${output_file} is stale. Run scripts/refresh-enforcement-matrix.sh and commit."
-      rm --force -- "${tsv}" "${hook_names}" "${ci_jobs}" "${tmp_out}"
+      rm --force -- "${tsv}" "${hook_names}" "${ci_jobs}" "${roster}" "${tmp_out}"
       exit 1
     fi
     log_info "enforcement matrix in ${output_file} is up to date"
-    rm --force -- "${tsv}" "${hook_names}" "${ci_jobs}" "${tmp_out}"
+    rm --force -- "${tsv}" "${hook_names}" "${ci_jobs}" "${roster}" "${tmp_out}"
     return 0
   fi
 
@@ -672,7 +806,7 @@ function parse_and_render() {
   mkdir -p -- "${parent_dir}"
   mv -- "${tmp_out}" "${output_file}"
   log_info "refreshed enforcement matrix in ${output_file}"
-  rm --force -- "${tsv}" "${hook_names}" "${ci_jobs}"
+  rm --force -- "${tsv}" "${hook_names}" "${ci_jobs}" "${roster}"
 }
 
 function main() {
