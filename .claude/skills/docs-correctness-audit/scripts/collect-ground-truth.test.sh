@@ -276,8 +276,8 @@ fi
 check "repo-map section 3 names exactly the tracked refresh-*.sh generators" "${rc}"
 
 case "$(map_section 3)" in
-*git-cliff*) check "repo-map section 3 keeps the one non-refresh generator row" 0 ;;
-*) check "repo-map section 3 keeps the one non-refresh generator row" 1 ;;
+*git-cliff*) check "repo-map section 3 keeps the git-cliff row, which no refresh-*.sh covers" 0 ;;
+*) check "repo-map section 3 keeps the git-cliff row, which no refresh-*.sh covers" 1 ;;
 esac
 
 # Section 4 restates the sweep's classes. Ground truth is the collector's own
