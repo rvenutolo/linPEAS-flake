@@ -42,7 +42,10 @@ flowchart LR
 The canonical list — mirroring the `protect-main` branch ruleset — lives
 in [`docs/security/required-checks.md`](../security/required-checks.md).
 The tables below group all 29 required contexts by what they gate; consult
-the canonical doc as source of truth.
+the canonical doc as source of truth. That grouping is this page's own. The
+README's Continuous integration summary files the same contexts under the
+display categories in `docs/_data/ci-check-categories.yml`, and the two
+partitions are not meant to match.
 
 Functional gates:
 

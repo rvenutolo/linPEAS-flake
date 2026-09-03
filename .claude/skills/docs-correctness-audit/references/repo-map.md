@@ -133,7 +133,7 @@ runs, and
 `lychee.toml`'s `exclude_path` for the consumers that reach lychee without
 the collector, the link-check workflow among them.
 `../scripts/collect-ground-truth.test.sh` asserts the two select the same
-set. **This paragraph is where that rule is stated; the other sites point
+set. **This paragraph is where that rule is stated; both filters point
 here, directly or via the collector.**
 
 `.claude/CLAUDE.md` and the global CLAUDE.md are untracked and stay read-only
@@ -258,10 +258,10 @@ recognized first, and inline code spans are blanked before a `BEGIN` is looked
 for, so a marker quoted in a span or a fence is documentation, not a block
 opener. Like the lint, the sweep fails loud on an unterminated fence or
 generated block rather than silently blanking to end-of-file — and in the
-collector that failure aborts the whole run mid-bundle: the sections after
-**`EPHEMERAL-TOKEN HITS`** (the links check included) never emit. A short
+collector that failure aborts the whole run mid-bundle: everything after
+**`EPHEMERAL-TOKEN HITS`** — the link check — never emits. A short
 bundle therefore means a malformed doc — record the offender as a
-high-severity finding and treat the never-emitted sections as unchecked rather
+high-severity finding and treat the never-emitted section as unchecked rather
 than clean. That pass is load-bearing: without it, every doc that *documents*
 a banned shape as an example — `docs/development/linting.md`'s table of banned
 shapes, the generated hook table in `docs/development/git.md` — reports as

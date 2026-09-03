@@ -389,8 +389,10 @@ work="$(make_temp --directory)"
 probe="$(make_temp --tmpdir="${dir}" probe.XXXXXX)"
 ```
 
-Matching is by command position, so prose naming the command — a
-whole-line comment, a parenthetical — is not a hit. The one
+Matching is by command position: a whole-line comment is blanked before
+the rule runs, and a bare `(` is not an introducer, so a parenthetical
+naming the command is not a hit — while a trailing comment or a string
+operand that places the word after `;`, `|` or `&` is one. The one
 sanctioned bare invocation lives in `scripts/lib/temp.sh`, which the rule
 skips by its repo-relative path — a second file of that name elsewhere
 under the scan root is an ordinary script and its bare call is a

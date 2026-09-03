@@ -29,7 +29,7 @@ posture is non-negotiable.
 ## Local development
 
 ```sh
-nix develop           # drops you into the devShell with every tool CI uses
+nix develop           # drops you into devShells.default, which carries the lint and formatting tooling
 just                  # list recipes
 just check            # nix flake check (formatting + pre-commit + lint-shell-tools + derivation build)
 just fmt              # treefmt — prettier + nixfmt + shfmt + taplo + mdformat + just
