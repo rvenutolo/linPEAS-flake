@@ -10,12 +10,15 @@ Run a documentation correctness audit of this repository using the
 1. Aim first at prose the last fix pass touched: read `LAST_AUDIT_SHA` from
     `.github/docs-audit-state` and list tracked Markdown changed since, then
     hand the readers that file list as a priority set — not a scope limit.
+    The bundle's `PROSE HOTSPOTS` ranking names the lines recent fix passes
+    rewrote; readers take the whole paragraph around each, not the hunk.
 1. Run the collector bundled with that skill (`<skill-dir>/scripts/collect-ground-truth.sh`,
     resolved from the SKILL.md's own directory) once to gather the
-    authoritative ground-truth bundle (flake outputs, recipes, scripts,
-    workflows, ci.yml job list, lint-group membership, the valid CI job /
-    check-name union allowlist, crons, required-check count, the
-    ephemeral-token sweep, and the internal link / anchor check).
+    authoritative ground-truth bundle (the prose-hotspot ranking, flake
+    outputs, recipes, scripts, workflows, ci.yml job list, lint-group
+    membership, the valid CI job / check-name union allowlist, crons,
+    required-check count, the ephemeral-token sweep, and the internal link /
+    anchor check).
 1. Fan out read-only cluster readers (one per doc cluster) checking factual
     drift, internal consistency, and prose quality.
 1. Require a coverage note from every reader saying what it cross-checked
