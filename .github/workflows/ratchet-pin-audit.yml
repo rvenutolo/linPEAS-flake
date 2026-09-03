@@ -277,8 +277,9 @@ jobs:
               publisher force-moved the tag. Compare the canonical SHA
               against upstream release notes; if the re-tag is legitimate,
               replace each `pinned` SHA with the corresponding `canonical`
-              SHA in the affected workflow files (or wait for Renovate to
-              do it on its next scheduled run), review the diff, and open
+              SHA in the affected workflow files and composite actions (or
+              wait for Renovate to do it on its next scheduled run), review
+              the diff, and open
               a PR. If the release notes do **not** describe the SHA
               change, treat this as a potential supply-chain event and
               escalate — do **not** auto-update. See the runbook for the

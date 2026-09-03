@@ -933,6 +933,13 @@ jobs:
         with:
           persist-credentials: false
       - uses: editorconfig-checker/action-editorconfig-checker@840e866d93b8e032123c23bac69dece044d4d84c # v2.2.0
+        with:
+          # The action downloads the checker release named here and looks
+          # for an `ec-<os>-<arch>` asset. Checker releases from v4 ship
+          # only `editorconfig-checker-<os>-<arch>` assets, so `latest`
+          # (the action's default) resolves to a release it cannot use.
+          # Lift this pin when an action release reads the new asset name.
+          version: v3.11.2
 
   commitlint:
     runs-on: ubuntu-latest

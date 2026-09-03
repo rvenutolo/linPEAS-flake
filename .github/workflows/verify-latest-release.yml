@@ -572,9 +572,10 @@ jobs:
               the failed step, so the attribution ladder has a gap. Treat
               the failure as unexplained until triaged by hand, and file a
               bug against this workflow's `attribute failure reason` step.
-            - `unknown` — the `verify` job emitted no reason at all, so it
-              was cancelled or skipped before the attribution step ran.
-              Re-run the cron.
+            - `unknown` — the `verify` job emitted no reason at all: it
+              was cancelled or skipped before the attribution step ran, or
+              a job-level timeout killed that step (which reports as a
+              plain failure). Re-run the cron.
 
             Investigate the `verify` job logs for the failing step. Do
             NOT merge any subsequent pin bumps if the reason is

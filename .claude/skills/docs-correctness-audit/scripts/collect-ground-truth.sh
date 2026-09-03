@@ -51,8 +51,9 @@ RE_SEEDED_FIXTURES='\.claude/skills/[^/]+/evals/seeded-defects/fixtures/'
 HOTSPOT_MARKERS=5
 # Where the line-level window starts. A marker records the sha its cycle
 # audited once that cycle's fixes had landed, so it marks the END of a cycle:
-# the range after the newest marker holds no fix pass at all, and the most
-# recent one sits between the second-newest marker and HEAD.
+# the range after the newest marker holds only what the cycle in progress
+# has landed so far (nothing, when the audit opens a cycle), and the last
+# completed pass sits between the second-newest marker and HEAD.
 HOTSPOT_RECENT_MARKERS=2
 # Under two touches the ranking says no more than "changed recently", which the
 # priority set already says.
@@ -380,8 +381,8 @@ hotspot_lines() {
   ' || true
 }
 
-# @description Rank tracked prose by how many recent fix commits rewrote it,
-#              and name the surviving lines of the files at the top.
+# @description Rank tracked prose by how many recent commits rewrote it, and
+#              name the surviving lines of the files at the top.
 rank_prose_hotspots() {
   local base latest
   # Two windows, because the two facts a reader needs are different. The wide
@@ -403,14 +404,17 @@ rank_prose_hotspots() {
   tmp="$(mktemp -d)"
   git log --format=%H "${latest}..HEAD" >"${tmp}/commits"
   # One commit contributes one line per path it touched, and a merge contributes
-  # none, so an occurrence count is a count of distinct fix commits.
+  # none, so an occurrence count is a count of distinct non-merge commits — of
+  # any type; in this tree nearly every commit that touches prose is a fix pass.
   git log --format='' --name-only "${base}..HEAD" -- '*.md' >"${tmp}/raw"
   # grep exits 1 on no match, which pipefail would turn into a collector abort
   # for the legitimate "nothing changed since that audit point" case.
   grep -vE "^$|${RE_HOTSPOT_SKIP}" "${tmp}/raw" >"${tmp}/paths" || true
   sort "${tmp}/paths" | uniq -c | awk '{ print $1, $2 }' | sort -rn -k1,1 >"${tmp}/ranked"
-  printf 'rewrite pressure: %s fix commit(s) since audit point %s (%s point(s) back)\n' \
-    "$(git rev-list --count "${base}..HEAD")" "${base:0:7}" "${HOTSPOT_MARKERS}"
+  # Same population as the per-file counts: non-merge commits, prose-touching
+  # or not, so the two figures read on one scale.
+  printf 'rewrite pressure: %s commit(s) since audit point %s (%s point(s) back)\n' \
+    "$(git rev-list --count --no-merges "${base}..HEAD")" "${base:0:7}" "${HOTSPOT_MARKERS}"
   printf 'lines below are what the most recent cycle rewrote, since audit point %s\n' "${latest:0:7}"
   local ranked=0 count path
   # The file's strict IFS holds no space, so the split is set per-read here.
@@ -419,10 +423,10 @@ rank_prose_hotspots() {
     ranked=$((ranked + 1))
     if ((ranked > HOTSPOT_BLAME_LIMIT)); then continue; fi
     if [[ -f ${path} ]]; then
-      printf '%s — %s fix commit(s); most recent cycle rewrote: %s\n' \
+      printf '%s — %s commit(s); most recent cycle rewrote: %s\n' \
         "${path}" "${count}" "$(hotspot_lines "${path}" "${tmp}/commits")"
     else
-      printf '%s — %s fix commit(s); not in the worktree\n' "${path}" "${count}"
+      printf '%s — %s commit(s); not in the worktree\n' "${path}" "${count}"
     fi
   done <"${tmp}/ranked"
   if ((ranked == 0)); then

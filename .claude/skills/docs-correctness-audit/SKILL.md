@@ -4,7 +4,8 @@ description: >-
   Read-only documentation correctness audit for this repo: cross-checks every
   tracked Markdown doc (README, docs/**, SECURITY, CONTRIBUTING,
   tests/README.md, the PR template, CHANGELOG (verify-only), and the tracked
-  `.claude/` tooling)
+  `.claude/` tooling) plus the issue-body prose workflows write and the
+  issue-template prompts
   against the actual code, CI, config, and workflows, then emits one
   severity-ranked findings report without editing anything. Invoke ONLY via the
   /docs-audit slash command. Do NOT auto-trigger on natural-language mentions of
@@ -140,8 +141,8 @@ fields, two examples joined by "or" — resolve every member, not the one that
 changed.
 
 The collector's **`PROSE HOTSPOTS`** section ranks this for you: it scores each
-doc by how many recent fix commits rewrote it and names the lines the most
-recent cycle left behind. A file high on that list with a rewritten line inside
+doc by how many commits since an earlier audit point rewrote it and names the
+lines the most recent cycle rewrote. A file high on that list with a rewritten line inside
 a paragraph is the strongest aim point the bundle offers — repeated rewriting
 means the paragraph keeps being read partially. Read those paragraphs whole,
 first.

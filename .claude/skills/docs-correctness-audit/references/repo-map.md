@@ -16,19 +16,29 @@ checked against one authoritative list.
 The collector's first section answers "which paragraph is most likely to still
 be wrong". It reports two things per doc, from two windows:
 
-- **rewrite pressure** — how many fix commits touched the file since the audit
-    point several recorded points back. A prose fix is written against one
-    sentence, so a file that has absorbed many of them holds paragraphs that
-    have been read partially, repeatedly.
+- **rewrite pressure** — how many commits touched the file since the audit
+    point several recorded points back: distinct non-merge commits of any
+    type, which in this tree means fix passes almost without exception. A
+    prose fix is written against one sentence, so a file that has absorbed
+    many of them holds paragraphs that have been read partially, repeatedly.
+    The section's opening line gives the same count repo-wide — every
+    non-merge commit since that point, prose-touching or not — so the
+    per-file figures have a scale to read against.
 - **the lines the most recent cycle rewrote** — from `git blame`, so they are
     current line numbers a reader can open, collapsed into ranges by adjacency
     rather than by which commit wrote them.
+
+Files touched twice or more are ranked; the top eight are resolved to line
+numbers, and a trailer counts the rest, which are still part of the priority
+set.
 
 Both windows are derived from the history of `.github/docs-audit-state`
 itself, which is the only in-tree record of where one cycle ended. A marker
 records its cycle's sha *after* that cycle's fixes landed, so it marks the END
 of a cycle: the line window starts one marker further back than the newest,
-because the range after the newest marker contains no fix pass at all.
+because the range after the newest marker holds only what the cycle in
+progress has landed so far — nothing, when the audit opens a cycle — while
+the last completed pass sits between the two newest markers.
 
 Read a high-pressure file's rewritten lines as whole paragraphs. The ranking is
 an aim point, not a scope limit, and a file with pressure but no recent lines
@@ -134,15 +144,19 @@ some row.
 
 Two non-Markdown surfaces carry user-facing prose and ride along with the
 cluster that owns the doc they mirror: the issue and notify bodies workflows
-write, and the field prompts in `.github/ISSUE_TEMPLATE/*.yml`. Enumerate the
-first with
+write, and the field prompts in `.github/ISSUE_TEMPLATE/*.yml`. Bodies take
+two shapes — a `body:` input handed to a notify action, and a body a `run:`
+step composes for `gh issue create` / `gh issue comment`, sometimes as a
+`--body-file` that a script writes — and a composite action carries them as
+readily as a workflow. Enumerate both shapes in both trees with
 
 ```sh
-grep -lE '^[[:space:]]*(body|title):' .github/workflows/*.yml
+grep -lE '^[[:space:]]*(body|title):|gh issue (create|comment)' .github/workflows/*.yml .github/actions/*/action.yml
 ```
 
 then read each body's prose against the runbook it restates — a triage step, a
-reason name, the conditions behind a status. Only the prose is in scope, not
+reason name, the conditions behind a status; for a `--body-file`, the prose
+lives in the script that writes the file. Only the prose is in scope, not
 the workflow logic around it: what a body *claims about a mechanism* drifts
 when the mechanism moves, and a reader hits that claim at the moment they act
 on the issue. A body and its runbook disagreeing is one finding listing both
@@ -174,8 +188,8 @@ would be reporting the harness working. The skill segment is a wildcard
 rather than one skill's name: any skill may grow such a tree, and a second
 one is out of scope for the reason the first is. Two filters carry that
 rule, because they serve different consumers — `RE_SEEDED_FIXTURES` in
-`../scripts/collect-ground-truth.sh` for the internal-link sweep this skill
-runs, and
+`../scripts/collect-ground-truth.sh` for the sweeps this skill runs itself,
+the internal-link check and the hotspot ranking, and
 `lychee.toml`'s `exclude_path` for the consumers that reach lychee without
 the collector, the link-check workflow among them.
 `../scripts/collect-ground-truth.test.sh` asserts the two select the same

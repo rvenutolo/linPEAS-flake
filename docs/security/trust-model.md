@@ -63,8 +63,9 @@ See [`SECURITY.md`](https://github.com/rvenutolo/linPEAS-flake/blob/main/SECURIT
 
 ## flake.lock input-provenance gate
 
-The weekly `update-flake-lock` cron bumps every flake input and auto-merges
-the PR; no build-path gate verifies input *provenance* — `flake-check` and
+The weekly `update-flake-lock` cron bumps every flake input that is not
+rev-pinned and auto-merges the PR; no build-path gate verifies input
+*provenance* — `flake-check` and
 the build/smoke jobs all accept whatever the lock names.
 `check-flake-lock-provenance.sh` (run in the `lint-doc-invariants`
 required group) closes that gap: it diffs the PR's `flake.lock` against
