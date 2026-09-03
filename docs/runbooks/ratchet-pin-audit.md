@@ -4,12 +4,12 @@ The `ratchet-pin-audit` workflow runs on a daily cron (see
 [CI — cron schedule](../architecture/ci.md#cron-schedule)). It runs
 `ratchet lint` (from the devshell) against every workflow file under
 `.github/workflows/` and re-derives the canonical SHA for each
-SHA-pinned action ref it does not skip (see below). On *any* failure — detected drift, an upstream
-API failure, a ratchet tool failure, or an unclassified error — the
-workflow opens (or updates) a single deduped umbrella issue labeled
-`ratchet-drift`, whose `Reason:` line names which of the four it was;
-triage by that line using the sections below. The issue auto-closes on
-the next clean run.
+SHA-pinned action ref it does not skip (see below). On *any* failure —
+detected drift, an upstream API failure, a ratchet tool failure, or an
+unclassified error — the workflow opens (or updates) a single deduped
+umbrella issue labeled `ratchet-drift`, whose `Reason:` line names which
+of the four it was; triage by that line using the sections below. The
+issue auto-closes on the next clean run.
 
 Two classes of upstream ref are skipped before any API call (a local
 `./` action, which names no upstream, is dropped earlier). Each still
@@ -39,7 +39,8 @@ This runbook is linked inline from the auto-filed issue body.
 release tags. Neither mechanism catches the case where an action
 publisher **force-moves a tag to a different SHA after we pinned to
 it** — the tag-vs-pin drift attack. The per-ref re-derivation in this
-workflow (`gh api …/git/refs/tags/{tag}`) is the detector for that
+workflow — a `gh api …/git/refs/tags/{tag}` lookup, dereferenced through
+`…/git/tags/{sha}` when the tag is annotated — is the detector for that
 class; `ratchet lint` is a local pin-shape tripwire alongside it.
 
 ## Triage by reason
@@ -92,18 +93,22 @@ Steps:
 
 ### `upstream-api-failure`
 
-The per-ref canonical-SHA re-derivation
-(`gh api …/git/refs/tags/{tag}`) failed or rate-limited, or ratchet's
-own output matched the upstream-failure heuristic. The `github.token`
-is capped at 1,000 requests per hour per repository; transient 5xx is
-also possible.
+One of the per-ref canonical-SHA re-derivation's API calls — the
+`gh api …/git/refs/tags/{tag}` lookup, or the `…/git/tags/{sha}`
+dereference an annotated tag needs — failed, rate-limited, or returned a
+payload `jq` could not read a SHA and object type from; or ratchet's own
+output matched the upstream-failure heuristic. The `github.token` is
+capped at 1,000 requests per hour per repository; transient 5xx is also
+possible.
 
 1. Re-run the workflow once via `workflow_dispatch`.
 1. If it fails again with the same reason, check the
     [GitHub Status page](https://www.githubstatus.com/).
-1. If the API is healthy, inspect the run log — the ratchet command
-    may be hitting a different upstream (the action's own
-    repository) that's rate-limited or down.
+1. If the API is healthy, inspect the run log: each failure line names
+    the `owner/repo@tag` whose lookup or dereference failed, or quotes
+    the payload that would not parse. One ref failing while the rest
+    succeed points at that action's repository — renamed, made private,
+    or its tag deleted — rather than at the API as a whole.
 
 ### `ratchet-tool-failure`
 
@@ -159,8 +164,9 @@ ratchet 0.11.4 `check`/`lint` performs local pin-shape verification
 only — it does not contact upstream APIs and cannot detect
 tag-vs-SHA drift on its own. The workflow uses ratchet as a
 belt-and-suspenders tripwire and performs the actual drift
-detection via per-ref `gh api repos/{owner}/{repo}/git/refs/tags/{tag}`
-canonical-SHA re-derivation.
+detection via per-ref canonical-SHA re-derivation: a
+`gh api repos/{owner}/{repo}/git/refs/tags/{tag}` lookup, dereferenced
+through `…/git/tags/{sha}` when the tag is annotated.
 
 That version number is load-bearing, not incidental: it is what makes
 the sentence above a claim about a specific tool version rather than a
