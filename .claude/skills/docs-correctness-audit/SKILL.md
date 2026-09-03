@@ -141,10 +141,10 @@ in a doc is checked against one authoritative list, not re-derived per agent
 (and not re-run by all of them). `references/repo-map.md` explains what each
 field means and how to use it; the collector is its executable form. If the
 bundle comes back short — the ephemeral sweep fails loud on an unterminated
-fence or generated block and aborts the collector before the link check,
-which follows it, emits — the malformed doc is itself a high-severity
-finding: record it, and treat the never-emitted section as unchecked rather
-than clean.
+fence or generated block and aborts the collector before the one section
+that follows it, the link check, is emitted — the malformed doc is itself a
+high-severity finding: record it, and treat the never-emitted section as
+unchecked rather than clean.
 
 ### 2. Fan out read-only readers, one per doc cluster
 

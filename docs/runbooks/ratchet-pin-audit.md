@@ -5,11 +5,14 @@ The `ratchet-pin-audit` workflow runs on a daily cron (see
 `ratchet lint` (from the devshell) against every workflow file under
 `.github/workflows/` and re-derives the canonical SHA for each
 SHA-pinned action ref it does not skip (see below). On *any* failure —
-detected drift, an upstream API failure, a ratchet tool failure, or an
-unclassified error — the workflow opens (or updates) a single deduped
-umbrella issue labeled `ratchet-drift`, whose `Reason:` line names which
-of the four it was; triage by that line using the sections below. The
-issue auto-closes on the next clean run.
+detected drift, an upstream API failure, a ratchet tool failure, an
+unclassified error, or a cancelled run — the workflow opens a single
+deduped umbrella issue labeled `ratchet-drift`, or comments a run link
+on the one already open. The issue body's `Reason:` line names the
+reason of the run that opened it; a later failure adds only the link,
+so when the issue has been re-commented, read the newest run's log for
+its reason. Match the reason against the sections below. The issue
+auto-closes on the next clean run.
 
 Two classes of upstream ref are skipped before any API call (a local
 `./` action, which names no upstream, is dropped earlier). Each still
@@ -50,8 +53,10 @@ against the sections below.
 
 ### `drift-detected`
 
-At least one drifted ref is listed in the issue body, one per line,
-in the shape `owner/repo@tag pinned=<sha> canonical=<sha>`.
+At least one drifted ref is listed in the body of the issue as it was
+opened, one per line, in the shape `<ref>@tag pinned=<sha> canonical=<sha>`,
+where `<ref>` is the literal pinned action — a monorepo action keeps its
+subpath, as in `github/codeql-action/analyze`.
 
 Steps:
 
@@ -104,11 +109,14 @@ possible.
 1. Re-run the workflow once via `workflow_dispatch`.
 1. If it fails again with the same reason, check the
     [GitHub Status page](https://www.githubstatus.com/).
-1. If the API is healthy, inspect the run log: each failure line names
-    the `owner/repo@tag` whose lookup or dereference failed, or quotes
-    the payload that would not parse. One ref failing while the rest
-    succeed points at that action's repository — renamed, made private,
-    or its tag deleted — rather than at the API as a whole.
+1. If the API is healthy, inspect the run log. The audit stops at the
+    first failure, so the log carries one failure line: it names the
+    `owner/repo@tag` whose lookup or dereference failed, or quotes the
+    payload that would not parse (a failure routed here by the ratchet
+    heuristic quotes ratchet's output instead and names no ref). A named
+    ref that keeps failing across re-runs points at that action's
+    repository — renamed, made private, or its tag deleted — rather
+    than at the API as a whole; the refs after it were not attempted.
 
 ### `ratchet-tool-failure`
 
@@ -129,9 +137,10 @@ failed shape validation; OR the workflow glob matched zero files.
     the per-ref `gh api` re-derivation rather than from ratchet's
     output, so an output-format change cannot fabricate a drift
     report.
-1. The step does grep ratchet's output to tell an upstream failure
-    from a tool failure, so a reworded ratchet error can still land an
-    upstream failure under this reason. If the run log shows one,
+1. The step tells an upstream failure from a tool failure with a fixed
+    heuristic grep over ratchet's output, so a reworded ratchet error
+    can still land an upstream failure under this reason. If the run
+    log shows one,
     widen the heuristic grep in the `audit pins` step. The structural
     invariant `scripts/check-ratchet-pin-audit.sh` pins the four reason values
     the notify body documents (`drift-detected`,
@@ -146,10 +155,14 @@ failed shape validation; OR the workflow glob matched zero files.
 
 ### `unknown`
 
-The check step exited non-zero without writing a `result=` output.
-Inspect the run log directly; this typically indicates an
-unhandled error inside the run block. Add classification for the
-new failure mode and update both the workflow and this runbook.
+The check step produced no `reason=` output. Either it exited non-zero
+on an unhandled error inside the run block, or the run was cancelled —
+most often its `timeout-minutes` was exceeded — which the issue body
+flags with a `[!WARNING]` banner naming it an infrastructure failure
+rather than a finding. Read the banner first: a cancelled run says
+nothing about pin drift, so re-run it. For an unhandled error, inspect
+the run log directly, add classification for the new failure mode, and
+update both the workflow and this runbook.
 
 ## Recovery
 
