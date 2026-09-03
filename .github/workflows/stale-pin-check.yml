@@ -207,8 +207,10 @@ jobs:
             - `pin-malformed` — local `linpeas-pin.json` has a malformed
               `.version` field. Inspect the file; likely a manual edit or a
               broken bump pipeline.
-            - `unknown` — the check step exited non-zero without setting an
-              output. Inspect the run log directly.
+            - `unknown` — the `check` job produced no `reason` output:
+              the evaluation step hit an unhandled error, a step before it
+              failed, or the run was cancelled (a banner above, or the
+              run's comment, says so). Inspect the run log directly.
 
             This issue auto-closes once the next watchdog run sees a healthy
             pin within tolerance of the upstream latest tag.
