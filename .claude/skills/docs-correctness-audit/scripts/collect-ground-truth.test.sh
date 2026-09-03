@@ -452,6 +452,81 @@ case "${crons}" in *'real.yml:    - cron: "0 8 * * *"'*) check "cron sweep lists
 case "${crons}" in *"prose.yml"*) check "cron sweep skips prose cron: mentions" 1 ;; *) check "cron sweep skips prose cron: mentions" 0 ;; esac
 rm -rf "${cr}"
 
+# --- prose-hotspot fixture ---
+# Three recorded audit points, so the two windows the ranking uses are
+# distinguishable: the wide one counts fix commits, the narrow one names the
+# lines the most recent cycle left. A marker records its cycle's sha AFTER that
+# cycle's fixes landed, so the newest marker opens an empty range — the narrow
+# window has to start one marker further back or every file reports no lines.
+hs="$(mktemp -d)"
+(
+  cd "${hs}"
+  git init -q && git config user.email t@t && git config user.name t
+  mkdir -p docs .github
+  printf 'one\ntwo\nthree\nfour\nfive\nsix\nseven\n' >docs/hot.md
+  printf 'cold\n' >docs/cold.md
+  printf '# Changelog\n\ninit\n' >CHANGELOG.md
+  git add -A && git commit -qm base
+  base_sha="$(git rev-parse HEAD)"
+  printf 'LAST_AUDIT_SHA=%s\n' "${base_sha}" >.github/docs-audit-state
+  git add -A && git commit -qm 'mark cycle one'
+
+  # One fix commit inside the wide window but before the narrow one: it lifts
+  # hot.md's count without contributing a line, which is what separates
+  # "absorbed rewriting" from "rewritten by the last pass".
+  printf 'one\ntwo-edited\nthree\nfour\nfive\nsix\nseven\n' >docs/hot.md
+  git commit -qam 'fix hot line two'
+  mid_sha="$(git rev-parse HEAD)"
+  printf 'LAST_AUDIT_SHA=%s\n' "${mid_sha}" >.github/docs-audit-state
+  git add -A && git commit -qm 'mark cycle two'
+
+  # The most recent cycle: one line on its own, then two adjacent ones with an
+  # untouched line between, so the collapsed output must carry both a bare
+  # number and a range. Adjacency is what merges a run, not shared authorship:
+  # lines 3, 5 and 6 arrive in two commits and render as two entries.
+  printf 'one\ntwo-edited\nthree-edited\nfour\nfive\nsix\nseven\n' >docs/hot.md
+  git commit -qam 'fix hot line three'
+  printf 'one\ntwo-edited\nthree-edited\nfour\nfive-edited\nsix-edited\nseven\n' >docs/hot.md
+  git commit -qam 'fix hot lines five and six'
+  printf 'cold-edited\n' >docs/cold.md
+  git commit -qam 'fix cold once'
+  # Release-driven churn must not outrank prose: this alone would top the list.
+  for n in 1 2 3 4 5; do
+    printf '# Changelog\n\nentry %s\n' "${n}" >CHANGELOG.md
+    git commit -qam "release ${n}"
+  done
+  last_sha="$(git rev-parse HEAD)"
+  printf 'LAST_AUDIT_SHA=%s\n' "${last_sha}" >.github/docs-audit-state
+  git add -A && git commit -qm 'mark cycle three'
+)
+# shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
+hot="$(cd "${hs}" && source "${COLLECTOR}" && rank_prose_hotspots)"
+case "${hot}" in *"docs/hot.md — 3 fix commit(s)"*) check "hotspot counts distinct fix commits" 0 ;; *) check "hotspot counts distinct fix commits" 1 ;; esac
+case "${hot}" in *"docs/cold.md"*) check "hotspot drops a doc under the touch floor" 1 ;; *) check "hotspot drops a doc under the touch floor" 0 ;; esac
+case "${hot}" in *CHANGELOG*) check "hotspot excludes release-driven churn" 1 ;; *) check "hotspot excludes release-driven churn" 0 ;; esac
+# The narrow window's lines: line 3 alone, lines 5-6 collapsed. Line 2 was
+# rewritten in the wide window only, and lines 4 and 7 in neither, so a range
+# spanning them would mean the window or the collapse reaches too far.
+case "${hot}" in *"rewrote: 3, 5-6"*) check "hotspot collapses recent lines into ranges" 0 ;; *) check "hotspot collapses recent lines into ranges" 1 ;; esac
+# A marker records the end of a cycle, so a narrow window anchored on the
+# NEWEST marker reports nothing — the regression this fixture exists to catch.
+case "${hot}" in *"blame names none"*) check "hotspot narrow window is not the empty newest range" 1 ;; *) check "hotspot narrow window is not the empty newest range" 0 ;; esac
+rm -rf "${hs}"
+
+# --- prose-hotspot fallback: no recorded audit point ---
+hn="$(mktemp -d)"
+(
+  cd "${hn}"
+  git init -q && git config user.email t@t && git config user.name t
+  mkdir -p docs
+  printf 'one\n' >docs/only.md
+  git add -A && git commit -qm base
+)
+# shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
+hotnone="$(cd "${hn}" && source "${COLLECTOR}" && rank_prose_hotspots)"
+case "${hotnone}" in *"no usable audit point"*) check "hotspot says why it ranked nothing" 0 ;; *) check "hotspot says why it ranked nothing" 1 ;; esac
+rm -rf "${hn}"
+
 if [[ ${fails} -ne 0 ]]; then
   printf '\n%d FAILED\n' "${fails}"
   exit 1

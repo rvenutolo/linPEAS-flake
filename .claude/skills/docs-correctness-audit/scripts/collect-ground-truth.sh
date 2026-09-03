@@ -2,7 +2,8 @@
 # collect-ground-truth.sh — bundled with the docs-correctness-audit skill.
 #
 # @description Emit, in one labeled dump, the repo ground-truth bundle the audit
-# shares with every cluster reader: flake outputs, just recipes, scripts
+# shares with every cluster reader: a prose-hotspot ranking of the docs recent
+# fix passes rewrote most, flake outputs, just recipes, scripts
 # (entry points, sourced libraries, and awk programs),
 # workflows, the ci.yml top-level job list, lint-group membership, a union
 # allowlist of all valid CI job/check names, workflow crons, the
@@ -40,6 +41,28 @@ EPH_SCAN_DIR=""
 # carries the same pattern for the consumers that reach lychee without this
 # filter; collect-ground-truth.test.sh asserts the two select the same set.
 RE_SEEDED_FIXTURES='\.claude/skills/[^/]+/evals/seeded-defects/fixtures/'
+
+# Prose-hotspot ranking. What the section means and how to read it:
+# references/repo-map.md §1, "PROSE HOTSPOTS".
+#
+# How far back the ranking reaches, counted in recorded audit points rather
+# than commits: `.github/docs-audit-state` is rewritten once per cycle, so its
+# own history is the only in-tree record of where one cycle ended.
+HOTSPOT_MARKERS=5
+# Where the line-level window starts. A marker records the sha its cycle
+# audited once that cycle's fixes had landed, so it marks the END of a cycle:
+# the range after the newest marker holds no fix pass at all, and the most
+# recent one sits between the second-newest marker and HEAD.
+HOTSPOT_RECENT_MARKERS=2
+# Under two touches the ranking says no more than "changed recently", which the
+# priority set already says.
+HOTSPOT_MIN_TOUCHES=2
+# How many of the ranked files to resolve down to line numbers. Blame is
+# per-file work, and the counts carry the ranking on their own.
+HOTSPOT_BLAME_LIMIT=8
+# Churn that is not prose drift: release-driven records, generated data, and
+# fixture trees that exist to carry defects.
+RE_HOTSPOT_SKIP="^(CHANGELOG\.md|docs/releases\.md|docs/_data/|tests/fixtures/)|${RE_SEEDED_FIXTURES}"
 
 # @description Emit one file with its exempt regions blanked, line for line,
 # mirroring check-ephemeral-refs.sh's strip_exempt ordering: fences (backtick
@@ -293,9 +316,133 @@ list_workflow_crons() { # $1=workflows dir — emits "<file>:<schedule line>" fo
     sed "s#^$1/##"
 }
 
+# @description Print the commit the audit started from N recorded audit points
+#              back, or nothing when the marker history cannot supply a
+#              reachable one.
+# @arg $1 how many recorded audit points to reach back (1 = the current point)
+# @stdout one commit sha, or nothing
+hotspot_base_sha() {
+  local -r depth="$1"
+  local state='.github/docs-audit-state'
+  [[ -f ${state} ]] || return 0
+  local -a markers=()
+  # Marker commits newest first; each one records the sha its cycle audited.
+  mapfile -t markers < <(git log --format=%H -- "${state}" 2>/dev/null || true)
+  [[ ${#markers[@]} -gt 0 ]] || return 0
+  local idx=$((depth - 1))
+  # Fewer recorded points than the window asks for: reach back to the oldest.
+  ((idx < ${#markers[@]})) || idx=$((${#markers[@]} - 1))
+  local recorded
+  recorded="$(git show "${markers[idx]}:${state}" 2>/dev/null | sed -n 's/^LAST_AUDIT_SHA=//p' | head -1 || true)"
+  [[ -n ${recorded} ]] || return 0
+  # A recorded sha can be unreachable — a shallow clone, or rewritten history.
+  # Returning it anyway would rank nothing at all rather than say why.
+  git cat-file -e "${recorded}^{commit}" 2>/dev/null || return 0
+  printf '%s\n' "${recorded}"
+}
+
+# @description Emit the current line numbers of one file whose latest change
+#              came from a listed commit, collapsed into ranges. Blame reports
+#              lines as they stand now, so a range points at text a reader can
+#              go read rather than at an offset inside an old hunk.
+# @arg $1 path to a tracked file
+# @arg $2 path to a file of candidate commit shas, one per line
+hotspot_lines() {
+  local -r path="$1"
+  local -r shafile="$2"
+  # A blame that cannot run leaves the ranking intact — the counts do not
+  # depend on it — so report the gap for that one file instead of aborting.
+  git blame --porcelain -- "${path}" 2>/dev/null | awk -v listfile="${shafile}" '
+    BEGIN { while ((getline sha < listfile) > 0) recent[sha] = 1 }
+    # Content lines are tab-prefixed; only headers carry sha + line numbers.
+    /^\t/ { next }
+    length($1) == 40 && $1 ~ /^[0-9a-f]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ {
+      if ($3 > maxline) maxline = $3
+      if ($1 in recent) mark[$3] = 1
+      next
+    }
+    END {
+      for (i = 1; i <= maxline; i++) {
+        if (i in mark) {
+          if (!start) start = i
+          prev = i
+          continue
+        }
+        if (start) {
+          out = out sep (start == prev ? start : start "-" prev)
+          sep = ", "
+          start = 0
+        }
+      }
+      if (start) out = out sep (start == prev ? start : start "-" prev)
+      print (out == "" ? "(blame names none)" : out)
+    }
+  ' || true
+}
+
+# @description Rank tracked prose by how many recent fix commits rewrote it,
+#              and name the surviving lines of the files at the top.
+rank_prose_hotspots() {
+  local base latest
+  # Two windows, because the two facts a reader needs are different. The wide
+  # one measures how much rewriting a doc has absorbed; the newest point says
+  # which of its lines the last pass rewrote. A paragraph that scores on both
+  # is one an earlier pass edited around and the last pass edited again.
+  base="$(hotspot_base_sha "${HOTSPOT_MARKERS}")"
+  latest="$(hotspot_base_sha "${HOTSPOT_RECENT_MARKERS}")"
+  if [[ -z ${base} ]]; then
+    echo '(no usable audit point — .github/docs-audit-state is absent, records no'
+    echo ' reachable sha, or this is a shallow clone. Ranking skipped: read the'
+    echo ' priority set unranked.)'
+    return 0
+  fi
+  # An unreachable newest point with a reachable older one would leave the line
+  # window as a bare `..HEAD`; fall back to the one window that resolved.
+  [[ -n ${latest} ]] || latest="${base}"
+  local tmp
+  tmp="$(mktemp -d)"
+  git log --format=%H "${latest}..HEAD" >"${tmp}/commits"
+  # One commit contributes one line per path it touched, and a merge contributes
+  # none, so an occurrence count is a count of distinct fix commits.
+  git log --format='' --name-only "${base}..HEAD" -- '*.md' >"${tmp}/raw"
+  # grep exits 1 on no match, which pipefail would turn into a collector abort
+  # for the legitimate "nothing changed since that audit point" case.
+  grep -vE "^$|${RE_HOTSPOT_SKIP}" "${tmp}/raw" >"${tmp}/paths" || true
+  sort "${tmp}/paths" | uniq -c | awk '{ print $1, $2 }' | sort -rn -k1,1 >"${tmp}/ranked"
+  printf 'rewrite pressure: %s fix commit(s) since audit point %s (%s point(s) back)\n' \
+    "$(git rev-list --count "${base}..HEAD")" "${base:0:7}" "${HOTSPOT_MARKERS}"
+  printf 'lines below are what the most recent cycle rewrote, since audit point %s\n' "${latest:0:7}"
+  local ranked=0 count path
+  # The file's strict IFS holds no space, so the split is set per-read here.
+  while IFS=' ' read -r count path; do
+    ((count >= HOTSPOT_MIN_TOUCHES)) || continue
+    ranked=$((ranked + 1))
+    if ((ranked > HOTSPOT_BLAME_LIMIT)); then continue; fi
+    if [[ -f ${path} ]]; then
+      printf '%s — %s fix commit(s); most recent cycle rewrote: %s\n' \
+        "${path}" "${count}" "$(hotspot_lines "${path}" "${tmp}/commits")"
+    else
+      printf '%s — %s fix commit(s); not in the worktree\n' "${path}" "${count}"
+    fi
+  done <"${tmp}/ranked"
+  if ((ranked == 0)); then
+    echo '(no doc was rewritten by more than one fix commit since that audit point)'
+  elif ((ranked > HOTSPOT_BLAME_LIMIT)); then
+    printf '(%s further doc(s) scored %s+ and are not listed; the whole set is the priority set)\n' \
+      "$((ranked - HOTSPOT_BLAME_LIMIT))" "${HOTSPOT_MIN_TOUCHES}"
+  fi
+  rm -rf "${tmp}"
+  echo '(Read the whole paragraph around each line, not the sentence the diff'
+  echo ' changed: the surviving defect is usually a sibling clause the fix pass'
+  echo ' left alone, and a paragraph high on this list has survived several.)'
+}
+
 main() {
   REPO_ROOT="$(git rev-parse --show-toplevel)"
   cd "${REPO_ROOT}"
+
+  section "PROSE HOTSPOTS (docs the recent fix passes rewrote most; aim here first)"
+  rank_prose_hotspots
 
   section "FLAKE OUTPUTS (nix flake show)"
   if ! nix flake show --json 2>/dev/null | filter_flake_outputs 2>/dev/null; then

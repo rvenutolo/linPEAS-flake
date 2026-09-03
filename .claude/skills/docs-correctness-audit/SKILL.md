@@ -19,6 +19,16 @@ Review every Markdown doc in this repo against the *actual* state of the code,
 config, and CI, then emit one prioritized findings report. **The report stage is
 read-only — no edits.** The point is to let the user triage before any churn.
 
+Documentation here is a function, not a file extension. Prose a workflow writes
+into an issue it files — the triage steps and reason names in a notify body —
+and the prompts in `.github/ISSUE_TEMPLATE/*.yml` are read by a human at the
+moment they act on it, restate mechanisms the runbooks document, and drift the
+same way a runbook does. They are in scope for the factual-drift dimension, and
+a mismatch between such a body and the runbook it mirrors is one finding with
+two sites, not one per file. `references/repo-map.md` §2 says how to enumerate
+them and which reader owns them. Everything else outside tracked Markdown —
+code comments, script `@description` blocks, workflow logic itself — stays out.
+
 This skill is tuned to this repo. Concrete ground-truth commands, the doc
 cluster map, the generated-doc → generator table, and the ephemeral-token
 regex live in [`references/repo-map.md`](references/repo-map.md). Read it before
@@ -117,6 +127,25 @@ sentence they replaced — a fix that swapped one wrong claim for another reads
 as an improvement in the diff. If the state file is absent or its sha is
 unreachable, record that in the report and audit everything at equal priority.
 
+**The unit of re-reading is the paragraph, not the hunk.** A changed line is
+where the last pass aimed; the defect that survived is beside it. Take each
+hunk's whole paragraph — the full bullet, the full table row, the sentences
+either side — and read every claim in it against the artifact, including the
+clauses the diff never touched. Those clauses are the ones no pass has checked:
+each fix pass read the sentence it came to correct and left its neighbours
+carrying whatever they already said, so a false clause can sit untouched
+through several cycles of edits to the text around it. When a paragraph
+enumerates or bounds something — a list of what a layer catches, a set of
+fields, two examples joined by "or" — resolve every member, not the one that
+changed.
+
+The collector's **`PROSE HOTSPOTS`** section ranks this for you: it scores each
+doc by how many recent fix commits rewrote it and names the lines the most
+recent cycle left behind. A file high on that list with a rewritten line inside
+a paragraph is the strongest aim point the bundle offers — repeated rewriting
+means the paragraph keeps being read partially. Read those paragraphs whole,
+first.
+
 ### 1. Collect ground truth once
 
 Run the bundled collector once and keep its output. It lives in this skill's
@@ -128,7 +157,8 @@ SKILL.md you were given, then run it from anywhere inside the repo checkout
 bash <this-skill-dir>/scripts/collect-ground-truth.sh
 ```
 
-It emits one labeled bundle of eleven sections — flake outputs, `just`
+It emits one labeled bundle of twelve sections — a **`PROSE HOTSPOTS`**
+ranking of the docs recent fix passes rewrote most, flake outputs, `just`
 recipes, the `scripts/` inventory (entry points, the `scripts/lib/` libraries
 they source, *and* the `scripts/*.awk` programs), workflows, the **ci.yml
 top-level job list**, **lint-group membership**, the
@@ -303,6 +333,16 @@ findings must still show what was cross-checked, not just "clean".
   the quantifier instead of sharpening it. Overshooting into a fresh false
   exclusive is a defect this repo's fix passes have repeatedly shipped.
 ```
+
+Every finding on a quantifier carries its fix shape in the finding itself, not
+only in the closing notes: state whether the proposed wording **drops** the
+boundary word or **scopes** it to the set it can defend, and never propose a
+replacement exclusive. A fix pass reading a per-finding instruction follows it;
+one reading a single standing note at the end of the report has already written
+the sentence. When the false claim was introduced by a previous cycle's fix —
+`git log -L` or the hotspot ranking will say — record that in the finding. A
+defect a fix pass manufactured is worth more than its severity suggests,
+because it says the fix discipline itself is what leaked.
 
 Each finding states the file:line (its dimension lives in the severity index),
 what is wrong, the *evidence* (the command output or file line that proves
