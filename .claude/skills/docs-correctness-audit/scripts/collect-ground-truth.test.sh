@@ -454,10 +454,11 @@ rm -rf "${cr}"
 
 # --- prose-hotspot fixture ---
 # Three recorded audit points, so the two windows the ranking uses are
-# distinguishable: the wide one counts fix commits, the narrow one names the
-# lines the most recent cycle left. A marker records its cycle's sha AFTER that
-# cycle's fixes landed, so the newest marker opens an empty range — the narrow
-# window has to start one marker further back or every file reports no lines.
+# distinguishable: the wide one counts commits, the narrow one names the lines
+# the most recent cycle rewrote. A marker records its cycle's sha AFTER that
+# cycle's fixes landed, so the newest marker opens a range holding nothing yet
+# — the narrow window has to start one marker further back or every file
+# reports no lines.
 hs="$(mktemp -d)"
 (
   cd "${hs}"
@@ -501,7 +502,7 @@ hs="$(mktemp -d)"
 )
 # shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
 hot="$(cd "${hs}" && source "${COLLECTOR}" && rank_prose_hotspots)"
-case "${hot}" in *"docs/hot.md — 3 fix commit(s)"*) check "hotspot counts distinct fix commits" 0 ;; *) check "hotspot counts distinct fix commits" 1 ;; esac
+case "${hot}" in *"docs/hot.md — 3 commit(s)"*) check "hotspot counts distinct commits" 0 ;; *) check "hotspot counts distinct commits" 1 ;; esac
 case "${hot}" in *"docs/cold.md"*) check "hotspot drops a doc under the touch floor" 1 ;; *) check "hotspot drops a doc under the touch floor" 0 ;; esac
 case "${hot}" in *CHANGELOG*) check "hotspot excludes release-driven churn" 1 ;; *) check "hotspot excludes release-driven churn" 0 ;; esac
 # The narrow window's lines: line 3 alone, lines 5-6 collapsed. Line 2 was
