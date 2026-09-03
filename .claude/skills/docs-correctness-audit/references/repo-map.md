@@ -118,7 +118,16 @@ scope. The fixtures under `.claude/skills/*/evals/seeded-defects/fixtures/`
 stay out: they are the recall harness's own fixtures — sample audit
 reports `score.sh` grades against a manifest, and a seed set `plant.sh`
 is tested against — rather than repo documentation, so reporting them
-would be reporting the harness working.
+would be reporting the harness working. The skill segment is a wildcard
+rather than one skill's name: any skill may grow such a tree, and a second
+one is out of scope for the reason the first is. Two filters carry that
+rule, because they serve different consumers — `RE_SEEDED_FIXTURES` in
+`../scripts/collect-ground-truth.sh` for the sweeps this skill runs, and
+`lychee.toml`'s `exclude_path` for the consumers that reach lychee without
+the collector, the link-check workflow among them.
+`../scripts/collect-ground-truth.test.sh` asserts the two select the same
+set. **This paragraph is where that rule is stated; the other sites point
+here.**
 
 `.claude/CLAUDE.md` and the global CLAUDE.md are untracked and stay read-only
 — the global one lives outside the repo entirely. They set the scope of the
@@ -307,16 +316,16 @@ section produced by `lychee --offline --include-fragments=anchor-only`,
 reusing `lychee.toml`. It runs over all tracked `*.md` files — the tracked
 `.claude/` tooling included, since its links are ordinary links even though
 its prose quotes banned token shapes — excluding only `tests/fixtures/`,
-`docs/_data/` and the seeded-defect fixtures under
-`.claude/skills/*/evals/seeded-defects/fixtures/`, which are the recall
-harness's own fixtures rather than repo documentation. That list is only the
+`docs/_data/` and the seeded-defect fixtures (§2 states why those are out of
+scope and what keeps the two filters in step). That list is only the
 first of two filters: the run passes `--config lychee.toml`, whose
 `exclude_path` entries are **regular expressions matched against each input
 path as it was passed** (absolute, here), so any entry matching a tracked doc
 removes it from the sweep — lychee warns once per refused input, which the
 collector counts and surfaces as the `(lychee skipped …)` marker described
-below. The two agree today — verify with
-`lychee --dump-inputs` if a coverage claim depends on it. External URLs are
+below. Of the shared entries only the seeded-fixture one is gated (§2); the
+rest agree by inspection — verify with `lychee --dump-inputs` if a coverage
+claim depends on it. External URLs are
 skipped entirely — only relative file paths and heading anchors are checked. A
 listed entry is authoritative drift: the link target does not exist (high
 severity). Flag every entry without re-deriving by eye. Three non-result

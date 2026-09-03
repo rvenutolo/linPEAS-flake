@@ -49,31 +49,12 @@
 #      reads.
 #   4. Extract and scan — the per-language path below, candidates only.
 #
-# Why the candidate pass cannot hide a violation: every extractor emits,
-# for a given source line, either a blank line or a substring of that
-# same raw line — Markdown emits the line with exempt regions blanked,
-# shell emits `#` prepended to the text `shfmt` reports (and the raw
-# line carries that `#`), Nix and YAML emit the comment text with its
-# indent stripped, and a Nix block comment also loses its `/*` and `*/`
-# delimiters. Blanking only removes text, and removing text cannot
-# create a match. The one regex feature that could read differently is
-# the left boundary guard: where an extracted match binds `^`, the same
-# position in the raw line is preceded by whitespace, by line start, or
-# by a `/*` opener — a comment opener requires whitespace or line start
-# before it, and a Markdown line *is* the raw line — and none of those
-# is in the guard's negated class. So a match
-# in the extracted stream implies a match in the raw file, and skipping
-# a file the union does not match is sound. Widening a class regex
-# without widening the union it is joined into would break that, which
-# is why the union is assembled from these constants rather than written
-# out a second time.
-#
-# What the candidate pass gives up: a shell source with no candidate
-# token is never handed to `shfmt`, so a parse failure in it is not
-# reported. The verdict is unchanged — a file with no candidate token
-# carries no violation to hide — and `shellcheck` and the formatter
-# already gate shell parsability. Markdown and Nix keep their
-# structural diagnostics through phase 3.
+# Why the candidate pass cannot hide a violation, and what it gives up
+# in exchange: docs/development/linting.md, "The candidate pass". That
+# argument holds only while every class regex is a subset of the union
+# the candidate grep runs, which is why `UNION_BLOCKING` in
+# scripts/lib/ephemeral-refs-scope.sh is assembled from the class
+# constants rather than written out a second time.
 #
 # Extraction is per language; matching is shared. A source's extension
 # is the whole classifier, and the extracted text reaches one set of

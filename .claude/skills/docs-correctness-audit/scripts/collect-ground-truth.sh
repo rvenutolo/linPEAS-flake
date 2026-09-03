@@ -35,6 +35,12 @@ section() { printf '\n===== %s =====\n' "$1"; }
 EPH_FILES=()
 EPH_SCAN_DIR=""
 
+# Seeded-defect fixture trees, as an ERE over repo-relative paths. Why they
+# are out of scope: references/repo-map.md, "Doc cluster map". lychee.toml
+# carries the same pattern for the consumers that reach lychee without this
+# filter; collect-ground-truth.test.sh asserts the two select the same set.
+RE_SEEDED_FIXTURES='\.claude/skills/[^/]+/evals/seeded-defects/fixtures/'
+
 # @description Emit one file with its exempt regions blanked, line for line,
 # mirroring check-ephemeral-refs.sh's strip_exempt ordering: fences (backtick
 # or tilde) are recognized first, inline code spans are blanked before a BEGIN
@@ -151,10 +157,9 @@ sweep_internal_links() {
   local files=()
   # Wider than the ephemeral sweep: tracked .claude/ tooling quotes banned
   # token shapes as pattern data, but its links are ordinary links, so they
-  # stay in. Only tests/fixtures/, docs/_data/ and the seeded-defect
-  # fixtures drop out — the last are the recall harness's own fixtures
-  # (sample audit reports and a seed set) rather than repo documentation.
-  mapfile -t files < <(git ls-files '*.md' | grep -vE '^(tests/fixtures/|docs/_data/|\.claude/skills/[^/]+/evals/seeded-defects/fixtures/)' || true) # first of two filters; lychee.toml exclude_path narrows it again
+  # stay in. Only tests/fixtures/, docs/_data/ and the seeded-defect fixtures
+  # named by RE_SEEDED_FIXTURES drop out.
+  mapfile -t files < <(git ls-files '*.md' | grep -vE "^(tests/fixtures/|docs/_data/|${RE_SEEDED_FIXTURES})" || true) # first of two filters; lychee.toml exclude_path narrows it again
   if [[ ${#files[@]} -eq 0 ]]; then
     echo '(none)'
     return 0

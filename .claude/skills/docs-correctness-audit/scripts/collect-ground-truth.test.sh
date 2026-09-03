@@ -199,6 +199,52 @@ case "${lnk}" in *"gone-seeded.md"*) check "skips seeded-defect fixtures" 1 ;; *
 case "${lnk}" in *"lychee failed"*) check "a broken-link run is not marked unusable" 1 ;; *) check "a broken-link run is not marked unusable" 0 ;; esac
 rm -rf "${fl}"
 
+# --- the two seeded-fixture filters must select the same set ---
+# The collector's grep is only the first filter, and it protects only the
+# consumers that go through this script. The link-check workflow hands the
+# dotted trees straight to lychee, so there the exclude_path entry is the
+# ONLY filter: a pattern narrower there link-checks a fixture tree for the
+# breakage it was deliberately planted with, and the job goes red on the
+# harness working. The two patterns are written in two files because they
+# serve different consumers; this scenario is what keeps them one rule.
+if ! command -v yq >/dev/null 2>&1; then
+  check "yq available to read lychee.toml exclude_path" 1
+else
+  lychee_seeded="$(yq --input-format toml --output-format yaml \
+    '.exclude_path[] | select(test("seeded-defects/fixtures"))' "${REAL_REPO}/lychee.toml")"
+  # One entry, or the comparison below silently grades the wrong pattern.
+  lines="$(printf '%s\n' "${lychee_seeded}" | grep --count . || true)"
+  [[ ${lines} -eq 1 ]] && rc=0 || rc=1
+  check "lychee.toml carries exactly one seeded-fixture exclusion" "${rc}"
+
+  # Both the shipped tree and a hypothetical second skill's, plus paths that
+  # must survive: a sibling doc in the same skill, the fixtures' own README
+  # one level up, and an ordinary doc.
+  seeded_paths=(
+    '.claude/skills/docs-correctness-audit/evals/seeded-defects/fixtures/all-hit.md'
+    '.claude/skills/second-skill/evals/seeded-defects/fixtures/f.md'
+    '.claude/skills/docs-correctness-audit/evals/seeded-defects/README.md'
+    '.claude/skills/docs-correctness-audit/references/repo-map.md'
+    'docs/development/linting.md'
+  )
+  collector_sel="$(printf '%s\n' "${seeded_paths[@]}" | grep -E "^${RE_SEEDED_FIXTURES}" || true)"
+  lychee_sel="$(printf '%s\n' "${seeded_paths[@]}" | grep -E "${lychee_seeded}" || true)"
+
+  # Assert breadth, not just agreement: two empty selections agree vacuously,
+  # which is exactly what a typo in either pattern produces.
+  selected="$(printf '%s\n' "${collector_sel}" | grep --count . || true)"
+  [[ ${selected} -eq 2 ]] && rc=0 || rc=1
+  check "collector filter selects both fixture trees and nothing else" "${rc}"
+
+  [[ ${collector_sel} == "${lychee_sel}" ]] && rc=0 || rc=1
+  check "collector and lychee.toml filters select the same set" "${rc}"
+
+  case "${lychee_sel}" in
+  *second-skill*) check "lychee.toml excludes a second skill's fixture tree" 0 ;;
+  *) check "lychee.toml excludes a second skill's fixture tree" 1 ;;
+  esac
+fi
+
 # --- a lychee that cannot run at all must not read as a clean sweep ---
 # lychee exits non-zero without printing an [ERROR] line when it refuses an
 # input (a tracked doc deleted but not staged reaches this: git ls-files
