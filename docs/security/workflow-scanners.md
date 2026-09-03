@@ -72,10 +72,11 @@ tree.)
 - **Unique signal:** repo-jacking and known-vuln (CVE) detection in `uses:`
     references, plus a second injection-triangulation angle — coverage zizmor
     and codeql do not provide.
-- **Triggers:** every `git commit` as a pre-commit hook, fired by a
-    workflow-YAML `files` filter but scanning the full `.github/workflows`
-    directory to match the CI invocation (it self-skips inside the Nix build
-    sandbox, where docker is unavailable); PR to `main` filtered to
+- **Triggers:** a pre-commit hook on every commit that touches a workflow
+    YAML under `.github/workflows/`, scanning the full directory rather
+    than the staged files to match the CI invocation (it self-skips
+    inside the Nix build sandbox, where docker is unavailable); PR to
+    `main` filtered to
     `.github/workflows/**` and the octoscan scan script; push to `main`; weekly
     Friday cron (full tree); manual dispatch.
 - **Status:** advisory by design. It is the cheapest scanner, but it fails

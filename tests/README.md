@@ -293,8 +293,9 @@ runs the pair.
 
 1. Regenerate the script reference: run `just show-scripts` and commit
     the updated `docs/reference/scripts.md`. `scripts-reference-fresh`
-    fires on any staged `scripts/*.sh`, so a new check script blocks the
-    commit until its annotations are rendered — the census step above
+    fires on any staged shell file under `scripts/`, so a new check
+    script blocks the commit until its annotations are rendered — the
+    census step above
     covers only the harness table.
 
 1. If the script is wired into a CI required check, also document

@@ -136,7 +136,7 @@ rather than on the bump's own checks. Walk the list when one does.
     `verify-latest-release` the next day before assuming
     attestation drift.
 
-Step 5 of the step-by-step below contains the same surface as a
+Step 5 of the step-by-step below covers most of this surface as a
 symptom → fix lookup table; use this section to anticipate before
 the PR arrives, and the table to triage after CI fails.
 
