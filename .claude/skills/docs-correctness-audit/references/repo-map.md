@@ -110,11 +110,15 @@ some row.
 Part of `.claude/` is tracked and committed — the `docs-correctness-audit` and
 `multi-agent-review` skills and their slash commands. Those are maintained
 artifacts with real commit history, and they restate facts that live elsewhere
-in the tree: the generated-doc table below and the ephemeral-token regex on
-this very page. Nothing gates either of those duplications, so when a
-generator is added or removed the table here goes stale silently and the next
-audit runs against a stale map. The `claude-tooling` row is what puts them in
-scope. The fixtures under `.claude/skills/*/evals/seeded-defects/fixtures/`
+in the tree: the generated-doc table below and the ephemeral-token classes on
+this very page. Both restatements are gated — `collect-ground-truth.test.sh`
+asserts §3 names exactly the tracked `refresh-*.sh` set and that §4's bullets
+and the collector's swept classes are one set — so a generator or a class
+added on one side and not the other fails the harness rather than leaving the
+next audit to run against a stale map. They stay restated rather than reduced
+to pointers because this file is the ground truth a cluster reader checks the
+tree against, and a reader sent to a second file mid-audit is a reader reading
+two files. The `claude-tooling` row is what puts them in scope. The fixtures under `.claude/skills/*/evals/seeded-defects/fixtures/`
 stay out: they are the recall harness's own fixtures — sample audit
 reports `score.sh` grades against a manifest, and a seed set `plant.sh`
 is tested against — rather than repo documentation, so reporting them
@@ -187,21 +191,25 @@ merged commit — but ungated is not hand-written, and a fix there means fixing
 ## 4. Ephemeral-token regex (prose-quality dimension)
 
 Tracked docs describe the **current** state; history lives in git. Flag these
-banned shapes in tracked docs and comments:
+banned shapes in tracked docs and comments. Each bullet opens with the class
+label the collector prints beside a hit, so a label in the
+**`EPHEMERAL-TOKEN HITS`** section leads straight to the bullet that explains
+it; `collect-ground-truth.test.sh` asserts this list and the collector's
+classes stay one set.
 
-- Planning labels: `GAP-\d+`, `P\d+\.\d+`, `Wave-P?\d+`, `Phase \d+`,
+- **`planning-label`** — planning labels: `GAP-\d+`, `P\d+\.\d+`, `Wave-P?\d+`, `Phase \d+`,
     `AU-P-\d+`, `SC-POST-\d+`, `plan \d+`, `F-\d+`
-- Review-pass labels: `\(D\d+\)`, `\(L\d+[,)]`, `Per D\d+`, `D\d+:`
-- Ad-hoc ticket shapes (sweep-only — no blocking class; see the caveat
+- **`review-pass`** — review-pass labels: `\(D\d+\)`, `\(L\d+[,)]`, `Per D\d+`, `D\d+:`
+- **`ad-hoc-ticket`** — ad-hoc ticket shapes (sweep-only — no blocking class; see the caveat
     below): `DH-\d+`, `NC-[A-Z]\d+`, any
     `<2-3 uppercase letters>-<digits>` not externally meaningful
-- Dates in prose: `\d{4}-\d{2}-\d{2}`, `<Month> \d{4}`, `Q[1-4] \d{4}`.
+- **`date`** — dates in prose: `\d{4}-\d{2}-\d{2}`, `<Month> \d{4}`, `Q[1-4] \d{4}`.
     The `X-GitHub-Api-Version: <date>` literal is suppressed by the collector
     sweep only — `RE_DATE` carries no such exemption, and in the real lint the
     literal survives only by sitting inside a code span or fence. Static
     test-fixture data is exempt because `is_allowlisted()` skips
     `tests/fixtures/**` wholesale.
-- Causal-history phrases: `previously`, `Migration note`, `Tightened from`,
+- **`causal-history`** — causal-history phrases: `previously`, `Migration note`, `Tightened from`,
     `switched from/to`, `legacy <X> was deleted`, `added in #?\d+`,
     `post-PR #?\d+` (a phrase like `now enforced via X (previously Y)` is
     caught by the bare `previously` alternative).
@@ -210,8 +218,8 @@ banned shapes in tracked docs and comments:
     list: each reads as repo history or as present-tense prose depending only
     on its subject, so matching them fires on threat models and hypothetical
     drift as readily as on rot.
-- Issue / PR refs: `#\d+`, `PR #\d+`, `issue #\d+`.
-- Literal paths into `.claude/` from any scanned source outside the file
+- **`pr-ref`** — issue / PR refs: `#\d+`, `PR #\d+`, `issue #\d+`.
+- **`claude-path`** — literal paths into `.claude/` from any scanned source outside the file
     allowlist — Markdown prose and shell, Nix and YAML comments alike, since
     `RE_CLAUDE` is unscoped. The allowlist is `CHANGELOG.md`,
     `docs/releases.md`, `tests/fixtures/**` and `.claude/**`. Nearly all of
