@@ -44,8 +44,8 @@ in [`docs/security/required-checks.md`](../security/required-checks.md).
 The tables below group all 29 required contexts by what they gate; consult
 the canonical doc as source of truth. That grouping is this page's own. The
 README's Continuous integration summary files the same contexts under the
-display categories in `docs/_data/ci-check-categories.yml`, and the two
-partitions are not meant to match.
+categories in `docs/_data/ci-check-categories.yml`, which also colours the
+CI DAG; nothing compares that partition with this page's.
 
 Functional gates:
 
@@ -165,7 +165,7 @@ All third-party actions are SHA-pinned, with `# vX.Y.Z` patch-tag comments excep
 
 ## Cron schedule
 
-All schedules fit the maintainer's monitoring windows: daily crons run 08:00–10:00 UTC, weekly crons run Friday 05:00–07:00 UTC (both year-round inside the intended US-Eastern early-morning windows regardless of DST). One schedule runs outside those windows: `ci-watchdog` is a backstop that must fire around the clock, not a monitoring-window report, so it runs on a continuous 30-minute cadence instead. The monthly `docs-audit-reminder` sits at the very tail of the daily window (10:00 on the 1st) and clear of every daily cron in it, so a once-a-month reminder never competes with the bump pipeline for attention.
+Every fixed-time schedule fits the maintainer's monitoring windows: daily crons run 08:00–10:00 UTC, weekly crons run Friday 05:00–07:00 UTC (both year-round inside the intended US-Eastern early-morning windows regardless of DST). One schedule runs outside those windows: `ci-watchdog` is a backstop that must fire around the clock, not a monitoring-window report, so it runs on a continuous 30-minute cadence instead. The monthly `docs-audit-reminder` sits at the very tail of the daily window (10:00 on the 1st) and clear of every daily cron in it, so a once-a-month reminder never competes with the bump pipeline for attention.
 
 | Workflow                          | Cron            | UTC          | Purpose                                                                                                                                                                                                                          |
 | --------------------------------- | --------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
