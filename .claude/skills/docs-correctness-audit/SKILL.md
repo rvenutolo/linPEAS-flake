@@ -255,8 +255,36 @@ same defect scattered across many files (e.g. one wrong enforcement-model phrase
 repeated in a dozen lines) is *one* finding with a shared fix — state the root
 cause once, list every affected `file:line`, and give the single fix pattern.
 Reporting it as a dozen separate findings buries the signal and inflates the
-count; collapsing it is what makes the report actionable in one pass. Then rank
-by severity:
+count; collapsing it is what makes the report actionable in one pass.
+
+**Sweep for twins before writing the finding up — that is the controller's job,
+not a reader's.** Grouping by root cause only collapses the sites somebody
+found, and a reader works one cluster: it reports the instance in front of it
+and never learns the same sentence was copied three docs away, sometimes inside
+its own cluster. So for every confirmed finding, take the distinctive part of
+the wrong claim and `git grep` it across all tracked prose before it enters the
+report:
+
+```sh
+git grep -n 'distinctive phrase from the wrong claim' -- '*.md' '.github/**'
+```
+
+Search the wrong wording, not the corrected one, and loosen the phrase until it
+would catch a paraphrase — a twin rarely matches byte for byte. Every hit joins
+that finding's site list. A finding that ships with one site when three exist
+is not a smaller finding; it is a fix pass that will leave two wrong sentences
+behind and hand them to the next cycle as fresh drift.
+
+**A command a doc hands the reader is a claim about a set — run it.** Where
+prose says "enumerate them with `<command>`", the command is as checkable as a
+path, and it fails in a way reading cannot catch: it runs cleanly and returns a
+subset, so the output looks like an answer. Run it, then derive the same set a
+second way — a wider pattern, the other file shapes, the directory listing —
+and diff the two. A command that silently misses a member of the set it claims
+to produce is high severity, because every future reader trusts it instead of
+looking.
+
+Then rank by severity:
 
 - **high** — a wrong or broken fact: dead link, wrong command/path/flag, a
     drifted CI/cron/config value, a claimed-but-absent check or script.
