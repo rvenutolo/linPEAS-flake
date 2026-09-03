@@ -113,12 +113,14 @@ artifacts with real commit history, and they restate facts that live elsewhere
 in the tree: the generated-doc table below and the ephemeral-token classes on
 this very page. Both restatements are gated — `collect-ground-truth.test.sh`
 asserts §3 names exactly the tracked `refresh-*.sh` set and that §4's bullets
-and the collector's swept classes are one set — so a generator or a class
-added on one side and not the other fails the harness rather than leaving the
-next audit to run against a stale map. They stay restated rather than reduced
-to pointers because this file is the ground truth a cluster reader checks the
-tree against, and a reader sent to a second file mid-audit is a reader reading
-two files. The `claude-tooling` row is what puts them in scope. The fixtures under `.claude/skills/*/evals/seeded-defects/fixtures/`
+and the collector's swept classes are one set — so a `refresh-*.sh` generator
+or a class added on one side and not the other fails the harness rather than
+leaving the next audit to run against a stale map. The two §3 rows that name
+no `refresh-*.sh` — `gen-dashboard-data.sh` and git-cliff — sit outside that
+set comparison; the git-cliff row has a presence probe only. They stay
+restated rather than reduced to pointers because this file is the ground
+truth a cluster reader checks the tree against, and a reader sent to a second
+file mid-audit is a reader reading two files. The `claude-tooling` row is what puts them in scope. The fixtures under `.claude/skills/*/evals/seeded-defects/fixtures/`
 stay out: they are the recall harness's own fixtures — sample audit
 reports `score.sh` grades against a manifest, and a seed set `plant.sh`
 is tested against — rather than repo documentation, so reporting them
@@ -126,7 +128,8 @@ would be reporting the harness working. The skill segment is a wildcard
 rather than one skill's name: any skill may grow such a tree, and a second
 one is out of scope for the reason the first is. Two filters carry that
 rule, because they serve different consumers — `RE_SEEDED_FIXTURES` in
-`../scripts/collect-ground-truth.sh` for the sweeps this skill runs, and
+`../scripts/collect-ground-truth.sh` for the internal-link sweep this skill
+runs, and
 `lychee.toml`'s `exclude_path` for the consumers that reach lychee without
 the collector, the link-check workflow among them.
 `../scripts/collect-ground-truth.test.sh` asserts the two select the same

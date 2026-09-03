@@ -25,8 +25,9 @@ branch — see [pin convention](../architecture/pin-convention.md).
 This repo's own composite-action self-references are skipped because they
 have no upstream tag to compare against: Renovate's `pinDigests` rule
 tracks this repo's own `main` HEAD, not an upstream release. The
-digest-provenance gate skips them for the same reason, so the PR-time
-surface is `check-uses-sha-pinned.sh` alone, which still requires a full
+digest-provenance gate skips them for the same reason, so the in-repo
+PR-time gate left for them is `check-uses-sha-pinned.sh`, backing the
+GitHub-side `sha_pinning_required` setting; it still requires a full
 40-hex SHA — see [repo config](../security/repo-config.md).
 
 This runbook is linked inline from the auto-filed issue body.
