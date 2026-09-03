@@ -30,9 +30,11 @@ This repo's own composite-action self-references are skipped because they
 have no upstream tag to compare against: Renovate's `pinDigests` rule
 tracks this repo's own `main` HEAD, not an upstream release. The
 digest-provenance gate skips them for the same reason, so the in-repo
-PR-time gate left for them is `check-uses-sha-pinned.sh`, backing the
-GitHub-side `sha_pinning_required` setting; it still requires a full
-40-hex SHA — see [repo config](../security/repo-config.md).
+PR-time gates left for them are `check-uses-sha-pinned.sh`, backing the
+GitHub-side `sha_pinning_required` setting and still requiring a full
+40-hex SHA — see [repo config](../security/repo-config.md) — and
+`check-patch-tag-pins.sh`, which reads the same lines and admits a
+self-reference only through an inline `# patch-tag-exception:` marker.
 
 This runbook is linked inline from the auto-filed issue body.
 
@@ -158,8 +160,8 @@ failed shape validation; OR the workflow glob matched zero files.
 
 The `check` job produced no `reason=` output. Three run shapes do
 that: the `audit pins` step exited non-zero on an unhandled error
-inside its run block; a step before it failed (the Nix install or the
-checkout), so the audit never ran; or the run was cancelled — most
+inside its run block; a step before it failed, so the audit never ran;
+or the run was cancelled — most
 often its `timeout-minutes` was exceeded. The notify composite flags a
 cancelled run as an infrastructure failure rather than a finding: with
 a `[!WARNING]` banner at the top of the issue body when the cancelled

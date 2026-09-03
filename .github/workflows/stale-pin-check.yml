@@ -195,7 +195,8 @@ jobs:
             - `upstream-api-failure` — the `gh api
               repos/peass-ng/PEASS-ng/releases/latest` call failed or returned
               empty. Likely a transient GitHub API issue or rate-limit
-              (`github.token` authenticates at 5000/hr). The pin may or may
+              (`github.token` is capped at 1,000 requests/hr per
+              repository). The pin may or may
               not actually be stale — re-run the workflow before investigating
               the bump pipeline.
             - `upstream-tag-malformed` — upstream published a tag outside the
