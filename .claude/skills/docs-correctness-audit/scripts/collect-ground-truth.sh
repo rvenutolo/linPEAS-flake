@@ -152,8 +152,8 @@ sweep_internal_links() {
   # Wider than the ephemeral sweep: tracked .claude/ tooling quotes banned
   # token shapes as pattern data, but its links are ordinary links, so they
   # stay in. Only tests/fixtures/, docs/_data/ and the seeded-defect
-  # fixtures drop out — the last are the recall harness's scoring inputs
-  # rather than repo documentation.
+  # fixtures drop out — the last are the recall harness's own fixtures
+  # (sample audit reports and a seed set) rather than repo documentation.
   mapfile -t files < <(git ls-files '*.md' | grep -vE '^(tests/fixtures/|docs/_data/|\.claude/skills/[^/]+/evals/seeded-defects/fixtures/)' || true) # first of two filters; lychee.toml exclude_path narrows it again
   if [[ ${#files[@]} -eq 0 ]]; then
     echo '(none)'

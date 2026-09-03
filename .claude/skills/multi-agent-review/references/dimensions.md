@@ -102,7 +102,7 @@ Cross-check docs against actual code/CI/config. Flag generated docs (`refresh-*`
 
 Slices:
 
-- `README` + top-level (`SECURITY.md`, `CONTRIBUTING`)
+- `README` + top-level (`SECURITY.md`, `CONTRIBUTING`, `tests/README.md`, `.github/PULL_REQUEST_TEMPLATE.md`)
 - `docs/**` reference/config prose
 - `CHANGELOG` vs release reality
 - generated blocks (`BEGIN/END` markers, `refresh-*` output) — drift = generator bug
@@ -146,11 +146,11 @@ Refuters: refute an "unnecessary" claim by finding the case the apparatus exists
 
 ## 8. Update / release chain E2E — *deep*
 
-Trace the whole chain: `bump-linpeas.sh` → `update-linpeas.yml` → `release-on-bump.yml` → `verify-latest-release.yml` / `dockerhub-sync.yml`.
+Trace the chain: `bump-linpeas.sh` → `update-linpeas.yml` → `release-on-bump.yml` → `verify-latest-release.yml` / `dockerhub-sync.yml`, with `stale-pin-check.yml` watching for a bump that stops landing.
 
 Slices:
 
-- `bump-linpeas.sh` + `update-linpeas.yml` (pin bump → PR)
+- `bump-linpeas.sh` + `update-linpeas.yml` (pin bump → PR) + `stale-pin-check.yml` (the watchdog for a bump that runs green but never lands)
 - `release-on-bump.yml` (merge → release/build/sign)
 - `verify-latest-release.yml` + `dockerhub-sync.yml` (post-release verify + mirror)
 

@@ -115,10 +115,13 @@ Look for `"conclusion": "success"` within the last 7 days. Current state on the 
     `--header "X-GitHub-Api-Version: 2022-11-28"`. Apply to any new
     security-sensitive GitHub-REST caller.
 
-Guards 1–3 are lint-enforced by `scripts/check-bump-script-integrity.sh`
-(regex-presence over `scripts/bump-linpeas.sh`); guard 4 by
-`scripts/check-gh-api-version-header.sh`. Both run in the
-`lint-script-hygiene` CI job and as pre-commit hooks.
+The bump-script tokens of guards 1–3 are lint-enforced by
+`scripts/check-bump-script-integrity.sh` (regex-presence over
+`scripts/bump-linpeas.sh`); the tree-wide bare-`mktemp` ban in guard 3
+by `scripts/check-guard-exit-code.sh`; guard 4 by
+`scripts/check-gh-api-version-header.sh`. All three run in the
+`lint-script-hygiene` CI job; the first and last also run as pre-commit
+hooks.
 
 ## verify-latest-release upstream parity<a name="verify-latest-release-upstream-parity"></a>
 

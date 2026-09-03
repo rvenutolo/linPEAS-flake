@@ -115,9 +115,10 @@ this very page. Nothing gates either of those duplications, so when a
 generator is added or removed the table here goes stale silently and the next
 audit runs against a stale map. The `claude-tooling` row is what puts them in
 scope. The fixtures under `.claude/skills/*/evals/seeded-defects/fixtures/`
-stay out: they are the recall harness's scoring inputs — sample audit reports
-`score.sh` grades against a manifest — rather than repo documentation, so
-reporting them would be reporting the harness working.
+stay out: they are the recall harness's own fixtures — sample audit
+reports `score.sh` grades against a manifest, and a seed set `plant.sh`
+is tested against — rather than repo documentation, so reporting them
+would be reporting the harness working.
 
 `.claude/CLAUDE.md` and the global CLAUDE.md are untracked and stay read-only
 — the global one lives outside the repo entirely. They set the scope of the
@@ -308,7 +309,7 @@ reusing `lychee.toml`. It runs over all tracked `*.md` files — the tracked
 its prose quotes banned token shapes — excluding only `tests/fixtures/`,
 `docs/_data/` and the seeded-defect fixtures under
 `.claude/skills/*/evals/seeded-defects/fixtures/`, which are the recall
-harness's scoring inputs rather than repo documentation. That list is only the
+harness's own fixtures rather than repo documentation. That list is only the
 first of two filters: the run passes `--config lychee.toml`, whose
 `exclude_path` entries are **regular expressions matched against each input
 path as it was passed** (absolute, here), so any entry matching a tracked doc

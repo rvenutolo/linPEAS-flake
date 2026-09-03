@@ -509,9 +509,10 @@ variable whose own name does not match the filter pattern is banned at
 the assignment itself, wherever the copy is later read: every check
 above keys on the name of the variable being read, so a value carried
 under a fresh name would satisfy the letter of all of them while
-re-introducing the same defect. The sanctioned
-`readonly FILE_FILTER="${WORKFLOW_FILE_FILTER:-}"` stays legal because
-its own target matches the filter pattern.
+re-introducing the same defect. The sanctioned copies —
+`readonly FILE_FILTER="${WORKFLOW_FILE_FILTER:-}"` and its
+`SCRIPT_FILE_FILTER` / `TEST_FILE_FILTER` siblings — stay legal because
+their own target matches the filter pattern.
 
 A read outside every loop and every hop-reached function stays legal
 without a marker — the rule tests position, not purpose. The three live
@@ -611,8 +612,9 @@ ten are marked-off blocks inside a hand-written page:
 produce twelve regions. This list splits by what the generator emits; the
 annotations split by size-label ownership, where a page whose block is the
 whole of its content is `@generates` even though it splices into a fixed
-header — see [labeling.md](labeling.md#ignore-list-parity) for that 7/5
-split. Prose outside a block is ordinary hand-written documentation and is
+header — see [labeling.md](labeling.md#ignore-list-parity) for the
+annotation convention. Prose outside a block is ordinary hand-written
+documentation and is
 edited normally.
 
 Each has a `*-fresh` pre-commit hook, which is the gate a hand edit actually

@@ -38,8 +38,10 @@ than waiting for the daily cron sweep.
 ## Permissions
 
 Both jobs declare `actions: write` (cache deletion) and
-`contents: read`, which `prune-stale` uses to list branches and open
-PRs; `prune-on-pr-close` reads nothing outside the Actions-cache API
+`contents: read`, the scope GitHub documents for the branch listing
+`prune-stale` does (on this public repository neither that listing nor
+the open-PR one needs any token permission); `prune-on-pr-close` reads
+nothing outside the Actions-cache API
 and carries the scope only for parity. The `actions: write` grant is what
 `scripts/check-permission-scopes.sh` pins, via the per-job allowlist in
 `.github/permission-scopes.yml`; read scopes are outside that lint. The
@@ -70,5 +72,8 @@ that lands on a cache enumeration instead is swallowed — every cache
 enumeration feeds a `while` loop from a process substitution, whose
 exit status is discarded even under
 `set -Eeuo pipefail` — so that run reports zero deletions and goes
-green. Manual recovery either way:
-`gh workflow run actions-cache-prune.yml`.
+green. Manual recovery for the daily sweep either way:
+`gh workflow run actions-cache-prune.yml`; a swallowed PR-close prune
+is picked up by a later orphan-ref sweep instead, which evicts the
+merge ref's cache on the next tick and the head ref's once the branch
+is deleted.

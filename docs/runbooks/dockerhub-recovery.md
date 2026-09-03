@@ -2,8 +2,8 @@
 
 Steps to recover from a release the pipeline left incomplete, or whose
 two registries disagree. Most often that is a half-published one where
-one registry (`docker.io` or `ghcr.io`) accepted a per-arch push but the
-other failed, leaving an orphan arch-suffixed tag that a naive retry of
+`docker.io` accepted a per-arch push but `ghcr.io` failed, leaving an
+orphan arch-suffixed tag that a naive retry of
 `release-on-bump.yml` would silently overwrite, invalidating any
 attestations and signatures already issued over the original bytes —
 the failing arch's attest steps never ran, but the sibling arch's job
