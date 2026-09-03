@@ -21,7 +21,7 @@ flowchart TD
 
   build-linpeas:::build
   build-linpeas-arm64:::build
-  changelog-links:::security
+  changelog-links:::doc
   cliff-tag-pattern:::security
   commitlint:::commits
   dashboard-data-tests:::security

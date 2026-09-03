@@ -151,11 +151,12 @@ The analyze step passes `fail-on: critical` to `codeql-action/analyze`:
 a CRITICAL-severity finding fails the workflow, and on push, cron, and
 dispatch runs, a notify job opens a deduped issue under the
 `codeql-critical` label (a PR run pages via the failed check on the PR
-itself, so it files no issue). An analyze failure that produced no
-finding (scan crash, runner breakage) files under `codeql-infra`
-instead, so transient infrastructure trouble is not paged as a security
-finding. Findings **below** CRITICAL are advisory: they upload to the
-Security tab without failing the workflow. A green CodeQL run therefore
+itself, so it files no issue). An analyze job that fails without
+producing a finding (scan crash, runner breakage), or that is cancelled
+at its job timeout, files under `codeql-infra` instead, so transient
+infrastructure trouble is not paged as a security finding. Findings
+**below** CRITICAL are advisory: they upload to the Security tab without
+failing the workflow. A green CodeQL run therefore
 proves the scan completed with zero CRITICAL findings — **not** that
 zero findings exist. Closing the loop on sub-critical findings requires
 a maintainer to review the Security tab after a PR whose analysis

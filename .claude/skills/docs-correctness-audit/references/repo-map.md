@@ -108,7 +108,8 @@ appearing in the collector's sweeps. Verify the map covers everything with
 some row.
 
 Part of `.claude/` is tracked and committed — the `docs-correctness-audit` and
-`multi-agent-review` skills and their slash commands. Those are maintained
+`multi-agent-review` skills and their slash commands; the cluster map's
+`claude-tooling` row is what puts those tracked files in scope. Those are maintained
 artifacts with real commit history, and they restate facts that live elsewhere
 in the tree: the generated-doc table below and the ephemeral-token classes on
 this very page. Both restatements are gated — `collect-ground-truth.test.sh`
@@ -120,7 +121,8 @@ no `refresh-*.sh` — `gen-dashboard-data.sh` and git-cliff — sit outside that
 set comparison; the git-cliff row has a presence probe only. They stay
 restated rather than reduced to pointers because this file is the ground
 truth a cluster reader checks the tree against, and a reader sent to a second
-file mid-audit is a reader reading two files. The `claude-tooling` row is what puts them in scope. The fixtures under `.claude/skills/*/evals/seeded-defects/fixtures/`
+file mid-audit is a reader reading two files. The fixtures under
+`.claude/skills/*/evals/seeded-defects/fixtures/`
 stay out: they are the recall harness's own fixtures — sample audit
 reports `score.sh` grades against a manifest, and a seed set `plant.sh`
 is tested against — rather than repo documentation, so reporting them
@@ -258,11 +260,14 @@ recognized first, and inline code spans are blanked before a `BEGIN` is looked
 for, so a marker quoted in a span or a fence is documentation, not a block
 opener. Like the lint, the sweep fails loud on an unterminated fence or
 generated block rather than silently blanking to end-of-file — and in the
-collector that failure aborts the whole run mid-bundle: everything after
-**`EPHEMERAL-TOKEN HITS`** — the link check — never emits. A short
-bundle therefore means a malformed doc — record the offender as a
-high-severity finding and treat the never-emitted section as unchecked rather
-than clean. That pass is load-bearing: without it, every doc that *documents*
+collector that failure aborts the whole run mid-bundle: the
+**`EPHEMERAL-TOKEN HITS`** header has already printed, its hit list and
+footer never do, and the link check that follows never starts. A bundle
+that stops there means a malformed doc, named on stderr — record the
+offender as a high-severity finding and treat both sections as unchecked
+rather than clean. A bundle that stops earlier means a prerequisite
+command failed (`nix`, `just`, the cron scan); the missing sections are
+unchecked either way. That pass is load-bearing: without it, every doc that *documents*
 a banned shape as an example — `docs/development/linting.md`'s table of banned
 shapes, the generated hook table in `docs/development/git.md` — reports as
 though it carried one. Three classes additionally carry a deterministic

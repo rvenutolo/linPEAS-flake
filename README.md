@@ -72,11 +72,12 @@ docker run --rm \
 ```
 
 Both registries (`docker.io/rvenutolo/linpeas` and
-`ghcr.io/rvenutolo/linpeas`) serve the **same** image bytes — each
-release publishes identical image bytes to both, so the content digests
-match, and each registry's per-arch digests carry their own SLSA
-attestations. See [`docs/install/docker.md`](docs/install/docker.md)
-for per-scenario guidance and provenance-verification steps.
+`ghcr.io/rvenutolo/linpeas`) serve the **same** image bytes: whenever
+the release pipeline publishes an image it loads each arch's build once
+and pushes it to both registries, so the content digests match, and
+each registry's per-arch digests carry their own SLSA attestations. See
+[`docs/install/docker.md`](docs/install/docker.md) for per-scenario
+guidance and provenance-verification steps.
 
 ### As a flake input
 
@@ -169,8 +170,8 @@ the full job inventory + cron schedule lives in
 
 - **Build + smoke**: `build-linpeas`, `build-linpeas-arm64`, `flake-check`, `image-smoke`, `image-smoke-arm64`, `smoke-test`, `smoke-test-arm64`.
 - **Conventional Commits**: `commitlint`, `lint-pr-title`.
-- **Doc quality**: `doc-freshness`, `editorconfig`, `markdownlint`, `typos`.
-- **Security/invariant lints**: `changelog-links`, `cliff-tag-pattern`, `dashboard-data-tests`, `dependency-review`, `gitleaks`, `harness-group`, `lint-doc-invariants`, `lint-script-hygiene`, `lint-workflow-security`, `pr-workflows-no-secrets`, `protect-main-drift-check`, `renovate-invariants`, `required-checks-no-paths`, `setup-nix-required`, `tag-protection-drift-check`, `trufflehog`.
+- **Doc quality**: `changelog-links`, `doc-freshness`, `editorconfig`, `markdownlint`, `typos`.
+- **Security/invariant lints**: `cliff-tag-pattern`, `dashboard-data-tests`, `dependency-review`, `gitleaks`, `harness-group`, `lint-doc-invariants`, `lint-script-hygiene`, `lint-workflow-security`, `pr-workflows-no-secrets`, `protect-main-drift-check`, `renovate-invariants`, `required-checks-no-paths`, `setup-nix-required`, `tag-protection-drift-check`, `trufflehog`.
 
 <!-- END ci-summary -->
 

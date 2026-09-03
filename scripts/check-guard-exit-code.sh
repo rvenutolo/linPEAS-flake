@@ -41,8 +41,8 @@
 # library holds the one sanctioned bare invocation and is the only file
 # this rule skips. Matching is by command position — line start, a
 # command substitution, a pipe, a separator, a negation, a group
-# opening, or a loop/branch keyword — so prose naming the command,
-# including a parenthetical, is not a hit.
+# opening, or one of the keywords `then`, `do` and `else` — so prose
+# naming the command, including a parenthetical, is not a hit.
 #
 # Escape hatch: `# exit-code-exempt: <rationale>`, on the exit line of a
 # guard whose missing input genuinely IS the finding, or on the line of a
@@ -221,9 +221,9 @@ function scan_exit(ln, text) {
 
 # A bare temp-file creation, matched in command position. The introducer
 # set is line start, a command substitution, a pipe, a separator, a
-# negation, a group opening, or a loop/branch keyword — deliberately not
-# a bare paren, so a parenthetical naming the command in prose is not a
-# hit. The command name itself is spelled as a character class, like
+# negation, a group opening, or one of the keywords `then`, `do` and
+# `else` — deliberately not a bare paren, so a parenthetical naming the
+# command in prose is not a hit. The command name itself is spelled as a character class, like
 # every other pattern here, so this program never matches its own text.
 # A `:?` parameter expansion, which fails with the shell default exit
 # status of 1. The
