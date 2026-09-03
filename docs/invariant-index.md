@@ -143,7 +143,7 @@ scope for this index either way.
 ## Install / Runbooks
 
 - **Declared systems evaluate** — every system in `flake.lib.systems` force-evaluates in CI down to each package's derivation, failing with the system named. → [install/nix.md](install/nix.md) <!-- enforcer: scripts/check-flake-systems-eval.sh; ci: flake-check; hook: - -->
-- **OCI image** — `Entrypoint` not `Cmd`; bash+coreutils shipped alongside `grep`, `sed`, `awk`, `find` and `ps`, which the smoke jobs assert together with the entrypoint. → [install/docker.md](install/docker.md) <!-- enforcer: -; ci: image-smoke, image-smoke-arm64; hook: - -->
+- **OCI image** — `Entrypoint` not `Cmd`; bash+coreutils shipped alongside `grep`, `sed`, `awk`, `find` and `ps`, which the smoke jobs assert; their `docker run <image> -h` step is what proves the entrypoint. → [install/docker.md](install/docker.md) <!-- enforcer: -; ci: image-smoke, image-smoke-arm64; hook: - -->
 - **Manifest digest-pinning** — every multi-arch manifest-creating docker command takes its source refs as immutable digests (an `@sha256:` literal or an `@${…DIGEST}` expansion), never mutable tags. → [install/docker.md](install/docker.md) <!-- enforcer: scripts/check-manifest-digest-pinned.sh; ci: lint-workflow-security; hook: manifest-digest-pinned -->
 - **DOCKERHUB_TOKEN split** — `_RW` vs `_DELETE`, never unsuffixed, in workflows and in the docs' shell-fenced tag-delete snippets. → [runbooks/dockerhub-recovery.md](runbooks/dockerhub-recovery.md) <!-- enforcer: scripts/check-dockerhub-token-scope-split.sh; ci: lint-doc-invariants; hook: - -->
 - **Docker Hub notify-body parity** — issue body mirrors runbook. → [runbooks/dockerhub-recovery.md](runbooks/dockerhub-recovery.md) <!-- enforcer: -; ci: -; hook: - -->

@@ -134,7 +134,7 @@ runs, and
 the collector, the link-check workflow among them.
 `../scripts/collect-ground-truth.test.sh` asserts the two select the same
 set. **This paragraph is where that rule is stated; the other sites point
-here.**
+here, directly or via the collector.**
 
 `.claude/CLAUDE.md` and the global CLAUDE.md are untracked and stay read-only
 — the global one lives outside the repo entirely. They set the scope of the
