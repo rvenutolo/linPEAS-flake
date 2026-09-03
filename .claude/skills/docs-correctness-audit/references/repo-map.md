@@ -11,6 +11,31 @@ here** if they disagree, and note the drift as its own finding.
 Run these once and pass the results to every reader so a thing named in a doc is
 checked against one authoritative list.
 
+### PROSE HOTSPOTS
+
+The collector's first section answers "which paragraph is most likely to still
+be wrong". It reports two things per doc, from two windows:
+
+- **rewrite pressure** — how many fix commits touched the file since the audit
+    point several recorded points back. A prose fix is written against one
+    sentence, so a file that has absorbed many of them holds paragraphs that
+    have been read partially, repeatedly.
+- **the lines the most recent cycle rewrote** — from `git blame`, so they are
+    current line numbers a reader can open, collapsed into ranges by adjacency
+    rather than by which commit wrote them.
+
+Both windows are derived from the history of `.github/docs-audit-state`
+itself, which is the only in-tree record of where one cycle ended. A marker
+records its cycle's sha *after* that cycle's fixes landed, so it marks the END
+of a cycle: the line window starts one marker further back than the newest,
+because the range after the newest marker contains no fix pass at all.
+
+Read a high-pressure file's rewritten lines as whole paragraphs. The ranking is
+an aim point, not a scope limit, and a file with pressure but no recent lines
+is a doc that took its rewriting in an earlier cycle. Release-driven records
+(`CHANGELOG.md`, `docs/releases.md`), generated data and fixture trees are
+excluded: their churn is not prose drift and would otherwise top every list.
+
 The cron command spells both workflow globs, `*.yml` and `*.yaml`, to match the
 scan sets the repo's own workflow lints use. No `*.yaml` workflow exists today,
 so that half goes unmatched and reaches `grep` as a literal path: expect a
@@ -106,6 +131,25 @@ appearing in the collector's sweeps. Verify the map covers everything with
 `git ls-files '*.md'` minus `tests/fixtures/` and
 `.claude/skills/*/evals/seeded-defects/fixtures/` — every result must fall in
 some row.
+
+Two non-Markdown surfaces carry user-facing prose and ride along with the
+cluster that owns the doc they mirror: the issue and notify bodies workflows
+write, and the field prompts in `.github/ISSUE_TEMPLATE/*.yml`. Enumerate the
+first with
+
+```sh
+grep -lE '^[[:space:]]*(body|title):' .github/workflows/*.yml
+```
+
+then read each body's prose against the runbook it restates — a triage step, a
+reason name, the conditions behind a status. Only the prose is in scope, not
+the workflow logic around it: what a body *claims about a mechanism* drifts
+when the mechanism moves, and a reader hits that claim at the moment they act
+on the issue. A body and its runbook disagreeing is one finding listing both
+sites, since one fix pattern serves them; assign it to the cluster holding the
+runbook, so the reader checking the prose is the one who already read the
+mechanism. A body naming no documented mechanism — a bare link, a title — has
+nothing to drift against and is not a finding.
 
 Part of `.claude/` is tracked and committed — the `docs-correctness-audit` and
 `multi-agent-review` skills and their slash commands; the cluster map's
