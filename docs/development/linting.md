@@ -392,7 +392,9 @@ probe="$(make_temp --tmpdir="${dir}" probe.XXXXXX)"
 Matching is by command position, so prose naming the command — a
 comment, a parenthetical, a string operand — is never a hit. The one
 sanctioned bare invocation lives in `scripts/lib/temp.sh`, which the rule
-skips by basename. A call whose failure genuinely is the finding opts out
+skips by its repo-relative path — a second file of that name elsewhere
+under the scan root is an ordinary script and its bare call is a
+violation. A call whose failure genuinely is the finding opts out
 with an inline `# exit-code-exempt: <rationale>`, which has to open the
 comment — a sentence merely naming the marker is prose about the rule,
 not a use of it, and excuses nothing; the rationale must be non-empty,

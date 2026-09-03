@@ -378,6 +378,7 @@ failed=0
 exempted=0
 orphans=0
 scanned=0
+sanctioned_sites=0
 shopt -s nullglob globstar
 # `globstar` is set here and left set across the call, so the pattern keeps
 # reaching every nested directory under the scan root.
@@ -387,11 +388,14 @@ for f in "${repo_scripts[@]}"; do
   scanned=$((scanned + 1))
   # `scripts/lib/temp.sh` holds the one sanctioned bare invocation in the
   # tree — the guarded helper every other site routes through — so the
-  # bare-creation rule is switched off for it by basename while every
-  # other rule here still reads the file.
+  # bare-creation rule is switched off for it while every other rule here
+  # still reads the file. The match is on the whole repo-relative path as
+  # the glob built it, not on the basename: a second file named `temp.sh`
+  # anywhere under the scan root is a violation, not a second helper.
   sanctioned=0
-  if [[ ${f##*/} == 'temp.sh' ]]; then
+  if [[ ${f} == "${DIR}/lib/temp.sh" ]]; then
     sanctioned=1
+    sanctioned_sites=$((sanctioned_sites + 1))
   fi
   # Captured rather than piped so a scanner failure aborts the run
   # instead of handing this loop an empty stream to score as clean.
@@ -453,6 +457,9 @@ if ((failed > 0 || orphans > 0)); then
   exit 1
 fi
 
-printf 'guard-exit-code: %d script(s) scanned, %d exemption(s), %d orphan marker(s)\n' \
-  "${scanned}" "${exempted}" "${orphans}"
+# The sanctioned-site tally is part of the summary because the path-keyed
+# exemption is otherwise invisible: a run that stopped applying it and a run
+# that never reached the helper print the same clean line without it.
+printf 'guard-exit-code: %d script(s) scanned, %d exemption(s), %d orphan marker(s), %d sanctioned site(s)\n' \
+  "${scanned}" "${exempted}" "${orphans}" "${sanctioned_sites}"
 exit 0
