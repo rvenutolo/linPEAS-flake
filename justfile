@@ -18,7 +18,7 @@ fmt:
 lint:
   pre-commit run --all-files
 
-# Run lychee link checker over every markdown file, dotted trees included, that lychee.toml does not exclude
+# Run lychee link checker over every markdown file lychee.toml does not exclude, the two dotted trees the recipe names included
 lint-links:
   lychee --config lychee.toml './**/*.md' '.github/**/*.md' '.claude/**/*.md'
 

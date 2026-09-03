@@ -34,7 +34,7 @@ just                  # list recipes
 just check            # nix flake check (formatting + pre-commit + lint-shell-tools + derivation build)
 just fmt              # treefmt — prettier + nixfmt + shfmt + taplo + mdformat + just
 just lint             # pre-commit run --all-files
-just lint-links       # lychee over every markdown file, dotted trees included, that lychee.toml does not exclude
+just lint-links       # lychee over every markdown file lychee.toml does not exclude, the two dotted trees the recipe names included
 just verify           # lint groups + harnesses + doc-freshness + standalone enforcers
 just bump             # manually refresh linpeas pin from upstream latest
 ```

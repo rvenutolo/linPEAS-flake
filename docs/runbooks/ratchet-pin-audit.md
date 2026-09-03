@@ -4,7 +4,7 @@ The `ratchet-pin-audit` workflow runs on a daily cron (see
 [CI — cron schedule](../architecture/ci.md#cron-schedule)). It runs
 `ratchet lint` (from the devshell) against every workflow file under
 `.github/workflows/` and re-derives the canonical SHA for each
-SHA-pinned action ref. On *any* failure — detected drift, an upstream
+SHA-pinned action ref it does not skip (see below). On *any* failure — detected drift, an upstream
 API failure, a ratchet tool failure, or an unclassified error — the
 workflow opens (or updates) a single deduped umbrella issue labeled
 `ratchet-drift`, whose `Reason:` line names which of the four it was;
@@ -12,8 +12,8 @@ triage by that line using the sections below. The issue auto-closes on
 the next clean run.
 
 Two classes of upstream ref are skipped before any API call (a local
-`./` action, which names no upstream, is dropped earlier). Each is
-backed by a different PR-time check.
+`./` action, which names no upstream, is dropped earlier). Each still
+has a PR-time backstop, described below.
 
 Floating-major pins (`# vN`) are skipped because such a tag retargets on
 every release, so a benign move is indistinguishable from an attack.
