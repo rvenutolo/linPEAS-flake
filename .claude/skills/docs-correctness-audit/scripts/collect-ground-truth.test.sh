@@ -245,6 +245,62 @@ else
   esac
 fi
 
+# --- repo-map's restatements must track what they restate ---
+# repo-map.md is the audit's ground truth: a cluster reader checks the tree
+# against it, so a stale map does not misinform a human who might notice — it
+# makes the audit itself read clean over real drift. The map is deliberately
+# self-contained (a reader told to chase a second file mid-audit is a reader
+# reading two files), so both restatements below stay where they are and are
+# gated here instead of collapsed to pointers.
+REPO_MAP="${HERE}/../references/repo-map.md"
+map_section() { # $1=section number — emit that section's body
+  sed -n "/^## $1\\./,/^## $(($1 + 1))\\./p" "${REPO_MAP}"
+}
+
+# Section 3 restates every generated doc and its generator. Ground truth is the
+# tracked refresh-*.sh set plus git-cliff, which no refresh-*.sh covers.
+tree_gen="$(cd "${REAL_REPO}" && git ls-files 'scripts/refresh-*.sh' | sed 's|^scripts/||' | sort)"
+doc_gen="$(map_section 3 | grep -oE 'refresh-[a-z-]+\.sh' | sort -u)"
+
+# Breadth first: an enumeration that came back empty would agree with an empty
+# doc set, and a green run would mean the gate read nothing rather than that
+# the table is right.
+[[ -n ${tree_gen} ]] && rc=0 || rc=1
+check "repo-map generator gate enumerates a non-empty refresh-*.sh set" "${rc}"
+
+if [[ ${tree_gen} == "${doc_gen}" ]]; then rc=0; else
+  rc=1
+  printf '  tree-only: %s\n' "$(comm -23 <(echo "${tree_gen}") <(echo "${doc_gen}") | tr '\n' ' ')"
+  printf '  doc-only:  %s\n' "$(comm -13 <(echo "${tree_gen}") <(echo "${doc_gen}") | tr '\n' ' ')"
+fi
+check "repo-map section 3 names exactly the tracked refresh-*.sh generators" "${rc}"
+
+case "$(map_section 3)" in
+*git-cliff*) check "repo-map section 3 keeps the one non-refresh generator row" 0 ;;
+*) check "repo-map section 3 keeps the one non-refresh generator row" 1 ;;
+esac
+
+# Section 4 restates the sweep's classes. Ground truth is the collector's own
+# _emit_eph calls in this directory, not the real lint's constants: section 4
+# describes what the collector emits, and the collector deliberately mirrors
+# rather than calls the lint.
+# The marker is bold-plus-code at bullet start, not a bare code span: section 4
+# also carries a caveats list whose bullets open with a bare backticked class
+# name, and a bare-span matcher reads those as shape bullets.
+coll_classes="$(grep -oE '_emit_eph [a-z-]+' "${COLLECTOR}" | cut -d' ' -f2 | sort -u)"
+# shellcheck disable=SC2016 # literal backticks: the marker is a code span
+doc_classes="$(map_section 4 | sed -n 's/^- \*\*`\([a-z-]*\)`\*\*.*/\1/p' | sort -u)"
+
+[[ -n ${coll_classes} ]] && rc=0 || rc=1
+check "repo-map class gate enumerates a non-empty _emit_eph set" "${rc}"
+
+if [[ ${coll_classes} == "${doc_classes}" ]]; then rc=0; else
+  rc=1
+  printf '  collector-only: %s\n' "$(comm -23 <(echo "${coll_classes}") <(echo "${doc_classes}") | tr '\n' ' ')"
+  printf '  map-only:       %s\n' "$(comm -13 <(echo "${coll_classes}") <(echo "${doc_classes}") | tr '\n' ' ')"
+fi
+check "repo-map section 4 carries a bullet per swept class" "${rc}"
+
 # --- a lychee that cannot run at all must not read as a clean sweep ---
 # lychee exits non-zero without printing an [ERROR] line when it refuses an
 # input (a tracked doc deleted but not staged reaches this: git ls-files
