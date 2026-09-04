@@ -29,14 +29,16 @@ branch — see [pin convention](../architecture/pin-convention.md).
 This repo's own composite-action self-references are skipped because they
 have no upstream tag to compare against: Renovate's `pinDigests` rule
 tracks this repo's own `main` HEAD, not an upstream release. The
-digest-provenance gate skips them for the same reason, so the in-repo
-PR-time gates left for them are `check-uses-sha-pinned.sh`, backing the
-GitHub-side `sha_pinning_required` setting and still requiring a full
-40-hex SHA — see [repo config](../security/repo-config.md) — and
-`check-patch-tag-pins.sh`, which reads the same lines and demands an
-exact patch tag; this repo publishes no release tags on its composite
-actions, so its self-reference passes through an inline
-`# patch-tag-exception:` marker.
+digest-provenance gate skips them for the same reason, so their PR-time
+backstop is `check-uses-sha-pinned.sh` (the `uses-sha-pinned` member of
+`lint-workflow-security`), backing the GitHub-side `sha_pinning_required`
+setting and still requiring a full 40-hex SHA — see
+[repo config](../security/repo-config.md). `check-patch-tag-pins.sh` also
+reads these lines and demands an exact patch tag, but it runs only as the
+`patch-tag-pins` pre-commit hook and gates no merge — see
+[pin convention](../architecture/pin-convention.md); this repo publishes
+no release tags on its composite actions, so its self-reference carries an
+inline `# patch-tag-exception:` marker.
 
 This runbook is linked inline from the auto-filed issue body.
 
