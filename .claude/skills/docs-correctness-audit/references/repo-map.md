@@ -344,7 +344,9 @@ not is a false positive. The lint's complete class set is in
 `RE_REVIEW` and `RE_CLAUDE` block, `RE_CAUSAL` warns. The sweep transcribes
 the blocking classes from those constants, left boundary guards included, so a
 banned shape sitting inside a larger token (`UTF-8`, `PDF-1.7`, `ID5:`,
-`abc#12`) is no more a sweep hit than a gate failure. The advisory
+`abc#12`) is no more a blocking-class sweep hit than a gate failure (the
+unguarded `ad-hoc-ticket` class can still match a shape like `PDF-1.7`; see
+the caveat below). The advisory
 `causal-history` class is matched case-insensitively on both sides, matching
 `RE_CAUSAL`'s `--ignore-case` pass in the lint, so a sentence-initial
 `Previously` is a hit in the sweep exactly as it is in the lint; the blocking
