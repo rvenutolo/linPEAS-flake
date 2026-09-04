@@ -43,12 +43,15 @@ How to verify a release of this wrapper yourself. None of this trusts the Pages 
     which the release pipeline produces with cosign 3.x (an older 2.x
     client is not guaranteed to read its bundle format).
 - `docker` with `buildx` — `docker buildx imagetools inspect … --raw`
-    resolves the per-arch image digest from the multi-arch index.
-- `jq` — reads that digest out of the raw index.
+    resolves the per-arch image digest from the multi-arch index, for the
+    `gh attestation verify` path.
+- `jq` — reads that digest out of the raw index, for the same path.
 
-Either signing toolchain alone is enough to verify the image once the digest
-is resolved: `gh attestation verify` and `cosign verify` check different
-signatures over the same digest.
+Either signing toolchain alone is enough to verify the image:
+`gh attestation verify` needs the per-arch digest resolved first, since
+attestations are per-arch, while `cosign verify` accepts the tag, since the
+multi-arch index itself is signed. The two check different signatures over
+the same image.
 
 ## Verify the OCI image's build provenance<a name="verify-the-oci-images-build-provenance"></a>
 

@@ -168,8 +168,9 @@ source is the canonical list):
 | `OUT_FILE_OVERRIDE`                  | `gen-dashboard-data.sh`                                                                                                                                                                                                                                                                                                                                                                                                                     | redirect the generated YAML — use it so a test never writes the real `docs/_data/dashboard.yml` |
 
 Each script defines its own overrides — check the script for the
-canonical list before writing a new test. The two scan-root overrides
-are listed one script at a time rather than behind an enumerating grep,
+canonical list before writing a new test. The two tree-root overrides
+(`SCAN_ROOT` and `SCAN_ROOT_OVERRIDE`) are listed one script at a time
+rather than behind an enumerating grep,
 because each lint spells the variable differently: a grep for the
 shorter of the two names both scripts, one of which ignores the
 variable it matched and would scan the live repo instead of the fixture.

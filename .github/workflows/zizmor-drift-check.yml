@@ -5,9 +5,10 @@ name: zizmor-drift-check
 # zizmor runs as a pre-commit hook (--min-severity=low) — prevention at
 # commit time — and the required flake-check job re-runs that hook on
 # every PR and push through `nix flake check`, so a hook bypass is
-# caught before merge. This watchdog covers the gap neither run
-# re-evaluates: an upstream zizmor rule change after a file merged
-# green.
+# caught before merge. This watchdog re-runs the same lock-pinned scan
+# against main on a schedule: a finding here means a workflow file on
+# main fails a scan those gates ran green (a rule change arrives with
+# the flake.lock bump whose PR flake-check re-scans in full).
 #
 # On findings: opens (or leaves) a deduped `zizmor-drift` tracking
 # issue via the notify-workflow-result composite. On the next clean
@@ -95,9 +96,10 @@ jobs:
 
             This means a workflow file on `main` now fails the same
             `zizmor` scan the pre-commit hook and the required
-            `flake-check` job run — most likely an upstream zizmor rule
-            that tightened after the file merged green, since the
-            per-PR re-run rules out a hook bypass.
+            `flake-check` job run with the same lock-pinned binary on
+            every PR and push. Start triage by comparing this run
+            against the last `flake-check` run on `main`; a `flake.lock`
+            bump is what changes the zizmor binary.
 
             See the failing job logs for the specific finding(s):
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}

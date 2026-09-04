@@ -95,8 +95,17 @@ Steps:
     Review the diff, open a PR. (`ratchet update` is not used here
     because our pins use plain `# v3.36.0` trailing-comment annotations
     rather than ratchet's `# ratchet:repo@v3.36.0` format, so ratchet
-    does not recognize them as ratchet-managed.) Renovate will pick
-    these up on its next scheduled run if you prefer to wait.
+    does not recognize them as ratchet-managed.)
+
+    That PR fails the required `lint-doc-invariants` job by design: a
+    SHA that moves under an unchanged version comment is the
+    digest-repoint class `check-pin-digest-provenance.sh` hard-fails.
+    Move the version label together with the SHA, or update the pin
+    to the corrected upstream release — see
+    [pin digest provenance](../security/repo-config.md#pin-digest-provenance).
+    A Renovate digest-only bump for the same ref hits the same gate, so
+    waiting for Renovate helps only when upstream also published a new
+    version label.
 
 1. **If the release notes do not describe the SHA change**: treat
     this as a potential supply-chain event. Do not auto-update.
@@ -118,9 +127,9 @@ possible.
     [GitHub Status page](https://www.githubstatus.com/).
 1. If the API is healthy, inspect the run log. The audit stops at the
     first failure, so the log carries one failure line: it names the
-    `owner/repo@tag` whose lookup or dereference failed, or quotes the
-    payload that would not parse (a failure routed here by the ratchet
-    heuristic quotes ratchet's output instead and names no ref). A named
+    `owner/repo@tag` whose lookup, dereference or payload parse failed,
+    quoting the payload when one was read (a failure routed here by the
+    ratchet heuristic quotes ratchet's output instead and names no ref). A named
     ref that keeps failing across re-runs points at that action's
     repository — renamed, made private, or its tag deleted — rather
     than at the API as a whole; the refs after it were not attempted.
@@ -139,8 +148,9 @@ failed shape validation; OR the workflow glob matched zero files.
     so a finding here means the PR gate was bypassed or skipped. Treat
     it as a gate failure, not a tool failure.
 1. If ratchet instead started exiting non-zero on a workflow set it
-    accepted before, most likely after a ratchet upgrade, bump ratchet
-    locally via `nix flake update` and re-run. Drift itself comes from
+    accepted before, most likely after a ratchet upgrade, bump the
+    `nixpkgs-unstable` input that ships ratchet
+    (`nix flake update nixpkgs-unstable`) and re-run. Drift itself comes from
     the per-ref `gh api` re-derivation rather than from ratchet's
     output, so an output-format change cannot fabricate a drift
     report.
