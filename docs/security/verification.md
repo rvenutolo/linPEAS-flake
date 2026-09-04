@@ -115,8 +115,9 @@ Look for `"conclusion": "success"` within the last 7 days. Current state on the 
 
 1. Asset URL must start with
     `https://github.com/peass-ng/PEASS-ng/releases/download/`. Hard fail.
-1. GitHub-API `.digest` field never silently skipped. Absent or
-    non-`sha256:` prefix is a hard fail.
+1. GitHub-API `.digest` field never silently skipped. Absent,
+    non-`sha256:` prefix, or a digest that does not match the downloaded
+    asset is a hard fail.
 1. Pin file written via `make_temp` (`scripts/lib/temp.sh`) + `mv` (atomic).
     Never `>`, and never a bare `mktemp` — the script-hygiene lint rejects that
     shape under `scripts/`; the guarded helper in `scripts/lib/temp.sh` holds
@@ -369,8 +370,9 @@ Signed artifacts per release:
     both `ghcr.io` and `docker.io`. The signature lands as a `.sig` tag
     next to each image in each registry.
 - **Multi-arch index**: same `cosign sign` invocation against the OCI
-    index digest of `:VERSION` (which equals the digest of `:latest`,
-    since they reference identical bytes). One signature per registry
+    index digest of `:VERSION`. When the run also writes `:latest` (the
+    release is the newest one, not a historic backfill), that tag
+    resolves to the same index digest, so the one signature per registry
     covers both tags.
 
 ### Identity pinning<a name="identity-pinning"></a>
