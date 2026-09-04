@@ -284,8 +284,9 @@ jobs:
               `check-pin-digest-provenance.sh` hard-fails): move the
               version label with the SHA, or update the pin to the
               corrected upstream release — the runbook links the
-              documented unblock. A Renovate digest-only bump hits the
-              same gate. If the release notes do **not** describe the SHA
+              documented unblock. A Renovate digest-only bump for the
+              same ref hits the same gate. If the release notes do
+              **not** describe the SHA
               change, treat this as a potential supply-chain event and
               escalate — do **not** auto-update. See the runbook for the
               exact remediation command.

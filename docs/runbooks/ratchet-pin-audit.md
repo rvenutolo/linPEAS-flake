@@ -4,7 +4,8 @@ The `ratchet-pin-audit` workflow runs on a daily cron (see
 [CI — cron schedule](../architecture/ci.md#cron-schedule)). It runs
 `ratchet lint` (from the devshell) against every workflow file under
 `.github/workflows/` and re-derives the canonical SHA for each
-SHA-pinned action ref it does not skip (see below). On *any* failure —
+SHA-pinned action ref carrying a version comment that it does not skip
+(see below). On *any* failure —
 detected drift, an upstream API failure, a ratchet tool failure, an
 unclassified error, or a cancelled run — the workflow opens a single
 deduped umbrella issue labeled `ratchet-drift`, or comments on the one

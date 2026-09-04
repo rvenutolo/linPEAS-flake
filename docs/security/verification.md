@@ -90,9 +90,12 @@ This means:
 - The manifest index itself is **not** attested. An attacker with push
     to either registry could repoint the manifest at unattested images;
     the verify step in `release-on-bump.yml` would catch this at release
-    time, but consumers who only verify the manifest pointer (not the
-    arch image) would miss it. Always verify against the resolved
-    arch-image digest.
+    time, but a consumer who checks only the attestation against the
+    manifest pointer (not the arch image) would miss it. For
+    `gh attestation verify`, target the resolved arch-image digest.
+    `cosign verify` against the tag covers the index itself, since the
+    index digest is signed — see
+    [Cosign keyless signatures](#cosign-keyless-signatures).
 
 ## Verify the weekly parity check is current<a name="verify-the-weekly-parity-check-is-current"></a>
 
