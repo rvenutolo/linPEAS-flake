@@ -170,7 +170,8 @@ The `codeql.yml` workflow is not in branch protection's required-check
 set, and is deliberately advisory: gating merge on CodeQL would let a
 single CRITICAL false positive or a transient CodeQL infrastructure
 flake wedge every PR. The merge gate is the in-tree workflow lints plus
-the zizmor pre-commit hook. A CodeQL infrastructure failure must not
+the zizmor pre-commit hook, which the required `flake-check` job re-runs
+through `nix flake check`. A CodeQL infrastructure failure must not
 block linpeas pin bumps; failure surfacing is via the deduped issues
 filed by the notify jobs.
 

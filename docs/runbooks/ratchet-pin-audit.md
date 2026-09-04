@@ -33,8 +33,10 @@ digest-provenance gate skips them for the same reason, so the in-repo
 PR-time gates left for them are `check-uses-sha-pinned.sh`, backing the
 GitHub-side `sha_pinning_required` setting and still requiring a full
 40-hex SHA — see [repo config](../security/repo-config.md) — and
-`check-patch-tag-pins.sh`, which reads the same lines and admits a
-self-reference only through an inline `# patch-tag-exception:` marker.
+`check-patch-tag-pins.sh`, which reads the same lines and demands an
+exact patch tag; this repo publishes no release tags on its composite
+actions, so its self-reference passes through an inline
+`# patch-tag-exception:` marker.
 
 This runbook is linked inline from the auto-filed issue body.
 
@@ -89,8 +91,8 @@ Steps:
     place and the next run would re-file the same issue.
 
     Review the diff, open a PR. (`ratchet update` is not used here
-    because our pins use plain `# v3` trailing-comment annotations
-    rather than ratchet's `# ratchet:repo@v3` format, so ratchet
+    because our pins use plain `# v3.36.0` trailing-comment annotations
+    rather than ratchet's `# ratchet:repo@v3.36.0` format, so ratchet
     does not recognize them as ratchet-managed.) Renovate will pick
     these up on its next scheduled run if you prefer to wait.
 
@@ -208,8 +210,8 @@ than a side effect.
 
 `ratchet update` does reach upstream, but it only operates on pins
 written in ratchet's own annotation format
-(`uses: foo@<sha> # ratchet:foo@v3`). Our pins use plain
-`# v3` trailing comments and are therefore invisible to
+(`uses: foo@<sha> # ratchet:foo@v3.36.0`). Our pins use plain
+`# v3.36.0`-style trailing comments and are therefore invisible to
 `ratchet update`. Remediation must be done by hand (or via Renovate
 on its next scheduled run).
 

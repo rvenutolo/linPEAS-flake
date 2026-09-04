@@ -42,9 +42,13 @@ How to verify a release of this wrapper yourself. None of this trusts the Pages 
     `cosign verify-blob` for the `.sigstore` release-asset bundles,
     which the release pipeline produces with cosign 3.x (an older 2.x
     client is not guaranteed to read its bundle format).
+- `docker` with `buildx` — `docker buildx imagetools inspect … --raw`
+    resolves the per-arch image digest from the multi-arch index.
+- `jq` — reads that digest out of the raw index.
 
-Either toolchain alone is enough for the image: `gh attestation verify` and
-`cosign verify` check different signatures over the same digest.
+Either signing toolchain alone is enough to verify the image once the digest
+is resolved: `gh attestation verify` and `cosign verify` check different
+signatures over the same digest.
 
 ## Verify the OCI image's build provenance<a name="verify-the-oci-images-build-provenance"></a>
 
