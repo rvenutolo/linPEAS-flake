@@ -39,7 +39,7 @@ The `gh issue create` invocation sets no `--assignee`; mismatches rely on defaul
 
 - A `nix path-info --json` shape change is not the cause: both `measure hashes` steps pipe it through `jq --exit-status` under `set -Eeuo pipefail`, so a shape change fails its own build job, and `compare` needs both builds and never runs.
 - What *can* reach `compare` is a `build.json` that uploaded or downloaded incompletely.
-- A `repro-diff` artifact is present on exit 2 — the diffoscope and upload steps gate on `exit_code != '0'`, which 2 satisfies — but it diffs builds whose measurement the compare script already rejected. Read the `build.json` files in the `repro-build-a` / `repro-build-b` artifacts instead; those expire after 7 days (vs `repro-diff`'s 30), so exit-2 triage has a one-week window.
+- A `repro-diff` artifact is present on exit 2 — the diffoscope and upload steps gate on `exit_code != '0'` (or the `force_diffoscope` input, below), which 2 satisfies — but it diffs builds whose measurement the compare script already rejected. Read the `build.json` files in the `repro-build-a` / `repro-build-b` artifacts instead; those expire after 7 days (vs `repro-diff`'s 30), so exit-2 triage has a one-week window.
 - The `open issue (on mismatch)` and `fail job (on mismatch)` steps gate on the same `exit_code != '0'` condition, so exit 2 also files an issue and fails the job — and the issue body's "detected a mismatch" wording is not to be trusted until the `compare hashes` step's exit code is checked.
 - If a build job itself went red, triage its `measure hashes` step there.
 

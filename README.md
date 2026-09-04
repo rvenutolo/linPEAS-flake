@@ -263,7 +263,7 @@ and tag protection, required-check list — lives in
 
 ## Development
 
-All of the tooling this section assumes — `shfmt`, `shellcheck`, `just`,
+Every tool named below — `shfmt`, `shellcheck`, `just`,
 `pre-commit`, `nixfmt`, `deadnix`, `statix`, `actionlint`, `zizmor`,
 `yamllint`, `prettier`, `lychee`, `check-jsonschema`, and more — is
 supplied by the flake's `devShells.default` (see `nix/devshell.nix` for
