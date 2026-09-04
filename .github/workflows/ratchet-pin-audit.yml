@@ -286,17 +286,16 @@ jobs:
               corrected upstream release — the runbook links the
               documented unblock. A Renovate digest-only bump for the
               same ref hits the same gate. If the release notes do
-              **not** describe the SHA
-              change, treat this as a potential supply-chain event and
-              escalate — do **not** auto-update. See the runbook for the
-              exact remediation command.
+              **not** describe the SHA change, treat this as a potential
+              supply-chain event and escalate — do **not** auto-update.
+              See the runbook for the exact remediation command.
             - `upstream-api-failure` — the per-ref canonical-SHA
               re-derivation (`gh api`) failed or rate-limited, or
               ratchet's own output matched the upstream-failure
               heuristic. The `github.token` is capped at 1,000
               requests/hr per repository; transient 5xx is also possible.
-              Re-run the workflow once
-              before investigating ratchet itself.
+              Re-run the workflow once before investigating ratchet
+              itself.
             - `ratchet-tool-failure` — ratchet exited non-zero (the
               re-derivation is skipped in that case), OR
               `classify-pin-ref.sh` failed or returned an unrecognized

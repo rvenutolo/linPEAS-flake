@@ -8,8 +8,8 @@ SHA-pinned action ref carrying a version comment that it does not skip
 (see below). On *any* failure —
 detected drift, an upstream API failure, a ratchet tool failure, an
 unclassified error, or a cancelled run — the workflow opens a single
-deduped umbrella issue labeled `ratchet-drift`, or comments on the one
-already open. The issue body's `Reason:` line names the reason of the
+deduped umbrella issue labeled `ratchet-drift`, or comments on an
+already-open one. The issue body's `Reason:` line names the reason of the
 run that opened it; a later failure's comment carries only the run
 link (a later cancelled run's comment says it was cancelled), so when
 the issue has been re-commented, read the newest run's log for its
@@ -130,8 +130,8 @@ possible.
     first failure, so the log carries one failure line: it names the
     `owner/repo@tag` whose lookup, dereference or payload parse failed,
     quoting the payload when one was read (a failure routed here by the
-    ratchet heuristic quotes ratchet's output instead and names no ref). A named
-    ref that keeps failing across re-runs points at that action's
+    ratchet heuristic quotes ratchet's output instead and names no ref).
+    A named ref that keeps failing across re-runs points at that action's
     repository — renamed, made private, or its tag deleted — rather
     than at the API as a whole; the refs after it were not attempted.
 
@@ -151,17 +151,16 @@ failed shape validation; OR the workflow glob matched zero files.
 1. If ratchet instead started exiting non-zero on a workflow set it
     accepted before, most likely after a ratchet upgrade, bump the
     `nixpkgs-unstable` input that ships ratchet
-    (`nix flake update nixpkgs-unstable`) and re-run. Drift itself comes from
-    the per-ref `gh api` re-derivation rather than from ratchet's
-    output, so an output-format change cannot fabricate a drift
-    report.
+    (`nix flake update nixpkgs-unstable`) and re-run. Drift itself
+    comes from the per-ref `gh api` re-derivation rather than from
+    ratchet's output, so an output-format change cannot fabricate a
+    drift report.
 1. The step tells an upstream failure from a tool failure with a fixed
     heuristic grep over ratchet's output, so a reworded ratchet error
     can still land an upstream failure under this reason. If the run
-    log shows one,
-    widen the heuristic grep in the `audit pins` step. The structural
-    invariant `scripts/check-ratchet-pin-audit.sh` pins the four reason values
-    the notify body documents (`drift-detected`,
+    log shows one, widen the heuristic grep in the `audit pins` step.
+    The structural invariant `scripts/check-ratchet-pin-audit.sh` pins
+    the four reason values the notify body documents (`drift-detected`,
     `upstream-api-failure`, `ratchet-tool-failure`, `unknown`), not
     the heuristic strings — so widening it is a single-file change.
 1. If the workflow glob matched zero files, a refactor moved
@@ -176,8 +175,8 @@ failed shape validation; OR the workflow glob matched zero files.
 The `check` job produced no `reason=` output. Three run shapes do
 that: the `audit pins` step exited non-zero on an unhandled error
 inside its run block; a step before it failed, so the audit never ran;
-or the run was cancelled — most
-often its `timeout-minutes` was exceeded. The notify composite flags a
+or the run was cancelled — most often its `timeout-minutes` was
+exceeded. The notify composite flags a
 cancelled run as an infrastructure failure rather than a finding: with
 a `[!WARNING]` banner at the top of the issue body when the cancelled
 run is the one that opened the issue, and in its comment when it
