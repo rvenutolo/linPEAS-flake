@@ -183,7 +183,7 @@ for required in "${REQUIRED_RULES[@]}"; do
       break
     fi
   done
-  if ((!found)); then
+  if ((found == 0)); then
     printf 'missing rule: %s (have: %s)\n' "${required}" "${actual_rules[*]}" >&2
     exit 1
   fi

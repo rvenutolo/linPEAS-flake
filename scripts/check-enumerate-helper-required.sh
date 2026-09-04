@@ -528,9 +528,11 @@ def pattern_texts:
 #
 # A read under a plus operator is skipped: it emits the alternate word
 # and never the value of the parameter, so a pattern the variable holds
-# cannot expand there. `Exp.Op` is an opaque integer with no name in the
-# JSON, fixed by this parser version: 81 is `+` and 82 is `:+`, while 83
-# is `-` and 84 is `:-`, which do emit the value and are therefore read.
+# cannot expand there. `Exp.Op` names the operator in either of two
+# encodings, depending on how the parser serializes it: an opaque
+# integer — 81 is `+`, 82 is `:+`, 83 is `-`, 84 is `:-` — or the
+# operator token itself. Both spellings of the two plus forms are
+# matched here; the minus forms do emit the value and are read.
 # Whatever the alternate word itself carries is a literal written at this
 # site, and the loop and array positions above already read it.
 #
@@ -544,7 +546,7 @@ def pattern_texts:
     | . as $fc
     | (.Loop.Items // [])[] | (.Parts // [])[]
     | select(.Type == "ParamExp")
-    | select((.Exp.Op // 0) != 81 and (.Exp.Op // 0) != 82)
+    | select((.Exp.Op // 0) | IN(81, "+", 82, ":+") | not)
     | select(([$glob_loop_sites[]
         | select(.line == $fc.Pos.Line and .col == $fc.Pos.Col)] | length) == 0)
     | (.Param.Value // "") as $n
@@ -554,7 +556,7 @@ def pattern_texts:
     | . as $aa
     | (.Array.Elems // [])[] | (.Value.Parts // [])[]
     | select(.Type == "ParamExp")
-    | select((.Exp.Op // 0) != 81 and (.Exp.Op // 0) != 82)
+    | select((.Exp.Op // 0) | IN(81, "+", 82, ":+") | not)
     | select(([$glob_array_sites[]
         | select(.line == $aa.Array.Pos.Line and .col == $aa.Array.Pos.Col)] | length) == 0)
     | (.Param.Value // "") as $n
@@ -579,13 +581,15 @@ def pattern_texts:
 # somewhere inside it is what keeps an `if` block from swallowing its
 # own condition into the range of the loop.
 #
-# `BinaryCmd.Op` is an opaque integer with no name in the JSON, fixed by
-# this parser version: 13 is `|`, 14 is `|&`. Only those two extend the
-# range of a loop, because only those two feed the loop data — a `&&`
-# (11) or `||` (12) chain onto a loop is the guard of the loop, not its
-# input: the chained condition decides whether the loop runs at all, and
-# that decision is made and read before the loop consumes anything, the
-# same relationship an `if` condition already has to a loop in its body.
+# `BinaryCmd.Op` names the operator in either of two encodings, the same
+# way `Exp.Op` above does: an opaque integer — 13 is `|`, 14 is `|&` —
+# or the operator token itself. Both spellings of the two pipe forms are
+# matched here. Only those two extend the range of a loop, because only
+# those two feed the loop data — a `&&` (11) or `||` (12) chain onto a
+# loop is the guard of the loop, not its input: the chained condition
+# decides whether the loop runs at all, and that decision is made and
+# read before the loop consumes anything, the same relationship an `if`
+# condition already has to a loop in its body.
 # Counting every `BinaryCmd` regardless of operator would swallow the
 # filter read of that guard into the range of the loop the same way an
 # unguarded `if` was already kept from doing, through a different
@@ -594,7 +598,7 @@ def pattern_texts:
     | select((((.Cmd // {}) | .Type) == "ForClause") or (((.Cmd // {}) | .Type) == "WhileClause"))
     | {from: .Pos.Offset, to: .End.Offset}]
   + [.. | objects | select(.Type == "BinaryCmd")
-    | select(.Op == 13 or .Op == 14)
+    | select(.Op | IN(13, "|", 14, "|&"))
     | select(([(.Y // {}) | .. | objects
         | select(.Type == "ForClause" or .Type == "WhileClause")] | length) > 0)
     | {from: .Pos.Offset, to: .End.Offset}]) as $loops
