@@ -464,9 +464,14 @@ hs="$(mktemp -d)"
   cd "${hs}"
   git init -q && git config user.email t@t && git config user.name t
   mkdir -p docs .github
+  mkdir -p .github/workflows scripts
   printf 'one\ntwo\nthree\nfour\nfive\nsix\nseven\n' >docs/hot.md
   printf 'cold\n' >docs/cold.md
   printf '# Changelog\n\ninit\n' >CHANGELOG.md
+  # Prose that is not Markdown: a workflow's notify body and a script's
+  # rationale header drift like a runbook, so the ranking must reach them.
+  printf 'name: w\non: workflow_dispatch\njobs: {}\n' >.github/workflows/body.yml
+  printf '#!/usr/bin/env bash\n# rationale\ntrue\n' >scripts/prose.sh
   git add -A && git commit -qm base
   base_sha="$(git rev-parse HEAD)"
   printf 'LAST_AUDIT_SHA=%s\n' "${base_sha}" >.github/docs-audit-state
@@ -491,6 +496,14 @@ hs="$(mktemp -d)"
   git commit -qam 'fix hot lines five and six'
   printf 'cold-edited\n' >docs/cold.md
   git commit -qam 'fix cold once'
+  # Two touches each, so both clear the floor: a ranking scoped to *.md scores
+  # them zero and reports neither, which is the blind spot this pair catches.
+  printf 'name: w\non: workflow_dispatch\njobs: {}\n# body one\n' >.github/workflows/body.yml
+  printf '#!/usr/bin/env bash\n# rationale one\ntrue\n' >scripts/prose.sh
+  git commit -qam 'fix body and header once'
+  printf 'name: w\non: workflow_dispatch\njobs: {}\n# body two\n' >.github/workflows/body.yml
+  printf '#!/usr/bin/env bash\n# rationale two\ntrue\n' >scripts/prose.sh
+  git commit -qam 'fix body and header twice'
   # Release-driven churn must not outrank prose: this alone would top the list.
   for n in 1 2 3 4 5; do
     printf '# Changelog\n\nentry %s\n' "${n}" >CHANGELOG.md
@@ -512,7 +525,68 @@ case "${hot}" in *"rewrote: 3, 5-6"*) check "hotspot collapses recent lines into
 # A marker records the end of a cycle, so a narrow window anchored on the
 # NEWEST marker reports nothing — the regression this fixture exists to catch.
 case "${hot}" in *"blame names none"*) check "hotspot narrow window is not the empty newest range" 1 ;; *) check "hotspot narrow window is not the empty newest range" 0 ;; esac
+# Prose is a function, not a file extension. A ranking scoped to Markdown
+# leaves every notify body and rationale header unaimed-at, which is how a
+# defect in one survives a cycle that rewrote the doc beside it.
+case "${hot}" in *".github/workflows/body.yml — 2 commit(s)"*) check "hotspot ranks a workflow body" 0 ;; *) check "hotspot ranks a workflow body" 1 ;; esac
+case "${hot}" in *"scripts/prose.sh — 2 commit(s)"*) check "hotspot ranks a script rationale header" 0 ;; *) check "hotspot ranks a script rationale header" 1 ;; esac
 rm -rf "${hs}"
+
+# --- pass-attribution fixture ---
+# Attribution reads the branch side of a merge, so a commit main gained while
+# the PR was open must not be credited to that pass — the wrong attribution a
+# reader cannot detect, because the file it names really was touched in the
+# window.
+pa="$(mktemp -d)"
+(
+  cd "${pa}"
+  git init -q -b main && git config user.email t@t && git config user.name t
+  mkdir -p docs .github/workflows
+  printf 'base\n' >docs/pass.md
+  printf 'base\n' >docs/other.md
+  git add -A && git commit -qm base
+  base_sha="$(git rev-parse HEAD)"
+  printf 'LAST_AUDIT_SHA=%s\n' "${base_sha}" >.github/docs-audit-state
+  git add -A && git commit -qm 'mark cycle one'
+  # The pass under attribution, on its own branch.
+  git checkout -qb fixpass
+  printf 'edited\n' >docs/pass.md
+  git commit -qam 'fix the pass claim'
+  printf 'name: w\non: workflow_dispatch\njobs: {}\n# body\n' >.github/workflows/body.yml
+  git add -A && git commit -qm 'fix the body claim'
+  # Landed on main underneath the open PR; the merge reaches it through ^1.
+  git checkout -q main
+  printf 'unrelated\n' >docs/other.md
+  git commit -qam 'unrelated main commit'
+  git merge -q --no-ff fixpass -m 'docs: reconcile the pass claims'
+  printf 'LAST_AUDIT_SHA=%s\n' "$(git rev-parse HEAD)" >.github/docs-audit-state
+  git add -A && git commit -qm 'mark cycle two'
+)
+# shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
+att="$(cd "${pa}" && source "${COLLECTOR}" && attribute_passes)"
+case "${att}" in *"docs: reconcile the pass claims"*) check "attribution names the merge" 0 ;; *) check "attribution names the merge" 1 ;; esac
+case "${att}" in *"fix the pass claim"*) check "attribution names a carried commit" 0 ;; *) check "attribution names a carried commit" 1 ;; esac
+case "${att}" in *"docs/pass.md"*) check "attribution names the file a commit touched" 0 ;; *) check "attribution names the file a commit touched" 1 ;; esac
+case "${att}" in *".github/workflows/body.yml"*) check "attribution reaches non-Markdown prose" 0 ;; *) check "attribution reaches non-Markdown prose" 1 ;; esac
+case "${att}" in *"unrelated main commit"*) check "attribution excludes the merge's first-parent side" 1 ;; *) check "attribution excludes the merge's first-parent side" 0 ;; esac
+# A marker commit touches one non-prose file; crediting it to a pass would
+# hand every reader a file with no prose in it.
+case "${att}" in *"mark cycle two"*) check "attribution drops a commit that touched no prose" 1 ;; *) check "attribution drops a commit that touched no prose" 0 ;; esac
+rm -rf "${pa}"
+
+# --- pass-attribution fallback: no recorded audit point ---
+pnil="$(mktemp -d)"
+(
+  cd "${pnil}"
+  git init -q && git config user.email t@t && git config user.name t
+  mkdir -p docs
+  printf 'one\n' >docs/only.md
+  git add -A && git commit -qm base
+)
+# shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
+attnone="$(cd "${pnil}" && source "${COLLECTOR}" && attribute_passes)"
+case "${attnone}" in *"no usable audit point"*) check "attribution says why it attributed nothing" 0 ;; *) check "attribution says why it attributed nothing" 1 ;; esac
+rm -rf "${pnil}"
 
 # --- prose-hotspot fallback: no recorded audit point ---
 hn="$(mktemp -d)"
