@@ -228,8 +228,11 @@ finding: record it, and treat both sections as unchecked rather than clean.
 
 ### 2. Fan out read-only readers, one per doc cluster
 
-Dispatch parallel **read-only Explore agents** (they cannot edit — that
-enforces the no-edits rule), one per cluster from the cluster map. Give each
+Dispatch parallel **read-only Explore agents**, one per cluster from the
+cluster map. The agent type does not enforce the no-edits rule — an Explore
+agent has no `Edit`/`Write` tool but runs Bash, which writes files as
+readily — so the dispatch itself carries the prohibition: no writes into the
+repo tree, no generator, formatter, `nix build` or harness run. Give each
 agent: the ground-truth bundle, the three dimensions below, the generated-doc
 exclusion list, and the ephemeral-token regex. Each returns structured findings
 **plus a coverage note**: which hand-written claims in its cluster it
