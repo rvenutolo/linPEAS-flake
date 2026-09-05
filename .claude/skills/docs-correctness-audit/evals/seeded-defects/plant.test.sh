@@ -25,11 +25,17 @@ primary_before="$(git -C "$here" status --porcelain --untracked-files=no)"
 wt="$(cat "$results/worktree-path.txt")"
 manifest="$results/manifest-resolved.json"
 
+# Derived, never a literal: a hard-coded expectation goes stale the moment a
+# seed is added, and the staleness reads as a planting failure. The non-zero
+# guard is load-bearing — an empty seeds.json would otherwise satisfy both
+# count assertions while planting nothing at all.
+seed_count="$(jq '.seeds | length' "$here/seeds.json")"
+check "seeds.json is non-empty" "[ '$seed_count' -gt 0 ]"
 check "worktree exists" "[ -d '$wt' ]"
 check "skill present in worktree" "[ -f '$wt/.claude/skills/docs-correctness-audit/SKILL.md' ]"
-check "manifest has 9 seeds" "[ \"\$(jq 'length' '$manifest')\" = 9 ]"
+check "manifest has $seed_count seeds" "[ \"\$(jq 'length' '$manifest')\" = $seed_count ]"
 check "every seed has a numeric line" \
-  "[ \"\$(jq '[.[] | select((.line|type)==\"number\" and .line>0)] | length' '$manifest')\" = 9 ]"
+  "[ \"\$(jq '[.[] | select((.line|type)==\"number\" and .line>0)] | length' '$manifest')\" = $seed_count ]"
 
 # Every sentinel (non-empty) must be present in the worktree at its recorded file.
 while IFS=$'\t' read -r f s; do

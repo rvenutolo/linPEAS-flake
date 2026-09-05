@@ -128,6 +128,20 @@ sentence they replaced — a fix that swapped one wrong claim for another reads
 as an improvement in the diff. If the state file is absent or its sha is
 unreachable, record that in the report and audit everything at equal priority.
 
+`LAST_AUDIT_SHA` moves once per *cycle*, not once per audit. When several
+audits run back to back — each iteration's fixes landing before the next
+starts — the marker still names the point the previous cycle ended, so the
+hotspot ranking it feeds is stale for every iteration after the first. Aim
+additionally at the most recent fix commit, whatever the marker says:
+
+```sh
+git log --oneline -1 --grep='^docs:' HEAD
+```
+
+Read that commit's paragraphs before anything else. Measured across a
+five-iteration run, this check found a defect in every iteration that ran it,
+and out-found the full cluster fan-out in the last two.
+
 **The unit of re-reading is the paragraph, not the hunk.** A changed line is
 where the last pass aimed; the defect that survived is beside it. Take each
 hunk's whole paragraph — the full bullet, the full table row, the sentences
@@ -139,6 +153,26 @@ through several cycles of edits to the text around it. When a paragraph
 enumerates or bounds something — a list of what a layer catches, a set of
 fields, two examples joined by "or" — resolve every member, not the one that
 changed.
+
+**Two defects the paragraph rule and the twin sweep both miss.** The paragraph
+rule reaches what sits beside a rewrite; the twin sweep reaches the same claim
+in other files. Neither reaches the rest of *this* file, and neither reads the
+replacement wording as a pointer:
+
+- **The distant same-file claim.** Changing what a section asserts obligates
+    every other passage in that document on the same subject, however far away
+    — a superseded bullet dozens of lines below a rewritten section, a signing
+    or scoping claim hundreds of lines below under a different heading. Those
+    passages are neither neighbours nor twins, so nothing else in this
+    procedure sends a reader to them. After a rewrite, sweep the whole file for
+    the *subject*, not for the wording that changed.
+- **Deixis the rewrite invalidated.** Replacement wording carries pointers —
+    `below`, `above`, `the following`, `listed here`, `which`, `it` — and a
+    rewrite can leave them aimed at nothing: "every tool named below" when the
+    list is inline in that same sentence, or an inserted parenthetical that
+    detaches a relative clause from its referent. Resolve every pointer in a
+    rewritten passage to the thing it names, and report the ones that land
+    nowhere.
 
 The collector's **`PROSE HOTSPOTS`** section ranks this for you: it scores each
 doc by how many commits since an earlier audit point rewrote it and names the
