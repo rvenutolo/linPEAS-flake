@@ -6,6 +6,77 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20260905-ceea8544] - 2026-09-05
+
+### CI
+- Suppress the zizmor self-repository audit with a rationale ([#1074](https://github.com/rvenutolo/linPEAS-flake/pull/1074))
+- Assert the harness roster backs every ci: harness-group annotation ([#1047](https://github.com/rvenutolo/linPEAS-flake/pull/1047))
+
+### Chores
+- Bump linpeas to 20260905-ceea8544 ([#1083](https://github.com/rvenutolo/linPEAS-flake/pull/1083))
+- Update flake.lock ([#1062](https://github.com/rvenutolo/linPEAS-flake/pull/1062))
+- Update github-actions ([#1061](https://github.com/rvenutolo/linPEAS-flake/pull/1061))
+
+### Documentation
+- Reconcile egress, pin-exception and drift-body claims, record the audit point ([#1082](https://github.com/rvenutolo/linPEAS-flake/pull/1082))
+- Reconcile staleness, drift-body, egress and audit-skill claims with the tree ([#1081](https://github.com/rvenutolo/linPEAS-flake/pull/1081))
+- Scope egress, staleness and notify-body claims to what the tree holds ([#1080](https://github.com/rvenutolo/linPEAS-flake/pull/1080))
+- Reconcile audit-skill, zizmor and ratchet claims with the tree ([#1079](https://github.com/rvenutolo/linPEAS-flake/pull/1079))
+- Correct drifted pin-tag, zizmor-path and runbook claims ([#1078](https://github.com/rvenutolo/linPEAS-flake/pull/1078))
+- Scope the cosign index bullet, bump guard, and twin-sweep pathspec ([#1071](https://github.com/rvenutolo/linPEAS-flake/pull/1071))
+- Scope the index-signing bullet, devShell claim, and gate clauses ([#1070](https://github.com/rvenutolo/linPEAS-flake/pull/1070))
+- Scope the zizmor sweep, cron purposes, and ratchet unblock ([#1069](https://github.com/rvenutolo/linPEAS-flake/pull/1069))
+- Scope zizmor gaps, patch-tag hook, and override enumerations ([#1065](https://github.com/rvenutolo/linPEAS-flake/pull/1065))
+- Correct zizmor PR-path, pin exemplars, and overshot exclusives ([#1064](https://github.com/rvenutolo/linPEAS-flake/pull/1064))
+- Sweep for twins and run the commands a doc hands the reader ([#1060](https://github.com/rvenutolo/linPEAS-flake/pull/1060))
+- Scope hotspot, body-enumeration and pin-gate claims to their code ([#1058](https://github.com/rvenutolo/linPEAS-flake/pull/1058))
+- Scope the lint-shell guard and unknown-reason claims to their code ([#1056](https://github.com/rvenutolo/linPEAS-flake/pull/1056))
+- Read ratchet triage and lint-shell claims against their code paths ([#1055](https://github.com/rvenutolo/linPEAS-flake/pull/1055))
+- Scope lint-shell, ratchet-runbook and audit-map claims to their sets ([#1054](https://github.com/rvenutolo/linPEAS-flake/pull/1054))
+- Scope lint-shell, runbook and recipe claims to what runs ([#1053](https://github.com/rvenutolo/linPEAS-flake/pull/1053))
+- Align lint and runbook prose with the scripts they describe ([#1052](https://github.com/rvenutolo/linPEAS-flake/pull/1052))
+- State the harness roster as the ci annotation's criterion ([#1041](https://github.com/rvenutolo/linPEAS-flake/pull/1041))
+- Scope the ci annotation's harness clause and label claims ([#1040](https://github.com/rvenutolo/linPEAS-flake/pull/1040))
+- Scope label creators and the ci annotation's meaning ([#1039](https://github.com/rvenutolo/linPEAS-flake/pull/1039))
+- Name every label creator and scope two permission claims ([#1038](https://github.com/rvenutolo/linPEAS-flake/pull/1038))
+- Drop false exclusives and stale counts the audit surfaced ([#1037](https://github.com/rvenutolo/linPEAS-flake/pull/1037))
+- Record nine-seed recall and sync the command's step list ([#1036](https://github.com/rvenutolo/linPEAS-flake/pull/1036))
+- Fix three prose defects the recall harness surfaced ([#1034](https://github.com/rvenutolo/linPEAS-flake/pull/1034))
+- Check quantifier claims and prior-pass prose in the audit ([#1033](https://github.com/rvenutolo/linPEAS-flake/pull/1033))
+- Drop seven false exclusives and record the audit point ([#1032](https://github.com/rvenutolo/linPEAS-flake/pull/1032))
+- Fix the notify-issue claims and two index annotations ([#1031](https://github.com/rvenutolo/linPEAS-flake/pull/1031))
+- Fix the octoscan ignore count and commitlint's local stage ([#1030](https://github.com/rvenutolo/linPEAS-flake/pull/1030))
+- Describe octoscan's live suppressions and wire the commit-msg hook ([#1029](https://github.com/rvenutolo/linPEAS-flake/pull/1029))
+- Scope the doc-freshness gate claim and tighten four runbook commands ([#1028](https://github.com/rvenutolo/linPEAS-flake/pull/1028))
+- Fix the previous pass's counts and finish the Docker Hub rescoping ([#1027](https://github.com/rvenutolo/linPEAS-flake/pull/1027))
+- Correct a false gate claim and finish two half-landed fixes ([#1026](https://github.com/rvenutolo/linPEAS-flake/pull/1026))
+- Fix four over-corrections from the last pass and three omissions ([#1025](https://github.com/rvenutolo/linPEAS-flake/pull/1025))
+- Correct wrong rationales, unwalkable procedures, and a silent gate ([#1024](https://github.com/rvenutolo/linPEAS-flake/pull/1024))
+- Fix link-sweep scope hole and four doc drift items ([#1023](https://github.com/rvenutolo/linPEAS-flake/pull/1023))
+- Revert three over-corrections and fix the previous pass's drift ([#1022](https://github.com/rvenutolo/linPEAS-flake/pull/1022))
+- Correct the previous pass's own drift across 21 files ([#1021](https://github.com/rvenutolo/linPEAS-flake/pull/1021))
+- Correct four gate rationales and six runbook procedures ([#1020](https://github.com/rvenutolo/linPEAS-flake/pull/1020))
+- Narrow three overstated scope claims, widen two workflow globs ([#1019](https://github.com/rvenutolo/linPEAS-flake/pull/1019))
+- Correct self-reference, sidecar scope, and EXEMPT criterion ([#1018](https://github.com/rvenutolo/linPEAS-flake/pull/1018))
+- Align flake.lock provenance gate prose with the enforcer ([#1017](https://github.com/rvenutolo/linPEAS-flake/pull/1017))
+
+### Features
+- Catch distant same-file claims and dangling deixis in rewrites ([#1072](https://github.com/rvenutolo/linPEAS-flake/pull/1072))
+- Rank prose hotspots and audit paragraphs, not diff hunks ([#1057](https://github.com/rvenutolo/linPEAS-flake/pull/1057))
+- Verify flake input rev ancestry in the provenance gate ([#1016](https://github.com/rvenutolo/linPEAS-flake/pull/1016))
+
+### Fixes
+- Guard the operator encoding the enumerate-helper lint reads ([#1077](https://github.com/rvenutolo/linPEAS-flake/pull/1077))
+- Correct the hotspot window and the seed expectations to measurement ([#1076](https://github.com/rvenutolo/linPEAS-flake/pull/1076))
+- Describe the tag shape patch-tag-pins accepts and the zizmor watchdog's reach ([#1075](https://github.com/rvenutolo/linPEAS-flake/pull/1075))
+- Read shfmt operator fields in both serialized encodings ([#1067](https://github.com/rvenutolo/linPEAS-flake/pull/1067))
+- Collapse two ungated duplications, one of them functional ([#1049](https://github.com/rvenutolo/linPEAS-flake/pull/1049))
+- Key the bare-mktemp exemption on path, not basename ([#1048](https://github.com/rvenutolo/linPEAS-flake/pull/1048))
+
+### Tests
+- Gate repo-map's generated-doc table and token classes ([#1051](https://github.com/rvenutolo/linPEAS-flake/pull/1051))
+- Seed the near-miss end of the false-exclusive class ([#1035](https://github.com/rvenutolo/linPEAS-flake/pull/1035))
+
 ## [20260901-a029e205] - 2026-09-01
 
 ### Chores
