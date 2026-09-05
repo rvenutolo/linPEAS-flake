@@ -90,7 +90,10 @@ column) is exactly the signal being measured.
     weaker of the two, on the reasoning that a reader who spot-checks two or
     three members finds nothing wrong; measured, both hit 2/2. Two runs is too
     thin to retire the concern, so treat the expectation as open rather than
-    refuted.
+    refuted. A later M=2 run settled it the other way: `near-miss-exclusive`
+    came back 1/2 FLAKY while `false-exclusive` held 2/2, which is the
+    predicted ordering. Treat the near-miss end of the class as the weaker
+    one, and expect it to carry the set's flake.
 - **Rewrite-shaped** seeds (`distant-contradiction`, `dangling-deixis`) carry
     no bundle support whatsoever and are the hardest of the set. Both encode a
     defect a fix pass leaves behind rather than one that rots on its own:
@@ -99,9 +102,23 @@ column) is exactly the signal being measured.
     paragraph — or even the whole section — and stops will miss it;
     `dangling-deixis` plants "the three checkers listed below" where nothing
     below lists three of anything, which is caught only by resolving the
-    pointer instead of reading past it. Neither has a measured recall yet.
-    Expect them to be the flakiest column, and read a low number as a
-    statement about how far a reader searches, not as a broken seed.
+    pointer instead of reading past it. Both were expected to be the flakiest
+    column, on the reasoning that they measure how far a reader searches
+    rather than whether a fact is checkable. Measured at M=2, both hit 2/2
+    with no flake — so that expectation is refuted, not merely open. Read a
+    future low number as a statement about search depth rather than as a
+    broken seed, but do not predict one.
+
+## A confound to keep in view
+
+Every seed is planted with `insert-after` against a heading anchor, so each
+one lands as a lone sentence directly below a heading. That shape is itself a
+tell: a reader can learn to spot it without doing the verification the seed
+exists to measure, and it trips markdownlint's MD022 as a side effect — one
+scored run filed the glued-under-heading formatting as a finding in its own
+right and named the seeded headings. Recall measured this way is therefore an
+upper bound. Varying the insertion point into paragraph interiors would
+tighten it, at the cost of re-measuring every seed from scratch.
 
 ## Tests
 
