@@ -32,22 +32,23 @@ per the ratchet-pin-audit runbook.
 
 ## Exceptions
 
-Two classes of ref need special handling. Some publishers tag only
-majors, so no versioned tag exists for the comment to name. Other pins
-name the SHA of an annotated tag object rather than the release commit,
-so the inventory script's SHA-equality lookup against
-`gh api repos/<owner>/<repo>/tags` returns no match. For a majors-only
-publisher the comment may remain `# v<major>`, provided the same line
-carries an inline marker; a tag-object pin whose comment already names a
-versioned tag needs no marker — the hook's patch-tag regex passes it and
-the audit accepts either SHA:
+A ref that cannot name a versioned tag carries an inline marker on the
+same line: a publisher that tags only majors leaves no versioned tag for
+the comment to name, so the comment may remain `# v<major>`; this repo's
+own self-referenced composite action names no upstream tag at all (see
+Enforcement below). A pin that names the SHA of an annotated tag object
+rather than the release commit is a different case: the inventory
+script's SHA-equality lookup against `gh api repos/<owner>/<repo>/tags`
+returns no match for it, but if its comment names a versioned tag it
+needs no marker — the hook's patch-tag regex passes it and the audit
+accepts either SHA:
 
 ```yaml
 - uses: some/action@<sha> # v2 # patch-tag-exception: publisher only tags majors
 ```
 
 The marker reason must be non-empty (the half that the lint checks) and,
-by convention, specific to the ref's upstream tagging convention.
+by convention, say why this ref cannot name a versioned tag.
 
 ## Enforcement
 
