@@ -139,12 +139,14 @@ them yourself, with the `sha` computed above:
 
 ```sh
 git log --oneline --no-merges "${sha}..HEAD" -- '*.md'
+git log --oneline --merges "${sha}..HEAD"
 ```
 
 Read the newest commit's paragraphs before anything else. Filter by path,
 not by subject: prose passes here land under `fix:` as readily as `docs:`.
-And read a merge commit — this repo merges every PR with one, titled by the
-PR — with `git show -m --first-parent <sha>`; a bare `git show` on a merge
+The second command lists the merges that carried those commits — this repo
+merges every PR with one, titled by the PR — and a merge is read with
+`git show -m --first-parent <merge-sha>`; a bare `git show` on a merge
 prints no hunks at all.
 
 **The unit of re-reading is the paragraph, not the hunk.** A changed line is
@@ -160,8 +162,9 @@ fields, two examples joined by "or" — resolve every member, not the one that
 changed.
 
 **Two defects the paragraph rule and the twin sweep both miss.** The paragraph
-rule reaches what sits beside a rewrite; the twin sweep reaches the same claim
-in other files. Neither reaches the rest of *this* file, and neither reads the
+rule reaches what sits beside a rewrite; the twin sweep matches wording, so it
+finds the same sentence wherever it sits. What neither reaches is the same
+*subject* re-worded elsewhere in *this* file, and neither reads the
 replacement wording as a pointer:
 
 - **The distant same-file claim.** Changing what a section asserts obligates
