@@ -22,17 +22,21 @@ Run a documentation correctness audit of this repository using the
     internal link / anchor check). Save it under `.claude/reports/` and hand
     every reader that path together with one shared reader brief, rather than
     restating the method in each dispatch.
-1. Fan out read-only cluster readers (one per doc cluster) checking factual
-    drift, internal consistency, and prose quality.
+1. Fan out read-only cluster readers (one per doc cluster), overridden to the
+    strongest model available, checking factual drift, internal consistency,
+    and prose quality.
 1. Require a coverage note from every reader saying what it cross-checked
     against ground truth, plus a `Could not locate` list of anything the
     dispatch named that the reader could not find. A cluster reporting "clean"
     without a coverage note is not clean — re-dispatch it.
 1. Verify every candidate finding empirically before reporting it — especially
     hand-written claims about CI jobs / required checks, which freshness gates do
-    not cover.
-1. Write a severity-ranked findings report to `.claude/reports/`, attributing
-    each finding to the pass that wrote it where the bundle's
+    not cover. Run any command a doc hands the reader and derive the same set
+    a second way. Then `git grep` the wrong wording across all tracked prose
+    (`'*.md' '.github/**' 'scripts/*.sh'`) so every twin joins the finding.
+1. Write a severity-ranked findings report to `.claude/reports/` — suffixed
+    `-<n>` when a same-day report exists, as the bundle and brief are —
+    attributing each finding to the pass that wrote it where the bundle's
     `PASS ATTRIBUTION` section can say.
 1. Close by saying whether this audit closes the cycle. If no further audit is
     planned, the final fix PR runs `just docs-audit-done` and commits the

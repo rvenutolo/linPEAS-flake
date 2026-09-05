@@ -40,8 +40,16 @@ below.
     After each run, copy the emitted report into the harness `results/` dir:
 
     ```sh
-    cp .claude/reports/*-docs-correctness-findings.md \
+    cp .claude/reports/<the report the audit named>.md \
       "$harness"/results/run-1.md   # run-2.md, run-3.md, ...
+    ```
+
+    Name the file rather than globbing for it: the report path carries a
+    `-<n>` suffix once a same-day report exists, and same-day runs are what
+    this loop produces, so a glob over `*-docs-correctness-findings*.md`
+    expands to every earlier run's report as well.
+
+    ```sh
     ```
 
 1. Score — back in the original checkout's harness directory, not the

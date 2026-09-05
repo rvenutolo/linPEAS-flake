@@ -9,7 +9,7 @@
 # What this guards is mechanism liveness, not upstream freshness. Two
 # things refresh this repo's inputs — the weekly `update-flake-lock.yml`
 # cron (`nix flake update`, which re-resolves every branch-tracked
-# input) and Renovate (the only thing that can move a rev-pinned one) —
+# input) and Renovate (the mechanism that moves a rev-pinned one) —
 # and neither announces having stopped. A disabled workflow, a broken
 # trigger, a manager that stops opening PRs: each leaves the inputs the
 # affected mechanism refreshes frozen while every check stays green. The
@@ -91,9 +91,10 @@ declare -rA THRESHOLD_DAYS=(
   # backstops for the case where it somehow refreshes those two alone.
   ["flake-parts"]="${SLOW_DAYS}"
   ["treefmt-nix"]="${SLOW_DAYS}"
-  # Rev-pinned in flake.nix, so `nix flake update` cannot move it and
-  # Renovate's cachix/git-hooks.nix manager is the only mechanism that
-  # can. This entry is what surfaces a Renovate manager that has gone quiet.
+  # Rev-pinned in flake.nix, so `nix flake update` cannot move it past
+  # that rev; Renovate's cachix/git-hooks.nix manager is the mechanism
+  # that does. This entry is what surfaces a Renovate manager that has
+  # gone quiet.
   ["pre-commit-hooks"]="${SLOW_DAYS}"
 )
 

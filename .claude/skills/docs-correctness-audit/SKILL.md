@@ -28,10 +28,12 @@ same way a runbook does. They are in scope for the factual-drift dimension, and
 a mismatch between such a body and the runbook it mirrors is one finding with
 two sites, not one per file. `references/repo-map.md` §2 says how to enumerate
 them and which reader owns them. Workflow logic and the `@description` blocks
-that generate `docs/reference/scripts.md` stay out. A rationale comment block
-that restates a mechanism a runbook documents — a workflow's header comment, a
-script's second comment block — is in scope when a pass inside the window
-touched it: it is prose a maintainer reads at the moment they act, the twin
+that generate `docs/reference/scripts.md` stay out — for a `scripts/lib/*.sh`
+library that includes every `@description` block preceding a function, not the
+header alone (`references/repo-map.md` §3 says which blocks each scope
+renders). A rationale comment block that restates a mechanism a runbook
+documents — a workflow's header comment, an entry-point script's second comment
+block — is in scope when a pass inside the window touched it: it is prose a maintainer reads at the moment they act, the twin
 sweep's `scripts/*.sh` pathspec already reaches it, and a claim corrected in
 the runbook while its comment twin keeps the old wording is the same defect
 with two sites.
@@ -216,7 +218,9 @@ bash <this-skill-dir>/scripts/collect-ground-truth.sh \
 
 Redirect it to that path and hand every reader the path — never paste the
 bundle into a dispatch. Write one shared **reader brief** beside it at
-`.claude/reports/<YYYY-MM-DD>-reader-brief.md` holding everything every reader
+`.claude/reports/<YYYY-MM-DD>-reader-brief.md`. Both paths take the same
+`-<n>` suffix as the report (§5) when a same-day file already exists, so
+back-to-back audits keep their own evidence. The brief holds everything every reader
 needs identically: the bundle path, the write prohibitions below, the three
 dimensions, the generated-doc exclusion list, the ephemeral-token regex, the
 not-a-finding list, the output format, and the could-not-locate instruction. A

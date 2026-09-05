@@ -70,8 +70,8 @@ by convention, say why this ref cannot name a versioned tag.
 
     The audit compares each pin against the tag it names, accepting a pin
     that equals **either** the annotated-tag-object SHA or the commit that
-    tag dereferences to — so a tag-object pin (the form some
-    `patch-tag-exception` refs use) is not mistaken for drift, while a
+    tag dereferences to — so a tag-object pin (a form a
+    `patch-tag-exception` ref can take) is not mistaken for drift, while a
     genuine force-move (which changes both SHAs) still is. Refs whose
     comment names a floating major (`vN`) are excluded from the
     comparison and logged: a deliberately-moving tag cannot be judged by

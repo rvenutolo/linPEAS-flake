@@ -77,8 +77,8 @@
   };
   # The release-verify job's step ids, its attribution env block, the
   # reason ladder, and the documented reason list are four copies of one
-  # set. A step added without a ladder branch reports `unknown`, whose
-  # documented meaning is a bug in the attribution logic — so a real
+  # set. A step added without a ladder branch reports `unattributed`, whose
+  # documented meaning is a gap in the attribution ladder — so a real
   # verification failure would be auto-filed as a tooling bug. See
   # docs/security/verification.md.
   verify-reason-ladder = {

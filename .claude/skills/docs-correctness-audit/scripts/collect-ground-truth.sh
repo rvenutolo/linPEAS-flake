@@ -52,7 +52,8 @@ HOTSPOT_MARKERS=5
 # Where the line-level window starts. A marker records the sha its cycle
 # audited once that cycle's fixes had landed, so it marks the END of a cycle:
 # the range after the newest marker holds only what the cycle in progress
-# has landed so far (nothing, when the audit opens a cycle), and the last
+# has landed so far (when the audit opens a cycle, usually only the daily
+# bump and changelog PRs), and the last
 # completed pass sits between the second-newest marker and HEAD.
 HOTSPOT_RECENT_MARKERS=2
 # Under two touches the ranking says no more than "changed recently", which the
@@ -78,6 +79,10 @@ HOTSPOT_PATHSPECS=(
   '.github/ISSUE_TEMPLATE/*.yml'
   'scripts/*.sh'
 )
+# The same four shapes as a path regex, for the pass-attribution listing, so
+# the files a pass is credited with are the files the ranking scores: a `.yml`
+# outside those two directories is config, not prose, and never ranks.
+RE_HOTSPOT_PROSE='\.md$|^\.github/(workflows|ISSUE_TEMPLATE)/[^/]+\.yml$|^scripts/.*\.sh$'
 
 # @description Emit one file with its exempt regions blanked, line for line,
 # mirroring check-ephemeral-refs.sh's strip_exempt ordering: fences (backtick
@@ -484,7 +489,7 @@ attribute_passes() {
     while IFS=' ' read -r commit csubject; do
       [[ -n ${commit} ]] || continue
       files="$(git diff-tree --no-commit-id --name-only -r "${commit}" |
-        grep -E '\.(md|yml)$|^scripts/.*\.sh$' | grep -vE "${RE_HOTSPOT_SKIP}" | paste -sd' ' - || true)"
+        grep -E "${RE_HOTSPOT_PROSE}" | grep -vE "${RE_HOTSPOT_SKIP}" | paste -sd' ' - || true)"
       [[ -n ${files} ]] || continue
       printf '  %s %s\n    %s\n' "${commit}" "${csubject}" "${files}"
     done < <(git log --format='%h %s' --no-merges "${merge}^1..${merge}^2" 2>/dev/null || true)

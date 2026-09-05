@@ -37,7 +37,8 @@ itself, which is the only in-tree record of where one cycle ended. A marker
 records its cycle's sha *after* that cycle's fixes landed, so it marks the END
 of a cycle: the line window starts one marker further back than the newest,
 because the range after the newest marker holds only what the cycle in
-progress has landed so far — nothing, when the audit opens a cycle — while
+progress has landed so far — when the audit opens a cycle, usually only the
+bump and changelog PRs that land daily — while
 the last completed pass sits between the second-newest marker and `HEAD`.
 
 Read a high-pressure file's rewritten lines as whole paragraphs. The ranking is
@@ -46,18 +47,21 @@ is a doc that took its rewriting in an earlier cycle. Release-driven records
 (`CHANGELOG.md`, `docs/releases.md`), generated data and fixture trees are
 excluded: their churn is not prose drift and would otherwise top every list.
 
-The ranking covers every shape of prose the audit reads, not Markdown alone:
-tracked `*.md`, the workflow files whose notify bodies and header comments a
-maintainer reads at the moment they act (`.github/workflows/*.yml`,
-`.github/ISSUE_TEMPLATE/*.yml`), and `scripts/*.sh` — which, git pathspec `*`
-crossing `/`, reaches `scripts/lib/` too. Blame resolves lines in those the
-same way it does in a doc.
+The ranking scores four pathspecs, not Markdown alone: tracked `*.md`, the
+workflow files whose notify bodies and header comments a maintainer reads at
+the moment they act (`.github/workflows/*.yml`, `.github/ISSUE_TEMPLATE/*.yml`),
+and `scripts/*.sh` — which, git pathspec `*` crossing `/`, reaches
+`scripts/lib/` too. Blame resolves lines in those the same way it does in a
+doc. The composite-action bodies §2 enumerates (`.github/actions/*/action.yml`)
+are read but not ranked: a rewrite there reaches a reader through the cluster
+dispatch, not through this section.
 
 ### PASS ATTRIBUTION
 
 The section after the ranking answers "which pass wrote this sentence". For
 each merge in the line window, newest first, it names the commits that merge
-carried and the prose files each of them touched. A finding inside one of
+carried and the files each of them touched under the same four pathspecs the
+ranking scores. A finding inside one of
 those files is attributable to that pass, and the report says so: a defect a
 fix pass manufactured is worth more than its severity, because it says the fix
 discipline itself leaked rather than that one sentence rotted.
@@ -271,12 +275,17 @@ Its rows are driven by the `enforcer:` / `ci:` / `hook:` annotations in
 `docs/invariant-index.md`, so a wrong row is a finding against that index
 entry, not against this page.
 
-`docs/reference/scripts.md` renders, per script, only the **contiguous comment
-block before the first blank line** — the `@description` block `_script_docs.awk`
-reads. A comment block *after* that blank line generates nothing: editing it
-changes no generated body and trips no freshness gate, and it is in scope as
-prose under the rationale-comment rule in SKILL.md. Check which block a line
-sits in before deciding an edit needs `just show-scripts`.
+`docs/reference/scripts.md` renders, per entry-point script, the **contiguous
+comment block before the first blank line** — the header `@description` block
+`_script_docs.awk` reads in its default scope. For a `scripts/lib/*.sh`
+library the generator runs the awk in `scope=library`, which additionally
+renders every column-0 `# @description` block that precedes a function, so a
+library's later doc blocks are generated content too. A comment block that
+neither scope reads — an entry point's second block, a library comment with no
+`@description` tag — generates nothing: editing it changes no generated body
+and trips no freshness gate, and it is in scope as prose under the
+rationale-comment rule in SKILL.md. Check which block a line sits in, and which
+scope the file is read in, before deciding an edit needs `just show-scripts`.
 
 `CHANGELOG.md` is whole-file too, and for the same reason: `cliff.toml`'s
 `header` produces the `# Changelog` preamble and its `body` template produces

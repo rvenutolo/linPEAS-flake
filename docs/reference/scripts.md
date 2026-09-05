@@ -1635,7 +1635,7 @@ how many commits touched CI structure (.github/workflows, scripts,
 added or removed. Emits a Markdown body for the monthly docs-audit
 reminder issue, terminated by a machine-readable PRESSURE=<n> line.
 
-Freshness gates validate only generated blocks; hand-written prose about
+Freshness gates validate only generated content; hand-written prose about
 CI drifts silently. CI churn is the best cheap proxy for that drift, so it
 decides whether a semantic audit is worth running this month.
 

@@ -2,7 +2,7 @@ name: docs-audit-reminder
 
 # Monthly prompt to run the semantic docs audit.
 #
-# Freshness gates (*-fresh) validate only generated block bodies. Nothing
+# Freshness gates (*-fresh) validate only generated content. Nothing
 # generates hand-written prose about CI, so a sentence naming a job that
 # does not exist passes every gate. A reading agent is the only mechanism
 # that catches that class; this workflow decides when it is worth running,

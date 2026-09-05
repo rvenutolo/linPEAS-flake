@@ -21,9 +21,10 @@ jobs:
       packages: read
     outputs:
       # Failure-attribution token consumed by the `notify` job's body.
-      # Mirrors the `reason=` pattern in `stale-pin-check.yml` — only
-      # `upstream-sri-drift` warrants the "security incident" framing
-      # in the auto-filed issue; the rest are operational.
+      # Mirrors the `reason=` pattern in `stale-pin-check.yml` —
+      # `upstream-sri-drift` and `cross-registry-manifest-mismatch`
+      # warrant the "security incident" framing in the auto-filed issue
+      # outright; the rest are operational or re-run-first.
       reason: ${{ steps.attribute.outputs.reason }}
     steps:
       - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
@@ -309,7 +310,8 @@ jobs:
         # attestation steps above only prove *our* artifacts are untampered;
         # they cannot detect upstream replacing the asset after we pinned it.
         # Failure of this step is the canonical "treat as security incident"
-        # signal; all other failures are operational.
+        # signal, alongside the cross-registry manifest comparison below;
+        # the other failures are operational or re-run-first.
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
@@ -573,8 +575,8 @@ jobs:
               the failure as unexplained until triaged by hand, and file a
               bug against this workflow's `attribute failure reason` step.
             - `unknown` — the `verify` job emitted no reason at all: it
-              was cancelled or skipped before the attribution step ran, or
-              a job-level timeout killed that step. Re-run the cron.
+              was cancelled — most often by the job timeout — before the
+              attribution step ran. Re-run the cron.
 
             Investigate the `verify` job logs for the failing step. Do
             NOT merge any subsequent pin bumps if the reason is
