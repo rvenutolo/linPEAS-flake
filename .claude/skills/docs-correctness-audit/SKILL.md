@@ -138,17 +138,17 @@ several audits run back to back — each iteration's fixes landing before the
 next starts — they already reach what earlier iterations changed. What neither
 does is single any one of those commits out: the ranking scores whole files
 across the window, so the commit whose paragraphs have been checked least, the
-one that landed last, carries no more weight than the rest of the cycle. List
-them yourself, with the `sha` computed above:
+one that landed last, carries no more weight than the rest of the cycle. The
+first command above already lists them newest-first; list the window's merges
+yourself, with the same `sha`:
 
 ```sh
-git log --oneline --no-merges "${sha}..HEAD" -- '*.md' '.github/**' 'scripts/*.sh'
 git log --oneline --merges "${sha}..HEAD"
 ```
 
 Read the newest commit's paragraphs before anything else. Filter by path,
 not by subject: prose passes here land under `fix:` as readily as `docs:`.
-The second command lists every merge in the window: the PR-titled entries
+This command lists every merge in the window: the PR-titled entries
 are the passes that carried those commits — this repo merges every PR with
 one — and `Merge branch 'main' into …` entries are branch syncs to skip.
 Leave it unpathed; with a pathspec, history simplification drops PR merges
