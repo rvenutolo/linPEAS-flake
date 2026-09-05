@@ -12,8 +12,9 @@
 # input) and Renovate (the only thing that can move a rev-pinned one) —
 # and neither announces having stopped. A disabled workflow, a broken
 # trigger, a manager that stops opening PRs: each leaves the inputs the
-# affected mechanism refreshes frozen while every check stays green. Two
-# of those are live risks here.
+# affected mechanism refreshes frozen while every check stays green. The
+# latter two — a broken trigger and a manager that stops opening PRs —
+# are live risks here.
 #
 # `locked.lastModified` is an UPSTREAM commit time, not a "when did we
 # last check" timestamp, which is what makes the thresholds below
@@ -29,9 +30,10 @@
 #     anything a healthy mechanism produces.
 #   * SLOW (120 days) — everything else. Loose enough that ordinary
 #     upstream quiet never fires it, tight enough that a mechanism that
-#     has genuinely stopped still surfaces. `pre-commit-hooks` sat at
-#     102 days while Renovate was in silent mode, so the bound is set
-#     to catch that class without calling a quiet upstream a fault.
+#     has genuinely stopped still surfaces. A rev-pinned input such as
+#     `pre-commit-hooks` can sit months past a manager that has gone
+#     quiet, so the bound is set to catch that class without calling a
+#     quiet upstream a fault.
 #
 # Scope is the TOP-LEVEL inputs — the entry node's `inputs` — and only
 # those. A transitive node's rev is chosen by its parent's pin, not by
@@ -91,7 +93,7 @@ declare -rA THRESHOLD_DAYS=(
   ["treefmt-nix"]="${SLOW_DAYS}"
   # Rev-pinned in flake.nix, so `nix flake update` cannot move it and
   # Renovate's cachix/git-hooks.nix manager is the only mechanism that
-  # can. This entry is what would have surfaced Renovate's silent mode.
+  # can. This entry is what surfaces a Renovate manager that has gone quiet.
   ["pre-commit-hooks"]="${SLOW_DAYS}"
 )
 

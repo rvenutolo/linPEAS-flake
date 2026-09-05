@@ -8,9 +8,10 @@ name: flake-lock-staleness-check
 # `update-flake-lock.yml` cron and Renovate — and neither announces
 # having stopped. A disabled workflow, a broken trigger, or a manager
 # that stops opening PRs leaves the inputs the affected mechanism
-# refreshes frozen while every check stays green. Two of those are live
-# risks here, so the freeze is the thing worth watching rather than any
-# single mechanism.
+# refreshes frozen while every check stays green. The latter two — a
+# broken trigger and a manager that stops opening PRs — are live risks
+# here, so the freeze is the thing worth watching rather than any single
+# mechanism.
 #
 # Schedule + dispatch, deliberately NOT a required check. A gate keyed
 # on wall-clock age turns every unrelated PR red the moment a cron runs
@@ -112,8 +113,8 @@ jobs:
               running, and are its PRs still merging? It floats every
               branch-tracked input.
             - The Renovate dependency dashboard — is a manager still
-              opening PRs for the rev-pinned inputs, and is Renovate
-              itself still enabled?
+              opening PRs for `pre-commit-hooks`, the one rev-pinned
+              input, and is Renovate itself still enabled?
             - `renovate-flake-lock-refresh.yml` — a Renovate PR that
               never gets its lockfile stays red and never merges.
 

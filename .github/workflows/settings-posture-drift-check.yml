@@ -115,10 +115,11 @@ jobs:
             `rvenutolo/linPEAS-flake`: either the live repository
             settings no longer match `docs/security/settings-posture.md`,
             or the comparison could not be made at all — the fixture
-            harness step failed, the App token could not be minted, or
+            harness step failed, the App token could not be minted (see
+            `docs/runbooks/settings-drift-app.md`), or
             `scripts/check-settings-posture.sh` exited 2 because a probed
             endpoint could not be fetched or returned a payload it could
-            not read (see `docs/runbooks/settings-drift-app.md`).
+            not read.
 
             See the failing job logs to tell the two apart: on drift,
             every mismatched setting is reported in one run; a

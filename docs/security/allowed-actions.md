@@ -60,7 +60,7 @@ wagoid/*
 
 ## Drift detection
 
-The canonical list above is enforced against live API state by `scripts/check-allowed-actions-api.sh`, run on a daily cron + `workflow_dispatch` from `.github/workflows/allowed-actions-api-drift-check.yml`. On mismatch the workflow opens a deduped `allowed-actions-drift` issue, which auto-closes when the next run sees the allowlist reconciled.
+The canonical list above is enforced against live API state by `scripts/check-allowed-actions-api.sh`, run on a daily cron + `workflow_dispatch` from `.github/workflows/allowed-actions-api-drift-check.yml`. On drift, or when the comparison could not be made at all (the exit-2 case below), the workflow opens a deduped `allowed-actions-drift` issue, which auto-closes when the next run sees the allowlist reconciled.
 
 The check covers three things:
 
