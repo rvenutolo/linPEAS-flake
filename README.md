@@ -263,13 +263,13 @@ and tag protection, required-check list — lives in
 
 ## Development
 
-All tooling below — `shfmt`, `shellcheck`, `just`, `pre-commit`,
-`nixfmt`, `deadnix`, `statix`, `actionlint`, `zizmor`, `yamllint`,
-`prettier`, `lychee`, `check-jsonschema`, and more — is supplied by the
-flake's `devShells.default` (see `nix/devshell.nix` for the explicit
-list; it also splices in every pre-commit hook's tool, and `pre-commit`
-itself reaches `PATH` through the git-hooks `shellHook` that shell
-inherits).
+Every tool listed here — `shfmt`, `shellcheck`, `just`,
+`pre-commit`, `nixfmt`, `deadnix`, `statix`, `actionlint`, `zizmor`,
+`yamllint`, `prettier`, `lychee`, `check-jsonschema`, and more — is
+supplied by the flake's `devShells.default` (see `nix/devshell.nix` for
+the explicit list; it also inherits the packages the enabled pre-commit
+hooks declare, and `pre-commit` itself reaches `PATH` through the
+git-hooks `shellHook` that shell inherits).
 You do **not** install any of it manually.
 
 Prerequisite: Nix with flakes enabled (`nix-command flakes`).

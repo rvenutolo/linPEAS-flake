@@ -277,28 +277,34 @@ jobs:
               publisher force-moved the tag. Compare the canonical SHA
               against upstream release notes; if the re-tag is legitimate,
               replace each `pinned` SHA with the corresponding `canonical`
-              SHA in the affected workflow files and composite actions (or
-              wait for Renovate to do it on its next scheduled run), review
-              the diff, and open
-              a PR. If the release notes do **not** describe the SHA
-              change, treat this as a potential supply-chain event and
-              escalate — do **not** auto-update. See the runbook for the
-              exact remediation command.
+              SHA in the affected workflow files and composite actions,
+              review the diff, and open a PR. That PR fails the required
+              `lint-doc-invariants` job by design (a SHA moving under an
+              unchanged version comment is the digest-repoint class
+              `check-pin-digest-provenance.sh` hard-fails): move the
+              version label with the SHA, or update the pin to the
+              corrected upstream release — the runbook links the
+              documented unblock. A Renovate digest-only bump for the
+              same ref hits the same gate. If the release notes do
+              **not** describe the SHA change, treat this as a potential
+              supply-chain event and escalate — do **not** auto-update.
+              See the runbook for the exact remediation command.
             - `upstream-api-failure` — the per-ref canonical-SHA
               re-derivation (`gh api`) failed or rate-limited, or
               ratchet's own output matched the upstream-failure
               heuristic. The `github.token` is capped at 1,000
               requests/hr per repository; transient 5xx is also possible.
-              Re-run the workflow once
-              before investigating ratchet itself.
+              Re-run the workflow once before investigating ratchet
+              itself.
             - `ratchet-tool-failure` — ratchet exited non-zero (the
               re-derivation is skipped in that case), OR
               `classify-pin-ref.sh` failed or returned an unrecognized
               verdict, OR a drift line failed shape validation, OR the
               workflow glob matched zero files. Likely a ratchet upgrade
               is needed (output format drift) or a refactor moved
-              workflow files. Bump `pkgs-unstable.ratchet` via
-              `nix flake update` and re-run.
+              workflow files. Bump the `nixpkgs-unstable` input that
+              ships ratchet (`nix flake update nixpkgs-unstable`) and
+              re-run.
             - `unknown` — the `check` job produced no `reason` output:
               the audit step hit an unhandled error, a step before it
               failed, or the run was cancelled (a banner above, or the

@@ -19,8 +19,8 @@ Major tags are designed to be force-moved on every release, so a
 deliberately-moving tag cannot be judged by tag-vs-pin equality.
 `ratchet-pin-audit` therefore excludes any ref whose comment names a
 floating major (`vN`) from the comparison entirely — a `# vN` comment
-silently removes the ref from audit coverage, leaving its integrity to
-rest on the immutable digest pin, Renovate currency, and the PR-time
+removes the ref from audit coverage, leaving its integrity to rest
+on the immutable digest pin, Renovate currency, and the PR-time
 digest-provenance gate alone.
 
 Per-patch tags (e.g. `v3.36.0`) are immutable by publisher

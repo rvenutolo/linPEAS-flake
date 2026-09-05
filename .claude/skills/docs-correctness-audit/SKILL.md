@@ -266,8 +266,11 @@ the wrong claim and `git grep` it across all tracked prose before it enters the
 report:
 
 ```sh
-git grep -n 'distinctive phrase from the wrong claim' -- '*.md' '.github/**'
+git grep -n 'distinctive phrase from the wrong claim' -- '*.md' '.github/**' 'scripts/*.sh'
 ```
+
+The third pathspec is what reaches a `--body-file` body: that prose lives
+in the script that writes the file, not in the workflow that files it.
 
 Search the wrong wording, not the corrected one, and loosen the phrase until it
 would catch a paraphrase — a twin rarely matches byte for byte. Every hit joins
