@@ -347,12 +347,12 @@ while IFS=$'\037' read -r name files scripts attr_ns attr_leaf attr_seen; do
   covers_hooks_dir=1
   filter_covers_hooks_dir "${files}" || covers_hooks_dir=0
 
-  if ((references_manifest)) && ((!covers_hooks_dir)); then
+  if ((references_manifest)) && ((covers_hooks_dir == 0)); then
     printf 'hook %s: files filter missing nix/hooks\n' "${name}" >&2
     failed=$((failed + 1))
   fi
 
-  if [[ -n ${manifest_assigner} ]] && ((!covers_hooks_dir)); then
+  if [[ -n ${manifest_assigner} ]] && ((covers_hooks_dir == 0)); then
     printf 'hook %s: files filter missing nix/hooks (builds %s.%s, assigned by %s which reads the hook manifest)\n' \
       "${name}" "${attr_ns}" "${attr_leaf}" "${manifest_assigner}" >&2
     failed=$((failed + 1))
