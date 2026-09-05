@@ -90,7 +90,7 @@ column) is exactly the signal being measured.
     weaker of the two, on the reasoning that a reader who spot-checks two or
     three members finds nothing wrong; measured, both hit 2/2. Two runs is too
     thin to retire the concern, so treat the expectation as open rather than
-    refuted. A later M=2 run settled it the other way: `near-miss-exclusive`
+    refuted. A later M=2 run confirmed the expectation: `near-miss-exclusive`
     came back 1/2 FLAKY while `false-exclusive` held 2/2, which is the
     predicted ordering. Treat the near-miss end of the class as the weaker
     one, and expect it to carry the set's flake.
@@ -115,7 +115,7 @@ column) is exactly the signal being measured.
 
 Most seeds are planted with `insert-after` against a heading anchor, so they
 land as a lone sentence directly below a heading (a few anchor on body prose,
-and the two `replace-substr` seeds edit a sentence in place). That shape is
+and the two `replace-substr` seeds edit an existing line in place). That shape is
 itself a tell: a reader can learn to spot it without doing the verification
 the seed exists to measure, and the heading-anchored ones trip markdownlint's
 MD022 as a side effect — one

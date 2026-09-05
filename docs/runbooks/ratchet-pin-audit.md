@@ -4,7 +4,7 @@ The `ratchet-pin-audit` workflow runs on a daily cron (see
 [CI — cron schedule](../architecture/ci.md#cron-schedule)). It runs
 `ratchet lint` (from the devshell) against every workflow file under
 `.github/workflows/` and re-derives the canonical SHA for each
-SHA-pinned action ref carrying a version comment that it does not skip
+SHA-pinned action ref carrying a trailing `# <tag>` comment that it does not skip
 (see below). On *any* failure —
 detected drift, an upstream API failure, a ratchet tool failure, an
 unclassified error, or a cancelled run — the workflow opens a single
@@ -95,7 +95,7 @@ Steps:
     place and the next run would re-file the same issue.
 
     Review the diff, open a PR. (`ratchet update` is not used here
-    because our pins use plain `# v3.36.0` trailing-comment annotations
+    because our pins use plain `# v3.36.0`-style trailing-comment annotations
     rather than ratchet's `# ratchet:repo@v3.36.0` format, so ratchet
     does not recognize them as ratchet-managed.)
 
@@ -154,10 +154,14 @@ failed shape validation; OR the workflow glob matched zero files.
 1. If ratchet instead started exiting non-zero on a workflow set it
     accepted before, most likely after a ratchet upgrade, bump the
     `nixpkgs-unstable` input that ships ratchet
-    (`nix flake update nixpkgs-unstable`) and re-run. Drift itself
-    comes from the per-ref `gh api` re-derivation rather than from
-    ratchet's output, so an output-format change cannot fabricate a
-    drift report.
+    (`nix flake update nixpkgs-unstable`), update every
+    `ratchet <X.Y.Z>` literal in this page and in the workflow to the
+    version the refreshed devShell reports — `check-ratchet-pin-audit.sh`,
+    run by the required `harness-group` job, fails on a stale literal (see
+    [Note on ratchet's role](#note-on-ratchets-role)) — and re-run. Drift
+    itself comes from the per-ref `gh api` re-derivation rather than from
+    ratchet's output, so a change in ratchet's output format cannot
+    fabricate a drift report.
 1. The step tells an upstream failure from a tool failure with a fixed
     heuristic grep over ratchet's output, so a reworded ratchet error
     can still land an upstream failure under this reason. If the run

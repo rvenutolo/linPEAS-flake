@@ -32,8 +32,8 @@ per the ratchet-pin-audit runbook.
 
 ## Exceptions
 
-Some publishers tag only majors. Others pin the SHA of an annotated
-tag object rather than the release commit, so the inventory script's
+Some publishers tag only majors. For other refs the pin names the SHA of
+an annotated tag object rather than the release commit, so the inventory script's
 SHA-equality lookup against `gh api repos/<owner>/<repo>/tags` returns
 no match. For such refs a majors-only comment may remain `# v<major>`,
 provided the same line carries an inline marker (a tag-object pin whose

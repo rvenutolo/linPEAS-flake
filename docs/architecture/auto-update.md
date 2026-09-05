@@ -118,9 +118,10 @@ No third-party flake-lock action is used: such actions take the write credential
 ## Flake-input staleness watchdog
 
 Both mechanisms above refresh inputs, and neither announces having stopped.
-A disabled workflow, a broken trigger, or a Renovate manager whose matcher no
-longer matches leaves every input frozen while every check stays green. Two
-of those are live risks here: a broken trigger — a Renovate branch-prefix change would stop the `identify` job's
+A disabled workflow, a broken trigger, or a Renovate manager that stops
+opening PRs — its matcher no longer matching, or the bot itself gone quiet —
+leaves the inputs that mechanism owns frozen while every check stays green.
+Two of those are live risks here: a broken trigger — a Renovate branch-prefix change would stop the `identify` job's
 `renovate/` branch-prefix gate in `renovate-flake-lock-refresh.yml` from ever passing —
 and a manager gone quiet — Renovate in Mend silent mode can leave `pre-commit-hooks` far past its
 staleness tier, with nothing in either case saying so. (Failures inside the
