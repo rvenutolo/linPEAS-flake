@@ -181,9 +181,20 @@
 # the clean summary line carries the count as a fourth field alongside
 # files scanned, sites classified and exemptions applied.
 #
-# Honors PATHS_OVERRIDE (newline-separated file list) for fixtures, and
-# LINT_ALLOW_EMPTY_SCAN=1 to accept a run whose scan-site tally (or whose
-# enumerated file count) comes back zero.
+# Two of the rules above are decided by reading an operator out of the
+# syntax tree — a pipeline stage feeding a loop, and a read under a plus
+# operator — and a `select` handed an encoding this file was not taught
+# matches nothing rather than failing. So the encodings are established
+# as a precondition: a fixed probe exercising all eight operators is
+# parsed before any file is scanned, and each construct is asserted both
+# to match the branch that must select it and to be absent from the
+# branch that must not.
+#
+# Honors PATHS_OVERRIDE (newline-separated file list) for fixtures,
+# SHFMT_OVERRIDE (default `shfmt`) to point the parse at a stub emitting
+# a tree the jq program was not written for, and LINT_ALLOW_EMPTY_SCAN=1
+# to accept a run whose scan-site tally (or whose enumerated file count)
+# comes back zero.
 # Exit 0 clean, 1 on a producer outside `enumerate_into`, a producer name
 # copied to a variable, a `for` loop expanding a glob at its own head, an
 # array assignment expanding one in its element list, a `for` loop or an
@@ -194,8 +205,10 @@
 # an assignment copying a filter value to a name outside the filter
 # pattern, an exemption marker with no rationale, or an exemption marker
 # that excuses no site this pass classified, 2 when a required tool is
-# absent, the scan set could not be enumerated (or classified nothing),
-# a named path does not exist, or a file could not be parsed as shell.
+# absent, the parser emitted an operator encoding this lint does not
+# recognize, the scan set could not be enumerated (or classified
+# nothing), a named path does not exist, or a file could not be parsed
+# as shell.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -206,11 +219,116 @@ source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/log.sh
 source "${_lib_dir}/lib/log.sh"
 
-# A missing `shfmt` or `jq` must be diagnosed as itself rather than as
+# The parser this lint reads its syntax trees from. Held in a variable so
+# the harness can point the parse at a stub emitting a tree this file's jq
+# program was not written for — the shape the precondition below exists
+# to catch, and the one no parser on PATH can be made to produce.
+# Defaults to `shfmt`.
+readonly SHFMT="${SHFMT_OVERRIDE:-shfmt}"
+
+# A missing parser or `jq` must be diagnosed as itself rather than as
 # the per-file "could not parse" message below, which is reserved for a
 # file that genuinely fails to parse once both tools are known present.
-require_tool shfmt
+# The guard names the resolved parser rather than the literal default, so
+# an override pointing at something absent is reported as what it is.
+require_tool "${SHFMT}"
 require_tool jq
+
+# The operator encodings the two operator-reading branches of the scan
+# match on, in one place rather than three, so the precondition below
+# checks the values the scan actually uses instead of a copy of them.
+#
+# `BinaryCmd.Op` and `ParamExp.Exp.Op` are serialized in either of two
+# encodings, depending on the parser: an opaque integer — 13 is `|`, 14
+# is `|&`, 11 is `&&`, 12 is `||`; 81 is `+`, 82 is `:+`, 83 is `-`, 84
+# is `:-` — or the operator token itself. Both spellings of the forms
+# each branch selects are listed; the forms it must not select are
+# absent from both lists on purpose, and the probe below asserts that
+# absence as well as the presence.
+readonly PIPE_OPS_JSON='[13, "|", 14, "|&"]'
+readonly PLUS_OPS_JSON='[81, "+", 82, ":+"]'
+
+# A fixed snippet exercising all eight operators the two branches divide
+# between them, one construct per line so the assertion keys on a line
+# number — a structural fact — rather than on the encoding it is auditing.
+# shellcheck disable=SC2016 # probe text; the expansions are the operands under test, not shell to expand here
+readonly OP_PROBE='a | b
+c |& d
+e && f
+g || h
+: "${x+A}"
+: "${x:+B}"
+: "${x-C}"
+: "${x:-D}"'
+
+# Every `select` in the scan that reads an operator matches nothing when
+# handed an encoding this file was not taught, and a rule that matches
+# nothing reports nothing: the pipeline-stage branch would stop extending
+# a loop's range past the stage feeding it, the plus-operator branch
+# would stop skipping alternate-word reads, and both would keep exiting
+# 0. That is a silent false negative, so the encoding is established as a
+# precondition before any file is scanned.
+#
+# The assertion is behavioral rather than an enumeration of known values:
+# each construct is checked for membership in the list its branch reads,
+# and each construct the branch must not select is checked for absence
+# from that same list. An enumeration would pass an encoding that spelled
+# `&&` the way this file spells `|`, which reads as the opposite of a
+# silent no-op and is just as wrong.
+# shellcheck disable=SC2016 # jq program literal; $-prefixed names are jq variables, not shell
+readonly OP_PROBE_JQ='
+def ops_at($line; $type):
+  [.. | objects
+  | select(.Type == $type and (.Pos.Line // 0) == $line)
+  | if $type == "BinaryCmd" then .Op else (.Exp.Op // null) end];
+
+. as $ast
+| [{line: 1, type: "BinaryCmd", field: "BinaryCmd.Op", kind: "pipe", token: "|", want: true},
+    {line: 2, type: "BinaryCmd", field: "BinaryCmd.Op", kind: "pipe", token: "|&", want: true},
+    {line: 3, type: "BinaryCmd", field: "BinaryCmd.Op", kind: "pipe", token: "&&", want: false},
+    {line: 4, type: "BinaryCmd", field: "BinaryCmd.Op", kind: "pipe", token: "||", want: false},
+    {line: 5, type: "ParamExp", field: "ParamExp.Exp.Op", kind: "plus", token: "${x+A}", want: true},
+    {line: 6, type: "ParamExp", field: "ParamExp.Exp.Op", kind: "plus", token: "${x:+B}", want: true},
+    {line: 7, type: "ParamExp", field: "ParamExp.Exp.Op", kind: "plus", token: "${x-C}", want: false},
+    {line: 8, type: "ParamExp", field: "ParamExp.Exp.Op", kind: "plus", token: "${x:-D}", want: false}][]
+| . as $c
+| (if $c.kind == "pipe" then $pipe_ops else $plus_ops end) as $list
+| ($ast | ops_at($c.line; $c.type)) as $ops
+| if ($ops | length) != 1 then
+    "\($c.field) for \($c.token): the probe yielded \($ops | length) \($c.type) node(s) where it writes one, so the tree no longer carries the shape this scan walks"
+  else
+    (($list | index($ops[0])) != null) as $matched
+    | if $matched == $c.want then empty
+      elif $c.want then
+        "\($c.field) for \($c.token) is an encoding this lint does not match on, so the \($c.kind)-operator branch of the scan would select nothing and report nothing; value seen: \($ops[0] | tojson)"
+      else
+        "\($c.field) for \($c.token) matches the \($c.kind)-operator list, so that branch of the scan would select a construct it exists to leave alone; value seen: \($ops[0] | tojson)"
+      end
+  end'
+
+probe_json=""
+if ! probe_json="$("${SHFMT}" --to-json <<<"${OP_PROBE}" 2>/dev/null)"; then
+  printf '%s: the parser could not parse the fixed operator probe; the scan reads its syntax trees from that same parser and cannot establish what it emits\n' \
+    "${0##*/}" >&2
+  exit 2
+fi
+
+probe_errors=""
+if ! probe_errors="$(jq --raw-output --argjson pipe_ops "${PIPE_OPS_JSON}" \
+  --argjson plus_ops "${PLUS_OPS_JSON}" "${OP_PROBE_JQ}" <<<"${probe_json}")"; then
+  printf '%s: jq failed walking the parsed operator probe\n' "${0##*/}" >&2
+  exit 2
+fi
+
+if [[ -n ${probe_errors} ]]; then
+  while IFS= read -r probe_error; do
+    [[ -z ${probe_error} ]] && continue
+    printf '%s: %s\n' "${0##*/}" "${probe_error}" >&2
+  done <<<"${probe_errors}"
+  printf '%s: the parser emitted an operator encoding this lint does not recognize; teach the encoding to the operator lists in this file rather than leaving the branches that read them silently matching nothing\n' \
+    "${0##*/}" >&2
+  exit 2
+fi
 
 # @description NUL-delimited producer for `enumerate_into`. Each pathspec
 # crosses `/`, so `scripts/*.sh` covers `scripts/lib/` as well as the top
@@ -528,11 +646,11 @@ def pattern_texts:
 #
 # A read under a plus operator is skipped: it emits the alternate word
 # and never the value of the parameter, so a pattern the variable holds
-# cannot expand there. `Exp.Op` names the operator in either of two
-# encodings, depending on how the parser serializes it: an opaque
-# integer — 81 is `+`, 82 is `:+`, 83 is `-`, 84 is `:-` — or the
-# operator token itself. Both spellings of the two plus forms are
-# matched here; the minus forms do emit the value and are read.
+# cannot expand there. `Exp.Op` names the operator, in whichever encoding
+# the parser serializes it; `$plus_ops` carries every spelling of the two
+# plus forms this file knows, and a precondition asserts before the scan
+# that the parser still emits one of them. The minus forms are absent
+# from that list on purpose: they do emit the value, and are read.
 # Whatever the alternate word itself carries is a literal written at this
 # site, and the loop and array positions above already read it.
 #
@@ -546,7 +664,7 @@ def pattern_texts:
     | . as $fc
     | (.Loop.Items // [])[] | (.Parts // [])[]
     | select(.Type == "ParamExp")
-    | select((.Exp.Op // 0) | IN(81, "+", 82, ":+") | not)
+    | select((.Exp.Op // 0) | IN($plus_ops[]) | not)
     | select(([$glob_loop_sites[]
         | select(.line == $fc.Pos.Line and .col == $fc.Pos.Col)] | length) == 0)
     | (.Param.Value // "") as $n
@@ -556,7 +674,7 @@ def pattern_texts:
     | . as $aa
     | (.Array.Elems // [])[] | (.Value.Parts // [])[]
     | select(.Type == "ParamExp")
-    | select((.Exp.Op // 0) | IN(81, "+", 82, ":+") | not)
+    | select((.Exp.Op // 0) | IN($plus_ops[]) | not)
     | select(([$glob_array_sites[]
         | select(.line == $aa.Array.Pos.Line and .col == $aa.Array.Pos.Col)] | length) == 0)
     | (.Param.Value // "") as $n
@@ -581,11 +699,11 @@ def pattern_texts:
 # somewhere inside it is what keeps an `if` block from swallowing its
 # own condition into the range of the loop.
 #
-# `BinaryCmd.Op` names the operator in either of two encodings, the same
-# way `Exp.Op` above does: an opaque integer — 13 is `|`, 14 is `|&` —
-# or the operator token itself. Both spellings of the two pipe forms are
-# matched here. Only those two extend the range of a loop, because only
-# those two feed the loop data — a `&&` (11) or `||` (12) chain onto a
+# `BinaryCmd.Op` names the operator in whichever encoding the parser
+# serializes it, the same way `Exp.Op` above does; `$pipe_ops` carries
+# every spelling of the two pipe forms this file knows, under the same
+# precondition. Only those two extend the range of a loop, because only
+# those two feed the loop data — a `&&` or `||` chain onto a
 # loop is the guard of the loop, not its input: the chained condition
 # decides whether the loop runs at all, and that decision is made and
 # read before the loop consumes anything, the same relationship an `if`
@@ -598,7 +716,7 @@ def pattern_texts:
     | select((((.Cmd // {}) | .Type) == "ForClause") or (((.Cmd // {}) | .Type) == "WhileClause"))
     | {from: .Pos.Offset, to: .End.Offset}]
   + [.. | objects | select(.Type == "BinaryCmd")
-    | select(.Op | IN(13, "|", 14, "|&"))
+    | select(.Op | IN($pipe_ops[]))
     | select(([(.Y // {}) | .. | objects
         | select(.Type == "ForClause" or .Type == "WhileClause")] | length) > 0)
     | {from: .Pos.Offset, to: .End.Offset}]) as $loops
@@ -785,7 +903,7 @@ for f in "${paths[@]}"; do
   scanned=$((scanned + 1))
 
   ast_json=""
-  if ! ast_json="$(shfmt --to-json <"${f}" 2>/dev/null)"; then
+  if ! ast_json="$("${SHFMT}" --to-json <"${f}" 2>/dev/null)"; then
     printf '%s: shfmt could not parse this file as shell for AST inspection\n' "${f}" >&2
     exit 2
   fi
@@ -798,6 +916,7 @@ for f in "${paths[@]}"; do
     --arg producer_alias_what "${PRODUCER_ALIAS_WHAT}" \
     --arg glob_var_what "${GLOB_VAR_WHAT}" \
     --arg glob_var_array_what "${GLOB_VAR_ARRAY_WHAT}" \
+    --argjson pipe_ops "${PIPE_OPS_JSON}" --argjson plus_ops "${PLUS_OPS_JSON}" \
     "${JQ_PROG}" <<<"${ast_json}")"; then
     printf '%s: jq failed walking the parsed syntax tree\n' "${f}" >&2
     exit 2
