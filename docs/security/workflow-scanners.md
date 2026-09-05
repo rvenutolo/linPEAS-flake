@@ -131,8 +131,14 @@ tree.)
     `checks.pre-commit`, and the zizmor hook carries no sandbox bail
     (unlike octoscan), so it re-scans `.github/workflows/` there too.
 - **Status:** commit-time prevention + PR/push detection (the `flake-check`
-    re-run) + weekly watchdog. The drift-check re-runs the same lock-pinned
-    scan against `main` on a schedule and pages a finding as a deduped
+    re-run) + weekly watchdog. The watchdog earns its place by reaching the
+    scanner differently, not by scanning more: it hands `zizmor` the
+    `.github/workflows/` directory, where the hook receives whatever
+    pre-commit's own `files` and `types` matching selects. A workflow file
+    that matching stops selecting leaves the hook with nothing to scan — which
+    pre-commit reports as a skip, not a failure — and the scheduled run still
+    covers it. Both paths read the same `zizmor.yml`, so neither is a check on
+    the other's suppressions. The watchdog pages a finding as a deduped
     `zizmor-drift` issue, closed on the next clean run; a rule change arrives
     with the `flake.lock` bump whose PR `flake-check` already re-scans in
     full.

@@ -10,6 +10,14 @@ name: zizmor-drift-check
 # main fails a scan those gates ran green (a rule change arrives with
 # the flake.lock bump whose PR flake-check re-scans in full).
 #
+# The step below passes the .github/workflows/ directory straight to
+# zizmor. The hook instead scans whatever pre-commit's `files` and
+# `types` matching hands it, and pre-commit reports a hook it selected
+# no files for as a skip rather than a failure — so a file that
+# matching stops selecting is scanned here and nowhere else. Keep the
+# directory argument: rewriting this step to invoke the hook would
+# collapse the two paths into one and cost that coverage.
+#
 # On findings: opens (or leaves) a deduped `zizmor-drift` tracking
 # issue via the notify-workflow-result composite. On the next clean
 # run, the composite closes any open `zizmor-drift` issue(s).
