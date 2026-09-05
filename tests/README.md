@@ -138,7 +138,8 @@ scan-breadth rules as a repo script: `find` / `git ls-files` /
 through `glob_into`, and filter narrowing through `filter_into` (all in `scripts/lib/enumerate.sh`) — or carry an inline
 `# enumerate-exempt: <rationale>`, `# glob-exempt: <rationale>` or
 `# filter-exempt: <rationale>` marker. The scan set is `scripts/*.sh` plus
-`tests/*.test.sh`, less `tests/fixtures/`, so harnesses are in scope by
+`tests/*.test.sh` as git pathspecs (so `scripts/lib/` and nested harnesses
+are included), less `tests/fixtures/`, so harnesses are in scope by
 name. Enforced by
 `scripts/check-enumerate-helper-required.sh` (member check
 `enumerate-helper-required` in the `lint-script-hygiene` CI group); see

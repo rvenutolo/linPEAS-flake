@@ -1,6 +1,6 @@
 # Auto-update architecture
 
-Three automation groups — the daily pin bump, the release on bump, and the weekly dependency-upkeep pair — keep the pin current and the release artifacts in sync. Two watchdogs sit alongside them: `flake-lock-staleness-check` watches that the dependency-upkeep pair is still refreshing inputs, and [stale-pin-check](ci.md#stale-pin-failure-attribution) watches the pin bump.
+Three automation groups — the daily pin bump, the release on bump, and the weekly dependency-upkeep pair — keep the pin current and the release artifacts in sync. Two staleness watchdogs sit alongside them: `flake-lock-staleness-check` watches that the dependency-upkeep pair is still refreshing inputs, and [stale-pin-check](ci.md#stale-pin-failure-attribution) watches the pin bump.
 
 ## Daily linpeas pin bump
 
