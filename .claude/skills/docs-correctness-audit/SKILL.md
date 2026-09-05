@@ -27,8 +27,14 @@ moment they act on it, restate mechanisms the runbooks document, and drift the
 same way a runbook does. They are in scope for the factual-drift dimension, and
 a mismatch between such a body and the runbook it mirrors is one finding with
 two sites, not one per file. `references/repo-map.md` §2 says how to enumerate
-them and which reader owns them. Everything else outside tracked Markdown —
-code comments, script `@description` blocks, workflow logic itself — stays out.
+them and which reader owns them. Workflow logic and the `@description` blocks
+that generate `docs/reference/scripts.md` stay out. A rationale comment block
+that restates a mechanism a runbook documents — a workflow's header comment, a
+script's second comment block — is in scope when a pass inside the window
+touched it: it is prose a maintainer reads at the moment they act, the twin
+sweep's `scripts/*.sh` pathspec already reaches it, and a claim corrected in
+the runbook while its comment twin keeps the old wording is the same defect
+with two sites.
 
 This skill is tuned to this repo. Concrete ground-truth commands, the doc
 cluster map, the generated-doc → generator table, and the ephemeral-token
@@ -204,14 +210,26 @@ SKILL.md you were given, then run it from anywhere inside the repo checkout
 (it resolves and cds to the repo root itself):
 
 ```sh
-bash <this-skill-dir>/scripts/collect-ground-truth.sh
+bash <this-skill-dir>/scripts/collect-ground-truth.sh \
+  >.claude/reports/<YYYY-MM-DD>-ground-truth.txt
 ```
 
-It emits one labeled bundle of twelve sections — a **`PROSE HOTSPOTS`**
-ranking of the docs recent fix passes rewrote most, flake outputs, `just`
-recipes, the `scripts/` inventory (entry points, the `scripts/lib/` libraries
-they source, *and* the `scripts/*.awk` programs), workflows, the **ci.yml
-top-level job list**, **lint-group membership**, the
+Redirect it to that path and hand every reader the path — never paste the
+bundle into a dispatch. Write one shared **reader brief** beside it at
+`.claude/reports/<YYYY-MM-DD>-reader-brief.md` holding everything every reader
+needs identically: the bundle path, the write prohibitions below, the three
+dimensions, the generated-doc exclusion list, the ephemeral-token regex, the
+not-a-finding list, the output format, and the could-not-locate instruction. A
+dispatch then names only what differs — the cluster, its files, its issue
+bodies, and its priority hunks. Five prompts that each restate the method are
+five chances for the method to differ between readers.
+
+It emits one labeled bundle of thirteen sections — a **`PROSE HOTSPOTS`**
+ranking of the prose recent fix passes rewrote most, a **`PASS ATTRIBUTION`**
+listing of which pass in the window wrote which prose file, flake outputs,
+`just` recipes, the `scripts/` inventory (entry points, the `scripts/lib/`
+libraries they source, *and* the `scripts/*.awk` programs), workflows, the
+**ci.yml top-level job list**, **lint-group membership**, the
 **`VALID CI JOB / CHECK NAMES`** union allowlist (the ghost/mislabel detector
 this audit turns on), workflow crons, the required-check context count, an
 **`EPHEMERAL-TOKEN HITS`** sweep of banned token shapes over tracked docs, and
@@ -229,17 +247,29 @@ finding: record it, and treat both sections as unchecked rather than clean.
 ### 2. Fan out read-only readers, one per doc cluster
 
 Dispatch parallel **read-only Explore agents**, one per cluster from the
-cluster map. The agent type does not enforce the no-edits rule — an Explore
-agent has no `Edit`/`Write` tool but runs Bash, which writes files as
-readily — so the dispatch itself carries the prohibition: no writes into the
-repo tree, no generator, formatter, `nix build` or harness run. Give each
-agent: the ground-truth bundle, the three dimensions below, the generated-doc
-exclusion list, and the ephemeral-token regex. Each returns structured findings
-**plus a coverage note**: which hand-written claims in its cluster it
-cross-checked against ground truth, and what it confirmed clean versus left
-uncertain. A reader may not report a cluster "clean" merely because the
-freshness checks pass — only after it has read the cluster's prose claims
-against ground truth. It does not write files.
+cluster map, **overridden to the strongest model available**. A reader's job is
+to hold a script open beside a sentence and resolve the sentence against it;
+the default search tier locates the sentence and reports it, which is how a
+cluster comes back "clean". The agent type does not enforce the no-edits rule —
+an Explore agent has no `Edit`/`Write` tool but runs Bash, which writes files as
+readily — so the brief carries the prohibition: no writes into the repo tree,
+no generator, formatter, `nix build` or harness run. Point each agent at the
+shared brief and the bundle path; the dispatch adds only its cluster's files,
+issue bodies and priority hunks. Each returns structured findings **plus a
+coverage note**: which hand-written claims in its cluster it cross-checked
+against ground truth, and what it confirmed clean versus left uncertain. Cap
+that note at ten lines — counts per category, which prior-pass paragraphs it
+read whole, what it left uncertain — because a note long enough to bury its own
+gaps defeats the completeness gate it exists to feed. A reader may not report a
+cluster "clean" merely because the freshness checks pass — only after it has
+read the cluster's prose claims against ground truth. It does not write files.
+
+Every reader also returns a **`Could not locate`** section listing verbatim any
+file, line, hunk or claim the dispatch named that it could not find. A
+controller's dispatch is hand-written and drifts like any other prose: it will
+name a flag that does not exist or attribute a hunk to the wrong commit, and a
+reader that silently disproves it spends its budget there and reports nothing.
+Silence must not be the return value for a bad instruction.
 
 Read-only fan-out needs no orchestration opt-in — it is plain parallel reads.
 
@@ -353,20 +383,33 @@ Then rank by severity:
 
 ### 5. Write the report (no edits)
 
-Write one report to `.claude/reports/<YYYY-MM-DD>-docs-correctness-findings.md`
-using the template below. Stop there. Do not edit any doc. Surface, in the
-report's closing notes, anything that needs a human decision (spec ambiguity,
-a generated-doc/generator fix, a finding whose "fix" would change runtime
-behavior).
+Write one report to
+`.claude/reports/<YYYY-MM-DD>-docs-correctness-findings[-<n>].md` using the
+template below — append `-<n>` when a report for that date already exists, so
+back-to-back audits in one day do not overwrite each other's evidence. Stop
+there. Do not edit any doc. Surface, in the report's closing notes, anything
+that needs a human decision (spec ambiguity, a generated-doc/generator fix, a
+finding whose "fix" would change runtime behavior).
 
-### 6. Tell the user to record the audit point
+### 6. Say whether this audit closes the cycle
 
-Close the report by naming the step that ends the cycle: once these findings
-are fixed, the final fix PR runs `just docs-audit-done` and commits the
-updated `.github/docs-audit-state`. That marker is the base the monthly reminder
-measures drift pressure from, so an audit that never records its point leaves
-pressure climbing and the reminder issue open. Say it explicitly — this skill
-is read-only and cannot write the marker itself.
+The marker in `.github/docs-audit-state` means "read, and resolved". It moves
+once per *cycle*, written by the final fix PR — which runs `just docs-audit-done`
+and commits the updated file as that PR's last commit. Close the report by
+saying which case this audit is:
+
+- **No further audit planned before the cycle closes.** Say that the fix PR
+    ends with the marker commit. That marker is the base the monthly reminder
+    measures drift pressure from, so an audit that never records its point
+    leaves pressure climbing and the reminder issue open.
+- **Another audit will run against this cycle's fixes.** Say that the fix PR
+    does *not* run it. A marker written mid-cycle splits one cycle's fix
+    commits across the next window boundary: the commits before it drop out of
+    the next priority set even though nothing has read them, and they are the
+    commits most likely to carry a fresh defect.
+
+Say it explicitly either way — this skill is read-only and cannot write the
+marker itself.
 
 If the audit found nothing, the instruction is the same and applies
 immediately: a clean read is still a read.
