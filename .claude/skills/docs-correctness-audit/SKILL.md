@@ -33,7 +33,8 @@ library that includes every `@description` block preceding a function, not the
 header alone (`references/repo-map.md` §3 says which blocks each scope
 renders). A rationale comment block that restates a mechanism a runbook
 documents — a workflow's header comment, an entry-point script's second comment
-block — is in scope when a pass inside the window touched it: it is prose a maintainer reads at the moment they act, the twin
+block — is in scope when a pass inside the window touched it: it is prose a
+maintainer reads at the moment they act, the twin
 sweep's `scripts/*.sh` pathspec already reaches it, and a claim corrected in
 the runbook while its comment twin keeps the old wording is the same defect
 with two sites.
@@ -218,8 +219,8 @@ bash <this-skill-dir>/scripts/collect-ground-truth.sh \
 
 Redirect it to that path and hand every reader the path — never paste the
 bundle into a dispatch. Write one shared **reader brief** beside it at
-`.claude/reports/<YYYY-MM-DD>-reader-brief.md`. Both paths take the same
-`-<n>` suffix as the report (§5) when a same-day file already exists, so
+`.claude/reports/<YYYY-MM-DD>-reader-brief.md`. Append `-<n>` to both when a
+same-day bundle already exists; the report (§5) takes the same `n`, so
 back-to-back audits keep their own evidence. The brief holds everything every reader
 needs identically: the bundle path, the write prohibitions below, the three
 dimensions, the generated-doc exclusion list, the ephemeral-token regex, the
@@ -472,7 +473,8 @@ boundary word or **scopes** it to the set it can defend, and never propose a
 replacement exclusive. A fix pass reading a per-finding instruction follows it;
 one reading a single standing note at the end of the report has already written
 the sentence. When the false claim was introduced by a previous cycle's fix —
-`git log -L` or the hotspot ranking will say — record that in the finding. A
+`git log -L` or the bundle's `PASS ATTRIBUTION` section will say — record that
+in the finding. A
 defect a fix pass manufactured is worth more than its severity suggests,
 because it says the fix discipline itself is what leaked.
 

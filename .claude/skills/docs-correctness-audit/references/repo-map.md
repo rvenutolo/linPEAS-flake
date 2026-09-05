@@ -59,9 +59,10 @@ dispatch, not through this section.
 ### PASS ATTRIBUTION
 
 The section after the ranking answers "which pass wrote this sentence". For
-each merge in the line window, newest first, it names the commits that merge
-carried and the files each of them touched under the same four pathspecs the
-ranking scores. A finding inside one of
+each PR merge on `main`'s first-parent line in the window, newest first — a
+`Merge branch 'main' into …` sync inside a PR is not listed — it names the
+commits that merge carried and the files each of them touched under the same
+four pathspecs the ranking scores. A finding inside one of
 those files is attributable to that pass, and the report says so: a defect a
 fix pass manufactured is worth more than its severity, because it says the fix
 discipline itself leaked rather than that one sentence rotted.
@@ -276,7 +277,7 @@ Its rows are driven by the `enforcer:` / `ci:` / `hook:` annotations in
 entry, not against this page.
 
 `docs/reference/scripts.md` renders, per entry-point script, the **contiguous
-comment block before the first blank line** — the header `@description` block
+comment block before the first blank or non-comment line** — the header `@description` block
 `_script_docs.awk` reads in its default scope. For a `scripts/lib/*.sh`
 library the generator runs the awk in `scope=library`, which additionally
 renders every column-0 `# @description` block that precedes a function, so a

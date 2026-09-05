@@ -49,9 +49,6 @@ below.
     this loop produces, so a glob over `*-docs-correctness-findings*.md`
     expands to every earlier run's report as well.
 
-    ```sh
-    ```
-
 1. Score — back in the original checkout's harness directory, not the
     planted worktree (the worktree has the same tracked `score.sh` but no
     untracked `results/`, so running it there exits 1):

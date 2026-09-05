@@ -24,7 +24,7 @@ jobs:
       # Mirrors the `reason=` pattern in `stale-pin-check.yml` —
       # `upstream-sri-drift` and `cross-registry-manifest-mismatch`
       # warrant the "security incident" framing in the auto-filed issue
-      # outright; the rest are operational or re-run-first.
+      # outright; the body grades the remaining reasons individually.
       reason: ${{ steps.attribute.outputs.reason }}
     steps:
       - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
@@ -311,7 +311,7 @@ jobs:
         # they cannot detect upstream replacing the asset after we pinned it.
         # Failure of this step is the canonical "treat as security incident"
         # signal, alongside the cross-registry manifest comparison below;
-        # the other failures are operational or re-run-first.
+        # the notify body grades the other failures individually.
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
@@ -414,7 +414,7 @@ jobs:
         # `notify` job's body. Without explicit attribution, the auto-filed
         # issue treats every failure as a possible security incident and
         # the maintainer learns to skim-read the body — exactly the wrong
-        # reflex for the one time it really is `upstream-sri-drift`.
+        # reflex for the time it really is an incident.
         # `if: always()` ensures this runs even after a prior failure.
         if: always()
         env:
@@ -575,7 +575,7 @@ jobs:
               the failure as unexplained until triaged by hand, and file a
               bug against this workflow's `attribute failure reason` step.
             - `unknown` — the `verify` job emitted no reason at all: it
-              was cancelled — most often by the job timeout — before the
+              was cancelled, or the runner was lost, before the
               attribution step ran. Re-run the cron.
 
             Investigate the `verify` job logs for the failing step. Do
