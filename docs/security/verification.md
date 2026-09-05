@@ -186,7 +186,7 @@ the `attribute failure reason` step. Reasons:
     watch for after adding a verification step without wiring its
     `id:` into the ladder.
 - `unknown` — the `verify` job produced no `reason` output at all: it
-    was cancelled, skipped, or killed by the job timeout before the
+    was cancelled — most often by the job timeout — before the
     attribution step ran. Not a verification result; re-run the cron.
 
 `upstream-sri-drift` and `cross-registry-manifest-mismatch` warrant the

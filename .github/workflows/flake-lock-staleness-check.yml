@@ -96,15 +96,19 @@ jobs:
           # infrastructure failures and is inert on skipped.
           result: ${{ needs.staleness-check.result }}
           label: flake-lock-stale
-          title: "flake-lock-staleness-check: an input has stopped moving"
+          title: "flake-lock-staleness-check: an input has stopped moving, or the check could not run"
           body: |
-            The daily `flake-lock-staleness-check` watchdog found a
-            top-level `flake.lock` input whose `locked.lastModified` is
-            older than the bound declared for it in
-            `scripts/check-flake-lock-staleness.sh`.
+            The daily `flake-lock-staleness-check` watchdog failed:
+            either a top-level `flake.lock` input has a
+            `locked.lastModified` older than the bound declared for it in
+            `scripts/check-flake-lock-staleness.sh`, or the check could
+            not run — the fixture harness step failed, or the script
+            exited 2 (an input with no bound declared, an input resolving
+            through `follows`, a malformed lock, or `jq` absent).
 
-            The failing job log names every input past its bound, its
-            age, and the bound it exceeded.
+            See the failing job log to tell them apart: on staleness it
+            names every input past its bound, its age, and the bound it
+            exceeded; a could-not-run names its cause on stderr instead.
 
             An input stops moving when the mechanism that refreshes it
             stops. Check, in this order:
@@ -125,5 +129,5 @@ jobs:
 
             This issue auto-closes once the next watchdog run sees every
             input within bounds.
-          label-description: a flake.lock input has stopped being refreshed
+          label-description: a flake.lock input has stopped being refreshed, or the staleness check could not run
           github-token: ${{ secrets.GITHUB_TOKEN }}

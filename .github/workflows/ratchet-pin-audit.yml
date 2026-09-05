@@ -8,7 +8,7 @@ name: ratchet-pin-audit
 # local pin-shape tripwire (in ratchet 0.11.4; `check` is an alias);
 # the per-ref `gh api` re-derivation below is the drift detector.
 # Drift → deduped umbrella issue (`ratchet-drift` label)
-# opened/edited/closed by the notify-workflow-result composite,
+# opened, commented on, or closed by the notify-workflow-result composite,
 # mirroring stale-pin-check.
 
 on:

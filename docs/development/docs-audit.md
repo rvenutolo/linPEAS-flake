@@ -35,8 +35,10 @@ Run it when the findings are fixed, not when the audit is dispatched. The
 monthly reminder issue closes on the count this produces; marking at
 dispatch time would close the issue over findings still outstanding.
 
-If an audit finds nothing, mark immediately — a clean read is still a
-read, and the churn it covered has been audited.
+If an audit finds nothing and no further audit is planned for the cycle,
+mark immediately — a clean read is still a read, and the churn it covered
+has been audited. A clean audit mid-cycle leaves the marker alone for the
+same reason a fix pass does: the next audit's priority set starts there.
 
 ## Why a marker rather than a rolling window
 

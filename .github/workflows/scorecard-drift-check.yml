@@ -32,8 +32,8 @@ name: scorecard-drift-check
 # so it cannot be driven to 10 by any in-repo change.
 #
 # Binary source: `nix develop --command scorecard` resolves through
-# flake.lock-pinned nixpkgs-unstable — same pin model as zizmor and
-# actionlint sibling drift-checks. One source of truth.
+# flake.lock-pinned nixpkgs-unstable — same pin model as the
+# zizmor-drift-check sibling. One source of truth.
 #
 # Token: scorecard's Webhooks check needs admin:repo_hook scope
 # (not grantable via job-level GITHUB_TOKEN permissions), so a
@@ -168,21 +168,24 @@ jobs:
           # infrastructure failures and is inert on skipped.
           result: ${{ needs.drift-check.result }}
           label: scorecard-drift
-          title: "scorecard-drift-check: check(s) scored <10, or the scorecard payload was unreadable"
+          title: "scorecard-drift-check: check(s) scored <10, the scorecard payload was unreadable, or the scan itself failed"
           body: |
             The weekly `scorecard-drift-check` watchdog failed for
             `${{ github.repository }}`: either one or more curated
             OpenSSF Scorecard checks scored below 10, or the threshold
             script could not read the scorecard payload as JSON at all
             (its exit 2 — an empty, malformed or wrongly shaped
-            `results.json`).
+            `results.json`), or the scorecard scan itself failed before
+            the threshold script ran — an auth, egress or
+            check-execution error, which the step log names.
 
-            See the failing job logs to tell the two apart: the
-            offending check name(s) and score(s), or the payload
-            diagnostic, are printed on stderr by
-            `scripts/check-scorecard-threshold.sh`, followed by the first
-            1 KiB of `results.json`, which the same step dumps to stderr
-            whenever the threshold script exits non-zero:
+            See the failing job logs to tell them apart: the offending
+            check name(s) and score(s), or the payload diagnostic, are
+            printed on stderr by `scripts/check-scorecard-threshold.sh`,
+            followed by the first 1 KiB of `results.json`, which the same
+            step dumps to stderr whenever the threshold script exits
+            non-zero; a scan that failed earlier prints neither, only the
+            scorecard CLI's own error:
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
             Run pinned at commit `${{ github.sha }}`.
@@ -193,5 +196,5 @@ jobs:
             [docs/runbooks/scorecard-pat-rotation.md](https://github.com/${{ github.repository }}/blob/main/docs/runbooks/scorecard-pat-rotation.md).
 
             This issue auto-closes on the next clean scheduled run.
-          label-description: scorecard check(s) scored below 10, or the scorecard payload was unreadable
+          label-description: scorecard check(s) scored below 10, the scorecard payload was unreadable, or the scan itself failed
           github-token: ${{ secrets.GITHUB_TOKEN }}
