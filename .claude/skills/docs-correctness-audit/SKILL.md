@@ -114,9 +114,13 @@ changed in tracked prose since:
 
 ```sh
 sha="$(sed -n 's/^LAST_AUDIT_SHA=//p' .github/docs-audit-state)"
-git log --oneline "${sha}..HEAD" -- '*.md'
-git diff --stat "${sha}..HEAD" -- '*.md'
+git log --oneline --no-merges "${sha}..HEAD" -- '*.md' '.github/**' 'scripts/*.sh'
+git diff --stat "${sha}..HEAD" -- '*.md' '.github/**' 'scripts/*.sh'
 ```
+
+The pathspecs are the same three the twin sweep below uses: `'*.md'`
+alone misses a pass that touched only a notify body in a workflow or a
+body a script composes, and such passes land here.
 
 Hand that file list to the readers as a **priority set, not a scope limit** —
 every tracked doc is still in scope. Prose rewritten by an earlier cycle's fix
@@ -138,14 +142,17 @@ one that landed last, carries no more weight than the rest of the cycle. List
 them yourself, with the `sha` computed above:
 
 ```sh
-git log --oneline --no-merges "${sha}..HEAD" -- '*.md'
+git log --oneline --no-merges "${sha}..HEAD" -- '*.md' '.github/**' 'scripts/*.sh'
 git log --oneline --merges "${sha}..HEAD"
 ```
 
 Read the newest commit's paragraphs before anything else. Filter by path,
 not by subject: prose passes here land under `fix:` as readily as `docs:`.
-The second command lists the merges that carried those commits — this repo
-merges every PR with one, titled by the PR — and a merge is read with
+The second command lists every merge in the window: the PR-titled entries
+are the passes that carried those commits — this repo merges every PR with
+one — and `Merge branch 'main' into …` entries are branch syncs to skip.
+Leave it unpathed; with a pathspec, history simplification drops PR merges
+that carried prose. A merge is read with
 `git show -m --first-parent <merge-sha>`; a bare `git show` on a merge
 prints no hunks at all.
 
