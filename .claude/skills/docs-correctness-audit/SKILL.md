@@ -134,14 +134,18 @@ several audits run back to back — each iteration's fixes landing before the
 next starts — they already reach what earlier iterations changed. What neither
 does is single any one of those commits out: the ranking scores whole files
 across the window, so the commit whose paragraphs have been checked least, the
-one that landed last, carries no more weight than the rest of the cycle. Name
-it yourself:
+one that landed last, carries no more weight than the rest of the cycle. List
+them yourself, with the `sha` computed above:
 
 ```sh
-git log --oneline -1 --grep='^docs:' HEAD
+git log --oneline --no-merges "${sha}..HEAD" -- '*.md'
 ```
 
-Read that commit's paragraphs before anything else.
+Read the newest commit's paragraphs before anything else. Filter by path,
+not by subject: prose passes here land under `fix:` as readily as `docs:`.
+And read a merge commit — this repo merges every PR with one, titled by the
+PR — with `git show -m --first-parent <sha>`; a bare `git show` on a merge
+prints no hunks at all.
 
 **The unit of re-reading is the paragraph, not the hunk.** A changed line is
 where the last pass aimed; the defect that survived is beside it. Take each
