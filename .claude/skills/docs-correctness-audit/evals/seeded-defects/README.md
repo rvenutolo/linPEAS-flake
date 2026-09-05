@@ -111,10 +111,12 @@ column) is exactly the signal being measured.
 
 ## A confound to keep in view
 
-Every seed is planted with `insert-after` against a heading anchor, so each
-one lands as a lone sentence directly below a heading. That shape is itself a
-tell: a reader can learn to spot it without doing the verification the seed
-exists to measure, and it trips markdownlint's MD022 as a side effect — one
+Most seeds are planted with `insert-after` against a heading anchor, so they
+land as a lone sentence directly below a heading (a few anchor on body prose,
+and the two `replace-substr` seeds edit a sentence in place). That shape is
+itself a tell: a reader can learn to spot it without doing the verification
+the seed exists to measure, and the heading-anchored ones trip markdownlint's
+MD022 as a side effect — one
 scored run filed the glued-under-heading formatting as a finding in its own
 right and named the seeded headings. Recall measured this way is therefore an
 upper bound. Varying the insertion point into paragraph interiors would

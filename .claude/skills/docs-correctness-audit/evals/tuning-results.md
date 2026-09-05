@@ -44,7 +44,9 @@ where it hit 2/2 across two runs; the other two configurations have not been
 re-run with it, and two runs is too thin to call the category non-flaky.
 `near-miss-exclusive` was added later still and measured the same way, in a
 two-run pass over all nine seeds that scored 18/18; it also hit 2/2, and the
-same two caveats apply to it. The merged map cuts total
+same two caveats apply to it. Seeds added after that pass are measured and
+recorded in [`seeded-defects/README.md`](seeded-defects/README.md), which is
+the record of the current set. The merged map cuts total
 reader-tokens ~29% because most of a reader's cost is fixed per-agent overhead
 (re-reading the ground-truth bundle, tool setup); three readers collapsed into
 `core-docs` and two into `arch+dev` eliminate that overhead while the same documents still get

@@ -304,8 +304,9 @@ report:
 git grep -n 'distinctive phrase from the wrong claim' -- '*.md' '.github/**' 'scripts/*.sh'
 ```
 
-The third pathspec is what reaches a `--body-file` body: that prose lives
-in the script that writes the file, not in the workflow that files it.
+The third pathspec is what reaches a `--body-file` body whose prose a
+script composes; a body a `run:` step composes inline is already covered by
+the `.github/**` pathspec.
 
 Search the wrong wording, not the corrected one, and loosen the phrase until it
 would catch a paraphrase — a twin rarely matches byte for byte. Every hit joins

@@ -260,9 +260,10 @@ attestation carries `https://slsa.dev/provenance/v1`.
 every workflow, with `egress-policy: block`. Each job declares an
 `allowed-endpoints:` allowlist scoped to the minimum outbound hosts it
 needs: a two-host floor (`api.github.com`, `github.com`),
-`objects.githubusercontent.com` on all but a couple of API-only jobs,
-`release-assets.githubusercontent.com` on jobs that download a GitHub
-release asset, plus job-specific endpoints. `cache.nixos.org` and
+`objects.githubusercontent.com` on all but a couple of jobs that need
+nothing beyond the floor, `release-assets.githubusercontent.com` on jobs
+that download a GitHub release asset, plus job-specific endpoints.
+`cache.nixos.org` and
 `releases.nixos.org` are not part of that baseline — they appear only on
 jobs that install or invoke Nix, and `scripts/check-egress-allowlist.sh`
 rejects either host on a job that carries it without a Nix-reaching

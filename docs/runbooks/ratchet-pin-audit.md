@@ -35,8 +35,8 @@ backstop is `check-uses-sha-pinned.sh` (the `uses-sha-pinned` member of
 `lint-workflow-security`), backing the GitHub-side `sha_pinning_required`
 setting and still requiring a full 40-hex SHA — see
 [repo config](../security/repo-config.md). `check-patch-tag-pins.sh` also
-reads these lines and demands an exact patch tag, but it runs only as the
-`patch-tag-pins` pre-commit hook and gates no merge — see
+reads these lines and demands a versioned `# vX.Y[.Z]` tag, but it runs
+only as the `patch-tag-pins` pre-commit hook and gates no merge — see
 [pin convention](../architecture/pin-convention.md); this repo publishes
 no release tags on its composite actions, so its self-reference carries an
 inline `# patch-tag-exception:` marker.
@@ -118,8 +118,10 @@ Steps:
 One of the per-ref canonical-SHA re-derivation's API calls — the
 `gh api …/git/refs/tags/{tag}` lookup, or the `…/git/tags/{sha}`
 dereference an annotated tag needs — failed, rate-limited, or returned a
-payload `jq` could not read a SHA and object type from; or ratchet's own
-output matched the upstream-failure heuristic. The `github.token` is
+ref payload `jq` could not read a SHA and object type from (the
+annotated-tag dereference fails on a non-zero call or an empty SHA); or
+ratchet's own output matched the upstream-failure heuristic. The
+`github.token` is
 capped at 1,000 requests per hour per repository; transient 5xx is also
 possible.
 
@@ -224,8 +226,9 @@ than a side effect.
 written in ratchet's own annotation format
 (`uses: foo@<sha> # ratchet:foo@v3.36.0`). Our pins use plain
 `# v3.36.0`-style trailing comments and are therefore invisible to
-`ratchet update`. Remediation must be done by hand (or via Renovate
-on its next scheduled run).
+`ratchet update`. Remediation must be done by hand; a Renovate
+digest-only bump hits the digest-provenance gate — see the
+`drift-detected` steps above.
 
 ## Related
 

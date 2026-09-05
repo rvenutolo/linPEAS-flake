@@ -1,9 +1,10 @@
 # Pin convention for GitHub Actions
 
 Every `uses:` reference to a third-party GitHub Action in this repo
-is pinned by full 40-hex commit SHA. The trailing comment names the
-**exact patch tag** whose SHA matches the pin, not the floating major
-tag.
+is pinned by full 40-hex commit SHA. The trailing comment names a
+**versioned tag** (`# vX.Y[.Z]` — at least two numeric components) whose
+SHA matches the pin, not the floating major tag; naming the patch tag is
+the convention.
 
 ```yaml
 # Required
@@ -36,7 +37,7 @@ tag object rather than the release commit, so the inventory script's
 SHA-equality lookup against `gh api repos/<owner>/<repo>/tags` returns
 no match. For such refs a majors-only comment may remain `# v<major>`,
 provided the same line carries an inline marker (a tag-object pin whose
-comment already names the exact patch needs no marker — the hook's
+comment already names a versioned tag needs no marker — the hook's
 patch-tag regex passes it and the audit accepts either SHA):
 
 ```yaml
@@ -50,7 +51,7 @@ by convention, specific to the ref's upstream tagging convention.
 
 - Lint: `scripts/check-patch-tag-pins.sh`, wired as the
     `patch-tag-pins` pre-commit hook (see `nix/hooks/workflow-security.nix`).
-    Fails the commit locally when a SHA pin lacks both an exact patch-tag
+    Fails the commit locally when a SHA pin lacks both a versioned-tag
     comment and an exception marker — whether the comment is missing
     entirely, names no version, or names only a major tag. The hook is the
     whole enforcement surface: the rule is in no lint group and gates no
