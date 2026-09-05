@@ -185,7 +185,7 @@ Hooks (alphabetical):
 | `nixpkgs-hammering`              | nixpkgs idiom checker for the linpeas derivation.                                                                                                        |
 | `no-opaque-procsub`              | No scripts/\*.sh feeds a redirection from a process substitution.                                                                                        |
 | `octoscan`                       | synacktiv/octoscan workflow vulnerability scanner.                                                                                                       |
-| `patch-tag-pins`                 | SHA-pinned uses: comments name exact patch tag (vX.Y.Z), not major (vX).                                                                                 |
+| `patch-tag-pins`                 | SHA-pinned uses: comments name a versioned tag (vX.Y[.Z]), not a bare major (vX).                                                                        |
 | `permission-scopes`              | Per-job GITHUB_TOKEN write scopes are allowlisted in .github/permission-scopes.yml.                                                                      |
 | `pin-diff-isolated`              | Only scripts/bump-linpeas.sh mutates linpeas-pin.json.                                                                                                   |
 | `pin-parity-fresh`               | The pin-parity block in docs/architecture/auto-update.md names every tracked file carrying the canonical pin-shape regex.                                |

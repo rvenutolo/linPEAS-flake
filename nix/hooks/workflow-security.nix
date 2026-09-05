@@ -26,7 +26,7 @@
   patch-tag-pins = {
     enable = true;
     name = "patch-tag-pins";
-    description = "SHA-pinned uses: comments name exact patch tag (vX.Y.Z), not major (vX).";
+    description = "SHA-pinned uses: comments name a versioned tag (vX.Y[.Z]), not a bare major (vX).";
     entry = "${pkgs-unstable.writeShellScript "patch-tag-pins-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'
