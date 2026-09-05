@@ -128,19 +128,20 @@ sentence they replaced — a fix that swapped one wrong claim for another reads
 as an improvement in the diff. If the state file is absent or its sha is
 unreachable, record that in the report and audit everything at equal priority.
 
-`LAST_AUDIT_SHA` moves once per *cycle*, not once per audit. When several
-audits run back to back — each iteration's fixes landing before the next
-starts — the marker still names the point the previous cycle ended, so the
-hotspot ranking it feeds is stale for every iteration after the first. Aim
-additionally at the most recent fix commit, whatever the marker says:
+`LAST_AUDIT_SHA` moves once per *cycle*, not once per audit. Both the priority
+set above and the collector's line window run from a marker to `HEAD`, so when
+several audits run back to back — each iteration's fixes landing before the
+next starts — they already reach what earlier iterations changed. What neither
+does is single any one of those commits out: the ranking scores whole files
+across the window, so the commit whose paragraphs have been checked least, the
+one that landed last, carries no more weight than the rest of the cycle. Name
+it yourself:
 
 ```sh
 git log --oneline -1 --grep='^docs:' HEAD
 ```
 
-Read that commit's paragraphs before anything else. Measured across a
-five-iteration run, this check found a defect in every iteration that ran it,
-and out-found the full cluster fan-out in the last two.
+Read that commit's paragraphs before anything else.
 
 **The unit of re-reading is the paragraph, not the hunk.** A changed line is
 where the last pass aimed; the defect that survived is beside it. Take each

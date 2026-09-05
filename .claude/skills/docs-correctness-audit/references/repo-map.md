@@ -38,7 +38,7 @@ records its cycle's sha *after* that cycle's fixes landed, so it marks the END
 of a cycle: the line window starts one marker further back than the newest,
 because the range after the newest marker holds only what the cycle in
 progress has landed so far — nothing, when the audit opens a cycle — while
-the last completed pass sits between the two newest markers.
+the last completed pass sits between the second-newest marker and `HEAD`.
 
 Read a high-pressure file's rewritten lines as whole paragraphs. The ranking is
 an aim point, not a scope limit, and a file with pressure but no recent lines
