@@ -103,9 +103,11 @@ jobs:
             `--min-severity=low`.
 
             This means a workflow file on `main` now fails the same
-            `zizmor` scan the pre-commit hook and the required
-            `flake-check` job run with the same lock-pinned binary on
-            every PR and push. Start triage by comparing this run
+            lock-pinned `zizmor` binary the pre-commit hook and the
+            required `flake-check` job run on every PR and push — this
+            run hands it the `.github/workflows/` directory, where the
+            hook path scans only the files pre-commit's matching
+            selects. Start triage by comparing this run
             against the last `flake-check` run on `main`; a `flake.lock`
             bump is what changes the zizmor binary.
 
@@ -114,8 +116,11 @@ jobs:
 
             Run pinned at commit `${{ github.sha }}`.
 
-            To resolve: run `nix develop --command pre-commit run zizmor --all-files`
-            locally, fix the reported findings, and push. This issue
-            auto-closes on the next clean scheduled run.
+            To resolve: run
+            `nix develop --command zizmor --min-severity=low .github/workflows/`
+            locally (the hook path, `pre-commit run zizmor --all-files`,
+            covers only the files pre-commit's matching selects), fix the
+            reported findings, and push. This issue auto-closes on the
+            next clean scheduled run.
           label-description: workflow file(s) drifted past zizmor --min-severity=low
           github-token: ${{ secrets.GITHUB_TOKEN }}

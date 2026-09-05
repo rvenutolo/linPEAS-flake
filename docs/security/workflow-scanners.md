@@ -30,9 +30,11 @@ re-run). PR/push detection re-checks every change server-side. The weekly
 sweep re-runs the same pinned scanners against `main` on a schedule, so a
 finding on `main` is paged as a deduped issue even when no push has run the
 scanners since — codeql and octoscan are advisory on PRs and page only from
-non-PR runs, and zizmor's run re-verifies what the required `flake-check` job
-already scans. A tightened rule arrives with the PR that bumps the scanner's
-pin, and that PR's own runs re-scan the files. The posture watchdogs catch drift
+non-PR runs, and zizmor's scheduled run hands the scanner the workflow
+directory itself, which reaches more than the `flake-check` re-run of the
+hook selects (see [zizmor](#zizmor)). A tightened rule arrives with the PR
+that bumps the scanner's pin, and that PR's own runs re-scan the files. The
+posture watchdogs catch drift
 that accrues across commits — a force-moved tag, a loosened setting — that no
 individual diff reveals.
 
@@ -129,15 +131,17 @@ tree.)
     manual dispatch. The hook also runs server-side on every PR and push:
     the required `flake-check` job runs `nix flake check`, which builds
     `checks.pre-commit`, and the zizmor hook carries no sandbox bail
-    (unlike octoscan), so it re-scans `.github/workflows/` there too.
+    (unlike octoscan), so it re-runs there too, over the workflow files
+    pre-commit's matching selects.
 - **Status:** commit-time prevention + PR/push detection (the `flake-check`
     re-run) + weekly watchdog. The watchdog earns its place by reaching the
     scanner differently, not by scanning more: it hands `zizmor` the
     `.github/workflows/` directory, where the hook receives whatever
     pre-commit's own `files` and `types` matching selects. A workflow file
-    that matching stops selecting leaves the hook with nothing to scan — which
-    pre-commit reports as a skip, not a failure — and the scheduled run still
-    covers it. Both paths read the same `zizmor.yml`, so neither is a check on
+    that matching stops selecting is never handed to the hook, and a hook
+    that matching selects no files for at all is reported by pre-commit as a
+    skip, not a failure; either way the scheduled run still covers the file.
+    Both paths read the same `zizmor.yml`, so neither is a check on
     the other's suppressions. The watchdog pages a finding as a deduped
     `zizmor-drift` issue, closed on the next clean run; a rule change arrives
     with the `flake.lock` bump whose PR `flake-check` already re-scans in
