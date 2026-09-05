@@ -300,14 +300,15 @@ jobs:
               re-derivation is skipped in that case), OR
               `classify-pin-ref.sh` failed or returned an unrecognized
               verdict, OR a drift line failed shape validation, OR the
-              workflow glob matched zero files. Most often ratchet exited
-              non-zero on an unpinned `uses:` the PR gate should have
-              caught — check for that first. If ratchet instead started
-              failing a workflow set it accepted before (typically after a
-              ratchet upgrade), bump the `nixpkgs-unstable` input that
-              ships ratchet (`nix flake update nixpkgs-unstable`) and
-              re-run; a refactor that moved workflow files out of
-              `.github/workflows/` also lands here.
+              workflow glob matched zero files. Check first for an
+              unpinned `uses:` finding — the PR gate should have caught
+              it, so one here means the gate was bypassed. If ratchet
+              instead started failing a workflow set it accepted before
+              (typically after a ratchet upgrade), bump the
+              `nixpkgs-unstable` input that ships ratchet
+              (`nix flake update nixpkgs-unstable`), update the
+              `ratchet <X.Y.Z>` literals the runbook and this workflow
+              carry, and re-run.
             - `unknown` — the `check` job produced no `reason` output:
               the audit step hit an unhandled error, a step before it
               failed, or the run was cancelled (a banner above, or the

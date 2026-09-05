@@ -168,16 +168,20 @@ jobs:
           # infrastructure failures and is inert on skipped.
           result: ${{ needs.drift-check.result }}
           label: scorecard-drift
-          title: "scorecard-drift-check: at least one check scored <10"
+          title: "scorecard-drift-check: check(s) scored <10, or the scorecard payload was unreadable"
           body: |
-            The weekly `scorecard-drift-check` watchdog detected one
-            or more curated OpenSSF Scorecard checks scoring below 10
-            for `${{ github.repository }}`.
+            The weekly `scorecard-drift-check` watchdog failed for
+            `${{ github.repository }}`: either one or more curated
+            OpenSSF Scorecard checks scored below 10, or the threshold
+            script could not read the scorecard payload as JSON at all
+            (its exit 2 — an empty, malformed or wrongly shaped
+            `results.json`).
 
-            See the failing job logs for the offending check
-            name(s) and reasons (printed on stderr by
+            See the failing job logs to tell the two apart: the
+            offending check name(s) and reasons, or the payload
+            diagnostic, are printed on stderr by
             `scripts/check-scorecard-threshold.sh`, then `--show-details`
-            output from the scorecard CLI itself):
+            output from the scorecard CLI itself:
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
             Run pinned at commit `${{ github.sha }}`.
@@ -188,5 +192,5 @@ jobs:
             [docs/runbooks/scorecard-pat-rotation.md](https://github.com/${{ github.repository }}/blob/main/docs/runbooks/scorecard-pat-rotation.md).
 
             This issue auto-closes on the next clean scheduled run.
-          label-description: scorecard check(s) scored below 10
+          label-description: scorecard check(s) scored below 10, or the scorecard payload was unreadable
           github-token: ${{ secrets.GITHUB_TOKEN }}
