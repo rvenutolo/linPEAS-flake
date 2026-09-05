@@ -105,7 +105,7 @@ jobs:
             This means a workflow file on `main` now fails the same
             lock-pinned `zizmor` binary the pre-commit hook and the
             required `flake-check` job run on every PR and push — this
-            run hands it the `.github/workflows/` directory, where the
+            run hands it the `.github/workflows/` directory, whereas the
             hook path scans only the files pre-commit's matching
             selects. Start triage by comparing this run
             against the last `flake-check` run on `main`; a `flake.lock`

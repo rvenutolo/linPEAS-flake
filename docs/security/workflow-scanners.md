@@ -17,7 +17,7 @@ posture, not redundancy to trim.
 Workflow scanning runs at four moments, each with a blind spot the next layer
 closes:
 
-| Layer                  | When it fires                                                                      | Tools                                                                                                                                                                                          | Closes the gap of                                                                         |
+| Layer                  | When it fires                                                                      | Tools                                                                                                                                                                                          | What the layer adds                                                                       |
 | ---------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | Commit-time prevention | every `git commit` touching a scanned path (pre-commit)                            | zizmor, octoscan + the workflow-hardening hook family                                                                                                                                          | bad edits caught before they reach history, on the local path                             |
 | PR / push detection    | every PR to `main` (codeql full; octoscan paths-filtered) and every push to `main` | codeql, octoscan, zizmor (re-run by the required `flake-check` job's `nix flake check`), and the required lint-group jobs (lint-workflow-security / lint-script-hygiene / lint-doc-invariants) | changed workflows checked server-side, in the diff                                        |
@@ -31,7 +31,7 @@ sweep re-runs the same pinned scanners against `main` on a schedule, so a
 finding on `main` is paged as a deduped issue even when no push has run the
 scanners since — codeql and octoscan are advisory on PRs and page only from
 non-PR runs, and zizmor's scheduled run hands the scanner the workflow
-directory itself, where the `flake-check` re-run scans whatever pre-commit's
+directory itself, whereas the `flake-check` re-run scans whatever pre-commit's
 matching selects (see [zizmor](#zizmor)). A tightened rule arrives with the PR
 that bumps the scanner's pin, and that PR's own runs re-scan the files. The
 posture watchdogs catch drift
@@ -136,7 +136,7 @@ tree.)
 - **Status:** commit-time prevention + PR/push detection (the `flake-check`
     re-run) + weekly watchdog. The watchdog earns its place by reaching the
     scanner differently, not by scanning more: it hands `zizmor` the
-    `.github/workflows/` directory, where the hook receives whatever
+    `.github/workflows/` directory, whereas the hook receives whatever
     pre-commit's own `files` and `types` matching selects. A workflow file
     that matching stops selecting is never handed to the hook; a hook for
     which matching selects no files is reported by pre-commit as a skip
