@@ -775,6 +775,99 @@ function expect_unparsable_shell() {
 
 expect_unparsable_shell
 
+# @description The operator-encoding precondition. Two rule branches are
+# decided by reading an operator out of the syntax tree, and a `select`
+# handed an encoding the lint was not taught matches nothing rather than
+# failing — so the branch stops detecting while the run still exits 0.
+# No parser on PATH can be made to produce that, which is exactly why it
+# needs a scenario: the lint parses a fixed probe through SHFMT_OVERRIDE,
+# and a stub rewriting one operator value in the tree is the only way to
+# put the shape under assertion.
+#
+# The stub reads its rewrite from STUB_TREE_EDIT so one file serves every
+# scenario, and an empty value passes the tree through untouched — which
+# is what makes the passthrough scenario below a control: it proves the
+# exit 2 the other two report comes from the encoding the stub planted
+# and not from routing the parse through a stub at all.
+#
+# The rewrite is a jq program over the parsed tree rather than a textual
+# substitution on the parser's output, and it selects the node to doctor
+# by type and position rather than by the value sitting there. Both
+# encodings the lint matches are live on ordinary developer machines at
+# once — the parser in this repo's dev shell serializes an operator as
+# its token where an older one on PATH serializes an opaque integer — so
+# a stub that rewrote a literal value would plant nothing under half of
+# them and score a silent pass, which is the failure this scenario
+# exists to catch, reappearing in the thing that tests for it.
+# @arg $1 scenario name  @arg $2 jq rewrite program ('' passes through)
+# @arg $3 expected exit  @arg $4 expected substring
+function expect_parser_probe() {
+  local -r name="$1" tree_edit="$2" want_exit="$3" want_msg="$4"
+  local stub_dir stub out_file err_file outcome_file got_exit=0
+  stub_dir="$(mktemp --directory)"
+  stub="${stub_dir}/shfmt-stub"
+  cat >"${stub}" <<'STUB'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+if [[ -n ${STUB_TREE_EDIT:-} ]]; then
+  shfmt "$@" | jq "${STUB_TREE_EDIT}"
+else
+  shfmt "$@"
+fi
+STUB
+  chmod +x -- "${stub}"
+  out_file="$(mktemp)"
+  err_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  # Three fixtures rather than one: the clean summary is the whole
+  # assertion of the passthrough control, so its tally has to be a tuple
+  # no other scenario in this file already produces.
+  STUB_TREE_EDIT="${tree_edit}" SHFMT_OVERRIDE="${stub}" \
+    PATHS_OVERRIDE="${FIXTURES}/good-glob-arg-only.sh
+${FIXTURES}/good-filter-exempt.sh
+${FIXTURES}/good-direct.sh" \
+    "${SCRIPT}" >"${out_file}" 2>"${err_file}" || got_exit=$?
+  rm --recursive --force -- "${stub_dir}"
+  printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${want_msg}" "${outcome_file}" "${out_file}" "${err_file}"
+
+  if [[ ${got_exit} != "${want_exit}" ]]; then
+    fail "$(printf '%s: exit %s, want %s' "${name}" "${got_exit}" "${want_exit}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  elif ! grep --fixed-strings --quiet -- "${want_msg}" "${out_file}" "${err_file}"; then
+    fail "$(printf '%s: output missing %q' "${name}" "${want_msg}")"
+    cat -- "${out_file}" "${err_file}" >&2
+  else
+    pass "${name}"
+  fi
+  rm --force -- "${out_file}" "${err_file}" "${outcome_file}"
+}
+
+# An encoding the lint recognizes: the scan runs and reports its tally.
+expect_parser_probe 'parser-probe-recognized' '' 0 \
+  '3 file(s) scanned, 5 scan site(s) classified, 1 exemption(s)'
+
+# An encoding the lint does not recognize, in the shape that silences a
+# branch: every pipeline operator arrives as a value no list holds, so
+# the rule reading it would stop extending a loop's range past the stage
+# feeding it and report nothing.
+expect_parser_probe 'parser-probe-unknown-encoding' \
+  'walk(if type == "object" and .Type == "BinaryCmd" then .Op = "%%unrecognized%%" else . end)' 2 \
+  'BinaryCmd.Op for | is an encoding this lint does not match on'
+
+# The mirror shape, which an enumeration of known values would pass: the
+# minus operator arrives spelled however this parser spells the plus one,
+# copied off the probe's own plus construct so the collision lands under
+# either encoding. The plus branch would then skip a read that does emit
+# the parameter's value; the probe asserts absence as well as presence,
+# which is what catches it.
+# shellcheck disable=SC2016 # the brace pair is literal diagnostic text naming the probe construct, not an expansion
+expect_parser_probe 'parser-probe-collided-encoding' \
+  '([.. | objects | select(.Type == "ParamExp" and (.Pos.Line // 0) == 5) | .Exp.Op][0]) as $plus
+  | walk(if type == "object" and .Type == "ParamExp" and (.Pos.Line // 0) == 7
+      then .Exp.Op = $plus else . end)' 2 \
+  'ParamExp.Exp.Op for ${x-C} matches the plus-operator list'
+
 harness_assert_verify || failures=$((failures + 1))
 
 if ((failures > 0)); then

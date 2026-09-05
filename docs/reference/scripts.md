@@ -542,9 +542,20 @@ never consumed while walking a file is reported on its own line, and
 the clean summary line carries the count as a fourth field alongside
 files scanned, sites classified and exemptions applied.
 
-Honors PATHS_OVERRIDE (newline-separated file list) for fixtures, and
-LINT_ALLOW_EMPTY_SCAN=1 to accept a run whose scan-site tally (or whose
-enumerated file count) comes back zero.
+Two of the rules above are decided by reading an operator out of the
+syntax tree — a pipeline stage feeding a loop, and a read under a plus
+operator — and a `select` handed an encoding this file was not taught
+matches nothing rather than failing. So the encodings are established
+as a precondition: a fixed probe exercising all eight operators is
+parsed before any file is scanned, and each construct is asserted both
+to match the branch that must select it and to be absent from the
+branch that must not.
+
+Honors PATHS_OVERRIDE (newline-separated file list) for fixtures,
+SHFMT_OVERRIDE (default `shfmt`) to point the parse at a stub emitting
+a tree the jq program was not written for, and LINT_ALLOW_EMPTY_SCAN=1
+to accept a run whose scan-site tally (or whose enumerated file count)
+comes back zero.
 Exit 0 clean, 1 on a producer outside `enumerate_into`, a producer name
 copied to a variable, a `for` loop expanding a glob at its own head, an
 array assignment expanding one in its element list, a `for` loop or an
@@ -555,8 +566,10 @@ calling `filter_into`,
 an assignment copying a filter value to a name outside the filter
 pattern, an exemption marker with no rationale, or an exemption marker
 that excuses no site this pass classified, 2 when a required tool is
-absent, the scan set could not be enumerated (or classified nothing),
-a named path does not exist, or a file could not be parsed as shell.
+absent, the parser emitted an operator encoding this lint does not
+recognize, the scan set could not be enumerated (or classified
+nothing), a named path does not exist, or a file could not be parsed
+as shell.
 
 ### scripts/check-ephemeral-refs.sh
 
