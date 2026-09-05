@@ -180,7 +180,7 @@ jobs:
                   `treat it as a real failure.\n\n` +
                   `PR: ${pr.html_url}\nHead commit: \`${pr.head.sha}\`\n\n` +
                   `Exhausted runs:\n\n${detail}\n\n` +
-                  `Triggered by the scheduled \`ci-watchdog\` workflow.\n\n` +
+                  `Filed by the \`ci-watchdog\` workflow.\n\n` +
                   `What to do: ` +
                   `https://github.com/${owner}/${repo}/blob/main/docs/runbooks/ci-watchdog.md` +
                   `\n\n${marker}`;

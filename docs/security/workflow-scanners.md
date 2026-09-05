@@ -85,7 +85,7 @@ tree.)
     inside the Nix build sandbox, where docker is unavailable); PR to
     `main` filtered to
     `.github/workflows/**` and the octoscan scan script; push to `main`; weekly
-    Friday cron (full tree); manual dispatch.
+    Friday cron (the whole workflow directory, unfiltered); manual dispatch.
 - **Status:** advisory by design. It is the cheapest scanner, but it fails
     on *any* finding (no severity threshold), so as a required check a
     single false positive would block merge. Its rule set is narrowed only

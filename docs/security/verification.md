@@ -185,9 +185,9 @@ the `attribute failure reason` step. Reasons:
     triage it by hand and fix the attribution step. This is the token to
     watch for after adding a verification step without wiring its
     `id:` into the ladder.
-- `unknown` — the `verify` job produced no `reason` output at all,
-    which happens when it is cancelled or skipped before the attribution
-    step runs. Not a verification result; re-run the cron.
+- `unknown` — the `verify` job produced no `reason` output at all: it
+    was cancelled, skipped, or killed by the job timeout before the
+    attribution step ran. Not a verification result; re-run the cron.
 
 `upstream-sri-drift` and `cross-registry-manifest-mismatch` warrant the
 "treat as security incident" framing outright; the `*-attest-failed`
