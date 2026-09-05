@@ -180,8 +180,9 @@ jobs:
             See the failing job logs to tell the two apart: the
             offending check name(s) and reasons, or the payload
             diagnostic, are printed on stderr by
-            `scripts/check-scorecard-threshold.sh`, then `--show-details`
-            output from the scorecard CLI itself:
+            `scripts/check-scorecard-threshold.sh`, followed by the first
+            1 KiB of `results.json`, which the same step dumps to stderr
+            whenever the threshold script exits non-zero:
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
             Run pinned at commit `${{ github.sha }}`.
