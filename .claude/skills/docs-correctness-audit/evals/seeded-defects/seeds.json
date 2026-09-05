@@ -107,6 +107,30 @@
       "expected_severity": "low",
       "sentinel": "",
       "line_tol": 3
+    },
+    {
+      "id": "distant-contradiction",
+      "category": "distant same-file claim",
+      "file": "docs/security/verification.md",
+      "anchor": "## Tools needed",
+      "op": "insert-after",
+      "from": "",
+      "payload": "The multi-arch index carries no cosign signature of its own, so verifying the index itself requires `gh attestation verify` rather than `cosign verify`.",
+      "expected_severity": "high",
+      "sentinel": "",
+      "line_tol": 3
+    },
+    {
+      "id": "dangling-deixis",
+      "category": "dangling deixis",
+      "file": "docs/development/linting.md",
+      "anchor": "## Typos",
+      "op": "insert-after",
+      "from": "",
+      "payload": "Each of the three checkers listed below runs in the order shown.",
+      "expected_severity": "medium",
+      "sentinel": "",
+      "line_tol": 3
     }
   ]
 }
