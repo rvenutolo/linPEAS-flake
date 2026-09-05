@@ -110,9 +110,10 @@ jobs:
             not be made at all — the fixture harness step failed, the
             App token could not be minted, or
             `scripts/check-allowed-actions-api.sh` exited 2 (`gh` or
-            `jq` absent, the doc's canonical block yielding no patterns,
-            or the live API call failing or returning a payload missing
-            a field it reads).
+            `jq` absent, the allowlist doc missing or its canonical
+            block yielding no patterns, the live API call failing, or
+            the payload missing a field it reads or carrying it at the
+            wrong type).
 
             Drift modes:
 
