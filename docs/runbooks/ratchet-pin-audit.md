@@ -4,11 +4,12 @@ The `ratchet-pin-audit` workflow runs on a daily cron (see
 [CI — cron schedule](../architecture/ci.md#cron-schedule)). It runs
 `ratchet lint` (from the devshell) against every workflow file under
 `.github/workflows/` and re-derives the canonical SHA for each
-SHA-pinned action ref it does not skip (see below). On *any* failure —
+SHA-pinned action ref carrying a version comment that it does not skip
+(see below). On *any* failure —
 detected drift, an upstream API failure, a ratchet tool failure, an
 unclassified error, or a cancelled run — the workflow opens a single
-deduped umbrella issue labeled `ratchet-drift`, or comments on the one
-already open. The issue body's `Reason:` line names the reason of the
+deduped umbrella issue labeled `ratchet-drift`, or comments on an
+already-open one. The issue body's `Reason:` line names the reason of the
 run that opened it; a later failure's comment carries only the run
 link (a later cancelled run's comment says it was cancelled), so when
 the issue has been re-commented, read the newest run's log for its
@@ -29,12 +30,16 @@ branch — see [pin convention](../architecture/pin-convention.md).
 This repo's own composite-action self-references are skipped because they
 have no upstream tag to compare against: Renovate's `pinDigests` rule
 tracks this repo's own `main` HEAD, not an upstream release. The
-digest-provenance gate skips them for the same reason, so the in-repo
-PR-time gates left for them are `check-uses-sha-pinned.sh`, backing the
-GitHub-side `sha_pinning_required` setting and still requiring a full
-40-hex SHA — see [repo config](../security/repo-config.md) — and
-`check-patch-tag-pins.sh`, which reads the same lines and admits a
-self-reference only through an inline `# patch-tag-exception:` marker.
+digest-provenance gate skips them for the same reason, so their PR-time
+backstop is `check-uses-sha-pinned.sh` (the `uses-sha-pinned` member of
+`lint-workflow-security`), backing the GitHub-side `sha_pinning_required`
+setting and still requiring a full 40-hex SHA — see
+[repo config](../security/repo-config.md). `check-patch-tag-pins.sh` also
+reads these lines and demands an exact patch tag, but it runs only as the
+`patch-tag-pins` pre-commit hook and gates no merge — see
+[pin convention](../architecture/pin-convention.md); this repo publishes
+no release tags on its composite actions, so its self-reference carries an
+inline `# patch-tag-exception:` marker.
 
 This runbook is linked inline from the auto-filed issue body.
 
@@ -89,10 +94,19 @@ Steps:
     place and the next run would re-file the same issue.
 
     Review the diff, open a PR. (`ratchet update` is not used here
-    because our pins use plain `# v3` trailing-comment annotations
-    rather than ratchet's `# ratchet:repo@v3` format, so ratchet
-    does not recognize them as ratchet-managed.) Renovate will pick
-    these up on its next scheduled run if you prefer to wait.
+    because our pins use plain `# v3.36.0` trailing-comment annotations
+    rather than ratchet's `# ratchet:repo@v3.36.0` format, so ratchet
+    does not recognize them as ratchet-managed.)
+
+    That PR fails the required `lint-doc-invariants` job by design: a
+    SHA that moves under an unchanged version comment is the
+    digest-repoint class `check-pin-digest-provenance.sh` hard-fails.
+    Move the version label together with the SHA, or update the pin
+    to the corrected upstream release — see
+    [pin digest provenance](../security/repo-config.md#pin-digest-provenance).
+    A Renovate digest-only bump for the same ref hits the same gate, so
+    waiting for Renovate helps only when upstream also published a new
+    version label.
 
 1. **If the release notes do not describe the SHA change**: treat
     this as a potential supply-chain event. Do not auto-update.
@@ -114,10 +128,10 @@ possible.
     [GitHub Status page](https://www.githubstatus.com/).
 1. If the API is healthy, inspect the run log. The audit stops at the
     first failure, so the log carries one failure line: it names the
-    `owner/repo@tag` whose lookup or dereference failed, or quotes the
-    payload that would not parse (a failure routed here by the ratchet
-    heuristic quotes ratchet's output instead and names no ref). A named
-    ref that keeps failing across re-runs points at that action's
+    `owner/repo@tag` whose lookup, dereference or payload parse failed,
+    quoting the payload when one was read (a failure routed here by the
+    ratchet heuristic quotes ratchet's output instead and names no ref).
+    A named ref that keeps failing across re-runs points at that action's
     repository — renamed, made private, or its tag deleted — rather
     than at the API as a whole; the refs after it were not attempted.
 
@@ -135,18 +149,18 @@ failed shape validation; OR the workflow glob matched zero files.
     so a finding here means the PR gate was bypassed or skipped. Treat
     it as a gate failure, not a tool failure.
 1. If ratchet instead started exiting non-zero on a workflow set it
-    accepted before, most likely after a ratchet upgrade, bump ratchet
-    locally via `nix flake update` and re-run. Drift itself comes from
-    the per-ref `gh api` re-derivation rather than from ratchet's
-    output, so an output-format change cannot fabricate a drift
-    report.
+    accepted before, most likely after a ratchet upgrade, bump the
+    `nixpkgs-unstable` input that ships ratchet
+    (`nix flake update nixpkgs-unstable`) and re-run. Drift itself
+    comes from the per-ref `gh api` re-derivation rather than from
+    ratchet's output, so an output-format change cannot fabricate a
+    drift report.
 1. The step tells an upstream failure from a tool failure with a fixed
     heuristic grep over ratchet's output, so a reworded ratchet error
     can still land an upstream failure under this reason. If the run
-    log shows one,
-    widen the heuristic grep in the `audit pins` step. The structural
-    invariant `scripts/check-ratchet-pin-audit.sh` pins the four reason values
-    the notify body documents (`drift-detected`,
+    log shows one, widen the heuristic grep in the `audit pins` step.
+    The structural invariant `scripts/check-ratchet-pin-audit.sh` pins
+    the four reason values the notify body documents (`drift-detected`,
     `upstream-api-failure`, `ratchet-tool-failure`, `unknown`), not
     the heuristic strings — so widening it is a single-file change.
 1. If the workflow glob matched zero files, a refactor moved
@@ -161,8 +175,8 @@ failed shape validation; OR the workflow glob matched zero files.
 The `check` job produced no `reason=` output. Three run shapes do
 that: the `audit pins` step exited non-zero on an unhandled error
 inside its run block; a step before it failed, so the audit never ran;
-or the run was cancelled — most
-often its `timeout-minutes` was exceeded. The notify composite flags a
+or the run was cancelled — most often its `timeout-minutes` was
+exceeded. The notify composite flags a
 cancelled run as an infrastructure failure rather than a finding: with
 a `[!WARNING]` banner at the top of the issue body when the cancelled
 run is the one that opened the issue, and in its comment when it
@@ -208,8 +222,8 @@ than a side effect.
 
 `ratchet update` does reach upstream, but it only operates on pins
 written in ratchet's own annotation format
-(`uses: foo@<sha> # ratchet:foo@v3`). Our pins use plain
-`# v3` trailing comments and are therefore invisible to
+(`uses: foo@<sha> # ratchet:foo@v3.36.0`). Our pins use plain
+`# v3.36.0`-style trailing comments and are therefore invisible to
 `ratchet update`. Remediation must be done by hand (or via Renovate
 on its next scheduled run).
 

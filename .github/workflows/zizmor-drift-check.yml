@@ -2,12 +2,13 @@ name: zizmor-drift-check
 
 # Weekly drift detection for zizmor findings on .github/workflows/**.
 #
-# zizmor runs as a pre-commit hook today (--min-severity=low) — that
-# is prevention at commit time. This watchdog covers the gaps:
-#   - commits made with --no-verify
-#   - edits authored outside the pre-commit environment (web UI, gh
-#     CLI, dependabot/renovate auto-edits before hook re-run)
-#   - upstream zizmor rule changes after a file merged green
+# zizmor runs as a pre-commit hook (--min-severity=low) — prevention at
+# commit time — and the required flake-check job re-runs that hook on
+# every PR and push through `nix flake check`, so a hook bypass is
+# caught before merge. This watchdog re-runs the same lock-pinned scan
+# against main on a schedule: a finding here means a workflow file on
+# main fails a scan those gates ran green (a rule change arrives with
+# the flake.lock bump whose PR flake-check re-scans in full).
 #
 # On findings: opens (or leaves) a deduped `zizmor-drift` tracking
 # issue via the notify-workflow-result composite. On the next clean
@@ -93,12 +94,12 @@ jobs:
             more findings in `.github/workflows/**` at or above
             `--min-severity=low`.
 
-            This means a workflow file landed on `main` that the
-            pre-commit `zizmor` hook would have caught — likely via
-            `--no-verify`, an edit made outside the pre-commit
-            environment (web UI, `gh` CLI, bot auto-edit), or an
-            upstream zizmor rule that tightened after the file
-            merged green.
+            This means a workflow file on `main` now fails the same
+            `zizmor` scan the pre-commit hook and the required
+            `flake-check` job run with the same lock-pinned binary on
+            every PR and push. Start triage by comparing this run
+            against the last `flake-check` run on `main`; a `flake.lock`
+            bump is what changes the zizmor binary.
 
             See the failing job logs for the specific finding(s):
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}

@@ -42,9 +42,16 @@ How to verify a release of this wrapper yourself. None of this trusts the Pages 
     `cosign verify-blob` for the `.sigstore` release-asset bundles,
     which the release pipeline produces with cosign 3.x (an older 2.x
     client is not guaranteed to read its bundle format).
+- `docker` with `buildx` — `docker buildx imagetools inspect … --raw`
+    resolves the per-arch image digest from the multi-arch index, for the
+    `gh attestation verify` path.
+- `jq` — reads that digest out of the raw index, for the same path.
 
-Either toolchain alone is enough for the image: `gh attestation verify` and
-`cosign verify` check different signatures over the same digest.
+Either signing toolchain alone is enough to verify the image:
+`gh attestation verify` needs the per-arch digest resolved first, since
+attestations are per-arch, while `cosign verify` accepts the tag, since the
+multi-arch index itself is signed. The two check different signatures over
+the same image.
 
 ## Verify the OCI image's build provenance<a name="verify-the-oci-images-build-provenance"></a>
 
@@ -83,9 +90,12 @@ This means:
 - The manifest index itself is **not** attested. An attacker with push
     to either registry could repoint the manifest at unattested images;
     the verify step in `release-on-bump.yml` would catch this at release
-    time, but consumers who only verify the manifest pointer (not the
-    arch image) would miss it. Always verify against the resolved
-    arch-image digest.
+    time, but a consumer who checks only the attestation against the
+    manifest pointer (not the arch image) would miss it. For
+    `gh attestation verify`, target the resolved arch-image digest.
+    `cosign verify` against the tag covers the index itself, since the
+    index digest is signed — see
+    [Cosign keyless signatures](#cosign-keyless-signatures).
 
 ## Verify the weekly parity check is current<a name="verify-the-weekly-parity-check-is-current"></a>
 
@@ -105,8 +115,9 @@ Look for `"conclusion": "success"` within the last 7 days. Current state on the 
 
 1. Asset URL must start with
     `https://github.com/peass-ng/PEASS-ng/releases/download/`. Hard fail.
-1. GitHub-API `.digest` field never silently skipped. Absent or
-    non-`sha256:` prefix is a hard fail.
+1. GitHub-API `.digest` field never silently skipped. Absent,
+    non-`sha256:` prefix, or a digest that does not match the downloaded
+    asset is a hard fail.
 1. Pin file written via `make_temp` (`scripts/lib/temp.sh`) + `mv` (atomic).
     Never `>`, and never a bare `mktemp` — the script-hygiene lint rejects that
     shape under `scripts/`; the guarded helper in `scripts/lib/temp.sh` holds
@@ -359,8 +370,9 @@ Signed artifacts per release:
     both `ghcr.io` and `docker.io`. The signature lands as a `.sig` tag
     next to each image in each registry.
 - **Multi-arch index**: same `cosign sign` invocation against the OCI
-    index digest of `:VERSION` (which equals the digest of `:latest`,
-    since they reference identical bytes). One signature per registry
+    index digest of `:VERSION`. When the run also writes `:latest` (the
+    release is the newest one, not a historic backfill), that tag
+    resolves to the same index digest, so the one signature per registry
     covers both tags.
 
 ### Identity pinning<a name="identity-pinning"></a>

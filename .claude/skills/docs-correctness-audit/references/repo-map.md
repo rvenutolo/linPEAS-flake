@@ -46,6 +46,8 @@ is a doc that took its rewriting in an earlier cycle. Release-driven records
 (`CHANGELOG.md`, `docs/releases.md`), generated data and fixture trees are
 excluded: their churn is not prose drift and would otherwise top every list.
 
+### The rest of the bundle
+
 The cron command spells both workflow globs, `*.yml` and `*.yaml`, to match the
 scan sets the repo's own workflow lints use. No `*.yaml` workflow exists today,
 so that half goes unmatched and reaches `grep` as a literal path: expect a
@@ -129,8 +131,8 @@ them un-merged unless someone re-measures cost head-to-head. That
 recall-vs-cost tuning covers the four user-facing clusters;
 `claude-tooling` is separate from all of them because it is not
 user-facing documentation at all — it is the audit's own specification,
-so its reader checks this file against the tree rather than checking the
-tree against prose.
+so its reader checks the tracked `.claude/` tooling — this file included —
+against the tree rather than checking the tree against prose.
 
 `root + misc` carries the catch-all clause because the three `docs/` rows are
 directory globs and `claude-tooling` covers only `.claude/`: a tracked doc
@@ -344,7 +346,9 @@ not is a false positive. The lint's complete class set is in
 `RE_REVIEW` and `RE_CLAUDE` block, `RE_CAUSAL` warns. The sweep transcribes
 the blocking classes from those constants, left boundary guards included, so a
 banned shape sitting inside a larger token (`UTF-8`, `PDF-1.7`, `ID5:`,
-`abc#12`) is no more a sweep hit than a gate failure. The advisory
+`abc#12`) is no more a blocking-class sweep hit than a gate failure (the
+unguarded `ad-hoc-ticket` class can still match a shape like `PDF-1.7`; see
+the caveat below). The advisory
 `causal-history` class is matched case-insensitively on both sides, matching
 `RE_CAUSAL`'s `--ignore-case` pass in the lint, so a sentence-initial
 `Previously` is a hit in the sweep exactly as it is in the lint; the blocking

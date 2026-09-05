@@ -17,18 +17,22 @@ posture, not redundancy to trim.
 Workflow scanning runs at four moments, each with a blind spot the next layer
 closes:
 
-| Layer                  | When it fires                                                                      | Tools                                                                                                                                                | Closes the gap of                                                 |
-| ---------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Commit-time prevention | every `git commit` touching a scanned path (pre-commit)                            | zizmor, octoscan + the workflow-hardening hook family                                                                                                | bad edits never enter history                                     |
-| PR / push detection    | every PR to `main` (codeql full; octoscan paths-filtered) and every push to `main` | codeql, octoscan, and the required lint-group jobs (lint-workflow-security / lint-script-hygiene / lint-doc-invariants)                              | changed workflows checked server-side, in the diff                |
-| Weekly full sweep      | Friday cron cluster                                                                | codeql, octoscan, zizmor                                                                                                                             | `--no-verify` bypasses, web-UI / bot edits, upstream rule changes |
-| Posture watchdog       | daily + weekly cron                                                                | scorecard-drift-check, ratchet-pin-audit, settings-posture-drift-check, stale-pin-check, allowed-actions-api-drift-check, flake-lock-staleness-check | silent regressions no single PR introduces                        |
+| Layer                  | When it fires                                                                      | Tools                                                                                                                                                                                          | Closes the gap of                                                                         |
+| ---------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Commit-time prevention | every `git commit` touching a scanned path (pre-commit)                            | zizmor, octoscan + the workflow-hardening hook family                                                                                                                                          | bad edits caught before they reach history, on the local path                             |
+| PR / push detection    | every PR to `main` (codeql full; octoscan paths-filtered) and every push to `main` | codeql, octoscan, zizmor (re-run by the required `flake-check` job's `nix flake check`), and the required lint-group jobs (lint-workflow-security / lint-script-hygiene / lint-doc-invariants) | changed workflows checked server-side, in the diff                                        |
+| Weekly full sweep      | Friday cron cluster                                                                | codeql, octoscan, zizmor                                                                                                                                                                       | a scheduled re-scan of `main`, paged as a deduped issue, with no PR or push to trigger it |
+| Posture watchdog       | daily + weekly cron                                                                | scorecard-drift-check, ratchet-pin-audit, settings-posture-drift-check, stale-pin-check, allowed-actions-api-drift-check, flake-lock-staleness-check                                           | silent regressions no single PR introduces                                                |
 
 Commit-time prevention is the cheapest and earliest gate, but it is bypassable
 (`--no-verify`, edits made in the GitHub web UI or by bots before hooks
 re-run). PR/push detection re-checks every change server-side. The weekly
-sweep re-runs the same scanners against the whole tree, so a file that merged
-green before a rule existed is re-evaluated. The posture watchdogs catch drift
+sweep re-runs the same pinned scanners against `main` on a schedule, so a
+finding on `main` is paged as a deduped issue even when no push has run the
+scanners since — codeql and octoscan are advisory on PRs and page only from
+non-PR runs, and zizmor's run re-verifies what the required `flake-check` job
+already scans. A tightened rule arrives with the PR that bumps the scanner's
+pin, and that PR's own runs re-scan the files. The posture watchdogs catch drift
 that accrues across commits — a force-moved tag, a loosened setting — that no
 individual diff reveals.
 
@@ -65,7 +69,8 @@ tree.)
 - **Status:** advisory. Deliberately not a required check — gating merge on it
     would let a single CRITICAL false positive or a transient CodeQL infra flake
     wedge every PR; the merge gate is the in-tree workflow lints plus the zizmor
-    pre-commit hook, with CodeQL as the deeper dataflow second opinion.
+    pre-commit hook, re-run in the required `flake-check` job, with CodeQL as
+    the deeper dataflow second opinion.
 
 ### octoscan
 
@@ -121,12 +126,16 @@ tree.)
 - **Triggers:** runs as a **pre-commit hook on every commit that touches a
     workflow YAML under `.github/workflows/`** (`--min-severity=low`,
     scanning the changed workflow files), plus a weekly Friday cron and
-    manual dispatch. It does **not** scan on PRs or pushes — commit-time
-    prevention is its primary mode.
-- **Status:** commit-time prevention + weekly watchdog. The drift-check covers
-    the pre-commit blind spots (`--no-verify`, web-UI and bot edits, upstream
-    rule changes); on a finding it opens a deduped `zizmor-drift` issue, closed
-    on the next clean run.
+    manual dispatch. The hook also runs server-side on every PR and push:
+    the required `flake-check` job runs `nix flake check`, which builds
+    `checks.pre-commit`, and the zizmor hook carries no sandbox bail
+    (unlike octoscan), so it re-scans `.github/workflows/` there too.
+- **Status:** commit-time prevention + PR/push detection (the `flake-check`
+    re-run) + weekly watchdog. The drift-check re-runs the same lock-pinned
+    scan against `main` on a schedule and pages a finding as a deduped
+    `zizmor-drift` issue, closed on the next clean run; a rule change arrives
+    with the `flake.lock` bump whose PR `flake-check` already re-scans in
+    full.
 
 ## In-tree lints and posture watchdogs
 
