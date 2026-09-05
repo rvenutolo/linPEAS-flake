@@ -138,7 +138,7 @@ jobs:
       # Self-reference pinned by SHA: path-relative `uses: ./` would
       # resolve to the PR branch's copy on `pull_request` events; SHA pin
       # forces the composite to come from main regardless of the checked-out
-      # ref. Renovate's pinDigests rule updates this on the daily Friday run;
+      # ref. Renovate's pinDigests rule updates this on the weekly Friday run;
       # if Renovate ever stops tracking self-references, bump manually via:
       #   git rev-parse origin/main
       - uses: rvenutolo/linPEAS-flake/.github/actions/notify-workflow-result@ffc97d8b617b52890430629d6bd15cec9bc71f53 # self-reference; Renovate pinDigests bumps SHA # patch-tag-exception: self-reference to this repo, which publishes no release tags on composite actions
