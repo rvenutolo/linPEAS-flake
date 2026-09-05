@@ -48,7 +48,7 @@ excluded: their churn is not prose drift and would otherwise top every list.
 
 ### The rest of the bundle
 
-The cron command spells both workflow globs, `*.yml` and `*.yaml`, to match the
+The cron command below spells both workflow globs, `*.yml` and `*.yaml`, to match the
 scan sets the repo's own workflow lints use. No `*.yaml` workflow exists today,
 so that half goes unmatched and reaches `grep` as a literal path: expect a
 `No such file or directory` warning and exit 2; its stdout is still complete.
