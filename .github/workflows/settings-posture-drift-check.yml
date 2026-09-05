@@ -109,14 +109,20 @@ jobs:
           # infrastructure failures and is inert on skipped.
           result: ${{ needs.drift-check.result }}
           label: settings-drift
-          title: "settings-posture-drift-check: live repo settings have drifted"
+          title: "settings-posture-drift-check: live repo settings have drifted, or the posture could not be compared"
           body: |
-            The daily `settings-posture-drift-check` watchdog detected
-            that the live `rvenutolo/linPEAS-flake` repository settings
-            no longer match `docs/security/settings-posture.md`.
+            The daily `settings-posture-drift-check` watchdog failed for
+            `rvenutolo/linPEAS-flake`: either the live repository
+            settings no longer match `docs/security/settings-posture.md`,
+            or the comparison could not be made at all — the fixture
+            harness step failed, the App token could not be minted, or
+            `scripts/check-settings-posture.sh` exited 2 because a probed
+            endpoint could not be fetched or returned a payload it could
+            not read (see `docs/runbooks/settings-drift-app.md`).
 
-            See the failing job logs for the specific drift line(s);
-            every mismatched setting is reported in one run.
+            See the failing job logs to tell the two apart: on drift,
+            every mismatched setting is reported in one run; a
+            could-not-run names its cause on stderr instead.
 
             Remediation: reconcile by either
             - reverting the UI change so live matches the doc, or
@@ -126,5 +132,5 @@ jobs:
 
             This issue auto-closes once the next watchdog run sees the
             settings reconciled.
-          label-description: live repo settings drifted from settings-posture.md
+          label-description: live repo settings drifted from settings-posture.md, or could not be compared
           github-token: ${{ secrets.GITHUB_TOKEN }}

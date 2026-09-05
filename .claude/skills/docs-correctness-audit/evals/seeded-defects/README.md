@@ -89,8 +89,8 @@ column) is exactly the signal being measured.
     same table the claim sits under. The near-miss was expected to be the
     weaker of the two, on the reasoning that a reader who spot-checks two or
     three members finds nothing wrong; measured, both hit 2/2. Two runs is too
-    thin to retire the concern, so treat the expectation as open rather than
-    refuted. A later M=2 run confirmed the expectation: `near-miss-exclusive`
+    thin to retire the concern, so the expectation stayed open. A later M=2
+    run confirmed it: `near-miss-exclusive`
     came back 1/2 FLAKY while `false-exclusive` held 2/2, which is the
     predicted ordering. Treat the near-miss end of the class as the weaker
     one, and expect it to carry the set's flake.

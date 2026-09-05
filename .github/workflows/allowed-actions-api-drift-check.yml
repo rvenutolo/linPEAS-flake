@@ -100,13 +100,19 @@ jobs:
           # infrastructure failures and is inert on skipped.
           result: ${{ needs.drift-check.result }}
           label: allowed-actions-drift
-          title: "allowed-actions-api-drift-check: live allowlist has drifted"
+          title: "allowed-actions-api-drift-check: live allowlist has drifted, or it could not be compared"
           body: |
-            The daily `allowed-actions-api-drift-check` watchdog
-            detected that the live `actions.permissions.allowed_actions`
-            API state on `rvenutolo/linPEAS-flake` no longer matches
-            the canonical allowlist in
-            `docs/security/allowed-actions.md`.
+            The daily `allowed-actions-api-drift-check` watchdog failed
+            for `rvenutolo/linPEAS-flake`: either the live
+            `actions.permissions.allowed_actions` API state no longer
+            matches the canonical allowlist in
+            `docs/security/allowed-actions.md`, or the comparison could
+            not be made at all — the fixture harness step failed, the
+            App token could not be minted, or
+            `scripts/check-allowed-actions-api.sh` exited 2 (`gh` or
+            `jq` absent, the doc's canonical block yielding no patterns,
+            or the live API call failing or returning a payload missing
+            a field it reads).
 
             Drift modes:
 
@@ -128,9 +134,11 @@ jobs:
               stay false. `true` lets opaque "verified creator"
               vendors in without our involvement.
 
-            See the failing job logs for the specific drift line(s).
+            See the failing job logs to tell the two apart: the drift
+            line(s), or the could-not-run diagnostic, are printed on
+            stderr.
 
             This issue auto-closes once the next watchdog run sees
             the allowlist reconciled.
-          label-description: live allowed-actions API state drifted from doc
+          label-description: live allowed-actions API state drifted from doc, or could not be compared
           github-token: ${{ secrets.GITHUB_TOKEN }}

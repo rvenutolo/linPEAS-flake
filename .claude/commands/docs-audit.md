@@ -8,7 +8,8 @@ Run a documentation correctness audit of this repository using the
 1. Read the skill's `references/repo-map.md` in full before dispatching
     anything.
 1. Aim first at prose the last fix pass touched: read `LAST_AUDIT_SHA` from
-    `.github/docs-audit-state` and list tracked Markdown changed since, then
+    `.github/docs-audit-state` and list tracked prose changed since —
+    Markdown, workflow bodies and script-composed bodies alike — then
     hand the readers that file list as a priority set — not a scope limit.
     The bundle's `PROSE HOTSPOTS` ranking names the lines recent fix passes
     rewrote; readers take the whole paragraph around each, not the hunk.
