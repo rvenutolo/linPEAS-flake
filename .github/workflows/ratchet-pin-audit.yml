@@ -300,8 +300,8 @@ jobs:
               re-derivation is skipped in that case), OR
               `classify-pin-ref.sh` failed or returned an unrecognized
               verdict, OR a drift line failed shape validation, OR the
-              workflow glob matched zero files. Likely a ratchet upgrade
-              is needed (output format drift) or a refactor moved
+              workflow glob matched zero files. Likely ratchet's output
+              format moved under a `flake.lock` bump, or a refactor moved
               workflow files. Bump the `nixpkgs-unstable` input that
               ships ratchet (`nix flake update nixpkgs-unstable`) and
               re-run.
