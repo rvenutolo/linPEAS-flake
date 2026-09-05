@@ -122,7 +122,7 @@ jobs:
           label: codeql-critical
           title: "codeql: CRITICAL finding in workflow analysis"
           body: |
-            `codeql / analyze` failed on a CRITICAL-severity finding in the
+            `codeql / analyze (actions)` failed on a CRITICAL-severity finding in the
             GitHub Actions workflow analysis.
 
             - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -167,7 +167,7 @@ jobs:
           label-description: codeql workflow infrastructure failure (no security finding)
           title: "codeql: infrastructure failure (analyze did not run)"
           body: |
-            `codeql / analyze` failed before the `analyze` step executed
+            `codeql / analyze (actions)` failed before the `analyze` step executed
             (e.g. checkout, harden-runner, or CodeQL init). No CRITICAL
             security finding was reported — the SARIF was never produced.
 
