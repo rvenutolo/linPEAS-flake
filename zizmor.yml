@@ -20,3 +20,48 @@ rules:
     ignore:
       - dockerhub-sync.yml
       - renovate-flake-lock-refresh.yml
+
+  # `self-repository` asks that a local composite action be reached
+  # through the `$/` self-repository form rather than the path-relative
+  # `uses: ./...`, so it resolves at the running commit instead of out
+  # of the checked-out working tree. The concern is a job that checks
+  # out a ref it does not control and then runs an action from it.
+  #
+  # The form is not adoptable here: no released `actionlint` parses
+  # `$/`, and `actionlint` runs as a blocking hook, so converting these
+  # call sites trades this audit for a hard parse error on every one of
+  # them. The suppression lifts when `actionlint` ships support.
+  #
+  # In every listed workflow but one, the checkout is the workflow's own
+  # commit, which makes `./` and `$/` resolve to the same tree. The
+  # exception is `compute-refresh` in renovate-flake-lock-refresh.yml,
+  # which checks out a Renovate branch head before `uses: ./`. That job
+  # holds `contents: read`, carries no App key, checks out with
+  # `persist-credentials: false`, and runs under a blocking egress
+  # allowlist, so what a modified composite could reach there is bounded
+  # — but it is the one site where the two forms differ, and the
+  # SHA-pinned self-reference pages.yml already uses is the fix that
+  # does not wait on `actionlint`.
+  self-repository:
+    ignore:
+      - allowed-actions-api-drift-check.yml
+      - ci.yml
+      - codeql.yml
+      - cron-table-drift-check.yml
+      - dockerhub-sync.yml
+      - flake-lock-staleness-check.yml
+      - image-cve-scan.yml
+      - octoscan.yml
+      - pages.yml
+      - pr-title-lint.yml
+      - ratchet-pin-audit.yml
+      - release-on-bump.yml
+      - renovate-flake-lock-refresh.yml
+      - reproducibility-check.yml
+      - scorecard-drift-check.yml
+      - settings-posture-drift-check.yml
+      - stale-pin-check.yml
+      - update-flake-lock.yml
+      - update-linpeas.yml
+      - verify-latest-release.yml
+      - zizmor-drift-check.yml
