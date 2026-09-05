@@ -178,7 +178,7 @@ jobs:
             `results.json`).
 
             See the failing job logs to tell the two apart: the
-            offending check name(s) and reasons, or the payload
+            offending check name(s) and score(s), or the payload
             diagnostic, are printed on stderr by
             `scripts/check-scorecard-threshold.sh`, followed by the first
             1 KiB of `results.json`, which the same step dumps to stderr
