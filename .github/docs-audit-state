@@ -7,4 +7,4 @@
 #
 # Written by scripts/mark-docs-audit.sh; run `just docs-audit-done` in the
 # final fix PR of an audit cycle. Do not hand-edit.
-LAST_AUDIT_SHA=9eeb040e7daa775c5b55270aaa462e945a4db75f
+LAST_AUDIT_SHA=6c5c33623bb3b8760d090eb351f5afef96ece812
