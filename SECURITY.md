@@ -262,11 +262,12 @@ every workflow, with `egress-policy: block`. Each job declares an
 needs: a two-host floor (`api.github.com`, `github.com`),
 `objects.githubusercontent.com` on all but a couple of jobs whose
 allowlist is the bare floor, `release-assets.githubusercontent.com` on
-many jobs — `scripts/check-egress-allowlist.sh` requires it wherever a
-`run:` block names a `github.com/…/releases/download/` URL, which 302s
-there, or `codeql-action/init` runs, whose bundle takes the same route,
-and a job may also carry it without either trigger — plus job-specific
-endpoints.
+many jobs — a `github.com/…/releases/download/` URL 302s there, so a
+Nix build that fetches the pinned `linpeas.sh` release asset reaches it,
+as does `codeql-action/init`'s bundle; `scripts/check-egress-allowlist.sh`
+requires the host only where a `run:` block contains `releases/download`
+or `codeql-action/init` runs, and the other jobs carrying it have no
+rule binding it — plus job-specific endpoints.
 `cache.nixos.org` and
 `releases.nixos.org` are not part of that baseline — they appear only on
 jobs that install or invoke Nix, and `scripts/check-egress-allowlist.sh`
