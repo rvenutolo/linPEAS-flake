@@ -46,6 +46,28 @@ is a doc that took its rewriting in an earlier cycle. Release-driven records
 (`CHANGELOG.md`, `docs/releases.md`), generated data and fixture trees are
 excluded: their churn is not prose drift and would otherwise top every list.
 
+The ranking covers every shape of prose the audit reads, not Markdown alone:
+tracked `*.md`, the workflow files whose notify bodies and header comments a
+maintainer reads at the moment they act (`.github/workflows/*.yml`,
+`.github/ISSUE_TEMPLATE/*.yml`), and `scripts/*.sh` — which, git pathspec `*`
+crossing `/`, reaches `scripts/lib/` too. Blame resolves lines in those the
+same way it does in a doc.
+
+### PASS ATTRIBUTION
+
+The section after the ranking answers "which pass wrote this sentence". For
+each merge in the line window, newest first, it names the commits that merge
+carried and the prose files each of them touched. A finding inside one of
+those files is attributable to that pass, and the report says so: a defect a
+fix pass manufactured is worth more than its severity, because it says the fix
+discipline itself leaked rather than that one sentence rotted.
+
+It reads the branch side of each merge (`<merge>^1..<merge>^2`), so commits
+`main` gained underneath an open PR are not credited to it. A commit that
+touched no prose file — a marker commit, a pure code change — is listed
+nowhere. With no merge in the window the section says so; a cycle that landed
+on the branch directly is attributed from the ranking's line window instead.
+
 ### The rest of the bundle
 
 The cron command below spells both workflow globs, `*.yml` and `*.yaml`, to match the
@@ -248,6 +270,13 @@ make it look block-generated, but there is no hand-written prose outside them.
 Its rows are driven by the `enforcer:` / `ci:` / `hook:` annotations in
 `docs/invariant-index.md`, so a wrong row is a finding against that index
 entry, not against this page.
+
+`docs/reference/scripts.md` renders, per script, only the **contiguous comment
+block before the first blank line** — the `@description` block `_script_docs.awk`
+reads. A comment block *after* that blank line generates nothing: editing it
+changes no generated body and trips no freshness gate, and it is in scope as
+prose under the rationale-comment rule in SKILL.md. Check which block a line
+sits in before deciding an edit needs `just show-scripts`.
 
 `CHANGELOG.md` is whole-file too, and for the same reason: `cliff.toml`'s
 `header` produces the `# Changelog` preamble and its `body` template produces

@@ -64,6 +64,20 @@ HOTSPOT_BLAME_LIMIT=8
 # Churn that is not prose drift: release-driven records, generated data, and
 # fixture trees that exist to carry defects.
 RE_HOTSPOT_SKIP="^(CHANGELOG\.md|docs/releases\.md|docs/_data/|tests/fixtures/)|${RE_SEEDED_FIXTURES}"
+# What counts as prose for the ranking. Documentation here is a function, not a
+# file extension: the body a workflow writes into an issue and the rationale
+# header a script carries are read by a maintainer at the moment they act, and
+# they drift the way a runbook does. Ranking Markdown alone leaves every defect
+# in them unaimed-at. Git pathspec `*` crosses `/`, so `scripts/*.sh` reaches
+# `scripts/lib/` too — the same reach the twin sweep uses.
+# Not readonly: the harness sources this file more than once per run, and a
+# readonly array makes the second source a fatal error rather than a no-op.
+HOTSPOT_PATHSPECS=(
+  '*.md'
+  '.github/workflows/*.yml'
+  '.github/ISSUE_TEMPLATE/*.yml'
+  'scripts/*.sh'
+)
 
 # @description Emit one file with its exempt regions blanked, line for line,
 # mirroring check-ephemeral-refs.sh's strip_exempt ordering: fences (backtick
@@ -406,7 +420,7 @@ rank_prose_hotspots() {
   # One commit contributes one line per path it touched, and a merge contributes
   # none, so an occurrence count is a count of distinct non-merge commits — of
   # any type; in this tree nearly every commit that touches prose is a fix pass.
-  git log --format='' --name-only "${base}..HEAD" -- '*.md' >"${tmp}/raw"
+  git log --format='' --name-only "${base}..HEAD" -- "${HOTSPOT_PATHSPECS[@]}" >"${tmp}/raw"
   # grep exits 1 on no match, which pipefail would turn into a collector abort
   # for the legitimate "nothing changed since that audit point" case.
   grep -vE "^$|${RE_HOTSPOT_SKIP}" "${tmp}/raw" >"${tmp}/paths" || true
@@ -441,12 +455,55 @@ rank_prose_hotspots() {
   echo ' left alone, and a paragraph high on this list has survived several.)'
 }
 
+# @description Name every fix pass in the line window and the prose files each
+#              of its commits touched, so a finding can be attributed to the
+#              pass that wrote it without re-deriving the mapping per reader.
+attribute_passes() {
+  local latest
+  latest="$(hotspot_base_sha "${HOTSPOT_RECENT_MARKERS}")"
+  if [[ -z ${latest} ]]; then
+    echo '(no usable audit point — attribution needs a recorded sha to bound the'
+    echo ' window. Attribute findings by hand with git log -L.)'
+    return 0
+  fi
+  printf 'passes merged since audit point %s (newest first)\n' "${latest:0:7}"
+  local -a merges=()
+  mapfile -t merges < <(git log --format=%H --merges --first-parent "${latest}..HEAD" 2>/dev/null || true)
+  if [[ ${#merges[@]} -eq 0 ]]; then
+    echo '(no merge in the window — this cycle landed on the branch directly;'
+    echo ' read the commits the PROSE HOTSPOTS line window names.)'
+    return 0
+  fi
+  local merge subject commit csubject files
+  for merge in "${merges[@]}"; do
+    subject="$(git log --format=%s -1 "${merge}")"
+    printf '\n%s %s\n' "${merge:0:7}" "${subject}"
+    # ^1..^2 is the branch side of the merge: the commits the pass itself wrote,
+    # excluding whatever main gained underneath it while the PR was open.
+    # The file's strict IFS holds no space, so the split is set per-read here.
+    while IFS=' ' read -r commit csubject; do
+      [[ -n ${commit} ]] || continue
+      files="$(git diff-tree --no-commit-id --name-only -r "${commit}" |
+        grep -E '\.(md|yml)$|^scripts/.*\.sh$' | grep -vE "${RE_HOTSPOT_SKIP}" | paste -sd' ' - || true)"
+      [[ -n ${files} ]] || continue
+      printf '  %s %s\n    %s\n' "${commit}" "${csubject}" "${files}"
+    done < <(git log --format='%h %s' --no-merges "${merge}^1..${merge}^2" 2>/dev/null || true)
+  done
+  echo
+  echo '(A finding inside a file one of these commits touched is attributable to'
+  echo ' that pass. Say so in the report: a defect a fix pass manufactured says'
+  echo ' the fix discipline leaked, which is worth more than its severity.)'
+}
+
 main() {
   REPO_ROOT="$(git rev-parse --show-toplevel)"
   cd "${REPO_ROOT}"
 
   section "PROSE HOTSPOTS (docs the recent fix passes rewrote most; aim here first)"
   rank_prose_hotspots
+
+  section "PASS ATTRIBUTION (which fix pass wrote which prose file in the window)"
+  attribute_passes
 
   section "FLAKE OUTPUTS (nix flake show)"
   if ! nix flake show --json 2>/dev/null | filter_flake_outputs 2>/dev/null; then
