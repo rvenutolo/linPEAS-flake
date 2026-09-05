@@ -11,9 +11,9 @@
 # cron (`nix flake update`, which re-resolves every branch-tracked
 # input) and Renovate (the only thing that can move a rev-pinned one) —
 # and neither announces having stopped. A disabled workflow, a broken
-# trigger, a manager whose matcher no longer matches: each leaves every
-# input frozen while every check stays green. Both halves of that
-# sentence have already happened here.
+# trigger, a manager that stops opening PRs: each leaves the inputs the
+# affected mechanism refreshes frozen while every check stays green. Two
+# of those are live risks here.
 #
 # `locked.lastModified` is an UPSTREAM commit time, not a "when did we
 # last check" timestamp, which is what makes the thresholds below

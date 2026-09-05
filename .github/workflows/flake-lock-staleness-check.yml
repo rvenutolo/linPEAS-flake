@@ -7,10 +7,10 @@ name: flake-lock-staleness-check
 # Two things refresh this repo's inputs — the weekly
 # `update-flake-lock.yml` cron and Renovate — and neither announces
 # having stopped. A disabled workflow, a broken trigger, or a manager
-# that stops opening PRs leaves the inputs that mechanism owns frozen
-# while every check stays green. Two of those have already happened here, so
-# the freeze is the thing worth watching rather than any single
-# mechanism.
+# that stops opening PRs leaves the inputs the affected mechanism
+# refreshes frozen while every check stays green. Two of those are live
+# risks here, so the freeze is the thing worth watching rather than any
+# single mechanism.
 #
 # Schedule + dispatch, deliberately NOT a required check. A gate keyed
 # on wall-clock age turns every unrelated PR red the moment a cron runs
