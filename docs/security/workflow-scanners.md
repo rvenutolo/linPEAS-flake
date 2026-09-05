@@ -31,8 +31,8 @@ sweep re-runs the same pinned scanners against `main` on a schedule, so a
 finding on `main` is paged as a deduped issue even when no push has run the
 scanners since — codeql and octoscan are advisory on PRs and page only from
 non-PR runs, and zizmor's scheduled run hands the scanner the workflow
-directory itself, which reaches more than the `flake-check` re-run of the
-hook selects (see [zizmor](#zizmor)). A tightened rule arrives with the PR
+directory itself, where the `flake-check` re-run scans whatever pre-commit's
+matching selects (see [zizmor](#zizmor)). A tightened rule arrives with the PR
 that bumps the scanner's pin, and that PR's own runs re-scan the files. The
 posture watchdogs catch drift
 that accrues across commits — a force-moved tag, a loosened setting — that no
@@ -138,10 +138,10 @@ tree.)
     scanner differently, not by scanning more: it hands `zizmor` the
     `.github/workflows/` directory, where the hook receives whatever
     pre-commit's own `files` and `types` matching selects. A workflow file
-    that matching stops selecting is never handed to the hook, and a hook
-    that matching selects no files for at all is reported by pre-commit as a
-    skip, not a failure; either way the scheduled run still covers the file.
-    Both paths read the same `zizmor.yml`, so neither is a check on
+    that matching stops selecting is never handed to the hook; a hook for
+    which matching selects no files is reported by pre-commit as a skip
+    rather than a failure. Either way the scheduled run still scans the
+    directory. Both paths read the same `zizmor.yml`, so neither is a check on
     the other's suppressions. The watchdog pages a finding as a deduped
     `zizmor-drift` issue, closed on the next clean run; a rule change arrives
     with the `flake.lock` bump whose PR `flake-check` already re-scans in
