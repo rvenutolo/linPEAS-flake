@@ -89,7 +89,8 @@ bump that already landed breaks something.
 
 Bump cadence, which sets how often either case comes up:
 
-- `cachix/git-hooks.nix`: maybe a handful of bumps per year.
+- `cachix/git-hooks.nix`: whenever upstream master advances past the
+    7-day quarantine, at most once per Friday Renovate run.
 - `NixOS/nixpkgs`: twice per year (May `YY.05`, November `YY.11`).
 - `nixpkgs-unstable`: weekly via the `update-flake-lock.yml` cron, not
     Renovate. Carries the tooling layer.

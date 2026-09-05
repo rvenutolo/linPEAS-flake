@@ -292,8 +292,9 @@ the enumerated planning and review labels above are blocked.
     refs and dates; fixtures carry intentional static data; `.claude/`
     holds Claude tooling rather than user-facing prose, so its
     workflow-phase and label vocabulary is not an ephemeral reference.
-    The allowlist is also the only escape from a false positive: there
-    is no per-line or per-token suppression comment.
+    The allowlist is also the only file-level escape from a false
+    positive: there is no per-line or per-token suppression comment,
+    though a token inside a code span or fence is not read at all.
 
 - **Structural stripping:** generated auto-blocks (the `BEGIN`/`END`
     HTML-comment marker pairs), fenced code blocks, and inline code spans

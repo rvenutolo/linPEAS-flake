@@ -286,8 +286,9 @@ parity with this runbook's "Common Docker Hub failure modes" section:
 - `dockerhub-sync.yml`'s notify-failure issue body carries the same three
     bullets as a `Common causes:` list, phrased against
     `DOCKERHUB_TOKEN_DELETE` rather than `_RW` because that is the token
-    its own job consumes. It adds a fourth, sync-specific bullet about a
-    no-op parent `release-on-bump` run, which carries no parity obligation
+    its own job consumes. It adds a sync-specific note about a no-op
+    parent `release-on-bump` run — not a failure cause, since a no-op
+    parent still yields a green sync — which carries no parity obligation
     here.
 
 Nothing enforces this parity, so an edit here has to reach both

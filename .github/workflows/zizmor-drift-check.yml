@@ -96,13 +96,16 @@ jobs:
           # infrastructure failures and is inert on skipped.
           result: ${{ needs.drift-check.result }}
           label: zizmor-drift
-          title: "zizmor-drift-check: workflow file(s) fail zizmor --min-severity=low"
+          title: "zizmor-drift-check: workflow file(s) fail zizmor --min-severity=low, or the scan could not run"
           body: |
-            The weekly `zizmor-drift-check` watchdog detected one or
-            more findings in `.github/workflows/**` at or above
-            `--min-severity=low`.
+            The weekly `zizmor-drift-check` watchdog failed: either it
+            detected one or more findings in `.github/workflows/**` at or
+            above `--min-severity=low`, or the scan could not run —
+            `setup-nix` or `nix develop` failed before zizmor started.
+            The job log says which: a finding is reported by zizmor
+            itself, with the workflow file and rule named.
 
-            This means a workflow file on `main` now fails the same
+            On findings, a workflow file on `main` now fails the same
             lock-pinned `zizmor` binary the pre-commit hook and the
             required `flake-check` job run on every PR and push — this
             run hands it the `.github/workflows/` directory, whereas the
@@ -121,6 +124,6 @@ jobs:
             locally (the hook path, `pre-commit run zizmor --all-files`,
             covers only the files pre-commit's matching selects), fix the
             reported findings, and push. This issue auto-closes on the
-            next clean scheduled run.
-          label-description: workflow file(s) drifted past zizmor --min-severity=low
+            next clean run.
+          label-description: workflow file(s) drifted past zizmor --min-severity=low, or the zizmor scan could not run
           github-token: ${{ secrets.GITHUB_TOKEN }}

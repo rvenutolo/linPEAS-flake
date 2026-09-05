@@ -301,6 +301,7 @@ runs the pair.
     covers only the harness table.
 
 1. If the script is wired into a CI required check, also document
-    it in `docs/security/required-checks.md` and ensure
-    `scripts/check-required-checks-no-paths.sh` covers the new
-    workflow file.
+    it in `docs/security/required-checks.md`;
+    `scripts/check-required-checks-no-paths.sh` reads its workflow set
+    from that page, so listing the workflow there is what brings it
+    under the lint.

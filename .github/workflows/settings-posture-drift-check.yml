@@ -122,9 +122,10 @@ jobs:
             token and the endpoint-fetch causes are covered by
             `docs/runbooks/settings-drift-app.md`.
 
-            See the failing job logs to tell the two apart: on drift,
-            every mismatched setting is reported in one run; a
-            could-not-run names its cause on stderr instead.
+            See the failing job logs to tell drift from a could-not-run: on drift,
+            every mismatched setting is reported in one run as a
+            `<key> drift: got …, want …` line; a could-not-run prints a
+            single cause line and no drift lines.
 
             Remediation: reconcile by either
             - reverting the UI change so live matches the doc, or

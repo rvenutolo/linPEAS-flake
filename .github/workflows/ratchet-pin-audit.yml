@@ -2,8 +2,8 @@ name: ratchet-pin-audit
 
 # Daily audit: detects the silent-regression case where an action
 # publisher force-moves a tag to a different SHA after we pinned to
-# it. `check-uses-sha-pinned.sh` enforces that every `uses:` is a
-# SHA; Renovate keeps SHAs aligned with canonical release tags;
+# it. `check-uses-sha-pinned.sh` enforces that every non-local `uses:`
+# is a full SHA; Renovate keeps SHAs aligned with canonical release tags;
 # neither catches the tag-vs-pin drift attack. `ratchet lint` is a
 # local pin-shape tripwire (in ratchet 0.11.4; `check` is an alias);
 # the per-ref `gh api` re-derivation below is the drift detector.
@@ -256,8 +256,8 @@ jobs:
           # skipped.
           result: ${{ needs.check.outputs.result || needs.check.result }}
           label: ratchet-drift
-          label-description: action pin SHA drift detected by ratchet check
-          title: "ratchet-pin-audit: action pin drift detected"
+          label-description: action pin SHA drift, or the ratchet audit could not run
+          title: "ratchet-pin-audit: action pin drift detected, or the audit could not run"
           body: |
             The daily `ratchet-pin-audit` workflow flagged a failure.
 

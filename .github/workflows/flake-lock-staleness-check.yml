@@ -107,8 +107,10 @@ jobs:
             through `follows`, a malformed lock, or `jq` absent).
 
             See the failing job log to tell them apart: on staleness it
-            names every input past its bound, its age, and the bound it
-            exceeded; a could-not-run names its cause on stderr instead.
+            prints a `STALE:` line for every input past its bound, with
+            its age and the bound it exceeded; a could-not-run prints a
+            single `flake-lock-staleness: <cause>` line, or a harness
+            `FAIL:` line, and no `STALE:` lines.
 
             An input stops moving when the mechanism that refreshes it
             stops. Check, in this order:

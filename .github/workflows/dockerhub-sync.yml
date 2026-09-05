@@ -96,6 +96,7 @@ jobs:
             - `DOCKERHUB_TOKEN_DELETE` expired or revoked → rotate at <https://hub.docker.com/settings/security> and `gh secret set DOCKERHUB_TOKEN_DELETE`.
             - `DOCKERHUB_USERNAME` mismatch with the `rvenutolo/linpeas` repo owner.
             - Docker Hub partial outage; manual re-run via `workflow_dispatch` is often enough.
-            - Parent `release-on-bump` finished green but as a no-op (existing tag, `force-republish` not set). The sync still ran but there is nothing fresh to publish. Verify the latest release was actually re-cut; if not, dispatch the `release-on-bump` workflow with `force-republish: true` and let this sync re-fire on its `workflow_run` completion.
+
+            Not a cause of this failure, but check while here: if the parent `release-on-bump` finished green as a no-op (existing tag, `force-republish` not set), the sync ran with nothing fresh behind it. Verify the latest release was actually re-cut; if not, dispatch the `release-on-bump` workflow with `force-republish: true` and let this sync re-fire on its `workflow_run` completion.
           label-description: dockerhub-sync workflow failure
           github-token: ${{ secrets.GITHUB_TOKEN }}

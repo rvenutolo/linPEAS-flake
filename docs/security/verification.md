@@ -186,20 +186,21 @@ the `attribute failure reason` step. Reasons:
     watch for after adding a verification step without wiring its
     `id:` into the ladder.
 - `unknown` — the `verify` job produced no `reason` output at all: it
-    was cancelled — most often by the job timeout — before the
-    attribution step ran. Not a verification result; re-run the cron.
+    was cancelled, or the runner was lost, before the attribution step
+    ran. Not a verification result; re-run the cron.
 
 `upstream-sri-drift` and `cross-registry-manifest-mismatch` warrant the
 "treat as security incident" framing outright; the `*-attest-failed`
 family and `images-cosign-failed` warrant it once a 24h re-run has ruled
-out trust-root rotation lag, with `manifest-tag-drift` a step below.
+out trust-root rotation lag; `manifest-tag-drift` is a lower-confidence
+security signal that still freezes pin bumps.
 Folding all reasons into a single failure body trains
 the maintainer to skim-read auto-filed issues — exactly the wrong reflex
 when the failure is a real SRI drift or a one-sided registry rollback.
 
-This pattern is the project default for every cron-notify caller: each
-must attribute distinct failure reasons to distinct issue-body wording.
-Alert fatigue is a security risk.
+Cron-notify callers whose job can fail more than one way tell the ways
+apart, in the body or by label, so a reader acts on the failure in front
+of them. Alert fatigue is a security risk.
 
 ### Ladder coverage is linted<a name="ladder-coverage-is-linted"></a>
 
@@ -353,8 +354,11 @@ attests via `actions/attest-sbom`.
 - Per-arch image SBOMs: attested + pushed to ghcr.io and docker.io with
     `push-to-registry: true`, **and** uploaded as release assets with
     `.sigstore` + `.intoto.jsonl` sidecars.
-- `verify-latest-release.yml`'s `gh attestation verify` covers SBOMs
-    automatically (verifies ALL attestations).
+- `verify-latest-release.yml` verifies the SBOM release assets with
+    `cosign verify-blob` (the `sbom-*-blob-sig-failed` reasons). Its
+    `gh attestation verify` calls check build provenance only — they pass
+    no `--predicate-type`, so the registry-pushed SBOM attestations are
+    not re-verified by the cron.
 
 ## Cosign keyless signatures<a name="cosign-keyless-signatures"></a>
 

@@ -45,9 +45,10 @@ name: scorecard-drift-check
 # exits 1 if any included check scored < 10, and exits 2 if its stdin
 # payload cannot be read as scorecard JSON at all (empty, malformed, or
 # the wrong shape). Either exit fails the drift-check job and trips the
-# notify-workflow-result composite to open (or leave) a deduped
-# `scorecard-drift` tracking issue. On the next clean run the composite
-# closes any open issue(s).
+# notify-workflow-result composite to open, or comment on, a deduped
+# `scorecard-drift` tracking issue — as does a scorecard CLI failure,
+# which exits the step before the script runs. On the next clean run
+# the composite closes any open issue(s).
 
 on:
   schedule:
@@ -175,8 +176,8 @@ jobs:
             OpenSSF Scorecard checks scored below 10, or the threshold
             script could not read the scorecard payload as JSON at all
             (its exit 2 — an empty, malformed or wrongly shaped
-            `results.json`), or the scorecard scan itself failed before
-            the threshold script ran — an auth, egress or
+            `results.json`), or the job failed before or during the
+            scorecard scan — a setup step, or an auth, egress or
             check-execution error, which the step log names.
 
             See the failing job logs to tell them apart: the offending
@@ -195,6 +196,6 @@ jobs:
             `SCORECARD_PAT` secret is expired or under-scoped — see
             [docs/runbooks/scorecard-pat-rotation.md](https://github.com/${{ github.repository }}/blob/main/docs/runbooks/scorecard-pat-rotation.md).
 
-            This issue auto-closes on the next clean scheduled run.
+            This issue auto-closes on the next clean run.
           label-description: scorecard check(s) scored below 10, the scorecard payload was unreadable, or the scan itself failed
           github-token: ${{ secrets.GITHUB_TOKEN }}
