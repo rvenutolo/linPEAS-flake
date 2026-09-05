@@ -132,7 +132,8 @@ recall-vs-cost tuning covers the four user-facing clusters;
 `claude-tooling` is separate from all of them because it is not
 user-facing documentation at all — it is the audit's own specification,
 so its reader checks the tracked `.claude/` tooling — this file included —
-against the tree rather than checking the tree against prose.
+against the tree; a stale map does not merely misinform, it makes the next
+audit read clean over real drift.
 
 `root + misc` carries the catch-all clause because the three `docs/` rows are
 directory globs and `claude-tooling` covers only `.claude/`: a tracked doc
@@ -158,7 +159,8 @@ grep -lE '^[[:space:]]*(body|title):|gh issue (create|comment)' .github/workflow
 
 then read each body's prose against the runbook it restates — a triage step, a
 reason name, the conditions behind a status; for a `--body-file`, the prose
-lives in the script that writes the file. Only the prose is in scope, not
+lives wherever the file is composed — a script (`docs-audit-pressure.sh`) or
+the `run:` step itself. Only the prose is in scope, not
 the workflow logic around it: what a body *claims about a mechanism* drifts
 when the mechanism moves, and a reader hits that claim at the moment they act
 on the issue. A body and its runbook disagreeing is one finding listing both

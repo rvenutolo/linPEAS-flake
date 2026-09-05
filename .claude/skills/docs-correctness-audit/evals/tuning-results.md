@@ -43,8 +43,9 @@ rows above. It has since been measured under the shipped four-reader map only,
 where it hit 2/2 across two runs; the other two configurations have not been
 re-run with it, and two runs is too thin to call the category non-flaky.
 `near-miss-exclusive` was added later still and measured the same way, in a
-two-run pass over all nine seeds that scored 18/18; it also hit 2/2, and the
-same two caveats apply to it. Seeds added after that pass are measured and
+two-run pass over all nine seeds that scored 18/18; it hit 2/2 in that pass,
+and a later M=2 run returned 1/2 FLAKY — `seeded-defects/README.md` carries
+the current reading. Seeds added after that pass are measured and
 recorded in [`seeded-defects/README.md`](seeded-defects/README.md), which is
 the record of the current set. The merged map cuts total
 reader-tokens ~29% because most of a reader's cost is fixed per-agent overhead

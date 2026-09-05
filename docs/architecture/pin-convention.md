@@ -88,7 +88,10 @@ by convention, specific to the ref's upstream tagging convention.
     `owner/repo@sha` form is what these exclusions actually act on: it is
     used where a `pull_request` event must not run a PR branch's copy of
     the composite, and `scripts/check-uses-sha-pinned.sh` still holds it
-    to a full 40-hex SHA at PR time.
+    to a full 40-hex SHA at PR time. The `patch-tag-pins` hook reads that
+    line too, and since this repo publishes no release tags on its
+    composite actions the comment can name no version — so the pin carries
+    a `# patch-tag-exception:` marker.
 
 - Bulk remediation: when comment drift is tree-wide,
     `scripts/inventory-action-pin-tags.sh` builds a TSV of each pin's

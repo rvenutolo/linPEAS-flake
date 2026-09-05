@@ -119,10 +119,10 @@ No third-party flake-lock action is used: such actions take the write credential
 
 Both mechanisms above refresh inputs, and neither announces having stopped.
 A disabled workflow, a broken trigger, or a Renovate manager whose matcher no
-longer matches leaves every input frozen while every check stays green. Both
-halves are live risks here: a Renovate branch-prefix change would stop the `identify` job's
-`renovate/` branch-prefix gate in `renovate-flake-lock-refresh.yml` from ever passing,
-and Renovate in Mend silent mode can leave `pre-commit-hooks` far past its
+longer matches leaves every input frozen while every check stays green. Two
+of those are live risks here: a broken trigger — a Renovate branch-prefix change would stop the `identify` job's
+`renovate/` branch-prefix gate in `renovate-flake-lock-refresh.yml` from ever passing —
+and a manager gone quiet — Renovate in Mend silent mode can leave `pre-commit-hooks` far past its
 staleness tier, with nothing in either case saying so. (Failures inside the
 workflow do announce themselves: a bot login-shape change fails the
 `identify` job on an author the classifier rejects, a Renovate title-shape

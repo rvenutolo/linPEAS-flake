@@ -27,7 +27,7 @@ Four automations may auto-merge PRs into `main` when CI passes:
 3. **Renovate** — Friday batch. Every dependency set Renovate tracks carries `automerge`: GitHub Action SHA pins, the pinned Nix installer version, the octoscan pin, the tracked flake inputs (`nixpkgs` stable branch, `cachix/git-hooks.nix`), and the SchemaStore pin. No class waits on a reviewer; the required check set is the whole gate. Same gating, with three scoping rules:
     - `nixpkgs-unstable` is deliberately absent: it is branch-tracked, so the weekly `nix flake update` cron already floats it and a Renovate manager for it would only rewrite the branch name in `flake.nix` into a fixed rev, freezing the input.
     - Each set carries its own per-manager `automerge` scope rather than a top-level key, so a manager this config does not name — npm activated by a new `package.json`, say — cannot inherit automerge.
-    - All PRs honor a non-empty `minimumReleaseAge` (7 days); the `renovate-invariants` CI lint enforces the release age and the per-manager scoping.
+    - All PRs honor a non-empty `minimumReleaseAge` (7 days); the `renovate-invariants` CI lint enforces that a release age is set and the per-manager scoping.
 
     What a green check set does and does not prove for the wide-blast flake inputs is spelled out in [`docs/architecture/flake-input-bumps.md`](../architecture/flake-input-bumps.md).
 4. **`release-on-bump.yml`** — per release. The `changelog` job regenerates `CHANGELOG.md` and commits it through a PR it auto-merges under the same `linpeas-flake-bumper` App identity as the bump workflows. Same gating.

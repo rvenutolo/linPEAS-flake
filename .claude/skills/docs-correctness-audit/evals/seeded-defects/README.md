@@ -98,8 +98,10 @@ column) is exactly the signal being measured.
     no bundle support whatsoever and are the hardest of the set. Both encode a
     defect a fix pass leaves behind rather than one that rots on its own:
     `distant-contradiction` plants a claim under `## Tools needed` that the
-    cosign section refutes hundreds of lines below, so a reader who reads the
-    paragraph — or even the whole section — and stops will miss it;
+    page refutes both inside that same section, a dozen lines below the
+    insertion point, and again under the cosign section hundreds of lines
+    further on, so a reader who reads only the inserted sentence and stops
+    will miss it;
     `dangling-deixis` plants "the three checkers listed below" where nothing
     below lists three of anything, which is caught only by resolving the
     pointer instead of reading past it. Both were expected to be the flakiest

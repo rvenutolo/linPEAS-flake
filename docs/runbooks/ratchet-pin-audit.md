@@ -35,8 +35,9 @@ backstop is `check-uses-sha-pinned.sh` (the `uses-sha-pinned` member of
 `lint-workflow-security`), backing the GitHub-side `sha_pinning_required`
 setting and still requiring a full 40-hex SHA — see
 [repo config](../security/repo-config.md). `check-patch-tag-pins.sh` also
-reads these lines and demands a versioned `# vX.Y[.Z]` tag, but it runs
-only as the `patch-tag-pins` pre-commit hook and gates no merge — see
+reads these lines and demands a versioned `# vX.Y[.Z]` tag, but against
+the tree it runs only as the `patch-tag-pins` pre-commit hook and gates no
+merge (its fixture tests do run in `harness-group`) — see
 [pin convention](../architecture/pin-convention.md); this repo publishes
 no release tags on its composite actions, so its self-reference carries an
 inline `# patch-tag-exception:` marker.
