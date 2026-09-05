@@ -22,7 +22,7 @@ closes:
 | Commit-time prevention | every `git commit` touching a scanned path (pre-commit)                            | zizmor, octoscan + the workflow-hardening hook family                                                                                                                                          | bad edits caught before they reach history, on the local path                             |
 | PR / push detection    | every PR to `main` (codeql full; octoscan paths-filtered) and every push to `main` | codeql, octoscan, zizmor (re-run by the required `flake-check` job's `nix flake check`), and the required lint-group jobs (lint-workflow-security / lint-script-hygiene / lint-doc-invariants) | changed workflows checked server-side, in the diff                                        |
 | Weekly full sweep      | Friday cron cluster                                                                | codeql, octoscan, zizmor                                                                                                                                                                       | a scheduled re-scan of `main`, paged as a deduped issue, with no PR or push to trigger it |
-| Posture watchdog       | daily + weekly cron                                                                | scorecard-drift-check, ratchet-pin-audit, settings-posture-drift-check, stale-pin-check, allowed-actions-api-drift-check, flake-lock-staleness-check                                           | silent regressions no single PR introduces                                                |
+| Posture watchdog       | daily + weekly cron                                                                | scorecard-drift-check, ratchet-pin-audit, settings-posture-drift-check, stale-pin-check, allowed-actions-api-drift-check, flake-lock-staleness-check                                           | detection of slow regressions no single PR introduces                                     |
 
 Commit-time prevention is the cheapest and earliest gate, but it is bypassable
 (`--no-verify`, edits made in the GitHub web UI or by bots before hooks
@@ -134,14 +134,16 @@ tree.)
     (unlike octoscan), so it re-runs there too, over the workflow files
     pre-commit's matching selects.
 - **Status:** commit-time prevention + PR/push detection (the `flake-check`
-    re-run) + weekly watchdog. The watchdog earns its place by reaching the
+    re-run) + weekly full sweep (the `zizmor-drift-check` watchdog). The
+    watchdog earns its place by reaching the
     scanner differently, not by scanning more: it hands `zizmor` the
     `.github/workflows/` directory, whereas the hook receives whatever
     pre-commit's own `files` and `types` matching selects. A workflow file
     that matching stops selecting is never handed to the hook; a hook for
     which matching selects no files is reported by pre-commit as a skip
-    rather than a failure. Either way the scheduled run still scans the
-    directory. Both paths read the same `zizmor.yml`, so neither is a check on
+    rather than a failure. Either way the scheduled run still reaches the
+    file, since it is handed the directory rather than a matched file
+    list. Both paths read the same `zizmor.yml`, so neither is a check on
     the other's suppressions. The watchdog pages a finding as a deduped
     `zizmor-drift` issue, closed on the next clean run; a rule change arrives
     with the `flake.lock` bump whose PR `flake-check` already re-scans in
