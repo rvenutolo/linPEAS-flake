@@ -696,10 +696,12 @@ jobs:
     # runs its live enforce script; the allowed-actions-api and
     # settings-posture live probes need admin-scoped App tokens, so
     # those two run schedule-only in their own drift-check workflows.
-    # The flake-lock-staleness enforce run is schedule-only too, but its
-    # harness ends with a live scenario against the repo's flake.lock on
-    # the wall clock, so a lock past a bound fails this job. Required
-    # status context; see docs/security/required-checks.md.
+    # The flake-lock-staleness probe is keyed on wall-clock age rather
+    # than on the tree, so it runs schedule-only too; its harness's live
+    # scenario pins "now" to the lock's own newest lastModified and
+    # accepts a stale verdict, asserting only that the check can still
+    # read the tree. Required status context; see
+    # docs/security/required-checks.md.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

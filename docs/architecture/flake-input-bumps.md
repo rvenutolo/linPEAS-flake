@@ -345,8 +345,9 @@ answer to an input from outside the tree — the wall clock, against which
 `flake.lock`'s `locked.lastModified` is measured, and the scorecard CLI's JSON
 on stdin, which only the scheduled run produces. Locally those four
 drift-check enforcers' harnesses run, and the staleness harness's last
-scenario runs its enforcer against the live `flake.lock` with the wall
-clock, so that one does probe the live tree under `just verify`;
+scenario runs its enforcer against the live `flake.lock` — pinned off
+that lock's own newest `lastModified`, so it reads the tree without
+asserting an age;
 `check-flake-systems-eval.sh` and its
 harness run only in the `flake-check` job. Individual
 harnesses can still be run directly

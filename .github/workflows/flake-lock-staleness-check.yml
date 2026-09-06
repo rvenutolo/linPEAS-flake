@@ -13,12 +13,14 @@ name: flake-lock-staleness-check
 # here, so the freeze is the thing worth watching rather than any single
 # mechanism.
 #
-# Schedule + dispatch; the workflow is not a required check. The
-# scheduled issue-filer is the same shape the other drift checks use.
-# The bounds still reach pull requests by another route: the harness
-# the required `harness-group` job runs ends with a live scenario
-# against the repo's own flake.lock on the wall clock, so a lock past a
-# bound fails that job on every open PR until the input moves.
+# Schedule + dispatch, deliberately not a required check. A gate keyed
+# on wall-clock age turns every unrelated PR red the moment a cron runs
+# late, which charges contributors for infrastructure lateness. Nothing
+# on the pull-request path asserts an age: the harness the required
+# `harness-group` job runs ends with a live scenario against the repo's
+# own flake.lock, but it pins "now" to that lock's newest lastModified
+# and accepts a stale verdict — it asserts only that the check can still
+# read the tree. This workflow is what reports a bound being passed.
 #
 # Thresholds and the reasoning behind their two tiers live in
 # scripts/check-flake-lock-staleness.sh.
@@ -111,20 +113,21 @@ jobs:
             lock, or `jq` absent).
 
             See the failing job log to tell them apart. The harness step
-            runs before the probe step and its last scenario runs the
-            check against the live `flake.lock` on the wall clock, so
-            both a genuine staleness and a could-not-run against the
-            live lock fail the harness step first, and the probe step
-            is skipped either way. The harness's
-            `FAIL: live: the repo flake.lock is within bounds — exit N`
-            line says which: exit 1 followed by a `STALE:` line for
-            every input past its bound, with its age and the bound it
-            exceeded, is staleness; exit 2 followed by a
-            `flake-lock-staleness: <cause>` line, an `ERROR` line for a
-            missing tool, or a `payload from` line for a lock it could
-            not read is a could-not-run. So is a `FAIL:` line naming one
-            of the fixture scenarios, or a `harness-assert:` line from
-            the harness's discrimination gate; an earlier step's failure
+            runs before the probe step, but it asserts no age: its live
+            scenario pins "now" to the lock's own newest `lastModified`
+            and passes on a stale verdict, so a genuine staleness
+            reaches the probe step and is reported there. The probe
+            step's own output says which: a `STALE:` line for every
+            input past its bound, with its age and the bound it
+            exceeded, is staleness; a `flake-lock-staleness: <cause>`
+            line, an `ERROR` line for a missing tool, or a `payload
+            from` line for a lock it could not read is a could-not-run.
+            A could-not-run rooted in the tree fails the harness step
+            first instead, as
+            `FAIL: live: the repo flake.lock is readable by its own
+            check — exit 2`; so does a `FAIL:` line naming one of the
+            fixture scenarios, or a `harness-assert:` line from the
+            harness's discrimination gate. An earlier step's failure
             shows that step's own error.
 
             An input stops moving when the mechanism that refreshes it

@@ -7,7 +7,9 @@
 # so a fixture's age — and therefore its verdict — cannot drift with the
 # day the suite runs. Every fixture's lastModified is expressed as an
 # offset from that one epoch. One live scenario at the end runs the
-# check against the repo's own flake.lock on the wall clock.
+# check against the repo's own flake.lock, pinning "now" to the newest
+# lastModified that lock carries: it asserts the check can still read
+# the tree, not how old the tree is.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -175,18 +177,42 @@ function main() {
     'missing required tool: jq' "${outcome_file}" "${out_file}"
   rm --recursive --force -- "${outcome_file}" "${out_file}" "${farm}"
 
-  # The live tree must satisfy its own check. This is the scenario that
-  # notices a real input going stale, and the only one whose input is
-  # not a fixture.
+  # The live scenario, and the only one whose input is not a fixture. It
+  # reads the repo's own lock to assert the check can still parse it:
+  # every directly-pinned input has a bound declared, none resolves
+  # through `follows`, every node carries a numeric lastModified. Those
+  # are the exit-2 causes, and they are properties of the tree.
+  #
+  # Age is deliberately not asserted. "Now" is pinned to the newest
+  # lastModified the lock itself carries, so this scenario cannot move
+  # with the wall clock, and a stale verdict (exit 1) passes: staleness
+  # is a fact about upstream cadence and cron liveness, not about the
+  # branch under test, and gating merges on it charges contributors for
+  # infrastructure lateness. The scheduled workflow is what reports it.
+  local live_epoch=''
+  live_epoch="$(jq -r '
+    . as $lock
+    | [ $lock.nodes[$lock.root].inputs
+        | to_entries[]
+        | select(.value | type == "string")
+        | $lock.nodes[.value].locked.lastModified // empty ]
+    | max // empty
+  ' "${REPO_ROOT}/flake.lock" 2>/dev/null)" || live_epoch=''
+  # A lock this cannot read is a lock the check must reject on its own
+  # terms; run unpinned and let the exit-2 assertion below name it.
+  [[ ${live_epoch} =~ ^[0-9]+$ ]] || live_epoch=''
   actual_exit=0
   out_file="$(mktemp)"
-  (cd "${REPO_ROOT}" && "${SCRIPT}") >"${out_file}" 2>&1 || actual_exit=$?
-  if [[ ${actual_exit} -ne 0 ]]; then
-    printf 'FAIL: live: the repo flake.lock is within bounds — exit %d\n' "${actual_exit}" >&2
+  (cd "${REPO_ROOT}" && STALENESS_NOW_EPOCH="${live_epoch}" "${SCRIPT}") \
+    >"${out_file}" 2>&1 || actual_exit=$?
+  if ((actual_exit > 1)); then
+    printf 'FAIL: live: the repo flake.lock is readable by its own check — exit %d\n' \
+      "${actual_exit}" >&2
     cat -- "${out_file}" >&2
     failures=$((failures + 1))
   else
-    printf 'PASS: live: the repo flake.lock is within bounds (exit %d)\n' "${actual_exit}"
+    printf 'PASS: live: the repo flake.lock is readable by its own check (exit %d)\n' \
+      "${actual_exit}"
   fi
   rm --force -- "${out_file}"
 
