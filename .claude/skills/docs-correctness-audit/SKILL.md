@@ -34,10 +34,10 @@ header alone (`references/repo-map.md` §3 says which blocks each scope
 renders). A rationale comment block that restates a mechanism a runbook
 documents — a workflow's header comment, an entry-point script's second comment
 block — is in scope when a pass inside the window touched it: it is prose a
-maintainer reads at the moment they act, the twin
-sweep's `scripts/*.sh` pathspec already reaches it, and a claim corrected in
-the runbook while its comment twin keeps the old wording is the same defect
-with two sites.
+maintainer reads at the moment they act, the twin sweep's `.github/**` and
+`scripts/*.sh` pathspecs already reach both, and a claim corrected in the
+runbook while its comment twin keeps the old wording is the same defect with
+two sites.
 
 This skill is tuned to this repo. Concrete ground-truth commands, the doc
 cluster map, the generated-doc → generator table, and the ephemeral-token
@@ -155,15 +155,18 @@ yourself, with the same `sha`:
 git log --oneline --merges "${sha}..HEAD"
 ```
 
-Read the newest commit's paragraphs before anything else. Filter by path,
-not by subject: prose passes here land under `fix:` as readily as `docs:`.
 This command lists every merge in the window: the PR-titled entries
 are the passes that carried those commits — this repo merges every PR with
 one — and `Merge branch 'main' into …` entries are branch syncs to skip.
 Leave it unpathed; with a pathspec, history simplification drops PR merges
 that carried prose. A merge is read with
 `git show -m --first-parent <merge-sha>`; a bare `git show` on a merge
-prints no hunks at all.
+prints no hunks at all. The bundle's **`PASS ATTRIBUTION`** section is this
+listing rendered with the files each carried commit touched; mid-cycle, when
+the marker has not moved and the range above is the whole cycle, build the
+priority set from it. Read the newest merge's paragraphs before anything
+else. Filter by path, not by subject: prose passes here land under `fix:` as
+readily as `docs:`.
 
 **The unit of re-reading is the paragraph, not the hunk.** A changed line is
 where the last pass aimed; the defect that survived is beside it. Take each
@@ -220,8 +223,9 @@ bash <this-skill-dir>/scripts/collect-ground-truth.sh \
 Redirect it to that path and hand every reader the path — never paste the
 bundle into a dispatch. Write one shared **reader brief** beside it at
 `.claude/reports/<YYYY-MM-DD>-reader-brief.md`. Append `-<n>` to both when a
-same-day bundle already exists; the report (§5) takes the same `n`, so
-back-to-back audits keep their own evidence. The brief holds everything every reader
+same-day bundle already exists — this is the one trigger; the report (§5)
+takes the `n` the bundle took, so back-to-back audits keep their own
+evidence. The brief holds everything every reader
 needs identically: the bundle path, the write prohibitions below, the three
 dimensions, the generated-doc exclusion list, the ephemeral-token regex, the
 not-a-finding list, the output format, and the could-not-locate instruction. A
@@ -241,9 +245,9 @@ this audit turns on), workflow crons, the required-check context count, an
 an **`UNRESOLVED INTERNAL LINKS / ANCHORS`** check via `lychee --offline`.
 Hand this same bundle to every reader so a path/recipe/output/job/cron named
 in a doc is checked against one authoritative list, not re-derived per agent
-(and not re-run by all of them). `references/repo-map.md` explains what each
-field means and how to use it; the collector is its executable form. If the
-bundle comes back short — the ephemeral sweep fails loud on an unterminated
+(and not re-run by all of them). `references/repo-map.md` explains the
+sections it names and how to use them; the collector is its executable form.
+If the bundle comes back short — the ephemeral sweep fails loud on an unterminated
 fence or generated block and aborts the collector inside its own section,
 leaving that section a bare header and never starting the link check that
 follows it — the malformed doc (named on stderr) is itself a high-severity
@@ -390,8 +394,8 @@ Then rank by severity:
 
 Write one report to
 `.claude/reports/<YYYY-MM-DD>-docs-correctness-findings[-<n>].md` using the
-template below — append `-<n>` when a report for that date already exists, so
-back-to-back audits in one day do not overwrite each other's evidence. Stop
+template below — it takes the `n` the bundle took (§1), so back-to-back
+audits in one day do not overwrite each other's evidence. Stop
 there. Do not edit any doc. Surface, in the report's closing notes, anything
 that needs a human decision (spec ambiguity, a generated-doc/generator fix, a
 finding whose "fix" would change runtime behavior).

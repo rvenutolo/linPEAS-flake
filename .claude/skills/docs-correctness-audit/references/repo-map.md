@@ -49,7 +49,8 @@ excluded: their churn is not prose drift and would otherwise top every list.
 
 The ranking scores four pathspecs, not Markdown alone: tracked `*.md`, the
 workflow files whose notify bodies and header comments a maintainer reads at
-the moment they act (`.github/workflows/*.yml`, `.github/ISSUE_TEMPLATE/*.yml`),
+the moment they act and the issue-template prompts (`.github/workflows/*.yml`,
+`.github/ISSUE_TEMPLATE/*.yml`),
 and `scripts/*.sh` — which, git pathspec `*` crossing `/`, reaches
 `scripts/lib/` too. Blame resolves lines in those the same way it does in a
 doc. The composite-action bodies §2 enumerates (`.github/actions/*/action.yml`)
