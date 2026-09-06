@@ -237,14 +237,16 @@ dispatch then names only what differs — the cluster, its files, its issue
 bodies, and its priority hunks. Five prompts that each restate the method are
 five chances for the method to differ between readers.
 
-It emits one labeled bundle of thirteen sections — a **`PROSE HOTSPOTS`**
+It emits one labeled bundle of fourteen sections — a **`PROSE HOTSPOTS`**
 ranking of the prose recent fix passes rewrote most, a **`PASS ATTRIBUTION`**
 listing of which pass in the window wrote which prose file, flake outputs,
 `just` recipes, the `scripts/` inventory (entry points, the `scripts/lib/`
 libraries they source, *and* the `scripts/*.awk` programs), workflows, the
 **ci.yml top-level job list**, **lint-group membership**, the
 **`VALID CI JOB / CHECK NAMES`** union allowlist (the ghost/mislabel detector
-this audit turns on), workflow crons, the required-check context count, an
+this audit turns on), a **`HARNESS LIVE-TREE SCENARIOS`** row per harness
+saying whether it reads the real repo or only fixtures, workflow crons, the
+required-check context count, an
 **`EPHEMERAL-TOKEN HITS`** sweep of banned token shapes over tracked docs, and
 an **`UNRESOLVED INTERNAL LINKS / ANCHORS`** check via `lychee --offline`.
 Hand this same bundle to every reader so a path/recipe/output/job/cron named
@@ -258,6 +260,14 @@ follows it — the malformed doc (named on stderr) is itself a high-severity
 finding: record it, and treat both sections as unchecked rather than clean.
 
 ### 2. Fan out read-only readers, one per doc cluster
+
+Cap the fan-out at **four concurrent readers**. A fifth has been measured on
+this repo to add cost without adding recall, and the clusters that come back
+empty are stable across cycles — spend the slot on a second reader for a dense
+cluster instead. If a reader completes and a later one dies, its output is a
+finished result: keep it, fold it into the report, and do not re-dispatch that
+cluster. Amend the shared reader brief when you do, so a re-dispatched sibling
+does not re-derive what it already answered.
 
 Dispatch parallel **read-only Explore agents**, one per cluster from the
 cluster map, **overridden to the strongest model available**. A reader's job is
@@ -310,6 +320,13 @@ Read-only fan-out needs no orchestration opt-in — it is plain parallel reads.
     independently, so it can head a real error list: when it does, both apply
     — flag the listed entries and record the sweep as incomplete. Say so in
     the coverage note.
+    A command quoted inside a Markdown **table cell** must be read as it
+    renders, not as it appears in the source: `\|` there is the cell's pipe
+    escape and renders as `|`. Running the raw source turns a working
+    alternation into a command that matches nothing, which reads as a broken
+    command a doc hands the reader — a false high finding whose "fix" makes
+    the formatter split the cell. Render the row, or strip the escapes, before
+    running anything out of a table.
 1. **Internal consistency.** Docs contradicting each other (same fact stated two
     ways); invariant-index entries vs their tracked-doc sections; a claimed
     invariant with no backing check.
@@ -368,11 +385,32 @@ The third pathspec is what reaches a `--body-file` body whose prose a
 script composes; a body a `run:` step composes inline is already covered by
 the `.github/**` pathspec.
 
+Two ways this sweep returns zero hits while twins exist, both silent:
+
+- **This repo sets `grep.patternType=perl`.** `\|` alternation matches
+    nothing, so a pattern built with it reports a clean tree. Pass each
+    alternative as its own `-e` instead.
+- **An unquoted `*.md` pathspec is expanded by the shell**, so it reaches
+    `git grep` as the root-level Markdown files only and every `docs/**` twin
+    goes unread. Quote every pathspec.
+
+A sweep that found nothing is only evidence if it could have found something —
+re-run it against a phrase you know is present before trusting a zero.
+
 Search the wrong wording, not the corrected one, and loosen the phrase until it
 would catch a paraphrase — a twin rarely matches byte for byte. Every hit joins
 that finding's site list. A finding that ships with one site when three exist
 is not a smaller finding; it is a fix pass that will leave two wrong sentences
 behind and hand them to the next cycle as fresh drift.
+
+**A notify body is one unit with its `title:`, its `label-description:`, the
+job comment above it, and the doc describing the job.** Read all four before
+filing, and list all four sites in the finding. A body fixed alone leaves its
+twins behind, and every audit of this repo so far has shipped at least one.
+The same holds sideways: when a claim is copied across sibling workflows —
+an arm list, a failure-cause enumeration, a step name — check it against each
+sibling's *own* steps rather than assuming the paste was true everywhere. Both
+failures look identical in the report: one site fixed, several still wrong.
 
 **A command a doc hands the reader is a claim about a set — run it.** Where
 prose says "enumerate them with `<command>`", the command is as checkable as a
@@ -382,6 +420,18 @@ second way — a wider pattern, the other file shapes, the directory listing —
 and diff the two. A command that silently misses a member of the set it claims
 to produce is high severity, because every future reader trusts it instead of
 looking.
+
+**Before deferring anything to the user, test whether the tree already
+decides it.** A finding parked as "spec ambiguity" costs a whole cycle, and
+across this repo's audits the parked items have usually not been ambiguous at
+all — the code answered them and nobody asked it. So for each candidate
+deferral, write down what the tree would have to look like for each reading to
+be right, then check. If only one reading is consistent with the code, it is a
+finding with a fix, not a decision: file it that way. Defer only when both
+readings survive contact with the tree, and then state both readings precisely
+enough that the user can choose between them without re-deriving the
+mechanism. A finding whose fix would change runtime behaviour is a different
+case and still goes to the user — say which of the two it is.
 
 Then rank by severity:
 
@@ -404,7 +454,36 @@ there. Do not edit any doc. Surface, in the report's closing notes, anything
 that needs a human decision (spec ambiguity, a generated-doc/generator fix, a
 finding whose "fix" would change runtime behavior).
 
-### 6. Say whether this audit closes the cycle
+### 6. State the fix-pass contract in the report
+
+Across this repo's audit cycles, roughly a third of every audit's findings
+were defects the *previous* audit's fix pass had just written. That rate did
+not fall as rules naming the failure modes accumulated, because a fix pass
+rewriting a paragraph is not reading the rules — it is reading the finding.
+The report therefore carries a contract the fix PR is held to, not more
+advice:
+
+1. **Every rewritten paragraph names the artifact it was written against.**
+    The fix commit records, per paragraph it changes, the file and line range
+    of the code, workflow, or script whose behaviour the new sentence claims.
+    A sentence with no artifact line range behind it is a sentence somebody
+    inferred from the old sentence, which is how a corrected claim becomes a
+    differently-wrong one.
+1. **A second reader re-reads those pairs before the PR opens** — the reader
+    is not whoever wrote them. It opens only the recorded (paragraph, artifact
+    range) pairs, reads the artifact first and the paragraph second, and says
+    for each whether the paragraph is true of that artifact. This is cheap:
+    the pair list is short, and it is the only step in the cycle that has ever
+    caught a fix-pass defect before it merged rather than a cycle later.
+1. **A widened claim is dropped or scoped, never re-sharpened.** Replacing a
+    false exclusive with a different exclusive is the single most repeated
+    defect these audits find. State the fix shape in the finding itself, not
+    only in the closing notes.
+
+Say in the report that the fix PR owes these three. A fix pass that skips them
+is the mechanism by which this cycle's fixes become next cycle's findings.
+
+### 7. Say whether this audit closes the cycle
 
 The marker in `.github/docs-audit-state` means "read, and resolved". It moves
 once per *cycle*, written by the final fix PR — which runs `just docs-audit-done`
@@ -468,11 +547,21 @@ findings must still show what was cross-checked, not just "clean".
 ## LOW
 ...
 
+## Needs a live run
+Candidates the tree cannot settle. Split them, because the two cost very
+different amounts:
+- **One read-only call settles it** — `gh issue view`, `gh label list`, a
+  `nix eval` at the locked rev. Make the call and record the answer here
+  rather than carrying the item another cycle.
+- **Needs a CI run** — what a cancelled job writes, whether a gate has ever
+  fired. Say so and leave the claim unwritten; do not invent it.
+
 ## Notes for the fix pass
 - <batching suggestion, decisions the user must make, generated-doc/generator fixes>
-- Standing item: when a fix widens a claim that was too narrow, drop or scope
-  the quantifier instead of sharpening it. Overshooting into a fresh false
-  exclusive is a defect this repo's fix passes have repeatedly shipped.
+- Fix-pass contract (§6): record the artifact file:line range each rewritten
+  paragraph was written against; a second reader — not the writer — re-reads
+  those pairs before the PR opens; a widened claim is dropped or scoped, never
+  re-sharpened.
 ```
 
 Every finding on a quantifier carries its fix shape in the finding itself, not

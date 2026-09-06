@@ -16,6 +16,24 @@ Invoke the `/docs-audit` slash command. It is read-only: it emits one
 severity-ranked findings report and edits nothing. Fix what it finds in
 the normal PR flow.
 
+## Fixing what an audit finds
+
+Roughly a third of each audit's findings are defects the previous audit's
+fix pass wrote. A pass rewriting a paragraph reads the finding, not the
+artifact, so a corrected claim becomes a differently-wrong one. The
+report states a contract the fix PR is held to:
+
+- Every rewritten paragraph records the `file:line` range of the code,
+    workflow, or script whose behaviour the new sentence claims. A sentence
+    with no artifact range behind it was inferred from the sentence it
+    replaced.
+- A second reader — not whoever wrote them — opens those pairs before the
+    PR does, reads the artifact first and the paragraph second, and says for
+    each whether the paragraph is true of that artifact.
+- A claim that was too narrow is dropped or scoped to the set it can
+    defend. Replacing a false exclusive with a different exclusive is the
+    most repeated defect these audits find.
+
 ## Closing the loop
 
 The final fix PR of an audit cycle records the audit point:

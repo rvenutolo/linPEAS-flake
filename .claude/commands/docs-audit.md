@@ -25,14 +25,17 @@ Run a documentation correctness audit of this repository using the
     the previous step asked for, not a second one — to gather the
     authoritative ground-truth bundle (the prose-hotspot ranking, the
     pass-attribution listing, flake outputs, recipes, scripts, workflows,
-    ci.yml job list, lint-group membership, the valid CI job / check-name union
+    ci.yml job list, lint-group membership, the per-harness live-tree
+    scenario listing, the valid CI job / check-name union
     allowlist, crons, required-check count, the ephemeral-token sweep, and the
     internal link / anchor check). Save it under `.claude/reports/` and hand
     every reader that path together with one shared reader brief, rather than
     restating the method in each dispatch.
 1. Fan out read-only cluster readers (one per doc cluster), overridden to the
     strongest model available, checking factual drift, internal consistency,
-    and prose quality.
+    and prose quality. Cap the fan-out at four concurrent readers; if one
+    completes and a later one dies, keep the completed output as a finished
+    result rather than re-dispatching that cluster.
 1. Require a coverage note from every reader saying what it cross-checked
     against ground truth, plus a `Could not locate` list of anything the
     dispatch named that the reader could not find. A cluster reporting "clean"
@@ -42,10 +45,19 @@ Run a documentation correctness audit of this repository using the
     not cover. Run any command a doc hands the reader and derive the same set
     a second way. Then `git grep` the wrong wording across all tracked prose
     (`'*.md' '.github/**' 'scripts/*.sh'`) so every twin joins the finding.
+    Quote every pathspec and pass each alternative as its own `-e` — this repo
+    sets `grep.patternType=perl`, so `\|` matches nothing, and an unquoted
+    `*.md` never reaches `docs/`. Both failures report a clean tree.
+1. Before parking anything as a decision for the user, check whether the tree
+    already decides it: write down what the code would have to look like for
+    each reading to be right, and defer only if both survive.
 1. Write a severity-ranked findings report to `.claude/reports/` — taking
     the `-<n>` suffix the bundle and brief took — attributing each finding
     to the pass that wrote it where the bundle's `PASS ATTRIBUTION` section
-    can say.
+    can say. State the fix-pass contract in it: each rewritten paragraph
+    records the artifact `file:line` range it was written against, a second
+    reader — not the writer — re-reads those pairs before the fix PR opens,
+    and a claim that was too narrow is dropped or scoped, never re-sharpened.
 1. Close by saying whether this audit closes the cycle. If no further audit is
     planned, the final fix PR runs `just docs-audit-done` and commits the
     updated `.github/docs-audit-state` as its last commit; the monthly reminder
