@@ -138,7 +138,9 @@ hooks.
 
 The weekly verify cron re-fetches the pinned `linpeas.sh` URL, recomputes the SRI
 hash via `openssl dgst -sha256 -binary <file> | base64 --wrap=0`, compares against
-`linpeas-pin.json`. Failure = security incident.
+`linpeas-pin.json`. A hash mismatch = security incident; the same step
+also fails on a fetch error or an unreadable pin, which the notify body
+tells apart.
 
 ## verify-latest-release failure attribution<a name="verify-latest-release-failure-attribution"></a>
 
@@ -146,12 +148,13 @@ hash via `openssl dgst -sha256 -binary <file> | base64 --wrap=0`, compares again
 reasons via per-step `id:` outcomes mapped to a `reason` token by
 the `attribute failure reason` step. Reasons:
 
-- `upstream-sri-drift` — the upstream fetch step failed: either the
-    fetched `linpeas.sh` SHA-256 no longer matches the pinned SRI —
-    **a security incident** — or the fetch itself failed; the step log
-    says which.
+- `upstream-sri-drift` — the upstream fetch step failed: the fetched
+    `linpeas.sh` SHA-256 no longer matches the pinned SRI — **a security
+    incident** — or the step failed before comparing (a `curl` error or
+    an unreadable pin); the step log says which.
 - `manifest-tag-drift` — `:latest` no longer resolves to the same
-    manifest as `:VERSION` on ghcr.io or docker.io.
+    manifest as `:VERSION` on ghcr.io or docker.io, or `:latest` could
+    not be fetched from one registry.
 - `cross-registry-manifest-mismatch` — **security incident.** ghcr.io
     and docker.io serve different multi-arch manifests for the release
     tag. Identical bytes are published to both at release time, so a
@@ -161,9 +164,12 @@ the `attribute failure reason` step. Reasons:
     [dockerhub-recovery.md](../runbooks/dockerhub-recovery.md).
 - `ghcr-attest-failed` / `hub-attest-failed` /
     `pin-attest-failed` — attestation
-    verification failed for a specific artifact. Either tampering or a
-    Sigstore TUF trust-root rotation lag on the runner image; re-run the
-    cron 24h later to distinguish before treating it as tampering.
+    verification failed for a specific artifact, or the registry fetch
+    that resolves the per-arch digest failed first (the step log shows a
+    `docker manifest inspect` error or `unexpected … digest`). A
+    verification failure is tampering or a Sigstore TUF trust-root
+    rotation lag on the runner image; re-run the cron 24h later to
+    distinguish before treating it as tampering.
 - `release-tag-fetch-failed` / `release-asset-download-failed` —
     transient GitHub API / asset visibility lag.
 - `pin-blob-sig-failed` — cosign verify-blob failed for
@@ -179,8 +185,10 @@ the `attribute failure reason` step. Reasons:
     CycloneDX SBOM asset. Responsibility lives in the
     `image-arm64` job of `release-on-bump.yml`.
 - `images-cosign-failed` — `cosign verify` of the published per-arch and
-    index images failed against the pinned workflow identity and OIDC issuer.
-    Treat as a signing-chain incident, adjacent in severity to the
+    index images failed against the pinned workflow identity and OIDC
+    issuer, or the step could not reach cosign (`nix shell` error) or the
+    registries; the step log says which. Treat a cosign verification
+    error as a signing-chain incident, adjacent in severity to the
     `*-attest-failed` reasons and subject to the same re-run-first caveat.
 - `unattributed` — the job failed but no ladder arm matched the failed
     step: either a step before the first verification step
@@ -193,7 +201,8 @@ the `attribute failure reason` step. Reasons:
     was cancelled, or the runner was lost, before the attribution step
     ran. Not a verification result; re-run the cron.
 
-`upstream-sri-drift` and `cross-registry-manifest-mismatch` warrant the
+`upstream-sri-drift` on a hash mismatch and
+`cross-registry-manifest-mismatch` warrant the
 "treat as security incident" framing outright; the `*-attest-failed`
 family and `images-cosign-failed` warrant it once a 24h re-run has ruled
 out trust-root rotation lag; `manifest-tag-drift` is a lower-confidence
@@ -212,7 +221,8 @@ of them. Alert fatigue is a security risk.
 The step ids, the attribution step's `env:` block, the `elif` ladder,
 and the reason list above are four hand-synced copies of one set.
 `scripts/check-verify-reason-ladder.sh` binds them: every `id:`-carrying
-step in the `verify` job is referenced by a `steps.<id>.outcome` entry
+step in the `verify` job other than the attribution step itself is
+referenced by a `steps.<id>.outcome` entry
 in the attribution `env:`, every such env var is read by the ladder,
 every `reason` token the ladder emits appears in the list above, and the
 ladder's branch order matches the steps' execution order — the order the
@@ -297,7 +307,8 @@ post-processes the SARIF to count CRITICAL findings and **fails the
 job** when count > 0. The job emits an `outputs.has-finding` boolean
 (`'true'` iff the count step ran and returned a non-zero count) so
 notify jobs can distinguish a real CRITICAL CVE from an
-infrastructure failure that prevented the scan.
+infrastructure failure that prevented a CRITICAL count from being
+produced.
 
 Two follow-on jobs (`needs: image-cve-scan-trivy`) gate on that
 output and open / update deduped issues via
@@ -307,8 +318,9 @@ output and open / update deduped issues via
     CRITICAL CVE reported by Trivy. Remediation: bump `nixpkgs`.
 
 - `image-cve-scan-trivy-notify-infra` (label: `image-cve-infra-trivy`) — job failed
-    before Trivy produced a CRITICAL count (build, scan, or SARIF
-    upload broke), or the job was cancelled (timeout). Remediation:
+    before Trivy produced a CRITICAL count (build, scan, SARIF
+    upload, or the count step itself broke — Trivy may or may not have
+    found a CRITICAL), or the job was cancelled (timeout). Remediation:
     inspect the failing step; if transient, close once the next
     scheduled run is green.
 
@@ -348,8 +360,9 @@ deduped issue via the `notify-workflow-result` composite:
 - `image-cve-scan-grype-notify-finding` (label: `image-cve-critical-grype`) — real
     CRITICAL CVE was identified by Grype.
 - `image-cve-scan-grype-notify-infra` (label: `image-cve-infra-grype`) — job failed
-    before producing a CRITICAL count (build / scan / SARIF upload),
-    or the job was cancelled (timeout).
+    before producing a CRITICAL count (build / scan / SARIF upload /
+    the count step itself — Grype may or may not have found a
+    CRITICAL), or the job was cancelled (timeout).
 
 ## SBOM attestation<a name="sbom-attestation"></a>
 

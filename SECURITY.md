@@ -234,7 +234,7 @@ filed by the notify jobs.
 - `SCORECARD_PAT` — a fine-grained read-only personal access token
     consumed as `GITHUB_AUTH_TOKEN` by `scorecard-drift-check.yml` on the
     scorecard step only; the `Webhooks` check needs the `Webhooks` read
-    permission, which the workflow-level `GITHUB_TOKEN` cannot be granted.
+    permission, which no `GITHUB_TOKEN` `permissions:` block can grant.
     Rotation:
     on PAT expiry (bounded at one year), on suspected compromise, or
     on GitHub revocation —

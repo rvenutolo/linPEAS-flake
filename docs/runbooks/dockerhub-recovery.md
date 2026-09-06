@@ -3,11 +3,12 @@
 Steps to recover from a release the pipeline left incomplete, or whose
 two registries disagree. Most often that is a half-published one where
 `docker.io` accepted a per-arch push but `ghcr.io` failed, leaving an
-orphan arch-suffixed tag that a naive retry of
-`release-on-bump.yml` would silently overwrite, invalidating any
-attestations and signatures already issued over the original bytes —
-the failing arch's attest steps never ran, but the sibling arch's job
-may have completed fully before the failure.
+orphan arch-suffixed tag that carries no attestation or signature —
+every attest and sign step runs after the push loop, so the failing
+arch's never ran — while the sibling arch's job may have completed
+fully before the failure. A naive retry of `release-on-bump.yml`
+would silently overwrite the orphan and leave the retry's digests
+ambiguous.
 
 A post-publication tag rewrite lands here too — see the third path
 under [When this applies](#when-this-applies).
@@ -53,9 +54,10 @@ The push loop inside `release-on-bump.yml` per-arch jobs runs
     The `manifest` job is skipped, so neither registry has the
     unsuffixed `{version}` or `:latest` tags. Delete the orphan
     docker.io arch tag before retrying: the push itself would succeed
-    and silently overwrite it, replacing bytes a prior attestation or
-    signature may already reference and leaving the retry's digests
-    ambiguous.
+    and silently overwrite it. The orphan carries no attestation or
+    signature (those steps run after the push and never ran), so
+    deleting it loses nothing and keeps the retry's digests
+    unambiguous.
 
 A third path arrives here from elsewhere: when a published release's two
 registries disagree, `verify-latest-release.yml` files its
@@ -293,7 +295,7 @@ carries the longer remediation:
     parent still yields a green sync — which carries no parity obligation
     here.
 
-Nothing enforces this parity, so an edit here has to reach both
+Nothing enforces that three-cause agreement, so an edit here has to reach both
 workflows by hand.
 
 The third path under [When this applies](#when-this-applies) carries a

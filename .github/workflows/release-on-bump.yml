@@ -1658,7 +1658,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Common Docker Hub causes — parity with dockerhub-sync.yml; keep wording in sync.
+      # Common Docker Hub causes — the same three causes as dockerhub-sync.yml
+      # and docs/runbooks/dockerhub-recovery.md; each body names the token its
+      # own job consumes.
       - uses: ./.github/actions/notify-workflow-result
         with:
           # image/verify are gated on `tag-exists == 'false'` so

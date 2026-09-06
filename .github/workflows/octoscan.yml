@@ -8,15 +8,15 @@ name: octoscan
 # `known-vulnerability` (CVE match against pinned action versions).
 #
 # Not in branch protection; failure of this workflow does NOT block
-# merge. The `scan` step distinguishes octoscan's three documented
+# merge. `scripts/octoscan-scan.sh` distinguishes octoscan's per-file
 # exit codes (`0` = clean, `2` = findings, `1` = fatal scanner
 # error) and surfaces the distinction through the
-# `has-finding` job output: on push to main, real findings page
-# `notify-finding`, scanner / runner breakage pages `notify-infra`,
-# under separate issue labels. Findings below the fail threshold
-# (there is no severity flag — every finding fails the job) and the
-# full SARIF still upload to the Security tab under the distinct
-# `octoscan` category. See SECURITY.md "Supply-chain posture
+# `has-finding` job output: on push, cron and dispatch runs, real
+# findings page `notify-finding`, scanner / runner breakage pages
+# `notify-infra`, under separate issue labels. There is no severity
+# flag — every finding fails the job — and the full SARIF still
+# uploads to the Security tab under the distinct `octoscan`
+# category. See SECURITY.md "Supply-chain posture
 # monitoring".
 
 on:
@@ -144,9 +144,10 @@ jobs:
             and document it in that script's Suppressions header.
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-  # Infrastructure failure: scan never produced a findings result
-  # (e.g. docker pull failure, checkout / harden-runner failure,
-  # octoscan exit `1` from an internal parse error) or was cancelled
+  # Infrastructure failure: the job failed without a complete findings
+  # result (e.g. docker pull failure, checkout / harden-runner failure,
+  # octoscan exit `1` from an internal parse error, a SARIF upload
+  # failure after a clean scan) or was cancelled
   # (timeout). Filed under a distinct label so transient breakage is
   # not paged as a security finding. PR runs are excluded — the
   # failed check on the PR itself is the maintainer-facing signal
@@ -178,16 +179,17 @@ jobs:
           result: ${{ needs.scan.result }}
           label: octoscan-infra
           label-color: fbca04
-          label-description: octoscan workflow infrastructure failure (no security finding)
-          title: "octoscan: infrastructure failure (scan did not run / scan crashed)"
+          label-description: octoscan workflow infrastructure failure (no complete findings result; findings may exist)
+          title: "octoscan: infrastructure failure (scan did not complete)"
           body: |
-            `octoscan / scan` failed without producing a findings
+            `octoscan / scan` failed without a complete findings
             result (e.g. docker pull failure, checkout / harden-runner
-            failure, or octoscan exit `1` from an internal scanner
-            error). No SARIF was uploaded — it may be partial or absent.
-            If the log's `classification=` line reads `findings recorded
-            but incomplete`, real findings exist beside an unanalyzed
-            file — triage both.
+            failure, octoscan exit `1` from an internal scanner error,
+            or the SARIF upload step failing after a clean scan). On a
+            scanner error no SARIF was uploaded — the script drops a
+            partial one. If the log's `classification=` line reads
+            `infra-failure (findings recorded but incomplete)`, real
+            findings exist beside an unanalyzed file — triage both.
 
             - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 

@@ -36,7 +36,7 @@ name: scorecard-drift-check
 # zizmor-drift-check sibling. One source of truth.
 #
 # Token: scorecard's Webhooks check needs the Webhooks read
-# permission (not grantable via job-level GITHUB_TOKEN permissions), so a
+# permission, which no GITHUB_TOKEN permissions block can grant, so a
 # fine-grained PAT is stored as SCORECARD_PAT and passed via the
 # GITHUB_AUTH_TOKEN env var on the scorecard step only (never
 # job-wide). Rotation steps: docs/runbooks/scorecard-pat-rotation.md.
