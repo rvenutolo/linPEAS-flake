@@ -171,7 +171,7 @@ jobs:
           # skipped.
           result: ${{ needs.check.outputs.result || needs.check.result }}
           label: pin-stalled
-          title: "stale-pin-check: pin not advancing"
+          title: "stale-pin-check: pin not advancing, or the check could not run"
           body: |
             The daily `stale-pin-check` watchdog flagged a failure.
 
@@ -215,5 +215,5 @@ jobs:
 
             This issue auto-closes once the next watchdog run sees a healthy
             pin within tolerance of the upstream latest tag.
-          label-description: pin not advancing despite green update-linpeas runs
+          label-description: pin not advancing despite green update-linpeas runs, or the stale-pin check could not run
           github-token: ${{ secrets.GITHUB_TOKEN }}

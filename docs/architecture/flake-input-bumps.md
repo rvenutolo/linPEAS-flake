@@ -337,14 +337,17 @@ CI. Of the required-check enforcers, only
 `check-flake-systems-eval.sh` runs nowhere but CI; the drift-check
 enforcers (daily: `check-settings-posture.sh`,
 `check-allowed-actions-api.sh`, `check-flake-lock-staleness.sh`; weekly:
-`check-scorecard-threshold.sh`) are likewise CI-only, for two reasons:
-`check-settings-posture.sh` and `check-allowed-actions-api.sh` need an
-admin-scoped App token against the live API, while
+`check-scorecard-threshold.sh`) likewise run as enforcement steps only
+in CI, for two reasons: `check-settings-posture.sh` and `check-allowed-actions-api.sh`
+need an admin-scoped App token against the live API, while
 `check-flake-lock-staleness.sh` and `check-scorecard-threshold.sh` each
 answer to an input from outside the tree — the wall clock, against which
 `flake.lock`'s `locked.lastModified` is measured, and the scorecard CLI's JSON
-on stdin, which only the scheduled run produces. Locally only those four
-drift-check enforcers' harnesses run; `check-flake-systems-eval.sh` and its
+on stdin, which only the scheduled run produces. Locally those four
+drift-check enforcers' harnesses run, and the staleness harness's last
+scenario runs its enforcer against the live `flake.lock` with the wall
+clock, so that one does probe the live tree under `just verify`;
+`check-flake-systems-eval.sh` and its
 harness run only in the `flake-check` job. Individual
 harnesses can still be run directly
 (`nix develop --command bash tests/<name>.test.sh`) while iterating on

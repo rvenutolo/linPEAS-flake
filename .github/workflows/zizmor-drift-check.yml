@@ -7,8 +7,9 @@ name: zizmor-drift-check
 # every PR and push through `nix flake check`, so a hook bypass is
 # caught before merge. This watchdog runs the same lock-pinned binary
 # against main on a schedule: a finding here is a workflow file on
-# main that fails the current pinned binary — a rule change carried by
-# a flake.lock bump, or a file pre-commit's matching no longer selects.
+# main that fails the current pinned binary — a file pre-commit's
+# matching does not select, typically surfaced when a flake.lock bump
+# changes the rules the bump PR's flake-check applied to selected files.
 #
 # The step below passes the .github/workflows/ directory straight to
 # zizmor. The hook instead scans whatever pre-commit's `files` and

@@ -145,8 +145,13 @@ case, so no drift is reported alongside); OR `classify-pin-ref.sh`
 failed or returned an unrecognized verdict for a ref; OR a drift line
 failed shape validation; OR the workflow glob matched zero files.
 
-1. Inspect the run log; look at the `ratchet exit N; raw output:`
-    block, which is ratchet's combined stdout and stderr.
+1. Inspect the run log. When ratchet exited non-zero, look at the
+    `ratchet exit N; raw output:` block, which is ratchet's combined
+    stdout and stderr. The other arms print one of
+    `classify-pin-ref failed for …`,
+    `malformed drift line rejected: …`,
+    `unexpected classifier verdict …` or
+    `no workflow files matched …` instead.
 1. Look first for an unpinned-ref finding. `ratchet lint` exits
     non-zero on an unpinned `uses:` as readily as on a tool error, and
     `check-uses-sha-pinned.sh` should have blocked that at PR time —

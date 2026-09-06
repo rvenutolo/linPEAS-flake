@@ -14,8 +14,8 @@ name: codeql
 # hook; CodeQL is the deeper dataflow second opinion that runs on every
 # PR for fast feedback without holding the merge button hostage.
 # The `analyze` step is invoked with `fail-on: critical`, so a
-# CRITICAL finding fails the job and — on push to main — the
-# `notify-finding` job opens a deduped issue via
+# CRITICAL finding fails the job and — on push, cron and dispatch
+# runs — the `notify-finding` job opens a deduped issue via
 # `notify-workflow-result`. If the job fails before `analyze` runs
 # (e.g. checkout/init failure), `notify-infra` opens a separate, less
 # alarming issue so transient infrastructure flakes do not page as
@@ -57,8 +57,9 @@ jobs:
       security-events: write # upload-sarif
       actions: read # read other workflows in repo
     # `has-finding` is `'true'` only when the `analyze` step ran and
-    # failed (i.e. CodeQL itself rejected the run on a CRITICAL
-    # finding). Any earlier failure (checkout, init) leaves the
+    # failed — with `fail-on: critical` most often a CRITICAL finding,
+    # though an error inside the analyze action counts too. Any
+    # earlier failure (checkout, init) leaves the
     # `analyze` step `skipped`, which evaluates to `'false'` and is
     # classified as an infra failure by the notify jobs below.
     outputs:
@@ -93,7 +94,7 @@ jobs:
           # to the Security tab.
           fail-on: critical
 
-  # Real CRITICAL finding: analyze ran and failed. PR runs are
+  # Analyze ran and failed — most often a CRITICAL finding. PR runs are
   # excluded — the failed check on the PR itself is the
   # maintainer-facing signal there; push, cron, and dispatch runs
   # have no PR surface, so they page via the deduped issue.
@@ -120,7 +121,7 @@ jobs:
         with:
           result: failure
           label: codeql-critical
-          title: "codeql: CRITICAL finding in workflow analysis"
+          title: "codeql: analyze failed (fail-on: critical)"
           body: |
             `codeql / analyze (actions)` failed — with `fail-on: critical`, most
             often a CRITICAL-severity finding in the GitHub Actions workflow

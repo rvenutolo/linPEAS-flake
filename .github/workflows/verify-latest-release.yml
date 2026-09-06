@@ -22,9 +22,10 @@ jobs:
     outputs:
       # Failure-attribution token consumed by the `notify` job's body.
       # Mirrors the `reason=` pattern in `stale-pin-check.yml` —
-      # `upstream-sri-drift` and `cross-registry-manifest-mismatch`
-      # warrant the "security incident" framing in the auto-filed issue
-      # outright; the body grades the remaining reasons individually.
+      # `upstream-sri-drift` on a hash mismatch and
+      # `cross-registry-manifest-mismatch` warrant the "security incident"
+      # framing in the auto-filed issue outright; the body grades the
+      # remaining reasons individually.
       reason: ${{ steps.attribute.outputs.reason }}
     steps:
       - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
@@ -309,8 +310,9 @@ jobs:
         # URL and confirm the SRI hash still matches the pinned value. The
         # attestation steps above only prove *our* artifacts are untampered;
         # they cannot detect upstream replacing the asset after we pinned it.
-        # Failure of this step is the canonical "treat as security incident"
+        # A hash mismatch here is the canonical "treat as security incident"
         # signal, alongside the cross-registry manifest comparison below;
+        # the step also fails on an unreadable pin or a fetch error, and
         # the notify body grades the other failures individually.
         run: |
           set -Eeuo pipefail
@@ -493,17 +495,20 @@ jobs:
 
             Reason values and what they mean:
 
-            - `upstream-sri-drift` — the upstream fetch step failed:
-              either the fetched `linpeas.sh` no longer matches the
-              pinned SRI (the step log prints `upstream content drift:
-              pin says …`) — **TREAT THAT AS A SECURITY INCIDENT**:
-              either upstream tag-replaced the asset or someone tampered
-              with the pin — or the fetch itself failed (a `curl` error
-              in the step log). Do NOT merge subsequent pin bumps until
-              a hash mismatch is investigated.
+            - `upstream-sri-drift` — the upstream fetch step failed.
+              If the fetched `linpeas.sh` no longer matches the pinned
+              SRI (the step log prints `upstream content drift: pin
+              says …`), **TREAT THAT AS A SECURITY INCIDENT**: upstream
+              tag-replaced the asset or someone tampered with the pin.
+              The step also fails before comparing — a `curl` error, or
+              a pin the step could not read — and the step log says
+              which. Do NOT merge subsequent pin bumps until a hash
+              mismatch is investigated.
             - `manifest-tag-drift` — `:latest` on ghcr.io or docker.io
               no longer resolves to the same manifest as the
-              release-tagged `:VERSION`. Likely registry-side repoint
+              release-tagged `:VERSION`, or `:latest` could not be
+              fetched from one registry (the step log names it). On a
+              mismatch: likely registry-side repoint
               (incident, account compromise, accidental `docker tag`
               push); also a security signal but lower-confidence than
               SRI drift.
@@ -521,14 +526,20 @@ jobs:
             - `ghcr-attest-failed` / `hub-attest-failed` /
               `pin-attest-failed` — attestation
               verification failed for one of the per-arch images or
-              the pin asset. Could be artifact tampering or
+              the pin asset, or the registry fetch that resolves the
+              per-arch digest failed first (the step log shows a
+              `docker manifest inspect` error or `unexpected … digest`).
+              A verification failure could be artifact tampering or
               a Sigstore TUF trust-root rotation lag (newer `gh` CLI
               with rotated root has shipped to runners but the cron
               still runs on the old runner image). Re-run the cron 24h
               later to distinguish.
             - `images-cosign-failed` — cosign
               signature verification failed for one
-              of the per-arch / multi-arch image digests. Same
+              of the per-arch / multi-arch image digests, or the step
+              could not reach cosign (`nix shell` error) or the
+              registries (the step log says which). On a cosign
+              verification error: same
               authenticity guarantee as the `*-attest-failed` reasons
               above, exposed via the user-facing `cosign verify` path.
               Same Sigstore TUF rotation caveat applies — re-run 24h
@@ -587,7 +598,8 @@ jobs:
 
             Investigate the `verify` job logs for the failing step. Do
             NOT merge any subsequent pin bumps if the reason is
-            `upstream-sri-drift`, `cross-registry-manifest-mismatch`, or
-            `manifest-tag-drift` until resolved.
+            `upstream-sri-drift` on a hash mismatch,
+            `cross-registry-manifest-mismatch`, or `manifest-tag-drift`
+            until resolved.
           label-description: verify-latest-release scheduled check failed
           github-token: ${{ secrets.GITHUB_TOKEN }}

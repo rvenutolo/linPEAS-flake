@@ -62,6 +62,9 @@ jobs:
             printf 'pressure script emitted no PRESSURE line\n' >&2
             exit 1
           fi
+          # The trailer is the machine-readable line this step reads; the
+          # issue body a maintainer reads should end with the instruction.
+          sed --in-place '/^PRESSURE=/d' "${body_file}"
           printf 'pressure=%s\n' "${pressure}" >>"${GITHUB_OUTPUT}"
           printf 'body_file=%s\n' "${body_file}" >>"${GITHUB_OUTPUT}"
       - name: open, update, or close the reminder issue

@@ -3,8 +3,9 @@ name: cron-table-drift-check
 # Push-triggered drift check for the cron schedule table in
 # docs/architecture/ci.md. Fails if the table or its ordering
 # paragraph drifts from cron lines under .github/workflows/. The push
-# paths filter covers every file that can introduce a desync, so no
-# scheduled re-check is needed. Same source of truth as the local
+# paths filter covers the `.yml` workflows, the table and the script —
+# the files that introduce a desync in practice — so no scheduled
+# re-check is needed. Same source of truth as the local
 # pre-commit hook (scripts/check-cron-table.sh).
 
 on:
@@ -76,9 +77,10 @@ jobs:
             detected drift between the cron schedule table (or its
             ordering paragraph) in `docs/architecture/ci.md` and the
             `cron:` lines under `.github/workflows/`, or the check could
-            not run — a step before it (harden-runner, checkout,
-            setup-nix) failed, or `scripts/check-cron-table.sh` exited 2
-            on a missing or unparsable input. The job log says which.
+            not run — a step before it (harden-runner, checkout)
+            failed, or `scripts/check-cron-table.sh` exited 2 on a
+            missing or unparsable input, or on a workflow declaring
+            more than one `cron:` line. The job log says which.
 
             Run `bash scripts/check-cron-table.sh` locally to see the
             specific mismatch.

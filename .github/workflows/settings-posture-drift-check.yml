@@ -125,10 +125,10 @@ jobs:
 
             See the failing job logs to tell drift from a could-not-run: on drift,
             every mismatched setting is reported in one run as a
-            `<key> drift: got …, want …` line; a could-not-run prints its
-            cause — the failing tool's own error, then the script's
-            `ERROR` line when the script got that far — and no `drift:`
-            line for the setting it stopped on.
+            `<key> drift: got …, want …` line; a could-not-run prints a
+            diagnostic naming the cause — the failing tool's own error
+            where a tool failed, then the script's own line — and no
+            `drift:` line for the setting it stopped on.
 
             Remediation: reconcile by either
             - reverting the UI change so live matches the doc, or

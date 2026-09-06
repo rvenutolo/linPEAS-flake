@@ -44,8 +44,8 @@ below.
       "$harness"/results/run-1.md   # run-2.md, run-3.md, ...
     ```
 
-    Name the file rather than globbing for it: the report path carries a
-    `-<n>` suffix once a same-day report exists, and same-day runs are what
+    Name the file rather than globbing for it: the report path carries the
+    `-<n>` suffix its ground-truth bundle took, and same-day runs are what
     this loop produces, so a glob over `*-docs-correctness-findings*.md`
     expands to every earlier run's report as well.
 

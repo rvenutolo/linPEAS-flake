@@ -294,8 +294,8 @@ the enumerated planning and review labels above are blocked.
     workflow-phase and label vocabulary is not an ephemeral reference.
     The allowlist is also the only file-level escape from a false
     positive: there is no per-line or per-token suppression comment,
-    though a token inside a code span, a fence or a generated block is
-    not read at all.
+    though a token inside a code span (in any source), or inside a
+    fence or a generated block (in Markdown), is not read at all.
 
 - **Structural stripping:** generated auto-blocks (the `BEGIN`/`END`
     HTML-comment marker pairs), fenced code blocks, and inline code spans

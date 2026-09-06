@@ -65,7 +65,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: harness passes against fixtures
+      - name: harness passes against fixtures and the live lock
         run: nix develop --command bash tests/check-flake-lock-staleness.test.sh
       - name: every top-level input is within its staleness bound
         id: probe
@@ -103,19 +103,24 @@ jobs:
             `locked.lastModified` older than the bound declared for it in
             `scripts/check-flake-lock-staleness.sh`, or the check could
             not run — a step before it (harden-runner, checkout,
-            setup-nix) failed, the fixture harness step failed, or the
-            script exited 2 (an input with no bound declared, an input
-            resolving through `follows`, a malformed lock, or `jq`
-            absent).
+            setup-nix) failed, a fixture scenario of the harness step
+            failed, or the script exited 2 (an input with no bound
+            declared, an input resolving through `follows`, a malformed
+            lock, or `jq` absent).
 
-            See the failing job log to tell them apart: on staleness it
-            prints a `STALE:` line for every input past its bound, with
-            its age and the bound it exceeded; a could-not-run prints its
-            cause and stops — a `flake-lock-staleness: <cause>` line, an
-            `ERROR` line for a missing tool, a `payload from` line for a
-            lock it could not read, or a harness `FAIL:` line — and a
-            `STALE:` line may precede it only for an input that sorts
-            earlier than the one the check stopped on.
+            See the failing job log to tell them apart. The harness step
+            runs before the probe step and its last scenario runs the
+            check against the live `flake.lock`, so a genuine staleness
+            fails the harness step first: the log shows
+            `FAIL: live: the repo flake.lock is within bounds` followed
+            by a `STALE:` line for every input past its bound, with its
+            age and the bound it exceeded, and the probe step is
+            skipped. A could-not-run shows a `FAIL:` line for a
+            fixture-named scenario instead, or — from the probe step —
+            a `flake-lock-staleness: <cause>` line, an `ERROR` line for
+            a missing tool, or a `payload from` line for a lock it could
+            not read; an earlier step's failure shows that step's own
+            error.
 
             An input stops moving when the mechanism that refreshes it
             stops. Check, in this order:
