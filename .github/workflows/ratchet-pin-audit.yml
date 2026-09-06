@@ -304,11 +304,14 @@ jobs:
               unpinned `uses:` finding — the PR gate should have caught
               it, so one here means the gate was bypassed. If ratchet
               instead started failing a workflow set it accepted before
-              (typically after a ratchet upgrade), bump the
-              `nixpkgs-unstable` input that ships ratchet
-              (`nix flake update nixpkgs-unstable`), update the
-              `ratchet <X.Y.Z>` literals the runbook and this workflow
-              carry, and re-run.
+              (typically after a ratchet upgrade — one that has already
+              landed via a `nixpkgs-unstable` lock bump whose PR carried
+              the matching `ratchet <X.Y.Z>` literals), read the
+              `ratchet exit N; raw output:` block: a rule the new
+              ratchet enforces means fixing the workflows; a ratchet
+              regression means waiting for a later `nixpkgs-unstable`
+              move that ships a fixed ratchet. There is no in-tree way
+              to hold ratchet back.
             - `unknown` — the `check` job produced no `reason` output:
               the audit step hit an unhandled error, a step before it
               failed, or the run was cancelled (a banner above, or the

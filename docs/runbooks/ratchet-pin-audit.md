@@ -158,13 +158,20 @@ failed shape validation; OR the workflow glob matched zero files.
     so a finding here means the PR gate was bypassed or skipped. Treat
     it as a gate failure, not a tool failure.
 1. If ratchet instead started exiting non-zero on a workflow set it
-    accepted before, most likely after a ratchet upgrade, bump the
-    `nixpkgs-unstable` input that ships ratchet
-    (`nix flake update nixpkgs-unstable`), update every
-    `ratchet <X.Y.Z>` literal in this page and in the workflow to the
-    version the refreshed devShell reports — `check-ratchet-pin-audit.sh`,
-    run by the required `harness-group` job, fails on a stale literal (see
-    [Note on ratchet's role](#note-on-ratchets-role)) — and re-run. Drift
+    accepted before, a ratchet upgrade is the likely cause, and the
+    upgrade has already landed: ratchet ships from the
+    `nixpkgs-unstable` input, so its version changes only when a
+    `flake.lock` bump moves that input, and that bump's PR already
+    carried the matching `ratchet <X.Y.Z>` literals in this page and in
+    the workflow — `check-ratchet-pin-audit.sh`, run by the required
+    `harness-group` job, fails on a stale literal (see
+    [Note on ratchet's role](#note-on-ratchets-role)). Nothing runs
+    `ratchet lint` against the live tree before this workflow does, so
+    the new version's verdict surfaces here first. Read the raw-output
+    block: a rule the new ratchet enforces means fixing the workflows;
+    a ratchet regression means waiting for a later `nixpkgs-unstable`
+    move that ships a fixed ratchet, with the literal update riding in
+    that PR — there is no in-tree way to hold ratchet back. Drift
     itself comes from the per-ref `gh api` re-derivation rather than from
     ratchet's output, so a change in ratchet's output format cannot
     fabricate a drift report.

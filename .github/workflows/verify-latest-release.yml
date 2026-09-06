@@ -23,9 +23,9 @@ jobs:
       # Failure-attribution token consumed by the `notify` job's body.
       # Mirrors the `reason=` pattern in `stale-pin-check.yml` —
       # `upstream-sri-drift` on a hash mismatch and
-      # `cross-registry-manifest-mismatch` warrant the "security incident"
-      # framing in the auto-filed issue outright; the body grades the
-      # remaining reasons individually.
+      # `cross-registry-manifest-mismatch` on a mismatch warrant the
+      # "security incident" framing in the auto-filed issue outright; the
+      # body grades the remaining reasons individually.
       reason: ${{ steps.attribute.outputs.reason }}
     steps:
       - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
@@ -170,7 +170,7 @@ jobs:
         # parity is re-asserted after release. A registry-side `:latest`
         # repoint between releases (incident, account compromise,
         # accidental `docker tag` push) would otherwise persist
-        # undetected for up to 24h until the next pin bump.
+        # undetected until the next release republished `:latest`.
         #
         # Anonymous `docker buildx imagetools inspect --raw` works on
         # public repos for both registries — no auth required.
@@ -242,8 +242,8 @@ jobs:
 
       - name: cosign verify images (both registries, per-arch + index)
         id: verify-images-cosign
-        # Re-uses the per-arch digests resolved by the earlier steps via
-        # `docker manifest inspect`, plus the multi-arch index digest of
+        # Re-resolves the same per-arch digests the earlier steps checked,
+        # via `docker manifest inspect`, plus the multi-arch index digest of
         # `:VERSION` on each registry. Every ref must carry a valid cosign
         # signature from this repo's release workflow identity; a missing,
         # invalid, or wrong-identity signature fails the run.
@@ -311,9 +311,10 @@ jobs:
         # attestation steps above only prove *our* artifacts are untampered;
         # they cannot detect upstream replacing the asset after we pinned it.
         # A hash mismatch here is the canonical "treat as security incident"
-        # signal, alongside the cross-registry manifest comparison below;
-        # the step also fails on an unreadable pin or a fetch error, and
-        # the notify body grades the other failures individually.
+        # signal, alongside the cross-registry manifest comparison above
+        # (`verify-cross-registry`); the step also fails on a pin it cannot
+        # use or a fetch error, and the notify body grades the other
+        # failures individually.
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
@@ -500,21 +501,24 @@ jobs:
               SRI (the step log prints `upstream content drift: pin
               says …`), **TREAT THAT AS A SECURITY INCIDENT**: upstream
               tag-replaced the asset or someone tampered with the pin.
-              The step also fails before comparing — a `curl` error, or
-              a pin the step could not read — and the step log says
-              which. Do NOT merge subsequent pin bumps until a hash
-              mismatch is investigated.
+              The step also fails before comparing — a `curl` error, a
+              pin the step could not read, or a pin whose hash is not
+              `sha256-` (`unsupported SRI algorithm in pin`) — and the
+              step log says which. Do NOT merge subsequent pin bumps
+              until a hash mismatch is investigated.
             - `manifest-tag-drift` — `:latest` on ghcr.io or docker.io
               no longer resolves to the same manifest as the
-              release-tagged `:VERSION`, or `:latest` could not be
-              fetched from one registry (the step log names it). On a
-              mismatch: likely registry-side repoint
+              release-tagged `:VERSION`, or one of the two tags could
+              not be fetched from a registry (the step log names it). On
+              a mismatch: likely registry-side repoint
               (incident, account compromise, accidental `docker tag`
               push); also a security signal but lower-confidence than
               SRI drift.
-            - `cross-registry-manifest-mismatch` — **TREAT AS SECURITY
-              INCIDENT.** ghcr.io and docker.io no longer serve the same
-              multi-arch manifest for the current release tag. Both
+            - `cross-registry-manifest-mismatch` — ghcr.io and docker.io
+              no longer serve the same multi-arch manifest for the
+              current release tag, or the `:VERSION` manifest could not
+              be fetched from one registry (the step log names it). On a
+              mismatch, **TREAT AS SECURITY INCIDENT.** Both
               registries receive identical bytes at release time, so a
               divergence means one registry's tags were rewritten after
               publication — most likely a Docker Hub push-credential
@@ -526,9 +530,10 @@ jobs:
             - `ghcr-attest-failed` / `hub-attest-failed` /
               `pin-attest-failed` — attestation
               verification failed for one of the per-arch images or
-              the pin asset, or the registry fetch that resolves the
-              per-arch digest failed first (the step log shows a
-              `docker manifest inspect` error or `unexpected … digest`).
+              the pin asset, or — for the two image tokens — the registry
+              fetch that resolves the per-arch digest failed first (the
+              step log shows a `docker manifest inspect` error or
+              `unexpected … digest`).
               A verification failure could be artifact tampering or
               a Sigstore TUF trust-root rotation lag (newer `gh` CLI
               with rotated root has shipped to runners but the cron
@@ -545,10 +550,13 @@ jobs:
               Same Sigstore TUF rotation caveat applies — re-run 24h
               later before treating as tampering.
             - `pin-blob-sig-failed` — `cosign verify-blob` failed for
-              `linpeas-pin.json` on the latest release. Either the
+              `linpeas-pin.json` on the latest release. The
               `linpeas-pin.json.sigstore` sidecar is missing from the
-              release, or the bundle no longer verifies against the
-              pinned `release-on-bump.yml` workflow identity. Triage:
+              release, the bundle no longer verifies against the
+              pinned `release-on-bump.yml` workflow identity, or the
+              step failed before verifying — its own `gh release
+              download` (no retry here) or `nix shell .#cosign` errored;
+              the step log says which. Triage:
               download both files with `gh release download`, re-run
               `cosign verify-blob` locally using the identity flags in
               `docs/security/verification.md`. If the sidecar is
@@ -557,11 +565,14 @@ jobs:
               re-trigger via `workflow_dispatch` with
               `force-republish: true`.
             - `sbom-amd64-blob-sig-failed` — `cosign verify-blob`
-              failed for `linpeas-image-amd64.cdx.json`. Either the
+              failed for `linpeas-image-amd64.cdx.json`. The
               `linpeas-image-amd64.cdx.json.sigstore` sidecar is
-              missing from the release, or the bundle no longer
+              missing from the release, the bundle no longer
               verifies against the pinned `release-on-bump.yml`
-              workflow identity. Triage: download both files with
+              workflow identity, or the step failed before verifying —
+              its own `gh release download` (no retry here) or
+              `nix shell .#cosign` errored; the step log says which.
+              Triage: download both files with
               `gh release download`, re-run `cosign verify-blob`
               locally using the identity flags in
               `docs/security/verification.md`. If the sidecar is
@@ -569,11 +580,14 @@ jobs:
               did not run (registry-side asset loss); re-trigger via
               `workflow_dispatch` with `force-republish: true`.
             - `sbom-arm64-blob-sig-failed` — `cosign verify-blob`
-              failed for `linpeas-image-arm64.cdx.json`. Either the
+              failed for `linpeas-image-arm64.cdx.json`. The
               `linpeas-image-arm64.cdx.json.sigstore` sidecar is
-              missing from the release, or the bundle no longer
+              missing from the release, the bundle no longer
               verifies against the pinned `release-on-bump.yml`
-              workflow identity. Triage: download both files with
+              workflow identity, or the step failed before verifying —
+              its own `gh release download` (no retry here) or
+              `nix shell .#cosign` errored; the step log says which.
+              Triage: download both files with
               `gh release download`, re-run `cosign verify-blob`
               locally using the identity flags in
               `docs/security/verification.md`. If the sidecar is
@@ -598,8 +612,8 @@ jobs:
 
             Investigate the `verify` job logs for the failing step. Do
             NOT merge any subsequent pin bumps if the reason is
-            `upstream-sri-drift` on a hash mismatch,
-            `cross-registry-manifest-mismatch`, or `manifest-tag-drift`
-            until resolved.
+            `upstream-sri-drift` on a hash mismatch, or
+            `cross-registry-manifest-mismatch` or `manifest-tag-drift`
+            on a mismatch, until resolved.
           label-description: verify-latest-release scheduled check failed
           github-token: ${{ secrets.GITHUB_TOKEN }}

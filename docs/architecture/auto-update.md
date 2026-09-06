@@ -136,9 +136,11 @@ issue for each.)
 mechanism: it fails when a top-level input's `locked.lastModified` is older
 than the bound declared for that input.
 
-It is a scheduled issue-filer, not a required check. A gate keyed on
-wall-clock age turns every unrelated PR red the moment a cron runs late, which
-charges contributors for infrastructure lateness.
+The workflow is a scheduled issue-filer, not a required check. The bounds
+still reach pull requests by another route: the check's harness, which the
+required `harness-group` job runs, ends with a live scenario against the
+repo's own `flake.lock` on the wall clock, so a lock past a bound fails that
+job on every open PR until the input moves.
 
 `locked.lastModified` is an upstream commit time, not a record of when this
 repo last checked, which is what makes the bounds uneven rather than

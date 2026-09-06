@@ -1633,7 +1633,8 @@ Report docs-audit drift pressure since the last audit:
 how many commits touched CI structure (.github/workflows, scripts,
 .github/lint-groups.yml), and which job ids / lint-group members were
 added or removed. Emits a Markdown body for the monthly docs-audit
-reminder issue, terminated by a machine-readable PRESSURE=<n> line.
+reminder issue, terminated by a machine-readable PRESSURE=<n> trailer
+that the reminder workflow reads and strips before posting.
 
 Freshness gates validate only generated content; hand-written prose about
 CI drifts silently. CI churn is the best cheap proxy for that drift, so it

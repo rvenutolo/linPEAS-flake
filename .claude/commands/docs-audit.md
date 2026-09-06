@@ -21,7 +21,8 @@ Run a documentation correctness audit of this repository using the
     `PROSE HOTSPOTS` names the lines recent fix passes rewrote, and
     readers take the whole paragraph around each, not the hunk.
 1. Run the collector bundled with that skill (`<skill-dir>/scripts/collect-ground-truth.sh`,
-    resolved from the SKILL.md's own directory) once to gather the
+    resolved from the SKILL.md's own directory) once — this is the run
+    the previous step asked for, not a second one — to gather the
     authoritative ground-truth bundle (the prose-hotspot ranking, the
     pass-attribution listing, flake outputs, recipes, scripts, workflows,
     ci.yml job list, lint-group membership, the valid CI job / check-name union
