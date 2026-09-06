@@ -404,8 +404,10 @@ jobs instead, though not all: `patch-tag-pins` is pre-commit only,
 workflow, `octoscan`'s live coverage is the `octoscan.yml`
 workflow (its harness runs test-only in `harness-group`), and the two
 actionlint canaries (`actionlint-shellcheck-active`,
-`actionlint-pyflakes-active`) are pre-commit only, with
-`harness-group` running their fixture tests alone.
+`actionlint-pyflakes-active`) run as pre-commit hooks, with
+`harness-group` running their harnesses — the hook's own default
+invocation plus a check that the hook's file filter still watches the
+pin.
 The full, generated list is in
 [Git workflow → Pre-commit hooks](../development/git.md#pre-commit-hooks).
 

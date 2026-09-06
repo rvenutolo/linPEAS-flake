@@ -7,8 +7,7 @@ orphan arch-suffixed tag that carries no attestation or signature —
 every attest and sign step runs after the push loop, so the failing
 arch's never ran — while the sibling arch's job may have completed
 fully before the failure. A naive retry of `release-on-bump.yml`
-would silently overwrite the orphan and leave the retry's digests
-ambiguous.
+would silently overwrite the orphan.
 
 A post-publication tag rewrite lands here too — see the third path
 under [When this applies](#when-this-applies).
@@ -56,8 +55,7 @@ The push loop inside `release-on-bump.yml` per-arch jobs runs
     docker.io arch tag before retrying: the push itself would succeed
     and silently overwrite it. The orphan carries no attestation or
     signature (those steps run after the push and never ran), so
-    deleting it loses nothing and keeps the retry's digests
-    unambiguous.
+    deleting it loses nothing.
 
 A third path arrives here from elsewhere: when a published release's two
 registries disagree, `verify-latest-release.yml` files its

@@ -86,8 +86,9 @@ jobs:
           # once and writes the SARIF report to the path passed via
           # `--sarif`. Capture stdout to forward `has-finding` to
           # GITHUB_OUTPUT; rc=0 clean, rc=1 = findings present OR the
-          # scanner ran and errored, rc=2 = a tool the scan needs is
-          # absent (notify jobs branch on has-finding).
+          # scanner ran and errored, rc=2 = the scan could not proceed
+          # (docker or jq absent, or a per-file temp file could not be
+          # created); notify jobs branch on has-finding.
           stdout="$(scripts/octoscan-scan.sh --sarif octoscan.sarif)" || rc=$?
           has_finding="$(printf '%s\n' "${stdout}" | grep -E '^has-finding=' | tail -n1 || true)"
           [[ -n "${has_finding}" ]] || has_finding="has-finding=false"

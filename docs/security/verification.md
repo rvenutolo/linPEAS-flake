@@ -139,8 +139,8 @@ hooks.
 The weekly verify cron re-fetches the pinned `linpeas.sh` URL, recomputes the SRI
 hash via `openssl dgst -sha256 -binary <file> | base64 --wrap=0`, compares against
 `linpeas-pin.json`. A hash mismatch = security incident; the same step
-also fails on a fetch error or an unreadable pin, which the notify body
-tells apart.
+also fails on a fetch error or a pin it cannot use, and the step log tells
+them apart (the notify body names both).
 
 ## verify-latest-release failure attribution<a name="verify-latest-release-failure-attribution"></a>
 
@@ -150,32 +150,37 @@ the `attribute failure reason` step. Reasons:
 
 - `upstream-sri-drift` — the upstream fetch step failed: the fetched
     `linpeas.sh` SHA-256 no longer matches the pinned SRI — **a security
-    incident** — or the step failed before comparing (a `curl` error or
-    an unreadable pin); the step log says which.
+    incident** — or the step failed before comparing (a `curl` error, an
+    unreadable pin, or a pin whose hash is not `sha256-`); the step log
+    says which.
 - `manifest-tag-drift` — `:latest` no longer resolves to the same
-    manifest as `:VERSION` on ghcr.io or docker.io, or `:latest` could
-    not be fetched from one registry.
-- `cross-registry-manifest-mismatch` — **security incident.** ghcr.io
-    and docker.io serve different multi-arch manifests for the release
-    tag. Identical bytes are published to both at release time, so a
+    manifest as `:VERSION` on ghcr.io or docker.io, or one of the two
+    tags could not be fetched from a registry.
+- `cross-registry-manifest-mismatch` — ghcr.io and docker.io serve
+    different multi-arch manifests for the release tag (**security
+    incident**), or the `:VERSION` manifest could not be fetched from
+    one registry. Identical bytes are published to both at release time, so a
     divergence means post-publication tag rewriting on one registry —
     typically a rollback to an older, still-validly-signed release,
     which no signature or attestation check can detect. Triage via
     [dockerhub-recovery.md](../runbooks/dockerhub-recovery.md).
 - `ghcr-attest-failed` / `hub-attest-failed` /
     `pin-attest-failed` — attestation
-    verification failed for a specific artifact, or the registry fetch
-    that resolves the per-arch digest failed first (the step log shows a
-    `docker manifest inspect` error or `unexpected … digest`). A
+    verification failed for a specific artifact, or — for the two image
+    tokens — the registry fetch that resolves the per-arch digest failed
+    first (the step log shows a `docker manifest inspect` error or
+    `unexpected … digest`). A
     verification failure is tampering or a Sigstore TUF trust-root
     rotation lag on the runner image; re-run the cron 24h later to
     distinguish before treating it as tampering.
 - `release-tag-fetch-failed` / `release-asset-download-failed` —
     transient GitHub API / asset visibility lag.
 - `pin-blob-sig-failed` — cosign verify-blob failed for
-    `linpeas-pin.json` on the latest release. Indicates the
-    `.sigstore` sidecar is missing or no longer verifies against
-    the pinned workflow identity. Triage: re-trigger
+    `linpeas-pin.json` on the latest release. The `.sigstore` sidecar
+    is missing, it no longer verifies against the pinned workflow
+    identity, or the step's own `gh release download` or
+    `nix shell .#cosign` failed first; the step log says which. Triage:
+    re-trigger
     `release-on-bump.yml` via `workflow_dispatch` with
     `force-republish: true` if the sidecar is missing.
 - `sbom-amd64-blob-sig-failed` — same failure for the amd64
@@ -202,12 +207,12 @@ the `attribute failure reason` step. Reasons:
     ran. Not a verification result; re-run the cron.
 
 `upstream-sri-drift` on a hash mismatch and
-`cross-registry-manifest-mismatch` warrant the
+`cross-registry-manifest-mismatch` on a mismatch warrant the
 "treat as security incident" framing outright; the `*-attest-failed`
 family and `images-cosign-failed` warrant it once a 24h re-run has ruled
-out trust-root rotation lag; `manifest-tag-drift` is a lower-confidence
-security signal, and the body tells the maintainer to hold pin bumps
-for it too.
+out trust-root rotation lag; `manifest-tag-drift` on a mismatch is a
+lower-confidence security signal, and the body tells the maintainer to
+hold pin bumps for it too.
 Folding all reasons into a single failure body trains
 the maintainer to skim-read auto-filed issues — exactly the wrong reflex
 when the failure is a real SRI drift or a one-sided registry rollback.
@@ -329,7 +334,7 @@ output and open / update deduped issues via
 
 - Trivy's own `exit-code: "0"` + `ignore-unfixed: true` intentional;
     the CRITICAL-fail decision lives in the `fail on CRITICAL findings`
-    step so the SARIF upload always runs.
+    step so a CRITICAL finding does not stop the SARIF upload.
 
 - Prevention path: nixpkgs auto-bump via `update-flake-lock`. CRITICAL
     finding → bump nixpkgs, then rebuild the OCI image.

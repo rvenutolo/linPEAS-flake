@@ -3,11 +3,11 @@
 #
 # Verdict + failure-mode matrix for
 # scripts/check-flake-lock-staleness.sh. Drives the check off fixture
-# locks via FLAKE_LOCK_OVERRIDE — plus one live scenario against the
-# repo's own flake.lock at the end — with STALENESS_NOW_EPOCH
-# pinning "now" so a fixture's age — and therefore its verdict — cannot
-# drift with the day the suite runs. Every fixture's lastModified is
-# expressed as an offset from that one epoch.
+# locks via FLAKE_LOCK_OVERRIDE, with STALENESS_NOW_EPOCH pinning "now"
+# so a fixture's age — and therefore its verdict — cannot drift with the
+# day the suite runs. Every fixture's lastModified is expressed as an
+# offset from that one epoch. One live scenario at the end runs the
+# check against the repo's own flake.lock on the wall clock.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
