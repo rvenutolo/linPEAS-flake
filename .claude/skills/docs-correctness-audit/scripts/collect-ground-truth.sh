@@ -21,6 +21,51 @@ IFS=$'\n\t'
 
 section() { printf '\n===== %s =====\n' "$1"; }
 
+# A harness roster entry's third field is its enforce script, and the
+# absence of one is what "test-only" means in ci.md and the enforcement
+# matrix. That model is about the SCRIPT. A harness with no enforce script
+# can still hold a scenario that runs against the live tree — invoking its
+# subject with no fixture override, or reading the real nix/ or .github/
+# trees — and such a scenario fails a pull request on a fact about the
+# repo rather than about a fixture. Prose calling that harness "test-only"
+# is then wrong while the roster it was derived from is right, so no
+# freshness gate covers it and reading the roster does not find it.
+# @arg $1 path to run-harness-group.sh  @arg $2 directory holding the harnesses
+list_harness_live_tree() {
+  local -r roster="$1" tests_dir="$2"
+  if [[ ! -f ${roster} ]]; then
+    echo "(no ${roster})"
+    return 0
+  fi
+  local id harness enforce path markers
+  sed -n "/^readonly -a HARNESSES=(/,/^)/p" "${roster}" |
+    grep -oE "^[[:space:]]*'[^']+'" |
+    sed -E "s/^[[:space:]]*'//; s/'\$//" |
+    while IFS='|' read -r id harness enforce; do
+      [[ -n ${id} ]] || continue
+      path="${tests_dir}/${harness}"
+      if [[ ! -f ${path} ]]; then
+        printf '%-34s harness not found: %s\n' "${id}" "${path}"
+        continue
+      fi
+      # Every harness resolves its subject through ${REPO_ROOT}/scripts, so
+      # that path is not the signal — it is how a harness finds the script,
+      # in fixture scenarios too. A live-tree READ is narrower: running the
+      # subject from the repo root with no fixture override, or reading the
+      # real nix/, .github/, docs/ or lock files. grep is enough because the
+      # output is a short list of harnesses to open, not a classification to
+      # trust.
+      markers="$(grep -nE 'cd "?\$\{REPO_ROOT\}"?|\$\{REPO_ROOT\}/(nix|\.github|docs|flake\.(lock|nix))|git ls-files' "${path}" |
+        head -4 || true)"
+      if [[ -n ${markers} ]]; then
+        printf '%-34s LIVE-TREE (enforce=%s)\n' "${id}" "${enforce:--}"
+        printf '%s\n' "${markers}" | sed 's/^/    /'
+      else
+        printf '%-34s fixtures only (enforce=%s)\n' "${id}" "${enforce:--}"
+      fi
+    done
+}
+
 # Banned-token sweep over tracked docs. Canonical list: references/repo-map.md §4.
 #
 # The sweep reads prose only. Before matching, it blanks the three regions the
@@ -567,6 +612,13 @@ main() {
   echo '(GHOST CHECK: a name a doc calls a "CI job" or "required check" that is'
   echo ' ABSENT from this list exists in no workflow, no lint group and no harness'
   echo ' group — high severity.)'
+
+  section "HARNESS LIVE-TREE SCENARIOS (which harness-group harnesses read the real repo, not a fixture)"
+  list_harness_live_tree scripts/run-harness-group.sh tests
+  echo '(A harness listed LIVE-TREE with enforce=- is still test-only in the'
+  echo ' enforcement model and still fails a PR on a live-tree fact. Prose'
+  echo ' calling it "test-only", "fixture tests alone" or "probes no live tree"'
+  echo ' is a finding. Open the named lines before filing one either way.)'
 
   section "WORKFLOW CRONS (authoritative schedules; ci.md table must match)"
   list_workflow_crons .github/workflows

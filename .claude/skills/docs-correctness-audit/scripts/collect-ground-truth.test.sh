@@ -358,6 +358,68 @@ case "${both_out}" in *"lychee skipped"*) check "a skipped input is reported eve
 case "${both_out}" in *"gone.md"*) check "the broken link is reported alongside the skip" 0 ;; *) check "the broken link is reported alongside the skip" 1 ;; esac
 rm -rf "${fy}"
 
+# --- harness live-tree classification ---
+# The roster's enforce field says whether a harness runs an enforce SCRIPT.
+# It does not say whether a scenario reads the live tree, and prose that
+# reads "test-only" off the roster is wrong for a harness that does. Every
+# harness resolves its subject through ${REPO_ROOT}/scripts, so that path
+# must not be the signal or every harness classifies live and the section
+# says nothing.
+lt="$(mktemp -d)"
+mkdir -p "${lt}/tests"
+cat >"${lt}/run-harness-group.sh" <<'ROSTER'
+readonly -a HARNESSES=(
+  'fixture-only|fixture-only.test.sh|'
+  'reads-live|reads-live.test.sh|'
+  'has-enforce|has-enforce.test.sh|check-has-enforce.sh'
+  'absent|absent.test.sh|'
+)
+ROSTER
+# Resolves its subject through REPO_ROOT/scripts and drives it off a
+# fixture — the shape of every fixture-only harness here.
+cat >"${lt}/tests/fixture-only.test.sh" <<'H'
+readonly SCRIPT="${REPO_ROOT}/scripts/check-thing.sh"
+FIXTURE_OVERRIDE="${FIXTURES}/a.json" "${SCRIPT}"
+H
+# Same subject resolution, plus a run from the repo root with no override.
+cat >"${lt}/tests/reads-live.test.sh" <<'H'
+readonly SCRIPT="${REPO_ROOT}/scripts/check-thing.sh"
+(cd "${REPO_ROOT}" && "${SCRIPT}")
+H
+cat >"${lt}/tests/has-enforce.test.sh" <<'H'
+readonly SCRIPT="${REPO_ROOT}/scripts/check-has-enforce.sh"
+grep -r -- 'x' "${REPO_ROOT}/nix"
+H
+# shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
+lt_out="$(source "${COLLECTOR}" && list_harness_live_tree "${lt}/run-harness-group.sh" "${lt}/tests")"
+case "${lt_out}" in
+*"fixture-only"*"fixtures only"*) check "a harness driven only off fixtures is not called live-tree" 0 ;;
+*) check "a harness driven only off fixtures is not called live-tree" 1 ;;
+esac
+case "${lt_out}" in
+*"reads-live"*"LIVE-TREE"*) check "a scenario run from the repo root is called live-tree" 0 ;;
+*) check "a scenario run from the repo root is called live-tree" 1 ;;
+esac
+case "${lt_out}" in
+*"has-enforce"*"LIVE-TREE (enforce=check-has-enforce.sh)"*) check "the enforce script is reported beside the verdict" 0 ;;
+*) check "the enforce script is reported beside the verdict" 1 ;;
+esac
+case "${lt_out}" in
+*"reads-live"*"enforce=-"*) check "a live-tree harness with no enforce script is still marked live-tree" 0 ;;
+*) check "a live-tree harness with no enforce script is still marked live-tree" 1 ;;
+esac
+case "${lt_out}" in
+*"absent"*"harness not found"*) check "a roster entry naming a missing harness says so" 0 ;;
+*) check "a roster entry naming a missing harness says so" 1 ;;
+esac
+# shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
+lt_none="$(source "${COLLECTOR}" && list_harness_live_tree "${lt}/no-such-roster.sh" "${lt}/tests")"
+case "${lt_none}" in
+*"no-such-roster.sh"*) check "an absent roster is reported, not scored as zero live-tree harnesses" 0 ;;
+*) check "an absent roster is reported, not scored as zero live-tree harnesses" 1 ;;
+esac
+rm -rf "${lt}"
+
 # --- ci.yml job listing is scoped to the jobs: block ---
 # A bare 2-space-key grep also returns `on:` trigger names and `concurrency:`
 # keys. Those read as job ids to a reader checking a doc's "CI job X" claim,

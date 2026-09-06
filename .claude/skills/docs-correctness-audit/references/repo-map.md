@@ -133,6 +133,19 @@ every job in that file into a false ghost. Any name a doc calls a "CI job" or
 but described as a standalone job is a **mislabel**. Both are high severity,
 and neither is caught by a freshness gate.
 
+The collector also emits a **HARNESS LIVE-TREE SCENARIOS** section, one row
+per `HARNESSES` roster entry, marking whether that harness holds a scenario
+that reads the real repo rather than a fixture. The roster's third field is a
+harness's enforce script, and its absence is what "test-only" means in
+`docs/architecture/ci.md` and the generated enforcement matrix. That model is
+about the *script*. A harness with no enforce script can still run its subject
+from the repo root with no fixture override, or read the live `nix/` or
+`.github/` trees — and such a scenario fails a pull request on a fact about
+the repo. Prose calling that harness "test-only", "fixture tests alone" or
+"probes no live tree" is then wrong while the roster it was derived from is
+right, so no freshness gate covers it and reading the roster does not find it.
+The section names the matching lines; open them before filing either way.
+
 ## 2. Doc cluster map (one read-only agent per row)
 
 | Cluster        | Files                                                                                                                                                                                                                                                                                                                                                                                         |
