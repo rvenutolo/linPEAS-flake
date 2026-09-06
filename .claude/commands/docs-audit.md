@@ -12,11 +12,14 @@ Run a documentation correctness audit of this repository using the
     Markdown, workflow bodies and script-composed bodies alike — then
     hand the readers that file list as a priority set — not a scope limit.
     List the window's merges too, unpathed, and read the newest merge's
-    paragraphs first; mid-cycle, when the marker has not moved, the
-    bundle's `PASS ATTRIBUTION` section is that listing with the files
-    each commit touched, and the priority set comes from it.
-    The bundle's `PROSE HOTSPOTS` ranking names the lines recent fix passes
-    rewrote; readers take the whole paragraph around each, not the hunk.
+    paragraphs first. Two bundle sections sharpen this aim, and the
+    collector in the next step produces them — run it before finishing
+    this step. Mid-cycle, when the marker has not moved,
+    `PASS ATTRIBUTION` lists the passes (from one marker further back
+    than `LAST_AUDIT_SHA`, so take only the ones newer than it) with the
+    files each commit touched, and the priority set comes from those.
+    `PROSE HOTSPOTS` names the lines recent fix passes rewrote, and
+    readers take the whole paragraph around each, not the hunk.
 1. Run the collector bundled with that skill (`<skill-dir>/scripts/collect-ground-truth.sh`,
     resolved from the SKILL.md's own directory) once to gather the
     authoritative ground-truth bundle (the prose-hotspot ranking, the

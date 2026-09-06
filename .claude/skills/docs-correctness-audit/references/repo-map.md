@@ -222,8 +222,8 @@ would be reporting the harness working. The skill segment is a wildcard
 rather than one skill's name: any skill may grow such a tree, and a second
 one is out of scope for the reason the first is. Two filters carry that
 rule, because they serve different consumers — `RE_SEEDED_FIXTURES` in
-`../scripts/collect-ground-truth.sh` for the sweeps this skill runs itself,
-the internal-link check and the hotspot ranking, and
+`../scripts/collect-ground-truth.sh` for the sweeps this skill runs itself —
+the internal-link check, the hotspot ranking and the pass attribution — and
 `lychee.toml`'s `exclude_path` for the consumers that reach lychee without
 the collector, the link-check workflow among them.
 `../scripts/collect-ground-truth.test.sh` asserts the two select the same

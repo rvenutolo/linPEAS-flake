@@ -161,12 +161,15 @@ one — and `Merge branch 'main' into …` entries are branch syncs to skip.
 Leave it unpathed; with a pathspec, history simplification drops PR merges
 that carried prose. A merge is read with
 `git show -m --first-parent <merge-sha>`; a bare `git show` on a merge
-prints no hunks at all. The bundle's **`PASS ATTRIBUTION`** section is this
-listing rendered with the files each carried commit touched; mid-cycle, when
-the marker has not moved and the range above is the whole cycle, build the
-priority set from it. Read the newest merge's paragraphs before anything
-else. Filter by path, not by subject: prose passes here land under `fix:` as
-readily as `docs:`.
+prints no hunks at all. The bundle's **`PASS ATTRIBUTION`** section is the
+collector's own first-parent merge listing with the files each carried
+commit touched — it starts from the second-newest marker, so mid-cycle it is
+wider than the range above and never lists a branch sync. When the marker
+has not moved and the range above is the whole cycle, run the collector
+(§1) first and build the priority set from the passes in that section
+newer than `LAST_AUDIT_SHA`, newest first. Read the newest merge's
+paragraphs before anything else. Filter by path, not by subject: prose
+passes here land under `fix:` as readily as `docs:`.
 
 **The unit of re-reading is the paragraph, not the hunk.** A changed line is
 where the last pass aimed; the defect that survived is beside it. Take each
@@ -201,7 +204,8 @@ replacement wording as a pointer:
     rewritten passage to the thing it names, and report the ones that land
     nowhere.
 
-The collector's **`PROSE HOTSPOTS`** section ranks this for you: it scores each
+The collector's **`PROSE HOTSPOTS`** section (§1 runs it; come back to this
+aim once it has) ranks this for you: it scores each
 doc by how many commits since an earlier audit point rewrote it and names the
 lines the most recent cycle rewrote. A file high on that list with a rewritten line inside
 a paragraph is the strongest aim point the bundle offers — repeated rewriting
