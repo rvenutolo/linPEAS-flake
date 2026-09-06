@@ -39,6 +39,7 @@ lint-workflow-security:
   - egress-allowlist
   - verify-reason-ladder
   - lock-derived-docs
+  - notify-label-descriptions
 lint-script-hygiene:
   - script-shebang-pipefail
   - harness-preamble

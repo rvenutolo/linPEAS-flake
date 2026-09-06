@@ -467,4 +467,26 @@
     pass_filenames = false;
     language = "system";
   };
+
+  # The composite writes label-description onto the label, so a value
+  # past the labels API's 100-character cap never reaches the label it
+  # describes, and two callers disagreeing about one label overwrite each
+  # other on every run. Both are invisible in the tree, which goes on
+  # looking like the source of truth.
+  # See docs/security/workflow-hardening.md.
+  notify-label-descriptions = {
+    enable = true;
+    name = "notify-label-descriptions";
+    description = "Every notify label description fits the labels API cap and agrees across callers.";
+    entry = "${pkgs-unstable.writeShellScript "notify-label-descriptions-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-notify-label-descriptions.sh
+    ''}";
+    files = "^(\\.github/workflows/.*\\.ya?ml|\\.github/actions/notify-workflow-result/action\\.yml|scripts/check-notify-label-descriptions\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
 }

@@ -56,7 +56,7 @@ inputs:
     required: false
     default: b60205
   label-description:
-    description: "Description string set on first-time label creation."
+    description: "Description string for the label. Set on creation, and refreshed on a later run when the live label's description differs."
     required: false
     default: Workflow failure auto-filed by .github/actions/notify-workflow-result
   github-token:
@@ -162,6 +162,12 @@ runs:
 
           // Ensure label exists before creating the issue.
           // createLabel returns 422 when it already exists; swallow only that.
+          //
+          // A label that already exists keeps whatever description it was
+          // created with, so an edit to label-description here would never
+          // reach the label a maintainer reads. On the 422 path, compare and
+          // update, which makes this file the source of truth for the wording
+          // rather than whichever run first filed the label.
           try {
             await github.rest.issues.createLabel({
               owner: context.repo.owner,
@@ -173,6 +179,28 @@ runs:
           } catch (err) {
             if (err.status !== 422) {
               throw err;
+            }
+            // Best-effort: a description that could not be refreshed must not
+            // stop the issue this run exists to file.
+            try {
+              const { data: live } = await github.rest.issues.getLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: label,
+              });
+              if ((live.description || '') !== labelDescription) {
+                await github.rest.issues.updateLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label,
+                  description: labelDescription,
+                });
+                core.notice(`Refreshed description of label ${label}`);
+              }
+            } catch (syncErr) {
+              core.warning(
+                `Could not refresh description of label ${label}: ${syncErr.message}`,
+              );
             }
           }
 
