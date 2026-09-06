@@ -122,8 +122,10 @@ jobs:
           label: codeql-critical
           title: "codeql: CRITICAL finding in workflow analysis"
           body: |
-            `codeql / analyze (actions)` failed on a CRITICAL-severity finding in the
-            GitHub Actions workflow analysis.
+            `codeql / analyze (actions)` failed — with `fail-on: critical`, most
+            often a CRITICAL-severity finding in the GitHub Actions workflow
+            analysis. Confirm in the Code Scanning tab: an error inside the
+            analyze action files here too.
 
             - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
             - Code Scanning tab: ${{ github.server_url }}/${{ github.repository }}/security/code-scanning?query=tool%3ACodeQL

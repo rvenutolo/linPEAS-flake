@@ -5,10 +5,10 @@ name: zizmor-drift-check
 # zizmor runs as a pre-commit hook (--min-severity=low) — prevention at
 # commit time — and the required flake-check job re-runs that hook on
 # every PR and push through `nix flake check`, so a hook bypass is
-# caught before merge. This watchdog re-runs the same lock-pinned scan
-# against main on a schedule: a finding here means a workflow file on
-# main fails a scan those gates ran green (a rule change arrives with
-# the flake.lock bump whose PR flake-check re-scans in full).
+# caught before merge. This watchdog runs the same lock-pinned binary
+# against main on a schedule: a finding here is a workflow file on
+# main that fails the current pinned binary — a rule change carried by
+# a flake.lock bump, or a file pre-commit's matching no longer selects.
 #
 # The step below passes the .github/workflows/ directory straight to
 # zizmor. The hook instead scans whatever pre-commit's `files` and
@@ -18,7 +18,8 @@ name: zizmor-drift-check
 # directory argument: rewriting this step to invoke the hook would
 # collapse the two paths into one and cost that coverage.
 #
-# On findings: opens (or leaves) a deduped `zizmor-drift` tracking
+# On a failed or cancelled run — a finding, or a scan that could not
+# start — opens (or leaves) a deduped `zizmor-drift` tracking
 # issue via the notify-workflow-result composite. On the next clean
 # run, the composite closes any open `zizmor-drift` issue(s).
 #
@@ -100,8 +101,9 @@ jobs:
           body: |
             The weekly `zizmor-drift-check` watchdog failed: either it
             detected one or more findings in `.github/workflows/**` at or
-            above `--min-severity=low`, or the scan could not run —
-            `setup-nix` or `nix develop` failed before zizmor started.
+            above `--min-severity=low`, or the scan could not run — a
+            step before the scan (harden-runner, checkout, setup-nix) or
+            `nix develop` itself failed before zizmor started.
             The job log says which: a finding is reported by zizmor
             itself, with the workflow file and rule named.
 

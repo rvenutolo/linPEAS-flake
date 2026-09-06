@@ -1,8 +1,8 @@
 # SCORECARD_PAT rotation runbook
 
 The `scorecard-drift-check.yml` workflow calls the OSSF Scorecard
-CLI against this repo. The `Webhooks` check requires a scope
-(`admin:repo_hook` read) that is not grantable via the workflow-level
+CLI against this repo. The `Webhooks` check requires a permission
+(`Webhooks` read) that is not grantable via the workflow-level
 `GITHUB_TOKEN` permissions block, so a fine-grained PAT is stored as
 the repo secret `SCORECARD_PAT` and consumed via the `GITHUB_AUTH_TOKEN`
 env var on the scorecard step.

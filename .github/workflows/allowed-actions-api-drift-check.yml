@@ -107,8 +107,9 @@ jobs:
             `actions.permissions.allowed_actions` API state no longer
             matches the canonical allowlist in
             `docs/security/allowed-actions.md`, or the comparison could
-            not be made at all — the fixture harness step failed, the
-            App token could not be minted, or
+            not be made at all — a step before it (harden-runner,
+            checkout, setup-nix) failed, the fixture harness step failed,
+            the App token could not be minted, or
             `scripts/check-allowed-actions-api.sh` exited 2 (`gh` or
             `jq` absent, the allowlist doc missing or its canonical
             block yielding no patterns, the live API call failing, or
@@ -135,9 +136,9 @@ jobs:
               stay false. `true` lets opaque "verified creator"
               vendors in without our involvement.
 
-            See the failing job logs to tell the two apart: the drift
-            line(s), or the could-not-run diagnostic, are printed on
-            stderr.
+            See the failing job logs to tell drift from a could-not-run:
+            the drift line(s), or the could-not-run diagnostic, are
+            printed on stderr.
 
             This issue auto-closes once the next watchdog run sees
             the allowlist reconciled.

@@ -70,12 +70,15 @@ jobs:
           # infrastructure failures and is inert on skipped.
           result: ${{ needs.drift-check.result }}
           label: cron-table-drift
-          title: "cron-table-drift-check: docs/architecture/ci.md drifted from .github/workflows/"
+          title: "cron-table-drift-check: docs/architecture/ci.md drifted from .github/workflows/, or the check could not run"
           body: |
-            The `cron-table-drift-check` watchdog detected drift between
-            the cron schedule table (or its ordering paragraph) in
-            `docs/architecture/ci.md` and the `cron:` lines under
-            `.github/workflows/`.
+            The `cron-table-drift-check` watchdog failed: either it
+            detected drift between the cron schedule table (or its
+            ordering paragraph) in `docs/architecture/ci.md` and the
+            `cron:` lines under `.github/workflows/`, or the check could
+            not run — a step before it (harden-runner, checkout,
+            setup-nix) failed, or `scripts/check-cron-table.sh` exited 2
+            on a missing or unparsable input. The job log says which.
 
             Run `bash scripts/check-cron-table.sh` locally to see the
             specific mismatch.

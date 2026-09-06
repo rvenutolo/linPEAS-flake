@@ -184,8 +184,10 @@ jobs:
             `octoscan / scan` failed without producing a findings
             result (e.g. docker pull failure, checkout / harden-runner
             failure, or octoscan exit `1` from an internal scanner
-            error). No SARIF finding was reported — the SARIF may be
-            partial or absent.
+            error). No SARIF was uploaded — it may be partial or absent.
+            If the log's `classification=` line reads `findings recorded
+            but incomplete`, real findings exist beside an unanalyzed
+            file — triage both.
 
             - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 

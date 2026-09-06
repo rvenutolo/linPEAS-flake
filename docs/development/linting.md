@@ -294,7 +294,8 @@ the enumerated planning and review labels above are blocked.
     workflow-phase and label vocabulary is not an ephemeral reference.
     The allowlist is also the only file-level escape from a false
     positive: there is no per-line or per-token suppression comment,
-    though a token inside a code span or fence is not read at all.
+    though a token inside a code span, a fence or a generated block is
+    not read at all.
 
 - **Structural stripping:** generated auto-blocks (the `BEGIN`/`END`
     HTML-comment marker pairs), fenced code blocks, and inline code spans
@@ -342,8 +343,8 @@ file's.
     block too. The accepted cost is that a `''…''` block holding
     something other than shell — a changelog snippet, a Markdown
     fragment — would have its `#` lines read as comments and could
-    false-positive. The file allowlist is the only escape if that ever
-    happens.
+    false-positive. The file allowlist is the only file-level escape if
+    that ever happens; wrapping the token in backticks is the other.
 - **YAML reads only the `#` comments that start their own line**, for
     the reason the Nix matcher gives. A `#` line inside a `run:` block
     scalar is read like any other: those blocks are embedded shell, and

@@ -35,8 +35,8 @@ name: scorecard-drift-check
 # flake.lock-pinned nixpkgs-unstable — same pin model as the
 # zizmor-drift-check sibling. One source of truth.
 #
-# Token: scorecard's Webhooks check needs admin:repo_hook scope
-# (not grantable via job-level GITHUB_TOKEN permissions), so a
+# Token: scorecard's Webhooks check needs the Webhooks read
+# permission (not grantable via job-level GITHUB_TOKEN permissions), so a
 # fine-grained PAT is stored as SCORECARD_PAT and passed via the
 # GITHUB_AUTH_TOKEN env var on the scorecard step only (never
 # job-wide). Rotation steps: docs/runbooks/scorecard-pat-rotation.md.
@@ -169,7 +169,7 @@ jobs:
           # infrastructure failures and is inert on skipped.
           result: ${{ needs.drift-check.result }}
           label: scorecard-drift
-          title: "scorecard-drift-check: check(s) scored <10, the scorecard payload was unreadable, or the scan itself failed"
+          title: "scorecard-drift-check: check(s) scored <10, the scorecard payload was unreadable, or the job could not run the scan"
           body: |
             The weekly `scorecard-drift-check` watchdog failed for
             `${{ github.repository }}`: either one or more curated
@@ -185,8 +185,9 @@ jobs:
             printed on stderr by `scripts/check-scorecard-threshold.sh`,
             followed by the first 1 KiB of `results.json`, which the same
             step dumps to stderr whenever the threshold script exits
-            non-zero; a scan that failed earlier prints neither, only the
-            scorecard CLI's own error:
+            non-zero; a job that failed earlier prints neither — the
+            failing step's own error, the scorecard CLI's or a setup
+            step's, is the diagnostic:
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
             Run pinned at commit `${{ github.sha }}`.
@@ -197,5 +198,5 @@ jobs:
             [docs/runbooks/scorecard-pat-rotation.md](https://github.com/${{ github.repository }}/blob/main/docs/runbooks/scorecard-pat-rotation.md).
 
             This issue auto-closes on the next clean run.
-          label-description: scorecard check(s) scored below 10, the scorecard payload was unreadable, or the scan itself failed
+          label-description: scorecard check(s) scored below 10, the scorecard payload was unreadable, or the job could not run the scan
           github-token: ${{ secrets.GITHUB_TOKEN }}
