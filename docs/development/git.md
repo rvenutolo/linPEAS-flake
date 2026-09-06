@@ -184,6 +184,7 @@ Hooks (alphabetical):
 | `nixfmt`                         | Nix file formatting.                                                                                                                                     |
 | `nixpkgs-hammering`              | nixpkgs idiom checker for the linpeas derivation.                                                                                                        |
 | `no-opaque-procsub`              | No scripts/\*.sh feeds a redirection from a process substitution.                                                                                        |
+| `notify-label-descriptions`      | Every notify label description fits the labels API cap and agrees across callers.                                                                        |
 | `octoscan`                       | synacktiv/octoscan workflow vulnerability scanner.                                                                                                       |
 | `patch-tag-pins`                 | SHA-pinned uses: comments name a versioned tag (vX.Y[.Z]), not a bare major (vX).                                                                        |
 | `permission-scopes`              | Per-job GITHUB_TOKEN write scopes are allowlisted in .github/permission-scopes.yml.                                                                      |

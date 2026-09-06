@@ -951,6 +951,13 @@ banned shape has, and the one a top-level-only glob never reads.
 Honors SCRIPTS_DIR_OVERRIDE (default: scripts) for fixtures.
 Exit 0 clean, 1 on any hit, 2 on operational error.
 
+### scripts/check-notify-label-descriptions.sh
+
+Lint: every `label-description` handed to the
+notify-workflow-result composite fits GitHub's 100-character label
+description cap, and no label name carries two different descriptions
+across the workflows that file it.
+
 ### scripts/check-orphan-invariants.sh
 
 Lint: docs/invariant-index.md and docs/\*\*/\*.md stay

@@ -198,5 +198,5 @@ jobs:
             [docs/runbooks/scorecard-pat-rotation.md](https://github.com/${{ github.repository }}/blob/main/docs/runbooks/scorecard-pat-rotation.md).
 
             This issue auto-closes on the next clean run.
-          label-description: scorecard check(s) scored below 10, the scorecard payload was unreadable, or the job could not run the scan
+          label-description: scorecard check(s) scored below 10, the payload was unreadable, or the scan could not run
           github-token: ${{ secrets.GITHUB_TOKEN }}
