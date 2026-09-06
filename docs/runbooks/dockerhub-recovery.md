@@ -278,8 +278,10 @@ Rotation: on suspected compromise only.
 
 ## Notify-body parity invariant<a name="notify-body-parity-invariant"></a>
 
-Two other copies of this failure-cause list exist and must stay in
-parity with this runbook's "Common Docker Hub failure modes" section:
+Two other copies of this failure-cause list exist and carry the same
+three causes as this runbook's "Common Docker Hub failure modes"
+section — each names the token its own job consumes, and this page
+carries the longer remediation:
 
 - `release-on-bump.yml`'s notify-failure issue body carries it as a
     `## Common Docker Hub causes` subsection.

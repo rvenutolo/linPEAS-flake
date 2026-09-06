@@ -102,15 +102,20 @@ jobs:
             either a top-level `flake.lock` input has a
             `locked.lastModified` older than the bound declared for it in
             `scripts/check-flake-lock-staleness.sh`, or the check could
-            not run — the fixture harness step failed, or the script
-            exited 2 (an input with no bound declared, an input resolving
-            through `follows`, a malformed lock, or `jq` absent).
+            not run — a step before it (harden-runner, checkout,
+            setup-nix) failed, the fixture harness step failed, or the
+            script exited 2 (an input with no bound declared, an input
+            resolving through `follows`, a malformed lock, or `jq`
+            absent).
 
             See the failing job log to tell them apart: on staleness it
             prints a `STALE:` line for every input past its bound, with
-            its age and the bound it exceeded; a could-not-run prints a
-            single `flake-lock-staleness: <cause>` line, or a harness
-            `FAIL:` line, and no `STALE:` lines.
+            its age and the bound it exceeded; a could-not-run prints its
+            cause and stops — a `flake-lock-staleness: <cause>` line, an
+            `ERROR` line for a missing tool, a `payload from` line for a
+            lock it could not read, or a harness `FAIL:` line — and a
+            `STALE:` line may precede it only for an input that sorts
+            earlier than the one the check stopped on.
 
             An input stops moving when the mechanism that refreshes it
             stops. Check, in this order:

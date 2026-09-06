@@ -146,8 +146,8 @@ tree.)
     list. Both paths read the same `zizmor.yml`, so neither is a check on
     the other's suppressions. The watchdog pages a finding as a deduped
     `zizmor-drift` issue, closed on the next clean run; a rule change arrives
-    with the `flake.lock` bump whose PR `flake-check` already re-scans in
-    full.
+    with the `flake.lock` bump whose PR `flake-check` already re-scans the
+    files pre-commit's matching selects.
 
 ## In-tree lints and posture watchdogs
 

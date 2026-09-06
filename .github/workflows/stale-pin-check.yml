@@ -9,7 +9,7 @@ name: stale-pin-check
 #
 # Logic: read the timestamp prefix of `pin.version` (peass-ng tags use
 # `YYYYMMDD-<sha>`). If we are >14d behind that date AND the upstream
-# `peass-ng/PEASS-ng` latest tag is newer than the pinned one, the
+# `peass-ng/PEASS-ng` latest tag differs from the pinned one, the
 # pin is considered stalled and a deduped `pin-stalled` issue opens.
 #
 # When the pin catches back up, the same composite auto-closes the

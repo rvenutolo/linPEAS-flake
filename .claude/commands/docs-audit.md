@@ -11,6 +11,10 @@ Run a documentation correctness audit of this repository using the
     `.github/docs-audit-state` and list tracked prose changed since —
     Markdown, workflow bodies and script-composed bodies alike — then
     hand the readers that file list as a priority set — not a scope limit.
+    List the window's merges too, unpathed, and read the newest merge's
+    paragraphs first; mid-cycle, when the marker has not moved, the
+    bundle's `PASS ATTRIBUTION` section is that listing with the files
+    each commit touched, and the priority set comes from it.
     The bundle's `PROSE HOTSPOTS` ranking names the lines recent fix passes
     rewrote; readers take the whole paragraph around each, not the hunk.
 1. Run the collector bundled with that skill (`<skill-dir>/scripts/collect-ground-truth.sh`,
@@ -34,10 +38,10 @@ Run a documentation correctness audit of this repository using the
     not cover. Run any command a doc hands the reader and derive the same set
     a second way. Then `git grep` the wrong wording across all tracked prose
     (`'*.md' '.github/**' 'scripts/*.sh'`) so every twin joins the finding.
-1. Write a severity-ranked findings report to `.claude/reports/` — suffixed
-    `-<n>` when a same-day report exists, as the bundle and brief are —
-    attributing each finding to the pass that wrote it where the bundle's
-    `PASS ATTRIBUTION` section can say.
+1. Write a severity-ranked findings report to `.claude/reports/` — taking
+    the `-<n>` suffix the bundle and brief took — attributing each finding
+    to the pass that wrote it where the bundle's `PASS ATTRIBUTION` section
+    can say.
 1. Close by saying whether this audit closes the cycle. If no further audit is
     planned, the final fix PR runs `just docs-audit-done` and commits the
     updated `.github/docs-audit-state` as its last commit; the monthly reminder

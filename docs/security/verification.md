@@ -146,8 +146,10 @@ hash via `openssl dgst -sha256 -binary <file> | base64 --wrap=0`, compares again
 reasons via per-step `id:` outcomes mapped to a `reason` token by
 the `attribute failure reason` step. Reasons:
 
-- `upstream-sri-drift` — **security incident.** Upstream
-    `linpeas.sh` SHA-256 no longer matches the pinned SRI.
+- `upstream-sri-drift` — the upstream fetch step failed: either the
+    fetched `linpeas.sh` SHA-256 no longer matches the pinned SRI —
+    **a security incident** — or the fetch itself failed; the step log
+    says which.
 - `manifest-tag-drift` — `:latest` no longer resolves to the same
     manifest as `:VERSION` on ghcr.io or docker.io.
 - `cross-registry-manifest-mismatch` — **security incident.** ghcr.io
@@ -181,10 +183,12 @@ the `attribute failure reason` step. Reasons:
     Treat as a signing-chain incident, adjacent in severity to the
     `*-attest-failed` reasons and subject to the same re-run-first caveat.
 - `unattributed` — the job failed but no ladder arm matched the failed
-    step. The ladder has a gap: the failure is real and unexplained, so
-    triage it by hand and fix the attribution step. This is the token to
-    watch for after adding a verification step without wiring its
-    `id:` into the ladder.
+    step: either a step before the first verification step
+    (harden-runner, checkout, setup-nix) failed, or a verification step
+    has no ladder arm. The failure is real and unexplained, so triage it
+    by hand; in the second case fix the attribution step. This is the
+    token to watch for after adding a verification step without wiring
+    its `id:` into the ladder.
 - `unknown` — the `verify` job produced no `reason` output at all: it
     was cancelled, or the runner was lost, before the attribution step
     ran. Not a verification result; re-run the cron.
@@ -193,7 +197,8 @@ the `attribute failure reason` step. Reasons:
 "treat as security incident" framing outright; the `*-attest-failed`
 family and `images-cosign-failed` warrant it once a 24h re-run has ruled
 out trust-root rotation lag; `manifest-tag-drift` is a lower-confidence
-security signal that still freezes pin bumps.
+security signal, and the body tells the maintainer to hold pin bumps
+for it too.
 Folding all reasons into a single failure body trains
 the maintainer to skim-read auto-filed issues — exactly the wrong reflex
 when the failure is a real SRI drift or a one-sided registry rollback.

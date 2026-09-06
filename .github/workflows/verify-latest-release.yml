@@ -493,11 +493,14 @@ jobs:
 
             Reason values and what they mean:
 
-            - `upstream-sri-drift` — **TREAT AS SECURITY INCIDENT.** The
-              upstream `linpeas.sh` URL still resolves but its SHA-256
-              no longer matches the pinned SRI. Either upstream
-              tag-replaced the asset or someone tampered with the pin.
-              Do NOT merge subsequent pin bumps until investigated.
+            - `upstream-sri-drift` — the upstream fetch step failed:
+              either the fetched `linpeas.sh` no longer matches the
+              pinned SRI (the step log prints `upstream content drift:
+              pin says …`) — **TREAT THAT AS A SECURITY INCIDENT**:
+              either upstream tag-replaced the asset or someone tampered
+              with the pin — or the fetch itself failed (a `curl` error
+              in the step log). Do NOT merge subsequent pin bumps until
+              a hash mismatch is investigated.
             - `manifest-tag-drift` — `:latest` on ghcr.io or docker.io
               no longer resolves to the same manifest as the
               release-tagged `:VERSION`. Likely registry-side repoint
@@ -571,9 +574,13 @@ jobs:
               Transient GitHub API or release-asset visibility lag.
               Re-run the cron.
             - `unattributed` — the job failed but no ladder arm matched
-              the failed step, so the attribution ladder has a gap. Treat
-              the failure as unexplained until triaged by hand, and file a
-              bug against this workflow's `attribute failure reason` step.
+              the failed step: either a step before the first
+              verification step (harden-runner, checkout, setup-nix)
+              failed — the step log says which — or a verification step
+              has no ladder arm, so the attribution ladder has a gap.
+              Treat the failure as unexplained until triaged by hand; only
+              the second case is a bug to file against this workflow's
+              `attribute failure reason` step.
             - `unknown` — the `verify` job emitted no reason at all: it
               was cancelled, or the runner was lost, before the
               attribution step ran. Re-run the cron.

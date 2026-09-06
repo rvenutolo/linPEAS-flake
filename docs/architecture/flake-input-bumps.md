@@ -3,8 +3,9 @@
 This page is the triage runbook for the Renovate PRs that touch
 flake-input pins in `flake.nix`:
 
-- **`cachix/git-hooks.nix`** — master HEAD tracker. Fires whenever
-    upstream master moves.
+- **`cachix/git-hooks.nix`** — master HEAD tracker. Fires when
+    upstream master has moved and the new head has cleared the global
+    7-day `minimumReleaseAge` quarantine.
 - **`NixOS/nixpkgs`** — stable-branch tracker. Fires when the next
     NixOS GA tag (`YY.MM`) lands plus the global 7-day
     `minimumReleaseAge` quarantine. **Blast: the linpeas runtime

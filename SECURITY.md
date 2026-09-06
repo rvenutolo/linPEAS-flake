@@ -233,8 +233,9 @@ filed by the notify jobs.
 
 - `SCORECARD_PAT` — a fine-grained read-only personal access token
     consumed as `GITHUB_AUTH_TOKEN` by `scorecard-drift-check.yml` on the
-    scorecard step only; the `Webhooks` check needs `admin:repo_hook` read,
-    which the workflow-level `GITHUB_TOKEN` cannot be granted. Rotation:
+    scorecard step only; the `Webhooks` check needs the `Webhooks` read
+    permission, which the workflow-level `GITHUB_TOKEN` cannot be granted.
+    Rotation:
     on PAT expiry (bounded at one year), on suspected compromise, or
     on GitHub revocation —
     [`docs/runbooks/scorecard-pat-rotation.md`](docs/runbooks/scorecard-pat-rotation.md).
@@ -247,12 +248,15 @@ for each per-arch OCI image.
 Verify with:
 
 ```bash
-gh attestation verify oci://ghcr.io/rvenutolo/linpeas@<DIGEST> --repo rvenutolo/linPEAS-flake
+gh attestation verify oci://ghcr.io/rvenutolo/linpeas@<DIGEST> \
+  --repo rvenutolo/linPEAS-flake \
+  --predicate-type https://cyclonedx.org/bom
 ```
 
-`gh attestation verify` lists ALL attached attestations — the SBOM attestation
-is the one with predicate-type `https://cyclonedx.org/bom`; the provenance
-attestation carries `https://slsa.dev/provenance/v1`.
+`gh attestation verify` verifies the SLSA provenance predicate
+(`https://slsa.dev/provenance/v1`) by default; the `--predicate-type`
+flag is what selects the SBOM attestation, so a bare call checks
+provenance only.
 
 ## Runner egress control (harden-runner, block mode)
 

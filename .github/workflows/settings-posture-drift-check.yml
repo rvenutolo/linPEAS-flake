@@ -114,7 +114,8 @@ jobs:
             The daily `settings-posture-drift-check` watchdog failed for
             `rvenutolo/linPEAS-flake`: either the live repository
             settings no longer match `docs/security/settings-posture.md`,
-            or the comparison could not be made at all — the fixture
+            or the comparison could not be made at all — a step before
+            it (harden-runner, checkout, setup-nix) failed, the fixture
             harness step failed, the App token could not be minted, or
             `scripts/check-settings-posture.sh` exited 2 because `gh` or
             `jq` was absent, a probed endpoint could not be fetched, or a
@@ -124,8 +125,10 @@ jobs:
 
             See the failing job logs to tell drift from a could-not-run: on drift,
             every mismatched setting is reported in one run as a
-            `<key> drift: got …, want …` line; a could-not-run prints a
-            single cause line and no drift lines.
+            `<key> drift: got …, want …` line; a could-not-run prints its
+            cause — the failing tool's own error, then the script's
+            `ERROR` line when the script got that far — and no `drift:`
+            line for the setting it stopped on.
 
             Remediation: reconcile by either
             - reverting the UI change so live matches the doc, or
