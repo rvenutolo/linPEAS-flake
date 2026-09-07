@@ -277,11 +277,17 @@ Binding:
 Read the two failure codes apart before rotating anything. Docker Hub
 answers `401` when it got no usable credential at all, and `403` with
 `{"message":"access denied: insufficient scope"}` when the credential is
-valid but its scope does not cover the call. Both `403`s above are the
-second shape, and the scope check runs ahead of the lookup — a tag delete
-against a tag that does not exist still answers `403`, never `404`. So a
-`403` here says the token is the wrong one, not that it expired; a `401`
+valid but its scope does not cover the call. Every `403` this runbook
+cites is the second shape, and the scope check runs ahead of the lookup —
+a delete of a tag that does not exist still answers `403`, never `404`.
+So a `403` says the token is the wrong one, not that it expired; a `401`
 says the secret is empty, malformed, or revoked.
+
+That is also where the step 2 snippet fails if the `_RW` value gets
+pasted into it. The `/v2/users/login` exchange succeeds — the token is
+valid, just not delete-scoped — so the first `curl --fail` returns a JWT
+and it is the `DELETE` that dies. A failure on the login call instead
+means the token itself is bad, not merely under-scoped.
 
 Rotation: on suspected compromise only.
 
