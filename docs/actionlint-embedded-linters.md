@@ -23,6 +23,19 @@ shell that forgot `nix develop` — it is nixpkgs quietly changing which
 binaries it bundles, which would take embedded coverage with it and
 surface as nothing at all.
 
+That is a claim about nixpkgs rather than about this tree, so nothing
+here proves it. Check it against the locked revision directly:
+
+```bash
+nix develop --command bash -c 'cat "$(command -v actionlint)"'
+```
+
+The bare `actionlint` on the devShell `PATH` is the nixpkgs one, and
+printing it should show two `PATH=` prepends — one `shellcheck` store
+path, one `pyflakes` — ahead of an `exec` of `.actionlint-wrapped`. A
+binary instead of a script, or only one of the two prepends, means
+nixpkgs changed and the paragraph above no longer describes it.
+
 `nix/wrappers.nix` therefore names both paths explicitly:
 
 ```nix
