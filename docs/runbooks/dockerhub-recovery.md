@@ -89,7 +89,7 @@ credential is sound. Take these first instead:
 
 - A Docker Hub access token with **Delete** scope. Use the
     `DOCKERHUB_TOKEN_DELETE` repository secret value
-    (the `_RW` token returns `401` on the tag-delete endpoint). Fetch it
+    (the `_RW` token returns `403` on the tag-delete endpoint). Fetch it
     from your local secret vault — **do not** print `gh secret` values
     inside the auto-filed issue body. If no copy survives, see
     [No local copy of the token](#no-local-copy-of-the-token) below.
@@ -267,12 +267,21 @@ Binding:
     `release-on-bump.yml` or `verify-latest-release.yml`.
 1. Manual recovery snippets performing a tag delete (`--request DELETE`
     or `-X DELETE`) must name `DOCKERHUB_TOKEN_DELETE` and must not name
-    `DOCKERHUB_TOKEN_RW` (the `_RW` token returns `401`). The lint
+    `DOCKERHUB_TOKEN_RW` (the `_RW` token returns `403`). The lint
     counts a fence as a Docker Hub delete when it performs a DELETE and
     either addresses `hub.docker.com` or names a `DOCKERHUB_TOKEN`
     variant.
 1. No unsuffixed `DOCKERHUB_TOKEN` secret may exist; only `_RW` and
     `_DELETE` variants are authoritative.
+
+Read the two failure codes apart before rotating anything. Docker Hub
+answers `401` when it got no usable credential at all, and `403` with
+`{"message":"access denied: insufficient scope"}` when the credential is
+valid but its scope does not cover the call. Both `403`s above are the
+second shape, and the scope check runs ahead of the lookup — a tag delete
+against a tag that does not exist still answers `403`, never `404`. So a
+`403` here says the token is the wrong one, not that it expired; a `401`
+says the secret is empty, malformed, or revoked.
 
 Rotation: on suspected compromise only.
 

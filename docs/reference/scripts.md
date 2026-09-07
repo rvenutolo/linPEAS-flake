@@ -335,8 +335,9 @@ The same split binds the manual recovery snippets in the docs. A
 shell-fenced Markdown block that performs a tag delete
 (`--request DELETE` / `-X DELETE`) against Docker Hub must name
 DOCKERHUB_TOKEN_DELETE and must not name DOCKERHUB_TOKEN_RW: the
-write-scoped PAT returns 401 on a tag delete, so a snippet pasting it
-hands the operator a failure that reads like a credential problem.
+write-scoped PAT returns 403 (access denied: insufficient scope) on a
+tag delete, so a snippet pasting it strands the operator part-way
+through a recovery the runbook presented as working.
 A fence counts as a Docker Hub delete when it does a DELETE and either
 addresses hub.docker.com or names a DOCKERHUB_TOKEN — a DELETE against
 some other API is not this rule's business, and scoping on the host
