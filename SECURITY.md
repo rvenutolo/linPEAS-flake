@@ -155,7 +155,8 @@ dispatch runs, a notify job opens a deduped issue under the
 `codeql-critical` label (a PR run pages via the failed check on the PR
 itself, so it files no issue). An analyze job that fails without
 producing a finding (scan crash, runner breakage), or that is cancelled
-at its job timeout, files under `codeql-infra` instead, so transient
+(never placed on a runner, or at its job timeout), files under
+`codeql-infra` instead, so transient
 infrastructure trouble is not paged as a security finding. Findings
 **below** CRITICAL are advisory: they upload to the Security tab without
 failing the workflow. A green CodeQL run therefore

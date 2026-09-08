@@ -37,10 +37,11 @@ inputs:
     description: >-
       Aggregate result of the parent job(s)
       (success/failure/cancelled/skipped). `cancelled` is treated as an
-      infrastructure failure (most commonly `timeout-minutes` exceeded):
-      it files/updates the same deduped issue as `failure`, with the
-      issue text flagging the run as cancelled so triage does not read
-      it as a finding. `skipped` is inert.
+      infrastructure failure — a job the runner pool never picked up,
+      or `timeout-minutes` exceeded: it files/updates the same deduped
+      issue as `failure`, with the issue text flagging the run as
+      cancelled so triage does not read it as a finding. `skipped` is
+      inert.
     required: true
   label:
     description: "Label used to dedup open issues for this workflow."
@@ -88,14 +89,18 @@ runs:
             `https://github.com/${context.repo.owner}/${context.repo.repo}` +
             `/actions/runs/${context.runId}`;
 
-          // `cancelled` is an infrastructure failure: for scheduled
-          // watchdogs it almost always means `timeout-minutes` was
-          // exceeded (the drift-check crons set
-          // `cancel-in-progress: false`, and a concurrency-superseded
-          // or manually-cancelled run cancels this notify job too, so
-          // neither path reaches this code). Filing it keeps red runs
-          // from sitting in the Actions tab unalerted; the issue text
-          // flags it so triage does not read it as a finding.
+          // `cancelled` reaching this code means a job-level cancel,
+          // because a run-level cancel (an operator's `gh run cancel`,
+          // or a concurrency supersede where `cancel-in-progress: true`)
+          // cancels this notify job along with the rest of the run,
+          // `always()` included, so it never executes. A job-level
+          // cancel is either a job the runner pool never picked up or
+          // `timeout-minutes` exceeded, and `result` cannot tell them
+          // apart — the jobs API can. See "Cancelled-job attribution"
+          // in docs/architecture/ci.md. Filing keeps a job that died
+          // either way from sitting red in the Actions tab unalerted;
+          // the issue text flags it so triage does not read it as a
+          // finding.
           const cancelled = result === 'cancelled';
 
           // Inert on skipped so callers can pass a raw job result and
@@ -144,8 +149,9 @@ runs:
 
           // result === 'failure' || result === 'cancelled'
           const cancelledNote =
-            'cancelled (likely `timeout-minutes` exceeded) — ' +
-            'infrastructure failure, not a finding';
+            'cancelled (never picked up by a runner, or ' +
+            '`timeout-minutes` exceeded) — infrastructure failure, ' +
+            'not a finding';
           if (existing.length > 0) {
             const issue = existing[0];
             await github.rest.issues.createComment({

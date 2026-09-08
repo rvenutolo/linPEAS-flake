@@ -136,10 +136,11 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
   # Infrastructure failure: analyze never ran (checkout/init failed)
-  # or was cancelled (timeout). Filed under a distinct label so
-  # transient runner / network / token issues are not paged as
-  # CRITICAL security findings. PR runs are excluded — the failed
-  # check on the PR itself is the maintainer-facing signal there.
+  # or was cancelled — no runner, or its timeout. Filed under a
+  # distinct label so transient runner / network / token issues are
+  # not paged as CRITICAL security findings. PR runs are excluded —
+  # the failed check on the PR itself is the maintainer-facing signal
+  # there.
   notify-infra:
     name: notify (infra)
     needs: analyze

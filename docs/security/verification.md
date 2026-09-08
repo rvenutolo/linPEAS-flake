@@ -325,9 +325,9 @@ output and open / update deduped issues via
 - `image-cve-scan-trivy-notify-infra` (label: `image-cve-infra-trivy`) — job failed
     before Trivy produced a CRITICAL count (build, scan, SARIF
     upload, or the count step itself broke — Trivy may or may not have
-    found a CRITICAL), or the job was cancelled (timeout). Remediation:
-    inspect the failing step; if transient, close once the next
-    scheduled run is green.
+    found a CRITICAL), or the job was cancelled (no runner, or its
+    timeout). Remediation: inspect the failing step; if transient, close
+    once the next scheduled run is green.
 
 - NOT in required-checks (intentional — `update-flake-lock` must still
     land even if a CVE is present, with explicit maintainer awareness).
@@ -367,7 +367,7 @@ deduped issue via the `notify-workflow-result` composite:
 - `image-cve-scan-grype-notify-infra` (label: `image-cve-infra-grype`) — job failed
     before producing a CRITICAL count (build / scan / SARIF upload /
     the count step itself — Grype may or may not have found a
-    CRITICAL), or the job was cancelled (timeout).
+    CRITICAL), or the job was cancelled (no runner, or its timeout).
 
 ## SBOM attestation<a name="sbom-attestation"></a>
 

@@ -102,7 +102,9 @@ tells you which of three things happened:
     is processed — but harden-runner, checkout, or the job timeout produce
     the same silence (a timeout can fire mid-loop, after some PRs were
     already re-run). Read the log's stack trace directly; the per-PR
-    guidance below does not apply.
+    guidance below does not apply. If the run holds no `retry` log at
+    all, the job never started and there is no stack trace to read — see
+    [Cancelled-job attribution](../architecture/ci.md#cancelled-job-attribution).
 - **`Sweep halted by rate limit; ...`.** The sweep hit a rate limit partway
     through and stopped rather than keep spending an exhausted budget. The PRs
     listed as "not attempted" were never touched this run — they are not
