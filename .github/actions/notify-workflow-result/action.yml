@@ -37,8 +37,8 @@ inputs:
     description: >-
       Aggregate result of the parent job(s)
       (success/failure/cancelled/skipped). `cancelled` is treated as an
-      infrastructure failure (most commonly `timeout-minutes` exceeded):
-      it files/updates the same deduped issue as `failure`, with the
+      infrastructure failure (`timeout-minutes` exceeded): it
+      files/updates the same deduped issue as `failure`, with the
       issue text flagging the run as cancelled so triage does not read
       it as a finding. `skipped` is inert.
     required: true
@@ -88,13 +88,13 @@ runs:
             `https://github.com/${context.repo.owner}/${context.repo.repo}` +
             `/actions/runs/${context.runId}`;
 
-          // `cancelled` is an infrastructure failure: for scheduled
-          // watchdogs it almost always means `timeout-minutes` was
-          // exceeded (the drift-check crons set
-          // `cancel-in-progress: false`, and a concurrency-superseded
-          // or manually-cancelled run cancels this notify job too, so
-          // neither path reaches this code). Filing it keeps red runs
-          // from sitting in the Actions tab unalerted; the issue text
+          // `cancelled` reaching this code means a job-level cancel —
+          // `timeout-minutes` exceeded — because a run-level cancel (an
+          // operator's `gh run cancel`, or a concurrency supersede where
+          // `cancel-in-progress: true`) cancels this notify job along
+          // with the rest of the run, `always()` included, so it never
+          // executes. Filing keeps a job that died at its timeout from
+          // sitting red in the Actions tab unalerted; the issue text
           // flags it so triage does not read it as a finding.
           const cancelled = result === 'cancelled';
 
