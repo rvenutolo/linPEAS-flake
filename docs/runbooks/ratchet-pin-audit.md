@@ -195,8 +195,8 @@ failed shape validation; OR the workflow glob matched zero files.
 The `check` job produced no `reason=` output. Three run shapes do
 that: the `audit pins` step exited non-zero on an unhandled error
 inside its run block; a step before it failed, so the audit never ran;
-or the run was cancelled — most often its `timeout-minutes` was
-exceeded. The notify composite flags a
+or the run was cancelled — a job was never picked up by a runner, or
+a job exceeded its `timeout-minutes`. The notify composite flags a
 cancelled run as an infrastructure failure rather than a finding: with
 a `[!WARNING]` banner at the top of the issue body when the cancelled
 run is the one that opened the issue, and in its comment when it

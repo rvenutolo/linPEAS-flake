@@ -223,6 +223,45 @@ Surfacing "open bump PR" state on the dashboard is deliberately not implemented 
 
 Do not collapse into single `failure` classification.
 
+## Cancelled-job attribution
+
+A job conclusion of `cancelled` has two causes, and `needs.<job>.result`
+carries the same token for both:
+
+- the job was never scheduled onto a runner, and the platform cancelled
+    it while it waited;
+- the job ran and exceeded its `timeout-minutes`.
+
+Do not reach for the timeout first. A job the runner pool never picks up
+is cancelled roughly 15 minutes after it is queued no matter what
+`timeout-minutes` it declares, so an elapsed time near 15 minutes that
+does not match the job's own deadline rules the timeout out rather than
+in.
+
+The jobs API settles it. A job that ran reports a `runner_name`, a
+populated `steps` array, and a file of its own in the run's log archive.
+A job that never started reports an empty `runner_name`, an empty
+`steps` array, and contributes no file at all:
+
+```sh
+gh api "repos/rvenutolo/linPEAS-flake/actions/runs/<run-id>/jobs" \
+    --jq '.jobs[] | "\(.name)\t\(.conclusion)\t\(.runner_name)\t\(.steps | length)"'
+```
+
+An empty `steps` array is not evidence that step data aged out of
+retention. Retention drops a whole run at once, so read the array
+against a sibling job in the same run: when the other jobs still carry
+full step timings, nothing expired and the empty one never started. The
+log archive answers the same way — download it and list its entries
+rather than reading one job's absence from it as expiry.
+
+A never-scheduled cancel is also unpageable from inside the run. The
+`notify` job that would file the issue needs the runner that was
+unavailable, so a scarcity window wide enough to cancel one job
+generally cancels the notifier queued behind it too, and the run sits
+red with nothing filed. No change to the workflow fixes that; catching
+it would take a later run reading the jobs API.
+
 ## Cron-notify root-cause comments
 
 When a `notify-workflow-result` issue auto-closes after a transient

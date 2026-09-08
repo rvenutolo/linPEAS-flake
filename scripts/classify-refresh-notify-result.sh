@@ -86,7 +86,7 @@ done
 # A failed or cancelled `identify` sets no outputs, so nothing below
 # this point could tell such a run from a clean early exit. The
 # composite treats `cancelled` as an infrastructure failure, and so does
-# this: a timed-out identify leaves the same unrefreshed PR behind that
+# this: a cancelled identify leaves the same unrefreshed PR behind that
 # a failed one does.
 if [[ ${IDENTIFY} != 'success' ]]; then
   printf 'failure\n'
