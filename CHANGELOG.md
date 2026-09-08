@@ -6,6 +6,28 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20260907-44edc153] - 2026-09-08
+
+### Chores
+- Bump linpeas to 20260907-44edc153 ([#1100](https://github.com/rvenutolo/linPEAS-flake/pull/1100))
+
+### Documentation
+- Attribute a cancelled job conclusion before calling it a timeout ([#1099](https://github.com/rvenutolo/linPEAS-flake/pull/1099))
+- Hold the audit fix pass to the artifact it read ([#1093](https://github.com/rvenutolo/linPEAS-flake/pull/1093))
+- Tell a could-not-run from a staleness and close the audit cycle ([#1090](https://github.com/rvenutolo/linPEAS-flake/pull/1090))
+- Tell a live-lock staleness from a could-not-run and scope the incident arms ([#1089](https://github.com/rvenutolo/linPEAS-flake/pull/1089))
+- Name the setup-step arm in every watchdog body and scope the SBOM verify snippet ([#1088](https://github.com/rvenutolo/linPEAS-flake/pull/1088))
+- Scope the SBOM verify claim and name every arm the watchdog bodies file on ([#1087](https://github.com/rvenutolo/linPEAS-flake/pull/1087))
+- Name every watchdog-body arm and scope the audit skill's generated-block claims ([#1086](https://github.com/rvenutolo/linPEAS-flake/pull/1086))
+
+### Features
+- Aim the docs audit at fix-pass drift in every shape of prose ([#1085](https://github.com/rvenutolo/linPEAS-flake/pull/1085))
+
+### Fixes
+- Settle four doc claims against live probes and source ([#1097](https://github.com/rvenutolo/linPEAS-flake/pull/1097))
+- Keep notify label descriptions reaching the labels ([#1092](https://github.com/rvenutolo/linPEAS-flake/pull/1092))
+- Pin the staleness harness live scenario off the lock ([#1091](https://github.com/rvenutolo/linPEAS-flake/pull/1091))
+
 ## [20260905-ceea8544] - 2026-09-05
 
 ### CI
