@@ -72,10 +72,12 @@ jobs:
           # The exempt list is the action's default plus 409. The input
           # replaces the default wholesale, so every code must be restated:
           # 422 so createLabel's try/catch sees the already-exists conflict
-          # immediately, 403 because retrying a rate limit makes it worse,
-          # 409 so a re-run that already took effect does not burn the budget
-          # re-conflicting, and 400/401/404 because a malformed, unauthorized,
-          # or missing request will not become valid on a second try.
+          # immediately, 409 so a re-run that already took effect does not
+          # burn the budget re-conflicting, 403 for every cause it carries
+          # here — a permissions gap does not heal on an immediate retry and
+          # a rate limit only worsens — and 400/401/404 because a malformed,
+          # unauthorized, or missing request will not become valid on a
+          # second try.
           retries: "3"
           retry-exempt-status-codes: 400,401,403,404,409,422
           script: |

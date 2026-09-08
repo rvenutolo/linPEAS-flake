@@ -15,8 +15,9 @@
 # shell-fenced Markdown block that performs a tag delete
 # (`--request DELETE` / `-X DELETE`) against Docker Hub must name
 # DOCKERHUB_TOKEN_DELETE and must not name DOCKERHUB_TOKEN_RW: the
-# write-scoped PAT returns 401 on a tag delete, so a snippet pasting it
-# hands the operator a failure that reads like a credential problem.
+# write-scoped PAT returns 403 (access denied: insufficient scope) on a
+# tag delete, so a snippet pasting it strands the operator part-way
+# through a recovery the runbook presented as working.
 # A fence counts as a Docker Hub delete when it does a DELETE and either
 # addresses hub.docker.com or names a DOCKERHUB_TOKEN — a DELETE against
 # some other API is not this rule's business, and scoping on the host
@@ -222,7 +223,7 @@ for md_path in ${md_paths[@]+"${md_paths[@]}"}; do
   while IFS=$'\t' read -r kind a b c; do
     case "${kind}" in
     V)
-      violation "${md_path}:${a}: shell fence deletes a Docker Hub tag but ${b}; a tag delete needs DOCKERHUB_TOKEN_DELETE (the _RW token returns 401)"
+      violation "${md_path}:${a}: shell fence deletes a Docker Hub tag but ${b}; a tag delete needs DOCKERHUB_TOKEN_DELETE (the _RW token returns 403)"
       ;;
     C)
       md_fences=$((md_fences + a))

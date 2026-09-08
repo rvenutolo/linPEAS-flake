@@ -18,11 +18,13 @@ at attempt 1.
 Separately from that 3-attempt run bound, the watchdog's own API requests
 retry on anything not in the exempt list below — in practice a 5xx.
 Malformed, unauthorized, or missing-resource requests, conflicts,
-already-exists responses, and rate limits are exempt: a 400,
+already-exists responses, and all 403s are exempt: a 400,
 401, or 404 will not become valid on a second try, a 409 means the re-run
 already took effect, a 422 lets `createLabel`'s try/catch see the
-already-exists conflict immediately, and retrying a 403 rate limit only
-makes it worse.
+already-exists conflict immediately, and the 403 entry is a bare status
+code — it exempts a permissions gap exactly as it exempts a rate limit.
+Neither becomes valid on an immediate retry, and a rate limit is made
+worse by one.
 
 An error that survives that retry is confined to the PR it happened on.
 The sweep processes every remaining PR and then fails the job, naming
