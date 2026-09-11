@@ -58,7 +58,7 @@ jobs:
       tag-exists: ${{ steps.exists.outputs.exists }}
       write-latest: ${{ steps.latest.outputs.write-latest }}
     steps:
-      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -311,7 +311,7 @@ jobs:
       arm64-ghcr-digest: ${{ steps.classify.outputs.arm64-ghcr-digest }}
       arm64-hub-digest: ${{ steps.classify.outputs.arm64-hub-digest }}
     steps:
-      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           # Anonymous registry reads only: no cosign (no sigstore
@@ -445,7 +445,7 @@ jobs:
       ghcr_digest: ${{ steps.push.outputs.ghcr_digest || steps.pull.outputs.ghcr_digest }}
       hub_digest: ${{ steps.push.outputs.hub_digest || steps.pull.outputs.hub_digest }}
     steps:
-      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -634,7 +634,7 @@ jobs:
         # uploads on release-typed events; this workflow runs on push
         # and workflow_dispatch). The explicit gh release upload in
         # the sign-blob step below is the release-asset path.
-        uses: anchore/sbom-action@aa80c8c5bd439a416a62804f2151ab38c671a638 # v0.24.1
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           image: rvenutolo/linpeas:${{ needs.release.outputs.version }}-amd64
           format: cyclonedx-json
@@ -752,7 +752,7 @@ jobs:
       ghcr_digest: ${{ steps.push.outputs.ghcr_digest || steps.pull.outputs.ghcr_digest }}
       hub_digest: ${{ steps.push.outputs.hub_digest || steps.pull.outputs.hub_digest }}
     steps:
-      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -919,7 +919,7 @@ jobs:
       - name: generate SBOM for OCI image (arm64)
         # CycloneDX-JSON SBOM for the arm64 image. Mirrors amd64 step;
         # see that step for format + upload rationale.
-        uses: anchore/sbom-action@aa80c8c5bd439a416a62804f2151ab38c671a638 # v0.24.1
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           image: rvenutolo/linpeas:${{ needs.release.outputs.version }}-arm64
           format: cyclonedx-json
@@ -1014,7 +1014,7 @@ jobs:
       ghcr_index_digest: ${{ steps.create.outputs.ghcr_index_digest }}
       hub_index_digest: ${{ steps.create.outputs.hub_index_digest }}
     steps:
-      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -1188,7 +1188,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -1430,7 +1430,7 @@ jobs:
       attestations: read
       packages: read
     steps:
-      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           # No timestamp.sigstore.dev: this job only verifies (cosign
@@ -1648,7 +1648,7 @@ jobs:
     permissions:
       issues: write
     steps:
-      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           allowed-endpoints: >
