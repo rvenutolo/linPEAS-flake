@@ -24,12 +24,12 @@ the markers by hand.
 ├───checks
 │   ├───aarch64-linux
 │   │   ├───formatting: derivation 'treefmt-check'
-│   │   ├───linpeas-build: derivation 'linpeas-20260914-474d0061'
+│   │   ├───linpeas-build: derivation 'linpeas-20260916-a2e9c332'
 │   │   ├───lint-shell-tools: derivation 'check-lint-shell-tools'
 │   │   └───pre-commit: derivation 'pre-commit-run'
 │   └───x86_64-linux
 │       ├───formatting: derivation 'treefmt-check'
-│       ├───linpeas-build: derivation 'linpeas-20260914-474d0061'
+│       ├───linpeas-build: derivation 'linpeas-20260916-a2e9c332'
 │       ├───lint-shell-tools: derivation 'check-lint-shell-tools'
 │       └───pre-commit: derivation 'pre-commit-run'
 ├───devShells
@@ -49,22 +49,22 @@ the markers by hand.
 └───packages
     ├───aarch64-linux
     │   ├───cosign: package 'cosign-3.1.3'
-    │   ├───default: package 'linpeas-20260914-474d0061'
+    │   ├───default: package 'linpeas-20260916-a2e9c332'
     │   ├───diffoscopeMinimal: package 'diffoscope-329'
     │   ├───git-cliff: package 'git-cliff-2.14.1'
-    │   ├───linpeas: package 'linpeas-20260914-474d0061'
+    │   ├───linpeas: package 'linpeas-20260916-a2e9c332'
     │   ├───linpeas-image: package 'linpeas.tar.gz'
     │   ├───nix: package 'nix-2.34.8'
-    │   └───site: package 'linpeas-flake-site-20260914-474d0061'
+    │   └───site: package 'linpeas-flake-site-20260916-a2e9c332'
     └───x86_64-linux
         ├───cosign: package 'cosign-3.1.3'
-        ├───default: package 'linpeas-20260914-474d0061'
+        ├───default: package 'linpeas-20260916-a2e9c332'
         ├───diffoscopeMinimal: package 'diffoscope-329'
         ├───git-cliff: package 'git-cliff-2.14.1'
-        ├───linpeas: package 'linpeas-20260914-474d0061'
+        ├───linpeas: package 'linpeas-20260916-a2e9c332'
         ├───linpeas-image: package 'linpeas.tar.gz'
         ├───nix: package 'nix-2.34.8'
-        └───site: package 'linpeas-flake-site-20260914-474d0061'
+        └───site: package 'linpeas-flake-site-20260916-a2e9c332'
 ```
 
 <!-- END flake-show -->
