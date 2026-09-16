@@ -6,6 +6,11 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20260916-a2e9c332] - 2026-09-16
+
+### Chores
+- Bump linpeas to 20260916-a2e9c332 ([#1109](https://github.com/rvenutolo/linPEAS-flake/pull/1109))
+
 ## [20260914-474d0061] - 2026-09-14
 
 ### Chores
