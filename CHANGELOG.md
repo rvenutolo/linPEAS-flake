@@ -6,6 +6,13 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20260919-fca1e2b0] - 2026-09-19
+
+### Chores
+- Bump linpeas to 20260919-fca1e2b0 ([#1115](https://github.com/rvenutolo/linPEAS-flake/pull/1115))
+- Update flake.lock ([#1114](https://github.com/rvenutolo/linPEAS-flake/pull/1114))
+- Update github/codeql-action action to v4.38.0 ([#1113](https://github.com/rvenutolo/linPEAS-flake/pull/1113))
+
 ## [20260916-01f8a0d0] - 2026-09-17
 
 ### Chores
