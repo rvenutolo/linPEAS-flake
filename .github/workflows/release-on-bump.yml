@@ -634,6 +634,30 @@ jobs:
         # uploads on release-typed events; this workflow runs on push
         # and workflow_dispatch). The explicit gh release upload in
         # the sign-blob step below is the release-asset path.
+        # The action downloads syft from GitHub releases on every run,
+        # and one 5xx on that download fails the step, so it runs with
+        # continue-on-error and the retry step below runs once on failure.
+        id: sbom-amd64
+        continue-on-error: true
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        with:
+          image: rvenutolo/linpeas:${{ needs.release.outputs.version }}-amd64
+          format: cyclonedx-json
+          output-file: linpeas-image-amd64.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: wait before retrying SBOM generation (amd64)
+        if: steps.sbom-amd64.outcome == 'failure'
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          sleep 30
+
+      - name: retry SBOM generation for OCI image (amd64)
+        # Single retry of the step above. A failure here fails the job,
+        # so a sustained outage still reaches notify.
+        if: steps.sbom-amd64.outcome == 'failure'
         uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           image: rvenutolo/linpeas:${{ needs.release.outputs.version }}-amd64
@@ -918,7 +942,28 @@ jobs:
 
       - name: generate SBOM for OCI image (arm64)
         # CycloneDX-JSON SBOM for the arm64 image. Mirrors amd64 step;
-        # see that step for format + upload rationale.
+        # see that step for format, upload, and retry rationale.
+        id: sbom-arm64
+        continue-on-error: true
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        with:
+          image: rvenutolo/linpeas:${{ needs.release.outputs.version }}-arm64
+          format: cyclonedx-json
+          output-file: linpeas-image-arm64.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: wait before retrying SBOM generation (arm64)
+        if: steps.sbom-arm64.outcome == 'failure'
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          sleep 30
+
+      - name: retry SBOM generation for OCI image (arm64)
+        # Single retry of the step above. A failure here fails the job,
+        # so a sustained outage still reaches notify.
+        if: steps.sbom-arm64.outcome == 'failure'
         uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           image: rvenutolo/linpeas:${{ needs.release.outputs.version }}-arm64
