@@ -56,8 +56,7 @@ for the credential split.
 ## Branch protection
 
 `main` is protected by the `protect-main` ruleset. See
-[`required-checks.md`](required-checks.md) for the gating check list and
-the full ruleset shape.
+[`required-checks.md`](required-checks.md) for the gating check list.
 
 ## Merge policy
 

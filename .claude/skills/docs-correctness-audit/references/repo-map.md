@@ -89,7 +89,7 @@ just --list                    # every recipe (and what each regenerates)
 ls scripts/*.sh scripts/lib/*.sh scripts/*.awk  # script inventory: entry points, sourced libraries, awk programs
 ls .github/workflows/          # workflow filenames
 grep -HE '^[[:space:]]*-[[:space:]]*cron:' .github/workflows/*.yml .github/workflows/*.yaml   # authoritative cron schedules (anchored: a prose `cron:` inside a run: block is not a schedule)
-grep -c '"context"' .github/rulesets/protect-main.json  # required-check context count
+sed -n '/^## Required contexts/,/^## /p' docs/security/required-checks.md  # required-check contexts
 git grep -n '<symbol>'         # existence of options, env vars, secret names, flags
 ```
 
@@ -115,11 +115,11 @@ The authoritative cron table for prose to match is
 diagram or runbook names a schedule, verify against both the workflow `cron:`
 line and that table.
 
-`.github/rulesets/protect-main.json` is the in-tree mirror of the live
-`protect-main` ruleset and the source of truth for required-check **counts** as
-well as names — a doc stating how many required checks a PR must pass is
-checked against it, and the collector emits that count as its
-**REQUIRED-CHECK CONTEXTS** section.
+The `## Required contexts` table in `docs/security/required-checks.md` is the
+source of truth for required-check **counts** as well as names — a doc stating
+how many required checks a PR must pass is checked against it, and the
+collector emits that table's row count as its **REQUIRED-CHECK CONTEXTS**
+section.
 
 For CI job / required-check names, the collector emits a **VALID CI JOB /
 CHECK NAMES** union allowlist — every workflow job id plus every lint-group

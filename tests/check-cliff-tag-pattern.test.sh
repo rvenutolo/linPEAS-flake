@@ -2,7 +2,7 @@
 # tests/check-cliff-tag-pattern.test.sh
 #
 # Failure-mode harness for scripts/check-cliff-tag-pattern.sh.
-# Mirrors the pattern in tests/check-tag-protection.test.sh.
+# Fixture-driven: each scenario asserts exit code and output.
 
 set -Eeuo pipefail
 IFS=$'\n\t'

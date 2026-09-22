@@ -215,7 +215,7 @@ function main() {
   # shape gate on release_json trips before new_tag is ever read. No
   # override exists for this payload — bump-linpeas.sh always calls
   # `gh`, live or stubbed — so the source is named by the literal API
-  # path, matching check-tag-protection.sh's no-override convention.
+  # path.
   # That literal path is the same route the dashboard generator names
   # when it fetches upstream's latest release live, so these
   # expectations carry the `bump-linpeas upstream release` subject for

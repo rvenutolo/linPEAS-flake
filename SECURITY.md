@@ -289,8 +289,8 @@ not `egress-policy: block` with a non-empty allowlist.
 
 Repository settings knobs the security model depends on:
 
-- `secret_scanning`, `secret_scanning_push_protection`,
-    `dependabot_security_updates` all **enabled**.
+- `secret_scanning` and `secret_scanning_push_protection` both
+    **enabled**.
 - Actions: `allowed_actions: selected`, with a vendor allowlist.
 - Actions: `sha_pinning_required: true`. Belt-and-braces against
     Renovate misconfiguration — every `uses:` must be SHA-pinned at
@@ -301,9 +301,6 @@ Repository settings knobs the security model depends on:
     `can_approve_pull_request_reviews: false`. Prevents a compromised
     workflow from self-approving a PR.
 - `github-pages` environment: `can_admins_bypass: false`.
-
-Not probe-verifiable (manual UI check):
-
 - Fork-PR approval gate: first-time contributors require approval before workflows run.
 - Merge-method flags: merge commit only; squash and rebase disabled.
 - Account: 2FA enabled on the maintainer account with non-SMS second

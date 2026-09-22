@@ -2,7 +2,7 @@
 # tests/check-pin-diff-isolated.test.sh
 #
 # Failure-mode harness for scripts/check-pin-diff-isolated.sh.
-# Mirrors tests/check-tag-protection.test.sh.
+# Fixture-driven: each scenario asserts exit code and output.
 
 set -Eeuo pipefail
 IFS=$'\n\t'

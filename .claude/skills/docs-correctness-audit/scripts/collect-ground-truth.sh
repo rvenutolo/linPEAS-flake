@@ -623,12 +623,18 @@ main() {
   section "WORKFLOW CRONS (authoritative schedules; ci.md table must match)"
   list_workflow_crons .github/workflows
 
-  section "REQUIRED-CHECK CONTEXTS (ruleset)"
-  ruleset='.github/rulesets/protect-main.json'
-  if [[ -f ${ruleset} ]]; then
-    printf 'protect-main.json context count: %s\n' "$(grep -c '"context"' "${ruleset}")"
+  section "REQUIRED-CHECK CONTEXTS (docs/security/required-checks.md table)"
+  local -r required_doc='docs/security/required-checks.md'
+  if [[ -f ${required_doc} ]]; then
+    # Data rows of the "## Required contexts" table: every `|` line in that
+    # section except the header row and the `| ---` separator.
+    printf 'required-checks.md context count: %s\n' "$(awk '
+      /^## / { in_table = ($0 == "## Required contexts"); next }
+      in_table && /^\|/ { rows++ }
+      END { print (rows >= 2 ? rows - 2 : 0) }
+    ' "${required_doc}")"
   else
-    echo '(no ruleset file at .github/rulesets/protect-main.json)'
+    echo "(no ${required_doc})"
   fi
 
   section "EPHEMERAL-TOKEN HITS (banned shapes in tracked-doc PROSE; see repo-map §4)"

@@ -2,7 +2,7 @@
 # tests/check-pre-commit-hooks-sha-parity.test.sh
 #
 # Failure-mode harness for scripts/check-pre-commit-hooks-sha-parity.sh.
-# Mirrors the pattern in tests/check-tag-protection.test.sh.
+# Fixture-driven: each scenario asserts exit code and output.
 
 set -Eeuo pipefail
 IFS=$'\n\t'

@@ -114,10 +114,9 @@ function main() {
 
   # (h) LIVE: the real tree must satisfy the lint. Every subject reads
   # its payload behind a scenario-verified exit-2 shape gate
-  # (bump-linpeas.sh, check-allowed-actions-api.sh,
-  # check-flake-lock-provenance.sh, check-pin-digest-provenance.sh,
-  # check-pre-commit-hooks-sha-parity.sh, check-scorecard-threshold.sh,
-  # check-settings-posture.sh, gen-dashboard-data.sh), and every
+  # (bump-linpeas.sh, check-flake-lock-provenance.sh,
+  # check-pin-digest-provenance.sh, check-pre-commit-hooks-sha-parity.sh,
+  # check-scorecard-threshold.sh, gen-dashboard-data.sh), and every
   # non-subject carries its exemption marker: the three renovate.json
   # readers, the gh-api-version-header meta-lint,
   # check-payload-shape-scenario.sh's own self-match, and

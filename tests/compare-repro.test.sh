@@ -2,7 +2,7 @@
 # tests/compare-repro.test.sh
 #
 # Failure-mode harness for scripts/compare-repro.sh.
-# Mirrors tests/check-protect-main.test.sh.
+# Fixture-driven: each scenario asserts exit code and output.
 
 set -Eeuo pipefail
 IFS=$'\n\t'

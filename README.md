@@ -191,8 +191,7 @@ required check; alphabetical):
     Trivy + Grype → code-scanning SARIF,
     advisory only; prevention path is `update-flake-lock`).
 - `release-tag-protection` ruleset blocks delete / non-FF / update on
-    release tags. The ruleset itself is not a check; its drift is asserted
-    by `tag-protection-drift-check`, which *is* a required context.
+    release tags.
 - `step-security/harden-runner` runs as the first step in every job
     in `egress-policy: block` mode, each with a per-job
     `allowed-endpoints:` allowlist.
