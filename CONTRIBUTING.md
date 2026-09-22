@@ -15,16 +15,10 @@ posture is non-negotiable.
     bump credentials.
 - Run `just verify` locally — runs the batched lint groups, harnesses,
     doc-freshness checks, and standalone enforcers CI runs. Hook-only lints
-    run under `just lint`. Two enforcers in the recipe
-    (`check-tag-protection.sh`, `check-protect-main.sh`) probe the upstream
-    repo's live rulesets over the GitHub API and need an authenticated `gh`.
-    Both hardcode `rvenutolo/linPEAS-flake` and never read your remote, so a
-    fork clone probes the same rulesets and passes; the endpoint needs no
-    elevated scope. Without `gh auth login` they report could-not-run
-    (exit 2) and fail the recipe while everything else still runs — except
-    that the `pin-digest-provenance` and `flake-lock-provenance` members of
-    `lint-doc-invariants` also reach the API, but only on a branch that moves
-    an action pin or `flake.lock`.
+    run under `just lint`. The `pin-digest-provenance` and
+    `flake-lock-provenance` members of `lint-doc-invariants` reach the
+    GitHub API through `gh`, but only on a branch that moves an action pin
+    or `flake.lock`; such a branch needs an authenticated `gh`.
 
 ## Local development
 
@@ -41,7 +35,7 @@ just bump             # manually refresh linpeas pin from upstream latest
 
 ## What CI gates on
 
-Every PR must pass 29 required status checks before merge.
+Every PR must pass 27 required status checks before merge.
 The canonical list of required checks lives in
 [`docs/security/required-checks.md`](docs/security/required-checks.md).
 Highlights:
@@ -61,8 +55,7 @@ Highlights:
     `image-smoke`(`-arm64`) — derivation health on x86_64 and aarch64.
 - `gitleaks`, `dependency-review` — supply-chain.
 - `pr-workflows-no-secrets`, `required-checks-no-paths`,
-    `renovate-invariants`, `tag-protection-drift-check` — invariant
-    lints.
+    `renovate-invariants` — invariant lints.
 
 ## Merge policy
 

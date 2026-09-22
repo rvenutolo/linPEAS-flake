@@ -99,41 +99,33 @@ Promotion steps:
 1. Edit `.github/workflows/reproducibility-check.yml`: remove `continue-on-error: true` from the `compare` job.
 1. Add a `pull_request:` trigger targeting `main` to the same workflow, with no `paths:` / `paths-ignore:` filter (`scripts/check-required-checks-no-paths.sh` rejects a path filter on any workflow listed in [`docs/security/required-checks.md`](../security/required-checks.md), so it starts enforcing this once step 4 lands). The workflow currently runs only on its weekly cron and `workflow_dispatch`; a required status context whose workflow never runs on pull requests leaves every PR waiting for a report that never arrives.
 1. Push the branch, then dispatch against it: `gh workflow run reproducibility-check.yml --ref <promotion-branch>`. The `--ref` is load-bearing: a bare `gh workflow run reproducibility-check.yml` targets `main`, whose copy still carries `continue-on-error: true`, so it confirms nothing about the change. Confirm the run is green, then confirm the change itself by re-reading the dispatched ref's workflow file (`gh api --header 'Accept: application/vnd.github.raw+json' repos/rvenutolo/linPEAS-flake/contents/.github/workflows/reproducibility-check.yml?ref=<promotion-branch>` — without that header the endpoint returns base64 inside JSON): the `compare` job must carry no `continue-on-error`. There is no runtime signal on a clean tree — a matching build gives the flag nothing to mask.
-1. Update `.github/rulesets/protect-main.json`, the required-contexts table in [`docs/security/required-checks.md`](../security/required-checks.md), and `docs/_data/ci-check-categories.yml` in the same change, and run `just show-ci-summary` to regenerate the README summary block (the CI-summary freshness gate fails otherwise; see that page for the edit flow).
+1. Update the required-contexts table in [`docs/security/required-checks.md`](../security/required-checks.md) and `docs/_data/ci-check-categories.yml` in the same change, and run `just show-ci-summary` to regenerate the README summary block (the CI-summary freshness gate fails otherwise; see that page for the edit flow).
 1. Update this runbook's **Status** header to `Required`.
-1. Add `compare` to the **live** ruleset, before opening the PR.
-    `.github/rulesets/protect-main.json` is only the in-tree mirror:
-    `scripts/check-protect-main.sh` fetches the live ruleset and diffs it
-    against that file, so a PR carrying the mirror edit alone holds
-    `protect-main-drift-check` red until the live `PUT` lands. Land other open
-    PRs first — rebasing will not help them, since `main` carries neither the
-    mirror edit nor the `pull_request:` trigger until this PR merges. Between
-    the `PUT` and that merge, `main` and every open PR without the mirror edit
-    fail `protect-main-drift-check` as well as waiting on a `compare` context
+1. Add `compare` to the `protect-main` ruleset's required checks. Land other
+    open PRs first — rebasing will not help them, since `main` carries no
+    `pull_request:` trigger for the workflow until this PR merges. Between the
+    ruleset change and that merge, every open PR waits on a `compare` context
     that never reports. The promotion PR itself is unaffected: its own head
-    carries both.
-1. Commit changes on a single PR titled `ci: promote reproducibility check to required`. `protect-main-drift-check` goes green once the live `PUT` from the previous step is in place, at which point the PR can merge.
+    carries the trigger.
+1. Commit changes on a single PR titled `ci: promote reproducibility check to required`.
 
 ## Demotion criteria
 
 If a real-world repro break cannot be fixed within one week of detection:
 
 1. Re-add `continue-on-error: true` to the `compare` job.
-1. Drop `compare` from the **live** ruleset first, as promotion added it
-    first — that immediately stops `compare` gating every open PR. Until the
-    demotion PR merges, `main` and every open PR whose mirror still lists
-    `compare` fail `protect-main-drift-check`; the demotion PR's own head is
-    green, because it carries the mirror edit.
-1. Remove `compare` from `.github/rulesets/protect-main.json`, the
-    required-contexts table in
-    [`docs/security/required-checks.md`](../security/required-checks.md), and
+1. Drop `compare` from the `protect-main` ruleset's required checks first,
+    as promotion added it first — that immediately stops `compare` gating
+    every open PR.
+1. Remove `compare` from the required-contexts table in
+    [`docs/security/required-checks.md`](../security/required-checks.md) and
     `docs/_data/ci-check-categories.yml`, and run `just show-ci-summary` to
     regenerate the README summary block (the same gates that guard promotion
     fail otherwise).
 1. Remove the `pull_request:` trigger added at promotion — a demoted,
     non-required check has no reason to run on every PR. This rides in the
-    same PR as the previous step; the ordering that matters is the live
-    `PUT`, not the order of edits inside one merge.
+    same PR as the previous step; the ordering that matters is the ruleset
+    change, not the order of edits inside one merge.
 1. Update **Status** header to `Burn-in (demoted)`. Keep the date and the
     blocking issue number out of this file — `check-ephemeral-refs.sh` blocks
     both shapes in tracked prose. They belong in the demoting commit message

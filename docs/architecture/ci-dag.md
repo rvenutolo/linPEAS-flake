@@ -36,13 +36,11 @@ flowchart TD
   lint-workflow-security:::security
   markdownlint:::doc
   pr-workflows-no-secrets:::security
-  protect-main-drift-check:::security
   renovate-invariants:::security
   required-checks-no-paths:::security
   setup-nix-required:::security
   smoke-test:::build
   smoke-test-arm64:::build
-  tag-protection-drift-check:::security
   typos:::doc
 
   build-linpeas --> smoke-test

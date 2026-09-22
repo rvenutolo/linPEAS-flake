@@ -171,7 +171,7 @@ the full job inventory + cron schedule lives in
 - **Build + smoke**: `build-linpeas`, `build-linpeas-arm64`, `flake-check`, `image-smoke`, `image-smoke-arm64`, `smoke-test`, `smoke-test-arm64`.
 - **Conventional Commits**: `commitlint`, `lint-pr-title`.
 - **Doc quality**: `changelog-links`, `doc-freshness`, `editorconfig`, `markdownlint`, `typos`.
-- **Security/invariant lints**: `cliff-tag-pattern`, `dashboard-data-tests`, `dependency-review`, `gitleaks`, `harness-group`, `lint-doc-invariants`, `lint-script-hygiene`, `lint-workflow-security`, `pr-workflows-no-secrets`, `protect-main-drift-check`, `renovate-invariants`, `required-checks-no-paths`, `setup-nix-required`, `tag-protection-drift-check`, `trufflehog`.
+- **Security/invariant lints**: `cliff-tag-pattern`, `dashboard-data-tests`, `dependency-review`, `gitleaks`, `harness-group`, `lint-doc-invariants`, `lint-script-hygiene`, `lint-workflow-security`, `pr-workflows-no-secrets`, `renovate-invariants`, `required-checks-no-paths`, `setup-nix-required`, `trufflehog`.
 
 <!-- END ci-summary -->
 
@@ -184,16 +184,14 @@ Defense-in-depth supply-chain layers (the layer itself is not a
 required check; alphabetical):
 
 - `actions.permissions.allowed_actions` = `selected` with a vendor
-    allowlist
-    ([`docs/security/allowed-actions.md`](docs/security/allowed-actions.md)).
+    allowlist.
 - `image-cve-scan-trivy` and `image-cve-scan-grype` (weekly cron, a
     path-filtered push on image-affecting files, and manual dispatch —
     `image-cve-scan.yml`;
     Trivy + Grype → code-scanning SARIF,
     advisory only; prevention path is `update-flake-lock`).
 - `release-tag-protection` ruleset blocks delete / non-FF / update on
-    release tags. The ruleset itself is not a check; its drift is asserted
-    by `tag-protection-drift-check`, which *is* a required context.
+    release tags.
 - `step-security/harden-runner` runs as the first step in every job
     in `egress-policy: block` mode, each with a per-job
     `allowed-endpoints:` allowlist.

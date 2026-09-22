@@ -478,7 +478,7 @@ Every `jobs.<name>:` in `.github/workflows/ci.yml` either appears as a key in `d
 
 `refresh-ci-summary.sh` already enforces parity between the category map and `docs/security/required-checks.md`. This lint adds the ci.yml ↔ categories check, so a new required job that ships without a category mapping fails the PR rather than landing and breaking the pre-commit summary regenerator on the next commit.
 
-Adding a new ci.yml job that should be a required status check requires updating the categories map, the required-checks doc, and the protect-main ruleset (in-tree and live). Adding an auxiliary job requires only an `EXEMPT` entry justified in the script comment. The list is self-policed: an entry must name a real `ci.yml` job that has no category-map key, so it cannot rot into a name that exempts nothing while the lint stays green.
+Adding a new ci.yml job that should be a required status check requires updating the categories map, the required-checks doc, and the protect-main ruleset. Adding an auxiliary job requires only an `EXEMPT` entry justified in the script comment. The list is self-policed: an entry must name a real `ci.yml` job that has no category-map key, so it cannot rot into a name that exempts nothing while the lint stays green.
 
 The same lint asserts a third thing, manifest coverage: every check basename in `.github/lint-groups.yml` resolves to a real `scripts/check-<basename>.sh`. The grouped lint jobs name their members in `.github/lint-groups.yml` rather than individually in `ci.yml`, so without this a check could silently leave the merge gate — its manifest entry orphaned, or its script deleted — while the group job stayed green.
 

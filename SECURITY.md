@@ -224,14 +224,6 @@ filed by the notify jobs.
     SLSA attestation with `gh attestation verify`; mismatched attestation
     is the canonical detection signal.
 
-- `SETTINGS_DRIFT_APP_PRIVATE_KEY` / `vars.SETTINGS_DRIFT_APP_CLIENT_ID` —
-    a second, read-only GitHub App used by
-    `settings-posture-drift-check.yml` and
-    `allowed-actions-api-drift-check.yml` to probe repository settings
-    that `GITHUB_TOKEN` cannot read. Kept separate from the bump App so a
-    leak grants no write capability. Registration and rotation:
-    [`docs/runbooks/settings-drift-app.md`](docs/runbooks/settings-drift-app.md).
-
 - `SCORECARD_PAT` — a fine-grained read-only personal access token
     consumed as `GITHUB_AUTH_TOKEN` by `scorecard-drift-check.yml` on the
     scorecard step only; the `Webhooks` check needs the `Webhooks` read
@@ -295,14 +287,11 @@ not `egress-policy: block` with a non-empty allowlist.
 
 ## Settings posture
 
-Repository settings knobs the security model depends on (each
-probe-verifiable — copy-pasteable commands in
-`docs/security/settings-posture.md`):
+Repository settings knobs the security model depends on:
 
-- `secret_scanning`, `secret_scanning_push_protection`,
-    `dependabot_security_updates` all **enabled**.
-- Actions: `allowed_actions: selected`, with the vendor allowlist in
-    [`docs/security/allowed-actions.md`](docs/security/allowed-actions.md).
+- `secret_scanning` and `secret_scanning_push_protection` both
+    **enabled**.
+- Actions: `allowed_actions: selected`, with a vendor allowlist.
 - Actions: `sha_pinning_required: true`. Belt-and-braces against
     Renovate misconfiguration — every `uses:` must be SHA-pinned at
     GitHub level, not just by Renovate convention. GitHub rejects an
@@ -312,18 +301,9 @@ probe-verifiable — copy-pasteable commands in
     `can_approve_pull_request_reviews: false`. Prevents a compromised
     workflow from self-approving a PR.
 - `github-pages` environment: `can_admins_bypass: false`.
-
-Not probe-verifiable (manual UI check):
-
 - Fork-PR approval gate: first-time contributors require approval before workflows run.
 - Merge-method flags: merge commit only; squash and rebase disabled.
 - Account: 2FA enabled on the maintainer account with non-SMS second
     factor (specifics not recorded).
 
-Each of these is called out, with the reason the drift check cannot
-reach it, under
-[Drift detection](docs/security/settings-posture.md#drift-detection).
-
-Any drift on any of the above is treated as a security incident. The
-`docs/security/settings-posture.md` file is the source of truth and
-includes copy-pasteable probe commands.
+Any drift on any of the above is treated as a security incident.

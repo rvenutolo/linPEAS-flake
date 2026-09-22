@@ -9,9 +9,6 @@ sub-docs.
 `actions.permissions.allowed_actions` is `selected`. Only `uses:`
 references drawn from a vetted vendor allowlist may run in this repo.
 
-See [`allowed-actions.md`](allowed-actions.md) for the canonical
-vendor list and the procedure for adding a new vendor.
-
 ## Workflow action SHA pinning
 
 Every `uses:` in `.github/workflows/*.yml` (or `.yaml`) and
@@ -59,22 +56,15 @@ for the credential split.
 ## Branch protection
 
 `main` is protected by the `protect-main` ruleset. See
-[`required-checks.md`](required-checks.md) for the gating check list and
-the full ruleset shape, and [`settings-posture.md`](settings-posture.md)
-for the repo-level settings knobs (merge-method flags, Actions
-permissions, tag protection).
+[`required-checks.md`](required-checks.md) for the gating check list.
 
 ## Merge policy
 
-Merge-commit only. Set at both layers, but only the ruleset layer is
-drift-probed:
+Merge-commit only. Set at both layers:
 
 - **Repo:** `allow_merge_commit=true`, `allow_rebase_merge=false`,
-    `allow_squash_merge=false` — set manually in the UI; the read-only
-    drift checker cannot see these flags, so they are not probed (see
-    [`settings-posture.md`](settings-posture.md)).
-- **Ruleset:** `pull_request.allowed_merge_methods=["merge"]` — asserted
-    by `check-protect-main.sh`.
+    `allow_squash_merge=false`.
+- **Ruleset:** `pull_request.allowed_merge_methods=["merge"]`.
 
 Why: see [`../development/git.md`](../development/git.md#merge-policy).
 
@@ -100,10 +90,6 @@ bypass_actors empty) blocks deletion, non-fast-forward update, and
 arbitrary update of release-tag refs matching
 `refs/tags/[0-9]{8}-[0-9a-f]{7,40}` (fallback include of
 `refs/tags/**` if GitHub ever rejects the regex).
-
-Drift is asserted by `scripts/check-tag-protection.sh` via the
-`tag-protection-drift-check` required CI job. If the GitHub rulesets
-API shape changes, update the script and its fixtures together.
 
 ## Renovate invariants
 

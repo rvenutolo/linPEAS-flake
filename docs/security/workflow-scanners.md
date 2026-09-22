@@ -22,7 +22,7 @@ closes:
 | Commit-time prevention | every `git commit` touching a scanned path (pre-commit)                            | zizmor, octoscan + the workflow-hardening hook family                                                                                                                                          | bad edits caught before they reach history, on the local path                             |
 | PR / push detection    | every PR to `main` (codeql full; octoscan paths-filtered) and every push to `main` | codeql, octoscan, zizmor (re-run by the required `flake-check` job's `nix flake check`), and the required lint-group jobs (lint-workflow-security / lint-script-hygiene / lint-doc-invariants) | changed workflows checked server-side, in the diff                                        |
 | Weekly full sweep      | Friday cron cluster                                                                | codeql, octoscan, zizmor                                                                                                                                                                       | a scheduled re-scan of `main`, paged as a deduped issue, with no PR or push to trigger it |
-| Posture watchdog       | daily + weekly cron                                                                | scorecard-drift-check, ratchet-pin-audit, settings-posture-drift-check, stale-pin-check, allowed-actions-api-drift-check, flake-lock-staleness-check                                           | detection of slow regressions no single PR introduces                                     |
+| Posture watchdog       | daily + weekly cron                                                                | scorecard-drift-check, ratchet-pin-audit, stale-pin-check, flake-lock-staleness-check                                                                                                          | detection of slow regressions no single PR introduces                                     |
 
 Commit-time prevention is the cheapest and earliest gate, but it is bypassable
 (`--no-verify`, edits made in the GitHub web UI or by bots before hooks
@@ -35,7 +35,7 @@ directory itself, whereas the `flake-check` re-run scans whatever pre-commit's
 matching selects (see [zizmor](#zizmor)). A tightened rule arrives with the PR
 that bumps the scanner's pin, and that PR's own runs re-scan the files. The
 posture watchdogs catch drift
-that accrues across commits — a force-moved tag, a loosened setting — that no
+that accrues across commits — a force-moved tag, an aging `flake.lock` — that no
 individual diff reveals.
 
 ## The four external tools
@@ -189,7 +189,6 @@ and "Stale-pin failure attribution" is the notify-body reason split.
 | nix-run-pinned               | every `nix` subcommand pinned through the flake, never bare `nixpkgs#`       |
 | cosign-identity-pinned       | every `cosign verify*` subcommand pins identity and OIDC issuer              |
 | manifest-digest-pinned       | multi-arch manifest sources pinned by digest, not tag                        |
-| settings-posture-drift-check | repo settings vs. the expected hardened posture (daily cron)                 |
 
 See the [enforcement matrix](enforcement-matrix.md) for the authoritative
 enforcer/hook/CI mapping of every row that has one.

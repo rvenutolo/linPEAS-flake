@@ -324,8 +324,8 @@ nix develop --command just verify
 
 `just verify` runs the batched lint groups, the full harness suite,
 the doc-freshness checks, and every standalone required-check enforcer
-(`check-protect-main.sh`, `check-tag-protection.sh`, the changelog
-checks, and the rest of the `justfile` recipe) — the in-repo enforcer
+(the changelog checks and the rest of the `justfile` recipe) — the
+in-repo enforcer
 set CI gates on. The action-driven checks are not part of `just verify`:
 `markdownlint`, `typos` and `editorconfig` run as CI jobs and, locally,
 through the pre-commit hook set (`just lint` / `just check`); `commitlint`
@@ -335,15 +335,12 @@ hook on an actual commit (a `commit-msg`-stage hook, which
 `dependency-review` and `lint-pr-title` have no local hook and run only in
 CI. Of the required-check enforcers, only
 `check-flake-systems-eval.sh` runs nowhere but CI; the drift-check
-enforcers (daily: `check-settings-posture.sh`,
-`check-allowed-actions-api.sh`, `check-flake-lock-staleness.sh`; weekly:
+enforcers (daily: `check-flake-lock-staleness.sh`; weekly:
 `check-scorecard-threshold.sh`) likewise run as enforcement steps only
-in CI, for two reasons: `check-settings-posture.sh` and `check-allowed-actions-api.sh`
-need an admin-scoped App token against the live API, while
-`check-flake-lock-staleness.sh` and `check-scorecard-threshold.sh` each
-answer to an input from outside the tree — the wall clock, against which
-`flake.lock`'s `locked.lastModified` is measured, and the scorecard CLI's JSON
-on stdin, which only the scheduled run produces. Locally those four
+in CI, because each answers to an input from outside the tree — the
+wall clock, against which `flake.lock`'s `locked.lastModified` is
+measured, and the scorecard CLI's JSON on stdin, which only the
+scheduled run produces. Locally those two
 drift-check enforcers' harnesses run, and the staleness harness's last
 scenario runs its enforcer against the live `flake.lock` — pinned off
 that lock's own newest `lastModified`, so it reads the tree without

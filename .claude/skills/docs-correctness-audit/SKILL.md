@@ -534,7 +534,7 @@ findings must still show what was cross-checked, not just "clean".
 
 | Cluster | Cross-checked | Findings | Notes |
 |---------|---------------|----------|-------|
-| security | job/check names vs the union allowlist, required checks vs ruleset, links | 2 | ... |
+| security | job/check names vs the union allowlist, required checks vs `required-checks.md`, links | 2 | ... |
 | ... | ... | ... | ... |
 
 ## HIGH

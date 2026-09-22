@@ -66,8 +66,7 @@ execution, secret exfiltration from third-party actions.
 - `harden-runner` is the first step in every job.
 - PR-triggered workflows expose only `secrets.GITHUB_TOKEN`.
 
-See [`docs/security/repo-config.md`](repo-config.md),
-[`docs/security/allowed-actions.md`](allowed-actions.md),
+See [`docs/security/repo-config.md`](repo-config.md)
 and [`docs/security/trust-model.md`](trust-model.md).
 
 ### ci → art

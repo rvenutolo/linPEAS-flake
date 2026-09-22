@@ -269,7 +269,6 @@ Enforcement and configuration:
 - `nix/linpeas.nix`
 - `scripts/bump-linpeas.sh`
 - `scripts/check-cliff-tag-pattern.sh`
-- `scripts/check-tag-protection.sh`
 - `scripts/gen-dashboard-data.sh`
 - `scripts/refresh-pin-parity.sh`
 
@@ -280,7 +279,6 @@ Documentation:
 - `docs/development/changelog.md`
 - `docs/invariant-index.md`
 - `docs/security/repo-config.md`
-- `docs/security/settings-posture.md`
 - `docs/security/trust-model.md`
 
 Test fixtures and harnesses under `tests/` carry the shape too and are

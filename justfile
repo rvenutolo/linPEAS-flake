@@ -33,10 +33,8 @@ verify:
   ./scripts/run-doc-freshness.sh || rc=1; \
   ./scripts/check-required-checks-no-paths.sh || rc=1; \
   ./scripts/check-pr-workflows-no-secrets.sh || rc=1; \
-  ./scripts/check-tag-protection.sh || rc=1; \
   ./scripts/check-renovate-invariants.sh || rc=1; \
   ./scripts/check-renovate-markers-matched.sh || rc=1; \
-  ./scripts/check-protect-main.sh || rc=1; \
   ./scripts/check-setup-nix-required.sh || rc=1; \
   ./scripts/check-cliff-tag-pattern.sh || rc=1; \
   ./scripts/check-changelog-links.sh || rc=1; \

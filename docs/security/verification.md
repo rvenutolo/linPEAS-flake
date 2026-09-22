@@ -259,8 +259,7 @@ check named `gitleaks` in the `protect-main` ruleset.
     `non_fast_forward` rule blocks a repository admin as well. Re-sign
     the rewritten commits before pushing — history rewriting drops the
     original signatures and `required_signatures` rejects unsigned
-    objects — and expect `protect-main-drift-check` to stay red until
-    the ruleset is re-enabled.
+    objects — then re-enable the ruleset.
 - Vendor `gitleaks/*` is in the `allowed_actions` allowlist; do not
     remove without replacing the workflow.
 

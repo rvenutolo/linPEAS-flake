@@ -63,12 +63,6 @@ never ran says nothing about the integration, so it must not borrow
 the failure code — that sends a maintainer after a wiring regression
 that has not happened.
 
-### scripts/check-allowed-actions-api.sh
-
-Assert the live `actions.permissions.allowed_actions`
-API state matches the canonical allowlist documented in
-`docs/security/allowed-actions.md`.
-
 ### scripts/check-auto-merge-decline-gate.sh
 
 Lint: every workflow run-block that calls `gh pr merge`
@@ -1166,13 +1160,6 @@ Lint: the SHA embedded in `flake.nix`'s
 `pre-commit-hooks` input URL matches `flake.lock`'s pinned
 `pre-commit-hooks.locked.rev`.
 
-### scripts/check-protect-main.sh
-
-Lint: the live `protect-main` branch ruleset matches
-the desired posture, the in-tree mirror at
-`.github/rulesets/protect-main.json`, and the `## Required contexts`
-table in `docs/security/required-checks.md`.
-
 ### scripts/check-pull-request-target-absent.sh
 
 Lint: hard-fail if any workflow under
@@ -1268,12 +1255,6 @@ with `#!/usr/bin/env bash` (exact first line) and carries
 addition such as `-x` is accepted); every sourced library
 under `scripts/lib/` satisfies the inverse.
 
-### scripts/check-settings-posture.sh
-
-Lint: every gh-API-verifiable row in
-`docs/security/settings-posture.md` matches the live repository
-configuration. Manual-UI rows are out of scope.
-
 ### scripts/check-setup-nix-required.sh
 
 Lint: every workflow installing Nix goes through the
@@ -1287,12 +1268,6 @@ Lint: the size-label action's `IGNORED` list holds exactly
 the files this repo's generators declare they own — every `@generates`
 path is on the list, no `@generates-block` path is, and every other
 entry is one of this lint's declared exemptions.
-
-### scripts/check-tag-protection.sh
-
-Lint: the live `release-tag-protection` ruleset
-matches the desired posture (tag target, active enforcement, ref
-include pattern, required rules).
 
 ### scripts/check-test-reachable.sh
 

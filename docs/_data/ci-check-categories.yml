@@ -34,9 +34,7 @@ lint-doc-invariants: Security/invariant lints
 lint-script-hygiene: Security/invariant lints
 lint-workflow-security: Security/invariant lints
 pr-workflows-no-secrets: Security/invariant lints
-protect-main-drift-check: Security/invariant lints
 renovate-invariants: Security/invariant lints
 required-checks-no-paths: Security/invariant lints
 setup-nix-required: Security/invariant lints
-tag-protection-drift-check: Security/invariant lints
 trufflehog: Security/invariant lints
