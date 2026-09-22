@@ -3,7 +3,6 @@ ci:
       - any-glob-to-any-file:
           - .github/workflows/**
           - .github/actions/**
-          - .github/rulesets/**
 
 docs:
   - changed-files:
@@ -34,7 +33,6 @@ security:
       - any-glob-to-any-file:
           - docs/security/**
           - SECURITY.md
-          - .github/rulesets/**
 
 pin:
   - changed-files:

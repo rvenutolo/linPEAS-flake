@@ -269,7 +269,6 @@ Enforcement and configuration:
 - `nix/linpeas.nix`
 - `scripts/bump-linpeas.sh`
 - `scripts/check-cliff-tag-pattern.sh`
-- `scripts/check-tag-protection.sh`
 - `scripts/gen-dashboard-data.sh`
 - `scripts/refresh-pin-parity.sh`
 

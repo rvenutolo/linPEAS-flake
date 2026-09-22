@@ -39,10 +39,10 @@ function main() {
   # Assertion 2: the regenerated block is exhaustive — contains required
   # contexts that were missing from the old curated summary.
   if grep --quiet 'gitleaks' "${DOC}" &&
-    grep --quiet 'protect-main-drift-check' "${DOC}"; then
-    pass 'block is exhaustive (contains gitleaks and protect-main-drift-check)'
+    grep --quiet 'required-checks-no-paths' "${DOC}"; then
+    pass 'block is exhaustive (contains gitleaks and required-checks-no-paths)'
   else
-    fail 'block missing exhaustive contexts (gitleaks and/or protect-main-drift-check)'
+    fail 'block missing exhaustive contexts (gitleaks and/or required-checks-no-paths)'
   fi
 
   # Assertion 3: in-block drift makes --check exit non-zero.

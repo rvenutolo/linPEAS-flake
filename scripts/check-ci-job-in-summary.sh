@@ -33,7 +33,6 @@
 #   - add the job to ci.yml
 #   - add an entry to docs/_data/ci-check-categories.yml
 #   - add an entry to docs/security/required-checks.md
-#   - update .github/rulesets/protect-main.json
 #   - sync the live ruleset
 # Adding a new auxiliary ci.yml job (test sandbox, notify-style):
 #   - add the job to ci.yml

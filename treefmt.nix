@@ -136,13 +136,6 @@
     # both paths from the fixture directory it is handed.
     "tests/fixtures/ci-job-in-summary/bad-malformed-ci/ci.yml"
     "tests/fixtures/ci-job-in-summary/bad-malformed-categories/categories.yml"
-    # tag-protection payload-shape fixtures are intentionally not
-    # well-formed ruleset JSON, to exercise the not-JSON and empty-payload
-    # branches of the lint's shape gate; prettier refuses to format invalid
-    # JSON, and it would strip the blank fixture to zero bytes, erasing the
-    # whitespace-only content the emptiness check is measured against.
-    "tests/fixtures/tag-protection/bad-not-json.json"
-    "tests/fixtures/tag-protection/bad-empty-payload.json"
     # renovate payload-shape fixtures are intentionally not well-formed
     # JSON, to exercise the not-JSON and empty-payload branches of the
     # lints' shape gate; prettier refuses to format invalid JSON, and it

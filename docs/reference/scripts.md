@@ -1166,13 +1166,6 @@ Lint: the SHA embedded in `flake.nix`'s
 `pre-commit-hooks` input URL matches `flake.lock`'s pinned
 `pre-commit-hooks.locked.rev`.
 
-### scripts/check-protect-main.sh
-
-Lint: the live `protect-main` branch ruleset matches
-the desired posture, the in-tree mirror at
-`.github/rulesets/protect-main.json`, and the `## Required contexts`
-table in `docs/security/required-checks.md`.
-
 ### scripts/check-pull-request-target-absent.sh
 
 Lint: hard-fail if any workflow under
@@ -1287,12 +1280,6 @@ Lint: the size-label action's `IGNORED` list holds exactly
 the files this repo's generators declare they own — every `@generates`
 path is on the list, no `@generates-block` path is, and every other
 entry is one of this lint's declared exemptions.
-
-### scripts/check-tag-protection.sh
-
-Lint: the live `release-tag-protection` ruleset
-matches the desired posture (tag target, active enforcement, ref
-include pattern, required rules).
 
 ### scripts/check-test-reachable.sh
 
