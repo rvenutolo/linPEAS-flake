@@ -577,8 +577,7 @@ slug; the explicit anchor gives both resolvers one target to reach, and
 `scripts/check-doc-anchors.sh` accepts it as a target too.
 
 Seeded files: `docs/security/verification.md`,
-`docs/runbooks/dockerhub-recovery.md`,
-`docs/runbooks/settings-drift-app.md`. Add a file to the list by
+`docs/runbooks/dockerhub-recovery.md`. Add a file to the list by
 pasting the marker pair anywhere after the H1, then running `nix fmt`.
 
 ## Flake-show auto-block

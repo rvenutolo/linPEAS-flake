@@ -18,8 +18,7 @@ Strict least-privilege rule for every workflow in `.github/workflows/`.
 Rule 1 is what stops a job from inheriting the repo-wide default: in a
 workflow with no top-level `permissions:` at all, every job that declares
 none of its own takes that default instead. The default is pinned to
-`read` here and probed daily (see
-[settings posture](settings-posture.md)), but one UI flip to `write`
+`read` here, but one UI flip to `write`
 would widen every such job at once, and nothing in the workflow file
 would record it.
 

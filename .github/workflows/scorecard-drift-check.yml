@@ -4,8 +4,7 @@ name: scorecard-drift-check
 #
 # Independent second-opinion on hardening posture. Surfaces signals
 # not covered by existing in-tree lints (zizmor, actionlint,
-# check-uses-sha-pinned.sh, codeql, gitleaks/trufflehog,
-# settings-posture-drift, etc.):
+# check-uses-sha-pinned.sh, codeql, gitleaks/trufflehog, etc.):
 #
 #   Pinned-Dependencies, Signed-Releases, SBOM, Vulnerabilities,
 #   Security-Policy, Dependency-Update-Tool, License, Webhooks,
@@ -15,11 +14,7 @@ name: scorecard-drift-check
 # Code-Review, Contributors, CII-Best-Practices, Fuzzing,
 # Branch-Protection (failing subscore is entirely review-flow —
 # requires approvers, codeowners, stale-dismissal, last-push-approval;
-# all N/A for a one-maintainer repo. The non-review hardening
-# Branch-Protection would cover — force-push blocked, deletion
-# blocked, admin enforcement, required status checks, required PRs —
-# is already cross-checked by settings-posture-drift-check, so the
-# second-source value is diminished).
+# all N/A for a one-maintainer repo).
 #
 # Dropped as duplicates of an existing in-tree signal — the
 # scorecard signal is coarser than the check that already covers it:

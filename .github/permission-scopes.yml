@@ -9,8 +9,6 @@
 actions-cache-prune.yml:
   prune-stale: [actions]
   prune-on-pr-close: [actions]
-allowed-actions-api-drift-check.yml:
-  notify: [issues]
 ci-watchdog.yml:
   retry: [actions, issues]
 codeql.yml:
@@ -59,8 +57,6 @@ reproducibility-check.yml:
 scorecard-drift-check.yml:
   notify: [issues]
 flake-lock-staleness-check.yml:
-  notify: [issues]
-settings-posture-drift-check.yml:
   notify: [issues]
 stale-pin-check.yml:
   notify: [issues]

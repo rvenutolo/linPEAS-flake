@@ -279,7 +279,6 @@ Documentation:
 - `docs/development/changelog.md`
 - `docs/invariant-index.md`
 - `docs/security/repo-config.md`
-- `docs/security/settings-posture.md`
 - `docs/security/trust-model.md`
 
 Test fixtures and harnesses under `tests/` carry the shape too and are

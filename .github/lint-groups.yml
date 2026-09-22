@@ -13,8 +13,8 @@
 # ci-job-in-summary lint fails CI if a basename here has no real script.
 #
 # This is a subset of scripts/check-*.sh: checks that run via dedicated
-# harness/drift-check jobs (protect-main, settings-posture, ratchet-pin-audit,
-# allowed-actions-api, …) are not group-batched and stay out of this manifest.
+# harness/drift-check jobs (ratchet-pin-audit, flake-lock-staleness, …) are
+# not group-batched and stay out of this manifest.
 
 lint-workflow-security:
   - uses-sha-pinned

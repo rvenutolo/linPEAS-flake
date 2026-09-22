@@ -9,9 +9,6 @@ sub-docs.
 `actions.permissions.allowed_actions` is `selected`. Only `uses:`
 references drawn from a vetted vendor allowlist may run in this repo.
 
-See [`allowed-actions.md`](allowed-actions.md) for the canonical
-vendor list and the procedure for adding a new vendor.
-
 ## Workflow action SHA pinning
 
 Every `uses:` in `.github/workflows/*.yml` (or `.yaml`) and
@@ -60,18 +57,14 @@ for the credential split.
 
 `main` is protected by the `protect-main` ruleset. See
 [`required-checks.md`](required-checks.md) for the gating check list and
-the full ruleset shape, and [`settings-posture.md`](settings-posture.md)
-for the repo-level settings knobs (merge-method flags, Actions
-permissions, tag protection).
+the full ruleset shape.
 
 ## Merge policy
 
 Merge-commit only. Set at both layers:
 
 - **Repo:** `allow_merge_commit=true`, `allow_rebase_merge=false`,
-    `allow_squash_merge=false` — set manually in the UI; the read-only
-    drift checker cannot see these flags, so they are not probed (see
-    [`settings-posture.md`](settings-posture.md)).
+    `allow_squash_merge=false`.
 - **Ruleset:** `pull_request.allowed_merge_methods=["merge"]`.
 
 Why: see [`../development/git.md`](../development/git.md#merge-policy).

@@ -44,7 +44,6 @@ rules:
   # does not wait on `actionlint`.
   self-repository:
     ignore:
-      - allowed-actions-api-drift-check.yml
       - ci.yml
       - codeql.yml
       - cron-table-drift-check.yml
@@ -59,7 +58,6 @@ rules:
       - renovate-flake-lock-refresh.yml
       - reproducibility-check.yml
       - scorecard-drift-check.yml
-      - settings-posture-drift-check.yml
       - stale-pin-check.yml
       - update-flake-lock.yml
       - update-linpeas.yml

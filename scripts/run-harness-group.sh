@@ -8,12 +8,10 @@
 # @option --print-roster print the HARNESSES roster, one pipe-delimited entry per line, and exit 0 without running anything
 
 # Harness details: ratchet-pin-audit runs its test then its live enforce
-# script (safe on PR). allowed-actions-api and settings-posture need
-# admin-scoped App tokens and run schedule-only in their own drift-check
-# workflows, so here they run test-only (no enforce script). bump-linpeas
-# downloads a release asset and rewrites linpeas-pin.json on its live
-# path, so it also runs test-only here — its own bump runs from
-# release-on-bump.yml, never from this shared job.
+# script (safe on PR). Every other entry runs test-only (no enforce
+# script). bump-linpeas downloads a release asset and rewrites
+# linpeas-pin.json on its live path, so it runs test-only here — its own
+# bump runs from release-on-bump.yml, never from this shared job.
 #
 # The roster as a shared declaration — `--print-roster` writes every
 # entry to stdout verbatim, one per line, and exits 0 without running a
@@ -47,8 +45,6 @@ readonly ROOT_DIR="${ROOT_DIR_OVERRIDE:-.}"
 # cannot collide, since a bare filename holds no separator.
 readonly -a HARNESSES=(
   'ratchet-pin-audit|check-ratchet-pin-audit.test.sh|check-ratchet-pin-audit.sh'
-  'allowed-actions-api|check-allowed-actions-api.test.sh|'
-  'settings-posture|check-settings-posture.test.sh|'
   'bump-linpeas|bump-linpeas.test.sh|'
   'backfill-image-mode|classify-backfill-image-mode.test.sh|'
   'renovate-flake-input|classify-renovate-flake-input.test.sh|'

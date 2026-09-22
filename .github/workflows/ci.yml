@@ -659,14 +659,12 @@ jobs:
     # Batched setup-tax failure-mode harnesses. Realizes the devShell
     # once and runs each harness via scripts/run-harness-group.sh,
     # printing a per-harness pass/fail table. ratchet-pin-audit also
-    # runs its live enforce script; the allowed-actions-api and
-    # settings-posture live probes need admin-scoped App tokens, so
-    # those two run schedule-only in their own drift-check workflows.
-    # The flake-lock-staleness probe is keyed on wall-clock age rather
-    # than on the tree, so it runs schedule-only too; its harness's live
-    # scenario pins "now" to the lock's own newest lastModified and
-    # accepts a stale verdict, asserting only that the check can still
-    # read the tree. Required status context; see
+    # runs its live enforce script. The flake-lock-staleness probe is
+    # keyed on wall-clock age rather than on the tree, so it runs
+    # schedule-only; its harness's live scenario pins "now" to the
+    # lock's own newest lastModified and accepts a stale verdict,
+    # asserting only that the check can still read the tree. Required
+    # status context; see
     # docs/security/required-checks.md.
     runs-on: ubuntu-latest
     timeout-minutes: 10

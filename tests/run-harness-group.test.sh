@@ -35,15 +35,15 @@ function make_stub() {
 # Drives one scenario. Caller pre-builds $tests_dir and $scripts_dir.
 # @arg $1 name  @arg $2 tests_dir  @arg $3 scripts_dir
 # @arg $4 expected exit  @arg $5 expected stdout substring (empty skips)
-# @arg $6 forbidden marker path for allowed-actions enforce (empty skips)
-# @arg $7 forbidden marker path for settings-posture enforce (empty skips)
+# @arg $6 forbidden marker for a bump-linpeas same-named script (empty skips)
+# @arg $7 forbidden marker for a backfill-image-mode same-named script (empty skips)
 # @arg $8 forbidden marker path for ratchet enforce (empty skips)
 # @arg $9 'skip-record' to keep this run out of the discrimination pool,
 #      for a re-run of a seed another scenario already records (empty records)
 function run_scenario() {
   local -r name="$1" tests_dir="$2" scripts_dir="$3"
   local -r expected_exit="$4" expected_out="$5"
-  local -r forbidden_allowed="${6:-}" forbidden_settings="${7:-}" forbidden_ratchet="${8:-}"
+  local -r forbidden_bump="${6:-}" forbidden_backfill="${7:-}" forbidden_ratchet="${8:-}"
   local -r skip_record="${9:-}"
   local outcome_file out_file step_file actual_exit=0
   outcome_file="$(mktemp)"
@@ -86,10 +86,10 @@ function run_scenario() {
     failed_check="tally claims ${tally_failed} failed, table shows ${table_failed} FAIL row(s)"
   elif ! grep --fixed-strings --quiet -- '### harness-group' "${step_file}"; then
     failed_check='GITHUB_STEP_SUMMARY missing table header'
-  elif [[ -n ${forbidden_allowed} && -e ${forbidden_allowed} ]]; then
-    failed_check='allowed-actions-api harness wrongly ran its enforce script'
-  elif [[ -n ${forbidden_settings} && -e ${forbidden_settings} ]]; then
-    failed_check='settings-posture harness wrongly ran its enforce script'
+  elif [[ -n ${forbidden_bump} && -e ${forbidden_bump} ]]; then
+    failed_check='bump-linpeas harness wrongly ran a same-named script'
+  elif [[ -n ${forbidden_backfill} && -e ${forbidden_backfill} ]]; then
+    failed_check='backfill-image-mode harness wrongly ran a same-named script'
   elif [[ -n ${forbidden_ratchet} && -e ${forbidden_ratchet} ]]; then
     failed_check='ratchet enforce ran despite test failure'
   fi
@@ -112,17 +112,17 @@ function fail_roster() {
   failures=$((failures + 1))
 }
 
-# Seeds the five exact harness names in the runner's HARNESSES list. Exit
-# codes per component are passed in; the allowed-actions and
-# settings-posture enforce stubs (which the runner must never call for
-# test-only harnesses) touch their respective forbidden markers when run.
+# Seeds the scenario-controlled harness names in the runner's HARNESSES
+# list. Exit codes per component are passed in; the bump-linpeas and
+# backfill-image-mode same-named script stubs (which the runner must never
+# call for test-only harnesses) touch their respective forbidden markers
+# when run.
 # @arg $1 work dir  @arg $2 ratchet-test  $3 ratchet-enforce exit code
-#      $4 allowed-test  $5 settings-test
-#      $6 allowed forbidden-marker  $7 settings forbidden-marker
+#      $4 bump-linpeas test exit  $5 backfill-image-mode test exit
+#      $6 bump-linpeas forbidden-marker  $7 backfill-image-mode forbidden-marker
 #      $8 ratchet-enforce forbidden-marker (optional)
-#      $9 backfill-image-mode test exit code (optional, default 0)
-#      $10 lib-log test exit code (optional, default 0)
-#      $11 docs-audit-plant test exit code (optional, default 0)
+#      $9 lib-log test exit code (optional, default 0)
+#      $10 docs-audit-plant test exit code (optional, default 0)
 function seed() {
   local -r work="$1"
   local -r tests_dir="${work}/tests" scripts_dir="${work}/scripts"
@@ -131,20 +131,19 @@ function seed() {
   mkdir -p "${tests_dir}" "${scripts_dir}" "${root_dir}"
   make_stub "${tests_dir}/check-ratchet-pin-audit.test.sh" "$2"
   make_stub "${scripts_dir}/check-ratchet-pin-audit.sh" "$3" "${8:-}"
-  make_stub "${tests_dir}/check-allowed-actions-api.test.sh" "$4"
-  make_stub "${tests_dir}/check-settings-posture.test.sh" "$5"
-  # backfill-image-mode is a test-only harness (no enforce script).
-  make_stub "${tests_dir}/classify-backfill-image-mode.test.sh" "${9:-0}"
-  # lib-log is a test-only harness (no enforce script).
-  make_stub "${tests_dir}/lib-log.test.sh" "${10:-0}"
-  # Same-named enforce stubs the runner must NOT run for test-only harnesses.
-  make_stub "${scripts_dir}/check-allowed-actions-api.sh" 0 "$6"
-  make_stub "${scripts_dir}/check-settings-posture.sh" 0 "$7"
+  # bump-linpeas, backfill-image-mode, and lib-log are test-only harnesses
+  # (no enforce script).
+  make_stub "${tests_dir}/bump-linpeas.test.sh" "$4"
+  make_stub "${tests_dir}/classify-backfill-image-mode.test.sh" "$5"
+  make_stub "${tests_dir}/lib-log.test.sh" "${9:-0}"
+  # Same-named scripts the runner must NOT run for test-only harnesses.
+  make_stub "${scripts_dir}/bump-linpeas.sh" 0 "$6"
+  make_stub "${scripts_dir}/classify-backfill-image-mode.sh" 0 "$7"
 
   # docs-audit-plant is the root-relative test-only harness the scenarios
   # below drive; seed it explicitly so its exit code is controllable.
   mkdir -p -- "${root_dir}/${plant_rel%/*}"
-  make_stub "${root_dir}/${plant_rel}" "${11:-0}"
+  make_stub "${root_dir}/${plant_rel}" "${10:-0}"
 
   # The runner declares harnesses beyond the scenario-controlled ones above.
   # Stub every other declared harness as passing so the fixture tree is
@@ -181,40 +180,40 @@ function seed() {
 }
 
 function main() {
-  local work forbidden_allowed forbidden_settings
+  local work forbidden_bump forbidden_backfill
 
   # Scenario 1: all pass.
   work="$(mktemp -d)"
-  forbidden_allowed="${work}/ran-allowed"
-  forbidden_settings="${work}/ran-settings"
-  seed "${work}" 0 0 0 0 "${forbidden_allowed}" "${forbidden_settings}"
+  forbidden_bump="${work}/ran-bump"
+  forbidden_backfill="${work}/ran-backfill"
+  seed "${work}" 0 0 0 0 "${forbidden_bump}" "${forbidden_backfill}"
   run_scenario 'all harnesses pass -> exit 0' \
     "${work}/tests" "${work}/scripts" 0 'harnesses passed, 0 failed' \
-    "${forbidden_allowed}" "${forbidden_settings}"
+    "${forbidden_bump}" "${forbidden_backfill}"
   rm --recursive --force -- "${work}"
 
   # Scenario 2: one harness fails, others still run.
   work="$(mktemp -d)"
-  forbidden_allowed="${work}/ran-allowed"
-  forbidden_settings="${work}/ran-settings"
-  seed "${work}" 0 0 0 1 "${forbidden_allowed}" "${forbidden_settings}"
-  run_scenario 'settings-posture test fails -> exit 1' \
-    "${work}/tests" "${work}/scripts" 1 '| settings-posture | FAIL (test) |' \
-    "${forbidden_allowed}" "${forbidden_settings}"
+  forbidden_bump="${work}/ran-bump"
+  forbidden_backfill="${work}/ran-backfill"
+  seed "${work}" 0 0 1 0 "${forbidden_bump}" "${forbidden_backfill}"
+  run_scenario 'bump-linpeas test fails -> exit 1' \
+    "${work}/tests" "${work}/scripts" 1 '| bump-linpeas | FAIL (test) |' \
+    "${forbidden_bump}" "${forbidden_backfill}"
   rm --recursive --force -- "${work}"
 
   work="$(mktemp -d)"
-  forbidden_allowed="${work}/ran-allowed"
-  forbidden_settings="${work}/ran-settings"
-  seed "${work}" 0 0 0 1 "${forbidden_allowed}" "${forbidden_settings}"
+  forbidden_bump="${work}/ran-bump"
+  forbidden_backfill="${work}/ran-backfill"
+  seed "${work}" 0 0 1 0 "${forbidden_bump}" "${forbidden_backfill}"
   # Same seed as the scenario above, re-run to assert a second property of
   # that outcome: the harness after the failing one still ran. Its pass row
-  # appears in every scenario that does not perturb allowed-actions-api, so
+  # appears in every scenario that does not perturb backfill-image-mode, so
   # the row cannot discriminate between runs — the run stays out of the
   # discrimination pool rather than being exempted row by row.
   run_scenario 'failing harness does not abort the rest' \
-    "${work}/tests" "${work}/scripts" 1 '| allowed-actions-api | pass |' \
-    "${forbidden_allowed}" "${forbidden_settings}" '' 'skip-record'
+    "${work}/tests" "${work}/scripts" 1 '| backfill-image-mode | pass |' \
+    "${forbidden_bump}" "${forbidden_backfill}" '' 'skip-record'
   rm --recursive --force -- "${work}"
 
   # Scenario 3: ratchet test passes but its enforce script fails -> the row
@@ -223,74 +222,74 @@ function main() {
   # only thing that separates the two runs, so asserting it here is what
   # keeps "enforce ran" and "enforce was skipped" distinct observations.
   work="$(mktemp -d)"
-  forbidden_allowed="${work}/ran-allowed"
-  forbidden_settings="${work}/ran-settings"
-  seed "${work}" 0 1 0 0 "${forbidden_allowed}" "${forbidden_settings}"
+  forbidden_bump="${work}/ran-bump"
+  forbidden_backfill="${work}/ran-backfill"
+  seed "${work}" 0 1 0 0 "${forbidden_bump}" "${forbidden_backfill}"
   run_scenario 'ratchet enforce script runs and can fail the row' \
     "${work}/tests" "${work}/scripts" 1 '| ratchet-pin-audit | FAIL (enforce) |' \
-    "${forbidden_allowed}" "${forbidden_settings}"
+    "${forbidden_bump}" "${forbidden_backfill}"
   rm --recursive --force -- "${work}"
 
   # Scenario 4: ratchet TEST fails -> enforce must NOT run, and the row
   # names the test stage rather than the enforce stage it never reached.
   work="$(mktemp -d)"
-  forbidden_allowed="${work}/ran-allowed"
-  forbidden_settings="${work}/ran-settings"
+  forbidden_bump="${work}/ran-bump"
+  forbidden_backfill="${work}/ran-backfill"
   local forbidden_ratchet="${work}/ran-ratchet-enforce"
-  seed "${work}" 1 0 0 0 "${forbidden_allowed}" "${forbidden_settings}" "${forbidden_ratchet}"
+  seed "${work}" 1 0 0 0 "${forbidden_bump}" "${forbidden_backfill}" "${forbidden_ratchet}"
   run_scenario 'ratchet test fails -> enforce skipped, row FAIL' \
     "${work}/tests" "${work}/scripts" 1 '| ratchet-pin-audit | FAIL (test) |' \
-    "${forbidden_allowed}" "${forbidden_settings}" "${forbidden_ratchet}"
+    "${forbidden_bump}" "${forbidden_backfill}" "${forbidden_ratchet}"
   rm --recursive --force -- "${work}"
 
   # Scenario 5: the test-only backfill-image-mode harness fails -> row
   # FAIL, exit 1. Guards against the harness being dropped or its failure
   # being swallowed.
   work="$(mktemp -d)"
-  forbidden_allowed="${work}/ran-allowed"
-  forbidden_settings="${work}/ran-settings"
-  seed "${work}" 0 0 0 0 "${forbidden_allowed}" "${forbidden_settings}" "" 1
+  forbidden_bump="${work}/ran-bump"
+  forbidden_backfill="${work}/ran-backfill"
+  seed "${work}" 0 0 0 1 "${forbidden_bump}" "${forbidden_backfill}"
   run_scenario 'backfill-image-mode test fails -> exit 1' \
     "${work}/tests" "${work}/scripts" 1 '| backfill-image-mode | FAIL (test) |' \
-    "${forbidden_allowed}" "${forbidden_settings}"
+    "${forbidden_bump}" "${forbidden_backfill}"
   rm --recursive --force -- "${work}"
 
   # Scenario 6: the test-only lib-log harness fails -> row FAIL, exit 1.
   # Guards against the harness being dropped or its failure being
   # swallowed.
   work="$(mktemp -d)"
-  forbidden_allowed="${work}/ran-allowed"
-  forbidden_settings="${work}/ran-settings"
-  seed "${work}" 0 0 0 0 "${forbidden_allowed}" "${forbidden_settings}" "" 0 1
+  forbidden_bump="${work}/ran-bump"
+  forbidden_backfill="${work}/ran-backfill"
+  seed "${work}" 0 0 0 0 "${forbidden_bump}" "${forbidden_backfill}" "" 1
   run_scenario 'lib-log test fails -> exit 1' \
     "${work}/tests" "${work}/scripts" 1 '| lib-log | FAIL (test) |' \
-    "${forbidden_allowed}" "${forbidden_settings}"
+    "${forbidden_bump}" "${forbidden_backfill}"
   rm --recursive --force -- "${work}"
 
   # Scenario 7: a repo-root-relative harness fails -> row FAIL, exit 1. The
   # entry form that resolves outside tests/ has to fail as loudly as the rest,
   # or registering a harness there is registration without enforcement.
   work="$(mktemp -d)"
-  forbidden_allowed="${work}/ran-allowed"
-  forbidden_settings="${work}/ran-settings"
-  seed "${work}" 0 0 0 0 "${forbidden_allowed}" "${forbidden_settings}" '' 0 0 1
+  forbidden_bump="${work}/ran-bump"
+  forbidden_backfill="${work}/ran-backfill"
+  seed "${work}" 0 0 0 0 "${forbidden_bump}" "${forbidden_backfill}" '' 0 1
   run_scenario 'root-relative harness fails -> exit 1' \
     "${work}/tests" "${work}/scripts" 1 '| docs-audit-plant | FAIL (test) |' \
-    "${forbidden_allowed}" "${forbidden_settings}"
+    "${forbidden_bump}" "${forbidden_backfill}"
   rm --recursive --force -- "${work}"
 
   # Scenario 8: a root-relative entry whose file is absent names the path the
   # runner actually tried. A diagnostic naming only the filename would read
   # identically for a mistyped tests/ entry and a mistyped root-relative one.
   work="$(mktemp -d)"
-  forbidden_allowed="${work}/ran-allowed"
-  forbidden_settings="${work}/ran-settings"
-  seed "${work}" 0 0 0 0 "${forbidden_allowed}" "${forbidden_settings}"
+  forbidden_bump="${work}/ran-bump"
+  forbidden_backfill="${work}/ran-backfill"
+  seed "${work}" 0 0 0 0 "${forbidden_bump}" "${forbidden_backfill}"
   rm --force -- "${work}/root/.claude/skills/docs-correctness-audit/evals/seeded-defects/plant.test.sh"
   run_scenario 'missing root-relative harness names its path' \
     "${work}/tests" "${work}/scripts" 1 \
     "missing test harness: ${work}/root/.claude/skills/docs-correctness-audit/evals/seeded-defects/plant.test.sh" \
-    "${forbidden_allowed}" "${forbidden_settings}"
+    "${forbidden_bump}" "${forbidden_backfill}"
   rm --recursive --force -- "${work}"
 
   # Scenario 9: --print-roster prints the roster and runs nothing. The mode

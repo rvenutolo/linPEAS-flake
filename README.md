@@ -184,8 +184,7 @@ Defense-in-depth supply-chain layers (the layer itself is not a
 required check; alphabetical):
 
 - `actions.permissions.allowed_actions` = `selected` with a vendor
-    allowlist
-    ([`docs/security/allowed-actions.md`](docs/security/allowed-actions.md)).
+    allowlist.
 - `image-cve-scan-trivy` and `image-cve-scan-grype` (weekly cron, a
     path-filtered push on image-affecting files, and manual dispatch —
     `image-cve-scan.yml`;

@@ -63,12 +63,6 @@ never ran says nothing about the integration, so it must not borrow
 the failure code — that sends a maintainer after a wiring regression
 that has not happened.
 
-### scripts/check-allowed-actions-api.sh
-
-Assert the live `actions.permissions.allowed_actions`
-API state matches the canonical allowlist documented in
-`docs/security/allowed-actions.md`.
-
 ### scripts/check-auto-merge-decline-gate.sh
 
 Lint: every workflow run-block that calls `gh pr merge`
@@ -1260,12 +1254,6 @@ with `#!/usr/bin/env bash` (exact first line) and carries
 `set -Eeuo pipefail` as its own line (line-anchored; a trailing
 addition such as `-x` is accepted); every sourced library
 under `scripts/lib/` satisfies the inverse.
-
-### scripts/check-settings-posture.sh
-
-Lint: every gh-API-verifiable row in
-`docs/security/settings-posture.md` matches the live repository
-configuration. Manual-UI rows are out of scope.
 
 ### scripts/check-setup-nix-required.sh
 
