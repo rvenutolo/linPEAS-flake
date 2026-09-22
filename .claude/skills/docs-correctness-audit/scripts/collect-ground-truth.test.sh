@@ -514,6 +514,44 @@ case "${crons}" in *'real.yml:    - cron: "0 8 * * *"'*) check "cron sweep lists
 case "${crons}" in *"prose.yml"*) check "cron sweep skips prose cron: mentions" 1 ;; *) check "cron sweep skips prose cron: mentions" 0 ;; esac
 rm -rf "${cr}"
 
+# --- required-context count is scoped to one table ---
+# The count is what a doc's "N required checks" claim is graded against, so
+# an off-by-one reads as real drift in a doc that is right. Two hazards: the
+# header and separator rows are not contexts, and the page carries more than
+# one table — a count that keeps running past the section's closing heading
+# grades every such claim against the wrong total.
+rq="$(mktemp -d)"
+mkdir -p "${rq}/docs/security"
+{
+  printf '# Required Status Checks\n\nIn-tree restatement of the required-context set.\n\n'
+  printf '## Required contexts\n\n'
+  printf '| Context | Source workflow | Source file |\n'
+  printf '| ------- | --------------- | ----------- |\n'
+  printf '| flake-check | ci | .github/workflows/ci.yml |\n'
+  printf '| harness-group | ci | .github/workflows/ci.yml |\n'
+  printf '| gitleaks | gitleaks | .github/workflows/gitleaks.yml |\n\n'
+  printf '## Advisory contexts\n\n'
+  printf '| Context | Source workflow |\n'
+  printf '| ------- | --------------- |\n'
+  printf '| octoscan | octoscan |\n'
+  printf '| build-docs | site |\n'
+} >"${rq}/docs/security/required-checks.md"
+# shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
+rq_out="$(cd "${rq}" && source "${COLLECTOR}" && count_required_contexts docs/security/required-checks.md)"
+[[ ${rq_out} == 'required-checks.md context count: 3' ]] && rc=0 || rc=1
+check "required-context count reports the data rows of the Required contexts table" "${rc}"
+if [[ ${rc} -ne 0 ]]; then printf '  got: %s\n' "${rq_out}"; fi
+
+# An absent doc is an absence, not a count: reporting 0 tells a reader the
+# page lists no contexts, which is a finding they would then chase.
+# shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
+rq_missing="$(cd "${rq}" && source "${COLLECTOR}" && count_required_contexts docs/security/no-such-doc.md)"
+case "${rq_missing}" in
+*"(no docs/security/no-such-doc.md)"*) check "an absent required-checks doc is reported, not counted as zero" 0 ;;
+*) check "an absent required-checks doc is reported, not counted as zero" 1 ;;
+esac
+rm -rf "${rq}"
+
 # --- prose-hotspot fixture ---
 # Three recorded audit points, so the two windows the ranking uses are
 # distinguishable: the wide one counts commits, the narrow one names the lines

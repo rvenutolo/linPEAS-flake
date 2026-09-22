@@ -382,6 +382,29 @@ list_workflow_crons() { # $1=workflows dir — emits "<file>:<schedule line>" fo
     sed "s#^$1/##"
 }
 
+# @description Print the number of data rows in the "## Required contexts"
+#              table, the count a doc's "N required checks" claim is graded
+#              against. Rows under any other heading belong to another table
+#              and must not lift the total; an absent file is reported as
+#              such rather than counted as zero, which a reader would read
+#              as "the doc lists no contexts".
+# @arg $1 path to the required-checks doc
+# @stdout one "required-checks.md context count: N" line, or an absence marker
+count_required_contexts() {
+  local -r required_doc="$1"
+  if [[ -f ${required_doc} ]]; then
+    # Data rows of the "## Required contexts" table: every `|` line in that
+    # section except the header row and the `| ---` separator.
+    printf 'required-checks.md context count: %s\n' "$(awk '
+      /^## / { in_table = ($0 == "## Required contexts"); next }
+      in_table && /^\|/ { rows++ }
+      END { print (rows >= 2 ? rows - 2 : 0) }
+    ' "${required_doc}")"
+  else
+    echo "(no ${required_doc})"
+  fi
+}
+
 # @description Print the commit the audit started from N recorded audit points
 #              back, or nothing when the marker history cannot supply a
 #              reachable one.
@@ -624,18 +647,7 @@ main() {
   list_workflow_crons .github/workflows
 
   section "REQUIRED-CHECK CONTEXTS (docs/security/required-checks.md table)"
-  local -r required_doc='docs/security/required-checks.md'
-  if [[ -f ${required_doc} ]]; then
-    # Data rows of the "## Required contexts" table: every `|` line in that
-    # section except the header row and the `| ---` separator.
-    printf 'required-checks.md context count: %s\n' "$(awk '
-      /^## / { in_table = ($0 == "## Required contexts"); next }
-      in_table && /^\|/ { rows++ }
-      END { print (rows >= 2 ? rows - 2 : 0) }
-    ' "${required_doc}")"
-  else
-    echo "(no ${required_doc})"
-  fi
+  count_required_contexts docs/security/required-checks.md
 
   section "EPHEMERAL-TOKEN HITS (banned shapes in tracked-doc PROSE; see repo-map §4)"
   sweep_ephemeral_tokens
