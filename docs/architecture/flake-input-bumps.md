@@ -325,8 +325,8 @@ nix develop --command just verify
 `just verify` runs the batched lint groups, the full harness suite,
 the doc-freshness checks, and every standalone required-check enforcer
 (the changelog checks and the rest of the `justfile` recipe) — the
-in-repo enforcer
-set CI gates on. The action-driven checks are not part of `just verify`:
+in-repo enforcer set CI gates on. The action-driven checks are not part
+of `just verify`:
 `markdownlint`, `typos` and `editorconfig` run as CI jobs and, locally,
 through the pre-commit hook set (`just lint` / `just check`); `commitlint`
 runs as a CI job and, locally, only through the installed `commit-msg` git
