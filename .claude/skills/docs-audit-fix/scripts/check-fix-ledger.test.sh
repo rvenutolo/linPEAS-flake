@@ -193,6 +193,75 @@ function main() {
   run_hash_case hash-reversed-range "${d}" 2 \
     'bad range: 6-3 (start must be >= 1 and <= end)' docs/a.md 6-3
 
+  # Pure reflow: Alpha's two lines joined, same words. Needs no pair.
+  d="$(new_repo)"
+  sed -i -e '3{N;s/\n/ /}' "${d}/docs/a.md"
+  commit_all "${d}" reflow
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case reflow-only "${d}" 0 '' \
+    'OK — 0 pairs; 0 hunks covered, 1 reflow-only and 0 generated skipped; 0 code changes'
+
+  # Negative fixture N1: reflow plus one changed word must still need a
+  # pair. Guards against a "reflow" test that compares anything weaker than
+  # the collapsed text (word counts, line counts, whitespace-only diffs).
+  d="$(new_repo)"
+  sed -i -e '3{N;s/\n/ /}' -e 's/line one/line uno/' "${d}/docs/a.md"
+  commit_all "${d}" reflow-plus-word
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case reflow-plus-word "${d}" 1 'uncovered-hunk: docs/a.md:3'
+
+  # Inside a generated block: skipped.
+  d="$(new_repo)"
+  sed -i 's/^generated row one$/generated row two/' "${d}/docs/a.md"
+  commit_all "${d}" gen
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case generated-only "${d}" 0 '' \
+    'OK — 0 pairs; 0 hunks covered, 0 reflow-only and 1 generated skipped; 0 code changes'
+
+  # Negative fixture N2: a line inserted directly after END is prose, not
+  # generated output. Guards against an off-by-one generated range.
+  d="$(new_repo)"
+  sed -i '10a Inserted after the block.' "${d}/docs/a.md"
+  commit_all "${d}" after-end
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case after-end-marker "${d}" 1 'uncovered-hunk: docs/a.md:11'
+
+  # A content hunk with no pair.
+  d="$(new_repo)"
+  sed -i 's/^Gamma paragraph\.$/Gamma paragraph, now wrong./' "${d}/docs/a.md"
+  commit_all "${d}" gamma
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case uncovered-hunk "${d}" 1 'uncovered-hunk: docs/a.md:12'
+
+  # A changed non-Markdown file not listed as a code change.
+  d="$(new_repo)"
+  sed -i 's/^echo line5$/echo line5 changed/' "${d}/scripts/tool.sh"
+  commit_all "${d}" code
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case uncovered-file "${d}" 1 'uncovered-file: scripts/tool.sh is changed but not listed in code_changes'
+
+  # A deleted Markdown file has no paragraph to pair; it must be listed.
+  d="$(new_repo)"
+  git -C "${d}" rm --quiet -- docs/a.md
+  git -C "${d}" commit --quiet --message delete
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case deleted-md "${d}" 1 'uncovered-file: docs/a.md is changed but not listed in code_changes'
+
+  # A space in a filename must not break hunk attribution.
+  d="$(new_repo)"
+  printf 'Spaced paragraph.\n' >"${d}/docs/b c.md"
+  commit_all "${d}" spaced
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case space-in-name "${d}" 1 'uncovered-hunk: docs/b c.md:1'
+
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
     printf '%d scenario(s) failed\n' "${failures}" >&2
