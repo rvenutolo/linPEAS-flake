@@ -376,6 +376,15 @@ readonly -a HARNESSES=(
   'path-form|nested/dir/path-form.test.sh|'
   'git-idiom|git-idiom.test.sh|'
   'preamble-only|preamble-only.test.sh|'
+  # A comment inside the array: the extractor must skip it rather than
+  # read it as an entry.
+  'comment-marker|comment-marker.test.sh|'
+  'sandbox-git|sandbox-git.test.sh|'
+  'cd-teardown|cd-teardown.test.sh|'
+  'cd-first|cd-first.test.sh|'
+  'fixture-enforce|fixture-enforce.test.sh|check-fixture-enforce.sh'
+  'prefix-var|prefix-var.test.sh|'
+  'cd-fixture-path|cd-fixture-path.test.sh|'
 )
 ROSTER
 # Resolves its subject through REPO_ROOT/scripts and drives it off a
@@ -419,6 +428,51 @@ cat >"${lt}/tests/git-idiom.test.sh" <<'H'
 here="$(dirname -- "$0")"
 git -C "${here}" status --porcelain --untracked-files=no
 H
+# A harness that *mentions* a live-tree producer while explaining what a
+# well-behaved one looks like is not running it.
+cat >"${lt}/tests/comment-marker.test.sh" <<'H'
+# a truncated producer; `git ls-files -z` and its siblings emit a trailing NUL
+readonly SCRIPT="${REPO_ROOT}/scripts/check-thing.sh"
+FIXTURE_OVERRIDE="${FIXTURES}/a.json" "${SCRIPT}"
+H
+# `git -C` against a scratch repo built to be thrown away is the opposite
+# of a live-tree read: the directory the harness names is what decides.
+cat >"${lt}/tests/sandbox-git.test.sh" <<'H'
+SANDBOX="$(mktemp -d)"
+git -C "${SANDBOX}" init --quiet
+H
+# Changing back to the repo root after a sandbox restores the directory the
+# harness left. It is a teardown, not a scenario.
+cat >"${lt}/tests/cd-teardown.test.sh" <<'H'
+SANDBOX="$(mktemp -d)"
+cd "${SANDBOX}"
+run_scenario 'something'
+cd "${REPO_ROOT}"
+H
+# Changing to the repo root before anything else runs every scenario there.
+cat >"${lt}/tests/cd-first.test.sh" <<'H'
+cd "${REPO_ROOT}"
+WORK="$(mktemp -d)"
+H
+# A fixtures-only harness may still carry an enforce script; the verdict and
+# the enforce field are independent.
+cat >"${lt}/tests/fixture-enforce.test.sh" <<'H'
+readonly SCRIPT="${REPO_ROOT}/scripts/check-fixture-enforce.sh"
+FIXTURE_OVERRIDE="${FIXTURES}/a.json" "${SCRIPT}"
+H
+# The checkout-naming allow-list is matched as a prefix unless it is
+# anchored: a sandbox named after the repo-root variable would otherwise
+# defeat the very rule that excludes sandboxes.
+cat >"${lt}/tests/prefix-var.test.sh" <<'H'
+SANDBOX="$(mktemp -d)"
+git -C "${REPO_ROOT_SANDBOX}" init --quiet
+H
+# A `cd` into a fixture tree under the repo root is not a bare `cd` to the
+# repo root, and means the opposite.
+cat >"${lt}/tests/cd-fixture-path.test.sh" <<'H'
+cd "${REPO_ROOT}/tests/fixtures/x"
+run_it
+H
 # shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
 lt_out="$(source "${COLLECTOR}" && list_harness_live_tree "${lt}/run-harness-group.sh" "${lt}/tests" "${lt}")"
 if printf '%s\n' "${lt_out}" | grep -qE '^fixture-only +fixtures only'; then
@@ -460,6 +514,52 @@ if printf '%s\n' "${lt_out}" | grep -qE '^preamble-only +fixtures only'; then
   check "the repo-root preamble alone does not make a harness live-tree" 0
 else
   check "the repo-root preamble alone does not make a harness live-tree" 1
+fi
+if printf '%s\n' "${lt_out}" | grep -qE '^comment-marker +fixtures only'; then
+  check "a marker word inside a comment does not make a harness live-tree" 0
+else
+  check "a marker word inside a comment does not make a harness live-tree" 1
+fi
+if printf '%s\n' "${lt_out}" | grep -qE '^sandbox-git +fixtures only'; then
+  check "git -C against a scratch sandbox is not a live-tree read" 0
+else
+  check "git -C against a scratch sandbox is not a live-tree read" 1
+fi
+if printf '%s\n' "${lt_out}" | grep -qE '^cd-teardown +fixtures only'; then
+  check "a cd back to the repo root after a sandbox is a teardown, not a scenario" 0
+else
+  check "a cd back to the repo root after a sandbox is a teardown, not a scenario" 1
+fi
+if printf '%s\n' "${lt_out}" | grep -qE '^cd-first +LIVE-TREE'; then
+  check "a cd to the repo root before anything else is a live-tree scenario" 0
+else
+  check "a cd to the repo root before anything else is a live-tree scenario" 1
+fi
+if printf '%s\n' "${lt_out}" | grep -qE '^fixture-enforce +fixtures only \(enforce=check-fixture-enforce\.sh\)'; then
+  check "a fixtures-only harness still reports its enforce script" 0
+else
+  check "a fixtures-only harness still reports its enforce script" 1
+fi
+# --- prefix-matched checkout names and fixture-path cd ---
+if printf '%s\n' "${lt_out}" | grep -qE '^prefix-var +fixtures only'; then
+  check "a sandbox named after the repo-root variable is not live-tree" 0
+else
+  check "a sandbox named after the repo-root variable is not live-tree" 1
+fi
+if printf '%s\n' "${lt_out}" | grep -qE '^cd-fixture-path +fixtures only'; then
+  check "a cd into a fixture tree under the repo root is not live-tree" 0
+else
+  check "a cd into a fixture tree under the repo root is not live-tree" 1
+fi
+# The roster holds comment lines. A comment must contribute no row, and
+# must not be read as the id of the entry that follows it.
+lt_rows="$(printf '%s\n' "${lt_out}" | grep -cE '^[a-z]' || true)"
+lt_entries="$(sed -n "/^readonly -a HARNESSES=(/,/^)/p" "${lt}/run-harness-group.sh" |
+  grep -cE "^[[:space:]]*'" || true)"
+if [[ ${lt_rows} == "${lt_entries}" ]]; then
+  check "a comment inside the roster array contributes no row" 0
+else
+  check "a comment inside the roster array contributes no row" 1
 fi
 # shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
 lt_none="$(source "${COLLECTOR}" && list_harness_live_tree "${lt}/no-such-roster.sh" "${lt}/tests")"
