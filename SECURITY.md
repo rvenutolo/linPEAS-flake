@@ -308,5 +308,6 @@ Repository settings knobs the security model depends on:
 
 Any drift on any of the above is treated as a security incident. These
 are GitHub-side settings; no check in this repository probes them, so
-drift is caught by review of the repository settings rather than by a
-scheduled check.
+drift is caught by a maintainer re-reading the repository settings —
+there is no runbook and no scheduled probe, and the list above is the
+checklist.

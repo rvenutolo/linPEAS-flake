@@ -1170,9 +1170,10 @@ foreclosing the canonical Actions privilege-escalation footgun.
 
 Lint: the ratchet-pin-audit workflow keeps its
 hardened shape — empty top-level permissions, harden-runner first,
-typed reason tokens in the notify body, ratchet in the
-nix/devshell.nix devShell, and a documented ratchet version matching
-the one the devShell ships — so future edits cannot silently weaken it.
+per-job permissions and timeouts, typed reason tokens in the notify
+body, ratchet in the nix/devshell.nix devShell, and a documented
+ratchet version matching the one the devShell ships, among others — so
+future edits cannot silently weaken it.
 
 ### scripts/check-renovate-config-validator.sh
 

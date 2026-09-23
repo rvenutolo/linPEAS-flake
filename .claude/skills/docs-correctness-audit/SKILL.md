@@ -264,12 +264,13 @@ finding: record it, and treat both sections as unchecked rather than clean.
 Cap the fan-out at **four concurrent readers**. The map has five clusters, so
 the fifth runs as a slot frees. Cost and recall were measured for the four
 user-facing clusters only ([`evals/tuning-results.md`](evals/tuning-results.md));
-the `claude-tooling` reader is unmeasured. The clusters that come back empty
-are stable across cycles — spend a later freed slot on a second reader for a
-dense cluster rather than re-dispatching an empty one. If a reader completes and a later one dies, its output is a
-finished result: keep it, fold it into the report, and do not re-dispatch that
-cluster. Amend the shared reader brief when you do, so a re-dispatched sibling
-does not re-derive what it already answered.
+the `claude-tooling` reader is unmeasured. If a cluster comes back empty,
+spend a later freed slot on a second reader for a dense cluster rather than
+re-dispatching the empty one — and amend the shared reader brief when you
+do, so that second reader does not re-derive what the first already
+answered. If a reader completes and a later one dies, its output is a
+finished result: keep it, fold it into the report, and do not re-dispatch
+that cluster.
 
 Dispatch parallel **read-only Explore agents**, one per cluster from the
 cluster map, **overridden to the strongest model available**. A reader's job is
