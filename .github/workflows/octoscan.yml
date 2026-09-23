@@ -147,7 +147,7 @@ jobs:
 
   # Infrastructure failure: the job failed without a complete findings
   # result (e.g. docker pull failure, checkout / harden-runner failure,
-  # octoscan exit `1` from an internal parse error, a SARIF upload
+  # octoscan exit `1` from an internal scanner error, a SARIF upload
   # failure after a clean scan) or was cancelled
   # (timeout). Filed under a distinct label so transient breakage is
   # not paged as a security finding. PR runs are excluded — the

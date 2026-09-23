@@ -273,6 +273,11 @@ Binding:
     variant.
 1. No unsuffixed `DOCKERHUB_TOKEN` secret may exist; only `_RW` and
     `_DELETE` variants are authoritative.
+1. `release-on-bump.yml` must consume `secrets.DOCKERHUB_TOKEN_RW` and
+    `dockerhub-sync.yml` must consume `secrets.DOCKERHUB_TOKEN_DELETE` —
+    the lint fails closed if either producer is removed, so a deletion
+    is a reviewed edit rather than a silent hole that lets the
+    must-never rules above pass trivially.
 
 Read the two failure codes apart before rotating anything. Docker Hub
 answers `401` when it got no usable credential at all, and `403` with
