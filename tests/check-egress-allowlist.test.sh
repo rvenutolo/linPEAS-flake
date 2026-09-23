@@ -141,9 +141,10 @@ printf 'OK   zero-notify-discovery-override\n'
 # Assertion 7: nix-host reachability. A job whose allowlist carries
 # cache.nixos.org or releases.nixos.org must reach nix through the
 # setup-nix composite, a run: block invoking a nix subcommand, or an
-# in-job `# egress-nix-exempt: <reason>` marker; an empty-reason marker is
-# rejected, and a marker on a job carrying neither host is reported as
-# stale rather than silently tolerated.
+# in-job `# egress-nix-exempt: <reason>` marker; where the job reaches no
+# nix tooling, an empty-reason marker is rejected, and a marker on a job
+# carrying neither host is reported as stale rather than silently
+# tolerated.
 expect good-nix-setup-nix.yml 0 ""
 expect good-nix-run-invocation.yml 0 ""
 expect bad-nix-neither.yml 1 "reaches no nix tooling"

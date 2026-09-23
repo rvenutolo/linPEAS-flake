@@ -750,8 +750,10 @@ repo.
 A hit is a conditional whose test is PURELY an availability predicate
 and whose branch body exits 1:
 
-if ! command -v X if ! require_tool X
-if \[[ ! -f|-r|-e|-d|-s|-x P ]\] \[[ -f P ]\] || { ... }
+```text
+  if ! command -v X            if ! require_tool X
+  if [[ ! -f|-r|-e|-d|-s|-x P ]]  [[ -f P ]] || { ... }
+```
 
 Matching is branch-scoped rather than proximity-based: the branch body
 is walked from its opening keyword to the matching `fi` or closing
@@ -1341,17 +1343,20 @@ An unguarded tool does not fail loudly. It fails as whatever the
 surrounding code does with a non-zero status, and every one of those
 readings is wrong:
 
-- A shape probe written as `<tool> ... || die` reports the payload as
+```text
+  * A shape probe written as `<tool> ... || die` reports the payload as
     malformed. The operator opens a file that is intact and looks for a
     field that is present.
-- A guard that treats success as the violation — `if <tool> ...; then report` — scores every input clean, because an absent tool cannot
+  * A guard that treats success as the violation — `if <tool> ...; then
+    report` — scores every input clean, because an absent tool cannot
     succeed. The check exits 0 having read nothing, which is the only
     failure mode here that no caller can see.
-- An enumeration ending in `|| true` comes back empty, and a lint that
+  * An enumeration ending in `|| true` comes back empty, and a lint that
     asserts over an empty set asserts nothing.
-- An unchecked command substitution ends the run under the tool's own
+  * An unchecked command substitution ends the run under the tool's own
     status — 127 for an absent one — which the exit-code convention
     does not catalogue.
+```
 
 The convention this protects: 2 means the check could not run, 1 means
 it ran and found a violation, 0 means it ran and found none. A missing
@@ -2233,7 +2238,7 @@ check's own diagnostic names only the garbage case.
 - `$1` — source kind, used verbatim in every diagnostic
 - `$2` — the payload
 - `$3` — optional jq program emitting a message for the first field whose type is wrong, and `empty` when the shape is acceptable
-- `$4` — optional subject, prefixed to every diagnostic as `<subject>: `. A source kind does not always identify what could not be read. Several sources in this tree are read by more than one caller: one override variable and one API route naming two different rulesets, one config file read by three lints, one pin file and one latest-release route read by both the bump script and the dashboard generator, and the name `flake.lock` reached by two checks. In each case the source alone leaves an operator unable to tell which subject's payload was malformed, so every caller sharing a source kind passes one. Callers whose source kind is unique to them pass nothing and their output is unchanged; the rule is a property of the whole tree, not of one script, so adding a second reader of an existing source means giving both readers a subject.
+- `$4` — optional subject, prefixed to every diagnostic as `<subject>: `. A source kind does not always identify what could not be read. Several sources in this tree are read by more than one caller: one config file read by three lints, one pin file and one latest-release route read by both the bump script and the dashboard generator, and the name `flake.lock` reached by more than one check. In each case the source alone leaves an operator unable to tell which subject's payload was malformed, so a caller sharing a source kind is expected to pass one. Callers whose source kind is unique to them pass nothing and their output is unchanged. Whether a subject is warranted is a property of the whole tree rather than of one script, so a second reader of an existing source is the point at which to give both readers one.
 
 **Exit codes:**
 

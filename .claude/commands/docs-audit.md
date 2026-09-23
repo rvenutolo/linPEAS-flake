@@ -25,8 +25,7 @@ Run a documentation correctness audit of this repository using the
     the previous step asked for, not a second one — to gather the
     authoritative ground-truth bundle (the prose-hotspot ranking, the
     pass-attribution listing, flake outputs, recipes, scripts, workflows,
-    ci.yml job list, lint-group membership, the per-harness live-tree
-    scenario listing, the valid CI job / check-name union
+    ci.yml job list, lint-group membership, the per-harness `HARNESS LIVE-TREE  SCENARIOS` marker shortlist, the valid CI job / check-name union
     allowlist, crons, required-check count, the ephemeral-token sweep, and the
     internal link / anchor check). Save it under `.claude/reports/` and hand
     every reader that path together with one shared reader brief, rather than

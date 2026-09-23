@@ -103,7 +103,11 @@ function emit_body() {
     {
       if (fenced) { print "```"; fenced = 0 }
       print
-      prev = $0
+      # A colon lead-in is often separated from its run by a blank comment
+      # line. Keep the last non-blank line, or such a run never fences —
+      # which left the one two-column pairing in the tree rendering as the
+      # collapsed prose this filter exists to prevent.
+      if ($0 !~ /^[[:space:]]*$/) { prev = $0 }
     }
     END { if (fenced) print "```" }
   '
