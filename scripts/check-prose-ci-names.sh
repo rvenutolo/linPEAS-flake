@@ -58,12 +58,23 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
+# shellcheck source=scripts/lib/log.sh
+source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/awk-path.sh
 source "${_lib_dir}/lib/awk-path.sh"
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+
+require_tool git
+require_tool yq
+require_tool awk
+require_tool grep
+require_tool cut
+require_tool sed
+require_tool sort
+require_tool basename
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
@@ -126,12 +137,14 @@ function lint_group_names() {
 function harness_names() {
   local roster
   if [[ -n ${HARNESS_ROSTER} ]]; then
-    roster="$(cat -- "${HARNESS_ROSTER}")" || return 1
+    [[ -f ${HARNESS_ROSTER} ]] || return 1
+    roster="$(cut -d'|' -f1 -- "${HARNESS_ROSTER}")" || return 1
   else
     roster="$("${HARNESS_RUNNER}" --print-roster)" || return 1
+    roster="$(printf '%s\n' "${roster}" | cut -d'|' -f1)" || return 1
   fi
   [[ -n ${roster} ]] || return 1
-  printf '%s\n' "${roster}" | cut -d'|' -f1
+  printf '%s\n' "${roster}"
 }
 
 # @description Emit every scanned prose path under SCAN_ROOT, NUL-delimited
@@ -259,9 +272,14 @@ function main() {
   local -i jobs_n workflows_n members_n
   IFS=$'\t' read -r jobs_n workflows_n members_n <<<"${kinds}"
 
-  local report
-  if ! report="$(
-    awk -v names_file="$(awk_path "${names_tmp}")" '
+  # One invocation per file, so every awk file operand is spelled through
+  # the helper at its own call site. Fence state resets at each file
+  # anyway, so a per-file run is the same scan — and an unterminated fence
+  # becomes that file's own END rather than a flag carried into the next.
+  local awk_prog
+  awk_prog=$(
+    cat <<'AWK'
+
       # @description Judge one name against the claim noun it was found
       #              under. A workflow basename is a CI unit, so calling it
       #              a job is loose rather than wrong — but a required-check
@@ -432,15 +450,32 @@ function main() {
         if (fence) { printf "unterminated fence opened in %s\n", fence_file > "/dev/stderr"; unterminated = 1 }
         printf "%d\t%d\t%d\t%d\t%d\t%d\t%d\n", lines, sites, found, dropped_file, dropped_field, fenced, unterminated
       }
-    ' "${files[@]}"
-  )"; then
-    printf 'prose-ci-names: scan failed\n' >&2
-    exit 2
-  fi
+AWK
+  )
 
-  local -i lines sites found dropped_file dropped_field fenced unterminated
-  IFS=$'\t' read -r lines sites found dropped_file dropped_field fenced \
-    unterminated <<<"${report}"
+  local -i lines=0 sites=0 found=0 dropped_file=0 dropped_field=0
+  local -i fenced=0 unterminated=0
+  local f report
+  local -i f_lines f_sites f_found f_dropped_file f_dropped_field
+  local -i f_fenced f_unterminated
+  for f in "${files[@]}"; do
+    if ! report="$(
+      awk -v names_file="$(awk_path "${names_tmp}")" "${awk_prog}" \
+        "$(awk_path "${f}")"
+    )"; then
+      printf 'prose-ci-names: scan failed for %s\n' "${f}" >&2
+      exit 2
+    fi
+    IFS=$'\t' read -r f_lines f_sites f_found f_dropped_file \
+      f_dropped_field f_fenced f_unterminated <<<"${report}"
+    lines=$((lines + f_lines))
+    sites=$((sites + f_sites))
+    found=$((found + f_found))
+    dropped_file=$((dropped_file + f_dropped_file))
+    dropped_field=$((dropped_field + f_dropped_field))
+    fenced=$((fenced + f_fenced))
+    unterminated=$((unterminated + f_unterminated))
+  done
 
   # An unterminated fence hid every line after its opener, so a clean
   # verdict for that file rests on text nobody read. That is a precondition
