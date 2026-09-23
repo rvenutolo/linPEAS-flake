@@ -169,6 +169,15 @@ function main() {
   jq '.pairs[0].artifact = []' "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case schema-no-artifact "${d}" 1 'schema: pair p1 needs a non-empty artifact list'
 
+  # A leading zero must not slip past the range regex into bash's octal
+  # arithmetic later (a schema-array collision rules out targeting the
+  # artifact's own lines here; see the report for why the pair's lines
+  # field is used instead).
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].lines = "08-99"' "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case schema-leading-zero "${d}" 1 'schema: pair p1 needs id, file and a <start>-<end> lines'
+
   d="$(new_repo)"
   beta_fixed "${d}"
   jq '.pairs[0].fix_shape = "sharpen"' "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"

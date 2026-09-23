@@ -111,7 +111,7 @@ git rev-parse --verify --quiet "${HEAD_REV}^{commit}" >/dev/null ||
 
 if ((hash_mode)); then
   ((${#positional[@]} == 2)) || die 'usage: --hash <file> <start>-<end>'
-  [[ ${positional[1]} =~ ^([0-9]+)-([0-9]+)$ ]] || die "bad range: ${positional[1]}"
+  [[ ${positional[1]} =~ ^([1-9][0-9]*)-([1-9][0-9]*)$ ]] || die "bad range: ${positional[1]}"
   hash_start="${BASH_REMATCH[1]}"
   hash_end="${BASH_REMATCH[2]}"
   ((hash_start >= 1 && hash_start <= hash_end)) ||
@@ -151,7 +151,7 @@ fi
 function check_schema() {
   jq --raw-output '
     def str: type == "string" and length > 0;
-    def rng: str and test("^[0-9]+-[0-9]+$");
+    def rng: str and test("^[1-9][0-9]*-[1-9][0-9]*$");
     (if (.pairs | type) != "array" then ["schema", "ledger needs a pairs array"] else empty end),
     (if (.code_changes | type) != "array" then ["schema", "ledger needs a code_changes array"] else empty end),
     ((.pairs // [])[] | (.id // "?") as $id |
