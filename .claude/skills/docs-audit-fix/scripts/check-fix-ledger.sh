@@ -112,9 +112,15 @@ git rev-parse --verify --quiet "${HEAD_REV}^{commit}" >/dev/null ||
 if ((hash_mode)); then
   ((${#positional[@]} == 2)) || die 'usage: --hash <file> <start>-<end>'
   [[ ${positional[1]} =~ ^([0-9]+)-([0-9]+)$ ]] || die "bad range: ${positional[1]}"
+  hash_start="${BASH_REMATCH[1]}"
+  hash_end="${BASH_REMATCH[2]}"
+  ((hash_start >= 1 && hash_start <= hash_end)) ||
+    die "bad range: ${positional[1]} (start must be >= 1 and <= end)"
   git cat-file -e "${HEAD_REV}:${positional[0]}" 2>/dev/null ||
     die "not tracked at ${HEAD_REV}: ${positional[0]}"
-  block_hash "${HEAD_REV}" "${positional[0]}" "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+  [[ "$(git cat-file -t "${HEAD_REV}:${positional[0]}")" == blob ]] ||
+    die "not a file at ${HEAD_REV}: ${positional[0]}"
+  block_hash "${HEAD_REV}" "${positional[0]}" "${hash_start}" "${hash_end}"
   exit 0
 fi
 
@@ -172,6 +178,10 @@ function check_artifacts() {
   while IFS=$'\t' read -r id file lines; do
     if ! git cat-file -e "${HEAD_REV}:${file}" 2>/dev/null; then
       finding artifact "pair ${id} ${file} is not tracked at the head revision"
+      continue
+    fi
+    if [[ "$(git cat-file -t "${HEAD_REV}:${file}")" != blob ]]; then
+      finding artifact "pair ${id} ${file} is not a file at the head revision"
       continue
     fi
     start="${lines%-*}"

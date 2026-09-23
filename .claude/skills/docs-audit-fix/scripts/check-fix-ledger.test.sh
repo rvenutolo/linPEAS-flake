@@ -89,6 +89,36 @@ function run_case() {
   LAST_NAME="${name}"
 }
 
+# @description Run the checker directly in --hash mode in repo $2 with
+# extra args $5..; assert exit and stderr substring. Mirrors run_case's
+# record/assert pattern for the ledger-mode invocation it wraps.
+function run_hash_case() {
+  local -r name="$1" dir="$2" expected_exit="$3" expected_stderr="$4"
+  shift 4
+  local stderr_file stdout_file outcome_file actual_exit=0
+  stderr_file="$(mktemp -p "${SCRATCH}")"
+  stdout_file="$(mktemp -p "${SCRATCH}")"
+  outcome_file="$(mktemp -p "${SCRATCH}")"
+  (cd "${dir}" && "${SCRIPT}" --hash "$@") \
+    >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  if [[ ${actual_exit} -ne ${expected_exit} ]]; then
+    printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${expected_exit}" "${actual_exit}" >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif [[ -n ${expected_stderr} ]] && ! grep --fixed-strings --quiet -- "${expected_stderr}" "${stderr_file}"; then
+    printf 'FAIL: %s — stderr missing %q\n' "${name}" "${expected_stderr}" >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+  harness_assert_record "${name}" "${expected_stderr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  LAST_STDERR="${stderr_file}"
+  LAST_NAME="${name}"
+}
+
 # @description Assert one more substring in the last scenario's stderr.
 # `harness_assert_also` alone never greps, so this does both.
 function also_expect() {
@@ -153,6 +183,15 @@ function main() {
   beta_fixed "${d}"
   jq '.pairs[0].artifact[0].file = "scripts/nope.sh"' "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case artifact-untracked "${d}" 1 'artifact: pair p1 scripts/nope.sh is not tracked at the head revision'
+
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].artifact[0].file = "scripts"' "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case artifact-directory "${d}" 1 'artifact: pair p1 scripts is not a file at the head revision'
+
+  d="$(new_repo)"
+  run_hash_case hash-reversed-range "${d}" 2 \
+    'bad range: 6-3 (start must be >= 1 and <= end)' docs/a.md 6-3
 
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
