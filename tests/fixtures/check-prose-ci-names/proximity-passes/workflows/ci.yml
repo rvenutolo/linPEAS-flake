@@ -1,0 +1,12 @@
+name: CI
+on:
+  push:
+jobs:
+  flake-check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: "true"
+  lint-doc-invariants:
+    runs-on: ubuntu-latest
+    steps:
+      - run: "true"

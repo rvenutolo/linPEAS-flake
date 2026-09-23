@@ -486,6 +486,47 @@ The `EXEMPT` list is also the ci-job exemption source for the enforcement matrix
 
 Enforced by `scripts/check-ci-job-in-summary.sh`. Wired as the `lint-doc-invariants` CI job (member check `ci-job-in-summary`) and as a pre-commit hook.
 
+## prose-ci-names
+
+`ci-job-in-summary` holds the workflow set against the category map; neither side is prose. Nothing else checks that a CI job or required check *named in a sentence* exists, and no freshness gate can, because no generator writes the sentence. Two shapes go wrong:
+
+- **ghost** — the name resolves to no workflow job, no lint group and no harness-roster entry, so the sentence points at nothing.
+- **mislabel** — the name is only a lint-group member or a harness-roster entry. It runs inside a batched group job, so it is neither a standalone job nor a required status check, and a set-membership test alone would pass it.
+
+The valid-name set is derived on every run, never listed, from four sources: every `jobs:` key of every `.github/workflows/*.yml` and `*.yaml`, every workflow's own bare basename, every group name and member in `.github/lint-groups.yml`, and the first pipe-delimited field of every entry in the harness roster, read through `scripts/run-harness-group.sh --print-roster`. Job outranks workflow outranks member, so a name carried by more than one source is judged by the strongest.
+
+Only adjacency counts as a claim — a backticked name immediately against the claim noun, in either order, for both nouns, and for a comma-and-`and` enumeration wherever a single name may stand:
+
+```text
+`NAME` job                      job `NAME`
+`NAME`, `NAME` and `NAME` jobs  job named `NAME` / job called `NAME`
+`NAME` is a job                 `NAME` and `NAME` are jobs
+`NAME` required check           required check `NAME`
+`NAME` is a required check      required checks `NAME` and `NAME`
+`NAME`, a required check        status check `NAME`
+`NAME` and `NAME` are required checks
+```
+
+A list may stand wherever a single name may, on either side of the noun, and the copula forms accept the past tense.
+
+Initial letters of the claim nouns match in either case, so a sentence that opens with one is not silently exempt. The bare name-first form stays singular: without a copula, a name standing before a plural check noun is attributive — "the `protect-main` required status checks" are the checks belonging to that ruleset, not a claim that it is one. The noun-first form stays singular for "job" for the mirror reason, since "the five jobs `NAME` re-runs" counts jobs rather than naming one.
+
+A proximity window instead of adjacency was measured on this tree and rejected: every site it added was a different noun standing near the word "job" — a name for a list, a name for an artifact. Claim-site and drop counts are printed on every clean run rather than restated here, because a number written into prose is exactly the kind of fact this repo has watched rot.
+
+The shapes above sit in a fenced block for the same reason the lint skips fences: written as prose they are claims about names that deliberately resolve to nothing, and the lint would be right to flag them.
+
+Two adjacency shapes are still not claims and are dropped, each with its own tally in the summary line so a clean run says which exclusion it rested on. A filename-shaped name (`` `ci.yml` job ``) names the file a job lives in. An adjectival use (`` `cancelled` job conclusion ``, `` `has-finding` job output ``) names a job's field, with the job itself unnamed. Fenced blocks are skipped, because a fence quoting workflow YAML shows a name rather than claiming one; inline code spans are kept, since they are what the lint reads.
+
+The scan set is every Markdown and YAML file a commit would carry — tracked files plus not-yet-added ones, minus anything gitignored — so the lint sees a new doc and its fixtures on the commit that adds them. It is not every committed file: claims sitting in Nix and shell comments are outside it. `tests/fixtures/` is excluded because it exists to carry deliberate violations, and `CHANGELOG.md` and `docs/releases.md` are excluded as historical records that must keep naming jobs as they stood at the time.
+
+A fence is tracked by its marker character and run length, so a fence closes only on a marker of the same character that is at least as long as the one that opened it — a shorter or different marker quoted inside is content. A same-character marker of equal or greater length does close the fence, including one carrying an info string, which CommonMark treats as an opener rather than a closer; the lint does not model that distinction. Fences inside blockquotes are recognised. A file that ends with a fence still open is a precondition failure, not a clean file: every line after the opener went unread, so there is nothing for a clean verdict to rest on.
+
+Indentation is not capped, because this repo's list-item fences are indented four spaces and capping at the CommonMark limit of three would stop treating them as fences at all. The cost is that a document *displaying* a fence marker inside an indented block opens a fence the lint believes is real, and an unbalanced one fails the run. That failure is loud and names the file, which is the better trade against silently dropping the remainder of a document.
+
+A harness-roster entry often shares its name with a whole workflow. That name is a CI unit of its own, so calling it a job is loose rather than wrong, and it is not reported. Only a name that is a group or roster member and neither a workflow nor a job is a mislabel.
+
+Enforced by `scripts/check-prose-ci-names.sh`. Wired as the `lint-doc-invariants` CI job (member check `prose-ci-names`) and as a pre-commit hook.
+
 ## run-block-strict
 
 Every block-scalar or newline-carrying `run:` block under `.github/workflows/*.yml` (or `.yaml`) and `.github/actions/**/action.yml` (or `.yaml`) starts with `set -Eeuo pipefail` as its first non-blank, non-comment line.
