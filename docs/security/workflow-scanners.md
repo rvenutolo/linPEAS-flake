@@ -88,7 +88,9 @@ tree.)
     Friday cron (the whole workflow directory, unfiltered); manual dispatch.
 - **Status:** advisory by design. It is the cheapest scanner, but it fails
     on *any* finding (no severity threshold), so as a required check a
-    single false positive would block merge. Its rule set is narrowed only
+    single false positive would block merge. A finding and a scan that did
+    not complete are paged as separate deduped issues, under
+    `octoscan-finding` and `octoscan-infra`. Its rule set is narrowed only
     by the suppression set in `scripts/octoscan-scan.sh` — two disabled
     rules (`local-action`, `dangerous-write`) and a single `--ignore` regex
     carrying two alternatives, each with its rationale in that script's
@@ -146,8 +148,9 @@ tree.)
     rather than a failure. Either way the scheduled run still reaches the
     file, since it is handed the directory rather than a matched file
     list. Both paths read the same `zizmor.yml`, so neither is a check on
-    the other's suppressions. The watchdog pages a finding as a deduped
-    `zizmor-drift` issue, closed on the next clean run; a rule change arrives
+    the other's suppressions. The watchdog pages a finding — or a scan that
+    could not start, a step before it or `nix develop` itself failing — as a
+    deduped `zizmor-drift` issue, closed on the next clean run; a rule change arrives
     with the `flake.lock` bump whose PR `flake-check` already re-scans the
     files pre-commit's matching selects.
 

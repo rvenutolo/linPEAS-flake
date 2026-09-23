@@ -33,7 +33,8 @@ Run a documentation correctness audit of this repository using the
     restating the method in each dispatch.
 1. Fan out read-only cluster readers (one per doc cluster), overridden to the
     strongest model available, checking factual drift, internal consistency,
-    and prose quality. Cap the fan-out at four concurrent readers; if one
+    and prose quality. Cap the fan-out at four concurrent readers — the map
+    has five clusters, so the fifth starts as a slot frees; if one
     completes and a later one dies, keep the completed output as a finished
     result rather than re-dispatching that cluster.
 1. Require a coverage note from every reader saying what it cross-checked

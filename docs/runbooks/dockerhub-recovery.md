@@ -265,8 +265,10 @@ Binding:
     token is release-only).
 1. `secrets.DOCKERHUB_TOKEN_DELETE` must never be consumed in
     `release-on-bump.yml` or `verify-latest-release.yml`.
-1. Manual recovery snippets performing a tag delete (`--request DELETE`
-    or `-X DELETE`) must name `DOCKERHUB_TOKEN_DELETE` and must not name
+1. Any shell-fenced Docker Hub tag delete (`--request DELETE`
+    or `-X DELETE`) in a tracked Markdown file outside `tests/` —
+    including this runbook's own manual recovery snippets — must name
+    `DOCKERHUB_TOKEN_DELETE` and must not name
     `DOCKERHUB_TOKEN_RW` (the `_RW` token returns `403`). The lint
     counts a fence as a Docker Hub delete when it performs a DELETE and
     either addresses `hub.docker.com` or names a `DOCKERHUB_TOKEN`
@@ -276,8 +278,8 @@ Binding:
 1. `release-on-bump.yml` must consume `secrets.DOCKERHUB_TOKEN_RW` and
     `dockerhub-sync.yml` must consume `secrets.DOCKERHUB_TOKEN_DELETE` —
     the lint fails closed if either producer is removed, so a deletion
-    is a reviewed edit rather than a silent hole that lets the
-    must-never rules above pass trivially.
+    is a reviewed edit rather than a silent hole that lets the absence
+    rules in items 1 and 2 above pass trivially.
 
 Read the two failure codes apart before rotating anything. Docker Hub
 answers `401` when it got no usable credential at all, and `403` with

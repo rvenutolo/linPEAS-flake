@@ -356,7 +356,7 @@ in
   check-cron-table = {
     enable = true;
     name = "check-cron-table";
-    description = "Cron schedule table + ordering paragraph in docs/architecture/ci.md matches workflow cron triggers.";
+    description = "Cron schedule table in docs/architecture/ci.md matches workflow cron triggers, and the ordering paragraph matches the table's daily rows.";
     entry = "${pkgs-unstable.writeShellScript "check-cron-table-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'
