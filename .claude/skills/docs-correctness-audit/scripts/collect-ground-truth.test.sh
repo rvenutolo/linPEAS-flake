@@ -363,8 +363,8 @@ rm -rf "${fy}"
 # It does not say whether a scenario reads the live tree, and prose that
 # reads "test-only" off the roster is wrong for a harness that does. Every
 # harness resolves its subject through ${REPO_ROOT}/scripts, so that path
-# must not be the signal or every harness classifies live and the section
-# says nothing.
+# must not be the signal or every harness matches and the shortlist
+# narrows nothing.
 lt="$(mktemp -d)"
 mkdir -p "${lt}/tests"
 cat >"${lt}/run-harness-group.sh" <<'ROSTER'
@@ -388,7 +388,7 @@ readonly -a HARNESSES=(
 )
 ROSTER
 # Resolves its subject through REPO_ROOT/scripts and drives it off a
-# fixture — the shape of every fixture-only harness here.
+# fixture — the shape of every marker-free harness here.
 cat >"${lt}/tests/fixture-only.test.sh" <<'H'
 readonly SCRIPT="${REPO_ROOT}/scripts/check-thing.sh"
 FIXTURE_OVERRIDE="${FIXTURES}/a.json" "${SCRIPT}"
@@ -405,7 +405,7 @@ H
 # A roster entry holding a `/` is repo-root-relative, not harness-directory
 # relative — the form the tracked .claude/ harnesses take. Resolving it under
 # the harness directory stats a path that cannot exist, so the entry reports
-# missing and its live-tree verdict never reaches the bundle.
+# missing and its marker result never reaches the bundle.
 mkdir -p "${lt}/nested/dir"
 cat >"${lt}/nested/dir/path-form.test.sh" <<'H'
 readonly SCRIPT="${REPO_ROOT}/scripts/check-thing.sh"
@@ -413,12 +413,12 @@ git ls-files 'scripts/refresh-*.sh'
 H
 # A harness can reach the real checkout without naming REPO_ROOT at all —
 # cutting a worktree from HEAD, asking git for the toplevel, or reading the
-# primary tree's status. Classifying that as fixtures-only hides a gate that
+# primary tree's status. Reporting no markers for that hides a gate that
 # fails pull requests on a fact about the repo.
 # Nearly every harness opens with `git rev-parse --show-toplevel` to find
 # the checkout it resolves its subject through. That is a path lookup, not a
-# live-tree read: matching it marks the whole roster live and the section
-# stops classifying anything.
+# live-tree read: matching it marks every roster row and the section
+# stops narrowing anything.
 cat >"${lt}/tests/preamble-only.test.sh" <<'H'
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-thing.sh"
@@ -454,8 +454,8 @@ cat >"${lt}/tests/cd-first.test.sh" <<'H'
 cd "${REPO_ROOT}"
 WORK="$(mktemp -d)"
 H
-# A fixtures-only harness may still carry an enforce script; the verdict and
-# the enforce field are independent.
+# A harness with no markers may still carry an enforce script; the marker
+# result and the enforce field are independent.
 cat >"${lt}/tests/fixture-enforce.test.sh" <<'H'
 readonly SCRIPT="${REPO_ROOT}/scripts/check-fixture-enforce.sh"
 FIXTURE_OVERRIDE="${FIXTURES}/a.json" "${SCRIPT}"
@@ -531,14 +531,14 @@ else
   check "a cd back to the repo root after a sandbox is a teardown, not a scenario" 1
 fi
 if printf '%s\n' "${lt_out}" | grep -qE '^cd-first +markers found'; then
-  check "a cd to the repo root before anything else is a live-tree scenario" 0
+  check "a cd to the repo root before anything else matches a marker" 0
 else
-  check "a cd to the repo root before anything else is a live-tree scenario" 1
+  check "a cd to the repo root before anything else matches a marker" 1
 fi
 if printf '%s\n' "${lt_out}" | grep -qE '^fixture-enforce +no markers \(enforce=check-fixture-enforce\.sh\)'; then
-  check "a fixtures-only harness still reports its enforce script" 0
+  check "a harness with no markers still reports its enforce script" 0
 else
-  check "a fixtures-only harness still reports its enforce script" 1
+  check "a harness with no markers still reports its enforce script" 1
 fi
 # --- prefix-matched checkout names and fixture-path cd ---
 if printf '%s\n' "${lt_out}" | grep -qE '^prefix-var +no markers'; then
@@ -564,8 +564,8 @@ fi
 # shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
 lt_none="$(source "${COLLECTOR}" && list_harness_live_tree "${lt}/no-such-roster.sh" "${lt}/tests")"
 case "${lt_none}" in
-*"no-such-roster.sh"*) check "an absent roster is reported, not scored as zero live-tree harnesses" 0 ;;
-*) check "an absent roster is reported, not scored as zero live-tree harnesses" 1 ;;
+*"no-such-roster.sh"*) check "an absent roster is reported, not scored as a roster with no markers" 0 ;;
+*) check "an absent roster is reported, not scored as a roster with no markers" 1 ;;
 esac
 rm -rf "${lt}"
 
