@@ -207,7 +207,7 @@ filed by the notify jobs.
         that job's env. Cannot delete tags.
     - `DOCKERHUB_TOKEN_DELETE` — Read, Write, Delete on
         `rvenutolo/linpeas`. Used ONLY by `dockerhub-sync.yml` (the sole
-        workflow consumer) and by the manual tag-delete snippets in
+        workflow consumer) and by the manual tag-delete snippet in
         `docs/runbooks/dockerhub-recovery.md`.
 
     The `Delete` capability is required by the `peter-evans/dockerhub-description`
@@ -309,5 +309,4 @@ Repository settings knobs the security model depends on:
 Any drift on any of the above is treated as a security incident. These
 are GitHub-side settings; no check in this repository probes them, so
 drift is caught by a maintainer re-reading the repository settings —
-there is no runbook and no scheduled probe, and the list above is the
-checklist.
+there is no runbook and no scheduled probe.

@@ -134,9 +134,10 @@ tighten it, at the cost of re-measuring every seed from scratch.
 `plant.test.sh` and `score.test.sh` are cheap, deterministic, and need no audit
 run. `score.test.sh` validates scoring math against fixtures alone.
 `plant.test.sh` validates the planting mechanics *and* asserts every
-`seeds.json` anchor still resolves exactly once in the tracked docs, so
-rewording a seeded sentence fails `harness-group` until the seed is
-re-anchored. Together with `../../scripts/collect-ground-truth.test.sh` they
+`seeds.json` anchor still resolves exactly once in the tracked docs, so a
+*committed* reword of a seeded sentence fails `harness-group` until the
+seed is re-anchored — `plant.sh` cuts its worktree from `HEAD`, so an
+uncommitted edit still resolves. Together with `../../scripts/collect-ground-truth.test.sh` they
 are registered in `scripts/run-harness-group.sh` as `docs-audit-plant`,
 `docs-audit-score` and `docs-audit-ground-truth`, and run in the required
 `harness-group` CI job. Only the audit loop itself stays manual.

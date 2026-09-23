@@ -278,8 +278,8 @@ signer.
 
 Lint: cron schedule table in docs/architecture/ci.md
 matches cron triggers in .github/workflows/\*.yml (and \*.yaml) — set
-parity, cron string accuracy, and daily arrow-list ordering with
-strictly increasing UTC times.
+parity and cron string accuracy — and the daily arrow list matches the
+table's own daily rows, in strictly increasing UTC order.
 
 Exit codes:
 0 all checks passed
@@ -325,7 +325,7 @@ verify-latest-release.yml. The delete-capable token must never leak into
 workflows that only push images, and no unsuffixed secrets.DOCKERHUB_TOKEN
 may exist — only \_RW and \_DELETE are authoritative.
 
-The same split binds the manual recovery snippets in the docs. A
+The same split binds the manual recovery snippet in the docs. A
 shell-fenced Markdown block that performs a tag delete
 (`--request DELETE` / `-X DELETE`) against Docker Hub must name
 DOCKERHUB_TOKEN_DELETE and must not name DOCKERHUB_TOKEN_RW: the

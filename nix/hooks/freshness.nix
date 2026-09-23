@@ -350,8 +350,9 @@ in
     language = "system";
   };
   # Asserts the cron schedule table in docs/architecture/ci.md
-  # matches cron triggers in .github/workflows/*.yml — set
-  # parity, cron string accuracy, and daily arrow-list ordering
+  # matches cron triggers in .github/workflows/*.yml and *.yaml — set
+  # parity and cron string accuracy — and the daily arrow list matches
+  # the table's own daily rows, in ordering
   # with strictly increasing UTC times.
   check-cron-table = {
     enable = true;

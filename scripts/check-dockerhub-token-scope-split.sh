@@ -11,7 +11,7 @@
 # workflows that only push images, and no unsuffixed secrets.DOCKERHUB_TOKEN
 # may exist — only _RW and _DELETE are authoritative.
 #
-# The same split binds the manual recovery snippets in the docs. A
+# The same split binds the manual recovery snippet in the docs. A
 # shell-fenced Markdown block that performs a tag delete
 # (`--request DELETE` / `-X DELETE`) against Docker Hub must name
 # DOCKERHUB_TOKEN_DELETE and must not name DOCKERHUB_TOKEN_RW: the
