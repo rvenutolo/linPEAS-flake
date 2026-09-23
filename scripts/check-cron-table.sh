@@ -3,8 +3,8 @@
 #
 # @description Lint: cron schedule table in docs/architecture/ci.md
 # matches cron triggers in .github/workflows/*.yml (and *.yaml) — set
-# parity, cron string accuracy, and daily arrow-list ordering with
-# strictly increasing UTC times.
+# parity and cron string accuracy — and the daily arrow list matches the
+# table's own daily rows, in strictly increasing UTC order.
 #
 # Exit codes:
 #   0  all checks passed

@@ -26,9 +26,11 @@
 # for the version assertion: the second stands in for the installed tool,
 # so the mismatch case is exercisable offline.
 # Exits 0 on full coverage, 1 on any drift, 2 when the check cannot run
-# — yq absent from PATH, or the workflow file itself missing. With no
-# workflow to parse there is no invariant to score, and counting that as
-# a failed invariant would report drift in a file the check never read.
+# — `yq` or `ratchet` absent from PATH, the workflow file itself missing,
+# a workflow expression yq cannot evaluate, an unreadable version site, or
+# a `ratchet --version` string carrying no X.Y.Z. With no workflow to
+# parse there is no invariant to score, and counting that as a failed
+# invariant would report drift in a file the check never read.
 
 set -Eeuo pipefail
 IFS=$'\n\t'

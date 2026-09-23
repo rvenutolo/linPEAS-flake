@@ -34,10 +34,14 @@ Run a documentation correctness audit of this repository using the
 1. Fan out read-only cluster readers (one per doc cluster), overridden to the
     strongest model available, checking factual drift, internal consistency,
     and prose quality. Cap the fan-out at four concurrent readers — the map
-    has five clusters, so the fifth starts as a slot frees; if one
+    has five clusters, so the fifth starts as a slot frees. If a cluster
+    comes back empty, spend a later freed slot on a second reader for a
+    dense cluster rather than re-dispatching the empty one, and amend the
+    shared brief so it does not re-derive what the first answered. If one
     completes and a later one dies, keep the completed output as a finished
     result rather than re-dispatching that cluster.
-1. Require a coverage note from every reader saying what it cross-checked
+1. Require a coverage note from every reader — capped at ten lines, because
+    a note long enough to bury its own gaps defeats the gate it feeds — saying what it cross-checked
     against ground truth, plus a `Could not locate` list of anything the
     dispatch named that the reader could not find. A cluster reporting "clean"
     without a coverage note is not clean — re-dispatch it.

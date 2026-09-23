@@ -72,7 +72,11 @@ tree.)
     would let a single CRITICAL false positive or a transient CodeQL infra flake
     wedge every PR; the merge gate is the in-tree workflow lints plus the zizmor
     pre-commit hook, re-run in the required `flake-check` job, with CodeQL as
-    the deeper dataflow second opinion.
+    the deeper dataflow second opinion. On non-PR runs a CRITICAL finding —
+    or an error inside the analyze action, which counts the same — and a
+    failure before `analyze` ran, or a run cancelled at its timeout, are
+    paged as separate deduped issues, under `codeql-critical` and
+    `codeql-infra`.
 
 ### octoscan
 
@@ -88,9 +92,11 @@ tree.)
     Friday cron (the whole workflow directory, unfiltered); manual dispatch.
 - **Status:** advisory by design. It is the cheapest scanner, but it fails
     on *any* finding (no severity threshold), so as a required check a
-    single false positive would block merge. A finding and a scan that did
-    not complete are paged as separate deduped issues, under
-    `octoscan-finding` and `octoscan-infra`. Its rule set is narrowed only
+    single false positive would block merge. A finding, and a failure that
+    produced no complete findings result — a cancelled run and a SARIF
+    upload failing after a clean scan among them — are paged as separate
+    deduped issues, under `octoscan-finding` and `octoscan-infra`.
+    octoscan's rule set is narrowed only
     by the suppression set in `scripts/octoscan-scan.sh` — two disabled
     rules (`local-action`, `dangerous-write`) and a single `--ignore` regex
     carrying two alternatives, each with its rationale in that script's
@@ -115,9 +121,9 @@ tree.)
     scan on PRs or pushes.
 - **Status:** weekly watchdog. A check scoring anything below a
     perfect 10 (the policy is strict), a scorecard payload the
-    threshold script cannot read as JSON at all, or a failure before or
+    threshold script cannot read as JSON at all, a failure before or
     during the scan itself — a setup step, or an auth, egress or
-    check-execution error — fails the run and
+    check-execution error — or a run cancelled at its timeout, fails the run and
     opens a deduped `scorecard-drift` tracking issue; the next clean run
     closes it. The check set is curated — review-flow checks not applicable to a
     solo repo, checks duplicating an in-tree signal whether blocking or
@@ -148,9 +154,10 @@ tree.)
     rather than a failure. Either way the scheduled run still reaches the
     file, since it is handed the directory rather than a matched file
     list. Both paths read the same `zizmor.yml`, so neither is a check on
-    the other's suppressions. The watchdog pages a finding — or a scan that
-    could not start, a step before it or `nix develop` itself failing — as a
-    deduped `zizmor-drift` issue, closed on the next clean run; a rule change arrives
+    the other's suppressions. The watchdog pages a finding, a scan that
+    could not start because a step before it or `nix develop` itself
+    failed, or a run cancelled at its timeout, as a deduped
+    `zizmor-drift` issue, closed on the next clean run; a rule change arrives
     with the `flake.lock` bump whose PR `flake-check` already re-scans the
     files pre-commit's matching selects.
 

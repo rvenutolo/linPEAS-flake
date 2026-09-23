@@ -62,16 +62,39 @@ list_harness_live_tree() {
       # that path is not the signal — it is how a harness finds the script,
       # in fixture scenarios too. A live-tree READ is narrower: running the
       # subject from the repo root with no fixture override, or reading the
-      # real nix/, .github/, docs/ or lock files. A harness can also reach
-      # the checkout by pointing git at a directory itself — `git -C <dir>`
-      # — which names no REPO_ROOT and reads the live tree just as hard, so
-      # that form carries its own alternative. `git rev-parse
-      # --show-toplevel` does not: it opens this file's own preamble, so
-      # matching it would mark the whole roster live and the section would
-      # classify nothing. grep is enough because the output is a short list
-      # of harnesses to open, not a classification to trust.
-      markers="$(grep -nE 'cd "?\$\{REPO_ROOT\}"?|\$\{REPO_ROOT\}/(nix|\.github|docs|flake\.(lock|nix))|git ls-files|git -C ' "${path}" |
+      # real nix/, .github/, docs/ or lock files, and `git -C` pointed at
+      # the checkout. `git -C` against a `mktemp` sandbox is the opposite:
+      # a scratch repo built to be thrown away, so the directory a harness
+      # names is what decides. `git rev-parse --show-toplevel` decides
+      # nothing — nearly every harness opens with it to find the checkout
+      # it resolves its subject through, so matching it would mark the
+      # whole roster live and the section would classify nothing.
+      #
+      # Two deliberate limits, because this is a grep and the output is a
+      # shortlist to open rather than a classification to trust:
+      #
+      #   - Everything after the first `#` on a line is ignored. That is
+      #     not the same as ignoring comment lines: a live read sitting
+      #     after a `#` inside a string is missed. The alternative, counting
+      #     a producer a harness only *names* while explaining it, was the
+      #     worse error.
+      #   - A bare `cd "${REPO_ROOT}"` counts only when no other `cd`
+      #     precedes it in the file. Changing to the repo root first runs
+      #     the scenarios there; changing back to it after a sandbox is a
+      #     teardown. This reads textual order, not execution order, so a
+      #     `cd` inside a function called later, or inside a branch, is not
+      #     seen.
+      #
+      # A matched line can also sit inside a fixture body a harness writes
+      # with a heredoc. The section prints what matched so the reader can
+      # tell the two apart; the trailer below says so.
+      markers="$(grep -nE '^[^#]*(cd "?\$\{REPO_ROOT\}"? &&|\$\{REPO_ROOT\}/(nix|\.github|docs|flake\.(lock|nix))|git ls-files|git -C "?\$\{?(REPO_ROOT|REAL_REPO|repo_root|here)\}?"?[[:space:]])' "${path}" |
         head -4 || true)"
+      if [[ -z ${markers} ]] &&
+        grep -nE '^[[:space:]]*\(?cd ' "${path}" | head -1 |
+        grep -qE 'cd "?\$\{REPO_ROOT\}"?[[:space:]]*$'; then
+        markers="$(grep -nE '^[[:space:]]*\(?cd "?\$\{REPO_ROOT\}"?[[:space:]]*$' "${path}" | head -1)"
+      fi
       if [[ -n ${markers} ]]; then
         printf '%-34s LIVE-TREE (enforce=%s)\n' "${id}" "${enforce:--}"
         printf '%s\n' "${markers}" | sed 's/^/    /'
@@ -656,7 +679,10 @@ main() {
   echo '(A harness listed LIVE-TREE with enforce=- is still test-only in the'
   echo ' enforcement model and still fails a PR on a live-tree fact. Prose'
   echo ' calling it "test-only", "fixture tests alone" or "probes no live tree"'
-  echo ' is a finding. Open the named lines before filing one either way.)'
+  echo ' is a finding. Open the named lines before filing one either way: a'
+  echo ' matched line can sit inside a fixture body the harness writes with a'
+  echo ' heredoc, and a harness can read the live tree in a way no line here'
+  echo ' names. The verdicts are a shortlist, not a classification.)'
 
   section "WORKFLOW CRONS (authoritative schedules; ci.md table must match)"
   list_workflow_crons .github/workflows
