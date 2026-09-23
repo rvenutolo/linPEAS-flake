@@ -254,7 +254,7 @@ fi
 # gated here instead of collapsed to pointers.
 REPO_MAP="${HERE}/../references/repo-map.md"
 map_section() { # $1=section number — emit that section's body
-  sed -n "/^## $1\\./,/^## $(($1 + 1))\\./p" "${REPO_MAP}"
+  sed -n "/^## $1\./,/^## $(($1 + 1))\./p" "${REPO_MAP}"
 }
 
 # Section 3 restates every generated doc and its generator. Ground truth is the
@@ -374,6 +374,8 @@ readonly -a HARNESSES=(
   'has-enforce|has-enforce.test.sh|check-has-enforce.sh'
   'absent|absent.test.sh|'
   'path-form|nested/dir/path-form.test.sh|'
+  'git-idiom|git-idiom.test.sh|'
+  'preamble-only|preamble-only.test.sh|'
 )
 ROSTER
 # Resolves its subject through REPO_ROOT/scripts and drives it off a
@@ -400,32 +402,65 @@ cat >"${lt}/nested/dir/path-form.test.sh" <<'H'
 readonly SCRIPT="${REPO_ROOT}/scripts/check-thing.sh"
 git ls-files 'scripts/refresh-*.sh'
 H
+# A harness can reach the real checkout without naming REPO_ROOT at all —
+# cutting a worktree from HEAD, asking git for the toplevel, or reading the
+# primary tree's status. Classifying that as fixtures-only hides a gate that
+# fails pull requests on a fact about the repo.
+# Nearly every harness opens with `git rev-parse --show-toplevel` to find
+# the checkout it resolves its subject through. That is a path lookup, not a
+# live-tree read: matching it marks the whole roster live and the section
+# stops classifying anything.
+cat >"${lt}/tests/preamble-only.test.sh" <<'H'
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+readonly SCRIPT="${REPO_ROOT}/scripts/check-thing.sh"
+FIXTURE_OVERRIDE="${FIXTURES}/a.json" "${SCRIPT}"
+H
+cat >"${lt}/tests/git-idiom.test.sh" <<'H'
+here="$(dirname -- "$0")"
+git -C "${here}" status --porcelain --untracked-files=no
+H
 # shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
 lt_out="$(source "${COLLECTOR}" && list_harness_live_tree "${lt}/run-harness-group.sh" "${lt}/tests" "${lt}")"
-case "${lt_out}" in
-*"fixture-only"*"fixtures only"*) check "a harness driven only off fixtures is not called live-tree" 0 ;;
-*) check "a harness driven only off fixtures is not called live-tree" 1 ;;
-esac
-case "${lt_out}" in
-*"reads-live"*"LIVE-TREE"*) check "a scenario run from the repo root is called live-tree" 0 ;;
-*) check "a scenario run from the repo root is called live-tree" 1 ;;
-esac
-case "${lt_out}" in
-*"has-enforce"*"LIVE-TREE (enforce=check-has-enforce.sh)"*) check "the enforce script is reported beside the verdict" 0 ;;
-*) check "the enforce script is reported beside the verdict" 1 ;;
-esac
-case "${lt_out}" in
-*"reads-live"*"enforce=-"*) check "a live-tree harness with no enforce script is still marked live-tree" 0 ;;
-*) check "a live-tree harness with no enforce script is still marked live-tree" 1 ;;
-esac
-case "${lt_out}" in
-*"absent"*"harness not found"*) check "a roster entry naming a missing harness says so" 0 ;;
-*) check "a roster entry naming a missing harness says so" 1 ;;
-esac
-case "${lt_out}" in
-*"path-form"*"LIVE-TREE"*) check "a repo-root-relative roster entry is resolved, not reported missing" 0 ;;
-*) check "a repo-root-relative roster entry is resolved, not reported missing" 1 ;;
-esac
+if printf '%s\n' "${lt_out}" | grep -qE '^fixture-only +fixtures only'; then
+  check "a harness driven only off fixtures is not called live-tree" 0
+else
+  check "a harness driven only off fixtures is not called live-tree" 1
+fi
+if printf '%s\n' "${lt_out}" | grep -qE '^reads-live +LIVE-TREE'; then
+  check "a scenario run from the repo root is called live-tree" 0
+else
+  check "a scenario run from the repo root is called live-tree" 1
+fi
+if printf '%s\n' "${lt_out}" | grep -qE '^has-enforce +LIVE-TREE \(enforce=check-has-enforce\.sh\)'; then
+  check "the enforce script is reported beside the verdict" 0
+else
+  check "the enforce script is reported beside the verdict" 1
+fi
+if printf '%s\n' "${lt_out}" | grep -qE '^reads-live +LIVE-TREE \(enforce=-\)'; then
+  check "a live-tree harness with no enforce script is still marked live-tree" 0
+else
+  check "a live-tree harness with no enforce script is still marked live-tree" 1
+fi
+if printf '%s\n' "${lt_out}" | grep -qE '^absent +harness not found'; then
+  check "a roster entry naming a missing harness says so" 0
+else
+  check "a roster entry naming a missing harness says so" 1
+fi
+if printf '%s\n' "${lt_out}" | grep -qE '^path-form +LIVE-TREE'; then
+  check "a repo-root-relative roster entry is resolved, not reported missing" 0
+else
+  check "a repo-root-relative roster entry is resolved, not reported missing" 1
+fi
+if printf '%s\n' "${lt_out}" | grep -qE '^git-idiom +LIVE-TREE'; then
+  check "a harness reaching the checkout through git alone is called live-tree" 0
+else
+  check "a harness reaching the checkout through git alone is called live-tree" 1
+fi
+if printf '%s\n' "${lt_out}" | grep -qE '^preamble-only +fixtures only'; then
+  check "the repo-root preamble alone does not make a harness live-tree" 0
+else
+  check "the repo-root preamble alone does not make a harness live-tree" 1
+fi
 # shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
 lt_none="$(source "${COLLECTOR}" && list_harness_live_tree "${lt}/no-such-roster.sh" "${lt}/tests")"
 case "${lt_none}" in

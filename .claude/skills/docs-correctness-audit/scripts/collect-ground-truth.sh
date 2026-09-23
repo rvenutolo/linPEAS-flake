@@ -62,10 +62,15 @@ list_harness_live_tree() {
       # that path is not the signal — it is how a harness finds the script,
       # in fixture scenarios too. A live-tree READ is narrower: running the
       # subject from the repo root with no fixture override, or reading the
-      # real nix/, .github/, docs/ or lock files. grep is enough because the
-      # output is a short list of harnesses to open, not a classification to
-      # trust.
-      markers="$(grep -nE 'cd "?\$\{REPO_ROOT\}"?|\$\{REPO_ROOT\}/(nix|\.github|docs|flake\.(lock|nix))|git ls-files' "${path}" |
+      # real nix/, .github/, docs/ or lock files. A harness can also reach
+      # the checkout by pointing git at a directory itself — `git -C <dir>`
+      # — which names no REPO_ROOT and reads the live tree just as hard, so
+      # that form carries its own alternative. `git rev-parse
+      # --show-toplevel` does not: it opens this file's own preamble, so
+      # matching it would mark the whole roster live and the section would
+      # classify nothing. grep is enough because the output is a short list
+      # of harnesses to open, not a classification to trust.
+      markers="$(grep -nE 'cd "?\$\{REPO_ROOT\}"?|\$\{REPO_ROOT\}/(nix|\.github|docs|flake\.(lock|nix))|git ls-files|git -C ' "${path}" |
         head -4 || true)"
       if [[ -n ${markers} ]]; then
         printf '%-34s LIVE-TREE (enforce=%s)\n' "${id}" "${enforce:--}"
