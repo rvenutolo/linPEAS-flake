@@ -38,6 +38,7 @@ jobs:
             nixos.org:443
             nixos.wiki:443
             objects.githubusercontent.com:443
+            raw.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             rvenutolo.github.io:443
             www.conventionalcommits.org:443
