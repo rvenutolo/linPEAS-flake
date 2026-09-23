@@ -373,6 +373,7 @@ readonly -a HARNESSES=(
   'reads-live|reads-live.test.sh|'
   'has-enforce|has-enforce.test.sh|check-has-enforce.sh'
   'absent|absent.test.sh|'
+  'path-form|nested/dir/path-form.test.sh|'
 )
 ROSTER
 # Resolves its subject through REPO_ROOT/scripts and drives it off a
@@ -390,8 +391,17 @@ cat >"${lt}/tests/has-enforce.test.sh" <<'H'
 readonly SCRIPT="${REPO_ROOT}/scripts/check-has-enforce.sh"
 grep -r -- 'x' "${REPO_ROOT}/nix"
 H
+# A roster entry holding a `/` is repo-root-relative, not harness-directory
+# relative — the form the tracked .claude/ harnesses take. Resolving it under
+# the harness directory stats a path that cannot exist, so the entry reports
+# missing and its live-tree verdict never reaches the bundle.
+mkdir -p "${lt}/nested/dir"
+cat >"${lt}/nested/dir/path-form.test.sh" <<'H'
+readonly SCRIPT="${REPO_ROOT}/scripts/check-thing.sh"
+git ls-files 'scripts/refresh-*.sh'
+H
 # shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
-lt_out="$(source "${COLLECTOR}" && list_harness_live_tree "${lt}/run-harness-group.sh" "${lt}/tests")"
+lt_out="$(source "${COLLECTOR}" && list_harness_live_tree "${lt}/run-harness-group.sh" "${lt}/tests" "${lt}")"
 case "${lt_out}" in
 *"fixture-only"*"fixtures only"*) check "a harness driven only off fixtures is not called live-tree" 0 ;;
 *) check "a harness driven only off fixtures is not called live-tree" 1 ;;
@@ -411,6 +421,10 @@ esac
 case "${lt_out}" in
 *"absent"*"harness not found"*) check "a roster entry naming a missing harness says so" 0 ;;
 *) check "a roster entry naming a missing harness says so" 1 ;;
+esac
+case "${lt_out}" in
+*"path-form"*"LIVE-TREE"*) check "a repo-root-relative roster entry is resolved, not reported missing" 0 ;;
+*) check "a repo-root-relative roster entry is resolved, not reported missing" 1 ;;
 esac
 # shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
 lt_none="$(source "${COLLECTOR}" && list_harness_live_tree "${lt}/no-such-roster.sh" "${lt}/tests")"

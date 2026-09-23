@@ -31,8 +31,9 @@ section() { printf '\n===== %s =====\n' "$1"; }
 # is then wrong while the roster it was derived from is right, so no
 # freshness gate covers it and reading the roster does not find it.
 # @arg $1 path to run-harness-group.sh  @arg $2 directory holding the harnesses
+# @arg $3 repo root a path-form entry resolves against (default `.`)
 list_harness_live_tree() {
-  local -r roster="$1" tests_dir="$2"
+  local -r roster="$1" tests_dir="$2" root_dir="${3:-.}"
   if [[ ! -f ${roster} ]]; then
     echo "(no ${roster})"
     return 0
@@ -43,7 +44,16 @@ list_harness_live_tree() {
     sed -E "s/^[[:space:]]*'//; s/'\$//" |
     while IFS='|' read -r id harness enforce; do
       [[ -n ${id} ]] || continue
-      path="${tests_dir}/${harness}"
+      # Same two entry forms the runner resolves: a test-harness field
+      # holding a `/` is repo-root-relative, a bare filename sits under the
+      # harness directory. Resolving only the second stats a path that
+      # cannot exist and reports the entry missing instead of classifying
+      # it, which silently shortens the section every reader trusts.
+      if [[ ${harness} == */* ]]; then
+        path="${root_dir}/${harness}"
+      else
+        path="${tests_dir}/${harness}"
+      fi
       if [[ ! -f ${path} ]]; then
         printf '%-34s harness not found: %s\n' "${id}" "${path}"
         continue
