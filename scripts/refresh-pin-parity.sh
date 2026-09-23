@@ -58,7 +58,7 @@ readonly LITERAL='[0-9]{8}-[0-9a-f]{7,40}'
 # shellcheck disable=SC2329 # invoked indirectly, by name, via enumerate_into
 function carrying_sources() {
   local src
-  (cd "${REPO_ROOT}" && git ls-files --cached --others --exclude-standard -z) |
+  (cd "${REPO_ROOT}" && git ls-files --cached -z) |
     while IFS= read -r -d '' src || [[ -n ${src} ]]; do
       [[ -n ${src} ]] || continue
       if [[ ${src} == tests/* ]]; then continue; fi

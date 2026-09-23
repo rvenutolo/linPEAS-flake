@@ -33,7 +33,10 @@ invoking pyflakes on python `run:` blocks. See
 docs/actionlint-embedded-linters.md.
 
 Env overrides (test-only):
-ACTIONLINT_PYFLAKES_FIXTURE_OVERRIDE — alternate fixture path
+
+```text
+  ACTIONLINT_PYFLAKES_FIXTURE_OVERRIDE — alternate fixture path
+```
 
 Exits 0 on clean, 1 when the canary fires (pyflakes no longer
 reaches python `run:` blocks), 2 when the canary could not run at all:
@@ -54,7 +57,10 @@ invoking shellcheck on `run:` blocks. See
 docs/actionlint-embedded-linters.md.
 
 Env overrides (test-only):
-ACTIONLINT_SMOKE_FIXTURE_OVERRIDE — alternate fixture path
+
+```text
+  ACTIONLINT_SMOKE_FIXTURE_OVERRIDE — alternate fixture path
+```
 
 Exits 0 on clean, 1 when the canary fires (shellcheck no longer
 reaches `run:` blocks), 2 when the canary could not run at all: the
@@ -195,10 +201,13 @@ changelog that was never the problem. git-cliff's own stderr is passed
 through rather than silenced, so the reason is visible in the job log.
 
 Env overrides (test-only):
-CHANGELOG_OVERRIDE — committed changelog path (default CHANGELOG.md)
-CLIFF_TOML_OVERRIDE — cliff config path (default cliff.toml)
-REGEN_OVERRIDE — pre-generated regen file; when set, the git-cliff
-call is skipped so the comparison logic can be tested without nix
+
+```text
+  CHANGELOG_OVERRIDE  — committed changelog path (default CHANGELOG.md)
+  CLIFF_TOML_OVERRIDE — cliff config path (default cliff.toml)
+  REGEN_OVERRIDE      — pre-generated regen file; when set, the git-cliff
+    call is skipped so the comparison logic can be tested without nix
+```
 
 ### scripts/check-changelog-links.sh
 
@@ -224,8 +233,11 @@ cliff.toml assertion that never fired. git-cliff's own stderr is passed
 through rather than silenced, so the reason is visible in the job log.
 
 Env overrides (test-only):
-CLIFF_TOML_OVERRIDE — path to a fixture cliff.toml instead of
-the repo-root cliff.toml
+
+```text
+  CLIFF_TOML_OVERRIDE — path to a fixture cliff.toml instead of
+    the repo-root cliff.toml
+```
 
 ### scripts/check-checkout-persist-credentials.sh
 
@@ -257,8 +269,11 @@ missing. A config that was never read cannot have drifted, so it must not
 borrow the drift code.
 
 Env overrides (test-only):
-CLIFF_TOML_OVERRIDE — path to a fixture cliff.toml instead of
-the repo-root cliff.toml
+
+```text
+  CLIFF_TOML_OVERRIDE — path to a fixture cliff.toml instead of
+    the repo-root cliff.toml
+```
 
 ### scripts/check-commitlint-config-explicit.sh
 
@@ -282,9 +297,12 @@ parity and cron string accuracy — and the daily arrow list matches the
 table's own daily rows, in strictly increasing UTC order.
 
 Exit codes:
-0 all checks passed
-1 drift detected (details printed to stderr)
-2 missing input files / parse error / workflow declares >1 cron line
+
+```text
+  0  all checks passed
+  1  drift detected (details printed to stderr)
+  2  missing input files / parse error / workflow declares >1 cron line
+```
 
 ### scripts/check-doc-anchors.sh
 
@@ -308,10 +326,13 @@ table)", and a pattern that flagged those would report the very phrasing
 this lint exists to encourage.
 
 Exit codes:
-0 no restatements found
-1 restatement(s) found (details printed to stderr)
-2 the check could not run: missing/empty .github/workflows directory,
-or a producer that lists or reads the doc files failed
+
+```text
+  0  no restatements found
+  1  restatement(s) found (details printed to stderr)
+  2  the check could not run: missing/empty .github/workflows directory,
+      or a producer that lists or reads the doc files failed
+```
 
 ### scripts/check-dockerhub-token-scope-split.sh
 
@@ -325,7 +346,7 @@ verify-latest-release.yml. The delete-capable token must never leak into
 workflows that only push images, and no unsuffixed secrets.DOCKERHUB_TOKEN
 may exist — only \_RW and \_DELETE are authoritative.
 
-The same split binds the manual recovery snippet in the docs. A
+The same split binds every manual recovery snippet in the docs. A
 shell-fenced Markdown block that performs a tag delete
 (`--request DELETE` / `-X DELETE`) against Docker Hub must name
 DOCKERHUB_TOKEN_DELETE and must not name DOCKERHUB_TOKEN_RW: the
@@ -604,14 +625,17 @@ treats one as a finding and reports a violation nobody observed.
 
 A script can reach exit 2 two ways, and both count:
 
-- a literal `exit 2` / `return 2` on a line that is not a comment
-- a call to a library helper that exits 2 in the caller's shell:
+```text
+  - a literal `exit 2` / `return 2` on a line that is not a comment
+  - a call to a library helper that exits 2 in the caller's shell:
     require_tool, enumerate_into, glob_into, filter_into,
     require_json_payload, payload_source_into, read_json_payload_into,
     make_temp
-    Detection is textual and direct-call-only: a helper reached through
-    another helper is already covered by that helper's own call site, and
-    chasing the source graph would report a script for code it never runs.
+```
+
+Detection is textual and direct-call-only: a helper reached through
+another helper is already covered by that helper's own call site, and
+chasing the source graph would report a script for code it never runs.
 
 The header is every line above the first line that is neither blank nor
 a comment. It is unwrapped before matching, because these contracts
@@ -620,10 +644,14 @@ clause split across two lines.
 
 Four contract shapes count as documenting exit 2, which is every shape
 the tree uses:
-Exits 2 when … (a dedicated sentence)
-Exits 0 on …, 1 on …, 2 on … (a comma-separated list)
-Exit: 0 …, 3 …, 2 usage error. (the same list, any order)
-Exit codes: … a `2` item line … (an enumerated block)
+
+```text
+  Exits 2 when …                        (a dedicated sentence)
+  Exits 0 on …, 1 on …, 2 on …          (a comma-separated list)
+  Exit: 0 …, 3 …, 2 usage error.        (the same list, any order)
+  Exit codes:  … a `2` item line …      (an enumerated block)
+```
+
 The list forms match only within one sentence, so a `2` in unrelated
 prose later in the header does not excuse a missing contract. The item
 form requires the 2 to stand alone as a token: `2FA` and `v2` are prose,
@@ -1282,14 +1310,17 @@ it does not guarantee the test ever RUNS. A harness reachable by no runner is
 a coverage no-op — the regressions it would catch pass green while the
 pairing guard stays satisfied. Reachability is via one of four runners:
 
-1. the HARNESSES array in scripts/run-harness-group.sh (harness-group job),
-1. the tests/refresh-\*.test.sh glob in scripts/run-doc-freshness.sh,
-1. a .github/lint-groups.yml member -> tests/check-<name>.test.sh
-    (executed by scripts/run-lint-group.sh), or
-1. a direct `tests/<x>.test.sh` invocation in a .github/workflows/\*.yml.
-    A tests/ harness is keyed by basename and a tracked `.claude/` one by its
-    repo-root-relative path, which is exactly how each is spelled in the
-    HARNESSES array, so the two key spaces cannot collide.
+```text
+  1. the HARNESSES array in scripts/run-harness-group.sh (harness-group job),
+  2. the tests/refresh-*.test.sh glob in scripts/run-doc-freshness.sh,
+  3. a .github/lint-groups.yml member -> tests/check-<name>.test.sh
+      (executed by scripts/run-lint-group.sh), or
+  4. a direct `tests/<x>.test.sh` invocation in a .github/workflows/*.yml.
+```
+
+A tests/ harness is keyed by basename and a tracked `.claude/` one by its
+repo-root-relative path, which is exactly how each is spelled in the
+HARNESSES array, so the two key spaces cannot collide.
 
 Overridable dirs/paths let the paired test harness point at fixtures.
 Exits 0 if every harness is reachable, 1 otherwise. Exits 2 when the
@@ -1398,7 +1429,7 @@ docs/\_data/ci-check-categories.yml map.
 
 **Options:**
 
-- `--check` — exit 1 if the doc would change; exit 2 if an input file
+- `--check` — exit 1 if the doc would change; exit 2 if an input file is missing, if ci.yml has needs: references to non-existent jobs, or if a tool fails to read them
 
 ### scripts/refresh-ci-summary.sh
 
@@ -1407,7 +1438,7 @@ from required-checks.md plus the ci-check-categories.yml map.
 
 **Options:**
 
-- `--check` — exit 1 if README.md would change; exit 2 if an input
+- `--check` — exit 1 if README.md would change; exit 2 if an input file is missing; do not mutate the working tree
 
 ### scripts/refresh-enforcement-matrix.sh
 
@@ -1436,7 +1467,7 @@ contradicts itself.
 
 **Options:**
 
-- `--check` — exit 1 if the block would change; exit 2 if the check
+- `--check` — exit 1 if the block would change; exit 2 if the check cannot run (doc missing, marker missing, no unclaimed sources, empty corpus, or a class regex that fails its canary) or if a blocking shape was found; do not mutate the working tree
 
 ### scripts/refresh-flake-show.sh
 
@@ -1445,7 +1476,7 @@ docs/reference/flake-outputs.md from `nix flake show --all-systems`.
 
 **Options:**
 
-- `--check` — exit 1 if the doc would change; exit 2 if the check
+- `--check` — exit 1 if the doc would change; exit 2 if the check cannot run (doc missing, or nix flake show fails); do not mutate the working tree
 
 ### scripts/refresh-just-recipes.sh
 
@@ -1455,7 +1486,7 @@ README.md and docs/reference/just-recipes.md from the current
 
 **Options:**
 
-- `--check` — exit 1 if either doc would change; exit 2 if either doc
+- `--check` — exit 1 if either doc would change; exit 2 if either doc is missing; do not mutate the working tree
 
 ### scripts/refresh-pin-parity.sh
 
@@ -1470,7 +1501,7 @@ fixtures too and a silent omission would read as coverage.
 
 **Options:**
 
-- `--check` — exit 1 if the block would change; exit 2 if the check
+- `--check` — exit 1 if the block would change; exit 2 if the check cannot run (doc missing, marker missing, or no tracked file carries the literal at all); do not mutate the working tree
 
 ### scripts/refresh-precommit-table.sh
 
@@ -1480,7 +1511,7 @@ in the flake.
 
 **Options:**
 
-- `--check` — exit 1 if the doc would change; exit 2 if the doc is
+- `--check` — exit 1 if the doc would change; exit 2 if the doc is missing; do not mutate the working tree
 
 ### scripts/refresh-scripts-reference.sh
 
@@ -1493,7 +1524,7 @@ in a Libraries section.
 
 **Options:**
 
-- `--check` — exit 1 if drift; exit 2 if the doc or the awk parser is
+- `--check` — exit 1 if drift; exit 2 if the doc or the awk parser is missing; do not mutate the working tree
 
 ### scripts/refresh-test-harnesses.sh
 
@@ -1509,7 +1540,7 @@ than the one on disk.
 
 **Options:**
 
-- `--check` — exit 1 if drift; exit 2 if the doc is missing, a harness
+- `--check` — exit 1 if drift; exit 2 if the doc is missing, a harness declares no subject or two, or a fixture directory is named by no harness; do not mutate the working tree
 
 ### scripts/refresh-treefmt-config.sh
 
@@ -1519,7 +1550,7 @@ exposed by `nix/treefmt-config.nix` as `devTooling.<system>.treefmtConfig`.
 
 **Options:**
 
-- `--check` — exit 1 if the doc would change; exit 2 if the check
+- `--check` — exit 1 if the doc would change; exit 2 if the check cannot run (doc missing, or nix eval fails); do not mutate the working tree
 
 ## Other
 
@@ -1641,11 +1672,14 @@ Honors LINT_ALLOW_EMPTY_SCAN=1 to accept a ref whose workflows dir holds
 no YAML.
 
 Exit codes:
-0 success (body on stdout, PRESSURE=<n> as the final line)
-2 missing inputs / parse error / nothing enumerated to measure,
-including an audit-state file that is absent, carries no
-LAST_AUDIT_SHA=\<40-hex> line, or names a commit this history does
-not contain
+
+```text
+  0  success (body on stdout, PRESSURE=<n> as the final line)
+  2  missing inputs / parse error / nothing enumerated to measure,
+      including an audit-state file that is absent, carries no
+      LAST_AUDIT_SHA=<40-hex> line, or names a commit this history does
+      not contain
+```
 
 ### scripts/gen-dashboard-data.sh
 
@@ -1694,25 +1728,31 @@ noise-suppression flags, and the exit-code mapping shared by the
 CI workflow and the pre-commit hook.
 
 Usage:
-scripts/octoscan-scan.sh # text output to stdout
-scripts/octoscan-scan.sh --sarif <path> # SARIF output to <path>
+
+```text
+  scripts/octoscan-scan.sh                 # text output to stdout
+  scripts/octoscan-scan.sh --sarif <path>  # SARIF output to <path>
+```
 
 Exit codes:
-0 — scan clean
-1 — findings present, the scanner ran and errored (image pull
-failure, scanner internal error), or the command line is
-unusable. A finding is told from a scanner error by the
-`has-finding` line printed to stdout (`has-finding=true|false`)
-— the same contract the CI workflow exposes via
-`$GITHUB_OUTPUT` — and by the `classification=` field beside it.
-2 — the scan could not proceed: `docker` is absent, `--sarif` was
-given while `jq` is absent, or a per-file SARIF temp file could
-not be created. The two tool guards report before any workflow
-file is read and print the `infra-failure` classification
-themselves; the temp-file failure reports itself, and can land
-after part of the directory has already been scanned. Either
-way the hook and the job still fail; only the diagnosis
-differs.
+
+```text
+  0 — scan clean
+  1 — findings present, the scanner ran and errored (image pull
+      failure, scanner internal error), or the command line is
+      unusable. A finding is told from a scanner error by the
+      `has-finding` line printed to stdout (`has-finding=true|false`)
+      — the same contract the CI workflow exposes via
+      `$GITHUB_OUTPUT` — and by the `classification=` field beside it.
+  2 — the scan could not proceed: `docker` is absent, `--sarif` was
+      given while `jq` is absent, or a per-file SARIF temp file could
+      not be created. The two tool guards report before any workflow
+      file is read and print the `infra-failure` classification
+      themselves; the temp-file failure reports itself, and can land
+      after part of the directory has already been scanned. Either
+      way the hook and the job still fail; only the diagnosis
+      differs.
+```
 
 Per-file iteration: octoscan v0.1.7 directory-target mode silently
 returns exit 0 with empty SARIF even when a single-file invocation
@@ -1724,23 +1764,26 @@ upload only when no file errored.
 
 Suppressions (CLI flags — `--config-file` is documented but
 `paths.<glob>.ignore` is a no-op in v0.1.7):
---disable-rules local-action : repo intentionally uses
-`./.github/actions/*` composite actions (e.g.
-notify-workflow-result, setup-nix); every reference is a
-false positive.
---disable-rules dangerous-write : every `>> "$GITHUB_OUTPUT"`
-and `>> "$GITHUB_ENV"` is flagged regardless of input
-trust; the rule has no notion of which writes carry
-attacker-controlled data, so it is unworkably noisy here.
---ignore '(needs|steps).\*\*.outputs.\*\*' : `expression-injection`
-fires on every workflow-internal `${{ needs.X.outputs.Y }}`
-/ `${{ steps.X.outputs.Y }}` reference; those carry data
-set by other jobs/steps in the same workflow, not external
-input.
---ignore "actions/checkout' with a custom ref" : same regex
-covers the renovate-flake-lock-refresh workflow's
-`actions/checkout` with `ref:` set to a bot-controlled
-branch — the ref source is internal, not attacker-supplied.
+
+```text
+  --disable-rules local-action  : repo intentionally uses
+      `./.github/actions/*` composite actions (e.g.
+      notify-workflow-result, setup-nix); every reference is a
+      false positive.
+  --disable-rules dangerous-write : every `>> "$GITHUB_OUTPUT"`
+      and `>> "$GITHUB_ENV"` is flagged regardless of input
+      trust; the rule has no notion of which writes carry
+      attacker-controlled data, so it is unworkably noisy here.
+  --ignore '(needs|steps)\.\*\*\.outputs\.\*\*' : `expression-injection`
+      fires on every workflow-internal `${{ needs.X.outputs.Y }}`
+      / `${{ steps.X.outputs.Y }}` reference; those carry data
+      set by other jobs/steps in the same workflow, not external
+      input.
+  --ignore "actions/checkout' with a custom ref" : same regex
+      covers the renovate-flake-lock-refresh workflow's
+      `actions/checkout` with `ref:` set to a bot-controlled
+      branch — the ref source is internal, not attacker-supplied.
+```
 
 Renovate manages OCTOSCAN_DIGEST + OCTOSCAN_VERSION in lockstep
 (renovate.json customManager scoped to this file).
@@ -1835,12 +1878,12 @@ record including the last, so this only fires on a broken producer.
 **Args:**
 
 - `$1` — name of the array to fill
-- `$2` — human-readable label naming the producer, used verbatim in both
+- `$2` — human-readable label naming the producer, used verbatim in both diagnostics below. Callers supply this rather than it being derived from argv\[0\]: argv[0] of `git ls-files -z ...` is just `git`, and a same-file wrapper function's name is even less informative to an operator reading the message.
 - `$@` — the producer command and its arguments
 
 **Exit codes:**
 
-- `2` — the producer failed, or the scan set was empty while
+- `2` — the producer failed, or the scan set was empty while LINT_ALLOW_EMPTY_SCAN was unset
 
 #### glob_into()
 
@@ -1979,7 +2022,7 @@ scored as agreement.
 
 **Stdout:**
 
-- one record per declaration, `<kind>\037<path>\037<script-path>`,
+- one record per declaration, `<kind>\037<path>\037<script-path>`, where `<kind>` is `generates` or `generates-block`
 
 ### scripts/lib/harness-assert.sh
 
@@ -2189,12 +2232,12 @@ check's own diagnostic names only the garbage case.
 
 - `$1` — source kind, used verbatim in every diagnostic
 - `$2` — the payload
-- `$3` — optional jq program emitting a message for the first field
-- `$4` — optional subject, prefixed to every diagnostic as `<subject>: `.
+- `$3` — optional jq program emitting a message for the first field whose type is wrong, and `empty` when the shape is acceptable
+- `$4` — optional subject, prefixed to every diagnostic as `<subject>: `. A source kind does not always identify what could not be read. Several sources in this tree are read by more than one caller: one override variable and one API route naming two different rulesets, one config file read by three lints, one pin file and one latest-release route read by both the bump script and the dashboard generator, and the name `flake.lock` reached by two checks. In each case the source alone leaves an operator unable to tell which subject's payload was malformed, so every caller sharing a source kind passes one. Callers whose source kind is unique to them pass nothing and their output is unchanged; the rule is a property of the whole tree, not of one script, so adding a second reader of an existing source means giving both readers a subject.
 
 **Exit codes:**
 
-- `2` — the payload is empty, unparsable, or the shape program
+- `2` — the payload is empty, unparsable, or the shape program named a fault
 
 #### payload_source_into()
 

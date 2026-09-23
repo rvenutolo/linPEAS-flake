@@ -160,9 +160,9 @@
 #      `LINT_ALLOW_EMPTY_SCAN=1` suppresses it for a deliberately empty
 #      scan root.
 #
-#   7. Nix-host reachability. Every assertion above binds a host to a tool
-#      it must be PRESENT for; this is the first binding a host to a tool
-#      it must be REACHABLE by. Any job whose `allowed-endpoints` carries
+#   7. Nix-host reachability. The assertions above that involve a tool at
+#      all bind a host to a tool it must be PRESENT for; this binds a host
+#      to a tool it must be REACHABLE by. Any job whose `allowed-endpoints` carries
 #      `cache.nixos.org` or `releases.nixos.org` must satisfy one of:
 #        - a step `uses:` the `./.github/actions/setup-nix` composite
 #          (the only nix-installing path anywhere in this tree), or
@@ -174,9 +174,12 @@
 #          `releases.nixos.org/nix/nix-<version>/install` do not count), or
 #        - an in-job `# egress-nix-exempt: <reason>` comment with a
 #          non-empty reason.
-#      An empty-reason marker is rejected outright, and a marker on a job
-#      whose allowlist carries neither host is reported as stale — the
-#      rule it would exempt does not apply to that job.
+#      An empty-reason marker is rejected when the job reaches no nix
+#      tooling — the only case the marker's reason is read at all. A marker on
+#      a job whose allowlist carries neither host is reported as stale —
+#      the rule it would exempt does not apply to that job. A marker on a
+#      job that carries a host and already reaches nix is read by nothing
+#      and goes unreported.
 #
 #      Detection deliberately does NOT follow callees: a job reaching nix
 #      indirectly through a `scripts/*.sh` invocation or a `just` recipe

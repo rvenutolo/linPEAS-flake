@@ -74,7 +74,7 @@ tree.)
     pre-commit hook, re-run in the required `flake-check` job, with CodeQL as
     the deeper dataflow second opinion. On non-PR runs a CRITICAL finding —
     or an error inside the analyze action, which counts the same — and a
-    failure before `analyze` ran, or a run cancelled at its timeout, are
+    failure before `analyze` ran, or a cancelled job, are
     paged as separate deduped issues, under `codeql-critical` and
     `codeql-infra`.
 
@@ -93,7 +93,7 @@ tree.)
 - **Status:** advisory by design. It is the cheapest scanner, but it fails
     on *any* finding (no severity threshold), so as a required check a
     single false positive would block merge. A finding, and a failure that
-    produced no complete findings result — a cancelled run and a SARIF
+    produced no complete findings result — a cancelled job and a SARIF
     upload failing after a clean scan among them — are paged as separate
     deduped issues, under `octoscan-finding` and `octoscan-infra`.
     octoscan's rule set is narrowed only
@@ -123,7 +123,7 @@ tree.)
     perfect 10 (the policy is strict), a scorecard payload the
     threshold script cannot read as JSON at all, a failure before or
     during the scan itself — a setup step, or an auth, egress or
-    check-execution error — or a run cancelled at its timeout, fails the run and
+    check-execution error, or a cancelled job — fails the run and
     opens a deduped `scorecard-drift` tracking issue; the next clean run
     closes it. The check set is curated — review-flow checks not applicable to a
     solo repo, checks duplicating an in-tree signal whether blocking or
@@ -156,7 +156,7 @@ tree.)
     list. Both paths read the same `zizmor.yml`, so neither is a check on
     the other's suppressions. The watchdog pages a finding, a scan that
     could not start because a step before it or `nix develop` itself
-    failed, or a run cancelled at its timeout, as a deduped
+    failed, or a cancelled job, as a deduped
     `zizmor-drift` issue, closed on the next clean run; a rule change arrives
     with the `flake.lock` bump whose PR `flake-check` already re-scans the
     files pre-commit's matching selects.

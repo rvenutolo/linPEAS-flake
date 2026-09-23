@@ -146,6 +146,82 @@ EOF
   fi
   rm --force -- "${lib_stderr}"
 
+  # 4b. Wrapped-annotation scenario: an @arg/@option/@exitcode/@stdout
+  # whose text runs past one comment line must render whole. Truncating
+  # it publishes a sentence that stops mid-clause with no ellipsis, and
+  # neither the freshness gate nor the shape gate can see it, because the
+  # generator and the committed file agree on the fragment.
+  fixture_dir="$(mktemp --directory)"
+  cat >"${fixture_dir}/wrapped.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description wrapped annotations
+# @option --check exit 1 if the doc would change; exit 2 if the check
+# cannot run; do not mutate the working tree
+# @arg $1 a label naming the producer, used verbatim in both the
+# success line and the diagnostic
+# @exitcode 2 the producer failed, or the scan set was empty while
+# LINT_ALLOW_EMPTY_SCAN was unset
+set -Eeuo pipefail
+echo hi
+EOF
+  local wrapped_json
+  wrapped_json="$(awk -f "${REPO_ROOT}/scripts/_script_docs.awk" "${fixture_dir}/wrapped.sh")"
+  rm --recursive --force -- "${fixture_dir}"
+  fixture_dir=''
+  if grep --fixed-strings --quiet 'do not mutate the working tree' <<<"${wrapped_json}" &&
+    grep --fixed-strings --quiet 'success line and the diagnostic' <<<"${wrapped_json}" &&
+    grep --fixed-strings --quiet 'LINT_ALLOW_EMPTY_SCAN was unset' <<<"${wrapped_json}"; then
+    pass 'a wrapped @option/@arg/@exitcode renders its whole text'
+  else
+    fail 'a wrapped @option/@arg/@exitcode renders its whole text'
+  fi
+
+  # A blank comment line closes the annotation: an unrelated comment
+  # after it must not be swallowed into the last one.
+  fixture_dir="$(mktemp --directory)"
+  cat >"${fixture_dir}/closed.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description closed annotations
+# @option --check exit 1 if the doc would change
+#
+# An unrelated trailing note.
+set -Eeuo pipefail
+echo hi
+EOF
+  local closed_json
+  closed_json="$(awk -f "${REPO_ROOT}/scripts/_script_docs.awk" "${fixture_dir}/closed.sh")"
+  rm --recursive --force -- "${fixture_dir}"
+  fixture_dir=''
+  if grep --fixed-strings --quiet 'An unrelated trailing note' <<<"${closed_json}"; then
+    fail 'a blank comment line closes a wrapped annotation'
+  else
+    pass 'a blank comment line closes a wrapped annotation'
+  fi
+
+  # 4c. Indented-run scenario: a description carrying a usage block, an
+  # exit-code ladder or a two-column pairing must reach the page as
+  # written. Emitted as a paragraph it collapses to one line and Markdown
+  # re-interprets its metacharacters, which publishes a shape — and here a
+  # flag VALUE — the source comment does not carry. Asserted end to end
+  # against the committed doc, because the renderer is not reachable
+  # without running the generator.
+  local ignore_src rendered_doc
+  ignore_src="$(sed -n "s/^readonly IGNORE_PATTERN='\\(.*\\)'$/\\1/p" \
+    "${REPO_ROOT}/scripts/octoscan-scan.sh")"
+  rendered_doc="${REPO_ROOT}/docs/reference/scripts.md"
+  # The escapes are the point: a paragraph render eats the backslashes and
+  # publishes a different regex. Assert on the escape-bearing fragment, not
+  # on a prefix that survives either way.
+  local ignore_frag
+  ignore_frag='\.\*\*\.outputs\.\*\*'
+  if [[ -n ${ignore_src} ]] &&
+    [[ ${ignore_src} == *"${ignore_frag}"* ]] &&
+    grep --fixed-strings --quiet -- "${ignore_frag}" "${rendered_doc}"; then
+    pass 'an indented run reaches the page with its escapes intact'
+  else
+    fail 'an indented run reaches the page with its escapes intact'
+  fi
+
   # 5. Parser-shape scenario: a parser that emits JSON of another shape
   # is a document the renderer could not read, not drift. The override
   # stands in for a changed parser; the shape gate must catch it before
