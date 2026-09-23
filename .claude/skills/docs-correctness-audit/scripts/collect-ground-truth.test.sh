@@ -358,7 +358,7 @@ case "${both_out}" in *"lychee skipped"*) check "a skipped input is reported eve
 case "${both_out}" in *"gone.md"*) check "the broken link is reported alongside the skip" 0 ;; *) check "the broken link is reported alongside the skip" 1 ;; esac
 rm -rf "${fy}"
 
-# --- harness live-tree classification ---
+# --- harness live-tree marker shortlist ---
 # The roster's enforce field says whether a harness runs an enforce SCRIPT.
 # It does not say whether a scenario reads the live tree, and prose that
 # reads "test-only" off the roster is wrong for a harness that does. Every
@@ -475,81 +475,81 @@ run_it
 H
 # shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
 lt_out="$(source "${COLLECTOR}" && list_harness_live_tree "${lt}/run-harness-group.sh" "${lt}/tests" "${lt}")"
-if printf '%s\n' "${lt_out}" | grep -qE '^fixture-only +fixtures only'; then
-  check "a harness driven only off fixtures is not called live-tree" 0
+if printf '%s\n' "${lt_out}" | grep -qE '^fixture-only +no markers'; then
+  check "a harness driven only off fixtures matches no marker" 0
 else
-  check "a harness driven only off fixtures is not called live-tree" 1
+  check "a harness driven only off fixtures matches no marker" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^reads-live +LIVE-TREE'; then
-  check "a scenario run from the repo root is called live-tree" 0
+if printf '%s\n' "${lt_out}" | grep -qE '^reads-live +markers found'; then
+  check "a scenario run from the repo root is a marker hit" 0
 else
-  check "a scenario run from the repo root is called live-tree" 1
+  check "a scenario run from the repo root is a marker hit" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^has-enforce +LIVE-TREE \(enforce=check-has-enforce\.sh\)'; then
-  check "the enforce script is reported beside the verdict" 0
+if printf '%s\n' "${lt_out}" | grep -qE '^has-enforce +markers found \(enforce=check-has-enforce\.sh\)'; then
+  check "the enforce script is reported beside the marker result" 0
 else
-  check "the enforce script is reported beside the verdict" 1
+  check "the enforce script is reported beside the marker result" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^reads-live +LIVE-TREE \(enforce=-\)'; then
-  check "a live-tree harness with no enforce script is still marked live-tree" 0
+if printf '%s\n' "${lt_out}" | grep -qE '^reads-live +markers found \(enforce=-\)'; then
+  check "a matching harness with no enforce script still reports its markers" 0
 else
-  check "a live-tree harness with no enforce script is still marked live-tree" 1
+  check "a matching harness with no enforce script still reports its markers" 1
 fi
 if printf '%s\n' "${lt_out}" | grep -qE '^absent +harness not found'; then
   check "a roster entry naming a missing harness says so" 0
 else
   check "a roster entry naming a missing harness says so" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^path-form +LIVE-TREE'; then
+if printf '%s\n' "${lt_out}" | grep -qE '^path-form +markers found'; then
   check "a repo-root-relative roster entry is resolved, not reported missing" 0
 else
   check "a repo-root-relative roster entry is resolved, not reported missing" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^git-idiom +LIVE-TREE'; then
-  check "a harness reaching the checkout through git alone is called live-tree" 0
+if printf '%s\n' "${lt_out}" | grep -qE '^git-idiom +markers found'; then
+  check "a harness reaching the checkout through git alone matches a marker" 0
 else
-  check "a harness reaching the checkout through git alone is called live-tree" 1
+  check "a harness reaching the checkout through git alone matches a marker" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^preamble-only +fixtures only'; then
-  check "the repo-root preamble alone does not make a harness live-tree" 0
+if printf '%s\n' "${lt_out}" | grep -qE '^preamble-only +no markers'; then
+  check "the repo-root preamble alone does not mark a harness" 0
 else
-  check "the repo-root preamble alone does not make a harness live-tree" 1
+  check "the repo-root preamble alone does not mark a harness" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^comment-marker +fixtures only'; then
-  check "a marker word inside a comment does not make a harness live-tree" 0
+if printf '%s\n' "${lt_out}" | grep -qE '^comment-marker +no markers'; then
+  check "a marker word inside a comment does not mark a harness" 0
 else
-  check "a marker word inside a comment does not make a harness live-tree" 1
+  check "a marker word inside a comment does not mark a harness" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^sandbox-git +fixtures only'; then
-  check "git -C against a scratch sandbox is not a live-tree read" 0
+if printf '%s\n' "${lt_out}" | grep -qE '^sandbox-git +no markers'; then
+  check "git -C against a scratch sandbox matches no marker" 0
 else
-  check "git -C against a scratch sandbox is not a live-tree read" 1
+  check "git -C against a scratch sandbox matches no marker" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^cd-teardown +fixtures only'; then
+if printf '%s\n' "${lt_out}" | grep -qE '^cd-teardown +no markers'; then
   check "a cd back to the repo root after a sandbox is a teardown, not a scenario" 0
 else
   check "a cd back to the repo root after a sandbox is a teardown, not a scenario" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^cd-first +LIVE-TREE'; then
+if printf '%s\n' "${lt_out}" | grep -qE '^cd-first +markers found'; then
   check "a cd to the repo root before anything else is a live-tree scenario" 0
 else
   check "a cd to the repo root before anything else is a live-tree scenario" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^fixture-enforce +fixtures only \(enforce=check-fixture-enforce\.sh\)'; then
+if printf '%s\n' "${lt_out}" | grep -qE '^fixture-enforce +no markers \(enforce=check-fixture-enforce\.sh\)'; then
   check "a fixtures-only harness still reports its enforce script" 0
 else
   check "a fixtures-only harness still reports its enforce script" 1
 fi
 # --- prefix-matched checkout names and fixture-path cd ---
-if printf '%s\n' "${lt_out}" | grep -qE '^prefix-var +fixtures only'; then
-  check "a sandbox named after the repo-root variable is not live-tree" 0
+if printf '%s\n' "${lt_out}" | grep -qE '^prefix-var +no markers'; then
+  check "a sandbox named after the repo-root variable has no markers" 0
 else
-  check "a sandbox named after the repo-root variable is not live-tree" 1
+  check "a sandbox named after the repo-root variable has no markers" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^cd-fixture-path +fixtures only'; then
-  check "a cd into a fixture tree under the repo root is not live-tree" 0
+if printf '%s\n' "${lt_out}" | grep -qE '^cd-fixture-path +no markers'; then
+  check "a cd into a fixture tree under the repo root has no markers" 0
 else
-  check "a cd into a fixture tree under the repo root is not live-tree" 1
+  check "a cd into a fixture tree under the repo root has no markers" 1
 fi
 # The roster holds comment lines. A comment must contribute no row, and
 # must not be read as the id of the entry that follows it.

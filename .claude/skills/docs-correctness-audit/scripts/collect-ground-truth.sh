@@ -30,6 +30,10 @@ section() { printf '\n===== %s =====\n' "$1"; }
 # repo rather than about a fixture. Prose calling that harness "test-only"
 # is then wrong while the roster it was derived from is right, so no
 # freshness gate covers it and reading the roster does not find it.
+#
+# What this function contributes to that question is a shortlist, not an
+# answer: it greps for a few shapes, and it both misses and over-reports.
+# Open the harness before judging any prose about it.
 # @arg $1 path to run-harness-group.sh  @arg $2 directory holding the harnesses
 # @arg $3 repo root a path-form entry resolves against (default `.`)
 list_harness_live_tree() {
@@ -58,36 +62,34 @@ list_harness_live_tree() {
         printf '%-34s harness not found: %s\n' "${id}" "${path}"
         continue
       fi
-      # Every harness resolves its subject through ${REPO_ROOT}/scripts, so
-      # that path is not the signal — it is how a harness finds the script,
-      # in fixture scenarios too. A live-tree READ is narrower: running the
-      # subject from the repo root with no fixture override, or reading the
-      # real nix/, .github/, docs/ or lock files, and `git -C` pointed at
-      # the checkout. `git -C` against a `mktemp` sandbox is the opposite:
-      # a scratch repo built to be thrown away, so the directory a harness
-      # names is what decides. `git rev-parse --show-toplevel` decides
-      # nothing — nearly every harness opens with it to find the checkout
-      # it resolves its subject through, so matching it would mark the
-      # whole roster live and the section would classify nothing.
+      # This is a grep, and it is neither sound nor complete. It looks for
+      # a handful of shapes that usually mean a harness touched the real
+      # checkout: a run from the repo root, a read of the real nix/,
+      # .github/ or docs/ trees or the lock files, `git ls-files`, and
+      # `git -C` naming the checkout through one of four variables. It
+      # ignores everything after the first `#` on a line, so a marker a
+      # harness only mentions while explaining it is not counted.
       #
-      # Two deliberate limits, because this is a grep and the output is a
-      # shortlist to open rather than a classification to trust:
+      # A bare `cd "${REPO_ROOT}"` on its own line counts too, but only
+      # when it is the first `cd` in the file by textual order: changing to
+      # the repo root before anything else runs the scenarios there, while
+      # changing back to it after a sandbox is a teardown.
       #
-      #   - Everything after the first `#` on a line is ignored. That is
-      #     not the same as ignoring comment lines: a live read sitting
-      #     after a `#` inside a string is missed. The alternative, counting
-      #     a producer a harness only *names* while explaining it, was the
-      #     worse error.
-      #   - A bare `cd "${REPO_ROOT}"` counts only when no other `cd`
-      #     precedes it in the file. Changing to the repo root first runs
-      #     the scenarios there; changing back to it after a sandbox is a
-      #     teardown. This reads textual order, not execution order, so a
-      #     `cd` inside a function called later, or inside a branch, is not
-      #     seen.
+      # What it misses, and does not try to reach: a harness that runs its
+      # real subject with no override and lets that subject find the tree
+      # (`run-harness-group` and `octoscan-scan` both do); a checkout named
+      # by any other variable; a `cd` reached through a substitution or
+      # written inside a function or branch; a live read sitting after a
+      # `#` inside a string. What it over-reports: a `cd` to the repo root
+      # that exists only so a relative fixture path resolves, a marker
+      # inside a fixture body written with a heredoc, and `git ls-files`
+      # run against a sandbox rather than the checkout.
       #
-      # A matched line can also sit inside a fixture body a harness writes
-      # with a heredoc. The section prints what matched so the reader can
-      # tell the two apart; the trailer below says so.
+      # Both directions were measured against the roster and left standing,
+      # because the output is a shortlist of harnesses to open rather than
+      # a verdict to cite. Four rounds of tightening the shapes each fixed
+      # the cases named and left others; the labels below say "markers"
+      # rather than a classification for that reason.
       markers="$(grep -nE '^[^#]*(cd "?\$\{REPO_ROOT\}"? &&|\$\{REPO_ROOT\}/(nix|\.github|docs|flake\.(lock|nix))|git ls-files|git -C "?\$\{?(REPO_ROOT|REAL_REPO|repo_root|here)\}?"?[[:space:]])' "${path}" |
         head -4 || true)"
       if [[ -z ${markers} ]] &&
@@ -96,10 +98,10 @@ list_harness_live_tree() {
         markers="$(grep -nE '^[[:space:]]*\(?cd "?\$\{REPO_ROOT\}"?[[:space:]]*$' "${path}" | head -1)"
       fi
       if [[ -n ${markers} ]]; then
-        printf '%-34s LIVE-TREE (enforce=%s)\n' "${id}" "${enforce:--}"
+        printf '%-34s markers found (enforce=%s)\n' "${id}" "${enforce:--}"
         printf '%s\n' "${markers}" | sed 's/^/    /'
       else
-        printf '%-34s fixtures only (enforce=%s)\n' "${id}" "${enforce:--}"
+        printf '%-34s no markers (enforce=%s)\n' "${id}" "${enforce:--}"
       fi
     done
 }
@@ -674,15 +676,22 @@ main() {
   echo ' ABSENT from this list exists in no workflow, no lint group and no harness'
   echo ' group — high severity.)'
 
-  section "HARNESS LIVE-TREE SCENARIOS (which harness-group harnesses read the real repo, not a fixture)"
+  section "HARNESS LIVE-TREE SCENARIOS (harness-group harnesses whose text matches a live-tree marker — a shortlist to open, not a verdict)"
   list_harness_live_tree scripts/run-harness-group.sh tests
-  echo '(A harness listed LIVE-TREE with enforce=- is still test-only in the'
-  echo ' enforcement model and still fails a PR on a live-tree fact. Prose'
-  echo ' calling it "test-only", "fixture tests alone" or "probes no live tree"'
-  echo ' is a finding. Open the named lines before filing one either way: a'
-  echo ' matched line can sit inside a fixture body the harness writes with a'
-  echo ' heredoc, and a harness can read the live tree in a way no line here'
-  echo ' names. The verdicts are a shortlist, not a classification.)'
+  echo '(This is a shortlist of harnesses to open, not a classification.'
+  echo ' A row saying "markers found" means some line matched; the line may'
+  echo ' sit inside a fixture body the harness writes with a heredoc, or be'
+  echo ' a cd that exists only so a relative fixture path resolves. A row'
+  echo ' saying "no markers" does NOT mean fixtures-only: a harness that'
+  echo ' runs its real subject with no override reads whatever that subject'
+  echo ' reads, and nothing here sees it — run-harness-group and'
+  echo ' octoscan-scan are two such rows.'
+  echo
+  echo ' So do not cite a row. Open the harness, decide for yourself, and'
+  echo ' only then judge prose calling it "test-only", "fixture tests alone"'
+  echo ' or "probes no live tree". A harness that asserts a fact about the'
+  echo ' repo fails a pull request on it whatever the enforcement model'
+  echo ' calls it.)'
 
   section "WORKFLOW CRONS (authoritative schedules; ci.md table must match)"
   list_workflow_crons .github/workflows

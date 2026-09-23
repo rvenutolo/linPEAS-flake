@@ -37,7 +37,8 @@ constant rather than inferring a path from its name. Roughly a third of
 the harnesses build their tree at runtime and have no fixture directory
 at all; those render an em dash in the census.
 
-Every harness, its subject and its fixture directories are listed in
+Every `tests/*.test.sh` harness, its subject and its fixture directories
+are listed in
 [`docs/reference/test-harnesses.md`](../docs/reference/test-harnesses.md),
 which `scripts/refresh-test-harnesses.sh` generates and a pre-commit
 hook holds fresh.

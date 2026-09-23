@@ -22,8 +22,9 @@
           # linpeas invokes grep/sed/awk/find/ps internally for most of its
           # checks. Ship them so the image is actually useful for its
           # intended use cases (container audit, CI image scanning,
-          # forensics on mounted captured filesystems, and host audit when
-          # launched with host namespaces + bind mount). See
+          # forensics on mounted captured filesystems, base-image
+          # hardening review, and a read-only sweep of a bind-mounted host
+          # tree). See
           # docs/install/docker.md for the use-case framing.
           paths = [
             pkgs.bashInteractive

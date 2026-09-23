@@ -25,7 +25,8 @@ BEGIN {
   n_fn = 0
   pending = 0
   fatal = 0
-  state = ""  # "desc" | "example" | ""
+  state = ""  # "desc" | "example" | "arg" | "opt" | "exit" | "std" | ""
+  cur_idx = 0  # index within the tag array `state` names
   init_target(0)
 }
 
@@ -109,6 +110,28 @@ in_header && !/^[[:space:]]*$/ && !/^#/ {
     } else {
       example[cur] = example[cur] "\n" body
     }
+  } else if (state == "arg" || state == "opt" || state == "exit" || state == "std") {
+    # A wrapped @arg/@option/@exitcode/@stdout line. These render as one
+    # list item, so the continuation joins with a single space rather than
+    # a newline; the line's own leading indent is stripped first, so a
+    # `#   wrapped` continuation does not carry three spaces into the
+    # join. A comment line with no text closes the annotation — without
+    # that, unrelated trailing prose would be swallowed into the last one.
+    # "No text" means no non-space content, so a `#` followed by spaces
+    # closes it too.
+    cont = body
+    sub(/^[[:space:]]+/, "", cont)
+    if (cont == "") {
+      state = ""
+    } else if (state == "arg") {
+      arg_text[cur, cur_idx] = arg_text[cur, cur_idx] " " cont
+    } else if (state == "opt") {
+      opt_text[cur, cur_idx] = opt_text[cur, cur_idx] " " cont
+    } else if (state == "exit") {
+      exit_text[cur, cur_idx] = exit_text[cur, cur_idx] " " cont
+    } else {
+      std_text[cur, cur_idx] = std_text[cur, cur_idx] " " cont
+    }
   }
   # Otherwise (state == ""): plain comment we do not capture.
   next
@@ -183,7 +206,8 @@ function handle_tag(segment,   tag, rest, name, text) {
     arg_name[cur, n_args[cur]] = name
     arg_text[cur, n_args[cur]] = text
     n_args[cur]++
-    state = ""
+    cur_idx = n_args[cur] - 1
+    state = "arg"
   } else if (tag == "option") {
     name = rest
     sub(/[[:space:]].*$/, "", name)
@@ -192,7 +216,8 @@ function handle_tag(segment,   tag, rest, name, text) {
     opt_flag[cur, n_opts[cur]] = name
     opt_text[cur, n_opts[cur]] = text
     n_opts[cur]++
-    state = ""
+    cur_idx = n_opts[cur] - 1
+    state = "opt"
   } else if (tag == "exitcode") {
     # rest = "N TEXT..."
     name = rest
@@ -202,11 +227,13 @@ function handle_tag(segment,   tag, rest, name, text) {
     exit_code[cur, n_exit[cur]] = name
     exit_text[cur, n_exit[cur]] = text
     n_exit[cur]++
-    state = ""
+    cur_idx = n_exit[cur] - 1
+    state = "exit"
   } else if (tag == "stdout") {
     std_text[cur, n_std[cur]] = rest
     n_std[cur]++
-    state = ""
+    cur_idx = n_std[cur] - 1
+    state = "std"
   } else if (tag == "example") {
     state = "example"
     # rest (if any) ignored; example body is the following indented lines

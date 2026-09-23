@@ -246,7 +246,8 @@ libraries they source, *and* the `scripts/*.awk` programs), workflows, the
 **ci.yml top-level job list**, **lint-group membership**, the
 **`VALID CI JOB / CHECK NAMES`** union allowlist (the ghost/mislabel detector
 this audit turns on), a **`HARNESS LIVE-TREE SCENARIOS`** row per harness
-saying whether it reads the real repo or only fixtures, workflow crons, the
+shortlisting the ones whose text matches a live-tree marker (a list to
+open, not a classification), workflow crons, the
 required-check context count, an
 **`EPHEMERAL-TOKEN HITS`** sweep of banned token shapes over tracked docs, and
 an **`UNRESOLVED INTERNAL LINKS / ANCHORS`** check via `lychee --offline`.

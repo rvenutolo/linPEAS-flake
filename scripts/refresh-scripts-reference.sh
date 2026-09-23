@@ -71,7 +71,43 @@ function emit_body() {
   stdout_len="$(jq --raw-output '.stdout | length' <<<"${json}")"
   example="$(jq --raw-output '.example' <<<"${json}")"
 
-  printf '%s\n\n' "${description}"
+  # A description can carry an indented run — a usage block, an exit-code
+  # ladder, a two-column "hit shape / compliant shape" pairing. Emitted as
+  # a paragraph those collapse into one line and their Markdown
+  # metacharacters are re-interpreted, which publishes a shape, and
+  # sometimes a value, the source comment does not carry. Fence each run so
+  # it reaches the page as written.
+  printf '%s\n' "${description}" | awk '
+    # An indented run only opens a fence when the line before it ends in a
+    # colon. That is what separates a deliberate block — "Exit codes:",
+    # "Usage:", "...both count:" — from ordinary prose a header happens to
+    # wrap at an indent, which is the common case and must stay a
+    # paragraph.
+    /^[[:space:]][[:space:]]+[^[:space:]]/ {
+      if (!fenced) {
+        if (prev ~ /:[[:space:]]*$/) { print "```text"; fenced = 1 }
+        else { prev = $0; print; next }
+      }
+      # A comment aligns its continuations under the text they belong to,
+      # which lands on odd columns. Inside a fence those become file
+      # indentation, and editorconfig wants multiples of two. Round each
+      # line up to the next even column: the grouping the fence exists to
+      # keep survives, one space wider.
+      body = $0
+      indent = match(body, /[^ ]/) - 1
+      if (indent % 2) { body = " " body }
+      print body
+      prev = $0
+      next
+    }
+    {
+      if (fenced) { print "```"; fenced = 0 }
+      print
+      prev = $0
+    }
+    END { if (fenced) print "```" }
+  '
+  printf '\n'
 
   local i
   if [[ ${args_len} -gt 0 ]]; then
