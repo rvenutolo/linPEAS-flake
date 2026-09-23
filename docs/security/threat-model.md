@@ -79,9 +79,8 @@ forgery on `main`.
 - Tag-protection ruleset (`release-tag-protection`) blocks deletion,
     non-fast-forward update, and arbitrary update of release-tag refs,
     with no bypass actors — release tags are immutable once minted, but
-    minting one is not itself a restricted operation; drift-check lint
-    asserts the ruleset is intact and that its bypass-actor list is
-    empty.
+    minting one is not itself a restricted operation. The ruleset is
+    configured GitHub-side; nothing in-tree probes it.
 - Bot commits land via REST `PUT /contents` and are web-flow signed; the
     release tag is created through the API rather than a `git push`, and no PAT
     is involved.

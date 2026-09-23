@@ -306,4 +306,7 @@ Repository settings knobs the security model depends on:
 - Account: 2FA enabled on the maintainer account with non-SMS second
     factor (specifics not recorded).
 
-Any drift on any of the above is treated as a security incident.
+Any drift on any of the above is treated as a security incident. These
+are GitHub-side settings; no check in this repository probes them, so
+drift is caught by review of the repository settings rather than by a
+scheduled check.

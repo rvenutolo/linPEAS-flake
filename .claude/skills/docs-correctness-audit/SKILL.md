@@ -261,10 +261,12 @@ finding: record it, and treat both sections as unchecked rather than clean.
 
 ### 2. Fan out read-only readers, one per doc cluster
 
-Cap the fan-out at **four concurrent readers**. A fifth has been measured on
-this repo to add cost without adding recall, and the clusters that come back
-empty are stable across cycles — spend the slot on a second reader for a dense
-cluster instead. If a reader completes and a later one dies, its output is a
+Cap the fan-out at **four concurrent readers**. The map has five clusters, so
+the fifth runs as a slot frees. Cost and recall were measured for the four
+user-facing clusters only ([`evals/tuning-results.md`](evals/tuning-results.md));
+the `claude-tooling` reader is unmeasured. The clusters that come back empty
+are stable across cycles — spend a later freed slot on a second reader for a
+dense cluster rather than re-dispatching an empty one. If a reader completes and a later one dies, its output is a
 finished result: keep it, fold it into the report, and do not re-dispatch that
 cluster. Amend the shared reader brief when you do, so a re-dispatched sibling
 does not re-derive what it already answered.

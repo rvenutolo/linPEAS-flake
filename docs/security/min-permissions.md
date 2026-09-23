@@ -17,10 +17,9 @@ Strict least-privilege rule for every workflow in `.github/workflows/`.
 
 Rule 1 is what stops a job from inheriting the repo-wide default: in a
 workflow with no top-level `permissions:` at all, every job that declares
-none of its own takes that default instead. The default is pinned to
-`read` here, but one UI flip to `write`
-would widen every such job at once, and nothing in the workflow file
-would record it.
+none of its own takes that default instead. The repo-wide default is
+set to `read`, but one UI flip to `write` would widen every such job at
+once, and nothing in the workflow file would record it.
 
 Rule 2 then forbids leaning on the empty top-level block. A job that
 declares no scopes states nothing about what it needs, so the posture

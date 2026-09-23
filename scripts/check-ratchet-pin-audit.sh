@@ -7,10 +7,9 @@
 # nix/devshell.nix devShell, and a documented ratchet version matching
 # the one the devShell ships — so future edits cannot silently weaken it.
 
-# Lint: assert ratchet-pin-audit.yml retains the eleven structural
-# hardening invariants this script enforces — each one is asserted
-# below and named in its own diagnostic, so the assertions are the
-# specification.
+# Lint: assert ratchet-pin-audit.yml retains the structural hardening
+# invariants this script enforces — each one is asserted below and named
+# in its own diagnostic, so the assertions are the specification.
 #
 # The version assertion exists because `ratchet` comes from nixpkgs as a
 # bare devShell entry with no pin in the tree, so its version floats with
