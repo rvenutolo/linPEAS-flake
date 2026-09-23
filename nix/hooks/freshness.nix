@@ -368,6 +368,29 @@ in
     pass_filenames = false;
     language = "system";
   };
+  # Asserts every CI job or required check named in prose resolves to a
+  # real workflow job, and that a lint-group or harness-roster member is
+  # never called a standalone job or a required check.
+  check-prose-ci-names = {
+    enable = true;
+    name = "check-prose-ci-names";
+    description = "A CI job or required check named in prose must resolve to a real job.";
+    entry = "${pkgs-unstable.writeShellScript "check-prose-ci-names-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${toolPath}:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-prose-ci-names.sh
+    ''}";
+    # Matches the scan set the script builds, which is every Markdown and
+    # YAML file a commit would carry, not just the ones under docs/ and
+    # .github/. A narrower pattern leaves the hook silent on edits the CI
+    # job would still fail, and the job-name-dense category map is one of
+    # the files that would slip through.
+    files = "^(.*\\.md|.*\\.ya?ml|scripts/run-harness-group\\.sh|scripts/check-prose-ci-names\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Asserts docs outside ci.md never restate a literal workflow cron
   # time: a line naming a workflow and carrying an HH:MM clock time
   # belongs only in the ci.md schedule table; other docs link it.

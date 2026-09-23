@@ -1190,6 +1190,66 @@ Lint: the SHA embedded in `flake.nix`'s
 `pre-commit-hooks` input URL matches `flake.lock`'s pinned
 `pre-commit-hooks.locked.rev`.
 
+### scripts/check-prose-ci-names.sh
+
+Lint: every CI job or required check named in prose must
+resolve to something that really runs. Prose that puts a backticked name
+immediately against the claim noun — either order, for both "job" and
+"required check" — is asserting that the name is a unit CI schedules.
+Two ways that assertion goes wrong, both invisible to a freshness gate
+because nothing generates the sentence:
+
+```text
+  ghost     the name exists in no workflow, no lint group and no harness
+            roster, so the sentence points at nothing.
+  mislabel  the name resolves, but not to the kind of thing the sentence
+            calls it. A lint-group member or harness-roster entry runs
+            inside a batched group job, so it is never a standalone job.
+            A whole workflow is a CI unit, so calling it a job is loose
+            rather than wrong — but a required-check context always names
+            a job, so a workflow under a check noun is still a mislabel.
+```
+
+The valid-name set is derived, never listed: every workflow's `jobs:`
+keys, every workflow's own bare basename, every lint-group name and
+member in .github/lint-groups.yml, and the first pipe-delimited field of
+every entry in the harness roster. Job outranks workflow outranks member,
+so a name carried by more than one source is judged by the strongest.
+
+Only adjacency counts as a claim. A backticked name merely near the word
+"job" is usually a different noun entirely — one naming a list, or an
+artifact — so a proximity window flags those at a rate that makes the
+lint unusable. A comma-and-`and` list stands wherever a single name may,
+on either side of the noun, and the copula forms cover "is a job" and
+"are required checks". Two adjacency shapes are still not claims and are
+dropped: a filename-shaped name, which names the file a job lives in,
+and an adjectival use (job output, job inputs), which describes a job's
+field rather than naming a job, whether one name holds that position or
+several coordinated ones do.
+
+Fenced lines are skipped outright — they leave the prose tally as well as
+the scan — because a fence quoting workflow YAML is showing a name rather
+than claiming one. A fence closes only on a marker of the same character
+that is at least as long as the one that opened it, so a shorter or
+different marker quoted inside is content; an equal-or-longer one closes
+it even when it carries an info string, which this does not model.
+Blockquoted fences count. Indentation is uncapped, because this repo's
+list-item fences are indented past the CommonMark limit, so a document
+displaying a marker inside an indented block opens a fence the lint
+believes is real. A file ending with a fence still open is therefore a
+precondition failure rather than a clean file. Inline code spans are
+kept: they are what the lint reads.
+
+Exit codes:
+
+```text
+  0  every name claimed in prose resolves to something the sentence's own
+      claim noun admits
+  1  ghost or mislabel name(s) found (details printed to stderr)
+  2  the check could not run: a missing or empty name source, or a
+      producer that lists or reads the scanned files failed
+```
+
 ### scripts/check-pull-request-target-absent.sh
 
 Lint: hard-fail if any workflow under

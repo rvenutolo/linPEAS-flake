@@ -1,0 +1,8 @@
+name: Ratchet
+on:
+  push:
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - run: "true"

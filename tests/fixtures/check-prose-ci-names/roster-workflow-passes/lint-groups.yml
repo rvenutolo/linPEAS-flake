@@ -1,0 +1,3 @@
+lint-doc-invariants:
+  - doc-anchors
+  - ephemeral-refs
