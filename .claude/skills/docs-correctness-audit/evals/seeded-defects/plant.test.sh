@@ -108,7 +108,10 @@ check "unresolvable anchor names the miss" \
 # A seed can span two files through "also" edits. The fixture plants one seed
 # whose also-edits land above its primary line in the same file and in a
 # second file, then a later seed inserts above that second-file location, so
-# every recorded line has to move with the inserts that follow it.
+# every recorded line has to move with the inserts that follow it. A third
+# inserts directly below that same location, which must not move it; a fourth
+# replaces a from-string that also appears earlier on its line, outside the
+# anchor, and must edit the occurrence inside the anchor.
 "$plant" --clean >/dev/null 2>&1 || true
 SEEDS_OVERRIDE="$here/fixtures/seeds-also.json" "$plant" >/dev/null
 wt="$(cat "$results/worktree-path.txt")"
@@ -120,9 +123,11 @@ assert_planted "$here/fixtures/seeds-also.json"
 "$plant" --clean >/dev/null
 
 # Each malformed seed set must fail the plant and name its fault: an also
-# anchor that resolves nowhere, a from-string present in the file but not on
-# the anchor line (the replacement would silently edit nothing), and a
-# repeated seed id (its locations would merge into the other seed's).
+# anchor that resolves nowhere; a from-string outside the anchor, whether on
+# another line (the replacement would silently edit nothing) or beside the
+# anchor on its own line (it would edit text the seed never named); a payload
+# holding a newline (it would add lines no recorded location accounts for);
+# and a repeated seed id (its locations would merge into the other seed's).
 while IFS=$'\t' read -r fixture msg; do
   rc=0
   # shellcheck disable=SC2034 # read via check()'s eval of the assertion string below, not a direct expansion here
@@ -132,7 +137,9 @@ while IFS=$'\t' read -r fixture msg; do
   "$plant" --clean >/dev/null 2>&1 || true
 done <<'EOF'
 seeds-bad-also-anchor.json	anchor matched 0 lines in docs/index.md
-seeds-from-off-line.json	from-string not on the anchor line
+seeds-from-off-line.json	from-string not inside the anchor
+seeds-from-outside-anchor.json	from-string not inside the anchor
+seeds-multiline-payload.json	holds a newline
 seeds-dup-id.json	duplicate seed id(s): span
 EOF
 
