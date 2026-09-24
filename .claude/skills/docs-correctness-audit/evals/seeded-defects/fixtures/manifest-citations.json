@@ -1,0 +1,65 @@
+[
+  {
+    "id": "prefix",
+    "category": "citation",
+    "file": "CONTRIBUTING.md",
+    "line": 38,
+    "expected_severity": "high",
+    "sentinel": "",
+    "line_tol": 3
+  },
+  {
+    "id": "suffix",
+    "category": "citation",
+    "file": "a.md",
+    "line": 10,
+    "expected_severity": "high",
+    "sentinel": "",
+    "line_tol": 3
+  },
+  {
+    "id": "meta",
+    "category": "citation",
+    "file": "docs/a+b(c).md",
+    "line": 10,
+    "expected_severity": "high",
+    "sentinel": "",
+    "line_tol": 3
+  },
+  {
+    "id": "meta-false",
+    "category": "citation",
+    "file": "docs/x+y.md",
+    "line": 5,
+    "expected_severity": "high",
+    "sentinel": "",
+    "line_tol": 3
+  },
+  {
+    "id": "range",
+    "category": "citation",
+    "file": "docs/r.md",
+    "line": 30,
+    "expected_severity": "high",
+    "sentinel": "",
+    "line_tol": 3
+  },
+  {
+    "id": "range-far",
+    "category": "citation",
+    "file": "docs/q.md",
+    "line": 60,
+    "expected_severity": "high",
+    "sentinel": "",
+    "line_tol": 3
+  },
+  {
+    "id": "wrapped",
+    "category": "citation",
+    "file": "docs/p.md",
+    "line": 7,
+    "expected_severity": "high",
+    "sentinel": "",
+    "line_tol": 3
+  }
+]

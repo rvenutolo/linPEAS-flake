@@ -1,0 +1,9 @@
+# report
+
+- .github/CONTRIBUTING.md:38 — a different file whose path ends in the seed's
+- docs/data.md:10 — a different file whose name ends in the seed's
+- docs/a+b(c).md:11 — the seed's own path, regex metacharacters and all
+- docs/xxy.md:5 — matches the seed's path only if + is read as a regex
+- docs/r.md:20-40 — a range that spans the seed's line
+- docs/q.md:20-40 — a range that ends far from the seed's line
+- (`docs/p.md:7`) — a citation wrapped in punctuation

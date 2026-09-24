@@ -32,4 +32,35 @@ check "delta flagged FLAKY" "grep -E 'delta' <<<\"\$out\" | grep -q FLAKY"
 check "overall 8/12" "grep -qE '8/12' <<<\"\$out\""
 check "recall report written" "ls \"$tmp\"/recall-*.md >/dev/null 2>&1"
 
+# A citation names a file only as a whole path: one that merely ends in the
+# seed's path is another file, and a path's regex metacharacters are literal.
+# A cited range hits when it spans the seed's line, within tolerance.
+cp "$here/fixtures/manifest-citations.json" "$tmp/manifest-resolved.json"
+# shellcheck disable=SC2034  # used inside the eval'd check() assertion strings
+cit="$(SEEDED_RESULTS_DIR="$tmp" "$score" "$here/fixtures/citations.md")"
+while IFS=$'\t' read -r id want why; do
+  check "$id $want: $why" "grep -qF '| $id | $want |' <<<\"\$cit\""
+done <<'EOF'
+prefix	0/1	a longer path ending in the seed's path is another file
+suffix	0/1	a file name ending in the seed's name is another file
+meta	1/1	the seed's own path matches with its metacharacters literal
+meta-false	0/1	+ in the seed's path is not a regex quantifier
+range	1/1	a cited range spanning the seed's line hits
+range-far	0/1	a cited range ending outside tolerance misses
+wrapped	1/1	punctuation around a citation does not hide it
+EOF
+
+# A manifest location without a numeric line, or with a tab in its path,
+# cannot be scored; score.sh must refuse it by name rather than die mid-table
+# or print a total that silently leaves seeds out.
+for bad in manifest-also-no-line.json manifest-tab-path.json; do
+  cp "$here/fixtures/$bad" "$tmp/manifest-resolved.json"
+  rc=0
+  # shellcheck disable=SC2034  # used inside the eval'd check() assertion strings
+  bad_out="$(SEEDED_RESULTS_DIR="$tmp" "$score" "$here/fixtures/all-hit.md" 2>&1)" || rc=$?
+  check "$bad is refused" "[ '$rc' -ne 0 ]"
+  check "$bad names the malformed manifest" "grep -qF 'malformed manifest' <<<\"\$bad_out\""
+  check "$bad prints no total" "! grep -qF 'Overall:' <<<\"\$bad_out\""
+done
+
 exit "$fail"

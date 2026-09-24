@@ -1,0 +1,20 @@
+[
+  {
+    "id": "ok",
+    "category": "citation",
+    "file": "docs/a.md",
+    "line": 3,
+    "expected_severity": "high",
+    "sentinel": "",
+    "line_tol": 3
+  },
+  {
+    "id": "tab",
+    "category": "citation",
+    "file": "docs/t\tb.md",
+    "line": 4,
+    "expected_severity": "high",
+    "sentinel": "",
+    "line_tol": 3
+  }
+]
