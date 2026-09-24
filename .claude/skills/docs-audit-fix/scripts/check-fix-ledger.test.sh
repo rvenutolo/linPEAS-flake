@@ -1126,6 +1126,17 @@ EOF
   run_case sibling-removed-wide-range "${d}" 1 \
     'schema: pair p1 sibling docs/a.md:7-13 is marked removed with a range wider than a deletion boundary'
 
+  # An edit that replaces one line with one line deletes nothing past its
+  # own new line, so the line after it cannot be a removed sibling. The
+  # positive case, a line deleted right after the pair's edit in the
+  # same hunk, is sibling-removed.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].siblings = [{file: "docs/a.md", lines: "7-7", status: "removed"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case sibling-removed-after-edit "${d}" 1 \
+    'sibling-not-removed: pair p1 sibling docs/a.md:7-7 is marked removed but no covered hunk deletes text there'
+
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
     printf '%d scenario(s) failed\n' "${failures}" >&2
