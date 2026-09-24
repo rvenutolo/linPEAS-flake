@@ -772,6 +772,12 @@ function check_siblings() {
       finding schema "pair ${id} sibling ${file}:${lines} is marked ${status} without a valid <start>-<end> range"
       continue
     fi
+    # A removed sibling names a deletion boundary (ns, or ns and ns+1),
+    # not a span; a wide range would reach any deleting hunk nearby.
+    if [[ ${status} == removed ]] && ((e - s > 1)); then
+      finding schema "pair ${id} sibling ${file}:${lines} is marked removed with a range wider than a deletion boundary"
+      continue
+    fi
     if git cat-file -e "${HEAD_REV}:${file}" 2>/dev/null &&
       [[ "$(git cat-file -t "${HEAD_REV}:${file}")" == blob ]]; then
       n="$(git show "${HEAD_REV}:${file}" | awk 'END { print NR }')"
