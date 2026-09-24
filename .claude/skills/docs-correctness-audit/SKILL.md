@@ -461,34 +461,20 @@ there. Do not edit any doc. Surface, in the report's closing notes, anything
 that needs a human decision (spec ambiguity, a generated-doc/generator fix, a
 finding whose "fix" would change runtime behavior).
 
-### 6. State the fix-pass contract in the report
+### 6. Hand the fix pass to `/docs-fix`
 
 Across this repo's audit cycles, roughly a third of every audit's findings
 were defects the *previous* audit's fix pass had just written. That rate did
 not fall as rules naming the failure modes accumulated, because a fix pass
 rewriting a paragraph is not reading the rules — it is reading the finding.
-The report therefore carries a contract the fix PR is held to, not more
-advice:
+The report therefore hands the fix PR a contract it is held to, not more
+advice.
 
-1. **Every rewritten paragraph names the artifact it was written against.**
-    The fix commit records, per paragraph it changes, the file and line range
-    of the code, workflow, or script whose behaviour the new sentence claims.
-    A sentence with no artifact line range behind it is a sentence somebody
-    inferred from the old sentence, which is how a corrected claim becomes a
-    differently-wrong one.
-1. **A second reader re-reads those pairs before the PR opens** — the reader
-    is not whoever wrote them. It opens only the recorded (paragraph, artifact
-    range) pairs, reads the artifact first and the paragraph second, and says
-    for each whether the paragraph is true of that artifact. This is cheap:
-    the pair list is short, and it is the only step in the cycle that has ever
-    caught a fix-pass defect before it merged rather than a cycle later.
-1. **A widened claim is dropped or scoped, never re-sharpened.** Replacing a
-    false exclusive with a different exclusive is the single most repeated
-    defect these audits find. State the fix shape in the finding itself, not
-    only in the closing notes.
-
-Say in the report that the fix PR owes these three. A fix pass that skips them
-is the mechanism by which this cycle's fixes become next cycle's findings.
+The contract, the gate that enforces it, and the checker that proves the
+gate saw every paragraph live in the `docs-audit-fix` skill. Close the
+report by telling the reader to run `/docs-fix <this report>` rather than
+fixing by hand. Keep stating each quantifier finding's fix shape in the
+finding itself, as below.
 
 ### 7. Say whether this audit closes the cycle
 
@@ -565,10 +551,8 @@ different amounts:
 
 ## Notes for the fix pass
 - <batching suggestion, decisions the user must make, generated-doc/generator fixes>
-- Fix-pass contract (§6): record the artifact file:line range each rewritten
-  paragraph was written against; a second reader — not the writer — re-reads
-  those pairs before the PR opens; a widened claim is dropped or scoped, never
-  re-sharpened.
+- Fix with `/docs-fix <this report>`: it holds the PR to the fix-pass
+  contract and does not open it until the ledger checker passes.
 ```
 
 Every finding on a quantifier carries its fix shape in the finding itself, not

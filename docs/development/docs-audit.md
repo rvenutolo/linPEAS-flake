@@ -13,15 +13,15 @@ something.
 ## Running an audit
 
 Invoke the `/docs-audit` slash command. It is read-only: it emits one
-severity-ranked findings report and edits nothing. Fix what it finds in
-the normal PR flow.
+severity-ranked findings report and edits nothing. Fix what it finds with
+the `/docs-fix` slash command, described below.
 
 ## Fixing what an audit finds
 
 Roughly a third of each audit's findings are defects the previous audit's
 fix pass wrote. A pass rewriting a paragraph reads the finding, not the
 artifact, so a corrected claim becomes a differently-wrong one. The
-report states a contract the fix PR is held to:
+`/docs-fix` slash command holds the fix PR to a contract that includes:
 
 - Every rewritten paragraph records the `file:line` range of the code,
     workflow, or script whose behaviour the new sentence claims. A sentence
@@ -33,6 +33,11 @@ report states a contract the fix PR is held to:
 - A claim that was too narrow is dropped or scoped to the set it can
     defend. Replacing a false exclusive with a different exclusive is the
     most repeated defect these audits find.
+
+`/docs-fix` records each pair in a ledger, has a separate agent gate every pair,
+and opens the PR only after a checker has matched the ledger against the
+branch's diff and found each pair's verdict `TRUE` against the
+paragraph's current text.
 
 ## Closing the loop
 

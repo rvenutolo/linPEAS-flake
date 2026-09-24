@@ -58,10 +58,8 @@ Run a documentation correctness audit of this repository using the
 1. Write a severity-ranked findings report to `.claude/reports/` — taking
     the `-<n>` suffix the bundle and brief took — attributing each finding
     to the pass that wrote it where the bundle's `PASS ATTRIBUTION` section
-    can say. State the fix-pass contract in it: each rewritten paragraph
-    records the artifact `file:line` range it was written against, a second
-    reader — not the writer — re-reads those pairs before the fix PR opens,
-    and a claim that was too narrow is dropped or scoped, never re-sharpened.
+    can say. Close it by pointing at `/docs-fix <this report>`, which holds
+    the fix PR to the fix-pass contract.
 1. Close by saying whether this audit closes the cycle. If no further audit is
     planned, the final fix PR runs `just docs-audit-done` and commits the
     updated `.github/docs-audit-state` as its last commit; the monthly reminder

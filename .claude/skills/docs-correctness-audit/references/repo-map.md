@@ -218,8 +218,8 @@ runbook, so the reader checking the prose is the one who already read the
 mechanism. A body naming no documented mechanism — a bare link, a title — has
 nothing to drift against and is not a finding.
 
-Part of `.claude/` is tracked and committed — the `docs-correctness-audit` and
-`multi-agent-review` skills and their slash commands; the cluster map's
+Part of `.claude/` is tracked and committed — the `docs-correctness-audit`,
+`docs-audit-fix` and `multi-agent-review` skills and their slash commands; the cluster map's
 `claude-tooling` row is what puts those tracked files in scope. Those are maintained
 artifacts with real commit history, and they restate facts that live elsewhere
 in the tree: the generated-doc table below and the ephemeral-token classes on
