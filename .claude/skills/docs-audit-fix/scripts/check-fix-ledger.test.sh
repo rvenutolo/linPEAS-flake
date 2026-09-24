@@ -156,6 +156,49 @@ function expect_absent() {
   fi
 }
 
+# @description Write a fake `git` into ${SCRATCH}/$1 and print that
+# directory, for a run's PATH. Mode $2 is "context" (swap --unified=0
+# for --unified=3 and drop --inter-hunk-context=0, so hunks carry
+# context lines) or "bad-body" (rewrite the "+Beta paragraph,
+# corrected." body line to start with "?"). Everything else goes to the
+# real git unchanged.
+function make_git_shim() {
+  local -r dir="${SCRATCH}/$1" mode="$2"
+  local real
+  real="$(command -v git)"
+  mkdir -p -- "${dir}"
+  case "${mode}" in
+  context)
+    cat >"${dir}/git" <<'EOF'
+#!/usr/bin/env bash
+a=()
+for x in "$@"; do
+  case "${x}" in
+  --unified=0) a+=(--unified=3) ;;
+  --inter-hunk-context=0) ;;
+  *) a+=("${x}") ;;
+  esac
+done
+exec @REAL_GIT@ "${a[@]}"
+EOF
+    ;;
+  bad-body)
+    cat >"${dir}/git" <<'EOF'
+#!/usr/bin/env bash
+if [[ " $* " == *" --unified=0 "* ]]; then
+  @REAL_GIT@ "$@" | sed 's/^+Beta paragraph, corrected\.$/?Beta paragraph, corrected./'
+else
+  exec @REAL_GIT@ "$@"
+fi
+EOF
+    ;;
+  *) return 1 ;;
+  esac
+  sed -i "s|@REAL_GIT@|${real}|g" "${dir}/git"
+  chmod +x -- "${dir}/git"
+  printf '%s\n' "${dir}"
+}
+
 # @description The ledger for a single correct Beta edit, gated TRUE.
 function beta_fixed() {
   local -r d="$1"
@@ -198,7 +241,7 @@ function two_file_edit() {
 }
 
 function main() {
-  local d
+  local d shim
 
   d="$(new_repo)"
   beta_fixed "${d}"
@@ -715,6 +758,37 @@ EOF
   printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
   run_case replace-object "${d}" 1 'uncovered-hunk: docs/g.md:1'
+
+  # Hunks that do carry context lines (forced here by a git shim, since
+  # the checker's own flags stop git emitting any) must be consumed by
+  # prefix: h.md's edits at 3 and 9 become one hunk with 7 context
+  # lines, and skipping only ol+nl body lines would over-skip into
+  # docs/k.md's headers and hide its unpaired new paragraph.
+  d="$(new_repo)"
+  git -C "${d}" switch --quiet main
+  printf '%s\n' 'Hotel one.' '' 'Hotel three.' '' 'Hotel five.' '' 'Hotel seven.' \
+    '' 'Hotel nine.' >"${d}/docs/h.md"
+  commit_all "${d}" add-h
+  git -C "${d}" switch --quiet fix
+  git -C "${d}" merge --quiet main
+  sed -i -e '3s/.*/Hotel WRONG./' -e '9s/.*/Hotel WRONG./' "${d}/docs/h.md"
+  printf 'Kilo paragraph.\n' >"${d}/docs/k.md"
+  commit_all "${d}" wrong
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  shim="$(make_git_shim ctxshim context)"
+  CASE_ENV=("PATH=${shim}:${PATH}")
+  run_case context-hunks-shim "${d}" 1 'uncovered-hunk: docs/k.md:1'
+
+  # A hunk body line with a prefix git never emits is a parse error
+  # (exit 2), never a silently skipped line.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  shim="$(make_git_shim badshim bad-body)"
+  CASE_ENV=("PATH=${shim}:${PATH}")
+  run_case bad-body-line-shim "${d}" 2 \
+    'unknown hunk body prefix): ?Beta paragraph, corrected.'
+  also_expect 'could not parse the Markdown diff'
 
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
