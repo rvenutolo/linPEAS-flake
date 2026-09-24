@@ -6,6 +6,25 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20260924-77959926] - 2026-09-24
+
+### Chores
+- Bump linpeas to 20260924-77959926 ([#1143](https://github.com/rvenutolo/linPEAS-flake/pull/1143))
+- Cover the required-context count and refresh audit wording ([#1125](https://github.com/rvenutolo/linPEAS-flake/pull/1125))
+
+### Documentation
+- Scope the egress marker claim and close the audit cycle ([#1131](https://github.com/rvenutolo/linPEAS-flake/pull/1131))
+
+### Features
+- Lint CI job and required-check names written in prose ([#1141](https://github.com/rvenutolo/linPEAS-flake/pull/1141))
+
+### Fixes
+- Stop the script-docs parser truncating wrapped annotations ([#1130](https://github.com/rvenutolo/linPEAS-flake/pull/1130))
+- Stop the live-tree classifier reading comments and sandboxes ([#1129](https://github.com/rvenutolo/linPEAS-flake/pull/1129))
+- Allow raw.githubusercontent.com in the links job egress policy ([#1128](https://github.com/rvenutolo/linPEAS-flake/pull/1128))
+- Classify git -C harnesses and settle the sibling claims left behind ([#1127](https://github.com/rvenutolo/linPEAS-flake/pull/1127))
+- Resolve path-form harness entries and settle twelve doc claims ([#1126](https://github.com/rvenutolo/linPEAS-flake/pull/1126))
+
 ## [20260922-7b7c14db] - 2026-09-22
 
 ### Chores
