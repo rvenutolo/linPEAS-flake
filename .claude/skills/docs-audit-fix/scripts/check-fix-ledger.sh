@@ -176,7 +176,7 @@ done
 git rev-parse --verify --quiet "${BASE}^{commit}" >/dev/null ||
   die "base revision does not resolve: ${BASE}"
 MB="$(git merge-base "${BASE}" "${HEAD_REV}")" || die "no merge base for ${BASE} and ${HEAD_REV}"
-# shellcheck disable=SC2034 # consumed by the diff-scoping checks a later task adds
+# The merge base every diff and reflow comparison reads its old side from.
 readonly MB
 
 # Checking HEAD with edits still in the working tree would pass or fail a
