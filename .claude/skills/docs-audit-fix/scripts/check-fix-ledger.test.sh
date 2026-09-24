@@ -636,6 +636,21 @@ EOF
   expect_absent 'arithmetic syntax error'
   expect_absent '(start must be'
 
+  # code_changes names are read one per line, so a name holding a
+  # newline would add its second line to the listed set: here it would
+  # list scripts/tool.sh without an entry that names it. A pair's
+  # sibling carries a tab too, so both jq checks show in one output.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  sed -i 's/^echo line5$/echo line5 changed/' "${d}/scripts/tool.sh"
+  commit_all "${d}" code
+  jq '.code_changes = [{"file": "x\nscripts/tool.sh"}] |
+      .pairs[0].siblings = [{"file": "docs/a\tb.md", "reason": "r"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case file-with-newline "${d}" 1 \
+    'schema: code_changes file "x<LF>scripts/tool.sh" holds a newline, tab or CR'
+  also_expect 'schema: pair p1 sibling file "docs/a<TAB>b.md" holds a newline, tab or CR'
+
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
     printf '%d scenario(s) failed\n' "${failures}" >&2

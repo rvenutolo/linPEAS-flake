@@ -175,6 +175,8 @@ function check_schema() {
     # "1-999999\n" would otherwise pass; the explicit no-newline check
     # closes that regardless of anchor semantics.
     def rng: str and (test("\n") | not) and test("^[1-9][0-9]{0,5}-[1-9][0-9]{0,5}$");
+    def ctl: type == "string" and test("[\n\t\r]");
+    def shown: gsub("\n"; "<LF>") | gsub("\t"; "<TAB>") | gsub("\r"; "<CR>");
     (if (.pairs | type) != "array" then ["schema", "ledger needs a pairs array"] else empty end),
     (if (.code_changes | type) != "array" then ["schema", "ledger needs a code_changes array"] else empty end),
     ((.pairs // [])[] | (.id // "?") as $id |
@@ -190,7 +192,21 @@ function check_schema() {
     ([(.pairs // [])[].id] | group_by(.)[] | select(length > 1)
       | ["schema", "pair id \(.[0]) is used more than once"]),
     ((.code_changes // [])[] | select((.file | str) | not)
-      | ["schema", "a code_changes entry needs a file"])
+      | ["schema", "a code_changes entry needs a file"]),
+    # File names are later read one per line (or one per tab field), so
+    # a newline, tab or CR inside one would split it into extra names,
+    # e.g. listing a changed file no entry actually names. The name is
+    # shown with those characters spelled out, since @tsv would escape
+    # a JSON rendering a second time.
+    ((.code_changes // [])[] | objects | select(.file | ctl)
+      | ["schema", "code_changes file \"\(.file | shown)\" holds a newline, tab or CR"]),
+    ((.pairs // [])[] | objects | (.id // "?") as $id |
+      (select(.file | ctl)
+        | ["schema", "pair \($id) file \"\(.file | shown)\" holds a newline, tab or CR"]),
+      (.artifact | arrays | .[] | objects | select(.file | ctl)
+        | ["schema", "pair \($id) artifact file \"\(.file | shown)\" holds a newline, tab or CR"]),
+      (.siblings | arrays | .[] | objects | select(.file | ctl)
+        | ["schema", "pair \($id) sibling file \"\(.file | shown)\" holds a newline, tab or CR"]))
     | @tsv' "${LEDGER}"
 }
 
