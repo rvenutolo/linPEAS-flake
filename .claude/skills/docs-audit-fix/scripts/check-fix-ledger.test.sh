@@ -50,6 +50,15 @@ function commit_all() {
   git -C "$1" commit --quiet --message "$2"
 }
 
+# @description Like commit_all, but also stages extra repo-root paths
+# (e.g. .gitattributes) that live outside docs/scripts.
+function commit_all_special() {
+  local -r dir="$1" msg="$2"
+  shift 2
+  git -C "${dir}" add --all -- docs scripts "$@"
+  git -C "${dir}" commit --quiet --message "${msg}"
+}
+
 # @description Hash a block exactly as the gate would: via the checker.
 function gate_hash() {
   (cd "$1" && "${SCRIPT}" --hash "$2" "$3")
@@ -404,16 +413,15 @@ EOF
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
   run_case forged-block-after-end "${d}" 1 'uncovered-hunk: docs/a.md:13'
 
-  # A .md file git treats as binary (a NUL byte forces this) produces no
-  # "+++"/"@@" headers, so list_hunks never sees it; it must still be
-  # required in code_changes rather than silently exempted the way a
-  # surviving text .md file is.
+  # A .md file git treats as binary (a NUL byte forces this) now gets a
+  # real hunk from list_hunks' --text, so it needs a pair like any other
+  # new paragraph rather than a special "must be listed" exemption.
   d="$(new_repo)"
   printf 'binary\000content\n' >"${d}/docs/bin.md"
   commit_all "${d}" binary
   printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
-  run_case binary-md "${d}" 1 'uncovered-file: docs/bin.md is a binary diff and not listed in code_changes'
+  run_case binary-md "${d}" 1 'uncovered-hunk: docs/bin.md:1'
 
   # An arithmetic-overflow range must not wrap past bash's 64-bit
   # signed integers and slip through the >= 1 / <= end bound check.
@@ -436,6 +444,73 @@ EOF
                   "fix_shape": "scope", "siblings": []}]' \
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case pair-file-directory "${d}" 1 'schema: pair p1 file docs is not a file at the head revision'
+
+  # diff.external must not replace the real diff with an empty one and
+  # hide every hunk. Two filler paragraphs land the edited word at a
+  # fresh line (16) no other scenario asserts.
+  d="$(new_repo)"
+  git -C "${d}" switch --quiet main
+  { for i in 1 2; do printf '\nFiller%d paragraph.\n' "${i}"; done; } >>"${d}/docs/a.md"
+  commit_all "${d}" fillers
+  git -C "${d}" switch --quiet fix
+  git -C "${d}" merge --quiet main
+  git -C "${d}" config diff.external /bin/true
+  sed -i 's/^Filler2 paragraph\.$/Filler2 WRONG./' "${d}/docs/a.md"
+  commit_all "${d}" wrong
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case diff-external-configured "${d}" 1 'uncovered-hunk: docs/a.md:16'
+
+  # A "diff=<driver>" attribute plus that driver's textconv must not
+  # replace the real diff either. .gitattributes is committed on main
+  # before the word edit, so it is part of the merge base and does not
+  # itself need a code_changes entry. Three fillers land the edit at
+  # line 18.
+  d="$(new_repo)"
+  git -C "${d}" switch --quiet main
+  printf '*.md diff=blank\n' >"${d}/.gitattributes"
+  { for i in 1 2 3; do printf '\nFiller%d paragraph.\n' "${i}"; done; } >>"${d}/docs/a.md"
+  commit_all_special "${d}" fillers-and-attrs .gitattributes
+  git -C "${d}" switch --quiet fix
+  git -C "${d}" merge --quiet main
+  git -C "${d}" config diff.blank.textconv true
+  sed -i 's/^Filler3 paragraph\.$/Filler3 WRONG./' "${d}/docs/a.md"
+  commit_all "${d}" wrong
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case textconv-configured "${d}" 1 'uncovered-hunk: docs/a.md:18'
+
+  # A "-diff" .md file listed in code_changes (satisfying the old
+  # binary-file exemption) must still need a pair for its actual
+  # content, now that list_hunks' --text gives it a real hunk. Four
+  # fillers land the edit at line 20.
+  d="$(new_repo)"
+  git -C "${d}" switch --quiet main
+  printf 'docs/a.md -diff\n' >"${d}/.gitattributes"
+  { for i in 1 2 3 4; do printf '\nFiller%d paragraph.\n' "${i}"; done; } >>"${d}/docs/a.md"
+  commit_all_special "${d}" fillers-and-attrs .gitattributes
+  git -C "${d}" switch --quiet fix
+  git -C "${d}" merge --quiet main
+  sed -i 's/^Filler4 paragraph\.$/Filler4 WRONG./' "${d}/docs/a.md"
+  commit_all "${d}" wrong
+  printf '{"report": "r.md", "pairs": [], "code_changes": [{"file": "docs/a.md"}]}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case binary-md-listed-in-code-changes "${d}" 1 'uncovered-hunk: docs/a.md:20'
+
+  # diff.noprefix must not desync the "+++ b/<path>" column-7 read this
+  # parser relies on. Five fillers land the edit at line 22.
+  d="$(new_repo)"
+  git -C "${d}" switch --quiet main
+  { for i in 1 2 3 4 5; do printf '\nFiller%d paragraph.\n' "${i}"; done; } >>"${d}/docs/a.md"
+  commit_all "${d}" fillers
+  git -C "${d}" switch --quiet fix
+  git -C "${d}" merge --quiet main
+  git -C "${d}" config diff.noprefix true
+  sed -i 's/^Filler5 paragraph\.$/Filler5 WRONG./' "${d}/docs/a.md"
+  commit_all "${d}" wrong
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case noprefix-configured "${d}" 1 'uncovered-hunk: docs/a.md:22'
 
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then

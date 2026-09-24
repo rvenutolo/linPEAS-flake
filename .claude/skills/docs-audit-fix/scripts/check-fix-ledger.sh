@@ -225,8 +225,19 @@ ALL_HUNKS=''
 # consumed unconditionally before another header is recognised — a body
 # line that itself starts with "+++ " or "@@ " (e.g. an added line that
 # happens to read "++ b/CHANGELOG.md") cannot pose as one.
+#
+# --no-ext-diff and --no-textconv stop a repo-local diff.external
+# command or a per-path textconv driver from replacing the real diff
+# with attacker-controlled (or merely misleading) output; --text forces
+# even a file git would otherwise call binary (a NUL byte, a "-diff"
+# attribute) through the same line-oriented diff, so it gets real
+# hunks instead of being silently skipped; --src-prefix/--dst-prefix
+# pin the "a/"/"b/" header prefixes this parser's column-7 read relies
+# on, regardless of a repo's diff.noprefix setting.
 function list_hunks() {
-  git -c core.quotePath=false diff --no-color --no-renames --unified=0 "${MB}" "${HEAD_REV}" -- "$@" |
+  git -c core.quotePath=false diff --no-ext-diff --no-textconv --text \
+    --src-prefix=a/ --dst-prefix=b/ --no-color --no-renames --unified=0 \
+    "${MB}" "${HEAD_REV}" -- "$@" |
     awk '
       remaining > 0 { remaining--; next }
       /^\+\+\+ / {
@@ -453,29 +464,26 @@ function check_completeness() {
     fi
   done < <(list_hunks '*.md' ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures')
 
-  # Every changed file that is not a surviving, textually-diffed
-  # Markdown file must be listed. --numstat (rather than --name-only)
-  # also reports whether git treated the diff as binary ("-\t-" for
-  # both counts) — a .md file with a NUL byte or a "-diff" attribute
-  # produces no "+++"/"@@" headers at all, so list_hunks never sees it
-  # and it must not be silently exempted the way a real text hunk is.
-  local listed changed added deleted
+  # Every changed file that is not a surviving Markdown file must be
+  # listed. list_hunks' --text now forces a hunk-level diff even for a
+  # file git would call binary, so a surviving .md file's coverage is
+  # enforced by the per-paragraph pairing above regardless of binary
+  # status; this loop no longer needs to special-case binary itself
+  # (round 2's numstat-based branch is dead now that --text is in
+  # play, and re-checking --numstat here would just disagree with
+  # list_hunks, which reads --text hunks).
+  local listed changed
   listed="$(jq --raw-output '.code_changes[].file' "${LEDGER}")"
-  # shellcheck disable=SC2034 # named for numstat's fixed 3-column shape; only "added" (binary vs text) and "changed" are read
-  while IFS=$'\t' read -r added deleted changed; do
+  while IFS= read -r changed; do
     [[ -n ${changed} ]] || continue
-    if [[ ${changed} == *.md && ${added} != '-' ]] &&
-      git cat-file -e "${HEAD_REV}:${changed}" 2>/dev/null; then
+    if [[ ${changed} == *.md ]] && git cat-file -e "${HEAD_REV}:${changed}" 2>/dev/null; then
       continue
     fi
     if ! grep --line-regexp --fixed-strings --quiet -- "${changed}" <<<"${listed}"; then
-      if [[ ${added} == '-' ]]; then
-        finding uncovered-file "${changed} is a binary diff and not listed in code_changes"
-      else
-        finding uncovered-file "${changed} is changed but not listed in code_changes"
-      fi
+      finding uncovered-file "${changed} is changed but not listed in code_changes"
     fi
-  done < <(git -c core.quotePath=false diff --numstat --no-renames "${MB}" "${HEAD_REV}")
+  done < <(git -c core.quotePath=false diff --no-ext-diff --no-textconv \
+    --src-prefix=a/ --dst-prefix=b/ --name-only --no-renames "${MB}" "${HEAD_REV}")
 
   # shellcheck disable=SC2034 # consumed by the sibling check a later task adds
   ALL_HUNKS="$(list_hunks .)"
