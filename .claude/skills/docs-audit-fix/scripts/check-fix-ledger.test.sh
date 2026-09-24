@@ -1175,9 +1175,9 @@ EOF
 
   # A caller's diff.algorithm must not change the hunks the checker
   # reads. Under myers this edit leaves a hunk whose new side is the blank
-  # line 6, which no pair covers; histogram shapes the same change into
-  # hunks the pairs do cover. The checker diffs with myers whatever the
-  # repository or user configures.
+  # line 6; no pair's paragraph takes in lines 5-7, so it is uncovered.
+  # histogram shapes the same change into hunks the pairs do cover. The
+  # checker diffs with myers whatever the repository or user configures.
   d="$(new_repo)"
   seed_main "${d}" docs/p.md '' z z y '' x z y '' '' z z
   printf '%s\n' x '' z z '' '' z y '' q '' z z >"${d}/docs/p.md"
@@ -1186,7 +1186,7 @@ EOF
   local pl
   printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
-  for pl in 1 3 4 7 8 10 12 13; do
+  for pl in 1 3 4 10 12 13; do
     jq --arg l "${pl}-${pl}" '.pairs += [{id: "p\($l)", finding: 1, file: "docs/p.md", lines: $l,
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "drop", siblings: []}]' \
       "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
