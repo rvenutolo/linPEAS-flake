@@ -669,14 +669,14 @@ function hunk_overlaps() {
 # block is fixed at its generator, which is a code change. Any other file
 # may be cleared by any hunk. A missing lines, status or reason field is
 # read as "-": tab is IFS whitespace, so an empty field would collapse and
-# shift every field after it.
+# shift every field after it. A whitespace-only reason is no reason.
 function check_siblings() {
   local id file lines status reason s e pool records
   records="$(jq --raw-output '.pairs[] | .id as $id | .siblings[]
     | [$id, .file,
       (if (.lines | type) == "string" and (.lines | length) > 0 then .lines else "-" end),
       (if (.status | type) == "string" and (.status | length) > 0 then .status else "-" end),
-      (if (.reason | type) == "string" and (.reason | length) > 0 then .reason else "-" end)]
+      (if (.reason | type) == "string" and (.reason | test("\\S")) then .reason else "-" end)]
     | @tsv' "${LEDGER}")" ||
     die "could not read the sibling list from ${LEDGER}"
   while IFS=$'\t' read -r id file lines status reason; do
@@ -712,7 +712,7 @@ function check_siblings() {
 
 # @description Every pair needs a gate verdict of TRUE whose hash still
 # matches the pair's whole block at head, and every code change needs a
-# gate entry recording an attack and its result. A pair whose own file or
+# gate entry recording an attack and its result, neither whitespace-only. A pair whose own file or
 # range check_completeness already rejected is skipped here, since there
 # is no block to hash. Missing verdict, hash or note fields are read as
 # "-", for the same IFS reason check_siblings gives.
@@ -752,10 +752,10 @@ function check_verdicts() {
 
   local cfile unattacked
   unattacked="$(jq --raw-output --slurpfile gate "${GATE}" '
-    def str: type == "string" and length > 0;
+    def txt: type == "string" and test("\\S");
     .code_changes[].file as $f
     | select(any($gate[0].code_changes[];
-      .file == $f and (.attack | str) and (.result | str)) | not)
+      .file == $f and (.attack | txt) and (.result | txt)) | not)
     | $f' "${LEDGER}")" ||
     die "could not read the gate attacks from ${GATE}"
   while IFS= read -r cfile; do
