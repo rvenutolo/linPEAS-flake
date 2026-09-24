@@ -64,8 +64,8 @@ function gate_hash() {
   (cd "$1" && "${SCRIPT}" --hash "$2" "$3")
 }
 
-# "NAME=value" assignments the next run_case passes to the checker's
-# environment only; run_case clears it after that one run.
+# "NAME=value" assignments the next run_case or run_hash_case passes to
+# the checker's environment only; each clears it after that one run.
 CASE_ENV=()
 
 # @description Run the checker in repo $2 with $2/ledger.json and
@@ -111,10 +111,12 @@ function run_hash_case() {
   local -r name="$1" dir="$2" expected_exit="$3" expected_stderr="$4"
   shift 4
   local stderr_file stdout_file outcome_file actual_exit=0
+  local -a env_args=("${CASE_ENV[@]}")
+  CASE_ENV=()
   stderr_file="$(mktemp -p "${SCRATCH}")"
   stdout_file="$(mktemp -p "${SCRATCH}")"
   outcome_file="$(mktemp -p "${SCRATCH}")"
-  (cd "${dir}" && "${SCRIPT}" --hash "$@") \
+  (cd "${dir}" && env "${env_args[@]}" "${SCRIPT}" --hash "$@") \
     >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
@@ -142,6 +144,16 @@ function also_expect() {
     failures=$((failures + 1))
   fi
   harness_assert_also "$1"
+}
+
+# @description Assert a substring is absent from the last scenario's
+# stderr.
+function expect_absent() {
+  if grep --fixed-strings --quiet -- "$1" "${LAST_STDERR}"; then
+    printf 'FAIL: %s — stderr unexpectedly holds %q\n' "${LAST_NAME}" "$1" >&2
+    cat -- "${LAST_STDERR}" >&2
+    failures=$((failures + 1))
+  fi
 }
 
 # @description The ledger for a single correct Beta edit, gated TRUE.
@@ -613,6 +625,16 @@ EOF
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
   run_case no-newline-marker-mid-diff "${d}" 1 'uncovered-hunk: docs/d.md:5'
   also_expect 'uncovered-hunk: docs/c.md:3'
+
+  # Under a UTF-8 locale bash's [0-9] also matches Arabic-Indic digits,
+  # so a range check built on it passes "1-٦٦" and the (( )) bound check
+  # after it raises an arithmetic error that `if` reads as false. The
+  # range must be rejected by the checker's own message alone.
+  d="$(new_repo)"
+  CASE_ENV=(LC_ALL=en_US.UTF-8)
+  run_hash_case hash-non-ascii-digits "${d}" 2 'bad range: 1-٦٦' docs/a.md '1-٦٦'
+  expect_absent 'arithmetic syntax error'
+  expect_absent '(start must be'
 
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then

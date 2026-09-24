@@ -33,6 +33,12 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+# Under a UTF-8 locale bash's [0-9] also matches non-ASCII digits (which
+# the (( )) bound checks then fail on as an arithmetic error that `if`
+# reads as false), and awk's [[:space:]] also matches non-ASCII spaces,
+# so a paragraph's block span, and with it the gate's hash, would depend
+# on the caller's locale. The C locale pins all of it to ASCII.
+export LC_ALL=C
 
 readonly PROG='check-fix-ledger'
 findings=0
