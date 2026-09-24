@@ -818,12 +818,13 @@ EOF
   jq -n '{report: "r.md", code_changes: [], pairs: [
     {id: "p1", finding: 1, file: "docs/a.md", lines: "6-6",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "scope",
-      siblings: [{file: "docs/a.md", lines: "12-12", status: "changed"}]},
+      siblings: [{file: "docs/a.md", lines: "12-12", status: "changed"},
+        {file: "docs/a.md", lines: "3-4", status: "unchanged", reason: "already scoped"}]},
     {id: "p2", finding: 1, file: "docs/a.md", lines: "12-12",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "scope", siblings: []}]}' \
     >"${d}/ledger.json"
   run_case sibling-changed "${d}" 0 '' \
-    'OK — 2 pairs; 2 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 1 changed and 0 unchanged siblings'
+    'OK — 2 pairs; 2 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 1 changed and 1 unchanged siblings'
 
   # Unchanged sibling with no reason.
   d="$(new_repo)"
@@ -932,6 +933,82 @@ EOF
   jq '.pairs += [{id: "p9", verdict: "TRUE", hash: "0", note: ""}]' \
     "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
   run_case gate-unknown-id "${d}" 1 'schema: gate verdict id p9 is not a ledger pair'
+
+  # Negative fixture: a sibling whose only change is a trailing space
+  # (a reflow-only hunk, which completeness skips) has not been fixed,
+  # so it must not count as changed.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  sed -i 's/^Gamma paragraph\.$/Gamma paragraph. /' "${d}/docs/a.md"
+  commit_all "${d}" 'gamma trailing space'
+  jq '.pairs[0].siblings = [{file: "docs/a.md", lines: "12-12", status: "changed"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case sibling-cleared-by-reflow "${d}" 1 \
+    'sibling-not-changed: pair p1 sibling docs/a.md:12-12 is marked changed but only a reflow-only or generated hunk touches it'
+
+  # Prose inside a generated block is fixed at its generator, which is a
+  # code change; a generated-block hunk does not clear a sibling.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  sed -i 's/^generated row one$/generated row TWO/' "${d}/docs/a.md"
+  commit_all "${d}" 'regenerate'
+  jq '.pairs[0].siblings = [{file: "docs/a.md", lines: "9-9", status: "changed"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case sibling-cleared-by-generated "${d}" 1 \
+    'sibling-not-changed: pair p1 sibling docs/a.md:9-9 is marked changed but only a reflow-only or generated hunk touches it'
+
+  # A whitespace-only reason is no reason.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].siblings = [{file: "docs/a.md", lines: "3-4", status: "unchanged", reason: " \t "}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case sibling-reason-whitespace "${d}" 1 \
+    'sibling-reason: pair p1 sibling docs/a.md:3-4 is unchanged with no reason'
+
+  # A whitespace-only attack is no attack.
+  d="$(new_repo)"
+  printf 'echo w\n' >"${d}/scripts/w.sh"
+  commit_all "${d}" code
+  printf '{"report": "r.md", "pairs": [], "code_changes": [{"file": "scripts/w.sh", "evidence": "harness"}]}\n' \
+    >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": [{"file": "scripts/w.sh", "attack": "  ", "result": "exit 2"}]}\n' \
+    >"${d}/gate.json"
+  run_case attack-whitespace "${d}" 1 'missing-attack: code change scripts/w.sh has no gate attack and result'
+
+  # An unchanged sibling must name a file that exists at head.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].siblings = [{file: "docs/nope.md", lines: "1-1", status: "unchanged", reason: "n/a"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case sibling-unchanged-untracked "${d}" 1 \
+    'sibling-untracked: pair p1 sibling docs/nope.md is not tracked at the head revision'
+
+  # An OVERREACHES verdict blocks; with no note, no placeholder shows.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].verdict = "OVERREACHES"' "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
+  run_case verdict-overreaches "${d}" 1 'verdict: pair p1 is OVERREACHES'
+  expect_absent 'OVERREACHES:'
+
+  # Verdicts are case-sensitive.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].verdict = "true"' "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
+  run_case enum-verdict "${d}" 1 'enum: verdict for pair p1 "true" is not TRUE, FALSE or OVERREACHES'
+
+  # A TRUE verdict with no hash never read the paragraph.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq 'del(.pairs[0].hash)' "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
+  run_case missing-hash "${d}" 1 'missing-hash: pair p1 has a TRUE verdict with no hash'
+
+  # A changed sibling needs a forward <start>-<end> range to match hunks.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].siblings = [{file: "docs/a.md", lines: "12-5", status: "changed"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case sibling-changed-bad-range "${d}" 1 \
+    'schema: pair p1 sibling docs/a.md:12-5 is marked changed without a valid <start>-<end> range'
 
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
