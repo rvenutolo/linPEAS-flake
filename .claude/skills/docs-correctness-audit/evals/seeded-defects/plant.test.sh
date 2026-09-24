@@ -129,6 +129,9 @@ assert_planted "$here/fixtures/seeds-also.json"
 # holding a newline (it would add lines no recorded location accounts for);
 # an anchor that occurs twice on its line (which occurrence is meant is
 # ambiguous); a seed text field that is not a string (jq prints null as text);
+# an also that is not an array of edit objects (its edits would be dropped
+# while the plant exits 0); a seed id that is not a string, or a tolerance
+# that is not an integer (score.sh would refuse the manifest after the fact);
 # and a repeated seed id (its locations would merge into the other seed's).
 while IFS=$'\t' read -r fixture msg; do
   rc=0
@@ -145,6 +148,10 @@ seeds-multiline-payload.json	holds a newline
 seeds-dup-id.json	duplicate seed id(s): span
 seeds-anchor-twice.json	occurs more than once on its line
 seeds-null-payload.json	payload is not a string
+seeds-also-string.json	also is not an array of edit objects
+seeds-also-scalar-entry.json	also is not an array of edit objects
+seeds-numeric-id.json	id is not a non-empty string
+seeds-fractional-tol.json	line_tol is not an integer
 EOF
 
 exit "$fail"

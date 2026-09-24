@@ -1,0 +1,20 @@
+[
+  {
+    "id": "a",
+    "category": "c",
+    "file": "docs/a.md",
+    "line": 3,
+    "expected_severity": "high",
+    "sentinel": "",
+    "line_tol": 1e19
+  },
+  {
+    "id": "b",
+    "category": "c",
+    "file": "docs/b.md",
+    "line": 4,
+    "expected_severity": "high",
+    "sentinel": "",
+    "line_tol": 3
+  }
+]

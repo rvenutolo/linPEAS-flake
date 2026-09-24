@@ -65,9 +65,10 @@ EOF
 # false hit: a location without a positive integer line or with a tab in its
 # path, a fractional tolerance, no seeds at all, a sentinel that is not a
 # string (jq prints null, which the report is then searched for), an empty
-# path, or a seed with no id.
+# path, a seed with no id, or a number too large for bash arithmetic (jq
+# prints 1e19 in exponent form).
 for bad in manifest-also-no-line.json manifest-tab-path.json manifest-fractional-tol.json \
-  manifest-empty.json manifest-null-sentinel.json manifest-empty-file.json manifest-no-id.json; do
+  manifest-empty.json manifest-null-sentinel.json manifest-empty-file.json manifest-no-id.json manifest-huge-tol.json; do
   cp "$here/fixtures/$bad" "$tmp/manifest-resolved.json"
   rc=0
   # shellcheck disable=SC2034  # used inside the eval'd check() assertion strings
