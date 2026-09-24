@@ -532,6 +532,24 @@ EOF
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
   run_case content-replaced-by-blank "${d}" 1 'uncovered-hunk: docs/a.md:14'
 
+  # A hunk whose new side is only blank lines anchors, like a pure
+  # deletion, on the lines either side of it: "alpha line two." blanked
+  # in place leaves Alpha's first line directly above the blank, so a
+  # pair on that neighbouring paragraph covers the hunk. The unchanged
+  # sibling gives this OK line a tally no other scenario prints.
+  d="$(new_repo)"
+  sed -i '4s/.*//' "${d}/docs/a.md"
+  commit_all "${d}" blank-alpha-two
+  jq -n '{report: "r.md", code_changes: [],
+    pairs: [{id: "p1", finding: 1, file: "docs/a.md", lines: "3-3",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "drop",
+      siblings: [{file: "docs/a.md", lines: "6-6", status: "unchanged",
+        reason: "Beta states nothing the dropped line did"}]}]}' >"${d}/ledger.json"
+  jq -n --arg h "$(gate_hash "${d}" docs/a.md 3-3)" \
+    '{pairs: [{id: "p1", verdict: "TRUE", hash: $h, note: ""}], code_changes: []}' >"${d}/gate.json"
+  run_case blank-replacement-covered-by-neighbour "${d}" 0 '' \
+    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 1 unchanged and 0 removed siblings'
+
   # A pure insertion's old-side position (os, the line BEFORE the
   # insertion) must sit strictly before a generated block's END marker,
   # not on it: inserting a same-named BEGIN/END pair immediately after
