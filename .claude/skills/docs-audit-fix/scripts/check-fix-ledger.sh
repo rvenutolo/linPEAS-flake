@@ -274,10 +274,25 @@ function generated_ranges() {
     }'
 }
 
+# @description True when every line $3..$4 of $1:$2 is empty or
+# whitespace-only.
+function all_blank() {
+  local -r rev="$1" file="$2" start="$3" end="$4"
+  ! git show "${rev}:${file}" | awk -v s="${start}" -v e="${end}" '
+    NR >= s && NR <= e && $0 !~ /^[[:space:]]*$/ { bad = 1 }
+    END { exit bad ? 0 : 1 }'
+}
+
 # @description True when the old block around the hunk and the new block
 # around it hold the same words in the same order — a re-wrap. False
 # (rather than a garbage compare) when either side's span falls outside
 # its file, which a hunk misattributed to the wrong file can produce.
+# A pure insertion or deletion (ol==0 or nl==0) is a re-wrap only when
+# every added/removed line is blank; a blank-line anchor otherwise lets
+# block_span expand across it and join the paragraphs on both sides, so
+# a duplicated paragraph being inserted or deleted (or a duplicate
+# wrapped differently) can collapse to the same text as its neighbour
+# and read as a re-wrap even though real content was added or removed.
 function is_reflow() {
   local -r file="$1" os="$2" ol="$3" ns="$4" nl="$5"
   git cat-file -e "${MB}:${file}" 2>/dev/null || return 1
@@ -286,6 +301,12 @@ function is_reflow() {
   hd_n="$(git show "${HEAD_REV}:${file}" | awk 'END { print NR }')"
   local oe=$((os + (ol > 0 ? ol - 1 : 0))) ne=$((ns + (nl > 0 ? nl - 1 : 0)))
   ((os >= 1 && oe <= mb_n && ns >= 1 && ne <= hd_n)) || return 1
+  if ((ol == 0)) && ! all_blank "${HEAD_REV}" "${file}" "${ns}" "${ne}"; then
+    return 1
+  fi
+  if ((nl == 0)) && ! all_blank "${MB}" "${file}" "${os}" "${oe}"; then
+    return 1
+  fi
   local ospan nspan old new
   ospan="$(git show "${MB}:${file}" | block_span "$((os > 0 ? os : 1))" "$((oe > 0 ? oe : 1))")"
   nspan="$(git show "${HEAD_REV}:${file}" | block_span "$((ns > 0 ? ns : 1))" "$((ne > 0 ? ne : 1))")"

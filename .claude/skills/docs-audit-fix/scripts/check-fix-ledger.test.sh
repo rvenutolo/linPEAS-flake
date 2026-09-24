@@ -512,6 +512,34 @@ EOF
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
   run_case noprefix-configured "${d}" 1 'uncovered-hunk: docs/a.md:22'
 
+  # Inserting a second, blank-line-separated copy of Beta right after
+  # Beta must not read as a re-wrap: block_span's blank-anchored
+  # expansion (for the pure-insertion old side, anchored on the blank
+  # line between the two paragraphs) joins them into one span whose
+  # collapsed text can equal the new span's, even though real content
+  # (a whole duplicated paragraph) was added.
+  d="$(new_repo)"
+  sed -i '7a\Beta paragraph.\n' "${d}/docs/a.md"
+  commit_all "${d}" insert-dup
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case duplicate-paragraph-inserted "${d}" 1 'uncovered-hunk: docs/a.md:8'
+
+  # The same bug in reverse: deleting a second copy of Beta must not
+  # read as a re-wrap either. The duplicate is committed to main first
+  # so it is part of the merge base the deletion diffs against.
+  d="$(new_repo)"
+  git -C "${d}" switch --quiet main
+  sed -i '7a\Beta paragraph.\n' "${d}/docs/a.md"
+  commit_all "${d}" base-with-dup
+  git -C "${d}" switch --quiet fix
+  git -C "${d}" merge --quiet main
+  sed -i '8,9d' "${d}/docs/a.md"
+  commit_all "${d}" delete-dup
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case duplicate-paragraph-deleted "${d}" 1 'uncovered-hunk: docs/a.md:7'
+
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
     printf '%d scenario(s) failed\n' "${failures}" >&2
