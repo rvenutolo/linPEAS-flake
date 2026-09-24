@@ -39,6 +39,14 @@ IFS=$'\n\t'
 # so a paragraph's block span, and with it the gate's hash, would depend
 # on the caller's locale. The C locale pins all of it to ASCII.
 export LC_ALL=C
+# The caller's environment must not change what git diffs:
+# GIT_DIFF_OPTS=--unified=N overrides --unified=0; the *_PATHSPECS
+# switches turn "*.md" into a literal name (or change its matching) so
+# every Markdown hunk disappears; and a replace ref could map a changed
+# blob back to its base text.
+unset GIT_DIFF_OPTS GIT_GLOB_PATHSPECS GIT_LITERAL_PATHSPECS \
+  GIT_NOGLOB_PATHSPECS GIT_ICASE_PATHSPECS
+export GIT_NO_REPLACE_OBJECTS=1
 
 readonly PROG='check-fix-ledger'
 findings=0
@@ -292,10 +300,10 @@ ALL_HUNKS=''
 # keeps a hunk that does carry context from over-skipping into, and
 # hiding, the next file's headers.
 #
-# --unified=0 with --inter-hunk-context=0 and GIT_DIFF_OPTS unset keeps
-# git from emitting context at all: diff.interHunkContext would merge
-# nearby hunks with context between them, and GIT_DIFF_OPTS=--unified=N
-# overrides --unified=0. --no-ext-diff and --no-textconv stop a
+# --unified=0 with --inter-hunk-context=0 (and GIT_DIFF_OPTS, unset at
+# script start) keeps git from emitting context at all:
+# diff.interHunkContext would merge nearby hunks with context between
+# them. --no-ext-diff and --no-textconv stop a
 # repo-local diff.external command or a per-path textconv driver from
 # replacing the real diff with attacker-controlled (or merely
 # misleading) output; --text forces even a file git would otherwise call
@@ -305,7 +313,7 @@ ALL_HUNKS=''
 # parser's column-7 read relies on, regardless of a repo's diff.noprefix
 # setting.
 function list_hunks() {
-  env -u GIT_DIFF_OPTS git -c core.quotePath=false diff --no-ext-diff \
+  git -c core.quotePath=false diff --no-ext-diff \
     --no-textconv --text --src-prefix=a/ --dst-prefix=b/ --no-color \
     --no-renames --unified=0 --inter-hunk-context=0 \
     "${MB}" "${HEAD_REV}" -- "$@" |
