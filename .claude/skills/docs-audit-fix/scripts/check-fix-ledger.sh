@@ -68,7 +68,7 @@ function finding() {
   class_count["$1"]=$((${class_count["$1"]:-0} + 1))
 }
 
-for tool in git jq awk sed sha256sum tr cut realpath; do
+for tool in git jq awk sed grep sort sha256sum tr cut realpath; do
   command -v "${tool}" >/dev/null 2>&1 || die "required tool not found: ${tool}"
 done
 
