@@ -57,9 +57,9 @@ paragraph in its scope.
 1. **Gate.** Dispatch one agent that did not write the changes, on the
     strongest model available. The dispatch carries, verbatim: the ledger
     path; the diff command (`git diff main...HEAD`); the twin-sweep scope
-    from contract clause 4 (`git grep` over
-    `'*.md' '.github/**' 'scripts/*.sh'`, each alternative its own `-e`),
-    so duty 4 searches what the writer searched; the five gate duties
+    from contract clause 4 (`git grep` of the old wording, one `-e` per
+    alternative wording, over `'*.md' '.github/**' 'scripts/*.sh'`), so
+    duty 4 searches what the writer searched; the five gate duties
     below; the paragraph after them on recording each pair's `hash` and
     each code change's `blob`; and the `<report-stem>.gate.json` format
     block under **Files**. A gate given the duties alone writes records
@@ -86,8 +86,8 @@ paragraph in its scope.
 1. Push the branch, then open the PR (`gh pr create --head <branch>`).
     The body carries the pair table rendered from the ledger and gate —
     one row per pair: paragraph `file:lines`, artifact `file:lines`, fix
-    shape, siblings
-    (changed/removed/unchanged counts), verdict — plus each code change's
+    shape, siblings (changed/removed/unchanged counts), verdict — plus
+    each code change's
     attack and result, and the checker's OK line with the commit recorded
     in step 5. When step 7 applies, the body also says the marker commit
     follows that commit.
@@ -96,10 +96,13 @@ paragraph in its scope.
     writes as the PR's last commit, the only commit after that run, and
     push again. Do not re-run the checker over it: the marker is in no
     ledger, so the checker would ask for a `code_changes` entry and a gate
-    attack on it. With the marker as the last commit, anyone holding the
-    ledger and gate reproduces the OK line on the PR head with
-    `check-fix-ledger.sh --head HEAD^ <ledger> <gate>`. If another audit
-    will read these fixes, do not run it.
+    attack on it. Anyone holding the ledger and gate reproduces the OK
+    line with `check-fix-ledger.sh --head <commit> <ledger> <gate>`, using
+    the commit recorded in step 5; while the marker is the last commit,
+    that commit is `HEAD^`. A content commit needed after the marker means
+    dropping the marker commit, re-running the checker, and committing a
+    new marker. If another audit will read these fixes, do not run
+    `just docs-audit-done`.
 
 ## The gate's duties
 
@@ -279,8 +282,10 @@ the gate's job. Its known limits:
 - A pure deletion, or a hunk whose new side is only blank lines, anchors
     at the lines either side of it. When a whole paragraph goes, that is
     its blank line and the next paragraph, so the pair usually goes on the
-    paragraph that follows. A pair on either neighbour covers such a hunk,
-    even when the text it removed belonged to the other one: replace one
+    paragraph that follows. A hunk whose new side is only blank lines is
+    covered by a pair on the paragraph directly above or below it, even
+    when the text it removed belonged to the other one: replace one
     paragraph's last line and the blank line after it with a single
     whitespace-only line, pair only the paragraph below, and the run
-    passes.
+    passes. With a truly empty line instead, git shows a pure deletion,
+    and the same pairing fails.
