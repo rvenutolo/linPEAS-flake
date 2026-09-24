@@ -695,12 +695,18 @@ function check_siblings() {
       continue
     fi
     [[ ${status} == changed ]] || continue # check_schema reported the enum
-    if ! valid_range "${lines}"; then
+    s=0
+    e=0
+    if valid_range "${lines}"; then
+      s="${lines%-*}"
+      e="${lines#*-}"
+    fi
+    # A reversed range overlaps nothing, so it would read as "no hunk
+    # touches it" rather than as the malformed range it is.
+    if ((s == 0 || s > e)); then
       finding schema "pair ${id} sibling ${file}:${lines} is marked changed without a valid <start>-<end> range"
       continue
     fi
-    s="${lines%-*}"
-    e="${lines#*-}"
     pool="${ALL_HUNKS}"
     if [[ ${file} == *.md && ${file} != CHANGELOG.md && ${file} != tests/fixtures/* ]]; then
       pool="${SUBSTANTIVE_HUNKS}"
