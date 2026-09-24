@@ -37,7 +37,10 @@ function expect() {
   ROOT_OVERRIDE="${root}" \
     "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || got_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
-  harness_assert_record "${name}" "${want_msg}" \
+  # The gate stores one substring per line and refuses a newline, so a
+  # message spanning lines is registered by its last line. The whole
+  # message, newline included, is still asserted by the glob below.
+  harness_assert_record "${name}" "${want_msg##*$'\n'}" \
     "${outcome_file}" "${stdout_file}" "${stderr_file}"
 
   local got_stderr
