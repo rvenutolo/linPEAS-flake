@@ -391,6 +391,16 @@ EOF
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
   run_case binary-md "${d}" 1 'uncovered-file: docs/bin.md is a binary diff and not listed in code_changes'
 
+  # An arithmetic-overflow range must not wrap past bash's 64-bit
+  # signed integers and slip through the >= 1 / <= end bound check.
+  # Exercised via --hash so the offending value appears verbatim in the
+  # message, rather than through the ledger schema (whose generic "pair
+  # p1 needs id, file and a <start>-<end> lines" text would collide with
+  # schema-leading-zero).
+  d="$(new_repo)"
+  run_hash_case range-overflow "${d}" 2 \
+    'bad range: 12-18446744073709551628' docs/a.md 12-18446744073709551628
+
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
     printf '%d scenario(s) failed\n' "${failures}" >&2
