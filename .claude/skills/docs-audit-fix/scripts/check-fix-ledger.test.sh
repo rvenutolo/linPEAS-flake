@@ -690,6 +690,32 @@ EOF
   also_expect 'schema: gate code_changes[0] is not an object'
   also_expect 'schema: gate pairs[1] is not an object'
 
+  # GIT_LITERAL_PATHSPECS turns the "*.md" pathspec into a literal file
+  # name that matches nothing, hiding every Markdown hunk.
+  d="$(new_repo)"
+  printf 'Foxtrot paragraph.\n' >"${d}/docs/f.md"
+  commit_all "${d}" add-f
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  CASE_ENV=(GIT_LITERAL_PATHSPECS=1)
+  run_case literal-pathspecs-env "${d}" 1 'uncovered-hunk: docs/f.md:1'
+
+  # A replace ref mapping the changed blob back to the base blob makes
+  # git read the old text at HEAD, so the diff shows no hunk.
+  d="$(new_repo)"
+  git -C "${d}" switch --quiet main
+  printf 'Golf paragraph.\n' >"${d}/docs/g.md"
+  commit_all "${d}" add-g
+  git -C "${d}" switch --quiet fix
+  git -C "${d}" merge --quiet main
+  printf 'Golf WRONG.\n' >"${d}/docs/g.md"
+  commit_all "${d}" wrong
+  git -C "${d}" replace "$(git -C "${d}" rev-parse fix:docs/g.md)" \
+    "$(git -C "${d}" rev-parse main:docs/g.md)"
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case replace-object "${d}" 1 'uncovered-hunk: docs/g.md:1'
+
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
     printf '%d scenario(s) failed\n' "${failures}" >&2
