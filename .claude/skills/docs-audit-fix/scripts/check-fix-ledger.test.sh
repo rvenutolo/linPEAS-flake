@@ -368,6 +368,23 @@ function main() {
   run_case range-trailing-newline "${d}" 1 'schema: pair id p1 is used more than once'
   also_expect 'schema: pair p1 needs id, file and a <start>-<end> lines'
 
+  # A file named with a leading "./" or "/" never equals a path git
+  # prints, so a pair on "./docs/a.md" would leave its own hunk reading
+  # as uncovered, with nothing pointing at the pair. Each file field, in
+  # a pair, an artifact, a sibling and a code change, is refused by name.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].file = "./docs/a.md"
+    | .pairs[0].artifact[0].file = "/scripts/tool.sh"
+    | .pairs[0].siblings = [{file: "./docs/b.md", lines: "1-1", status: "unchanged", reason: "r"}]
+    | .code_changes = [{file: "/scripts/tool.sh", evidence: "e"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case file-path-dot-slash "${d}" 1 \
+    'schema: pair p1 file "./docs/a.md" starts with ./ or /; name it from the repository root'
+  also_expect 'schema: pair p1 artifact file "/scripts/tool.sh" starts with ./ or /'
+  also_expect 'schema: pair p1 sibling file "./docs/b.md" starts with ./ or /'
+  also_expect 'schema: code_changes file "/scripts/tool.sh" starts with ./ or /'
+
   d="$(new_repo)"
   beta_fixed "${d}"
   jq '.pairs[0].fix_shape = "sharpen"' "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
