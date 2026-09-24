@@ -75,13 +75,15 @@ its file as the earlier seeds left it. `insert-after` adds the payload as the
 line after the anchor; `replace-substr` swaps `from` for the payload inside
 the anchor's own text, and planting fails if `from` is not part of the anchor.
 An empty payload with `replace-substr` deletes `from`, which is how a
-truncation is planted. Anchor, `from` and payload are each one line; planting
-refuses a newline in any of them.
+truncation is planted. Every field is a string, and anchor, `from` and payload
+are each one line; planting refuses a newline in any of them, and an anchor
+that occurs twice on its line.
 
 A seed is scored as hit when a report contains its non-empty `sentinel`, or
 cites the seed's `file:line` within `line_tol` of where the edit landed. A
-citation must name the whole repo-relative path: a longer path that merely
-ends in the seed's names another file. A cited range such as `file:20-40`
+citation must name the whole repo-relative path, optionally with a leading
+`./`: a longer path that merely ends in the seed's names another file, and
+an absolute path does not match. A cited range such as `file:20-40`
 hits when it comes within `line_tol` of the seed's line.
 
 A seed may also carry an `also` list of further `{file, anchor, op, from, payload}` edits, for a defect that lives in two files at once. The manifest
@@ -149,7 +151,8 @@ column) is exactly the signal being measured.
     below it, *and* in its rendered line, so the generator, the page and the
     script's own header agree. What refutes them is the script's exit paths
     and the comment beside the could-not-run exit, plus the pattern the page
-    sets: every other generator's `--check` line reads the other way round.
+    sets: every other generator's `--check` line that names both codes gives
+    exit 1 for drift and exit 2 for a check that cannot run.
 - **Re-sharpened** seed (`resharpened-claim`) follows the vague "Representative
     hooks" list with a precise sentence naming two scripts as hooks, of which
     only `check-ephemeral-refs` is one; `check-tool-guarded` runs only as the
