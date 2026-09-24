@@ -239,6 +239,28 @@ function main() {
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
   run_case after-end-marker "${d}" 1 'uncovered-hunk: docs/a.md:11'
 
+  # A new BEGIN/END pair introduced only at HEAD must not exempt the
+  # prose it wraps: the generated check requires a same-named block to
+  # cover the hunk's old side at ${MB} too, and this hunk's old side has
+  # no generated block at all.
+  d="$(new_repo)"
+  sed -i -e '4i\<!-- BEGIN fake -->' -e '4a\<!-- END fake -->' \
+    -e 's/^alpha line two\.$/alpha line two, sneaky./' "${d}/docs/a.md"
+  commit_all "${d}" wrap
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case markers-added-around-prose "${d}" 1 'uncovered-hunk: docs/a.md:4'
+
+  # An END whose name doesn't match its BEGIN must not close the block;
+  # nothing inside counts as generated.
+  d="$(new_repo)"
+  sed -i -e 's/^<!-- END gen -->$/<!-- END mismatch -->/' \
+    -e 's/^generated row one$/generated row two/' "${d}/docs/a.md"
+  commit_all "${d}" mismatch
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case mismatched-end-name "${d}" 1 'uncovered-hunk: docs/a.md:9'
+
   # A content hunk with no pair.
   d="$(new_repo)"
   sed -i 's/^Gamma paragraph\.$/Gamma paragraph, now wrong./' "${d}/docs/a.md"

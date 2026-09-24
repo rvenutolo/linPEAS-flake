@@ -217,12 +217,25 @@ function list_hunks() {
       }'
 }
 
-# @description "start end" line pairs of BEGIN/END generated blocks in
-# stdin, markers inclusive.
+# @description "start end name" line triples of BEGIN/END generated blocks
+# in stdin, markers inclusive. An END only closes the block when its name
+# matches the open BEGIN; a mismatched name leaves the BEGIN unterminated,
+# so nothing between them counts as generated.
 function generated_ranges() {
   awk '
-    /^[[:space:]]*<!-- BEGIN [A-Za-z0-9_-]+ -->[[:space:]]*$/ { s = NR; next }
-    /^[[:space:]]*<!-- END [A-Za-z0-9_-]+ -->[[:space:]]*$/ { if (s) { print s, NR; s = 0 } }'
+    /^[[:space:]]*<!-- BEGIN [A-Za-z0-9_-]+ -->[[:space:]]*$/ {
+      name = $0
+      sub(/^[[:space:]]*<!-- BEGIN /, "", name)
+      sub(/ -->[[:space:]]*$/, "", name)
+      s = NR; sname = name
+      next
+    }
+    /^[[:space:]]*<!-- END [A-Za-z0-9_-]+ -->[[:space:]]*$/ {
+      name = $0
+      sub(/^[[:space:]]*<!-- END /, "", name)
+      sub(/ -->[[:space:]]*$/, "", name)
+      if (s && name == sname) { print s, NR, sname; s = 0 }
+    }'
 }
 
 # @description True when the old block around the hunk and the new block
@@ -239,8 +252,36 @@ function is_reflow() {
   [[ ${old} == "${new}" ]]
 }
 
+# @description True when the hunk's old side sits inside a generated
+# block at ${MB} and its new side sits inside a same-named generated
+# block at HEAD. Checking only one side lets a writer forge the
+# exemption by wrapping newly-changed prose in a fresh BEGIN/END pair
+# that exists only at HEAD.
+function hunk_is_generated() {
+  local -r file="$1" os="$2" ol="$3" ns="$4" nl="$5"
+  git cat-file -e "${MB}:${file}" 2>/dev/null || return 1
+  local -r oe=$((os + (ol > 0 ? ol - 1 : 0))) ne=$((ns + (nl > 0 ? nl - 1 : 0)))
+  local a b name oldname='' newname=''
+  while IFS=' ' read -r a b name; do
+    [[ -n ${a} ]] || continue
+    if ((os >= a && oe <= b)); then
+      oldname="${name}"
+      break
+    fi
+  done < <(git show "${MB}:${file}" | generated_ranges)
+  [[ -n ${oldname} ]] || return 1
+  while IFS=' ' read -r a b name; do
+    [[ -n ${a} ]] || continue
+    if ((ns >= a && ne <= b)); then
+      newname="${name}"
+      break
+    fi
+  done < <(git show "${HEAD_REV}:${file}" | generated_ranges)
+  [[ -n ${newname} && ${newname} == "${oldname}" ]]
+}
+
 function check_completeness() {
-  local file os ol ns nl hs he a b covered gen pf pa pb
+  local file os ol ns nl hs he covered pf pa pb
   # Pair spans at head, as "file\ta\tb".
   local spans='' id pfile plines span
   while IFS=$'\t' read -r id pfile plines; do
@@ -257,12 +298,7 @@ function check_completeness() {
     # A pure deletion has no new lines; it touches the boundary at ns/ns+1.
     hs=$((ns > 0 ? ns : 1))
     he=$((nl > 0 ? ns + nl - 1 : ns + 1))
-    gen=0
-    while IFS=' ' read -r a b; do
-      [[ -n ${a} ]] || continue
-      if ((hs >= a && he <= b)); then gen=1; fi
-    done < <(git show "${HEAD_REV}:${file}" | generated_ranges)
-    if ((gen)); then
+    if hunk_is_generated "${file}" "${os}" "${ol}" "${ns}" "${nl}"; then
       HUNKS_GENERATED=$((HUNKS_GENERATED + 1))
       continue
     fi
