@@ -131,6 +131,63 @@
       "expected_severity": "medium",
       "sentinel": "",
       "line_tol": 3
+    },
+    {
+      "id": "generator-truncation",
+      "category": "generator truncation",
+      "file": "docs/reference/scripts.md",
+      "anchor": "exit 1 if the doc would change; exit 2 if the check cannot run (doc missing, or nix flake show fails); do not mutate the working tree",
+      "op": "replace-substr",
+      "from": " cannot run (doc missing, or nix flake show fails); do not mutate the working tree",
+      "payload": "",
+      "expected_severity": "high",
+      "sentinel": "",
+      "line_tol": 3
+    },
+    {
+      "id": "rendering-divergence",
+      "category": "generator rendering divergence",
+      "file": "docs/reference/scripts.md",
+      "anchor": "--ignore '(needs|steps)\\.\\*\\*\\.outputs\\.\\*\\*' : `expression-injection`",
+      "op": "replace-substr",
+      "from": "(needs|steps)\\.\\*\\*\\.outputs\\.\\*\\*",
+      "payload": "(needs|steps).**.outputs.**",
+      "expected_severity": "high",
+      "sentinel": "",
+      "line_tol": 3
+    },
+    {
+      "id": "agreed-false-annotation",
+      "category": "generator-agreed false claim",
+      "file": "docs/reference/scripts.md",
+      "anchor": "exit 1 if the doc would change; exit 2 if the check cannot run (doc missing, or nix eval fails); do not mutate the working tree",
+      "op": "replace-substr",
+      "from": "exit 1 if the doc would change; exit 2 if",
+      "payload": "exit 2 if the doc would change; exit 1 if",
+      "expected_severity": "high",
+      "sentinel": "",
+      "line_tol": 3,
+      "also": [
+        {
+          "file": "scripts/refresh-treefmt-config.sh",
+          "anchor": "# @option --check exit 1 if the doc would change; exit 2 if the check",
+          "op": "replace-substr",
+          "from": "exit 1 if the doc would change; exit 2 if",
+          "payload": "exit 2 if the doc would change; exit 1 if"
+        }
+      ]
+    },
+    {
+      "id": "resharpened-claim",
+      "category": "re-sharpened claim",
+      "file": "docs/development/linting.md",
+      "anchor": "see [Git workflow → Pre-commit hooks](git.md#pre-commit-hooks).",
+      "op": "insert-after",
+      "from": "",
+      "payload": "Of the lint-group members, `check-ephemeral-refs` and `check-tool-guarded` also run here as hooks, so a clean commit has already cleared both.",
+      "expected_severity": "medium",
+      "sentinel": "",
+      "line_tol": 3
     }
   ]
 }
