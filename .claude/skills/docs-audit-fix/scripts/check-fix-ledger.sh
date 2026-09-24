@@ -740,7 +740,15 @@ function check_verdicts() {
       continue
     fi
     if [[ ${verdict} != TRUE ]]; then
-      finding verdict "pair ${id} is ${verdict}: ${note}"
+      if [[ ${note} == - ]]; then
+        finding verdict "pair ${id} is ${verdict}"
+      else
+        finding verdict "pair ${id} is ${verdict}: ${note}"
+      fi
+      continue
+    fi
+    if [[ ${hash} == - ]]; then
+      finding missing-hash "pair ${id} has a TRUE verdict with no hash"
       continue
     fi
     git cat-file -e "${HEAD_REV}:${file}" 2>/dev/null || continue
