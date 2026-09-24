@@ -368,12 +368,16 @@ function count_covered() {
 # diff, so it gets real hunks instead of being silently skipped;
 # --src-prefix/--dst-prefix pin the "a/"/"b/" header prefixes this
 # parser's column-7 read relies on, regardless of a repo's diff.noprefix
-# setting.
+# setting; --diff-algorithm=myers and --no-indent-heuristic pin where
+# hunk boundaries fall, which a configured diff.algorithm or
+# diff.indentHeuristic would otherwise move, so the same branch could pass
+# for one caller and fail for another.
 function list_hunks() {
   local -r mode="$1"
   shift
   git -c core.quotePath=false diff --no-ext-diff \
     --no-textconv --text --src-prefix=a/ --dst-prefix=b/ --no-color \
+    --diff-algorithm=myers --no-indent-heuristic \
     --no-renames --unified=0 --inter-hunk-context=0 \
     "${MB}" "${HEAD_REV}" -- "$@" |
     awk -v prog="${PROG}" -v mode="${mode}" '
@@ -683,6 +687,7 @@ function check_completeness() {
   listed="$(jq --raw-output '.code_changes[].file' "${LEDGER}")" ||
     die "could not read code_changes from ${LEDGER}"
   changed_files="$(git -c core.quotePath=false diff --no-ext-diff --no-textconv \
+    --diff-algorithm=myers --no-indent-heuristic \
     --src-prefix=a/ --dst-prefix=b/ --name-only --no-renames "${MB}" "${HEAD_REV}")" ||
     die 'could not list the changed files'
   while IFS= read -r changed; do
