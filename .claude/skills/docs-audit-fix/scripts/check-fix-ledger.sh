@@ -303,8 +303,12 @@ function check_artifacts() {
     fi
     start="${lines%-*}"
     end="${lines#*-}"
+    if ((start > end)); then
+      finding artifact "pair ${id} ${file}:${lines} is reversed (start ${start} > end ${end})"
+      continue
+    fi
     n="$(git show "${HEAD_REV}:${file}" | awk 'END { print NR }')"
-    if ((start < 1 || start > end || end > n)); then
+    if ((end > n)); then
       finding artifact "pair ${id} ${file}:${lines} runs past end of file (${n} lines)"
     fi
   done <<<"${records}"
@@ -606,10 +610,14 @@ function check_completeness() {
       finding schema "pair ${id} ${pfile}:${plines} is not a valid <start>-<end> range"
       continue
     fi
-    flen="$(git show "${HEAD_REV}:${pfile}" | awk 'END { print NR }')"
     pstart="${plines%-*}"
     pend="${plines#*-}"
-    if ((pstart < 1 || pstart > pend || pend > flen)); then
+    if ((pstart > pend)); then
+      finding schema "pair ${id} ${pfile}:${plines} is reversed (start ${pstart} > end ${pend})"
+      continue
+    fi
+    flen="$(git show "${HEAD_REV}:${pfile}" | awk 'END { print NR }')"
+    if ((pend > flen)); then
       finding schema "pair ${id} ${pfile}:${plines} runs past end of file (${flen} lines)"
       continue
     fi
