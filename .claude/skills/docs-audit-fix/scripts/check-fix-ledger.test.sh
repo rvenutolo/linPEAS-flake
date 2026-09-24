@@ -258,6 +258,21 @@ function main() {
   printf '{not json\n' >"${d}/ledger.json"
   run_case bad-json "${d}" 2 'ledger.json is not valid JSON'
 
+  # jq's exit status reflects only its last input, so a leading stray
+  # document raises a jq error on every read that `|| die` never sees;
+  # the file must hold exactly one top-level object.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  { printf '"x"\n' && cat -- "${d}/ledger.json"; } >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case ledger-two-documents "${d}" 2 'ledger.json does not hold exactly one JSON object'
+
+  # An accidental `>>` append leaves two gate objects whose verdicts
+  # would merge; only one may be read, so the file is refused.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  cat -- "${d}/gate.json" >"${d}/g" && cat -- "${d}/g" >>"${d}/gate.json"
+  run_case gate-appended-twice "${d}" 2 'gate.json does not hold exactly one JSON object'
+
   d="$(new_repo)"
   beta_fixed "${d}"
   jq '.pairs[0].artifact = []' "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
