@@ -83,14 +83,16 @@ readonly -a HARNESSES=(
   'run-lint-group|run-lint-group.test.sh|'
   'linpeas-pin-assert|linpeas-pin-assert.test.sh|'
   # Tracked harnesses outside tests/. Nearly all of `.claude/` is untracked,
-  # but the docs-correctness-audit skill and its seeded-defect eval are
-  # committed, and their harnesses are reachable from no other runner —
-  # scripts/check-test-reachable.sh holds that. Test-only: the paired scripts
-  # build a throwaway worktree or read a results manifest, neither of which is
-  # an enforcement pass this job could act on.
+  # but the docs-correctness-audit and docs-audit-fix skills and the
+  # seeded-defect eval are committed, and their harnesses are reachable from
+  # no other runner — scripts/check-test-reachable.sh holds that. Test-only:
+  # the paired scripts build a throwaway worktree, read a results manifest, or
+  # check a fix pass's ledger against a diff, none of which is an enforcement
+  # pass this job could act on.
   'docs-audit-plant|.claude/skills/docs-correctness-audit/evals/seeded-defects/plant.test.sh|'
   'docs-audit-score|.claude/skills/docs-correctness-audit/evals/seeded-defects/score.test.sh|'
   'docs-audit-ground-truth|.claude/skills/docs-correctness-audit/scripts/collect-ground-truth.test.sh|'
+  'docs-audit-fix-ledger|.claude/skills/docs-audit-fix/scripts/check-fix-ledger.test.sh|'
 )
 
 # Argument handling sits directly after the roster so the mode stays

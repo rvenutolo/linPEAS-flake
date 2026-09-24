@@ -13,15 +13,16 @@ something.
 ## Running an audit
 
 Invoke the `/docs-audit` slash command. It is read-only: it emits one
-severity-ranked findings report and edits nothing. Fix what it finds in
-the normal PR flow.
+severity-ranked findings report and edits nothing. Fix what it finds with
+the `/docs-fix` slash command, described below.
 
 ## Fixing what an audit finds
 
-Roughly a third of each audit's findings are defects the previous audit's
-fix pass wrote. A pass rewriting a paragraph reads the finding, not the
-artifact, so a corrected claim becomes a differently-wrong one. The
-report states a contract the fix PR is held to:
+About half of an audit's findings were defects the previous round's fix
+pass had written, and the share swung widely from round to round. A pass
+rewriting a paragraph reads the finding, not the artifact, so a
+corrected claim becomes a differently-wrong one. The `/docs-fix` slash
+command holds the fix PR to a contract that includes:
 
 - Every rewritten paragraph records the `file:line` range of the code,
     workflow, or script whose behaviour the new sentence claims. A sentence
@@ -30,9 +31,15 @@ report states a contract the fix PR is held to:
 - A second reader — not whoever wrote them — opens those pairs before the
     PR does, reads the artifact first and the paragraph second, and says for
     each whether the paragraph is true of that artifact.
-- A claim that was too narrow is dropped or scoped to the set it can
-    defend. Replacing a false exclusive with a different exclusive is the
-    most repeated defect these audits find.
+- A claim the audit found overbroad is dropped or scoped to the set it
+    can defend, never re-sharpened; a plain wrong fact is corrected to the
+    artifact's fact. Replacing a claim with a differently wrong exclusive
+    or a precise wrong fact is the most repeated defect these audits find.
+
+`/docs-fix` records each pair in a ledger, has a separate agent gate
+every pair, and opens the PR only after a checker has matched the ledger
+against the branch's diff and found each pair's verdict `TRUE` against
+the paragraph's current text.
 
 ## Closing the loop
 

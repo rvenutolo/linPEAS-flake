@@ -44,9 +44,10 @@ exclude_path = [
   # they are not real docs and must not be link-checked.
   "tests/fixtures/",
   # Untracked working notes. Part of the Claude tooling tree IS tracked — the
-  # docs-correctness-audit and multi-agent-review skills and their slash
-  # commands — and those are maintained docs whose links belong in scope, so
-  # the entries below name the untracked areas rather than the whole tree.
+  # docs-correctness-audit, docs-audit-fix and multi-agent-review skills and
+  # their slash commands — and those are maintained docs whose links belong in
+  # scope, so the entries below name the untracked areas rather than the whole
+  # tree.
   # They bite only because the lint recipe names the dotted trees as inputs:
   # a plain `./**/*.md` glob never descends into a dotted directory, so
   # nothing under one reaches lychee through it and no exclusion here could
