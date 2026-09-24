@@ -132,6 +132,7 @@ assert_planted "$here/fixtures/seeds-also.json"
 # an also that is not an array of edit objects (its edits would be dropped
 # while the plant exits 0); a seed id that is not a string, or a tolerance
 # that is not an integer (score.sh would refuse the manifest after the fact);
+# an empty seed list; and an id holding a newline (it splits its table row);
 # and a repeated seed id (its locations would merge into the other seed's).
 while IFS=$'\t' read -r fixture msg; do
   rc=0
@@ -150,8 +151,10 @@ seeds-anchor-twice.json	occurs more than once on its line
 seeds-null-payload.json	payload is not a string
 seeds-also-string.json	also is not an array of edit objects
 seeds-also-scalar-entry.json	also is not an array of edit objects
-seeds-numeric-id.json	id is not a non-empty string
+seeds-numeric-id.json	id is not a non-empty one-line string
 seeds-fractional-tol.json	line_tol is not an integer
+seeds-empty.json	no seeds
+seeds-newline-id.json	id is not a non-empty one-line string
 EOF
 
 exit "$fail"

@@ -1,0 +1,16 @@
+{
+  "seeds": [
+    {
+      "id": "x\ny",
+      "category": "two-file claim",
+      "file": "docs/index.md",
+      "anchor": "All credit for LinPEAS itself belongs to the PEASS-ng authors.",
+      "op": "insert-after",
+      "from": "",
+      "payload": "zzq7 span primary",
+      "expected_severity": "high",
+      "sentinel": "",
+      "line_tol": 3
+    }
+  ]
+}
