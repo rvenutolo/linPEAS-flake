@@ -52,6 +52,12 @@ padded	1/1	a zero-padded line number is decimal, not octal
 dotslash	1/1	a leading ./ still names the repo-relative path
 meta-all	1/1	every ERE metacharacter in the seed's path is literal
 float-line	1/1	a manifest line written 30.0 is line 30
+near-bracket	0/1	a metacharacter in the seed's path is not a regex operator
+near-brace	0/1	a metacharacter in the seed's path is not a regex operator
+near-star	0/1	a metacharacter in the seed's path is not a regex operator
+near-question	0/1	a metacharacter in the seed's path is not a regex operator
+near-bar	0/1	a metacharacter in the seed's path is not a regex operator
+near-backslash	0/1	a metacharacter in the seed's path is not a regex operator
 EOF
 
 # A manifest that cannot be scored as written must be refused by name rather
