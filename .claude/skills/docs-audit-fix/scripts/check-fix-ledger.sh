@@ -427,18 +427,29 @@ function check_completeness() {
     fi
   done < <(list_hunks '*.md' ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures')
 
-  # Every changed file that is not a surviving Markdown file must be listed.
-  local listed changed
+  # Every changed file that is not a surviving, textually-diffed
+  # Markdown file must be listed. --numstat (rather than --name-only)
+  # also reports whether git treated the diff as binary ("-\t-" for
+  # both counts) — a .md file with a NUL byte or a "-diff" attribute
+  # produces no "+++"/"@@" headers at all, so list_hunks never sees it
+  # and it must not be silently exempted the way a real text hunk is.
+  local listed changed added deleted
   listed="$(jq --raw-output '.code_changes[].file' "${LEDGER}")"
-  while IFS= read -r changed; do
+  # shellcheck disable=SC2034 # named for numstat's fixed 3-column shape; only "added" (binary vs text) and "changed" are read
+  while IFS=$'\t' read -r added deleted changed; do
     [[ -n ${changed} ]] || continue
-    if [[ ${changed} == *.md ]] && git cat-file -e "${HEAD_REV}:${changed}" 2>/dev/null; then
+    if [[ ${changed} == *.md && ${added} != '-' ]] &&
+      git cat-file -e "${HEAD_REV}:${changed}" 2>/dev/null; then
       continue
     fi
     if ! grep --line-regexp --fixed-strings --quiet -- "${changed}" <<<"${listed}"; then
-      finding uncovered-file "${changed} is changed but not listed in code_changes"
+      if [[ ${added} == '-' ]]; then
+        finding uncovered-file "${changed} is a binary diff and not listed in code_changes"
+      else
+        finding uncovered-file "${changed} is changed but not listed in code_changes"
+      fi
     fi
-  done < <(git -c core.quotePath=false diff --name-only --no-renames "${MB}" "${HEAD_REV}")
+  done < <(git -c core.quotePath=false diff --numstat --no-renames "${MB}" "${HEAD_REV}")
 
   # shellcheck disable=SC2034 # consumed by the sibling check a later task adds
   ALL_HUNKS="$(list_hunks .)"

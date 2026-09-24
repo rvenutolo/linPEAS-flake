@@ -380,6 +380,17 @@ EOF
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
   run_case forged-block-after-end "${d}" 1 'uncovered-hunk: docs/a.md:13'
 
+  # A .md file git treats as binary (a NUL byte forces this) produces no
+  # "+++"/"@@" headers, so list_hunks never sees it; it must still be
+  # required in code_changes rather than silently exempted the way a
+  # surviving text .md file is.
+  d="$(new_repo)"
+  printf 'binary\000content\n' >"${d}/docs/bin.md"
+  commit_all "${d}" binary
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case binary-md "${d}" 1 'uncovered-file: docs/bin.md is a binary diff and not listed in code_changes'
+
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
     printf '%d scenario(s) failed\n' "${failures}" >&2
