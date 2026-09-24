@@ -1117,6 +1117,15 @@ EOF
   run_case sibling-removed-whitespace-only "${d}" 1 \
     'sibling-not-removed: pair p1 sibling docs/w.md:3-3 is marked removed but no covered hunk deletes text there'
 
+  # A removed sibling names a deletion boundary, not a span: a wide range
+  # would reach any deleting hunk nearby.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].siblings = [{file: "docs/a.md", lines: "7-13", status: "removed"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case sibling-removed-wide-range "${d}" 1 \
+    'schema: pair p1 sibling docs/a.md:7-13 is marked removed with a range wider than a deletion boundary'
+
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
     printf '%d scenario(s) failed\n' "${failures}" >&2
