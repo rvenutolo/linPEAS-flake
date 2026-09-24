@@ -77,10 +77,7 @@ apply_edit() {
     + [("anchor", "from", "payload") as $k
       | select((.[$k] | type) == "string" and (.[$k] | test("[\n\r]")))
       | "\($k) holds a newline"]
-    | join(", ")' <<<"$edit")" || {
-    echo "seed '$id': an edit is not a JSON object" >&2
-    exit 1
-  }
+    | join(", ")' <<<"$edit")"
   [ -z "$fault" ] || {
     echo "seed '$id': $fault" >&2
     exit 1
@@ -142,6 +139,35 @@ apply_edit() {
 
   locs="$(jq --arg id "$id" --arg f "$file" --argjson l "$rline" \
     '. + [{id: $id, file: $f, line: $l}]' <<<"$locs")"
+}
+
+# Refuse a seed the manifest could not carry before planting anything: a
+# non-string id never joins back to its recorded locations, a non-string
+# sentinel or non-integer tolerance makes score.sh refuse the manifest after
+# the fact, and an also that is not an array of objects would drop its edits
+# while the plant exits 0. The tolerance is capped so bash arithmetic can read
+# it (jq prints 1e19 in exponent form).
+fault="$(jq -r 'def int: type == "number" and . == floor and . >= 0 and . <= 1e9;
+  if (.seeds | type) != "array" then "seeds is not an array"
+  else [.seeds | to_entries[] | .key as $i | .value as $s
+    | if ($s | type) != "object" then "seed #\($i): not an object"
+      else (if ($s.id | type) == "string" and $s.id != "" then "seed '"'"'\($s.id)'"'"'"
+            else "seed #\($i)" end) as $who
+        | (if ($s.id | type) == "string" and $s.id != "" then empty
+            else "\($who): id is not a non-empty string" end),
+          (if ($s.sentinel | type) == "string" then empty
+            else "\($who): sentinel is not a string" end),
+          (if ($s.line_tol | int) then empty
+            else "\($who): line_tol is not an integer from 0 to 1e9" end),
+          (if ($s.also // []) | type == "array" and all(.[]; type == "object") then empty
+            else "\($who): also is not an array of edit objects" end)
+      end] | join("\n") end' "$seeds")" || {
+  echo "$seeds is not a JSON object" >&2
+  exit 1
+}
+[ -z "$fault" ] || {
+  printf '%s\n' "$fault" >&2
+  exit 1
 }
 
 # Locations are keyed by seed id, so a repeated id would merge two seeds.

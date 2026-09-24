@@ -23,9 +23,10 @@ n="${#reports[@]}"
 # string sentinel (jq prints a null one as the text "null", which the report
 # would then be searched for) and a non-negative integer tolerance; every
 # location a non-empty, tab-free path (a location is passed as "file<TAB>line")
-# and a positive integer line. Anything else would die mid-table, drop seeds
-# from the total, or score a false hit.
-bad="$(jq -r 'def int: type == "number" and . == floor;
+# and a positive integer line. Both numbers are capped at 1e9, since jq prints
+# larger ones in exponent form, which bash arithmetic cannot read. Anything
+# else would die mid-table, drop seeds from the total, or score a false hit.
+bad="$(jq -r 'def int: type == "number" and . == floor and . <= 1e9;
   if type != "array" or length == 0 then "no seeds"
   else [.[] | . as $s | ($s.id // "?") as $id
     | (if ($s.id | type) == "string" and $s.id != "" then empty else "a seed with no id" end),
