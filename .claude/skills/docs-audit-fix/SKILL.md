@@ -56,7 +56,10 @@ paragraph in its scope.
     checker reads commits, not the working tree.
 1. **Gate.** Dispatch one agent that did not write the changes, on the
     strongest model available. The dispatch carries, verbatim: the ledger
-    path; the diff command (`git diff main...HEAD`); the five gate duties
+    path; the diff command (`git diff main...HEAD`); the twin-sweep scope
+    from contract clause 4 (`git grep` of the old wording, one `-e` per
+    alternative wording, over `'*.md' '.github/**' 'scripts/*.sh'`), so
+    duty 4 searches what the writer searched; the five gate duties
     below; the paragraph after them on recording each pair's `hash` and
     each code change's `blob`; and the `<report-stem>.gate.json` format
     block under **Files**. A gate given the duties alone writes records
@@ -76,20 +79,32 @@ paragraph in its scope.
     until it exits 0. Also run the lints and harnesses the diff touches,
     and every `refresh-*.sh` whose output the diff touches. The checker's
     OK run is over the branch's last content commit: the only commit that
-    may follow it is step 7's marker commit.
-1. Open the PR (`gh pr create --head <branch>`). The body carries the pair
-    table rendered from the ledger and gate — one row per pair: paragraph
-    `file:lines`, artifact `file:lines`, fix shape, siblings
-    (changed/removed/unchanged counts), verdict — plus each code change's
-    attack and result, and the checker's OK line. When step 7 applies, the
-    body also says the marker commit follows the commit that OK line was
-    produced at.
+    may follow it is step 7's marker commit. Any other commit made after
+    the OK run, a `refresh-*.sh` regeneration included, means running the
+    checker again. A merge from `main` (`gh pr update-branch`) is not a
+    content commit: it needs no re-run. When the checker prints the OK
+    line, record `git rev-parse HEAD`: the OK line names no commit, and
+    step 6 needs it.
+1. Push the branch, then open the PR (`gh pr create --head <branch>`).
+    The body carries the pair table rendered from the ledger and gate —
+    one row per pair: paragraph `file:lines`, artifact `file:lines`, fix
+    shape, siblings (changed/removed/unchanged counts), verdict — plus
+    each code change's attack and result, and the checker's OK line with
+    the commit recorded in step 5. When step 7 applies, the body also says
+    the marker commit follows that commit.
 1. If the report said this audit closes the cycle, run `just docs-audit-done`
-    after the checker's OK run, and commit the `.github/docs-audit-state` it
-    writes as the PR's last commit, the only commit after that run. Do not
-    re-run the checker over it: the marker is in no ledger, so the checker
-    would ask for a `code_changes` entry and a gate attack on it. If another
-    audit will read these fixes, do not run it.
+    after the checker's OK run, commit the `.github/docs-audit-state` it
+    writes as the PR's last commit, the only commit after that run, and
+    push again. Do not re-run the checker over it: the marker is in no
+    ledger, so the checker would ask for a `code_changes` entry and a gate
+    attack on it. Anyone holding the ledger and gate reproduces the OK
+    line with `check-fix-ledger.sh --head <commit> <ledger> <gate>`, using
+    the commit recorded in step 5; while the marker is the last commit,
+    that commit is `HEAD^`. A content commit needed after the marker means
+    reverting the marker commit, re-running the checker, recording the new
+    commit as in step 5, updating the PR body's OK line and commit, and
+    committing a new marker. If another audit will read these fixes, do
+    not run `just docs-audit-done`.
 
 ## The gate's duties
 
@@ -269,4 +284,10 @@ the gate's job. Its known limits:
 - A pure deletion, or a hunk whose new side is only blank lines, anchors
     at the lines either side of it. When a whole paragraph goes, that is
     its blank line and the next paragraph, so the pair usually goes on the
-    paragraph that follows.
+    paragraph that follows. A hunk whose new side is only blank lines is
+    covered by a pair on the paragraph directly above or below it, even
+    when the text it removed belonged to the other one: replace one
+    paragraph's last line and the one blank line after it with a single
+    whitespace-only line, pair only the paragraph below, and the run
+    passes. With a truly empty line instead, git shows a pure deletion,
+    and the same pairing fails.
