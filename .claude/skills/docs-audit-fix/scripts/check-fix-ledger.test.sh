@@ -1237,6 +1237,21 @@ EOF
   run_case sibling-removed-file-never-existed "${d}" 1 \
     'sibling-not-removed: pair p1 sibling docs/never.md:3-3 is marked removed but the file is tracked at neither the merge base nor the head revision'
 
+  # A caller's diff.ignoreSubmodules=all must not hide a gitlink change:
+  # the changed gitlink is a changed file that needs a code_changes entry.
+  d="$(new_repo)"
+  git -C "${d}" switch --quiet main
+  git -C "${d}" update-index --add --cacheinfo "160000,$(git -C "${d}" rev-parse HEAD),sub"
+  git -C "${d}" commit --quiet --message 'add gitlink'
+  git -C "${d}" switch --quiet fix
+  git -C "${d}" merge --quiet main
+  git -C "${d}" update-index --cacheinfo "160000,$(git -C "${d}" rev-parse HEAD),sub"
+  git -C "${d}" commit --quiet --message 'move gitlink'
+  git -C "${d}" config diff.ignoreSubmodules all
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case ignore-submodules-configured "${d}" 1 'uncovered-file: sub is changed but not listed in code_changes'
+
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
     printf '%d scenario(s) failed\n' "${failures}" >&2
