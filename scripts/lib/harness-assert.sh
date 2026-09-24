@@ -6,8 +6,9 @@
 # output, the assertion passes whether or not the asserted behavior
 # exists — green while verifying nothing. Record each scenario here and
 # call `harness_assert_verify` at the end of the run to fail on any such
-# substring, and on any two scenarios whose whole observable outcome is
-# the same — a pair that verifies one thing between them however each is
+# substring, on any asserted substring missing from its own scenario's
+# output, and on any two scenarios whose whole observable outcome is the
+# same — a pair that verifies one thing between them however each is
 # named. Source after `set -Eeuo pipefail`.
 # shellcheck shell=bash
 
@@ -68,12 +69,19 @@ function harness_assert_parity_exempt() {
 # stream(s) the harness asserts against. Pass '' as the substring for a
 # scenario that asserts only an exit code — its output still belongs in
 # the comparison pool, because that is usually the output a failure-path
-# substring wrongly matches.
+# substring wrongly matches. A substring holding a newline is refused, for
+# the reason given on `harness_assert_also`.
 # @arg $1 scenario name  @arg $2 asserted substring ('' if none)
 # @arg $@ one or more captured output files
 function harness_assert_record() {
   local -r scenario="$1" substring="$2"
   shift 2
+
+  if [[ ${substring} == *$'\n'* ]]; then
+    printf 'harness-assert: %s: substring holds a newline: %s\n' \
+      "${scenario}" "${substring@Q}" >&2
+    return 1
+  fi
 
   if [[ -z ${HARNESS_ASSERT_POOL} ]]; then
     HARNESS_ASSERT_POOL="$(make_temp --directory)"
@@ -120,7 +128,11 @@ function harness_assert_record() {
 # output: recording that invocation once per property makes those records
 # byte-identical siblings, which the pairwise rule cannot separate and
 # the census scores as collapsed coverage. Each attached substring is
-# held to the same rule as the record's own.
+# held to the same rules as the record's own: `harness_assert_verify`
+# fails when it is missing from this record's output and when it appears
+# in a sibling's, so attaching a substring asserts it. A substring holding
+# a newline is refused, because the pool stores one substring per line and
+# would check each line on its own rather than the whole.
 # @arg $1 substring
 function harness_assert_also() {
   local -r substring="$1"
@@ -130,6 +142,11 @@ function harness_assert_also() {
   fi
   if [[ -z ${substring} ]]; then
     printf 'harness-assert: harness_assert_also needs a substring\n' >&2
+    return 1
+  fi
+  if [[ ${substring} == *$'\n'* ]]; then
+    printf 'harness-assert: harness_assert_also got a substring holding a newline: %s\n' \
+      "${substring@Q}" >&2
     return 1
   fi
   printf '%s\n' "${substring}" \
@@ -172,13 +189,15 @@ function harness_assert_parity_is_exempt() {
   return 1
 }
 
-# @description Apply the pairwise rule, the identical-output rule and the
-# parity rule to everything recorded, print the census, and drop the pool.
-# Exit 1 if any asserted substring also occurs in a sibling scenario's
-# output, if two records share one output while asserting different
-# substrings, if two records share one output without a parity exemption,
-# or if nothing was recorded at all. The census names every group of
-# scenarios sharing one output before reporting the counts.
+# @description Apply the presence rule, the pairwise rule, the
+# identical-output rule and the parity rule to everything recorded, print
+# the census, and drop the pool. Exit 1 if any asserted substring is
+# missing from its own scenario's output, if any asserted substring also
+# occurs in a sibling scenario's output, if two records share one output
+# while asserting different substrings, if two records share one output
+# without a parity exemption, or if nothing was recorded at all. The
+# census names every group of scenarios sharing one output before
+# reporting the counts.
 function harness_assert_verify() {
   if [[ ${HARNESS_ASSERT_COUNT} -eq 0 ]]; then
     printf 'harness-assert: no scenarios recorded — the harness is wired to the gate but never calls harness_assert_record\n' >&2
@@ -192,6 +211,18 @@ function harness_assert_verify() {
     while IFS= read -r sub_i; do
       [[ -z ${sub_i} ]] && continue
       asserted=$((asserted + 1))
+      # A substring that is not in the record's own output was never
+      # observed, so the pairwise rule below would judge an assertion the
+      # scenario does not make. Checking it here is what makes an attached
+      # substring an assertion: without it, deleting the code that prints
+      # the substring leaves the harness green.
+      if ! grep --fixed-strings --quiet -- "${sub_i}" \
+        "${HARNESS_ASSERT_POOL}/${i}.out"; then
+        printf 'harness-assert: %s asserts %s which does not appear in its own output — the assertion checks nothing\n' \
+          "${name_i}" "${sub_i@Q}" >&2
+        flagged=$((flagged + 1))
+        continue
+      fi
       for ((j = 0; j < HARNESS_ASSERT_COUNT; j++)); do
         [[ ${i} -eq ${j} ]] && continue
         harness_assert_declares "${sub_i}" "${j}" && continue

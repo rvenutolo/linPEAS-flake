@@ -16,9 +16,9 @@ readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-prose-ci-names"
 failures=0
 
 # The stderr of the most recent scenario, kept so `also_expect` can assert
-# against it. `harness_assert_also` alone does not: it registers a
-# substring for the discrimination check and never greps the output, so a
-# second expected finding written only that way is not actually asserted.
+# against it. `harness_assert_also` checks presence only at
+# `harness_assert_verify`, against every stream the record holds; this
+# pins the finding to stderr and names the scenario where it happens.
 LAST_STDERR=''
 LAST_NAME=''
 
@@ -101,7 +101,7 @@ function run_scenario() {
 # @description Assert one more substring appears in the last scenario's
 # stderr, and register it for the discrimination check. A scenario whose
 # point is that several names are reported needs every one of them
-# asserted; registering alone would let all but the first silently vanish.
+# asserted on stderr, where the lint reports them.
 # @arg $1 expected stderr substring
 function also_expect() {
   local -r substring="$1"
