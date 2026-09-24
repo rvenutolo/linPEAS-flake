@@ -1137,6 +1137,29 @@ EOF
   run_case sibling-removed-after-edit "${d}" 1 \
     'sibling-not-removed: pair p1 sibling docs/a.md:7-7 is marked removed but no covered hunk deletes text there'
 
+  # A caller's diff.algorithm must not change the hunks the checker
+  # reads. Under myers this edit leaves a hunk whose new side is the blank
+  # line 6, which no pair covers; histogram shapes the same change into
+  # hunks the pairs do cover. The checker diffs with myers whatever the
+  # repository or user configures.
+  d="$(new_repo)"
+  seed_main "${d}" docs/p.md '' z z y '' x z y '' '' z z
+  printf '%s\n' x '' z z '' '' z y '' q '' z z >"${d}/docs/p.md"
+  commit_all "${d}" 'reshape p'
+  git -C "${d}" config diff.algorithm histogram
+  local pl
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  for pl in 1 3 4 7 8 10 12 13; do
+    jq --arg l "${pl}-${pl}" '.pairs += [{id: "p\($l)", finding: 1, file: "docs/p.md", lines: $l,
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "drop", siblings: []}]' \
+      "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+    jq --arg l "${pl}-${pl}" --arg h "$(gate_hash "${d}" docs/p.md "${pl}-${pl}")" \
+      '.pairs += [{id: "p\($l)", verdict: "TRUE", hash: $h, note: ""}]' \
+      "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
+  done
+  run_case diff-algorithm-configured "${d}" 1 'uncovered-hunk: docs/p.md:6 changed and no pair covers it'
+
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
     printf '%d scenario(s) failed\n' "${failures}" >&2
