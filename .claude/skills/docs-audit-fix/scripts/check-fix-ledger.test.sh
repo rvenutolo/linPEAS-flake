@@ -651,6 +651,45 @@ EOF
     'schema: code_changes file "x<LF>scripts/tool.sh" holds a newline, tab or CR'
   also_expect 'schema: pair p1 sibling file "docs/a<TAB>b.md" holds a newline, tab or CR'
 
+  # A non-object artifact or sibling entry must be a schema finding, not
+  # a jq crash that drops every other schema finding (here the bogus
+  # fix_shape) and lets the run pass.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].artifact = ["x"] | .pairs[0].siblings = [1] |
+      .pairs[0].fix_shape = "bogus"' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case non-object-artifact "${d}" 1 'schema: pair p1 artifact[0] is not an object'
+  also_expect 'schema: pair p1 siblings[0] is not an object'
+  also_expect 'enum: pair p1 fix_shape "bogus" is not drop, scope or correct'
+
+  # A non-object pair must not crash the schema check before it reaches
+  # the code_changes newline check, whose injected second line would
+  # otherwise list the changed scripts/tool.sh.
+  d="$(new_repo)"
+  sed -i 's/^echo line6$/echo line6 changed/' "${d}/scripts/tool.sh"
+  commit_all "${d}" code
+  jq -n '{report: "r.md", pairs: ["x", 1],
+    code_changes: [{file: "y\nscripts/tool.sh"}]}' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case non-object-pair-hides-newline-file "${d}" 1 'schema: pairs[0] is not an object'
+  also_expect 'schema: pairs[1] is not an object'
+  also_expect 'schema: code_changes file "y<LF>scripts/tool.sh" holds a newline, tab or CR'
+
+  # A non-object code_changes entry, in the ledger or the gate, is a
+  # schema finding (exit 1), never a jq crash (exit 5).
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  sed -i 's/^echo line7$/echo line7 changed/' "${d}/scripts/tool.sh"
+  commit_all "${d}" code
+  jq '.code_changes = [{"file": "scripts/tool.sh"}, 7]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  jq '.code_changes = [7] | .pairs += ["g"]' \
+    "${d}/gate.json" >"${d}/l" && mv -- "${d}/l" "${d}/gate.json"
+  run_case non-object-code-change "${d}" 1 'schema: code_changes[1] is not an object'
+  also_expect 'schema: gate code_changes[0] is not an object'
+  also_expect 'schema: gate pairs[1] is not an object'
+
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
     printf '%d scenario(s) failed\n' "${failures}" >&2
