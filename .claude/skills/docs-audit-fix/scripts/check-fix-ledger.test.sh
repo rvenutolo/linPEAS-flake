@@ -240,6 +240,30 @@ function two_file_edit() {
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
 }
 
+# @description Commit file $2 with lines $3.. on main, then merge it into
+# fix, so the base holds it and the branch can edit it.
+function seed_main() {
+  local -r d="$1" file="$2"
+  shift 2
+  git -C "${d}" switch --quiet main
+  printf '%s\n' "$@" >"${d}/${file}"
+  commit_all "${d}" "seed ${file}"
+  git -C "${d}" switch --quiet fix
+  git -C "${d}" merge --quiet main
+}
+
+# @description A ledger with pair p1 on $2:$3 and one changed sibling on
+# $2:$4, gated TRUE against the current text.
+function sibling_ledger() {
+  local -r d="$1" file="$2" plines="$3" slines="$4"
+  jq -n --arg f "${file}" --arg pl "${plines}" --arg sl "${slines}" '{report: "r.md", code_changes: [],
+    pairs: [{id: "p1", finding: 1, file: $f, lines: $pl,
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+      siblings: [{file: $f, lines: $sl, status: "changed"}]}]}' >"${d}/ledger.json"
+  jq -n --arg h "$(gate_hash "${d}" "${file}" "${plines}")" \
+    '{pairs: [{id: "p1", verdict: "TRUE", hash: $h, note: ""}], code_changes: []}' >"${d}/gate.json"
+}
+
 function main() {
   local d shim
 
@@ -944,7 +968,7 @@ EOF
   jq '.pairs[0].siblings = [{file: "docs/a.md", lines: "12-12", status: "changed"}]' \
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case sibling-cleared-by-reflow "${d}" 1 \
-    'sibling-not-changed: pair p1 sibling docs/a.md:12-12 is marked changed but only a reflow-only or generated hunk touches it'
+    'sibling-not-changed: pair p1 sibling docs/a.md:12-12 is marked changed but no covered hunk changes its text'
 
   # Prose inside a generated block is fixed at its generator, which is a
   # code change; a generated-block hunk does not clear a sibling.
@@ -955,7 +979,7 @@ EOF
   jq '.pairs[0].siblings = [{file: "docs/a.md", lines: "9-9", status: "changed"}]' \
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case sibling-cleared-by-generated "${d}" 1 \
-    'sibling-not-changed: pair p1 sibling docs/a.md:9-9 is marked changed but only a reflow-only or generated hunk touches it'
+    'sibling-not-changed: pair p1 sibling docs/a.md:9-9 is marked changed but no covered hunk changes its text'
 
   # A whitespace-only reason is no reason.
   d="$(new_repo)"
@@ -1009,6 +1033,61 @@ EOF
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case sibling-changed-bad-range "${d}" 1 \
     'schema: pair p1 sibling docs/a.md:12-5 is marked changed without a valid <start>-<end> range'
+
+  # Negative fixture: fixing one table row makes the formatter re-align
+  # every row. The sibling row's own words did not change, so padding in
+  # the same hunk as the real fix must not clear it.
+  d="$(new_repo)"
+  seed_main "${d}" docs/t.md '# T' '' '| a | b |' '| - | - |' '| x | old |' '| y | wrong |' '| z | ok |'
+  printf '%s\n' '# T' '' '| a | b         |' '| - | --------- |' '| x | corrected |' \
+    '| y | wrong     |' '| z | ok        |' >"${d}/docs/t.md"
+  commit_all "${d}" realign
+  sibling_ledger "${d}" docs/t.md 5-5 6-6
+  run_case sibling-table-realigned "${d}" 1 \
+    'sibling-not-changed: pair p1 sibling docs/t.md:6-6 is marked changed but no covered hunk changes its text'
+
+  # Negative fixture: a trailing space on the sibling item, in the same
+  # hunk as the fix to the item above it.
+  d="$(new_repo)"
+  seed_main "${d}" docs/l.md '- one wrong' '- two wrong'
+  printf '%s\n' '- one right' '- two wrong ' >"${d}/docs/l.md"
+  commit_all "${d}" 'fix one, pad two'
+  sibling_ledger "${d}" docs/l.md 1-1 2-2
+  run_case sibling-list-trailing-space "${d}" 1 \
+    'sibling-not-changed: pair p1 sibling docs/l.md:2-2 is marked changed but no covered hunk changes its text'
+
+  # Positive control: the sibling item's words change in the same hunk.
+  d="$(new_repo)"
+  seed_main "${d}" docs/l.md '- one wrong' '- two wrong'
+  printf '%s\n' '- one right' '- two right' >"${d}/docs/l.md"
+  commit_all "${d}" 'fix both'
+  sibling_ledger "${d}" docs/l.md 1-1 2-2
+  run_case sibling-list-word-change "${d}" 0 '' \
+    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 1 changed and 0 unchanged siblings'
+
+  # A changed sibling's range must fall inside its file.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].siblings = [{file: "docs/a.md", lines: "12-99", status: "changed"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case sibling-range-past-end "${d}" 1 \
+    'schema: pair p1 sibling docs/a.md:12-99 runs past end of file (12 lines)'
+
+  # A changed sibling's range must sit inside one paragraph; a wide range
+  # would be cleared by any hunk it happens to reach.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].siblings = [{file: "docs/a.md", lines: "5-12", status: "changed"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case sibling-spans-blocks "${d}" 1 \
+    'schema: pair p1 sibling docs/a.md:5-12 does not lie within one paragraph'
+
+  # A pair's own fix must not clear the pair's own lines as a sibling.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].siblings = [{file: "docs/a.md", lines: "6-6", status: "changed"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case sibling-is-own-pair "${d}" 1 'schema: pair p1 sibling docs/a.md:6-6 overlaps its own pair'
 
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
