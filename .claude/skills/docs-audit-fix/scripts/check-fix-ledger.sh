@@ -77,12 +77,13 @@ function collapse() {
 }
 
 # @description True when $1 is exactly a "<start>-<end>" range with each
-# number 1-6 digits. Re-checked in bash at every point a range read from
-# jq's @tsv output feeds an arithmetic ((...)) expression: jq's own rng
-# check (in check_schema) can pass a value carrying a trailing newline
-# that @tsv then emits literally, and a bash arithmetic error on that
-# stray newline is read by `if` as false rather than raised — silently
-# skipping the bound check it guards.
+# number 1-6 digits. check_schema's rng shape-checks pair and artifact
+# ranges, but not sibling ranges, so this is what guards a sibling range
+# before it feeds an arithmetic ((...)) expression; a bash arithmetic
+# error there is read by `if` as false rather than raised, silently
+# skipping the bound check it guards. Its uses on pair and artifact
+# ranges (the pair, artifact and verdict re-checks) are defence in depth:
+# a bad one is a schema finding, which stops those checks from running.
 function valid_range() {
   [[ $1 =~ ^[1-9][0-9]{0,5}-[1-9][0-9]{0,5}$ ]]
 }
@@ -295,6 +296,7 @@ function check_artifacts() {
       finding artifact "pair ${id} ${file} is not a file at the head revision"
       continue
     fi
+    # Defence in depth: check_schema's rng already rejects a bad range.
     if ! valid_range "${lines}"; then
       finding schema "pair ${id} artifact ${file}:${lines} is not a valid <start>-<end> range"
       continue
@@ -599,6 +601,7 @@ function check_completeness() {
       finding schema "pair ${id} file ${pfile} is not a file at the head revision"
       continue
     fi
+    # Defence in depth: check_schema's rng already rejects a bad range.
     if ! valid_range "${plines}"; then
       finding schema "pair ${id} ${pfile}:${plines} is not a valid <start>-<end> range"
       continue
