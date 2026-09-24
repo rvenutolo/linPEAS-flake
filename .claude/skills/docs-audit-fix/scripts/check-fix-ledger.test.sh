@@ -327,6 +327,23 @@ function main() {
   run_case pair-lines-past-end "${d}" 1 \
     'schema: pair p1 docs/a.md:9000-9999 runs past end of file (12 lines)'
 
+  # A reversed range is malformed, not too long: a pair range 2-1 and an
+  # artifact range 3-1 each say start > end, and neither says it runs
+  # past the end of a file it fits inside. p2 covers the Beta hunk so the
+  # only findings are the two reversed ranges.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].lines = "2-1" |
+      .pairs += [{"id": "p2", "finding": 2, "file": "docs/a.md", "lines": "6-6",
+                  "artifact": [{"file": "scripts/tool.sh", "lines": "3-1"}],
+                  "fix_shape": "scope", "siblings": []}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  jq '.pairs += [.pairs[0] | .id = "p2"]' "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
+  run_case pair-range-reversed "${d}" 1 \
+    'schema: pair p1 docs/a.md:2-1 is reversed (start 2 > end 1)'
+  also_expect 'artifact: pair p2 scripts/tool.sh:3-1 is reversed (start 3 > end 1)'
+  expect_absent 'runs past end of file'
+
   # jq test()'s $ matches before a trailing newline, so "1-999999\n"
   # passed the pre-fix rng check; @tsv then emitted the literal
   # newline, and the bash arithmetic error it caused was read by `if`
