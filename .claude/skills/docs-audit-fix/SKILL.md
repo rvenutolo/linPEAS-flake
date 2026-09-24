@@ -24,10 +24,10 @@ paragraph in its scope.
     sentence claims. A sentence with no artifact behind it was inferred from
     the old sentence.
 1. **A second reader re-reads the pairs** — not the writer. See the gate.
-1. **A claim the audit found false is dropped or scoped to the set it can
-    defend, never re-sharpened.** Replacing
-    a vague claim with a precise wrong one is the most repeated defect these
-    audits find. Record the shape: `drop`, `scope`, or `correct` (a fact
+1. **A claim the audit found overbroad is dropped or scoped to the set it
+    can defend, never re-sharpened; a plain wrong fact is corrected to the
+    artifact's fact.** Replacing a vague claim with a precise wrong one is
+    the most repeated defect these audits find. Record the shape: `drop`, `scope`, or `correct` (a fact
     replaced by the artifact's fact, no new boundary word).
 1. **Clear the sibling set.** Name every other place the corrected claim
     lives (`git grep` the old wording across
@@ -45,7 +45,10 @@ paragraph in its scope.
 1. Branch `docs/<topic>` from `main`. Work the findings.
 1. For each rewritten paragraph, append a pair to
     `<report-stem>.ledger.json` beside the report. A `changed` or `removed`
-    Markdown sibling is itself a rewritten paragraph and needs its own pair.
+    Markdown sibling is itself a rewritten paragraph: it needs a pair
+    covering it, unless it shares its pair's paragraph or sits in the root
+    `CHANGELOG.md` or `tests/fixtures/`. A `removed` sibling in a file the
+    branch deletes needs only that file's `code_changes` entry.
     For each changed file that is not a surviving Markdown file (a deleted
     `.md` file included), append a `code_changes` entry with the evidence
     (test, harness, mutation) that it is right. Commit as you go; the
@@ -169,8 +172,8 @@ Both stay untracked in `.claude/reports/`. Only the PR body is durable.
 It reads the committed diff from the merge base with `main` (`--base`
 overrides) to `HEAD`, refuses to run over uncommitted tracked changes, and
 ignores the caller's diff configuration (external diff, textconv, header
-prefixes, `diff.algorithm` and the indent heuristic, pathspec variables,
-replace refs). It exits 0 when every check below
+prefixes, `diff.algorithm` and the indent heuristic,
+`diff.ignoreSubmodules`, pathspec variables, replace refs). It exits 0 when every check below
 passes, 1 with one `check-fix-ledger: <class>: <detail>` line per finding,
 and 2 when it cannot run.
 
@@ -201,7 +204,10 @@ and 2 when it cannot run.
     and is touched by a covered hunk that removes a line whose collapsed text
     matches no added line of that hunk. That hunk's reach is the line before
     and after a pure deletion, its new lines plus the next one when it
-    removes more lines than it adds, and its new lines otherwise. In a file
+    removes more lines than it adds, and its new lines otherwise. A
+    `removed` one in a file the diff deletes, tracked at the merge base and
+    absent at `HEAD`, needs only a well-formed range of at most two lines,
+    with no hunk. In a file
     that is not Markdown, or in the root `CHANGELOG.md` or `tests/fixtures/`,
     any hunk touching the range clears a `changed` or `removed` sibling, a
     whitespace-only edit included.
@@ -232,11 +238,10 @@ the gate's job. Its known limits:
 - Prose in script comments and workflow bodies is covered per file through
     `code_changes`, not per paragraph.
 - The root `CHANGELOG.md` and `tests/fixtures/` are outside the paragraph
-    check: their Markdown hunks need no pair and no `code_changes` entry, so
-    the ledger records nothing about them.
-- In a file that is not Markdown, or in the root `CHANGELOG.md` or
-    `tests/fixtures/`, any hunk touching the range clears a `changed` or
-    `removed` sibling, a whitespace-only edit included.
+    check: no pair or `code_changes` entry is required for their Markdown
+    hunks.
+- Siblings outside in-scope Markdown are cleared by any touching hunk, as
+    **Siblings** above says, so a whitespace-only edit clears them.
 - A pure deletion anchors at the lines either side of it. When a whole
     paragraph goes, that is its blank line and the next paragraph, so the
     pair usually goes on the paragraph that follows.
