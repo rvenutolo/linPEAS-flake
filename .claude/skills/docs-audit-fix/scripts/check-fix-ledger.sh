@@ -503,8 +503,8 @@ function is_reflow() {
     return 1
   fi
   local ospan nspan old new
-  ospan="$(git show "${MB}:${file}" | block_span "$((os > 0 ? os : 1))" "$((oe > 0 ? oe : 1))")"
-  nspan="$(git show "${HEAD_REV}:${file}" | block_span "$((ns > 0 ? ns : 1))" "$((ne > 0 ? ne : 1))")"
+  ospan="$(git show "${MB}:${file}" | block_span "${os}" "${oe}")"
+  nspan="$(git show "${HEAD_REV}:${file}" | block_span "${ns}" "${ne}")"
   old="$(git show "${MB}:${file}" | sed --quiet "${ospan% *},${ospan#* }p" | collapse)"
   new="$(git show "${HEAD_REV}:${file}" | sed --quiet "${nspan% *},${nspan#* }p" | collapse)"
   [[ ${old} == "${new}" ]]
