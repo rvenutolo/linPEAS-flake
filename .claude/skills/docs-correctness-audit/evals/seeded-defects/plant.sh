@@ -58,7 +58,7 @@ write_back() {
 # apply_edit <id> <edit-json>: apply one {file, anchor, op, from, payload}
 # edit to the worktree and append the line it landed on to $locs.
 apply_edit() {
-  local id="$1" edit="$2" file anchor op from payload target n aline rline line
+  local id="$1" edit="$2" file anchor op from payload target n aline rline multiline
   file="$(jq -r '.file' <<<"$edit")"
   anchor="$(jq -r '.anchor' <<<"$edit")"
   op="$(jq -r '.op' <<<"$edit")"
@@ -66,6 +66,16 @@ apply_edit() {
   payload="$(jq -r '.payload' <<<"$edit")"
   target="$wt/$file"
 
+  # Seed text is one line: grep -F reads a newline in the anchor as a second
+  # pattern, and a payload that plants extra lines shifts text below it that
+  # no recorded location accounts for. Checked in jq, since command
+  # substitution would strip a trailing newline before bash could see it.
+  multiline="$(jq -r '[("anchor", "from", "payload") as $k
+    | select((.[$k] // "") | test("[\n\r]")) | $k] | join(" ")' <<<"$edit")"
+  [ -z "$multiline" ] || {
+    echo "seed '$id': $multiline holds a newline" >&2
+    exit 1
+  }
   [ -f "$target" ] || {
     echo "seed '$id': no file $file" >&2
     exit 1
@@ -93,16 +103,16 @@ apply_edit() {
       'map(if .file == $f and .line > $a then .line += 1 else . end)' <<<"$locs")"
     ;;
   replace-substr)
-    # The replacement edits the anchor line only, so the from-string must be
-    # on it: found anywhere else in the file, the edit would be a silent no-op.
-    line="$(sed -n "${aline}p" "$target")"
-    [ -n "$from" ] && [[ $line == *"$from"* ]] || {
-      echo "seed '$id': from-string not on the anchor line in $file" >&2
+    # The replacement edits the anchor's own text, so the from-string must be
+    # inside it: elsewhere in the file the edit would be a silent no-op, and
+    # beside the anchor on its line it would edit text the seed never named.
+    [ -n "$from" ] && [[ $anchor == *"$from"* ]] || {
+      echo "seed '$id': from-string not inside the anchor in $file" >&2
       exit 1
     }
-    SEED_FROM="$from" SEED_PAYLOAD="$payload" awk -v ln="$aline" '
-        NR==ln { from=ENVIRON["SEED_FROM"]; to=ENVIRON["SEED_PAYLOAD"]
-          i=index($0,from); if(i>0){$0=substr($0,1,i-1) to substr($0,i+length(from))} }
+    SEED_ANCHOR="$anchor" SEED_NEW="${anchor/"$from"/"$payload"}" awk -v ln="$aline" '
+        NR==ln { a=ENVIRON["SEED_ANCHOR"]; i=index($0,a)
+          $0=substr($0,1,i-1) ENVIRON["SEED_NEW"] substr($0,i+length(a)) }
         {print}' "$target" >"$target.tmp"
     write_back "$target"
     rline="$aline"
