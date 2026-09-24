@@ -7,3 +7,4 @@
 - docs/r.md:20-40 — a range that spans the seed's line
 - docs/q.md:20-40 — a range that ends far from the seed's line
 - (`docs/p.md:7`) — a citation wrapped in punctuation
+- `docs/o.md:08` — a zero-padded line number

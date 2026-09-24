@@ -61,5 +61,14 @@
     "expected_severity": "high",
     "sentinel": "",
     "line_tol": 3
+  },
+  {
+    "id": "padded",
+    "category": "citation",
+    "file": "docs/o.md",
+    "line": 8,
+    "expected_severity": "high",
+    "sentinel": "",
+    "line_tol": 3
   }
 ]

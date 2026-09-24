@@ -48,6 +48,7 @@ meta-false	0/1	+ in the seed's path is not a regex quantifier
 range	1/1	a cited range spanning the seed's line hits
 range-far	0/1	a cited range ending outside tolerance misses
 wrapped	1/1	punctuation around a citation does not hide it
+padded	1/1	a zero-padded line number is decimal, not octal
 EOF
 
 # A manifest location without a numeric line, or with a tab in its path,
