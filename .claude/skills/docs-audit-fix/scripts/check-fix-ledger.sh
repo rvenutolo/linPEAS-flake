@@ -222,38 +222,66 @@ ALL_HUNKS=''
 # @description Unified-zero hunks between the merge base and head, as
 # "file\tos\tol\tns\tnl". Paths come from the "+++ b/" header, read from
 # column 7 so a space in a filename survives; a deletion ("+++ /dev/null")
-# yields no rows, and deleted files are handled per file instead. Under
-# --unified=0, every line after an "@@" header is a body line ("-" or
-# "+") until exactly ol+nl of them have gone by, so that many lines are
-# consumed unconditionally before another header is recognised — a body
-# line that itself starts with "+++ " or "@@ " (e.g. an added line that
-# happens to read "++ b/CHANGELOG.md") cannot pose as one.
+# yields no rows, and deleted files are handled per file instead.
 #
-# --no-ext-diff and --no-textconv stop a repo-local diff.external
-# command or a per-path textconv driver from replacing the real diff
-# with attacker-controlled (or merely misleading) output; --text forces
-# even a file git would otherwise call binary (a NUL byte, a "-diff"
-# attribute) through the same line-oriented diff, so it gets real
-# hunks instead of being silently skipped; --src-prefix/--dst-prefix
-# pin the "a/"/"b/" header prefixes this parser's column-7 read relies
-# on, regardless of a repo's diff.noprefix setting.
+# After an "@@" header the body is consumed by prefix: a "-" line counts
+# against ol, a "+" line against nl, a " " context line against both, and
+# a "\ No newline at end of file" line against neither. Another header is
+# recognised only once both counts reach 0, so a body line that itself
+# starts with "+++ " or "@@ " (e.g. an added line that happens to read
+# "++ b/CHANGELOG.md") cannot pose as one. A line with any other prefix
+# while counts remain, a prefix whose count is already spent, or a diff
+# that ends mid-hunk is a parse error: awk exits 2, which the callers
+# turn into die. Counting per prefix rather than skipping ol+nl lines
+# keeps a hunk that does carry context from over-skipping into, and
+# hiding, the next file's headers.
+#
+# --unified=0 with --inter-hunk-context=0 and GIT_DIFF_OPTS unset keeps
+# git from emitting context at all: diff.interHunkContext would merge
+# nearby hunks with context between them, and GIT_DIFF_OPTS=--unified=N
+# overrides --unified=0. --no-ext-diff and --no-textconv stop a
+# repo-local diff.external command or a per-path textconv driver from
+# replacing the real diff with attacker-controlled (or merely
+# misleading) output; --text forces even a file git would otherwise call
+# binary (a NUL byte, a "-diff" attribute) through the same line-oriented
+# diff, so it gets real hunks instead of being silently skipped;
+# --src-prefix/--dst-prefix pin the "a/"/"b/" header prefixes this
+# parser's column-7 read relies on, regardless of a repo's diff.noprefix
+# setting.
 function list_hunks() {
-  git -c core.quotePath=false diff --no-ext-diff --no-textconv --text \
-    --src-prefix=a/ --dst-prefix=b/ --no-color --no-renames --unified=0 \
+  env -u GIT_DIFF_OPTS git -c core.quotePath=false diff --no-ext-diff \
+    --no-textconv --text --src-prefix=a/ --dst-prefix=b/ --no-color \
+    --no-renames --unified=0 --inter-hunk-context=0 \
     "${MB}" "${HEAD_REV}" -- "$@" |
-    awk '
-      remaining > 0 { remaining--; next }
+    awk -v prog="${PROG}" '
+      function bad(why) {
+        printf "%s: unparsable diff line %d (%s): %s\n", prog, NR, why, $0 > "/dev/stderr"
+        failed = 1
+        exit 2
+      }
+      ro > 0 || rn > 0 {
+        c = substr($0, 1, 1)
+        if (c == "\\") next
+        if (c == "-") { if (ro == 0) bad("removed line past the hunk count"); ro--; next }
+        if (c == "+") { if (rn == 0) bad("added line past the hunk count"); rn--; next }
+        if (c == " ") {
+          if (ro == 0 || rn == 0) bad("context line past the hunk count")
+          ro--; rn--; next
+        }
+        bad("unknown hunk body prefix")
+      }
       /^\+\+\+ / {
         f = ($0 == "+++ /dev/null") ? "" : substr($0, 7)
         sub(/\t$/, "", f) # git appends a tab to a header path holding a space
         next
       }
-      /^@@ / && f != "" {
+      /^@@ / {
         split(substr($2, 2), o, ","); split(substr($3, 2), n, ",")
         ol = (2 in o) ? o[2] : 1; nl = (2 in n) ? n[2] : 1
-        print f "\t" o[1] "\t" ol "\t" n[1] "\t" nl
-        remaining = ol + nl
-      }'
+        ro = ol + 0; rn = nl + 0
+        if (f != "") print f "\t" o[1] "\t" ol "\t" n[1] "\t" nl
+      }
+      END { if (!failed && (ro > 0 || rn > 0)) bad("diff ends inside a hunk") }'
 }
 
 # @description "start end name" line triples of BEGIN/END generated blocks
@@ -386,6 +414,9 @@ function new_side_blocks() {
 
 function check_completeness() {
   local file os ol ns nl hs he ne pf pa pb covered block_a block_b bcov all_covered block_count
+  local md_hunks
+  md_hunks="$(list_hunks '*.md' ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures')" ||
+    die 'could not parse the Markdown diff'
   # Pair spans at head, as "file\ta\tb". Each pair's own range must also
   # fall inside its file, the same bound check check_artifacts runs for
   # each artifact.
@@ -486,7 +517,7 @@ function check_completeness() {
     elif ((all_covered)); then
       HUNKS_COVERED=$((HUNKS_COVERED + 1))
     fi
-  done < <(list_hunks '*.md' ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures')
+  done <<<"${md_hunks}"
 
   # Every changed file that is not a surviving Markdown file must be
   # listed. list_hunks' --text now forces a hunk-level diff even for a
@@ -510,7 +541,7 @@ function check_completeness() {
     --src-prefix=a/ --dst-prefix=b/ --name-only --no-renames "${MB}" "${HEAD_REV}")
 
   # shellcheck disable=SC2034 # consumed by the sibling check a later task adds
-  ALL_HUNKS="$(list_hunks .)"
+  ALL_HUNKS="$(list_hunks .)" || die 'could not parse the full diff'
 }
 
 function main() {

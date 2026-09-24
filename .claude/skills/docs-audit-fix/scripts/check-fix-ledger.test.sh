@@ -64,16 +64,22 @@ function gate_hash() {
   (cd "$1" && "${SCRIPT}" --hash "$2" "$3")
 }
 
+# "NAME=value" assignments the next run_case passes to the checker's
+# environment only; run_case clears it after that one run.
+CASE_ENV=()
+
 # @description Run the checker in repo $2 with $2/ledger.json and
 # $2/gate.json; assert exit, stderr substring, optional stdout substring.
 function run_case() {
   local -r name="$1" dir="$2" expected_exit="$3" expected_stderr="$4"
   local -r expected_stdout="${5:-}"
   local stderr_file stdout_file outcome_file actual_exit=0
+  local -a env_args=("${CASE_ENV[@]}")
+  CASE_ENV=()
   stderr_file="$(mktemp -p "${SCRATCH}")"
   stdout_file="$(mktemp -p "${SCRATCH}")"
   outcome_file="$(mktemp -p "${SCRATCH}")"
-  (cd "${dir}" && "${SCRIPT}" ledger.json gate.json) \
+  (cd "${dir}" && env "${env_args[@]}" "${SCRIPT}" ledger.json gate.json) \
     >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
@@ -153,6 +159,30 @@ EOF
   h="$(gate_hash "${d}" docs/a.md 6-6)"
   printf '{"pairs": [{"id": "p1", "verdict": "TRUE", "hash": "%s", "note": ""}], "code_changes": []}\n' \
     "${h}" >"${d}/gate.json"
+}
+
+# @description Unpaired edits to lines 3 and 9 of a docs/b.md, plus
+# unpaired edits on each line $2.. (3, 5 or 7) of a docs/e.md, both
+# committed to main first, with an empty ledger and gate. The b.md edits
+# are far enough apart that git keeps them as separate hunks under -U0.
+function two_file_edit() {
+  local -r d="$1"
+  shift
+  local eline
+  git -C "${d}" switch --quiet main
+  printf '%s\n' '# B' '' 'Bravo three.' '' 'Bravo five.' '' 'Bravo seven.' \
+    '' 'Bravo nine.' >"${d}/docs/b.md"
+  printf '%s\n' '# E' '' 'Echo three.' '' 'Echo five.' '' 'Echo seven.' >"${d}/docs/e.md"
+  commit_all "${d}" add-b-e
+  git -C "${d}" switch --quiet fix
+  git -C "${d}" merge --quiet main
+  sed -i -e '3s/.*/Bravo WRONG./' -e '9s/.*/Bravo WRONG./' "${d}/docs/b.md"
+  for eline in "$@"; do
+    sed -i "${eline}s/.*/Echo WRONG./" "${d}/docs/e.md"
+  done
+  commit_all "${d}" wrong
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
 }
 
 function main() {
@@ -545,6 +575,44 @@ EOF
   d="$(new_repo)"
   run_hash_case hash-past-end "${d}" 2 \
     'bad range: 1-999999 (end must be <= 12 lines)' docs/a.md 1-999999
+
+  # diff.interHunkContext merges b.md's two edits into one hunk carrying
+  # context lines. A parser that skips ol+nl body lines then over-skips
+  # (each context line is counted in both but printed once) and swallows
+  # docs/e.md's header, hiding its unpaired edit. The finding count pins
+  # that no context-widened hunk adds spurious findings either.
+  d="$(new_repo)"
+  two_file_edit "${d}" 3
+  git -C "${d}" config diff.interHunkContext 50
+  run_case inter-hunk-context-configured "${d}" 1 'uncovered-hunk: docs/e.md:3'
+  also_expect 'check-fix-ledger: 3 finding(s)'
+
+  # GIT_DIFF_OPTS overrides --unified=0 from the environment, with the
+  # same over-skip. Editing e.md lines 5 and 7 rather than 3 gives this
+  # scenario its own findings and count, distinct from
+  # inter-hunk-context-configured's.
+  d="$(new_repo)"
+  two_file_edit "${d}" 5 7
+  CASE_ENV=(GIT_DIFF_OPTS=--unified=40)
+  run_case git-diff-opts-env "${d}" 1 'uncovered-hunk: docs/e.md:5'
+  also_expect 'check-fix-ledger: 4 finding(s)'
+
+  # A "\ No newline at end of file" marker inside a hunk counts against
+  # neither side; the file after it must still be parsed.
+  d="$(new_repo)"
+  git -C "${d}" switch --quiet main
+  printf 'Charlie one.\n\nCharlie end.' >"${d}/docs/c.md"
+  printf '%s\n' 'Delta one.' '' 'Delta two.' '' 'Delta three.' >"${d}/docs/d.md"
+  commit_all "${d}" no-eol
+  git -C "${d}" switch --quiet fix
+  git -C "${d}" merge --quiet main
+  printf 'Charlie one.\n\nCharlie WRONG.' >"${d}/docs/c.md"
+  sed -i 's/^Delta three\.$/Delta WRONG./' "${d}/docs/d.md"
+  commit_all "${d}" wrong
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case no-newline-marker-mid-diff "${d}" 1 'uncovered-hunk: docs/d.md:5'
+  also_expect 'uncovered-hunk: docs/c.md:3'
 
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
