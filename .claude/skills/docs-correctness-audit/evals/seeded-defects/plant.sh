@@ -47,6 +47,14 @@ git -C "$repo_root" worktree add --quiet --detach "$wt" HEAD
 # source and its rendered page agree on, say.
 locs="[]"
 
+# write_back <target>: replace <target> with <target>.tmp in place. Copying
+# the content over the original, rather than moving the temp file onto it,
+# keeps the original's mode — a planted script must stay executable.
+write_back() {
+  cat "$1.tmp" >"$1"
+  rm -f "$1.tmp"
+}
+
 # apply_edit <id> <edit-json>: apply one {file, anchor, op, from, payload}
 # edit to the worktree and append the line it landed on to $locs.
 apply_edit() {
@@ -76,7 +84,8 @@ apply_edit() {
     # Insert payload as the line after the anchor line.
     SEED_PAYLOAD="$payload" awk -v ln="$aline" \
       'NR==ln{print; print ENVIRON["SEED_PAYLOAD"]; next} {print}' \
-      "$target" >"$target.tmp" && mv "$target.tmp" "$target"
+      "$target" >"$target.tmp"
+    write_back "$target"
     rline=$((aline + 1))
     # The insert pushes every line below the anchor down one, including any
     # an earlier edit already recorded in this file.
@@ -94,7 +103,8 @@ apply_edit() {
     SEED_FROM="$from" SEED_PAYLOAD="$payload" awk -v ln="$aline" '
         NR==ln { from=ENVIRON["SEED_FROM"]; to=ENVIRON["SEED_PAYLOAD"]
           i=index($0,from); if(i>0){$0=substr($0,1,i-1) to substr($0,i+length(from))} }
-        {print}' "$target" >"$target.tmp" && mv "$target.tmp" "$target"
+        {print}' "$target" >"$target.tmp"
+    write_back "$target"
     rline="$aline"
     ;;
   *)
