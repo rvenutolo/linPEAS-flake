@@ -18,8 +18,8 @@ the `/docs-fix` slash command, described below.
 
 ## Fixing what an audit finds
 
-About half of an audit's findings are defects the previous round's fix
-pass wrote, and the share varies widely from round to round. A pass
+About half of an audit's findings were defects the previous round's fix
+pass had written, and the share swung widely from round to round. A pass
 rewriting a paragraph reads the finding, not the artifact, so a
 corrected claim becomes a differently-wrong one. The `/docs-fix` slash
 command holds the fix PR to a contract that includes:
@@ -33,8 +33,8 @@ command holds the fix PR to a contract that includes:
     each whether the paragraph is true of that artifact.
 - A claim the audit found overbroad is dropped or scoped to the set it
     can defend, never re-sharpened; a plain wrong fact is corrected to the
-    artifact's fact. Replacing a false exclusive with a different exclusive
-    is the most repeated defect these audits find.
+    artifact's fact. Replacing a claim with a differently wrong exclusive
+    or a precise wrong fact is the most repeated defect these audits find.
 
 `/docs-fix` records each pair in a ledger, has a separate agent gate
 every pair, and opens the PR only after a checker has matched the ledger

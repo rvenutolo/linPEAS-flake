@@ -26,9 +26,10 @@ paragraph in its scope.
 1. **A second reader re-reads the pairs** — not the writer. See the gate.
 1. **A claim the audit found overbroad is dropped or scoped to the set it
     can defend, never re-sharpened; a plain wrong fact is corrected to the
-    artifact's fact.** Replacing a vague claim with a precise wrong one is
-    the most repeated defect these audits find. Record the shape: `drop`, `scope`, or `correct` (a fact
-    replaced by the artifact's fact, no new boundary word).
+    artifact's fact.** Replacing a claim with a differently wrong exclusive
+    or a precise wrong fact is the most repeated defect these audits find.
+    Record the shape: `drop`, `scope`, or `correct` (a fact replaced by the
+    artifact's fact, no new boundary word).
 1. **Clear the sibling set.** Name every other place the corrected claim
     lives (`git grep` the old wording across
     `'*.md' '.github/**' 'scripts/*.sh'`, each alternative its own `-e`)
@@ -82,9 +83,9 @@ The gate is a separate agent. It did not write the changes.
 1. **Verdict per pair:** `TRUE`, `FALSE`, or `OVERREACHES` (true of part of
     the artifact, stated of all of it), with a one-line note for anything
     but TRUE.
-1. **Fix shape.** Check the recorded shape against the diff: a `drop` or
-    `scope` that introduced a new boundary word (`only`, `every`, `never`, a
-    count) is a re-sharpening and is OVERREACHES.
+1. **Fix shape.** Check the recorded shape against the diff: a fix of any
+    shape that introduces a new boundary word (`only`, `every`, `never`, a
+    count) not in the artifact is OVERREACHES.
 1. **Sibling set, per member.** Re-run the twin sweep yourself. A member
     the ledger omits, or marks unchanged for a reason that is false, makes
     the pair FALSE.
@@ -172,10 +173,10 @@ Both stay untracked in `.claude/reports/`. Only the PR body is durable.
 It reads the committed diff from the merge base with `main` (`--base`
 overrides) to `HEAD`, refuses to run over uncommitted tracked changes, and
 ignores the caller's diff configuration (external diff, textconv, header
-prefixes, `diff.algorithm` and the indent heuristic,
-`diff.ignoreSubmodules`, pathspec variables, replace refs). It exits 0 when every check below
-passes, 1 with one `check-fix-ledger: <class>: <detail>` line per finding,
-and 2 when it cannot run.
+prefixes, `diff.algorithm` and the indent heuristic, `diff.ignoreSubmodules`
+and `diff.submodule`, pathspec variables, replace refs). It exits 0 when
+every check below passes, 1 with one `check-fix-ledger: <class>: <detail>`
+line per finding, and 2 when it cannot run.
 
 - **Shape.** The ledger and the gate each hold exactly one JSON object;
     every list element is an object; every pair and artifact range is
@@ -187,12 +188,13 @@ and 2 when it cannot run.
     `deleted`. A `schema` finding from this shape pass stops the checks
     below; the later checks also report some tracking and range faults as
     `schema`, and those stop nothing.
-- **Completeness.** Every changed Markdown hunk is covered, except in
-    the root `CHANGELOG.md` and `tests/fixtures/`, inside a generated `BEGIN/END`
-    block of the same name on both sides, or a pure re-wrap. Covered means
-    every non-blank paragraph the hunk's new side touches overlaps a pair's
-    paragraph, each needing its own pair. Every other changed file, a deleted
-    Markdown file included, is listed in `code_changes`.
+- **Completeness.** Every changed Markdown hunk is covered, except in the
+    root `CHANGELOG.md` and `tests/fixtures/`, inside a generated
+    `BEGIN/END` block of the same name on both sides, or a pure re-wrap.
+    Covered means every non-blank paragraph the hunk's new side touches
+    overlaps a pair's paragraph, each needing its own pair. Every other
+    changed file, a deleted Markdown file included, is listed in
+    `code_changes`.
 - **Artifacts and pairs** name files tracked at `HEAD`, with the range
     inside the file.
 - **Siblings.** An `unchanged` one names a file tracked at `HEAD` and a
@@ -222,9 +224,10 @@ and 2 when it cannot run.
 Finding classes: `schema`, `enum`, `artifact`, `uncovered-hunk`,
 `uncovered-file`, `sibling-untracked`, `sibling-reason`,
 `sibling-not-changed`, `sibling-not-removed`, `missing-verdict`, `verdict`,
-`missing-hash`, `stale-verdict`, `missing-attack`, `stale-attack`. On success it prints one
-OK line with the pair, hunk (covered, reflow-only, generated), code-change
-and sibling (changed, unchanged, removed) tallies; the PR body quotes it.
+`missing-hash`, `stale-verdict`, `missing-attack`, `stale-attack`. On
+success it prints one OK line with the pair, hunk (covered, reflow-only,
+generated), code-change and sibling (changed, unchanged, removed) tallies;
+the PR body quotes it.
 
 It does not judge whether a sentence is true or re-sharpened — that is
 the gate's job. Its known limits:
@@ -240,8 +243,9 @@ the gate's job. Its known limits:
 - The root `CHANGELOG.md` and `tests/fixtures/` are outside the paragraph
     check: no pair or `code_changes` entry is required for their Markdown
     hunks.
-- Siblings outside in-scope Markdown are cleared by any touching hunk, as
-    **Siblings** above says, so a whitespace-only edit clears them.
+- A `changed` or `removed` sibling outside in-scope Markdown is cleared by
+    any touching hunk, as **Siblings** above says, so a whitespace-only edit
+    clears it.
 - A pure deletion anchors at the lines either side of it. When a whole
     paragraph goes, that is its blank line and the next paragraph, so the
     pair usually goes on the paragraph that follows.
