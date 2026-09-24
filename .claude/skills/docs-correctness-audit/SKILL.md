@@ -463,17 +463,17 @@ finding whose "fix" would change runtime behavior).
 
 ### 6. Hand the fix pass to `/docs-fix`
 
-Across this repo's audit cycles, roughly a third of every audit's findings
-were defects the *previous* audit's fix pass had just written. That rate did
-not fall as rules naming the failure modes accumulated, because a fix pass
-rewriting a paragraph is not reading the rules — it is reading the finding.
-The report therefore hands the fix PR a contract it is held to, not more
-advice.
+Across this repo's audit cycles, about half of an audit's findings were
+defects the previous round's fix pass had written, and the share swung widely
+from round to round. That share did not fall as rules naming the failure modes
+accumulated, because a fix pass rewriting a paragraph is not reading the rules
+— it is reading the finding. The report therefore hands the fix PR a contract
+it is held to, not more advice.
 
-The contract, the gate that enforces it, and the checker that proves the
-gate saw every paragraph live in the `docs-audit-fix` skill. Close the
-report by telling the reader to run `/docs-fix <this report>` rather than
-fixing by hand. Keep stating each quantifier finding's fix shape in the
+The contract, the gate that enforces it, and the checker that proves the gate
+saw every changed paragraph in its scope live in the `docs-audit-fix` skill.
+Close the report by telling the reader to run `/docs-fix <this report>` rather
+than fixing by hand. Keep stating each quantifier finding's fix shape in the
 finding itself, as below.
 
 ### 7. Say whether this audit closes the cycle

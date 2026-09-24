@@ -10,11 +10,12 @@ whose body shows, per rewritten paragraph, the artifact range it was
 written against and the gate's verdict on it.
 
 This phase exists because a fix pass reads the finding, not the audit's
-rules: across this repo's audit cycles roughly a third of each audit's
-findings were defects the previous cycle's fix pass had written. What
-caught them before merge was a second reader aimed at the fix, holding the
-duties below. The contract makes that reader's input complete; the checker
-proves it is.
+rules. Across this repo's audit cycles, about half of an audit's findings
+were defects the previous round's fix pass had written, and the share swung
+widely from round to round. What caught them before merge was a second
+reader aimed at the fix, holding the duties below. The contract makes that
+reader's input complete; the checker proves it covers every changed
+paragraph in its scope.
 
 ## The contract (the writer)
 
@@ -23,7 +24,8 @@ proves it is.
     sentence claims. A sentence with no artifact behind it was inferred from
     the old sentence.
 1. **A second reader re-reads the pairs** — not the writer. See the gate.
-1. **A widened claim is dropped or scoped, never re-sharpened.** Replacing
+1. **A claim the audit found false is dropped or scoped to the set it can
+    defend, never re-sharpened.** Replacing
     a vague claim with a precise wrong one is the most repeated defect these
     audits find. Record the shape: `drop`, `scope`, or `correct` (a fact
     replaced by the artifact's fact, no new boundary word).
@@ -42,8 +44,10 @@ proves it is.
 
 1. Branch `docs/<topic>` from `main`. Work the findings.
 1. For each rewritten paragraph, append a pair to
-    `<report-stem>.ledger.json` beside the report. For each changed file
-    that is not Markdown, append a `code_changes` entry with the evidence
+    `<report-stem>.ledger.json` beside the report. A `changed` or `removed`
+    Markdown sibling is itself a rewritten paragraph and needs its own pair.
+    For each changed file that is not a surviving Markdown file (a deleted
+    `.md` file included), append a `code_changes` entry with the evidence
     (test, harness, mutation) that it is right. Commit as you go; the
     checker reads commits, not the working tree.
 1. **Gate.** Dispatch one agent that did not write the changes, on the
@@ -51,11 +55,12 @@ proves it is.
     (`git diff main...HEAD`), and the gate duties below verbatim. It writes
     `<report-stem>.gate.json` and nothing else.
 1. For every FALSE or OVERREACHES: fix it, update the ledger, commit, and
-    re-dispatch the gate on the changed pairs only. A verdict is tied to the
-    paragraph's text by hash, so a fix made after the gate is stale until the
-    gate reads it again. Review the fix, not only the thing being fixed.
-1. Run `.claude/skills/docs-audit-fix/scripts/check-fix-ledger.sh <ledger> <gate>` until it exits 0. Also run the lints and harnesses the
-    diff touches, and every `refresh-*.sh` whose output the diff touches.
+    re-dispatch the gate on the changed pairs only. A pair's verdict is tied
+    to its paragraph's text by hash, and a code change's attack to the blob
+    it attacked, so anything fixed after the gate is stale until the gate
+    reads it again. Review the fix, not only the thing being fixed.
+1. Run `.claude/skills/docs-audit-fix/scripts/check-fix-ledger.sh <ledger> <gate>` until it exits 0. Also run the lints and harnesses the diff touches,
+    and every `refresh-*.sh` whose output the diff touches.
 1. Open the PR (`gh pr create --head <branch>`). The body carries the pair
     table rendered from the ledger and gate — one row per pair: paragraph
     `file:lines`, artifact `file:lines`, fix shape, siblings
@@ -87,7 +92,9 @@ The gate is a separate agent. It did not write the changes.
     Confirming the named case works is not an attack.
 
 For each pair record the hash of the paragraph as you read it:
-`check-fix-ledger.sh --hash <file> <start>-<end>`.
+`check-fix-ledger.sh --hash <file> <start>-<end>`. For each code change
+record the blob you attacked: `git rev-parse HEAD:<file>`, or `deleted`
+for a file the branch removes.
 
 ## Files
 
@@ -110,6 +117,24 @@ For each pair record the hash of the paragraph as you read it:
         {"file": "SECURITY.md", "lines": "12-14", "status": "unchanged",
           "reason": "states the other arm, true as written"}
       ]
+    },
+    {
+      "id": "p2",
+      "finding": 3,
+      "file": "docs/invariant-index.md",
+      "lines": "88-88",
+      "artifact": [{"file": "scripts/check-egress-allowlist.sh", "lines": "110-131"}],
+      "fix_shape": "scope",
+      "siblings": []
+    },
+    {
+      "id": "p3",
+      "finding": 3,
+      "file": "docs/architecture/ci.md",
+      "lines": "212-212",
+      "artifact": [{"file": "scripts/check-egress-allowlist.sh", "lines": "110-131"}],
+      "fix_shape": "drop",
+      "siblings": []
     }
   ],
   "code_changes": [{"file": "scripts/check-egress-allowlist.sh", "evidence": "harness scenario X"}]
@@ -118,15 +143,20 @@ For each pair record the hash of the paragraph as you read it:
 
 `lines` is `<start>-<end>` at `HEAD`. A `removed` sibling's `lines` is the
 head-side position its deleted text sat at — for a pure deletion, the line
-before it, the line after it, or both.
+before it, the line after it, or both. Here `p3` pairs the paragraph that
+follows the deleted one, where the deletion anchors.
 
 `<report-stem>.gate.json` (gate only):
 
 ```json
 {
-  "pairs": [{"id": "p1", "verdict": "TRUE", "hash": "<from --hash>", "note": ""}],
+  "pairs": [
+    {"id": "p1", "verdict": "TRUE", "hash": "<from --hash>", "note": ""},
+    {"id": "p2", "verdict": "TRUE", "hash": "<from --hash>", "note": ""},
+    {"id": "p3", "verdict": "TRUE", "hash": "<from --hash>", "note": ""}
+  ],
   "code_changes": [
-    {"file": "scripts/check-egress-allowlist.sh",
+    {"file": "scripts/check-egress-allowlist.sh", "blob": "<from git rev-parse>",
       "attack": "empty allowlist; host with trailing dot", "result": "exit 1 naming the host"}
   ]
 }
@@ -138,15 +168,22 @@ Both stay untracked in `.claude/reports/`. Only the PR body is durable.
 
 It reads the committed diff from the merge base with `main` (`--base`
 overrides) to `HEAD`, refuses to run over uncommitted tracked changes, and
-ignores the caller's diff configuration. It exits 0 when every check below
+ignores the caller's diff configuration (external diff, textconv, header
+prefixes, `diff.algorithm` and the indent heuristic, pathspec variables,
+replace refs). It exits 0 when every check below
 passes, 1 with one `check-fix-ledger: <class>: <detail>` line per finding,
 and 2 when it cannot run.
 
 - **Shape.** The ledger and the gate each hold exactly one JSON object;
-    every list element is an object; every range is `<start>-<end>` with at
-    most six digits a side; no ledger file name holds a newline, tab or CR; pair ids
-    and verdict ids are unique, and every verdict names a ledger pair. A
-    `schema` finding stops the run before the checks below.
+    every list element is an object; every pair and artifact range is
+    `<start>-<end>` with at most six digits a side (a `changed` or `removed`
+    sibling's range is checked with the siblings; an `unchanged` sibling's
+    `lines` is not checked); no ledger file name holds a newline, tab or CR;
+    pair ids and verdict ids are unique, every verdict names a ledger pair,
+    and every gate code change carries a `blob` that is an object id or
+    `deleted`. A `schema` finding from this shape pass stops the checks
+    below; the later checks also report some tracking and range faults as
+    `schema`, and those stop nothing.
 - **Completeness.** Every changed Markdown hunk is covered, except in
     the root `CHANGELOG.md` and `tests/fixtures/`, inside a generated `BEGIN/END`
     block of the same name on both sides, or a pure re-wrap. Covered means
@@ -165,18 +202,21 @@ and 2 when it cannot run.
     matches no added line of that hunk. That hunk's reach is the line before
     and after a pure deletion, its new lines plus the next one when it
     removes more lines than it adds, and its new lines otherwise. In a file
-    outside the completeness check, any hunk touching the range clears a
-    `changed` or `removed` sibling.
+    that is not Markdown, or in the root `CHANGELOG.md` or `tests/fixtures/`,
+    any hunk touching the range clears a `changed` or `removed` sibling, a
+    whitespace-only edit included.
 - **Verdicts.** Every pair is gated `TRUE` with a hash equal to its
     paragraph's hash now: the whole blank-line-delimited block, whitespace
     collapsed, so a re-wrap or a line shift keeps the verdict current and any
     word change makes it stale. Every code change has a gate entry whose
-    `attack` and `result` are not blank.
+    `attack` and `result` are not blank and whose `blob` is the one the file
+    holds at `HEAD` (or `deleted` when it is absent); a mismatch is
+    `stale-attack`.
 
 Finding classes: `schema`, `enum`, `artifact`, `uncovered-hunk`,
 `uncovered-file`, `sibling-untracked`, `sibling-reason`,
 `sibling-not-changed`, `sibling-not-removed`, `missing-verdict`, `verdict`,
-`missing-hash`, `stale-verdict`, `missing-attack`. On success it prints one
+`missing-hash`, `stale-verdict`, `missing-attack`, `stale-attack`. On success it prints one
 OK line with the pair, hunk (covered, reflow-only, generated), code-change
 and sibling (changed, unchanged, removed) tallies; the PR body quotes it.
 
@@ -187,11 +227,16 @@ the gate's job. Its known limits:
     manual re-wrap, or a moved line can read as a change.
 - A `removed` sibling is judged per hunk, so it reaches one line past any
     hunk that deletes more lines than it adds, wherever in the hunk the
-    deletion sat.
+    deletion sat. An in-place edit counts: a removed line whose text changed
+    is a deletion, so a `removed` sibling on an edited line passes.
 - Prose in script comments and workflow bodies is covered per file through
     `code_changes`, not per paragraph.
-- The root `CHANGELOG.md` and `tests/fixtures/` are outside the paragraph check:
-    their Markdown hunks need no pair, and a sibling there is cleared by any
-    hunk.
-- A pure deletion anchors at the blank line where it happened, so its pair
-    usually goes on the paragraph that follows it.
+- The root `CHANGELOG.md` and `tests/fixtures/` are outside the paragraph
+    check: their Markdown hunks need no pair and no `code_changes` entry, so
+    the ledger records nothing about them.
+- In a file that is not Markdown, or in the root `CHANGELOG.md` or
+    `tests/fixtures/`, any hunk touching the range clears a `changed` or
+    `removed` sibling, a whitespace-only edit included.
+- A pure deletion anchors at the lines either side of it. When a whole
+    paragraph goes, that is its blank line and the next paragraph, so the
+    pair usually goes on the paragraph that follows.
