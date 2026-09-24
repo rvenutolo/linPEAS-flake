@@ -342,6 +342,10 @@ function check_completeness() {
       finding schema "pair ${id} file ${pfile} is not tracked at the head revision"
       continue
     }
+    if [[ "$(git cat-file -t "${HEAD_REV}:${pfile}")" != blob ]]; then
+      finding schema "pair ${id} file ${pfile} is not a file at the head revision"
+      continue
+    fi
     flen="$(git show "${HEAD_REV}:${pfile}" | awk 'END { print NR }')"
     pstart="${plines%-*}"
     pend="${plines#*-}"

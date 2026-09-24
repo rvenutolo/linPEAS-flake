@@ -401,6 +401,18 @@ EOF
   run_hash_case range-overflow "${d}" 2 \
     'bad range: 12-18446744073709551628' docs/a.md 12-18446744073709551628
 
+  # A pair's own file must be a blob, the same check an artifact gets.
+  # A second, valid pair covers the Beta hunk so the only finding is the
+  # directory check, not an incidental uncovered-hunk for Beta.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].file = "docs" |
+      .pairs += [{"id": "p2", "finding": 2, "file": "docs/a.md", "lines": "6-6",
+                  "artifact": [{"file": "scripts/tool.sh", "lines": "1-5"}],
+                  "fix_shape": "scope", "siblings": []}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case pair-file-directory "${d}" 1 'schema: pair p1 file docs is not a file at the head revision'
+
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
     printf '%d scenario(s) failed\n' "${failures}" >&2
