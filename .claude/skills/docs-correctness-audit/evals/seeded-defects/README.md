@@ -76,8 +76,10 @@ line after the anchor; `replace-substr` swaps `from` for the payload inside
 the anchor's own text, and planting fails if `from` is not part of the anchor.
 An empty payload with `replace-substr` deletes `from`, which is how a
 truncation is planted. Every field is a string, and anchor, `from` and payload
-are each one line; planting refuses a newline in any of them, and an anchor
-that occurs twice on its line.
+are each one line; planting refuses a newline in any of them, and a
+`replace-substr` anchor that occurs twice on its line. Each seed also needs a
+string `id` and `sentinel`, an integer `line_tol` from 0 to 1e9, and an `also`
+that, when present, is an array of edit objects.
 
 A seed is scored as hit when a report contains its non-empty `sentinel`, or
 cites the seed's `file:line` within `line_tol` of where the edit landed. A
