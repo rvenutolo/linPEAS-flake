@@ -55,8 +55,12 @@ paragraph in its scope.
     (test, harness, mutation) that it is right. Commit as you go; the
     checker reads commits, not the working tree.
 1. **Gate.** Dispatch one agent that did not write the changes, on the
-    strongest model available, with the ledger path, the diff command
-    (`git diff main...HEAD`), and the gate duties below verbatim. It writes
+    strongest model available. The dispatch carries, verbatim: the ledger
+    path; the diff command (`git diff main...HEAD`); the five gate duties
+    below; the paragraph after them on recording each pair's `hash` and
+    each code change's `blob`; and the `<report-stem>.gate.json` format
+    block under **Files**. A gate given the duties alone writes records
+    with no `hash` or `blob`, and the checker rejects them. It writes
     `<report-stem>.gate.json` and nothing else.
 1. For every FALSE or OVERREACHES: fix it, update the ledger, commit, and
     re-dispatch the gate on the changed pairs only. A pair's verdict is tied
@@ -96,9 +100,9 @@ The gate is a separate agent. It did not write the changes.
     Confirming the named case works is not an attack.
 
 For each pair record the hash of the paragraph as you read it:
-`check-fix-ledger.sh --hash <file> <start>-<end>`. For each code change
-record the blob you attacked: `git rev-parse HEAD:<file>`, or `deleted`
-for a file the branch removes.
+`.claude/skills/docs-audit-fix/scripts/check-fix-ledger.sh --hash <file> <start>-<end>`.
+For each code change record the blob you attacked:
+`git rev-parse HEAD:<file>`, or `deleted` for a file the branch removes.
 
 ## Files
 
