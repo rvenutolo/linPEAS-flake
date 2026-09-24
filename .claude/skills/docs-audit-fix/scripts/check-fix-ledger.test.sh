@@ -1235,7 +1235,7 @@ EOF
   jq '.pairs[0].siblings = [{file: "docs/never.md", lines: "3-3", status: "removed"}]' \
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case sibling-removed-file-never-existed "${d}" 1 \
-    'sibling-not-removed: pair p1 sibling docs/never.md:3-3 is marked removed but the file is tracked at neither the merge base nor the head revision'
+    'sibling-not-removed: pair p1 sibling docs/never.md:3-3 is marked removed but is absent at the head revision and not a file at the merge base'
 
   # A caller's diff.ignoreSubmodules=all must not hide a gitlink change:
   # the changed gitlink is a changed file that needs a code_changes entry.
@@ -1251,6 +1251,31 @@ EOF
   printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
   run_case ignore-submodules-configured "${d}" 1 'uncovered-file: sub is changed but not listed in code_changes'
+
+  # A changed sibling on a gitlink is cleared by the gitlink's own hunk.
+  # A caller's diff.ignoreSubmodules=all would drop that hunk, and
+  # diff.submodule=log would replace it with a one-line summary the hunk
+  # parser never sees; either way the sibling would fail for this caller
+  # and pass for another.
+  d="$(new_repo)"
+  git -C "${d}" switch --quiet main
+  git -C "${d}" update-index --add --cacheinfo 160000,1111111111111111111111111111111111111111,sub
+  git -C "${d}" commit --quiet --message 'add gitlink'
+  git -C "${d}" switch --quiet fix
+  git -C "${d}" merge --quiet main
+  git -C "${d}" update-index --cacheinfo 160000,2222222222222222222222222222222222222222,sub
+  git -C "${d}" commit --quiet --message 'move gitlink'
+  beta_fixed "${d}"
+  git -C "${d}" config diff.ignoreSubmodules all
+  git -C "${d}" config diff.submodule log
+  jq '.pairs[0].siblings = [{file: "sub", lines: "1-1", status: "changed"}]
+    | .code_changes = [{file: "sub", evidence: "pointer bump"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  jq --arg b "$(git -C "${d}" rev-parse HEAD:sub)" \
+    '.code_changes = [{file: "sub", blob: $b, attack: "old pointer", result: "fails"}]' \
+    "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
+  run_case gitlink-sibling-submodule-config "${d}" 0 '' \
+    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 1 code changes; 1 changed, 0 unchanged and 0 removed siblings'
 
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
