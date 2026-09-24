@@ -199,8 +199,9 @@ line per finding, and 2 when it cannot run.
     every list element is an object; every pair and artifact range is
     `<start>-<end>` with at most six digits a side (a `changed` or `removed`
     sibling's range is checked with the siblings; an `unchanged` sibling's
-    `lines` is not checked); no ledger file name holds a newline, tab or CR;
-    pair ids and verdict ids are unique, every verdict names a ledger pair,
+    `lines` is not checked); no ledger file name holds a newline, tab or CR,
+    or starts with `./` or `/` (name each from the repository root); pair
+    ids and verdict ids are unique, every verdict names a ledger pair,
     and every gate code change carries a `blob` that is an object id or
     `deleted`. A `schema` finding from this shape pass stops the checks
     below; the later checks also report some tracking and range faults as

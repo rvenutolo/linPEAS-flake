@@ -205,6 +205,8 @@ function check_schema() {
     # closes that regardless of anchor semantics.
     def rng: str and (test("\n") | not) and test("^[1-9][0-9]{0,5}-[1-9][0-9]{0,5}$");
     def ctl: type == "string" and test("[\n\t\r]");
+    def rooted: type == "string" and (startswith("./") or startswith("/"));
+    def rootmsg: "starts with ./ or /; name it from the repository root";
     def shown: gsub("\n"; "<LF>") | gsub("\t"; "<TAB>") | gsub("\r"; "<CR>");
     def arr: if type == "array" then . else [] end;
     def nonobj($what): arr | to_entries[] | select(.value | type != "object")
@@ -244,7 +246,19 @@ function check_schema() {
       ((.artifact | arr)[] | objects | select(.file | ctl)
         | ["schema", "pair \($id) artifact file \"\(.file | shown)\" holds a newline, tab or CR"]),
       ((.siblings | arr)[] | objects | select(.file | ctl)
-        | ["schema", "pair \($id) sibling file \"\(.file | shown)\" holds a newline, tab or CR"]))
+        | ["schema", "pair \($id) sibling file \"\(.file | shown)\" holds a newline, tab or CR"])),
+    # Git prints paths from the repository root with no "./" or "/" in
+    # front, so a file named that way matches no hunk or listed change: the
+    # hunk a pair covers would read as uncovered with nothing naming the pair.
+    ((.code_changes | arr)[] | objects | select(.file | rooted)
+      | ["schema", "code_changes file \"\(.file | shown)\" \(rootmsg)"]),
+    ((.pairs | arr)[] | objects | (.id // "?") as $id |
+      (select(.file | rooted)
+        | ["schema", "pair \($id) file \"\(.file | shown)\" \(rootmsg)"]),
+      ((.artifact | arr)[] | objects | select(.file | rooted)
+        | ["schema", "pair \($id) artifact file \"\(.file | shown)\" \(rootmsg)"]),
+      ((.siblings | arr)[] | objects | select(.file | rooted)
+        | ["schema", "pair \($id) sibling file \"\(.file | shown)\" \(rootmsg)"]))
     | @tsv' "${LEDGER}"
 }
 
