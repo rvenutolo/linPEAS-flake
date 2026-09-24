@@ -382,14 +382,16 @@ function count_covered() {
 # hunk boundaries fall, which a configured diff.algorithm or
 # diff.indentHeuristic would otherwise move, so the same branch could pass
 # for one caller and fail for another; --ignore-submodules=none keeps a
-# diff.ignoreSubmodules setting from hiding a changed gitlink.
+# diff.ignoreSubmodules setting from hiding a changed gitlink, and
+# --submodule=short keeps diff.submodule=log from replacing its
+# "Subproject commit" hunk with a summary line that yields no rows.
 function list_hunks() {
   local -r mode="$1"
   shift
   git -c core.quotePath=false diff --no-ext-diff \
     --no-textconv --text --src-prefix=a/ --dst-prefix=b/ --no-color \
     --diff-algorithm=myers --no-indent-heuristic --ignore-submodules=none \
-    --no-renames --unified=0 --inter-hunk-context=0 \
+    --submodule=short --no-renames --unified=0 --inter-hunk-context=0 \
     "${MB}" "${HEAD_REV}" -- "$@" |
     awk -v prog="${PROG}" -v mode="${mode}" '
       function bad(why) {
@@ -801,7 +803,7 @@ function check_siblings() {
         [[ "$(git cat-file -t "${MB}:${file}")" == blob ]]; then
         SIBLINGS_REMOVED=$((SIBLINGS_REMOVED + 1))
       else
-        finding sibling-not-removed "pair ${id} sibling ${file}:${lines} is marked removed but the file is tracked at neither the merge base nor the head revision"
+        finding sibling-not-removed "pair ${id} sibling ${file}:${lines} is marked removed but is absent at the head revision and not a file at the merge base"
       fi
       continue
     fi
