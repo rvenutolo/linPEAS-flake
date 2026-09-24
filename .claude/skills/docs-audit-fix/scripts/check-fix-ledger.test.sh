@@ -337,6 +337,27 @@ EOF
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
   run_case space-in-name "${d}" 1 'uncovered-hunk: docs/b c.md:1'
 
+  # A hunk whose new side is entirely blank must still need a pair
+  # (regression guard for b1a58cce, whose per-block coverage loop left
+  # all_covered at its unproven default of 1 when new_side_blocks finds
+  # no non-blank run at all). A fresh "Epsilon paragraph." is committed
+  # to main first (so it is part of the merge base too, at a line
+  # number — 14 — no other scenario asserts), then blanked in place on
+  # fix; appending it directly on fix instead would diff as a pure
+  # blank-line insertion whose block_span happens to merge backward
+  # into Gamma's paragraph and gets misclassified as reflow.
+  d="$(new_repo)"
+  git -C "${d}" switch --quiet main
+  printf '\nEpsilon paragraph.\n' >>"${d}/docs/a.md"
+  commit_all "${d}" epsilon-on-main
+  git -C "${d}" switch --quiet fix
+  git -C "${d}" merge --quiet main
+  sed -i '14s/.*//' "${d}/docs/a.md"
+  commit_all "${d}" blanked
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case content-replaced-by-blank "${d}" 1 'uncovered-hunk: docs/a.md:14'
+
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
     printf '%d scenario(s) failed\n' "${failures}" >&2

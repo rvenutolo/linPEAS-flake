@@ -317,7 +317,7 @@ function new_side_blocks() {
 }
 
 function check_completeness() {
-  local file os ol ns nl hs he ne pf pa pb covered block_a block_b bcov all_covered
+  local file os ol ns nl hs he ne pf pa pb covered block_a block_b bcov all_covered block_count
   # Pair spans at head, as "file\ta\tb". Each pair's own range must also
   # fall inside its file, the same bound check check_artifacts runs for
   # each artifact.
@@ -372,8 +372,10 @@ function check_completeness() {
     # context between them); every such block needs its own pair.
     ne=$((ns + nl - 1))
     all_covered=1
+    block_count=0
     while IFS=' ' read -r block_a block_b; do
       [[ -n ${block_a} ]] || continue
+      block_count=$((block_count + 1))
       bcov=0
       while IFS=$'\t' read -r pf pa pb; do
         [[ ${pf} == "${file}" ]] || continue
@@ -387,7 +389,25 @@ function check_completeness() {
         finding uncovered-hunk "${file}:${block_a} changed and no pair covers it"
       fi
     done < <(new_side_blocks "${file}" "${ns}" "${ne}")
-    if ((all_covered)); then
+    if ((block_count == 0)); then
+      # The new side is entirely blank/whitespace lines, so there is no
+      # paragraph to split on; fall back to the same boundary check the
+      # nl==0 path uses, rather than trusting all_covered's unproven
+      # default of 1.
+      covered=0
+      while IFS=$'\t' read -r pf pa pb; do
+        [[ ${pf} == "${file}" ]] || continue
+        if ((hs <= pb && he >= pa)); then
+          covered=1
+          break
+        fi
+      done <<<"${spans}"
+      if ((covered)); then
+        HUNKS_COVERED=$((HUNKS_COVERED + 1))
+      else
+        finding uncovered-hunk "${file}:${hs} changed and no pair covers it"
+      fi
+    elif ((all_covered)); then
       HUNKS_COVERED=$((HUNKS_COVERED + 1))
     fi
   done < <(list_hunks '*.md' ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures')
