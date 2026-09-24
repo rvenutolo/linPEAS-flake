@@ -72,16 +72,24 @@ paragraph in its scope.
     other entry. Overwriting the file drops the other verdicts and attacks
     (`missing-verdict`, `missing-attack`); appending a second entry for the
     same pair repeats its id (`schema`).
-1. Run `.claude/skills/docs-audit-fix/scripts/check-fix-ledger.sh <ledger> <gate>` until it exits 0. Also run the lints and harnesses the diff touches,
-    and every `refresh-*.sh` whose output the diff touches.
+1. Run `.claude/skills/docs-audit-fix/scripts/check-fix-ledger.sh <ledger> <gate>`
+    until it exits 0. Also run the lints and harnesses the diff touches,
+    and every `refresh-*.sh` whose output the diff touches. The checker's
+    OK run is over the branch's last content commit: the only commit that
+    may follow it is step 7's marker commit.
 1. Open the PR (`gh pr create --head <branch>`). The body carries the pair
     table rendered from the ledger and gate — one row per pair: paragraph
     `file:lines`, artifact `file:lines`, fix shape, siblings
     (changed/removed/unchanged counts), verdict — plus each code change's
-    attack and result, and the checker's OK line.
-1. If the report said this audit closes the cycle, the PR's last commit is
-    `just docs-audit-done`. If another audit will read these fixes, do not
-    run it.
+    attack and result, and the checker's OK line. When step 7 applies, the
+    body also says the marker commit follows the commit that OK line was
+    produced at.
+1. If the report said this audit closes the cycle, run `just docs-audit-done`
+    after the checker's OK run, and commit the `.github/docs-audit-state` it
+    writes as the PR's last commit, the only commit after that run. Do not
+    re-run the checker over it: the marker is in no ledger, so the checker
+    would ask for a `code_changes` entry and a gate attack on it. If another
+    audit will read these fixes, do not run it.
 
 ## The gate's duties
 
