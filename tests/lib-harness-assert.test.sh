@@ -206,6 +206,76 @@ harness_assert_verify'
   check 'also before any record fails closed' 1 'called before any record' '
 harness_assert_also "orphan"'
 
+  # Presence: an asserted substring the scenario never printed asserts
+  # nothing, so deleting the code that printed it must turn the run red.
+  # Each pool below is otherwise clean — distinct outputs, no substring in
+  # a sibling — so the presence rule is the only one that can fail it.
+  check 'attached substring missing from its own output is flagged' 1 \
+    "a asserts 'delta' which does not appear in its own output" '
+d="$(mktemp -d)"
+printf "alpha\nbeta\n" >"${d}/a.out"
+printf "gamma\n"       >"${d}/b.out"
+harness_assert_record a "alpha" "${d}/a.out"
+harness_assert_also   "delta"
+harness_assert_record b "gamma" "${d}/b.out"
+harness_assert_verify'
+
+  check 'record substring missing from its own output is flagged' 1 \
+    "b asserts 'delta' which does not appear in its own output" '
+d="$(mktemp -d)"
+printf "alpha\n" >"${d}/a.out"
+printf "gamma\n" >"${d}/b.out"
+harness_assert_record a "alpha" "${d}/a.out"
+harness_assert_record b "delta" "${d}/b.out"
+harness_assert_verify'
+
+  # Present only in a sibling's output is still absent from its own: the
+  # pool must not credit one scenario with what another printed.
+  check 'substring present only in a sibling output is flagged as absent' 1 \
+    "a asserts 'gamma' which does not appear in its own output" '
+d="$(mktemp -d)"
+printf "alpha\n" >"${d}/a.out"
+printf "gamma\n" >"${d}/b.out"
+harness_assert_record a "alpha" "${d}/a.out"
+harness_assert_also   "gamma"
+harness_assert_record b "gamma" "${d}/b.out"
+harness_assert_verify'
+
+  # The pool stores one substring per line, so a newline would split one
+  # assertion into several that each pass on their own. Both entry points
+  # refuse it; a bare newline would otherwise slip past the empty check.
+  check 'also refuses a substring holding a newline' 1 'substring holding a newline' '
+d="$(mktemp -d)"
+printf "alpha\nzzz\nbeta\n" >"${d}/a.out"
+harness_assert_record a "alpha" "${d}/a.out"
+harness_assert_also $'"'"'zzz\nbeta'"'"'
+harness_assert_verify'
+
+  check 'also refuses a bare newline' 1 'substring holding a newline' '
+d="$(mktemp -d)"
+printf "alpha\n" >"${d}/a.out"
+harness_assert_record a "alpha" "${d}/a.out"
+harness_assert_also $'"'"'\n'"'"'
+harness_assert_verify'
+
+  check 'record refuses a substring holding a newline' 1 'substring holds a newline' '
+d="$(mktemp -d)"
+printf "one\nmid\ntwo\n" >"${d}/a.out"
+harness_assert_record a $'"'"'one\ntwo'"'"' "${d}/a.out"
+harness_assert_verify'
+
+  # Every stream a record was given counts as its output, so a substring
+  # printed on the second of two streams is present.
+  check 'substring in a later stream of the record is present' 0 'checked 3 substring assertions across 2 scenarios' '
+d="$(mktemp -d)"
+printf "alpha\n" >"${d}/a.out"
+printf "beta\n"  >"${d}/a.err"
+printf "gamma\n" >"${d}/b.out"
+harness_assert_record a "alpha" "${d}/a.out" "${d}/a.err"
+harness_assert_also   "beta"
+harness_assert_record b "gamma" "${d}/b.out"
+harness_assert_verify'
+
   # Identical output with differing assertions: neither substring can
   # separate the two, and the pairwise rule skips the pair by design. The
   # parity exemption is what a harness registers for such a pair, and the
