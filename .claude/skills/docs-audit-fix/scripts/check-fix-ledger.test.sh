@@ -930,7 +930,8 @@ EOF
   commit_all "${d}" code
   printf '{"report": "r.md", "pairs": [], "code_changes": [{"file": "scripts/tool.sh", "evidence": "harness"}]}\n' \
     >"${d}/ledger.json"
-  printf '{"pairs": [], "code_changes": [{"file": "scripts/tool.sh", "attack": "empty input", "result": "exit 2"}]}\n' \
+  jq -n --arg b "$(git -C "${d}" rev-parse HEAD:scripts/tool.sh)" \
+    '{pairs: [], code_changes: [{file: "scripts/tool.sh", blob: $b, attack: "empty input", result: "exit 2"}]}' \
     >"${d}/gate.json"
   run_case code-change-attacked "${d}" 0 '' \
     'OK — 0 pairs; 0 hunks covered, 0 reflow-only and 0 generated skipped; 1 code changes'
@@ -995,7 +996,8 @@ EOF
   commit_all "${d}" code
   printf '{"report": "r.md", "pairs": [], "code_changes": [{"file": "scripts/w.sh", "evidence": "harness"}]}\n' \
     >"${d}/ledger.json"
-  printf '{"pairs": [], "code_changes": [{"file": "scripts/w.sh", "attack": "  ", "result": "exit 2"}]}\n' \
+  jq -n --arg b "$(git -C "${d}" rev-parse HEAD:scripts/w.sh)" \
+    '{pairs: [], code_changes: [{file: "scripts/w.sh", blob: $b, attack: "  ", result: "exit 2"}]}' \
     >"${d}/gate.json"
   run_case attack-whitespace "${d}" 1 'missing-attack: code change scripts/w.sh has no gate attack and result'
 
@@ -1159,6 +1161,58 @@ EOF
       "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
   done
   run_case diff-algorithm-configured "${d}" 1 'uncovered-hunk: docs/p.md:6 changed and no pair covers it'
+
+  # A code change edited after the gate attacked it: the attack ran
+  # against a blob HEAD no longer holds.
+  d="$(new_repo)"
+  sed -i 's/^echo line5$/echo line5 changed/' "${d}/scripts/tool.sh"
+  commit_all "${d}" code
+  printf '{"report": "r.md", "pairs": [], "code_changes": [{"file": "scripts/tool.sh", "evidence": "harness"}]}\n' \
+    >"${d}/ledger.json"
+  jq -n --arg b "$(git -C "${d}" rev-parse HEAD:scripts/tool.sh)" \
+    '{pairs: [], code_changes: [{file: "scripts/tool.sh", blob: $b, attack: "empty input", result: "exit 2"}]}' \
+    >"${d}/gate.json"
+  sed -i 's/^echo line6$/echo line6 edited after the gate/' "${d}/scripts/tool.sh"
+  commit_all "${d}" 'post-gate code edit'
+  run_case stale-attack "${d}" 1 'stale-attack: code change scripts/tool.sh changed after the gate attacked it'
+
+  # An attack that records no blob cannot be tied to what it attacked.
+  d="$(new_repo)"
+  sed -i 's/^echo line5$/echo line5 changed/' "${d}/scripts/tool.sh"
+  commit_all "${d}" code
+  printf '{"report": "r.md", "pairs": [], "code_changes": [{"file": "scripts/tool.sh", "evidence": "harness"}]}\n' \
+    >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": [{"file": "scripts/tool.sh", "attack": "empty input", "result": "exit 2"}]}\n' \
+    >"${d}/gate.json"
+  run_case attack-missing-blob "${d}" 1 'schema: gate code change scripts/tool.sh needs a blob'
+
+  # A blob that is neither an object id nor "deleted" is malformed.
+  jq '.code_changes[0].blob = "HEAD"' "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
+  run_case attack-malformed-blob "${d}" 1 'schema: gate code change scripts/tool.sh needs a blob'
+
+  # A deleted file's attack records the blob "deleted", which matches a
+  # file absent at head; the same record on a file still present is stale.
+  # A replacement script lands alongside, attacked by its own blob.
+  d="$(new_repo)"
+  git -C "${d}" rm --quiet -- scripts/tool.sh
+  mkdir -p -- "${d}/scripts"
+  printf 'echo new\n' >"${d}/scripts/new.sh"
+  commit_all "${d}" 'replace tool'
+  printf '{"report": "r.md", "pairs": [], "code_changes": [{"file": "scripts/tool.sh", "evidence": "gone"}, {"file": "scripts/new.sh", "evidence": "harness"}]}\n' \
+    >"${d}/ledger.json"
+  jq -n --arg b "$(git -C "${d}" rev-parse HEAD:scripts/new.sh)" \
+    '{pairs: [], code_changes: [{file: "scripts/tool.sh", blob: "deleted", attack: "callers", result: "none left"},
+      {file: "scripts/new.sh", blob: $b, attack: "empty input", result: "exit 2"}]}' >"${d}/gate.json"
+  run_case attack-deleted-file "${d}" 0 '' \
+    'OK — 0 pairs; 0 hunks covered, 0 reflow-only and 0 generated skipped; 2 code changes'
+  d="$(new_repo)"
+  sed -i 's/^echo line5$/echo line5 changed/' "${d}/scripts/tool.sh"
+  commit_all "${d}" code
+  printf '{"report": "r.md", "pairs": [], "code_changes": [{"file": "scripts/tool.sh", "evidence": "harness"}]}\n' \
+    >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": [{"file": "scripts/tool.sh", "blob": "deleted", "attack": "callers", "result": "none left"}]}\n' \
+    >"${d}/gate.json"
+  run_case attack-deleted-but-present "${d}" 1 'stale-attack: code change scripts/tool.sh changed after the gate attacked it'
 
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
