@@ -209,9 +209,11 @@ line per finding, and 2 when it cannot run.
     root `CHANGELOG.md` and `tests/fixtures/`, inside a generated
     `BEGIN/END` block of the same name on both sides, or a pure re-wrap.
     Covered means every non-blank paragraph the hunk's new side touches
-    overlaps a pair's paragraph, each needing its own pair. Every other
-    changed file, a deleted Markdown file included, is listed in
-    `code_changes`.
+    overlaps a pair's paragraph, each needing its own pair. A hunk whose
+    new side holds no non-blank line (a pure deletion, or text replaced by
+    blank lines) is covered by a pair whose paragraph takes in the line
+    before or after it, or one of its blank lines. Every other changed
+    file, a deleted Markdown file included, is listed in `code_changes`.
 - **Artifacts and pairs** name files tracked at `HEAD`, with the range
     inside the file.
 - **Siblings.** An `unchanged` one names a file tracked at `HEAD` and a
@@ -263,6 +265,7 @@ the gate's job. Its known limits:
 - A `changed` or `removed` sibling outside in-scope Markdown is cleared by
     any touching hunk, as **Siblings** above says, so a whitespace-only edit
     clears it.
-- A pure deletion anchors at the lines either side of it. When a whole
-    paragraph goes, that is its blank line and the next paragraph, so the
-    pair usually goes on the paragraph that follows.
+- A pure deletion, or a hunk whose new side is only blank lines, anchors
+    at the lines either side of it. When a whole paragraph goes, that is
+    its blank line and the next paragraph, so the pair usually goes on the
+    paragraph that follows.

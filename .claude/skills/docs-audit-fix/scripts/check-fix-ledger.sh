@@ -678,13 +678,14 @@ function check_completeness() {
     done < <(new_side_blocks "${file}" "${ns}" "${ne}")
     if ((block_count == 0)); then
       # The new side is entirely blank/whitespace lines, so there is no
-      # paragraph to split on; fall back to the same boundary check the
-      # nl==0 path uses, rather than trusting all_covered's unproven
-      # default of 1.
+      # paragraph to split on, and all_covered's default of 1 proves
+      # nothing. Like a pure deletion, the hunk anchors on the lines
+      # either side of it, hs-1 and he+1, so a pair on the paragraph
+      # directly above or below covers it.
       covered=0
       while IFS=$'\t' read -r pf pa pb; do
         [[ ${pf} == "${file}" ]] || continue
-        if ((hs <= pb && he >= pa)); then
+        if ((hs - 1 <= pb && he + 1 >= pa)); then
           covered=1
           break
         fi
