@@ -35,7 +35,7 @@
       "anchor": "## What CI gates on",
       "op": "insert-after",
       "from": "",
-      "payload": "zzq7 later",
+      "payload": "zzq7 later \\.\\* keeps its backslashes",
       "expected_severity": "high",
       "sentinel": "",
       "line_tol": 3

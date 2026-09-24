@@ -69,10 +69,13 @@ apply_edit() {
   }
   aline="$(grep -nF -- "$anchor" "$target" | head -1 | cut -d: -f1)"
 
+  # Seed text reaches awk through ENVIRON, never -v: -v processes backslash
+  # escapes, so a regex like '\.\*' would arrive as '.*' and match nothing.
   case "$op" in
   insert-after)
     # Insert payload as the line after the anchor line.
-    awk -v ln="$aline" -v ins="$payload" 'NR==ln{print; print ins; next} {print}' \
+    SEED_PAYLOAD="$payload" awk -v ln="$aline" \
+      'NR==ln{print; print ENVIRON["SEED_PAYLOAD"]; next} {print}' \
       "$target" >"$target.tmp" && mv "$target.tmp" "$target"
     rline=$((aline + 1))
     # The insert pushes every line below the anchor down one, including any
@@ -88,8 +91,9 @@ apply_edit() {
       echo "seed '$id': from-string not on the anchor line in $file" >&2
       exit 1
     }
-    awk -v ln="$aline" -v from="$from" -v to="$payload" '
-        NR==ln { i=index($0,from); if(i>0){$0=substr($0,1,i-1) to substr($0,i+length(from))} }
+    SEED_FROM="$from" SEED_PAYLOAD="$payload" awk -v ln="$aline" '
+        NR==ln { from=ENVIRON["SEED_FROM"]; to=ENVIRON["SEED_PAYLOAD"]
+          i=index($0,from); if(i>0){$0=substr($0,1,i-1) to substr($0,i+length(from))} }
         {print}' "$target" >"$target.tmp" && mv "$target.tmp" "$target"
     rline="$aline"
     ;;
