@@ -381,13 +381,14 @@ function count_covered() {
 # setting; --diff-algorithm=myers and --no-indent-heuristic pin where
 # hunk boundaries fall, which a configured diff.algorithm or
 # diff.indentHeuristic would otherwise move, so the same branch could pass
-# for one caller and fail for another.
+# for one caller and fail for another; --ignore-submodules=none keeps a
+# diff.ignoreSubmodules setting from hiding a changed gitlink.
 function list_hunks() {
   local -r mode="$1"
   shift
   git -c core.quotePath=false diff --no-ext-diff \
     --no-textconv --text --src-prefix=a/ --dst-prefix=b/ --no-color \
-    --diff-algorithm=myers --no-indent-heuristic \
+    --diff-algorithm=myers --no-indent-heuristic --ignore-submodules=none \
     --no-renames --unified=0 --inter-hunk-context=0 \
     "${MB}" "${HEAD_REV}" -- "$@" |
     awk -v prog="${PROG}" -v mode="${mode}" '
@@ -693,7 +694,7 @@ function check_completeness() {
   listed="$(jq --raw-output '.code_changes[].file' "${LEDGER}")" ||
     die "could not read code_changes from ${LEDGER}"
   changed_files="$(git -c core.quotePath=false diff --no-ext-diff --no-textconv \
-    --diff-algorithm=myers --no-indent-heuristic \
+    --diff-algorithm=myers --no-indent-heuristic --ignore-submodules=none \
     --src-prefix=a/ --dst-prefix=b/ --name-only --no-renames "${MB}" "${HEAD_REV}")" ||
     die 'could not list the changed files'
   while IFS= read -r changed; do
