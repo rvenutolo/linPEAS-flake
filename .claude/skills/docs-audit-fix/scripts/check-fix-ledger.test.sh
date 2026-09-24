@@ -1213,6 +1213,30 @@ EOF
     >"${d}/gate.json"
   run_case attack-deleted-but-present "${d}" 1 'stale-attack: code change scripts/tool.sh changed after the gate attacked it'
 
+  # A removed sibling in a file the branch deletes: the file exists at the
+  # merge base and not at head, so the diff removed its text. The deleted
+  # file is a code change like any other.
+  d="$(new_repo)"
+  seed_main "${d}" docs/gone.md '# Gone' '' 'Gone paragraph.'
+  git -C "${d}" rm --quiet -- docs/gone.md
+  beta_fixed "${d}"
+  jq '.pairs[0].siblings = [{file: "docs/gone.md", lines: "3-3", status: "removed"}]
+    | .code_changes = [{file: "docs/gone.md", evidence: "whole page retired"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  jq '.code_changes = [{file: "docs/gone.md", blob: "deleted", attack: "links to it", result: "none left"}]' \
+    "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
+  run_case sibling-removed-file-deleted "${d}" 0 '' \
+    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 1 code changes; 0 changed, 0 unchanged and 1 removed siblings'
+
+  # A removed sibling in a file that exists at neither revision names
+  # nothing the diff could have deleted.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].siblings = [{file: "docs/never.md", lines: "3-3", status: "removed"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case sibling-removed-file-never-existed "${d}" 1 \
+    'sibling-not-removed: pair p1 sibling docs/never.md:3-3 is marked removed but the file is tracked at neither the merge base nor the head revision'
+
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
     printf '%d scenario(s) failed\n' "${failures}" >&2
