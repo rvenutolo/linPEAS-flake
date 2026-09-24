@@ -81,16 +81,17 @@ paragraph in its scope.
     OK run is over the branch's last content commit: the only commit that
     may follow it is step 7's marker commit. Any other commit made after
     the OK run, a `refresh-*.sh` regeneration included, means running the
-    checker again. When it prints the OK line, record `git rev-parse HEAD`:
-    the OK line names no commit, and step 6 needs it.
+    checker again. A merge from `main` (`gh pr update-branch`) is not a
+    content commit: it needs no re-run. When the checker prints the OK
+    line, record `git rev-parse HEAD`: the OK line names no commit, and
+    step 6 needs it.
 1. Push the branch, then open the PR (`gh pr create --head <branch>`).
     The body carries the pair table rendered from the ledger and gate —
     one row per pair: paragraph `file:lines`, artifact `file:lines`, fix
     shape, siblings (changed/removed/unchanged counts), verdict — plus
-    each code change's
-    attack and result, and the checker's OK line with the commit recorded
-    in step 5. When step 7 applies, the body also says the marker commit
-    follows that commit.
+    each code change's attack and result, and the checker's OK line with
+    the commit recorded in step 5. When step 7 applies, the body also says
+    the marker commit follows that commit.
 1. If the report said this audit closes the cycle, run `just docs-audit-done`
     after the checker's OK run, commit the `.github/docs-audit-state` it
     writes as the PR's last commit, the only commit after that run, and
@@ -100,9 +101,10 @@ paragraph in its scope.
     line with `check-fix-ledger.sh --head <commit> <ledger> <gate>`, using
     the commit recorded in step 5; while the marker is the last commit,
     that commit is `HEAD^`. A content commit needed after the marker means
-    dropping the marker commit, re-running the checker, and committing a
-    new marker. If another audit will read these fixes, do not run
-    `just docs-audit-done`.
+    reverting the marker commit, re-running the checker, recording the new
+    commit as in step 5, updating the PR body's OK line and commit, and
+    committing a new marker. If another audit will read these fixes, do
+    not run `just docs-audit-done`.
 
 ## The gate's duties
 
@@ -285,7 +287,7 @@ the gate's job. Its known limits:
     paragraph that follows. A hunk whose new side is only blank lines is
     covered by a pair on the paragraph directly above or below it, even
     when the text it removed belonged to the other one: replace one
-    paragraph's last line and the blank line after it with a single
+    paragraph's last line and the one blank line after it with a single
     whitespace-only line, pair only the paragraph below, and the run
     passes. With a truly empty line instead, git shows a pure deletion,
     and the same pairing fails.
