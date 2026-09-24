@@ -682,7 +682,12 @@ function check_siblings() {
   while IFS=$'\t' read -r id file lines status reason; do
     [[ -n ${id} ]] || continue
     if [[ ${status} == unchanged ]]; then
-      if [[ ${reason} == - ]]; then
+      # A reason about a file that does not exist at head clears nothing.
+      if ! git cat-file -e "${HEAD_REV}:${file}" 2>/dev/null; then
+        finding sibling-untracked "pair ${id} sibling ${file} is not tracked at the head revision"
+      elif [[ "$(git cat-file -t "${HEAD_REV}:${file}")" != blob ]]; then
+        finding sibling-untracked "pair ${id} sibling ${file} is not a file at the head revision"
+      elif [[ ${reason} == - ]]; then
         finding sibling-reason "pair ${id} sibling ${file}:${lines} is unchanged with no reason"
       else
         SIBLINGS_UNCHANGED=$((SIBLINGS_UNCHANGED + 1))
