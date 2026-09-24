@@ -19,15 +19,23 @@ manifest="$results/manifest-resolved.json"
 reports=("$@")
 n="${#reports[@]}"
 
-# Return 0 if a seed is detected in a single report.
+# Return 0 if a seed is detected in a single report: its sentinel appears
+# anywhere, or the report cites any of the seed's locations within tolerance.
+# Locations arrive as "file<TAB>line" arguments after the report — the primary
+# one first, then any "also" location of a seed that spans two files.
 detected() {
-  local file="$1" line="$2" tol="$3" sentinel="$4" report="$5" ln d
+  local tol="$1" sentinel="$2" report="$3" loc file line ln d
+  shift 3
   if [ -n "$sentinel" ] && grep -qF -- "$sentinel" "$report"; then return 0; fi
-  while read -r ln; do
-    d=$((ln - line))
-    d=${d#-}
-    [ "$d" -le "$tol" ] && return 0
-  done < <(grep -oE -- "${file//./\\.}:[0-9]+" "$report" 2>/dev/null | sed 's/.*://')
+  for loc in "$@"; do
+    file="${loc%%$'\t'*}"
+    line="${loc#*$'\t'}"
+    while read -r ln; do
+      d=$((ln - line))
+      d=${d#-}
+      [ "$d" -le "$tol" ] && return 0
+    done < <(grep -oE -- "${file//./\\.}:[0-9]+" "$report" 2>/dev/null | sed 's/.*://')
+  done
   return 1
 }
 
@@ -42,15 +50,14 @@ rows=""
 while IFS= read -r seed; do
   id="$(jq -r '.id' <<<"$seed")"
   cat="$(jq -r '.category' <<<"$seed")"
-  file="$(jq -r '.file' <<<"$seed")"
-  line="$(jq -r '.line' <<<"$seed")"
   tol="$(jq -r '.line_tol' <<<"$seed")"
   sentinel="$(jq -r '.sentinel' <<<"$seed")"
+  mapfile -t locs < <(jq -r '([{file, line}] + (.also // []))[] | "\(.file)\t\(.line)"' <<<"$seed")
 
   marks=""
   hits=0
   for r in "${reports[@]}"; do
-    if detected "$file" "$line" "$tol" "$sentinel" "$r"; then
+    if detected "$tol" "$sentinel" "$r" "${locs[@]}"; then
       marks+="✓ "
       hits=$((hits + 1))
     else

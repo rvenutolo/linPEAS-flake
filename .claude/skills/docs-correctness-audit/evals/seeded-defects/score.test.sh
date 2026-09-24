@@ -21,7 +21,15 @@ check "gamma 2/3" "grep -qE 'gamma .*2/3' <<<\"\$out\""
 check "beta flagged FLAKY" "grep -E 'beta'  <<<\"\$out\" | grep -q FLAKY"
 check "gamma flagged FLAKY" "grep -E 'gamma' <<<\"\$out\" | grep -q FLAKY"
 check "alpha not flaky" "! ( grep -E 'alpha' <<<\"\$out\" | grep -q FLAKY )"
-check "overall 6/9" "grep -qE '6/9' <<<\"\$out\""
+# delta spans two files: all-hit cites its also location, mixed its primary
+# one, and all-miss cites the also file at an unrelated line and the primary
+# file at the also line's number. Both all-miss citations must miss — a location
+# matches only as its own file:line pair, within tolerance. The per-report
+# marks are pinned, not just the tally: a scorer that misses all-hit and
+# wrongly hits all-miss still totals 2/3.
+check "delta 2/3 as hit, miss, hit" "grep -qF 'delta | 2/3 | ✓ ✗ ✓ |' <<<\"\$out\""
+check "delta flagged FLAKY" "grep -E 'delta' <<<\"\$out\" | grep -q FLAKY"
+check "overall 8/12" "grep -qE '8/12' <<<\"\$out\""
 check "recall report written" "ls \"$tmp\"/recall-*.md >/dev/null 2>&1"
 
 exit "$fail"

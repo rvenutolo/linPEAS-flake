@@ -41,16 +41,27 @@ remove_worktree # idempotent: clear any prior worktree first
 # it. Seeds are never committed.
 git -C "$repo_root" worktree add --quiet --detach "$wt" HEAD
 
-resolved="[]"
-while IFS= read -r seed; do
-  id="$(jq -r '.id' <<<"$seed")"
-  file="$(jq -r '.file' <<<"$seed")"
-  anchor="$(jq -r '.anchor' <<<"$seed")"
-  op="$(jq -r '.op' <<<"$seed")"
-  from="$(jq -r '.from' <<<"$seed")"
-  payload="$(jq -r '.payload' <<<"$seed")"
+# Every applied edit's location, in application order: {id, file, line}. A
+# seed's first entry is its primary location; any further entries are its
+# "also" edits, which let one defect span two files — a claim a generator
+# source and its rendered page agree on, say.
+locs="[]"
+
+# apply_edit <id> <edit-json>: apply one {file, anchor, op, from, payload}
+# edit to the worktree and append the line it landed on to $locs.
+apply_edit() {
+  local id="$1" edit="$2" file anchor op from payload target n aline rline line
+  file="$(jq -r '.file' <<<"$edit")"
+  anchor="$(jq -r '.anchor' <<<"$edit")"
+  op="$(jq -r '.op' <<<"$edit")"
+  from="$(jq -r '.from' <<<"$edit")"
+  payload="$(jq -r '.payload' <<<"$edit")"
   target="$wt/$file"
 
+  [ -f "$target" ] || {
+    echo "seed '$id': no file $file" >&2
+    exit 1
+  }
   n="$(grep -cF -- "$anchor" "$target" || true)"
   [ "$n" = 1 ] || {
     echo "seed '$id': anchor matched $n lines in $file (need 1)" >&2
@@ -65,13 +76,16 @@ while IFS= read -r seed; do
       "$target" >"$target.tmp" && mv "$target.tmp" "$target"
     rline=$((aline + 1))
     # The insert pushes every line below the anchor down one, including any
-    # an earlier seed already recorded in this file.
-    resolved="$(jq --arg f "$file" --argjson a "$aline" \
-      'map(if .file == $f and .line > $a then .line += 1 else . end)' <<<"$resolved")"
+    # an earlier edit already recorded in this file.
+    locs="$(jq --arg f "$file" --argjson a "$aline" \
+      'map(if .file == $f and .line > $a then .line += 1 else . end)' <<<"$locs")"
     ;;
   replace-substr)
-    grep -qF -- "$from" "$target" || {
-      echo "seed '$id': from-string not found" >&2
+    # The replacement edits the anchor line only, so the from-string must be
+    # on it: found anywhere else in the file, the edit would be a silent no-op.
+    line="$(sed -n "${aline}p" "$target")"
+    [ -n "$from" ] && [[ $line == *"$from"* ]] || {
+      echo "seed '$id': from-string not on the anchor line in $file" >&2
       exit 1
     }
     awk -v ln="$aline" -v from="$from" -v to="$payload" '
@@ -85,11 +99,32 @@ while IFS= read -r seed; do
     ;;
   esac
 
-  resolved="$(jq --argjson s "$seed" --argjson line "$rline" \
-    '. + [{id:$s.id, category:$s.category, file:$s.file, line:$line,
-            expected_severity:$s.expected_severity, sentinel:$s.sentinel,
-            line_tol:$s.line_tol}]' <<<"$resolved")"
+  locs="$(jq --arg id "$id" --arg f "$file" --argjson l "$rline" \
+    '. + [{id: $id, file: $f, line: $l}]' <<<"$locs")"
+}
+
+# Locations are keyed by seed id, so a repeated id would merge two seeds.
+dup="$(jq -r '[.seeds[].id] | group_by(.) | map(select(length > 1)[0]) | join(" ")' "$seeds")"
+[ -z "$dup" ] || {
+  echo "duplicate seed id(s): $dup" >&2
+  exit 1
+}
+
+while IFS= read -r seed; do
+  id="$(jq -r '.id' <<<"$seed")"
+  apply_edit "$id" "$seed"
+  while IFS= read -r edit; do
+    apply_edit "$id" "$edit"
+  done < <(jq -c '(.also // [])[]' <<<"$seed")
 done < <(jq -c '.seeds[]' "$seeds")
+
+resolved="$(jq --argjson locs "$locs" '[.seeds[] as $s
+  | ($locs | map(select(.id == $s.id))) as $l
+  | {id: $s.id, category: $s.category, file: $s.file, line: $l[0].line,
+    expected_severity: $s.expected_severity, sentinel: $s.sentinel,
+    line_tol: $s.line_tol}
+  + (if ($l | length) > 1 then {also: ($l[1:] | map({file, line}))} else {} end)]' \
+  "$seeds")"
 
 printf '%s\n' "$resolved" | jq '.' >"$results/manifest-resolved.json"
 printf '%s\n' "$wt" >"$results/worktree-path.txt"
