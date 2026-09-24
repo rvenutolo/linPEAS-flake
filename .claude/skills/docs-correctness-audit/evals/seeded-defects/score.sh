@@ -19,22 +19,44 @@ manifest="$results/manifest-resolved.json"
 reports=("$@")
 n="${#reports[@]}"
 
+# Every location must carry a path with no tab or newline (a location is passed
+# as "file<TAB>line") and a positive integer line, and every seed a numeric
+# tolerance. Anything else would die mid-table or drop seeds from the total.
+bad="$(jq -r '[.[] | . as $s | ([{file, line}] + (.also // []))[]
+  | select((.file | type) != "string" or (.file | test("[\t\n\r]"))
+      or (.line | type) != "number" or .line < 1 or .line != (.line | floor))
+  | $s.id] + [.[] | select((.line_tol | type) != "number") | .id]
+  | unique | join(" ")' "$manifest")" || {
+  echo "malformed manifest $manifest: not a JSON array of seeds" >&2
+  exit 1
+}
+[ -z "$bad" ] || {
+  echo "malformed manifest $manifest: seed(s) $bad need a tab-free file and a positive integer line at every location" >&2
+  exit 1
+}
+
 # Return 0 if a seed is detected in a single report: its sentinel appears
 # anywhere, or the report cites any of the seed's locations within tolerance.
 # Locations arrive as "file<TAB>line" arguments after the report — the primary
 # one first, then any "also" location of a seed that spans two files.
+# A citation names the whole path: it must not follow another path character,
+# so a longer path that merely ends in the seed's path is a different file,
+# and the path's regex metacharacters are escaped. A cited range "file:a-b"
+# hits when it comes within tolerance of the seed's line.
 detected() {
-  local tol="$1" sentinel="$2" report="$3" loc file line ln d
+  local tol="$1" sentinel="$2" report="$3" loc file line re lo hi
   shift 3
   if [ -n "$sentinel" ] && grep -qF -- "$sentinel" "$report"; then return 0; fi
   for loc in "$@"; do
     file="${loc%%$'\t'*}"
     line="${loc#*$'\t'}"
-    while read -r ln; do
-      d=$((ln - line))
-      d=${d#-}
-      [ "$d" -le "$tol" ] && return 0
-    done < <(grep -oE -- "${file//./\\.}:[0-9]+" "$report" 2>/dev/null | sed 's/.*://')
+    re="$(printf '%s' "$file" | sed 's/[][\\.*^$+?(){}|]/\\&/g')"
+    while IFS=- read -r lo hi; do
+      lo=$((10#$lo))
+      hi=$((10#${hi:-$lo}))
+      [ "$((lo - tol))" -le "$line" ] && [ "$line" -le "$((hi + tol))" ] && return 0
+    done < <(grep -oE -- "(^|[^A-Za-z0-9_./-])$re:[0-9]+(-[0-9]+)?" "$report" 2>/dev/null |
+      sed 's/.*://')
   done
   return 1
 }
