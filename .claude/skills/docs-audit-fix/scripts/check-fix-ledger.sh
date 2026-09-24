@@ -311,8 +311,9 @@ ALL_HUNKS=''
 # hunks, and padding-only lines inside a covered hunk, are left out.
 MD_CHANGED_LINES=''
 SUBSTANTIVE_LINES=''
-# Markdown hunks that delete text, as "file\tos\tns\tnl" for every hunk
-# (list_hunks deletions), and as "file\tns\tnl" for only the covered ones.
+# Markdown hunks that delete text, as "file\tos\tns" for every hunk
+# (list_hunks deletions), and as "file\tns\tol\tnl" for only the covered
+# ones.
 MD_DELETING_HUNKS=''
 DELETING_HUNKS=''
 
@@ -326,9 +327,9 @@ function count_covered() {
     [[ ${lf} == "$1" && ${los} == "$2" && ${lns} == "$4" ]] || continue
     SUBSTANTIVE_LINES+="${lf}"$'\t'"${line}"$'\n'
   done <<<"${MD_CHANGED_LINES}"
-  while IFS=$'\t' read -r lf los lns line; do
+  while IFS=$'\t' read -r lf los lns; do
     [[ ${lf} == "$1" && ${los} == "$2" && ${lns} == "$4" ]] || continue
-    DELETING_HUNKS+="${lf}"$'\t'"${lns}"$'\t'"${line}"$'\n'
+    DELETING_HUNKS+="$1"$'\t'"$4"$'\t'"$3"$'\t'"$5"$'\n'
   done <<<"${MD_DELETING_HUNKS}"
 }
 
@@ -338,7 +339,7 @@ function count_covered() {
 # whitespace-collapsed text matches no collapsed removed line of the same
 # hunk, i.e. each line whose words changed rather than only its padding
 # (a re-aligned table row, a trailing space); mode "deletions" prints
-# "file\tos\tns\tnl" for each hunk holding a removed line whose collapsed
+# "file\tos\tns" for each hunk holding a removed line whose collapsed
 # text matches no collapsed added line of that hunk. The rest of "$@" is
 # pathspecs. Paths come from the "+++ b/" header, read from
 # column 7 so a space in a filename survives; a deletion ("+++ /dev/null")
@@ -408,7 +409,7 @@ function list_hunks() {
         }
         if (ro == 0 && rn == 0 && mode == "deletions" && f != "") {
           for (i = 0; i < nr; i++) {
-            if (!(removed_text[i] in added)) { print f "\t" o[1] "\t" n[1] "\t" nl; break }
+            if (!(removed_text[i] in added)) { print f "\t" o[1] "\t" n[1]; break }
           }
         }
         next
@@ -727,16 +728,16 @@ function one_block() {
 # in a hunk it counted as covered, whose words changed: a trailing space,
 # a re-wrap or a re-aligned table row is not a fix, and prose inside a
 # generated block is fixed at its generator, which is a code change. A
-# sibling marked removed names the HEAD position its deleted text sat at
-# (a pure deletion's ns or ns+1, so one past the last line is allowed)
-# and needs a covered hunk touching it that deletes text: a removed line
-# whose collapsed text matches no added line of that hunk. Any other file
-# may be cleared by any hunk. A missing lines, status or reason
-# field is read as "-": tab is IFS whitespace, so an empty field would
-# collapse and shift every field after it. A whitespace-only reason is no
-# reason.
+# sibling marked removed names the HEAD position its deleted text sat at,
+# at most two lines (a pure deletion's ns or ns+1, so one past the last
+# line is allowed), and needs a covered hunk touching it that deletes
+# text: a removed line whose collapsed text matches no added line of that
+# hunk. Any other file may be cleared by any hunk. A missing lines, status
+# or reason field is read as "-": tab is IFS whitespace, so an empty field
+# would collapse and shift every field after it. A whitespace-only reason
+# is no reason.
 function check_siblings() {
-  local id pfile plines file lines status reason s e n ps pe hit lf line hns hnl hs he limit records
+  local id pfile plines file lines status reason s e n ps pe hit lf line hns hol hnl hs he limit records
   records="$(jq --raw-output '.pairs[] | .id as $id | .file as $pf | .lines as $pl | .siblings[]
     | [$id, $pf, $pl, .file,
       (if (.lines | type) == "string" and (.lines | length) > 0 then .lines else "-" end),
@@ -812,10 +813,20 @@ function check_siblings() {
     hit=0
     if [[ ${status} == removed ]]; then
       if [[ ${file} == *.md && ${file} != CHANGELOG.md && ${file} != tests/fixtures/* ]]; then
-        while IFS=$'\t' read -r lf hns hnl; do
+        while IFS=$'\t' read -r lf hns hol hnl; do
           [[ ${lf} == "${file}" ]] || continue
           hs=$((hns > 0 ? hns : 1))
-          he=$((hns + (hnl > 0 ? hnl : 1)))
+          # A pure deletion touches the boundary at ns/ns+1. A hunk with
+          # new lines reaches one past them only when it removed more
+          # lines than it added (a list item deleted right after its
+          # pair's edited item); a one-for-one edit deletes nothing there.
+          if ((hnl == 0)); then
+            he=$((hns + 1))
+          elif ((hol > hnl)); then
+            he=$((hns + hnl))
+          else
+            he=$((hns + hnl - 1))
+          fi
           if ((hs <= e && he >= s)); then
             hit=1
             break
