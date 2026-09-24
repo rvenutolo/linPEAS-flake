@@ -58,7 +58,7 @@ write_back() {
 # apply_edit <id> <edit-json>: apply one {file, anchor, op, from, payload}
 # edit to the worktree and append the line it landed on to $locs.
 apply_edit() {
-  local id="$1" edit="$2" file anchor op from payload target n aline rline multiline
+  local id="$1" edit="$2" file anchor op from payload target n aline rline fault line rest
   file="$(jq -r '.file' <<<"$edit")"
   anchor="$(jq -r '.anchor' <<<"$edit")"
   op="$(jq -r '.op' <<<"$edit")"
@@ -66,14 +66,23 @@ apply_edit() {
   payload="$(jq -r '.payload' <<<"$edit")"
   target="$wt/$file"
 
-  # Seed text is one line: grep -F reads a newline in the anchor as a second
-  # pattern, and a payload that plants extra lines shifts text below it that
-  # no recorded location accounts for. Checked in jq, since command
-  # substitution would strip a trailing newline before bash could see it.
-  multiline="$(jq -r '[("anchor", "from", "payload") as $k
-    | select((.[$k] // "") | test("[\n\r]")) | $k] | join(" ")' <<<"$edit")"
-  [ -z "$multiline" ] || {
-    echo "seed '$id': $multiline holds a newline" >&2
+  # Every edit field is a string (jq -r prints a null payload as the text
+  # "null", which would be planted), and seed text is one line: grep -F reads
+  # a newline in the anchor as a second pattern, and a payload that plants
+  # extra lines shifts text below it that no recorded location accounts for.
+  # Checked in jq, since command substitution would strip a trailing newline
+  # before bash could see it.
+  fault="$(jq -r '[("file", "anchor", "op", "from", "payload") as $k
+      | select((.[$k] | type) != "string") | "\($k) is not a string"]
+    + [("anchor", "from", "payload") as $k
+      | select((.[$k] | type) == "string" and (.[$k] | test("[\n\r]")))
+      | "\($k) holds a newline"]
+    | join(", ")' <<<"$edit")" || {
+    echo "seed '$id': an edit is not a JSON object" >&2
+    exit 1
+  }
+  [ -z "$fault" ] || {
+    echo "seed '$id': $fault" >&2
     exit 1
   }
   [ -f "$target" ] || {
@@ -108,6 +117,14 @@ apply_edit() {
     # beside the anchor on its line it would edit text the seed never named.
     [ -n "$from" ] && [[ $anchor == *"$from"* ]] || {
       echo "seed '$id': from-string not inside the anchor in $file" >&2
+      exit 1
+    }
+    # The rewrite takes the anchor's first occurrence on its line, so a second
+    # one would leave which text the seed means to the order of the line.
+    line="$(sed -n "${aline}p" "$target")"
+    rest="${line#*"$anchor"}"
+    [[ $rest != *"$anchor"* ]] || {
+      echo "seed '$id': anchor occurs more than once on its line in $file" >&2
       exit 1
     }
     SEED_ANCHOR="$anchor" SEED_NEW="${anchor/"$from"/"$payload"}" awk -v ln="$aline" '
