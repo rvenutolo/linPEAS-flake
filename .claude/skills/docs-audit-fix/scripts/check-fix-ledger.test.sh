@@ -252,14 +252,14 @@ function seed_main() {
   git -C "${d}" merge --quiet main
 }
 
-# @description A ledger with pair p1 on $2:$3 and one changed sibling on
-# $2:$4, gated TRUE against the current text.
+# @description A ledger with pair p1 on $2:$3 and one sibling on $2:$4
+# with status $5 (default changed), gated TRUE against the current text.
 function sibling_ledger() {
-  local -r d="$1" file="$2" plines="$3" slines="$4"
-  jq -n --arg f "${file}" --arg pl "${plines}" --arg sl "${slines}" '{report: "r.md", code_changes: [],
+  local -r d="$1" file="$2" plines="$3" slines="$4" status="${5:-changed}"
+  jq -n --arg f "${file}" --arg pl "${plines}" --arg sl "${slines}" --arg st "${status}" '{report: "r.md", code_changes: [],
     pairs: [{id: "p1", finding: 1, file: $f, lines: $pl,
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
-      siblings: [{file: $f, lines: $sl, status: "changed"}]}]}' >"${d}/ledger.json"
+      siblings: [{file: $f, lines: $sl, status: $st}]}]}' >"${d}/ledger.json"
   jq -n --arg h "$(gate_hash "${d}" "${file}" "${plines}")" \
     '{pairs: [{id: "p1", verdict: "TRUE", hash: $h, note: ""}], code_changes: []}' >"${d}/gate.json"
 }
@@ -270,7 +270,7 @@ function main() {
   d="$(new_repo)"
   beta_fixed "${d}"
   run_case complete "${d}" 0 '' \
-    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed and 0 unchanged siblings'
+    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 0 removed siblings'
 
   d="$(new_repo)"
   beta_fixed "${d}"
@@ -848,7 +848,7 @@ EOF
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "scope", siblings: []}]}' \
     >"${d}/ledger.json"
   run_case sibling-changed "${d}" 0 '' \
-    'OK — 2 pairs; 2 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 1 changed and 1 unchanged siblings'
+    'OK — 2 pairs; 2 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 1 changed, 1 unchanged and 0 removed siblings'
 
   # Unchanged sibling with no reason.
   d="$(new_repo)"
@@ -873,7 +873,7 @@ EOF
   jq '.pairs[0].siblings = [{file: "docs/a.md", lines: "12-12", status: "checked", reason: "x"}]' \
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case enum-sibling-status "${d}" 1 \
-    'enum: pair p1 sibling docs/a.md status "checked" is not changed or unchanged'
+    'enum: pair p1 sibling docs/a.md status "checked" is not changed, unchanged or removed'
 
   # No verdict for a pair.
   d="$(new_repo)"
@@ -908,7 +908,7 @@ EOF
   jq --arg h "$(gate_hash "${d}" docs/a.md 3-5)" '.pairs += [{id: "p2", verdict: "TRUE", hash: $h, note: ""}]' \
     "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
   run_case moved-paragraph "${d}" 0 '' \
-    'OK — 2 pairs; 2 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed and 0 unchanged siblings'
+    'OK — 2 pairs; 2 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 0 removed siblings'
 
   # Negative fixture N3: pair recorded on Alpha's first line only, gated,
   # then Alpha's second line edited. Same block, so the verdict is stale.
@@ -1063,7 +1063,7 @@ EOF
   commit_all "${d}" 'fix both'
   sibling_ledger "${d}" docs/l.md 1-1 2-2
   run_case sibling-list-word-change "${d}" 0 '' \
-    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 1 changed and 0 unchanged siblings'
+    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 1 changed, 0 unchanged and 0 removed siblings'
 
   # A changed sibling's range must fall inside its file.
   d="$(new_repo)"
@@ -1088,6 +1088,34 @@ EOF
   jq '.pairs[0].siblings = [{file: "docs/a.md", lines: "6-6", status: "changed"}]' \
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case sibling-is-own-pair "${d}" 1 'schema: pair p1 sibling docs/a.md:6-6 overlaps its own pair'
+
+  # A sibling item deleted outright, in the same covered hunk as the
+  # pair's fix. Its lines name the HEAD position the text sat at.
+  d="$(new_repo)"
+  seed_main "${d}" docs/l.md '- one wrong' '- two wrong'
+  printf '%s\n' '- one right' >"${d}/docs/l.md"
+  commit_all "${d}" 'fix one, drop two'
+  sibling_ledger "${d}" docs/l.md 1-1 2-2 removed
+  run_case sibling-removed "${d}" 0 '' \
+    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 1 removed siblings'
+
+  # A hunk that only adds lines removed nothing.
+  d="$(new_repo)"
+  seed_main "${d}" docs/l.md '- one' '- three'
+  printf '%s\n' '- one' '- two' '- three' >"${d}/docs/l.md"
+  commit_all "${d}" 'add two'
+  sibling_ledger "${d}" docs/l.md 2-2 3-3 removed
+  run_case sibling-removed-nothing-deleted "${d}" 1 \
+    'sibling-not-removed: pair p1 sibling docs/l.md:3-3 is marked removed but no covered hunk deletes text there'
+
+  # The only deleted line reappears re-indented, so no text was removed.
+  d="$(new_repo)"
+  seed_main "${d}" docs/w.md 'Alpha.' '- two'
+  printf '%s\n' 'Alpha.' 'New line.' '  - two' >"${d}/docs/w.md"
+  commit_all "${d}" 'insert and indent'
+  sibling_ledger "${d}" docs/w.md 2-2 3-3 removed
+  run_case sibling-removed-whitespace-only "${d}" 1 \
+    'sibling-not-removed: pair p1 sibling docs/w.md:3-3 is marked removed but no covered hunk deletes text there'
 
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then

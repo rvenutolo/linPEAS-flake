@@ -220,8 +220,8 @@ function check_schema() {
       else ["schema", "pair \($id) needs a siblings list whose members name a file"] end),
       (if .fix_shape == "drop" or .fix_shape == "scope" or .fix_shape == "correct" then empty
       else ["enum", "pair \($id) fix_shape \(.fix_shape | tojson) is not drop, scope or correct"] end),
-      ((.siblings | arr)[] | objects | select(.status != "changed" and .status != "unchanged")
-        | ["enum", "pair \($id) sibling \(.file) status \(.status | tojson) is not changed or unchanged"])),
+      ((.siblings | arr)[] | objects | select(.status != "changed" and .status != "unchanged" and .status != "removed")
+        | ["enum", "pair \($id) sibling \(.file) status \(.status | tojson) is not changed, unchanged or removed"])),
     ([(.pairs | arr)[] | objects | .id] | group_by(.)[] | select(length > 1)
       | ["schema", "pair id \(.[0]) is used more than once"]),
     ((.code_changes | arr)[] | objects | select((.file | str) | not)
@@ -303,6 +303,7 @@ HUNKS_REFLOW=0
 HUNKS_GENERATED=0
 SIBLINGS_CHANGED=0
 SIBLINGS_UNCHANGED=0
+SIBLINGS_REMOVED=0
 ALL_HUNKS=''
 # Added Markdown lines whose text changed, as "file\tos\tns\tline" for
 # every hunk (list_hunks lines), and as "file\tline" for only the hunks
@@ -310,9 +311,14 @@ ALL_HUNKS=''
 # hunks, and padding-only lines inside a covered hunk, are left out.
 MD_CHANGED_LINES=''
 SUBSTANTIVE_LINES=''
+# Markdown hunks that delete text, as "file\tos\tns\tnl" for every hunk
+# (list_hunks deletions), and as "file\tns\tnl" for only the covered ones.
+MD_DELETING_HUNKS=''
+DELETING_HUNKS=''
 
 # @description Count one covered hunk ($1..$5, as list_hunks prints it)
-# and record its changed lines in SUBSTANTIVE_LINES.
+# and record its changed lines in SUBSTANTIVE_LINES and, when it deletes
+# text, the hunk in DELETING_HUNKS.
 function count_covered() {
   local lf los lns line
   HUNKS_COVERED=$((HUNKS_COVERED + 1))
@@ -320,6 +326,10 @@ function count_covered() {
     [[ ${lf} == "$1" && ${los} == "$2" && ${lns} == "$4" ]] || continue
     SUBSTANTIVE_LINES+="${lf}"$'\t'"${line}"$'\n'
   done <<<"${MD_CHANGED_LINES}"
+  while IFS=$'\t' read -r lf los lns line; do
+    [[ ${lf} == "$1" && ${los} == "$2" && ${lns} == "$4" ]] || continue
+    DELETING_HUNKS+="${lf}"$'\t'"${lns}"$'\t'"${line}"$'\n'
+  done <<<"${MD_DELETING_HUNKS}"
 }
 
 # @description Unified-zero hunks between the merge base and head. Mode $1
@@ -327,7 +337,9 @@ function count_covered() {
 # prints "file\tos\tns\tline" for each added line whose
 # whitespace-collapsed text matches no collapsed removed line of the same
 # hunk, i.e. each line whose words changed rather than only its padding
-# (a re-aligned table row, a trailing space). The rest of "$@" is
+# (a re-aligned table row, a trailing space); mode "deletions" prints
+# "file\tos\tns\tnl" for each hunk holding a removed line whose collapsed
+# text matches no collapsed added line of that hunk. The rest of "$@" is
 # pathspecs. Paths come from the "+++ b/" header, read from
 # column 7 so a space in a filename survives; a deletion ("+++ /dev/null")
 # yields no rows, and deleted files are handled per file instead.
@@ -378,10 +390,11 @@ function list_hunks() {
         if (c == "\\") next
         if (c == "-") {
           if (ro == 0) bad("removed line past the hunk count")
-          ro--; removed[squash(substr($0, 2))] = 1
+          ro--; t = squash(substr($0, 2)); removed[t] = 1; removed_text[nr] = t; nr++
         } else if (c == "+") {
           if (rn == 0) bad("added line past the hunk count")
-          rn--; added_at[na] = nn; added_text[na] = squash(substr($0, 2)); na++; nn++
+          rn--; t = squash(substr($0, 2)); added[t] = 1
+          added_at[na] = nn; added_text[na] = t; na++; nn++
         } else if (c == " ") {
           if (ro == 0 || rn == 0) bad("context line past the hunk count")
           ro--; rn--; nn++
@@ -391,6 +404,11 @@ function list_hunks() {
         if (ro == 0 && rn == 0 && mode == "lines" && f != "") {
           for (i = 0; i < na; i++) {
             if (!(added_text[i] in removed)) print f "\t" o[1] "\t" n[1] "\t" added_at[i]
+          }
+        }
+        if (ro == 0 && rn == 0 && mode == "deletions" && f != "") {
+          for (i = 0; i < nr; i++) {
+            if (!(removed_text[i] in added)) { print f "\t" o[1] "\t" n[1] "\t" nl; break }
           }
         }
         next
@@ -404,7 +422,7 @@ function list_hunks() {
         split(substr($2, 2), o, ","); split(substr($3, 2), n, ",")
         ol = (2 in o) ? o[2] : 1; nl = (2 in n) ? n[2] : 1
         ro = ol + 0; rn = nl + 0
-        nn = n[1] + 0; na = 0; split("", removed)
+        nn = n[1] + 0; na = 0; nr = 0; split("", removed); split("", added)
         if (mode == "hunks" && f != "") print f "\t" o[1] "\t" ol "\t" n[1] "\t" nl
       }
       END { if (!failed && (ro > 0 || rn > 0)) bad("diff ends inside a hunk") }'
@@ -544,6 +562,8 @@ function check_completeness() {
   md_hunks="$(list_hunks hunks '*.md' ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures')" ||
     die 'could not parse the Markdown diff'
   MD_CHANGED_LINES="$(list_hunks lines '*.md' ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures')" ||
+    die 'could not parse the Markdown diff'
+  MD_DELETING_HUNKS="$(list_hunks deletions '*.md' ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures')" ||
     die 'could not parse the Markdown diff'
   # Pair spans at head, as "file\ta\tb". Each pair's own range must also
   # fall inside its file, the same bound check check_artifacts runs for
@@ -706,13 +726,17 @@ function one_block() {
 # file in check_completeness' scope that means an added line in the range,
 # in a hunk it counted as covered, whose words changed: a trailing space,
 # a re-wrap or a re-aligned table row is not a fix, and prose inside a
-# generated block is fixed at its generator, which is a code change. Any
-# other file may be cleared by any hunk. A missing lines, status or reason
+# generated block is fixed at its generator, which is a code change. A
+# sibling marked removed names the HEAD position its deleted text sat at
+# (a pure deletion's ns or ns+1, so one past the last line is allowed)
+# and needs a covered hunk touching it that deletes text: a removed line
+# whose collapsed text matches no added line of that hunk. Any other file
+# may be cleared by any hunk. A missing lines, status or reason
 # field is read as "-": tab is IFS whitespace, so an empty field would
 # collapse and shift every field after it. A whitespace-only reason is no
 # reason.
 function check_siblings() {
-  local id pfile plines file lines status reason s e n ps pe hit lf line records
+  local id pfile plines file lines status reason s e n ps pe hit lf line hns hnl hs he limit records
   records="$(jq --raw-output '.pairs[] | .id as $id | .file as $pf | .lines as $pl | .siblings[]
     | [$id, $pf, $pl, .file,
       (if (.lines | type) == "string" and (.lines | length) > 0 then .lines else "-" end),
@@ -735,7 +759,7 @@ function check_siblings() {
       fi
       continue
     fi
-    [[ ${status} == changed ]] || continue # check_schema reported the enum
+    [[ ${status} == changed || ${status} == removed ]] || continue # check_schema reported the enum
     s=0
     e=0
     if valid_range "${lines}"; then
@@ -745,23 +769,32 @@ function check_siblings() {
     # A reversed range overlaps nothing, so it would read as "no hunk
     # touches it" rather than as the malformed range it is.
     if ((s == 0 || s > e)); then
-      finding schema "pair ${id} sibling ${file}:${lines} is marked changed without a valid <start>-<end> range"
+      finding schema "pair ${id} sibling ${file}:${lines} is marked ${status} without a valid <start>-<end> range"
       continue
     fi
     if git cat-file -e "${HEAD_REV}:${file}" 2>/dev/null &&
       [[ "$(git cat-file -t "${HEAD_REV}:${file}")" == blob ]]; then
       n="$(git show "${HEAD_REV}:${file}" | awk 'END { print NR }')"
-      if ((e > n)); then
+      # A deletion at end of file anchors one past the last line.
+      limit="${n}"
+      if [[ ${status} == removed ]]; then
+        limit=$((n + 1))
+      fi
+      if ((e > limit)); then
         finding schema "pair ${id} sibling ${file}:${lines} runs past end of file (${n} lines)"
         continue
       fi
-      # A wide range would be cleared by any hunk it happens to reach.
-      if ! git show "${HEAD_REV}:${file}" | one_block "${s}" "${e}"; then
+      # A wide range would be cleared by any hunk it happens to reach. A
+      # removed sibling's position may sit on the blank line its text left.
+      if [[ ${status} == changed ]] && ! git show "${HEAD_REV}:${file}" | one_block "${s}" "${e}"; then
         finding schema "pair ${id} sibling ${file}:${lines} does not lie within one paragraph"
         continue
       fi
     fi
-    # The pair's own fix would otherwise clear its own lines.
+    # The pair's own fix would otherwise clear its own lines. Only the
+    # recorded lines count, not the pair's block: a table row or list item
+    # shares a block with its pair, and the gate's hash already covers the
+    # rest of that block.
     if [[ ${file} == "${pfile}" ]] && valid_range "${plines}"; then
       ps="${plines%-*}"
       pe="${plines#*-}"
@@ -771,6 +804,27 @@ function check_siblings() {
       fi
     fi
     hit=0
+    if [[ ${status} == removed ]]; then
+      if [[ ${file} == *.md && ${file} != CHANGELOG.md && ${file} != tests/fixtures/* ]]; then
+        while IFS=$'\t' read -r lf hns hnl; do
+          [[ ${lf} == "${file}" ]] || continue
+          hs=$((hns > 0 ? hns : 1))
+          he=$((hns + (hnl > 0 ? hnl : 1)))
+          if ((hs <= e && he >= s)); then
+            hit=1
+            break
+          fi
+        done <<<"${DELETING_HUNKS}"
+      elif hunk_overlaps "${file}" "${s}" "${e}" "${ALL_HUNKS}"; then
+        hit=1
+      fi
+      if ((hit)); then
+        SIBLINGS_REMOVED=$((SIBLINGS_REMOVED + 1))
+      else
+        finding sibling-not-removed "pair ${id} sibling ${file}:${lines} is marked removed but no covered hunk deletes text there"
+      fi
+      continue
+    fi
     if [[ ${file} == *.md && ${file} != CHANGELOG.md && ${file} != tests/fixtures/* ]]; then
       while IFS=$'\t' read -r lf line; do
         [[ ${lf} == "${file}" ]] || continue
@@ -796,8 +850,9 @@ function check_siblings() {
 # matches the pair's whole block at head, and every code change needs a
 # gate entry recording an attack and its result, neither whitespace-only.
 # A pair whose own file or range check_completeness already rejected is
-# skipped here, since there is no block to hash. Missing verdict, hash or note fields are read as
-# "-", for the same IFS reason check_siblings gives.
+# skipped here, since there is no block to hash. Missing verdict, hash or
+# note fields are read as "-", for the same IFS reason check_siblings
+# gives.
 function check_verdicts() {
   local id file lines verdict hash note current n start end records
   records="$(jq --raw-output --slurpfile gate "${GATE}" '
@@ -880,9 +935,9 @@ function main() {
   fi
   npairs="$(jq '.pairs | length' "${LEDGER}")" || die "could not count pairs in ${LEDGER}"
   nchanges="$(jq '.code_changes | length' "${LEDGER}")" || die "could not count code_changes in ${LEDGER}"
-  printf '%s: OK — %d pairs; %d hunks covered, %d reflow-only and %d generated skipped; %d code changes; %d changed and %d unchanged siblings\n' \
+  printf '%s: OK — %d pairs; %d hunks covered, %d reflow-only and %d generated skipped; %d code changes; %d changed, %d unchanged and %d removed siblings\n' \
     "${PROG}" "${npairs}" "${HUNKS_COVERED}" "${HUNKS_REFLOW}" "${HUNKS_GENERATED}" "${nchanges}" \
-    "${SIBLINGS_CHANGED}" "${SIBLINGS_UNCHANGED}"
+    "${SIBLINGS_CHANGED}" "${SIBLINGS_UNCHANGED}" "${SIBLINGS_REMOVED}"
 }
 
 main
