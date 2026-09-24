@@ -270,7 +270,7 @@ function main() {
   d="$(new_repo)"
   beta_fixed "${d}"
   run_case complete "${d}" 0 '' \
-    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes'
+    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed and 0 unchanged siblings'
 
   d="$(new_repo)"
   beta_fixed "${d}"
