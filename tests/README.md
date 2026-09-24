@@ -109,7 +109,10 @@ nothing. Harnesses source `scripts/lib/harness-assert.sh`, call
 `harness_assert_record <scenario> <substring> <output-file>...` after
 each script invocation, and end `main` with
 `harness_assert_verify || failures=$((failures + 1))`. The gate fails
-the harness on any substring that does not discriminate.
+the harness on any substring that does not discriminate, and on any
+asserted substring missing from its own scenario's recorded output — so
+a substring attached with `harness_assert_also` is asserted, not merely
+registered.
 
 The gate's *wiring verdict* reaches a harness only if it asserts with a
 quiet `grep`, which is how `scripts/check-harness-assert-wired.sh` tells

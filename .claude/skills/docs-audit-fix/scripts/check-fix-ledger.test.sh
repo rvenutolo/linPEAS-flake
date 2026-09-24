@@ -137,7 +137,8 @@ function run_hash_case() {
 }
 
 # @description Assert one more substring in the last scenario's stderr.
-# `harness_assert_also` alone never greps, so this does both.
+# `harness_assert_also` checks presence only at `harness_assert_verify`,
+# against every stream the record holds; this pins it to stderr.
 function also_expect() {
   if ! grep --fixed-strings --quiet -- "$1" "${LAST_STDERR}"; then
     printf 'FAIL: %s — stderr missing %q\n' "${LAST_NAME}" "$1" >&2

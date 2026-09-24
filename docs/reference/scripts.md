@@ -2097,8 +2097,9 @@ a substring. If that substring also appears in a sibling scenario's
 output, the assertion passes whether or not the asserted behavior
 exists — green while verifying nothing. Record each scenario here and
 call `harness_assert_verify` at the end of the run to fail on any such
-substring, and on any two scenarios whose whole observable outcome is
-the same — a pair that verifies one thing between them however each is
+substring, on any asserted substring missing from its own scenario's
+output, and on any two scenarios whose whole observable outcome is the
+same — a pair that verifies one thing between them however each is
 named. Source after `set -Eeuo pipefail`.
 
 #### harness_assert_exempt()
@@ -2138,7 +2139,8 @@ Record one scenario's asserted substring and the output
 stream(s) the harness asserts against. Pass '' as the substring for a
 scenario that asserts only an exit code — its output still belongs in
 the comparison pool, because that is usually the output a failure-path
-substring wrongly matches.
+substring wrongly matches. A substring holding a newline is refused, for
+the reason given on `harness_assert_also`.
 
 **Args:**
 
@@ -2153,7 +2155,11 @@ record. Use when one invocation asserts several properties of its
 output: recording that invocation once per property makes those records
 byte-identical siblings, which the pairwise rule cannot separate and
 the census scores as collapsed coverage. Each attached substring is
-held to the same rule as the record's own.
+held to the same rules as the record's own: `harness_assert_verify`
+fails when it is missing from this record's output and when it appears
+in a sibling's, so attaching a substring asserts it. A substring holding
+a newline is refused, because the pool stores one substring per line and
+would check each line on its own rather than the whole.
 
 **Args:**
 
@@ -2193,13 +2199,15 @@ parity exemption, in either order.
 
 #### harness_assert_verify()
 
-Apply the pairwise rule, the identical-output rule and the
-parity rule to everything recorded, print the census, and drop the pool.
-Exit 1 if any asserted substring also occurs in a sibling scenario's
-output, if two records share one output while asserting different
-substrings, if two records share one output without a parity exemption,
-or if nothing was recorded at all. The census names every group of
-scenarios sharing one output before reporting the counts.
+Apply the presence rule, the pairwise rule, the
+identical-output rule and the parity rule to everything recorded, print
+the census, and drop the pool. Exit 1 if any asserted substring is
+missing from its own scenario's output, if any asserted substring also
+occurs in a sibling scenario's output, if two records share one output
+while asserting different substrings, if two records share one output
+without a parity exemption, or if nothing was recorded at all. The
+census names every group of scenarios sharing one output before
+reporting the counts.
 
 ### scripts/lib/log.sh
 
