@@ -279,6 +279,24 @@ function main() {
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
   run_case body-line-poses-as-header "${d}" 1 'uncovered-hunk: docs/a.md:13'
 
+  # A hunk whose new side spans two HEAD paragraphs (Alpha's edited last
+  # line immediately followed by an inserted paragraph, with no context
+  # line between them, so it is one hunk) needs a pair for each block; a
+  # pair on Alpha only must not cover the inserted paragraph.
+  d="$(new_repo)"
+  sed -i '4c\alpha line two, changed.\n\nNew paragraph line.' "${d}/docs/a.md"
+  commit_all "${d}" twopara
+  cat >"${d}/ledger.json" <<'EOF'
+{"report": "r.md", "code_changes": [],
+  "pairs": [{"id": "p1", "finding": 1, "file": "docs/a.md", "lines": "3-4",
+            "artifact": [{"file": "docs/a.md", "lines": "3-4"}],
+            "fix_shape": "scope", "siblings": []}]}
+EOF
+  h="$(gate_hash "${d}" docs/a.md 3-4)"
+  printf '{"pairs": [{"id": "p1", "verdict": "TRUE", "hash": "%s", "note": ""}], "code_changes": []}\n' \
+    "${h}" >"${d}/gate.json"
+  run_case hunk-spans-two-paragraphs "${d}" 1 'uncovered-hunk: docs/a.md:6'
+
   # A changed non-Markdown file not listed as a code change.
   d="$(new_repo)"
   sed -i 's/^echo line5$/echo line5 changed/' "${d}/scripts/tool.sh"

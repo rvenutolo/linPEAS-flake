@@ -293,8 +293,31 @@ function hunk_is_generated() {
   [[ -n ${newname} && ${newname} == "${oldname}" ]]
 }
 
+# @description Maximal non-blank runs of the line range $2..$3 of file
+# $1 at HEAD, split at any blank line inside that range, as "start end"
+# per run. A run is not extended past $2 or $3 into unchanged context —
+# e.g. a fixed marker line the hunk merely abuts — only the hunk's own
+# range is split.
+function new_side_blocks() {
+  local -r file="$1" ns="$2" ne="$3"
+  git show "${HEAD_REV}:${file}" | awk -v ns="${ns}" -v ne="${ne}" '
+    { blank[NR] = ($0 ~ /^[[:space:]]*$/) }
+    END {
+      a = 0
+      for (i = ns; i <= ne + 1; i++) {
+        isblank = (i > ne) ? 1 : blank[i]
+        if (!isblank) {
+          if (a == 0) a = i
+        } else if (a != 0) {
+          print a, i - 1
+          a = 0
+        }
+      }
+    }'
+}
+
 function check_completeness() {
-  local file os ol ns nl hs he covered pf pa pb
+  local file os ol ns nl hs he ne pf pa pb covered block_a block_b bcov all_covered
   # Pair spans at head, as "file\ta\tb".
   local spans='' id pfile plines span
   while IFS=$'\t' read -r id pfile plines; do
@@ -319,18 +342,44 @@ function check_completeness() {
       HUNKS_REFLOW=$((HUNKS_REFLOW + 1))
       continue
     fi
-    covered=0
-    while IFS=$'\t' read -r pf pa pb; do
-      [[ ${pf} == "${file}" ]] || continue
-      if ((hs <= pb && he >= pa)); then
-        covered=1
-        break
+    if ((nl == 0)); then
+      covered=0
+      while IFS=$'\t' read -r pf pa pb; do
+        [[ ${pf} == "${file}" ]] || continue
+        if ((hs <= pb && he >= pa)); then
+          covered=1
+          break
+        fi
+      done <<<"${spans}"
+      if ((covered)); then
+        HUNKS_COVERED=$((HUNKS_COVERED + 1))
+      else
+        finding uncovered-hunk "${file}:${hs} changed and no pair covers it"
       fi
-    done <<<"${spans}"
-    if ((covered)); then
+      continue
+    fi
+    # A hunk can touch more than one HEAD paragraph (e.g. an edit right
+    # up against an inserted paragraph with no blank line recorded as
+    # context between them); every such block needs its own pair.
+    ne=$((ns + nl - 1))
+    all_covered=1
+    while IFS=' ' read -r block_a block_b; do
+      [[ -n ${block_a} ]] || continue
+      bcov=0
+      while IFS=$'\t' read -r pf pa pb; do
+        [[ ${pf} == "${file}" ]] || continue
+        if ((block_a <= pb && block_b >= pa)); then
+          bcov=1
+          break
+        fi
+      done <<<"${spans}"
+      if ((bcov == 0)); then
+        all_covered=0
+        finding uncovered-hunk "${file}:${block_a} changed and no pair covers it"
+      fi
+    done < <(new_side_blocks "${file}" "${ns}" "${ne}")
+    if ((all_covered)); then
       HUNKS_COVERED=$((HUNKS_COVERED + 1))
-    else
-      finding uncovered-hunk "${file}:${hs} changed and no pair covers it"
     fi
   done < <(list_hunks '*.md' ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures')
 
