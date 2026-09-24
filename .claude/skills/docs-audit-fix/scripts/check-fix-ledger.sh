@@ -304,6 +304,17 @@ HUNKS_GENERATED=0
 SIBLINGS_CHANGED=0
 SIBLINGS_UNCHANGED=0
 ALL_HUNKS=''
+# Markdown hunks check_completeness counted as covered, in list_hunks'
+# format: the substantive prose changes, without reflow-only or
+# generated-block hunks.
+SUBSTANTIVE_HUNKS=''
+
+# @description Count one covered hunk ($1..$5, as list_hunks prints it)
+# and record it in SUBSTANTIVE_HUNKS.
+function count_covered() {
+  HUNKS_COVERED=$((HUNKS_COVERED + 1))
+  SUBSTANTIVE_HUNKS+="$1"$'\t'"$2"$'\t'"$3"$'\t'"$4"$'\t'"$5"$'\n'
+}
 
 # @description Unified-zero hunks between the merge base and head, as
 # "file\tos\tol\tns\tnl". Paths come from the "+++ b/" header, read from
@@ -557,7 +568,7 @@ function check_completeness() {
         fi
       done <<<"${spans}"
       if ((covered)); then
-        HUNKS_COVERED=$((HUNKS_COVERED + 1))
+        count_covered "${file}" "${os}" "${ol}" "${ns}" "${nl}"
       else
         finding uncovered-hunk "${file}:${hs} changed and no pair covers it"
       fi
@@ -599,12 +610,12 @@ function check_completeness() {
         fi
       done <<<"${spans}"
       if ((covered)); then
-        HUNKS_COVERED=$((HUNKS_COVERED + 1))
+        count_covered "${file}" "${os}" "${ol}" "${ns}" "${nl}"
       else
         finding uncovered-hunk "${file}:${hs} changed and no pair covers it"
       fi
     elif ((all_covered)); then
-      HUNKS_COVERED=$((HUNKS_COVERED + 1))
+      count_covered "${file}" "${os}" "${ol}" "${ns}" "${nl}"
     fi
   done <<<"${md_hunks}"
 
@@ -635,13 +646,32 @@ function check_completeness() {
   ALL_HUNKS="$(list_hunks .)" || die 'could not parse the full diff'
 }
 
+# @description True when a hunk of file $1 in the list $4 (list_hunks'
+# format) overlaps lines $2..$3.
+function hunk_overlaps() {
+  local -r file="$1" s="$2" e="$3" hunks="$4"
+  local hf ns nl hs he
+  while IFS=$'\t' read -r hf _ _ ns nl; do
+    [[ ${hf} == "${file}" ]] || continue
+    # A pure deletion has no new lines; it touches the boundary at ns/ns+1.
+    hs=$((ns > 0 ? ns : 1))
+    he=$((nl > 0 ? ns + nl - 1 : ns + 1))
+    ((hs <= e && he >= s)) && return 0
+  done <<<"${hunks}"
+  return 1
+}
+
 # @description An unchanged sibling must carry a reason; a sibling marked
 # changed must overlap a hunk of the branch diff by line range, not merely
-# sit in a file that has a hunk somewhere. A missing lines, status or
-# reason field is read as "-": tab is IFS whitespace, so an empty field
-# would collapse and shift every field after it.
+# sit in a file that has a hunk somewhere. For a Markdown file in
+# check_completeness' scope that hunk must be one it counted as covered:
+# a trailing space or a re-wrap is not a fix, and prose inside a generated
+# block is fixed at its generator, which is a code change. Any other file
+# may be cleared by any hunk. A missing lines, status or reason field is
+# read as "-": tab is IFS whitespace, so an empty field would collapse and
+# shift every field after it.
 function check_siblings() {
-  local id file lines status reason s e hf ns nl hs he hit records
+  local id file lines status reason s e pool records
   records="$(jq --raw-output '.pairs[] | .id as $id | .siblings[]
     | [$id, .file,
       (if (.lines | type) == "string" and (.lines | length) > 0 then .lines else "-" end),
@@ -666,19 +696,14 @@ function check_siblings() {
     fi
     s="${lines%-*}"
     e="${lines#*-}"
-    hit=0
-    while IFS=$'\t' read -r hf _ _ ns nl; do
-      [[ ${hf} == "${file}" ]] || continue
-      # A pure deletion has no new lines; it touches the boundary at ns/ns+1.
-      hs=$((ns > 0 ? ns : 1))
-      he=$((nl > 0 ? ns + nl - 1 : ns + 1))
-      if ((hs <= e && he >= s)); then
-        hit=1
-        break
-      fi
-    done <<<"${ALL_HUNKS}"
-    if ((hit)); then
+    pool="${ALL_HUNKS}"
+    if [[ ${file} == *.md && ${file} != CHANGELOG.md && ${file} != tests/fixtures/* ]]; then
+      pool="${SUBSTANTIVE_HUNKS}"
+    fi
+    if hunk_overlaps "${file}" "${s}" "${e}" "${pool}"; then
       SIBLINGS_CHANGED=$((SIBLINGS_CHANGED + 1))
+    elif hunk_overlaps "${file}" "${s}" "${e}" "${ALL_HUNKS}"; then
+      finding sibling-not-changed "pair ${id} sibling ${file}:${lines} is marked changed but only a reflow-only or generated hunk touches it"
     else
       finding sibling-not-changed "pair ${id} sibling ${file}:${lines} is marked changed but no hunk touches it"
     fi
