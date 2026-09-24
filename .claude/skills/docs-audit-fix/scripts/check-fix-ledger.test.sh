@@ -358,6 +358,28 @@ EOF
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
   run_case content-replaced-by-blank "${d}" 1 'uncovered-hunk: docs/a.md:14'
 
+  # A pure insertion's old-side position (os, the line BEFORE the
+  # insertion) must sit strictly before a generated block's END marker,
+  # not on it: inserting a same-named BEGIN/END pair immediately after
+  # an existing END must not forge the exemption. An unrelated,
+  # separately-paired "Delta paragraph." shifts the forged block off
+  # docs/a.md:11 (already asserted by after-end-marker) and, by being
+  # blank-line-separated from the generated block on both sides, keeps
+  # its own pair's span from expanding across the abutting blocks.
+  d="$(new_repo)"
+  sed -i '7a\Delta paragraph.\n' "${d}/docs/a.md"
+  commit_all "${d}" delta
+  sed -i '/^<!-- END gen -->$/a\<!-- BEGIN gen -->\nBrand new prose.\n<!-- END gen -->' "${d}/docs/a.md"
+  commit_all "${d}" forge
+  cat >"${d}/ledger.json" <<'EOF'
+{"report": "r.md", "code_changes": [],
+  "pairs": [{"id": "p1", "finding": 1, "file": "docs/a.md", "lines": "8-8",
+            "artifact": [{"file": "docs/a.md", "lines": "8-8"}],
+            "fix_shape": "scope", "siblings": []}]}
+EOF
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case forged-block-after-end "${d}" 1 'uncovered-hunk: docs/a.md:13'
+
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
     printf '%d scenario(s) failed\n' "${failures}" >&2

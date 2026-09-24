@@ -277,7 +277,17 @@ function hunk_is_generated() {
   local a b name oldname='' newname=''
   while IFS=' ' read -r a b name; do
     [[ -n ${a} ]] || continue
-    if ((os >= a && oe <= b)); then
+    # A pure insertion (ol==0) has no real old-side range: os is the
+    # line BEFORE the insertion point, so it must sit strictly before
+    # the END marker (os < b) — an insertion immediately after an
+    # existing END is not "inside" that block just because os lands on
+    # the END's own line number.
+    if ((ol == 0)); then
+      if ((os >= a && os < b)); then
+        oldname="${name}"
+        break
+      fi
+    elif ((os >= a && oe <= b)); then
       oldname="${name}"
       break
     fi
@@ -285,7 +295,12 @@ function hunk_is_generated() {
   [[ -n ${oldname} ]] || return 1
   while IFS=' ' read -r a b name; do
     [[ -n ${a} ]] || continue
-    if ((ns >= a && ne <= b)); then
+    if ((nl == 0)); then
+      if ((ns >= a && ns < b)); then
+        newname="${name}"
+        break
+      fi
+    elif ((ns >= a && ne <= b)); then
       newname="${name}"
       break
     fi
