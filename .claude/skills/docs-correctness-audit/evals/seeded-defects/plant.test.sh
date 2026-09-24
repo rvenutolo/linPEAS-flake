@@ -79,6 +79,12 @@ assert_planted() {
 }
 assert_planted "$here/seeds.json"
 
+# Planting edits content only. A mode change is a second defect the seed never
+# declared — a script that lost its execute bit fails wherever it is run — and
+# a tell in the worktree's diff besides.
+mode_changes="$(git -C "$wt" diff --summary | grep -cF 'mode change' || true)"
+check "planting changes no file mode" "[ '$mode_changes' = 0 ]"
+
 # Primary tree must be unchanged by planting (tracked files).
 check "primary tree unchanged by planting" \
   "[ \"\$(git -C '$here' status --porcelain --untracked-files=no)\" = \"\$primary_before\" ]"
