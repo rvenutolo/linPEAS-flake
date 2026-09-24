@@ -201,10 +201,16 @@ ALL_HUNKS=''
 # @description Unified-zero hunks between the merge base and head, as
 # "file\tos\tol\tns\tnl". Paths come from the "+++ b/" header, read from
 # column 7 so a space in a filename survives; a deletion ("+++ /dev/null")
-# yields no rows, and deleted files are handled per file instead.
+# yields no rows, and deleted files are handled per file instead. Under
+# --unified=0, every line after an "@@" header is a body line ("-" or
+# "+") until exactly ol+nl of them have gone by, so that many lines are
+# consumed unconditionally before another header is recognised — a body
+# line that itself starts with "+++ " or "@@ " (e.g. an added line that
+# happens to read "++ b/CHANGELOG.md") cannot pose as one.
 function list_hunks() {
   git -c core.quotePath=false diff --no-color --no-renames --unified=0 "${MB}" "${HEAD_REV}" -- "$@" |
     awk '
+      remaining > 0 { remaining--; next }
       /^\+\+\+ / {
         f = ($0 == "+++ /dev/null") ? "" : substr($0, 7)
         sub(/\t$/, "", f) # git appends a tab to a header path holding a space
@@ -214,6 +220,7 @@ function list_hunks() {
         split(substr($2, 2), o, ","); split(substr($3, 2), n, ",")
         ol = (2 in o) ? o[2] : 1; nl = (2 in n) ? n[2] : 1
         print f "\t" o[1] "\t" ol "\t" n[1] "\t" nl
+        remaining = ol + nl
       }'
 }
 
@@ -239,11 +246,17 @@ function generated_ranges() {
 }
 
 # @description True when the old block around the hunk and the new block
-# around it hold the same words in the same order — a re-wrap.
+# around it hold the same words in the same order — a re-wrap. False
+# (rather than a garbage compare) when either side's span falls outside
+# its file, which a hunk misattributed to the wrong file can produce.
 function is_reflow() {
   local -r file="$1" os="$2" ol="$3" ns="$4" nl="$5"
   git cat-file -e "${MB}:${file}" 2>/dev/null || return 1
+  local mb_n hd_n
+  mb_n="$(git show "${MB}:${file}" | awk 'END { print NR }')"
+  hd_n="$(git show "${HEAD_REV}:${file}" | awk 'END { print NR }')"
   local oe=$((os + (ol > 0 ? ol - 1 : 0))) ne=$((ns + (nl > 0 ? nl - 1 : 0)))
+  ((os >= 1 && oe <= mb_n && ns >= 1 && ne <= hd_n)) || return 1
   local ospan nspan old new
   ospan="$(git show "${MB}:${file}" | block_span "$((os > 0 ? os : 1))" "$((oe > 0 ? oe : 1))")"
   nspan="$(git show "${HEAD_REV}:${file}" | block_span "$((ns > 0 ? ns : 1))" "$((ne > 0 ? ne : 1))")"

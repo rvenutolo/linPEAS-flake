@@ -269,6 +269,16 @@ function main() {
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
   run_case uncovered-hunk "${d}" 1 'uncovered-hunk: docs/a.md:12'
 
+  # A diff body line that itself reads "++ b/CHANGELOG.md" must not be
+  # mistaken for a "+++" file header and misattribute the hunk after it.
+  d="$(new_repo)"
+  sed -i -e '4a\++ b/CHANGELOG.md' \
+    -e 's/^Gamma paragraph\.$/Gamma paragraph, now wrong./' "${d}/docs/a.md"
+  commit_all "${d}" poser
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case body-line-poses-as-header "${d}" 1 'uncovered-hunk: docs/a.md:13'
+
   # A changed non-Markdown file not listed as a code change.
   d="$(new_repo)"
   sed -i 's/^echo line5$/echo line5 changed/' "${d}/scripts/tool.sh"
