@@ -248,7 +248,9 @@ function check_schema() {
 # that read them never index a string or number. Each verdict id must be
 # unique (with two, which one counts would depend on order) and must name
 # a ledger pair (a verdict for no pair gates nothing, and usually means
-# the gate read a different ledger).
+# the gate read a different ledger). Each code change entry must carry
+# the blob id it attacked, or "deleted" for a file absent at head, so an
+# attack can be tied to the code it ran against.
 function check_gate_schema() {
   jq --raw-output --slurpfile ledger "${LEDGER}" '
     def arr: if type == "array" then . else [] end;
@@ -265,7 +267,11 @@ function check_gate_schema() {
       | ["schema", "gate verdict id \($id) is not a ledger pair"]),
     ((.pairs | arr)[] | objects
       | select(.verdict != "TRUE" and .verdict != "FALSE" and .verdict != "OVERREACHES")
-      | ["enum", "verdict for pair \(.id) \(.verdict | tojson) is not TRUE, FALSE or OVERREACHES"])
+      | ["enum", "verdict for pair \(.id) \(.verdict | tojson) is not TRUE, FALSE or OVERREACHES"]),
+    ((.code_changes | arr)[] | objects
+      | select((.blob | type == "string" and (test("\n") | not)
+          and test("^([0-9a-f]{40}|[0-9a-f]{64}|deleted)$")) | not)
+      | ["schema", "gate code change \(.file) needs a blob (the head blob id it attacked, or \"deleted\"), got \(.blob | tojson)"])
     | @tsv' "${GATE}"
 }
 
@@ -870,7 +876,8 @@ function check_siblings() {
 
 # @description Every pair needs a gate verdict of TRUE whose hash still
 # matches the pair's whole block at head, and every code change needs a
-# gate entry recording an attack and its result, neither whitespace-only.
+# gate entry recording an attack and its result, neither whitespace-only,
+# against the blob the file holds at head.
 # A pair whose own file or range check_completeness already rejected is
 # skipped here, since there is no block to hash. Missing verdict, hash or
 # note fields are read as "-", for the same IFS reason check_siblings
@@ -917,7 +924,7 @@ function check_verdicts() {
       finding stale-verdict "pair ${id} ${file}:${lines} changed after the gate read it"
   done <<<"${records}"
 
-  local cfile unattacked
+  local cfile unattacked attacked blobs current_blob
   unattacked="$(jq --raw-output --slurpfile gate "${GATE}" '
     def txt: type == "string" and test("\\S");
     .code_changes[].file as $f
@@ -929,6 +936,28 @@ function check_verdicts() {
     [[ -n ${cfile} ]] || continue
     finding missing-attack "code change ${cfile} has no gate attack and result"
   done <<<"${unattacked}"
+
+  # An attack holds only for the blob it ran against: a code change edited
+  # after the gate attacked it is stale, as a paragraph edited after the
+  # gate read it is. Each attacked file is printed with the blobs of its
+  # attacked gate entries, space-separated (check_gate_schema has already
+  # confined every blob to hex or "deleted").
+  attacked="$(jq --raw-output --slurpfile gate "${GATE}" '
+    def txt: type == "string" and test("\\S");
+    .code_changes[].file as $f
+    | [$gate[0].code_changes[]
+      | select(.file == $f and (.attack | txt) and (.result | txt)) | .blob]
+    | select(length > 0)
+    | [$f, join(" ")] | @tsv' "${LEDGER}")" ||
+    die "could not read the gate attack blobs from ${GATE}"
+  while IFS=$'\t' read -r cfile blobs; do
+    [[ -n ${cfile} ]] || continue
+    current_blob="$(git rev-parse --verify --quiet "${HEAD_REV}:${cfile}")" ||
+      current_blob=deleted
+    if [[ " ${blobs} " != *" ${current_blob} "* ]]; then
+      finding stale-attack "code change ${cfile} changed after the gate attacked it (attacked ${blobs}; head holds ${current_blob})"
+    fi
+  done <<<"${attacked}"
 }
 
 function main() {
