@@ -170,13 +170,29 @@ function main() {
   run_case schema-no-artifact "${d}" 1 'schema: pair p1 needs a non-empty artifact list'
 
   # A leading zero must not slip past the range regex into bash's octal
-  # arithmetic later (a schema-array collision rules out targeting the
-  # artifact's own lines here; see the report for why the pair's lines
-  # field is used instead).
+  # arithmetic later. This targets the pair's own lines field rather than
+  # the artifact's: an empty artifact list and a non-empty artifact list
+  # whose one entry fails the range regex fall through the same jq
+  # branch and print the identical schema message, so targeting the
+  # artifact here would be indistinguishable from schema-no-artifact.
   d="$(new_repo)"
   beta_fixed "${d}"
   jq '.pairs[0].lines = "08-99"' "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case schema-leading-zero "${d}" 1 'schema: pair p1 needs id, file and a <start>-<end> lines'
+
+  # A pair's own recorded range must fall inside its file, the same
+  # bound check an artifact range gets. A second, valid pair covers the
+  # Beta hunk so the only finding is the bad range, not a secondary
+  # uncovered-hunk from p1 no longer covering anything.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].lines = "9000-9999" |
+      .pairs += [{"id": "p2", "finding": 2, "file": "docs/a.md", "lines": "6-6",
+                  "artifact": [{"file": "scripts/tool.sh", "lines": "1-5"}],
+                  "fix_shape": "scope", "siblings": []}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case pair-lines-past-end "${d}" 1 \
+    'schema: pair p1 docs/a.md:9000-9999 runs past end of file (12 lines)'
 
   d="$(new_repo)"
   beta_fixed "${d}"

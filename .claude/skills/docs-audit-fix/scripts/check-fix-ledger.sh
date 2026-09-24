@@ -318,14 +318,23 @@ function new_side_blocks() {
 
 function check_completeness() {
   local file os ol ns nl hs he ne pf pa pb covered block_a block_b bcov all_covered
-  # Pair spans at head, as "file\ta\tb".
-  local spans='' id pfile plines span
+  # Pair spans at head, as "file\ta\tb". Each pair's own range must also
+  # fall inside its file, the same bound check check_artifacts runs for
+  # each artifact.
+  local spans='' id pfile plines span flen pstart pend
   while IFS=$'\t' read -r id pfile plines; do
     git cat-file -e "${HEAD_REV}:${pfile}" 2>/dev/null || {
       finding schema "pair ${id} file ${pfile} is not tracked at the head revision"
       continue
     }
-    span="$(git show "${HEAD_REV}:${pfile}" | block_span "${plines%-*}" "${plines#*-}")"
+    flen="$(git show "${HEAD_REV}:${pfile}" | awk 'END { print NR }')"
+    pstart="${plines%-*}"
+    pend="${plines#*-}"
+    if ((pstart < 1 || pstart > pend || pend > flen)); then
+      finding schema "pair ${id} ${pfile}:${plines} runs past end of file (${flen} lines)"
+      continue
+    fi
+    span="$(git show "${HEAD_REV}:${pfile}" | block_span "${pstart}" "${pend}")"
     spans+="${pfile}"$'\t'"${span% *}"$'\t'"${span#* }"$'\n'
   done < <(jq --raw-output '.pairs[] | [.id, .file, .lines] | @tsv' "${LEDGER}")
 
