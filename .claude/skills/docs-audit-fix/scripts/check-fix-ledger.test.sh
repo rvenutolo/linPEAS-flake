@@ -194,6 +194,30 @@ function main() {
   run_case pair-lines-past-end "${d}" 1 \
     'schema: pair p1 docs/a.md:9000-9999 runs past end of file (12 lines)'
 
+  # jq test()'s $ matches before a trailing newline, so "1-999999\n"
+  # passed the pre-fix rng check; @tsv then emitted the literal
+  # newline, and the bash arithmetic error it caused was read by `if`
+  # as false, skipping the bound check entirely. A duplicate pair id
+  # gives this scenario a second, independent schema finding so its
+  # combined output cannot match schema-leading-zero's single line.
+  d="$(new_repo)"
+  sed -i -e 's/^alpha line two\.$/alpha line WRONG./' \
+    -e 's/^Beta paragraph\.$/Beta WRONG./' \
+    -e 's/^Gamma paragraph\.$/Gamma WRONG./' "${d}/docs/a.md"
+  commit_all "${d}" wrong
+  bad_lines=$'1-999999\n'
+  jq -n --arg bad "${bad_lines}" '{
+    report: "r.md", code_changes: [],
+    pairs: [
+      { id: "p1", finding: 1, file: "docs/a.md", lines: $bad,
+        artifact: [{file: "docs/a.md", lines: "1-1"}], fix_shape: "scope", siblings: [] },
+      { id: "p1", finding: 2, file: "docs/a.md", lines: "4-4",
+        artifact: [{file: "docs/a.md", lines: "1-1"}], fix_shape: "scope", siblings: [] }
+    ]}' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case range-trailing-newline "${d}" 1 'schema: pair id p1 is used more than once'
+  also_expect 'schema: pair p1 needs id, file and a <start>-<end> lines'
+
   d="$(new_repo)"
   beta_fixed "${d}"
   jq '.pairs[0].fix_shape = "sharpen"' "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"

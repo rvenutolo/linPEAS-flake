@@ -55,6 +55,17 @@ function collapse() {
   tr --squeeze-repeats '[:space:]' ' ' | sed --expression 's/^ //' --expression 's/ $//'
 }
 
+# @description True when $1 is exactly a "<start>-<end>" range with each
+# number 1-6 digits. Re-checked in bash at every point a range read from
+# jq's @tsv output feeds an arithmetic ((...)) expression: jq's own rng
+# check (in check_schema) can pass a value carrying a trailing newline
+# that @tsv then emits literally, and a bash arithmetic error on that
+# stray newline is read by `if` as false rather than raised — silently
+# skipping the bound check it guards.
+function valid_range() {
+  [[ $1 =~ ^[1-9][0-9]{0,5}-[1-9][0-9]{0,5}$ ]]
+}
+
 # @description Print "<a> <b>": the blank-line-delimited block(s) that
 # contain lines $1..$2 of stdin.
 function block_span() {
@@ -151,7 +162,10 @@ fi
 function check_schema() {
   jq --raw-output '
     def str: type == "string" and length > 0;
-    def rng: str and test("^[1-9][0-9]{0,5}-[1-9][0-9]{0,5}$");
+    # test() with $ matches before a trailing newline (Oniguruma), so
+    # "1-999999\n" would otherwise pass; the explicit no-newline check
+    # closes that regardless of anchor semantics.
+    def rng: str and (test("\n") | not) and test("^[1-9][0-9]{0,5}-[1-9][0-9]{0,5}$");
     (if (.pairs | type) != "array" then ["schema", "ledger needs a pairs array"] else empty end),
     (if (.code_changes | type) != "array" then ["schema", "ledger needs a code_changes array"] else empty end),
     ((.pairs // [])[] | (.id // "?") as $id |
@@ -182,6 +196,10 @@ function check_artifacts() {
     fi
     if [[ "$(git cat-file -t "${HEAD_REV}:${file}")" != blob ]]; then
       finding artifact "pair ${id} ${file} is not a file at the head revision"
+      continue
+    fi
+    if ! valid_range "${lines}"; then
+      finding schema "pair ${id} artifact ${file}:${lines} is not a valid <start>-<end> range"
       continue
     fi
     start="${lines%-*}"
@@ -344,6 +362,10 @@ function check_completeness() {
     }
     if [[ "$(git cat-file -t "${HEAD_REV}:${pfile}")" != blob ]]; then
       finding schema "pair ${id} file ${pfile} is not a file at the head revision"
+      continue
+    fi
+    if ! valid_range "${plines}"; then
+      finding schema "pair ${id} ${pfile}:${plines} is not a valid <start>-<end> range"
       continue
     fi
     flen="$(git show "${HEAD_REV}:${pfile}" | awk 'END { print NR }')"
