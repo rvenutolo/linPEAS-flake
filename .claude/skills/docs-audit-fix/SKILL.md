@@ -66,7 +66,12 @@ paragraph in its scope.
     re-dispatch the gate on the changed pairs only. A pair's verdict is tied
     to its paragraph's text by hash, and a code change's attack to the blob
     it attacked, so anything fixed after the gate is stale until the gate
-    reads it again. Review the fix, not only the thing being fixed.
+    reads it again. Review the fix, not only the thing being fixed. The
+    re-gate edits `<report-stem>.gate.json` in place: it replaces only the
+    entries for the pairs and code changes it re-read, and keeps every
+    other entry. Overwriting the file drops the other verdicts and attacks
+    (`missing-verdict`, `missing-attack`); appending a second entry for the
+    same pair repeats its id (`schema`).
 1. Run `.claude/skills/docs-audit-fix/scripts/check-fix-ledger.sh <ledger> <gate>` until it exits 0. Also run the lints and harnesses the diff touches,
     and every `refresh-*.sh` whose output the diff touches.
 1. Open the PR (`gh pr create --head <branch>`). The body carries the pair
