@@ -8,3 +8,6 @@
 - docs/q.md:20-40 — a range that ends far from the seed's line
 - (`docs/p.md:7`) — a citation wrapped in punctuation
 - `docs/o.md:08` — a zero-padded line number
+- ./docs/s.md:5 — a repo-relative path written with a leading ./
+- docs/w[1]{2}\*?^$|.md:5 — the seed's own path, every ERE metacharacter literal
+- docs/f.md:30 — a seed whose manifest line is written 30.0

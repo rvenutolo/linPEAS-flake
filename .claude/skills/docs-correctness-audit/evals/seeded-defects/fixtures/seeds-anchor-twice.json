@@ -1,0 +1,16 @@
+{
+  "seeds": [
+    {
+      "id": "span",
+      "category": "two-file claim",
+      "file": "docs/index.md",
+      "anchor": "peass-ng/PEASS-ng",
+      "op": "replace-substr",
+      "from": "PEASS-ng",
+      "payload": "zzq7",
+      "expected_severity": "high",
+      "sentinel": "",
+      "line_tol": 3
+    }
+  ]
+}

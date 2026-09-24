@@ -70,5 +70,32 @@
     "expected_severity": "high",
     "sentinel": "",
     "line_tol": 3
+  },
+  {
+    "id": "dotslash",
+    "category": "citation",
+    "file": "docs/s.md",
+    "line": 5,
+    "expected_severity": "high",
+    "sentinel": "",
+    "line_tol": 3
+  },
+  {
+    "id": "meta-all",
+    "category": "citation",
+    "file": "docs/w[1]{2}*?^$|\\.md",
+    "line": 5,
+    "expected_severity": "high",
+    "sentinel": "",
+    "line_tol": 3
+  },
+  {
+    "id": "float-line",
+    "category": "citation",
+    "file": "docs/f.md",
+    "line": 30.0,
+    "expected_severity": "high",
+    "sentinel": "",
+    "line_tol": 3
   }
 ]

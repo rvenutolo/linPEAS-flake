@@ -127,6 +127,8 @@ assert_planted "$here/fixtures/seeds-also.json"
 # another line (the replacement would silently edit nothing) or beside the
 # anchor on its own line (it would edit text the seed never named); a payload
 # holding a newline (it would add lines no recorded location accounts for);
+# an anchor that occurs twice on its line (which occurrence is meant is
+# ambiguous); a seed text field that is not a string (jq prints null as text);
 # and a repeated seed id (its locations would merge into the other seed's).
 while IFS=$'\t' read -r fixture msg; do
   rc=0
@@ -141,6 +143,8 @@ seeds-from-off-line.json	from-string not inside the anchor
 seeds-from-outside-anchor.json	from-string not inside the anchor
 seeds-multiline-payload.json	holds a newline
 seeds-dup-id.json	duplicate seed id(s): span
+seeds-anchor-twice.json	occurs more than once on its line
+seeds-null-payload.json	payload is not a string
 EOF
 
 exit "$fail"

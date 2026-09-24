@@ -1,0 +1,11 @@
+[
+  {
+    "id": "a",
+    "category": "citation",
+    "file": "",
+    "line": 3,
+    "expected_severity": "high",
+    "sentinel": "",
+    "line_tol": 3
+  }
+]

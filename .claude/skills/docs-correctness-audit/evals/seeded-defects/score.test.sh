@@ -49,12 +49,19 @@ range	1/1	a cited range spanning the seed's line hits
 range-far	0/1	a cited range ending outside tolerance misses
 wrapped	1/1	punctuation around a citation does not hide it
 padded	1/1	a zero-padded line number is decimal, not octal
+dotslash	1/1	a leading ./ still names the repo-relative path
+meta-all	1/1	every ERE metacharacter in the seed's path is literal
+float-line	1/1	a manifest line written 30.0 is line 30
 EOF
 
-# A manifest location without a numeric line, or with a tab in its path,
-# cannot be scored; score.sh must refuse it by name rather than die mid-table
-# or print a total that silently leaves seeds out.
-for bad in manifest-also-no-line.json manifest-tab-path.json; do
+# A manifest that cannot be scored as written must be refused by name rather
+# than die mid-table, print a total that silently leaves seeds out, or score a
+# false hit: a location without a positive integer line or with a tab in its
+# path, a fractional tolerance, no seeds at all, a sentinel that is not a
+# string (jq prints null, which the report is then searched for), an empty
+# path, or a seed with no id.
+for bad in manifest-also-no-line.json manifest-tab-path.json manifest-fractional-tol.json \
+  manifest-empty.json manifest-null-sentinel.json manifest-empty-file.json manifest-no-id.json; do
   cp "$here/fixtures/$bad" "$tmp/manifest-resolved.json"
   rc=0
   # shellcheck disable=SC2034  # used inside the eval'd check() assertion strings
