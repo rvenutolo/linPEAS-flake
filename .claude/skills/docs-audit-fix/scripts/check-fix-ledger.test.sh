@@ -510,7 +510,9 @@ EOF
             "artifact": [{"file": "docs/a.md", "lines": "8-8"}],
             "fix_shape": "scope", "siblings": []}]}
 EOF
-  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  h="$(gate_hash "${d}" docs/a.md 8-8)"
+  printf '{"pairs": [{"id": "p1", "verdict": "TRUE", "hash": "%s", "note": ""}], "code_changes": []}\n' \
+    "${h}" >"${d}/gate.json"
   run_case forged-block-after-end "${d}" 1 'uncovered-hunk: docs/a.md:13'
 
   # A .md file git treats as binary (a NUL byte forces this) now gets a
@@ -804,6 +806,132 @@ EOF
   run_case bad-body-line-shim "${d}" 2 \
     'unknown hunk body prefix): ?Beta paragraph, corrected.'
   also_expect 'could not parse the Markdown diff'
+
+  # A sibling marked changed that really changed: pass.
+  d="$(new_repo)"
+  sed -i -e 's/^Beta paragraph\.$/Beta paragraph, corrected./' \
+    -e 's/^Gamma paragraph\.$/Gamma paragraph, corrected./' "${d}/docs/a.md"
+  commit_all "${d}" 'beta and gamma'
+  jq -n --arg h1 "$(gate_hash "${d}" docs/a.md 6-6)" --arg h2 "$(gate_hash "${d}" docs/a.md 12-12)" \
+    '{pairs: [{id: "p1", verdict: "TRUE", hash: $h1, note: ""},
+      {id: "p2", verdict: "TRUE", hash: $h2, note: ""}], code_changes: []}' >"${d}/gate.json"
+  jq -n '{report: "r.md", code_changes: [], pairs: [
+    {id: "p1", finding: 1, file: "docs/a.md", lines: "6-6",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "scope",
+      siblings: [{file: "docs/a.md", lines: "12-12", status: "changed"}]},
+    {id: "p2", finding: 1, file: "docs/a.md", lines: "12-12",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "scope", siblings: []}]}' \
+    >"${d}/ledger.json"
+  run_case sibling-changed "${d}" 0 '' \
+    'OK — 2 pairs; 2 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 1 changed and 0 unchanged siblings'
+
+  # Unchanged sibling with no reason.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].siblings = [{file: "docs/a.md", lines: "12-12", status: "unchanged"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case sibling-no-reason "${d}" 1 \
+    'sibling-reason: pair p1 sibling docs/a.md:12-12 is unchanged with no reason'
+
+  # Negative fixture N4: a sibling claimed changed in a file that has a
+  # hunk elsewhere. Guards against checking "changed" at file level.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].siblings = [{file: "docs/a.md", lines: "12-12", status: "changed"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case sibling-not-changed "${d}" 1 \
+    'sibling-not-changed: pair p1 sibling docs/a.md:12-12 is marked changed but no hunk touches it'
+
+  # Bad sibling status.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].siblings = [{file: "docs/a.md", lines: "12-12", status: "checked", reason: "x"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case enum-sibling-status "${d}" 1 \
+    'enum: pair p1 sibling docs/a.md status "checked" is not changed or unchanged'
+
+  # No verdict for a pair.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case missing-verdict "${d}" 1 'missing-verdict: pair p1 has no gate verdict'
+
+  # A FALSE verdict blocks.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].verdict = "FALSE" | .pairs[0].note = "artifact says otherwise"' \
+    "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
+  run_case verdict-false "${d}" 1 'verdict: pair p1 is FALSE: artifact says otherwise'
+
+  # Edited after the gate: stale.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  sed -i 's/^Beta paragraph, corrected\.$/Beta paragraph, corrected again./' "${d}/docs/a.md"
+  commit_all "${d}" 'post-gate edit'
+  run_case stale-verdict "${d}" 1 'stale-verdict: pair p1 docs/a.md:6-6 changed after the gate read it'
+
+  # Moved, not edited: a line added above Beta (gated separately) shifts
+  # it to line 7; the ledger is updated and Beta's old verdict stays
+  # current.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  sed -i '3a Alpha inserted line.' "${d}/docs/a.md"
+  commit_all "${d}" 'alpha grows'
+  jq '.pairs[0].lines = "7-7" | .pairs += [{id: "p2", finding: 2, file: "docs/a.md", lines: "3-5",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  jq --arg h "$(gate_hash "${d}" docs/a.md 3-5)" '.pairs += [{id: "p2", verdict: "TRUE", hash: $h, note: ""}]' \
+    "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
+  run_case moved-paragraph "${d}" 0 '' \
+    'OK — 2 pairs; 2 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed and 0 unchanged siblings'
+
+  # Negative fixture N3: pair recorded on Alpha's first line only, gated,
+  # then Alpha's second line edited. Same block, so the verdict is stale.
+  # Guards against hashing the recorded lines instead of the whole block.
+  d="$(new_repo)"
+  sed -i 's/^Alpha paragraph line one\.$/Alpha paragraph line one, fixed./' "${d}/docs/a.md"
+  commit_all "${d}" alpha
+  jq -n '{report: "r.md", code_changes: [], pairs: [{id: "p1", finding: 1, file: "docs/a.md", lines: "3-3",
+    artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "scope", siblings: []}]}' >"${d}/ledger.json"
+  jq -n --arg h "$(gate_hash "${d}" docs/a.md 3-3)" \
+    '{pairs: [{id: "p1", verdict: "TRUE", hash: $h, note: ""}], code_changes: []}' >"${d}/gate.json"
+  sed -i 's/^alpha line two\.$/alpha line two, edited after the gate./' "${d}/docs/a.md"
+  commit_all "${d}" 'post-gate same block'
+  run_case stale-same-block "${d}" 1 'stale-verdict: pair p1 docs/a.md:3-3 changed after the gate read it'
+
+  # A listed code change with a gate attack: pass.
+  d="$(new_repo)"
+  sed -i 's/^echo line5$/echo line5 changed/' "${d}/scripts/tool.sh"
+  commit_all "${d}" code
+  printf '{"report": "r.md", "pairs": [], "code_changes": [{"file": "scripts/tool.sh", "evidence": "harness"}]}\n' \
+    >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": [{"file": "scripts/tool.sh", "attack": "empty input", "result": "exit 2"}]}\n' \
+    >"${d}/gate.json"
+  run_case code-change-attacked "${d}" 0 '' \
+    'OK — 0 pairs; 0 hunks covered, 0 reflow-only and 0 generated skipped; 1 code changes'
+
+  # A listed code change the gate never attacked.
+  d="$(new_repo)"
+  sed -i 's/^echo line5$/echo line5 changed/' "${d}/scripts/tool.sh"
+  commit_all "${d}" code
+  printf '{"report": "r.md", "pairs": [], "code_changes": [{"file": "scripts/tool.sh", "evidence": "harness"}]}\n' \
+    >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case missing-attack "${d}" 1 'missing-attack: code change scripts/tool.sh has no gate attack and result'
+
+  # Two verdicts for one pair: which one counts would depend on order.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs += [.pairs[0] | .verdict = "FALSE"]' \
+    "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
+  run_case gate-duplicate-id "${d}" 1 'schema: gate verdict id p1 is used more than once'
+
+  # A verdict for a pair the ledger does not hold gates nothing.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs += [{id: "p9", verdict: "TRUE", hash: "0", note: ""}]' \
+    "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
+  run_case gate-unknown-id "${d}" 1 'schema: gate verdict id p9 is not a ledger pair'
 
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then

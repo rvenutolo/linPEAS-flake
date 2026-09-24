@@ -219,7 +219,9 @@ function check_schema() {
       (if (.siblings | type) == "array" and all(.siblings[] | objects; .file | str) then empty
       else ["schema", "pair \($id) needs a siblings list whose members name a file"] end),
       (if .fix_shape == "drop" or .fix_shape == "scope" or .fix_shape == "correct" then empty
-      else ["enum", "pair \($id) fix_shape \(.fix_shape | tojson) is not drop, scope or correct"] end)),
+      else ["enum", "pair \($id) fix_shape \(.fix_shape | tojson) is not drop, scope or correct"] end),
+      ((.siblings | arr)[] | objects | select(.status != "changed" and .status != "unchanged")
+        | ["enum", "pair \($id) sibling \(.file) status \(.status | tojson) is not changed or unchanged"])),
     ([(.pairs | arr)[] | objects | .id] | group_by(.)[] | select(length > 1)
       | ["schema", "pair id \(.[0]) is used more than once"]),
     ((.code_changes | arr)[] | objects | select((.file | str) | not)
@@ -243,16 +245,27 @@ function check_schema() {
 
 # @description Gate schema findings, in check_schema's format. The gate's
 # pairs and code_changes lists must hold objects, so the verdict checks
-# that read them never index a string or number.
+# that read them never index a string or number. Each verdict id must be
+# unique (with two, which one counts would depend on order) and must name
+# a ledger pair (a verdict for no pair gates nothing, and usually means
+# the gate read a different ledger).
 function check_gate_schema() {
-  jq --raw-output '
+  jq --raw-output --slurpfile ledger "${LEDGER}" '
     def arr: if type == "array" then . else [] end;
     def nonobj($what): arr | to_entries[] | select(.value | type != "object")
       | ["schema", "gate \($what)[\(.key)] is not an object"];
+    ([$ledger[0].pairs | arr | .[] | objects | .id]) as $ids |
     (if (.pairs | type) != "array" then ["schema", "gate needs a pairs array"] else empty end),
     (if (.code_changes | type) != "array" then ["schema", "gate needs a code_changes array"] else empty end),
     (.pairs | nonobj("pairs")),
-    (.code_changes | nonobj("code_changes"))
+    (.code_changes | nonobj("code_changes")),
+    ([(.pairs | arr)[] | objects | .id] | group_by(.)[] | select(length > 1)
+      | ["schema", "gate verdict id \(.[0]) is used more than once"]),
+    ((.pairs | arr)[] | objects | .id as $id | select(any($ids[]; . == $id) | not)
+      | ["schema", "gate verdict id \($id) is not a ledger pair"]),
+    ((.pairs | arr)[] | objects
+      | select(.verdict != "TRUE" and .verdict != "FALSE" and .verdict != "OVERREACHES")
+      | ["enum", "verdict for pair \(.id) \(.verdict | tojson) is not TRUE, FALSE or OVERREACHES"])
     | @tsv' "${GATE}"
 }
 
@@ -288,6 +301,8 @@ function check_artifacts() {
 HUNKS_COVERED=0
 HUNKS_REFLOW=0
 HUNKS_GENERATED=0
+SIBLINGS_CHANGED=0
+SIBLINGS_UNCHANGED=0
 ALL_HUNKS=''
 
 # @description Unified-zero hunks between the merge base and head, as
@@ -617,8 +632,111 @@ function check_completeness() {
     fi
   done <<<"${changed_files}"
 
-  # shellcheck disable=SC2034 # consumed by the sibling check a later task adds
   ALL_HUNKS="$(list_hunks .)" || die 'could not parse the full diff'
+}
+
+# @description An unchanged sibling must carry a reason; a sibling marked
+# changed must overlap a hunk of the branch diff by line range, not merely
+# sit in a file that has a hunk somewhere. A missing lines, status or
+# reason field is read as "-": tab is IFS whitespace, so an empty field
+# would collapse and shift every field after it.
+function check_siblings() {
+  local id file lines status reason s e hf ns nl hs he hit records
+  records="$(jq --raw-output '.pairs[] | .id as $id | .siblings[]
+    | [$id, .file,
+      (if (.lines | type) == "string" and (.lines | length) > 0 then .lines else "-" end),
+      (if (.status | type) == "string" and (.status | length) > 0 then .status else "-" end),
+      (if (.reason | type) == "string" and (.reason | length) > 0 then .reason else "-" end)]
+    | @tsv' "${LEDGER}")" ||
+    die "could not read the sibling list from ${LEDGER}"
+  while IFS=$'\t' read -r id file lines status reason; do
+    [[ -n ${id} ]] || continue
+    if [[ ${status} == unchanged ]]; then
+      if [[ ${reason} == - ]]; then
+        finding sibling-reason "pair ${id} sibling ${file}:${lines} is unchanged with no reason"
+      else
+        SIBLINGS_UNCHANGED=$((SIBLINGS_UNCHANGED + 1))
+      fi
+      continue
+    fi
+    [[ ${status} == changed ]] || continue # check_schema reported the enum
+    if ! valid_range "${lines}"; then
+      finding schema "pair ${id} sibling ${file}:${lines} is marked changed without a valid <start>-<end> range"
+      continue
+    fi
+    s="${lines%-*}"
+    e="${lines#*-}"
+    hit=0
+    while IFS=$'\t' read -r hf _ _ ns nl; do
+      [[ ${hf} == "${file}" ]] || continue
+      # A pure deletion has no new lines; it touches the boundary at ns/ns+1.
+      hs=$((ns > 0 ? ns : 1))
+      he=$((nl > 0 ? ns + nl - 1 : ns + 1))
+      if ((hs <= e && he >= s)); then
+        hit=1
+        break
+      fi
+    done <<<"${ALL_HUNKS}"
+    if ((hit)); then
+      SIBLINGS_CHANGED=$((SIBLINGS_CHANGED + 1))
+    else
+      finding sibling-not-changed "pair ${id} sibling ${file}:${lines} is marked changed but no hunk touches it"
+    fi
+  done <<<"${records}"
+}
+
+# @description Every pair needs a gate verdict of TRUE whose hash still
+# matches the pair's whole block at head, and every code change needs a
+# gate entry recording an attack and its result. A pair whose own file or
+# range check_completeness already rejected is skipped here, since there
+# is no block to hash. Missing verdict, hash or note fields are read as
+# "-", for the same IFS reason check_siblings gives.
+function check_verdicts() {
+  local id file lines verdict hash note current n start end records
+  records="$(jq --raw-output --slurpfile gate "${GATE}" '
+    .pairs[] | .id as $id
+    | ([$gate[0].pairs[] | select(.id == $id)] | first) as $v
+    | [$id, .file, .lines,
+      (if $v == null then "-" elif ($v.verdict | type) == "string" then $v.verdict
+      else ($v.verdict | tojson) end),
+      (if ($v.hash | type) == "string" and ($v.hash | length) > 0 then $v.hash else "-" end),
+      (if ($v.note | type) == "string" and ($v.note | length) > 0 then $v.note else "-" end)]
+    | @tsv' "${LEDGER}")" ||
+    die "could not read the gate verdicts from ${GATE}"
+  while IFS=$'\t' read -r id file lines verdict hash note; do
+    [[ -n ${id} ]] || continue
+    if [[ ${verdict} == - ]]; then
+      finding missing-verdict "pair ${id} has no gate verdict"
+      continue
+    fi
+    if [[ ${verdict} != TRUE ]]; then
+      finding verdict "pair ${id} is ${verdict}: ${note}"
+      continue
+    fi
+    git cat-file -e "${HEAD_REV}:${file}" 2>/dev/null || continue
+    [[ "$(git cat-file -t "${HEAD_REV}:${file}")" == blob ]] || continue
+    valid_range "${lines}" || continue
+    start="${lines%-*}"
+    end="${lines#*-}"
+    n="$(git show "${HEAD_REV}:${file}" | awk 'END { print NR }')"
+    ((start >= 1 && start <= end && end <= n)) || continue
+    current="$(block_hash "${HEAD_REV}" "${file}" "${start}" "${end}")"
+    [[ ${current} == "${hash}" ]] ||
+      finding stale-verdict "pair ${id} ${file}:${lines} changed after the gate read it"
+  done <<<"${records}"
+
+  local cfile unattacked
+  unattacked="$(jq --raw-output --slurpfile gate "${GATE}" '
+    def str: type == "string" and length > 0;
+    .code_changes[].file as $f
+    | select(any($gate[0].code_changes[];
+      .file == $f and (.attack | str) and (.result | str)) | not)
+    | $f' "${LEDGER}")" ||
+    die "could not read the gate attacks from ${GATE}"
+  while IFS= read -r cfile; do
+    [[ -n ${cfile} ]] || continue
+    finding missing-attack "code change ${cfile} has no gate attack and result"
+  done <<<"${unattacked}"
 }
 
 function main() {
@@ -634,6 +752,8 @@ function main() {
   if ((schema_bad == 0)); then
     check_artifacts
     check_completeness
+    check_siblings
+    check_verdicts
   fi
   if ((findings > 0)); then
     local tally='' c
@@ -645,8 +765,9 @@ function main() {
   fi
   npairs="$(jq '.pairs | length' "${LEDGER}")" || die "could not count pairs in ${LEDGER}"
   nchanges="$(jq '.code_changes | length' "${LEDGER}")" || die "could not count code_changes in ${LEDGER}"
-  printf '%s: OK — %d pairs; %d hunks covered, %d reflow-only and %d generated skipped; %d code changes\n' \
-    "${PROG}" "${npairs}" "${HUNKS_COVERED}" "${HUNKS_REFLOW}" "${HUNKS_GENERATED}" "${nchanges}"
+  printf '%s: OK — %d pairs; %d hunks covered, %d reflow-only and %d generated skipped; %d code changes; %d changed and %d unchanged siblings\n' \
+    "${PROG}" "${npairs}" "${HUNKS_COVERED}" "${HUNKS_REFLOW}" "${HUNKS_GENERATED}" "${nchanges}" \
+    "${SIBLINGS_CHANGED}" "${SIBLINGS_UNCHANGED}"
 }
 
 main
