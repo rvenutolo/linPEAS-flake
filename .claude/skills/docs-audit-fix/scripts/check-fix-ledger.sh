@@ -42,6 +42,8 @@ export LC_ALL=C
 
 readonly PROG='check-fix-ledger'
 findings=0
+# Findings per class, for the summary line.
+declare -A class_count=()
 
 function die() {
   printf '%s: %s\n' "${PROG}" "$1" >&2
@@ -51,6 +53,7 @@ function die() {
 function finding() {
   printf '%s: %s: %s\n' "${PROG}" "$1" "$2" >&2
   findings=$((findings + 1))
+  class_count["$1"]=$((${class_count["$1"]:-0} + 1))
 }
 
 for tool in git jq awk sed sha256sum tr cut realpath; do
@@ -168,6 +171,12 @@ if [[ ${HEAD_REV} == HEAD && -n "$(git status --porcelain --untracked-files=no)"
 fi
 
 # @description Schema and enum findings. Each line is "<class>\t<detail>".
+# Every list is read through `arr` and every element is type-checked
+# before anything indexes it: a string or number where an object belongs
+# would otherwise raise a jq error mid-stream, and every finding after
+# that point (an enum, a duplicate id, a newline in a file name) would be
+# lost. The callers capture this output with `|| die`, so a jq failure
+# the guards miss stops the run instead of reading as no findings.
 function check_schema() {
   jq --raw-output '
     def str: type == "string" and length > 0;
@@ -177,44 +186,69 @@ function check_schema() {
     def rng: str and (test("\n") | not) and test("^[1-9][0-9]{0,5}-[1-9][0-9]{0,5}$");
     def ctl: type == "string" and test("[\n\t\r]");
     def shown: gsub("\n"; "<LF>") | gsub("\t"; "<TAB>") | gsub("\r"; "<CR>");
+    def arr: if type == "array" then . else [] end;
+    def nonobj($what): arr | to_entries[] | select(.value | type != "object")
+      | ["schema", "\($what)[\(.key)] is not an object"];
     (if (.pairs | type) != "array" then ["schema", "ledger needs a pairs array"] else empty end),
     (if (.code_changes | type) != "array" then ["schema", "ledger needs a code_changes array"] else empty end),
-    ((.pairs // [])[] | (.id // "?") as $id |
+    (.pairs | nonobj("pairs")),
+    (.code_changes | nonobj("code_changes")),
+    ((.pairs | arr)[] | objects | (.id // "?") as $id |
       (if (.id | str) and (.file | str) and (.lines | rng) then empty
       else ["schema", "pair \($id) needs id, file and a <start>-<end> lines"] end),
+      (.artifact | nonobj("pair \($id) artifact")),
       (if (.artifact | type) == "array" and (.artifact | length) > 0
-          and all(.artifact[]; (.file | str) and (.lines | rng)) then empty
+          and all(.artifact[] | objects; (.file | str) and (.lines | rng)) then empty
       else ["schema", "pair \($id) needs a non-empty artifact list of file and lines"] end),
-      (if (.siblings | type) == "array" and all(.siblings[]; .file | str) then empty
+      (.siblings | nonobj("pair \($id) siblings")),
+      (if (.siblings | type) == "array" and all(.siblings[] | objects; .file | str) then empty
       else ["schema", "pair \($id) needs a siblings list whose members name a file"] end),
       (if .fix_shape == "drop" or .fix_shape == "scope" or .fix_shape == "correct" then empty
       else ["enum", "pair \($id) fix_shape \(.fix_shape | tojson) is not drop, scope or correct"] end)),
-    ([(.pairs // [])[].id] | group_by(.)[] | select(length > 1)
+    ([(.pairs | arr)[] | objects | .id] | group_by(.)[] | select(length > 1)
       | ["schema", "pair id \(.[0]) is used more than once"]),
-    ((.code_changes // [])[] | select((.file | str) | not)
+    ((.code_changes | arr)[] | objects | select((.file | str) | not)
       | ["schema", "a code_changes entry needs a file"]),
     # File names are later read one per line (or one per tab field), so
     # a newline, tab or CR inside one would split it into extra names,
     # e.g. listing a changed file no entry actually names. The name is
     # shown with those characters spelled out, since @tsv would escape
     # a JSON rendering a second time.
-    ((.code_changes // [])[] | objects | select(.file | ctl)
+    ((.code_changes | arr)[] | objects | select(.file | ctl)
       | ["schema", "code_changes file \"\(.file | shown)\" holds a newline, tab or CR"]),
-    ((.pairs // [])[] | objects | (.id // "?") as $id |
+    ((.pairs | arr)[] | objects | (.id // "?") as $id |
       (select(.file | ctl)
         | ["schema", "pair \($id) file \"\(.file | shown)\" holds a newline, tab or CR"]),
-      (.artifact | arrays | .[] | objects | select(.file | ctl)
+      ((.artifact | arr)[] | objects | select(.file | ctl)
         | ["schema", "pair \($id) artifact file \"\(.file | shown)\" holds a newline, tab or CR"]),
-      (.siblings | arrays | .[] | objects | select(.file | ctl)
+      ((.siblings | arr)[] | objects | select(.file | ctl)
         | ["schema", "pair \($id) sibling file \"\(.file | shown)\" holds a newline, tab or CR"]))
     | @tsv' "${LEDGER}"
+}
+
+# @description Gate schema findings, in check_schema's format. The gate's
+# pairs and code_changes lists must hold objects, so the verdict checks
+# that read them never index a string or number.
+function check_gate_schema() {
+  jq --raw-output '
+    def arr: if type == "array" then . else [] end;
+    def nonobj($what): arr | to_entries[] | select(.value | type != "object")
+      | ["schema", "gate \($what)[\(.key)] is not an object"];
+    (if (.pairs | type) != "array" then ["schema", "gate needs a pairs array"] else empty end),
+    (if (.code_changes | type) != "array" then ["schema", "gate needs a code_changes array"] else empty end),
+    (.pairs | nonobj("pairs")),
+    (.code_changes | nonobj("code_changes"))
+    | @tsv' "${GATE}"
 }
 
 # @description Each artifact must be tracked at head with its range inside
 # the file.
 function check_artifacts() {
-  local id file lines start end n
+  local id file lines start end n records
+  records="$(jq --raw-output '.pairs[] | .id as $id | .artifact[] | [$id, .file, .lines] | @tsv' "${LEDGER}")" ||
+    die "could not read the artifact list from ${LEDGER}"
   while IFS=$'\t' read -r id file lines; do
+    [[ -n ${id} ]] || continue
     if ! git cat-file -e "${HEAD_REV}:${file}" 2>/dev/null; then
       finding artifact "pair ${id} ${file} is not tracked at the head revision"
       continue
@@ -233,7 +267,7 @@ function check_artifacts() {
     if ((start < 1 || start > end || end > n)); then
       finding artifact "pair ${id} ${file}:${lines} runs past end of file (${n} lines)"
     fi
-  done < <(jq --raw-output '.pairs[] | .id as $id | .artifact[] | [$id, .file, .lines] | @tsv' "${LEDGER}")
+  done <<<"${records}"
 }
 
 HUNKS_COVERED=0
@@ -442,8 +476,11 @@ function check_completeness() {
   # Pair spans at head, as "file\ta\tb". Each pair's own range must also
   # fall inside its file, the same bound check check_artifacts runs for
   # each artifact.
-  local spans='' id pfile plines span flen pstart pend
+  local spans='' id pfile plines span flen pstart pend records
+  records="$(jq --raw-output '.pairs[] | [.id, .file, .lines] | @tsv' "${LEDGER}")" ||
+    die "could not read the pair list from ${LEDGER}"
   while IFS=$'\t' read -r id pfile plines; do
+    [[ -n ${id} ]] || continue
     git cat-file -e "${HEAD_REV}:${pfile}" 2>/dev/null || {
       finding schema "pair ${id} file ${pfile} is not tracked at the head revision"
       continue
@@ -465,7 +502,7 @@ function check_completeness() {
     fi
     span="$(git show "${HEAD_REV}:${pfile}" | block_span "${pstart}" "${pend}")"
     spans+="${pfile}"$'\t'"${span% *}"$'\t'"${span#* }"$'\n'
-  done < <(jq --raw-output '.pairs[] | [.id, .file, .lines] | @tsv' "${LEDGER}")
+  done <<<"${records}"
 
   while IFS=$'\t' read -r file os ol ns nl; do
     [[ -n ${file} ]] || continue
@@ -549,8 +586,12 @@ function check_completeness() {
   # (round 2's numstat-based branch is dead now that --text is in
   # play, and re-checking --numstat here would just disagree with
   # list_hunks, which reads --text hunks).
-  local listed changed
-  listed="$(jq --raw-output '.code_changes[].file' "${LEDGER}")"
+  local listed changed changed_files
+  listed="$(jq --raw-output '.code_changes[].file' "${LEDGER}")" ||
+    die "could not read code_changes from ${LEDGER}"
+  changed_files="$(git -c core.quotePath=false diff --no-ext-diff --no-textconv \
+    --src-prefix=a/ --dst-prefix=b/ --name-only --no-renames "${MB}" "${HEAD_REV}")" ||
+    die 'could not list the changed files'
   while IFS= read -r changed; do
     [[ -n ${changed} ]] || continue
     if [[ ${changed} == *.md ]] && git cat-file -e "${HEAD_REV}:${changed}" 2>/dev/null; then
@@ -559,31 +600,38 @@ function check_completeness() {
     if ! grep --line-regexp --fixed-strings --quiet -- "${changed}" <<<"${listed}"; then
       finding uncovered-file "${changed} is changed but not listed in code_changes"
     fi
-  done < <(git -c core.quotePath=false diff --no-ext-diff --no-textconv \
-    --src-prefix=a/ --dst-prefix=b/ --name-only --no-renames "${MB}" "${HEAD_REV}")
+  done <<<"${changed_files}"
 
   # shellcheck disable=SC2034 # consumed by the sibling check a later task adds
   ALL_HUNKS="$(list_hunks .)" || die 'could not parse the full diff'
 }
 
 function main() {
-  local class detail schema_bad=0
+  local class detail schema_bad=0 schema npairs nchanges
+  schema="$(check_schema)" || die "could not check the schema of ${LEDGER}"
+  schema+=$'\n'"$(check_gate_schema)" || die "could not check the schema of ${GATE}"
   while IFS=$'\t' read -r class detail; do
     [[ -n ${class} ]] || continue
     finding "${class}" "${detail}"
     [[ ${class} == schema ]] && schema_bad=1
-  done < <(check_schema)
+  done <<<"${schema}"
   # Later checks read the ledger's shape; a schema finding stops here.
   if ((schema_bad == 0)); then
     check_artifacts
     check_completeness
   fi
   if ((findings > 0)); then
-    printf '%s: %d finding(s)\n' "${PROG}" "${findings}" >&2
+    local tally='' c
+    while IFS= read -r c; do
+      tally+="${tally:+, }${c} ${class_count["${c}"]}"
+    done < <(printf '%s\n' "${!class_count[@]}" | sort)
+    printf '%s: %d finding(s) (%s)\n' "${PROG}" "${findings}" "${tally}" >&2
     exit 1
   fi
+  npairs="$(jq '.pairs | length' "${LEDGER}")" || die "could not count pairs in ${LEDGER}"
+  nchanges="$(jq '.code_changes | length' "${LEDGER}")" || die "could not count code_changes in ${LEDGER}"
   printf '%s: OK — %d pairs; %d hunks covered, %d reflow-only and %d generated skipped; %d code changes\n' \
-    "${PROG}" "$(jq '.pairs | length' "${LEDGER}")" "${HUNKS_COVERED}" "${HUNKS_REFLOW}" "${HUNKS_GENERATED}" "$(jq '.code_changes | length' "${LEDGER}")"
+    "${PROG}" "${npairs}" "${HUNKS_COVERED}" "${HUNKS_REFLOW}" "${HUNKS_GENERATED}" "${nchanges}"
 }
 
 main

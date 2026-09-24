@@ -597,7 +597,7 @@ EOF
   two_file_edit "${d}" 3
   git -C "${d}" config diff.interHunkContext 50
   run_case inter-hunk-context-configured "${d}" 1 'uncovered-hunk: docs/e.md:3'
-  also_expect 'check-fix-ledger: 3 finding(s)'
+  also_expect 'check-fix-ledger: 3 finding(s) (uncovered-hunk 3)'
 
   # GIT_DIFF_OPTS overrides --unified=0 from the environment, with the
   # same over-skip. Editing e.md lines 5 and 7 rather than 3 gives this
@@ -607,7 +607,7 @@ EOF
   two_file_edit "${d}" 5 7
   CASE_ENV=(GIT_DIFF_OPTS=--unified=40)
   run_case git-diff-opts-env "${d}" 1 'uncovered-hunk: docs/e.md:5'
-  also_expect 'check-fix-ledger: 4 finding(s)'
+  also_expect 'check-fix-ledger: 4 finding(s) (uncovered-hunk 4)'
 
   # A "\ No newline at end of file" marker inside a hunk counts against
   # neither side; the file after it must still be parsed.
