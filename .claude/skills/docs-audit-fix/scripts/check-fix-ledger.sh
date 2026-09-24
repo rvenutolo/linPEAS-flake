@@ -131,6 +131,9 @@ if ((hash_mode)); then
     die "not tracked at ${HEAD_REV}: ${positional[0]}"
   [[ "$(git cat-file -t "${HEAD_REV}:${positional[0]}")" == blob ]] ||
     die "not a file at ${HEAD_REV}: ${positional[0]}"
+  hash_n="$(git show "${HEAD_REV}:${positional[0]}" | awk 'END { print NR }')"
+  ((hash_end <= hash_n)) ||
+    die "bad range: ${positional[1]} (end must be <= ${hash_n} lines)"
   block_hash "${HEAD_REV}" "${positional[0]}" "${hash_start}" "${hash_end}"
   exit 0
 fi

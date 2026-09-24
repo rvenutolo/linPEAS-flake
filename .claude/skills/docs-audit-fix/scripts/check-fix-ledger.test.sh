@@ -540,6 +540,12 @@ EOF
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
   run_case duplicate-paragraph-deleted "${d}" 1 'uncovered-hunk: docs/a.md:7'
 
+  # --hash must reject an end past the file's own line count, the same
+  # way the ledger-mode bound checks do.
+  d="$(new_repo)"
+  run_hash_case hash-past-end "${d}" 2 \
+    'bad range: 1-999999 (end must be <= 12 lines)' docs/a.md 1-999999
+
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
     printf '%d scenario(s) failed\n' "${failures}" >&2
