@@ -43,6 +43,31 @@ while IFS=$'\t' read -r f s; do
   check "sentinel '$s' planted in $f" "grep -qF -- '$s' '$wt/$f'"
 done < <(jq -r '.[] | "\(.file)\t\(.sentinel)"' "$manifest")
 
+# Every recorded line must hold the text its seed planted. Scoring matches a
+# report's file:line citation against that line, so a line that drifts — a later
+# seed inserting above an earlier one in the same file — silently moves the
+# target a reader has to cite. An insert must read back as its payload exactly;
+# a replacement must read back as its anchor with the from-string swapped.
+# Records are joined on \x1f, not a tab: tab is IFS whitespace, so the empty
+# from-string of every insert would collapse into its neighbour.
+while IFS=$'\x1f' read -r id f ln op anchor from payload; do
+  actual="$(sed -n "${ln}p" "$wt/$f")"
+  ok=0
+  case "$op" in
+  insert-after) [ "$actual" = "$payload" ] && ok=1 ;;
+  replace-substr) [[ $actual == *"${anchor/"$from"/"$payload"}"* ]] && ok=1 ;;
+  esac
+  check "seed '$id': $f:$ln holds the planted text" "[ $ok = 1 ]"
+done < <(jq -r --slurpfile s "$here/seeds.json" '
+  ($s[0].seeds | map({key: .id, value: .}) | from_entries) as $by
+  | .[] | $by[.id] as $seed
+  | ([{file, line}] + (.also // [])) as $locs
+  | ([$seed] + ($seed.also // [])) as $edits
+  | range(0; $locs | length) as $i
+  | [.id, $locs[$i].file, ($locs[$i].line | tostring), $edits[$i].op,
+    $edits[$i].anchor, $edits[$i].from, $edits[$i].payload]
+  | join("\u001f")' "$manifest")
+
 # Primary tree must be unchanged by planting (tracked files).
 check "primary tree unchanged by planting" \
   "[ \"\$(git -C '$here' status --porcelain --untracked-files=no)\" = \"\$primary_before\" ]"
