@@ -69,14 +69,20 @@ below.
 
 ## Seed format
 
-Each entry in `seeds.json` names a `file`, an `anchor` (a substring that must
-match exactly one line of that file at `HEAD`), an `op`, and a `payload`.
-`insert-after` adds the payload as the line after the anchor; `replace-substr`
-swaps `from` for the payload on the anchor line itself, and planting fails if
-`from` is not on that line. An empty payload with `replace-substr` deletes
-`from`, which is how a truncation is planted. A seed is scored as hit when a
-report contains its non-empty `sentinel`, or cites `file:line` within
-`line_tol` of where the edit landed.
+Each entry in `seeds.json` names a `file`, an `anchor`, an `op`, and a
+`payload`. Seeds apply in order, so an anchor must match exactly one line of
+its file as the earlier seeds left it. `insert-after` adds the payload as the
+line after the anchor; `replace-substr` swaps `from` for the payload inside
+the anchor's own text, and planting fails if `from` is not part of the anchor.
+An empty payload with `replace-substr` deletes `from`, which is how a
+truncation is planted. Anchor, `from` and payload are each one line; planting
+refuses a newline in any of them.
+
+A seed is scored as hit when a report contains its non-empty `sentinel`, or
+cites the seed's `file:line` within `line_tol` of where the edit landed. A
+citation must name the whole repo-relative path: a longer path that merely
+ends in the seed's names another file. A cited range such as `file:20-40`
+hits when it comes within `line_tol` of the seed's line.
 
 A seed may also carry an `also` list of further `{file, anchor, op, from, payload}` edits, for a defect that lives in two files at once. The manifest
 records each one's line, and a citation of any location counts as a hit.
@@ -139,13 +145,18 @@ column) is exactly the signal being measured.
     published; `rendering-divergence` strips the backslashes from the rendered
     octoscan `--ignore` regex, so the page shows a value the script does not
     pass. `agreed-false-annotation` swaps the exit codes in the
-    `refresh-treefmt-config.sh` `--check` annotation *and* in its rendered
-    line, so the generator and the page agree and only the code refutes them.
+    `refresh-treefmt-config.sh` `--check` annotation, in the usage comment
+    below it, *and* in its rendered line, so the generator, the page and the
+    script's own header agree. What refutes them is the script's exit paths
+    and the comment beside the could-not-run exit, plus the pattern the page
+    sets: every other generator's `--check` line reads the other way round.
 - **Re-sharpened** seed (`resharpened-claim`) follows the vague "Representative
-    hooks" list with a precise sentence naming two lint members as hooks, of
-    which only `check-ephemeral-refs` is one; `check-tool-guarded` runs only in
-    the `lint-script-hygiene` group. It is refuted by the hook modules under
-    `nix/hooks/`, not by anything in the bundle.
+    hooks" list with a precise sentence naming two scripts as hooks, of which
+    only `check-ephemeral-refs` is one; `check-tool-guarded` runs only as the
+    `tool-guarded` member of the `lint-script-hygiene` group. It is refuted by
+    the hook modules under `nix/hooks/` and by the generated hook table in
+    `docs/development/git.md`, which the paragraph links to one sentence
+    earlier.
 
 ## A confound to keep in view
 
