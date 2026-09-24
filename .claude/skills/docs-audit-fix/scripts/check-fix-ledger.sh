@@ -162,10 +162,17 @@ LEDGER="$(realpath -- "${positional[0]}")" || die "cannot resolve ${positional[0
 GATE="$(realpath -- "${positional[1]}")" || die "cannot resolve ${positional[1]}"
 readonly LEDGER GATE
 cd -- "$(git rev-parse --show-toplevel)" || die 'not inside a git work tree'
-jq --exit-status 'type == "object"' "${LEDGER}" >/dev/null 2>&1 ||
-  die "${LEDGER} is not valid JSON"
-jq --exit-status 'type == "object"' "${GATE}" >/dev/null 2>&1 ||
-  die "${GATE} is not valid JSON"
+# jq's exit status reflects only its last input: a file holding a stray
+# document before the object (or two appended objects) would pass an
+# object check, and every later read would then error on, or merge, the
+# extra document with no failing status for `|| die` to catch. Each file
+# must parse, then hold exactly one top-level object.
+for json_file in "${LEDGER}" "${GATE}"; do
+  jq empty "${json_file}" >/dev/null 2>&1 || die "${json_file} is not valid JSON"
+  jq --exit-status --slurp 'length == 1 and (.[0] | type) == "object"' \
+    "${json_file}" >/dev/null 2>&1 ||
+    die "${json_file} does not hold exactly one JSON object"
+done
 git rev-parse --verify --quiet "${BASE}^{commit}" >/dev/null ||
   die "base revision does not resolve: ${BASE}"
 MB="$(git merge-base "${BASE}" "${HEAD_REV}")" || die "no merge base for ${BASE} and ${HEAD_REV}"
