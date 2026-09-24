@@ -11,10 +11,13 @@
 #                 pure reflow overlaps a recorded paragraph, and every other
 #                 changed file is listed as a code change
 #   artifacts     every recorded artifact range exists at the head revision
-#   siblings      an unchanged sibling carries a reason; a changed one
-#                 overlaps a hunk
+#   siblings      an unchanged sibling names a tracked file and a reason; a
+#                 changed one gains a substantively changed line in a covered
+#                 hunk, a removed one borders a covered hunk that deletes
+#                 text; outside in-scope Markdown any touching hunk clears it
 #   verdicts      every pair is gated TRUE against its current text, and
 #                 every code change carries the gate's adversarial attack
+#                 against its current blob (else stale-attack)
 #
 # A paragraph is the blank-line-delimited block around the recorded lines,
 # and its hash covers that whole block with whitespace collapsed, so a
@@ -682,13 +685,9 @@ function check_completeness() {
   done <<<"${md_hunks}"
 
   # Every changed file that is not a surviving Markdown file must be
-  # listed. list_hunks' --text now forces a hunk-level diff even for a
-  # file git would call binary, so a surviving .md file's coverage is
-  # enforced by the per-paragraph pairing above regardless of binary
-  # status; this loop no longer needs to special-case binary itself
-  # (round 2's numstat-based branch is dead now that --text is in
-  # play, and re-checking --numstat here would just disagree with
-  # list_hunks, which reads --text hunks).
+  # listed. list_hunks diffs with --text, so a surviving .md file git
+  # would call binary is still paired per paragraph above; this loop
+  # needs no binary case.
   local listed changed changed_files
   listed="$(jq --raw-output '.code_changes[].file' "${LEDGER}")" ||
     die "could not read code_changes from ${LEDGER}"

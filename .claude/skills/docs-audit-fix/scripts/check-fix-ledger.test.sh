@@ -539,9 +539,9 @@ EOF
     "${h}" >"${d}/gate.json"
   run_case forged-block-after-end "${d}" 1 'uncovered-hunk: docs/a.md:13'
 
-  # A .md file git treats as binary (a NUL byte forces this) now gets a
-  # real hunk from list_hunks' --text, so it needs a pair like any other
-  # new paragraph rather than a special "must be listed" exemption.
+  # A .md file git treats as binary (a NUL byte forces this) gets a real
+  # hunk from list_hunks' --text, so it needs a pair like any other new
+  # paragraph, not a code_changes entry.
   d="$(new_repo)"
   printf 'binary\000content\n' >"${d}/docs/bin.md"
   commit_all "${d}" binary
@@ -606,9 +606,8 @@ EOF
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
   run_case textconv-configured "${d}" 1 'uncovered-hunk: docs/a.md:18'
 
-  # A "-diff" .md file listed in code_changes (satisfying the old
-  # binary-file exemption) must still need a pair for its actual
-  # content, now that list_hunks' --text gives it a real hunk. Four
+  # A "-diff" .md file listed in code_changes still needs a pair for its
+  # content, because list_hunks' --text gives it a real hunk. Four
   # fillers land the edit at line 20.
   d="$(new_repo)"
   git -C "${d}" switch --quiet main
