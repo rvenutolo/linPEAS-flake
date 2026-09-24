@@ -14,7 +14,8 @@
 #   siblings      an unchanged sibling names a tracked file and a reason; a
 #                 changed one gains a substantively changed line in a covered
 #                 hunk, a removed one borders a covered hunk that deletes
-#                 text; outside in-scope Markdown any touching hunk clears it
+#                 text or sits in a file the diff deletes; outside in-scope
+#                 Markdown any touching hunk clears it
 #   verdicts      every pair is gated TRUE against its current text, and
 #                 every code change carries the gate's adversarial attack
 #                 against its current blob (else stale-attack)
@@ -742,7 +743,8 @@ function one_block() {
 # at most two lines (a pure deletion's ns or ns+1, so one past the last
 # line is allowed), and needs a covered hunk touching it that deletes
 # text: a removed line whose collapsed text matches no added line of that
-# hunk. Any other file may be cleared by any hunk. A missing lines, status
+# hunk; a removed sibling in a file the diff deletes needs no hunk. Any
+# other file may be cleared by any hunk. A missing lines, status
 # or reason field is read as "-": tab is IFS whitespace, so an empty field
 # would collapse and shift every field after it. A whitespace-only reason
 # is no reason.
@@ -787,6 +789,19 @@ function check_siblings() {
     # not a span; a wide range would reach any deleting hunk nearby.
     if [[ ${status} == removed ]] && ((e - s > 1)); then
       finding schema "pair ${id} sibling ${file}:${lines} is marked removed with a range wider than a deletion boundary"
+      continue
+    fi
+    # A removed sibling in a file the diff deletes: the file holds a blob
+    # at the merge base and nothing at head, so all of its text went and
+    # there is no head position to check the range against. A file absent
+    # at both revisions was never in the diff.
+    if [[ ${status} == removed ]] && ! git cat-file -e "${HEAD_REV}:${file}" 2>/dev/null; then
+      if git cat-file -e "${MB}:${file}" 2>/dev/null &&
+        [[ "$(git cat-file -t "${MB}:${file}")" == blob ]]; then
+        SIBLINGS_REMOVED=$((SIBLINGS_REMOVED + 1))
+      else
+        finding sibling-not-removed "pair ${id} sibling ${file}:${lines} is marked removed but the file is tracked at neither the merge base nor the head revision"
+      fi
       continue
     fi
     if git cat-file -e "${HEAD_REV}:${file}" 2>/dev/null &&
