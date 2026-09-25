@@ -6,10 +6,12 @@
 # output, the assertion passes whether or not the asserted behavior
 # exists — green while verifying nothing. Record each scenario here and
 # call `harness_assert_verify` at the end of the run to fail on any such
-# substring, on any asserted substring missing from its own scenario's
-# output, and on any two scenarios whose recorded output is the same after
-# the clock normalization in `harness_assert_record` — a pair that verifies one
-# thing between them however each is named. Source after `set -Eeuo pipefail`.
+# substring (a sibling asserting the same substring, one with identical
+# output, or an exempt pair is skipped), on any asserted substring missing
+# from its own scenario's output, and on any two scenarios whose recorded
+# output is the same after the clock normalization in
+# `harness_assert_record`, unless a parity exemption covers the pair — a
+# pair that verifies one thing between them however each is named. Source after `set -Eeuo pipefail`.
 # shellcheck shell=bash
 
 # The library directory is resolved by parameter expansion rather than by
