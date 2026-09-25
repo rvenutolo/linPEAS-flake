@@ -660,35 +660,37 @@ page with python-markdown and the extensions `mkdocs.yml` loads, configured as
 markup: `inlinehilite` strips a `#!lang` prefix from a code span, and
 `snippets` replaces a line with a file. It reads `mkdocs.yml` as mkdocs does:
 the built-in `toc`, `tables` and `fenced_code` extensions load first, `!ENV`
-resolves to a set variable or its default, and `!!python/name:` imports the
-object it names. An extension list that cannot be read or loaded is a
-could-not-run, and so is a config that inherits another through `INHERIT`,
-which the check does not follow. Like the site build, it imports what
-`mkdocs.yml` names and reads the files `snippets` points at, so
+reads the first set variable as a plain YAML scalar, else its default, and
+`!!python/name:` imports the object it names. An extension list that cannot be
+read or loaded is a could-not-run, and so is a config that inherits another
+through `INHERIT`, which the check does not follow. Like the site build, it
+imports what `mkdocs.yml` names and reads the files `snippets` points at, so
 `mkdocs.yml` is trusted input to it, as it is to the site build.
 
 Each unit of header text — a tag and the lines that continue it — is matched
 in its own part of the entry. An `@arg`, `@option`, `@exitcode` or `@stdout`
 must be one whole item of its list, and each item is matched once, so two
 identical annotations need two items. An `@example` must be the entry's
-example block, line for line with the blank lines at its edges dropped;
-text on an `@example` tag line is required, and the generator does not print
-it. Description text is found as whole words, in
-order, in the part before the first list label. Text is compared with
-whitespace collapsed, a list item's marker read as the bullet the page shows —
-`-`, `*`, `+` or a number and a dot, at most three spaces in, after a blank
-line or another item, which is where python-markdown opens one — and the
-backticks of a code span dropped — but only
-those: a backtick the page shows literally is an altered unit. Prose after a
-blank comment line that closes an `@arg`, `@option`, `@exitcode` or `@stdout`
-is a further description unit.
+example block, line for line with the blank lines at its edges dropped and
+tabs expanded as in a fenced run; text on an `@example` tag line is required,
+and the generator does not print it. Description text is found as whole words,
+in order, in the part before the first list label. Text is compared with
+whitespace collapsed, a list marker at the start of a prose line (`-`, `*`,
+`+`, or a number with `.` or `)`) allowed to be absent, and the backticks of a
+code span dropped — but only those: a backtick the page shows literally is an
+altered unit. Prose after a blank comment line that closes an `@arg`,
+`@option`, `@exitcode` or `@stdout` is a further description unit. A leading
+marker may be absent because the page passes through mdformat, whose
+CommonMark rules decide which lines become list items, before python-markdown
+renders it by its own rules, so the marker may show as text or as a bullet.
 
 An indented run whose lead-in line ends in a colon must be exactly one
 preformatted block on the page, line for line with its blank lines and
-indentation, a tab read as two spaces and an odd indent rounded up to even as
-the generator writes a fence; each fence is matched once, in order. Collapsing
-a run into a paragraph keeps every word and still loses the shape, so the word
-comparison alone would pass it.
+indentation, a tab in the indent read as two spaces and an odd indent rounded
+up to even as the generator writes a fence, and a tab later in the line
+expanded to a four-column stop as python-markdown expands it; each fence is
+matched once, in order. Collapsing a run into a paragraph keeps every word and
+still loses the shape, so the word comparison alone would pass it.
 
 Header text in three shapes the generator never reads is a finding: prose
 before the first tag other than the file's own path line and a first-line
@@ -696,17 +698,18 @@ shebang, a `# @tag` in a comment block between the header's first blank line
 and the first line of code, and, in a library, an annotation outside a
 function's `@description` block.
 
-Four limits are known. A description compared as words does not see its
-blocks change kind — a sentence the page shows as a list item or a quote
-still matches. Text inside a Markdown table in a header is not read. A run
-of backticks that opens no matching run is compared as the regular
-expression reads it, which can differ from the renderer. A line such as
-`- - -`, which python-markdown renders as a rule, is read as a list item.
+Five limits are known. A description compared as words does not see its blocks
+change kind — a sentence the page shows as a list item or a quote still
+matches. Text inside a Markdown table in a header is not read. A run of
+backticks that opens no matching run is compared as the regular expression
+reads it, which can differ from the renderer. A line such as `- - -`, which
+python-markdown renders as a rule, is read as text. And since a leading marker
+may be absent, a page that drops a marker the header meant as text passes, and
+the numbers of a list rendered as a numbered list are not compared.
 
 Header text outside a code span is Markdown on the page. A `<placeholder>`
-renders as an HTML tag and vanishes, and a glob's asterisks can open
-emphasis, so put such text in backticks. Escaping a `<` in the generator does
-not work:
+renders as an HTML tag and vanishes, and a glob's asterisks can open emphasis,
+so put such text in backticks. Escaping a `<` in the generator does not work:
 mdformat rewrites `&lt;` to `\<`, which python-markdown does not treat as an
 escape, so the site prints the backslash and still swallows the tag.
 
