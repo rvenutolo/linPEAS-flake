@@ -6,6 +6,26 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20260925-f15c218b] - 2026-09-25
+
+### Chores
+- Bump linpeas to 20260925-f15c218b ([#1160](https://github.com/rvenutolo/linPEAS-flake/pull/1160))
+- Update flake.lock ([#1159](https://github.com/rvenutolo/linPEAS-flake/pull/1159))
+- Update github-actions ([#1153](https://github.com/rvenutolo/linPEAS-flake/pull/1153))
+
+### Documentation
+- Fix the drift a full audit found on main ([#1158](https://github.com/rvenutolo/linPEAS-flake/pull/1158))
+- Close the gaps a fresh /docs-fix session has to infer ([#1148](https://github.com/rvenutolo/linPEAS-flake/pull/1148))
+
+### Features
+- Gate the docs-audit fix pass behind a checked ledger ([#1147](https://github.com/rvenutolo/linPEAS-flake/pull/1147))
+
+### Fixes
+- Make harness_assert_also assert presence ([#1150](https://github.com/rvenutolo/linPEAS-flake/pull/1150))
+
+### Tests
+- Seed the docs-audit recall harness with the classes that shipped ([#1151](https://github.com/rvenutolo/linPEAS-flake/pull/1151))
+
 ## [20260924-77959926] - 2026-09-24
 
 ### Chores
