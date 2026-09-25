@@ -2188,8 +2188,9 @@ substring (a sibling asserting the same substring, one with identical
 output, or an exempt pair is skipped), on any asserted substring missing
 from its own scenario's output, and on any two scenarios whose recorded
 output is the same after the clock normalization in
-`harness_assert_record`, unless a parity exemption covers the pair — a
-pair that verifies one thing between them however each is named. Source after `set -Eeuo pipefail`.
+`harness_assert_record` — a pair that verifies one thing between them
+however each is named. A parity exemption excuses such a pair only when
+both assert the same substrings. Source after `set -Eeuo pipefail`.
 
 #### harness_assert_exempt()
 
