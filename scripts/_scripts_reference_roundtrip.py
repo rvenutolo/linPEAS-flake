@@ -17,14 +17,16 @@
 # wrapper must not read either as findings.
 
 import html.parser
+import importlib
 import os
 import re
 import sys
 
 try:
     import markdown
-except ImportError:
-    print("scripts-reference-roundtrip: python-markdown is not importable", file=sys.stderr)
+    import yaml
+except ImportError as err:
+    print(f"scripts-reference-roundtrip: python-markdown is not importable ({err.name} is missing)", file=sys.stderr)
     sys.exit(2)
 
 PROG = "scripts-reference-roundtrip"
@@ -74,13 +76,13 @@ class Unit:
             parts = self.head.split(None, 1)
             name = parts[0] if parts else ""
             rest = parts[1] if len(parts) > 1 else ""
-            return name + " — " + prose([rest] + self.lines)
+            return prose([name]) + " — " + prose([rest] + self.lines)
         if self.tag in DECLARED:
             return prose(self.lines)
         if self.tag == "example":
-            return " ".join([self.head] + self.lines)
+            return "\n".join(self.example_lines())
         if self.tag == "description":
-            lines = [self.head] + self.lines
+            lines = unlist([self.head] + self.lines)
             out, i = [], 0
             for start, end, fenced in run_spans(lines):
                 out.append(prose(lines[i:start]))
@@ -89,6 +91,15 @@ class Unit:
             out.append(prose(lines[i:]))
             return " ".join(out)
         return prose([self.head] + self.lines)
+
+    def example_lines(self):
+        """An @example's fence as the generator writes it: the body lines as
+        written, the tag line's own text first when it has any, trailing
+        blank lines dropped."""
+        lines = ([self.head] if self.head.strip() else []) + self.lines
+        while lines and blank(lines[-1]):
+            lines.pop()
+        return [x.rstrip() for x in lines]
 
     def label(self):
         return "@" + self.tag if self.tag != "?" else "header text"
@@ -105,7 +116,13 @@ def units_of(run, findings, rel):
             text = re.sub(r"^#[ \t]+", "", raw, count=1)
             for seg in TAG_SPLIT.split(text):
                 m = TAG.match(seg)
-                if m and m.group(1) in KNOWN:
+                if m and m.group(1) == "example" and any(u.tag == "example" for u in units):
+                    # A second @example continues the first: the generator
+                    # renders every example line in one fence.
+                    cur = next(u for u in units if u.tag == "example")
+                    if m.group(2).strip():
+                        cur.lines.append(m.group(2))
+                elif m and m.group(1) in KNOWN:
                     cur = Unit(m.group(1), m.group(2), no)
                     units.append(cur)
                 elif cur is not None:
@@ -260,48 +277,48 @@ class PageText(html.parser.HTMLParser):
                 self.strong_text.append(data)
 
 
-def fence_code_format(*args, **kwargs):
-    from pymdownx.superfences import fence_code_format as real
-    return real(*args, **kwargs)
+class SiteLoader(yaml.SafeLoader):
+    """mkdocs.yml's own loader rules: `!!python/name:` imports the object it
+    names, as mkdocs does; any other custom tag reads as nothing, since only
+    markdown_extensions is used."""
+
+
+def _python_name(loader, suffix, node):
+    module, _, attr = suffix.rpartition(".")
+    return getattr(importlib.import_module(module), attr)
+
+
+SiteLoader.add_multi_constructor("tag:yaml.org,2002:python/name:", _python_name)
+SiteLoader.add_multi_constructor("!", lambda loader, suffix, node: None)
 
 
 def site_extensions(mkdocs_yml):
-    """The extensions mkdocs.yml loads, configured as it configures them.
-
-    Several of them change text, not just markup: inlinehilite, details and
+    """The extensions and configs mkdocs.yml loads, read as mkdocs reads
+    them. Several rewrite text, not just markup — inlinehilite, details and
     tabbed rewrite their own syntax, and snippets replaces a line with a
-    file. So an extension this checker does not know is a could-not-run,
-    not something to skip.
-    """
-    base = os.path.dirname(os.path.abspath(mkdocs_yml))
-    known = {
-        "admonition": {}, "attr_list": {}, "md_in_html": {}, "tables": {},
-        "toc": {"permalink": True},
-        "pymdownx.details": {},
-        "pymdownx.highlight": {"anchor_linenums": True, "line_spans": "__span", "pygments_lang_class": True},
-        "pymdownx.inlinehilite": {},
-        "pymdownx.snippets": {"base_path": [base]},
-        "pymdownx.tabbed": {"alternate_style": True},
-        "pymdownx.superfences": {"custom_fences": [{"name": "mermaid", "class": "mermaid", "format": fence_code_format}]},
-    }
-    names, inside = [], False
-    for line in read_lines(mkdocs_yml):
-        if re.match(r"^markdown_extensions:[ \t]*$", line):
-            inside = True
-            continue
-        if inside and re.match(r"^\S", line):
-            break
-        m = re.match(r"^  - ([A-Za-z0-9_.]+):?[ \t]*$", line) if inside else None
-        if m:
-            names.append(m.group(1))
-    if not names:
+    file — so an extension list that cannot be read is a could-not-run."""
+    try:
+        with open(mkdocs_yml, encoding="utf-8") as fh:
+            config = yaml.load(fh, Loader=SiteLoader)
+    except (OSError, yaml.YAMLError, ImportError, AttributeError) as err:
+        print(f"{PROG}: cannot read the markdown extensions in {mkdocs_yml}: {err}", file=sys.stderr)
+        sys.exit(2)
+    entries = config.get("markdown_extensions") if isinstance(config, dict) else None
+    if not isinstance(entries, list) or not entries:
         print(f"{PROG}: {mkdocs_yml} lists no markdown_extensions", file=sys.stderr)
         sys.exit(2)
-    unknown = [n for n in names if n not in known]
-    if unknown:
-        print(f"{PROG}: {mkdocs_yml} loads {', '.join(unknown)}, which this checker does not configure", file=sys.stderr)
-        sys.exit(2)
-    return names, {n: known[n] for n in names}
+    names, configs = [], {}
+    for entry in entries:
+        if isinstance(entry, str):
+            names.append(entry)
+        elif isinstance(entry, dict) and len(entry) == 1:
+            name, conf = next(iter(entry.items()))
+            names.append(name)
+            configs[name] = conf or {}
+        else:
+            print(f"{PROG}: {mkdocs_yml} has a markdown_extensions entry this checker cannot read: {entry!r}", file=sys.stderr)
+            sys.exit(2)
+    return names, configs
 
 
 def render(doc, mkdocs_yml):
@@ -314,7 +331,17 @@ def render(doc, mkdocs_yml):
         print(f"{PROG}: {doc} lacks the scripts-reference BEGIN/END markers", file=sys.stderr)
         sys.exit(2)
     block = "\n".join(lines[begin + 1:end]).replace("{% raw %}", "").replace("{% endraw %}", "")
-    html_out = markdown.markdown(block, extensions=names, extension_configs=configs)
+    # mkdocs builds from the directory holding mkdocs.yml, which is where a
+    # relative snippets path resolves.
+    here = os.getcwd()
+    os.chdir(os.path.dirname(os.path.abspath(mkdocs_yml)))
+    try:
+        html_out = markdown.markdown(block, extensions=names, extension_configs=configs)
+    except Exception as err:  # noqa: BLE001
+        print(f"{PROG}: the site's Markdown extensions could not render the page: {type(err).__name__}: {err}", file=sys.stderr)
+        sys.exit(2)
+    finally:
+        os.chdir(here)
     page = PageText()
     page.feed(html_out)
     page.close()
@@ -324,9 +351,21 @@ def render(doc, mkdocs_yml):
 CODE_SPAN = re.compile(r"(`+)(.+?)\1", re.S)
 
 
-# A list marker standing alone as a word: the renderer shows it as a bullet
-# or a number, not as text.
-LIST_MARKER = re.compile(r"(?:(?<=\s)|^)(?:[-*+]|[0-9]+[.)])(?=\s)")
+# A list item's marker: the renderer shows it as a bullet or a number.
+LIST_ITEM = re.compile(r"^([ \t]*)(?:[-*+]|[0-9]+[.)])[ \t]+(?=\S)")
+
+
+def unlist(lines):
+    """Drop the marker of each line that opens a Markdown list item: one
+    after a blank line or after another item, which is where python-markdown
+    starts a list. A marker anywhere else is text the page shows."""
+    out, prev_blank, prev_item = [], True, False
+    for line in lines:
+        m = LIST_ITEM.match(line)
+        is_item = bool(m) and (prev_blank or prev_item) and not INDENTED.match(line)
+        out.append(line[m.end():] if is_item else line)
+        prev_blank, prev_item = blank(line), is_item or (prev_item and not blank(line))
+    return out
 
 
 def prose(lines):
@@ -337,9 +376,8 @@ def prose(lines):
 
 def normalize(text):
     # Text is compared as words, so line-join, indent and fence markers fall
-    # away, and a list marker becomes a bullet. The same transform runs on
-    # both sides.
-    return re.sub(r"\s+", " ", LIST_MARKER.sub(" ", text)).strip()
+    # away. The same transform runs on both sides.
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def contains(have, want, start=0):
@@ -388,6 +426,7 @@ def colon_led_runs(unit):
         run = []
         for line in lines[start:end]:
             if blank(line):
+                run.append("")
                 continue
             lead = re.match(r"^[ \t]*", line).group(0)
             indent = lead.replace("\t", "  ")
@@ -399,7 +438,13 @@ def colon_led_runs(unit):
 
 
 def pre_lines(text):
-    return [x.rstrip() for x in text.split("\n") if x.strip()]
+    """A fence's lines, interior blank lines kept, edge blank lines dropped."""
+    lines = [x.rstrip() for x in text.split("\n")]
+    while lines and not lines[0]:
+        lines.pop(0)
+    while lines and not lines[-1]:
+        lines.pop()
+    return lines
 
 
 def first_divergence(want, have):
@@ -428,6 +473,10 @@ def main(argv):
             return 2
         else:
             files.append((arg, mode == "--lib"))
+    if not files and os.environ.get("LINT_ALLOW_EMPTY_SCAN"):
+        # The scan set is empty and the caller said that is deliberate.
+        print("check-scripts-reference-roundtrip: ok — 0 file(s), 0 annotation unit(s), 0 indented block(s) published intact")
+        return 0
     entries = render(doc, mkdocs_yml)
 
     findings, n_units, n_runs = [], 0, 0
@@ -437,6 +486,9 @@ def main(argv):
         findings += [f"{key}:{no}: {msg}" for key, no, msg in unreached]
         has_example = {key for key, unit in units if unit.tag == "example"}
         desc_from = {}  # key -> offset the next description unit must start at
+        # Each list item and each description fence is matched at most once,
+        # so two units cannot share one item, and fences match in order.
+        items_left, pre_from = {}, {}
         for key, unit in units:
             want = normalize(unit.expected())
             if not want:
@@ -452,8 +504,10 @@ def main(argv):
             desc_blocks = [b for b in blocks if b[0] == "description" and b is not example]
             where = f"{key}: {unit.label()} (line {unit.line})"
             if unit.tag in PageText.LABELS.values():
-                items = [normalize(b[2]) for b in blocks if b[0] == unit.tag and b[1] == "li"]
-                if want not in items:
+                items = items_left.setdefault((key, unit.tag), [normalize(b[2]) for b in blocks if b[0] == unit.tag and b[1] == "li"])
+                if want in items:
+                    items.remove(want)
+                else:
                     got, total, frag = first_divergence(want, " | ".join(items))
                     if got == total:
                         findings.append(f"{where} is not one item of its list: its text appears only inside other text")
@@ -461,10 +515,14 @@ def main(argv):
                         findings.append(f"{where} is not one item of its list: published {got} of {total} words; dropped or altered from: {frag!r}")
                 continue
             if unit.tag == "example":
-                have = normalize(example[2]) if example else ""
-                if want != have:
-                    got, total, frag = first_divergence(want, have)
-                    findings.append(f"{where} is not the entry's example block: published {got} of {total} words; dropped or altered from: {frag!r}")
+                # A fence shows its lines exactly, so they are compared as
+                # lines, not as words.
+                if (pre_lines(example[2]) if example else []) != unit.example_lines():
+                    got, total, frag = first_divergence(want, normalize(example[2]) if example else "")
+                    if got == total:
+                        findings.append(f"{where} is not the entry's example block: its lines or indentation differ")
+                    else:
+                        findings.append(f"{where} is not the entry's example block: published {got} of {total} words; dropped or altered from: {frag!r}")
                 continue
             if unit.tag == "description":
                 # Description units appear in source order, so each one is
@@ -480,7 +538,11 @@ def main(argv):
                 pres = [pre_lines(b[2]) for b in desc_blocks if b[1] == "pre"]
                 for run in colon_led_runs(unit):
                     n_runs += 1
-                    if run not in pres:
+                    at = pre_from.get(key, 0)
+                    hit = next((k for k in range(at, len(pres)) if pres[k] == run), -1)
+                    if hit >= 0:
+                        pre_from[key] = hit + 1
+                    else:
                         findings.append(f"{key}: indented block (line {unit.line} description) is not exactly one preformatted block on the page, indentation included, starting {run[0].strip()[:60]!r}")
                 continue
             # Text under a non-rendering tag, or a line opening with an

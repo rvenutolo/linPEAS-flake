@@ -506,14 +506,15 @@ function scenario_interpreter_failures() {
   chmod +x -- "${stub_dir}/python3"
   PATH="${stub_dir}:${PATH}" run_scenario 'python-markdown missing is exit 2' 2 \
     'python-markdown is not importable'
-  # A renderer that raises stands in for any bug inside the checker: an
-  # uncaught exception would otherwise exit 1 and read as findings.
+  # A config loader that raises stands in for any bug inside the checker:
+  # an uncaught exception would otherwise exit 1 and read as findings.
   local stub_py="${work}/stub-py"
   mkdir --parents -- "${stub_py}"
-  printf '%s\n' 'def markdown(*args, **kwargs):' '    raise RuntimeError("stub renderer")' \
-    >"${stub_py}/markdown.py"
+  printf '%s\n' 'class YAMLError(Exception):' '    pass' '' '' 'class SafeLoader:' \
+    '    @classmethod' '    def add_multi_constructor(cls, *args):' '        pass' '' '' \
+    'def load(*args, **kwargs):' '    raise RuntimeError("stub loader")' >"${stub_py}/yaml.py"
   PYTHONPATH="${stub_py}:${PYTHONPATH:-}" run_scenario 'a checker exception is exit 2, not a finding' 2 \
-    'the checker failed: RuntimeError: stub renderer'
+    'the checker failed: RuntimeError: stub loader'
   # Python exits 1 on a syntax error, so a status of 1 must not read as
   # findings.
   printf '#!/usr/bin/env bash\nexit 1\n' >"${stub_dir}/python3"
@@ -802,16 +803,18 @@ EOF
     "scripts/t.sh: @description (line 2) published 1 of 5 words; dropped or altered from: '#!python print(1) to test.'"
 }
 
-# An extension the checker cannot configure is a could-not-run: skipping it
-# would pass text the site rewrites.
+# An extension list the checker cannot load is a could-not-run: skipping an
+# extension would pass text the site rewrites.
 function scenario_site_config_unusable() {
   new_tree siteconfig
   printf '%s\n' '#!/usr/bin/env bash' '# @description Body.' 'true' >"${TREE}/scripts/t.sh"
   printf '%s\n' '### scripts/t.sh' '' 'Body.' | write_page
-  sed --in-place 's/^markdown_extensions:$/markdown_extensions:\n  - footnotes/' "${TREE}/mkdocs.yml"
-  run_scenario 'an extension the checker does not configure is exit 2' 2 \
-    'loads footnotes, which this checker does not configure'
+  sed --in-place 's/^markdown_extensions:$/markdown_extensions:\n  - no_such_extension/' "${TREE}/mkdocs.yml"
+  run_scenario 'an extension that cannot be loaded is exit 2' 2 \
+    "the site's Markdown extensions could not render the page"
   MKDOCS="${TREE}/absent.yml" run_scenario 'a missing mkdocs.yml is exit 2' 2 'absent.yml not found'
+  printf '%s\n' 'markdown_extensions: [' >"${TREE}/mkdocs.yml"
+  run_scenario 'an unparsable mkdocs.yml is exit 2' 2 'cannot read the markdown extensions in'
   printf '%s\n' 'site_name: x' >"${TREE}/mkdocs.yml"
   run_scenario 'a mkdocs.yml with no extensions is exit 2' 2 'lists no markdown_extensions'
 }
@@ -840,12 +843,236 @@ function scenario_tab_run_fenced_intact() {
   new_tree tabintact
   {
     printf '%s\n' '#!/usr/bin/env bash' '# @description Tab run:'
-    printf '#\t\tgamma\n#\t\t  delta\n'
+    # The parser strips the tab after `#`, so two tabs of indent remain:
+    # four spaces at two per tab, where one per tab would give two.
+    printf '#\t\t\tgamma\n#\t\t\t  delta\n'
     printf '%s\n' 'true'
   } >"${TREE}/scripts/t.sh"
-  printf '%s\n' '### scripts/t.sh' '' 'Tab run:' '' '```text' '  gamma' '    delta' '```' | write_page
+  printf '%s\n' '### scripts/t.sh' '' 'Tab run:' '' '```text' '    gamma' '      delta' '```' | write_page
   run_scenario 'a tab-indented run fenced with two spaces per tab is intact' 0 '' \
     'ok — 2 file(s), 2 annotation unit(s), 1 indented block(s) published intact'
+}
+
+# Description text is matched only before the first list label: a
+# description dropped from the page is not found inside a list item.
+function scenario_description_not_found_in_list() {
+  new_tree region
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Reports drift.
+# @exitcode 1 Reports drift.
+true
+EOF
+  write_page <<'EOF'
+### scripts/t.sh
+
+**Exit codes:**
+
+- `1` — Reports drift.
+EOF
+  run_scenario 'a description found only inside a list item is reported' 1 \
+    "scripts/t.sh: @description (line 2) published 0 of 2 words; dropped or altered from: 'Reports drift.'"
+}
+
+# An @example is compared as lines: an appended line, or two lines joined
+# into one, is an altered example although every word survives.
+function scenario_example_lines() {
+  new_tree examplelines
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Body.
+# @example
+#   a.sh \
+#     --flag
+true
+EOF
+  write_page <<'EOF'
+### scripts/t.sh
+
+Body.
+
+```bash
+  a.sh \ --flag
+```
+EOF
+  run_scenario 'an example whose lines were joined is reported' 1 \
+    "scripts/t.sh: @example (line 3) is not the entry's example block: its lines or indentation differ"
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Body,
+# wrapped.
+# @example
+#   a.sh
+true
+EOF
+  write_page <<'EOF'
+### scripts/t.sh
+
+Body,
+wrapped.
+
+```bash
+  a.sh
+  extra
+```
+EOF
+  run_scenario 'an example with an appended line is reported' 1 \
+    "scripts/t.sh: @example (line 4) is not the entry's example block: its lines or indentation differ"
+}
+
+# mkdocs.yml is read as YAML, so a comment inside the extension list does
+# not end it: inlinehilite still loads and still rewrites the code span.
+function scenario_site_config_comment() {
+  new_tree yamlcomment
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Then call `#!python print(2)` again.
+true
+EOF
+  # shellcheck disable=SC2016 # backticks are page text, not a substitution
+  printf '%s\n' '### scripts/t.sh' '' 'Then call `#!python print(2)` again.' | write_page
+  sed --in-place 's/^  - pymdownx.inlinehilite$/# site-only extensions below\n  - pymdownx.inlinehilite/' "${TREE}/mkdocs.yml"
+  run_scenario 'a comment inside the extension list does not drop the extensions after it' 1 \
+    "scripts/t.sh: @description (line 2) published 2 of 5 words; dropped or altered from: '#!python print(2) again.'"
+}
+
+# A list marker is dropped only where it opens a list item; anywhere else
+# the page shows it, so a page that loses it has altered the text.
+function scenario_marker_inside_text() {
+  new_tree marker
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Pick option 2. or - the other.
+true
+EOF
+  printf '%s\n' '### scripts/t.sh' '' 'Pick option or the other.' | write_page
+  run_scenario 'a list marker inside a sentence that the page lost is reported' 1 \
+    "scripts/t.sh: @description (line 2) published 2 of 7 words; dropped or altered from: '2. or - the other.'"
+}
+
+# Each fence and each list item is matched once: a second identical run
+# needs its own fence, a run keeps its interior blank line, and a second
+# identical exit code needs its own item.
+function scenario_matched_once() {
+  new_tree once
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Usage:
+#   a.sh
+#
+#   b.sh
+# Again:
+#   a.sh
+#
+#   b.sh
+# Third:
+#   c.sh
+#
+#   d.sh
+# @exitcode 1 drift
+# @exitcode 1 drift
+true
+EOF
+  write_page <<'EOF'
+### scripts/t.sh
+
+Usage:
+
+```text
+  a.sh
+
+  b.sh
+```
+
+Again:
+
+a.sh
+
+b.sh
+
+Third:
+
+```text
+  c.sh
+  d.sh
+```
+
+**Exit codes:**
+
+- `1` — drift
+EOF
+  run_scenario 'a duplicate run, a lost blank line and a duplicate item are each reported' 1 \
+    "scripts/t.sh: @exitcode (line 15) is not one item of its list: published 0 of 3 words; dropped or altered from: '1 — drift'"
+  also_expect "scripts/t.sh: indented block (line 2 description) is not exactly one preformatted block on the page, indentation included, starting 'a.sh'"
+  also_expect "scripts/t.sh: indented block (line 2 description) is not exactly one preformatted block on the page, indentation included, starting 'c.sh'"
+  also_expect '3 finding(s)'
+}
+
+# Near misses the generator renders correctly: two @example tags share one
+# fence, and an @arg name written as a code span shows without backticks.
+function scenario_two_examples_and_code_span_name() {
+  new_tree twoexamples
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Body.
+# @arg `$1` the target
+# @stdout nothing
+# @example
+#   a.sh one
+# @example
+#   a.sh two
+true
+EOF
+  write_page <<'EOF'
+### scripts/t.sh
+
+Body.
+
+**Args:**
+
+- ``$1`` — the target
+
+**Stdout:**
+
+- nothing
+
+```bash
+  a.sh one
+  a.sh two
+```
+EOF
+  run_scenario 'two examples in one fence and a code-span arg name are intact' 0 '' \
+    'ok — 2 file(s), 5 annotation unit(s), 0 indented block(s) published intact'
+}
+
+# An empty scan set is accepted when the caller says it is deliberate.
+function scenario_allowed_empty_scan() {
+  new_tree emptyscan
+  rm --force -- "${TREE}/scripts/lib/l.sh"
+  printf '%s\n' '### scripts/x.sh' '' 'Body.' | write_page
+  LINT_ALLOW_EMPTY_SCAN=1 run_scenario 'an empty scan with LINT_ALLOW_EMPTY_SCAN set is clean' 0 '' \
+    'ok — 0 file(s), 0 annotation unit(s), 0 indented block(s) published intact'
+}
+
+# A marker on a line that continues a paragraph is text the page shows,
+# and an extension's own config from mkdocs.yml is honoured: smarty with
+# dashes and quotes off leaves both as written.
+function scenario_wrapped_marker_and_extension_config() {
+  new_tree smarty
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Wrapped text
+# - with a dash, then a -- b "q".
+# @exitcode 0 clean
+true
+EOF
+  printf '%s\n' '#!/usr/bin/env bash' '# @description Other.' 'true' >"${TREE}/scripts/u.sh"
+  # shellcheck disable=SC2016 # backticks are page text, not a substitution
+  printf '%s\n' '### scripts/t.sh' '' 'Wrapped text' '- with a dash, then a -- b "q".' '' \
+    '**Exit codes:**' '' '- `0` — clean' '' '### scripts/u.sh' '' 'Other.' | write_page
+  sed --in-place 's/^markdown_extensions:$/markdown_extensions:\n  - smarty:\n      smart_dashes: false\n      smart_quotes: false/' "${TREE}/mkdocs.yml"
+  run_scenario 'a wrapped dash line and a configured extension are published intact' 0 '' \
+    'ok — 3 file(s), 4 annotation unit(s), 0 indented block(s) published intact'
 }
 
 function scenario_live_tree() {
@@ -909,6 +1136,14 @@ function main() {
   scenario_site_config_unusable
   scenario_path_and_shebang_lookalikes
   scenario_tab_run_fenced_intact
+  scenario_description_not_found_in_list
+  scenario_example_lines
+  scenario_site_config_comment
+  scenario_marker_inside_text
+  scenario_matched_once
+  scenario_two_examples_and_code_span_name
+  scenario_allowed_empty_scan
+  scenario_wrapped_marker_and_extension_config
   scenario_cannot_run
   scenario_interpreter_failures
   scenario_outside_work_tree
