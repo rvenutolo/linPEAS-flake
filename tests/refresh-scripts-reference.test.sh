@@ -192,10 +192,11 @@ EOF
   closed_json="$(awk -f "${REPO_ROOT}/scripts/_script_docs.awk" "${fixture_dir}/closed.sh")"
   rm --recursive --force -- "${fixture_dir}"
   fixture_dir=''
-  if grep --fixed-strings --quiet 'An unrelated trailing note' <<<"${closed_json}"; then
-    fail 'a blank comment line closes a wrapped annotation'
-  else
+  if jq --exit-status '.options[0].text | contains("An unrelated trailing note") | not' \
+    <<<"${closed_json}" >/dev/null; then
     pass 'a blank comment line closes a wrapped annotation'
+  else
+    fail 'a blank comment line closes a wrapped annotation'
   fi
 
   # 4c. Indented-run scenario: a description carrying a usage block, an

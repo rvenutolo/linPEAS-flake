@@ -1573,6 +1573,17 @@ or omit one that gained it. A file under tests/ is excluded; the block
 says so in prose, because a versioning-scheme migration touches the
 fixtures too and a silent omission would read as coverage.
 
+Env overrides (test-only):
+
+```text
+  PIN_PARITY_ROOT_OVERRIDE — alternate REPO_ROOT. Fixture roots sit
+    inside this repo, so the git producer still runs against them and
+    reports paths relative to the override — which is also what keeps
+    the fixtures clear of the tests/ filter that would otherwise drop
+    every one of them.
+  PIN_PARITY_DOC_OVERRIDE — alternate output doc path
+```
+
 **Options:**
 
 - `--check` — exit 1 if the block would change; exit 2 if the check cannot run (doc missing, marker missing, or no tracked file carries the literal at all); do not mutate the working tree
