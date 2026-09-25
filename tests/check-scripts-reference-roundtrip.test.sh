@@ -1176,15 +1176,17 @@ EOF
     "scripts/t.sh: @description (line 2) published 2 of 5 words; dropped or altered from: '-- b here.'"
   printf '%s\n' 'INHERIT: base.yml' 'markdown_extensions:' '  - smarty' >"${TREE}/mkdocs.yml"
   run_scenario 'a mkdocs.yml that inherits another is exit 2' 2 'inherits another config (INHERIT)'
-  # A built-in the list also names still loads first, as mkdocs loads it.
-  # The probe is inert: it raises only when toc has not registered yet.
+  # A built-in the list also names still loads first, as mkdocs loads it,
+  # and a name listed twice loads once. The probe is inert: it raises only
+  # when toc has not registered yet or when it is loaded a second time.
   local probe_py="${work}/probe-py"
   mkdir --parents -- "${probe_py}"
   printf '%s\n' 'from markdown.extensions import Extension' '' '' \
-    'class Probe(Extension):' '    def extendMarkdown(self, md):' \
-    '        if "toc" not in md.treeprocessors:' '            raise RuntimeError("toc loaded after the probe")' '' '' \
+    'LOADS = []' '' '' 'class Probe(Extension):' '    def extendMarkdown(self, md):' \
+    '        if "toc" not in md.treeprocessors:' '            raise RuntimeError("toc loaded after the probe")' \
+    '        LOADS.append(1)' '        if len(LOADS) > 1:' '            raise RuntimeError("the probe loaded twice")' '' '' \
     'def makeExtension(**kwargs):' '    return Probe(**kwargs)' >"${probe_py}/zzorderprobe.py"
-  printf '%s\n' 'site_name: x' 'markdown_extensions:' '  - zzorderprobe' '  - toc' >"${TREE}/mkdocs.yml"
+  printf '%s\n' 'site_name: x' 'markdown_extensions:' '  - zzorderprobe' '  - toc' '  - zzorderprobe' >"${TREE}/mkdocs.yml"
   local s
   for s in v w x; do
     printf '%s\n' '#!/usr/bin/env bash' "# @description Probed ${s}." 'true' >"${TREE}/scripts/${s}.sh"
