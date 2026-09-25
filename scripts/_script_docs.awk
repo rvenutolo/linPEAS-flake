@@ -4,7 +4,10 @@
 # annotations. Recognized tags: @description, @arg, @option, @example,
 # @exitcode, @stdout, and the non-rendering @generates /
 # @generates-block declarations. Several tags may share one comment line
-# when separated by two or more spaces (`# @arg $1 a  @arg $2 b`).
+# when separated by two or more spaces (`# @arg $1 a  @arg $2 b`). An
+# @arg/@option/@exitcode/@stdout runs until a comment line with no text;
+# prose after that line publishes as a further paragraph of the
+# description instead of being dropped.
 #
 # Default scope reads the file header only — the contiguous comment run
 # before the first blank or non-comment line — so a function-body
@@ -25,7 +28,7 @@ BEGIN {
   n_fn = 0
   pending = 0
   fatal = 0
-  state = ""  # "desc" | "example" | "arg" | "opt" | "exit" | "std" | ""
+  state = ""  # "desc" | "example" | "arg" | "opt" | "exit" | "std" | "resume" | ""
   cur_idx = 0  # index within the tag array `state` names
   init_target(0)
 }
@@ -118,11 +121,13 @@ in_header && !/^[[:space:]]*$/ && !/^#/ {
     # join. A comment line with no text closes the annotation — without
     # that, unrelated trailing prose would be swallowed into the last one.
     # "No text" means no non-space content, so a `#` followed by spaces
-    # closes it too.
+    # closes it too. Prose after the close is still part of the comment
+    # block the author wrote for this target, so it resumes the
+    # description rather than being dropped (see the "resume" arm below).
     cont = body
     sub(/^[[:space:]]+/, "", cont)
     if (cont == "") {
-      state = ""
+      state = "resume"
     } else if (state == "arg") {
       arg_text[cur, cur_idx] = arg_text[cur, cur_idx] " " cont
     } else if (state == "opt") {
@@ -131,6 +136,17 @@ in_header && !/^[[:space:]]*$/ && !/^#/ {
       exit_text[cur, cur_idx] = exit_text[cur, cur_idx] " " cont
     } else {
       std_text[cur, cur_idx] = std_text[cur, cur_idx] " " cont
+    }
+  } else if (state == "resume") {
+    # Prose after an annotation a blank comment line closed. It publishes
+    # as a further paragraph of the description, kept line for line so an
+    # indented run in it still reaches the renderer's fence rule. Blank
+    # lines before it are skipped; the paragraph break is added here.
+    cont = body
+    sub(/^[[:space:]]+/, "", cont)
+    if (cont != "") {
+      desc[cur] = desc[cur] "\n\n" body
+      state = "desc"
     }
   }
   # Otherwise (state == ""): plain comment we do not capture.

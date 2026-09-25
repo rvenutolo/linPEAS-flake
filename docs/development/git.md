@@ -139,80 +139,81 @@ Hooks (alphabetical):
 
 <!-- BEGIN precommit-table -->
 
-| Hook                             | What it checks                                                                                                                                           |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `actionlint`                     | GitHub Actions workflow syntax (shellcheck pinned).                                                                                                      |
-| `actionlint-pyflakes-active`     | actionlint pyflakes integration canary.                                                                                                                  |
-| `actionlint-shellcheck-active`   | actionlint shellcheck integration canary.                                                                                                                |
-| `auto-merge-decline-gate`        | Auto-merge run-blocks carry the CLOSED/MERGED decline gate.                                                                                              |
-| `bump-script-integrity`          | scripts/bump-linpeas.sh keeps its URL-prefix, .digest, and atomic-write guards.                                                                          |
-| `check-cron-table`               | Cron schedule table in docs/architecture/ci.md matches workflow cron triggers, and the ordering paragraph matches the table's daily rows.                |
-| `check-doc-anchors`              | Every markdown #anchor link resolves to a heading slug in its target file.                                                                               |
-| `check-doc-cron-restatement`     | Docs outside ci.md must link the cron schedule table, not restate literal workflow times.                                                                |
-| `check-ephemeral-refs`           | Markdown prose and shell/Nix/YAML comments carry no ephemeral references (PR/issue refs, prose dates, planning/review labels, literal .claude/ paths).   |
-| `check-jsonschema`               | Schema-shape validation of repo config (renovate.json, workflows, actions).                                                                              |
-| `check-orphan-invariants`        | Every docs/ file has an invariant-index entry and vice versa.                                                                                            |
-| `check-prose-ci-names`           | A CI job or required check named in prose must resolve to a real job or, when called a job, a whole workflow.                                            |
-| `checkout-persist-credentials`   | Every actions/checkout sets with.persist-credentials: false.                                                                                             |
-| `ci-dag-fresh`                   | docs/architecture/ci-dag.md matches .github/workflows/ci.yml needs graph.                                                                                |
-| `ci-job-in-summary`              | ci.yml jobs cross-checked against docs/\_data/ci-check-categories.yml.                                                                                   |
-| `ci-summary-fresh`               | README CI summary matches required-checks.md and the category map.                                                                                       |
-| `commitlint`                     | Commit message satisfies Conventional Commits (CI parity via .commitlintrc.yml).                                                                         |
-| `commitlint-config-explicit`     | Every commitlint action step names an existing configFile; merge ruleset stays minimal.                                                                  |
-| `cosign-identity-pinned`         | cosign verify\* pins --certificate-identity[-regexp] + --certificate-oidc-issuer.                                                                        |
-| `deadnix`                        | Unused Nix bindings.                                                                                                                                     |
-| `editorconfig-checker`           | .editorconfig compliance (charset, line endings, trailing whitespace, final newline).                                                                    |
-| `egress-allowlist`               | Every job's allowed-endpoints list matches its tool inventory and carries no denylisted host.                                                            |
-| `enforcement-matrix-fresh`       | docs/security/enforcement-matrix.md matches the annotated invariant index, real enforcers, and the harness roster.                                       |
-| `ephemeral-refs-gap-fresh`       | The scope-gap block in docs/development/linting.md matches the file types no ephemeral-refs extractor claims, and none of them carries a blocking shape. |
-| `flake-show-fresh`               | flake-show block in docs/reference/flake-outputs.md matches current flake outputs.                                                                       |
-| `fork-guard-release`             | Release-grade jobs include github.repository fork guard.                                                                                                 |
-| `freshness-hook-watches-modules` | Every flake-evaluating freshness hook watches every source its evaluation reads.                                                                         |
-| `gh-api-version-header`          | Every gh api / api.github.com call in scripts passes an X-GitHub-Api-Version header.                                                                     |
-| `gh-attestation-repo`            | gh attestation verify pins --repo rvenutolo/linPEAS-flake.                                                                                               |
-| `harden-runner-block`            | Every harden-runner step uses egress-policy: block with non-empty allowed-endpoints.                                                                     |
-| `harden-runner-first`            | Every workflow job's first step is step-security/harden-runner.                                                                                          |
-| `harness-assert-wired`           | Every output-asserting tests/\*.test.sh is wired to the discrimination gate.                                                                             |
-| `job-timeout-minutes`            | Every workflow job declares an explicit timeout-minutes.                                                                                                 |
-| `just-recipes-fresh`             | just-recipes blocks in README.md and docs/reference/just-recipes.md match the justfile.                                                                  |
-| `lint-shell-tools`               | devShells.lint declares every tool the .#lint lint groups need.                                                                                          |
-| `lock-derived-docs`              | Every lock-writing workflow regenerates the docs a lock bump can make stale.                                                                             |
-| `manifest-digest-pinned`         | docker manifest/imagetools create sources are digest-pinned.                                                                                             |
-| `manifest-hook-watches-nix`      | Every hook reaching the Nix hook manifest watches nix/hooks in its files filter.                                                                         |
-| `markdownlint`                   | Markdown style + structure.                                                                                                                              |
-| `min-permissions`                | Top-level workflow permissions empty; each job declares its own scopes.                                                                                  |
-| `nix-run-pinned`                 | No unpinned nix run nixpkgs#<pkg>; use nix shell .#<pkg> or pin a rev.                                                                                   |
-| `nixfmt`                         | Nix file formatting.                                                                                                                                     |
-| `nixpkgs-hammering`              | nixpkgs idiom checker for the linpeas derivation.                                                                                                        |
-| `no-opaque-procsub`              | No scripts/\*.sh feeds a redirection from a process substitution.                                                                                        |
-| `notify-label-descriptions`      | Every notify label description fits the labels API cap and agrees across callers.                                                                        |
-| `octoscan`                       | synacktiv/octoscan workflow vulnerability scanner.                                                                                                       |
-| `patch-tag-pins`                 | SHA-pinned uses: comments name a versioned tag (vX.Y[.Z]), not a bare major (vX).                                                                        |
-| `permission-scopes`              | Per-job GITHUB_TOKEN write scopes are allowlisted in .github/permission-scopes.yml.                                                                      |
-| `pin-diff-isolated`              | Only scripts/bump-linpeas.sh mutates linpeas-pin.json.                                                                                                   |
-| `pin-parity-fresh`               | The pin-parity block in docs/architecture/auto-update.md names every tracked file carrying the canonical pin-shape regex.                                |
-| `pre-commit-hooks-sha-parity`    | The pre-commit-hooks input SHA in flake.nix matches flake.lock locked.rev.                                                                               |
-| `precommit-table-fresh`          | Hook table in docs/development/git.md matches the flake hook manifest.                                                                                   |
-| `pull-request-target-absent`     | No workflow uses the pull_request_target trigger.                                                                                                        |
-| `renovate-config-validator`      | Validate renovate.json against the upstream Renovate config schema.                                                                                      |
-| `run-block-strict`               | Block-scalar and newline-carrying run: blocks in workflows and composite actions start with set -Eeuo pipefail.                                          |
-| `script-has-test`                | Every scripts/check-*.sh paired with tests/check-*.test.sh.                                                                                              |
-| `script-shebang-pipefail`        | Every scripts/\*.sh has portable shebang + set -Eeuo pipefail.                                                                                           |
-| `scripts-reference-fresh`        | docs/reference/scripts.md matches in-script annotations.                                                                                                 |
-| `shellcheck`                     | Shell-script static analysis.                                                                                                                            |
-| `size-label-ignores`             | The size-label ignore list matches what the generators declare they write.                                                                               |
-| `statix`                         | Nix anti-pattern lint.                                                                                                                                   |
-| `test-harnesses-fresh`           | The harness census in docs/reference/test-harnesses.md matches the harnesses in tests/.                                                                  |
-| `treefmt`                        | Multi-language formatter aggregator (shfmt, prettier, etc).                                                                                              |
-| `treefmt-config-fresh`           | treefmt-config block in docs/reference/treefmt-config.md matches the evaluated treefmt config.                                                           |
-| `typos`                          | Spell-check across the repo.                                                                                                                             |
-| `upload-artifact-strict`         | Every actions/upload-artifact sets with.if-no-files-found: error.                                                                                        |
-| `uses-sha-pinned`                | Every uses: reference is SHA-pinned.                                                                                                                     |
-| `verify-reason-ladder`           | Every verify-job step id is mapped to a documented reason token, in execution order.                                                                     |
-| `workflow-concurrency`           | Every workflow declares a top-level concurrency.group.                                                                                                   |
-| `workflow-on-branches`           | pull_request: and push: declare branches: [main] explicitly.                                                                                             |
-| `yamllint`                       | YAML style.                                                                                                                                              |
-| `zizmor`                         | GitHub Actions security audit.                                                                                                                           |
+| Hook                                | What it checks                                                                                                                                           |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `actionlint`                        | GitHub Actions workflow syntax (shellcheck pinned).                                                                                                      |
+| `actionlint-pyflakes-active`        | actionlint pyflakes integration canary.                                                                                                                  |
+| `actionlint-shellcheck-active`      | actionlint shellcheck integration canary.                                                                                                                |
+| `auto-merge-decline-gate`           | Auto-merge run-blocks carry the CLOSED/MERGED decline gate.                                                                                              |
+| `bump-script-integrity`             | scripts/bump-linpeas.sh keeps its URL-prefix, .digest, and atomic-write guards.                                                                          |
+| `check-cron-table`                  | Cron schedule table in docs/architecture/ci.md matches workflow cron triggers, and the ordering paragraph matches the table's daily rows.                |
+| `check-doc-anchors`                 | Every markdown #anchor link resolves to a heading slug in its target file.                                                                               |
+| `check-doc-cron-restatement`        | Docs outside ci.md must link the cron schedule table, not restate literal workflow times.                                                                |
+| `check-ephemeral-refs`              | Markdown prose and shell/Nix/YAML comments carry no ephemeral references (PR/issue refs, prose dates, planning/review labels, literal .claude/ paths).   |
+| `check-jsonschema`                  | Schema-shape validation of repo config (renovate.json, workflows, actions).                                                                              |
+| `check-orphan-invariants`           | Every docs/ file has an invariant-index entry and vice versa.                                                                                            |
+| `check-prose-ci-names`              | A CI job or required check named in prose must resolve to a real job or, when called a job, a whole workflow.                                            |
+| `check-scripts-reference-roundtrip` | Every script header's text appears as written in the rendered docs/reference/scripts.md.                                                                 |
+| `checkout-persist-credentials`      | Every actions/checkout sets with.persist-credentials: false.                                                                                             |
+| `ci-dag-fresh`                      | docs/architecture/ci-dag.md matches .github/workflows/ci.yml needs graph.                                                                                |
+| `ci-job-in-summary`                 | ci.yml jobs cross-checked against docs/\_data/ci-check-categories.yml.                                                                                   |
+| `ci-summary-fresh`                  | README CI summary matches required-checks.md and the category map.                                                                                       |
+| `commitlint`                        | Commit message satisfies Conventional Commits (CI parity via .commitlintrc.yml).                                                                         |
+| `commitlint-config-explicit`        | Every commitlint action step names an existing configFile; merge ruleset stays minimal.                                                                  |
+| `cosign-identity-pinned`            | cosign verify\* pins --certificate-identity[-regexp] + --certificate-oidc-issuer.                                                                        |
+| `deadnix`                           | Unused Nix bindings.                                                                                                                                     |
+| `editorconfig-checker`              | .editorconfig compliance (charset, line endings, trailing whitespace, final newline).                                                                    |
+| `egress-allowlist`                  | Every job's allowed-endpoints list matches its tool inventory and carries no denylisted host.                                                            |
+| `enforcement-matrix-fresh`          | docs/security/enforcement-matrix.md matches the annotated invariant index, real enforcers, and the harness roster.                                       |
+| `ephemeral-refs-gap-fresh`          | The scope-gap block in docs/development/linting.md matches the file types no ephemeral-refs extractor claims, and none of them carries a blocking shape. |
+| `flake-show-fresh`                  | flake-show block in docs/reference/flake-outputs.md matches current flake outputs.                                                                       |
+| `fork-guard-release`                | Release-grade jobs include github.repository fork guard.                                                                                                 |
+| `freshness-hook-watches-modules`    | Every flake-evaluating freshness hook watches every source its evaluation reads.                                                                         |
+| `gh-api-version-header`             | Every gh api / api.github.com call in scripts passes an X-GitHub-Api-Version header.                                                                     |
+| `gh-attestation-repo`               | gh attestation verify pins --repo rvenutolo/linPEAS-flake.                                                                                               |
+| `harden-runner-block`               | Every harden-runner step uses egress-policy: block with non-empty allowed-endpoints.                                                                     |
+| `harden-runner-first`               | Every workflow job's first step is step-security/harden-runner.                                                                                          |
+| `harness-assert-wired`              | Every output-asserting tests/\*.test.sh is wired to the discrimination gate.                                                                             |
+| `job-timeout-minutes`               | Every workflow job declares an explicit timeout-minutes.                                                                                                 |
+| `just-recipes-fresh`                | just-recipes blocks in README.md and docs/reference/just-recipes.md match the justfile.                                                                  |
+| `lint-shell-tools`                  | devShells.lint declares every tool the .#lint lint groups need.                                                                                          |
+| `lock-derived-docs`                 | Every lock-writing workflow regenerates the docs a lock bump can make stale.                                                                             |
+| `manifest-digest-pinned`            | docker manifest/imagetools create sources are digest-pinned.                                                                                             |
+| `manifest-hook-watches-nix`         | Every hook reaching the Nix hook manifest watches nix/hooks in its files filter.                                                                         |
+| `markdownlint`                      | Markdown style + structure.                                                                                                                              |
+| `min-permissions`                   | Top-level workflow permissions empty; each job declares its own scopes.                                                                                  |
+| `nix-run-pinned`                    | No unpinned nix run nixpkgs#<pkg>; use nix shell .#<pkg> or pin a rev.                                                                                   |
+| `nixfmt`                            | Nix file formatting.                                                                                                                                     |
+| `nixpkgs-hammering`                 | nixpkgs idiom checker for the linpeas derivation.                                                                                                        |
+| `no-opaque-procsub`                 | No scripts/\*.sh feeds a redirection from a process substitution.                                                                                        |
+| `notify-label-descriptions`         | Every notify label description fits the labels API cap and agrees across callers.                                                                        |
+| `octoscan`                          | synacktiv/octoscan workflow vulnerability scanner.                                                                                                       |
+| `patch-tag-pins`                    | SHA-pinned uses: comments name a versioned tag (vX.Y[.Z]), not a bare major (vX).                                                                        |
+| `permission-scopes`                 | Per-job GITHUB_TOKEN write scopes are allowlisted in .github/permission-scopes.yml.                                                                      |
+| `pin-diff-isolated`                 | Only scripts/bump-linpeas.sh mutates linpeas-pin.json.                                                                                                   |
+| `pin-parity-fresh`                  | The pin-parity block in docs/architecture/auto-update.md names every tracked file carrying the canonical pin-shape regex.                                |
+| `pre-commit-hooks-sha-parity`       | The pre-commit-hooks input SHA in flake.nix matches flake.lock locked.rev.                                                                               |
+| `precommit-table-fresh`             | Hook table in docs/development/git.md matches the flake hook manifest.                                                                                   |
+| `pull-request-target-absent`        | No workflow uses the pull_request_target trigger.                                                                                                        |
+| `renovate-config-validator`         | Validate renovate.json against the upstream Renovate config schema.                                                                                      |
+| `run-block-strict`                  | Block-scalar and newline-carrying run: blocks in workflows and composite actions start with set -Eeuo pipefail.                                          |
+| `script-has-test`                   | Every scripts/check-*.sh paired with tests/check-*.test.sh.                                                                                              |
+| `script-shebang-pipefail`           | Every scripts/\*.sh has portable shebang + set -Eeuo pipefail.                                                                                           |
+| `scripts-reference-fresh`           | docs/reference/scripts.md matches in-script annotations.                                                                                                 |
+| `shellcheck`                        | Shell-script static analysis.                                                                                                                            |
+| `size-label-ignores`                | The size-label ignore list matches what the generators declare they write.                                                                               |
+| `statix`                            | Nix anti-pattern lint.                                                                                                                                   |
+| `test-harnesses-fresh`              | The harness census in docs/reference/test-harnesses.md matches the harnesses in tests/.                                                                  |
+| `treefmt`                           | Multi-language formatter aggregator (shfmt, prettier, etc).                                                                                              |
+| `treefmt-config-fresh`              | treefmt-config block in docs/reference/treefmt-config.md matches the evaluated treefmt config.                                                           |
+| `typos`                             | Spell-check across the repo.                                                                                                                             |
+| `upload-artifact-strict`            | Every actions/upload-artifact sets with.if-no-files-found: error.                                                                                        |
+| `uses-sha-pinned`                   | Every uses: reference is SHA-pinned.                                                                                                                     |
+| `verify-reason-ladder`              | Every verify-job step id is mapped to a documented reason token, in execution order.                                                                     |
+| `workflow-concurrency`              | Every workflow declares a top-level concurrency.group.                                                                                                   |
+| `workflow-on-branches`              | pull_request: and push: declare branches: [main] explicitly.                                                                                             |
+| `yamllint`                          | YAML style.                                                                                                                                              |
+| `zizmor`                            | GitHub Actions security audit.                                                                                                                           |
 
 <!-- END precommit-table -->
 

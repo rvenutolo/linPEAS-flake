@@ -242,7 +242,7 @@ It emits one labeled bundle of fourteen sections — a **`PROSE HOTSPOTS`**
 ranking of the prose recent fix passes rewrote most, a **`PASS ATTRIBUTION`**
 listing of which pass in the window wrote which prose file, flake outputs,
 `just` recipes, the `scripts/` inventory (entry points, the `scripts/lib/`
-libraries they source, *and* the `scripts/*.awk` programs), workflows, the
+libraries they source, *and* the `scripts/*.awk` and `scripts/*.py` programs), workflows, the
 **ci.yml top-level job list**, **lint-group membership**, the
 **`VALID CI JOB / CHECK NAMES`** union allowlist (the ghost/mislabel detector
 this audit turns on), a **`HARNESS LIVE-TREE SCENARIOS`** row per harness
@@ -305,7 +305,7 @@ Read-only fan-out needs no orchestration opt-in — it is plain parallel reads.
 
 1. **Factual drift (exhaustive).** Extract *every* concrete reference in the
     doc — file paths, flake outputs, `just` recipes, `scripts/*.sh`, the
-    `scripts/lib/*.sh` libraries they source, the `scripts/*.awk` programs, shell
+    `scripts/lib/*.sh` libraries they source, the `scripts/*.awk` and `scripts/*.py` programs, shell
     commands, env vars, secret names, workflow/job names, config options,
     internal links/anchors — and verify each exists / is described correctly
     against ground truth and the real files. A doc naming a removed

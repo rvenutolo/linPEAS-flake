@@ -7,9 +7,13 @@ Auto-generated from in-script `@description` / `@arg` / `@option` /
 basename prefix into the Check scripts, Refresh scripts and Other
 sections; the sourced libraries under `scripts/lib/` render one entry
 per library — its file header, then one sub-entry per annotated
-function — in the Libraries section. The `scripts/*.awk` parsers are not
+function — in the Libraries section. The underscore-prefixed helpers —
+the `scripts/*.awk` parsers and the round-trip checker's Python — are not
 rendered here; they are documented from the entry points that invoke
 them. Do not edit between the markers.
+`scripts/check-scripts-reference-roundtrip.sh` checks that every header
+reaches this page as written; see
+[linting.md](../development/linting.md#scripts-reference-round-trip).
 
 <!-- BEGIN scripts-reference -->
 
@@ -714,7 +718,7 @@ absent from PATH, or a temp file that cannot be created.
 
 **Options:**
 
-- `--flake` — <dir> flake to check (default: repo root)
+- `--flake` — `<dir>` flake to check (default: repo root)
 
 ### scripts/check-fork-guard-release.sh
 
@@ -1027,8 +1031,8 @@ equivalent hand-rolled `die_op` guard) that regresses or was never
 written is invisible to every other lint in this repo, because none of
 them runs the scripts under test — only a scenario that actually drives
 a malformed payload through the gate and checks the exit code proves
-the gate still fires. This lint therefore gates the *scenario's
-existence*, not the gate's source text: grepping a script for
+the gate still fires. This lint therefore gates the scenario's
+existence, not the gate's source text: grepping a script for
 `require_json_payload` would pass a script that calls it on a path a
 scenario never exercises, and would fail a script whose gate is
 hand-rolled (die_op) but genuinely covered.
@@ -1355,6 +1359,60 @@ with `#!/usr/bin/env bash` (exact first line) and carries
 addition such as `-x` is accepted); every sourced library
 under `scripts/lib/` satisfies the inverse.
 
+### scripts/check-scripts-reference-roundtrip.sh
+
+Lint: every piece of script-header text reaches
+docs/reference/scripts.md as written. The page is generated, and its
+freshness gate compares the committed page with a fresh render, so a
+generator that drops or rewrites header text agrees with itself and stays
+green. This check compares the other two ends instead: what each header
+says, read by an independent reader, against what the committed page shows
+once rendered the way the site renders it: python-markdown with the
+extensions mkdocs.yml loads.
+
+Scope is the generator's own: every `scripts/*.sh` not starting with an
+underscore, read header-only, and every `scripts/lib/*.sh`, whose
+function `@description` blocks are read as well. The reader splits a
+header into units at each tag. A unit's text must appear, whitespace
+collapsed and code-span backticks removed, in that script's or function's
+entry. Prose after a blank comment line that closes an `@arg`, `@option`,
+`@exitcode` or `@stdout` is a further description unit. An indented run
+whose lead-in line ends in a colon must also stay one preformatted block,
+line for line, because collapsing it keeps every word and still loses the
+shape. Three shapes of header text the generator never reads are findings
+too: prose before the first tag, a `# @tag` in a comment block between the
+header's first blank line and the first line of code, and, in a library,
+an annotation outside a function's `@description` block.
+
+Text outside a code span is Markdown on the page, so a `<placeholder>`
+reads as an HTML tag, a `<` in `<-` shows with a backslash, and a glob's
+asterisks can open emphasis. Put such text in backticks. Escaping a `<`
+cannot help: the formatter rewrites the escape into one the site's
+renderer does not honor.
+
+This wrapper enumerates the files; the checker itself is
+scripts/\_scripts_reference_roundtrip.py.
+
+Env overrides (test-only):
+
+```text
+  SCRIPTS_DIR_OVERRIDE — alternate scripts/ root
+  SCRIPTS_REFERENCE_DOC_OVERRIDE — alternate rendered page
+  SCRIPTS_REFERENCE_MKDOCS_OVERRIDE — alternate mkdocs.yml, whose
+    markdown_extensions the page is rendered with
+```
+
+Exit codes:
+
+```text
+  0  every annotation unit is published intact
+  1  header text the page drops, alters or collapses (details on stderr)
+  2  the check could not run: the page or its markers are missing,
+      python3 or python-markdown is unavailable, the scripts or lib glob
+      matches nothing (unless LINT_ALLOW_EMPTY_SCAN is set), a header is
+      not UTF-8, or no annotation text was found
+```
+
 ### scripts/check-setup-nix-required.sh
 
 Lint: every workflow installing Nix goes through the
@@ -1573,6 +1631,17 @@ or omit one that gained it. A file under tests/ is excluded; the block
 says so in prose, because a versioning-scheme migration touches the
 fixtures too and a silent omission would read as coverage.
 
+Env overrides (test-only):
+
+```text
+  PIN_PARITY_ROOT_OVERRIDE — alternate REPO_ROOT. Fixture roots sit
+    inside this repo, so the git producer still runs against them and
+    reports paths relative to the override — which is also what keeps
+    the fixtures clear of the tests/ filter that would otherwise drop
+    every one of them.
+  PIN_PARITY_DOC_OVERRIDE — alternate output doc path
+```
+
 **Options:**
 
 - `--check` — exit 1 if the block would change; exit 2 if the check cannot run (doc missing, marker missing, or no tracked file carries the literal at all); do not mutate the working tree
@@ -1722,7 +1791,7 @@ Report docs-audit drift pressure since the last audit:
 how many commits touched CI structure (.github/workflows, scripts,
 .github/lint-groups.yml), and which job ids / lint-group members were
 added or removed. Emits a Markdown body for the monthly docs-audit
-reminder issue, terminated by a machine-readable PRESSURE=<n> trailer
+reminder issue, terminated by a machine-readable `PRESSURE=<n>` trailer
 that the reminder workflow reads and strips before posting.
 
 Freshness gates validate only generated content; hand-written prose about
@@ -1763,7 +1832,7 @@ by aggregating pin metadata and live GitHub REST API data.
 ### scripts/inventory-action-pin-tags.sh
 
 Enumerate every SHA-pinned `uses:` in
-.github/workflows/*.yml|*.yaml and .github/actions/\*\*/action.yml
+`.github/workflows/*.yml|*.yaml` and `.github/actions/**/action.yml`
 (or action.yaml), resolve each pinned SHA to its exact patch tag via
 `gh api .../tags`, and emit a TSV mapping pin -> patch tag for
 downstream rewrite tooling.

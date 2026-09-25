@@ -58,9 +58,9 @@ Refuters: verify eval behavior empirically (`nix eval`, `nix build --no-link`, `
 
 Per-script logic trace across every `scripts/*.sh` **and**
 `scripts/lib/*.sh` (budget each slice from
-`ls scripts/*.sh scripts/lib/*.sh scripts/*.awk | wc -l` — the count moves
+`ls scripts/*.sh scripts/lib/*.sh scripts/*.awk scripts/*.py | wc -l` — the count moves
 with every script added, so no figure is written here; the slice
-partition itself is fixed below). The `scripts/*.awk`
+partition itself is fixed below). The `scripts/*.awk` and `scripts/*.py`
 programs the generators and lints drive are in scope with them. The `scripts/lib/` libraries are load-bearing — the ephemeral-refs
 regex classes, payload helpers, and enumeration guards all live there — so
 a run that skips them silently reviews none of that.
@@ -69,7 +69,7 @@ Slices:
 
 - `check-*` validators
 - `refresh-*` generators
-- `scripts/lib/*.sh` libraries + `scripts/*.awk` programs + the tracked
+- `scripts/lib/*.sh` libraries + `scripts/*.awk` and `scripts/*.py` programs + the tracked
     `.claude/` skill shell tooling
     (`git ls-files '.claude/*.sh' | grep -v '\.test\.sh$'` — the
     `*.test.sh` halves belong to dimension 5; CI-required via the

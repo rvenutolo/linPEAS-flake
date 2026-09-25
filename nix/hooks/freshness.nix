@@ -36,6 +36,16 @@ let
     pkgs-unstable.yq-go
     treefmtWrapper
   ];
+  # The round-trip check renders the scripts reference with the site's own
+  # Markdown renderer and reads mkdocs.yml for its extensions, so its hook
+  # carries those libraries rather than trusting whatever python3 the
+  # committer's shell has.
+  rendererPython = pkgs-unstable.python3.withPackages (ps: [
+    ps.markdown
+    ps.pygments
+    ps.pymdown-extensions
+    ps.pyyaml
+  ]);
 in
 {
   # Refuse to commit if the flake-show block in docs/reference/flake-outputs.md
@@ -389,6 +399,25 @@ in
     # job would still fail, and the job-name-dense category map is one of
     # the files that would slip through.
     files = "^(.*\\.md|.*\\.ya?ml|scripts/run-harness-group\\.sh|scripts/check-prose-ci-names\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
+  # Asserts every piece of script-header text is visible, as written, in
+  # the rendered docs/reference/scripts.md. scripts-reference-fresh proves
+  # the page matches a fresh render; this proves the render matches the
+  # headers, which a generator bug breaks without touching freshness.
+  check-scripts-reference-roundtrip = {
+    enable = true;
+    name = "check-scripts-reference-roundtrip";
+    description = "Every script header's text appears as written in the rendered docs/reference/scripts.md.";
+    entry = "${pkgs-unstable.writeShellScript "check-scripts-reference-roundtrip-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${rendererPython}/bin:${toolPath}:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-scripts-reference-roundtrip.sh
+    ''}";
+    files = "^(scripts/.*\\.sh|scripts/_script_docs\\.awk|scripts/_scripts_reference_roundtrip\\.py|docs/reference/scripts\\.md)$";
     pass_filenames = false;
     language = "system";
   };

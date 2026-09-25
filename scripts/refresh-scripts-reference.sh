@@ -83,25 +83,38 @@ function emit_body() {
     # "Usage:", "...both count:" — from ordinary prose a header happens to
     # wrap at an indent, which is the common case and must stay a
     # paragraph.
-    /^[[:space:]][[:space:]]+[^[:space:]]/ {
+    # Indented means two or more leading blanks, or a leading tab: the
+    # parser strips the one separator after `#`, so a run written with
+    # tabs reaches here with a single tab of indent.
+    /^([[:space:]][[:space:]]+|\t)[^[:space:]]/ {
       if (!fenced) {
         if (prev ~ /:[[:space:]]*$/) { print "```text"; fenced = 1 }
         else { prev = $0; print; next }
       }
+      # A blank line inside the run is part of it, so it stays inside the
+      # fence; only a blank line followed by unindented text ends the run.
+      for (; held > 0; held--) { print "" }
+      # Tabs in the indent become two spaces each: a fenced tab is file
+      # indentation, which editorconfig wants as spaces.
+      lead = $0
+      sub(/[^[:space:]].*$/, "", lead)
+      rest = substr($0, length(lead) + 1)
+      gsub(/\t/, "  ", lead)
       # A comment aligns its continuations under the text they belong to,
       # which lands on odd columns. Inside a fence those become file
       # indentation, and editorconfig wants multiples of two. Round each
       # line up to the next even column: the grouping the fence exists to
       # keep survives, one space wider.
-      body = $0
-      indent = match(body, /[^ ]/) - 1
-      if (indent % 2) { body = " " body }
+      body = lead rest
+      if (length(lead) % 2) { body = " " body }
       print body
       prev = $0
       next
     }
+    fenced && /^[[:space:]]*$/ { held++; next }
     {
       if (fenced) { print "```"; fenced = 0 }
+      for (; held > 0; held--) { print "" }
       print
       # A colon lead-in is often separated from its run by a blank comment
       # line. Keep the last non-blank line, or such a run never fences —

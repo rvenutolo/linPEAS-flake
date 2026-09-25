@@ -170,7 +170,35 @@ function test_library_unannotated_function_exits_2() {
   rm --force -- "${outcome_file}" "${stdout_file}" "${stderr_file}"
 }
 
+# A blank comment line closes an @option, but the prose after it is still
+# the author's header text. It must publish as description, line for line,
+# and must not leak into the annotation it follows. Library scope binds the
+# same rule to a function block.
+function test_prose_after_closed_annotation_resumes_description() {
+  local -r name='prose after a closed annotation publishes as description'
+  local entry_json lib_json
+  entry_json="$(printf '%s\n' '#!/usr/bin/env bash' '# @description Head.' \
+    '# @option --check exit 1 on drift' '#' '# Env overrides (test-only):' \
+    '#   FOO_OVERRIDE — alternate root' 'true' | awk --file "${PARSER}")"
+  # shellcheck disable=SC2016 # `$1` is fixture header text, not an expansion
+  lib_json="$(printf '%s\n' '#!/usr/bin/env bash' '# @description Lib.' '' \
+    '# @description Fn.' '# @arg $1 the input' '#' '# Trailing fn prose.' \
+    'function fn() {' '  :' '}' | awk -v scope=library --file "${PARSER}")"
+  if ! jq --exit-status '.description == "Head.\n\nEnv overrides (test-only):\n  FOO_OVERRIDE — alternate root"' \
+    <<<"${entry_json}" >/dev/null; then
+    fail "${name} — entry description: $(jq --compact-output '.description' <<<"${entry_json}")"
+  elif ! jq --exit-status '.options[0].text == "exit 1 on drift"' <<<"${entry_json}" >/dev/null; then
+    fail "${name} — the prose leaked into the option"
+  elif ! jq --exit-status '.functions[0].description == "Fn.\n\nTrailing fn prose." and .functions[0].args[0].text == "the input"' \
+    <<<"${lib_json}" >/dev/null; then
+    fail "${name} — library function: $(jq --compact-output '.functions[0]' <<<"${lib_json}")"
+  else
+    pass "${name}"
+  fi
+}
+
 function main() {
+  test_prose_after_closed_annotation_resumes_description
   test_full_matches_expected
   test_no_description_exits_2
   test_function_body_description_ignored

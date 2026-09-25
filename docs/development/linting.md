@@ -267,7 +267,7 @@ the enumerated planning and review labels above are blocked.
     <!-- BEGIN ephemeral-refs-gap -->
 
     File types no extractor claims and that carry `#` comments:
-    `.awk`, `.envrc`, `.gitignore`, `.toml`, `.txt`, `docs-audit-state`, `justfile`.
+    `.awk`, `.envrc`, `.gitignore`, `.py`, `.toml`, `.txt`, `docs-audit-state`, `justfile`.
     No blocking shape appears in any of them.
 
     <!-- END ephemeral-refs-gap -->
@@ -644,6 +644,84 @@ it, no `*-fresh` hook covers it, and freshness is asserted by
 `scripts/check-changelog-fresh.sh` in the required `changelog-links` job over
 the released sections only — `## Unreleased` changes with every merged commit.
 See [changelog.md](changelog.md).
+
+## Scripts-reference round trip
+
+A freshness gate proves a generator ran, not that it is right: when the
+generator drops or rewrites text, the committed page and a fresh render agree
+on the wrong output. `scripts/check-scripts-reference-roundtrip.sh` checks the
+scripts reference end to end instead. It reads every header the generator
+reads — each `scripts/*.sh` entry point not starting with an underscore, and
+each `scripts/lib/*.sh` library with its function `@description` blocks — with
+its own reader, not `scripts/_script_docs.awk`, because a checker built on the
+parser would agree with every text the parser drops. It renders the committed
+page with python-markdown and the extensions `mkdocs.yml` loads, configured as
+`mkdocs.yml` configures them, because several rewrite text rather than only
+markup: `inlinehilite` strips a `#!lang` prefix from a code span, and
+`snippets` replaces a line with a file. It reads `mkdocs.yml` as mkdocs does:
+the built-in `toc`, `tables` and `fenced_code` extensions load first, `!ENV`
+reads the first set variable as a plain YAML scalar, else its default, and
+`!!python/name:` imports the object it names. An extension list that cannot be
+read or loaded is a could-not-run, and so is a config that inherits another
+through `INHERIT`, which the check does not follow. Like the site build, it
+imports what `mkdocs.yml` names and reads the files `snippets` points at, so
+`mkdocs.yml` is trusted input to it, as it is to the site build.
+
+Each unit of header text — a tag and the lines that continue it — is matched
+in its own part of the entry. A tag is `# @tag`, one blank after the hash; a
+comment that indents an `@tag` further is prose, and the page must show it as
+written. An `@arg`, `@option`, `@exitcode` or `@stdout` must be one whole item
+of its list, and each item is matched once, so two identical annotations need
+two items. An `@example` must be the entry's example block, line for line with
+the blank lines at its edges dropped and tabs expanded as in a fenced run;
+text on an `@example` tag line is required, and the generator does not print
+it. Description text is found as whole words, in order, in the part before the
+first list label. Text is compared with whitespace collapsed, a list marker at
+the start of a prose line (`-`, `*`, `+`, or a number with `.` or `)`) allowed
+to be absent, and the backticks of a code span dropped — but only those: a
+backtick the page shows literally is an altered unit. Prose after a blank
+comment line that closes an `@arg`, `@option`, `@exitcode` or `@stdout` is a
+further description unit. A leading marker may be absent because the page
+passes through mdformat, whose CommonMark rules decide which lines become list
+items, before python-markdown renders it by its own rules, so the marker may
+show as text or as a bullet.
+
+An indented run whose lead-in line ends in a colon must be exactly one
+preformatted block on the page, line for line with its blank lines and
+indentation, a tab in the indent read as two spaces and an odd indent rounded
+up to even as the generator writes a fence, and a tab later in the line
+expanded to a four-column stop as python-markdown expands it; each fence is
+matched once, in order. Collapsing a run into a paragraph keeps every word and
+still loses the shape, so the word comparison alone would pass it.
+
+Header text in three shapes the generator never reads is a finding: prose
+before the first tag other than the file's own path line and a first-line
+shebang, a `# @tag` in a comment block between the header's first blank line
+and the first line of code, and, in a library, an annotation outside a
+function's `@description` block.
+
+Six limits are known. The check reads from header to page only: text the page
+adds, such as an invented sentence or item, is not reported, and "visible"
+means present in the rendered text, not shown by the browser. A description
+compared as words does not see its blocks change kind — a sentence the page
+shows as a list item or a quote still matches. Text inside a Markdown table in
+a header is not read. A run of backticks that opens no matching run is
+compared as the regular expression reads it, which can differ from the
+renderer. A line such as `- - -`, which python-markdown renders as a rule, is
+read as text. And since a leading marker may be absent, a page that drops a
+marker the header meant as text passes, and the numbers of a list rendered as
+a numbered list are not compared.
+
+Header text outside a code span is Markdown on the page. A `<placeholder>`
+renders as an HTML tag and vanishes, a `<` in `<-` or `<=` shows with a
+backslash, and a glob's asterisks can open emphasis, so put such text in
+backticks. Escaping a `<` in the generator does not work: mdformat rewrites
+`&lt;` to `\<`, which python-markdown does not treat as an escape, so the site
+prints the backslash and still swallows the tag.
+
+It runs in the `lint-doc-invariants` group and as the
+`check-scripts-reference-roundtrip` pre-commit hook, whose Python carries
+python-markdown, Pygments, pymdown-extensions and PyYAML itself.
 
 ## Payload shape-gate scenario coverage
 
