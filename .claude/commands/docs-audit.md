@@ -25,7 +25,7 @@ Run a documentation correctness audit of this repository using the
     the previous step asked for, not a second one — to gather the
     authoritative ground-truth bundle (the prose-hotspot ranking, the
     pass-attribution listing, flake outputs, recipes, scripts, workflows,
-    ci.yml job list, lint-group membership, the per-harness `HARNESS LIVE-TREE  SCENARIOS` marker shortlist, the valid CI job / check-name union
+    ci.yml job list, lint-group membership, the per-harness `HARNESS LIVE-TREE SCENARIOS` marker shortlist, the valid CI job / check-name union
     allowlist, crons, required-check count, the ephemeral-token sweep, and the
     internal link / anchor check). Save it under `.claude/reports/` and hand
     every reader that path together with one shared reader brief, rather than
@@ -49,8 +49,9 @@ Run a documentation correctness audit of this repository using the
     not cover. Run any command a doc hands the reader and derive the same set
     a second way. Then `git grep` the wrong wording across all tracked prose
     (`'*.md' '.github/**' 'scripts/*.sh'`) so every twin joins the finding.
-    Quote every pathspec and pass each alternative as its own `-e` — this repo
-    sets `grep.patternType=perl`, so `\|` matches nothing, and an unquoted
+    Quote every pathspec and pass each alternative as its own `-e` — the
+    maintainer's global git config sets `grep.patternType=perl`, so `\|`
+    matches nothing, and an unquoted
     `*.md` never reaches `docs/`. Both failures report a clean tree.
 1. Before parking anything as a decision for the user, check whether the tree
     already decides it: write down what the code would have to look like for

@@ -92,8 +92,8 @@ tree.)
     Friday cron (the whole workflow directory, unfiltered); manual dispatch.
 - **Status:** advisory by design. It is the cheapest scanner, but it fails
     on *any* finding (no severity threshold), so as a required check a
-    single false positive would block merge. A finding, and a failure that
-    produced no complete findings result — a cancelled job and a SARIF
+    single false positive would block merge. On non-PR runs, a finding, and
+    a failure that produced no complete findings result — a cancelled job and a SARIF
     upload failing after a clean scan among them — are paged as separate
     deduped issues, under `octoscan-finding` and `octoscan-infra`.
     octoscan's rule set is narrowed only

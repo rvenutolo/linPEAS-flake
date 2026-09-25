@@ -337,14 +337,17 @@ Exit codes:
 ### scripts/check-dockerhub-token-scope-split.sh
 
 Lint: enforce the DOCKERHUB_TOKEN RW/DELETE scope split.
-The delete-scoped PAT (secrets.DOCKERHUB_TOKEN_DELETE) is consumed only
-by dockerhub-sync.yml (peter-evans/dockerhub-description needs Delete
-scope to PATCH repo metadata; a Read/Write-only PAT returns 403). The
-write-scoped PAT (secrets.DOCKERHUB_TOKEN_RW) is consumed only by
-release-on-bump.yml — never by the anonymous/read-only
-verify-latest-release.yml. The delete-capable token must never leak into
-workflows that only push images, and no unsuffixed secrets.DOCKERHUB_TOKEN
-may exist — only \_RW and \_DELETE are authoritative.
+The delete-scoped PAT (secrets.DOCKERHUB_TOKEN_DELETE) belongs to
+dockerhub-sync.yml (peter-evans/dockerhub-description needs Delete
+scope to PATCH repo metadata; a Read/Write-only PAT returns 403), and the
+write-scoped PAT (secrets.DOCKERHUB_TOKEN_RW) to release-on-bump.yml.
+The lint requires each token in its own workflow, refuses the
+delete-scoped token in release-on-bump.yml and in the
+anonymous/read-only verify-latest-release.yml, and refuses the
+write-scoped token in dockerhub-sync.yml and verify-latest-release.yml.
+It does not check other workflows for either token. In every workflow, a
+secrets.DOCKERHUB_TOKEN reference without the \_RW or \_DELETE suffix is
+refused.
 
 The same split binds every manual recovery snippet in the docs. A
 shell-fenced Markdown block that performs a tag delete
@@ -669,8 +672,9 @@ Honors SCRIPTS_DIR_OVERRIDE (default: scripts) and
 LINT_ALLOW_EMPTY_SCAN=1 for fixtures.
 
 Exits 0 when every script that can reach exit 2 documents it, 1 on any
-script that cannot. Exits 2 when the check cannot run: the scan set
-matches no script, which is a could-not-run rather than a clean tree.
+script that can reach exit 2 without documenting it. Exits 2 when the
+check cannot run: the scan set matches no script, which is a
+could-not-run rather than a clean tree.
 
 ### scripts/check-flake-lock-provenance.sh
 
@@ -701,6 +705,12 @@ evaluates, forcing each package's derivation (not just the attribute
 names) so a package whose value throws is caught. Fails naming the
 offending system + the real nix error, so a platform drop in a nixpkgs
 bump is diagnosable at a glance.
+
+Exits 0 when every declared system evaluates, 1 when one or more fail
+to evaluate or when the flake declares no systems at all. Exits 2 when
+the check cannot run: an unrecognized argument, `--flake` given with no
+directory, a flake whose `lib.systems` cannot be read, `nix` or `jq`
+absent from PATH, or a temp file that cannot be created.
 
 **Options:**
 
@@ -1246,8 +1256,9 @@ Exit codes:
   0  every name claimed in prose resolves to something the sentence's own
       claim noun admits
   1  ghost or mislabel name(s) found (details printed to stderr)
-  2  the check could not run: a missing or empty name source, or a
-      producer that lists or reads the scanned files failed
+  2  the check could not run: a missing or empty name source, a
+      producer that lists or reads the scanned files failed, an empty
+      scan set, or a scanned file that leaves a code fence open
 ```
 
 ### scripts/check-pull-request-target-absent.sh
@@ -1278,8 +1289,6 @@ Exits 0 on a valid config, 1 on any validation error, 2 when the check
 cannot run — the config is absent, unreadable, not a regular file, or
 the validator itself is not on PATH. None of those says anything about
 the config's validity, so none may borrow the rejection code.
-
-payload-subject-exempt: a malformed config is this script's verdict, not an obstacle to it — the validator rejects one at exit 1, so there is no could-not-run outcome for a scenario to prove
 
 ### scripts/check-renovate-invariants.sh
 
@@ -2006,8 +2015,7 @@ regexes a scan matches against. Shared by the lint that enforces the
 ban and by the generator that reports which types the ban leaves
 unread, so a class that widens widens for both and the two stay
 derived from one record set rather than two lists that drift. Source
-after
-`set -Eeuo pipefail`.
+after `set -Eeuo pipefail`.
 
 #### ephemeral_refs_pathspec_into()
 
@@ -2098,9 +2106,9 @@ output, the assertion passes whether or not the asserted behavior
 exists — green while verifying nothing. Record each scenario here and
 call `harness_assert_verify` at the end of the run to fail on any such
 substring, on any asserted substring missing from its own scenario's
-output, and on any two scenarios whose whole observable outcome is the
-same — a pair that verifies one thing between them however each is
-named. Source after `set -Eeuo pipefail`.
+output, and on any two scenarios whose recorded output is the same once
+timestamps and durations are normalized — a pair that verifies one
+thing between them however each is named. Source after `set -Eeuo pipefail`.
 
 #### harness_assert_exempt()
 
@@ -2120,8 +2128,8 @@ mandatory so the weakening is reviewable.
 
 #### harness_assert_parity_exempt()
 
-Register two scenarios as legitimately producing one
-observable outcome. Two scenarios the gate cannot tell apart verify one
+Register two scenarios as legitimately recording one
+output. Two scenarios the gate cannot tell apart verify one
 thing between them, so the pair needs a reason that a reviewer can
 check: the scenarios must differ in what they exercise even though
 nothing they emit says so, and no honest output could separate them.
@@ -2201,9 +2209,11 @@ parity exemption, in either order.
 
 Apply the presence rule, the pairwise rule, the
 identical-output rule and the parity rule to everything recorded, print
-the census, and drop the pool. Exit 1 if any asserted substring is
+the census, and drop the pool. Return 1 if any asserted substring is
 missing from its own scenario's output, if any asserted substring also
-occurs in a sibling scenario's output, if two records share one output
+occurs in a sibling scenario's output (skipping a sibling that asserts
+the same substring, one whose output is identical, which the next rule
+judges, and an exempt pair), if two records share one output
 while asserting different substrings, if two records share one output
 without a parity exemption, or if nothing was recorded at all. The
 census names every group of scenarios sharing one output before
@@ -2381,9 +2391,9 @@ them is something `cat` can be trusted to fail on promptly — a
 directory does, but a FIFO with no writer, or a device such as
 `/dev/random`, blocks or streams instead of erroring, which would turn
 a could-not-run into a hang. The explicit not-a-regular-file check
-below reaches that verdict by `stat`, before any read is attempted, so
-the only thing left for the final `cat` guard to catch is a regular
-file whose read still fails for some other reason. Both guards stay
+below reaches that verdict by a `[[ -f ]]` test, before any read is
+attempted, so the only thing left for the final `cat` guard to catch is
+a regular file whose read still fails for some other reason. Both guards stay
 exercisable where mode bits are no lever — none of these path kinds
 depend on the permission bits `-r` already checked.
 

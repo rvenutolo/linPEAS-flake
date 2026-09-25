@@ -86,9 +86,9 @@ readonly -a HARNESSES=(
   # but the docs-correctness-audit and docs-audit-fix skills and the
   # seeded-defect eval are committed, and their harnesses are reachable from
   # no other runner — scripts/check-test-reachable.sh holds that. Test-only:
-  # the paired scripts build a throwaway worktree, read a results manifest, or
-  # check a fix pass's ledger against a diff, none of which is an enforcement
-  # pass this job could act on.
+  # the paired scripts build a throwaway worktree, read a results manifest,
+  # emit the audit's ground-truth bundle, or check a fix pass's ledger against
+  # a diff, none of which is an enforcement pass this job could act on.
   'docs-audit-plant|.claude/skills/docs-correctness-audit/evals/seeded-defects/plant.test.sh|'
   'docs-audit-score|.claude/skills/docs-correctness-audit/evals/seeded-defects/score.test.sh|'
   'docs-audit-ground-truth|.claude/skills/docs-correctness-audit/scripts/collect-ground-truth.test.sh|'

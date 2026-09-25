@@ -369,12 +369,13 @@ in
     language = "system";
   };
   # Asserts every CI job or required check named in prose resolves to a
-  # real workflow job, and that a lint-group or harness-roster member is
-  # never called a standalone job or a required check.
+  # real workflow job or, when called a job, a whole workflow, and that a
+  # lint-group or harness-roster member is never called a standalone job
+  # or a required check.
   check-prose-ci-names = {
     enable = true;
     name = "check-prose-ci-names";
-    description = "A CI job or required check named in prose must resolve to a real job.";
+    description = "A CI job or required check named in prose must resolve to a real job or, when called a job, a whole workflow.";
     entry = "${pkgs-unstable.writeShellScript "check-prose-ci-names-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'

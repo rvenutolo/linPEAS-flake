@@ -152,7 +152,7 @@ Hooks (alphabetical):
 | `check-ephemeral-refs`           | Markdown prose and shell/Nix/YAML comments carry no ephemeral references (PR/issue refs, prose dates, planning/review labels, literal .claude/ paths).   |
 | `check-jsonschema`               | Schema-shape validation of repo config (renovate.json, workflows, actions).                                                                              |
 | `check-orphan-invariants`        | Every docs/ file has an invariant-index entry and vice versa.                                                                                            |
-| `check-prose-ci-names`           | A CI job or required check named in prose must resolve to a real job.                                                                                    |
+| `check-prose-ci-names`           | A CI job or required check named in prose must resolve to a real job or, when called a job, a whole workflow.                                            |
 | `checkout-persist-credentials`   | Every actions/checkout sets with.persist-credentials: false.                                                                                             |
 | `ci-dag-fresh`                   | docs/architecture/ci-dag.md matches .github/workflows/ci.yml needs graph.                                                                                |
 | `ci-job-in-summary`              | ci.yml jobs cross-checked against docs/\_data/ci-check-categories.yml.                                                                                   |

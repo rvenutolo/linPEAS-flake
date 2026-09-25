@@ -7,7 +7,8 @@
 # window wrote which prose file, flake outputs, just recipes, scripts
 # (entry points, sourced libraries, and awk programs),
 # workflows, the ci.yml top-level job list, lint-group membership, a union
-# allowlist of all valid CI job/check names, workflow crons, the
+# allowlist of all valid CI job/check names, a shortlist of harnesses whose
+# text matches a live-tree marker, workflow crons, the
 # required-check context count, an ephemeral-token sweep over tracked
 # docs, and an internal link/anchor check. Run this ONCE and hand its output to every
 # reader, so a path/recipe/output/job/cron named in a doc is checked against one

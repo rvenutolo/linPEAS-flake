@@ -258,8 +258,8 @@ check named `gitleaks` in the `protect-main` ruleset.
     the duration: its `bypass_actors` list is empty, so the
     `non_fast_forward` rule blocks a repository admin as well. Re-sign
     the rewritten commits before pushing — history rewriting drops the
-    original signatures and `required_signatures` rejects unsigned
-    objects — then re-enable the ruleset.
+    original signatures, and every commit on `main` must be signed —
+    then re-enable the ruleset.
 - Vendor `gitleaks/*` is in the `allowed_actions` allowlist; do not
     remove without replacing the workflow.
 
@@ -276,7 +276,7 @@ detector sets, and a secret shape one misses is the reason the other
 runs. Neither substitutes for the other, and dropping either needs a
 [security-review entry](https://github.com/rvenutolo/linPEAS-flake/blob/main/CONTRIBUTING.md#security-review-entries).
 
-- Uses only `secrets.GITHUB_TOKEN` — PR-triggered workflow secret
+- References no secret — PR-triggered workflow secret
     allowlist invariant holds.
 - A verified finding is a live credential and therefore a security
     incident. Triage is the same as for gitleaks:

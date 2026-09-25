@@ -70,8 +70,8 @@ readonly GATE_VERIFY_CALL='^[[:space:]]*(if[[:space:]]+|(\|\||&&)[[:space:]]+)*h
 # assertion deserves.
 readonly GATE_EXEMPT_CALL='^[[:space:]]*harness_assert_exempt([[:space:]]|$)'
 
-# The parity escape hatch excuses two scenarios whose whole observable
-# outcome is the same. It cannot be held at zero, because a scenario can
+# The parity escape hatch excuses two scenarios whose recorded output is
+# the same. It cannot be held at zero, because a scenario can
 # exercise a distinction its subject deliberately never observes, and no
 # honest output separates such a pair. It is held to a named list
 # instead: the harnesses below may register one, and any other harness

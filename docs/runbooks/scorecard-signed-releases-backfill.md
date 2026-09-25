@@ -128,8 +128,8 @@ then re-run the backfill:
     **local system's** image only. Restoring a non-host arch needs a host
     of that architecture, or a remote builder / `extra-platforms` with
     binfmt configured; repeat per missing arch. Every missing object has to
-    be restored, not just the arch tags — see
-    [Partial image set](#partial-image-set) for why five of six still fails.
+    be restored, not just the arch tags — the **partial** case above is
+    why five of six still fails.
 1. Before pushing anything, verify each rebuilt per-arch image against a
     record that predates the loss, and recover the digests the release
     shipped — see [Verifying the rebuild](#verifying-the-rebuild) below. If

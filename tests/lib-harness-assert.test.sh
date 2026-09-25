@@ -320,7 +320,7 @@ harness_assert_verify'
   # Parity: two scenarios whose whole observable outcome is the same
   # verify one thing between them, so matching assertions do not rescue
   # the pair — the second scenario adds no evidence the first lacks.
-  check 'two scenarios sharing one outcome are flagged' 1 'share one observable outcome' '
+  check 'two scenarios sharing one outcome are flagged' 1 'share one recorded output' '
 d="$(mktemp -d)"
 printf "marker missing\n" >"${d}/a.out"
 printf "marker missing\n" >"${d}/b.out"
@@ -345,7 +345,7 @@ harness_assert_record a "marker missing" "${d}/a.out"
 harness_assert_record b "marker missing" "${d}/b.out"
 harness_assert_verify'
 
-  check 'parity exemption for a different pair does not suppress' 1 'share one observable outcome' '
+  check 'parity exemption for a different pair does not suppress' 1 'share one recorded output' '
 harness_assert_parity_exempt a c "unrelated pair"
 d="$(mktemp -d)"
 printf "marker missing\n" >"${d}/a.out"

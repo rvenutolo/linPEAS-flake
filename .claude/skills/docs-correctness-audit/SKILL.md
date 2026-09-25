@@ -394,7 +394,7 @@ the `.github/**` pathspec.
 
 Two ways this sweep returns zero hits while twins exist, both silent:
 
-- **This repo sets `grep.patternType=perl`.** `\|` alternation matches
+- **The maintainer's global git config sets `grep.patternType=perl`.** `\|` alternation matches
     nothing, so a pattern built with it reports a clean tree. Pass each
     alternative as its own `-e` instead.
 - **An unquoted `*.md` pathspec is expanded by the shell**, so it reaches
