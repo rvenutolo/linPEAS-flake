@@ -12,7 +12,7 @@
 # the check cannot run: an unrecognized argument, `--flake` given with no
 # directory, a flake whose `lib.systems` cannot be read, `nix` or `jq`
 # absent from PATH, or a temp file that cannot be created.
-# @option --flake <dir> flake to check (default: repo root)
+# @option --flake `<dir>` flake to check (default: repo root)
 set -Eeuo pipefail
 IFS=$'\n\t'
 # The library directory is resolved by parameter expansion rather than by

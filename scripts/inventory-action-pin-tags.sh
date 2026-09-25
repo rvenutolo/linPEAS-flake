@@ -2,7 +2,7 @@
 # scripts/inventory-action-pin-tags.sh
 #
 # @description Enumerate every SHA-pinned `uses:` in
-# .github/workflows/*.yml|*.yaml and .github/actions/**/action.yml
+# `.github/workflows/*.yml|*.yaml` and `.github/actions/**/action.yml`
 # (or action.yaml), resolve each pinned SHA to its exact patch tag via
 # `gh api .../tags`, and emit a TSV mapping pin -> patch tag for
 # downstream rewrite tooling.

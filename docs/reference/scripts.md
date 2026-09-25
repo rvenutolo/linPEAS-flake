@@ -714,7 +714,7 @@ absent from PATH, or a temp file that cannot be created.
 
 **Options:**
 
-- `--flake` — <dir> flake to check (default: repo root)
+- `--flake` — `<dir>` flake to check (default: repo root)
 
 ### scripts/check-fork-guard-release.sh
 
@@ -1027,8 +1027,8 @@ equivalent hand-rolled `die_op` guard) that regresses or was never
 written is invisible to every other lint in this repo, because none of
 them runs the scripts under test — only a scenario that actually drives
 a malformed payload through the gate and checks the exit code proves
-the gate still fires. This lint therefore gates the *scenario's
-existence*, not the gate's source text: grepping a script for
+the gate still fires. This lint therefore gates the scenario's
+existence, not the gate's source text: grepping a script for
 `require_json_payload` would pass a script that calls it on a path a
 scenario never exercises, and would fail a script whose gate is
 hand-rolled (die_op) but genuinely covered.
@@ -1733,7 +1733,7 @@ Report docs-audit drift pressure since the last audit:
 how many commits touched CI structure (.github/workflows, scripts,
 .github/lint-groups.yml), and which job ids / lint-group members were
 added or removed. Emits a Markdown body for the monthly docs-audit
-reminder issue, terminated by a machine-readable PRESSURE=<n> trailer
+reminder issue, terminated by a machine-readable `PRESSURE=<n>` trailer
 that the reminder workflow reads and strips before posting.
 
 Freshness gates validate only generated content; hand-written prose about
@@ -1774,7 +1774,7 @@ by aggregating pin metadata and live GitHub REST API data.
 ### scripts/inventory-action-pin-tags.sh
 
 Enumerate every SHA-pinned `uses:` in
-.github/workflows/*.yml|*.yaml and .github/actions/\*\*/action.yml
+`.github/workflows/*.yml|*.yaml` and `.github/actions/**/action.yml`
 (or action.yaml), resolve each pinned SHA to its exact patch tag via
 `gh api .../tags`, and emit a TSV mapping pin -> patch tag for
 downstream rewrite tooling.

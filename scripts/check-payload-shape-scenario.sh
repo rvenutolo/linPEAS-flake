@@ -8,8 +8,8 @@
 # written is invisible to every other lint in this repo, because none of
 # them runs the scripts under test — only a scenario that actually drives
 # a malformed payload through the gate and checks the exit code proves
-# the gate still fires. This lint therefore gates the *scenario's
-# existence*, not the gate's source text: grepping a script for
+# the gate still fires. This lint therefore gates the scenario's
+# existence, not the gate's source text: grepping a script for
 # `require_json_payload` would pass a script that calls it on a path a
 # scenario never exercises, and would fail a script whose gate is
 # hand-rolled (die_op) but genuinely covered.
