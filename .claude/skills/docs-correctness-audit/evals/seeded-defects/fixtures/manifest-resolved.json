@@ -25,5 +25,20 @@
     "expected_severity": "high",
     "sentinel": "sent-gamma",
     "line_tol": 3
+  },
+  {
+    "id": "delta",
+    "category": "two-file claim",
+    "file": "docs/d.md",
+    "line": 20,
+    "expected_severity": "high",
+    "sentinel": "",
+    "line_tol": 3,
+    "also": [
+      {
+        "file": "src/d.sh",
+        "line": 8
+      }
+    ]
   }
 ]

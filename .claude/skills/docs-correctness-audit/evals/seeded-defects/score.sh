@@ -19,15 +19,57 @@ manifest="$results/manifest-resolved.json"
 reports=("$@")
 n="${#reports[@]}"
 
-# Return 0 if a seed is detected in a single report.
+# Refuse a manifest that cannot be scored as written. Every seed needs an id, a
+# string sentinel (jq prints a null one as the text "null", which the report
+# would then be searched for) and a non-negative integer tolerance; every
+# location a non-empty, tab-free path (a location is passed as "file<TAB>line")
+# and a positive integer line. Both numbers are capped at 1e9, since jq prints
+# larger ones in exponent form, which bash arithmetic cannot read. Anything
+# else would die mid-table, drop seeds from the total, or score a false hit.
+bad="$(jq -r 'def int: type == "number" and . == floor and . <= 1e9;
+  if type != "array" or length == 0 then "no seeds"
+  else [.[] | . as $s | ($s.id // "?") as $id
+    | (if ($s.id | type) == "string" and $s.id != "" then empty else "a seed with no id" end),
+      (if ($s.sentinel | type) == "string" then empty else "\($id): sentinel" end),
+      (if ($s.line_tol | int) and $s.line_tol >= 0 then empty else "\($id): line_tol" end),
+      (if (($s.also // []) | type) != "array" then "\($id): also"
+        else ([{file: $s.file, line: $s.line}] + ($s.also // []))[]
+          | select(type != "object" or (.file | type) != "string" or .file == ""
+            or (.file | test("[\t\n\r]")) or ((.line | int) and .line >= 1 | not))
+          | "\($id): location" end)]
+    | unique | join(", ") end' "$manifest")" || {
+  echo "malformed manifest $manifest: not a JSON array of seeds" >&2
+  exit 1
+}
+[ -z "$bad" ] || {
+  echo "malformed manifest $manifest: $bad" >&2
+  exit 1
+}
+
+# Return 0 if a seed is detected in a single report: its sentinel appears
+# anywhere, or the report cites any of the seed's locations within tolerance.
+# Locations arrive as "file<TAB>line" arguments after the report — the primary
+# one first, then any "also" location of a seed that spans two files.
+# A citation names the whole path, optionally written with a leading ./: it
+# must not follow another path character, so a longer path that merely ends
+# in the seed's path is a different file,
+# and the path's regex metacharacters are escaped. A cited range "file:a-b"
+# hits when it comes within tolerance of the seed's line.
 detected() {
-  local file="$1" line="$2" tol="$3" sentinel="$4" report="$5" ln d
+  local tol="$1" sentinel="$2" report="$3" loc file line re lo hi
+  shift 3
   if [ -n "$sentinel" ] && grep -qF -- "$sentinel" "$report"; then return 0; fi
-  while read -r ln; do
-    d=$((ln - line))
-    d=${d#-}
-    [ "$d" -le "$tol" ] && return 0
-  done < <(grep -oE -- "${file//./\\.}:[0-9]+" "$report" 2>/dev/null | sed 's/.*://')
+  for loc in "$@"; do
+    file="${loc%%$'\t'*}"
+    line="${loc#*$'\t'}"
+    re="$(printf '%s' "$file" | sed 's/[][\\.*^$+?(){}|]/\\&/g')"
+    while IFS=- read -r lo hi; do
+      lo=$((10#$lo))
+      hi=$((10#${hi:-$lo}))
+      [ "$((lo - tol))" -le "$line" ] && [ "$line" -le "$((hi + tol))" ] && return 0
+    done < <(grep -oE -- "(^|[^A-Za-z0-9_./-])(\./)?$re:[0-9]+(-[0-9]+)?" "$report" 2>/dev/null |
+      sed 's/.*://')
+  done
   return 1
 }
 
@@ -42,15 +84,14 @@ rows=""
 while IFS= read -r seed; do
   id="$(jq -r '.id' <<<"$seed")"
   cat="$(jq -r '.category' <<<"$seed")"
-  file="$(jq -r '.file' <<<"$seed")"
-  line="$(jq -r '.line' <<<"$seed")"
-  tol="$(jq -r '.line_tol' <<<"$seed")"
+  tol="$(jq -r '.line_tol | floor' <<<"$seed")"
   sentinel="$(jq -r '.sentinel' <<<"$seed")"
+  mapfile -t locs < <(jq -r '([{file, line}] + (.also // []))[] | "\(.file)\t\(.line | floor)"' <<<"$seed")
 
   marks=""
   hits=0
   for r in "${reports[@]}"; do
-    if detected "$file" "$line" "$tol" "$sentinel" "$r"; then
+    if detected "$tol" "$sentinel" "$r" "${locs[@]}"; then
       marks+="✓ "
       hits=$((hits + 1))
     else

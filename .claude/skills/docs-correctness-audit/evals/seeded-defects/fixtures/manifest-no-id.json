@@ -1,0 +1,10 @@
+[
+  {
+    "category": "citation",
+    "file": "docs/a.md",
+    "line": 3,
+    "expected_severity": "high",
+    "sentinel": "",
+    "line_tol": 3
+  }
+]

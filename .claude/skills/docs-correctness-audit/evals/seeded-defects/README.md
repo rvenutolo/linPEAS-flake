@@ -23,7 +23,7 @@ below.
     ./plant.sh
     ```
 
-    Adds a detached worktree at HEAD under
+    Adds a detached worktree of HEAD at
     `${TMPDIR:-/tmp}/docs-audit-seeded-defects` — the tracked skill is checked
     out with it, so nothing is copied — applies all seeds, and writes
     `results/manifest-resolved.json` plus `results/worktree-path.txt`.
@@ -66,6 +66,34 @@ below.
     ```sh
     ./plant.sh --clean
     ```
+
+## Seed format
+
+Each entry in `seeds.json` names a `file`, an `anchor`, an `op`, a `from`
+(empty for `insert-after`), and a `payload`. Seeds apply in order, so an anchor must match exactly one line of
+its file as the earlier seeds left it. `insert-after` adds the payload as the
+line after the anchor; `replace-substr` swaps `from` for the payload inside
+the anchor's own text, and planting fails if `from` is not part of the anchor.
+An empty payload with `replace-substr` deletes `from`, which is how a
+truncation is planted. Every edit field is a string, and anchor, `from` and
+payload are each one line; planting refuses a newline in any of them, and a
+`replace-substr` anchor that occurs twice on its line. Each seed also needs a
+non-empty one-line string `id`, a string `sentinel`, and an integer
+`line_tol` from 0 to 1e9; an `also` that is not absent, `null` or `false`
+must be an array of edit objects. Planting checks these seed-level rules,
+and refuses an empty seed list, before it creates the worktree; the
+per-edit checks run as each edit is applied, so a refused edit leaves the
+worktree behind for the next plant to clear.
+
+A seed is scored as hit when a report contains its non-empty `sentinel`, or
+cites the seed's `file:line` within `line_tol` of where the edit landed. A
+citation must name the whole repo-relative path, optionally with a leading
+`./`: a longer path that merely ends in the seed's names another file, and
+an absolute path does not match. A cited range such as `file:20-40`
+hits when it comes within `line_tol` of the seed's line.
+
+A seed may also carry an `also` list of further `{file, anchor, op, from, payload}` edits, for a defect that lives in two files at once. The manifest
+records each one's line, and a citation of any location counts as a hit.
 
 ## Determinism
 
@@ -115,12 +143,39 @@ column) is exactly the signal being measured.
     with no flake — so that expectation is refuted, not merely open. Read a
     future low number as a statement about search depth rather than as a
     broken seed, but do not predict one.
+- **Generator-class** seeds (`generator-truncation`, `rendering-divergence`,
+    `agreed-false-annotation`) sit inside the generated body of
+    `docs/reference/scripts.md`, which `SKILL.md` tells readers never to flag
+    except as a low-confidence generator-vs-reality gap. They were expected
+    to score low because of that instruction. Measured at M=2, they did not:
+    both runs compared the rendered lines with their source comments and
+    reported `generator-truncation` and `agreed-false-annotation`, and one
+    run reported `rendering-divergence`, the set's only flake.
+    `generator-truncation` cuts the `refresh-flake-show.sh` `--check` line
+    where its source comment wraps, the shape the script-docs parser once
+    published; `rendering-divergence` strips the backslashes from the rendered
+    octoscan `--ignore` regex, so the page shows a value the script does not
+    pass. `agreed-false-annotation` swaps the exit codes in the
+    `refresh-treefmt-config.sh` `--check` annotation, in the usage comment
+    below it, *and* in its rendered line, so the generator, the page and the
+    script's own header agree. What refutes them is the script's exit paths
+    and the comment beside the could-not-run exit, plus the pattern the page
+    sets: every other generator's `--check` line that names both codes gives
+    exit 1 for drift and exit 2 for a check that cannot run.
+- **Re-sharpened** seed (`resharpened-claim`) follows the vague "Representative
+    hooks" list with a precise sentence naming two scripts as hooks, of which
+    only `check-ephemeral-refs` is one; `check-tool-guarded` runs only as the
+    `tool-guarded` member of the `lint-script-hygiene` group. It is refuted by
+    the hook modules under `nix/hooks/` and by the generated hook table in
+    `docs/development/git.md`, which the paragraph links to one sentence
+    earlier.
 
 ## A confound to keep in view
 
-Most seeds are planted with `insert-after` against a heading anchor, so they
-land as a lone sentence directly below a heading (a few anchor on body prose,
-and the two `replace-substr` seeds edit an existing line in place). That shape is
+Six of the fifteen seeds are planted with `insert-after` against a heading
+anchor, so they land as a lone sentence directly below a heading (the other
+four inserts anchor on body prose, and the `replace-substr` seeds edit an
+existing line in place). That shape is
 itself a tell: a reader can learn to spot it without doing the verification
 the seed exists to measure, and the heading-anchored ones trip markdownlint's
 MD022 as a side effect — one
@@ -129,13 +184,36 @@ right and named the seeded headings. Recall measured this way is therefore an
 upper bound. Varying the insertion point into paragraph interiors would
 tighten it, at the cost of re-measuring every seed from scratch.
 
+The generator-class seeds carry a second confound. `generator-truncation`
+and `rendering-divergence` edit only the rendered page, so the page no longer
+matches what its generator would write, and the `scripts-reference-fresh`
+hook would reject them. The real defects passed that gate because the generator
+itself was wrong. The audit runs no generator, so the seeds still measure
+whether a reader compares the page with its source, but a freshness failure
+is a tell the real class never had. `agreed-false-annotation` has no such
+tell: it edits the source comment and the page together, and regenerating
+the page leaves it unchanged.
+
+A third confound applies to every seed. The planted worktree carries the
+seeds as uncommitted edits, so `git status` lists exactly the files that hold
+them. Both runs of the M=2 measurement below noticed, and said so in their
+reports; each seed's finding was still verified against its source of truth,
+but nothing shows whether the reader found it by reading or by diffing.
+
+## Last measurement
+
+M=2 at `bd61a8c5`, fifteen seeds: 29/30 (96%). Every seed hit in both runs
+except `rendering-divergence`, which hit in one (FLAKY). Read the figure as
+an upper bound, for the confounds above.
+
 ## Tests
 
 `plant.test.sh` and `score.test.sh` are cheap, deterministic, and need no audit
 run. `score.test.sh` validates scoring math against fixtures alone.
 `plant.test.sh` validates the planting mechanics *and* asserts every
-`seeds.json` anchor still resolves exactly once in the tracked docs, so a
-*committed* reword of a seeded sentence fails `harness-group` until the
+`seeds.json` anchor, `also` edits included, still resolves exactly once in
+its tracked file, and that every recorded line holds the text its seed
+planted there. A *committed* reword of a seeded sentence fails `harness-group` until the
 seed is re-anchored — `plant.sh` cuts its worktree from `HEAD`, so an
 uncommitted edit still resolves. Together with `../../scripts/collect-ground-truth.test.sh` they
 are registered in `scripts/run-harness-group.sh` as `docs-audit-plant`,

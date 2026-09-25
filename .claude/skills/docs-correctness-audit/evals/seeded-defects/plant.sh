@@ -27,6 +27,44 @@ if [ "${1:-}" = "--clean" ]; then
   exit 0
 fi
 
+# Refuse a seed the manifest could not carry before planting anything: a
+# non-string id never joins back to its recorded locations, a non-string
+# sentinel or non-integer tolerance makes score.sh refuse the manifest after
+# the fact, and an also that is not an array of objects would drop its edits
+# while the plant exits 0. The tolerance is capped so bash arithmetic can read
+# it (jq prints 1e19 in exponent form).
+fault="$(jq -r 'def int: type == "number" and . == floor and . >= 0 and . <= 1e9;
+  if (.seeds | type) != "array" then "seeds is not an array"
+  elif (.seeds | length) == 0 then "no seeds"
+  else [.seeds | to_entries[] | .key as $i | .value as $s
+    | if ($s | type) != "object" then "seed #\($i): not an object"
+      else (if ($s.id | type) == "string" and $s.id != "" and ($s.id | test("[\n\r]") | not)
+            then "seed '"'"'\($s.id)'"'"'"
+            else "seed #\($i)" end) as $who
+        | (if $who != "seed #\($i)" then empty
+            else "\($who): id is not a non-empty one-line string" end),
+          (if ($s.sentinel | type) == "string" then empty
+            else "\($who): sentinel is not a string" end),
+          (if ($s.line_tol | int) then empty
+            else "\($who): line_tol is not an integer from 0 to 1e9" end),
+          (if ($s.also // []) | type == "array" and all(.[]; type == "object") then empty
+            else "\($who): also is not an array of edit objects" end)
+      end] | join("\n") end' "$seeds")" || {
+  echo "$seeds is not a JSON object holding a seeds array" >&2
+  exit 1
+}
+[ -z "$fault" ] || {
+  printf '%s\n' "$fault" >&2
+  exit 1
+}
+
+# Locations are keyed by seed id, so a repeated id would merge two seeds.
+dup="$(jq -r '[.seeds[].id] | group_by(.) | map(select(length > 1)[0]) | join(" ")' "$seeds")"
+[ -z "$dup" ] || {
+  echo "duplicate seed id(s): $dup" >&2
+  exit 1
+}
+
 mkdir -p "$results"
 # Planting must leave the primary tree exactly as it found it. Comparing the
 # tracked-file status before and after asserts that; an absolute "tree is
@@ -41,16 +79,51 @@ remove_worktree # idempotent: clear any prior worktree first
 # it. Seeds are never committed.
 git -C "$repo_root" worktree add --quiet --detach "$wt" HEAD
 
-resolved="[]"
-while IFS= read -r seed; do
-  id="$(jq -r '.id' <<<"$seed")"
-  file="$(jq -r '.file' <<<"$seed")"
-  anchor="$(jq -r '.anchor' <<<"$seed")"
-  op="$(jq -r '.op' <<<"$seed")"
-  from="$(jq -r '.from' <<<"$seed")"
-  payload="$(jq -r '.payload' <<<"$seed")"
+# Every applied edit's location, in application order: {id, file, line}. A
+# seed's first entry is its primary location; any further entries are its
+# "also" edits, which let one defect span two files — a claim a generator
+# source and its rendered page agree on, say.
+locs="[]"
+
+# write_back <target>: replace <target> with <target>.tmp in place. Copying
+# the content over the original, rather than moving the temp file onto it,
+# keeps the original's mode — a planted script must stay executable.
+write_back() {
+  cat "$1.tmp" >"$1"
+  rm -f "$1.tmp"
+}
+
+# apply_edit <id> <edit-json>: apply one {file, anchor, op, from, payload}
+# edit to the worktree and append the line it landed on to $locs.
+apply_edit() {
+  local id="$1" edit="$2" file anchor op from payload target n aline rline fault line rest
+  file="$(jq -r '.file' <<<"$edit")"
+  anchor="$(jq -r '.anchor' <<<"$edit")"
+  op="$(jq -r '.op' <<<"$edit")"
+  from="$(jq -r '.from' <<<"$edit")"
+  payload="$(jq -r '.payload' <<<"$edit")"
   target="$wt/$file"
 
+  # Every edit field is a string (jq -r prints a null payload as the text
+  # "null", which would be planted), and seed text is one line: grep -F reads
+  # a newline in the anchor as a second pattern, and a payload that plants
+  # extra lines shifts text below it that no recorded location accounts for.
+  # Checked in jq, since command substitution would strip a trailing newline
+  # before bash could see it.
+  fault="$(jq -r '[("file", "anchor", "op", "from", "payload") as $k
+      | select((.[$k] | type) != "string") | "\($k) is not a string"]
+    + [("anchor", "from", "payload") as $k
+      | select((.[$k] | type) == "string" and (.[$k] | test("[\n\r]")))
+      | "\($k) holds a newline"]
+    | join(", ")' <<<"$edit")"
+  [ -z "$fault" ] || {
+    echo "seed '$id': $fault" >&2
+    exit 1
+  }
+  [ -f "$target" ] || {
+    echo "seed '$id': no file $file" >&2
+    exit 1
+  }
   n="$(grep -cF -- "$anchor" "$target" || true)"
   [ "$n" = 1 ] || {
     echo "seed '$id': anchor matched $n lines in $file (need 1)" >&2
@@ -58,21 +131,42 @@ while IFS= read -r seed; do
   }
   aline="$(grep -nF -- "$anchor" "$target" | head -1 | cut -d: -f1)"
 
+  # Seed text reaches awk through ENVIRON, never -v: -v processes backslash
+  # escapes, so a regex like '\.\*' would arrive as '.*' and match nothing.
   case "$op" in
   insert-after)
     # Insert payload as the line after the anchor line.
-    awk -v ln="$aline" -v ins="$payload" 'NR==ln{print; print ins; next} {print}' \
-      "$target" >"$target.tmp" && mv "$target.tmp" "$target"
+    SEED_PAYLOAD="$payload" awk -v ln="$aline" \
+      'NR==ln{print; print ENVIRON["SEED_PAYLOAD"]; next} {print}' \
+      "$target" >"$target.tmp"
+    write_back "$target"
     rline=$((aline + 1))
+    # The insert pushes every line below the anchor down one, including any
+    # an earlier edit already recorded in this file.
+    locs="$(jq --arg f "$file" --argjson a "$aline" \
+      'map(if .file == $f and .line > $a then .line += 1 else . end)' <<<"$locs")"
     ;;
   replace-substr)
-    grep -qF -- "$from" "$target" || {
-      echo "seed '$id': from-string not found" >&2
+    # The replacement edits the anchor's own text, so the from-string must be
+    # inside it: elsewhere in the file the edit would be a silent no-op, and
+    # beside the anchor on its line it would edit text the seed never named.
+    [ -n "$from" ] && [[ $anchor == *"$from"* ]] || {
+      echo "seed '$id': from-string not inside the anchor in $file" >&2
       exit 1
     }
-    awk -v ln="$aline" -v from="$from" -v to="$payload" '
-        NR==ln { i=index($0,from); if(i>0){$0=substr($0,1,i-1) to substr($0,i+length(from))} }
-        {print}' "$target" >"$target.tmp" && mv "$target.tmp" "$target"
+    # The rewrite takes the anchor's first occurrence on its line, so a second
+    # one would leave which text the seed means to the order of the line.
+    line="$(sed -n "${aline}p" "$target")"
+    rest="${line#*"$anchor"}"
+    [[ $rest != *"$anchor"* ]] || {
+      echo "seed '$id': anchor occurs more than once on its line in $file" >&2
+      exit 1
+    }
+    SEED_ANCHOR="$anchor" SEED_NEW="${anchor/"$from"/"$payload"}" awk -v ln="$aline" '
+        NR==ln { a=ENVIRON["SEED_ANCHOR"]; i=index($0,a)
+          $0=substr($0,1,i-1) ENVIRON["SEED_NEW"] substr($0,i+length(a)) }
+        {print}' "$target" >"$target.tmp"
+    write_back "$target"
     rline="$aline"
     ;;
   *)
@@ -81,11 +175,25 @@ while IFS= read -r seed; do
     ;;
   esac
 
-  resolved="$(jq --argjson s "$seed" --argjson line "$rline" \
-    '. + [{id:$s.id, category:$s.category, file:$s.file, line:$line,
-            expected_severity:$s.expected_severity, sentinel:$s.sentinel,
-            line_tol:$s.line_tol}]' <<<"$resolved")"
+  locs="$(jq --arg id "$id" --arg f "$file" --argjson l "$rline" \
+    '. + [{id: $id, file: $f, line: $l}]' <<<"$locs")"
+}
+
+while IFS= read -r seed; do
+  id="$(jq -r '.id' <<<"$seed")"
+  apply_edit "$id" "$seed"
+  while IFS= read -r edit; do
+    apply_edit "$id" "$edit"
+  done < <(jq -c '(.also // [])[]' <<<"$seed")
 done < <(jq -c '.seeds[]' "$seeds")
+
+resolved="$(jq --argjson locs "$locs" '[.seeds[] as $s
+  | ($locs | map(select(.id == $s.id))) as $l
+  | {id: $s.id, category: $s.category, file: $s.file, line: $l[0].line,
+    expected_severity: $s.expected_severity, sentinel: $s.sentinel,
+    line_tol: $s.line_tol}
+  + (if ($l | length) > 1 then {also: ($l[1:] | map({file, line}))} else {} end)]' \
+  "$seeds")"
 
 printf '%s\n' "$resolved" | jq '.' >"$results/manifest-resolved.json"
 printf '%s\n' "$wt" >"$results/worktree-path.txt"

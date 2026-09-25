@@ -43,6 +43,48 @@ while IFS=$'\t' read -r f s; do
   check "sentinel '$s' planted in $f" "grep -qF -- '$s' '$wt/$f'"
 done < <(jq -r '.[] | "\(.file)\t\(.sentinel)"' "$manifest")
 
+# Every recorded line must hold the text its seed planted. Scoring matches a
+# report's file:line citation against that line, so a line that drifts — a later
+# seed inserting above an earlier one in the same file — silently moves the
+# target a reader has to cite. An insert must read back as its payload exactly;
+# a replacement must read back as its anchor with the from-string swapped. A
+# seed's "also" edits are held to the same rule at their own recorded lines,
+# and a seed must record exactly one location per edit it declares.
+# Records are joined on \x1f, not a tab: tab is IFS whitespace, so the empty
+# from-string of every insert would collapse into its neighbour.
+assert_planted() {
+  local seeds_file="$1" id f ln op anchor from payload actual ok
+  while IFS=$'\x1f' read -r id f ln op anchor from payload; do
+    actual="$(sed -n "${ln}p" "$wt/$f")"
+    ok=0
+    case "$op" in
+    insert-after) [ "$actual" = "$payload" ] && ok=1 ;;
+    replace-substr) [[ $actual == *"${anchor/"$from"/"$payload"}"* ]] && ok=1 ;;
+    esac
+    check "seed '$id': $f:$ln holds the planted text" "[ $ok = 1 ]"
+  done < <(jq -r --slurpfile s "$seeds_file" '
+    ($s[0].seeds | map({key: .id, value: .}) | from_entries) as $by
+    | .[] | $by[.id] as $seed
+    | ([{file, line}] + (.also // [])) as $locs
+    | ([$seed] + ($seed.also // [])) as $edits
+    | if ($locs | length) != ($edits | length) then
+        [.id, "\($locs | length) locations for \($edits | length) edits", "0", "count"]
+        | join("\u001f")
+      else
+        range(0; $locs | length) as $i
+        | [.id, $locs[$i].file, ($locs[$i].line | tostring), $edits[$i].op,
+          $edits[$i].anchor, $edits[$i].from, $edits[$i].payload]
+        | join("\u001f")
+      end' "$manifest")
+}
+assert_planted "$here/seeds.json"
+
+# Planting edits content only. A mode change is a second defect the seed never
+# declared — a script that lost its execute bit fails wherever it is run — and
+# a tell in the worktree's diff besides.
+mode_changes="$(git -C "$wt" diff --summary | grep -cF 'mode change' || true)"
+check "planting changes no file mode" "[ '$mode_changes' = 0 ]"
+
 # Primary tree must be unchanged by planting (tracked files).
 check "primary tree unchanged by planting" \
   "[ \"\$(git -C '$here' status --porcelain --untracked-files=no)\" = \"\$primary_before\" ]"
@@ -62,5 +104,57 @@ check "unresolvable anchor fails the plant" "[ '$bad_rc' -ne 0 ]"
 check "unresolvable anchor names the miss" \
   "printf '%s' \"\$bad_out\" | grep -qF 'anchor matched 0 lines'"
 "$plant" --clean >/dev/null 2>&1 || true
+
+# A seed can span two files through "also" edits. The fixture plants one seed
+# whose also-edits land above its primary line in the same file and in a
+# second file, then a later seed inserts above that second-file location, so
+# every recorded line has to move with the inserts that follow it. A third
+# inserts directly below that same location, which must not move it; a fourth
+# replaces a from-string that also appears earlier on its line, outside the
+# anchor, and must edit the occurrence inside the anchor.
+"$plant" --clean >/dev/null 2>&1 || true
+SEEDS_OVERRIDE="$here/fixtures/seeds-also.json" "$plant" >/dev/null
+wt="$(cat "$results/worktree-path.txt")"
+check "a two-file seed records both also locations" \
+  "[ \"\$(jq '[.[] | select(.id == \"span\") | .also[]] | length' '$manifest')\" = 2 ]"
+check "a single-file seed records no also key" \
+  "[ \"\$(jq '[.[] | select(.id == \"later\") | has(\"also\")] | .[0]' '$manifest')\" = false ]"
+assert_planted "$here/fixtures/seeds-also.json"
+"$plant" --clean >/dev/null
+
+# Each malformed seed set must fail the plant and name its fault: an also
+# anchor that resolves nowhere; a from-string outside the anchor, whether on
+# another line (the replacement would silently edit nothing) or beside the
+# anchor on its own line (it would edit text the seed never named); a payload
+# holding a newline (it would add lines no recorded location accounts for);
+# an anchor that occurs twice on its line (which occurrence is meant is
+# ambiguous); a seed text field that is not a string (jq prints null as text);
+# an also that is not an array of edit objects (its edits would be dropped
+# while the plant exits 0); a seed id that is not a string, or a tolerance
+# that is not an integer (score.sh would refuse the manifest after the fact);
+# an empty seed list; and an id holding a newline (it splits its table row);
+# and a repeated seed id (its locations would merge into the other seed's).
+while IFS=$'\t' read -r fixture msg; do
+  rc=0
+  # shellcheck disable=SC2034 # read via check()'s eval of the assertion string below, not a direct expansion here
+  out="$(SEEDS_OVERRIDE="$here/fixtures/$fixture" "$plant" 2>&1)" || rc=$?
+  check "$fixture fails the plant" "[ '$rc' -ne 0 ]"
+  check "$fixture names its fault" "printf '%s' \"\$out\" | grep -qF '$msg'"
+  "$plant" --clean >/dev/null 2>&1 || true
+done <<'EOF'
+seeds-bad-also-anchor.json	anchor matched 0 lines in docs/index.md
+seeds-from-off-line.json	from-string not inside the anchor
+seeds-from-outside-anchor.json	from-string not inside the anchor
+seeds-multiline-payload.json	holds a newline
+seeds-dup-id.json	duplicate seed id(s): span
+seeds-anchor-twice.json	occurs more than once on its line
+seeds-null-payload.json	payload is not a string
+seeds-also-string.json	also is not an array of edit objects
+seeds-also-scalar-entry.json	also is not an array of edit objects
+seeds-numeric-id.json	id is not a non-empty one-line string
+seeds-fractional-tol.json	line_tol is not an integer
+seeds-empty.json	no seeds
+seeds-newline-id.json	id is not a non-empty one-line string
+EOF
 
 exit "$fail"
