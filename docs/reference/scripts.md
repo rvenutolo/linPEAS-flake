@@ -7,9 +7,13 @@ Auto-generated from in-script `@description` / `@arg` / `@option` /
 basename prefix into the Check scripts, Refresh scripts and Other
 sections; the sourced libraries under `scripts/lib/` render one entry
 per library — its file header, then one sub-entry per annotated
-function — in the Libraries section. The `scripts/*.awk` parsers are not
+function — in the Libraries section. The underscore-prefixed helpers —
+the `scripts/*.awk` parsers and the round-trip checker's Python — are not
 rendered here; they are documented from the entry points that invoke
 them. Do not edit between the markers.
+`scripts/check-scripts-reference-roundtrip.sh` checks that every header
+reaches this page as written; see
+[linting.md](../development/linting.md#scripts-reference-round-trip).
 
 <!-- BEGIN scripts-reference -->
 
@@ -1354,6 +1358,52 @@ with `#!/usr/bin/env bash` (exact first line) and carries
 `set -Eeuo pipefail` as its own line (line-anchored; a trailing
 addition such as `-x` is accepted); every sourced library
 under `scripts/lib/` satisfies the inverse.
+
+### scripts/check-scripts-reference-roundtrip.sh
+
+Lint: every piece of script-header text reaches
+docs/reference/scripts.md as written. The page is generated, and its
+freshness gate compares the committed page with a fresh render, so a
+generator that drops or rewrites header text agrees with itself and stays
+green. This check compares the other two ends instead: what each header
+says, read by an independent reader, against what the committed page shows
+once rendered by the site's own Markdown renderer (python-markdown).
+
+Scope is the generator's own: every `scripts/*.sh` not starting with an
+underscore, read header-only, and every `scripts/lib/*.sh`, whose
+function `@description` blocks are read as well. The reader splits a
+header into units at each tag. A unit's text must appear, whitespace
+collapsed and code-span backticks removed, in that script's or function's
+entry. Prose after a blank comment line that closes an `@arg`, `@option`,
+`@exitcode` or `@stdout` is a further description unit. An indented run
+whose lead-in line ends in a colon must also stay one preformatted block,
+line for line, because collapsing it keeps every word and still loses the
+shape. Text the generator never reaches is a finding too: header prose
+before the first tag, a `# @tag` in a comment block after the header's
+first blank line, and a library annotation not bound to a function.
+
+Text outside a code span is Markdown on the page, so a `<placeholder>`
+reads as an HTML tag and a glob's asterisks open emphasis. Put such text in
+backticks; escaping cannot help, because the formatter rewrites the escape
+into one the site's renderer does not honor.
+
+Env overrides (test-only):
+
+```text
+  SCRIPTS_DIR_OVERRIDE — alternate scripts/ root
+  SCRIPTS_REFERENCE_DOC_OVERRIDE — alternate rendered page
+```
+
+Exit codes:
+
+```text
+  0  every annotation unit is published intact
+  1  header text the page drops, alters or collapses (details on stderr)
+  2  the check could not run: the page or its markers are missing,
+      python3 or python-markdown is unavailable, the scripts or lib glob
+      matches nothing (unless LINT_ALLOW_EMPTY_SCAN is set), a header is
+      not UTF-8, or no annotation text was found
+```
 
 ### scripts/check-setup-nix-required.sh
 

@@ -302,7 +302,9 @@ which a bare substring grep reports as a consumer.
     fires on any staged shell file under `scripts/`, so a new check
     script blocks the commit until its annotations are rendered — the
     census step above
-    covers only the harness table.
+    covers only the harness table. `check-scripts-reference-roundtrip`
+    then checks that the header reaches the page as written, so a
+    `<placeholder>` or glob outside backticks fails the commit.
 
 1. If the script is wired into a CI required check, also document
     it in `docs/security/required-checks.md`;

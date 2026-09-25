@@ -267,7 +267,7 @@ the enumerated planning and review labels above are blocked.
     <!-- BEGIN ephemeral-refs-gap -->
 
     File types no extractor claims and that carry `#` comments:
-    `.awk`, `.envrc`, `.gitignore`, `.toml`, `.txt`, `docs-audit-state`, `justfile`.
+    `.awk`, `.envrc`, `.gitignore`, `.py`, `.toml`, `.txt`, `docs-audit-state`, `justfile`.
     No blocking shape appears in any of them.
 
     <!-- END ephemeral-refs-gap -->
@@ -644,6 +644,41 @@ it, no `*-fresh` hook covers it, and freshness is asserted by
 `scripts/check-changelog-fresh.sh` in the required `changelog-links` job over
 the released sections only — `## Unreleased` changes with every merged commit.
 See [changelog.md](changelog.md).
+
+## Scripts-reference round trip
+
+A freshness gate proves a generator ran, not that it is right: when the
+generator drops or rewrites text, the committed page and a fresh render agree
+on the wrong output. `scripts/check-scripts-reference-roundtrip.sh` checks the
+scripts reference end to end instead. It reads every header the generator
+reads — each `scripts/*.sh` entry point not starting with an underscore, and
+each `scripts/lib/*.sh` library with its function `@description` blocks — with
+its own reader, not `scripts/_script_docs.awk`, because a checker built on the
+parser would agree with every text the parser drops. It renders the committed
+page with python-markdown, the renderer the site is built with, and asserts
+three things per script or function entry:
+
+1. Each unit of header text — a tag and the lines that continue it — is
+    visible in the entry, compared as words with code-span backticks
+    removed. Prose after a blank comment line that closes an `@arg`,
+    `@option`, `@exitcode` or `@stdout` is a further description unit.
+1. An indented run whose lead-in line ends in a colon is one preformatted
+    block on the page, line for line. Collapsing it into a paragraph keeps
+    every word and still loses the shape, so the word comparison alone would
+    pass it.
+1. No header text sits where the generator never reads it: prose before the
+    first tag, a `# @tag` in a comment block after the header's first blank
+    line, or a library annotation not bound to a function.
+
+Header text outside a code span is Markdown on the page. A `<placeholder>`
+renders as an HTML tag and vanishes, and a glob's asterisks open emphasis, so
+put such text in backticks. Escaping it in the generator does not work:
+mdformat rewrites `&lt;` to `\<`, which python-markdown does not treat as an
+escape, so the site prints the backslash and still swallows the tag.
+
+It runs in the `lint-doc-invariants` group and as the
+`check-scripts-reference-roundtrip` pre-commit hook, whose Python carries
+python-markdown and pymdown-extensions itself.
 
 ## Payload shape-gate scenario coverage
 
