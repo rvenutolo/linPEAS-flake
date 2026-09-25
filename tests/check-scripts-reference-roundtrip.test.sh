@@ -1176,6 +1176,23 @@ EOF
     "scripts/t.sh: @description (line 2) published 2 of 5 words; dropped or altered from: '-- b here.'"
   printf '%s\n' 'INHERIT: base.yml' 'markdown_extensions:' '  - smarty' >"${TREE}/mkdocs.yml"
   run_scenario 'a mkdocs.yml that inherits another is exit 2' 2 'inherits another config (INHERIT)'
+  # A built-in the list also names still loads first, as mkdocs loads it.
+  # The probe is inert: it raises only when toc has not registered yet.
+  local probe_py="${work}/probe-py"
+  mkdir --parents -- "${probe_py}"
+  printf '%s\n' 'from markdown.extensions import Extension' '' '' \
+    'class Probe(Extension):' '    def extendMarkdown(self, md):' \
+    '        if "toc" not in md.treeprocessors:' '            raise RuntimeError("toc loaded after the probe")' '' '' \
+    'def makeExtension(**kwargs):' '    return Probe(**kwargs)' >"${probe_py}/zzorderprobe.py"
+  printf '%s\n' 'site_name: x' 'markdown_extensions:' '  - zzorderprobe' '  - toc' >"${TREE}/mkdocs.yml"
+  local s
+  for s in v w x; do
+    printf '%s\n' '#!/usr/bin/env bash' "# @description Probed ${s}." 'true' >"${TREE}/scripts/${s}.sh"
+  done
+  printf '%s\n' '### scripts/t.sh' '' 'Dash a -- b here.' '' '### scripts/v.sh' '' 'Probed v.' '' \
+    '### scripts/w.sh' '' 'Probed w.' '' '### scripts/x.sh' '' 'Probed x.' | write_page
+  PYTHONPATH="${probe_py}:${PYTHONPATH:-}" run_scenario 'a built-in the list names later still loads first' 0 '' \
+    'ok — 5 file(s), 5 annotation unit(s), 0 indented block(s) published intact'
 }
 
 # The page is formatted by mdformat, whose CommonMark rules decide which
@@ -1263,6 +1280,24 @@ function scenario_import_path_scrubbed() {
   SCRIPT_UNDER_TEST="${work}/checker-link/check-scripts-reference-roundtrip.sh" \
     run_scenario 'nor through a symlinked scripts directory' 2 \
     "could not render the page: ModuleNotFoundError: No module named 'zzlinked'"
+}
+
+# A known limit: the page's table cells are not collected, so a header
+# table the page renders as a table reads as dropped text.
+function scenario_header_table_reads_as_dropped() {
+  new_tree headertable
+  cat >"${TREE}/scripts/t.sh" <<'EOF2'
+#!/usr/bin/env bash
+# @description Table:
+#
+# | a | b |
+# |---|---|
+# | x | y |
+true
+EOF2
+  printf '%s\n' '### scripts/t.sh' '' 'Table:' '' '| a | b |' '|---|---|' '| x | y |' | write_page
+  run_scenario 'a header table the page renders as a table reads as dropped' 1 \
+    "scripts/t.sh: @description (line 2) published 1 of 12 words; dropped or altered from: '| a | b | |---|---| | x | y |'"
 }
 
 # A code span never crosses a blank line, so a lone backtick in one
@@ -1381,6 +1416,7 @@ function main() {
   scenario_env_value_resolution
   scenario_import_path_scrubbed
   scenario_lone_backtick
+  scenario_header_table_reads_as_dropped
   scenario_indented_tag_is_prose
   scenario_cannot_run
   scenario_interpreter_failures
