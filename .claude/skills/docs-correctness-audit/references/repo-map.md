@@ -2,7 +2,7 @@
 
 This file holds the repo-specific facts the audit shares with every reader.
 Commands and lists drift; where this file names a generator, recipe, or path,
-**trust live output (`just --list`, `ls scripts/*.sh scripts/lib/*.sh scripts/*.awk`,
+**trust live output (`just --list`, `ls scripts/*.sh scripts/lib/*.sh scripts/*.awk scripts/*.py`,
 `ls scripts/refresh-*.sh`, the named script's own source) over what is written
 here** if they disagree, and note the drift as its own finding.
 
@@ -86,7 +86,7 @@ which a hand-run command does not.
 ```sh
 nix flake show --json          # flake output inventory (the bundle's FLAKE OUTPUTS section is authoritative)
 just --list                    # every recipe (and what each regenerates)
-ls scripts/*.sh scripts/lib/*.sh scripts/*.awk  # script inventory: entry points, sourced libraries, awk programs
+ls scripts/*.sh scripts/lib/*.sh scripts/*.awk scripts/*.py  # script inventory: entry points, sourced libraries, awk and Python programs
 ls .github/workflows/          # workflow filenames
 grep -HE '^[[:space:]]*-[[:space:]]*cron:' .github/workflows/*.yml .github/workflows/*.yaml   # authoritative cron schedules (anchored: a prose `cron:` inside a run: block is not a schedule)
 sed -n '/^## Required contexts/,/^## /p' docs/security/required-checks.md  # required-check contexts
@@ -99,11 +99,12 @@ the raw `nix flake show` tree rendering, so a tree-shaped FLAKE OUTPUTS
 section means the filter fell back and should be read as a raw dump; `python3`
 is therefore a soft dependency of the collector.
 
-The script inventory names both shell trees and the awk programs because
+The script inventory names both shell trees and the awk and Python programs because
 tracked docs cite the sourced libraries under `scripts/lib/` — `make_temp`
 (`scripts/lib/temp.sh`), `enumerate_into` (`scripts/lib/enumerate.sh`) and
 their siblings carry invariants of their own — and the `scripts/*.awk`
-programs (`_script_docs.awk`, `_attestation_invocations.awk`) by path as
+programs (`_script_docs.awk`, `_attestation_invocations.awk`) and the
+`scripts/*.py` program (`_scripts_reference_roundtrip.py`) by path as
 readily as the top-level entry points. A `scripts/*.sh` glob covers neither,
 so an inventory that stops at top-level `*.sh` makes every such citation read
 as a script that does not exist. The collector emits libraries under a `lib/`

@@ -656,23 +656,28 @@ each `scripts/lib/*.sh` library with its function `@description` blocks — with
 its own reader, not `scripts/_script_docs.awk`, because a checker built on the
 parser would agree with every text the parser drops. It renders the committed
 page with python-markdown, the renderer the site is built with, and asserts
-three things per script or function entry:
+three things per script or function entry. Each unit is matched in its own
+part of the entry: an `@arg`, `@option`, `@exitcode` or `@stdout` must be one
+whole item of its list, an `@example` the entry's example block, and
+description text is found in order in the part before the first list label.
 
 1. Each unit of header text — a tag and the lines that continue it — is
-    visible in the entry, compared as words with code-span backticks
+    visible in its part of the entry, compared as words with code-span backticks
     removed. Prose after a blank comment line that closes an `@arg`,
     `@option`, `@exitcode` or `@stdout` is a further description unit.
 1. An indented run whose lead-in line ends in a colon is one preformatted
     block on the page, line for line. Collapsing it into a paragraph keeps
     every word and still loses the shape, so the word comparison alone would
     pass it.
-1. No header text sits where the generator never reads it: prose before the
-    first tag, a `# @tag` in a comment block after the header's first blank
-    line, or a library annotation not bound to a function.
+1. Header text in three shapes the generator never reads is a finding:
+    prose before the first tag, a `# @tag` in a comment block between the
+    header's first blank line and the first line of code, and, in a
+    library, an annotation outside a function's `@description` block.
 
 Header text outside a code span is Markdown on the page. A `<placeholder>`
-renders as an HTML tag and vanishes, and a glob's asterisks open emphasis, so
-put such text in backticks. Escaping it in the generator does not work:
+renders as an HTML tag and vanishes, and a glob's asterisks can open
+emphasis, so put such text in backticks. Escaping a `<` in the generator does
+not work:
 mdformat rewrites `&lt;` to `\<`, which python-markdown does not treat as an
 escape, so the site prints the backslash and still swallows the tag.
 

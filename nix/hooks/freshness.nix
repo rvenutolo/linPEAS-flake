@@ -24,13 +24,6 @@ let
   # invoking `shfmt` as a bare command — the ephemeral-reference lint reads
   # shell comments out of `shfmt --to-json` — resolves nothing without this
   # entry.
-  # The round-trip check renders the scripts reference with the site's own
-  # Markdown renderer, so its hook carries that renderer rather than
-  # trusting whatever python3 the committer's shell has.
-  rendererPython = pkgs-unstable.python3.withPackages (ps: [
-    ps.markdown
-    ps.pymdown-extensions
-  ]);
   toolPath = pkgs-unstable.lib.makeBinPath [
     pkgs-unstable.coreutils
     pkgs-unstable.diffutils
@@ -43,6 +36,13 @@ let
     pkgs-unstable.yq-go
     treefmtWrapper
   ];
+  # The round-trip check renders the scripts reference with the site's own
+  # Markdown renderer, so its hook carries that renderer rather than
+  # trusting whatever python3 the committer's shell has.
+  rendererPython = pkgs-unstable.python3.withPackages (ps: [
+    ps.markdown
+    ps.pymdown-extensions
+  ]);
 in
 {
   # Refuse to commit if the flake-show block in docs/reference/flake-outputs.md

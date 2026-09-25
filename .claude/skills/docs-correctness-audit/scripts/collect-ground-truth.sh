@@ -375,15 +375,16 @@ print("outputs: " + ", ".join(names))
 }
 
 list_scripts() { # emits one `scripts/`-relative path per script, cwd = repo root
-  # Both shell trees plus the awk programs. Tracked docs cite the sourced
-  # libraries under scripts/lib/ and the `scripts/*.awk` programs by path as
+  # Both shell trees plus the awk and Python programs. Tracked docs cite the
+  # sourced libraries under scripts/lib/ and the `scripts/*.awk` and
+  # `scripts/*.py` programs by path as
   # readily as the top-level entry points, and a `scripts/*.sh` glob covers
   # neither — so an inventory that stops at top-level *.sh makes every such
   # citation read to a reader as a script that does not exist. The `lib/`
   # prefix is what keeps a library entry distinguishable from an entry-point
   # one; a bare basename would collapse the distinction the citations rely on.
   local f
-  for f in scripts/*.sh scripts/lib/*.sh scripts/*.awk; do
+  for f in scripts/*.sh scripts/lib/*.sh scripts/*.awk scripts/*.py; do
     [[ -e ${f} ]] || continue
     printf '%s\n' "${f#scripts/}"
   done
@@ -628,7 +629,7 @@ main() {
   section "JUST RECIPES (just --list)"
   just --list 2>/dev/null | sed 's/^ *//'
 
-  section "SCRIPTS (scripts/*.sh + scripts/lib/*.sh + scripts/*.awk)"
+  section "SCRIPTS (scripts/*.sh + scripts/lib/*.sh + scripts/*.awk + scripts/*.py)"
   list_scripts
 
   section "WORKFLOWS (.github/workflows)"
