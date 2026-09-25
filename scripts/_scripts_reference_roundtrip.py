@@ -10,9 +10,9 @@
 #
 # Usage: python3 _scripts_reference_roundtrip.py DOC MKDOCS --entry F... --lib F...
 # Exit 0 when every unit is published intact, 3 on any finding, 2 when the
-# check cannot run: the page or its markers are missing, mkdocs.yml loads an
-# extension this checker cannot configure, a header is not UTF-8, or the
-# files named hold no annotation at all. Findings use 3, not 1, because
+# check cannot run: the page or its markers are missing, mkdocs.yml's
+# markdown extensions cannot be read or loaded, a header is not UTF-8, or
+# the files named hold no annotation at all. Findings use 3, not 1, because
 # Python itself exits 1 on a syntax error or an uncaught exception, and the
 # wrapper must not read either as findings.
 
@@ -22,11 +22,17 @@ import os
 import re
 import sys
 
+# Python puts this script's own directory first on the import path, so an
+# extension or `!!python/name:` in mkdocs.yml could otherwise import a file
+# sitting beside the checker. Imports resolve from installed packages only.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path[:] = [p for p in sys.path if os.path.abspath(p or os.curdir) != _HERE]
+
 try:
     import markdown
     import yaml
 except ImportError as err:
-    print(f"scripts-reference-roundtrip: python-markdown is not importable ({err.name} is missing)", file=sys.stderr)
+    print(f"scripts-reference-roundtrip: python-markdown or PyYAML is not importable ({err.name} is missing)", file=sys.stderr)
     sys.exit(2)
 
 PROG = "scripts-reference-roundtrip"
@@ -82,23 +88,30 @@ class Unit:
         if self.tag == "example":
             return "\n".join(self.example_lines())
         if self.tag == "description":
-            lines = unlist([self.head] + self.lines)
+            # A fenced run is shown as written; everything around it is
+            # prose, where a list item's marker renders as a bullet.
+            lines = [self.head] + self.lines
             out, i = [], 0
             for start, end, fenced in run_spans(lines):
-                out.append(prose(lines[i:start]))
-                out.append(" ".join(lines[start:end]) if fenced else prose(lines[start:end]))
+                if not fenced:
+                    continue
+                out.append(prose(unlist(lines[i:start])))
+                out.append(" ".join(lines[start:end]))
                 i = end
-            out.append(prose(lines[i:]))
+            out.append(prose(unlist(lines[i:])))
             return " ".join(out)
         return prose([self.head] + self.lines)
 
     def example_lines(self):
-        """An @example's fence as the generator writes it: the body lines as
-        written, the tag line's own text first when it has any, trailing
-        blank lines dropped."""
+        """The lines an @example's fence must hold: its body as written,
+        with the blank lines at either edge dropped as the fence drops them.
+        Text on the tag line itself is required too; the generator does not
+        print it, so a header that puts text there is reported."""
         lines = ([self.head] if self.head.strip() else []) + self.lines
         while lines and blank(lines[-1]):
             lines.pop()
+        while lines and blank(lines[0]):
+            lines.pop(0)
         return [x.rstrip() for x in lines]
 
     def label(self):
@@ -288,7 +301,22 @@ def _python_name(loader, suffix, node):
     return getattr(importlib.import_module(module), attr)
 
 
+def _env(loader, node):
+    """mkdocs's `!ENV NAME` or `!ENV [NAME, ..., default]`: the first set
+    variable, else the default."""
+    if isinstance(node, yaml.ScalarNode):
+        names, default = [loader.construct_scalar(node)], None
+    else:
+        items = loader.construct_sequence(node)
+        names, default = items[:-1], items[-1]
+    for name in names:
+        if name in os.environ:
+            return yaml.safe_load(os.environ[name])
+    return default
+
+
 SiteLoader.add_multi_constructor("tag:yaml.org,2002:python/name:", _python_name)
+SiteLoader.add_constructor("!ENV", _env)
 SiteLoader.add_multi_constructor("!", lambda loader, suffix, node: None)
 
 
@@ -302,6 +330,9 @@ def site_extensions(mkdocs_yml):
             config = yaml.load(fh, Loader=SiteLoader)
     except (OSError, yaml.YAMLError, ImportError, AttributeError) as err:
         print(f"{PROG}: cannot read the markdown extensions in {mkdocs_yml}: {err}", file=sys.stderr)
+        sys.exit(2)
+    if isinstance(config, dict) and "INHERIT" in config:
+        print(f"{PROG}: {mkdocs_yml} inherits another config (INHERIT), which this checker does not follow", file=sys.stderr)
         sys.exit(2)
     entries = config.get("markdown_extensions") if isinstance(config, dict) else None
     if not isinstance(entries, list) or not entries:
@@ -318,6 +349,8 @@ def site_extensions(mkdocs_yml):
         else:
             print(f"{PROG}: {mkdocs_yml} has a markdown_extensions entry this checker cannot read: {entry!r}", file=sys.stderr)
             sys.exit(2)
+    # mkdocs always loads these, ahead of the configured list.
+    names = [n for n in ("toc", "tables", "fenced_code") if n not in names] + names
     return names, configs
 
 
@@ -331,17 +364,11 @@ def render(doc, mkdocs_yml):
         print(f"{PROG}: {doc} lacks the scripts-reference BEGIN/END markers", file=sys.stderr)
         sys.exit(2)
     block = "\n".join(lines[begin + 1:end]).replace("{% raw %}", "").replace("{% endraw %}", "")
-    # mkdocs builds from the directory holding mkdocs.yml, which is where a
-    # relative snippets path resolves.
-    here = os.getcwd()
-    os.chdir(os.path.dirname(os.path.abspath(mkdocs_yml)))
     try:
         html_out = markdown.markdown(block, extensions=names, extension_configs=configs)
     except Exception as err:  # noqa: BLE001
         print(f"{PROG}: the site's Markdown extensions could not render the page: {type(err).__name__}: {err}", file=sys.stderr)
         sys.exit(2)
-    finally:
-        os.chdir(here)
     page = PageText()
     page.feed(html_out)
     page.close()
@@ -351,20 +378,23 @@ def render(doc, mkdocs_yml):
 CODE_SPAN = re.compile(r"(`+)(.+?)\1", re.S)
 
 
-# A list item's marker: the renderer shows it as a bullet or a number.
-LIST_ITEM = re.compile(r"^([ \t]*)(?:[-*+]|[0-9]+[.)])[ \t]+(?=\S)")
+# A list item's marker as python-markdown reads one: `-`, `*`, `+` or a
+# number and a dot (not a parenthesis), indented at most three spaces.
+LIST_ITEM = re.compile(r"^ {0,3}(?:[-*+]|[0-9]+\.)[ \t]+(?=\S)")
 
 
 def unlist(lines):
-    """Drop the marker of each line that opens a Markdown list item: one
-    after a blank line or after another item, which is where python-markdown
-    starts a list. A marker anywhere else is text the page shows."""
-    out, prev_blank, prev_item = [], True, False
+    """Drop the marker of each line that opens a list item: one after a
+    blank line, or after an item and its continuation lines, which is where
+    python-markdown starts or continues a list. A marker anywhere else is
+    text the page shows."""
+    out, prev_blank, in_list = [], True, False
     for line in lines:
         m = LIST_ITEM.match(line)
-        is_item = bool(m) and (prev_blank or prev_item) and not INDENTED.match(line)
+        is_item = bool(m) and (prev_blank or in_list)
         out.append(line[m.end():] if is_item else line)
-        prev_blank, prev_item = blank(line), is_item or (prev_item and not blank(line))
+        in_list = is_item or (in_list and not blank(line))
+        prev_blank = blank(line)
     return out
 
 
@@ -473,11 +503,13 @@ def main(argv):
             return 2
         else:
             files.append((arg, mode == "--lib"))
+    # Rendered first, so a missing marker or an unreadable config is still
+    # a could-not-run when the scan set is empty.
+    entries = render(doc, mkdocs_yml)
     if not files and os.environ.get("LINT_ALLOW_EMPTY_SCAN"):
         # The scan set is empty and the caller said that is deliberate.
         print("check-scripts-reference-roundtrip: ok — 0 file(s), 0 annotation unit(s), 0 indented block(s) published intact")
         return 0
-    entries = render(doc, mkdocs_yml)
 
     findings, n_units, n_runs = [], 0, 0
     for path, library in files:

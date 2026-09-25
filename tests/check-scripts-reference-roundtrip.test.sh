@@ -505,13 +505,14 @@ function scenario_interpreter_failures() {
   printf '#!/usr/bin/env bash\nexec %q -I -S "$@"\n' "${real_python}" >"${stub_dir}/python3"
   chmod +x -- "${stub_dir}/python3"
   PATH="${stub_dir}:${PATH}" run_scenario 'python-markdown missing is exit 2' 2 \
-    'python-markdown is not importable'
+    'python-markdown or PyYAML is not importable'
   # A config loader that raises stands in for any bug inside the checker:
   # an uncaught exception would otherwise exit 1 and read as findings.
   local stub_py="${work}/stub-py"
   mkdir --parents -- "${stub_py}"
   printf '%s\n' 'class YAMLError(Exception):' '    pass' '' '' 'class SafeLoader:' \
-    '    @classmethod' '    def add_multi_constructor(cls, *args):' '        pass' '' '' \
+    '    @classmethod' '    def add_multi_constructor(cls, *args):' '        pass' '' \
+    '    @classmethod' '    def add_constructor(cls, *args):' '        pass' '' '' \
     'def load(*args, **kwargs):' '    raise RuntimeError("stub loader")' >"${stub_py}/yaml.py"
   PYTHONPATH="${stub_py}:${PYTHONPATH:-}" run_scenario 'a checker exception is exit 2, not a finding' 2 \
     'the checker failed: RuntimeError: stub loader'
@@ -1052,6 +1053,9 @@ function scenario_allowed_empty_scan() {
   printf '%s\n' '### scripts/x.sh' '' 'Body.' | write_page
   LINT_ALLOW_EMPTY_SCAN=1 run_scenario 'an empty scan with LINT_ALLOW_EMPTY_SCAN set is clean' 0 '' \
     'ok — 0 file(s), 0 annotation unit(s), 0 indented block(s) published intact'
+  printf '%s\n' '# Scripts' >"${TREE}/page.md"
+  LINT_ALLOW_EMPTY_SCAN=1 run_scenario 'an allowed empty scan still needs a readable page' 2 \
+    'lacks the scripts-reference BEGIN/END markers'
 }
 
 # A marker on a line that continues a paragraph is text the page shows,
@@ -1073,6 +1077,105 @@ EOF
   sed --in-place 's/^markdown_extensions:$/markdown_extensions:\n  - smarty:\n      smart_dashes: false\n      smart_quotes: false/' "${TREE}/mkdocs.yml"
   run_scenario 'a wrapped dash line and a configured extension are published intact' 0 '' \
     'ok — 3 file(s), 4 annotation unit(s), 0 indented block(s) published intact'
+}
+
+# An @example drops the blank lines at its edges, as its fence does, but
+# text on an @example tag line is required: the generator does not print
+# it, whether on the first tag or a second one it merges.
+function scenario_example_edges_and_tag_text() {
+  new_tree exampleedges
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Body.
+# @example
+#
+#   a.sh
+#
+true
+EOF
+  cat >"${TREE}/scripts/u.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Other.
+# @example tag-line text
+#   b.sh
+true
+EOF
+  cat >"${TREE}/scripts/v.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Third.
+# @example
+#   c.sh
+# @example merged tag text
+true
+EOF
+  printf '%s\n' '### scripts/t.sh' '' 'Body.' '' '```bash' '  a.sh' '```' '' \
+    '### scripts/u.sh' '' 'Other.' '' '```bash' '  b.sh' '```' '' \
+    '### scripts/v.sh' '' 'Third.' '' '```bash' '  c.sh' '```' | write_page
+  run_scenario 'example tag-line text the fence lacks is reported, edge blanks are not' 1 \
+    "scripts/u.sh: @example (line 3) is not the entry's example block: published 0 of 3 words; dropped or altered from: 'tag-line text b.sh'"
+  also_expect "scripts/v.sh: @example (line 3) is not the entry's example block: published 1 of 4 words; dropped or altered from: 'merged tag text'"
+  # The edge-blank example is intact, so nothing names its script.
+  if grep --fixed-strings --quiet -- 'scripts/t.sh' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — an example with edge blank lines was reported\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
+}
+
+# python-markdown's list rules: an item continues through its wrapped
+# lines, a marker may be indented up to three spaces, and `1)` is not a
+# marker at all. A page showing each as rendered is intact.
+function scenario_list_rules() {
+  new_tree listrules
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Steps
+#
+# - one
+#   wraps
+# - two
+#
+# 1) not a list
+#
+#   * three
+true
+EOF
+  printf '%s\n' '#!/usr/bin/env bash' '# @description Other.' '# @stdout nothing' 'true' >"${TREE}/scripts/u.sh"
+  printf '%s\n' '### scripts/t.sh' '' 'Steps' '' '- one' '  wraps' '- two' '' '1) not a list' '' '  * three' '' \
+    '### scripts/u.sh' '' 'Other.' '' '**Stdout:**' '' '- nothing' '' '### scripts/w.sh' '' 'Fourth.' | write_page
+  printf '%s\n' '#!/usr/bin/env bash' '# @description Fourth.' 'true' >"${TREE}/scripts/w.sh"
+  run_scenario 'list items, their wrapped lines and a non-marker are read as rendered' 0 '' \
+    'ok — 4 file(s), 5 annotation unit(s), 0 indented block(s) published intact'
+}
+
+# mkdocs.yml is read as mkdocs reads it: `!ENV` resolves to its default
+# when the variable is unset, the built-in extensions load even when the
+# list omits them, and a config that inherits another is refused.
+function scenario_mkdocs_semantics() {
+  new_tree mkdocsenv
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Usage:
+#   a -- b
+true
+EOF
+  printf '%s\n' '#!/usr/bin/env bash' '# @description Other.' 'true' >"${TREE}/scripts/u.sh"
+  printf '%s\n' '### scripts/t.sh' '' 'Usage:' '' '```text' '  a -- b' '```' '' '### scripts/u.sh' '' 'Other.' | write_page
+  printf '%s\n' 'site_name: x' 'markdown_extensions:' '  - smarty' >"${TREE}/mkdocs.yml"
+  run_scenario 'the built-in fenced_code loads when mkdocs.yml omits it' 0 '' \
+    'ok — 3 file(s), 3 annotation unit(s), 1 indented block(s) published intact'
+  rm --force -- "${TREE}/scripts/u.sh"
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Dash a -- b here.
+true
+EOF
+  printf '%s\n' '### scripts/t.sh' '' 'Dash a -- b here.' | write_page
+  printf '%s\n' 'site_name: x' 'markdown_extensions:' '  - smarty:' \
+    '      smart_dashes: !ENV [SCRIPTS_REFERENCE_UNSET_VARIABLE, true]' >"${TREE}/mkdocs.yml"
+  run_scenario 'an !ENV option resolves to its default, as mkdocs resolves it' 1 \
+    "scripts/t.sh: @description (line 2) published 2 of 5 words; dropped or altered from: '-- b here.'"
+  printf '%s\n' 'INHERIT: base.yml' 'markdown_extensions:' '  - smarty' >"${TREE}/mkdocs.yml"
+  run_scenario 'a mkdocs.yml that inherits another is exit 2' 2 'inherits another config (INHERIT)'
 }
 
 function scenario_live_tree() {
@@ -1144,6 +1247,9 @@ function main() {
   scenario_two_examples_and_code_span_name
   scenario_allowed_empty_scan
   scenario_wrapped_marker_and_extension_config
+  scenario_example_edges_and_tag_text
+  scenario_list_rules
+  scenario_mkdocs_semantics
   scenario_cannot_run
   scenario_interpreter_failures
   scenario_outside_work_tree
