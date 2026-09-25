@@ -1265,6 +1265,46 @@ function scenario_import_path_scrubbed() {
     "could not render the page: ModuleNotFoundError: No module named 'zzlinked'"
 }
 
+# A code span never crosses a blank line, so a lone backtick in one
+# paragraph does not pair with the next paragraph's code span; the page,
+# where mdformat escapes the lone one, is intact.
+function scenario_lone_backtick() {
+  new_tree lonebacktick
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Flag the legacy backtick (`) form.
+#
+# Run `shellcheck` on the result.
+# @exitcode 0 clean
+# @stdout the flagged lines
+true
+EOF
+  # shellcheck disable=SC2016 # backticks are page text, not a substitution
+  printf '%s\n' '### scripts/t.sh' '' 'Flag the legacy backtick (\`) form.' '' 'Run `shellcheck` on the result.' \
+    '' '**Exit codes:**' '' '- `0` — clean' '' '**Stdout:**' '' '- the flagged lines' '' \
+    '### scripts/u.sh' '' 'Other.' | write_page
+  printf '%s\n' '#!/usr/bin/env bash' '# @description Other.' 'true' >"${TREE}/scripts/u.sh"
+  run_scenario 'a lone backtick does not pair with the next paragraph' 0 '' \
+    'ok — 3 file(s), 5 annotation unit(s), 0 indented block(s) published intact'
+}
+
+# Only `# @tag`, one blank after the hash, is an annotation. An indented
+# `@arg` line is prose, so the parser turning a usage block of them into
+# an Args list is reported.
+function scenario_indented_tag_is_prose() {
+  new_tree indentedtag
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Recognised tags:
+#   @arg NAME TEXT
+true
+EOF
+  # shellcheck disable=SC2016 # backticks are page text, not a substitution
+  printf '%s\n' '### scripts/t.sh' '' 'Recognised tags:' '' '**Args:**' '' '- `NAME` — TEXT' | write_page
+  run_scenario 'an indented tag line the parser read as an annotation is reported' 1 \
+    "scripts/t.sh: indented block (line 2 description) is not exactly one preformatted block on the page, indentation included, starting '@arg NAME TEXT'"
+}
+
 function scenario_live_tree() {
   local stdout_file stderr_file outcome_file actual_exit=0 f
   local -i files=0
@@ -1340,6 +1380,8 @@ function main() {
   scenario_formatter_lists_and_tabs
   scenario_env_value_resolution
   scenario_import_path_scrubbed
+  scenario_lone_backtick
+  scenario_indented_tag_is_prose
   scenario_cannot_run
   scenario_interpreter_failures
   scenario_outside_work_tree

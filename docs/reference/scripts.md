@@ -1385,9 +1385,10 @@ header's first blank line and the first line of code, and, in a library,
 an annotation outside a function's `@description` block.
 
 Text outside a code span is Markdown on the page, so a `<placeholder>`
-reads as an HTML tag, and a glob's asterisks can open emphasis. Put such
-text in backticks. Escaping a `<` cannot help: the formatter rewrites the
-escape into one the site's renderer does not honor.
+reads as an HTML tag, a `<` in `<-` shows with a backslash, and a glob's
+asterisks can open emphasis. Put such text in backticks. Escaping a `<`
+cannot help: the formatter rewrites the escape into one the site's
+renderer does not honor.
 
 This wrapper enumerates the files; the checker itself is
 scripts/\_scripts_reference_roundtrip.py.

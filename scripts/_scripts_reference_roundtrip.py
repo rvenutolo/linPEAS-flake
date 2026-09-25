@@ -43,16 +43,17 @@ PROG = "scripts-reference-roundtrip"
 RENDERED = ("description", "arg", "option", "example", "exitcode", "stdout")
 DECLARED = ("generates-block", "generates")
 KNOWN = RENDERED + DECLARED
-TAG_LINE = re.compile(r"^#[ \t]+@[A-Za-z]")
+# An annotation is `# @tag`, one blank after the hash, which is the house
+# style. A comment that indents an `@tag` further is prose about the tag,
+# and the page must show it as written.
+TAG_LINE = re.compile(r"^# @[A-Za-z]")
 # Several tags may share a line when two or more blanks separate them.
 TAG_SPLIT = re.compile(r"[ \t]{2,}(?=@(?:%s)(?![A-Za-z-]))" % "|".join(KNOWN))
 TAG = re.compile(r"^@([A-Za-z-]+)[ \t]*(.*)$", re.S)
 SHELLCHECK = re.compile(r"^#[ \t]+shellcheck[ \t]")
 FUNC = re.compile(r"^(?:function[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*\(\)")
-# House style for an annotation is `# @tag`, one blank after the hash. A
-# comment that indents an `@tag` further is prose about the tag.
 STRAY_TAG = re.compile(r"^# @(?:%s)(?:[ \t]|$)" % "|".join(RENDERED))
-BOUND_OPENER = re.compile(r"^#[ \t]+@description(?![A-Za-z-])")
+BOUND_OPENER = re.compile(r"^# @description(?![A-Za-z-])")
 # Indented: two or more leading blanks, or a leading tab.
 INDENTED = re.compile(r"^(?: {2,}|\t| +\t)[ \t]*\S")
 
@@ -128,7 +129,7 @@ def units_of(run, findings, rel):
             continue
         if TAG_LINE.match(raw):
             started = True
-            text = re.sub(r"^#[ \t]+", "", raw, count=1)
+            text = raw[2:]
             for seg in TAG_SPLIT.split(text):
                 m = TAG.match(seg)
                 if m and m.group(1) == "example" and any(u.tag == "example" for u in units):
@@ -406,8 +407,17 @@ def shown(text):
 
 def prose(lines):
     """Header prose as the page shows it: a code span loses its backticks
-    and the blanks at its edges. A backtick that opens no span stays."""
-    return CODE_SPAN.sub(lambda m: m.group(2).strip(), " ".join(lines))
+    and the blanks at its edges. A backtick that opens no span stays. A code
+    span never crosses a blank line, so each paragraph is read on its own."""
+    paragraphs, cur = [], []
+    for line in lines:
+        if blank(line):
+            paragraphs.append(cur)
+            cur = []
+        else:
+            cur.append(line)
+    paragraphs.append(cur)
+    return " ".join(CODE_SPAN.sub(lambda m: m.group(2).strip(), " ".join(p)) for p in paragraphs if p)
 
 
 def normalize(text):
