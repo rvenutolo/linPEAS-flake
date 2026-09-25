@@ -156,9 +156,9 @@ dispatch runs, a notify job opens a deduped issue under the
 itself, so it files no issue). An analyze job that fails before the
 analyze step runs (checkout or init breaks), or that is cancelled
 (never placed on a runner, or at its job timeout), files under
-`codeql-infra` instead; an error inside the analyze step files under
-`codeql-critical` like a finding, so transient
-infrastructure trouble is not paged as a security finding. Findings
+`codeql-infra` instead, so transient infrastructure trouble ahead of
+the scan is not paged as a security finding. An error inside the analyze
+step files under `codeql-critical`, the same as a finding. Findings
 **below** CRITICAL are advisory: they upload to the Security tab without
 failing the workflow. A green CodeQL run therefore
 proves the scan completed with zero CRITICAL findings — **not** that
