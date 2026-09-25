@@ -5,10 +5,10 @@ name: docs-audit-reminder
 # Freshness gates (*-fresh) validate only generated content. Nothing
 # generates hand-written prose about CI, so a sentence naming a job that
 # does not exist passes every freshness gate. check-prose-ci-names.sh fails
-# such a name in one form: backticked, not filename-shaped, standing against
-# a claim noun, in a Markdown or YAML file it scans, outside a fenced block.
-# For every other form, a reading agent is the only mechanism that catches
-# that class. This workflow decides when running one is worth it, using CI churn
+# some forms of such a name (a backticked name in claim position; its
+# section in docs/security/workflow-hardening.md says which). For the forms
+# that lint does not read, a reading agent is the only mechanism that
+# catches that class. This workflow decides when running one is worth it, using CI churn
 # as the proxy for prose drift.
 #
 # Non-zero drift pressure always exits 0: it never signals "audit due" by
