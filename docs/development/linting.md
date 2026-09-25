@@ -655,24 +655,32 @@ reads — each `scripts/*.sh` entry point not starting with an underscore, and
 each `scripts/lib/*.sh` library with its function `@description` blocks — with
 its own reader, not `scripts/_script_docs.awk`, because a checker built on the
 parser would agree with every text the parser drops. It renders the committed
-page with python-markdown, the renderer the site is built with, and asserts
-three things per script or function entry. Each unit is matched in its own
-part of the entry: an `@arg`, `@option`, `@exitcode` or `@stdout` must be one
-whole item of its list, an `@example` the entry's example block, and
-description text is found in order in the part before the first list label.
+page with python-markdown and the extensions `mkdocs.yml` loads, because
+several of them rewrite text rather than only markup: `inlinehilite` strips a
+`#!lang` prefix from a code span, and `snippets` replaces a line with a file.
+An extension the check does not know how to configure is a could-not-run.
 
-1. Each unit of header text — a tag and the lines that continue it — is
-    visible in its part of the entry, compared as words with code-span backticks
-    removed. Prose after a blank comment line that closes an `@arg`,
-    `@option`, `@exitcode` or `@stdout` is a further description unit.
-1. An indented run whose lead-in line ends in a colon is one preformatted
-    block on the page, line for line. Collapsing it into a paragraph keeps
-    every word and still loses the shape, so the word comparison alone would
-    pass it.
-1. Header text in three shapes the generator never reads is a finding:
-    prose before the first tag, a `# @tag` in a comment block between the
-    header's first blank line and the first line of code, and, in a
-    library, an annotation outside a function's `@description` block.
+Each unit of header text — a tag and the lines that continue it — is matched
+in its own part of the entry: an `@arg`, `@option`, `@exitcode` or `@stdout`
+must be one whole item of its list, an `@example` the entry's example block,
+and description text is found as whole words, in order, in the part before
+the first list label. Text is compared with whitespace collapsed, a list
+marker read as the bullet the page shows, and the backticks of a code span
+dropped — but only those: a backtick the page shows literally is an altered
+unit. Prose after a blank comment line that closes an `@arg`, `@option`,
+`@exitcode` or `@stdout` is a further description unit.
+
+An indented run whose lead-in line ends in a colon must be exactly one
+preformatted block on the page, line for line and indentation included, with
+a tab read as two spaces and an odd indent rounded up to even, as the
+generator writes a fence. Collapsing a run into a paragraph keeps every word
+and still loses the shape, so the word comparison alone would pass it.
+
+Header text in three shapes the generator never reads is a finding: prose
+before the first tag other than the file's own path line and a first-line
+shebang, a `# @tag` in a comment block between the header's first blank line
+and the first line of code, and, in a library, an annotation outside a
+function's `@description` block.
 
 Header text outside a code span is Markdown on the page. A `<placeholder>`
 renders as an HTML tag and vanishes, and a glob's asterisks can open
@@ -683,7 +691,7 @@ escape, so the site prints the backslash and still swallows the tag.
 
 It runs in the `lint-doc-invariants` group and as the
 `check-scripts-reference-roundtrip` pre-commit hook, whose Python carries
-python-markdown and pymdown-extensions itself.
+python-markdown, Pygments and pymdown-extensions itself.
 
 ## Payload shape-gate scenario coverage
 
