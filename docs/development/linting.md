@@ -655,32 +655,42 @@ reads — each `scripts/*.sh` entry point not starting with an underscore, and
 each `scripts/lib/*.sh` library with its function `@description` blocks — with
 its own reader, not `scripts/_script_docs.awk`, because a checker built on the
 parser would agree with every text the parser drops. It renders the committed
-page with python-markdown and the extensions `mkdocs.yml` loads, because
-several of them rewrite text rather than only markup: `inlinehilite` strips a
-`#!lang` prefix from a code span, and `snippets` replaces a line with a file.
-An extension the check does not know how to configure is a could-not-run.
+page with python-markdown and the extensions `mkdocs.yml` loads, configured as
+`mkdocs.yml` configures them, because several rewrite text rather than only
+markup: `inlinehilite` strips a `#!lang` prefix from a code span, and
+`snippets` replaces a line with a file. An extension list that cannot be read
+or loaded is a could-not-run.
 
 Each unit of header text — a tag and the lines that continue it — is matched
-in its own part of the entry: an `@arg`, `@option`, `@exitcode` or `@stdout`
-must be one whole item of its list, an `@example` the entry's example block,
-and description text is found as whole words, in order, in the part before
-the first list label. Text is compared with whitespace collapsed, a list
-marker read as the bullet the page shows, and the backticks of a code span
-dropped — but only those: a backtick the page shows literally is an altered
-unit. Prose after a blank comment line that closes an `@arg`, `@option`,
-`@exitcode` or `@stdout` is a further description unit.
+in its own part of the entry. An `@arg`, `@option`, `@exitcode` or `@stdout`
+must be one whole item of its list, and each item is matched once, so two
+identical annotations need two items. An `@example` must be the entry's
+example block, line for line. Description text is found as whole words, in
+order, in the part before the first list label. Text is compared with
+whitespace collapsed, the marker of a line that opens a list item read as the
+bullet the page shows, and the backticks of a code span dropped — but only
+those: a backtick the page shows literally is an altered unit. Prose after a
+blank comment line that closes an `@arg`, `@option`, `@exitcode` or `@stdout`
+is a further description unit.
 
 An indented run whose lead-in line ends in a colon must be exactly one
-preformatted block on the page, line for line and indentation included, with
-a tab read as two spaces and an odd indent rounded up to even, as the
-generator writes a fence. Collapsing a run into a paragraph keeps every word
-and still loses the shape, so the word comparison alone would pass it.
+preformatted block on the page, line for line with its blank lines and
+indentation, a tab read as two spaces and an odd indent rounded up to even as
+the generator writes a fence; each fence is matched once, in order. Collapsing
+a run into a paragraph keeps every word and still loses the shape, so the word
+comparison alone would pass it.
 
 Header text in three shapes the generator never reads is a finding: prose
 before the first tag other than the file's own path line and a first-line
 shebang, a `# @tag` in a comment block between the header's first blank line
 and the first line of code, and, in a library, an annotation outside a
 function's `@description` block.
+
+Three limits are known. A description compared as words does not see its
+blocks change kind — a sentence the page shows as a list item or a quote
+still matches. Text inside a Markdown table in a header is not read. A run
+of backticks that opens no matching run is compared as the regular
+expression reads it, which can differ from the renderer.
 
 Header text outside a code span is Markdown on the page. A `<placeholder>`
 renders as an HTML tag and vanishes, and a glob's asterisks can open
@@ -691,7 +701,7 @@ escape, so the site prints the backslash and still swallows the tag.
 
 It runs in the `lint-doc-invariants` group and as the
 `check-scripts-reference-roundtrip` pre-commit hook, whose Python carries
-python-markdown, Pygments and pymdown-extensions itself.
+python-markdown, Pygments, pymdown-extensions and PyYAML itself.
 
 ## Payload shape-gate scenario coverage
 
