@@ -6,8 +6,7 @@
 # ban and by the generator that reports which types the ban leaves
 # unread, so a class that widens widens for both and the two stay
 # derived from one record set rather than two lists that drift. Source
-# after
-# `set -Eeuo pipefail`.
+# after `set -Eeuo pipefail`.
 # shellcheck shell=bash
 
 # One record per claimed file type, `<extension>:<language>`. This is the

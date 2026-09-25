@@ -124,8 +124,9 @@ a `harness_assert_parity_exempt` from it still needs a
 `PARITY_EXEMPT_ALLOWED` entry.
 
 The same gate also enforces parity: two scenarios in one harness must
-not produce byte-identical whole outcomes (exit code + stdout +
-stderr), because a scenario indistinguishable from a sibling proves
+not record identical output — the files each passes to
+`harness_assert_record`, compared after the clock normalization that
+function applies — because a scenario indistinguishable from a sibling proves
 nothing the sibling did not already prove. The first remedies are to
 make the outputs differ, or to fold the two into one record with
 `harness_assert_also <substring>` (which attaches another asserted
@@ -160,7 +161,7 @@ source is the canonical list):
 | `LINT_ALLOW_EMPTY_SCAN`            | every script that enumerates through `scripts/lib/enumerate.sh`, which honours the variable without the caller naming it — mostly lints, and not only lints — enumerate with `grep -lE 'glob_into\|enumerate_into\|filter_into' scripts/*.sh`; plus the scripts that carry their own emptiness guard — the ones `grep -l 'LINT_ALLOW_EMPTY_SCAN' scripts/*.sh` lists that the first command does not; each script's own header is canonical | accept a deliberately empty scan set (see `docs/development/linting.md`)                        |
 | `RENOVATE_JSON_OVERRIDE`           | `check-renovate-invariants.sh`, `check-renovate-markers-matched.sh`, `check-renovate-config-validator.sh`                                                                                                                                                                                                                                                                                                                                   | swap the renovate.json path                                                                     |
 | `SCAN_ROOT`                        | `check-renovate-markers-matched.sh`                                                                                                                                                                                                                                                                                                                                                                                                         | swap the scanned tree root                                                                      |
-| `SCAN_ROOT_OVERRIDE`               | `check-doc-cron-restatement.sh`                                                                                                                                                                                                                                                                                                                                                                                                             | swap the scanned tree root                                                                      |
+| `SCAN_ROOT_OVERRIDE`               | `check-doc-cron-restatement.sh`, `check-prose-ci-names.sh`                                                                                                                                                                                                                                                                                                                                                                                  | swap the scanned tree root                                                                      |
 | `PIN_FILE_OVERRIDE`                | `bump-linpeas.sh`, `gen-dashboard-data.sh`                                                                                                                                                                                                                                                                                                                                                                                                  | swap the linpeas-pin.json path                                                                  |
 | `UPSTREAM_RELEASE_JSON_OVERRIDE`   | `gen-dashboard-data.sh`                                                                                                                                                                                                                                                                                                                                                                                                                     | swap upstream release JSON (singular: the latest-release payload)                               |
 | `UPSTREAM_RELEASES_JSON_OVERRIDE`  | `gen-dashboard-data.sh`                                                                                                                                                                                                                                                                                                                                                                                                                     | swap upstream releases-list JSON (plural: the release enumeration)                              |
@@ -174,9 +175,10 @@ Each script defines its own overrides — check the script for the
 canonical list before writing a new test. The two tree-root overrides
 (`SCAN_ROOT` and `SCAN_ROOT_OVERRIDE`) are listed one script at a time
 rather than behind an enumerating grep,
-because each lint spells the variable differently: a grep for the
-shorter of the two names both scripts, one of which ignores the
-variable it matched and would scan the live repo instead of the fixture.
+because the lints spell the variable differently: a grep for the
+shorter name also matches every script that reads the longer one, and
+those ignore the variable it matched and would scan the live repo
+instead of the fixture.
 The `^[^#]*` anchor on the two override-variable greps keeps them off
 comment-only mentions: a lint can name another lint's override variable
 in a rule comment without consuming it,
@@ -216,7 +218,10 @@ which a bare substring grep reports as a consumer.
     `does not discriminate` line means the chosen substring also
     appears in another scenario's output — pick a token unique to the
     failure path (typically the level tag plus the label rather than
-    the bare label) and re-run.
+    the bare label) and re-run. A `does not appear in its own output`
+    line means the substring is missing from the files recorded for
+    that scenario — record the stream that carries it, or fix the
+    substring.
 
 1. Make sure `_typos.toml` still excludes `tests/fixtures/**` —
     fixture content is often intentionally malformed.

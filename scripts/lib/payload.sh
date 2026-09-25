@@ -167,9 +167,9 @@ function payload_source_into() {
 # directory does, but a FIFO with no writer, or a device such as
 # `/dev/random`, blocks or streams instead of erroring, which would turn
 # a could-not-run into a hang. The explicit not-a-regular-file check
-# below reaches that verdict by `stat`, before any read is attempted, so
-# the only thing left for the final `cat` guard to catch is a regular
-# file whose read still fails for some other reason. Both guards stay
+# below reaches that verdict by a `[[ -f ]]` test, before any read is
+# attempted, so the only thing left for the final `cat` guard to catch is
+# a regular file whose read still fails for some other reason. Both guards stay
 # exercisable where mode bits are no lever — none of these path kinds
 # depend on the permission bits `-r` already checked.
 #

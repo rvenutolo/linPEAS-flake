@@ -3,8 +3,12 @@
 Freshness gates (`*-fresh`) validate only generated content — whole
 generator-owned files and spliced blocks alike.
 Nothing generates hand-written prose about CI, so a sentence naming a job
-that does not exist passes every gate in the repo. A reading agent is the
-only mechanism that catches that class of drift.
+that does not exist passes every freshness gate. The prose CI-name lint
+(`scripts/check-prose-ci-names.sh`) fails some forms of such a name — a
+backticked name in claim position; its section in
+[workflow hardening](../security/workflow-hardening.md#prose-ci-names) says
+which. For the forms that lint does not read, a reading agent is the only
+mechanism that catches that class of drift.
 
 The `docs-audit-reminder` workflow decides when running one is worth the
 effort, and the `docs-audit-state` marker is what makes its signal mean

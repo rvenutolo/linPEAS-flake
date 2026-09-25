@@ -125,7 +125,7 @@ jobs:
           body: |
             `codeql / analyze (actions)` failed — with `fail-on: critical`, most
             often a CRITICAL-severity finding in the GitHub Actions workflow
-            analysis. Confirm in the Code Scanning tab: an error inside the
+            analysis. Confirm in the Code Scanning tab. An error inside the
             analyze action files here too.
 
             - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

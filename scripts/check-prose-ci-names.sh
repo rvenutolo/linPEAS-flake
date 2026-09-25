@@ -51,8 +51,9 @@
 #   0  every name claimed in prose resolves to something the sentence's own
 #      claim noun admits
 #   1  ghost or mislabel name(s) found (details printed to stderr)
-#   2  the check could not run: a missing or empty name source, or a
-#      producer that lists or reads the scanned files failed
+#   2  the check could not run: a missing or empty name source, a
+#      producer that lists or reads the scanned files failed, an empty
+#      scan set, or a scanned file that leaves a code fence open
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -109,7 +110,7 @@ function job_names() {
 }
 
 # @description Emit every workflow's bare basename, one per line. A harness
-#              roster entry often shares its name with a whole workflow; that
+#              roster entry can share its name with a whole workflow; that
 #              name is a CI unit of its own, so calling it a job is loose
 #              rather than wrong and must not be reported as a mislabel.
 function workflow_names() {

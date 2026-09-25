@@ -47,8 +47,9 @@
 # LINT_ALLOW_EMPTY_SCAN=1 for fixtures.
 #
 # Exits 0 when every script that can reach exit 2 documents it, 1 on any
-# script that cannot. Exits 2 when the check cannot run: the scan set
-# matches no script, which is a could-not-run rather than a clean tree.
+# script that can reach exit 2 without documenting it. Exits 2 when the
+# check cannot run: the scan set matches no script, which is a
+# could-not-run rather than a clean tree.
 
 set -Eeuo pipefail
 IFS=$'\n\t'

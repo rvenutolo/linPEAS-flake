@@ -2,14 +2,17 @@
 # scripts/check-dockerhub-token-scope-split.sh
 #
 # @description Lint: enforce the DOCKERHUB_TOKEN RW/DELETE scope split.
-# The delete-scoped PAT (secrets.DOCKERHUB_TOKEN_DELETE) is consumed only
-# by dockerhub-sync.yml (peter-evans/dockerhub-description needs Delete
-# scope to PATCH repo metadata; a Read/Write-only PAT returns 403). The
-# write-scoped PAT (secrets.DOCKERHUB_TOKEN_RW) is consumed only by
-# release-on-bump.yml — never by the anonymous/read-only
-# verify-latest-release.yml. The delete-capable token must never leak into
-# workflows that only push images, and no unsuffixed secrets.DOCKERHUB_TOKEN
-# may exist — only _RW and _DELETE are authoritative.
+# The delete-scoped PAT (secrets.DOCKERHUB_TOKEN_DELETE) belongs to
+# dockerhub-sync.yml (peter-evans/dockerhub-description needs Delete
+# scope to PATCH repo metadata; a Read/Write-only PAT returns 403), and the
+# write-scoped PAT (secrets.DOCKERHUB_TOKEN_RW) to release-on-bump.yml.
+# The lint requires each token in its own workflow, refuses the
+# delete-scoped token in release-on-bump.yml and in the
+# anonymous/read-only verify-latest-release.yml, and refuses the
+# write-scoped token in dockerhub-sync.yml and verify-latest-release.yml.
+# It does not check other workflows for either token. In every workflow, a
+# secrets.DOCKERHUB_TOKEN reference without the _RW or _DELETE suffix is
+# refused.
 #
 # The same split binds every manual recovery snippet in the docs. A
 # shell-fenced Markdown block that performs a tag delete

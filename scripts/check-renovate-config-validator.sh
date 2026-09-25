@@ -12,7 +12,7 @@
 # cannot run — the config is absent, unreadable, not a regular file, or
 # the validator itself is not on PATH. None of those says anything about
 # the config's validity, so none may borrow the rejection code.
-#
+
 # payload-subject-exempt: a malformed config is this script's verdict, not an obstacle to it — the validator rejects one at exit 1, so there is no could-not-run outcome for a scenario to prove
 
 set -Eeuo pipefail

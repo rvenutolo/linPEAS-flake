@@ -78,10 +78,10 @@ paragraph in its scope.
 1. Run `.claude/skills/docs-audit-fix/scripts/check-fix-ledger.sh <ledger> <gate>`
     until it exits 0. Also run the lints and harnesses the diff touches,
     and every `refresh-*.sh` whose output the diff touches. The checker's
-    OK run is over the branch's last content commit: the only commit that
-    may follow it is step 7's marker commit. Any other commit made after
-    the OK run, a `refresh-*.sh` regeneration included, means running the
-    checker again. A merge from `main` (`gh pr update-branch`) is not a
+    OK run is over the branch's last content commit: the only content
+    commit that may follow it is step 7's marker commit. Any other commit
+    made after the OK run, a `refresh-*.sh` regeneration included, means
+    running the checker again. A merge from `main` (`gh pr update-branch`) is not a
     content commit: it needs no re-run. When the checker prints the OK
     line, record `git rev-parse HEAD`: the OK line names no commit, and
     step 6 needs it.
@@ -94,14 +94,13 @@ paragraph in its scope.
     the marker commit follows that commit.
 1. If the report said this audit closes the cycle, run `just docs-audit-done`
     after the checker's OK run, commit the `.github/docs-audit-state` it
-    writes as the PR's last commit, the only commit after that run, and
-    push again. Do not re-run the checker over it: the marker is in no
+    writes as the PR's last commit, the only content commit after that run,
+    and push again. Do not re-run the checker over it: the marker is in no
     ledger, so the checker would ask for a `code_changes` entry and a gate
     attack on it. Anyone holding the ledger and gate reproduces the OK
     line with `check-fix-ledger.sh --head <commit> <ledger> <gate>`, using
-    the commit recorded in step 5; while the marker is the last commit,
-    that commit is `HEAD^`. A content commit needed after the marker means
-    reverting the marker commit, re-running the checker, recording the new
+    the commit recorded in step 5. A content commit needed after the
+    marker means reverting the marker commit, re-running the checker, recording the new
     commit as in step 5, updating the PR body's OK line and commit, and
     committing a new marker. If another audit will read these fixes, do
     not run `just docs-audit-done`.
@@ -202,13 +201,14 @@ Both stay untracked in `.claude/reports/`. Only the PR body is durable.
 
 ## What the checker proves, and what it does not
 
-It reads the committed diff from the merge base with `main` (`--base`
-overrides) to `HEAD`, refuses to run over uncommitted tracked changes, and
-ignores the caller's diff configuration (external diff, textconv, header
-prefixes, `diff.algorithm` and the indent heuristic, `diff.ignoreSubmodules`
+It reads the committed diff from the merge base with `main` to `HEAD`
+(`--base` and `--head` override each end), refuses to run over uncommitted
+tracked changes when the head is `HEAD`, and ignores the caller's diff
+configuration (external diff, textconv, header prefixes, `diff.algorithm` and the indent heuristic, `diff.ignoreSubmodules`
 and `diff.submodule`, pathspec variables, replace refs). It exits 0 when
 every check below passes, 1 with one `check-fix-ledger: <class>: <detail>`
-line per finding, and 2 when it cannot run.
+line per finding followed by one count line tallying the findings by class,
+and 2 when it cannot run.
 
 - **Shape.** The ledger and the gate each hold exactly one JSON object;
     every list element is an object; every pair and artifact range is
@@ -223,7 +223,10 @@ line per finding, and 2 when it cannot run.
     `schema`, and those stop nothing.
 - **Completeness.** Every changed Markdown hunk is covered, except in the
     root `CHANGELOG.md` and `tests/fixtures/`, inside a generated
-    `BEGIN/END` block of the same name on both sides, or a pure re-wrap.
+    `<!-- BEGIN <name> -->` / `<!-- END <name> -->` block of the same name
+    on both sides, or a pure re-wrap. Other generated Markdown — the
+    `# BEGIN just-recipes` block in `README.md`, or a generated file with
+    no such markers — is checked like hand-written text.
     Covered means every non-blank paragraph the hunk's new side touches
     overlaps a pair's paragraph, each needing its own pair. A hunk whose
     new side holds no non-blank line (a pure deletion, or text replaced by

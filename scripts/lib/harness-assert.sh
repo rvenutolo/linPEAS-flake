@@ -7,9 +7,9 @@
 # exists — green while verifying nothing. Record each scenario here and
 # call `harness_assert_verify` at the end of the run to fail on any such
 # substring, on any asserted substring missing from its own scenario's
-# output, and on any two scenarios whose whole observable outcome is the
-# same — a pair that verifies one thing between them however each is
-# named. Source after `set -Eeuo pipefail`.
+# output, and on any two scenarios whose recorded output is the same after
+# the clock normalization in `harness_assert_record` — a pair that verifies one
+# thing between them however each is named. Source after `set -Eeuo pipefail`.
 # shellcheck shell=bash
 
 # The library directory is resolved by parameter expansion rather than by
@@ -48,8 +48,8 @@ function harness_assert_exempt() {
   HARNESS_ASSERT_EXEMPTIONS+=("${substring}"$'\037'"${other}")
 }
 
-# @description Register two scenarios as legitimately producing one
-# observable outcome. Two scenarios the gate cannot tell apart verify one
+# @description Register two scenarios as legitimately recording one
+# output. Two scenarios the gate cannot tell apart verify one
 # thing between them, so the pair needs a reason that a reviewer can
 # check: the scenarios must differ in what they exercise even though
 # nothing they emit says so, and no honest output could separate them.
@@ -191,9 +191,11 @@ function harness_assert_parity_is_exempt() {
 
 # @description Apply the presence rule, the pairwise rule, the
 # identical-output rule and the parity rule to everything recorded, print
-# the census, and drop the pool. Exit 1 if any asserted substring is
+# the census, and drop the pool. Return 1 if any asserted substring is
 # missing from its own scenario's output, if any asserted substring also
-# occurs in a sibling scenario's output, if two records share one output
+# occurs in a sibling scenario's output (skipping a sibling that asserts
+# the same substring, one whose output is identical, which the next rule
+# judges, and an exempt pair), if two records share one output
 # while asserting different substrings, if two records share one output
 # without a parity exemption, or if nothing was recorded at all. The
 # census names every group of scenarios sharing one output before
@@ -293,7 +295,7 @@ function harness_assert_verify() {
 
     # Two scenarios the gate cannot tell apart verify one thing between
     # them: whatever the second one is meant to exercise, its whole
-    # observable outcome is already produced by the first, so deleting
+    # recorded output is already produced by the first, so deleting
     # either leaves the recorded evidence unchanged. A harness at parity
     # — as many distinct outcomes as scenarios — is one where every
     # scenario earns its place. Each pair in a collapsed group is judged
@@ -303,7 +305,7 @@ function harness_assert_verify() {
       for ((q = p + 1; q < ${#members[@]}; q++)); do
         name_q="$(cat -- "${HARNESS_ASSERT_POOL}/${members[q]}.name")"
         harness_assert_parity_is_exempt "${name_p}" "${name_q}" && continue
-        printf 'harness-assert: %s and %s share one observable outcome — make their outputs differ, merge them into one record with harness_assert_also, or register harness_assert_parity_exempt with a rationale\n' \
+        printf 'harness-assert: %s and %s share one recorded output — make their outputs differ, merge them into one record with harness_assert_also, or register harness_assert_parity_exempt with a rationale\n' \
           "${name_p@Q}" "${name_q@Q}" >&2
         flagged=$((flagged + 1))
       done
