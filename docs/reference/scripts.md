@@ -1367,7 +1367,8 @@ freshness gate compares the committed page with a fresh render, so a
 generator that drops or rewrites header text agrees with itself and stays
 green. This check compares the other two ends instead: what each header
 says, read by an independent reader, against what the committed page shows
-once rendered by the site's own Markdown renderer (python-markdown).
+once rendered the way the site renders it: python-markdown with the
+extensions mkdocs.yml loads.
 
 Scope is the generator's own: every `scripts/*.sh` not starting with an
 underscore, read header-only, and every `scripts/lib/*.sh`, whose
@@ -1396,6 +1397,8 @@ Env overrides (test-only):
 ```text
   SCRIPTS_DIR_OVERRIDE — alternate scripts/ root
   SCRIPTS_REFERENCE_DOC_OVERRIDE — alternate rendered page
+  SCRIPTS_REFERENCE_MKDOCS_OVERRIDE — alternate mkdocs.yml, whose
+    markdown_extensions the page is rendered with
 ```
 
 Exit codes:

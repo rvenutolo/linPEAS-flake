@@ -2,16 +2,19 @@
 #
 # The checker behind scripts/check-scripts-reference-roundtrip.sh, which
 # enumerates the files and passes them here. It reads every script header
-# on its own terms, renders the committed docs/reference/scripts.md the way
-# the site builds it, and asserts that each piece of header text is visible
-# in its script's entry. It shares no code with scripts/_script_docs.awk on
+# on its own terms, renders the committed docs/reference/scripts.md with
+# python-markdown and the extensions mkdocs.yml loads, and asserts that each
+# piece of header text is visible in its script's entry. It shares no code with scripts/_script_docs.awk on
 # purpose: a checker that parsed headers with the generator's own parser
 # would agree with every text that parser drops.
 #
-# Usage: python3 _scripts_reference_roundtrip.py DOC --entry F... --lib F...
-# Exit 0 when every unit is published intact, 1 on any finding, 2 when the
-# check cannot run: the page or its markers are missing, a header is not
-# UTF-8, or the files named hold no annotation at all.
+# Usage: python3 _scripts_reference_roundtrip.py DOC MKDOCS --entry F... --lib F...
+# Exit 0 when every unit is published intact, 3 on any finding, 2 when the
+# check cannot run: the page or its markers are missing, mkdocs.yml loads an
+# extension this checker cannot configure, a header is not UTF-8, or the
+# files named hold no annotation at all. Findings use 3, not 1, because
+# Python itself exits 1 on a syntax error or an uncaught exception, and the
+# wrapper must not read either as findings.
 
 import html.parser
 import os
@@ -61,15 +64,31 @@ class Unit:
         return self.tag in ("arg", "option", "exitcode", "stdout")
 
     def expected(self):
-        """The text a reader must be able to see for this unit."""
+        """The text a reader must be able to see for this unit.
+
+        Prose is Markdown on the page, so its code spans show without their
+        backticks; a colon-led indented run and an @example are fenced, so
+        they show exactly as written.
+        """
         if self.tag in ("arg", "option", "exitcode"):
             parts = self.head.split(None, 1)
             name = parts[0] if parts else ""
             rest = parts[1] if len(parts) > 1 else ""
-            return name + " — " + " ".join([rest] + self.lines)
+            return name + " — " + prose([rest] + self.lines)
         if self.tag in DECLARED:
-            return " ".join(self.lines)
-        return " ".join([self.head] + self.lines)
+            return prose(self.lines)
+        if self.tag == "example":
+            return " ".join([self.head] + self.lines)
+        if self.tag == "description":
+            lines = [self.head] + self.lines
+            out, i = [], 0
+            for start, end, fenced in run_spans(lines):
+                out.append(prose(lines[i:start]))
+                out.append(" ".join(lines[start:end]) if fenced else prose(lines[start:end]))
+                i = end
+            out.append(prose(lines[i:]))
+            return " ".join(out)
+        return prose([self.head] + self.lines)
 
     def label(self):
         return "@" + self.tag if self.tag != "?" else "header text"
@@ -98,7 +117,8 @@ def units_of(run, findings, rel):
         body = comment_body(raw)
         if not started:
             text = body.strip()
-            if text and not text.startswith("scripts/") and not raw.startswith("#!"):
+            # The path line and the shebang are not prose.
+            if text and text != rel and not (no == 1 and raw.startswith("#!")):
                 findings.append((rel, no, "header text before the first tag is not published: " + text))
             continue
         if cur.closes_on_blank() and blank(body):
@@ -108,6 +128,11 @@ def units_of(run, findings, rel):
             cur.resumed = True
             units.append(cur)
             continue
+        if getattr(cur, "resumed", False) and not cur.lines:
+            if blank(body):
+                continue
+            # A resumed paragraph is reported at its first line of text.
+            cur.line = no
         cur.lines.append(body)
     return [u for u in units if not (getattr(u, "resumed", False) and not "".join(u.lines).strip())]
 
@@ -197,16 +222,13 @@ class PageText(html.parser.HTMLParser):
             self.strong_text = []
         elif tag == "strong":
             self.in_strong = True
-        elif self.block is not None and tag in ("p", "li", "br"):
-            # A paragraph or item nested inside the open block still
-            # separates words.
-            self.block_text.append(" ")
 
     def handle_endtag(self, tag):
         if tag == "strong":
             self.in_strong = False
         if tag == self.heading:
-            title = "".join(self.heading_text).strip()
+            # toc's permalink adds a pilcrow to every heading.
+            title = "".join(self.heading_text).replace("¶", "").strip()
             if tag == "h2":
                 self.key = self.script = None
             elif tag == "h3":
@@ -238,7 +260,52 @@ class PageText(html.parser.HTMLParser):
                 self.strong_text.append(data)
 
 
-def render(doc):
+def fence_code_format(*args, **kwargs):
+    from pymdownx.superfences import fence_code_format as real
+    return real(*args, **kwargs)
+
+
+def site_extensions(mkdocs_yml):
+    """The extensions mkdocs.yml loads, configured as it configures them.
+
+    Several of them change text, not just markup: inlinehilite, details and
+    tabbed rewrite their own syntax, and snippets replaces a line with a
+    file. So an extension this checker does not know is a could-not-run,
+    not something to skip.
+    """
+    base = os.path.dirname(os.path.abspath(mkdocs_yml))
+    known = {
+        "admonition": {}, "attr_list": {}, "md_in_html": {}, "tables": {},
+        "toc": {"permalink": True},
+        "pymdownx.details": {},
+        "pymdownx.highlight": {"anchor_linenums": True, "line_spans": "__span", "pygments_lang_class": True},
+        "pymdownx.inlinehilite": {},
+        "pymdownx.snippets": {"base_path": [base]},
+        "pymdownx.tabbed": {"alternate_style": True},
+        "pymdownx.superfences": {"custom_fences": [{"name": "mermaid", "class": "mermaid", "format": fence_code_format}]},
+    }
+    names, inside = [], False
+    for line in read_lines(mkdocs_yml):
+        if re.match(r"^markdown_extensions:[ \t]*$", line):
+            inside = True
+            continue
+        if inside and re.match(r"^\S", line):
+            break
+        m = re.match(r"^  - ([A-Za-z0-9_.]+):?[ \t]*$", line) if inside else None
+        if m:
+            names.append(m.group(1))
+    if not names:
+        print(f"{PROG}: {mkdocs_yml} lists no markdown_extensions", file=sys.stderr)
+        sys.exit(2)
+    unknown = [n for n in names if n not in known]
+    if unknown:
+        print(f"{PROG}: {mkdocs_yml} loads {', '.join(unknown)}, which this checker does not configure", file=sys.stderr)
+        sys.exit(2)
+    return names, {n: known[n] for n in names}
+
+
+def render(doc, mkdocs_yml):
+    names, configs = site_extensions(mkdocs_yml)
     lines = read_lines(doc)
     try:
         begin = lines.index("<!-- BEGIN scripts-reference -->")
@@ -247,10 +314,7 @@ def render(doc):
         print(f"{PROG}: {doc} lacks the scripts-reference BEGIN/END markers", file=sys.stderr)
         sys.exit(2)
     block = "\n".join(lines[begin + 1:end]).replace("{% raw %}", "").replace("{% endraw %}", "")
-    # The site's own renderer and the extensions that shape this page's
-    # text. mkdocs.yml also loads highlighting and TOC extensions, which
-    # add markup but no text.
-    html_out = markdown.markdown(block, extensions=["tables", "attr_list", "md_in_html", "admonition", "pymdownx.superfences"])
+    html_out = markdown.markdown(block, extensions=names, extension_configs=configs)
     page = PageText()
     page.feed(html_out)
     page.close()
@@ -265,26 +329,36 @@ CODE_SPAN = re.compile(r"(`+)(.+?)\1", re.S)
 LIST_MARKER = re.compile(r"(?:(?<=\s)|^)(?:[-*+]|[0-9]+[.)])(?=\s)")
 
 
+def prose(lines):
+    """Header prose as the page shows it: a code span loses its backticks
+    and the blanks at its edges. A backtick that opens no span stays."""
+    return CODE_SPAN.sub(lambda m: m.group(2).strip(), " ".join(lines))
+
+
 def normalize(text):
-    # A renderer trims the blanks at a code span's edges, drops its
-    # backticks, and turns list markers into bullets; text is compared as
-    # words, so line-join, indent and fence markers fall away. The same
-    # transform runs on both sides.
-    text = CODE_SPAN.sub(lambda m: m.group(2).strip(), text)
-    text = LIST_MARKER.sub(" ", text.replace("`", ""))
-    return re.sub(r"\s+", " ", text).strip()
+    # Text is compared as words, so line-join, indent and fence markers fall
+    # away, and a list marker becomes a bullet. The same transform runs on
+    # both sides.
+    return re.sub(r"\s+", " ", LIST_MARKER.sub(" ", text)).strip()
 
 
-def colon_led_runs(unit):
-    """Indented runs whose lead-in line ends in a colon: deliberate blocks."""
-    lines = [unit.head] + unit.lines
-    runs, i = [], 0
+def contains(have, want, start=0):
+    """Offset just past `want` found as whole words in `have`, or -1."""
+    at = (" " + have + " ").find(" " + want + " ", start)
+    return -1 if at < 0 else at + len(want)
+
+
+def run_spans(lines):
+    """(start, end, colon_led) for every indented run; a blank line inside a
+    run belongs to it. A run is a deliberate block when the last non-blank
+    line before it ends in a colon."""
+    spans, i = [], 0
     while i < len(lines):
         if not INDENTED.match(lines[i]):
             i += 1
             continue
         lead_in = next((x for x in reversed(lines[:i]) if not blank(x)), "")
-        run, j = [], i
+        j = i
         while j < len(lines):
             if blank(lines[j]):
                 k = j
@@ -296,16 +370,36 @@ def colon_led_runs(unit):
                 break
             if not INDENTED.match(lines[j]):
                 break
-            run.append(lines[j].strip())
             j += 1
-        if re.search(r":[ \t]*$", lead_in):
-            runs.append(run)
+        spans.append((i, j, bool(re.search(r":[ \t]*$", lead_in))))
         i = j
+    return spans
+
+
+def colon_led_runs(unit):
+    """Each deliberate block as the lines its fence must hold: a tab in the
+    indent is two spaces and an odd indent rounds up to even, which is how
+    the generator writes a fence."""
+    lines = [unit.head] + unit.lines
+    runs = []
+    for start, end, fenced in run_spans(lines):
+        if not fenced:
+            continue
+        run = []
+        for line in lines[start:end]:
+            if blank(line):
+                continue
+            lead = re.match(r"^[ \t]*", line).group(0)
+            indent = lead.replace("\t", "  ")
+            if len(indent) % 2:
+                indent = " " + indent
+            run.append(indent + line[len(lead):].rstrip())
+        runs.append(run)
     return runs
 
 
 def pre_lines(text):
-    return [x.strip() for x in text.split("\n") if x.strip()]
+    return [x.rstrip() for x in text.split("\n") if x.strip()]
 
 
 def first_divergence(want, have):
@@ -314,7 +408,7 @@ def first_divergence(want, have):
     # Longest prefix still present; presence is monotone in prefix length.
     while lo < hi:
         mid = (lo + hi + 1) // 2
-        if " ".join(words[:mid]) in have:
+        if contains(have, " ".join(words[:mid])) >= 0:
             lo = mid
         else:
             hi = mid - 1
@@ -323,10 +417,10 @@ def first_divergence(want, have):
 
 def main(argv):
     if len(argv) < 2:
-        print(f"usage: {PROG} DOC --entry F... --lib F...", file=sys.stderr)
+        print(f"usage: {PROG} DOC MKDOCS --entry F... --lib F...", file=sys.stderr)
         return 2
-    doc, files, mode = argv[1], [], None
-    for arg in argv[2:]:
+    doc, mkdocs_yml, files, mode = argv[1], argv[2] if len(argv) > 2 else "", [], None
+    for arg in argv[3:]:
         if arg in ("--entry", "--lib"):
             mode = arg
         elif mode is None:
@@ -334,7 +428,7 @@ def main(argv):
             return 2
         else:
             files.append((arg, mode == "--lib"))
-    entries = render(doc)
+    entries = render(doc, mkdocs_yml)
 
     findings, n_units, n_runs = [], 0, 0
     for path, library in files:
@@ -377,22 +471,22 @@ def main(argv):
                 # searched for after the end of the one before it.
                 have = normalize(" ".join(b[2] for b in desc_blocks))
                 start = desc_from.get(key, 0)
-                at = have.find(want, start)
-                if at < 0:
+                end = contains(have, want, start)
+                if end < 0:
                     got, total, frag = first_divergence(want, have[start:])
                     findings.append(f"{where} published {got} of {total} words; dropped or altered from: {frag!r}")
                 else:
-                    desc_from[key] = at + len(want)
+                    desc_from[key] = end
                 pres = [pre_lines(b[2]) for b in desc_blocks if b[1] == "pre"]
                 for run in colon_led_runs(unit):
                     n_runs += 1
                     if run not in pres:
-                        findings.append(f"{key}: indented block (line {unit.line} description) is not exactly one preformatted block on the page, starting {run[0][:60]!r}")
+                        findings.append(f"{key}: indented block (line {unit.line} description) is not exactly one preformatted block on the page, indentation included, starting {run[0].strip()[:60]!r}")
                 continue
             # Text under a non-rendering tag, or a line opening with an
             # unknown tag, is required anywhere in the entry.
             have = normalize(" ".join(b[2] for b in blocks))
-            if want not in have:
+            if contains(have, want) < 0:
                 got, total, frag = first_divergence(want, have)
                 findings.append(f"{where} published {got} of {total} words; dropped or altered from: {frag!r}")
     if n_units == 0:
@@ -404,7 +498,7 @@ def main(argv):
         print(f"{PROG}: {len(findings)} finding(s): script header text that docs/reference/scripts.md does not show as written. "
               "Fix the generator (scripts/_script_docs.awk, scripts/refresh-scripts-reference.sh) or rewrite the header, "
               "then regenerate.", file=sys.stderr)
-        return 1
+        return 3
     print(f"check-scripts-reference-roundtrip: ok — {len(files)} file(s), {n_units} annotation unit(s), "
           f"{n_runs} indented block(s) published intact")
     return 0

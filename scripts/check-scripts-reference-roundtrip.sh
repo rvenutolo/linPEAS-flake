@@ -7,7 +7,8 @@
 # generator that drops or rewrites header text agrees with itself and stays
 # green. This check compares the other two ends instead: what each header
 # says, read by an independent reader, against what the committed page shows
-# once rendered by the site's own Markdown renderer (python-markdown).
+# once rendered the way the site renders it: python-markdown with the
+# extensions mkdocs.yml loads.
 #
 # Scope is the generator's own: every `scripts/*.sh` not starting with an
 # underscore, read header-only, and every `scripts/lib/*.sh`, whose
@@ -34,6 +35,8 @@
 # Env overrides (test-only):
 #   SCRIPTS_DIR_OVERRIDE — alternate scripts/ root
 #   SCRIPTS_REFERENCE_DOC_OVERRIDE — alternate rendered page
+#   SCRIPTS_REFERENCE_MKDOCS_OVERRIDE — alternate mkdocs.yml, whose
+#     markdown_extensions the page is rendered with
 #
 # Exit codes:
 #   0  every annotation unit is published intact
@@ -56,21 +59,27 @@ require_tool git
 require_tool python3
 
 function main() {
-  local repo_root='' scripts_dir doc checker
-  # The repo root only supplies defaults, so a run with both overrides set
+  local repo_root='' scripts_dir doc mkdocs checker
+  # The repo root only supplies defaults, so a run with every override set
   # works outside a work tree; without them, not finding it is a could-not-run.
-  if [[ -z ${SCRIPTS_DIR_OVERRIDE:-} || -z ${SCRIPTS_REFERENCE_DOC_OVERRIDE:-} ]] &&
+  if [[ -z ${SCRIPTS_DIR_OVERRIDE:-} || -z ${SCRIPTS_REFERENCE_DOC_OVERRIDE:-} ||
+    -z ${SCRIPTS_REFERENCE_MKDOCS_OVERRIDE:-} ]] &&
     ! repo_root="$(git rev-parse --show-toplevel)"; then
-    log_err 'scripts-reference-roundtrip: not in a git work tree, and no override names the scripts root and page'
+    log_err 'scripts-reference-roundtrip: not in a git work tree, and the overrides do not name the scripts root, page and mkdocs.yml'
     exit 2
   fi
   scripts_dir="${SCRIPTS_DIR_OVERRIDE:-${repo_root}/scripts}"
   doc="${SCRIPTS_REFERENCE_DOC_OVERRIDE:-${repo_root}/docs/reference/scripts.md}"
+  mkdocs="${SCRIPTS_REFERENCE_MKDOCS_OVERRIDE:-${repo_root}/mkdocs.yml}"
   checker="${_lib_dir}/_scripts_reference_roundtrip.py"
-  readonly repo_root scripts_dir doc checker
+  readonly repo_root scripts_dir doc mkdocs checker
 
   if [[ ! -f ${doc} ]]; then
     log_err "scripts-reference-roundtrip: ${doc} not found"
+    exit 2
+  fi
+  if [[ ! -f ${mkdocs} ]]; then
+    log_err "scripts-reference-roundtrip: ${mkdocs} not found"
     exit 2
   fi
   if [[ ! -f ${checker} ]]; then
@@ -91,10 +100,13 @@ function main() {
   done
   args+=(--lib "${libraries[@]}")
 
+  # The checker reports findings as 3: Python exits 1 on its own for a
+  # syntax error or an uncaught exception, and neither is a finding.
   local status=0
-  python3 "${checker}" "${doc}" "${args[@]}" || status=$?
+  python3 "${checker}" "${doc}" "${mkdocs}" "${args[@]}" || status=$?
   case "${status}" in
-  0 | 1) exit "${status}" ;;
+  0) exit 0 ;;
+  3) exit 1 ;;
   2) exit 2 ;;
   *)
     log_err "scripts-reference-roundtrip: the checker died with status ${status}"

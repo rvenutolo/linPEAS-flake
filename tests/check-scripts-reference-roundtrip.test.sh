@@ -13,6 +13,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/enumerate.sh
+source "${REPO_ROOT}/scripts/lib/enumerate.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-scripts-reference-roundtrip.sh"
 
 failures=0
@@ -37,6 +39,9 @@ function new_tree() {
   mkdir --parents -- "${TREE}/scripts/lib"
   printf '%s\n' '#!/usr/bin/env bash' '# @description Lib header.' \
     >"${TREE}/scripts/lib/l.sh"
+  # The real site config, so fixtures render with the extensions the site
+  # loads.
+  cp -- "${REPO_ROOT}/mkdocs.yml" "${TREE}/mkdocs.yml"
 }
 
 # @description Write the tree's page: the entry-point entries given on
@@ -66,6 +71,7 @@ function run_scenario() {
   outcome_file="$(mktemp)"
   SCRIPTS_DIR_OVERRIDE="${TREE}/scripts" \
     SCRIPTS_REFERENCE_DOC_OVERRIDE="${page}" \
+    SCRIPTS_REFERENCE_MKDOCS_OVERRIDE="${MKDOCS:-${TREE}/mkdocs.yml}" \
     "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
@@ -219,7 +225,7 @@ Scanner. The ignore pattern:
 EOF
   run_scenario 'escapes a paragraph render eats are reported' 1 \
     "scripts/t.sh: @description (line 2) published 5 of 6 words; dropped or altered from: \"'steps\\\\.\\\\*\\\\*\\\\.outputs'\""
-  also_expect "scripts/t.sh: indented block (line 2 description) is not exactly one preformatted block on the page, starting \"--ignore 'steps"
+  also_expect "scripts/t.sh: indented block (line 2 description) is not exactly one preformatted block on the page, indentation included, starting \"--ignore 'steps"
 }
 
 function scenario_collapsed_run() {
@@ -239,7 +245,7 @@ Exit codes:
 1 drift
 EOF
   run_scenario 'a colon-led run rendered as a paragraph is reported' 1 \
-    "scripts/t.sh: indented block (line 2 description) is not exactly one preformatted block on the page, starting '0  clean'"
+    "scripts/t.sh: indented block (line 2 description) is not exactly one preformatted block on the page, indentation included, starting '0  clean'"
 }
 
 function scenario_uncolon_wrap_is_prose() {
@@ -285,8 +291,8 @@ gamma
 delta
 EOF
   run_scenario 'a run split at a blank line, or tab-indented and collapsed, is reported' 1 \
-    "scripts/t.sh: indented block (line 2 description) is not exactly one preformatted block on the page, starting 'alpha'"
-  also_expect "is not exactly one preformatted block on the page, starting 'gamma'"
+    "scripts/t.sh: indented block (line 2 description) is not exactly one preformatted block on the page, indentation included, starting 'alpha'"
+  also_expect "is not exactly one preformatted block on the page, indentation included, starting 'gamma'"
 }
 
 function scenario_placeholder_swallowed() {
@@ -330,7 +336,7 @@ Resumed.
 - `--check` — exit 1 on drift
 EOF
   run_scenario 'prose after a closed annotation missing from the page is reported' 1 \
-    "scripts/t.sh: @description (line 4) published 0 of 5 words; dropped or altered from: 'A paragraph after the option.'"
+    "scripts/t.sh: @description (line 5) published 0 of 5 words; dropped or altered from: 'A paragraph after the option.'"
 }
 
 function scenario_prose_before_first_tag() {
@@ -508,9 +514,11 @@ function scenario_interpreter_failures() {
     >"${stub_py}/markdown.py"
   PYTHONPATH="${stub_py}:${PYTHONPATH:-}" run_scenario 'a checker exception is exit 2, not a finding' 2 \
     'the checker failed: RuntimeError: stub renderer'
-  printf '#!/usr/bin/env bash\nexit 3\n' >"${stub_dir}/python3"
-  PATH="${stub_dir}:${PATH}" run_scenario 'a checker that dies is exit 2' 2 \
-    'the checker died with status 3'
+  # Python exits 1 on a syntax error, so a status of 1 must not read as
+  # findings.
+  printf '#!/usr/bin/env bash\nexit 1\n' >"${stub_dir}/python3"
+  PATH="${stub_dir}:${PATH}" run_scenario 'a checker exiting 1, as a syntax error does, is exit 2' 2 \
+    'the checker died with status 1'
 }
 
 # The file count is derived here, independently of the check, so the pass
@@ -564,7 +572,7 @@ Usage: a.sh --foo
 ```
 EOF
   run_scenario 'a collapsed run is not rescued by the example fence' 1 \
-    "scripts/t.sh: indented block (line 2 description) is not exactly one preformatted block on the page, starting 'a.sh --foo'"
+    "scripts/t.sh: indented block (line 2 description) is not exactly one preformatted block on the page, indentation included, starting 'a.sh --foo'"
 }
 
 # A fence that fails to close swallows what follows it: every word is still
@@ -596,7 +604,7 @@ Trailing prose.
 ```
 EOF
   run_scenario 'a fence that swallows the rest of the entry is reported' 1 \
-    "scripts/t.sh: indented block (line 2 description) is not exactly one preformatted block on the page, starting 'a.sh --foo'"
+    "scripts/t.sh: indented block (line 2 description) is not exactly one preformatted block on the page, indentation included, starting 'a.sh --foo'"
   also_expect "scripts/t.sh: @exitcode (line 6) is not one item of its list"
 }
 
@@ -663,7 +671,7 @@ Run the check.
 - `--check` — exit 1 on drift
 EOF
   run_scenario 'a resumed paragraph satisfied only by earlier text is reported' 1 \
-    "scripts/t.sh: @description (line 4) published 0 of 3 words; dropped or altered from: 'Run the check.'"
+    "scripts/t.sh: @description (line 5) published 0 of 3 words; dropped or altered from: 'Run the check.'"
 }
 
 # The repo root supplies only defaults: with both overrides set the check
@@ -724,10 +732,128 @@ EOF
     "scripts/t.sh: @example (line 3) is not the entry's example block: published 2 of 3 words; dropped or altered from: '--verbose'"
 }
 
+# Header prose shows without the backticks of its code spans, and with no
+# others: a backtick the page shows literally is an altered unit. Units are
+# matched as whole words, so "he end" does not match inside "The end".
+function scenario_literal_backticks_and_word_edges() {
+  new_tree backticks
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Run the `build` step.
+# @option --check exit 1 on drift
+#
+# he end marker.
+true
+EOF
+  write_page <<'EOF'
+### scripts/t.sh
+
+Run the \`build\` step.
+
+The end marker.
+
+**Options:**
+
+- `--check` — exit 1 on drift
+EOF
+  run_scenario 'a literal backtick and a word matched inside a longer one are reported' 1 \
+    "scripts/t.sh: @description (line 2) published 2 of 4 words; dropped or altered from: 'build step.'"
+  also_expect "scripts/t.sh: @description (line 5) published 0 of 3 words; dropped or altered from: 'he end marker.'"
+}
+
+# A fence keeps indentation, so a nested line flattened in the fence is an
+# altered block even though every word is still there.
+function scenario_fence_indentation_flattened() {
+  new_tree indent
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Usage:
+#   k.sh [opts]
+#       --deep   nested option
+true
+EOF
+  write_page <<'EOF'
+### scripts/t.sh
+
+Usage:
+
+```text
+  k.sh [opts]
+  --deep   nested option
+```
+EOF
+  run_scenario 'a fenced line whose indentation changed is reported' 1 \
+    "scripts/t.sh: indented block (line 2 description) is not exactly one preformatted block on the page, indentation included, starting 'k.sh [opts]'"
+}
+
+# The page renders with the site's own extensions, several of which change
+# text: inlinehilite turns a `#!lang` code span into highlighted code
+# without its prefix, so the header's words do not all reach the site.
+function scenario_site_extension_changes_text() {
+  new_tree inlinehilite
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Call `#!python print(1)` to test.
+true
+EOF
+  # shellcheck disable=SC2016 # backticks are page text, not a substitution
+  printf '%s\n' '### scripts/t.sh' '' 'Call `#!python print(1)` to test.' | write_page
+  run_scenario 'text a site extension rewrites is reported' 1 \
+    "scripts/t.sh: @description (line 2) published 1 of 5 words; dropped or altered from: '#!python print(1) to test.'"
+}
+
+# An extension the checker cannot configure is a could-not-run: skipping it
+# would pass text the site rewrites.
+function scenario_site_config_unusable() {
+  new_tree siteconfig
+  printf '%s\n' '#!/usr/bin/env bash' '# @description Body.' 'true' >"${TREE}/scripts/t.sh"
+  printf '%s\n' '### scripts/t.sh' '' 'Body.' | write_page
+  sed --in-place 's/^markdown_extensions:$/markdown_extensions:\n  - footnotes/' "${TREE}/mkdocs.yml"
+  run_scenario 'an extension the checker does not configure is exit 2' 2 \
+    'loads footnotes, which this checker does not configure'
+  MKDOCS="${TREE}/absent.yml" run_scenario 'a missing mkdocs.yml is exit 2' 2 'absent.yml not found'
+  printf '%s\n' 'site_name: x' >"${TREE}/mkdocs.yml"
+  run_scenario 'a mkdocs.yml with no extensions is exit 2' 2 'lists no markdown_extensions'
+}
+
+# Only the file's own path line and a first-line shebang are exempt from
+# the prose-before-the-first-tag rule.
+function scenario_path_and_shebang_lookalikes() {
+  new_tree lookalike
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# scripts/t.sh
+# scripts/t.sh is deprecated: callers must use u.sh.
+#!/bin/sh is not a shebang here.
+# @description Body.
+true
+EOF
+  printf '%s\n' '### scripts/t.sh' '' 'Body.' | write_page
+  run_scenario 'prose that looks like a path line or a shebang is reported' 1 \
+    'scripts/t.sh:3: header text before the first tag is not published: scripts/t.sh is deprecated: callers must use u.sh.'
+  also_expect 'scripts/t.sh:4: header text before the first tag is not published: !/bin/sh is not a shebang here.'
+}
+
+# The generator writes a tab in a fenced run's indent as two spaces; a
+# fence that does so is intact.
+function scenario_tab_run_fenced_intact() {
+  new_tree tabintact
+  {
+    printf '%s\n' '#!/usr/bin/env bash' '# @description Tab run:'
+    printf '#\t\tgamma\n#\t\t  delta\n'
+    printf '%s\n' 'true'
+  } >"${TREE}/scripts/t.sh"
+  printf '%s\n' '### scripts/t.sh' '' 'Tab run:' '' '```text' '  gamma' '    delta' '```' | write_page
+  run_scenario 'a tab-indented run fenced with two spaces per tab is intact' 0 '' \
+    'ok — 2 file(s), 2 annotation unit(s), 1 indented block(s) published intact'
+}
+
 function scenario_live_tree() {
   local stdout_file stderr_file outcome_file actual_exit=0 f
   local -i files=0
-  for f in "${REPO_ROOT}"/scripts/*.sh "${REPO_ROOT}"/scripts/lib/*.sh; do
+  local -a all
+  glob_into all 'scripts and scripts/lib' "${REPO_ROOT}/scripts/*.sh" "${REPO_ROOT}/scripts/lib/*.sh"
+  for f in "${all[@]}"; do
     if [[ ${f##*/} != _* ]]; then
       files+=1
     fi
@@ -777,6 +903,12 @@ function main() {
   scenario_description_list_and_label_prose
   scenario_resumed_paragraph_needs_its_own_text
   scenario_example_truncated
+  scenario_literal_backticks_and_word_edges
+  scenario_fence_indentation_flattened
+  scenario_site_extension_changes_text
+  scenario_site_config_unusable
+  scenario_path_and_shebang_lookalikes
+  scenario_tab_run_fenced_intact
   scenario_cannot_run
   scenario_interpreter_failures
   scenario_outside_work_tree

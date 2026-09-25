@@ -41,6 +41,7 @@ let
   # trusting whatever python3 the committer's shell has.
   rendererPython = pkgs-unstable.python3.withPackages (ps: [
     ps.markdown
+    ps.pygments
     ps.pymdown-extensions
   ]);
 in
