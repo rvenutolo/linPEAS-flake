@@ -658,17 +658,27 @@ parser would agree with every text the parser drops. It renders the committed
 page with python-markdown and the extensions `mkdocs.yml` loads, configured as
 `mkdocs.yml` configures them, because several rewrite text rather than only
 markup: `inlinehilite` strips a `#!lang` prefix from a code span, and
-`snippets` replaces a line with a file. An extension list that cannot be read
-or loaded is a could-not-run.
+`snippets` replaces a line with a file. It reads `mkdocs.yml` as mkdocs does:
+the built-in `toc`, `tables` and `fenced_code` extensions load first, `!ENV`
+resolves to a set variable or its default, and `!!python/name:` imports the
+object it names. An extension list that cannot be read or loaded is a
+could-not-run, and so is a config that inherits another through `INHERIT`,
+which the check does not follow. Like the site build, it imports what
+`mkdocs.yml` names and reads the files `snippets` points at, so
+`mkdocs.yml` is trusted input to it, as it is to the site build.
 
 Each unit of header text — a tag and the lines that continue it — is matched
 in its own part of the entry. An `@arg`, `@option`, `@exitcode` or `@stdout`
 must be one whole item of its list, and each item is matched once, so two
 identical annotations need two items. An `@example` must be the entry's
-example block, line for line. Description text is found as whole words, in
+example block, line for line with the blank lines at its edges dropped;
+text on an `@example` tag line is required, and the generator does not print
+it. Description text is found as whole words, in
 order, in the part before the first list label. Text is compared with
-whitespace collapsed, the marker of a line that opens a list item read as the
-bullet the page shows, and the backticks of a code span dropped — but only
+whitespace collapsed, a list item's marker read as the bullet the page shows —
+`-`, `*`, `+` or a number and a dot, at most three spaces in, after a blank
+line or another item, which is where python-markdown opens one — and the
+backticks of a code span dropped — but only
 those: a backtick the page shows literally is an altered unit. Prose after a
 blank comment line that closes an `@arg`, `@option`, `@exitcode` or `@stdout`
 is a further description unit.
@@ -686,11 +696,12 @@ shebang, a `# @tag` in a comment block between the header's first blank line
 and the first line of code, and, in a library, an annotation outside a
 function's `@description` block.
 
-Three limits are known. A description compared as words does not see its
+Four limits are known. A description compared as words does not see its
 blocks change kind — a sentence the page shows as a list item or a quote
 still matches. Text inside a Markdown table in a header is not read. A run
 of backticks that opens no matching run is compared as the regular
-expression reads it, which can differ from the renderer.
+expression reads it, which can differ from the renderer. A line such as
+`- - -`, which python-markdown renders as a rule, is read as a list item.
 
 Header text outside a code span is Markdown on the page. A `<placeholder>`
 renders as an HTML tag and vanishes, and a glob's asterisks can open
