@@ -223,6 +223,47 @@ EOF
     fail 'an indented run reaches the page with its escapes intact'
   fi
 
+  # 4d. An indented run must reach the page as one fence however it is
+  # written: a blank line inside it is part of the run, and a run indented
+  # with tabs is still indented. Split at the blank line, the tail rendered
+  # as a collapsed paragraph; written with tabs, the whole run did. The
+  # generator writes the tracked doc, so it is restored from a backup.
+  fixture_dir="$(mktemp --directory)"
+  mkdir -- "${fixture_dir}/lib"
+  {
+    printf '%s\n' '#!/usr/bin/env bash' '# @description Blank-split run:' \
+      '#' '#   alpha  one' '#' '#   beta  two' '#' '# Tab run:' '#'
+    printf '#\t\tgamma  three\n#\t\tdelta  four\n'
+    printf '%s\n' 'set -Eeuo pipefail'
+  } >"${fixture_dir}/runs.sh"
+  printf '%s\n' '# @description a library' >"${fixture_dir}/lib/l.sh"
+  backup="$(mktemp)"
+  cp -- "${DOC}" "${backup}"
+  rc=0
+  SCRIPTS_DIR_OVERRIDE="${fixture_dir}" "${SCRIPT}" >/dev/null 2>&1 || rc=$?
+  local runs_section
+  runs_section="$(sed --quiet '/^### scripts\/runs\.sh$/,/^### /p' "${DOC}")"
+  cp -- "${backup}" "${DOC}"
+  rm --force -- "${backup}"
+  rm --recursive --force -- "${fixture_dir}"
+  backup=''
+  fixture_dir=''
+  local want_blank want_tab
+  want_blank="$(printf '%s\n' '```text' '  alpha  one' '' '  beta  two' '```')"
+  want_tab="$(printf '%s\n' '```text' '  gamma  three' '  delta  four' '```')"
+  if [[ ${rc} -eq 0 && ${runs_section} == *"${want_blank}"* ]]; then
+    pass 'a blank line inside an indented run stays inside its fence'
+  else
+    fail "a blank line inside an indented run stays inside its fence (exit ${rc})"
+    printf '%s\n' "${runs_section}" | sed 's/^/    /' >&2
+  fi
+  if [[ ${rc} -eq 0 && ${runs_section} == *"${want_tab}"* ]]; then
+    pass 'an indented run written with tabs is fenced with spaces'
+  else
+    fail "an indented run written with tabs is fenced with spaces (exit ${rc})"
+    printf '%s\n' "${runs_section}" | sed 's/^/    /' >&2
+  fi
+
   # 5. Parser-shape scenario: a parser that emits JSON of another shape
   # is a document the renderer could not read, not drift. The override
   # stands in for a changed parser; the shape gate must catch it before
