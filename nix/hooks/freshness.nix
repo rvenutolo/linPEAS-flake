@@ -417,7 +417,7 @@ in
       export PATH="${rendererPython}/bin:${toolPath}:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-scripts-reference-roundtrip.sh
     ''}";
-    files = "^(scripts/.*\\.sh|scripts/_script_docs\\.awk|scripts/_scripts_reference_roundtrip\\.py|docs/reference/scripts\\.md)$";
+    files = "^(scripts/.*\\.sh|scripts/_script_docs\\.awk|scripts/_scripts_reference_roundtrip\\.py|docs/reference/scripts\\.md|mkdocs\\.yml)$";
     pass_filenames = false;
     language = "system";
   };
