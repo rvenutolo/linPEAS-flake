@@ -10,9 +10,11 @@
 #
 # Usage: python3 _scripts_reference_roundtrip.py DOC MKDOCS --entry F... --lib F...
 # Exit 0 when every unit is published intact, 3 on any finding, 2 when the
-# check cannot run: the page or its markers are missing, mkdocs.yml's
-# markdown extensions cannot be read or loaded, a header is not UTF-8, or
-# the files named hold no annotation at all. Findings use 3, not 1, because
+# check cannot run: python-markdown or PyYAML is not importable, the page
+# or its markers are missing, mkdocs.yml's markdown extensions cannot be
+# read, loaded or render the page, the config inherits another, a header
+# is not UTF-8 or cannot be read, the files named hold no annotation at
+# all, or the checker raises an uncaught exception. Findings use 3, not 1, because
 # Python itself exits 1 on a syntax error or an uncaught exception, and the
 # wrapper must not read either as findings.
 
@@ -358,8 +360,9 @@ def site_extensions(mkdocs_yml):
         else:
             print(f"{PROG}: {mkdocs_yml} has a markdown_extensions entry this checker cannot read: {entry!r}", file=sys.stderr)
             sys.exit(2)
-    # mkdocs always loads these, ahead of the configured list.
-    names = [n for n in ("toc", "tables", "fenced_code") if n not in names] + names
+    # mkdocs always loads these, ahead of the configured list, and drops a
+    # later repeat of any name, as its own reduce_list does.
+    names = list(dict.fromkeys(["toc", "tables", "fenced_code"] + names))
     return names, configs
 
 
