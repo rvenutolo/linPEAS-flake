@@ -317,7 +317,7 @@ harness_assert_record a "" "${d}/a.out"
 harness_assert_record b "" "${d}/b.out"
 harness_assert_verify'
 
-  # Parity: two scenarios whose whole observable outcome is the same
+  # Parity: two scenarios whose recorded output is the same
   # verify one thing between them, so matching assertions do not rescue
   # the pair — the second scenario adds no evidence the first lacks.
   check 'two scenarios sharing one outcome are flagged' 1 'share one recorded output' '

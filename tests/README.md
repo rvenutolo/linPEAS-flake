@@ -125,8 +125,8 @@ a `harness_assert_parity_exempt` from it still needs a
 
 The same gate also enforces parity: two scenarios in one harness must
 not record identical output — the files each passes to
-`harness_assert_record`, compared once timestamps and durations are
-normalized — because a scenario indistinguishable from a sibling proves
+`harness_assert_record`, compared after the clock normalization that
+function applies — because a scenario indistinguishable from a sibling proves
 nothing the sibling did not already prove. The first remedies are to
 make the outputs differ, or to fold the two into one record with
 `harness_assert_also <substring>` (which attaches another asserted

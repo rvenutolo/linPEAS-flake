@@ -2106,8 +2106,8 @@ output, the assertion passes whether or not the asserted behavior
 exists — green while verifying nothing. Record each scenario here and
 call `harness_assert_verify` at the end of the run to fail on any such
 substring, on any asserted substring missing from its own scenario's
-output, and on any two scenarios whose recorded output is the same once
-timestamps and durations are normalized — a pair that verifies one
+output, and on any two scenarios whose recorded output is the same after
+the clock normalization in `harness_assert_record` — a pair that verifies one
 thing between them however each is named. Source after `set -Eeuo pipefail`.
 
 #### harness_assert_exempt()

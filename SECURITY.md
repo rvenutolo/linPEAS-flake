@@ -154,7 +154,7 @@ a CRITICAL-severity finding fails the workflow, and on push, cron, and
 dispatch runs, a notify job opens a deduped issue under the
 `codeql-critical` label (a PR run pages via the failed check on the PR
 itself, so it files no issue). An analyze job that fails before the
-analyze step runs (checkout or init breaks), or that is cancelled
+analyze step runs (for example checkout or init breaks), or that is cancelled
 (never placed on a runner, or at its job timeout), files under
 `codeql-infra` instead, so transient infrastructure trouble ahead of
 the scan is not paged as a security finding. An error inside the analyze
