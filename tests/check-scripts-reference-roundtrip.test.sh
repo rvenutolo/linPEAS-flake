@@ -72,7 +72,7 @@ function run_scenario() {
   SCRIPTS_DIR_OVERRIDE="${TREE}/scripts" \
     SCRIPTS_REFERENCE_DOC_OVERRIDE="${page}" \
     SCRIPTS_REFERENCE_MKDOCS_OVERRIDE="${MKDOCS:-${TREE}/mkdocs.yml}" \
-    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+    "${SCRIPT_UNDER_TEST:-${SCRIPT}}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${expected_exit}" "${actual_exit}" >&2
@@ -812,7 +812,7 @@ function scenario_site_config_unusable() {
   printf '%s\n' '### scripts/t.sh' '' 'Body.' | write_page
   sed --in-place 's/^markdown_extensions:$/markdown_extensions:\n  - no_such_extension/' "${TREE}/mkdocs.yml"
   run_scenario 'an extension that cannot be loaded is exit 2' 2 \
-    "the site's Markdown extensions could not render the page"
+    "could not render the page: ModuleNotFoundError: No module named 'no_such_extension'"
   MKDOCS="${TREE}/absent.yml" run_scenario 'a missing mkdocs.yml is exit 2' 2 'absent.yml not found'
   printf '%s\n' 'markdown_extensions: [' >"${TREE}/mkdocs.yml"
   run_scenario 'an unparsable mkdocs.yml is exit 2' 2 'cannot read the markdown extensions in'
@@ -1178,6 +1178,93 @@ EOF
   run_scenario 'a mkdocs.yml that inherits another is exit 2' 2 'inherits another config (INHERIT)'
 }
 
+# The page is formatted by mdformat, whose CommonMark rules decide which
+# header lines become list items, before python-markdown renders it. So a
+# marker at the start of a prose line may show as text or as a bullet, and
+# a tab inside a fenced line is expanded to a four-column stop. This page is
+# the generator's own output for the header, and it is intact. mdformat
+# renumbering a list is not: `4. abort now` published as `1) abort now`.
+function scenario_formatter_lists_and_tabs() {
+  new_tree formatter
+  {
+    printf '%s\n' '#!/usr/bin/env bash' '# @description Steps:' '# - alpha' '# - beta' '#' \
+      '# 1) first step' '# 2) second step' '#' '# Usage:'
+    printf '#   a.sh\tcol\n# @example\n#   b.sh\tcol2\n'
+    printf '%s\n' 'true'
+  } >"${TREE}/scripts/t.sh"
+  {
+    printf '%s\n' '### scripts/t.sh' '' 'Steps:' '' '- alpha' '- beta' '' '1. first step' '1. second step' '' \
+      'Usage:' '' '```text'
+    # shellcheck disable=SC2016 # backticks are page text, not a substitution
+    printf '  a.sh\tcol\n```\n\n```bash\n  b.sh\tcol2\n```\n'
+    printf '\n%s\n' '### scripts/u.sh' '' 'Other.'
+  } | write_page
+  printf '%s\n' '#!/usr/bin/env bash' '# @description Other.' 'true' >"${TREE}/scripts/u.sh"
+  run_scenario 'list items the formatter opens and tabs in fences are intact' 0 '' \
+    'ok — 3 file(s), 4 annotation unit(s), 1 indented block(s) published intact'
+  rm --force -- "${TREE}/scripts/u.sh"
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Then:
+# - one
+#
+# 3. retry later
+# 4. abort now
+true
+EOF
+  printf '%s\n' '### scripts/t.sh' '' 'Then:' '' '- one' '' '3) retry later' '1) abort now' | write_page
+  run_scenario 'a list the formatter renumbers is reported' 1 \
+    "scripts/t.sh: @description (line 2) published 4 of 9 words; dropped or altered from: 'retry later 4. abort now'"
+}
+
+# `!ENV` reads a set variable as a plain YAML scalar, and a one-item list
+# names a variable with no default. `~` tells a scalar from a string: as a
+# scalar it is null, which the option reads as false; as the string "~" the
+# option cannot parse it at all.
+function scenario_env_value_resolution() {
+  new_tree envvalue
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Dash a -- b there.
+true
+EOF
+  printf '%s\n' '#!/usr/bin/env bash' '# @description Other.' 'true' >"${TREE}/scripts/u.sh"
+  printf '%s\n' '#!/usr/bin/env bash' '# @description Third.' 'true' >"${TREE}/scripts/v.sh"
+  printf '%s\n' '### scripts/t.sh' '' 'Dash a -- b there.' '' '### scripts/u.sh' '' 'Other.' '' \
+    '### scripts/v.sh' '' 'Third.' | write_page
+  printf '%s\n' 'site_name: x' 'markdown_extensions:' '  - smarty:' \
+    '      smart_dashes: !ENV [SCRIPTS_REFERENCE_SET_VARIABLE]' >"${TREE}/mkdocs.yml"
+  SCRIPTS_REFERENCE_SET_VARIABLE='~' run_scenario 'a set !ENV variable is read as a YAML scalar' 0 '' \
+    'ok — 4 file(s), 4 annotation unit(s), 0 indented block(s) published intact'
+}
+
+# Python puts the checker's own directory on its import path; the checker
+# removes it, so a module sitting beside it cannot be loaded by naming it in
+# mkdocs.yml — also when the checker is reached through a symlink. The
+# module here is inert: it only defines an extension that does nothing.
+function scenario_import_path_scrubbed() {
+  new_tree importpath
+  printf '%s\n' '#!/usr/bin/env bash' '# @description Body.' 'true' >"${TREE}/scripts/t.sh"
+  printf '%s\n' '### scripts/t.sh' '' 'Body.' | write_page
+  local copy="${work}/checker-copy"
+  mkdir --parents -- "${copy}/scripts"
+  cp --recursive -- "${REPO_ROOT}/scripts/lib" "${copy}/scripts/lib"
+  cp -- "${REPO_ROOT}/scripts/check-scripts-reference-roundtrip.sh" \
+    "${REPO_ROOT}/scripts/_scripts_reference_roundtrip.py" "${copy}/scripts/"
+  printf '%s\n' 'from markdown.extensions import Extension' '' '' \
+    'def makeExtension(**kwargs):' '    return Extension(**kwargs)' >"${copy}/scripts/zzbeside.py"
+  cp -- "${copy}/scripts/zzbeside.py" "${copy}/scripts/zzlinked.py"
+  ln --symbolic -- "${copy}/scripts" "${work}/checker-link"
+  printf '%s\n' 'site_name: x' 'markdown_extensions:' '  - zzbeside' >"${TREE}/mkdocs.yml"
+  SCRIPT_UNDER_TEST="${copy}/scripts/check-scripts-reference-roundtrip.sh" \
+    run_scenario 'a module beside the checker is not importable from mkdocs.yml' 2 \
+    "could not render the page: ModuleNotFoundError: No module named 'zzbeside'"
+  printf '%s\n' 'site_name: x' 'markdown_extensions:' '  - zzlinked' >"${TREE}/mkdocs.yml"
+  SCRIPT_UNDER_TEST="${work}/checker-link/check-scripts-reference-roundtrip.sh" \
+    run_scenario 'nor through a symlinked scripts directory' 2 \
+    "could not render the page: ModuleNotFoundError: No module named 'zzlinked'"
+}
+
 function scenario_live_tree() {
   local stdout_file stderr_file outcome_file actual_exit=0 f
   local -i files=0
@@ -1250,6 +1337,9 @@ function main() {
   scenario_example_edges_and_tag_text
   scenario_list_rules
   scenario_mkdocs_semantics
+  scenario_formatter_lists_and_tabs
+  scenario_env_value_resolution
+  scenario_import_path_scrubbed
   scenario_cannot_run
   scenario_interpreter_failures
   scenario_outside_work_tree

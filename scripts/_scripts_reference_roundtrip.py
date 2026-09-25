@@ -25,8 +25,9 @@ import sys
 # Python puts this script's own directory first on the import path, so an
 # extension or `!!python/name:` in mkdocs.yml could otherwise import a file
 # sitting beside the checker. Imports resolve from installed packages only.
-_HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path[:] = [p for p in sys.path if os.path.abspath(p or os.curdir) != _HERE]
+# Compared as real paths: Python resolves symlinks in the entry it adds.
+_HERE = os.path.dirname(os.path.realpath(__file__))
+sys.path[:] = [p for p in sys.path if os.path.realpath(p or os.curdir) != _HERE]
 
 try:
     import markdown
@@ -95,10 +96,10 @@ class Unit:
             for start, end, fenced in run_spans(lines):
                 if not fenced:
                     continue
-                out.append(prose(unlist(lines[i:start])))
+                out.append(prose(optional_markers(lines[i:start])))
                 out.append(" ".join(lines[start:end]))
                 i = end
-            out.append(prose(unlist(lines[i:])))
+            out.append(prose(optional_markers(lines[i:])))
             return " ".join(out)
         return prose([self.head] + self.lines)
 
@@ -112,7 +113,8 @@ class Unit:
             lines.pop()
         while lines and blank(lines[0]):
             lines.pop(0)
-        return [x.rstrip() for x in lines]
+        # python-markdown expands a tab to the next four-column stop.
+        return [x.rstrip().expandtabs(4) for x in lines]
 
     def label(self):
         return "@" + self.tag if self.tag != "?" else "header text"
@@ -302,16 +304,22 @@ def _python_name(loader, suffix, node):
 
 
 def _env(loader, node):
-    """mkdocs's `!ENV NAME` or `!ENV [NAME, ..., default]`: the first set
-    variable, else the default."""
+    """mkdocs's `!ENV`: a variable name, or a list of names whose last item
+    is the default when the list holds more than one. The first set variable
+    is read as a plain YAML scalar, so `true` is a boolean."""
+    default = None
     if isinstance(node, yaml.ScalarNode):
-        names, default = [loader.construct_scalar(node)], None
+        names = [loader.construct_scalar(node)]
     else:
-        items = loader.construct_sequence(node)
-        names, default = items[:-1], items[-1]
+        children = list(node.value)
+        if len(children) > 1:
+            default = loader.construct_object(children.pop())
+        names = [loader.construct_scalar(c) for c in children]
     for name in names:
         if name in os.environ:
-            return yaml.safe_load(os.environ[name])
+            value = os.environ[name]
+            tag = loader.resolve(yaml.ScalarNode, value, (True, False))
+            return loader.construct_object(yaml.ScalarNode(tag, value))
     return default
 
 
@@ -378,24 +386,22 @@ def render(doc, mkdocs_yml):
 CODE_SPAN = re.compile(r"(`+)(.+?)\1", re.S)
 
 
-# A list item's marker as python-markdown reads one: `-`, `*`, `+` or a
-# number and a dot (not a parenthesis), indented at most three spaces.
-LIST_ITEM = re.compile(r"^ {0,3}(?:[-*+]|[0-9]+\.)[ \t]+(?=\S)")
+# A token that stands where a list item's marker would. The page is
+# formatted by mdformat, which reads lists by CommonMark's rules, before
+# python-markdown renders it by its own, so whether a given line becomes a
+# list item is not predicted here: its marker may show as text or as a
+# bullet, and both match.
+OPTIONAL = "\x01"
+MARKER = re.compile(r"^([ \t]*)((?:[-*+]|[0-9]+[.)]))(?=[ \t]+\S)")
 
 
-def unlist(lines):
-    """Drop the marker of each line that opens a list item: one after a
-    blank line, or after an item and its continuation lines, which is where
-    python-markdown starts or continues a list. A marker anywhere else is
-    text the page shows."""
-    out, prev_blank, in_list = [], True, False
-    for line in lines:
-        m = LIST_ITEM.match(line)
-        is_item = bool(m) and (prev_blank or in_list)
-        out.append(line[m.end():] if is_item else line)
-        in_list = is_item or (in_list and not blank(line))
-        prev_blank = blank(line)
-    return out
+def optional_markers(lines):
+    return [MARKER.sub(lambda m: m.group(1) + OPTIONAL + m.group(2), line) for line in lines]
+
+
+def shown(text):
+    """Text for a diagnostic, without the optional-marker flags."""
+    return text.replace(OPTIONAL, "")
 
 
 def prose(lines):
@@ -411,9 +417,13 @@ def normalize(text):
 
 
 def contains(have, want, start=0):
-    """Offset just past `want` found as whole words in `have`, or -1."""
-    at = (" " + have + " ").find(" " + want + " ", start)
-    return -1 if at < 0 else at + len(want)
+    """Offset just past `want` found as whole words in `have`, or -1. A
+    word flagged as an optional list marker may be absent."""
+    pattern = " " + "".join(
+        f"(?:{re.escape(w[1:])} )?" if w.startswith(OPTIONAL) else re.escape(w) + " "
+        for w in want.split(" ") if w)
+    m = re.compile(pattern).search(" " + have + " ", start)
+    return -1 if m is None else m.end() - 1
 
 
 def run_spans(lines):
@@ -462,7 +472,9 @@ def colon_led_runs(unit):
             indent = lead.replace("\t", "  ")
             if len(indent) % 2:
                 indent = " " + indent
-            run.append(indent + line[len(lead):].rstrip())
+            # The generator writes the rest of the line as is, and
+            # python-markdown expands its tabs to four-column stops.
+            run.append((indent + line[len(lead):].rstrip()).expandtabs(4))
         runs.append(run)
     return runs
 
@@ -487,7 +499,7 @@ def first_divergence(want, have):
             lo = mid
         else:
             hi = mid - 1
-    return lo, len(words), " ".join(words[lo:lo + 12])
+    return lo, len(words), shown(" ".join(words[lo:lo + 12]))
 
 
 def main(argv):
