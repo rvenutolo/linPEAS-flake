@@ -23,7 +23,7 @@ below.
     ./plant.sh
     ```
 
-    Adds a detached worktree at HEAD under
+    Adds a detached worktree of HEAD at
     `${TMPDIR:-/tmp}/docs-audit-seeded-defects` — the tracked skill is checked
     out with it, so nothing is copied — applies all seeds, and writes
     `results/manifest-resolved.json` plus `results/worktree-path.txt`.
@@ -69,8 +69,8 @@ below.
 
 ## Seed format
 
-Each entry in `seeds.json` names a `file`, an `anchor`, an `op`, and a
-`payload`. Seeds apply in order, so an anchor must match exactly one line of
+Each entry in `seeds.json` names a `file`, an `anchor`, an `op`, a `from`
+(empty for `insert-after`), and a `payload`. Seeds apply in order, so an anchor must match exactly one line of
 its file as the earlier seeds left it. `insert-after` adds the payload as the
 line after the anchor; `replace-substr` swaps `from` for the payload inside
 the anchor's own text, and planting fails if `from` is not part of the anchor.
@@ -80,8 +80,10 @@ payload are each one line; planting refuses a newline in any of them, and a
 `replace-substr` anchor that occurs twice on its line. Each seed also needs a
 non-empty one-line string `id`, a string `sentinel`, and an integer
 `line_tol` from 0 to 1e9; an `also` that is not absent, `null` or `false`
-must be an array of edit objects. Planting checks all of this, and refuses
-an empty seed list, before it creates the worktree.
+must be an array of edit objects. Planting checks these seed-level rules,
+and refuses an empty seed list, before it creates the worktree; the
+per-edit checks run as each edit is applied, so a refused edit leaves the
+worktree behind for the next plant to clear.
 
 A seed is scored as hit when a report contains its non-empty `sentinel`, or
 cites the seed's `file:line` within `line_tol` of where the edit landed. A
@@ -144,8 +146,11 @@ column) is exactly the signal being measured.
 - **Generator-class** seeds (`generator-truncation`, `rendering-divergence`,
     `agreed-false-annotation`) sit inside the generated body of
     `docs/reference/scripts.md`, which `SKILL.md` tells readers never to flag
-    except as a low-confidence generator-vs-reality gap. Expect low recall
-    from that instruction, not from how hard the defects are to see.
+    except as a low-confidence generator-vs-reality gap. They were expected
+    to score low because of that instruction. Measured at M=2, they did not:
+    both runs compared the rendered lines with their source comments and
+    reported `generator-truncation` and `agreed-false-annotation`, and one
+    run reported `rendering-divergence`, the set's only flake.
     `generator-truncation` cuts the `refresh-flake-show.sh` `--check` line
     where its source comment wraps, the shape the script-docs parser once
     published; `rendering-divergence` strips the backslashes from the rendered
@@ -167,9 +172,10 @@ column) is exactly the signal being measured.
 
 ## A confound to keep in view
 
-Most seeds are planted with `insert-after` against a heading anchor, so they
-land as a lone sentence directly below a heading (a few anchor on body prose,
-and the `replace-substr` seeds edit an existing line in place). That shape is
+Six of the fifteen seeds are planted with `insert-after` against a heading
+anchor, so they land as a lone sentence directly below a heading (the other
+four inserts anchor on body prose, and the `replace-substr` seeds edit an
+existing line in place). That shape is
 itself a tell: a reader can learn to spot it without doing the verification
 the seed exists to measure, and the heading-anchored ones trip markdownlint's
 MD022 as a side effect — one
@@ -187,6 +193,18 @@ whether a reader compares the page with its source, but a freshness failure
 is a tell the real class never had. `agreed-false-annotation` has no such
 tell: it edits the source comment and the page together, and regenerating
 the page leaves it unchanged.
+
+A third confound applies to every seed. The planted worktree carries the
+seeds as uncommitted edits, so `git status` lists exactly the files that hold
+them. Both runs of the M=2 measurement below noticed, and said so in their
+reports; each seed's finding was still verified against its source of truth,
+but nothing shows whether the reader found it by reading or by diffing.
+
+## Last measurement
+
+M=2 at `bd61a8c5`, fifteen seeds: 29/30 (96%). Every seed hit in both runs
+except `rendering-divergence`, which hit in one (FLAKY). Read the figure as
+an upper bound, for the confounds above.
 
 ## Tests
 

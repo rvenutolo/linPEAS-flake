@@ -67,7 +67,8 @@ Merging trades some thoroughness on **low-severity, non-seeded** drift: a reader
 covering more files spreads attention thinner and skips minor prose-imprecision
 findings that a dedicated reader surfaces. All seven seeds measured in that
 comparison were caught in every run of every configuration. One structural blind spot: the
-seed set plants nothing under `reference/`, `install/`, or `runbooks/`,
+seven-seed set that comparison measured planted nothing under `reference/`,
+`install/`, or `runbooks/`,
 so the `core-docs` merge's recall-neutrality is inferred from the map's
 structure, not measured — no seed exists that the merge could have
 dropped.
