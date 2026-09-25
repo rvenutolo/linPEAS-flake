@@ -1378,14 +1378,18 @@ entry. Prose after a blank comment line that closes an `@arg`, `@option`,
 `@exitcode` or `@stdout` is a further description unit. An indented run
 whose lead-in line ends in a colon must also stay one preformatted block,
 line for line, because collapsing it keeps every word and still loses the
-shape. Text the generator never reaches is a finding too: header prose
-before the first tag, a `# @tag` in a comment block after the header's
-first blank line, and a library annotation not bound to a function.
+shape. Three shapes of header text the generator never reads are findings
+too: prose before the first tag, a `# @tag` in a comment block between the
+header's first blank line and the first line of code, and, in a library,
+an annotation outside a function's `@description` block.
 
 Text outside a code span is Markdown on the page, so a `<placeholder>`
-reads as an HTML tag and a glob's asterisks open emphasis. Put such text in
-backticks; escaping cannot help, because the formatter rewrites the escape
-into one the site's renderer does not honor.
+reads as an HTML tag, and a glob's asterisks can open emphasis. Put such
+text in backticks. Escaping a `<` cannot help: the formatter rewrites the
+escape into one the site's renderer does not honor.
+
+This wrapper enumerates the files; the checker itself is
+scripts/\_scripts_reference_roundtrip.py.
 
 Env overrides (test-only):
 

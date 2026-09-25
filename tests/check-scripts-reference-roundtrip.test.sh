@@ -198,7 +198,7 @@ Truncation.
 - `--check` — exit 2 if the check
 EOF
   run_scenario 'an annotation cut at its first line is reported' 1 \
-    "scripts/t.sh: @option (line 3) published 7 of 15 words; dropped or altered from: 'cannot run; do not mutate the working tree'"
+    "scripts/t.sh: @option (line 3) is not one item of its list: published 7 of 15 words; dropped or altered from: 'cannot run; do not mutate the working tree'"
 }
 
 function scenario_escapes_eaten_and_run_collapsed() {
@@ -219,7 +219,7 @@ Scanner. The ignore pattern:
 EOF
   run_scenario 'escapes a paragraph render eats are reported' 1 \
     "scripts/t.sh: @description (line 2) published 5 of 6 words; dropped or altered from: \"'steps\\\\.\\\\*\\\\*\\\\.outputs'\""
-  also_expect "scripts/t.sh: indented block (line 2 description) is not one preformatted block on the page, starting \"--ignore 'steps"
+  also_expect "scripts/t.sh: indented block (line 2 description) is not exactly one preformatted block on the page, starting \"--ignore 'steps"
 }
 
 function scenario_collapsed_run() {
@@ -239,7 +239,7 @@ Exit codes:
 1 drift
 EOF
   run_scenario 'a colon-led run rendered as a paragraph is reported' 1 \
-    "scripts/t.sh: indented block (line 2 description) is not one preformatted block on the page, starting '0  clean'"
+    "scripts/t.sh: indented block (line 2 description) is not exactly one preformatted block on the page, starting '0  clean'"
 }
 
 function scenario_uncolon_wrap_is_prose() {
@@ -285,8 +285,8 @@ gamma
 delta
 EOF
   run_scenario 'a run split at a blank line, or tab-indented and collapsed, is reported' 1 \
-    "scripts/t.sh: indented block (line 2 description) is not one preformatted block on the page, starting 'alpha'"
-  also_expect "is not one preformatted block on the page, starting 'gamma'"
+    "scripts/t.sh: indented block (line 2 description) is not exactly one preformatted block on the page, starting 'alpha'"
+  also_expect "is not exactly one preformatted block on the page, starting 'gamma'"
 }
 
 function scenario_placeholder_swallowed() {
@@ -307,7 +307,7 @@ Placeholder.
 - `--flake` — <dir> flake to check
 EOF
   run_scenario 'a placeholder the renderer reads as HTML is reported' 1 \
-    "scripts/t.sh: @option (line 3) published 2 of 6 words; dropped or altered from: '<dir> flake to check'"
+    "scripts/t.sh: @option (line 3) is not one item of its list: published 2 of 6 words; dropped or altered from: '<dir> flake to check'"
 }
 
 function scenario_resumed_paragraph_dropped() {
@@ -515,6 +515,215 @@ function scenario_interpreter_failures() {
 
 # The file count is derived here, independently of the check, so the pass
 # line is pinned to the real tree's scope rather than to its wording.
+# A unit is matched against its own part of the entry. Each deleted part
+# here survives as a substring elsewhere: "1 — drift" inside "1 — drift
+# found", and "JSON" inside the description.
+function scenario_unit_matched_in_its_own_part() {
+  new_tree ownpart
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Emits JSON.
+# @exitcode 1 drift
+# @exitcode 1 drift found
+# @stdout JSON
+true
+EOF
+  write_page <<'EOF'
+### scripts/t.sh
+
+Emits JSON.
+
+**Exit codes:**
+
+- `1` — drift found
+EOF
+  run_scenario 'an annotation present only inside another unit is reported' 1 \
+    "scripts/t.sh: @exitcode (line 3) is not one item of its list: its text appears only inside other text"
+  also_expect "scripts/t.sh: @stdout (line 5) is not one item of its list: published 0 of 1 words; dropped or altered from: 'JSON'"
+}
+
+# The indented-block rule reads description fences only: the example fence
+# carrying the same line must not satisfy it.
+function scenario_example_fence_not_a_description_block() {
+  new_tree examplefence
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Usage:
+#   a.sh --foo
+# @example
+#   a.sh --foo
+true
+EOF
+  write_page <<'EOF'
+### scripts/t.sh
+
+Usage: a.sh --foo
+
+```bash
+  a.sh --foo
+```
+EOF
+  run_scenario 'a collapsed run is not rescued by the example fence' 1 \
+    "scripts/t.sh: indented block (line 2 description) is not exactly one preformatted block on the page, starting 'a.sh --foo'"
+}
+
+# A fence that fails to close swallows what follows it: every word is still
+# on the page, and the run is still inside a fence.
+function scenario_fence_swallows_what_follows() {
+  new_tree unclosed
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Usage:
+#   a.sh --foo
+#
+# Trailing prose.
+# @exitcode 1 drift
+true
+EOF
+  write_page <<'EOF'
+### scripts/t.sh
+
+Usage:
+
+```text
+  a.sh --foo
+
+Trailing prose.
+
+**Exit codes:**
+
+- `1` — drift
+```
+EOF
+  run_scenario 'a fence that swallows the rest of the entry is reported' 1 \
+    "scripts/t.sh: indented block (line 2 description) is not exactly one preformatted block on the page, starting 'a.sh --foo'"
+  also_expect "scripts/t.sh: @exitcode (line 6) is not one item of its list"
+}
+
+# Near misses for the page model: a Markdown list in a description shows
+# bullets rather than its markers, and a description line reading
+# "Exit codes:" is prose, not the generator's bold list label.
+function scenario_description_list_and_label_prose() {
+  new_tree desclist
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Steps:
+#
+# - first step here
+# 1. numbered one
+#
+# Exit codes:
+#
+#   0  clean
+# @exitcode 0 clean
+true
+EOF
+  write_page <<'EOF'
+### scripts/t.sh
+
+Steps:
+
+- first step here
+
+1. numbered one
+
+Exit codes:
+
+```text
+  0  clean
+```
+
+**Exit codes:**
+
+- `0` — clean
+EOF
+  run_scenario 'a description list and a prose "Exit codes:" line are published intact' 0 '' \
+    'ok — 2 file(s), 3 annotation unit(s), 1 indented block(s) published intact'
+}
+
+# Description units are matched in source order, so a resumed paragraph
+# that repeats words of the first one needs its own occurrence.
+function scenario_resumed_paragraph_needs_its_own_text() {
+  new_tree order
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Run the check.
+# @option --check exit 1 on drift
+#
+# Run the check.
+true
+EOF
+  write_page <<'EOF'
+### scripts/t.sh
+
+Run the check.
+
+**Options:**
+
+- `--check` — exit 1 on drift
+EOF
+  run_scenario 'a resumed paragraph satisfied only by earlier text is reported' 1 \
+    "scripts/t.sh: @description (line 4) published 0 of 3 words; dropped or altered from: 'Run the check.'"
+}
+
+# The repo root supplies only defaults: with both overrides set the check
+# runs outside a work tree, and without them it is a could-not-run.
+function scenario_outside_work_tree() {
+  new_tree outside
+  printf '%s\n' '#!/usr/bin/env bash' '# @description Body.' 'true' >"${TREE}/scripts/t.sh"
+  printf '%s\n' '#!/usr/bin/env bash' '# @description Other.' 'true' >"${TREE}/scripts/u.sh"
+  printf '%s\n' '### scripts/t.sh' '' 'Body.' '' '### scripts/u.sh' '' 'Other.' | write_page
+  local stdout_file stderr_file outcome_file actual_exit=0
+  stdout_file="$(mktemp)"
+  stderr_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  (cd -- "${TREE}" && GIT_CEILING_DIRECTORIES="${work}" "${SCRIPT}") \
+    >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  if [[ ${actual_exit} -eq 2 ]] &&
+    grep --fixed-strings --quiet -- 'not in a git work tree' "${stderr_file}"; then
+    printf 'PASS: outside a work tree with no overrides is exit 2 (exit 2)\n'
+  else
+    printf 'FAIL: outside a work tree with no overrides is exit 2 — exit %d\n' "${actual_exit}" >&2
+    sed 's/^/    /' -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  fi
+  harness_assert_record 'outside a work tree with no overrides is exit 2' \
+    'not in a git work tree' "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  rm --force -- "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  # Not a subshell: run_scenario's failure count and assertion record must
+  # outlive the call.
+  cd -- "${TREE}"
+  GIT_CEILING_DIRECTORIES="${work}" run_scenario \
+    'outside a work tree with both overrides runs' 0 '' \
+    'ok — 3 file(s), 3 annotation unit(s), 0 indented block(s) published intact'
+  cd -- "${REPO_ROOT}"
+}
+
+# An @example is its entry's last fence, whole: a truncated one is
+# reported even though its first words match.
+function scenario_example_truncated() {
+  new_tree example
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Body.
+# @example
+#   t.sh --check --verbose
+true
+EOF
+  write_page <<'EOF'
+### scripts/t.sh
+
+Body.
+
+```bash
+  t.sh --check
+```
+EOF
+  run_scenario 'a truncated example is reported' 1 \
+    "scripts/t.sh: @example (line 3) is not the entry's example block: published 2 of 3 words; dropped or altered from: '--verbose'"
+}
+
 function scenario_live_tree() {
   local stdout_file stderr_file outcome_file actual_exit=0 f
   local -i files=0
@@ -562,8 +771,15 @@ function main() {
   scenario_no_entry
   scenario_unknown_tag_text
   scenario_generates_continuation
+  scenario_unit_matched_in_its_own_part
+  scenario_example_fence_not_a_description_block
+  scenario_fence_swallows_what_follows
+  scenario_description_list_and_label_prose
+  scenario_resumed_paragraph_needs_its_own_text
+  scenario_example_truncated
   scenario_cannot_run
   scenario_interpreter_failures
+  scenario_outside_work_tree
   harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then

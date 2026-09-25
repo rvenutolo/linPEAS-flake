@@ -169,33 +169,42 @@ def extract(path, library, findings):
 
 
 class PageText(html.parser.HTMLParser):
-    """Visible text and preformatted blocks, per H3 script and H4 function."""
+    """Each H3 script and H4 function entry as an ordered list of blocks.
 
-    BLOCK = {"p", "li", "pre", "div", "ul", "ol", "br", "tr", "td", "th", "blockquote"}
+    A block is (region, kind, text): kind is "p", "li" or "pre", and region
+    is "description" until a paragraph holding only a bold list label
+    ("Args:", "Options:", "Exit codes:", "Stdout:") switches it to that
+    label. That is the order the generator emits an entry in, so a unit can
+    be matched against its own part of the entry rather than anywhere in it.
+    """
+
+    LABELS = {"Args:": "arg", "Options:": "option", "Exit codes:": "exitcode", "Stdout:": "stdout"}
+    BLOCKS = ("p", "li", "pre")
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
-        self.text, self.pre = {}, {}
-        self.key, self.script, self.buf = None, None, []
+        self.entries = {}
+        self.key, self.script, self.region = None, None, "description"
         self.heading, self.heading_text = None, []
-        self.in_pre, self.pre_buf = False, []
-
-    def flush(self):
-        if self.key is not None:
-            self.text[self.key] = self.text.get(self.key, "") + "".join(self.buf)
-        self.buf = []
+        self.block, self.block_text = None, []
+        self.in_strong, self.strong_text = False, []
 
     def handle_starttag(self, tag, attrs):
         if tag in ("h2", "h3", "h4"):
-            self.flush()
             self.heading, self.heading_text = tag, []
-        elif tag == "pre":
-            self.in_pre, self.pre_buf = True, []
-            self.buf.append(" ")
-        elif tag in self.BLOCK:
-            self.buf.append(" ")
+        elif tag in self.BLOCKS and self.block is None:
+            self.block, self.block_text = tag, []
+            self.strong_text = []
+        elif tag == "strong":
+            self.in_strong = True
+        elif self.block is not None and tag in ("p", "li", "br"):
+            # A paragraph or item nested inside the open block still
+            # separates words.
+            self.block_text.append(" ")
 
     def handle_endtag(self, tag):
+        if tag == "strong":
+            self.in_strong = False
         if tag == self.heading:
             title = "".join(self.heading_text).strip()
             if tag == "h2":
@@ -205,21 +214,28 @@ class PageText(html.parser.HTMLParser):
             else:
                 fn = title[:-2] if title.endswith("()") else title
                 self.key = (self.script or "") + "::" + fn
+            if self.key is not None:
+                self.entries.setdefault(self.key, [])
+            self.region = "description"
             self.heading = None
-        elif tag == "pre":
-            self.in_pre = False
-            self.pre.setdefault(self.key, []).append("".join(self.pre_buf))
-            self.buf.append(" ")
-        elif tag in self.BLOCK:
-            self.buf.append(" ")
+        elif tag == self.block:
+            text = "".join(self.block_text)
+            # A label is the generator's bold paragraph; a description line
+            # that merely reads "Exit codes:" is prose.
+            label = "".join(self.strong_text).strip()
+            if tag == "p" and label in self.LABELS and label == text.strip():
+                self.region = self.LABELS[text.strip()]
+            elif self.key is not None:
+                self.entries[self.key].append((self.region, tag, text))
+            self.block = None
 
     def handle_data(self, data):
         if self.heading:
             self.heading_text.append(data)
-            return
-        self.buf.append(data)
-        if self.in_pre:
-            self.pre_buf.append(data)
+        elif self.block is not None:
+            self.block_text.append(data)
+            if self.in_strong:
+                self.strong_text.append(data)
 
 
 def render(doc):
@@ -238,19 +254,25 @@ def render(doc):
     page = PageText()
     page.feed(html_out)
     page.close()
-    page.flush()
-    return page.text, page.pre
+    return page.entries
 
 
 CODE_SPAN = re.compile(r"(`+)(.+?)\1", re.S)
 
 
+# A list marker standing alone as a word: the renderer shows it as a bullet
+# or a number, not as text.
+LIST_MARKER = re.compile(r"(?:(?<=\s)|^)(?:[-*+]|[0-9]+[.)])(?=\s)")
+
+
 def normalize(text):
-    # A renderer trims the blanks at a code span's edges and drops its
-    # backticks; text is compared as words, so line-join, indent and fence
-    # markers fall away. The same transform runs on both sides.
+    # A renderer trims the blanks at a code span's edges, drops its
+    # backticks, and turns list markers into bullets; text is compared as
+    # words, so line-join, indent and fence markers fall away. The same
+    # transform runs on both sides.
     text = CODE_SPAN.sub(lambda m: m.group(2).strip(), text)
-    return re.sub(r"\s+", " ", text.replace("`", "")).strip()
+    text = LIST_MARKER.sub(" ", text.replace("`", ""))
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def colon_led_runs(unit):
@@ -282,13 +304,8 @@ def colon_led_runs(unit):
     return runs
 
 
-def in_one_pre(run, pres):
-    for pre in pres:
-        have = [x.strip() for x in pre.split("\n") if x.strip()]
-        for k in range(len(have) - len(run) + 1):
-            if have[k:k + len(run)] == run:
-                return True
-    return False
+def pre_lines(text):
+    return [x.strip() for x in text.split("\n") if x.strip()]
 
 
 def first_divergence(want, have):
@@ -317,30 +334,67 @@ def main(argv):
             return 2
         else:
             files.append((arg, mode == "--lib"))
-    text, pres = render(doc)
+    entries = render(doc)
 
     findings, n_units, n_runs = [], 0, 0
     for path, library in files:
         unreached = []
         units = extract(path, library, unreached)
         findings += [f"{key}:{no}: {msg}" for key, no, msg in unreached]
+        has_example = {key for key, unit in units if unit.tag == "example"}
+        desc_from = {}  # key -> offset the next description unit must start at
         for key, unit in units:
             want = normalize(unit.expected())
             if not want:
                 continue
             n_units += 1
-            if key not in text:
+            if key not in entries:
                 findings.append(f"{key}: {unit.label()} (line {unit.line}) has no entry on the page")
                 continue
-            have = normalize(text[key])
-            if want not in have:
-                got, total, frag = first_divergence(want, have)
-                findings.append(f"{key}: {unit.label()} (line {unit.line}) published {got} of {total} words; dropped or altered from: {frag!r}")
+            blocks = entries[key]
+            # The generator writes the @example fence last, so when there is
+            # one, the entry's last block is it and not description.
+            example = blocks[-1] if key in has_example and blocks and blocks[-1][1] == "pre" else None
+            desc_blocks = [b for b in blocks if b[0] == "description" and b is not example]
+            where = f"{key}: {unit.label()} (line {unit.line})"
+            if unit.tag in PageText.LABELS.values():
+                items = [normalize(b[2]) for b in blocks if b[0] == unit.tag and b[1] == "li"]
+                if want not in items:
+                    got, total, frag = first_divergence(want, " | ".join(items))
+                    if got == total:
+                        findings.append(f"{where} is not one item of its list: its text appears only inside other text")
+                    else:
+                        findings.append(f"{where} is not one item of its list: published {got} of {total} words; dropped or altered from: {frag!r}")
+                continue
+            if unit.tag == "example":
+                have = normalize(example[2]) if example else ""
+                if want != have:
+                    got, total, frag = first_divergence(want, have)
+                    findings.append(f"{where} is not the entry's example block: published {got} of {total} words; dropped or altered from: {frag!r}")
+                continue
             if unit.tag == "description":
+                # Description units appear in source order, so each one is
+                # searched for after the end of the one before it.
+                have = normalize(" ".join(b[2] for b in desc_blocks))
+                start = desc_from.get(key, 0)
+                at = have.find(want, start)
+                if at < 0:
+                    got, total, frag = first_divergence(want, have[start:])
+                    findings.append(f"{where} published {got} of {total} words; dropped or altered from: {frag!r}")
+                else:
+                    desc_from[key] = at + len(want)
+                pres = [pre_lines(b[2]) for b in desc_blocks if b[1] == "pre"]
                 for run in colon_led_runs(unit):
                     n_runs += 1
-                    if not in_one_pre(run, pres.get(key, [])):
-                        findings.append(f"{key}: indented block (line {unit.line} description) is not one preformatted block on the page, starting {run[0][:60]!r}")
+                    if run not in pres:
+                        findings.append(f"{key}: indented block (line {unit.line} description) is not exactly one preformatted block on the page, starting {run[0][:60]!r}")
+                continue
+            # Text under a non-rendering tag, or a line opening with an
+            # unknown tag, is required anywhere in the entry.
+            have = normalize(" ".join(b[2] for b in blocks))
+            if want not in have:
+                got, total, frag = first_divergence(want, have)
+                findings.append(f"{where} published {got} of {total} words; dropped or altered from: {frag!r}")
     if n_units == 0:
         print(f"{PROG}: no annotation text found in {len(files)} file(s)", file=sys.stderr)
         return 2
