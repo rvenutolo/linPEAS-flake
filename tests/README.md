@@ -103,7 +103,8 @@ helpers (`expect_empty_scan`, `expect_failure`, `run_expect`) or a bare
 convention rather than a requirement.
 
 A scenario's expected substring must not appear in any sibling
-scenario's output. A substring the nominal path also prints matches
+scenario's output (a sibling asserting the same substring, one with
+identical output, or an exempt pair is skipped). A substring the nominal path also prints matches
 whether or not the asserted behavior exists, so the assertion proves
 nothing. Harnesses source `scripts/lib/harness-assert.sh`, call
 `harness_assert_record <scenario> <substring> <output-file>...` after

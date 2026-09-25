@@ -9,7 +9,7 @@
 # that the reminder workflow reads and strips before posting.
 #
 # Freshness gates validate only generated content; hand-written prose about
-# CI drifts silently. CI churn is the best cheap proxy for that drift, so it
+# CI drifts past every freshness gate. CI churn is the best cheap proxy for that drift, so it
 # decides whether a semantic audit is worth running this month.
 #
 # The diff base is the commit recorded in `.github/docs-audit-state`, which

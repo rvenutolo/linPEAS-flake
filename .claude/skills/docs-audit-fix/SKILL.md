@@ -79,7 +79,7 @@ paragraph in its scope.
     until it exits 0. Also run the lints and harnesses the diff touches,
     and every `refresh-*.sh` whose output the diff touches. The checker's
     OK run is over the branch's last content commit: the only content
-    commit that may follow it is step 7's marker commit. Any other commit
+    commit that may follow it is step 7's marker commit. Any other content commit
     made after the OK run, a `refresh-*.sh` regeneration included, means
     running the checker again. A merge from `main` (`gh pr update-branch`) is not a
     content commit: it needs no re-run. When the checker prints the OK

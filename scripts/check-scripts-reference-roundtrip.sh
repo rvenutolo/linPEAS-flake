@@ -13,16 +13,20 @@
 # Scope is the generator's own: every `scripts/*.sh` not starting with an
 # underscore, read header-only, and every `scripts/lib/*.sh`, whose
 # function `@description` blocks are read as well. The reader splits a
-# header into units at each tag. A unit's text must appear, whitespace
-# collapsed and code-span backticks removed, in that script's or function's
-# entry. Prose after a blank comment line that closes an `@arg`, `@option`,
+# header into units at each tag. A unit's text must appear in that script's
+# or function's entry: prose with whitespace collapsed and code-span
+# backticks removed, an `@arg`, `@option`, `@exitcode` or `@stdout` as one
+# whole item of its list, and an `@example` as the entry's example block,
+# line for line. Prose after a blank comment line that closes an `@arg`, `@option`,
 # `@exitcode` or `@stdout` is a further description unit. An indented run
 # whose lead-in line ends in a colon must also stay one preformatted block,
 # line for line, because collapsing it keeps every word and still loses the
-# shape. Three shapes of header text the generator never reads are findings
-# too: prose before the first tag, a `# @tag` in a comment block between the
-# header's first blank line and the first line of code, and, in a library,
-# an annotation outside a function's `@description` block.
+# shape. Header text the generator never reads is a finding too: prose
+# before the first tag, other than the path line, the shebang and a
+# `# shellcheck` directive; a rendered tag such as `# @arg` in a comment
+# block between the header's first blank line and the first line of code;
+# and, in a library, a rendered tag outside a function's `@description`
+# block, or a `@description` block that no function line follows.
 #
 # Text outside a code span is Markdown on the page, so a `<placeholder>`
 # reads as an HTML tag, a `<` in `<-` shows with a backslash, and a glob's
@@ -42,10 +46,15 @@
 # Exit codes:
 #   0  every annotation unit is published intact
 #   1  header text the page drops, alters or collapses (details on stderr)
-#   2  the check could not run: the page or its markers are missing,
-#      python3 or python-markdown is unavailable, the scripts or lib glob
-#      matches nothing (unless LINT_ALLOW_EMPTY_SCAN is set), a header is
-#      not UTF-8, or no annotation text was found
+#   2  the check could not run: git or python3 is missing, no git work
+#      tree is found while an override is unset, the page, its markers,
+#      mkdocs.yml or the checker is missing, python-markdown or PyYAML is
+#      not importable, mkdocs.yml's markdown extensions cannot be read,
+#      loaded or render the page, the config inherits another, the scripts
+#      or lib glob matches nothing (unless LINT_ALLOW_EMPTY_SCAN is set), a
+#      header is not UTF-8 or cannot be read, no annotation text was found,
+#      the checker raises an uncaught exception, or it exits with any
+#      status other than 0, 2 or 3
 
 set -Eeuo pipefail
 IFS=$'\n\t'

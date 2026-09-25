@@ -51,9 +51,10 @@
 #   0  every name claimed in prose resolves to something the sentence's own
 #      claim noun admits
 #   1  ghost or mislabel name(s) found (details printed to stderr)
-#   2  the check could not run: a missing or empty name source, a
-#      producer that lists or reads the scanned files failed, an empty
-#      scan set, or a scanned file that leaves a code fence open
+#   2  the check could not run: a required tool is missing, a temp file
+#      cannot be created, a missing or empty name source, a producer that
+#      lists or reads the scanned files failed, an empty scan set, or a
+#      scanned file that leaves a code fence open, among others
 
 set -Eeuo pipefail
 IFS=$'\n\t'

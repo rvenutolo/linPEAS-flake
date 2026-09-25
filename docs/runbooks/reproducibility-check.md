@@ -30,7 +30,7 @@ The `gh issue create` invocation sets no `--assignee`; mismatches rely on defaul
 1. Open the auto-created issue (label: `reproducibility`).
 1. Follow the run link to the failed workflow run.
 1. Download the `repro-diff` artifact.
-1. Open `image.html` (or `linpeas.html`) in a browser.
+1. Read `summary.txt`, then open the `.html` report of each pair it marks `report written`.
 1. Classify the divergence using the table below, then fix the root cause.
 
 ### Bad-input failures (exit 2)

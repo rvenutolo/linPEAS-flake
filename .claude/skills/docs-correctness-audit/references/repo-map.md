@@ -105,7 +105,7 @@ tracked docs cite the sourced libraries under `scripts/lib/` — `make_temp`
 their siblings carry invariants of their own — and the `scripts/*.awk`
 programs (`_script_docs.awk`, `_attestation_invocations.awk`) and the
 `scripts/*.py` program (`_scripts_reference_roundtrip.py`) by path as
-readily as the top-level entry points. A `scripts/*.sh` glob covers neither,
+readily as the top-level entry points. A `scripts/*.sh` glob covers none of them,
 so an inventory that stops at top-level `*.sh` makes every such citation read
 as a script that does not exist. The collector emits libraries under a `lib/`
 prefix in its **SCRIPTS** section, which is what keeps a library entry
