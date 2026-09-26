@@ -402,13 +402,14 @@ in
     pass_filenames = false;
     language = "system";
   };
-  # Asserts every prose count of the required set equals the data-row count
+  # Asserts every declared prose count of the required set, and every
+  # undeclared one in the phrasings its backstop reads, equals the data-row count
   # of the Required contexts table, so a context added to or dropped from
   # the ruleset cannot leave a restated count behind.
   check-required-check-counts = {
     enable = true;
     name = "check-required-check-counts";
-    description = "Every prose count of the required set matches the Required contexts table in required-checks.md.";
+    description = "Declared prose counts of the required set, and undeclared ones the backstop reads, match the Required contexts table in required-checks.md.";
     entry = "${pkgs-unstable.writeShellScript "check-required-check-counts-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'
@@ -416,9 +417,10 @@ in
       export PATH="${toolPath}:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-required-check-counts.sh
     ''}";
-    # Every Markdown file is in the script's scan set, and the table itself
-    # is Markdown, so any .md edit can change the verdict.
-    files = "^(.*\\.md|scripts/check-required-check-counts\\.sh)$";
+    # Any Markdown file can be in the scan set, and the table itself is
+    # Markdown, so any .md edit can change the verdict; so can the script
+    # and the libraries it sources.
+    files = "^(.*\\.md|scripts/check-required-check-counts\\.sh|scripts/lib/.*\\.sh)$";
     pass_filenames = false;
     language = "system";
   };

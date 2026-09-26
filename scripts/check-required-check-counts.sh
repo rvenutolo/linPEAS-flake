@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # scripts/check-required-check-counts.sh
 #
-# @description Lint: every count of the required-check set stated in prose
-# must equal the number of data rows in the `## Required contexts` table of
+# @description Lint: every declared count of the required-check set, and
+# every undeclared one in the phrasings the backstop reads, must equal the
+# number of data rows in the `## Required contexts` table of
 # docs/security/required-checks.md. That table is the canonical set, and
 # nothing generates the sentences that restate its size, so a context added
 # to or removed from the ruleset leaves each of them silently wrong.
@@ -14,16 +15,22 @@
 #   checks.
 #
 # The number immediately before the marker is the claim, so a paragraph that
-# states two numbers stays unambiguous. The marker must follow ASCII digits;
-# a number word, a missing number or an unknown key is reported rather than
-# skipped, because a marker that resolves to nothing is a count nobody
-# checks.
+# states two numbers stays unambiguous. The marker must follow a run of ASCII
+# digits that stands alone, after whitespace or at the start of the
+# paragraph. A number word, digits glued to anything else, a missing number,
+# an unknown key, or any other HTML comment that names a count is reported
+# rather than skipped, because a marker that resolves to nothing is a count
+# nobody checks.
 #
-# A backstop catches a count written without a marker: a number, in digits
-# or as a word, followed within two words by "required check(s)", "required
-# status check(s)" or "required context(s)". Anything wider matched unrelated
-# numbers on the real tree (a cron time, a sentence counting something else),
-# so other phrasings of the count are not seen. A subset count in the
+# A backstop catches a count written without a marker: a number of up to
+# three digits or a number word, after whitespace or an opening parenthesis
+# or at the start of a paragraph, followed within two words by "required
+# check(s)", "required status check(s)" or "required context(s)". Emphasis
+# markers and HTML comments count as whitespace. The words between may not
+# include "of", so a partitive ("one of the required checks") is not a count,
+# and the bare word "one" reads as an article rather than a count. Anything wider matched unrelated numbers
+# on the real tree (a cron time, a sentence counting something else), so
+# other phrasings of the count are not seen. A subset count in the
 # backstop's shape is reported too, since a marker cannot name a subset;
 # rephrase it.
 #
@@ -37,9 +44,10 @@
 # Exit codes: 0 every declared count matches the table and no undeclared
 # count was found, 1 a count disagrees with the table, is undeclared, or
 # carries a malformed marker (details printed to stderr), 2 the check could
-# not run: a required tool is missing, the table is missing, duplicated or
-# empty, the scan set could not be listed or is empty, or a scanned file
-# leaves a code fence open
+# not run: a required tool is missing, the table doc is missing, holds no
+# Required contexts section or more than one, holds no table, a table with
+# no separator row, a second table or no data rows there, the scan set could
+# not be listed or is empty, or a scanned file leaves a code fence open
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -58,7 +66,10 @@ require_tool git
 require_tool awk
 require_tool sort
 
-REPO_ROOT="$(git rev-parse --show-toplevel)"
+if ! REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+  printf 'required-check-counts: not inside a git repository\n' >&2
+  exit 2
+fi
 readonly REPO_ROOT
 
 # Env override (test-only):
@@ -69,9 +80,13 @@ readonly TABLE_DOC_REL='docs/security/required-checks.md'
 readonly TABLE_DOC="${SCAN_ROOT}/${TABLE_DOC_REL}"
 
 # @description Print the number of data rows in the `## Required contexts`
-#              table. A table starts at the section's first `|` line, whose
-#              next line must be the `| ---` separator, and ends at the first
-#              line that is not a `|` line.
+#              table. The section runs to the next level-one or level-two
+#              ATX heading. A table starts at the section's first line that
+#              opens with a pipe (up to three spaces in), whose next line must
+#              be the separator row, and runs to the next blank line or the
+#              start of another block (a heading, a blockquote, a list item,
+#              an HTML line, a fence); every line in between is a row, as
+#              GFM renders it, whether or not it opens with a pipe.
 # @stdout the row count
 # @exitcode 0 the section holds exactly one well-formed table
 # @exitcode 3 no such section
@@ -81,21 +96,21 @@ readonly TABLE_DOC="${SCAN_ROOT}/${TABLE_DOC_REL}"
 # @exitcode 7 a second table in the section
 function count_table_rows() {
   awk '
-    /^## / {
-      in_sec = ($0 == "## Required contexts")
+    /^##?([[:space:]]|$)/ {
+      in_sec = ($0 ~ /^##[[:space:]]+Required contexts([[:space:]]+#+)?[[:space:]]*$/)
       if (in_sec) headings++
       state = 0
       next
     }
     !in_sec { next }
-    state == 0 && /^\|/ { if (tables++) extra = 1; state = 1; next }
+    state == 2 && (/^[[:space:]]*$/ || /^ ? ? ?(#|>|<|[-*+][[:space:]]|[0-9]+[.)][[:space:]]|```|~~~)/) { state = 0 }
+    state == 0 && /^ ? ? ?\|/ { if (tables++) extra = 1; state = 1; next }
     state == 1 {
-      if ($0 !~ /^\|[-|: ]+\|[[:space:]]*$/) nosep = 1
+      if ($0 !~ /^[[:space:]]*\|?[[:space:]]*:?-+:?[[:space:]]*(\|[[:space:]]*:?-+:?[[:space:]]*)*\|?[[:space:]]*$/) nosep = 1
       state = 2
       next
     }
-    state == 2 && /^\|/ { rows++; next }
-    state == 2 { state = 0 }
+    state == 2 { rows++ }
     END {
       if (headings == 0) exit 3
       if (headings > 1) exit 4
@@ -135,12 +150,16 @@ function prose_scan() {
     while IFS= read -r -d '' rel; do
       case "${rel}" in
       .claude/* | tests/fixtures/* | CHANGELOG.md | docs/releases.md) continue ;;
-      *.md) printf '%s\0' "${SCAN_ROOT}/${rel}" ;;
+      *.md)
+        # A tracked file deleted from the working tree is still listed;
+        # there is nothing left to read, and nothing left to be wrong.
+        [[ -f ${SCAN_ROOT}/${rel} ]] && printf '%s\0' "${SCAN_ROOT}/${rel}"
+        ;;
       esac
     done <"${listing}"
     while IFS= read -r -d '' rel; do
       case "${rel}" in
-      *.md) printf '%s\0' "${SCAN_ROOT}/${rel}" ;;
+      *.md) [[ -f ${SCAN_ROOT}/${rel} ]] && printf '%s\0' "${SCAN_ROOT}/${rel}" ;;
       esac
     done <"${tracked_claude}"
   } | sort --zero-terminated
@@ -192,12 +211,14 @@ function main() {
       }
       # @description Blank every inline code span. A span opens on a run of
       #              n backticks and closes on the next run of exactly n; an
-      #              opener with no closer is literal text.
+      #              opener with no closer, or one escaped with a backslash,
+      #              is literal text.
       function strip_spans(s,   i, j, n, m, len) {
         len = length(s)
         i = 1
         while (i <= len) {
           if (substr(s, i, 1) != "`") { i++; continue }
+          if (i > 1 && substr(s, i - 1, 1) == "\\") { i++; continue }
           n = 0
           while (substr(s, i + n, 1) == "`") n++
           j = i + n
@@ -214,6 +235,11 @@ function main() {
         }
         return s
       }
+      # @description Whether a comment opens with a count word or names the
+      #              marker key: the shapes a misspelt marker takes.
+      function is_markerish(body) {
+        return tolower(body) ~ /^<!--[[:space:]]*counts?([^a-z]|$)/ || body ~ /required-contexts/
+      }
       # @description Line number of offset off within the paragraph.
       function line_of(off,   pre) {
         pre = substr(para, 1, off - 1)
@@ -223,72 +249,119 @@ function main() {
         printf "%s:%d: %s\n", name, line_of(off), msg > "/dev/stderr"
         found = 1
       }
-      function flush(   s, low, phrase, tok, rest, base, mstart, mlen, body, key, pre, k, dstart, val) {
+      function flush(   s, low, phrase, tok, rest, base, cstart, cend, body, key, pre, k, dstart, val, m) {
         if (para == "") return
-        paras++
         s = strip_spans(para)
-        # Declared counts. Every comment opening with `count:` is a marker,
-        # so a misspelt key is reported instead of read as an ordinary
-        # comment.
+        # Every HTML comment in prose. A count marker is read and blanked
+        # together with its number; any other comment is blanked alone, so
+        # the backstop reads straight through it.
         base = 0
         rest = s
-        while (match(rest, /<!--[[:space:]]*count[[:space:]]*:[^>]*-->/)) {
-          mstart = base + RSTART
-          mlen = RLENGTH
-          body = substr(rest, RSTART, RLENGTH)
-          base = mstart + mlen - 1
-          rest = substr(rest, RSTART + RLENGTH)
-          key = body
-          sub(/^<!--[[:space:]]*count[[:space:]]*:[[:space:]]*/, "", key)
-          sub(/[[:space:]]*-->$/, "", key)
-          if (key != "required-contexts") {
-            report(mstart, "unknown count marker key \"" key "\" (the only key is required-contexts)")
+        while ((k = index(rest, "<!--")) > 0) {
+          cstart = base + k
+          m = index(substr(rest, k + 4), "-->")
+          if (m == 0) {
+            # An unclosed opener is literal text on the page. One that reads
+            # as a marker is a broken marker, not an invisible one.
+            body = substr(s, cstart)
+            sub(/\n.*$/, "", body)
+            if (is_markerish(body))
+              report(cstart, "malformed count marker " body "; write <!-- count: required-contexts -->")
+            s = blank(s, cstart, cstart + 3)
+            base = cstart + 3
+            rest = substr(s, cstart + 4)
             continue
           }
-          # The digits directly before the marker, past any whitespace.
-          pre = substr(s, 1, mstart - 1)
+          cend = cstart + 4 + m + 1
+          body = substr(s, cstart, cend - cstart + 1)
+          base = cend
+          rest = substr(s, cend + 1)
+          if (body ~ /^<!--[[:space:]]*count[[:space:]]*:/) {
+            key = body
+            sub(/^<!--[[:space:]]*count[[:space:]]*:[[:space:]]*/, "", key)
+            sub(/[[:space:]]*-->$/, "", key)
+            if (key != "required-contexts") {
+              report(cstart, "unknown count marker key \"" key "\" (the only key is required-contexts)")
+              s = blank(s, cstart, cend)
+              continue
+            }
+          } else {
+            # A comment that opens with a count word or names the key, but is
+            # not shaped as a marker, is a slip that would otherwise silence
+            # both checks.
+            if (is_markerish(body))
+              report(cstart, "malformed count marker " body "; write <!-- count: required-contexts -->")
+            s = blank(s, cstart, cend)
+            continue
+          }
+          # The digits directly before the marker, past any whitespace, and
+          # standing alone: "1,003" or "v3" is not a count of 3.
+          pre = substr(s, 1, cstart - 1)
           sub(/[[:space:]]+$/, "", pre)
           k = length(pre)
           while (k > 0 && substr(pre, k, 1) ~ /[0-9]/) k--
           dstart = k + 1
-          if (dstart > length(pre) || (k > 0 && substr(pre, k, 1) ~ /[A-Za-z_-]/)) {
+          if (dstart > length(pre) || (k > 0 && substr(pre, k, 1) !~ /[[:space:]]/)) {
             tok = pre
             sub(/^.*[[:space:]]/, "", tok)
-            report(mstart, "count marker follows \"" tok "\", not a number written in digits")
+            if (tok == "")
+              report(cstart, "count marker has no number before it in its paragraph")
+            else
+              report(cstart, "count marker follows \"" tok "\", not a number written in digits")
+            s = blank(s, cstart, cend)
             continue
           }
           val = substr(pre, dstart) + 0
           sites++
           if (val != expected)
-            report(mstart, "states " val " required contexts; " table " has " expected)
+            report(dstart, "states " val " required contexts; " table " has " expected)
+          s = blank(s, dstart, cend)
         }
-        # Undeclared counts. Matched on a lowercased copy, which keeps every
-        # offset, so a sentence-initial number word is still seen.
+        # Undeclared counts. Matched on a lowercased copy with emphasis
+        # markers blanked, which keeps every offset, so a sentence-initial
+        # number word and a bold number are still seen.
+        gsub(/[*_]/, " ", s)
         low = tolower(s)
         base = 0
         rest = low
         while (match(rest, BACKSTOP)) {
-          mstart = base + RSTART
-          # The match may open on the boundary character before the number
-          # and close on the one after the noun; quote the phrase alone.
-          phrase = substr(para, mstart, RLENGTH)
-          if (substr(low, mstart, 1) ~ /[^a-z0-9]/) { phrase = substr(phrase, 2); mstart++ }
-          if (substr(phrase, length(phrase), 1) ~ /[^A-Za-z]/) phrase = substr(phrase, 1, length(phrase) - 1)
-          gsub(/[[:space:]]+/, " ", phrase)
-          report(mstart, "undeclared required-check count \"" phrase "\"; add <!-- count: required-contexts --> after the number, or rephrase a subset count")
-          backstop++
+          cstart = base + RSTART
+          m = RLENGTH
           base = base + RSTART + RLENGTH - 1
           rest = substr(rest, RSTART + RLENGTH)
+          # The match may open on the boundary character before the number
+          # and close on the one after the noun; quote the phrase alone, as
+          # read, with comments and emphasis already blanked.
+          phrase = substr(s, cstart, m)
+          if (substr(low, cstart, 1) !~ /[a-z0-9]/) { phrase = substr(phrase, 2); cstart++ }
+          if (substr(phrase, length(phrase), 1) ~ /[^A-Za-z]/) phrase = substr(phrase, 1, length(phrase) - 1)
+          gsub(/[[:space:]]+/, " ", phrase)
+          report(cstart, "undeclared required-check count \"" phrase "\"; add <!-- count: required-contexts --> after the number, or rephrase a subset count")
+          backstop++
         }
         para = ""
       }
       BEGIN {
-        W = "(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(-[a-z]+)?"
-        NUM = "([0-9]+|" W ")"
-        GAP = "([a-z0-9_-]+[[:space:]]+)?([a-z0-9_-]+[[:space:]]+)?"
-        BACKSTOP = "(^|[^a-z0-9_-])" NUM "[[:space:]]+" GAP "required[[:space:]]+(status[[:space:]]+)?(checks?|contexts?)([^a-z0-9_-]|$)"
+        # Bare "one" is left out: "one required check" reads as an article.
+        W = "(zero|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(-(one|two|three|four|five|six|seven|eight|nine))?"
+        # Up to three digits: a year or a time is not a count of the set.
+        NUM = "([0-9][0-9]?[0-9]?|" W ")"
+        # Any word but "of": a partitive names a share of the set, and
+        # skipping one after matching it would hide a total inside it.
+        WD = "([a-z0-9_-][a-z0-9_-][a-z0-9_-]+|[a-z0-9_-]|[a-np-z0-9_-][a-z0-9_-]|o[a-eg-z0-9_-])"
+        GAP = "(" WD "[[:space:]]+)?(" WD "[[:space:]]+)?"
+        BACKSTOP = "(^|[[:space:](])" NUM "[[:space:]]+" GAP "required[[:space:]]+(status[[:space:]]+)?(checks?|contexts?)([^a-z0-9_-]|$)"
       }
-      match($0, /^[[:space:]]*(>[[:space:]]*)*(`{3,}|~{3,})/) {
+      comment {
+        hidden++
+        if (index($0, "-->")) comment = 0
+        next
+      }
+      # A backtick fence's info string cannot hold a backtick, so a line
+      # opening with an inline span is prose, not a fence.
+      match($0, /^[[:space:]]*(>[[:space:]]*)*(`{3,}|~{3,})/) &&
+        (fence || substr($0, RSTART + RLENGTH - 1, 1) == "~" ||
+        substr($0, RSTART + RLENGTH) !~ /`/) {
         mk = substr($0, RSTART, RLENGTH)
         # After the marker is read: flush() runs match() of its own, which
         # overwrites RSTART and RLENGTH.
@@ -301,6 +374,23 @@ function main() {
         next
       }
       fence { fenced++; next }
+      # Up to three spaces in, a comment opens an HTML block, which ends
+      # the paragraph before it. One closed on its own line is read as a new
+      # paragraph, so a marker there has no number before it; one left open
+      # hides every line up to its closer, blank lines included.
+      /^ ? ? ?<!--/ {
+        flush()
+        if (index(substr($0, index($0, "<!--") + 4), "-->") == 0) {
+          if (is_markerish(substr($0, index($0, "<!--")))) {
+            printf "%s:%d: malformed count marker spanning lines; write <!-- count: required-contexts --> on the number's line\n", name, FNR > "/dev/stderr"
+            found = 1
+          }
+          comment = 1
+          comment_line = FNR
+          hidden++
+          next
+        }
+      }
       /^[[:space:]]*$/ { flush(); next }
       {
         lines++
@@ -310,7 +400,8 @@ function main() {
       END {
         flush()
         if (fence) printf "%s: unterminated code fence\n", name > "/dev/stderr"
-        printf "%d\t%d\t%d\t%d\t%d\t%d\n", lines, fenced, sites, backstop, found, fence
+        if (comment) printf "%s:%d: unterminated HTML comment\n", name, comment_line > "/dev/stderr"
+        printf "%d\t%d\t%d\t%d\t%d\t%d\n", lines, fenced + hidden, sites, backstop, found, fence || comment
       }
 AWK
   )
@@ -338,7 +429,7 @@ AWK
   done
 
   if ((unterminated)); then
-    printf 'required-check-counts: a scanned file left a code fence open, so the rest of it went unread.\n' >&2
+    printf 'required-check-counts: a scanned file left a code fence or HTML comment open, so the rest of it went unread.\n' >&2
     exit 2
   fi
   if ((found)); then
@@ -349,7 +440,7 @@ AWK
 
   # The site count is what separates a tree whose counts all match from one
   # where no marker was read at all.
-  printf 'check-required-check-counts: ok — %d declared count(s) match %d required context(s); scanned %d file(s), %d prose line(s) (%d fenced line(s) skipped)\n' \
+  printf 'check-required-check-counts: ok — %d declared count(s) match %d required context(s); scanned %d file(s), %d prose line(s) (%d fenced or commented line(s) skipped)\n' \
     "${sites}" "${expected}" "${#files[@]}" "${lines}" "${fenced}"
 }
 
