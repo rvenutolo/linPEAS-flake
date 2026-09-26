@@ -153,6 +153,7 @@ Hooks (alphabetical):
 | `check-jsonschema`                  | Schema-shape validation of repo config (renovate.json, workflows, actions).                                                                              |
 | `check-orphan-invariants`           | Every docs/ file has an invariant-index entry and vice versa.                                                                                            |
 | `check-prose-ci-names`              | A CI job or required check named in prose must resolve to a real job or, when called a job, a whole workflow.                                            |
+| `check-required-check-counts`       | Declared prose counts of the required set, and undeclared ones the backstop reads, match the Required contexts table in required-checks.md.              |
 | `check-scripts-reference-roundtrip` | Every script header's text appears as written in the rendered docs/reference/scripts.md.                                                                 |
 | `checkout-persist-credentials`      | Every actions/checkout sets with.persist-credentials: false.                                                                                             |
 | `ci-dag-fresh`                      | docs/architecture/ci-dag.md matches .github/workflows/ci.yml needs graph.                                                                                |

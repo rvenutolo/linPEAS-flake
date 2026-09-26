@@ -21,7 +21,7 @@
         },
         {
           "file": "CONTRIBUTING.md",
-          "anchor": "Every PR must pass 27 required status checks before merge.",
+          "anchor": "Every PR must pass 27 <!-- count: required-contexts --> required status",
           "op": "replace-substr",
           "from": "pass 27",
           "payload": "pass 99"
@@ -44,7 +44,7 @@
       "id": "same-line",
       "category": "insert on an earlier replacement line",
       "file": "CONTRIBUTING.md",
-      "anchor": "Every PR must pass 99 required status checks",
+      "anchor": "Every PR must pass 99 <!-- count: required-contexts --> required status",
       "op": "insert-after",
       "from": "",
       "payload": "zzq7 same-line",

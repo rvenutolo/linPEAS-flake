@@ -120,7 +120,11 @@ The `## Required contexts` table in `docs/security/required-checks.md` is the
 source of truth for required-check **counts** as well as names — a doc stating
 how many required checks a PR must pass is checked against it, and the
 collector emits that table's row count as its **REQUIRED-CHECK CONTEXTS**
-section.
+section. `scripts/check-required-check-counts.sh` already fails a declared
+count that disagrees with the table and some undeclared ones; its section in
+`docs/security/workflow-hardening.md` (`## required-check-counts`) says which
+phrasings it reads. A count phrased any other way is still this audit's to
+check.
 
 For CI job / required-check names, the collector emits a **VALID CI JOB /
 CHECK NAMES** union allowlist — every workflow job id plus every lint-group

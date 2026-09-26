@@ -402,6 +402,28 @@ in
     pass_filenames = false;
     language = "system";
   };
+  # Asserts every declared prose count of the required set, and every
+  # undeclared one in the phrasings its backstop reads, equals the data-row count
+  # of the Required contexts table, so a context added to or dropped from
+  # the ruleset cannot leave a restated count behind.
+  check-required-check-counts = {
+    enable = true;
+    name = "check-required-check-counts";
+    description = "Declared prose counts of the required set, and undeclared ones the backstop reads, match the Required contexts table in required-checks.md.";
+    entry = "${pkgs-unstable.writeShellScript "check-required-check-counts-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${toolPath}:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-required-check-counts.sh
+    ''}";
+    # Any Markdown file can be in the scan set, and the table itself is
+    # Markdown, so any .md edit can change the verdict; so can the script
+    # and the libraries it sources.
+    files = "^(.*\\.md|scripts/check-required-check-counts\\.sh|scripts/lib/.*\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Asserts every piece of script-header text is visible, as written, in
   # the rendered docs/reference/scripts.md. scripts-reference-fresh proves
   # the page matches a fresh render; this proves the render matches the

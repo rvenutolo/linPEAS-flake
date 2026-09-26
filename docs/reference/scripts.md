@@ -1325,6 +1325,58 @@ or came back empty, or jq cannot read a customManager's declarations —
 so no verdict about the markers is available and reporting one would
 blame a marker for a config-shape problem.
 
+### scripts/check-required-check-counts.sh
+
+Lint: every declared count of the required-check set, and
+every undeclared one in the phrasings the backstop reads, must equal the
+number of data rows in the `## Required contexts` table of
+docs/security/required-checks.md. That table is the canonical set, and
+nothing generates the sentences that restate its size, so a context added
+to or removed from the ruleset leaves each of them silently wrong.
+
+A count is declared, not guessed. A prose count carries a marker comment
+directly after its number:
+
+```text
+  Every PR must pass 27 <!-- count: required-contexts --> required status
+  checks.
+```
+
+The number immediately before the marker is the claim, so a paragraph that
+states two numbers stays unambiguous. The marker must follow a run of ASCII
+digits that stands alone, after whitespace or at the start of the
+paragraph. A number word, digits glued to anything else, a missing number,
+an unknown key, or any other HTML comment that names a count is reported
+rather than skipped, because a marker that resolves to nothing is a count
+nobody checks.
+
+A backstop catches a count written without a marker: a number of up to
+three digits or a number word, after whitespace or an opening parenthesis
+or at the start of a paragraph, followed within two words by "required
+check(s)", "required status check(s)" or "required context(s)". Emphasis
+markers and HTML comments count as whitespace. The words between may not
+include "of", so a partitive ("one of the required checks") is not a count,
+and the bare word "one" reads as an article rather than a count. Anything wider matched unrelated numbers
+on the real tree (a cron time, a sentence counting something else), so
+other phrasings of the count are not seen. A subset count in the
+backstop's shape is reported too, since a marker cannot name a subset;
+rephrase it.
+
+Paragraphs are read with their lines joined, so a count wrapped across a
+line break is still one phrase. Fenced blocks and inline code spans are
+skipped, which is how a document shows the marker or the phrase without
+making a claim. Fences are tracked marker-aware, as in
+check-prose-ci-names.sh, and a file ending inside a fence is a precondition
+failure.
+
+Exit codes: 0 every declared count matches the table and no undeclared
+count was found, 1 a count disagrees with the table, is undeclared, or
+carries a malformed marker (details printed to stderr), 2 the check could
+not run: a required tool is missing, the table doc is missing, holds no
+Required contexts section or more than one, holds no table, a table with
+no separator row, a second table or no data rows there, the scan set could
+not be listed or is empty, or a scanned file leaves a code fence open
+
 ### scripts/check-required-checks-no-paths.sh
 
 Lint: no workflow listed in

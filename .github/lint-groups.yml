@@ -71,6 +71,7 @@ lint-doc-invariants:
   - renovate-config-validator
   - ci-job-in-summary
   - prose-ci-names
+  - required-check-counts
   - scripts-reference-roundtrip
   - pin-diff-isolated
   - flake-lock-provenance
