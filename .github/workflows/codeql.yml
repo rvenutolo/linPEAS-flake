@@ -17,7 +17,8 @@ name: codeql
 # CRITICAL finding fails the job and — on push, cron and dispatch
 # runs — the `notify-finding` job opens a deduped issue via
 # `notify-workflow-result`. If the job fails before `analyze` runs
-# (e.g. checkout/init failure), `notify-infra` opens a separate, less
+# (e.g. checkout/init failure) or is cancelled (never placed on a runner,
+# or at its job timeout), `notify-infra` opens a separate, less
 # alarming issue so transient infrastructure flakes do not page as
 # CRITICAL findings. Classification is driven by
 # `needs.analyze.outputs.has-finding`, which is `'true'` iff the
@@ -126,7 +127,7 @@ jobs:
             `codeql / analyze (actions)` failed — with `fail-on: critical`, most
             often a CRITICAL-severity finding in the GitHub Actions workflow
             analysis. Confirm in the Code Scanning tab. An error inside the
-            analyze action files here too.
+            analyze action is also filed under this issue.
 
             - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
             - Code Scanning tab: ${{ github.server_url }}/${{ github.repository }}/security/code-scanning?query=tool%3ACodeQL
@@ -169,11 +170,13 @@ jobs:
           label: codeql-infra
           label-color: fbca04
           label-description: codeql workflow infrastructure failure (no security finding)
-          title: "codeql: infrastructure failure (analyze did not run)"
+          title: "codeql: infrastructure failure (analyze did not complete)"
           body: |
             `codeql / analyze (actions)` failed before the `analyze` step executed
-            (e.g. checkout, harden-runner, or CodeQL init). No CRITICAL
-            security finding was reported — the SARIF was never produced.
+            (e.g. checkout, harden-runner, or CodeQL init), or was cancelled
+            (never placed on a runner, or at its job timeout). No CRITICAL
+            security finding was reported — on a failure before the `analyze`
+            step, the SARIF was never produced.
 
             - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 

@@ -174,8 +174,9 @@ single CRITICAL false positive or a transient CodeQL infrastructure
 flake wedge every PR. The merge gate is the in-tree workflow lints plus
 the zizmor pre-commit hook, which the required `flake-check` job re-runs
 through `nix flake check`. A CodeQL infrastructure failure must not
-block linpeas pin bumps; failure surfacing is via the deduped issues
-filed by the notify jobs.
+block linpeas pin bumps; on push, cron and dispatch runs, failure
+surfacing is via the deduped issues filed by the notify jobs, and on a
+PR, via the failed check.
 
 ## Secrets
 

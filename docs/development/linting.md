@@ -673,13 +673,15 @@ comment that indents an `@tag` further is prose, and the page must show it as
 written. An `@arg`, `@option`, `@exitcode` or `@stdout` must be one whole item
 of its list, and each item is matched once, so two identical annotations need
 two items. An `@example` must be the entry's example block, line for line with
-the blank lines at its edges dropped and tabs expanded as in a fenced run;
-text on an `@example` tag line is required, and the generator does not print
-it. Description text is found as whole words, in order, in the part before the
-first list label. Text is compared with whitespace collapsed, a list marker at
-the start of a prose line (`-`, `*`, `+`, or a number with `.` or `)`) allowed
-to be absent, and the backticks of a code span dropped — but only those: a
-backtick the page shows literally is an altered unit. Prose after a blank
+the blank lines at its edges dropped and tabs expanded to four-column stops,
+as python-markdown expands them; text on an `@example` tag line is required,
+and the generator does not print it. Description text is found as whole words,
+in order, in the part before the first list label. Text other than an
+`@example` or a colon-led indented run is compared with whitespace collapsed
+and the backticks of a code span dropped — but only those: a backtick the page
+shows literally is an altered unit. In description
+text, a list marker at the start of a prose line (`-`, `*`, `+`, or a number
+with `.` or `)`) may also be absent. Prose after a blank
 comment line that closes an `@arg`, `@option`, `@exitcode` or `@stdout` is a
 further description unit. A leading marker may be absent because the page
 passes through mdformat, whose CommonMark rules decide which lines become list
@@ -694,19 +696,22 @@ expanded to a four-column stop as python-markdown expands it; each fence is
 matched once, in order. Collapsing a run into a paragraph keeps every word and
 still loses the shape, so the word comparison alone would pass it.
 
-Header text in three shapes the generator never reads is a finding: prose
-before the first tag other than the file's own path line and a first-line
-shebang, a `# @tag` in a comment block between the header's first blank line
-and the first line of code, and, in a library, an annotation outside a
-function's `@description` block.
+Header text the generator never reads is a finding, in these shapes: prose
+before the first tag, other than the file's own path line, a first-line
+shebang and a `# shellcheck` directive; a `# @description`, `# @arg`,
+`# @option`, `# @example`, `# @exitcode` or `# @stdout` line in a comment
+block between the header's first blank line and the first line of code; and,
+in a library, one of those annotations outside a function's `@description`
+block, or a `@description` block that no function line follows.
 
 Six limits are known. The check reads from header to page only: text the page
-adds, such as an invented sentence or item, is not reported, and "visible"
-means present in the rendered text, not shown by the browser. A description
-compared as words does not see its blocks change kind — a sentence the page
-shows as a list item or a quote still matches. Text inside a Markdown table in
-a header is not read. A run of backticks that opens no matching run is
-compared as the regular expression reads it, which can differ from the
+adds, such as an invented sentence or item, is not reported, and text counts
+as shown when it is in the rendered text, even where a browser would hide it.
+A description compared as words does not see its blocks change kind — a
+sentence the page shows as a list item or a quote still matches. Text the page
+renders as a table is not collected from the page, so a table in a header is
+reported as dropped even when the page shows it. A run of backticks that opens
+no matching run is compared as the regular expression reads it, which can differ from the
 renderer. A line such as `- - -`, which python-markdown renders as a rule, is
 read as text. And since a leading marker may be absent, a page that drops a
 marker the header meant as text passes, and the numbers of a list rendered as

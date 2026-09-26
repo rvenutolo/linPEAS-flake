@@ -5,7 +5,7 @@
 # shares with every cluster reader: a prose-hotspot ranking of the docs recent
 # fix passes rewrote most, a pass-attribution listing of which merge in the
 # window wrote which prose file, flake outputs, just recipes, scripts
-# (entry points, sourced libraries, and awk programs),
+# (entry points, sourced libraries, and awk and Python programs),
 # workflows, the ci.yml top-level job list, lint-group membership, a union
 # allowlist of all valid CI job/check names, a shortlist of harness-group harnesses
 # whose text matches a live-tree marker, workflow crons, the
@@ -379,7 +379,7 @@ list_scripts() { # emits one `scripts/`-relative path per script, cwd = repo roo
   # sourced libraries under scripts/lib/ and the `scripts/*.awk` and
   # `scripts/*.py` programs by path as
   # readily as the top-level entry points, and a `scripts/*.sh` glob covers
-  # neither — so an inventory that stops at top-level *.sh makes every such
+  # none of them — so an inventory that stops at top-level *.sh makes every such
   # citation read to a reader as a script that does not exist. The `lib/`
   # prefix is what keeps a library entry distinguishable from an entry-point
   # one; a bare basename would collapse the distinction the citations rely on.

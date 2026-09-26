@@ -6,10 +6,13 @@
 # output, the assertion passes whether or not the asserted behavior
 # exists — green while verifying nothing. Record each scenario here and
 # call `harness_assert_verify` at the end of the run to fail on any such
-# substring, on any asserted substring missing from its own scenario's
-# output, and on any two scenarios whose recorded output is the same after
-# the clock normalization in `harness_assert_record` — a pair that verifies one
-# thing between them however each is named. Source after `set -Eeuo pipefail`.
+# substring (a sibling asserting the same substring, one with identical
+# output, or an exempt pair is skipped), on any asserted substring missing
+# from its own scenario's output, and on any two scenarios whose recorded
+# output is the same after the clock normalization in
+# `harness_assert_record` — a pair that verifies one thing between them
+# however each is named. A parity exemption excuses such a pair only when
+# both assert the same substrings. Source after `set -Eeuo pipefail`.
 # shellcheck shell=bash
 
 # The library directory is resolved by parameter expansion rather than by
@@ -193,9 +196,9 @@ function harness_assert_parity_is_exempt() {
 # identical-output rule and the parity rule to everything recorded, print
 # the census, and drop the pool. Return 1 if any asserted substring is
 # missing from its own scenario's output, if any asserted substring also
-# occurs in a sibling scenario's output (skipping a sibling that asserts
-# the same substring, one whose output is identical, which the next rule
-# judges, and an exempt pair), if two records share one output
+# occurs in a sibling scenario's output (skipping three kinds of sibling:
+# one that asserts the same substring; one whose output is identical,
+# which the next rule judges; and an exempt pair), if two records share one output
 # while asserting different substrings, if two records share one output
 # without a parity exemption, or if nothing was recorded at all. The
 # census names every group of scenarios sharing one output before
@@ -297,7 +300,7 @@ function harness_assert_verify() {
     # them: whatever the second one is meant to exercise, its whole
     # recorded output is already produced by the first, so deleting
     # either leaves the recorded evidence unchanged. A harness at parity
-    # — as many distinct outcomes as scenarios — is one where every
+    # — as many distinct recorded outputs as scenarios — is one where every
     # scenario earns its place. Each pair in a collapsed group is judged
     # on its own, so excusing one pair never excuses the rest.
     for ((p = 0; p < ${#members[@]}; p++)); do
