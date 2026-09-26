@@ -676,9 +676,7 @@ two items. An `@example` must be the entry's example block, line for line with
 the blank lines at its edges dropped and tabs expanded to four-column stops,
 as python-markdown expands them; text on an `@example` tag line is required,
 and the generator does not print it. Description text is found as whole words,
-in order, in the part before the first list label. Text other than an
-`@example` or a colon-led indented run is compared with whitespace collapsed
-and the backticks of a code span dropped — but only those: a backtick the page
+in order, in the part before the first list label. Text other than an `@example` is compared with whitespace collapsed, and outside a colon-led indented run the backticks of a code span are dropped — but only those: a backtick the page
 shows literally is an altered unit. In description
 text, a list marker at the start of a prose line (`-`, `*`, `+`, or a number
 with `.` or `)`) may also be absent. Prose after a blank

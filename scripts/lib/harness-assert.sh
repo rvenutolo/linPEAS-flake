@@ -1,13 +1,14 @@
 # scripts/lib/harness-assert.sh
 #
-# @description Cross-scenario discrimination gate for test harnesses.
-# A harness asserts behavior by grepping a scenario's captured output for
-# a substring. If that substring also appears in a sibling scenario's
-# output, the assertion passes whether or not the asserted behavior
-# exists — green while verifying nothing. Record each scenario here and
-# call `harness_assert_verify` at the end of the run to fail on any such
-# substring (a sibling asserting the same substring, one with identical
-# output, or an exempt pair is skipped), on any asserted substring missing
+# @description Cross-scenario discrimination gate for test harnesses. A
+# harness asserts behavior by grepping a scenario's captured output for a
+# substring. If that substring also appears in a sibling scenario's
+# output, the assertion passes whether or not the asserted behavior exists
+# — green while verifying nothing. Record each scenario here and call
+# `harness_assert_verify` at the end of the run to fail on any such
+# substring (a sibling asserting the same substring, one whose output is
+# identical after clock normalization, or one that `harness_assert_exempt`
+# names for that substring is skipped), on any asserted substring missing
 # from its own scenario's output, and on any two scenarios whose recorded
 # output is the same after the clock normalization in
 # `harness_assert_record` — a pair that verifies one thing between them
@@ -197,11 +198,12 @@ function harness_assert_parity_is_exempt() {
 # the census, and drop the pool. Return 1 if any asserted substring is
 # missing from its own scenario's output, if any asserted substring also
 # occurs in a sibling scenario's output (skipping three kinds of sibling:
-# one that asserts the same substring; one whose output is identical,
-# which the next rule judges; and an exempt pair), if two records share one output
-# while asserting different substrings, if two records share one output
-# without a parity exemption, or if nothing was recorded at all. The
-# census names every group of scenarios sharing one output before
+# one that asserts the same substring; one whose output is identical after
+# clock normalization, which the next rule judges; and one that
+# `harness_assert_exempt` names for that substring), if two records share
+# one output while asserting different substrings, if two records share
+# one output without a parity exemption, or if nothing was recorded at
+# all. The census names every group of scenarios sharing one output before
 # reporting the counts.
 function harness_assert_verify() {
   if [[ ${HARNESS_ASSERT_COUNT} -eq 0 ]]; then

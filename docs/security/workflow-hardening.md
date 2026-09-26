@@ -387,7 +387,7 @@ Enforced by `scripts/check-test-reachable.sh`. Wired as the `lint-script-hygiene
 
 ## harness assertion discrimination
 
-Every harness scenario asserts a substring that appears in its own recorded output and in no sibling scenario's output (a sibling asserting the same substring, one with identical output, or an exempt pair is skipped), and every harness asserting against captured scenario output is wired to the gate that checks it.
+Every harness scenario asserts a substring that appears in its own recorded output and in no sibling scenario's output (a sibling asserting the same substring, one whose output is identical after clock normalization, or one that `harness_assert_exempt` names for that substring is skipped), and every harness asserting against captured scenario output is wired to the gate that checks it.
 
 A harness proves behavior by grepping one scenario's captured output for a substring. When that substring also appears in a sibling scenario's output — a banner the script prints on the nominal path as well as the failure path, say — the grep matches whether or not the asserted behavior exists, so the harness stays green against a script that never implements it and the regression it was written to catch merges unseen. The gate records each scenario's asserted substring alongside its captured output and, after the run, flags any substring missing from its own scenario's output, and any that also occurs in a sibling's output. Scenarios asserting the same substring are mutually exempt, and two records whose normalized output is identical are judged as a group rather than as two scenarios a substring fails to separate — see [harness census parity](#harness-census-parity). A harness wired to the gate that records nothing fails closed.
 
