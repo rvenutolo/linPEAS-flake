@@ -1,0 +1,3 @@
+# Fixture
+
+Every PR must pass 9 required checks.

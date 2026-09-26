@@ -5,7 +5,8 @@ Every PR runs a required set of jobs that gate auto-merge; most of them re-run o
 ## Build and smoke gates
 
 The seven functional gates below are the build-and-run core of the required
-set; the full list of 27 required contexts is in the next section.
+set; the full list of 27 <!-- count: required-contexts --> required contexts
+is in the next section.
 
 ```mermaid
 flowchart LR
@@ -41,7 +42,8 @@ flowchart LR
 
 The canonical list — mirroring the `protect-main` branch ruleset — lives
 in [`docs/security/required-checks.md`](../security/required-checks.md).
-The tables below group all 27 required contexts by what they gate; consult
+The tables below group all 27 <!-- count: required-contexts --> required
+contexts by what they gate; consult
 the canonical doc as source of truth. That grouping is this page's own. The
 README's Continuous integration summary files the same contexts under the
 categories in `docs/_data/ci-check-categories.yml`, which also colours the

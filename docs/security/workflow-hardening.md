@@ -527,6 +527,36 @@ A harness-roster entry can share its name with a whole workflow. That name is a 
 
 Enforced by `scripts/check-prose-ci-names.sh`. Wired as the `lint-doc-invariants` CI job (member check `prose-ci-names`) and as a pre-commit hook.
 
+## required-check-counts
+
+The `## Required contexts` table in [`required-checks.md`](required-checks.md) is the canonical required set. Prose elsewhere restates its size, and nothing generates those sentences, so a context added to or removed from the ruleset leaves each one silently wrong. The lint counts the table's data rows on every run and holds every prose count of the set against that number.
+
+A count is declared rather than guessed. The number carries a marker comment directly after it, which GitHub and the site hide:
+
+```text
+Every PR must pass NN <!-- count: required-contexts --> required status checks.
+```
+
+The claim is the number immediately before the marker, so a paragraph that also states a subset count ("the seven functional gates") stays unambiguous. A marker is a finding, not a skip, when it follows anything other than ASCII digits (a number word, or digits glued to a letter) or carries a key other than `required-contexts`: a marker that resolves to nothing is a count nobody checks.
+
+A backstop catches a count written without a marker. It reports a number, in digits or as a word, followed within two words by one of these phrases:
+
+```text
+NN required check(s)
+NN required status check(s)
+NN required context(s)
+```
+
+Matching is case-insensitive and whole-word on both ends. Any other phrasing of the count is not seen: "the required set of NN", "NN checks are required", or a count after the noun. A wider window was measured on this tree and rejected, because every site it added was a different number standing near the phrase — a cron time, a sentence counting something else. A subset count in the backstop's shape is reported too, since a marker cannot name a subset; rephrase it.
+
+Paragraphs are read with their lines joined, so a count wrapped across a line break is one phrase, and a finding names the line its number sits on. Fenced blocks and inline code spans are skipped, which is how a document shows the marker or the phrase without making a claim; fences are tracked by marker character and length as in [prose-ci-names](#prose-ci-names), and a file that ends inside a fence is a precondition failure.
+
+The table must be exactly one `## Required contexts` section holding exactly one table with a separator row under its header; a missing, duplicated, separator-less or empty table, or a second table in the section, is a precondition failure rather than a count of zero.
+
+The scan set is every Markdown file a commit would carry, minus `tests/fixtures/` (deliberate violations) and `CHANGELOG.md` and `docs/releases.md` (counts as they stood at the time). Only the tracked files of the Claude-behavior tree are read, because the rest of it is untracked scratch a commit cannot fix.
+
+Enforced by `scripts/check-required-check-counts.sh`. Wired as the `lint-doc-invariants` CI job (member check `required-check-counts`) and as a pre-commit hook.
+
 ## run-block-strict
 
 Every block-scalar or newline-carrying `run:` block under `.github/workflows/*.yml` (or `.yaml`) and `.github/actions/**/action.yml` (or `.yaml`) starts with `set -Eeuo pipefail` as its first non-blank, non-comment line.

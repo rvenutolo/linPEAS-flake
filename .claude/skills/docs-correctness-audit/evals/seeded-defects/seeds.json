@@ -64,7 +64,7 @@
       "id": "wrong-check-count",
       "category": "required-check count",
       "file": "CONTRIBUTING.md",
-      "anchor": "Every PR must pass 27 required status checks before merge.",
+      "anchor": "Every PR must pass 27 <!-- count: required-contexts --> required status",
       "op": "replace-substr",
       "from": "pass 27",
       "payload": "pass 26",
