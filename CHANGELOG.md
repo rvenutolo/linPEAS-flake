@@ -6,6 +6,19 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20260926-b586f446] - 2026-09-26
+
+### Chores
+- Bump linpeas to 20260926-b586f446 ([#1169](https://github.com/rvenutolo/linPEAS-flake/pull/1169))
+
+### Documentation
+- Scope the harness-assert skip and the round-trip whitespace rule ([#1166](https://github.com/rvenutolo/linPEAS-flake/pull/1166))
+- Fix round-trip, parity and CodeQL routing drift ([#1164](https://github.com/rvenutolo/linPEAS-flake/pull/1164))
+
+### Features
+- Lint required-check counts stated in prose ([#1168](https://github.com/rvenutolo/linPEAS-flake/pull/1168))
+- Assert every script header reaches the scripts reference intact ([#1163](https://github.com/rvenutolo/linPEAS-flake/pull/1163))
+
 ## [20260925-f15c218b] - 2026-09-25
 
 ### Chores
