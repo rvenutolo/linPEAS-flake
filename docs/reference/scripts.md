@@ -1002,12 +1002,11 @@ and the `result:` it hands the notify-workflow-result composite decides
 which of those combinations file an issue.
 
 A prose site declares the arm list it restates with a marker comment in
-the same paragraph:
+the same paragraph, after text on the same line:
 
 ```text
-  A finding, a failure with no finding, or a cancelled job is paged
-  <!-- notify-arms: codeql.yml/notify-infra = failure cancelled non-pr -->
-  under `codeql-infra`.
+  A failure with no finding, or a cancelled job, is paged under
+  `codeql-infra` <!-- notify-arms: codeql.yml/notify-infra = failure cancelled non-pr -->.
 ```
 
 The tokens after `=` are a set, in any order:
@@ -1028,38 +1027,53 @@ zizmor-drift-check, octoscan, codeql and image-cve-scan) must carry one
 marker in its own issue `body:`, where an HTML comment does not render,
 and at least one in the Markdown docs. A marker naming any other
 workflow's notify job is checked the same way. A docs marker that
-declares `cancelled` must share its paragraph with the word "cancel" in
-some form, because the cancelled arm is the one prose kept dropping. The
-body is exempt from that word, because the composite prefixes a cancelled
-run's issue with its own notice.
+declares `cancelled` must share its paragraph with the word "cancel" as
+a word in visible text (cancel, cancels, cancelled, cancelling or
+cancellation, but not inside a hyphenated compound such as
+cancel-in-progress, and not in a link destination), because the
+cancelled arm is the one prose kept dropping. The body is exempt from
+that word, because the composite prefixes a cancelled run's issue with
+its own notice, and a body is read as plain prose, so a marker on a line
+of its own counts there.
 
-Docs are read as paragraphs, split at blank lines and at list-item
-starts. A marker cannot open a line, at any indent: a comment there
-starts an HTML block, which cuts it off from the paragraph it describes
-(and, in a list item, can swallow the item after it).
-Fenced blocks and inline code spans are skipped, which is how a document
-shows the marker without declaring anything.
+Docs are read as paragraphs, split at blank lines and list-item starts;
+a heading and a table row are each a block of their own. A docs marker
+cannot sit on a line an HTML block holds: a comment that opens a line,
+at any indent, starts one, which cuts the marker off from the paragraph
+it describes (and, in a list item, can swallow the item after it), and
+so does the rest of the line a comment block closes on. Fenced blocks
+and inline code spans are skipped, which is how a document shows the
+marker without declaring anything; a fence line carrying an info string
+never closes a fence.
 
 The gate grammar is the one these workflows use: `always()`, the
-operators `==`, `!=`, `!`, `&&`, `||`, parentheses, quoted strings,
-`github.event_name`, and the watched job's `result` and
-`outputs.has-finding`. A gate without `always()` carries GitHub's
-implicit `success()`. The composite's own result handling (failure and
-cancelled file, success closes, skipped does nothing) is taken as fixed,
-and its classifying lines are checked verbatim so a change to them stops
-this lint rather than silently changing what an arm means.
+operators `==`, `!=`, `!` (on one operand), `&&`, `||`, parentheses,
+quoted strings, `github.event_name`, and the watched job's `result` and
+`outputs.has-finding`, with context names and string comparison
+case-insensitive. A gate without `always()` carries GitHub's implicit
+`success()`. A declared `has-finding` output is tried as 'true', 'false'
+and empty; the events tried are pull_request and every event the
+workflow's `on:` names. A job whose notify step has an `if:` of its own,
+runs the composite twice, or reaches it by any other `uses:` than
+./.github/actions/notify-workflow-result, is refused when it has to be
+derived. The composite's own result handling (failure and cancelled
+file, success closes, skipped does nothing) is taken as fixed: its text
+from `runs:` through the success branch is pinned by hash, and a gated
+step is refused, so a change there stops this lint rather than silently
+changing what an arm means.
 
 Exit codes: 0 every marker matches its job's derived arms and every
 scanner notify job carries its markers, 1 a marker disagrees with the
-derived arms, names a job that is not a notify job, is malformed, opens a
-line, sits in the wrong body, or a docs marker declaring cancelled has no
-cancel word near it, or a scanner notify job is missing a marker or files
-on no arm (details printed to stderr), 2 the check could not run: a
-required tool is missing, the composite or a scanner workflow is missing
-or has changed shape, a workflow cannot be parsed, a job it must derive
-has a gate, `needs:` or `result:` outside the grammar, a scanner workflow
-has no notify job, the scan set could not be listed or is empty, or a
-scanned file leaves a code fence or HTML comment open
+derived arms, names a job that is not a notify job, is malformed, sits on
+a line an HTML block holds, sits in the wrong body, or a docs marker
+declaring cancelled has no cancel word beside it, or a scanner notify job
+is missing a marker or files on no arm (details printed to stderr), 2
+the check could not run: a required tool is missing, the composite or a
+scanner workflow is missing or has changed, a workflow cannot be parsed,
+a job it must derive has a gate, `needs:`, `result:`, notify step or
+`on:` outside what it models, a scanner workflow has no notify job, the
+scan set could not be listed or is empty, or a scanned file leaves a code
+fence or HTML comment open
 
 ### scripts/check-notify-label-descriptions.sh
 
