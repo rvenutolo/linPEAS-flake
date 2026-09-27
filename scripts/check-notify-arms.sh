@@ -396,16 +396,6 @@ function prose_scan() {
   rm --force -- "${listing}" "${tracked_claude}"
 }
 
-# @description Emit every workflow file under SCAN_ROOT, NUL-delimited and
-#              sorted.
-# shellcheck disable=SC2329 # invoked indirectly, by name, via enumerate_into
-function workflow_scan() {
-  local f
-  for f in "${SCAN_ROOT}/${WORKFLOWS_REL}"/*.yml "${SCAN_ROOT}/${WORKFLOWS_REL}"/*.yaml; do
-    if [[ -f ${f} ]]; then printf '%s\0' "${f}"; fi
-  done | sort --zero-terminated
-}
-
 # The marker reader. For each marker in prose it prints
 # "M<TAB>line<TAB>workflow<TAB>job<TAB>sorted tokens<TAB>cancel word 0/1";
 # problems go to stderr and set the found flag in the closing tally line
@@ -657,7 +647,8 @@ function main() {
   [[ -d "${SCAN_ROOT}/${WORKFLOWS_REL}" ]] || die2 "missing ${WORKFLOWS_REL}"
 
   local -a workflows=() docs=()
-  enumerate_into workflows 'list workflows' workflow_scan
+  glob_into workflows 'workflow YAML' "${SCAN_ROOT}/${WORKFLOWS_REL}/*.yml" \
+    "${SCAN_ROOT}/${WORKFLOWS_REL}/*.yaml"
   enumerate_into docs 'list prose' prose_scan
 
   # Every notify job, keyed "<workflow file>/<job>", with its raw fields.
