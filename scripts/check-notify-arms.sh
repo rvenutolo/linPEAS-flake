@@ -83,6 +83,7 @@ require_tool git
 require_tool yq
 require_tool awk
 require_tool sort
+require_tool sha256sum
 
 if ! REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
   printf 'notify-arms: not inside a git repository\n' >&2
@@ -103,40 +104,50 @@ readonly -a SCANNER_WORKFLOWS=(
   scorecard-drift-check.yml
   zizmor-drift-check.yml
 )
-# The composite lines the arm model rests on, matched after leading
-# whitespace is trimmed.
-readonly -a COMPOSITE_LINES=(
-  "const cancelled = result === 'cancelled';"
-  "if (result !== 'success' && result !== 'failure' && !cancelled) {"
-  "if (result === 'success') {"
-)
+# SHA-256 of the composite from its `runs:` line through the line that
+# opens its success branch: the input wiring and every line that decides
+# whether a result files, closes or does nothing. Update it only after
+# checking that the arm model below still describes the composite.
+readonly COMPOSITE_SHA256='28fe77a370006e9d4e68faf5526a863f11f1e69b7f4ba1066b3339420c36ad9f'
 
 function die2() {
   printf 'notify-arms: %s\n' "$1" >&2
   exit 2
 }
 
-# @description Fail unless every line the arm model rests on is still in
-#              the composite, word for word.
+# @description Fail unless the composite's result handling is the one the
+#              arm model describes: no step gated by an `if:`, and the text
+#              from `runs:` through the success branch hashing to the pin.
 function check_composite() {
-  local composite="${SCAN_ROOT}/${COMPOSITE_REL}" want
+  local composite="${SCAN_ROOT}/${COMPOSITE_REL}" gated prefix sum
   [[ -f ${composite} ]] || die2 "missing ${COMPOSITE_REL}"
-  for want in "${COMPOSITE_LINES[@]}"; do
-    awk -v want="${want}" '
-      { line = $0; sub(/^[[:space:]]+/, "", line); sub(/[[:space:]]+$/, "", line) }
-      line == want { hit = 1 }
-      END { exit !hit }
-    ' "$(awk_path "${composite}")" ||
-      die2 "${COMPOSITE_REL} no longer holds the line \"${want}\"; its result handling changed, so the arm model in this script needs review"
-  done
+  gated="$(yq -r '[.runs.steps // [] | .[] | select(has("if"))] | length' "${composite}")" ||
+    die2 "cannot parse ${COMPOSITE_REL}"
+  [[ ${gated} == 0 ]] ||
+    die2 "${COMPOSITE_REL} gates its step with an if:, so a result can skip it; the arm model in this script needs review"
+  prefix="$(make_temp)" || die2 'cannot create a temporary file'
+  awk '
+    /^runs:[[:space:]]*$/ { on = 1 }
+    on { print }
+    on && /^[[:space:]]*if \(result === .success.\) \{[[:space:]]*$/ { done = 1; exit }
+    END { exit !done }
+  ' "$(awk_path "${composite}")" >"${prefix}" || {
+    rm --force -- "${prefix}"
+    die2 "the result handling of ${COMPOSITE_REL} changed: no runs: section reaching an if (result === 'success') branch"
+  }
+  sum="$(sha256sum -- "${prefix}")" || die2 "cannot hash ${COMPOSITE_REL}"
+  rm --force -- "${prefix}"
+  [[ ${sum%% *} == "${COMPOSITE_SHA256}" ]] ||
+    die2 "the result handling of ${COMPOSITE_REL} changed (its text from runs: through the success branch no longer matches COMPOSITE_SHA256); review the arm model in this script, then update the pin"
 }
 
-# @description Print one record per notify-workflow-result step in a
-#              workflow: job id, the watched job (`-` unless `needs:` names
-#              exactly one), the `if:` gate (`-` for none) and the
-#              `result:` input, with tabs and newlines folded to spaces.
-#              Printed raw rather than as TSV, which would quote a field
-#              holding a double quote.
+# @description Print one record per step in a workflow whose `uses:`
+#              names the notify composite in any form: the `uses:` value,
+#              job id, the watched job (`-` unless `needs:` names exactly
+#              one), the job's `if:` gate (`-` for none), the `result:`
+#              input and the step's own `if:` (`-` for none), with tabs and
+#              newlines folded to spaces. Printed raw rather than as TSV,
+#              which would quote a field holding a double quote.
 # @arg $1 workflow path
 # @stdout tab-separated records
 function notify_jobs() {
@@ -145,13 +156,29 @@ function notify_jobs() {
     .jobs // {} | to_entries | .[] | .key as $job | .value as $j
     | ($j.needs | [.] | flatten) as $n
     | ($j.steps // [])[]
-    | select((.uses // "") | test("^\\./\\.github/actions/notify-workflow-result$"))
-    | [$job,
+    | select((.uses // "") | test("notify-workflow-result"))
+    | [(.uses | tostring), $job,
         (($n | select(length == 1) | .[0] | select(tag == "!!str")) // "-"),
         (($j.if // "-") | tostring),
-        ((.with.result // "-") | tostring)]
+        ((.with.result // "-") | tostring),
+        ((.if // "-") | tostring)]
     | map(sub("[\t\n]"; " "; "g")) | join("\t")
   ' "$1"
+}
+
+# @description Print the events a workflow runs on, one per line: its
+#              `on:` value as a string, the items of a list, or the keys
+#              of a map.
+# @arg $1 workflow path
+function workflow_events() {
+  local shape
+  shape="$(yq -r '.on | tag' "$1")" || return 1
+  case "${shape}" in
+  '!!str') yq -r '.on' "$1" ;;
+  '!!seq') yq -r '.on[]' "$1" ;;
+  '!!map') yq -r '.on | keys | .[]' "$1" ;;
+  *) return 1 ;;
+  esac
 }
 
 # @description Print the notify step's `body:` input for one job.
@@ -165,18 +192,21 @@ function notify_body() {
   ' "$1"
 }
 
-# @description Print whether a job declares a `has-finding` output.
+# @description Print whether a job declares a `has-finding` output, in any
+#              case: GitHub reads context property names case-insensitively.
 # @arg $1 workflow path
 # @arg $2 job id
 # @stdout true or false
 function declares_has_finding() {
-  JOB="$2" yq -r '.jobs[strenv(JOB)].outputs // {} | has("has-finding")' "$1"
+  JOB="$2" yq -r '.jobs[strenv(JOB)].outputs // {} | keys | map(downcase) | any_c(. == "has-finding")' "$1"
 }
 
 # The gate evaluator. It tokenizes the `if:` expression once, then
 # evaluates it for each result x has-finding x event combination. Values
 # are "S<text>" for strings and "B1"/"B0" for booleans; string comparison
-# is case-insensitive, as in GitHub's expression language.
+# and context names are case-insensitive, as in GitHub's expression
+# language. Its inputs arrive through the environment, because awk -v
+# would decode backslash escapes that GitHub compares literally.
 # shellcheck disable=SC2016
 readonly EVAL_AWK='
 function fail(msg) { if (err == "") err = msg }
@@ -198,29 +228,31 @@ function tokenize(s,   t) {
   }
 }
 function truthy(v) { return v == "B1" || (substr(v, 1, 1) == "S" && v != "S") }
-function prim(   t, v) {
+function prim(   t, v, lt) {
   t = tok[pos]
+  lt = tolower(t)
   if (t == "(") { pos++; v = orx(); if (tok[pos] != ")") fail("unbalanced parentheses in the if: gate"); pos++; return v }
   if (t ~ /^'"'"'/) { pos++; return "S" substr(t, 2, length(t) - 2) }
   if (t == "always()") { pos++; return "B1" }
-  if (t == "github.event_name") { pos++; return "S" EVENT }
-  if (t == "needs." NEEDS ".result") { pos++; return "S" RESULT }
-  if (t == "needs." NEEDS ".outputs.has-finding") { pos++; return "S" HF }
+  if (lt == "github.event_name") { pos++; return "S" EVENT }
+  if (lt == tolower("needs." NEEDS ".result")) { pos++; return "S" RESULT }
+  if (lt == tolower("needs." NEEDS ".outputs.has-finding")) { pos++; return "S" HF }
   fail("unsupported operand \"" t "\" in the if: gate (the watched job is " NEEDS ")")
   pos++
   return "B0"
 }
+# `!` binds tighter than a comparison, so it applies to one operand.
+function unary() { if (tok[pos] == "!") { pos++; return truthy(unary()) ? "B0" : "B1" } ; return prim() }
 function cmp(   a, b, op) {
-  a = prim()
+  a = unary()
   op = tok[pos]
   if (op != "==" && op != "!=") return a
   pos++
-  b = prim()
+  b = unary()
   if (substr(a, 1, 1) != "S" || substr(b, 1, 1) != "S") { fail("comparison of a non-string in the if: gate"); return "B0" }
   return ((tolower(a) == tolower(b)) == (op == "==")) ? "B1" : "B0"
 }
-function notx() { if (tok[pos] == "!") { pos++; return truthy(notx()) ? "B0" : "B1" } ; return cmp() }
-function andx(   v, w) { v = notx(); while (tok[pos] == "&&") { pos++; w = notx(); v = (truthy(v) && truthy(w)) ? "B1" : "B0" } ; return v }
+function andx(   v, w) { v = cmp(); while (tok[pos] == "&&") { pos++; w = cmp(); v = (truthy(v) && truthy(w)) ? "B1" : "B0" } ; return v }
 function orx(   v, w) { v = andx(); while (tok[pos] == "||") { pos++; w = andx(); v = (truthy(v) || truthy(w)) ? "B1" : "B0" } ; return v }
 function gate(   v) {
   if (n == 0) return RESULT == "success"
@@ -230,6 +262,8 @@ function gate(   v) {
   return truthy(v) && (implicit ? RESULT == "success" : 1)
 }
 BEGIN {
+  GATE = ENVIRON["NA_GATE"]; NEEDS = ENVIRON["NA_NEEDS"]
+  RESULTIN = ENVIRON["NA_RESULTIN"]; HASOUT = ENVIRON["NA_HASOUT"]
   expr = GATE
   if (expr == "-") expr = ""
   if (match(expr, /^[[:space:]]*\$\{\{/) && match(expr, /\}\}[[:space:]]*$/)) {
@@ -242,18 +276,22 @@ BEGIN {
   else if (RESULTIN ~ /^(success|failure|cancelled|skipped)$/) filed_raw = 0
   else fail("unsupported result: input \"" RESULTIN "\"")
   split("success failure cancelled skipped", results, " ")
-  nhf = split(HASOUT == "true" ? "true|" : "", hfs, "|")
+  # A declared output is true, false or empty; an undeclared one is always
+  # empty.
+  nhf = split(HASOUT == "true" ? "true|false|" : "", hfs, "|")
   if (nhf == 0) { nhf = 1; hfs[1] = "" }
-  split("pull_request push", events, " ")
+  # pull_request, which non-pr is about, and every event the workflow
+  # names in on:.
+  nev = split("pull_request " ENVIRON["NA_EVENTS"], events, " ")
   for (r = 1; r <= 4 && err == ""; r++)
     for (h = 1; h <= nhf && err == ""; h++)
-      for (e = 1; e <= 2 && err == ""; e++) {
+      for (e = 1; e <= nev && err == ""; e++) {
         RESULT = results[r]; HF = hfs[h]; EVENT = events[e]
         if (!gate()) continue
         filed = filed_raw ? RESULT : RESULTIN
         if (filed != "failure" && filed != "cancelled") continue
         arm = RESULT
-        if (RESULT == "failure" && tolower(HF) == "true") arm = "finding"
+        if (RESULT == "failure" && HF == "true") arm = "finding"
         arms[arm] = 1
         if (EVENT == "pull_request") onpr = 1
         any = 1
@@ -275,14 +313,19 @@ BEGIN {
 # @arg $5 `result:` input, or -
 # @stdout "OK<TAB><arms>" (arms may be empty) or "ERR<TAB><why>"
 function derive_arms() {
-  local wf="$1" job="$2" needs="$3" gate="$4" result_in="$5" has_out
+  local wf="$1" job="$2" needs="$3" gate="$4" result_in="$5" has_out events
   if [[ ${needs} == - ]]; then
     printf 'ERR\tneeds: does not name exactly one job\n'
     return 0
   fi
   has_out="$(declares_has_finding "${wf}" "${needs}")" || return 1
-  awk -v GATE="${gate}" -v NEEDS="${needs}" -v RESULTIN="${result_in}" \
-    -v HASOUT="${has_out}" "${EVAL_AWK}" </dev/null
+  if ! events="$(workflow_events "${wf}")"; then
+    printf 'ERR\tthe workflow has no on: trigger the lint can read\n'
+    return 0
+  fi
+  NA_GATE="${gate}" NA_NEEDS="${needs}" NA_RESULTIN="${result_in}" \
+    NA_HASOUT="${has_out}" NA_EVENTS="${events//$'\n'/ }" \
+    awk "${EVAL_AWK}" </dev/null
 }
 
 # @description Emit every scanned Markdown path under SCAN_ROOT,
@@ -499,20 +542,33 @@ function main() {
   enumerate_into docs 'list prose' prose_scan
 
   # Every notify job, keyed "<workflow file>/<job>", with its raw fields.
-  local -A job_fields=() derived=() required=()
-  local wf base rec job needs gate result_in
+  local -A job_fields=() job_block=() derived=() required=()
+  local wf base rec uses job needs gate result_in step_if key
+  local -r field=$'[^\t]+'
   for wf in "${workflows[@]}"; do
     base="${wf##*/}"
     local listing
     listing="$(notify_jobs "${wf}")" || die2 "cannot parse ${WORKFLOWS_REL}/${base}"
     while IFS= read -r rec; do
       # yq prints empty lines between records; anything else must be a
-      # whole four-field record.
+      # whole six-field record.
       [[ -n ${rec} ]] || continue
-      [[ ${rec} =~ ^[^$'\t']+$'\t'[^$'\t']+$'\t'[^$'\t']+$'\t'[^$'\t']+$ ]] ||
+      [[ ${rec} =~ ^${field}$'\t'${field}$'\t'${field}$'\t'${field}$'\t'${field}$'\t'${field}$ ]] ||
         die2 "unreadable notify record in ${WORKFLOWS_REL}/${base}: ${rec}"
-      IFS=$'\t' read -r job needs gate result_in <<<"${rec}"
-      job_fields["${base}/${job}"]="${needs}"$'\t'"${gate}"$'\t'"${result_in}"
+      IFS=$'\t' read -r uses job needs gate result_in step_if <<<"${rec}"
+      # A job the lint cannot model is refused when it has to be derived,
+      # rather than read as if it were simpler than it is. Other
+      # workflows may reach the composite at a pinned remote revision,
+      # which is only a problem once a marker names such a job.
+      key="${base}/${job}"
+      if [[ -n ${job_fields["${key}"]+set} ]]; then
+        job_block["${key}"]="job ${job} runs more than one notify-workflow-result step, which the lint cannot model"
+      elif [[ ${uses} != './.github/actions/notify-workflow-result' ]]; then
+        job_block["${key}"]="job ${job} names the notify composite as \"${uses}\"; the lint models only ./.github/actions/notify-workflow-result"
+      elif [[ ${step_if} != - ]]; then
+        job_block["${key}"]="job ${job}: the notify step carries an if: of its own, which the lint cannot model"
+      fi
+      job_fields["${key}"]="${needs}"$'\t'"${gate}"$'\t'"${result_in}"
     done <<<"${listing}"
   done
 
@@ -535,6 +591,7 @@ function main() {
   function arms_of() {
     local key="$1" out
     if [[ -z ${derived["${key}"]+set} ]]; then
+      [[ -z ${job_block["${key}"]:-} ]] || die2 "${WORKFLOWS_REL}/${key%%/*}: ${job_block["${key}"]}"
       IFS=$'\t' read -r needs gate result_in <<<"${job_fields["${key}"]}"
       out="$(derive_arms "${SCAN_ROOT}/${WORKFLOWS_REL}/${key%%/*}" "${key#*/}" \
         "${needs}" "${gate}" "${result_in}")" ||

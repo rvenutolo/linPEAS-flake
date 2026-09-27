@@ -22,3 +22,16 @@ jobs:
           title: "other: failed"
           body: |
             Failed.
+  # The composite at a pinned remote revision, named by no marker.
+  remote-notify:
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: rvenutolo/linPEAS-flake/.github/actions/notify-workflow-result@0000000000000000000000000000000000000000
+        with:
+          result: ${{ needs.build.result }}
+          label: other-remote
+          title: "other: failed"
+          body: |
+            Failed.

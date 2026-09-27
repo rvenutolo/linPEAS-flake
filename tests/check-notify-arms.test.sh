@@ -425,6 +425,14 @@ failure cancelled non-pr -->.'
   run_scenario near-miss-uses-exits-2 2 \
     'names the notify composite as "./.github/actions/notify-workflow-result/"'
 
+  # A remote revision of the composite is not the one the lint pins, so a
+  # marker naming such a job is refused; unnamed, as in the base, it is
+  # never derived.
+  fresh_root
+  printf 'Other <!-- notify-arms: other.yml/remote-notify = failure cancelled -->.\n' >>"${ROOT}/${DOC}"
+  run_scenario remote-composite-named-exits-2 2 \
+    'job remote-notify names the notify composite as "rvenutolo/linPEAS-flake/.github/actions/notify-workflow-result@'
+
   # An empty gate leaves a record yq prints with a field missing.
   fresh_root
   edit "${SC}" 'if: always()' "if: ''"
@@ -524,12 +532,6 @@ A failed zizmor run opens `zizmor-drift`'
   # --- preconditions ---
 
   fresh_root
-  edit '.github/actions/notify-workflow-result/action.yml' "const cancelled = result === 'cancelled';" \
-    "const cancelled = result === 'cancelled' || result === 'timed_out';"
-  run_scenario composite-changed-exits-2 2 \
-    "no longer holds the line \"const cancelled = result === 'cancelled';\""
-
-  fresh_root
   rm -- "${ROOT}/.github/actions/notify-workflow-result/action.yml"
   run_scenario composite-missing-exits-2 2 'missing .github/actions/notify-workflow-result/action.yml'
 
@@ -566,7 +568,7 @@ A failed zizmor run opens `zizmor-drift`'
 
   fresh_root
   edit "${CQ}" "${CQ_FINDING_GATE}" "if: always() && 'a' == always()"
-  run_scenario non-string-compare-exits-2 2 'comparison of a non-string in the if: gate'
+  run_scenario non-string-compare-exits-2 2 'job notify-finding: comparison of a non-string in the if: gate'
 
   fresh_root
   edit "${SC}" 'needs: drift-check' 'needs: [drift-check, other]'
