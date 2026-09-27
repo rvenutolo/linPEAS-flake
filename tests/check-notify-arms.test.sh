@@ -163,7 +163,10 @@ function main() {
   #     composite ignores;
   #   - an 11th docs marker, in a second file, lists its tokens out of
   #     order and states the cancel word only in a code span;
-  #   - the codeql infra body says "cancellation" though bodies are exempt.
+  #   - the codeql infra body says "cancellation" though bodies are exempt,
+  #     and puts its marker on a line of its own, which an issue hides too;
+  #   - octoscan's scan job declares its output as `Has-Finding`: output
+  #     names, like every context property, are case-insensitive.
   fresh_root
   edit "${CQ}" "needs.analyze.result == 'failure' && needs.analyze.outputs.has-finding == 'true'" \
     "needs.analyze.result == 'FAILURE' && needs.analyze.outputs.has-finding == 'TRUE'"
@@ -177,7 +180,10 @@ function main() {
   printf 'An infrastructure run whose job ends `cancelled` <!-- notify-arms: codeql.yml/notify-infra = non-pr cancelled failure -->.\n' \
     >"${ROOT}/docs/second.md"
   edit "${CQ}" "${CQ_INFRA_BODY}" \
-    'An infrastructure failure, never a cancellation. <!-- notify-arms: codeql.yml/notify-infra = failure cancelled non-pr -->'
+    'An infrastructure failure, never a cancellation.
+            <!-- notify-arms: codeql.yml/notify-infra = failure cancelled non-pr -->'
+  edit '.github/workflows/octoscan.yml' '      has-finding: ${{ steps.count.outputs.has-finding }}' \
+    '      Has-Finding: ${{ steps.count.outputs.has-finding }}'
   run_scenario grammar-variants-pass 0 '' \
     "10 body marker(s) and 11 docs marker(s) match the arms of 10 scanner notify job(s) (${TALLY}); scanned 6 workflow(s) and 2 Markdown file(s)"
 
@@ -351,6 +357,169 @@ failure cancelled non-pr -->.'
     '— no count <!-- notify-arms: image-cve-scan.yml/image-cve-scan-trivy-notify-infra'
   run_scenario cancel-word-next-item-fails 1 \
     'docs/scanners.md:24: marker for image-cve-scan.yml/image-cve-scan-trivy-notify-infra declares cancelled'
+
+  # --- expression semantics the evaluator must follow ---
+
+  # `!` binds tighter than `==`: `!x == 'success'` compares a boolean with
+  # a string, which the grammar refuses rather than reading as !(x == ...).
+  fresh_root
+  edit "${SC}" 'if: always()' "if: always() && !needs.drift-check.result == 'success'"
+  run_scenario not-binds-tighter-exits-2 2 'job notify: comparison of a non-string in the if: gate'
+
+  # A declared has-finding output is 'true', 'false' or empty, and 'false'
+  # is a non-empty string, so a bare truthiness test admits a failure with
+  # no finding as well.
+  fresh_root
+  edit "${CQ}" "${CQ_FINDING_GATE}" \
+    "if: always() && github.event_name != 'pull_request' && needs.analyze.result == 'failure' && needs.analyze.outputs.has-finding"
+  run_scenario has-finding-false-truthy-fails 1 \
+    'docs/scanners.md:6: marker for codeql.yml/notify-finding declares "finding non-pr"; the workflow files on "finding failure non-pr"'
+
+  # A literal is compared as written: a backslash escape is not decoded.
+  fresh_root
+  edit "${SC}" 'if: always()' \
+    "if: always() && (needs.drift-check.result == '\\x66ailure' || needs.drift-check.result == 'cancelled')"
+  run_scenario escape-not-decoded-fails 1 \
+    'docs/scanners.md:17: marker for scorecard-drift-check.yml/notify declares "failure cancelled"; the workflow files on "cancelled"'
+
+  # The events tried are pull_request and every event the workflow's on:
+  # names, so a gate on a scheduled run is read, not dropped.
+  fresh_root
+  edit "${SC}" 'on: push' 'on:
+  push:
+  schedule:
+    - cron: "0 0 * * 0"'
+  edit "${SC}" 'if: always()' "if: always() && github.event_name == 'schedule'"
+  run_scenario schedule-event-fails 1 \
+    'marker for scorecard-drift-check.yml/notify declares "failure cancelled"; the workflow files on "failure cancelled non-pr"'
+
+  # --- notify steps the derivation cannot model ---
+
+  fresh_root
+  edit "${SC}" '      - uses: ./.github/actions/notify-workflow-result' \
+    "      - if: needs.drift-check.result == 'failure'
+        uses: ./.github/actions/notify-workflow-result"
+  run_scenario step-if-exits-2 2 'job notify: the notify step carries an if: of its own'
+
+  fresh_root
+  edit "${SC}" '      - uses: ./.github/actions/notify-workflow-result' \
+    '      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: failure
+          label: twice
+          title: twice
+          body: twice
+      - uses: ./.github/actions/notify-workflow-result'
+  run_scenario two-notify-steps-exits-2 2 'job notify runs more than one notify-workflow-result step'
+
+  fresh_root
+  edit '.github/workflows/octoscan.yml' \
+    '          result: ${{ needs.scan.result }}
+          label: octoscan-infra' \
+    '          result: ${{ needs.scan.result }}
+          label: octoscan-infra
+          # near-miss below'
+  edit '.github/workflows/octoscan.yml' '          # near-miss below' ''
+  sed --in-place '0,/uses: \.\/\.github\/actions\/notify-workflow-result$/! s|uses: \./\.github/actions/notify-workflow-result$|uses: ./.github/actions/notify-workflow-result/|' \
+    "${ROOT}/.github/workflows/octoscan.yml"
+  run_scenario near-miss-uses-exits-2 2 \
+    'names the notify composite as "./.github/actions/notify-workflow-result/"'
+
+  # An empty gate leaves a record yq prints with a field missing.
+  fresh_root
+  edit "${SC}" 'if: always()' "if: ''"
+  run_scenario empty-gate-record-exits-2 2 'unreadable notify record in .github/workflows/scorecard-drift-check.yml'
+
+  # --- the composite is pinned by content, not by three lines ---
+
+  fresh_root
+  edit '.github/actions/notify-workflow-result/action.yml' \
+    "          const cancelled = result === 'cancelled';" \
+    "          if (result === 'cancelled') {
+            return;
+          }
+          const cancelled = result === 'cancelled';"
+  run_scenario composite-early-return-exits-2 2 \
+    'the result handling of .github/actions/notify-workflow-result/action.yml changed'
+
+  fresh_root
+  edit '.github/actions/notify-workflow-result/action.yml' \
+    '    - name: open, comment, or close issue' \
+    "    - name: open, comment, or close issue
+      if: inputs.result == 'failure'"
+  run_scenario composite-step-if-exits-2 2 \
+    '.github/actions/notify-workflow-result/action.yml gates its step with an if:'
+
+  # --- markers the reader must not lose ---
+
+  # After a comment that opens a line, the rest of the line belongs to the
+  # HTML block, not to a paragraph; a marker there is reported.
+  fresh_root
+  printf '<!-- note --> A failure pages it <!-- notify-arms: codeql.yml/notify-infra = failure -->.\n' \
+    >"${ROOT}/docs/extra.md"
+  run_scenario marker-after-line-comment-fails 1 \
+    'docs/extra.md:1: notify-arms marker sits on a line an HTML block holds'
+
+  fresh_root
+  printf '<!--\nnote\n--> A failure pages it <!-- notify-arms: codeql.yml/notify-infra = failure -->.\n' \
+    >"${ROOT}/docs/extra.md"
+  run_scenario marker-after-comment-close-fails 1 \
+    'docs/extra.md:3: notify-arms marker sits on a line an HTML block holds'
+
+  # A fence line carrying an info string opens a fence but never closes
+  # one, so the prose between two such blocks is still prose.
+  fresh_root
+  printf '%s\n' '```markdown' '```bash' 'x' '```' '' \
+    'Text <!-- notify-arms: codeql.yml/notify-infra = failure -->.' '' \
+    '```text' '```sh' 'y' '```' >"${ROOT}/docs/extra.md"
+  run_scenario fence-closer-with-info-fails 1 \
+    'docs/extra.md:6: marker for codeql.yml/notify-infra declares "failure"'
+
+  fresh_root
+  printf 'Text <!--- notify-arms: codeql.yml/notify-infra = failure cancelled non-pr --->.\n' \
+    >"${ROOT}/docs/extra.md"
+  run_scenario triple-dash-marker-fails 1 'docs/extra.md:1: malformed notify-arms marker <!---'
+
+  fresh_root
+  printf 'Text <!-- notify\xe2\x80\x94arms: codeql.yml/notify-infra = failure cancelled non-pr -->.\n' \
+    >"${ROOT}/docs/extra.md"
+  run_scenario dash-typo-marker-fails 1 'docs/extra.md:1: malformed notify-arms marker <!-- notify'
+
+  # --- what counts as the cancel word ---
+
+  # Only text a reader sees counts: a link destination does not.
+  fresh_root
+  edit "${DOC}" "${SC_DOC}" \
+    'A failed scorecard run opens `scorecard-drift` ([runs](https://example.com/#cancelled-runs)) <!-- notify-arms: scorecard-drift-check.yml/notify = failure cancelled -->.'
+  run_scenario cancel-word-in-link-url-fails 1 \
+    'docs/scanners.md:17: marker for scorecard-drift-check.yml/notify declares cancelled'
+
+  # A heading is its own block, not part of the paragraph under it.
+  fresh_root
+  edit "${DOC}" 'A failed or cancelled zizmor run opens `zizmor-drift`' \
+    '### Cancelled runs
+A failed zizmor run opens `zizmor-drift`'
+  run_scenario cancel-word-in-heading-fails 1 \
+    'docs/scanners.md:20: marker for zizmor-drift-check.yml/notify declares cancelled'
+
+  # Each table row is its own unit.
+  fresh_root
+  edit "${DOC}" '- `image-cve-scan-trivy-notify-infra` — no count, or a cancelled job <!-- notify-arms' \
+    '| a cancelled job | x |
+| --- | --- |
+| no count <!-- notify-arms'
+  edit "${DOC}" 'image-cve-scan-trivy-notify-infra = failure cancelled -->.' \
+    'image-cve-scan-trivy-notify-infra = failure cancelled --> | y |'
+  run_scenario cancel-word-in-other-row-fails 1 \
+    'docs/scanners.md:26: marker for image-cve-scan.yml/image-cve-scan-trivy-notify-infra declares cancelled'
+
+  # A hyphenated compound such as cancel-in-progress names a setting, not
+  # the cancelled arm.
+  fresh_root
+  edit "${DOC}" '— no count, or a cancelled job <!-- notify-arms: image-cve-scan.yml/image-cve-scan-grype-notify-infra' \
+    '— no count, cancel-in-progress off <!-- notify-arms: image-cve-scan.yml/image-cve-scan-grype-notify-infra'
+  run_scenario cancel-word-compound-fails 1 \
+    'docs/scanners.md:26: marker for image-cve-scan.yml/image-cve-scan-grype-notify-infra declares cancelled'
 
   # --- preconditions ---
 

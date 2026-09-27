@@ -1,15 +1,226 @@
 name: notify-workflow-result
-description: "Fixture copy of the classifying lines the lint pins."
+description: "Open/update a deduped issue on workflow failure or cancellation; close it on next success."
+
+# SECURITY CONTRACT for `title` and `body` inputs:
+#
+# These values are rendered as **markdown** in a GitHub issue. The
+# composite uses env-var indirection so attacker-controlled values
+# cannot break out into shell or JS — but they CAN render arbitrary
+# markdown (links, @mentions, HTML comments) in the resulting issue.
+#
+# DO NOT pass values derived from:
+#   - github.event.issue.* / github.event.pull_request.*
+#   - github.event.head_commit.message
+#   - github.event.inputs.* (workflow_dispatch user input)
+#   - any third-party-API field that isn't shape-validated upstream
+#
+# SAFE inputs:
+#   - static literals
+#   - github.event_name, github.run_id, github.sha
+#   - needs.*.result
+#   - shape-validated values (e.g. the canonical
+#     `^[0-9]{8}-[0-9a-f]{7,40}$` pin shape enforced by
+#     stale-pin-check.yml before reaching this composite)
+#
+# DEDUPLICATION BEHAVIOR: the composite lists open issues by
+# `label`, then opens one if none exist. Two concurrent runs of the
+# SAME caller workflow can race the `listForRepo` -> `issues.create`
+# window and produce two open issues with the same label. The
+# cleanup loop on the next success correctly closes N>1, so the
+# duplication is self-healing within one cycle. If you see two
+# duplicated failure issues, do not "fix" the race here; the
+# alternative (a `concurrency:` mutex on the notify job) adds cost
+# that isn't justified by the impact.
+
+inputs:
+  result:
+    description: >-
+      Aggregate result of the parent job(s)
+      (success/failure/cancelled/skipped). `cancelled` is treated as an
+      infrastructure failure — a job the runner pool never picked up,
+      or `timeout-minutes` exceeded: it files/updates the same deduped
+      issue as `failure`, with the issue text flagging the run as
+      cancelled so triage does not read it as a finding. `skipped` is
+      inert.
+    required: true
+  label:
+    description: "Label used to dedup open issues for this workflow."
+    required: true
+  title:
+    description: "Title of the issue when opening."
+    required: true
+  body:
+    description: "Markdown body of the issue when opening."
+    required: true
+  label-color:
+    description: "Hex color (without #) for the label, applied on first-time creation."
+    required: false
+    default: b60205
+  label-description:
+    description: "Description string for the label. Set on creation, and refreshed on a later run when the live label's description differs."
+    required: false
+    default: Workflow failure auto-filed by .github/actions/notify-workflow-result
+  github-token:
+    description: "GitHub token with issues:write (e.g. secrets.GITHUB_TOKEN)."
+    required: true
+
 runs:
   using: composite
   steps:
-    - uses: actions/github-script@0000000000000000000000000000000000000000
+    - name: open, comment, or close issue
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        RESULT: ${{ inputs.result }}
+        LABEL: ${{ inputs.label }}
+        TITLE: ${{ inputs.title }}
+        BODY: ${{ inputs.body }}
+        LABEL_COLOR: ${{ inputs.label-color }}
+        LABEL_DESCRIPTION: ${{ inputs.label-description }}
       with:
+        github-token: ${{ inputs.github-token }}
         script: |
+          const result = process.env.RESULT;
+          const label = process.env.LABEL;
+          const title = process.env.TITLE;
+          const body = process.env.BODY;
+          const labelColor = process.env.LABEL_COLOR;
+          const labelDescription = process.env.LABEL_DESCRIPTION;
+          const runUrl =
+            `https://github.com/${context.repo.owner}/${context.repo.repo}` +
+            `/actions/runs/${context.runId}`;
+
+          // `cancelled` reaching this code means a job-level cancel,
+          // because a run-level cancel (an operator's `gh run cancel`,
+          // or a concurrency supersede where `cancel-in-progress: true`)
+          // cancels this notify job along with the rest of the run,
+          // `always()` included, so it never executes. A job-level
+          // cancel is either a job the runner pool never picked up or
+          // `timeout-minutes` exceeded, and `result` cannot tell them
+          // apart — the jobs API can. See "Cancelled-job attribution"
+          // in docs/architecture/ci.md. Filing keeps a job that died
+          // either way from sitting red in the Actions tab unalerted;
+          // the issue text flags it so triage does not read it as a
+          // finding.
           const cancelled = result === 'cancelled';
+
+          // Inert on skipped so callers can pass a raw job result and
+          // let no-op paths (gated jobs, no-change cron days) stay
+          // silent.
           if (result !== 'success' && result !== 'failure' && !cancelled) {
+            core.notice(`Result is '${result}'; no action.`);
             return;
           }
+
+          // Look up open issues carrying our dedup label.
+          const existing = await github.paginate(
+            github.rest.issues.listForRepo,
+            {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label,
+              per_page: 100,
+            },
+          );
+
           if (result === 'success') {
+            if (existing.length === 0) {
+              core.notice('Success: no open issues to close.');
+              return;
+            }
+            for (const issue of existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `Auto-closing: workflow recovered. Run: ${runUrl}`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed',
+                state_reason: 'completed',
+              });
+              core.notice(`Closed issue #${issue.number}`);
+            }
             return;
           }
+
+          // result === 'failure' || result === 'cancelled'
+          const cancelledNote =
+            'cancelled (never picked up by a runner, or ' +
+            '`timeout-minutes` exceeded) — infrastructure failure, ' +
+            'not a finding';
+          if (existing.length > 0) {
+            const issue = existing[0];
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              body: cancelled
+                ? `New run ${cancelledNote}: ${runUrl}`
+                : `New failure: ${runUrl}`,
+            });
+            core.notice(`Appended comment to existing issue #${issue.number}`);
+            return;
+          }
+
+          // Ensure label exists before creating the issue.
+          // createLabel returns 422 when it already exists; swallow only that.
+          //
+          // A label that already exists keeps whatever description it was
+          // created with, so an edit to label-description here would never
+          // reach the label a maintainer reads. On the 422 path, compare and
+          // update, which makes this file the source of truth for the wording
+          // rather than whichever run first filed the label.
+          try {
+            await github.rest.issues.createLabel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: label,
+              color: labelColor,
+              description: labelDescription,
+            });
+          } catch (err) {
+            if (err.status !== 422) {
+              throw err;
+            }
+            // Best-effort: a description that could not be refreshed must not
+            // stop the issue this run exists to file.
+            try {
+              const { data: live } = await github.rest.issues.getLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: label,
+              });
+              if ((live.description || '') !== labelDescription) {
+                await github.rest.issues.updateLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label,
+                  description: labelDescription,
+                });
+                core.notice(`Refreshed description of label ${label}`);
+              }
+            } catch (syncErr) {
+              core.warning(
+                `Could not refresh description of label ${label}: ${syncErr.message}`,
+              );
+            }
+          }
+
+          const issueBody = cancelled
+            ? `> [!WARNING]\n` +
+              `> This run was ${cancelledNote}. The body below ` +
+              `describes the workflow's failure mode and may not ` +
+              `apply.\n\n${body}\n\nRun: ${runUrl}`
+            : `${body}\n\nRun: ${runUrl}`;
+          const created = await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title,
+            body: issueBody,
+            labels: [label],
+          });
+          core.notice(`Opened issue #${created.data.number}`);
