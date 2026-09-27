@@ -497,10 +497,10 @@ failure cancelled non-pr -->.'
 
   # Only text a reader sees counts: a link destination does not.
   fresh_root
-  edit "${DOC}" "${SC_DOC}" \
-    'A failed scorecard run opens `scorecard-drift` ([runs](https://example.com/#cancelled-runs)) <!-- notify-arms: scorecard-drift-check.yml/notify = failure cancelled -->.'
+  edit "${DOC}" 'and an incomplete scan or a cancelled job under' \
+    'and an incomplete scan ([runs](https://example.com/#cancelled-runs)) under'
   run_scenario cancel-word-in-link-url-fails 1 \
-    'docs/scanners.md:17: marker for scorecard-drift-check.yml/notify declares cancelled'
+    'docs/scanners.md:12: marker for octoscan.yml/notify-infra declares cancelled'
 
   # A heading is its own block, not part of the paragraph under it.
   fresh_root

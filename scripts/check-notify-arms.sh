@@ -415,9 +415,28 @@ function strip_spans(s,   i, j, n, m, len) {
   return s
 }
 # Whether a comment reads as an attempt at a marker: one that opens with
-# the marker word, allowing a space or underscore slip. A comment that only
-# mentions it later (an enforcer note naming check-notify-arms) is not one.
-function is_markerish(c) { return tolower(c) ~ /^<!--[[:space:]]*notify[-_[:space:]]*arms?([^a-z]|$)/ }
+# the marker word, allowing slips such as an extra dash in the opener or
+# any punctuation between the two words. A comment that only mentions it
+# later (an enforcer note naming check-notify-arms) is not one.
+function is_markerish(c) { return tolower(c) ~ /^<!--[-[:space:]]*notify[^a-z]*arms?([^a-z]|$)/ }
+# Report every marker-like comment in text that an HTML block holds rather
+# than a paragraph. The first comment of a line that opens with one gets
+# its own message, since moving it after text is the usual fix.
+function block_markers(text, lineno, opens,   k, first) {
+  first = opens
+  while ((k = index(text, "<!--")) > 0) {
+    text = substr(text, k)
+    if (is_markerish(text)) {
+      if (first)
+        printf "%s:%d: notify-arms marker opens a line, which cuts it off from its paragraph; move it after text on the same line\n", name, lineno > "/dev/stderr"
+      else
+        printf "%s:%d: notify-arms marker sits on a line an HTML block holds, not in a paragraph; move it into the prose it describes\n", name, lineno > "/dev/stderr"
+      found = 1
+    }
+    first = 0
+    text = substr(text, 5)
+  }
+}
 function line_of(off,   pre) { pre = substr(para, 1, off - 1); return pstart + gsub(/\n/, "", pre) }
 function report(off, msg) { printf "%s:%d: %s\n", name, line_of(off), msg > "/dev/stderr"; found = 1 }
 function flush(   s, plain, rest, base, k, m, cstart, cend, body, spec, wf, job, toks, nt, t, i, seen, sorted, cw, nm, mline, mwf, mjob, mtoks) {
@@ -431,7 +450,12 @@ function flush(   s, plain, rest, base, k, m, cstart, cend, body, spec, wf, job,
     if (m == 0) break
     plain = substr(plain, 1, k - 1) " " substr(plain, k + 4 + m + 2)
   }
-  cw = (tolower(plain) ~ /cancel/) ? 1 : 0
+  # A link destination is not on the page.
+  gsub(/\]\([^)]*\)/, "]", plain)
+  gsub(/<[a-z][a-z0-9+.-]*:[^> ]*>/, " ", plain)
+  # The word in some form, but not inside a hyphenated compound such as
+  # cancel-in-progress, which names a setting rather than the arm.
+  cw = (tolower(plain) ~ /(^|[^a-z-])cancel(s|led|ling|lation|ed)?([^a-z-]|$)/) ? 1 : 0
   nm = 0
   base = 0
   rest = s
@@ -478,8 +502,13 @@ function flush(   s, plain, rest, base, k, m, cstart, cend, body, spec, wf, job,
   for (i = 1; i <= nm; i++) { printf "M\t%d\t%s\t%s\t%s\t%d\n", mline[i], mwf[i], mjob[i], mtoks[i], cw; markers++ }
   para = ""
 }
+# Inside a comment block the rest of the line after its closer still
+# belongs to the HTML block.
 comment {
-  if (index($0, "-->")) comment = 0
+  if ((k = index($0, "-->")) > 0) {
+    comment = 0
+    block_markers(substr($0, k + 3), FNR, 0)
+  }
   next
 }
 # A backtick fence info string cannot hold a backtick, so a line opening
@@ -488,13 +517,16 @@ match($0, /^[[:space:]]*(>[[:space:]]*)*(`{3,}|~{3,})/) &&
   (fence || substr($0, RSTART + RLENGTH - 1, 1) == "~" ||
   substr($0, RSTART + RLENGTH) !~ /`/) {
   mk = substr($0, RSTART, RLENGTH)
+  after = substr($0, RSTART + RLENGTH)
   # After the marker is read: flush() runs match() of its own, which
   # overwrites RSTART and RLENGTH.
   flush()
   sub(/^[[:space:]]*(>[[:space:]]*)*/, "", mk)
   ch = substr(mk, 1, 1)
   if (!fence) { fence = 1; fch = ch; flen = length(mk) }
-  else if (ch == fch && length(mk) >= flen) { fence = 0 }
+  # A closing fence carries nothing after its marker; one with an info
+  # string is a line of the fenced block.
+  else if (ch == fch && length(mk) >= flen && after ~ /^[[:space:]]*$/) { fence = 0 }
   next
 }
 fence { next }
@@ -502,16 +534,30 @@ fence { next }
 # paragraph before it, so a marker there describes nothing. Up to three
 # spaces in is the CommonMark rule; inside a list item the three count from
 # the content column of the item, so any indent reads as opening the line.
-/^[[:space:]]*(>[[:space:]]*)*<!--/ {
+# An issue body has no paragraph to lose: every comment there is hidden,
+# and no cancel word is asked of it, so a body line is read as prose.
+!body && /^[[:space:]]*(>[[:space:]]*)*<!--/ {
   flush()
-  if (is_markerish(substr($0, index($0, "<!--")))) {
-    printf "%s:%d: notify-arms marker opens a line, which cuts it off from its paragraph; move it after text on the same line\n", name, FNR > "/dev/stderr"
-    found = 1
-  }
-  if (index(substr($0, index($0, "<!--") + 4), "-->") == 0) { comment = 1; comment_line = FNR }
+  rest = substr($0, index($0, "<!--"))
+  if (index(substr(rest, 5), "-->") == 0) { comment = 1; comment_line = FNR }
+  block_markers(rest, FNR, 1)
   next
 }
 /^[[:space:]]*$/ { flush(); next }
+# A heading and a table row are blocks of their own, so the cancel word
+# in one does not speak for a marker in another.
+/^ ? ? ?(#{1,6}([[:space:]]|$)|\|)/ {
+  flush()
+  para = $0; pstart = FNR
+  flush()
+  next
+}
+# A setext underline makes the lines above it a heading.
+para != "" && /^ ? ? ?(=+|-+)[[:space:]]*$/ {
+  para = para "\n" $0
+  flush()
+  next
+}
 /^[[:space:]]*([-*+]|[0-9]+[.)])[[:space:]]/ { flush() }
 {
   if (para == "") { para = $0; pstart = FNR }
@@ -528,9 +574,10 @@ END {
 # @description Run the marker reader over one file.
 # @arg $1 file to read
 # @arg $2 name to report it under
+# @arg $3 1 when the file is an issue body, 0 for a doc
 # @stdout the reader's records
 function read_markers() {
-  awk -v name="$2" "${MARKER_AWK}" "$(awk_path "$1")"
+  awk -v name="$2" -v body="$3" "${MARKER_AWK}" "$(awk_path "$1")"
 }
 
 function main() {
@@ -651,7 +698,8 @@ function main() {
   # @description Read one file's markers and check each.
   function scan_file() {
     local path="$1" name="$2" origin="$3" own="$4"
-    rc_out="$(read_markers "${path}" "${name}")" || die2 "scan failed for ${name}"
+    rc_out="$(read_markers "${path}" "${name}" "$([[ ${origin} == body ]] && echo 1 || echo 0)")" ||
+      die2 "scan failed for ${name}"
     tally=''
     while IFS=$'\t' read -r tag line mwf mjob mtoks cw; do
       case "${tag}" in
