@@ -131,7 +131,7 @@ jobs:
           label: octoscan-finding
           title: "octoscan: finding(s) in workflow analysis"
           body: |
-            `octoscan / scan` failed because octoscan reported one or
+            `octoscan / scan` failed because octoscan reported one or <!-- notify-arms: octoscan.yml/notify-finding = finding non-pr -->
             more findings against `.github/workflows/`.
 
             - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -183,7 +183,7 @@ jobs:
           label-description: octoscan workflow infrastructure failure (no complete findings result; findings may exist)
           title: "octoscan: infrastructure failure (scan did not complete)"
           body: |
-            `octoscan / scan` failed without a complete findings
+            `octoscan / scan` failed without a complete findings <!-- notify-arms: octoscan.yml/notify-infra = failure cancelled non-pr -->
             result (e.g. docker pull failure, checkout / harden-runner
             failure, octoscan exit `1` from an internal scanner error,
             or the SARIF upload step failing after a clean scan). On a

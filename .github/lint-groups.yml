@@ -72,6 +72,7 @@ lint-doc-invariants:
   - ci-job-in-summary
   - prose-ci-names
   - required-check-counts
+  - notify-arms
   - scripts-reference-roundtrip
   - pin-diff-isolated
   - flake-lock-provenance

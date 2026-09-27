@@ -1,0 +1,34 @@
+name: codeql
+on: [push, pull_request]
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    outputs:
+      has-finding: ${{ steps.count.outputs.has-finding }}
+    steps:
+      - id: count
+        run: "true"
+  notify-finding:
+    needs: analyze
+    if: always() && github.event_name != 'pull_request' && needs.analyze.result == 'failure' && needs.analyze.outputs.has-finding == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: failure
+          label: codeql-finding
+          title: "codeql: finding"
+          body: |
+            A finding. <!-- notify-arms: codeql.yml/notify-finding = finding non-pr -->
+  notify-infra:
+    needs: analyze
+    if: always() && github.event_name != 'pull_request' && (needs.analyze.result == 'cancelled' || (needs.analyze.result == 'failure' && needs.analyze.outputs.has-finding != 'true'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.analyze.result }}
+          label: codeql-infra
+          title: "codeql: infrastructure failure"
+          body: |
+            An infrastructure failure. <!-- notify-arms: codeql.yml/notify-infra = failure cancelled non-pr -->

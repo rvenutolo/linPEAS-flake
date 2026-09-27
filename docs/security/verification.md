@@ -319,13 +319,15 @@ output and open / update deduped issues via
 `notify-workflow-result`:
 
 - `image-cve-scan-trivy-notify-finding` (label: `image-cve-critical-trivy`) — real
-    CRITICAL CVE reported by Trivy. Remediation: bump `nixpkgs`.
+    CRITICAL CVE reported by Trivy <!-- notify-arms: image-cve-scan.yml/image-cve-scan-trivy-notify-finding = finding -->.
+    Remediation: bump `nixpkgs`.
 
 - `image-cve-scan-trivy-notify-infra` (label: `image-cve-infra-trivy`) — job failed
     before Trivy produced a CRITICAL count (build, scan, SARIF
     upload, or the count step itself broke — Trivy may or may not have
     found a CRITICAL), or the job was cancelled (no runner, or its
-    timeout). Remediation: inspect the failing step; if transient, close
+    timeout) <!-- notify-arms: image-cve-scan.yml/image-cve-scan-trivy-notify-infra = failure cancelled -->.
+    Remediation: inspect the failing step; if transient, close
     once the next scheduled run is green.
 
 - NOT in required-checks (intentional — `update-flake-lock` must still
@@ -362,11 +364,11 @@ Two follow-on jobs (`needs: image-cve-scan-grype`) open or update a
 deduped issue via the `notify-workflow-result` composite:
 
 - `image-cve-scan-grype-notify-finding` (label: `image-cve-critical-grype`) — real
-    CRITICAL CVE was identified by Grype.
+    CRITICAL CVE was identified by Grype <!-- notify-arms: image-cve-scan.yml/image-cve-scan-grype-notify-finding = finding -->.
 - `image-cve-scan-grype-notify-infra` (label: `image-cve-infra-grype`) — job failed
     before producing a CRITICAL count (build / scan / SARIF upload /
     the count step itself — Grype may or may not have found a
-    CRITICAL), or the job was cancelled (no runner, or its timeout).
+    CRITICAL), or the job was cancelled (no runner, or its timeout) <!-- notify-arms: image-cve-scan.yml/image-cve-scan-grype-notify-infra = failure cancelled -->.
 
 ## SBOM attestation<a name="sbom-attestation"></a>
 

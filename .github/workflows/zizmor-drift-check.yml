@@ -100,7 +100,7 @@ jobs:
           label: zizmor-drift
           title: "zizmor-drift-check: workflow file(s) fail zizmor --min-severity=low, or the scan could not run"
           body: |
-            The weekly `zizmor-drift-check` watchdog failed: either it
+            The weekly `zizmor-drift-check` watchdog failed: either it <!-- notify-arms: zizmor-drift-check.yml/notify = failure cancelled -->
             detected one or more findings in `.github/workflows/**` at or
             above `--min-severity=low`, or the scan could not run — a
             step before the scan (harden-runner, checkout, setup-nix) or

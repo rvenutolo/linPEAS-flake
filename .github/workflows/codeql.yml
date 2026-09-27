@@ -124,7 +124,7 @@ jobs:
           label: codeql-critical
           title: "codeql: analyze failed (fail-on: critical)"
           body: |
-            `codeql / analyze (actions)` failed — with `fail-on: critical`, most
+            `codeql / analyze (actions)` failed — with `fail-on: critical`, most <!-- notify-arms: codeql.yml/notify-finding = finding non-pr -->
             often a CRITICAL-severity finding in the GitHub Actions workflow
             analysis. Confirm in the Code Scanning tab. An error inside the
             analyze action is also filed under this issue.
@@ -172,7 +172,7 @@ jobs:
           label-description: codeql workflow infrastructure failure (no security finding)
           title: "codeql: infrastructure failure (analyze did not complete)"
           body: |
-            `codeql / analyze (actions)` failed before the `analyze` step executed
+            `codeql / analyze (actions)` failed before the `analyze` step executed <!-- notify-arms: codeql.yml/notify-infra = failure cancelled non-pr -->
             (e.g. checkout, harden-runner, or CodeQL init), or was cancelled
             (never placed on a runner, or at its job timeout). No CRITICAL
             security finding was reported — on a failure before the `analyze`

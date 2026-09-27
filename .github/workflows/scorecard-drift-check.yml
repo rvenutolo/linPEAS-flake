@@ -166,7 +166,7 @@ jobs:
           label: scorecard-drift
           title: "scorecard-drift-check: check(s) scored <10, the scorecard payload was unreadable, or the job could not run the scan"
           body: |
-            The weekly `scorecard-drift-check` watchdog failed for
+            The weekly `scorecard-drift-check` watchdog failed for <!-- notify-arms: scorecard-drift-check.yml/notify = failure cancelled -->
             `${{ github.repository }}`: either one or more curated
             OpenSSF Scorecard checks scored below 10, or the threshold
             script could not read the scorecard payload as JSON at all

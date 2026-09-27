@@ -612,6 +612,59 @@ The composite writes the description onto the label — on creation, and on any 
 
 Enforced by `scripts/check-notify-label-descriptions.sh`. Wired as the `lint-workflow-security` CI job (member check `notify-label-descriptions`) and as a pre-commit hook. The scan set is `.github/workflows/*.yml`; a scan that matches workflows but finds no caller of the composite exits 2 rather than reporting a clean tree, because the composite having moved is not the same fact as every description being fine.
 
+## notify-arms
+
+Each scanner workflow's notify jobs open a deduped issue on a set of results of the job they watch: a finding, a failure with no finding, a cancelled job. That set is restated in prose in several places, and nothing generated those sentences, so an arm added to or renamed in a workflow left each restatement silently wrong. The lint derives the set from the workflow on every run and holds every declared restatement against it.
+
+The arms come from the workflow, not from a list in the lint. Each notify job's `if:` gate is evaluated for every combination of the watched job's result (`success`, `failure`, `cancelled`, `skipped`), its `has-finding` output (`'true'`, `'false'` or empty when the watched job declares that output, and only empty when it does not) and the event (each event the workflow's `on:` names, and no other, since no other run happens). The `result:` the job hands the `notify-workflow-result` composite then decides which admitted combinations file an issue: the composite files `failure` and `cancelled`, closes on `success` and ignores `skipped`. Those composite rules are taken as fixed. The composite's text from its `runs:` line through the line that opens its success branch is pinned by a SHA-256 in the lint, and a composite step gated by an `if:` is refused, so a change there stops the lint instead of quietly changing what an arm means.
+
+A restatement is declared with a marker comment in the paragraph that states the arms, after text on the same line, which GitHub and the site hide:
+
+```text
+... or a cancelled job, is paged under `codeql-infra` <!-- notify-arms: codeql.yml/notify-infra = failure cancelled non-pr -->.
+```
+
+The tokens after `=` are a set:
+
+```text
+finding    the watched job failed and its has-finding output is 'true'
+failure    it failed with no such finding, or declares no has-finding output
+cancelled  it was cancelled, and the composite files it (flagged as infrastructure when handed the raw result)
+success    it succeeded, and the notify job still files an issue
+skipped    it was skipped, and the notify job still files an issue
+non-pr     the workflow runs on pull_request, and no arm files on such a run
+```
+
+A marker fails when its set differs from the derived one, when it names a job that is not a notify job, or when it is misshapen, spans lines or repeats a token; a comment that opens with the marker word after a slip (an extra dash in the opener, punctuation between the two words) is reported as misshapen rather than skipped. A docs marker also fails when it sits on a line an HTML block holds. A comment that opens a line starts an HTML block, which cuts the marker off from its paragraph and, inside a list item, can swallow the item after it; the lint reads any indent as opening the line, because inside a list item CommonMark counts from the item's content column. The rest of the line a comment block closes on belongs to the block as well, and so does every line from a block-level tag such as `<div>` or `<details>` (or a lone tag opening a block) to the next blank line.
+
+A docs marker that declares `cancelled` must share its paragraph with the word "cancel" as a word in page text, because the cancelled arm is the one that restatements kept dropping. Cancel, cancels, canceled, cancelled, canceling, cancelling and cancellation count, in prose or in a code span. A hyphenated compound such as `cancel-in-progress` does not, since it names a setting, and neither does a link destination, image alt text or an HTML tag with its attributes, none of which a reader sees as text. Paragraphs end at blank lines, list-item starts, thematic breaks and changes of quote depth, and a heading (quoted or not) and each table row (after a delimiter row, with or without edge pipes) are blocks of their own, so the word in one does not speak for a marker in another.
+
+Every notify job in the scanner workflows (`codeql.yml`, `image-cve-scan.yml`, `octoscan.yml`, `scorecard-drift-check.yml` and `zizmor-drift-check.yml`) must carry one marker in its own issue `body:` and at least one in the Markdown docs; the docs markers live in the per-scanner sections of [workflow-scanners.md](workflow-scanners.md) and the [OCI image CVE scan](verification.md#oci-image-cve-scan-trivy) sections of `verification.md`. Other docs point there rather than restating the arms. A body is read as plain prose: the composite prefixes a cancelled run's issue with its own notice, so no cancel word is asked of it, and every comment in an issue is hidden, so a marker on a line of its own counts there. A marker naming another workflow's notify job is checked the same way, but none is required.
+
+The gate grammar is what these workflows use: `always()`, `==`, `!=`, `!` (which binds to one operand, so `!x == 'y'` compares a boolean and is refused), `&&`, `||`, parentheses, quoted strings, `github.event_name`, and the watched job's `result` and `outputs.has-finding`. Context names and string comparison are case-insensitive, as in GitHub's expressions, and a literal is compared as written, with no escape decoding. A gate with no `always()` carries GitHub's implicit `success()`. The lint refuses a job it cannot model when it has to derive it, which it does for every scanner notify job and for any job a marker names. That covers:
+
+- a gate outside the grammar;
+- a `needs:` naming more than one job;
+- a `result:` other than a literal result or the watched job's raw result;
+- a notify step with an `if:` of its own;
+- a step before the notify step other than `step-security/harden-runner` or `actions/checkout`, since its failure would skip the composite;
+- a job that runs the composite twice;
+- a job that reaches the composite by any other `uses:` than `./.github/actions/notify-workflow-result`, such as a pinned remote revision the hash does not cover;
+- a workflow with no readable `on:`.
+
+Known limits:
+
+- Only the arms the gate defines are checked. The failure cases prose splits out — a scorecard check under 10 against an unreadable payload against a scan that could not run — come from scripts and step order, not from the gate, so they are not read.
+- A marker is the claim. Prose that disagrees with its own marker is not caught, except for the cancel word, and the cancel word is matched as a word, so a negation ("no cancellation") passes.
+- `non-pr` summarises the whole job. An arm that files only on some events next to one that files on all of them yields no `non-pr`, and which arm files on which event is not stated or checked.
+- Issue titles, label descriptions and the workflow comments beside a notify job restate the arms too. A title and a label description cannot hide a marker, and the comments sit beside the gate they describe, so none of these is read.
+- Indented code blocks are read as prose, because this repo's list-item paragraphs are indented the same way, so a marker in one counts as a declaration and the cancel word in one counts, though the page shows both as code: a silent pass. Fence indentation is uncapped for the same reason, so a fence marker indented four or more spaces inside a paragraph opens a fence and hides the prose after it up to the next fence marker, a silent pass or, with no later marker, an unterminated-fence exit 2. This repo writes neither shape.
+- An HTML block opened by `<pre>`, `<script>`, `<style>` or `<textarea>` is taken to end at a blank line, as the other block-level tags do, rather than at its closing tag.
+
+Docs are read as paragraphs split at blank lines and list-item starts, with fences, inline code spans and comment blocks skipped, as in [required-check-counts](#required-check-counts); a file that ends inside a fence or a comment block is a precondition failure. The scan set is every Markdown file a commit would carry, minus `tests/fixtures/`, `CHANGELOG.md` and `docs/releases.md`, plus the tracked files of the Claude-behavior tree, and the issue bodies of every notify job in `.github/workflows/`.
+
+Enforced by `scripts/check-notify-arms.sh`. Wired as the `lint-doc-invariants` CI job (member check `notify-arms`) and as a pre-commit hook.
+
 ## setup-nix composite required
 
 {% raw %}

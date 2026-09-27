@@ -106,10 +106,11 @@ dependency.
 - Trivy and Grype CVE scans run on a weekly cron, a path-filtered push
     to `main`, and manual dispatch (`image-cve-scan.yml`). They are
     advisory only: neither is in the required-check set. Each fails its
-    own job on CRITICAL findings, and separately on an infrastructure
-    failure ahead of the count; each arm opens its own deduped tracking
-    issue under a distinct label, so four labels exist across the two
-    scanners.
+    own job on CRITICAL findings, and pages a finding and an
+    infrastructure failure under two distinct deduped labels, so four
+    labels exist across the two scanners; the
+    [OCI image CVE scan sections](verification.md#oci-image-cve-scan-trivy)
+    of `verification.md` list the results that file each.
 - Docker Hub push credentials are split into `_RW` and `_DELETE` tokens,
     never an unsuffixed PAT.
 

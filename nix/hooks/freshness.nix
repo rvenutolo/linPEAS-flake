@@ -424,6 +424,27 @@ in
     pass_filenames = false;
     language = "system";
   };
+  # Asserts every declared restatement of a scanner notify job's arms equals
+  # the arms derived from the job's if: gate and result: input, so an arm
+  # added to or renamed in a workflow cannot leave its prose behind.
+  check-notify-arms = {
+    enable = true;
+    name = "check-notify-arms";
+    description = "Declared notify-arms lists in docs and issue bodies match the arms each scanner notify job's if: gate and result: input file on.";
+    entry = "${pkgs-unstable.writeShellScript "check-notify-arms-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${toolPath}:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-notify-arms.sh
+    ''}";
+    # The markers live in any Markdown file and in workflow issue bodies,
+    # the arms in the workflows and the composite; the script and the
+    # libraries it sources can change the verdict too.
+    files = "^(.*\\.md|\\.github/workflows/.*\\.ya?ml|\\.github/actions/notify-workflow-result/action\\.yml|scripts/check-notify-arms\\.sh|scripts/lib/.*\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Asserts every piece of script-header text is visible, as written, in
   # the rendered docs/reference/scripts.md. scripts-reference-fresh proves
   # the page matches a fresh render; this proves the render matches the

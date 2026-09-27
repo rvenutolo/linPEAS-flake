@@ -75,8 +75,8 @@ tree.)
     the deeper dataflow second opinion. On non-PR runs a CRITICAL finding —
     or an error inside the analyze action, which counts the same — and a
     failure before `analyze` ran, or a cancelled job, are
-    paged as separate deduped issues, under `codeql-critical` and
-    `codeql-infra`.
+    paged as separate deduped issues, under `codeql-critical` <!-- notify-arms: codeql.yml/notify-finding = finding non-pr -->
+    and `codeql-infra` <!-- notify-arms: codeql.yml/notify-infra = failure cancelled non-pr -->.
 
 ### octoscan
 
@@ -95,7 +95,8 @@ tree.)
     single false positive would block merge. On non-PR runs, a finding, and
     a failure that produced no complete findings result — a cancelled job and a SARIF
     upload failing after a clean scan among them — are paged as separate
-    deduped issues, under `octoscan-finding` and `octoscan-infra`.
+    deduped issues, under `octoscan-finding` <!-- notify-arms: octoscan.yml/notify-finding = finding non-pr -->
+    and `octoscan-infra` <!-- notify-arms: octoscan.yml/notify-infra = failure cancelled non-pr -->.
     octoscan's rule set is narrowed only
     by the suppression set in `scripts/octoscan-scan.sh` — two disabled
     rules (`local-action`, `dangerous-write`) and a single `--ignore` regex
@@ -124,7 +125,8 @@ tree.)
     threshold script cannot read as JSON at all, a failure before or
     during the scan itself — a setup step, or an auth, egress or
     check-execution error, or a cancelled job — fails the run and
-    opens a deduped `scorecard-drift` tracking issue; the next clean run
+    opens a deduped `scorecard-drift` tracking issue <!-- notify-arms: scorecard-drift-check.yml/notify = failure cancelled -->;
+    the next clean run
     closes it. The check set is curated — review-flow checks not applicable to a
     solo repo, checks duplicating an in-tree signal whether blocking or
     advisory, and checks no in-repo change can move, are dropped; the
@@ -157,7 +159,8 @@ tree.)
     the other's suppressions. The watchdog pages a finding, a scan that
     could not start because a step before it or `nix develop` itself
     failed, or a cancelled job, as a deduped
-    `zizmor-drift` issue, closed on the next clean run; a rule change arrives
+    `zizmor-drift` issue <!-- notify-arms: zizmor-drift-check.yml/notify = failure cancelled -->,
+    closed on the next clean run; a rule change arrives
     with the `flake.lock` bump whose PR `flake-check` already re-scans the
     files pre-commit's matching selects.
 
