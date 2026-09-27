@@ -10,6 +10,8 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - uses: step-security/harden-runner@0000000000000000000000000000000000000000
+      - uses: actions/checkout@0000000000000000000000000000000000000000
       - uses: ./.github/actions/notify-workflow-result
         with:
           # A head comment, which yq prints as a line of its own.

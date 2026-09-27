@@ -30,3 +30,9 @@ A marker shown as syntax is not a declaration: `<!-- notify-arms: codeql.yml/nop
 ```text
 <!-- notify-arms: codeql.yml/nope = bogus -->
 ```
+
+Enforced by a lint <!-- enforcer: scripts/check-notify-arms.sh -->.
+
+<!--
+Text <!-- notify-arms: codeql.yml/nope = bogus
+-->

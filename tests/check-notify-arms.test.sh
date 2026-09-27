@@ -145,9 +145,11 @@ function main() {
   # --- derivation, clean paths ---
 
   # The base holds all ten scanner notify jobs, a marker in each body and
-  # each in the docs, a syntax example in a code span and a fence, and a
-  # non-scanner notify job whose gate and result are outside the grammar
-  # but that no marker names.
+  # each in the docs, a syntax example in a code span and a fence, a
+  # comment that names the lint without being a marker, a comment block
+  # whose inner line opens a marker-like comment, and a non-scanner notify
+  # job whose gate and result are outside the grammar but that no marker
+  # names.
   fresh_root
   run_scenario clean-passes 0 '' "${CLEAN}"
 
@@ -166,10 +168,15 @@ function main() {
   #   - the codeql infra body says "cancellation" though bodies are exempt,
   #     and puts its marker on a line of its own, which an issue hides too;
   #   - octoscan's scan job declares its output as `Has-Finding`: output
-  #     names, like every context property, are case-insensitive.
+  #     names, like every context property, are case-insensitive, and the
+  #     codeql finding gate spells its context names in mixed case;
+  #   - the scorecard paragraph spells the cancel word "canceling".
   fresh_root
   edit "${CQ}" "needs.analyze.result == 'failure' && needs.analyze.outputs.has-finding == 'true'" \
-    "needs.analyze.result == 'FAILURE' && needs.analyze.outputs.has-finding == 'TRUE'"
+    "needs.Analyze.Result == 'FAILURE' && NEEDS.analyze.outputs.Has-Finding == 'TRUE'"
+  edit "${CQ}" "if: always() && github.event_name != 'pull_request' && needs.Analyze" \
+    "if: always() && GitHub.Event_Name != 'pull_request' && needs.Analyze"
+  edit "${DOC}" 'A failed or cancelled scorecard run opens' 'A failed or canceling scorecard run opens'
   edit '.github/workflows/octoscan.yml' \
     "if: always() && github.event_name != 'pull_request' && needs.scan.result == 'failure' && needs.scan.outputs.has-finding == 'true'" \
     "if: \${{ always() && github.event_name != 'pull_request' && needs.scan.result == 'failure' && needs.scan.outputs.has-finding == 'true' }}"
@@ -231,7 +238,18 @@ function main() {
     'result: ${{ needs.build.result }}'
   printf 'Other pages a failure <!-- notify-arms: other.yml/notify = failure -->.\n' >>"${ROOT}/${DOC}"
   run_scenario other-workflow-marker-fails 1 \
-    'docs/scanners.md:33: marker for other.yml/notify declares "failure"; the workflow files on "failure cancelled"'
+    'docs/scanners.md:39: marker for other.yml/notify declares "failure"; the workflow files on "failure cancelled"'
+
+  # A .yaml workflow is read like a .yml one.
+  fresh_root
+  printf '%s\n' 'name: extra' 'on: push' 'jobs:' '  build:' '    runs-on: ubuntu-latest' \
+    '    steps:' '      - run: "true"' '  notify:' '    needs: build' '    if: always()' \
+    '    runs-on: ubuntu-latest' '    steps:' '      - uses: ./.github/actions/notify-workflow-result' \
+    '        with:' '          result: ${{ needs.build.result }}' '          label: extra' \
+    '          title: extra' '          body: extra' >"${ROOT}/.github/workflows/extra.yaml"
+  printf 'Extra <!-- notify-arms: extra.yaml/notify = failure -->.\n' >>"${ROOT}/${DOC}"
+  run_scenario yaml-workflow-read-fails 1 \
+    'docs/scanners.md:39: marker for extra.yaml/notify declares "failure"; the workflow files on "failure cancelled"'
 
   # --- a workflow change the prose did not follow ---
 
@@ -308,6 +326,10 @@ function main() {
   fresh_root
   edit "${DOC}" 'codeql.yml/notify-infra = failure cancelled non-pr' 'codeql.yml/notify-infra = failure cancelled cancelled non-pr'
   run_scenario repeated-arm-fails 1 'arm "cancelled" repeated'
+
+  fresh_root
+  printf 'Text <!-- NOTIFY-ARMS: codeql.yml/notify-infra = failure cancelled non-pr -->.\n' >"${ROOT}/docs/extra.md"
+  run_scenario upper-case-marker-fails 1 'docs/extra.md:1: malformed notify-arms marker <!-- NOTIFY-ARMS'
 
   fresh_root
   edit "${DOC}" 'codeql.yml/notify-infra = failure cancelled non-pr' 'codeql.yml/notify-infra failure cancelled non-pr'
@@ -393,6 +415,17 @@ failure cancelled non-pr -->.'
   run_scenario schedule-event-fails 1 \
     'marker for scorecard-drift-check.yml/notify declares "failure cancelled"; the workflow files on "failure cancelled non-pr"'
 
+  # Only the events the workflow names in on: are tried for arms; a
+  # pull_request run of a workflow without that trigger never happens.
+  fresh_root
+  edit '.github/workflows/zizmor-drift-check.yml' 'if: always()' "if: always() && github.event_name != 'push'"
+  run_scenario untriggered-pr-not-tried-fails 1 \
+    '.github/workflows/zizmor-drift-check.yml: job notify files on no arm'
+
+  fresh_root
+  edit "${SC}" 'on: push' 'on: 5'
+  run_scenario unreadable-on-exits-2 2 'the workflow has no on: trigger the lint can read'
+
   # --- notify steps the derivation cannot model ---
 
   fresh_root
@@ -432,6 +465,18 @@ failure cancelled non-pr -->.'
   printf 'Other <!-- notify-arms: other.yml/remote-notify = failure cancelled -->.\n' >>"${ROOT}/${DOC}"
   run_scenario remote-composite-named-exits-2 2 \
     'job remote-notify names the notify composite as "rvenutolo/linPEAS-flake/.github/actions/notify-workflow-result@'
+
+  # A step before the composite that can fail would skip it; only the
+  # runner hardening and checkout steps every notify job opens with are
+  # modelled.
+  fresh_root
+  edit '.github/workflows/zizmor-drift-check.yml' '      - uses: ./.github/actions/notify-workflow-result' \
+    '      - run: test "${{ needs.drift-check.result }}" != cancelled
+      - uses: ./.github/actions/notify-workflow-result'
+  run_scenario step-before-composite-exits-2 2 \
+    'job notify: a step before the notify step can fail and skip it'
+
+  # The base zizmor notify job opens with those two steps, and passes.
 
   # An empty gate leaves a record yq prints with a field missing.
   fresh_root
@@ -498,7 +543,7 @@ failure cancelled non-pr -->.'
   # Only text a reader sees counts: a link destination does not.
   fresh_root
   edit "${DOC}" 'and an incomplete scan or a cancelled job under' \
-    'and an incomplete scan ([runs](https://example.com/#cancelled-runs)) under'
+    'and an incomplete scan ([runs](https://example.com/cancelled)) under'
   run_scenario cancel-word-in-link-url-fails 1 \
     'docs/scanners.md:12: marker for octoscan.yml/notify-infra declares cancelled'
 
@@ -528,6 +573,77 @@ A failed zizmor run opens `zizmor-drift`'
     '— no count, cancel-in-progress off <!-- notify-arms: image-cve-scan.yml/image-cve-scan-grype-notify-infra'
   run_scenario cancel-word-compound-fails 1 \
     'docs/scanners.md:26: marker for image-cve-scan.yml/image-cve-scan-grype-notify-infra declares cancelled'
+
+  # --- block boundaries the cancel word must not cross ---
+
+  fresh_root
+  edit "${DOC}" "${SC_DOC}" 'A cancelled run is noted.
+***
+A failed scorecard run opens `scorecard-drift` <!-- notify-arms: scorecard-drift-check.yml/notify = failure cancelled -->.'
+  run_scenario cancel-word-across-break-fails 1 \
+    'docs/scanners.md:19: marker for scorecard-drift-check.yml/notify declares cancelled'
+
+  fresh_root
+  edit "${DOC}" 'A failed or cancelled zizmor run opens `zizmor-drift`' 'A cancelled run is noted.
+> A failed zizmor run opens `zizmor-drift`'
+  run_scenario cancel-word-across-quote-fails 1 \
+    'docs/scanners.md:20: marker for zizmor-drift-check.yml/notify declares cancelled'
+
+  # A block-level HTML tag opens an HTML block that runs to the next blank
+  # line, and a marker inside it is not in a paragraph.
+  fresh_root
+  edit "${DOC}" "${CQ_INFRA_DOC}" '<div>
+and `codeql-infra` <!-- notify-arms: codeql.yml/notify-infra = failure cancelled non-pr -->.'
+  run_scenario marker-in-html-block-fails 1 \
+    'docs/scanners.md:8: notify-arms marker sits on a line an HTML block holds'
+
+  # A table without edge pipes is still a table, row by row.
+  fresh_root
+  printf '%s\n' 'a cancelled job | x' '--- | ---' \
+    'no count <!-- notify-arms: codeql.yml/notify-infra = failure cancelled non-pr --> | y' \
+    >"${ROOT}/docs/extra.md"
+  run_scenario cancel-word-pipeless-table-fails 1 \
+    'docs/extra.md:3: marker for codeql.yml/notify-infra declares cancelled'
+
+  fresh_root
+  printf '%s\n' '> ### A cancelled run' \
+    '> Text <!-- notify-arms: codeql.yml/notify-infra = failure cancelled non-pr -->.' \
+    >"${ROOT}/docs/extra.md"
+  run_scenario cancel-word-quoted-heading-fails 1 \
+    'docs/extra.md:2: marker for codeql.yml/notify-infra declares cancelled'
+
+  fresh_root
+  printf '%s\n' 'A cancelled run' '===' \
+    'Text <!-- notify-arms: octoscan.yml/notify-infra = failure cancelled non-pr -->.' \
+    >"${ROOT}/docs/extra.md"
+  run_scenario cancel-word-setext-heading-fails 1 \
+    'docs/extra.md:3: marker for octoscan.yml/notify-infra declares cancelled'
+
+  # --- text a reader never sees as the cancel word ---
+
+  fresh_root
+  edit "${DOC}" 'A failed or cancelled zizmor run opens `zizmor-drift`' \
+    'A failed zizmor run (see <https://example.com/cancelled>) opens `zizmor-drift`'
+  run_scenario cancel-word-in-autolink-fails 1 \
+    'docs/scanners.md:19: marker for zizmor-drift-check.yml/notify declares cancelled'
+
+  fresh_root
+  printf 'Text ![a cancelled job](x.png) <!-- notify-arms: zizmor-drift-check.yml/notify = failure cancelled -->.\n' \
+    >"${ROOT}/docs/extra.md"
+  run_scenario cancel-word-in-image-alt-fails 1 \
+    'docs/extra.md:1: marker for zizmor-drift-check.yml/notify declares cancelled'
+
+  fresh_root
+  printf 'Text <a href="https://example.com/cancel">runs</a> <!-- notify-arms: scorecard-drift-check.yml/notify = failure cancelled -->.\n' \
+    >"${ROOT}/docs/extra.md"
+  run_scenario cancel-word-in-html-attribute-fails 1 \
+    'docs/extra.md:1: marker for scorecard-drift-check.yml/notify declares cancelled'
+
+  # The word must start at a word boundary: "precancelled" is not it.
+  fresh_root
+  edit "${DOC}" 'a failure before analysis or a cancelled job,' 'a failure before analysis or a precancelled job,'
+  run_scenario cancel-word-left-boundary-fails 1 \
+    'docs/scanners.md:7: marker for codeql.yml/notify-infra declares cancelled'
 
   # --- preconditions ---
 
@@ -597,7 +713,7 @@ A failed zizmor run opens `zizmor-drift`'
 
   fresh_root
   printf '<!-- open comment\n' >>"${ROOT}/${DOC}"
-  run_scenario unterminated-comment-exits-2 2 'docs/scanners.md:33: unterminated HTML comment'
+  run_scenario unterminated-comment-exits-2 2 'docs/scanners.md:39: unterminated HTML comment'
 
   fresh_root
   rm -- "${ROOT}/${DOC}"
