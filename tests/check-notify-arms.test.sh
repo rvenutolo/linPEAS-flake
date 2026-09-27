@@ -475,7 +475,14 @@ failure cancelled non-pr -->.'
     '      - run: test "${{ needs.drift-check.result }}" != cancelled
       - uses: ./.github/actions/notify-workflow-result'
   run_scenario step-before-composite-exits-2 2 \
-    'job notify: a step before the notify step can fail and skip it'
+    'job notify: a step before the notify step can fail and skip it ("-")'
+
+  fresh_root
+  edit '.github/workflows/zizmor-drift-check.yml' '      - uses: ./.github/actions/notify-workflow-result' \
+    '      - uses: actions/cache@0000000000000000000000000000000000000000
+      - uses: ./.github/actions/notify-workflow-result'
+  run_scenario action-before-composite-exits-2 2 \
+    'a step before the notify step can fail and skip it ("actions/cache@0000000000000000000000000000000000000000")'
 
   # The base zizmor notify job opens with those two steps, and passes.
 
@@ -600,11 +607,11 @@ and `codeql-infra` <!-- notify-arms: codeql.yml/notify-infra = failure cancelled
 
   # A table without edge pipes is still a table, row by row.
   fresh_root
-  printf '%s\n' 'a cancelled job | x' '--- | ---' \
-    'no count <!-- notify-arms: codeql.yml/notify-infra = failure cancelled non-pr --> | y' \
+  printf '%s\n' 'case | x' '--- | ---' 'a cancelled job | y' \
+    'no count <!-- notify-arms: codeql.yml/notify-infra = failure cancelled non-pr --> | z' \
     >"${ROOT}/docs/extra.md"
   run_scenario cancel-word-pipeless-table-fails 1 \
-    'docs/extra.md:3: marker for codeql.yml/notify-infra declares cancelled'
+    'docs/extra.md:4: marker for codeql.yml/notify-infra declares cancelled'
 
   fresh_root
   printf '%s\n' '> ### A cancelled run' \
@@ -639,6 +646,13 @@ and `codeql-infra` <!-- notify-arms: codeql.yml/notify-infra = failure cancelled
     >"${ROOT}/docs/extra.md"
   run_scenario cancel-word-in-html-attribute-fails 1 \
     'docs/extra.md:1: marker for scorecard-drift-check.yml/notify declares cancelled'
+
+  # A comment is not page text even when it holds a `>`.
+  fresh_root
+  printf 'Text <!-- note: a > cancelled --> <!-- notify-arms: octoscan.yml/notify-infra = failure cancelled non-pr -->.\n' \
+    >"${ROOT}/docs/extra.md"
+  run_scenario cancel-word-in-comment-fails 1 \
+    'docs/extra.md:1: marker for octoscan.yml/notify-infra declares cancelled, but'
 
   # The word must start at a word boundary: "precancelled" is not it.
   fresh_root
