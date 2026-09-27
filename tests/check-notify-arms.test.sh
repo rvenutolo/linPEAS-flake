@@ -404,11 +404,12 @@ failure cancelled non-pr -->.'
   run_scenario escape-not-decoded-fails 1 \
     'docs/scanners.md:17: marker for scorecard-drift-check.yml/notify declares "failure cancelled"; the workflow files on "cancelled"'
 
-  # The events tried are pull_request and every event the workflow's on:
-  # names, so a gate on a scheduled run is read, not dropped.
+  # The events tried are the ones the workflow's on: names, so a gate on a
+  # scheduled run is read, not dropped.
   fresh_root
   edit "${SC}" 'on: push' 'on:
   push:
+  pull_request:
   schedule:
     - cron: "0 0 * * 0"'
   edit "${SC}" 'if: always()' "if: always() && github.event_name == 'schedule'"
@@ -584,10 +585,10 @@ A failed scorecard run opens `scorecard-drift` <!-- notify-arms: scorecard-drift
     'docs/scanners.md:19: marker for scorecard-drift-check.yml/notify declares cancelled'
 
   fresh_root
-  edit "${DOC}" 'A failed or cancelled zizmor run opens `zizmor-drift`' 'A cancelled run is noted.
-> A failed zizmor run opens `zizmor-drift`'
+  edit "${DOC}" 'A failed or cancelled scorecard run opens `scorecard-drift`' 'A cancelled run is noted.
+> A failed scorecard run opens `scorecard-drift`'
   run_scenario cancel-word-across-quote-fails 1 \
-    'docs/scanners.md:20: marker for zizmor-drift-check.yml/notify declares cancelled'
+    'docs/scanners.md:18: marker for scorecard-drift-check.yml/notify declares cancelled'
 
   # A block-level HTML tag opens an HTML block that runs to the next blank
   # line, and a marker inside it is not in a paragraph.

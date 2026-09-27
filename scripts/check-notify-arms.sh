@@ -180,6 +180,16 @@ function notify_jobs() {
   ' "$1"
 }
 
+# @description Print, one per line, the `uses:` of every step a job runs
+#              before its first notify step, `-` for a `run:` step.
+# @arg $1 workflow path
+# @arg $2 job id
+function steps_before_notify() {
+  JOB="$2" yq -r '
+    .jobs[strenv(JOB)].steps // [] | .[] | (.uses // "-") | tostring
+  ' "$1" | awk '/notify-workflow-result/ { exit } { print }'
+}
+
 # @description Print the events a workflow runs on, one per line: its
 #              `on:` value as a string, the items of a list, or the keys
 #              of a map.
@@ -294,9 +304,10 @@ BEGIN {
   # empty.
   nhf = split(HASOUT == "true" ? "true|false|" : "", hfs, "|")
   if (nhf == 0) { nhf = 1; hfs[1] = "" }
-  # pull_request, which non-pr is about, and every event the workflow
-  # names in on:.
-  nev = split("pull_request " ENVIRON["NA_EVENTS"], events, " ")
+  # Only the events the workflow names in on: happen; non-pr is a claim
+  # about pull_request runs, so it is made only when those exist.
+  nev = split(ENVIRON["NA_EVENTS"], events, " ")
+  for (e = 1; e <= nev; e++) if (events[e] == "pull_request") prruns = 1
   for (r = 1; r <= 4 && err == ""; r++)
     for (h = 1; h <= nhf && err == ""; h++)
       for (e = 1; e <= nev && err == ""; e++) {
@@ -314,7 +325,7 @@ BEGIN {
   out = ""
   split("finding failure cancelled success skipped", order, " ")
   for (i = 1; i <= 5; i++) if (order[i] in arms) out = out (out == "" ? "" : " ") order[i]
-  if (any && !onpr) out = out " non-pr"
+  if (any && prruns && !onpr) out = out " non-pr"
   print "OK\t" out
 }
 '
@@ -432,6 +443,10 @@ function strip_spans(s,   i, j, n, m, len) {
 # the marker word, allowing slips such as an extra dash in the opener or
 # any punctuation between the two words. A comment that only mentions it
 # later (an enforcer note naming check-notify-arms) is not one.
+BEGIN {
+  HTML_BLOCK_TAG = "^ ? ? ?</?(address|article|aside|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|pre|script|search|section|style|summary|table|tbody|td|textarea|tfoot|th|thead|title|tr|track|ul)([ \t/>]|$)"
+  HTML_LONE_TAG = "^ ? ? ?</?[A-Za-z][A-Za-z0-9-]*[^>]*>[ \t]*$"
+}
 function is_markerish(c) { return tolower(c) ~ /^<!--[-[:space:]]*notify[^a-z]*arms?([^a-z]|$)/ }
 # Report every marker-like comment in text that an HTML block holds rather
 # than a paragraph. The first comment of a line that opens with one gets
@@ -464,12 +479,14 @@ function flush(   s, plain, rest, base, k, m, cstart, cend, body, spec, wf, job,
     if (m == 0) break
     plain = substr(plain, 1, k - 1) " " substr(plain, k + 4 + m + 2)
   }
-  # A link destination is not on the page.
+  # Image alt text, a link destination and an HTML tag, attributes and
+  # autolinks included, are not read as the text of the page.
+  gsub(/!\[[^]]*\]/, " ", plain)
   gsub(/\]\([^)]*\)/, "]", plain)
-  gsub(/<[a-z][a-z0-9+.-]*:[^> ]*>/, " ", plain)
+  gsub(/<[^>]*>/, " ", plain)
   # The word in some form, but not inside a hyphenated compound such as
   # cancel-in-progress, which names a setting rather than the arm.
-  cw = (tolower(plain) ~ /(^|[^a-z-])cancel(s|led|ling|lation|ed)?([^a-z-]|$)/) ? 1 : 0
+  cw = (tolower(plain) ~ /(^|[^a-z-])cancel(s|led|ling|lation|ed|ing)?([^a-z-]|$)/) ? 1 : 0
   nm = 0
   base = 0
   rest = s
@@ -525,6 +542,13 @@ comment {
   }
   next
 }
+# An HTML block opened by a tag runs to the next blank line, and none of
+# its lines is a paragraph.
+html {
+  if ($0 ~ /^[[:space:]]*$/) { html = 0; next }
+  block_markers($0, FNR, 0)
+  next
+}
 # A backtick fence info string cannot hold a backtick, so a line opening
 # with an inline span is prose, not a fence.
 match($0, /^[[:space:]]*(>[[:space:]]*)*(`{3,}|~{3,})/) &&
@@ -557,24 +581,55 @@ fence { next }
   block_markers(rest, FNR, 1)
   next
 }
-/^[[:space:]]*$/ { flush(); next }
-# A heading and a table row are blocks of their own, so the cancel word
-# in one does not speak for a marker in another.
-/^ ? ? ?(#{1,6}([[:space:]]|$)|\|)/ {
+/^[[:space:]]*$/ { flush(); table = 0; next }
+{
+  # The line with its blockquote markers removed, and how many there were.
+  ln = $0
+  depth = 0
+  while (match(ln, /^ ? ? ?>[ \t]?/)) { ln = substr(ln, RLENGTH + 1); depth++ }
+  # A quote that opens or deepens inside a paragraph interrupts it, and so
+  # does a line in a shallower quote; a line with no marker at all
+  # continues a quoted paragraph lazily.
+  if (para != "" && (depth > pdepth || (depth < pdepth && depth > 0))) flush()
+}
+# A tag opens an HTML block: a block-level tag anywhere, any complete tag
+# alone on a line that starts a block.
+!body && (tolower(ln) ~ HTML_BLOCK_TAG || (para == "" && ln ~ HTML_LONE_TAG)) {
   flush()
-  para = $0; pstart = FNR
+  html = 1
+  block_markers($0, FNR, 0)
+  next
+}
+# A heading, a table row and a thematic break are blocks of their own, so
+# the cancel word in one does not speak for a marker in another.
+table || ln ~ /^ ? ? ?(#{1,6}([[:space:]]|$)|\|)/ {
+  flush()
+  para = $0; pstart = FNR; pdepth = depth
   flush()
   next
 }
 # A setext underline makes the lines above it a heading.
-para != "" && /^ ? ? ?(=+|-+)[[:space:]]*$/ {
+para != "" && ln ~ /^ ? ? ?(=+|-+)[[:space:]]*$/ {
   para = para "\n" $0
   flush()
   next
 }
-/^[[:space:]]*([-*+]|[0-9]+[.)])[[:space:]]/ { flush() }
+ln ~ /^ ? ? ?((\*[ \t]*)(\*[ \t]*)(\*[ \t]*)+|(_[ \t]*)(_[ \t]*)(_[ \t]*)+|(-[ \t]*)(-[ \t]*)(-[ \t]*)+)$/ { flush(); next }
+# A delimiter row turns the line above it into a table header, and every
+# line after it, up to a blank line, into a row, pipes or not.
+para != "" && ln ~ /^ ? ? ?\|?[ \t]*:?-+:?[ \t]*(\|[ \t]*:?-+:?[ \t]*)+\|?[ \t]*$/ {
+  nl = split(para, pl, "\n")
+  hdr = pl[nl]
+  hline = pstart + nl - 1
+  if (nl > 1) { para = substr(para, 1, length(para) - length(hdr) - 1); flush() }
+  para = hdr; pstart = hline
+  flush()
+  table = 1
+  next
+}
+ln ~ /^[[:space:]]*([-*+]|[0-9]+[.)])[[:space:]]/ { flush() }
 {
-  if (para == "") { para = $0; pstart = FNR }
+  if (para == "") { para = $0; pstart = FNR; pdepth = depth }
   else para = para "\n" $0
 }
 END {
@@ -604,7 +659,7 @@ function main() {
 
   # Every notify job, keyed "<workflow file>/<job>", with its raw fields.
   local -A job_fields=() job_block=() derived=() required=()
-  local wf base rec uses job needs gate result_in step_if key
+  local wf base rec uses job needs gate result_in step_if key step
   local -r field=$'[^\t]+'
   for wf in "${workflows[@]}"; do
     base="${wf##*/}"
@@ -628,6 +683,19 @@ function main() {
         job_block["${key}"]="job ${job} names the notify composite as \"${uses}\"; the lint models only ./.github/actions/notify-workflow-result"
       elif [[ ${step_if} != - ]]; then
         job_block["${key}"]="job ${job}: the notify step carries an if: of its own, which the lint cannot model"
+      else
+        # A failed step before the composite skips it under the implicit
+        # success(). Every notify job opens with runner hardening and a
+        # checkout, whose failure is not an arm the prose describes.
+        local prior
+        prior="$(steps_before_notify "${wf}" "${job}")" ||
+          die2 "cannot read the steps of ${WORKFLOWS_REL}/${base} job ${job}"
+        while IFS= read -r step; do
+          [[ -n ${step} ]] || continue
+          [[ ${step} == step-security/harden-runner@* || ${step} == actions/checkout@* ]] && continue
+          job_block["${key}"]="job ${job}: a step before the notify step can fail and skip it (\"${step}\"); only step-security/harden-runner and actions/checkout are modelled there"
+          break
+        done <<<"${prior}"
       fi
       job_fields["${key}"]="${needs}"$'\t'"${gate}"$'\t'"${result_in}"
     done <<<"${listing}"

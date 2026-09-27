@@ -1,5 +1,5 @@
 name: octoscan
-on: push
+on: [push, pull_request]
 jobs:
   scan:
     runs-on: ubuntu-latest
