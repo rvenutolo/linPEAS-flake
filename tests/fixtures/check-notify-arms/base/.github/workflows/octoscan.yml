@@ -1,0 +1,34 @@
+name: octoscan
+on: push
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    outputs:
+      has-finding: ${{ steps.count.outputs.has-finding }}
+    steps:
+      - id: count
+        run: "true"
+  notify-finding:
+    needs: scan
+    if: always() && github.event_name != 'pull_request' && needs.scan.result == 'failure' && needs.scan.outputs.has-finding == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: failure
+          label: octoscan-finding
+          title: "octoscan: finding"
+          body: |
+            A finding. <!-- notify-arms: octoscan.yml/notify-finding = finding non-pr -->
+  notify-infra:
+    needs: scan
+    if: always() && github.event_name != 'pull_request' && (needs.scan.result == 'cancelled' || (needs.scan.result == 'failure' && needs.scan.outputs.has-finding != 'true'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.scan.result }}
+          label: octoscan-infra
+          title: "octoscan: infrastructure failure"
+          body: |
+            An infrastructure failure. <!-- notify-arms: octoscan.yml/notify-infra = failure cancelled non-pr -->

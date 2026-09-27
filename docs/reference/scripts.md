@@ -990,6 +990,77 @@ banned shape has, and the one a top-level-only glob never reads.
 Honors SCRIPTS_DIR_OVERRIDE (default: scripts) for fixtures.
 Exit 0 clean, 1 on any hit, 2 on operational error.
 
+### scripts/check-notify-arms.sh
+
+Lint: every stated arm list of a scanner notify job must
+equal the arms its workflow actually files on. An arm is a result of the
+watched job that makes the notify job open or update its deduped issue.
+The arms are derived from the workflow, never written down here: the
+notify job's `if:` gate is evaluated over every combination of the
+watched job's result, its `has-finding` output and the triggering event,
+and the `result:` it hands the notify-workflow-result composite decides
+which of those combinations file an issue.
+
+A prose site declares the arm list it restates with a marker comment in
+the same paragraph:
+
+```text
+  A finding, a failure with no finding, or a cancelled job is paged
+  <!-- notify-arms: codeql.yml/notify-infra = failure cancelled non-pr -->
+  under `codeql-infra`.
+```
+
+The tokens after `=` are a set, in any order:
+
+```text
+  finding    the watched job failed and its `has-finding` output is 'true'
+  failure    the watched job failed with no such finding (or declares no
+              `has-finding` output at all)
+  cancelled  the watched job was cancelled; the composite files it as an
+              infrastructure failure
+  success    the watched job succeeded, yet the notify job files an issue
+  skipped    the watched job was skipped, yet the notify job files an issue
+  non-pr     no arm files on a pull_request run
+```
+
+Every notify job in the scanner workflows (scorecard-drift-check,
+zizmor-drift-check, octoscan, codeql and image-cve-scan) must carry one
+marker in its own issue `body:`, where an HTML comment does not render,
+and at least one in the Markdown docs. A marker naming any other
+workflow's notify job is checked the same way. A docs marker that
+declares `cancelled` must share its paragraph with the word "cancel" in
+some form, because the cancelled arm is the one prose kept dropping. The
+body is exempt from that word, because the composite prefixes a cancelled
+run's issue with its own notice.
+
+Docs are read as paragraphs, split at blank lines and at list-item
+starts. A marker cannot open a line, at any indent: a comment there
+starts an HTML block, which cuts it off from the paragraph it describes
+(and, in a list item, can swallow the item after it).
+Fenced blocks and inline code spans are skipped, which is how a document
+shows the marker without declaring anything.
+
+The gate grammar is the one these workflows use: `always()`, the
+operators `==`, `!=`, `!`, `&&`, `||`, parentheses, quoted strings,
+`github.event_name`, and the watched job's `result` and
+`outputs.has-finding`. A gate without `always()` carries GitHub's
+implicit `success()`. The composite's own result handling (failure and
+cancelled file, success closes, skipped does nothing) is taken as fixed,
+and its classifying lines are checked verbatim so a change to them stops
+this lint rather than silently changing what an arm means.
+
+Exit codes: 0 every marker matches its job's derived arms and every
+scanner notify job carries its markers, 1 a marker disagrees with the
+derived arms, names a job that is not a notify job, is malformed, opens a
+line, sits in the wrong body, or a docs marker declaring cancelled has no
+cancel word near it, or a scanner notify job is missing a marker or files
+on no arm (details printed to stderr), 2 the check could not run: a
+required tool is missing, the composite or a scanner workflow is missing
+or has changed shape, a workflow cannot be parsed, a job it must derive
+has a gate, `needs:` or `result:` outside the grammar, a scanner workflow
+has no notify job, the scan set could not be listed or is empty, or a
+scanned file leaves a code fence or HTML comment open
+
 ### scripts/check-notify-label-descriptions.sh
 
 Lint: every `label-description` handed to the

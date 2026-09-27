@@ -1,0 +1,15 @@
+name: notify-workflow-result
+description: "Fixture copy of the classifying lines the lint pins."
+runs:
+  using: composite
+  steps:
+    - uses: actions/github-script@0000000000000000000000000000000000000000
+      with:
+        script: |
+          const cancelled = result === 'cancelled';
+          if (result !== 'success' && result !== 'failure' && !cancelled) {
+            return;
+          }
+          if (result === 'success') {
+            return;
+          }

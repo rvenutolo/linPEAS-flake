@@ -151,6 +151,7 @@ Hooks (alphabetical):
 | `check-doc-cron-restatement`        | Docs outside ci.md must link the cron schedule table, not restate literal workflow times.                                                                |
 | `check-ephemeral-refs`              | Markdown prose and shell/Nix/YAML comments carry no ephemeral references (PR/issue refs, prose dates, planning/review labels, literal .claude/ paths).   |
 | `check-jsonschema`                  | Schema-shape validation of repo config (renovate.json, workflows, actions).                                                                              |
+| `check-notify-arms`                 | Declared notify-arms lists in docs and issue bodies match the arms each scanner notify job's if: gate and result: input file on.                         |
 | `check-orphan-invariants`           | Every docs/ file has an invariant-index entry and vice versa.                                                                                            |
 | `check-prose-ci-names`              | A CI job or required check named in prose must resolve to a real job or, when called a job, a whole workflow.                                            |
 | `check-required-check-counts`       | Declared prose counts of the required set, and undeclared ones the backstop reads, match the Required contexts table in required-checks.md.              |

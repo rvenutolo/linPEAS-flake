@@ -149,16 +149,13 @@ sections. The rest of this section covers `codeql.yml`.
 every push to `main`, and weekly. It runs unfiltered because the OpenSSF
 Scorecard SAST check scores the fraction of recent merged PRs that ran a
 SAST tool, so skipping path-narrow PRs would drag that fraction down.
-The analyze step passes `fail-on: critical` to `codeql-action/analyze`:
-a CRITICAL-severity finding fails the workflow, and on push, cron, and
-dispatch runs, a notify job opens a deduped issue under the
-`codeql-critical` label (a PR run pages via the failed check on the PR
-itself, so it files no issue). An analyze job that fails before the
-analyze step runs (for example checkout or init breaks), or that is cancelled
-(never placed on a runner, or at its job timeout), files under
-`codeql-infra` instead, so transient infrastructure trouble ahead of
-the scan is not paged as a security finding. An error inside the analyze
-step files under `codeql-critical`, the same as a finding. Findings
+The analyze step passes `fail-on: critical` to `codeql-action/analyze`,
+so a CRITICAL-severity finding fails the workflow. Two notify jobs file
+deduped issues, one under `codeql-critical` and one under
+`codeql-infra`, so transient infrastructure trouble ahead of the scan is
+not paged as a security finding; which results file which issue, and on
+which runs, is listed under
+[codeql](docs/security/workflow-scanners.md#codeql). Findings
 **below** CRITICAL are advisory: they upload to the Security tab without
 failing the workflow. A green CodeQL run therefore
 proves the scan completed with zero CRITICAL findings — **not** that

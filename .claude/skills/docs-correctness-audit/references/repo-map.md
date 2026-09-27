@@ -204,7 +204,12 @@ a reader as a `body:` input handed to a notify action, as a body a `run:`
 step composes for `gh issue create` / `gh issue comment` / `gh pr create`,
 or as a `--body-file` — composed inline by the `run:` step, or with prose
 a script composes on stdout — and a composite action carries them as
-readily as a workflow. Enumerate every shape across the workflow and
+readily as a workflow. `scripts/check-notify-arms.sh` already fails a scanner
+notify job's arm list, as declared by a `notify-arms` marker in its body and
+in the docs, that disagrees with its workflow; its section in
+`docs/security/workflow-hardening.md` (`## notify-arms`) names what it does
+not read. Titles, label descriptions, the job comments beside a gate, and
+prose that disagrees with its own marker are still this audit's to check. Enumerate every shape across the workflow and
 composite-action trees and the issue templates with
 
 ```sh

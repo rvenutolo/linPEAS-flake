@@ -1,0 +1,24 @@
+name: other
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: "true"
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - run: "true"
+  # Outside the gate grammar, and named by no marker, so never derived.
+  notify:
+    needs: [build, deploy]
+    if: always() && contains(github.ref, 'main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ (needs.build.result == 'failure' || needs.deploy.result == 'failure') && 'failure' || 'success' }}
+          label: other
+          title: "other: failed"
+          body: |
+            Failed.
