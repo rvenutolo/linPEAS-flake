@@ -534,6 +534,47 @@ function main() {
   run_hash_case hash-reversed-range "${d}" 2 \
     'bad range: 6-3 (start must be >= 1 and <= end)' docs/a.md 6-3
 
+  # The root CHANGELOG.md and tests/fixtures/ sit outside the paragraph
+  # check: a word edit in each needs neither a pair nor a code_changes
+  # entry. Narrowing the in-scope Markdown set's exclusions makes either
+  # edit an uncovered hunk.
+  d="$(new_repo)"
+  git -C "${d}" switch --quiet main
+  mkdir -p -- "${d}/tests/fixtures/deep"
+  printf '%s\n' '# Changelog' '' 'Entry one.' >"${d}/CHANGELOG.md"
+  printf '%s\n' 'Fixture paragraph.' >"${d}/tests/fixtures/deep/x.md"
+  commit_all_special "${d}" out-of-scope CHANGELOG.md tests
+  git -C "${d}" switch --quiet fix
+  git -C "${d}" merge --quiet main
+  sed -i 's/^Entry one\.$/Entry one, reworded./' "${d}/CHANGELOG.md"
+  sed -i 's/^Fixture paragraph\.$/Fixture paragraph, reworded./' "${d}/tests/fixtures/deep/x.md"
+  commit_all_special "${d}" reword CHANGELOG.md tests
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case out-of-scope-markdown-unpaired "${d}" 0 '' \
+    'OK — 0 pairs; 0 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 0 removed siblings'
+
+  # Outside in-scope Markdown any touching hunk clears a changed sibling,
+  # a whitespace-only edit included. Narrowing the exclusions puts the
+  # same trailing space under the substance test, which it fails.
+  d="$(new_repo)"
+  git -C "${d}" switch --quiet main
+  mkdir -p -- "${d}/tests/fixtures/deep"
+  printf '%s\n' '# Changelog' '' 'Entry one.' >"${d}/CHANGELOG.md"
+  printf '%s\n' 'Fixture paragraph.' >"${d}/tests/fixtures/deep/x.md"
+  commit_all_special "${d}" out-of-scope CHANGELOG.md tests
+  git -C "${d}" switch --quiet fix
+  git -C "${d}" merge --quiet main
+  sed -i 's/^Entry one\.$/Entry one. /' "${d}/CHANGELOG.md"
+  sed -i 's/^Fixture paragraph\.$/Fixture paragraph. /' "${d}/tests/fixtures/deep/x.md"
+  commit_all_special "${d}" pad CHANGELOG.md tests
+  beta_fixed "${d}"
+  jq '.pairs[0].siblings = [{file: "CHANGELOG.md", lines: "3-3", status: "changed"},
+      {file: "tests/fixtures/deep/x.md", lines: "1-1", status: "changed"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case out-of-scope-markdown-sibling "${d}" 0 '' \
+    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 2 changed, 0 unchanged and 0 removed siblings'
+
   # Pure reflow: Alpha's two lines joined, same words. Needs no pair.
   d="$(new_repo)"
   sed -i -e '3{N;s/\n/ /}' "${d}/docs/a.md"
