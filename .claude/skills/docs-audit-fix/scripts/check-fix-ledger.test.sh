@@ -1990,6 +1990,7 @@ EOF
   seed_files "${d}" CHANGELOG.md 'Beta paragraph. old' \
     tests/fixtures/x/a.md 'Beta paragraph. fixture' flake.lock '{"n": "Beta paragraph."}' \
     .claude/skills/docs-correctness-audit/evals/seeded-defects/fixtures/s.md 'Beta paragraph. seeded' \
+    .claude/skills/other/evals/seeded-defects/fixtures/s.md 'Beta paragraph. seeded elsewhere' \
     docs/c.md 'Beta paragraph. in scope'
   beta_fixed "${d}"
   run_case sweep-out-of-scope "${d}" 1 'hits docs/c.md:1-1 at the merge base (1-1 at head)'
@@ -2036,9 +2037,10 @@ EOF
   # as written.
   d="$(new_repo)"
   printf 'x\0Beta paragraph. binary\n' >"${d}/scripts/blob.dat"
+  { printf 'Beta paragraph. late NUL\n' && head -c 9000 /dev/zero | tr '\0' 'y' && printf '\n\0'; } >"${d}/scripts/late.dat"
   seed_files "${d}" 'docs/café.md' 'Beta paragraph. accented'
   git -C "${d}" switch --quiet main
-  git -C "${d}" add -- scripts/blob.dat
+  git -C "${d}" add -- scripts/blob.dat scripts/late.dat
   git -C "${d}" commit --quiet --message 'add blob'
   git -C "${d}" switch --quiet fix
   git -C "${d}" merge --quiet main
@@ -2046,6 +2048,7 @@ EOF
   run_case sweep-binary-and-name "${d}" 1 \
     'sweep-uncovered: pair p1 term "Beta paragraph." hits docs/café.md:1-1 at the merge base (1-1 at head)'
   expect_absent 'blob.dat'
+  expect_absent 'late.dat'
 
   # A line inserted right after an untouched twin does not move it.
   d="$(new_repo)"
@@ -2092,7 +2095,14 @@ EOF
   d="$(new_repo)"
   seed_files "${d}" $'docs/t\tb.md' 'Beta paragraph. tabbed name'
   beta_fixed "${d}"
-  run_case sweep-tab-name "${d}" 2 'cannot sweep docs/t<TAB>b.md: its name holds a tab or newline; rename it'
+  run_case sweep-tab-name "${d}" 2 \
+    'cannot sweep docs/t?b.md: its name holds a tab, newline, 0x01 or 0x02 byte (shown as ?); rename it'
+  # So does one holding a byte the hit list uses to carry a tab or newline.
+  d="$(new_repo)"
+  seed_files "${d}" $'docs/c\001d.md' 'Beta paragraph. control name'
+  beta_fixed "${d}"
+  run_case sweep-control-name "${d}" 2 \
+    'cannot sweep docs/c?d.md: its name holds a tab, newline, 0x01 or 0x02 byte (shown as ?); rename it'
 
   # finding groups pairs for missing-sweep, so it must be a whole number
   # of 1 or more: missing, null or a string would merge or split groups.
@@ -2157,6 +2167,9 @@ EOF
   also_expect_stdout 'docs/a.md:6-6: Beta paragraph.'
   run_sweep_case sweep-mode-dash-term "${d}" 0 '' 'docs/b.md:5-5: -x only here' \
     --sweep -- '-x only'
+  seed_files "${d}" scripts/tabs.sh $'\tBeta tabbed line\t\t'
+  run_sweep_case sweep-mode-edge-tabs "${d}" 0 '' $'scripts/tabs.sh:1-1: \tBeta tabbed line\t\t' \
+    --sweep 'Beta tabbed'
   expect_absent_stdout 'docs/a.md'
   run_sweep_case sweep-mode-no-hit "${d}" 1 \
     'check-fix-ledger: term "Nowhere text" matches nothing in the sweep scope at the merge base' '' \
