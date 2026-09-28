@@ -39,16 +39,20 @@ How to verify a release of this wrapper yourself. None of this trusts the Pages 
     each bundle against Sigstore's live trusted root. A client that
     cannot load that root, because it cannot fetch it or is too old to
     parse it, fails before it verifies any attestation, and the error
-    says nothing about whether the attestation is valid. Older releases
-    name the cause after `failed to get trusted root:` (for example
-    `unsupported tlog public key type: PKIX_ED25519`); newer releases
-    print only
+    says nothing about whether the attestation is valid. The error names
+    the trusted root, the TUF client or the verifier, not the attestation.
+    The wording varies by release and by cause. Measured examples: an
+    older release that cannot parse the root prints
+    `failed to get trusted root: unsupported tlog public key type: PKIX_ED25519`,
+    and one that cannot fetch it prints `failed to create TUF client`; a
+    current release prints
     `public good verifier is not available (initialization may have failed)`
-    for either cause. The oldest working release can rise when the root
-    changes upstream (for example, when it adds a key type older clients
-    cannot parse), so this page
-    states no version number. `gh release download` fetches the signed
-    release assets.
+    for either cause, or `no valid Sigstore verifiers could be initialized`
+    when neither the Sigstore nor the GitHub TUF repository loads. The
+    oldest working release can rise when the root changes upstream (for
+    example, when it adds a key type older clients cannot parse), so this
+    page states no version number. `gh release download` fetches the
+    signed release assets.
 - `cosign` ≥ 3.0, the major the release pipeline signs with —
     `cosign verify` for image signatures and `cosign verify-blob` for the
     `.sigstore` release-asset bundles. cosign 3's defaults write a
@@ -57,8 +61,8 @@ How to verify a release of this wrapper yourself. None of this trusts the Pages 
     [Cosign keyless signatures](#cosign-keyless-signatures)). An older
     client that looks only for a `.sig` tag reports no signatures found.
     cosign also loads Sigstore's live trusted root; when it cannot fetch
-    it, the error reads `getting trusted root from TUF` rather than a
-    signature or certificate-identity error, and verifies nothing.
+    or parse it, the error contains `getting trusted root from TUF` rather
+    than a signature or certificate-identity error, and verifies nothing.
 - `docker` with `buildx` — `docker buildx imagetools inspect … --raw`
     resolves the per-arch image digest from the multi-arch index, for the
     `gh attestation verify` path.
@@ -190,8 +194,9 @@ the `attribute failure reason` step. Reasons:
     until ruled out, unless the step log shows `gh` could not load
     Sigstore's trusted root (the errors under
     [Tools needed](#tools-needed)). That run verified nothing: re-run it.
-    If the error persists, the runner's `gh` cannot parse the root; re-run
-    once the runner image ships a newer `gh` (the
+    If the error persists, either the TUF repositories are unreachable
+    from the runner or its `gh` cannot parse the root. For the second,
+    re-run once the runner image ships a newer `gh` (the
     [runner-images](https://github.com/actions/runner-images) README links
     each image's installed software), and treat a failure then as
     tampering.
@@ -220,8 +225,9 @@ the `attribute failure reason` step. Reasons:
     `*-attest-failed` reasons. A trusted-root load error (see
     [Tools needed](#tools-needed)) verified nothing: re-run. The step
     runs the lock-pinned `.#cosign`, not a runner tool, so a re-run uses
-    the same client; if the error persists, only a flake change that
-    updates cosign (normally a `flake.lock` bump) changes the client.
+    the same client. If the error persists and the TUF repository is
+    reachable, the pinned cosign cannot parse the root, and only a flake
+    change that updates cosign (normally a `flake.lock` bump) fixes it.
 - `unattributed` — the job failed but no ladder arm matched the failed
     step: either a step before the first verification step
     (harden-runner, checkout, setup-nix) failed, or a verification step

@@ -534,14 +534,15 @@ jobs:
               fetch that resolves the per-arch digest failed first (the
               step log shows a `docker manifest inspect` error or
               `unexpected … digest`).
-              Read the failed step's log first. If `gh` reports
-              `failed to get trusted root` or `public good verifier is
-              not available`, it could not load Sigstore's trusted root
-              and verified nothing (see "Tools needed" in
-              `docs/security/verification.md`): re-run. If that persists,
-              the runner's `gh` cannot parse the root; re-run once the
-              runner image ships a newer `gh`, and treat a failure then
-              as tampering. Any other verification error is artifact
+              Read the failed step's log first. If `gh` failed on the
+              trusted root, the TUF client or a verifier rather than
+              the attestation (examples under "Tools needed" in
+              `docs/security/verification.md`), it verified nothing:
+              re-run. If that persists, either the TUF repositories are
+              unreachable from the runner or its `gh` cannot parse the
+              root; for the second, re-run once the runner image ships
+              a newer `gh`, and treat a failure then as tampering. Any
+              other verification error is artifact
               tampering until ruled out.
             - `images-cosign-failed` — cosign
               signature verification failed for one
@@ -555,8 +556,10 @@ jobs:
               could not load Sigstore's trusted root and verified
               nothing: re-run. The step runs the lock-pinned
               `.#cosign`, not a runner tool, so a re-run uses the same
-              client; if the error persists, only a flake change that
-              updates cosign (normally a `flake.lock` bump) changes it.
+              client. If the error persists and the TUF repository is
+              reachable, the pinned cosign cannot parse the root; only
+              a flake change that updates cosign (normally a
+              `flake.lock` bump) fixes it.
             - `pin-blob-sig-failed` — `cosign verify-blob` failed for
               `linpeas-pin.json` on the latest release. The
               `linpeas-pin.json.sigstore` sidecar is missing from the
