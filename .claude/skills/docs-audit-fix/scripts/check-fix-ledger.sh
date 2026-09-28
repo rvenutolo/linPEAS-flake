@@ -2,7 +2,7 @@
 # .claude/skills/docs-audit-fix/scripts/check-fix-ledger.sh
 #
 # @description Pre-PR gate for a docs-audit fix pass. The writer records,
-# per rewritten paragraph, the artifact range the new sentence was written
+# per rewritten paragraph, the artifact the new sentence was written
 # against and the sibling set it belongs to; a separate gate agent records
 # a verdict and the hash of the paragraph it read. This script proves the
 # record covers the branch's diff and still describes it:
@@ -227,19 +227,21 @@ function check_schema() {
       # what it printed ({command, observed}). Only the shape of a
       # command entry is checked: the checker never runs it.
       ([.artifact | arr | to_entries[] | select(.value | type == "object")
-        | select((.value | has("command") | not) and (((.value.file | str) and (.value.lines | rng)) | not))
+        | select((.value | (has("command") or has("observed")) | not)
+            and (((.value.file | str) and (.value.lines | rng)) | not))
         | .key]) as $badfile |
       (if (.artifact | type) == "array" and (.artifact | length) > 0 then
         ($badfile[] | ["schema", "pair \($id) artifact[\(.)] needs a file and a <start>-<end> lines"])
-      else ["schema", "pair \($id) needs a non-empty artifact list of file and lines"] end),
-      ((.artifact | arr)[] | objects | select(has("command"))
+      else ["schema", "pair \($id) needs a non-empty artifact list"] end),
+      ((.artifact | arr) | to_entries[] | select(.value | type == "object")
+        | select(.value | has("command") or has("observed")) | .key as $k | .value
         | if has("file") or has("lines") then
-            ["schema", "pair \($id) artifact names both a command and a file (file \(.file | tojson), lines \(.lines | tojson)); give each its own entry"]
+            ["schema", "pair \($id) artifact[\($k)] holds both command and file keys (\(keys | join(", "))); give each its own entry"]
           else
             (if .command | txt then empty
-            else ["schema", "pair \($id) artifact command needs a non-blank command string, got \(.command | tojson)"] end),
+            else ["schema", "pair \($id) artifact[\($k)] needs a non-blank command string, got \(.command | tojson)"] end),
             (if .observed | txt then empty
-            else ["schema", "pair \($id) artifact command needs a non-blank observed string, got \(.observed | tojson)"] end)
+            else ["schema", "pair \($id) artifact[\($k)] needs a non-blank observed string, got \(.observed | tojson)"] end)
           end),
       (.siblings | nonobj("pair \($id) siblings")),
       (if (.siblings | type) == "array" and all(.siblings[] | objects; .file | str) then empty
