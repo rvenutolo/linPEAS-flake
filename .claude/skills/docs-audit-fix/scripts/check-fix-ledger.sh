@@ -861,10 +861,10 @@ function one_block() {
 # and carry a reason; a sibling marked changed must name a range inside
 # one paragraph of its file, apart from its own pair's lines, and a hunk
 # must change that range. For a Markdown file in check_completeness'
-# scope that means an added line in the range,
-# in a hunk it counted as covered, whose words changed: a trailing space,
-# a re-wrap or a re-aligned table row is not a fix, and prose inside a
-# generated block is fixed at its generator, which is a code change. A
+# scope that means an added line in the range, in a hunk it counted as
+# covered, whose words changed: a trailing space, a re-wrap or a
+# re-aligned table row is not a fix, and prose inside a generated block
+# is fixed at its generator, which is a code change. A
 # sibling marked removed names the HEAD position its deleted text sat at,
 # at most two lines (a pure deletion's ns or ns+1, so one past the last
 # line is allowed), and needs a covered hunk touching it that deletes

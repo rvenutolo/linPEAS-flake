@@ -62,7 +62,8 @@ paragraph in its scope.
     branch deletes needs only that file's `code_changes` entry, with
     `lines` inside the file as it was at the merge base.
     For each changed file that is not a surviving Markdown file (a deleted
-    `.md` file included), append a `code_changes` entry with the evidence
+    `.md` file included, and a `.md` path that is now a directory or a
+    gitlink), append a `code_changes` entry with the evidence
     (test, harness, mutation) that it is right. Commit as you go; the
     checker reads commits, not the working tree. The gate and the checker
     both read a pair's `lines` at `HEAD`, so bring every pair's range up
@@ -264,7 +265,9 @@ and 2 when it cannot run.
     blank lines) is covered by a pair whose paragraph takes in the line
     before or after it, or one of its blank lines. Every other changed
     file, a deleted Markdown file included (one replaced by a directory or
-    a gitlink counts as deleted), is listed in `code_changes`.
+    a gitlink counts as deleted), is listed in `code_changes`. A gitlink
+    under a `.md` name also leaves a hunk no pair can cover, since a pair
+    needs a file; see the known limits.
 - **Artifacts and pairs** name files tracked at `HEAD`, with the range
     inside the file. A command artifact is never run.
 - **Siblings.** An `unchanged` one names a file tracked at `HEAD`, a range
@@ -338,6 +341,9 @@ the gate's job. Its known limits:
     holding a backslash is read with it doubled, so it names no file at
     that path: its entry fails as untracked, or as a sibling nothing
     changed or removed.
+- A gitlink named like Markdown (`*.md`) cannot pass: its
+    `Subproject commit` hunk needs a pair, and a pair's file must be a
+    file at `HEAD`. Name the submodule path without `.md`.
 - Blank text is white space and invisible format characters (Unicode
     Cf). Other characters that print nothing, such as a Hangul filler or
     a braille blank, count as text.
