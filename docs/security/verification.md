@@ -35,13 +35,21 @@ How to verify a release of this wrapper yourself. None of this trusts the Pages 
 
 ## Tools needed<a name="tools-needed"></a>
 
-- `gh` (GitHub CLI) ≥ 2.49 — the upstream release that introduced
-    `gh attestation verify`; `gh release download` fetches the signed
+- `gh` (GitHub CLI), a recent release — `gh attestation verify` checks
+    each bundle against Sigstore's live trusted root, so a client too old
+    to parse that root fails before it verifies any attestation (for
+    example `unsupported tlog public key type: PKIX_ED25519`). The oldest
+    working release can rise when the root changes upstream (for example,
+    when it adds a key type older clients cannot parse), so this page
+    states no version number. `gh release download` fetches the signed
     release assets.
-- `cosign` ≥ 3.0 — `cosign verify` for image signatures and
-    `cosign verify-blob` for the `.sigstore` release-asset bundles,
-    which the release pipeline produces with cosign 3.x (an older 2.x
-    client is not guaranteed to read its bundle format).
+- `cosign` ≥ 3.0, the major the release pipeline signs with —
+    `cosign verify` for image signatures and `cosign verify-blob` for the
+    `.sigstore` release-asset bundles. cosign 3's defaults write a
+    protobuf Sigstore bundle and attach an image's signature as an OCI 1.1
+    referrer rather than a `.sig` tag (see
+    [Cosign keyless signatures](#cosign-keyless-signatures)). An older
+    client that looks only for a `.sig` tag reports no signatures found.
 - `docker` with `buildx` — `docker buildx imagetools inspect … --raw`
     resolves the per-arch image digest from the multi-arch index, for the
     `gh attestation verify` path.
@@ -395,8 +403,11 @@ workflow's OIDC token, then recorded in Rekor.
 Signed artifacts per release:
 
 - **Per-arch images**: `cosign sign <reg>/rvenutolo/linpeas@<digest>` on
-    both `ghcr.io` and `docker.io`. The signature lands as a `.sig` tag
-    next to each image in each registry.
+    both `ghcr.io` and `docker.io`. The signature is a Sigstore bundle
+    attached to the digest as an OCI 1.1 referrer. `docker.io` serves it
+    through the referrers API; `ghcr.io`, which has no referrers API,
+    holds it in the `sha256-<digest>` fallback tag. No `.sig` tag is
+    written.
 - **Multi-arch index**: same `cosign sign` invocation against the OCI
     index digest of `:VERSION`. When the run also writes `:latest` (the
     release is the newest one, not a historic backfill), that tag

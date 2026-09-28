@@ -130,13 +130,17 @@ rather than on the bump's own checks. Walk the list when one does.
     `command not found`. The `-h` run does not: a missing `sed`,
     `awk`, `find`, or `ps` leaves `-h` silent. Walk
     `pkgs.buildEnv.paths` in `nix/image.nix` against the smoke output.
-- **`gh attestation verify` trust-root staleness.** Newer
-    `ubuntu-latest` images carry a newer `gh` CLI, which ships an
-    updated Sigstore TUF trust-root. A nixpkgs bump does not affect
-    this directly, but a coincident runner-image rotation can cause
-    spurious verify failures the same day — confirm by re-dispatching
-    `verify-latest-release` the next day before assuming
-    attestation drift.
+- **`gh attestation verify` trust-root change lag.** When Sigstore
+    changes its trusted root in a way older clients cannot parse (a new
+    key type, for example), a runner image whose `gh` CLI predates the
+    change fails every attestation verify (see
+    [Tools needed](../security/verification.md#tools-needed)). A nixpkgs
+    bump does not affect this, since the workflows use the runner's
+    `gh`, but a coincident change can look like attestation drift.
+    The step log names the parse failure (for example
+    `unsupported tlog public key type`); confirm that before assuming
+    drift. It clears once the runner image ships a `gh` that parses the
+    new root.
 
 Step 5 of the step-by-step below covers most of this surface as a
 symptom → fix lookup table; use this section to anticipate before

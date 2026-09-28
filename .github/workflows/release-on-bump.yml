@@ -729,10 +729,12 @@ jobs:
           push-to-registry: true
 
       - name: cosign sign per-arch images (amd64, keyless)
-        # cosign sign writes a `.sig` tag next to each image in each
-        # registry. Signed against the immutable digest captured by the
-        # `push` step, NOT the mutable `<tag>-amd64` reference — the
-        # signature follows the digest even if a tag is later repointed.
+        # cosign sign attaches the signature to each image in each
+        # registry as an OCI 1.1 referrer (on ghcr.io, through the
+        # `sha256-<digest>` fallback tag). Signed against the immutable
+        # digest captured by the `push` step, NOT the mutable
+        # `<tag>-amd64` reference — the signature follows the digest
+        # even if a tag is later repointed.
         # Both registries must be reachable; cosign exits non-zero on
         # the first push failure.
         env:
@@ -1187,8 +1189,9 @@ jobs:
           printf 'hub_index_digest=%s\n' "${hub_index_digest}" >> "${GITHUB_OUTPUT}"
 
       - name: cosign sign multi-arch index (keyless)
-        # Signs the OCI index digest on each registry. cosign writes a
-        # `.sig` tag at `<digest>` so that `cosign verify` against
+        # Signs the OCI index digest on each registry. cosign attaches a
+        # referrer to `<digest>` (on ghcr.io, through the
+        # `sha256-<digest>` fallback tag) so that `cosign verify` against
         # `:VERSION` — and `:latest`, whenever it resolves to the same
         # digest — succeeds. Index-level signing complements the per-arch
         # signatures from the image-* jobs.
