@@ -18,6 +18,7 @@ readonly SCRIPT="${HERE}/check-fix-ledger.sh"
 
 failures=0
 LAST_STDERR=''
+LAST_STDOUT=''
 LAST_NAME=''
 SCRATCH="$(mktemp -d)"
 readonly SCRATCH
@@ -101,6 +102,7 @@ function run_case() {
     "${outcome_file}" "${stdout_file}" "${stderr_file}"
   if [[ -n ${expected_stdout} ]]; then harness_assert_also "${expected_stdout}"; fi
   LAST_STDERR="${stderr_file}"
+  LAST_STDOUT="${stdout_file}"
   LAST_NAME="${name}"
 }
 
@@ -153,6 +155,16 @@ function expect_absent() {
   if grep --fixed-strings --quiet -- "$1" "${LAST_STDERR}"; then
     printf 'FAIL: %s — stderr unexpectedly holds %q\n' "${LAST_NAME}" "$1" >&2
     cat -- "${LAST_STDERR}" >&2
+    failures=$((failures + 1))
+  fi
+}
+
+# @description Assert a substring is absent from the last scenario's
+# stdout.
+function expect_absent_stdout() {
+  if grep --fixed-strings --quiet -- "$1" "${LAST_STDOUT}"; then
+    printf 'FAIL: %s — stdout unexpectedly holds %q\n' "${LAST_NAME}" "$1" >&2
+    cat -- "${LAST_STDOUT}" >&2
     failures=$((failures + 1))
   fi
 }
@@ -272,6 +284,8 @@ function main() {
   beta_fixed "${d}"
   run_case complete "${d}" 0 '' \
     'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 0 removed siblings'
+  # A ledger citing no command keeps the OK line it always had.
+  expect_absent_stdout 'command artifacts'
 
   d="$(new_repo)"
   beta_fixed "${d}"
@@ -302,6 +316,91 @@ function main() {
   beta_fixed "${d}"
   jq '.pairs[0].artifact = []' "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case schema-no-artifact "${d}" 1 'schema: pair p1 needs a non-empty artifact list'
+
+  # A fact that lives outside the tree is cited as the command that shows
+  # it and what it printed. The checker validates the entry's shape and
+  # never runs the command: the payload here only creates a marker file,
+  # and the marker must not exist after the run.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].artifact = [{command: "touch RAN", observed: "exit 1, no output"}]
+    | .pairs[0].siblings = [{file: "docs/a.md", lines: "3-4", status: "unchanged", reason: "true as written"},
+      {file: "docs/a.md", lines: "12-12", status: "unchanged", reason: "true as written"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case artifact-command "${d}" 0 '' \
+    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 2 unchanged and 0 removed siblings; 1 command artifacts, shape-checked only'
+  if [[ -e ${d}/RAN ]]; then
+    printf 'FAIL: %s — the checker ran an artifact command\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
+
+  # A command entry beside a file entry leaves the file entry's checks in
+  # force: its range still has to fit its file, and the command entry is
+  # not read as a file.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].artifact = [{command: "git config --local --get x", observed: "exit 1"},
+      {file: "scripts/tool.sh", lines: "1-99"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case artifact-command-beside-file "${d}" 1 \
+    'artifact: pair p1 scripts/tool.sh:1-99 runs past end of file (20 lines)'
+  expect_absent 'is not tracked'
+
+  # A malformed file entry is still a schema finding when a well-formed
+  # command entry sits beside it.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].artifact = [{command: "git config --local --get x", observed: "exit 1"},
+      {file: "scripts/tool.sh"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case artifact-command-beside-bad-file "${d}" 1 \
+    'schema: pair p1 artifact[1] needs a file and a <start>-<end> lines'
+
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].artifact = [{command: "git config --local --get x"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case artifact-command-no-observed "${d}" 1 \
+    'schema: pair p1 artifact command needs a non-blank observed string, got null'
+
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].artifact = [{command: "git config --local --get x", observed: "   "}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case artifact-command-blank-observed "${d}" 1 \
+    'schema: pair p1 artifact command needs a non-blank observed string, got "   "'
+
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].artifact = [{command: "", observed: "exit 1"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case artifact-command-empty "${d}" 1 \
+    'schema: pair p1 artifact command needs a non-blank command string, got ""'
+
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].artifact = [{command: ["git", "config"], observed: "exit 1"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case artifact-command-not-string "${d}" 1 \
+    'schema: pair p1 artifact command needs a non-blank command string, got ["git","config"]'
+
+  # One entry holding both forms is ambiguous about which one the gate
+  # reads, so it is refused rather than checked as either.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].artifact = [{file: "scripts/tool.sh", lines: "1-5",
+      command: "git config --local --get x", observed: "exit 1"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case artifact-command-and-file "${d}" 1 \
+    'schema: pair p1 artifact names both a command and a file (file "scripts/tool.sh", lines "1-5")'
+
+  # A lines range with no file is still half of a file entry.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].artifact = [{lines: "1-5", command: "git config --local --get x", observed: "exit 1"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case artifact-command-and-lines "${d}" 1 \
+    'schema: pair p1 artifact names both a command and a file (file null, lines "1-5")'
 
   # A leading zero must not slip past the range regex into bash's octal
   # arithmetic later. This targets the pair's own lines field rather than
