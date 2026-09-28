@@ -507,6 +507,7 @@ Use this template:
 # Docs correctness sweep — findings report
 
 **Date:** <YYYY-MM-DD>
+**Commit:** <`git rev-parse --short HEAD` the audit read>
 **Stage:** report only — no edits applied
 **Scope:** <N files>
 **Method:** parallel read-only audits per cluster; every finding re-verified
@@ -553,6 +554,7 @@ different amounts:
 - <batching suggestion, decisions the user must make, generated-doc/generator fixes>
 - Fix with `/docs-fix <this report>`: it holds the PR to the fix-pass
   contract and does not open it until the ledger checker passes.
+- Cycle: <this audit closes the cycle | another audit will run against these fixes>
 ```
 
 Every finding on a quantifier carries its fix shape in the finding itself, not

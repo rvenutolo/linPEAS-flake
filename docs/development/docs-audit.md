@@ -29,8 +29,9 @@ corrected claim becomes a differently-wrong one. The `/docs-fix` slash
 command holds the fix PR to a contract that includes:
 
 - Every rewritten paragraph records the `file:line` range of the code,
-    workflow, or script whose behaviour the new sentence claims. A sentence
-    with no artifact range behind it was inferred from the sentence it
+    workflow, or script whose behaviour the new sentence claims, or, for a
+    fact outside the tree, the command that shows it and what it printed.
+    A sentence with no artifact behind it was inferred from the sentence it
     replaced.
 - A second reader — not whoever wrote them — opens those pairs before the
     PR does, reads the artifact first and the paragraph second, and says for

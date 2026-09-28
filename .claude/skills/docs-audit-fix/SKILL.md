@@ -6,7 +6,7 @@ description: Fix pass for a docs-correctness-audit findings report — works the
 # Docs-audit fix pass
 
 A findings report from `/docs-audit` is the input. The output is one PR
-whose body shows, per rewritten paragraph, the artifact range it was
+whose body shows, per rewritten paragraph, the artifact it was
 written against and the gate's verdict on it.
 
 This phase exists because a fix pass reads the finding, not the audit's
@@ -21,13 +21,19 @@ paragraph in its scope.
 
 1. **Every rewritten paragraph names its artifact.** Record the file and
     line range of the code, workflow or script whose behaviour the new
-    sentence claims. A sentence with no artifact behind it was inferred from
-    the old sentence.
+    sentence claims. When the fact lives outside the tree (a machine's
+    config, a live service), record the command that shows it and what it
+    printed instead. A sentence with no artifact behind it was inferred from
+    the old sentence, and so was one whose artifact is another paragraph
+    stating the same claim.
 1. **A second reader re-reads the pairs** — not the writer. See the gate.
 1. **A claim the audit found overbroad is dropped or scoped to the set it
     can defend, never re-sharpened; a plain wrong fact is corrected to the
     artifact's fact.** Replacing a claim with a differently wrong exclusive
     or a precise wrong fact is the most repeated defect these audits find.
+    When the sentence says what a lint or matcher catches, point at the
+    lint's own section instead of restating its conditions: a restated
+    condition list reads as complete, which re-sharpens the claim.
     Record the shape: `drop`, `scope`, or `correct` (a fact replaced by the
     artifact's fact, no new boundary word).
 1. **Clear the sibling set.** Name every other place the corrected claim
@@ -43,7 +49,11 @@ paragraph in its scope.
 
 ## Flow
 
-1. Branch `docs/<topic>` from `main`. Work the findings.
+1. Branch `docs/<topic>` from `main`. Before editing, re-read each
+    finding's cited site at the branch's `HEAD`: the report's line numbers
+    come from the audit's commit, and `main` moves. A finding that no
+    longer holds is listed as stale in the PR body, not fixed. Work the
+    rest.
 1. For each rewritten paragraph, append a pair to
     `<report-stem>.ledger.json` beside the report. A `changed` or `removed`
     Markdown sibling is itself a rewritten paragraph: it needs a pair
@@ -53,7 +63,10 @@ paragraph in its scope.
     For each changed file that is not a surviving Markdown file (a deleted
     `.md` file included), append a `code_changes` entry with the evidence
     (test, harness, mutation) that it is right. Commit as you go; the
-    checker reads commits, not the working tree.
+    checker reads commits, not the working tree. The gate and the checker
+    both read `lines` at `HEAD`, so bring every pair's range up to date
+    before each gate dispatch and each checker run. A gate that hashes a
+    stale range judges the wrong paragraph, and the checker can pass it.
 1. **Gate.** Dispatch one agent that did not write the changes, on the
     strongest model available. The dispatch carries, verbatim: the ledger
     path; the diff command (`git diff main...HEAD`); the twin-sweep scope
@@ -87,10 +100,11 @@ paragraph in its scope.
     step 6 needs it.
 1. Push the branch, then open the PR (`gh pr create --head <branch>`).
     The body carries the pair table rendered from the ledger and gate —
-    one row per pair: paragraph `file:lines`, artifact `file:lines`, fix
-    shape, siblings (changed/removed/unchanged counts), verdict — plus
-    each code change's attack and result, and the checker's OK line with
-    the commit recorded in step 5. When step 7 applies, the body also says
+    one row per pair: paragraph `file:lines`, artifact `file:lines` or
+    command, fix shape, siblings (changed/removed/unchanged counts),
+    verdict — plus each code change's attack and result, the findings step
+    1 found stale, and the checker's OK line with the commit recorded in
+    step 5. When step 7 applies, the body also says
     the marker commit follows that commit.
 1. If the report said this audit closes the cycle, run `just docs-audit-done`
     after the checker's OK run, commit the `.github/docs-audit-state` it
@@ -103,14 +117,17 @@ paragraph in its scope.
     marker means reverting the marker commit, re-running the checker, recording the new
     commit as in step 5, updating the PR body's OK line and commit, and
     committing a new marker. If another audit will read these fixes, do
-    not run `just docs-audit-done`.
+    not run `just docs-audit-done`. A report that does not say which case
+    it is counts as another audit will run: no marker commit, and the PR
+    body says the report was silent.
 
 ## The gate's duties
 
 The gate is a separate agent. It did not write the changes.
 
 1. **Artifact first, paragraph second.** Open the artifact range, form a
-    view of what it does, then read the paragraph.
+    view of what it does, then read the paragraph. For a command artifact,
+    run the command yourself and compare what it prints with `observed`.
 1. **Verdict per pair:** `TRUE`, `FALSE`, or `OVERREACHES` (true of part of
     the artifact, stated of all of it), with a one-line note for anything
     but TRUE.
@@ -176,6 +193,10 @@ For each code change record the blob you attacked:
 }
 ```
 
+An artifact entry for a fact outside the tree is
+`{"command": "git config --local --get grep.patternType", "observed": "exit 1, no output"}`
+in place of `file` and `lines`.
+
 `lines` is `<start>-<end>` at `HEAD`. A `removed` sibling's `lines` is the
 head-side position its deleted text sat at — for a pure deletion, the line
 before it, the line after it, or both. Here `p3` pairs the paragraph that
@@ -211,7 +232,9 @@ line per finding followed by one count line tallying the findings by class,
 and 2 when it cannot run.
 
 - **Shape.** The ledger and the gate each hold exactly one JSON object;
-    every list element is an object; every pair and artifact range is
+    every list element is an object; an artifact entry holds either `file`
+    and `lines` or a non-blank `command` and `observed`, never both;
+    every pair and artifact range is
     `<start>-<end>` with at most six digits a side (a `changed` or `removed`
     sibling's range is checked with the siblings; an `unchanged` sibling's
     `lines` is not checked); no ledger file name holds a newline, tab or CR,
@@ -234,7 +257,7 @@ and 2 when it cannot run.
     before or after it, or one of its blank lines. Every other changed
     file, a deleted Markdown file included, is listed in `code_changes`.
 - **Artifacts and pairs** name files tracked at `HEAD`, with the range
-    inside the file.
+    inside the file. A command artifact is never run.
 - **Siblings.** An `unchanged` one names a file tracked at `HEAD` and a
     reason that is not blank. A `changed` one lies inside its file and inside
     one paragraph, clear of its own pair's recorded lines, and a covered hunk
@@ -253,8 +276,11 @@ and 2 when it cannot run.
     whitespace-only edit included.
 - **Verdicts.** Every pair is gated `TRUE` with a hash equal to its
     paragraph's hash now: the whole blank-line-delimited block, whitespace
-    collapsed, so a re-wrap or a line shift keeps the verdict current and any
-    word change makes it stale. Every code change has a gate entry whose
+    collapsed, so a re-wrap keeps the verdict current, as does a line shift
+    once the pair's `lines` follow it, and any word change makes it stale.
+    A `stale-verdict` on a paragraph whose block is unchanged (the same
+    text between the same blank lines) means its range moved: update
+    `lines`, and the recorded hash holds. Every code change has a gate entry whose
     `attack` and `result` are not blank and whose `blob` is the one the file
     holds at `HEAD` (or `deleted` when it is absent); a mismatch is
     `stale-attack`.
@@ -264,8 +290,9 @@ Finding classes: `schema`, `enum`, `artifact`, `uncovered-hunk`,
 `sibling-not-changed`, `sibling-not-removed`, `missing-verdict`, `verdict`,
 `missing-hash`, `stale-verdict`, `missing-attack`, `stale-attack`. On
 success it prints one OK line with the pair, hunk (covered, reflow-only,
-generated), code-change and sibling (changed, unchanged, removed) tallies;
-the PR body quotes it.
+generated), code-change and sibling (changed, unchanged, removed) tallies,
+and a command-artifact tally when the ledger has one; the PR body quotes
+it.
 
 It does not judge whether a sentence is true or re-sharpened — that is
 the gate's job. Its known limits:
@@ -276,6 +303,8 @@ the gate's job. Its known limits:
     hunk that deletes more lines than it adds, wherever in the hunk the
     deletion sat. An in-place edit counts: a removed line whose text changed
     is a deletion, so a `removed` sibling on an edited line passes.
+- A command artifact's `observed` is not compared with anything; only the
+    gate runs the command.
 - Prose in script comments and workflow bodies is covered per file through
     `code_changes`, not per paragraph.
 - The root `CHANGELOG.md` and `tests/fixtures/` are outside the paragraph
