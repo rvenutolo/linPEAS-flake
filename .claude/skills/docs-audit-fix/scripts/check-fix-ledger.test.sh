@@ -359,6 +359,14 @@ EOF
     sed 's/"x\.y\\nz":1/"x.y\\nz":1,"x.y\\nz":2/' >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case ledger-duplicate-key-quoted "${d}" 2 'ledger.json repeats key .pairs[0]["x.y\nz"]'
 
+  # A trailing newline must not pass the identifier test: jq's $ matches
+  # before it, so "abc\n" would read as a plain abc and split the line.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq --compact-output '.pairs[0]["abc\n"] = 1' "${d}/ledger.json" |
+    sed 's/"abc\\n":1/"abc\\n":1,"abc\\n":2/' >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case ledger-duplicate-key-trailing-newline "${d}" 2 'ledger.json repeats key .pairs[0]["abc\n"]'
+
   d="$(new_repo)"
   beta_fixed "${d}"
   jq '.pairs[0].artifact = []' "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
