@@ -12,11 +12,12 @@
 #                 changed file is listed as a code change
 #   artifacts     every recorded artifact range exists at the head revision;
 #                 a command artifact is shape-checked and never run
-#   siblings      an unchanged sibling names a range inside a tracked file
-#                 and a reason; a changed one gains a substantively changed line in a covered
-#                 hunk, a removed one borders a covered hunk that deletes
-#                 text or sits in a file the diff deletes; outside in-scope
-#                 Markdown any touching hunk clears it
+#   siblings      an unchanged sibling names a range inside a tracked
+#                 file and a reason; a changed one gains a substantively
+#                 changed line in a covered hunk, a removed one borders a
+#                 covered hunk that deletes text or sits in a file the
+#                 diff deletes; outside in-scope Markdown any touching
+#                 hunk clears it
 #   verdicts      every pair is gated TRUE against its current text, and
 #                 every code change carries the gate's adversarial attack
 #                 against its current blob (else stale-attack)
@@ -67,9 +68,11 @@ readonly -a MD_SCOPE=("${MD_ALL[@]}" ':(exclude)CHANGELOG.md' ':(exclude)tests/f
 # jq definitions every ledger and gate read shares, so a rule is written
 # once: txt is a string holding a character that is neither white space
 # nor an invisible format character (Unicode category Cf: a zero-width
-# space, a byte-order mark, a soft hyphen), so text that prints nothing is
-# blank; iscmd marks a command artifact entry, which either of its keys
-# makes one; arr reads anything but an array as an empty one.
+# space, a byte-order mark, a soft hyphen), so text made only of those
+# is blank. Some other characters print nothing too (a Hangul filler, a
+# braille blank) and still count as text. iscmd marks a command artifact
+# entry, which either of its keys makes one; arr reads anything but an
+# array as an empty one.
 readonly JQ_DEFS='
   def txt: type == "string" and test("[^\\s\\p{Cf}]");
   def iscmd: has("command") or has("observed");
@@ -855,9 +858,10 @@ function one_block() {
 }
 
 # @description An unchanged sibling must name a range inside its file
-# and carry a reason; a sibling marked changed must name a range inside one paragraph of its file, apart from
-# its own pair's lines, and a hunk must change that range. For a Markdown
-# file in check_completeness' scope that means an added line in the range,
+# and carry a reason; a sibling marked changed must name a range inside
+# one paragraph of its file, apart from its own pair's lines, and a hunk
+# must change that range. For a Markdown file in check_completeness'
+# scope that means an added line in the range,
 # in a hunk it counted as covered, whose words changed: a trailing space,
 # a re-wrap or a re-aligned table row is not a fix, and prose inside a
 # generated block is fixed at its generator, which is a code change. A
