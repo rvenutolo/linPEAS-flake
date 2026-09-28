@@ -31,10 +31,17 @@
 # Usage:
 #   check-fix-ledger.sh [--base <rev>] [--head <rev>] <ledger.json> <gate.json>
 #   check-fix-ledger.sh [--head <rev>] --hash <file> <start>-<end>
+#   check-fix-ledger.sh [--base <rev>] [--head <rev>] --sweep [--] <term>...
+#
+# --sweep prints every hit of each term at the merge base, as
+# "<file>:<start>-<end>: <first line>", with the matching a ledger pair's
+# sweep terms get; a term that matches nothing is reported and exits 1.
 #
 # Exit codes:
 #   0  the ledger covers the diff and every pair is currently gated TRUE
-#   1  findings (printed to stderr, one line each)
+#      (--sweep: every term matched)
+#   1  findings (printed to stderr, one line each); --sweep: a term
+#      matched nothing
 #   2  the check could not run: missing tool, bad arguments, unparsable
 #      JSON or a key repeated inside one object, unresolvable revision,
 #      uncommitted tracked changes, or a changed path git quotes
@@ -65,6 +72,15 @@ readonly PROG='check-fix-ledger'
 # can drift from it.
 readonly -a MD_ALL=('*.md')
 readonly -a MD_SCOPE=("${MD_ALL[@]}" ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures')
+# Where a pair's sweep terms are searched, as git pathspecs: every tracked
+# file except tests/fixtures/ (it carries deliberate violations), the root
+# CHANGELOG.md (a historical record keeps its old wording) and flake.lock
+# (data). This is not MD_SCOPE: that set is the Markdown checked paragraph
+# by paragraph, while a claim's twin can sit in a workflow, a script or
+# Nix comment, a harness or a recipe, so the sweep reads every kind of
+# file. This is the sweep scope's only definition; --sweep and the ledger
+# check both read it.
+readonly -a SWEEP_SCOPE=('.' ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures' ':(exclude)flake.lock')
 # jq definitions every ledger and gate read shares, so a rule is written
 # once: txt is a string holding a character that is neither white space
 # nor an invisible format character (Unicode category Cf: a zero-width
@@ -72,9 +88,11 @@ readonly -a MD_SCOPE=("${MD_ALL[@]}" ':(exclude)CHANGELOG.md' ':(exclude)tests/f
 # is blank. Some other characters print nothing too (a Hangul filler, a
 # braille blank) and still count as text. iscmd marks a command artifact
 # entry, which either of its keys makes one; arr reads anything but an
-# array as an empty one.
+# array as an empty one. term is a usable sweep term: text with no
+# newline, tab or CR, since terms are read one per line.
 readonly JQ_DEFS='
   def txt: type == "string" and test("[^\\s\\p{Cf}]");
+  def term: txt and (test("[\\n\\t\\r]") | not);
   def iscmd: has("command") or has("observed");
   def arr: if type == "array" then . else [] end;
 '
@@ -125,6 +143,27 @@ function block_span() {
     }'
 }
 
+# @description "start end name" line triples of BEGIN/END generated blocks
+# in stdin, markers inclusive. An END only closes the block when its name
+# matches the open BEGIN; a mismatched name leaves the BEGIN unterminated,
+# so nothing between them counts as generated.
+function generated_ranges() {
+  awk '
+    /^[[:space:]]*<!-- BEGIN [A-Za-z0-9_-]+ -->[[:space:]]*$/ {
+      name = $0
+      sub(/^[[:space:]]*<!-- BEGIN /, "", name)
+      sub(/ -->[[:space:]]*$/, "", name)
+      s = NR; sname = name
+      next
+    }
+    /^[[:space:]]*<!-- END [A-Za-z0-9_-]+ -->[[:space:]]*$/ {
+      name = $0
+      sub(/^[[:space:]]*<!-- END /, "", name)
+      sub(/ -->[[:space:]]*$/, "", name)
+      if (s && name == sname) { print s, NR, sname; s = 0 }
+    }'
+}
+
 # @description True when $2 names an object at revision $1.
 function is_tracked() {
   git cat-file -e "$1:$2" 2>/dev/null
@@ -151,9 +190,94 @@ function block_hash() {
     sha256sum | cut --delimiter=' ' --fields=1
 }
 
+# @description Print "<start>\t<end>" for each place stdin holds the
+# term in ${SWEEP_TERM}, outside the generated ranges in ${SWEEP_GEN}
+# ("start end" per line, markers inclusive). Matching is a fixed string,
+# case-sensitive, within one paragraph: each line loses its leading white
+# space and a leading run of "#" followed by white space (a comment
+# marker), a line left empty ends the paragraph, and white space is
+# collapsed in the paragraph and the term alike, so a term wrapped across
+# lines or comment lines still matches, reported with the lines it spans.
+# The term comes through the environment, since awk -v would read its
+# backslashes as escapes.
+# shellcheck disable=SC2016 # an awk program: its $0 is awk's, not the shell's
+readonly SWEEP_AWK='
+  function flush(   from, p, pos, last, i, s, e, g, a) {
+    from = 1
+    while (n > 0 && (p = index(substr(blk, from), t)) > 0) {
+      pos = from + p - 1
+      last = pos + length(t) - 1
+      for (i = 1; i <= n; i++) { if (off[i] <= pos) s = ln[i]; if (off[i] <= last) e = ln[i] }
+      inside = 0
+      for (g = 1; g <= ng; g++) if (s >= ga[g] && e <= gb[g]) inside = 1
+      if (!inside) print s "\t" e
+      from = pos + length(t)
+    }
+    n = 0; blk = ""
+  }
+  BEGIN {
+    t = ENVIRON["SWEEP_TERM"]
+    gsub(/[[:space:]]+/, " ", t); sub(/^ /, "", t); sub(/ $/, "", t)
+    ng = split(ENVIRON["SWEEP_GEN"], rows, "\n"); k = 0
+    for (g = 1; g <= ng; g++) if (split(rows[g], f, " ") >= 2) { k++; ga[k] = f[1] + 0; gb[k] = f[2] + 0 }
+    ng = k
+  }
+  {
+    line = $0
+    sub(/^[[:space:]]+/, "", line)
+    if (line ~ /^#+([[:space:]]|$)/) sub(/^#+[[:space:]]*/, "", line)
+    gsub(/[[:space:]]+/, " ", line); sub(/ $/, "", line)
+    if (line == "") { flush(); next }
+    n++; ln[n] = NR
+    if (blk == "") { off[n] = 1; blk = line } else { off[n] = length(blk) + 2; blk = blk " " line }
+  }
+  END { flush() }'
+
+# @description True when $1 is a usable sweep term, by JQ_DEFS' term.
+function is_term() {
+  jq --null-input --exit-status --arg t "$1" "${JQ_DEFS}"'$t | term' >/dev/null 2>&1
+}
+
+# @description Hits of sweep term $1 at the merge base ${MB} across
+# SWEEP_SCOPE, as "<file>\t<start>\t<end>" lines, from the repository
+# root. git grep narrows the files to those holding every word of the
+# term somewhere (-I skips binary files), then SWEEP_AWK finds the term
+# itself. --no-color keeps a caller's color.grep out of the name list, -z
+# keeps names unquoted, and -F makes grep.patternType irrelevant.
+function sweep_hits() {
+  local -r term="$1"
+  local -a words=() args=()
+  local w names rc=0 f spans
+  IFS=$' \t\n\v\f\r' read -r -a words <<<"${term}"
+  for w in "${words[@]}"; do args+=(-e "${w}"); done
+  names="$(
+    git grep --no-color -I -l -z -F --all-match "${args[@]}" "${MB}" -- "${SWEEP_SCOPE[@]}" |
+      tr '\0' '\n'
+    exit "${PIPESTATUS[0]}"
+  )" || rc=$?
+  ((rc <= 1)) || die "could not search the merge base for the term ${term}"
+  while IFS= read -r f; do
+    [[ -n ${f} ]] || continue
+    f="${f#"${MB}":}"
+    spans="$(git show "${MB}:${f}" | generated_ranges)" ||
+      die "could not read ${f} at the merge base"
+    git show "${MB}:${f}" | SWEEP_TERM="${term}" SWEEP_GEN="${spans}" awk "${SWEEP_AWK}" |
+      while IFS=$'\t' read -r s e; do printf '%s\t%s\t%s\n' "${f}" "${s}" "${e}"; done ||
+      die "could not search ${f} at the merge base"
+  done <<<"${names}"
+}
+
+# @description Print the merge base of BASE and HEAD_REV, or stop.
+function merge_base() {
+  git rev-parse --verify --quiet "${BASE}^{commit}" >/dev/null ||
+    die "base revision does not resolve: ${BASE}"
+  git merge-base "${BASE}" "${HEAD_REV}" || die "no merge base for ${BASE} and ${HEAD_REV}"
+}
+
 BASE='main'
 HEAD_REV='HEAD'
 hash_mode=0
+sweep_mode=0
 positional=()
 while (($# > 0)); do
   case "$1" in
@@ -171,6 +295,15 @@ while (($# > 0)); do
     hash_mode=1
     shift
     ;;
+  --sweep)
+    sweep_mode=1
+    shift
+    ;;
+  --)
+    shift
+    positional+=("$@")
+    break
+    ;;
   -*) die "unknown option: $1" ;;
   *)
     positional+=("$1")
@@ -179,6 +312,7 @@ while (($# > 0)); do
   esac
 done
 readonly BASE HEAD_REV
+((hash_mode && sweep_mode)) && die '--sweep and --hash cannot be combined'
 
 git rev-parse --verify --quiet "${HEAD_REV}^{commit}" >/dev/null ||
   die "head revision does not resolve: ${HEAD_REV}"
@@ -199,6 +333,34 @@ if ((hash_mode)); then
     die "bad range: ${positional[1]} (end must be <= ${hash_n} lines)"
   block_hash "${HEAD_REV}" "${positional[0]}" "${hash_start}" "${hash_end}"
   exit 0
+fi
+
+if ((sweep_mode)); then
+  ((${#positional[@]} > 0)) || die 'usage: --sweep <term>...'
+  for term in "${positional[@]}"; do
+    is_term "${term}" ||
+      die "bad sweep term: $(jq --null-input --raw-output --arg t "${term}" '$t | tojson') (needs text, and no newline, tab or CR)"
+  done
+  cd -- "$(git rev-parse --show-toplevel)" || die 'not inside a git work tree'
+  MB="$(merge_base)" || exit 2
+  readonly MB
+  sweep_status=0
+  declare -A shown=()
+  for term in "${positional[@]}"; do
+    hits="$(sweep_hits "${term}")" || exit 2
+    if [[ -z ${hits} ]]; then
+      printf '%s: term "%s" matches nothing in the sweep scope at the merge base\n' "${PROG}" "${term}" >&2
+      sweep_status=1
+      continue
+    fi
+    while IFS=$'\t' read -r file start end; do
+      [[ -z ${shown["${file}:${start}-${end}"]:-} ]] || continue
+      shown["${file}:${start}-${end}"]=1
+      printf '%s:%s-%s: %s\n' "${file}" "${start}" "${end}" \
+        "$(git show "${MB}:${file}" | sed --quiet "${start}p")"
+    done <<<"${hits}"
+  done
+  exit "${sweep_status}"
 fi
 
 ((${#positional[@]} == 2)) || die 'usage: [--base <rev>] [--head <rev>] <ledger.json> <gate.json>'
@@ -243,9 +405,7 @@ for json_file in "${LEDGER}" "${GATE}"; do
     "${json_file}")" || die "could not read the keys of ${json_file}"
   [[ -z ${repeated} ]] || die "${json_file} repeats key ${repeated}"
 done
-git rev-parse --verify --quiet "${BASE}^{commit}" >/dev/null ||
-  die "base revision does not resolve: ${BASE}"
-MB="$(git merge-base "${BASE}" "${HEAD_REV}")" || die "no merge base for ${BASE} and ${HEAD_REV}"
+MB="$(merge_base)" || exit 2
 # The merge base every diff and reflow comparison reads its old side from.
 readonly MB
 
@@ -273,6 +433,7 @@ function check_schema() {
     def rooted: type == "string" and (startswith("./") or startswith("/"));
     def rootmsg: "starts with ./ or /; name it from the repository root";
     def shown: gsub("\n"; "<LF>") | gsub("\t"; "<TAB>") | gsub("\r"; "<CR>");
+    def rendered: if type == "string" then "\"\(shown)\"" else tojson end;
     def nonobj($what): arr | to_entries[] | select(.value | type != "object")
       | ["schema", "\($what)[\(.key)] is not an object"];
     (if (.pairs | type) != "array" then ["schema", "ledger needs a pairs array"] else empty end),
@@ -310,6 +471,16 @@ function check_schema() {
       else ["schema", "pair \($id) needs a siblings list whose members name a file"] end),
       (if .fix_shape == "drop" or .fix_shape == "scope" or .fix_shape == "correct" then empty
       else ["enum", "pair \($id) fix_shape \(.fix_shape | tojson) is not drop, scope or correct"] end),
+      # sweep is optional; when present it is a non-empty list of terms.
+      (if has("sweep") | not then empty
+      elif (.sweep | type) != "array" then
+        ["schema", "pair \($id) sweep must be a list of terms, got \(.sweep | rendered)"]
+      elif (.sweep | length) == 0 then
+        ["schema", "pair \($id) sweep is an empty list; omit the field or name a term"]
+      else
+        (.sweep | to_entries[] | select(.value | term | not)
+          | ["schema", "pair \($id) sweep[\(.key)] needs a non-blank term with no newline, tab or CR, got \(.value | rendered)"])
+      end),
       ((.siblings | arr)[] | objects | select(.status != "changed" and .status != "unchanged" and .status != "removed")
         | ["enum", "pair \($id) sibling \(.file) status \(.status | tojson) is not changed, unchanged or removed"])),
     ([(.pairs | arr)[] | objects | .id] | group_by(.)[] | select(length > 1)
@@ -560,27 +731,6 @@ function list_hunks() {
         if (mode == "hunks" && f != "") print f "\t" o[1] "\t" ol "\t" n[1] "\t" nl
       }
       END { if (!failed && (ro > 0 || rn > 0)) bad("diff ends inside a hunk") }'
-}
-
-# @description "start end name" line triples of BEGIN/END generated blocks
-# in stdin, markers inclusive. An END only closes the block when its name
-# matches the open BEGIN; a mismatched name leaves the BEGIN unterminated,
-# so nothing between them counts as generated.
-function generated_ranges() {
-  awk '
-    /^[[:space:]]*<!-- BEGIN [A-Za-z0-9_-]+ -->[[:space:]]*$/ {
-      name = $0
-      sub(/^[[:space:]]*<!-- BEGIN /, "", name)
-      sub(/ -->[[:space:]]*$/, "", name)
-      s = NR; sname = name
-      next
-    }
-    /^[[:space:]]*<!-- END [A-Za-z0-9_-]+ -->[[:space:]]*$/ {
-      name = $0
-      sub(/^[[:space:]]*<!-- END /, "", name)
-      sub(/ -->[[:space:]]*$/, "", name)
-      if (s && name == sname) { print s, NR, sname; s = 0 }
-    }'
 }
 
 # @description True when every line $3..$4 of $1:$2 is empty or
@@ -1034,6 +1184,125 @@ function check_siblings() {
   done <<<"${records}"
 }
 
+# @description Print the head line that merge-base line $2 of file $1
+# maps to, through ALL_HUNKS; side $3 is "first" or "last" of the span a
+# replaced line maps to. A line a hunk replaced maps to the hunk's new
+# side, reaching one line past it when the hunk removed more lines than
+# it added, as a removed sibling's reach does. A line removed by a pure
+# deletion, or replaced only by blank lines, maps to the lines either
+# side of the hunk, where completeness anchors that hunk. Any other line
+# moves by the lines the hunks above it added or removed.
+function head_line() {
+  local -r file="$1" line="$2" side="$3"
+  local hf os ol ns nl delta=0
+  while IFS=$'\t' read -r hf os ol ns nl; do
+    [[ ${hf} == "${file}" ]] || continue
+    if ((ol > 0 && line >= os && line <= os + ol - 1)); then
+      if ((nl > 0)) && all_blank "${HEAD_REV}" "${file}" "${ns}" $((ns + nl - 1)); then
+        if [[ ${side} == first ]]; then
+          printf '%d\n' $((ns > 1 ? ns - 1 : 1))
+        else
+          printf '%d\n' $((ns + nl))
+        fi
+      elif [[ ${side} == first ]]; then
+        printf '%d\n' $((ns > 0 ? ns : 1))
+      elif ((nl == 0)); then
+        printf '%d\n' $((ns + 1))
+      elif ((ol > nl)); then
+        printf '%d\n' $((ns + nl))
+      else
+        printf '%d\n' $((ns + nl - 1))
+      fi
+      return 0
+    fi
+    if (((ol > 0 && os + ol - 1 < line) || (ol == 0 && os < line))); then
+      delta=$((delta + nl - ol))
+    fi
+  done <<<"${ALL_HUNKS}"
+  printf '%d\n' $((line + delta))
+}
+
+SWEEP_TERMS=0
+SWEEP_CLEARED=0
+
+# @description Each finding needs a pair carrying a sweep term, and every
+# hit of a pair's terms at the merge base must sit in that pair's own
+# paragraph or one of its sibling ranges (any status), once mapped to
+# head with head_line. A hit in a file that is not a file at head keeps
+# its merge-base lines, which is where a removed sibling in a deleted
+# file points. A term with no hit at all is reported: with wrap-aware
+# matching, that means it is not the old wording.
+function check_sweeps() {
+  local missing fnum ids records k id pfile plines term hits f s e a b where span
+  missing="$(jq --raw-output "${JQ_DEFS}"'[.pairs[]] | group_by(.finding)[]
+    | select(all(.[]; (.sweep | arr | length) == 0))
+    | [(.[0].finding | tojson), (map("\(.id) at \(.file):\(.lines)") | join(", "))] | @tsv' "${LEDGER}")" ||
+    die "could not read the sweep terms from ${LEDGER}"
+  while IFS=$'\t' read -r fnum ids; do
+    [[ -n ${fnum} ]] || continue
+    finding missing-sweep "finding ${fnum} has no pair carrying a sweep term (pairs ${ids})"
+  done <<<"${missing}"
+
+  # Pairs by index, then terms by pair index: a term is read raw, one per
+  # line (check_schema confined it to no newline, tab or CR), so a
+  # backslash in it is not doubled the way @tsv would double it.
+  local -a pid=() pf=() pl=()
+  records="$(jq --raw-output '.pairs | to_entries[] | [(.key | tostring), .value.id, .value.file, .value.lines] | @tsv' "${LEDGER}")" ||
+    die "could not read the pair list from ${LEDGER}"
+  while IFS=$'\t' read -r k id pfile plines; do
+    [[ -n ${k} ]] || continue
+    pid[k]="${id}"
+    pf[k]="${pfile}"
+    pl[k]="${plines}"
+  done <<<"${records}"
+  local terms
+  terms="$(jq --raw-output "${JQ_DEFS}"'.pairs | to_entries[] | .key as $k
+    | (.value.sweep | arr)[] | [($k | tostring), .] | join("\t")' "${LEDGER}")" ||
+    die "could not read the sweep terms from ${LEDGER}"
+  local -A seen=()
+  while IFS=$'\t' read -r k term; do
+    [[ -n ${k} ]] || continue
+    SWEEP_TERMS=$((SWEEP_TERMS + 1))
+    # The entries that clear a hit: the pair's own paragraph at head and
+    # each sibling range, as "file\tstart\tend".
+    local entries=''
+    if is_file "${HEAD_REV}" "${pf[k]}" && valid_range "${pl[k]}"; then
+      span="$(git show "${HEAD_REV}:${pf[k]}" | block_span "${pl[k]%-*}" "${pl[k]#*-}")"
+      entries+="${pf[k]}"$'\t'"${span% *}"$'\t'"${span#* }"$'\n'
+    fi
+    local sfile slines
+    while IFS=$'\t' read -r sfile slines; do
+      [[ -n ${sfile} ]] || continue
+      valid_range "${slines}" || continue
+      entries+="${sfile}"$'\t'"${slines%-*}"$'\t'"${slines#*-}"$'\n'
+    done < <(jq --raw-output --argjson k "${k}" '.pairs[$k].siblings[] | [.file, (.lines // "-")] | @tsv' "${LEDGER}")
+    hits="$(sweep_hits "${term}")" || die "could not sweep the term ${term}"
+    if [[ -z ${hits} ]]; then
+      finding sweep-empty "pair ${pid[k]} term \"${term}\" matches nothing in the sweep scope at the merge base"
+      continue
+    fi
+    while IFS=$'\t' read -r f s e; do
+      [[ -n ${f} ]] || continue
+      [[ -z ${seen["${k}"$'\t'"${f}:${s}-${e}"]:-} ]] || continue
+      seen["${k}"$'\t'"${f}:${s}-${e}"]=1
+      if is_file "${HEAD_REV}" "${f}"; then
+        a="$(head_line "${f}" "${s}" first)"
+        b="$(head_line "${f}" "${e}" last)"
+        where="${a}-${b} at head"
+      else
+        a="${s}"
+        b="${e}"
+        where='deleted at head'
+      fi
+      if span_overlaps "${f}" "${a}" "${b}" "${entries}"; then
+        SWEEP_CLEARED=$((SWEEP_CLEARED + 1))
+      else
+        finding sweep-uncovered "pair ${pid[k]} term \"${term}\" hits ${f}:${s}-${e} at the merge base (${where}) and no entry of the pair covers it"
+      fi
+    done <<<"${hits}"
+  done <<<"${terms}"
+}
+
 # @description Every pair needs a gate verdict of TRUE whose hash still
 # matches the pair's whole block at head, and every code change needs a
 # gate entry recording an attack and its result, neither blank to txt,
@@ -1145,6 +1414,7 @@ function main() {
     check_artifacts
     check_completeness
     check_siblings
+    check_sweeps
     check_verdicts
   fi
   if ((findings > 0)); then
@@ -1165,9 +1435,15 @@ function main() {
   if ((ncommands > 0)); then
     command_note="; ${ncommands} command artifacts, shape-checked only"
   fi
-  printf '%s: OK — %d pairs; %d hunks covered, %d reflow-only and %d generated skipped; %d code changes; %d changed, %d unchanged and %d removed siblings%s\n' \
+  # Likewise the sweep tally, printed only for a ledger with terms, which
+  # is every ledger with a pair.
+  local sweep_note=''
+  if ((SWEEP_TERMS > 0)); then
+    sweep_note="; ${SWEEP_TERMS} sweep terms, ${SWEEP_CLEARED} hits cleared"
+  fi
+  printf '%s: OK — %d pairs; %d hunks covered, %d reflow-only and %d generated skipped; %d code changes; %d changed, %d unchanged and %d removed siblings%s%s\n' \
     "${PROG}" "${npairs}" "${HUNKS_COVERED}" "${HUNKS_REFLOW}" "${HUNKS_GENERATED}" "${nchanges}" \
-    "${SIBLINGS_CHANGED}" "${SIBLINGS_UNCHANGED}" "${SIBLINGS_REMOVED}" "${command_note}"
+    "${SIBLINGS_CHANGED}" "${SIBLINGS_UNCHANGED}" "${SIBLINGS_REMOVED}" "${command_note}" "${sweep_note}"
 }
 
 main
