@@ -758,10 +758,12 @@ EOF
   run_case md-replaced-by-directory "${d}" 1 \
     'uncovered-file: docs/x.md is changed but not listed in code_changes'
 
-  # A gitlink named like Markdown holds no text to pair, so it is a code
-  # change too.
+  # A gitlink named like Markdown is not a file, so it is a code change
+  # too. It points at a commit the repository holds, since a missing
+  # object already reads as absent at head and would not tell a
+  # tracked-name test from a file test.
   d="$(new_repo)"
-  git -C "${d}" update-index --add --cacheinfo 160000,3333333333333333333333333333333333333333,docs/sub.md
+  git -C "${d}" update-index --add --cacheinfo "160000,$(git -C "${d}" rev-parse HEAD),docs/sub.md"
   git -C "${d}" commit --quiet --message 'gitlink named .md'
   # An empty directory stands for the unpopulated submodule, so the
   # working tree is clean.
