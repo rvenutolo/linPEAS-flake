@@ -403,11 +403,9 @@ function main() {
     'schema: pair p1 artifact names both a command and a file (file null, lines "1-5")'
 
   # A leading zero must not slip past the range regex into bash's octal
-  # arithmetic later. This targets the pair's own lines field rather than
-  # the artifact's: an empty artifact list and a non-empty artifact list
-  # whose one entry fails the range regex fall through the same jq
-  # branch and print the identical schema message, so targeting the
-  # artifact here would be indistinguishable from schema-no-artifact.
+  # arithmetic later. This targets the pair's own lines field; a malformed
+  # artifact entry is reported by its index, as in
+  # artifact-command-beside-bad-file.
   d="$(new_repo)"
   beta_fixed "${d}"
   jq '.pairs[0].lines = "08-99"' "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"

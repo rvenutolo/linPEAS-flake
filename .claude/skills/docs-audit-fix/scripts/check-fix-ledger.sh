@@ -10,7 +10,8 @@
 #   completeness  every changed Markdown hunk outside generated blocks and
 #                 pure reflow overlaps a recorded paragraph, and every other
 #                 changed file is listed as a code change
-#   artifacts     every recorded artifact range exists at the head revision
+#   artifacts     every recorded artifact range exists at the head revision;
+#                 a command artifact is shape-checked and never run
 #   siblings      an unchanged sibling names a tracked file and a reason; a
 #                 changed one gains a substantively changed line in a covered
 #                 hunk, a removed one borders a covered hunk that deletes
@@ -200,6 +201,7 @@ fi
 function check_schema() {
   jq --raw-output '
     def str: type == "string" and length > 0;
+    def txt: type == "string" and test("\\S");
     # test() with $ matches before a trailing newline (Oniguruma), so
     # "1-999999\n" would otherwise pass; the explicit no-newline check
     # closes that regardless of anchor semantics.
@@ -219,9 +221,25 @@ function check_schema() {
       (if (.id | str) and (.file | str) and (.lines | rng) then empty
       else ["schema", "pair \($id) needs id, file and a <start>-<end> lines"] end),
       (.artifact | nonobj("pair \($id) artifact")),
-      (if (.artifact | type) == "array" and (.artifact | length) > 0
-          and all(.artifact[] | objects; (.file | str) and (.lines | rng)) then empty
+      # An artifact entry is a tracked range ({file, lines}) or, for a
+      # fact that lives outside the tree, the command that shows it and
+      # what it printed ({command, observed}). Only the shape of a
+      # command entry is checked: the checker never runs it.
+      ([.artifact | arr | to_entries[] | select(.value | type == "object")
+        | select((.value | has("command") | not) and (((.value.file | str) and (.value.lines | rng)) | not))
+        | .key]) as $badfile |
+      (if (.artifact | type) == "array" and (.artifact | length) > 0 then
+        ($badfile[] | ["schema", "pair \($id) artifact[\(.)] needs a file and a <start>-<end> lines"])
       else ["schema", "pair \($id) needs a non-empty artifact list of file and lines"] end),
+      ((.artifact | arr)[] | objects | select(has("command"))
+        | if has("file") or has("lines") then
+            ["schema", "pair \($id) artifact names both a command and a file (file \(.file | tojson), lines \(.lines | tojson)); give each its own entry"]
+          else
+            (if .command | txt then empty
+            else ["schema", "pair \($id) artifact command needs a non-blank command string, got \(.command | tojson)"] end),
+            (if .observed | txt then empty
+            else ["schema", "pair \($id) artifact command needs a non-blank observed string, got \(.observed | tojson)"] end)
+          end),
       (.siblings | nonobj("pair \($id) siblings")),
       (if (.siblings | type) == "array" and all(.siblings[] | objects; .file | str) then empty
       else ["schema", "pair \($id) needs a siblings list whose members name a file"] end),
@@ -294,11 +312,11 @@ function check_gate_schema() {
     | @tsv' "${GATE}"
 }
 
-# @description Each artifact must be tracked at head with its range inside
-# the file.
+# @description Each file artifact must be tracked at head with its range
+# inside the file. A command artifact names no file and is skipped.
 function check_artifacts() {
   local id file lines start end n records
-  records="$(jq --raw-output '.pairs[] | .id as $id | .artifact[] | [$id, .file, .lines] | @tsv' "${LEDGER}")" ||
+  records="$(jq --raw-output '.pairs[] | .id as $id | .artifact[] | select(has("command") | not) | [$id, .file, .lines] | @tsv' "${LEDGER}")" ||
     die "could not read the artifact list from ${LEDGER}"
   while IFS=$'\t' read -r id file lines; do
     [[ -n ${id} ]] || continue
@@ -1004,7 +1022,7 @@ function check_verdicts() {
 }
 
 function main() {
-  local class detail schema_bad=0 schema npairs nchanges
+  local class detail schema_bad=0 schema npairs nchanges ncommands
   schema="$(check_schema)" || die "could not check the schema of ${LEDGER}"
   schema+=$'\n'"$(check_gate_schema)" || die "could not check the schema of ${GATE}"
   while IFS=$'\t' read -r class detail; do
@@ -1029,9 +1047,17 @@ function main() {
   fi
   npairs="$(jq '.pairs | length' "${LEDGER}")" || die "could not count pairs in ${LEDGER}"
   nchanges="$(jq '.code_changes | length' "${LEDGER}")" || die "could not count code_changes in ${LEDGER}"
-  printf '%s: OK — %d pairs; %d hunks covered, %d reflow-only and %d generated skipped; %d code changes; %d changed, %d unchanged and %d removed siblings\n' \
+  ncommands="$(jq '[.pairs[].artifact[] | select(has("command"))] | length' "${LEDGER}")" ||
+    die "could not count command artifacts in ${LEDGER}"
+  # The command tally is printed only when there is one, so a ledger
+  # citing no command keeps the OK line it always had.
+  local command_note=''
+  if ((ncommands > 0)); then
+    command_note="; ${ncommands} command artifacts, shape-checked only"
+  fi
+  printf '%s: OK — %d pairs; %d hunks covered, %d reflow-only and %d generated skipped; %d code changes; %d changed, %d unchanged and %d removed siblings%s\n' \
     "${PROG}" "${npairs}" "${HUNKS_COVERED}" "${HUNKS_REFLOW}" "${HUNKS_GENERATED}" "${nchanges}" \
-    "${SIBLINGS_CHANGED}" "${SIBLINGS_UNCHANGED}" "${SIBLINGS_REMOVED}"
+    "${SIBLINGS_CHANGED}" "${SIBLINGS_UNCHANGED}" "${SIBLINGS_REMOVED}" "${command_note}"
 }
 
 main
