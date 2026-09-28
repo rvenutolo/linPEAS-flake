@@ -725,6 +725,36 @@ EOF
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
   run_case deleted-md "${d}" 1 'uncovered-file: docs/a.md is changed but not listed in code_changes'
 
+  # A Markdown file replaced by a directory of the same name is a deleted
+  # Markdown file: its text is gone, so it must be listed like any other.
+  # Only a file (a blob) at head survives as Markdown to pair.
+  d="$(new_repo)"
+  seed_main "${d}" docs/x.md 'Ex paragraph.'
+  git -C "${d}" rm --quiet -- docs/x.md
+  mkdir -p -- "${d}/docs/x.md"
+  printf 'inner\n' >"${d}/docs/x.md/inner.txt"
+  commit_all "${d}" 'md becomes a directory'
+  printf '{"report": "r.md", "pairs": [], "code_changes": [{"file": "docs/x.md/inner.txt", "evidence": "e"}]}\n' \
+    >"${d}/ledger.json"
+  jq -n --arg b "$(git -C "${d}" rev-parse HEAD:docs/x.md/inner.txt)" \
+    '{pairs: [], code_changes: [{file: "docs/x.md/inner.txt", blob: $b, attack: "a", result: "r"}]}' \
+    >"${d}/gate.json"
+  run_case md-replaced-by-directory "${d}" 1 \
+    'uncovered-file: docs/x.md is changed but not listed in code_changes'
+
+  # A gitlink named like Markdown holds no text to pair, so it is a code
+  # change too.
+  d="$(new_repo)"
+  git -C "${d}" update-index --add --cacheinfo 160000,3333333333333333333333333333333333333333,docs/sub.md
+  git -C "${d}" commit --quiet --message 'gitlink named .md'
+  # An empty directory stands for the unpopulated submodule, so the
+  # working tree is clean.
+  mkdir -p -- "${d}/docs/sub.md"
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case md-named-gitlink "${d}" 1 \
+    'uncovered-file: docs/sub.md is changed but not listed in code_changes'
+
   # A space in a filename must not break hunk attribution.
   d="$(new_repo)"
   printf 'Spaced paragraph.\n' >"${d}/docs/b c.md"
