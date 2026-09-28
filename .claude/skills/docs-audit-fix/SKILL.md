@@ -241,9 +241,12 @@ and 2 when it cannot run.
     or starts with `./` or `/` (name each from the repository root); pair
     ids and verdict ids are unique, every verdict names a ledger pair,
     and every gate code change carries a `blob` that is an object id or
-    `deleted`. A `schema` finding from this shape pass stops the checks
-    below; the later checks also report some tracking and range faults as
-    `schema`, and those stop nothing.
+    `deleted`. Text made only of white space and invisible format
+    characters, such as a zero-width space or a byte-order mark, is blank
+    wherever a field must not be: `command`, `observed`, a sibling's
+    `reason`, and a gate's `attack` and `result`. A `schema` finding from
+    this shape pass stops the checks below; the later checks also report
+    some tracking and range faults as `schema`, and those stop nothing.
 - **Completeness.** Every changed Markdown hunk is covered, except in the
     root `CHANGELOG.md` and `tests/fixtures/`, inside a generated
     `<!-- BEGIN <name> -->` / `<!-- END <name> -->` block of the same name

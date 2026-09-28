@@ -64,11 +64,13 @@ readonly PROG='check-fix-ledger'
 readonly -a MD_ALL=('*.md')
 readonly -a MD_SCOPE=("${MD_ALL[@]}" ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures')
 # jq definitions every ledger and gate read shares, so a rule is written
-# once: txt is a string holding a non-blank character; iscmd marks a
-# command artifact entry, which either of its keys makes one; arr reads
-# anything but an array as an empty one.
+# once: txt is a string holding a character that is neither white space
+# nor an invisible format character (Unicode category Cf: a zero-width
+# space, a byte-order mark, a soft hyphen), so text that prints nothing is
+# blank; iscmd marks a command artifact entry, which either of its keys
+# makes one; arr reads anything but an array as an empty one.
 readonly JQ_DEFS='
-  def txt: type == "string" and test("\\S");
+  def txt: type == "string" and test("[^\\s\\p{Cf}]");
   def iscmd: has("command") or has("observed");
   def arr: if type == "array" then . else [] end;
 '
@@ -840,8 +842,8 @@ function one_block() {
 # hunk; a removed sibling in a file the diff deletes needs no hunk. Any
 # other file may be cleared by any hunk. A missing lines, status
 # or reason field is read as "-": tab is IFS whitespace, so an empty field
-# would collapse and shift every field after it. A whitespace-only reason
-# is no reason.
+# would collapse and shift every field after it. A reason txt reads as
+# blank is no reason.
 function check_siblings() {
   local id pfile plines file lines status reason s e n ps pe hit lf line hns hol hnl hs he limit records
   records="$(jq --raw-output "${JQ_DEFS}"'.pairs[] | .id as $id | .file as $pf | .lines as $pl | .siblings[]
@@ -982,7 +984,7 @@ function check_siblings() {
 
 # @description Every pair needs a gate verdict of TRUE whose hash still
 # matches the pair's whole block at head, and every code change needs a
-# gate entry recording an attack and its result, neither whitespace-only,
+# gate entry recording an attack and its result, neither blank to txt,
 # against the blob the file holds at head.
 # A pair whose own file or range check_completeness already rejected is
 # skipped here, since there is no block to hash. Missing verdict, hash or
