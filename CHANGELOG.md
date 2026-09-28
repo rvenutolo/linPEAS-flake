@@ -6,6 +6,16 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20260928-e04a3639] - 2026-09-28
+
+### Chores
+- Bump linpeas to 20260928-e04a3639 ([#1179](https://github.com/rvenutolo/linPEAS-flake/pull/1179))
+
+### Documentation
+- Replace the 24h re-run with a step-log check for attest failures ([#1178](https://github.com/rvenutolo/linPEAS-flake/pull/1178))
+- Ground the gh and cosign floors in what the commands need ([#1176](https://github.com/rvenutolo/linPEAS-flake/pull/1176))
+- Point restated audit and nix-exempt rules at their homes ([#1175](https://github.com/rvenutolo/linPEAS-flake/pull/1175))
+
 ## [20260927-aa6dec8b] - 2026-09-27
 
 ### Chores
