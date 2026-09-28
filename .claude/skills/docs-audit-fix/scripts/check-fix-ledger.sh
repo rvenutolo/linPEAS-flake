@@ -121,6 +121,11 @@ function is_file() {
   is_tracked "$1" "$2" && [[ "$(git cat-file -t "$1:$2")" == blob ]]
 }
 
+# @description The number of lines file $2 holds at revision $1.
+function line_count() {
+  git show "$1:$2" | awk 'END { print NR }'
+}
+
 function block_hash() {
   local -r rev="$1" file="$2" start="$3" end="$4"
   local span a b
@@ -174,7 +179,7 @@ if ((hash_mode)); then
     die "not tracked at ${HEAD_REV}: ${positional[0]}"
   is_file "${HEAD_REV}" "${positional[0]}" ||
     die "not a file at ${HEAD_REV}: ${positional[0]}"
-  hash_n="$(git show "${HEAD_REV}:${positional[0]}" | awk 'END { print NR }')"
+  hash_n="$(line_count "${HEAD_REV}" "${positional[0]}")"
   ((hash_end <= hash_n)) ||
     die "bad range: ${positional[1]} (end must be <= ${hash_n} lines)"
   block_hash "${HEAD_REV}" "${positional[0]}" "${hash_start}" "${hash_end}"
@@ -362,7 +367,7 @@ function check_artifacts() {
       finding artifact "pair ${id} ${file}:${lines} is reversed (start ${start} > end ${end})"
       continue
     fi
-    n="$(git show "${HEAD_REV}:${file}" | awk 'END { print NR }')"
+    n="$(line_count "${HEAD_REV}" "${file}")"
     if ((end > n)); then
       finding artifact "pair ${id} ${file}:${lines} runs past end of file (${n} lines)"
     fi
@@ -565,8 +570,8 @@ function is_reflow() {
   local -r file="$1" os="$2" ol="$3" ns="$4" nl="$5"
   is_tracked "${MB}" "${file}" || return 1
   local mb_n hd_n
-  mb_n="$(git show "${MB}:${file}" | awk 'END { print NR }')"
-  hd_n="$(git show "${HEAD_REV}:${file}" | awk 'END { print NR }')"
+  mb_n="$(line_count "${MB}" "${file}")"
+  hd_n="$(line_count "${HEAD_REV}" "${file}")"
   local oe=$((os + (ol > 0 ? ol - 1 : 0))) ne=$((ns + (nl > 0 ? nl - 1 : 0)))
   ((os >= 1 && oe <= mb_n && ns >= 1 && ne <= hd_n)) || return 1
   if ((ol == 0)) && ! all_blank "${HEAD_REV}" "${file}" "${ns}" "${ne}"; then
@@ -685,7 +690,7 @@ function check_completeness() {
       finding schema "pair ${id} ${pfile}:${plines} is reversed (start ${pstart} > end ${pend})"
       continue
     fi
-    flen="$(git show "${HEAD_REV}:${pfile}" | awk 'END { print NR }')"
+    flen="$(line_count "${HEAD_REV}" "${pfile}")"
     if ((pend > flen)); then
       finding schema "pair ${id} ${pfile}:${plines} runs past end of file (${flen} lines)"
       continue
@@ -899,7 +904,7 @@ function check_siblings() {
       continue
     fi
     if is_file "${HEAD_REV}" "${file}"; then
-      n="$(git show "${HEAD_REV}:${file}" | awk 'END { print NR }')"
+      n="$(line_count "${HEAD_REV}" "${file}")"
       # A deletion at end of file anchors one past the last line.
       limit="${n}"
       if [[ ${status} == removed ]]; then
@@ -1023,7 +1028,7 @@ function check_verdicts() {
     valid_range "${lines}" || continue
     start="${lines%-*}"
     end="${lines#*-}"
-    n="$(git show "${HEAD_REV}:${file}" | awk 'END { print NR }')"
+    n="$(line_count "${HEAD_REV}" "${file}")"
     ((start >= 1 && start <= end && end <= n)) || continue
     current="$(block_hash "${HEAD_REV}" "${file}" "${start}" "${end}")"
     [[ ${current} == "${hash}" ]] ||
