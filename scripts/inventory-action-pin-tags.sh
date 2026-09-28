@@ -7,11 +7,12 @@
 # `gh api .../tags`, and emit a TSV mapping pin -> patch tag for
 # downstream rewrite tooling.
 
-# Comments today name floating major tags (e.g. `# v3`); upstream
-# publishers force-move those tags on every release, which fires the
-# ratchet-pin-audit workflow on benign retags. Rewriting comments to
-# the exact immutable patch tag turns audit drift back into a real
-# signal. This script builds the inventory the rewrite consumes.
+# The ratchet-pin-audit workflow can judge a pin only against a tag
+# that does not move, so a pin's comment must name its exact patch tag;
+# floating-major refs are left out of the audit (see
+# docs/architecture/pin-convention.md, Enforcement). This script finds
+# the patch tag for each pin and builds the inventory the comment
+# rewrite consumes.
 #
 # Output TSV columns:
 #   file  line  ref  pinned_sha  current_comment  target_comment  status
