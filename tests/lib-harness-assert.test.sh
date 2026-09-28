@@ -370,6 +370,18 @@ harness_assert_verify'
   check 'missing output file fails loud' 1 'output file not found' '
 harness_assert_record a "x" /nonexistent/path.out'
 
+  # The pool lives under TMPDIR, which may hold any byte a path can: a
+  # newline in it must not split the record files the gate reads back.
+  check 'pool under a TMPDIR holding a newline still judges' 1 \
+    'degraded asserts '\''bump PR'\'' which also appears in the output of nominal' "${SETUP}"'
+t="${d}/nl
+x"
+mkdir -p -- "${t}"
+export TMPDIR="${t}"
+harness_assert_record nominal  "wrote dashboard" "${d}/nominal.out"
+harness_assert_record degraded "bump PR"         "${d}/degraded.out"
+harness_assert_verify'
+
   if [[ ${failures} -gt 0 ]]; then
     printf '\n%d test(s) failed\n' "${failures}" >&2
     exit 1
