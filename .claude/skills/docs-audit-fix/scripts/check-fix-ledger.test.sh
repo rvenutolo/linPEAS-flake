@@ -719,6 +719,35 @@ EOF
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
   run_case space-in-name "${d}" 1 'uncovered-hunk: docs/b c.md:1'
 
+  # Git C-quotes a path holding a double quote or a backslash in every
+  # diff the checker reads, so no ledger name matches it, except one
+  # written as git's quoted text. Listed that way with the blob
+  # "deleted", a changed script would pass with an attack tied to no
+  # blob. Such a path stops the run instead, named as git prints it.
+  d="$(new_repo)"
+  printf 'echo q\n' >"${d}/scripts/q\"t.sh"
+  commit_all "${d}" quoted
+  jq -n '{report: "r.md", pairs: [], code_changes: [{file: "\"scripts/q\\\"t.sh\"", evidence: "e"}]}' \
+    >"${d}/ledger.json"
+  jq -n '{pairs: [], code_changes: [{file: "\"scripts/q\\\"t.sh\"", blob: "deleted", attack: "a", result: "r"}]}' \
+    >"${d}/gate.json"
+  run_case quoted-path-code-change "${d}" 2 \
+    'cannot check the change to "scripts/q\"t.sh": git quotes a path holding a double quote, backslash or control character; rename it'
+
+  # A Markdown file with a backslash in its name, paired correctly, would
+  # otherwise report its own hunk as uncovered under a garbled name.
+  d="$(new_repo)"
+  seed_main "${d}" 'docs/b\s.md' 'One.' '' 'Two.'
+  sed -i 's/^Two\.$/Two, fixed./' "${d}/docs/b\\s.md"
+  commit_all "${d}" fix
+  jq -n '{report: "r.md", code_changes: [], pairs: [{id: "p1", finding: 1, file: "docs/b\\s.md",
+    lines: "3-3", artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "scope", siblings: []}]}' \
+    >"${d}/ledger.json"
+  jq -n --arg h "$(gate_hash "${d}" 'docs/b\s.md' 3-3)" \
+    '{pairs: [{id: "p1", verdict: "TRUE", hash: $h, note: ""}], code_changes: []}' >"${d}/gate.json"
+  run_case quoted-path-markdown "${d}" 2 \
+    'cannot check the change to "docs/b\\s.md": git quotes a path holding a double quote, backslash or control character; rename it'
+
   # A hunk whose new side is entirely blank must still need a pair
   # (regression guard for b1a58cce, whose per-block coverage loop left
   # all_covered at its unproven default of 1 when new_side_blocks finds
