@@ -35,7 +35,8 @@
 #   0  the ledger covers the diff and every pair is currently gated TRUE
 #   1  findings (printed to stderr, one line each)
 #   2  the check could not run: missing tool, bad arguments, unparsable
-#      JSON, unresolvable revision, or uncommitted tracked changes
+#      JSON or a key repeated inside one object, unresolvable revision, or
+#      uncommitted tracked changes
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -214,6 +215,28 @@ for json_file in "${LEDGER}" "${GATE}"; do
   jq --exit-status --slurp 'length == 1 and (.[0] | type) == "object"' \
     "${json_file}" >/dev/null 2>&1 ||
     die "${json_file} does not hold exactly one JSON object"
+  # A key repeated inside one object resolves to its last value, so an
+  # earlier FALSE verdict (or siblings list) would be shadowed by a later
+  # one. The parsed value cannot show it; the token stream can. A value
+  # at path P is finished once its leaf is emitted, and a container once
+  # the event closing its last child is, so a leaf under a finished path
+  # is a second value for that key.
+  repeated="$(jq --stream --null-input --raw-output '
+    reduce inputs as $e ({done: {}, hit: null};
+      . as $s
+      | if $s.hit != null then $s
+        else ($e[0]) as $p
+        | if ($e | length) == 2 then
+            ([range(1; ($p | length) + 1) as $n | $p[:$n]
+              | select($s.done[tojson])] | first) as $hit
+            | if $hit != null then $s | .hit = $hit
+              else $s | .done[$p | tojson] = true end
+          else $s | .done[$p[:-1] | tojson] = true end
+        end)
+    | .hit // empty
+    | map(if type == "number" then "[\(.)]" else ".\(.)" end) | join("")' \
+    "${json_file}")" || die "could not read the keys of ${json_file}"
+  [[ -z ${repeated} ]] || die "${json_file} repeats key ${repeated}"
 done
 git rev-parse --verify --quiet "${BASE}^{commit}" >/dev/null ||
   die "base revision does not resolve: ${BASE}"

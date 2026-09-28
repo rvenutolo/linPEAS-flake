@@ -231,7 +231,9 @@ every check below passes, 1 with one `check-fix-ledger: <class>: <detail>`
 line per finding followed by one count line tallying the findings by class,
 and 2 when it cannot run.
 
-- **Shape.** The ledger and the gate each hold exactly one JSON object;
+- **Shape.** The ledger and the gate each hold exactly one JSON object,
+    with no key repeated inside any object (either fault stops the run
+    with exit 2);
     every list element is an object; an artifact entry holds either `file`
     and `lines` or a non-blank `command` and `observed`, never both;
     every pair and artifact range is
