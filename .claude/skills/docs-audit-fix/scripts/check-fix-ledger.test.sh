@@ -149,6 +149,15 @@ function also_expect() {
   harness_assert_also "$1"
 }
 
+# @description Assert one more substring in the last scenario's stdout.
+function also_expect_stdout() {
+  if ! grep --fixed-strings --quiet -- "$1" "${LAST_STDOUT}"; then
+    printf 'FAIL: %s — stdout missing %q\n' "${LAST_NAME}" "$1" >&2
+    failures=$((failures + 1))
+  fi
+  harness_assert_also "$1"
+}
+
 # @description Assert a substring is absent from the last scenario's
 # stderr.
 function expect_absent() {
@@ -221,7 +230,7 @@ function beta_fixed() {
 {"report": "r.md", "code_changes": [],
   "pairs": [{"id": "p1", "finding": 1, "file": "docs/a.md", "lines": "6-6",
             "artifact": [{"file": "scripts/tool.sh", "lines": "1-5"}],
-            "fix_shape": "scope", "siblings": []}]}
+            "fix_shape": "scope", "sweep": ["Beta paragraph."], "siblings": []}]}
 EOF
   local h
   h="$(gate_hash "${d}" docs/a.md 6-6)"
@@ -266,15 +275,113 @@ function seed_main() {
 }
 
 # @description A ledger with pair p1 on $2:$3 and one sibling on $2:$4
-# with status $5 (default changed), gated TRUE against the current text.
+# with status $5 (default changed) and sweep terms $6 (a JSON array,
+# default none), gated TRUE against the current text.
 function sibling_ledger() {
-  local -r d="$1" file="$2" plines="$3" slines="$4" status="${5:-changed}"
-  jq -n --arg f "${file}" --arg pl "${plines}" --arg sl "${slines}" --arg st "${status}" '{report: "r.md", code_changes: [],
+  local -r d="$1" file="$2" plines="$3" slines="$4" status="${5:-changed}" sweep="${6:-null}"
+  jq -n --arg f "${file}" --arg pl "${plines}" --arg sl "${slines}" --arg st "${status}" \
+    --argjson sw "${sweep}" '{report: "r.md", code_changes: [],
     pairs: [{id: "p1", finding: 1, file: $f, lines: $pl,
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
-      siblings: [{file: $f, lines: $sl, status: $st}]}]}' >"${d}/ledger.json"
+      siblings: [{file: $f, lines: $sl, status: $st}]} + (if $sw == null then {} else {sweep: $sw} end)]}' >"${d}/ledger.json"
   jq -n --arg h "$(gate_hash "${d}" "${file}" "${plines}")" \
     '{pairs: [{id: "p1", verdict: "TRUE", hash: $h, note: ""}], code_changes: []}' >"${d}/gate.json"
+}
+
+# @description Gate every pair of $1/ledger.json TRUE at its current
+# hash, and attack every code change at the blob it holds at HEAD (or
+# "deleted").
+function gate_all() {
+  local -r d="$1"
+  local id file lines blob
+  local pairs='[]' changes='[]'
+  while IFS=$'\t' read -r id file lines; do
+    [[ -n ${id} ]] || continue
+    pairs="$(jq --arg id "${id}" --arg h "$(gate_hash "${d}" "${file}" "${lines}")" \
+      '. + [{id: $id, verdict: "TRUE", hash: $h, note: ""}]' <<<"${pairs}")"
+  done < <(jq --raw-output '.pairs[] | [.id, .file, .lines] | @tsv' "${d}/ledger.json")
+  while IFS= read -r file; do
+    [[ -n ${file} ]] || continue
+    blob="$(git -C "${d}" rev-parse --verify --quiet "HEAD:${file}")" || blob=deleted
+    changes="$(jq --arg f "${file}" --arg b "${blob}" \
+      '. + [{file: $f, blob: $b, attack: "constructed input", result: "fails"}]' <<<"${changes}")"
+  done < <(jq --raw-output '.code_changes[].file' "${d}/ledger.json")
+  jq -n --argjson p "${pairs}" --argjson c "${changes}" '{pairs: $p, code_changes: $c}' >"${d}/gate.json"
+}
+
+# @description The Beta fix of beta_fixed with pair p1's sweep set to $2
+# (a JSON value, or the word "omit" to drop the field) and its siblings
+# to $3 (a JSON array, default []), plus code_changes files $4.. listed
+# with evidence; gated with gate_all.
+function sweep_case() {
+  local -r d="$1" sweep="$2" siblings="${3:-[]}"
+  shift 2
+  if (($# > 0)); then shift; fi
+  local changes='[]' f
+  for f in "$@"; do
+    changes="$(jq --arg f "${f}" '. + [{file: $f, evidence: "harness"}]' <<<"${changes}")"
+  done
+  jq -n --arg sw "${sweep}" --argjson sib "${siblings}" --argjson c "${changes}" \
+    '{report: "r.md", code_changes: $c,
+      pairs: [{id: "p1", finding: 1, file: "docs/a.md", lines: "6-6",
+        artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+        siblings: $sib} + (if $sw == "omit" then {} else {sweep: ($sw | fromjson)} end)]}' \
+    >"${d}/ledger.json"
+  gate_all "${d}"
+}
+
+# @description Run the checker in --sweep mode in repo $2 with terms
+# $6..; assert exit, a stderr substring and a stdout substring ($5).
+function run_sweep_case() {
+  local -r name="$1" dir="$2" expected_exit="$3" expected_stderr="$4" expected_stdout="$5"
+  shift 5
+  local stderr_file stdout_file outcome_file actual_exit=0
+  stderr_file="$(mktemp -p "${SCRATCH}")"
+  stdout_file="$(mktemp -p "${SCRATCH}")"
+  outcome_file="$(mktemp -p "${SCRATCH}")"
+  (cd "${dir}" && "${SCRIPT}" "$@") >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  if [[ ${actual_exit} -ne ${expected_exit} ]]; then
+    printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${expected_exit}" "${actual_exit}" >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif [[ -n ${expected_stderr} ]] && ! grep --fixed-strings --quiet -- "${expected_stderr}" "${stderr_file}"; then
+    printf 'FAIL: %s — stderr missing %q\n' "${name}" "${expected_stderr}" >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif [[ -n ${expected_stdout} ]] && ! grep --fixed-strings --quiet -- "${expected_stdout}" "${stdout_file}"; then
+    printf 'FAIL: %s — stdout missing %q\n' "${name}" "${expected_stdout}" >&2
+    cat -- "${stdout_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+  harness_assert_record "${name}" "${expected_stderr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  if [[ -n ${expected_stdout} ]]; then harness_assert_also "${expected_stdout}"; fi
+  LAST_STDERR="${stderr_file}"
+  LAST_STDOUT="${stdout_file}"
+  LAST_NAME="${name}"
+}
+
+# @description Write each "path" "content" pair after $1 into repo $1
+# on main (content gets a trailing newline), commit them, and merge
+# main into fix, so the merge base holds them.
+function seed_files() {
+  local -r d="$1"
+  shift
+  local -a paths=()
+  git -C "${d}" switch --quiet main
+  while (($# >= 2)); do
+    mkdir -p -- "$(dirname -- "${d}/$1")"
+    printf '%s\n' "$2" >"${d}/$1"
+    paths+=("$1")
+    shift 2
+  done
+  git -C "${d}" add -- "${paths[@]}"
+  git -C "${d}" commit --quiet --message seed
+  git -C "${d}" switch --quiet fix
+  git -C "${d}" merge --quiet main
 }
 
 function main() {
@@ -283,7 +390,7 @@ function main() {
   d="$(new_repo)"
   beta_fixed "${d}"
   run_case complete "${d}" 0 '' \
-    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 0 removed siblings'
+    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 0 removed siblings; 1 sweep terms, 1 hits cleared'
   # A ledger citing no command keeps the OK line it always had.
   expect_absent_stdout 'command artifacts'
 
@@ -842,12 +949,13 @@ EOF
   jq -n '{report: "r.md", code_changes: [],
     pairs: [{id: "p1", finding: 1, file: "docs/a.md", lines: "3-3",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "drop",
+      sweep: ["alpha line two."],
       siblings: [{file: "docs/a.md", lines: "6-6", status: "unchanged",
         reason: "Beta states nothing the dropped line did"}]}]}' >"${d}/ledger.json"
   jq -n --arg h "$(gate_hash "${d}" docs/a.md 3-3)" \
     '{pairs: [{id: "p1", verdict: "TRUE", hash: $h, note: ""}], code_changes: []}' >"${d}/gate.json"
   run_case blank-replacement-covered-by-neighbour "${d}" 0 '' \
-    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 1 unchanged and 0 removed siblings'
+    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 1 unchanged and 0 removed siblings; 1 sweep terms, 1 hits cleared'
 
   # A pure insertion's old-side position (os, the line BEFORE the
   # insertion) must sit strictly before a generated block's END marker,
@@ -1175,13 +1283,14 @@ EOF
   jq -n '{report: "r.md", code_changes: [], pairs: [
     {id: "p1", finding: 1, file: "docs/a.md", lines: "6-6",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "scope",
+      sweep: ["Beta paragraph.", "Gamma paragraph."],
       siblings: [{file: "docs/a.md", lines: "12-12", status: "changed"},
         {file: "docs/a.md", lines: "3-4", status: "unchanged", reason: "already scoped"}]},
     {id: "p2", finding: 1, file: "docs/a.md", lines: "12-12",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "scope", siblings: []}]}' \
     >"${d}/ledger.json"
   run_case sibling-changed "${d}" 0 '' \
-    'OK — 2 pairs; 2 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 1 changed, 1 unchanged and 0 removed siblings'
+    'OK — 2 pairs; 2 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 1 changed, 1 unchanged and 0 removed siblings; 2 sweep terms, 2 hits cleared'
 
   # Unchanged sibling with no reason.
   d="$(new_repo)"
@@ -1236,12 +1345,13 @@ EOF
   sed -i '3a Alpha inserted line.' "${d}/docs/a.md"
   commit_all "${d}" 'alpha grows'
   jq '.pairs[0].lines = "7-7" | .pairs += [{id: "p2", finding: 2, file: "docs/a.md", lines: "3-5",
-      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]' \
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+      sweep: ["Alpha paragraph line one."], siblings: []}]' \
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   jq --arg h "$(gate_hash "${d}" docs/a.md 3-5)" '.pairs += [{id: "p2", verdict: "TRUE", hash: $h, note: ""}]' \
     "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
   run_case moved-paragraph "${d}" 0 '' \
-    'OK — 2 pairs; 2 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 0 removed siblings'
+    'OK — 2 pairs; 2 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 0 removed siblings; 2 sweep terms, 2 hits cleared'
 
   # Negative fixture N3: pair recorded on Alpha's first line only, gated,
   # then Alpha's second line edited. Same block, so the verdict is stale.
@@ -1447,9 +1557,9 @@ EOF
   seed_main "${d}" docs/l.md '- one wrong' '- two wrong'
   printf '%s\n' '- one right' '- two right' >"${d}/docs/l.md"
   commit_all "${d}" 'fix both'
-  sibling_ledger "${d}" docs/l.md 1-1 2-2
+  sibling_ledger "${d}" docs/l.md 1-1 2-2 changed '["one wrong", "two wrong"]'
   run_case sibling-list-word-change "${d}" 0 '' \
-    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 1 changed, 0 unchanged and 0 removed siblings'
+    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 1 changed, 0 unchanged and 0 removed siblings; 2 sweep terms, 2 hits cleared'
 
   # A changed sibling's range must fall inside its file.
   d="$(new_repo)"
@@ -1481,9 +1591,9 @@ EOF
   seed_main "${d}" docs/l.md '- one wrong' '- two wrong'
   printf '%s\n' '- one right' >"${d}/docs/l.md"
   commit_all "${d}" 'fix one, drop two'
-  sibling_ledger "${d}" docs/l.md 1-1 2-2 removed
+  sibling_ledger "${d}" docs/l.md 1-1 2-2 removed '["one wrong", "two wrong"]'
   run_case sibling-removed "${d}" 0 '' \
-    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 1 removed siblings'
+    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 1 removed siblings; 2 sweep terms, 2 hits cleared'
 
   # A hunk that only adds lines removed nothing.
   d="$(new_repo)"
@@ -1611,7 +1721,7 @@ EOF
   jq '.code_changes = [{file: "docs/gone.md", blob: "deleted", attack: "links to it", result: "none left"}]' \
     "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
   run_case sibling-removed-file-deleted "${d}" 0 '' \
-    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 1 code changes; 0 changed, 0 unchanged and 1 removed siblings'
+    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 1 code changes; 0 changed, 0 unchanged and 1 removed siblings; 1 sweep terms, 1 hits cleared'
 
   # A deleted file has no head position for its text, so a removed
   # sibling there names the lines the text held at the merge base, and
@@ -1677,7 +1787,324 @@ EOF
     '.code_changes = [{file: "sub", blob: $b, attack: "old pointer", result: "fails"}]' \
     "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
   run_case gitlink-sibling-submodule-config "${d}" 0 '' \
-    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 1 code changes; 1 changed, 0 unchanged and 0 removed siblings'
+    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 1 code changes; 1 changed, 0 unchanged and 0 removed siblings; 1 sweep terms, 1 hits cleared'
+
+  # --- Sweep terms. A pair's sweep terms are searched at the merge base
+  # over the sweep scope; every hit must sit in the pair's own paragraph
+  # or in one of its sibling ranges, mapped to head.
+
+  # A twin elsewhere with no entry in the pair is reported with its
+  # merge-base and head positions.
+  d="$(new_repo)"
+  seed_files "${d}" docs/b.md $'# B\n\nBeta paragraph. Twin.'
+  beta_fixed "${d}"
+  run_case sweep-uncovered-twin "${d}" 1 \
+    'sweep-uncovered: pair p1 term "Beta paragraph." hits docs/b.md:3-3 at the merge base (3-3 at head) and no entry of the pair covers it'
+
+  # An unchanged sibling on the twin clears it.
+  d="$(new_repo)"
+  seed_files "${d}" docs/b.md $'# B\n\nBeta paragraph. Twin.'
+  beta_fixed "${d}"
+  sweep_case "${d}" '["Beta paragraph."]' \
+    '[{"file": "docs/b.md", "lines": "3-3", "status": "unchanged", "reason": "true as written"}]'
+  run_case sweep-unchanged-sibling "${d}" 0 '' \
+    '0 code changes; 0 changed, 1 unchanged and 0 removed siblings; 1 sweep terms, 2 hits cleared'
+
+  # A sibling on the same lines of another file does not clear a hit.
+  d="$(new_repo)"
+  seed_files "${d}" docs/d.md $'# D\n\nIntro.\n\nBeta paragraph. Twin in d.' docs/c.md $'# C\n\nIntro.\n\nUnrelated.'
+  beta_fixed "${d}"
+  sweep_case "${d}" '["Beta paragraph."]' \
+    '[{"file": "docs/c.md", "lines": "5-5", "status": "unchanged", "reason": "true as written"}]'
+  run_case sweep-sibling-other-file "${d}" 1 \
+    'sweep-uncovered: pair p1 term "Beta paragraph." hits docs/d.md:5-5 at the merge base (5-5 at head) and no entry of the pair covers it'
+  expect_absent 'docs/c.md'
+
+  # Lines inserted above an untouched twin shift it: the sibling names
+  # the head line, and the merge-base line number no longer covers it.
+  d="$(new_repo)"
+  seed_files "${d}" scripts/notes.sh $'#!/usr/bin/env bash\n# Beta paragraph. Twin.\necho done'
+  beta_fixed "${d}"
+  sed -i '1a\# one\n# two' "${d}/scripts/notes.sh"
+  commit_all "${d}" 'shift notes'
+  sweep_case "${d}" '["Beta paragraph."]' \
+    '[{"file": "scripts/notes.sh", "lines": "4-4", "status": "unchanged", "reason": "true as written"}]' \
+    scripts/notes.sh
+  run_case sweep-shifted-twin "${d}" 0 '' \
+    '1 code changes; 0 changed, 1 unchanged and 0 removed siblings; 1 sweep terms, 2 hits cleared'
+  sweep_case "${d}" '["Beta paragraph."]' \
+    '[{"file": "scripts/notes.sh", "lines": "2-2", "status": "unchanged", "reason": "true as written"}]' \
+    scripts/notes.sh
+  run_case sweep-stale-sibling-line "${d}" 1 \
+    'hits scripts/notes.sh:2-2 at the merge base (4-4 at head)'
+
+  # A changed twin maps to its hunk's new side.
+  d="$(new_repo)"
+  seed_files "${d}" scripts/notes.sh $'#!/usr/bin/env bash\n# Beta paragraph. Twin.\necho done'
+  beta_fixed "${d}"
+  sed -i -e '1a\# one' -e 's/^# Beta paragraph\. Twin\.$/# Beta, corrected twin./' "${d}/scripts/notes.sh"
+  commit_all "${d}" 'fix twin'
+  sweep_case "${d}" '["Beta paragraph."]' \
+    '[{"file": "scripts/notes.sh", "lines": "3-3", "status": "changed"}]' scripts/notes.sh
+  run_case sweep-changed-twin "${d}" 0 '' \
+    '1 code changes; 1 changed, 0 unchanged and 0 removed siblings; 1 sweep terms, 2 hits cleared'
+
+  # A twin in a file the branch deletes keeps its merge-base lines, and
+  # a removed sibling there clears it.
+  d="$(new_repo)"
+  seed_files "${d}" scripts/old.sh $'#!/usr/bin/env bash\necho x\n# Beta paragraph. Twin.'
+  beta_fixed "${d}"
+  git -C "${d}" rm --quiet scripts/old.sh
+  git -C "${d}" commit --quiet --message 'drop old'
+  sweep_case "${d}" '["Beta paragraph."]' '[]' scripts/old.sh
+  run_case sweep-deleted-file-twin "${d}" 1 \
+    'hits scripts/old.sh:3-3 at the merge base (deleted at head) and no entry'
+  sweep_case "${d}" '["Beta paragraph."]' \
+    '[{"file": "scripts/old.sh", "lines": "3-3", "status": "removed"}]' scripts/old.sh
+  run_case sweep-deleted-file-removed "${d}" 0 '' \
+    '1 code changes; 0 changed, 0 unchanged and 1 removed siblings; 1 sweep terms, 2 hits cleared'
+
+  # A twin paragraph deleted outright maps to the lines either side of
+  # the deletion, so a removed sibling on the line after it clears it.
+  d="$(new_repo)"
+  seed_files "${d}" docs/b.md $'# B\n\nBeta paragraph. Twin.\n\nBravo tail.'
+  beta_fixed "${d}"
+  sed -i '3,4d' "${d}/docs/b.md"
+  commit_all "${d}" 'drop twin'
+  jq '.pairs += [{id: "p2", finding: 1, file: "docs/b.md", lines: "3-3",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "drop", siblings: []}]
+    | .pairs[0].siblings = [{file: "docs/b.md", lines: "3-3", status: "removed"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  gate_all "${d}"
+  run_case sweep-deleted-paragraph "${d}" 0 '' \
+    'OK — 2 pairs; 2 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 1 removed siblings; 1 sweep terms, 2 hits cleared'
+
+  # A twin line deleted by a hunk that also edits the line above it maps
+  # one line past the hunk's new side, where a removed sibling sits.
+  d="$(new_repo)"
+  seed_files "${d}" docs/b.md $'# B\n\nOne wrong.\nTwo Beta paragraph. twin.\n\nTail.'
+  beta_fixed "${d}"
+  printf '%s\n' '# B' '' 'One right.' '' 'Tail.' >"${d}/docs/b.md"
+  commit_all "${d}" 'fix one, drop two'
+  jq '.pairs += [{id: "p2", finding: 1, file: "docs/b.md", lines: "3-3",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "drop", siblings: []}]
+    | .pairs[0].sweep += ["Beta paragraph"]
+    | .pairs[0].siblings = [{file: "docs/b.md", lines: "4-4", status: "removed"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  gate_all "${d}"
+  run_case sweep-deleted-after-edit "${d}" 0 '' \
+    'OK — 2 pairs; 2 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 1 removed siblings; 2 sweep terms, 2 hits cleared'
+
+  # A hit inside another pair's paragraph counts only when this pair
+  # lists it as a sibling.
+  d="$(new_repo)"
+  seed_files "${d}" docs/b.md $'# B\n\nIntro.\n\nBeta paragraph. Twin.'
+  beta_fixed "${d}"
+  sed -i 's/^Beta paragraph\. Twin\.$/Beta twin, corrected./' "${d}/docs/b.md"
+  commit_all "${d}" 'fix twin'
+  jq '.pairs += [{id: "p2", finding: 1, file: "docs/b.md", lines: "5-5",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  gate_all "${d}"
+  run_case sweep-other-pair-paragraph "${d}" 1 \
+    'sweep-uncovered: pair p1 term "Beta paragraph." hits docs/b.md:5-5 at the merge base (5-5 at head)'
+
+  # The pair's own paragraph counts whole, beyond its recorded lines, and
+  # white space in a term is collapsed like the text's.
+  d="$(new_repo)"
+  sed -i 's/^Alpha paragraph line one\.$/Alpha paragraph, corrected./' "${d}/docs/a.md"
+  commit_all "${d}" 'fix alpha'
+  jq -n '{report: "r.md", code_changes: [],
+    pairs: [{id: "p1", finding: 1, file: "docs/a.md", lines: "3-3",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+      sweep: ["alpha line two.", " Alpha  paragraph line one. "], siblings: []}]}' >"${d}/ledger.json"
+  gate_all "${d}"
+  run_case sweep-own-paragraph "${d}" 0 '' \
+    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 0 removed siblings; 2 sweep terms, 2 hits cleared'
+
+  # A sibling clears by its range, not its block: a script has no blank
+  # lines, so its whole body is one block.
+  d="$(new_repo)"
+  seed_files "${d}" scripts/notes.sh $'#!/usr/bin/env bash\n# Beta paragraph. Twin.\necho a\necho b\necho c'
+  beta_fixed "${d}"
+  sweep_case "${d}" '["Beta paragraph."]' \
+    '[{"file": "scripts/notes.sh", "lines": "5-5", "status": "unchanged", "reason": "true as written"}]'
+  run_case sweep-sibling-same-block "${d}" 1 'hits scripts/notes.sh:2-2 at the merge base (2-2 at head)'
+
+  # Matching is wrap-aware: a term split across Markdown lines, and one
+  # split across comment lines, each hit with the span it covers.
+  d="$(new_repo)"
+  seed_files "${d}" docs/b.md $'# B\n\nThe Beta\nparagraph. rule' \
+    scripts/notes.sh $'#!/usr/bin/env bash\n# the Beta\n#   paragraph. rule\necho done'
+  beta_fixed "${d}"
+  run_case sweep-wrapped "${d}" 1 'hits docs/b.md:3-4 at the merge base (3-4 at head)'
+  also_expect 'hits scripts/notes.sh:2-3 at the merge base (2-3 at head)'
+
+  # A comment line holding only the marker ends the paragraph, and the
+  # marker is not text.
+  d="$(new_repo)"
+  seed_files "${d}" scripts/notes.sh $'#!/usr/bin/env bash\n# the Beta\n#\n# paragraph. rule'
+  beta_fixed "${d}"
+  sweep_case "${d}" '["Beta paragraph.", "the Beta paragraph.", "the Beta #"]'
+  run_case sweep-comment-break "${d}" 1 \
+    'sweep-empty: pair p1 term "the Beta paragraph." matches nothing in the sweep scope at the merge base'
+  also_expect 'sweep-empty: pair p1 term "the Beta #" matches nothing'
+
+  # A "#" not followed by white space is text, not a comment marker.
+  d="$(new_repo)"
+  seed_files "${d}" docs/b.md $'# B\n\n#tagged Beta paragraph. here'
+  beta_fixed "${d}"
+  sweep_case "${d}" '["Beta paragraph.", "#tagged Beta"]' \
+    '[{"file": "docs/b.md", "lines": "3-3", "status": "unchanged", "reason": "true as written"}]'
+  run_case sweep-hash-text "${d}" 0 '' \
+    '0 code changes; 0 changed, 1 unchanged and 0 removed siblings; 2 sweep terms, 2 hits cleared'
+
+  # A term that matches nothing is reported: a misspelling, a case
+  # difference or a regex metacharacter (matched literally) all miss.
+  # docs/b.md holds each word of "beta paragraph." in its own case, so the
+  # file reaches the matcher, which must still tell the cases apart.
+  d="$(new_repo)"
+  seed_files "${d}" docs/b.md $'# B\n\nbeta\n\nBeta paragraph. Twin.'
+  beta_fixed "${d}"
+  sweep_case "${d}" '["Beta paragraph.", "beta paragraph.", "Beta.paragraph", "Nowhere text"]' \
+    '[{"file": "docs/b.md", "lines": "5-5", "status": "unchanged", "reason": "true as written"}]'
+  run_case sweep-empty-terms "${d}" 1 \
+    'sweep-empty: pair p1 term "beta paragraph." matches nothing in the sweep scope at the merge base'
+  also_expect 'sweep-empty: pair p1 term "Beta.paragraph" matches nothing'
+  also_expect 'sweep-empty: pair p1 term "Nowhere text" matches nothing'
+  expect_absent 'term "Beta paragraph." matches nothing'
+
+  # Hits inside a generated block are skipped; the generator is swept.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  sweep_case "${d}" '["Beta paragraph.", "generated row one"]'
+  run_case sweep-generated-skipped "${d}" 1 \
+    'sweep-empty: pair p1 term "generated row one" matches nothing'
+
+  # CHANGELOG.md, tests/fixtures/ and flake.lock are outside the sweep.
+  d="$(new_repo)"
+  seed_files "${d}" CHANGELOG.md 'Beta paragraph. old' \
+    tests/fixtures/x/a.md 'Beta paragraph. fixture' flake.lock '{"n": "Beta paragraph."}' \
+    docs/c.md 'Beta paragraph. in scope'
+  beta_fixed "${d}"
+  run_case sweep-out-of-scope "${d}" 1 'hits docs/c.md:1-1 at the merge base (1-1 at head)'
+  expect_absent 'CHANGELOG.md'
+  expect_absent 'tests/fixtures'
+  expect_absent 'flake.lock'
+
+  # Everything else is in the sweep, whatever the tree or extension.
+  d="$(new_repo)"
+  seed_files "${d}" nix/hooks.nix '# Beta paragraph. nix' \
+    tests/h.test.sh '# Beta paragraph. harness' .claude/skills/s/x.sh '# Beta paragraph. skill' \
+    justfile '# Beta paragraph. recipe' docs/sub/CHANGELOG.md 'Beta paragraph. nested'
+  beta_fixed "${d}"
+  run_case sweep-scope-reach "${d}" 1 'hits nix/hooks.nix:1-1 at the merge base'
+  also_expect 'hits tests/h.test.sh:1-1 at the merge base'
+  also_expect 'hits .claude/skills/s/x.sh:1-1 at the merge base'
+  also_expect 'hits justfile:1-1 at the merge base'
+  also_expect 'hits docs/sub/CHANGELOG.md:1-1 at the merge base'
+
+  # A term is read as written: a backslash stays one backslash.
+  d="$(new_repo)"
+  seed_files "${d}" docs/b.md $'# B\n\nPath a\\b Beta rule here'
+  beta_fixed "${d}"
+  sweep_case "${d}" '["Beta paragraph.", "a\\b Beta"]'
+  run_case sweep-backslash-term "${d}" 1 \
+    'sweep-uncovered: pair p1 term "a\b Beta" hits docs/b.md:3-3 at the merge base'
+
+  # The caller's grep and color configuration changes nothing.
+  d="$(new_repo)"
+  seed_files "${d}" docs/c.md $'# C\n\nBeta paragraph. Twin.'
+  beta_fixed "${d}"
+  git -C "${d}" config color.ui always
+  git -C "${d}" config color.grep always
+  git -C "${d}" config grep.patternType perl
+  git -C "${d}" config grep.fullName false
+  git -C "${d}" config core.quotePath true
+  run_case sweep-caller-config "${d}" 1 \
+    'sweep-uncovered: pair p1 term "Beta paragraph." hits docs/c.md:3-3 at the merge base (3-3 at head) and no entry of the pair covers it'
+
+  # A binary file is not swept, and a file name outside ASCII is shown
+  # as written.
+  d="$(new_repo)"
+  printf 'x\0Beta paragraph. binary\n' >"${d}/scripts/blob.dat"
+  seed_files "${d}" 'docs/café.md' 'Beta paragraph. accented'
+  git -C "${d}" switch --quiet main
+  git -C "${d}" add -- scripts/blob.dat
+  git -C "${d}" commit --quiet --message 'add blob'
+  git -C "${d}" switch --quiet fix
+  git -C "${d}" merge --quiet main
+  beta_fixed "${d}"
+  run_case sweep-binary-and-name "${d}" 1 \
+    'sweep-uncovered: pair p1 term "Beta paragraph." hits docs/café.md:1-1 at the merge base (1-1 at head)'
+  expect_absent 'blob.dat'
+
+  # Schema: a sweep that is not a list, an empty list, or a term that is
+  # blank, holds a newline or is not a string.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  sweep_case "${d}" '"Beta paragraph."'
+  run_case sweep-not-list "${d}" 1 'schema: pair p1 sweep must be a list of terms, got "Beta paragraph."'
+  sweep_case "${d}" '[]'
+  run_case sweep-empty-list "${d}" 1 'schema: pair p1 sweep is an empty list; omit the field or name a term'
+  sweep_case "${d}" '["Beta paragraph.", " \u200b", "a\nb", 3]'
+  run_case sweep-bad-terms "${d}" 1 \
+    'schema: pair p1 sweep[1] needs a non-blank term with no newline, tab or CR, got " '
+  also_expect 'schema: pair p1 sweep[2] needs a non-blank term with no newline, tab or CR, got "a<LF>b"'
+  also_expect 'schema: pair p1 sweep[3] needs a non-blank term with no newline, tab or CR, got 3'
+  expect_absent 'sweep[0]'
+
+  # Every finding needs a pair carrying a term; another pair of the same
+  # finding may go without.
+  d="$(new_repo)"
+  sed -i -e 's/^Beta paragraph\.$/Beta paragraph, corrected./' \
+    -e 's/^Gamma paragraph\.$/Gamma paragraph, corrected./' "${d}/docs/a.md"
+  commit_all "${d}" 'fix beta and gamma'
+  jq -n '{report: "r.md", code_changes: [], pairs: [
+    {id: "p1", finding: 1, file: "docs/a.md", lines: "6-6",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+      sweep: ["Beta paragraph."], siblings: []},
+    {id: "p2", finding: 2, file: "docs/a.md", lines: "12-12",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]}' \
+    >"${d}/ledger.json"
+  gate_all "${d}"
+  run_case sweep-missing-for-finding "${d}" 1 \
+    'missing-sweep: finding 2 has no pair carrying a sweep term (pairs p2 at docs/a.md:12-12)'
+  jq '.pairs[1].finding = 1' "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case sweep-shared-finding "${d}" 0 '' \
+    'OK — 2 pairs; 2 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 0 removed siblings; 1 sweep terms, 1 hits cleared'
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  sweep_case "${d}" omit
+  run_case sweep-omitted "${d}" 1 \
+    'missing-sweep: finding 1 has no pair carrying a sweep term (pairs p1 at docs/a.md:6-6)'
+
+  # --sweep prints each hit at the merge base, and reads a term after
+  # "--" even when it starts with a dash.
+  d="$(new_repo)"
+  seed_files "${d}" docs/b.md $'# B\n\n-flag Beta paragraph. Twin.\n\n-x only here'
+  run_sweep_case sweep-mode-hits "${d}" 0 '' 'docs/b.md:3-3: -flag Beta paragraph. Twin.' \
+    --sweep 'Beta paragraph.'
+  also_expect_stdout 'docs/a.md:6-6: Beta paragraph.'
+  run_sweep_case sweep-mode-dash-term "${d}" 0 '' 'docs/b.md:5-5: -x only here' \
+    --sweep -- '-x only'
+  expect_absent_stdout 'docs/a.md'
+  run_sweep_case sweep-mode-no-hit "${d}" 1 \
+    'check-fix-ledger: term "Nowhere text" matches nothing in the sweep scope at the merge base' '' \
+    --sweep 'Nowhere text'
+  run_sweep_case sweep-mode-blank-term "${d}" 2 'bad sweep term: " "' '' --sweep ' '
+  run_sweep_case sweep-mode-no-terms "${d}" 2 'usage: --sweep <term>...' '' --sweep
+  run_sweep_case sweep-mode-with-hash "${d}" 2 '--sweep and --hash cannot be combined' '' \
+    --sweep --hash docs/a.md 1-1
+
+  # A base that does not resolve, or shares no history, stops the run
+  # (merge_base, which ledger mode calls too).
+  run_sweep_case sweep-mode-bad-base "${d}" 2 'base revision does not resolve: nosuch' '' \
+    --base nosuch --sweep 'Beta paragraph.'
+  git -C "${d}" switch --quiet --orphan lone
+  git -C "${d}" commit --quiet --allow-empty --message lone
+  run_sweep_case sweep-mode-no-merge-base "${d}" 2 'no merge base for main and HEAD' '' \
+    --sweep 'Beta paragraph.'
 
   harness_assert_verify || failures=$((failures + 1))
   if ((failures > 0)); then
