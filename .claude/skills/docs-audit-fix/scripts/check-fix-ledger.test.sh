@@ -1218,6 +1218,37 @@ EOF
     >"${d}/gate.json"
   run_case attack-whitespace "${d}" 1 'missing-attack: code change scripts/w.sh has no gate attack and result'
 
+  # Text made only of invisible format characters is blank: a zero-width
+  # space (U+200B) and a byte-order mark (U+FEFF) print nothing, so a
+  # command or observed made of them records nothing.
+  local zwsp bom
+  zwsp=$'\xe2\x80\x8b'
+  bom=$'\xef\xbb\xbf'
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].artifact = [{command: "​​", observed: "﻿"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case artifact-command-zero-width "${d}" 1 \
+    "schema: pair p1 artifact[0] needs a non-blank command string, got \"${zwsp}${zwsp}\""
+  also_expect "schema: pair p1 artifact[0] needs a non-blank observed string, got \"${bom}\""
+
+  # The same rule holds for a sibling's reason and a gate attack and
+  # result: a word joiner (U+2060) and a soft hyphen (U+00AD) beside
+  # ordinary spaces are no reason and no attack.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  sed -i 's/^echo line5$/echo line5 changed/' "${d}/scripts/tool.sh"
+  commit_all "${d}" code
+  jq '.pairs[0].siblings = [{file: "docs/a.md", lines: "3-4", status: "unchanged", reason: " ⁠ "}]
+    | .code_changes = [{file: "scripts/tool.sh", evidence: "harness"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  jq --arg b "$(git -C "${d}" rev-parse HEAD:scripts/tool.sh)" \
+    '.code_changes = [{file: "scripts/tool.sh", blob: $b, attack: "­", result: "exit 2"}]' \
+    "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
+  run_case reason-and-attack-zero-width "${d}" 1 \
+    'sibling-reason: pair p1 sibling docs/a.md:3-4 is unchanged with no reason'
+  also_expect 'missing-attack: code change scripts/tool.sh has no gate attack and result'
+
   # An unchanged sibling must name a file that exists at head.
   d="$(new_repo)"
   beta_fixed "${d}"
