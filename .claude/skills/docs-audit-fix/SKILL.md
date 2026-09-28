@@ -37,11 +37,14 @@ paragraph in its scope.
     Record the shape: `drop`, `scope`, or `correct` (a fact replaced by the
     artifact's fact, no new boundary word).
 1. **Clear the sibling set.** Name every other place the corrected claim
-    lives (`git grep` the old wording across
-    `'*.md' '.github/**' 'scripts/*.sh'`, each alternative its own `-e`)
-    and record each member `changed`, `removed` (the text was deleted), or
-    `unchanged` with the reason it is still true. The sweep's output is a
-    list to clear, not a list to consider.
+    lives: sweep the old wording with
+    `.claude/skills/docs-audit-fix/scripts/check-fix-ledger.sh --sweep -- '<term>' …`,
+    one term per alternative wording, and record the terms as the pair's
+    `sweep`. Record each member `changed`, `removed` (the text was
+    deleted), or `unchanged` with the reason it is still true. The sweep's
+    output is a list to clear, not a list to consider, and the checker
+    re-runs it: every hit must fall in the pair's paragraph or one of its
+    siblings (see **Sweep** under what the checker proves).
 1. **A heuristic gets a negative fixture before it ships** — the input it
     must still reject, proven to fail when the rule is reverted.
 1. **A filter that reshapes authored text is tested on the ordinary case**,
@@ -60,7 +63,9 @@ paragraph in its scope.
     covering it, unless it shares its pair's paragraph or sits in the root
     `CHANGELOG.md` or `tests/fixtures/`. A `removed` sibling in a file the
     branch deletes needs only that file's `code_changes` entry, with
-    `lines` inside the file as it was at the merge base.
+    `lines` inside the file as it was at the merge base. Each finding
+    needs at least one pair carrying its `sweep` terms; its other pairs
+    may leave the field out.
     For each changed file that is not a surviving Markdown file (a deleted
     `.md` file included, and a `.md` path that is now a directory or a
     gitlink), append a `code_changes` entry with the evidence
@@ -72,10 +77,9 @@ paragraph in its scope.
     pass it.
 1. **Gate.** Dispatch one agent that did not write the changes, on the
     strongest model available. The dispatch carries, verbatim: the ledger
-    path; the diff command (`git diff main...HEAD`); the twin-sweep scope
-    from contract clause 4 (`git grep` of the old wording, one `-e` per
-    alternative wording, over `'*.md' '.github/**' 'scripts/*.sh'`), so
-    duty 4 searches what the writer searched; the five gate duties
+    path; the diff command (`git diff main...HEAD`); the sweep command
+    from contract clause 4 (`check-fix-ledger.sh --sweep -- '<term>' …`),
+    so duty 4 searches the way the writer searched; the five gate duties
     below; the paragraph after them on recording each pair's `hash` and
     each code change's `blob`; and the `<report-stem>.gate.json` format
     block under **Files**. A gate given the duties alone writes records
@@ -137,9 +141,11 @@ The gate is a separate agent. It did not write the changes.
 1. **Fix shape.** Check the recorded shape against the diff: a fix of any
     shape that introduces a new boundary word (`only`, `every`, `never`, a
     count) not in the artifact is OVERREACHES.
-1. **Sibling set, per member.** Re-run the twin sweep yourself. A member
-    the ledger omits, or marks unchanged for a reason that is false, makes
-    the pair FALSE.
+1. **Sibling set, per member.** Re-run the sweep yourself, with each
+    pair's `sweep` terms and with any wording of the old claim they leave
+    out. A term that misses the distinctive part of the old wording, or an
+    alternative wording the finding names, makes the pair FALSE, as does a
+    member the ledger omits or marks unchanged for a reason that is false.
 1. **Attack every changed matcher, parser or generator.** For each
     `code_changes` entry, construct inputs meant to break it — boundaries,
     empty input, the ordinary case next to the motivating one — and run
@@ -166,6 +172,7 @@ For each code change record the blob you attacked:
       "lines": "40-46",
       "artifact": [{"file": "scripts/check-egress-allowlist.sh", "lines": "110-131"}],
       "fix_shape": "scope",
+      "sweep": ["every egress host", "all egress hosts"],
       "siblings": [
         {"file": "docs/invariant-index.md", "lines": "88-88", "status": "changed"},
         {"file": "docs/architecture/ci.md", "lines": "212-212", "status": "removed"},
@@ -195,6 +202,10 @@ For each code change record the blob you attacked:
   "code_changes": [{"file": "scripts/check-egress-allowlist.sh", "evidence": "harness scenario X"}]
 }
 ```
+
+`sweep` holds the old wording, one entry per alternative. It is optional
+per pair, but every `finding` needs one pair carrying it; here `p2` and
+`p3` share `p1`'s.
 
 An artifact entry for a fact outside the tree is
 `{"command": "git config --local --get grep.patternType", "observed": "exit 1, no output"}`
@@ -286,6 +297,27 @@ and 2 when it cannot run.
     at the merge base. In a file that is not Markdown, or in the root
     `CHANGELOG.md` or `tests/fixtures/`, any hunk touching the range clears
     a `changed` or `removed` sibling, a whitespace-only edit included.
+- **Sweep.** Each `sweep` term is searched at the merge base across every
+    tracked file except `tests/fixtures/`, the root `CHANGELOG.md` and
+    `flake.lock` (`SWEEP_SCOPE` in the checker), skipping binary files and
+    hits inside a same-named `<!-- BEGIN <name> -->` / `<!-- END <name> -->`
+    block. The match is a fixed string, case-sensitive, within one
+    paragraph: each line loses its leading white space and a leading run
+    of `#` followed by white space, a line left empty ends the paragraph,
+    and white space is collapsed in the text and the term, so a term
+    wrapped across lines or comment lines still matches. Each hit is mapped
+    to `HEAD`: a line a hunk replaced maps to the hunk's new side, a line a
+    pure deletion removed (or one replaced only by blank lines) maps to the
+    lines either side, and any other line moves with the lines above it; in
+    a file that is not a file at `HEAD`, the hit keeps its merge-base lines.
+    The mapped hit must overlap the pair's own paragraph or one of its
+    sibling ranges, whatever their status (`sweep-uncovered`). A term with
+    no hit is `sweep-empty`, and a `finding` value no pair carries a term
+    for is `missing-sweep`. A `sweep` that is not a non-empty list of
+    terms, or a term that is blank or holds a newline, tab or CR, is
+    `schema`. `--sweep [--] <term>…` prints the same hits, one
+    `<file>:<start>-<end>: <first line>` per hit, and exits 1 when a term
+    matches nothing.
 - **Verdicts.** Every pair is gated `TRUE` with a hash equal to its
     paragraph's hash now: the whole blank-line-delimited block, whitespace
     collapsed, so a re-wrap keeps the verdict current, as does a line shift
@@ -299,12 +331,13 @@ and 2 when it cannot run.
 
 Finding classes: `schema`, `enum`, `artifact`, `uncovered-hunk`,
 `uncovered-file`, `sibling-untracked`, `sibling-reason`,
-`sibling-not-changed`, `sibling-not-removed`, `missing-verdict`, `verdict`,
+`sibling-not-changed`, `sibling-not-removed`, `missing-sweep`,
+`sweep-empty`, `sweep-uncovered`, `missing-verdict`, `verdict`,
 `missing-hash`, `stale-verdict`, `missing-attack`, `stale-attack`. On
 success it prints one OK line with the pair, hunk (covered, reflow-only,
 generated), code-change and sibling (changed, unchanged, removed) tallies,
-and a command-artifact tally when the ledger has one; the PR body quotes
-it.
+a command-artifact tally when the ledger has one, and the sweep-term and
+cleared-hit tallies when it has terms; the PR body quotes it.
 
 It does not judge whether a sentence is true or re-sharpened — that is
 the gate's job. Its known limits:
@@ -347,3 +380,13 @@ the gate's job. Its known limits:
 - Blank text is white space and invisible format characters (Unicode
     Cf). Other characters that print nothing, such as a Hangul filler or
     a braille blank, count as text.
+- The sweep reads the merge base only, so old wording the branch writes
+    again is not swept; only the gate, reading the diff, sees it. White space inside a term is collapsed,
+    so a term cannot tell one space from two, and only ASCII white space
+    collapses: a no-break space must match exactly. A phrase split across
+    separate strings (two `echo` lines, a concatenation) or across a
+    paragraph break does not match.
+- A sibling range is read at `HEAD` like a pair's, so a stale one can
+    clear a hit that has moved away from it.
+- A finding fixed only outside in-scope Markdown has no pair, so nothing
+    carries or checks its terms.

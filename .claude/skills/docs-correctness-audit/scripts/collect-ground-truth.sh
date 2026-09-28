@@ -157,7 +157,7 @@ RE_HOTSPOT_SKIP="^(CHANGELOG\.md|docs/releases\.md|docs/_data/|tests/fixtures/)|
 # header a script carries are read by a maintainer at the moment they act, and
 # they drift the way a runbook does. Ranking Markdown alone leaves every defect
 # in them unaimed-at. Git pathspec `*` crosses `/`, so `scripts/*.sh` reaches
-# `scripts/lib/` too — the same reach the twin sweep uses.
+# `scripts/lib/` too.
 # Not readonly: the harness sources this file more than once per run, and a
 # readonly array makes the second source a fatal error rather than a no-op.
 HOTSPOT_PATHSPECS=(
