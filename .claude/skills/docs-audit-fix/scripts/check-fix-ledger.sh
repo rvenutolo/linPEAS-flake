@@ -18,6 +18,9 @@
 #                 covered hunk that deletes text or sits in a file the
 #                 diff deletes; outside in-scope Markdown any touching
 #                 hunk clears it
+#   sweep         every hit of a pair's sweep terms at the merge base falls,
+#                 mapped to head, in the pair's paragraph or a sibling range,
+#                 every term hits, and every finding has a pair with terms
 #   verdicts      every pair is gated TRUE against its current text, and
 #                 every code change carries the gate's adversarial attack
 #                 against its current blob (else stale-attack)
@@ -73,14 +76,15 @@ readonly PROG='check-fix-ledger'
 readonly -a MD_ALL=('*.md')
 readonly -a MD_SCOPE=("${MD_ALL[@]}" ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures')
 # Where a pair's sweep terms are searched, as git pathspecs: every tracked
-# file except tests/fixtures/ (it carries deliberate violations), the root
-# CHANGELOG.md (a historical record keeps its old wording) and flake.lock
-# (data). This is not MD_SCOPE: that set is the Markdown checked paragraph
+# file except the two trees that carry deliberate violations (tests/fixtures/
+# and the docs audit's seeded-defect fixtures), the root CHANGELOG.md (a
+# historical record keeps its old wording) and the root flake.lock (data). This is not MD_SCOPE: that set is the Markdown checked paragraph
 # by paragraph, while a claim's twin can sit in a workflow, a script or
 # Nix comment, a harness or a recipe, so the sweep reads every kind of
 # file. This is the sweep scope's only definition; --sweep and the ledger
 # check both read it.
-readonly -a SWEEP_SCOPE=('.' ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures' ':(exclude)flake.lock')
+readonly -a SWEEP_SCOPE=('.' ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures'
+  ':(exclude).claude/skills/docs-correctness-audit/evals/seeded-defects/fixtures' ':(exclude)flake.lock')
 # jq definitions every ledger and gate read shares, so a rule is written
 # once: txt is a string holding a character that is neither white space
 # nor an invisible format character (Unicode category Cf: a zero-width
@@ -190,7 +194,7 @@ function block_hash() {
     sha256sum | cut --delimiter=' ' --fields=1
 }
 
-# @description Print "<start>\t<end>" for each place stdin holds the
+# @description Print "<start>\t<end>\t<text of line start>" for each place stdin holds the
 # term in ${SWEEP_TERM}, outside the generated ranges in ${SWEEP_GEN}
 # ("start end" per line, markers inclusive). Matching is a fixed string,
 # case-sensitive, within one paragraph: each line loses its leading white
@@ -210,7 +214,7 @@ readonly SWEEP_AWK='
       for (i = 1; i <= n; i++) { if (off[i] <= pos) s = ln[i]; if (off[i] <= last) e = ln[i] }
       inside = 0
       for (g = 1; g <= ng; g++) if (s >= ga[g] && e <= gb[g]) inside = 1
-      if (!inside) print s "\t" e
+      if (!inside) print s "\t" e "\t" raw[s]
       from = pos + length(t)
     }
     n = 0; blk = ""
@@ -224,6 +228,7 @@ readonly SWEEP_AWK='
   }
   {
     line = $0
+    raw[NR] = $0
     sub(/^[[:space:]]+/, "", line)
     if (line ~ /^#+([[:space:]]|$)/) sub(/^#+[[:space:]]*/, "", line)
     gsub(/[[:space:]]+/, " ", line); sub(/ $/, "", line)
@@ -239,11 +244,17 @@ function is_term() {
 }
 
 # @description Hits of sweep term $1 at the merge base ${MB} across
-# SWEEP_SCOPE, as "<file>\t<start>\t<end>" lines, from the repository
-# root. git grep narrows the files to those holding every word of the
-# term somewhere (-I skips binary files), then SWEEP_AWK finds the term
-# itself. --no-color keeps a caller's color.grep out of the name list, -z
-# keeps names unquoted, and -F makes grep.patternType irrelevant.
+# SWEEP_SCOPE, as "<file>\t<start>\t<end>\t<first line>" lines, from the
+# repository root. git grep narrows the files to those holding every word
+# of the term somewhere, then SWEEP_AWK finds the term itself. A file
+# holding a NUL byte is skipped as binary; git grep's own -I is not used,
+# since it also skips a text file a -diff or binary attribute marks, and a
+# caller's attributes must not hide a twin. --no-color keeps color.grep
+# out of the name list, --no-recurse-submodules keeps submodule.recurse
+# from reaching files the merge base does not hold, -z keeps names
+# unquoted, and -F makes grep.patternType irrelevant. Names come back
+# NUL-separated; one holding a newline or tab cannot be carried through
+# the line- and tab-separated hit list, so it stops the run.
 function sweep_hits() {
   local -r term="$1"
   local -a words=() args=()
@@ -251,18 +262,28 @@ function sweep_hits() {
   IFS=$' \t\n\v\f\r' read -r -a words <<<"${term}"
   for w in "${words[@]}"; do args+=(-e "${w}"); done
   names="$(
-    git grep --no-color -I -l -z -F --all-match "${args[@]}" "${MB}" -- "${SWEEP_SCOPE[@]}" |
-      tr '\0' '\n'
+    git grep --no-color --no-recurse-submodules --text -l -z -F --all-match \
+      "${args[@]}" "${MB}" -- "${SWEEP_SCOPE[@]}" |
+      tr '\0\n\t' '\n\001\002'
     exit "${PIPESTATUS[0]}"
   )" || rc=$?
   ((rc <= 1)) || die "could not search the merge base for the term ${term}"
+  local size text
   while IFS= read -r f; do
     [[ -n ${f} ]] || continue
     f="${f#"${MB}":}"
+    if [[ ${f} == *[$'\001\002']* ]]; then
+      f="${f//$'\001'/<LF>}"
+      die "cannot sweep ${f//$'\002'/<TAB>}: its name holds a tab or newline; rename it"
+    fi
+    size="$(git cat-file -s "${MB}:${f}")" || die "could not read ${f} at the merge base"
+    text="$(git cat-file blob "${MB}:${f}" | tr -d '\000' | wc -c)" ||
+      die "could not read ${f} at the merge base"
+    ((size == text)) || continue
     spans="$(git show "${MB}:${f}" | generated_ranges)" ||
       die "could not read ${f} at the merge base"
     git show "${MB}:${f}" | SWEEP_TERM="${term}" SWEEP_GEN="${spans}" awk "${SWEEP_AWK}" |
-      while IFS=$'\t' read -r s e; do printf '%s\t%s\t%s\n' "${f}" "${s}" "${e}"; done ||
+      while IFS=$'\t' read -r s e t; do printf '%s\t%s\t%s\t%s\n' "${f}" "${s}" "${e}" "${t}"; done ||
       die "could not search ${f} at the merge base"
   done <<<"${names}"
 }
@@ -353,11 +374,10 @@ if ((sweep_mode)); then
       sweep_status=1
       continue
     fi
-    while IFS=$'\t' read -r file start end; do
+    while IFS=$'\t' read -r file start end first; do
       [[ -z ${shown["${file}:${start}-${end}"]:-} ]] || continue
       shown["${file}:${start}-${end}"]=1
-      printf '%s:%s-%s: %s\n' "${file}" "${start}" "${end}" \
-        "$(git show "${MB}:${file}" | sed --quiet "${start}p")"
+      printf '%s:%s-%s: %s\n' "${file}" "${start}" "${end}" "${first}"
     done <<<"${hits}"
   done
   exit "${sweep_status}"
@@ -471,6 +491,10 @@ function check_schema() {
       else ["schema", "pair \($id) needs a siblings list whose members name a file"] end),
       (if .fix_shape == "drop" or .fix_shape == "scope" or .fix_shape == "correct" then empty
       else ["enum", "pair \($id) fix_shape \(.fix_shape | tojson) is not drop, scope or correct"] end),
+      # finding groups pairs for missing-sweep, so a missing, string or
+      # fractional value would merge or split the groups.
+      (if (.finding | type) == "number" and .finding >= 1 and (.finding | floor) == .finding then empty
+      else ["schema", "pair \($id) needs a finding number (a whole number of 1 or more), got \(.finding | rendered)"] end),
       # sweep is optional; when present it is a non-empty list of terms.
       (if has("sweep") | not then empty
       elif (.sweep | type) != "array" then
@@ -1230,8 +1254,8 @@ SWEEP_CLEARED=0
 # paragraph or one of its sibling ranges (any status), once mapped to
 # head with head_line. A hit in a file that is not a file at head keeps
 # its merge-base lines, which is where a removed sibling in a deleted
-# file points. A term with no hit at all is reported: with wrap-aware
-# matching, that means it is not the old wording.
+# file points. A term with no hit at all is reported: it is not the old
+# wording as the sweep reads it (a misspelling, or text the sweep skips).
 function check_sweeps() {
   local missing fnum ids records k id pfile plines term hits f s e a b where span
   missing="$(jq --raw-output "${JQ_DEFS}"'[.pairs[]] | group_by(.finding)[]
@@ -1281,7 +1305,7 @@ function check_sweeps() {
       finding sweep-empty "pair ${pid[k]} term \"${term}\" matches nothing in the sweep scope at the merge base"
       continue
     fi
-    while IFS=$'\t' read -r f s e; do
+    while IFS=$'\t' read -r f s e _; do
       [[ -n ${f} ]] || continue
       [[ -z ${seen["${k}"$'\t'"${f}:${s}-${e}"]:-} ]] || continue
       seen["${k}"$'\t'"${f}:${s}-${e}"]=1
