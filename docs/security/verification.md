@@ -37,8 +37,10 @@ How to verify a release of this wrapper yourself. None of this trusts the Pages 
 
 - `gh` (GitHub CLI), a recent release — `gh attestation verify` checks
     each bundle against Sigstore's live trusted root, so a client too old
-    to parse that root fails before it verifies any attestation (for
-    example `unsupported tlog public key type: PKIX_ED25519`). The oldest
+    to parse that root fails before it verifies any attestation. Its
+    error contains `failed to get trusted root` (for example
+    `failed to get trusted root: unsupported tlog public key type:   PKIX_ED25519`) and says nothing about whether the attestation is
+    valid. The oldest
     working release can rise when the root changes upstream (for example,
     when it adds a key type older clients cannot parse), so this page
     states no version number. `gh release download` fetches the signed
@@ -178,9 +180,11 @@ the `attribute failure reason` step. Reasons:
     tokens — the registry fetch that resolves the per-arch digest failed
     first (the step log shows a `docker manifest inspect` error or
     `unexpected … digest`). A
-    verification failure is tampering or a Sigstore TUF trust-root
-    rotation lag on the runner image; re-run the cron 24h later to
-    distinguish before treating it as tampering.
+    verification failure is tampering unless the step log shows the
+    root-load error [Tools needed](#tools-needed) describes. That error
+    verifies nothing, so re-run once the runner image ships a newer `gh`
+    (the [runner-images release notes](https://github.com/actions/runner-images/releases)
+    list each image's version), and treat a failure then as tampering.
 - `release-tag-fetch-failed` / `release-asset-download-failed` —
     transient GitHub API / asset visibility lag.
 - `pin-blob-sig-failed` — cosign verify-blob failed for
@@ -202,7 +206,9 @@ the `attribute failure reason` step. Reasons:
     issuer, or the step could not reach cosign (`nix shell` error) or the
     registries; the step log says which. Treat a cosign verification
     error as a signing-chain incident, adjacent in severity to the
-    `*-attest-failed` reasons and subject to the same re-run-first caveat.
+    `*-attest-failed` reasons. The step runs the lock-pinned `.#cosign`,
+    not a runner tool, so a re-run uses the same client; only a
+    `flake.lock` bump changes it.
 - `unattributed` — the job failed but no ladder arm matched the failed
     step: either a step before the first verification step
     (harden-runner, checkout, setup-nix) failed, or a verification step
@@ -217,8 +223,10 @@ the `attribute failure reason` step. Reasons:
 `upstream-sri-drift` on a hash mismatch and
 `cross-registry-manifest-mismatch` on a mismatch warrant the
 "treat as security incident" framing outright; the `*-attest-failed`
-family and `images-cosign-failed` warrant it once a 24h re-run has ruled
-out trust-root rotation lag; `manifest-tag-drift` on a mismatch is a
+family warrants it unless the step log shows the runner's `gh` could not
+load Sigstore's trusted root, and then if a re-run on a newer `gh` still
+fails; `images-cosign-failed` warrants it on a cosign verification
+error; `manifest-tag-drift` on a mismatch is a
 lower-confidence security signal, and the body tells the maintainer to
 hold pin bumps for it too.
 Folding all reasons into a single failure body trains

@@ -534,11 +534,15 @@ jobs:
               fetch that resolves the per-arch digest failed first (the
               step log shows a `docker manifest inspect` error or
               `unexpected … digest`).
-              A verification failure could be artifact tampering or
-              a Sigstore TUF trust-root rotation lag (newer `gh` CLI
-              with rotated root has shipped to runners but the cron
-              still runs on the old runner image). Re-run the cron 24h
-              later to distinguish.
+              Read the failed step's log first. If `gh` reports
+              `failed to get trusted root`, the runner's `gh` is too old
+              to load Sigstore's trusted root and verified nothing (see
+              "Tools needed" in `docs/security/verification.md`): re-run
+              once the runner image ships a newer `gh` (the
+              actions/runner-images release notes list each image's
+              version), and treat a failure then as tampering. Any other
+              verification error is artifact tampering until proven
+              otherwise.
             - `images-cosign-failed` — cosign
               signature verification failed for one
               of the per-arch / multi-arch image digests, or the step
@@ -547,8 +551,9 @@ jobs:
               verification error: same
               authenticity guarantee as the `*-attest-failed` reasons
               above, exposed via the user-facing `cosign verify` path.
-              Same Sigstore TUF rotation caveat applies — re-run 24h
-              later before treating as tampering.
+              The step runs the lock-pinned `.#cosign`, not a runner
+              tool, so a re-run uses the same client; only a
+              `flake.lock` bump changes it.
             - `pin-blob-sig-failed` — `cosign verify-blob` failed for
               `linpeas-pin.json` on the latest release. The
               `linpeas-pin.json.sigstore` sidecar is missing from the
