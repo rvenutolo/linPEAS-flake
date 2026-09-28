@@ -36,13 +36,23 @@ How to verify a release of this wrapper yourself. None of this trusts the Pages 
 ## Tools needed<a name="tools-needed"></a>
 
 - `gh` (GitHub CLI), a recent release — `gh attestation verify` checks
-    each bundle against Sigstore's live trusted root, so a client too old
-    to parse that root fails before it verifies any attestation (for
-    example `unsupported tlog public key type: PKIX_ED25519`). The oldest
-    working release can rise when the root changes upstream (for example,
-    when it adds a key type older clients cannot parse), so this page
-    states no version number. `gh release download` fetches the signed
-    release assets.
+    each bundle against Sigstore's live trusted root. A client that
+    cannot load that root, because it cannot fetch it or is too old to
+    parse it, fails before it verifies any attestation, and the error
+    says nothing about whether the attestation is valid. The error names
+    the trusted root, the TUF client or the verifier, not the attestation.
+    The wording varies by release and by cause. Measured examples: an
+    older release that cannot parse the root prints
+    `failed to get trusted root: unsupported tlog public key type: PKIX_ED25519`,
+    and one that cannot fetch it prints `failed to create TUF client`; a
+    current release prints
+    `public good verifier is not available (initialization may have failed)`
+    for either cause, or `no valid Sigstore verifiers could be initialized`
+    when neither the Sigstore nor the GitHub TUF repository loads. The
+    oldest working release can rise when the root changes upstream (for
+    example, when it adds a key type older clients cannot parse), so this
+    page states no version number. `gh release download` fetches the
+    signed release assets.
 - `cosign` ≥ 3.0, the major the release pipeline signs with —
     `cosign verify` for image signatures and `cosign verify-blob` for the
     `.sigstore` release-asset bundles. cosign 3's defaults write a
@@ -50,6 +60,9 @@ How to verify a release of this wrapper yourself. None of this trusts the Pages 
     referrer rather than a `.sig` tag (see
     [Cosign keyless signatures](#cosign-keyless-signatures)). An older
     client that looks only for a `.sig` tag reports no signatures found.
+    cosign also loads Sigstore's live trusted root; when it cannot fetch
+    or parse it, the error contains `getting trusted root from TUF` rather
+    than a signature or certificate-identity error, and verifies nothing.
 - `docker` with `buildx` — `docker buildx imagetools inspect … --raw`
     resolves the per-arch image digest from the multi-arch index, for the
     `gh attestation verify` path.
@@ -177,10 +190,16 @@ the `attribute failure reason` step. Reasons:
     verification failed for a specific artifact, or — for the two image
     tokens — the registry fetch that resolves the per-arch digest failed
     first (the step log shows a `docker manifest inspect` error or
-    `unexpected … digest`). A
-    verification failure is tampering or a Sigstore TUF trust-root
-    rotation lag on the runner image; re-run the cron 24h later to
-    distinguish before treating it as tampering.
+    `unexpected … digest`). Treat a verification failure as tampering
+    until ruled out, unless the step log shows `gh` could not load
+    Sigstore's trusted root (the errors under
+    [Tools needed](#tools-needed)). That run verified nothing: re-run it.
+    If the error persists, either the TUF repositories are unreachable
+    from the runner or its `gh` cannot parse the root. For the second,
+    re-run once the runner image ships a newer `gh` (the
+    [runner-images](https://github.com/actions/runner-images) README links
+    each image's installed software), and treat a failure then as
+    tampering.
 - `release-tag-fetch-failed` / `release-asset-download-failed` —
     transient GitHub API / asset visibility lag.
 - `pin-blob-sig-failed` — cosign verify-blob failed for
@@ -190,7 +209,8 @@ the `attribute failure reason` step. Reasons:
     `nix shell .#cosign` failed first; the step log says which. Triage:
     re-trigger
     `release-on-bump.yml` via `workflow_dispatch` with
-    `force-republish: true` if the sidecar is missing.
+    `force-republish: true` if the sidecar is missing. A trusted-root
+    load error in the step log is handled as for `images-cosign-failed`.
 - `sbom-amd64-blob-sig-failed` — same failure for the amd64
     CycloneDX SBOM asset. Responsibility lives in the
     `image-amd64` job of `release-on-bump.yml`.
@@ -202,7 +222,12 @@ the `attribute failure reason` step. Reasons:
     issuer, or the step could not reach cosign (`nix shell` error) or the
     registries; the step log says which. Treat a cosign verification
     error as a signing-chain incident, adjacent in severity to the
-    `*-attest-failed` reasons and subject to the same re-run-first caveat.
+    `*-attest-failed` reasons. A trusted-root load error (see
+    [Tools needed](#tools-needed)) verified nothing: re-run. The step
+    runs the lock-pinned `.#cosign`, not a runner tool, so a re-run uses
+    the same client. If the error persists and the TUF repository is
+    reachable, the pinned cosign cannot parse the root, and only a flake
+    change that updates cosign (normally a `flake.lock` bump) fixes it.
 - `unattributed` — the job failed but no ladder arm matched the failed
     step: either a step before the first verification step
     (harden-runner, checkout, setup-nix) failed, or a verification step
@@ -217,8 +242,11 @@ the `attribute failure reason` step. Reasons:
 `upstream-sri-drift` on a hash mismatch and
 `cross-registry-manifest-mismatch` on a mismatch warrant the
 "treat as security incident" framing outright; the `*-attest-failed`
-family and `images-cosign-failed` warrant it once a 24h re-run has ruled
-out trust-root rotation lag; `manifest-tag-drift` on a mismatch is a
+family on a verification failure and `images-cosign-failed` on a cosign
+verification error warrant it too, except when the step log shows the
+client could not load Sigstore's trusted root: then it applies only if
+the failure persists on a client that loads the root;
+`manifest-tag-drift` on a mismatch is a
 lower-confidence security signal, and the body tells the maintainer to
 hold pin bumps for it too.
 Folding all reasons into a single failure body trains

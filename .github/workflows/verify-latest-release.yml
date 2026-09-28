@@ -534,11 +534,16 @@ jobs:
               fetch that resolves the per-arch digest failed first (the
               step log shows a `docker manifest inspect` error or
               `unexpected … digest`).
-              A verification failure could be artifact tampering or
-              a Sigstore TUF trust-root rotation lag (newer `gh` CLI
-              with rotated root has shipped to runners but the cron
-              still runs on the old runner image). Re-run the cron 24h
-              later to distinguish.
+              Read the failed step's log first. If `gh` failed on the
+              trusted root, the TUF client or a verifier rather than
+              the attestation (examples under "Tools needed" in
+              `docs/security/verification.md`), it verified nothing:
+              re-run. If that persists, either the TUF repositories are
+              unreachable from the runner or its `gh` cannot parse the
+              root; for the second, re-run once the runner image ships
+              a newer `gh`, and treat a failure then as tampering. Any
+              other verification error is artifact
+              tampering until ruled out.
             - `images-cosign-failed` — cosign
               signature verification failed for one
               of the per-arch / multi-arch image digests, or the step
@@ -547,8 +552,14 @@ jobs:
               verification error: same
               authenticity guarantee as the `*-attest-failed` reasons
               above, exposed via the user-facing `cosign verify` path.
-              Same Sigstore TUF rotation caveat applies — re-run 24h
-              later before treating as tampering.
+              If cosign reports `getting trusted root from TUF`, it
+              could not load Sigstore's trusted root and verified
+              nothing: re-run. The step runs the lock-pinned
+              `.#cosign`, not a runner tool, so a re-run uses the same
+              client. If the error persists and the TUF repository is
+              reachable, the pinned cosign cannot parse the root; only
+              a flake change that updates cosign (normally a
+              `flake.lock` bump) fixes it.
             - `pin-blob-sig-failed` — `cosign verify-blob` failed for
               `linpeas-pin.json` on the latest release. The
               `linpeas-pin.json.sigstore` sidecar is missing from the
@@ -556,7 +567,8 @@ jobs:
               pinned `release-on-bump.yml` workflow identity, or the
               step failed before verifying — its own `gh release
               download` (no retry here) or `nix shell .#cosign` errored;
-              the step log says which. Triage:
+              the step log says which. A trusted-root load error is
+              handled as for `images-cosign-failed`. Triage:
               download both files with `gh release download`, re-run
               `cosign verify-blob` locally using the identity flags in
               `docs/security/verification.md`. If the sidecar is
@@ -572,7 +584,8 @@ jobs:
               workflow identity, or the step failed before verifying —
               its own `gh release download` (no retry here) or
               `nix shell .#cosign` errored; the step log says which.
-              Triage: download both files with
+              A trusted-root load error is handled as for
+              `images-cosign-failed`. Triage: download both files with
               `gh release download`, re-run `cosign verify-blob`
               locally using the identity flags in
               `docs/security/verification.md`. If the sidecar is
@@ -587,7 +600,8 @@ jobs:
               workflow identity, or the step failed before verifying —
               its own `gh release download` (no retry here) or
               `nix shell .#cosign` errored; the step log says which.
-              Triage: download both files with
+              A trusted-root load error is handled as for
+              `images-cosign-failed`. Triage: download both files with
               `gh release download`, re-run `cosign verify-blob`
               locally using the identity flags in
               `docs/security/verification.md`. If the sidecar is
