@@ -1282,6 +1282,26 @@ EOF
   run_case sibling-unchanged-untracked "${d}" 1 \
     'sibling-untracked: pair p1 sibling docs/nope.md is not tracked at the head revision'
 
+  # An unchanged sibling's range names the text its reason is about, so
+  # it must be a forward <start>-<end> range inside its file like any
+  # other sibling's: garbage, a reversed range, a missing one and one past
+  # the end are each reported, and each reason is still checked.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].siblings = [
+      {file: "docs/a.md", lines: "garbage", status: "unchanged", reason: "r"},
+      {file: "docs/a.md", lines: "12-5", status: "unchanged", reason: "r"},
+      {file: "docs/a.md", status: "unchanged"},
+      {file: "docs/a.md", lines: "900-999", status: "unchanged", reason: "r"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case sibling-unchanged-bad-range "${d}" 1 \
+    'schema: pair p1 sibling docs/a.md:garbage is marked unchanged without a valid <start>-<end> range'
+  also_expect 'schema: pair p1 sibling docs/a.md:12-5 is marked unchanged without a valid <start>-<end> range'
+  also_expect 'schema: pair p1 sibling docs/a.md:- is marked unchanged without a valid <start>-<end> range'
+  also_expect 'sibling-reason: pair p1 sibling docs/a.md:- is unchanged with no reason'
+  also_expect 'schema: pair p1 sibling docs/a.md:900-999 runs past end of file (12 lines)'
+  also_expect 'check-fix-ledger: 5 finding(s) (schema 4, sibling-reason 1)'
+
   # An OVERREACHES verdict blocks; with no note, no placeholder shows.
   d="$(new_repo)"
   beta_fixed "${d}"
