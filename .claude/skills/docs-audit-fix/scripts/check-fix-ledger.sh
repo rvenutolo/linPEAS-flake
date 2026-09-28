@@ -110,6 +110,17 @@ function block_span() {
     }'
 }
 
+# @description True when $2 names an object at revision $1.
+function is_tracked() {
+  git cat-file -e "$1:$2" 2>/dev/null
+}
+
+# @description True when $2 names a file (a blob, not a tree or a
+# gitlink) at revision $1.
+function is_file() {
+  is_tracked "$1" "$2" && [[ "$(git cat-file -t "$1:$2")" == blob ]]
+}
+
 function block_hash() {
   local -r rev="$1" file="$2" start="$3" end="$4"
   local span a b
@@ -159,9 +170,9 @@ if ((hash_mode)); then
   hash_end="${BASH_REMATCH[2]}"
   ((hash_start >= 1 && hash_start <= hash_end)) ||
     die "bad range: ${positional[1]} (start must be >= 1 and <= end)"
-  git cat-file -e "${HEAD_REV}:${positional[0]}" 2>/dev/null ||
+  is_tracked "${HEAD_REV}" "${positional[0]}" ||
     die "not tracked at ${HEAD_REV}: ${positional[0]}"
-  [[ "$(git cat-file -t "${HEAD_REV}:${positional[0]}")" == blob ]] ||
+  is_file "${HEAD_REV}" "${positional[0]}" ||
     die "not a file at ${HEAD_REV}: ${positional[0]}"
   hash_n="$(git show "${HEAD_REV}:${positional[0]}" | awk 'END { print NR }')"
   ((hash_end <= hash_n)) ||
@@ -332,11 +343,11 @@ function check_artifacts() {
     die "could not read the artifact list from ${LEDGER}"
   while IFS=$'\t' read -r id file lines; do
     [[ -n ${id} ]] || continue
-    if ! git cat-file -e "${HEAD_REV}:${file}" 2>/dev/null; then
+    if ! is_tracked "${HEAD_REV}" "${file}"; then
       finding artifact "pair ${id} ${file} is not tracked at the head revision"
       continue
     fi
-    if [[ "$(git cat-file -t "${HEAD_REV}:${file}")" != blob ]]; then
+    if ! is_file "${HEAD_REV}" "${file}"; then
       finding artifact "pair ${id} ${file} is not a file at the head revision"
       continue
     fi
@@ -552,7 +563,7 @@ function all_blank() {
 # and read as a re-wrap even though real content was added or removed.
 function is_reflow() {
   local -r file="$1" os="$2" ol="$3" ns="$4" nl="$5"
-  git cat-file -e "${MB}:${file}" 2>/dev/null || return 1
+  is_tracked "${MB}" "${file}" || return 1
   local mb_n hd_n
   mb_n="$(git show "${MB}:${file}" | awk 'END { print NR }')"
   hd_n="$(git show "${HEAD_REV}:${file}" | awk 'END { print NR }')"
@@ -579,7 +590,7 @@ function is_reflow() {
 # that exists only at HEAD.
 function hunk_is_generated() {
   local -r file="$1" os="$2" ol="$3" ns="$4" nl="$5"
-  git cat-file -e "${MB}:${file}" 2>/dev/null || return 1
+  is_tracked "${MB}" "${file}" || return 1
   local -r oe=$((os + (ol > 0 ? ol - 1 : 0))) ne=$((ns + (nl > 0 ? nl - 1 : 0)))
   local a b name oldname='' newname=''
   while IFS=' ' read -r a b name; do
@@ -655,11 +666,11 @@ function check_completeness() {
     die "could not read the pair list from ${LEDGER}"
   while IFS=$'\t' read -r id pfile plines; do
     [[ -n ${id} ]] || continue
-    git cat-file -e "${HEAD_REV}:${pfile}" 2>/dev/null || {
+    is_tracked "${HEAD_REV}" "${pfile}" || {
       finding schema "pair ${id} file ${pfile} is not tracked at the head revision"
       continue
     }
-    if [[ "$(git cat-file -t "${HEAD_REV}:${pfile}")" != blob ]]; then
+    if ! is_file "${HEAD_REV}" "${pfile}"; then
       finding schema "pair ${id} file ${pfile} is not a file at the head revision"
       continue
     fi
@@ -845,9 +856,9 @@ function check_siblings() {
     [[ -n ${id} ]] || continue
     if [[ ${status} == unchanged ]]; then
       # A reason about a file that does not exist at head clears nothing.
-      if ! git cat-file -e "${HEAD_REV}:${file}" 2>/dev/null; then
+      if ! is_tracked "${HEAD_REV}" "${file}"; then
         finding sibling-untracked "pair ${id} sibling ${file} is not tracked at the head revision"
-      elif [[ "$(git cat-file -t "${HEAD_REV}:${file}")" != blob ]]; then
+      elif ! is_file "${HEAD_REV}" "${file}"; then
         finding sibling-untracked "pair ${id} sibling ${file} is not a file at the head revision"
       elif [[ ${reason} == - ]]; then
         finding sibling-reason "pair ${id} sibling ${file}:${lines} is unchanged with no reason"
@@ -879,17 +890,15 @@ function check_siblings() {
     # at the merge base and nothing at head, so all of its text went and
     # there is no head position to check the range against. A file absent
     # at both revisions was never in the diff.
-    if [[ ${status} == removed ]] && ! git cat-file -e "${HEAD_REV}:${file}" 2>/dev/null; then
-      if git cat-file -e "${MB}:${file}" 2>/dev/null &&
-        [[ "$(git cat-file -t "${MB}:${file}")" == blob ]]; then
+    if [[ ${status} == removed ]] && ! is_tracked "${HEAD_REV}" "${file}"; then
+      if is_file "${MB}" "${file}"; then
         SIBLINGS_REMOVED=$((SIBLINGS_REMOVED + 1))
       else
         finding sibling-not-removed "pair ${id} sibling ${file}:${lines} is marked removed but is absent at the head revision and not a file at the merge base"
       fi
       continue
     fi
-    if git cat-file -e "${HEAD_REV}:${file}" 2>/dev/null &&
-      [[ "$(git cat-file -t "${HEAD_REV}:${file}")" == blob ]]; then
+    if is_file "${HEAD_REV}" "${file}"; then
       n="$(git show "${HEAD_REV}:${file}" | awk 'END { print NR }')"
       # A deletion at end of file anchors one past the last line.
       limit="${n}"
@@ -1010,8 +1019,7 @@ function check_verdicts() {
       finding missing-hash "pair ${id} has a TRUE verdict with no hash"
       continue
     fi
-    git cat-file -e "${HEAD_REV}:${file}" 2>/dev/null || continue
-    [[ "$(git cat-file -t "${HEAD_REV}:${file}")" == blob ]] || continue
+    is_file "${HEAD_REV}" "${file}" || continue
     valid_range "${lines}" || continue
     start="${lines%-*}"
     end="${lines#*-}"
