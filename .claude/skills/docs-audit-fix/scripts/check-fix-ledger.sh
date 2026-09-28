@@ -224,8 +224,9 @@ function check_schema() {
       (.artifact | nonobj("pair \($id) artifact")),
       # An artifact entry is a tracked range ({file, lines}) or, for a
       # fact that lives outside the tree, the command that shows it and
-      # what it printed ({command, observed}). Only the shape of a
-      # command entry is checked: the checker never runs it.
+      # what it printed ({command, observed}); either key alone makes an
+      # entry a command entry. Only the shape of a command entry is
+      # checked: the checker never runs it.
       ([.artifact | arr | to_entries[] | select(.value | type == "object")
         | select((.value | (has("command") or has("observed")) | not)
             and (((.value.file | str) and (.value.lines | rng)) | not))
