@@ -337,6 +337,20 @@ function main() {
 EOF
   run_case ledger-duplicate-key "${d}" 2 'ledger.json repeats key .pairs[0].siblings'
 
+  # The second value need share no path with the first: a command
+  # artifact list replacing a file artifact list is caught at the key
+  # that holds them both, not at any leaf.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  cat >"${d}/ledger.json" <<'EOF'
+{"report": "r.md", "code_changes": [],
+  "pairs": [{"id": "p1", "finding": 1, "file": "docs/a.md", "lines": "6-6",
+            "artifact": [{"file": "scripts/tool.sh", "lines": "1-5"}],
+            "artifact": [{"command": "git config --local --get x", "observed": "exit 1"}],
+            "fix_shape": "scope", "siblings": []}]}
+EOF
+  run_case ledger-duplicate-key-new-children "${d}" 2 'ledger.json repeats key .pairs[0].artifact'
+
   d="$(new_repo)"
   beta_fixed "${d}"
   jq '.pairs[0].artifact = []' "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
