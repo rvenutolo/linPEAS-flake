@@ -6,7 +6,7 @@ description: Fix pass for a docs-correctness-audit findings report — works the
 # Docs-audit fix pass
 
 A findings report from `/docs-audit` is the input. The output is one PR
-whose body shows, per rewritten paragraph, the artifact range it was
+whose body shows, per rewritten paragraph, the artifact it was
 written against and the gate's verdict on it.
 
 This phase exists because a fix pass reads the finding, not the audit's
@@ -278,8 +278,9 @@ and 2 when it cannot run.
     paragraph's hash now: the whole blank-line-delimited block, whitespace
     collapsed, so a re-wrap keeps the verdict current, as does a line shift
     once the pair's `lines` follow it, and any word change makes it stale.
-    A `stale-verdict` on a paragraph whose text did not change means its
-    range moved: update `lines`, and the recorded hash holds. Every code change has a gate entry whose
+    A `stale-verdict` on a paragraph whose block is unchanged (the same
+    text between the same blank lines) means its range moved: update
+    `lines`, and the recorded hash holds. Every code change has a gate entry whose
     `attack` and `result` are not blank and whose `blob` is the one the file
     holds at `HEAD` (or `deleted` when it is absent); a mismatch is
     `stale-attack`.

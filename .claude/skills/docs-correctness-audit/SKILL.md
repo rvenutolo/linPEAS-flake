@@ -507,6 +507,7 @@ Use this template:
 # Docs correctness sweep — findings report
 
 **Date:** <YYYY-MM-DD>
+**Commit:** <`git rev-parse --short HEAD` the audit read>
 **Stage:** report only — no edits applied
 **Scope:** <N files>
 **Method:** parallel read-only audits per cluster; every finding re-verified
