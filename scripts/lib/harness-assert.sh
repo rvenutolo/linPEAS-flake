@@ -216,16 +216,17 @@ function harness_assert_verify() {
     while IFS= read -r line; do
       [[ -n ${line} ]] && declared["${i}"$'\037'"${line}"]=1
     done <"${HARNESS_ASSERT_POOL}/${i}.sub"
-    out_files+=("${HARNESS_ASSERT_POOL}/${i}.out")
-    norm_files+=("${HARNESS_ASSERT_POOL}/${i}.norm")
+    # Named relative to the pool, so a newline in TMPDIR (the pool's
+    # parent) cannot split a line read back from grep or sha256sum.
+    out_files+=("${i}.out")
+    norm_files+=("${i}.norm")
   done
   local digests
-  digests="$(sha256sum -- "${norm_files[@]}")" || {
+  digests="$(cd -- "${HARNESS_ASSERT_POOL}" && sha256sum -- "${norm_files[@]}")" || {
     printf 'harness-assert: could not digest the recorded outputs\n' >&2
     return 1
   }
   while IFS=' ' read -r digest path; do
-    path="${path##*/}"
     rec_digest[${path%.norm}]="${digest}"
   done <<<"${digests}"
 
@@ -249,15 +250,15 @@ function harness_assert_verify() {
       fi
       # Every record whose output holds the substring, in record order.
       rc=0
-      holders="$(grep --fixed-strings --files-with-matches -e "${sub_i}" \
-        -- "${out_files[@]}")" || rc=$?
+      holders="$(cd -- "${HARNESS_ASSERT_POOL}" &&
+        grep --fixed-strings --files-with-matches -e "${sub_i}" \
+          -- "${out_files[@]}")" || rc=$?
       if ((rc > 1)); then
         printf 'harness-assert: could not search the recorded outputs for %s\n' "${sub_i@Q}" >&2
         return 1
       fi
       while IFS= read -r path; do
         [[ -n ${path} ]] || continue
-        path="${path##*/}"
         j="${path%.out}"
         [[ ${i} -eq ${j} ]] && continue
         [[ -n ${declared["${j}"$'\037'"${sub_i}"]:-} ]] && continue
