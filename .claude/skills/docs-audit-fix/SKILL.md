@@ -298,10 +298,11 @@ and 2 when it cannot run.
     `CHANGELOG.md` or `tests/fixtures/`, any hunk touching the range clears
     a `changed` or `removed` sibling, a whitespace-only edit included.
 - **Sweep.** Each `sweep` term is searched at the merge base across every
-    tracked file except `tests/fixtures/`, the root `CHANGELOG.md` and
-    `flake.lock` (`SWEEP_SCOPE` in the checker), skipping binary files and
-    hits inside a same-named `<!-- BEGIN <name> -->` / `<!-- END <name> -->`
-    block. The match is a fixed string, case-sensitive, within one
+    tracked file except `tests/fixtures/`, the docs audit's seeded-defect
+    fixtures, the root `CHANGELOG.md` and the root `flake.lock`
+    (`SWEEP_SCOPE` in the checker), skipping files that hold a NUL byte
+    (attributes do not decide it) and hits inside a same-named
+    `<!-- BEGIN <name> -->` / `<!-- END <name> -->` block. The match is a fixed string, case-sensitive, within one
     paragraph: each line loses its leading white space and a leading run
     of `#` followed by white space, a line left empty ends the paragraph,
     and white space is collapsed in the text and the term, so a term
@@ -313,9 +314,10 @@ and 2 when it cannot run.
     The mapped hit must overlap the pair's own paragraph or one of its
     sibling ranges, whatever their status (`sweep-uncovered`). A term with
     no hit is `sweep-empty`, and a `finding` value no pair carries a term
-    for is `missing-sweep`. A `sweep` that is not a non-empty list of
-    terms, or a term that is blank or holds a newline, tab or CR, is
-    `schema`. `--sweep [--] <term>…` prints the same hits, one
+    for is `missing-sweep`, so every pair's `finding` must be a whole
+    number of 1 or more. A `sweep` that is not a non-empty list of terms,
+    a term that is blank or holds a newline, tab or CR, or a bad `finding`
+    is `schema`. `--sweep [--] <term>…` prints the same hits, one
     `<file>:<start>-<end>: <first line>` per hit, and exits 1 when a term
     matches nothing.
 - **Verdicts.** Every pair is gated `TRUE` with a hash equal to its
@@ -387,6 +389,19 @@ the gate's job. Its known limits:
     separate strings (two `echo` lines, a concatenation) or across a
     paragraph break does not match.
 - A sibling range is read at `HEAD` like a pair's, so a stale one can
-    clear a hit that has moved away from it.
+    clear a hit that has moved away from it. A hit on a line a hunk
+    replaced maps to the hunk's whole new side, so a sibling anywhere on
+    that side clears it, and one wide range (an `unchanged` sibling has no
+    one-paragraph rule) clears every hit it overlaps.
+- Only a leading `#` marker is stripped. A blockquote's `>` and a `//`
+    comment stay text, so a phrase wrapped across them does not match. In
+    Markdown the stripping also takes a heading's `#` run, so a term that
+    includes it never matches, and a heading with no blank line after it
+    joins the paragraph below.
+- A hit in a file the branch turns into a symlink or a directory cannot
+    be cleared: its mapped lines fall outside the head file, or it reads as
+    deleted while the path still exists, so a `removed` sibling there fails.
+- A swept file whose name holds a tab or newline stops the run with exit
+    2; rename it.
 - A finding fixed only outside in-scope Markdown has no pair, so nothing
     carries or checks its terms.
