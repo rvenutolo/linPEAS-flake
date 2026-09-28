@@ -63,6 +63,15 @@ readonly PROG='check-fix-ledger'
 # can drift from it.
 readonly -a MD_ALL=('*.md')
 readonly -a MD_SCOPE=("${MD_ALL[@]}" ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures')
+# jq definitions every ledger and gate read shares, so a rule is written
+# once: txt is a string holding a non-blank character; iscmd marks a
+# command artifact entry, which either of its keys makes one; arr reads
+# anything but an array as an empty one.
+readonly JQ_DEFS='
+  def txt: type == "string" and test("\\S");
+  def iscmd: has("command") or has("observed");
+  def arr: if type == "array" then . else [] end;
+'
 findings=0
 # Findings per class, for the summary line.
 declare -A class_count=()
@@ -224,9 +233,8 @@ fi
 # lost. The callers capture this output with `|| die`, so a jq failure
 # the guards miss stops the run instead of reading as no findings.
 function check_schema() {
-  jq --raw-output '
+  jq --raw-output "${JQ_DEFS}"'
     def str: type == "string" and length > 0;
-    def txt: type == "string" and test("\\S");
     # test() with $ matches before a trailing newline (Oniguruma), so
     # "1-999999\n" would otherwise pass; the explicit no-newline check
     # closes that regardless of anchor semantics.
@@ -235,7 +243,6 @@ function check_schema() {
     def rooted: type == "string" and (startswith("./") or startswith("/"));
     def rootmsg: "starts with ./ or /; name it from the repository root";
     def shown: gsub("\n"; "<LF>") | gsub("\t"; "<TAB>") | gsub("\r"; "<CR>");
-    def arr: if type == "array" then . else [] end;
     def nonobj($what): arr | to_entries[] | select(.value | type != "object")
       | ["schema", "\($what)[\(.key)] is not an object"];
     (if (.pairs | type) != "array" then ["schema", "ledger needs a pairs array"] else empty end),
@@ -252,14 +259,14 @@ function check_schema() {
       # entry a command entry. Only the shape of a command entry is
       # checked: the checker never runs it.
       ([.artifact | arr | to_entries[] | select(.value | type == "object")
-        | select((.value | (has("command") or has("observed")) | not)
+        | select((.value | iscmd | not)
             and (((.value.file | str) and (.value.lines | rng)) | not))
         | .key]) as $badfile |
       (if (.artifact | type) == "array" and (.artifact | length) > 0 then
         ($badfile[] | ["schema", "pair \($id) artifact[\(.)] needs a file and a <start>-<end> lines"])
       else ["schema", "pair \($id) needs a non-empty artifact list"] end),
       ((.artifact | arr) | to_entries[] | select(.value | type == "object")
-        | select(.value | has("command") or has("observed")) | .key as $k | .value
+        | select(.value | iscmd) | .key as $k | .value
         | if has("file") or has("lines") then
             ["schema", "pair \($id) artifact[\($k)] holds both command and file keys (\(keys | join(", "))); give each its own entry"]
           else
@@ -317,8 +324,7 @@ function check_schema() {
 # the blob id it attacked, or "deleted" for a file absent at head, so an
 # attack can be tied to the code it ran against.
 function check_gate_schema() {
-  jq --raw-output --slurpfile ledger "${LEDGER}" '
-    def arr: if type == "array" then . else [] end;
+  jq --raw-output --slurpfile ledger "${LEDGER}" "${JQ_DEFS}"'
     def nonobj($what): arr | to_entries[] | select(.value | type != "object")
       | ["schema", "gate \($what)[\(.key)] is not an object"];
     ([$ledger[0].pairs | arr | .[] | objects | .id]) as $ids |
@@ -344,7 +350,7 @@ function check_gate_schema() {
 # inside the file. A command artifact names no file and is skipped.
 function check_artifacts() {
   local id file lines start end n records
-  records="$(jq --raw-output '.pairs[] | .id as $id | .artifact[] | select(has("command") | not) | [$id, .file, .lines] | @tsv' "${LEDGER}")" ||
+  records="$(jq --raw-output "${JQ_DEFS}"'.pairs[] | .id as $id | .artifact[] | select(iscmd | not) | [$id, .file, .lines] | @tsv' "${LEDGER}")" ||
     die "could not read the artifact list from ${LEDGER}"
   while IFS=$'\t' read -r id file lines; do
     [[ -n ${id} ]] || continue
@@ -838,11 +844,11 @@ function one_block() {
 # is no reason.
 function check_siblings() {
   local id pfile plines file lines status reason s e n ps pe hit lf line hns hol hnl hs he limit records
-  records="$(jq --raw-output '.pairs[] | .id as $id | .file as $pf | .lines as $pl | .siblings[]
+  records="$(jq --raw-output "${JQ_DEFS}"'.pairs[] | .id as $id | .file as $pf | .lines as $pl | .siblings[]
     | [$id, $pf, $pl, .file,
       (if (.lines | type) == "string" and (.lines | length) > 0 then .lines else "-" end),
       (if (.status | type) == "string" and (.status | length) > 0 then .status else "-" end),
-      (if (.reason | type) == "string" and (.reason | test("\\S")) then .reason else "-" end)]
+      (if .reason | txt then .reason else "-" end)]
     | @tsv' "${LEDGER}")" ||
     die "could not read the sibling list from ${LEDGER}"
   while IFS=$'\t' read -r id pfile plines file lines status reason; do
@@ -1024,8 +1030,7 @@ function check_verdicts() {
   done <<<"${records}"
 
   local cfile unattacked attacked blobs current_blob
-  unattacked="$(jq --raw-output --slurpfile gate "${GATE}" '
-    def txt: type == "string" and test("\\S");
+  unattacked="$(jq --raw-output --slurpfile gate "${GATE}" "${JQ_DEFS}"'
     .code_changes[].file as $f
     | select(any($gate[0].code_changes[];
       .file == $f and (.attack | txt) and (.result | txt)) | not)
@@ -1041,8 +1046,7 @@ function check_verdicts() {
   # gate read it is. Each attacked file is printed with the blobs of its
   # attacked gate entries, space-separated (check_gate_schema has already
   # confined every blob to hex or "deleted").
-  attacked="$(jq --raw-output --slurpfile gate "${GATE}" '
-    def txt: type == "string" and test("\\S");
+  attacked="$(jq --raw-output --slurpfile gate "${GATE}" "${JQ_DEFS}"'
     .code_changes[].file as $f
     | [$gate[0].code_changes[]
       | select(.file == $f and (.attack | txt) and (.result | txt)) | .blob]
@@ -1085,7 +1089,7 @@ function main() {
   fi
   npairs="$(jq '.pairs | length' "${LEDGER}")" || die "could not count pairs in ${LEDGER}"
   nchanges="$(jq '.code_changes | length' "${LEDGER}")" || die "could not count code_changes in ${LEDGER}"
-  ncommands="$(jq '[.pairs[].artifact[] | select(has("command"))] | length' "${LEDGER}")" ||
+  ncommands="$(jq "${JQ_DEFS}"'[.pairs[].artifact[] | select(iscmd)] | length' "${LEDGER}")" ||
     die "could not count command artifacts in ${LEDGER}"
   # The command tally is printed only when there is one, so a ledger
   # citing no command keeps the OK line it always had.
