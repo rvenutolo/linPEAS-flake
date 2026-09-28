@@ -35,19 +35,20 @@ How to verify a release of this wrapper yourself. None of this trusts the Pages 
 
 ## Tools needed<a name="tools-needed"></a>
 
-- `gh` (GitHub CLI), a current release — `gh attestation verify` checks
+- `gh` (GitHub CLI), a recent release — `gh attestation verify` checks
     each bundle against Sigstore's live trusted root, so a client too old
-    to parse that root fails before it reads the attestation (for example
-    `unsupported tlog public key type: PKIX_ED25519`). No fixed version
-    floor holds, because the root changes upstream. `gh release download`
-    fetches the signed release assets.
-- `cosign` ≥ 3.0 — `cosign verify` for image signatures and
-    `cosign verify-blob` for the `.sigstore` release-asset bundles. The
-    release pipeline signs with cosign 3, whose defaults write each
-    signature as a protobuf Sigstore bundle and attach an image's
-    signature as an OCI 1.1 referrer rather than a `.sig` tag (see
-    [Cosign keyless signatures](#cosign-keyless-signatures)). A client
-    that looks only for a `.sig` tag reports no signatures found.
+    to parse that root fails before it verifies any attestation (for
+    example `unsupported tlog public key type: PKIX_ED25519`). The oldest
+    working release rises whenever the root changes upstream, so this page
+    states no version number. `gh release download` fetches the signed
+    release assets.
+- `cosign` ≥ 3.0, the major the release pipeline signs with —
+    `cosign verify` for image signatures and `cosign verify-blob` for the
+    `.sigstore` release-asset bundles. cosign 3's defaults write a
+    protobuf Sigstore bundle and attach an image's signature as an OCI 1.1
+    referrer rather than a `.sig` tag (see
+    [Cosign keyless signatures](#cosign-keyless-signatures)). An older
+    client that looks only for a `.sig` tag reports no signatures found.
 - `docker` with `buildx` — `docker buildx imagetools inspect … --raw`
     resolves the per-arch image digest from the multi-arch index, for the
     `gh attestation verify` path.

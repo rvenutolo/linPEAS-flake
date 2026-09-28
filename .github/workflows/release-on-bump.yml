@@ -730,7 +730,8 @@ jobs:
 
       - name: cosign sign per-arch images (amd64, keyless)
         # cosign sign attaches the signature to each image in each
-        # registry as an OCI 1.1 referrer. Signed against the immutable
+        # registry as an OCI 1.1 referrer (on ghcr.io, through the
+        # `sha256-<digest>` fallback tag). Signed against the immutable
         # digest captured by the `push` step, NOT the mutable
         # `<tag>-amd64` reference — the signature follows the digest
         # even if a tag is later repointed.
