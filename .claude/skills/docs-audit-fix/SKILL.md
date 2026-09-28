@@ -237,9 +237,8 @@ and 2 when it cannot run.
     every list element is an object; an artifact entry holds either `file`
     and `lines` or a non-blank `command` and `observed`, never both;
     every pair and artifact range is
-    `<start>-<end>` with at most six digits a side (a `changed` or `removed`
-    sibling's range is checked with the siblings; an `unchanged` sibling's
-    `lines` is not checked); no ledger file name holds a newline, tab or CR,
+    `<start>-<end>` with at most six digits a side (a sibling's range is
+    checked with the siblings); no ledger file name holds a newline, tab or CR,
     or starts with `./` or `/` (name each from the repository root); pair
     ids and verdict ids are unique, every verdict names a ledger pair,
     and every gate code change carries a `blob` that is an object id or
@@ -263,8 +262,8 @@ and 2 when it cannot run.
     file, a deleted Markdown file included, is listed in `code_changes`.
 - **Artifacts and pairs** name files tracked at `HEAD`, with the range
     inside the file. A command artifact is never run.
-- **Siblings.** An `unchanged` one names a file tracked at `HEAD` and a
-    reason that is not blank. A `changed` one lies inside its file and inside
+- **Siblings.** An `unchanged` one names a file tracked at `HEAD`, a
+    range inside it, and a reason that is not blank. A `changed` one lies inside its file and inside
     one paragraph, clear of its own pair's recorded lines, and a covered hunk
     adds a line inside it whose whitespace-collapsed text matches no removed
     line of that hunk. A `removed` one spans at most two lines, may sit one

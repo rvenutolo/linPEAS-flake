@@ -12,8 +12,8 @@
 #                 changed file is listed as a code change
 #   artifacts     every recorded artifact range exists at the head revision;
 #                 a command artifact is shape-checked and never run
-#   siblings      an unchanged sibling names a tracked file and a reason; a
-#                 changed one gains a substantively changed line in a covered
+#   siblings      an unchanged sibling names a range inside a tracked file
+#                 and a reason; a changed one gains a substantively changed line in a covered
 #                 hunk, a removed one borders a covered hunk that deletes
 #                 text or sits in a file the diff deletes; outside in-scope
 #                 Markdown any touching hunk clears it
@@ -851,8 +851,8 @@ function one_block() {
     END { exit blank ? 1 : 0 }'
 }
 
-# @description An unchanged sibling must carry a reason; a sibling marked
-# changed must name a range inside one paragraph of its file, apart from
+# @description An unchanged sibling must name a range inside its file
+# and carry a reason; a sibling marked changed must name a range inside one paragraph of its file, apart from
 # its own pair's lines, and a hunk must change that range. For a Markdown
 # file in check_completeness' scope that means an added line in the range,
 # in a hunk it counted as covered, whose words changed: a trailing space,
@@ -869,6 +869,7 @@ function one_block() {
 # blank is no reason.
 function check_siblings() {
   local id pfile plines file lines status reason s e n ps pe hit lf line hns hol hnl hs he limit records
+  local range_ok
   records="$(jq --raw-output "${JQ_DEFS}"'.pairs[] | .id as $id | .file as $pf | .lines as $pl | .siblings[]
     | [$id, $pf, $pl, .file,
       (if (.lines | type) == "string" and (.lines | length) > 0 then .lines else "-" end),
@@ -878,26 +879,41 @@ function check_siblings() {
     die "could not read the sibling list from ${LEDGER}"
   while IFS=$'\t' read -r id pfile plines file lines status reason; do
     [[ -n ${id} ]] || continue
-    if [[ ${status} == unchanged ]]; then
-      # A reason about a file that does not exist at head clears nothing.
-      if ! is_tracked "${HEAD_REV}" "${file}"; then
-        finding sibling-untracked "pair ${id} sibling ${file} is not tracked at the head revision"
-      elif ! is_file "${HEAD_REV}" "${file}"; then
-        finding sibling-untracked "pair ${id} sibling ${file} is not a file at the head revision"
-      elif [[ ${reason} == - ]]; then
-        finding sibling-reason "pair ${id} sibling ${file}:${lines} is unchanged with no reason"
-      else
-        SIBLINGS_UNCHANGED=$((SIBLINGS_UNCHANGED + 1))
-      fi
-      continue
-    fi
-    [[ ${status} == changed || ${status} == removed ]] || continue # check_schema reported the enum
     s=0
     e=0
     if valid_range "${lines}"; then
       s="${lines%-*}"
       e="${lines#*-}"
     fi
+    if [[ ${status} == unchanged ]]; then
+      # A reason about a file that does not exist at head clears nothing,
+      # and one about a range the file does not hold names no text.
+      if ! is_tracked "${HEAD_REV}" "${file}"; then
+        finding sibling-untracked "pair ${id} sibling ${file} is not tracked at the head revision"
+        continue
+      elif ! is_file "${HEAD_REV}" "${file}"; then
+        finding sibling-untracked "pair ${id} sibling ${file} is not a file at the head revision"
+        continue
+      fi
+      range_ok=1
+      if ((s == 0 || s > e)); then
+        finding schema "pair ${id} sibling ${file}:${lines} is marked unchanged without a valid <start>-<end> range"
+        range_ok=0
+      else
+        n="$(line_count "${HEAD_REV}" "${file}")"
+        if ((e > n)); then
+          finding schema "pair ${id} sibling ${file}:${lines} runs past end of file (${n} lines)"
+          range_ok=0
+        fi
+      fi
+      if [[ ${reason} == - ]]; then
+        finding sibling-reason "pair ${id} sibling ${file}:${lines} is unchanged with no reason"
+      elif ((range_ok)); then
+        SIBLINGS_UNCHANGED=$((SIBLINGS_UNCHANGED + 1))
+      fi
+      continue
+    fi
+    [[ ${status} == changed || ${status} == removed ]] || continue # check_schema reported the enum
     # A reversed range overlaps nothing, so it would read as "no hunk
     # touches it" rather than as the malformed range it is.
     if ((s == 0 || s > e)); then
