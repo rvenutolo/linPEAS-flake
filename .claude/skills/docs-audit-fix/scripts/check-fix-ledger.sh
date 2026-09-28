@@ -654,8 +654,20 @@ function new_side_blocks() {
     }'
 }
 
+# @description True when a pair span of file $1 in the list $4 (as
+# "file\ta\tb" lines) overlaps lines $2..$3.
+function span_overlaps() {
+  local -r file="$1" s="$2" e="$3" spans="$4"
+  local pf pa pb
+  while IFS=$'\t' read -r pf pa pb; do
+    [[ ${pf} == "${file}" ]] || continue
+    ((s <= pb && e >= pa)) && return 0
+  done <<<"${spans}"
+  return 1
+}
+
 function check_completeness() {
-  local file os ol ns nl hs he ne pf pa pb covered block_a block_b bcov all_covered block_count
+  local file os ol ns nl hs he ne block_a block_b all_covered block_count
   local md_hunks
   md_hunks="$(list_hunks hunks "${MD_SCOPE[@]}")" ||
     die 'could not parse the Markdown diff'
@@ -713,15 +725,7 @@ function check_completeness() {
       continue
     fi
     if ((nl == 0)); then
-      covered=0
-      while IFS=$'\t' read -r pf pa pb; do
-        [[ ${pf} == "${file}" ]] || continue
-        if ((hs <= pb && he >= pa)); then
-          covered=1
-          break
-        fi
-      done <<<"${spans}"
-      if ((covered)); then
+      if span_overlaps "${file}" "${hs}" "${he}" "${spans}"; then
         count_covered "${file}" "${os}" "${ol}" "${ns}" "${nl}"
       else
         finding uncovered-hunk "${file}:${hs} changed and no pair covers it"
@@ -737,15 +741,7 @@ function check_completeness() {
     while IFS=' ' read -r block_a block_b; do
       [[ -n ${block_a} ]] || continue
       block_count=$((block_count + 1))
-      bcov=0
-      while IFS=$'\t' read -r pf pa pb; do
-        [[ ${pf} == "${file}" ]] || continue
-        if ((block_a <= pb && block_b >= pa)); then
-          bcov=1
-          break
-        fi
-      done <<<"${spans}"
-      if ((bcov == 0)); then
+      if ! span_overlaps "${file}" "${block_a}" "${block_b}" "${spans}"; then
         all_covered=0
         finding uncovered-hunk "${file}:${block_a} changed and no pair covers it"
       fi
@@ -756,15 +752,7 @@ function check_completeness() {
       # nothing. Like a pure deletion, the hunk anchors on the lines
       # either side of it, hs-1 and he+1, so a pair on the paragraph
       # directly above or below covers it.
-      covered=0
-      while IFS=$'\t' read -r pf pa pb; do
-        [[ ${pf} == "${file}" ]] || continue
-        if ((hs - 1 <= pb && he + 1 >= pa)); then
-          covered=1
-          break
-        fi
-      done <<<"${spans}"
-      if ((covered)); then
+      if span_overlaps "${file}" "$((hs - 1))" "$((he + 1))" "${spans}"; then
         count_covered "${file}" "${os}" "${ol}" "${ns}" "${nl}"
       else
         finding uncovered-hunk "${file}:${hs} changed and no pair covers it"
