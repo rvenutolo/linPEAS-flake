@@ -234,7 +234,9 @@ for json_file in "${LEDGER}" "${GATE}"; do
           else $s | .done[$p[:-1] | tojson] = true end
         end)
     | .hit // empty
-    | map(if type == "number" then "[\(.)]" else ".\(.)" end) | join("")' \
+    | map(if type == "number" then "[\(.)]"
+        elif test("^[A-Za-z_][A-Za-z0-9_]*$") then ".\(.)"
+        else "[\(tojson)]" end) | join("")' \
     "${json_file}")" || die "could not read the keys of ${json_file}"
   [[ -z ${repeated} ]] || die "${json_file} repeats key ${repeated}"
 done
