@@ -39,7 +39,8 @@ How to verify a release of this wrapper yourself. None of this trusts the Pages 
     each bundle against Sigstore's live trusted root, so a client too old
     to parse that root fails before it verifies any attestation (for
     example `unsupported tlog public key type: PKIX_ED25519`). The oldest
-    working release rises whenever the root changes upstream, so this page
+    working release can rise when the root changes upstream (for example,
+    when it adds a key type older clients cannot parse), so this page
     states no version number. `gh release download` fetches the signed
     release assets.
 - `cosign` ≥ 3.0, the major the release pipeline signs with —

@@ -1190,7 +1190,8 @@ jobs:
 
       - name: cosign sign multi-arch index (keyless)
         # Signs the OCI index digest on each registry. cosign attaches a
-        # referrer to `<digest>` so that `cosign verify` against
+        # referrer to `<digest>` (on ghcr.io, through the
+        # `sha256-<digest>` fallback tag) so that `cosign verify` against
         # `:VERSION` — and `:latest`, whenever it resolves to the same
         # digest — succeeds. Index-level signing complements the per-arch
         # signatures from the image-* jobs.
