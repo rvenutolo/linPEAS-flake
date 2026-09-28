@@ -137,10 +137,10 @@ rather than on the bump's own checks. Walk the list when one does.
     [Tools needed](../security/verification.md#tools-needed)). A nixpkgs
     bump does not affect this, since the workflows use the runner's
     `gh`, but a coincident change can look like attestation drift.
-    The step log names the parse failure (for example
-    `unsupported tlog public key type`); confirm that before assuming
-    drift. It clears once the runner image ships a `gh` that parses the
-    new root.
+    The step log shows a trusted-root load error (the errors under
+    [Tools needed](../security/verification.md#tools-needed)); confirm
+    that before assuming drift. It clears once the runner image ships a
+    `gh` that parses the new root.
 
 Step 5 of the step-by-step below covers most of this surface as a
 symptom → fix lookup table; use this section to anticipate before

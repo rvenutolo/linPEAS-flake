@@ -36,13 +36,17 @@ How to verify a release of this wrapper yourself. None of this trusts the Pages 
 ## Tools needed<a name="tools-needed"></a>
 
 - `gh` (GitHub CLI), a recent release — `gh attestation verify` checks
-    each bundle against Sigstore's live trusted root, so a client too old
-    to parse that root fails before it verifies any attestation. Its
-    error contains `failed to get trusted root` (for example
-    `failed to get trusted root: unsupported tlog public key type:   PKIX_ED25519`) and says nothing about whether the attestation is
-    valid. The oldest
-    working release can rise when the root changes upstream (for example,
-    when it adds a key type older clients cannot parse), so this page
+    each bundle against Sigstore's live trusted root. A client that
+    cannot load that root, because it cannot fetch it or is too old to
+    parse it, fails before it verifies any attestation, and the error
+    says nothing about whether the attestation is valid. Older releases
+    name the cause after `failed to get trusted root:` (for example
+    `unsupported tlog public key type: PKIX_ED25519`); newer releases
+    print only
+    `public good verifier is not available (initialization may have failed)`
+    for either cause. The oldest working release can rise when the root
+    changes upstream (for example, when it adds a key type older clients
+    cannot parse), so this page
     states no version number. `gh release download` fetches the signed
     release assets.
 - `cosign` ≥ 3.0, the major the release pipeline signs with —
@@ -52,6 +56,9 @@ How to verify a release of this wrapper yourself. None of this trusts the Pages 
     referrer rather than a `.sig` tag (see
     [Cosign keyless signatures](#cosign-keyless-signatures)). An older
     client that looks only for a `.sig` tag reports no signatures found.
+    cosign also loads Sigstore's live trusted root; when it cannot fetch
+    it, the error reads `getting trusted root from TUF` rather than a
+    signature or certificate-identity error, and verifies nothing.
 - `docker` with `buildx` — `docker buildx imagetools inspect … --raw`
     resolves the per-arch image digest from the multi-arch index, for the
     `gh attestation verify` path.
@@ -179,12 +186,15 @@ the `attribute failure reason` step. Reasons:
     verification failed for a specific artifact, or — for the two image
     tokens — the registry fetch that resolves the per-arch digest failed
     first (the step log shows a `docker manifest inspect` error or
-    `unexpected … digest`). A
-    verification failure is tampering unless the step log shows the
-    root-load error [Tools needed](#tools-needed) describes. That error
-    verifies nothing, so re-run once the runner image ships a newer `gh`
-    (the [runner-images release notes](https://github.com/actions/runner-images/releases)
-    list each image's version), and treat a failure then as tampering.
+    `unexpected … digest`). Treat a verification failure as tampering
+    until ruled out, unless the step log shows `gh` could not load
+    Sigstore's trusted root (the errors under
+    [Tools needed](#tools-needed)). That run verified nothing: re-run it.
+    If the error persists, the runner's `gh` cannot parse the root; re-run
+    once the runner image ships a newer `gh` (the
+    [runner-images](https://github.com/actions/runner-images) README links
+    each image's installed software), and treat a failure then as
+    tampering.
 - `release-tag-fetch-failed` / `release-asset-download-failed` —
     transient GitHub API / asset visibility lag.
 - `pin-blob-sig-failed` — cosign verify-blob failed for
@@ -194,7 +204,8 @@ the `attribute failure reason` step. Reasons:
     `nix shell .#cosign` failed first; the step log says which. Triage:
     re-trigger
     `release-on-bump.yml` via `workflow_dispatch` with
-    `force-republish: true` if the sidecar is missing.
+    `force-republish: true` if the sidecar is missing. A trusted-root
+    load error in the step log is handled as for `images-cosign-failed`.
 - `sbom-amd64-blob-sig-failed` — same failure for the amd64
     CycloneDX SBOM asset. Responsibility lives in the
     `image-amd64` job of `release-on-bump.yml`.
@@ -206,9 +217,11 @@ the `attribute failure reason` step. Reasons:
     issuer, or the step could not reach cosign (`nix shell` error) or the
     registries; the step log says which. Treat a cosign verification
     error as a signing-chain incident, adjacent in severity to the
-    `*-attest-failed` reasons. The step runs the lock-pinned `.#cosign`,
-    not a runner tool, so a re-run uses the same client; only a
-    `flake.lock` bump changes it.
+    `*-attest-failed` reasons. A trusted-root load error (see
+    [Tools needed](#tools-needed)) verified nothing: re-run. The step
+    runs the lock-pinned `.#cosign`, not a runner tool, so a re-run uses
+    the same client; if the error persists, only a flake change that
+    updates cosign (normally a `flake.lock` bump) changes the client.
 - `unattributed` — the job failed but no ladder arm matched the failed
     step: either a step before the first verification step
     (harden-runner, checkout, setup-nix) failed, or a verification step
@@ -223,10 +236,11 @@ the `attribute failure reason` step. Reasons:
 `upstream-sri-drift` on a hash mismatch and
 `cross-registry-manifest-mismatch` on a mismatch warrant the
 "treat as security incident" framing outright; the `*-attest-failed`
-family warrants it unless the step log shows the runner's `gh` could not
-load Sigstore's trusted root, and then if a re-run on a newer `gh` still
-fails; `images-cosign-failed` warrants it on a cosign verification
-error; `manifest-tag-drift` on a mismatch is a
+family on a verification failure and `images-cosign-failed` on a cosign
+verification error warrant it too, except when the step log shows the
+client could not load Sigstore's trusted root: then it applies only if
+the failure persists on a client that loads the root;
+`manifest-tag-drift` on a mismatch is a
 lower-confidence security signal, and the body tells the maintainer to
 hold pin bumps for it too.
 Folding all reasons into a single failure body trains
