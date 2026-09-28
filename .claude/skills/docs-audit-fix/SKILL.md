@@ -327,3 +327,8 @@ the gate's job. Its known limits:
     whitespace-only line, pair only the paragraph below, and the run
     passes. With a truly empty line instead, git shows a pure deletion,
     and the same pairing fails.
+- A changed file whose name holds a double quote, a backslash or a
+    control character stops the run with exit 2, because git quotes such
+    a name in every diff the checker reads; rename it. A ledger file name
+    holding a backslash is read with it doubled, so it names no tracked
+    file and fails as untracked.

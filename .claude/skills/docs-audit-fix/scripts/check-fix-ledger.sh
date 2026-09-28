@@ -35,8 +35,8 @@
 #   0  the ledger covers the diff and every pair is currently gated TRUE
 #   1  findings (printed to stderr, one line each)
 #   2  the check could not run: missing tool, bad arguments, unparsable
-#      JSON or a key repeated inside one object, unresolvable revision, or
-#      uncommitted tracked changes
+#      JSON or a key repeated inside one object, unresolvable revision,
+#      uncommitted tracked changes, or a changed path git quotes
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -1114,6 +1114,20 @@ function check_verdicts() {
 
 function main() {
   local class detail schema_bad=0 schema npairs nchanges ncommands
+  # Even with core.quotePath=false, git C-quotes a path holding a double
+  # quote, a backslash or a control character, in the diff headers and
+  # name lists this script reads alike. No ledger name matches the quoted
+  # spelling except one written as that quoted text, which would then
+  # pass a code change whose attack names no blob. A quoted name always
+  # starts with a double quote and a plain one never can, so the check is
+  # on the first character; the name is shown as git prints it.
+  local changed_all quoted
+  changed_all="$(changed_names)" || die 'could not list the changed files'
+  while IFS= read -r quoted; do
+    if [[ ${quoted} == \"* ]]; then
+      die "cannot check the change to ${quoted}: git quotes a path holding a double quote, backslash or control character; rename it"
+    fi
+  done <<<"${changed_all}"
   schema="$(check_schema)" || die "could not check the schema of ${LEDGER}"
   schema+=$'\n'"$(check_gate_schema)" || die "could not check the schema of ${GATE}"
   while IFS=$'\t' read -r class detail; do
