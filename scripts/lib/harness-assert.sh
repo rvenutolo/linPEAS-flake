@@ -157,16 +157,6 @@ function harness_assert_also() {
     >>"${HARNESS_ASSERT_POOL}/$((HARNESS_ASSERT_COUNT - 1)).sub"
 }
 
-# @description Return 0 if the record at the given index asserts the
-# given substring. Membership is a whole-line match against the record's
-# substring list, so one substring being another's prefix does not count
-# as the same assertion.
-# @arg $1 substring  @arg $2 record index
-function harness_assert_declares() {
-  grep --fixed-strings --line-regexp --quiet -- "$1" \
-    "${HARNESS_ASSERT_POOL}/${2}.sub"
-}
-
 # @description Return 0 if the substring/other-scenario pair is exempt,
 # either by an exact pair or by a `*` wildcard registered for the substring.
 # @arg $1 substring  @arg $2 other scenario name
@@ -212,9 +202,36 @@ function harness_assert_verify() {
   fi
 
   local flagged=0 asserted=0
-  local i j sub_i name_i name_j
+  local i j sub_i name_i name_j line digest path rc
+  # Everything the rules below compare is read once up front: each
+  # record's name, the substrings it declares (a whole-line match, so one
+  # substring being another's prefix is not the same assertion), and a
+  # digest of its normalized output. A digest match is confirmed with cmp
+  # before two records count as identical. Reading per comparison instead
+  # costs a process per record pair, which dominates a large harness.
+  local -a rec_name=() rec_digest=() out_files=() norm_files=()
+  local -A declared=()
   for ((i = 0; i < HARNESS_ASSERT_COUNT; i++)); do
-    name_i="$(cat -- "${HARNESS_ASSERT_POOL}/${i}.name")"
+    rec_name[i]="$(<"${HARNESS_ASSERT_POOL}/${i}.name")"
+    while IFS= read -r line; do
+      [[ -n ${line} ]] && declared["${i}"$'\037'"${line}"]=1
+    done <"${HARNESS_ASSERT_POOL}/${i}.sub"
+    out_files+=("${HARNESS_ASSERT_POOL}/${i}.out")
+    norm_files+=("${HARNESS_ASSERT_POOL}/${i}.norm")
+  done
+  local digests
+  digests="$(sha256sum -- "${norm_files[@]}")" || {
+    printf 'harness-assert: could not digest the recorded outputs\n' >&2
+    return 1
+  }
+  while IFS=' ' read -r digest path; do
+    path="${path##*/}"
+    rec_digest[${path%.norm}]="${digest}"
+  done <<<"${digests}"
+
+  local holders
+  for ((i = 0; i < HARNESS_ASSERT_COUNT; i++)); do
+    name_i="${rec_name[i]}"
     while IFS= read -r sub_i; do
       [[ -z ${sub_i} ]] && continue
       asserted=$((asserted + 1))
@@ -230,25 +247,37 @@ function harness_assert_verify() {
         flagged=$((flagged + 1))
         continue
       fi
-      for ((j = 0; j < HARNESS_ASSERT_COUNT; j++)); do
+      # Every record whose output holds the substring, in record order.
+      rc=0
+      holders="$(grep --fixed-strings --files-with-matches -e "${sub_i}" \
+        -- "${out_files[@]}")" || rc=$?
+      if ((rc > 1)); then
+        printf 'harness-assert: could not search the recorded outputs for %s\n' "${sub_i@Q}" >&2
+        return 1
+      fi
+      while IFS= read -r path; do
+        [[ -n ${path} ]] || continue
+        path="${path##*/}"
+        j="${path%.out}"
         [[ ${i} -eq ${j} ]] && continue
-        harness_assert_declares "${sub_i}" "${j}" && continue
+        [[ -n ${declared["${j}"$'\037'"${sub_i}"]:-} ]] && continue
         # Identical output means no substring can separate the two records,
         # so naming one of them as the weak assertion picks a side of a pair
         # the gate cannot tell apart, and no narrowing could clear it. The
         # identical-output rule below judges such records as a group instead,
         # and the census names the group, so the collapse stays visible
         # rather than quietly shrinking the comparison set.
-        cmp --silent -- "${HARNESS_ASSERT_POOL}/${i}.norm" \
-          "${HARNESS_ASSERT_POOL}/${j}.norm" && continue
-        grep --fixed-strings --quiet -- "${sub_i}" \
-          "${HARNESS_ASSERT_POOL}/${j}.out" || continue
-        name_j="$(cat -- "${HARNESS_ASSERT_POOL}/${j}.name")"
+        if [[ ${rec_digest[i]} == "${rec_digest[j]}" ]] &&
+          cmp --silent -- "${HARNESS_ASSERT_POOL}/${i}.norm" \
+            "${HARNESS_ASSERT_POOL}/${j}.norm"; then
+          continue
+        fi
+        name_j="${rec_name[j]}"
         harness_assert_is_exempt "${sub_i}" "${name_j}" && continue
         printf 'harness-assert: %s asserts %s which also appears in the output of %s — the assertion does not discriminate\n' \
           "${name_i}" "${sub_i@Q}" "${name_j}" >&2
         flagged=$((flagged + 1))
-      done
+      done <<<"${holders}"
     done <"${HARNESS_ASSERT_POOL}/${i}.sub"
   done
 
@@ -261,6 +290,7 @@ function harness_assert_verify() {
       >"${HARNESS_ASSERT_POOL}/${i}.set"
     group_of[i]=${i}
     for ((j = 0; j < i; j++)); do
+      [[ ${rec_digest[i]} == "${rec_digest[j]}" ]] || continue
       if cmp --silent -- "${HARNESS_ASSERT_POOL}/${i}.norm" \
         "${HARNESS_ASSERT_POOL}/${j}.norm"; then
         group_of[i]=${group_of[j]}
@@ -282,12 +312,12 @@ function harness_assert_verify() {
   for ((i = 0; i < HARNESS_ASSERT_COUNT; i++)); do
     [[ ${group_of[i]} -eq ${i} ]] || continue
     distinct=$((distinct + 1))
-    name_i="$(cat -- "${HARNESS_ASSERT_POOL}/${i}.name")"
+    name_i="${rec_name[i]}"
     names="" members=()
     for ((j = i; j < HARNESS_ASSERT_COUNT; j++)); do
       [[ ${group_of[j]} -eq ${i} ]] || continue
       members+=("${j}")
-      name_j="$(cat -- "${HARNESS_ASSERT_POOL}/${j}.name")"
+      name_j="${rec_name[j]}"
       names+="${names:+, }${name_j@Q}"
       [[ ${j} -eq ${i} ]] && continue
       cmp --silent -- "${HARNESS_ASSERT_POOL}/${i}.set" \
@@ -306,9 +336,9 @@ function harness_assert_verify() {
     # scenario earns its place. Each pair in a collapsed group is judged
     # on its own, so excusing one pair never excuses the rest.
     for ((p = 0; p < ${#members[@]}; p++)); do
-      name_p="$(cat -- "${HARNESS_ASSERT_POOL}/${members[p]}.name")"
+      name_p="${rec_name[members[p]]}"
       for ((q = p + 1; q < ${#members[@]}; q++)); do
-        name_q="$(cat -- "${HARNESS_ASSERT_POOL}/${members[q]}.name")"
+        name_q="${rec_name[members[q]]}"
         harness_assert_parity_is_exempt "${name_p}" "${name_q}" && continue
         printf 'harness-assert: %s and %s share one recorded output — make their outputs differ, merge them into one record with harness_assert_also, or register harness_assert_parity_exempt with a rationale\n' \
           "${name_p@Q}" "${name_q@Q}" >&2

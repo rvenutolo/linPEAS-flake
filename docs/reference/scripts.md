@@ -2396,18 +2396,6 @@ would check each line on its own rather than the whole.
 
 - `$1` — substring
 
-#### harness_assert_declares()
-
-Return 0 if the record at the given index asserts the
-given substring. Membership is a whole-line match against the record's
-substring list, so one substring being another's prefix does not count
-as the same assertion.
-
-**Args:**
-
-- `$1` — substring
-- `$2` — record index
-
 #### harness_assert_is_exempt()
 
 Return 0 if the substring/other-scenario pair is exempt,
