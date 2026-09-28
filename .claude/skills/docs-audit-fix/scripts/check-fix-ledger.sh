@@ -23,8 +23,9 @@
 #
 # A paragraph is the blank-line-delimited block around the recorded lines,
 # and its hash covers that whole block with whitespace collapsed, so a
-# re-wrap or a shift in line numbers leaves a verdict current while any
-# word change inside the block makes it stale.
+# re-wrap leaves a verdict current, as does a shift in line numbers once
+# the pair's recorded lines follow it, while any word change inside the
+# block makes it stale.
 #
 # Usage:
 #   check-fix-ledger.sh [--base <rev>] [--head <rev>] <ledger.json> <gate.json>

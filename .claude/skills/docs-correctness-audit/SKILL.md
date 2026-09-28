@@ -553,6 +553,7 @@ different amounts:
 - <batching suggestion, decisions the user must make, generated-doc/generator fixes>
 - Fix with `/docs-fix <this report>`: it holds the PR to the fix-pass
   contract and does not open it until the ledger checker passes.
+- Cycle: <this audit closes the cycle | another audit will run against these fixes>
 ```
 
 Every finding on a quantifier carries its fix shape in the finding itself, not
