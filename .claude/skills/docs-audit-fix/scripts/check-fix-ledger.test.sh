@@ -312,6 +312,31 @@ function main() {
   cat -- "${d}/gate.json" >"${d}/g" && cat -- "${d}/g" >>"${d}/gate.json"
   run_case gate-appended-twice "${d}" 2 'gate.json does not hold exactly one JSON object'
 
+  # A key repeated inside one object resolves to its last value, so an
+  # earlier FALSE verdict would be shadowed by a later TRUE one. The file
+  # is refused, naming the repeated key.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq --raw-output '.pairs[0].hash' "${d}/gate.json" >"${d}/h"
+  printf '{"pairs": [{"id": "p1", "verdict": "FALSE", "note": "artifact disagrees", "verdict": "TRUE", "hash": "%s", "note": ""}], "code_changes": []}\n' \
+    "$(cat -- "${d}/h")" >"${d}/gate.json"
+  run_case gate-duplicate-key "${d}" 2 'gate.json repeats key .pairs[0].verdict'
+
+  # A repeated key whose value is a container is caught too: the second
+  # siblings list replaces the first, whose changed sibling no hunk
+  # touches.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  cat >"${d}/ledger.json" <<'EOF'
+{"report": "r.md", "code_changes": [],
+  "pairs": [{"id": "p1", "finding": 1, "file": "docs/a.md", "lines": "6-6",
+            "artifact": [{"file": "scripts/tool.sh", "lines": "1-5"}],
+            "fix_shape": "scope",
+            "siblings": [{"file": "docs/a.md", "lines": "12-12", "status": "changed"}],
+            "siblings": []}]}
+EOF
+  run_case ledger-duplicate-key "${d}" 2 'ledger.json repeats key .pairs[0].siblings'
+
   d="$(new_repo)"
   beta_fixed "${d}"
   jq '.pairs[0].artifact = []' "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
