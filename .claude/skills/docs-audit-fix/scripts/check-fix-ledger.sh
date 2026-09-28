@@ -870,7 +870,6 @@ function one_block() {
 # blank is no reason.
 function check_siblings() {
   local id pfile plines file lines status reason s e n ps pe hit lf line hns hol hnl hs he limit records
-  local range_ok
   records="$(jq --raw-output "${JQ_DEFS}"'.pairs[] | .id as $id | .file as $pf | .lines as $pl | .siblings[]
     | [$id, $pf, $pl, .file,
       (if (.lines | type) == "string" and (.lines | length) > 0 then .lines else "-" end),
@@ -896,20 +895,19 @@ function check_siblings() {
         finding sibling-untracked "pair ${id} sibling ${file} is not a file at the head revision"
         continue
       fi
-      range_ok=1
+      # A range fault is a finding, so the tally below is only ever
+      # printed for siblings whose range held.
       if ((s == 0 || s > e)); then
         finding schema "pair ${id} sibling ${file}:${lines} is marked unchanged without a valid <start>-<end> range"
-        range_ok=0
       else
         n="$(line_count "${HEAD_REV}" "${file}")"
         if ((e > n)); then
           finding schema "pair ${id} sibling ${file}:${lines} runs past end of file (${n} lines)"
-          range_ok=0
         fi
       fi
       if [[ ${reason} == - ]]; then
         finding sibling-reason "pair ${id} sibling ${file}:${lines} is unchanged with no reason"
-      elif ((range_ok)); then
+      else
         SIBLINGS_UNCHANGED=$((SIBLINGS_UNCHANGED + 1))
       fi
       continue
