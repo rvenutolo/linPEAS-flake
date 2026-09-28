@@ -154,8 +154,9 @@ and the octoscan `OCTOSCAN_DIGEST`/`OCTOSCAN_VERSION` pair against
     the GitHub compare API — a dangling force-pushed commit fails.
     API errors fail the job loudly (exit 2), never silently.
 1. Version-label bumps (SHA and comment move together) pass here;
-    they are quarantined by `minimumReleaseAge` and re-checked daily
-    by `ratchet-pin-audit`.
+    they are quarantined by `minimumReleaseAge` and, for pins inside
+    the audit's scope, re-checked daily by `ratchet-pin-audit` (scope in
+    its [runbook](../runbooks/ratchet-pin-audit.md)).
 1. A self-reference pin — a `uses:` whose owner/repo is this repo's
     own — is exempt from this gate entirely: it has no upstream
     release tag to repoint against, since Renovate's pinDigests rule
