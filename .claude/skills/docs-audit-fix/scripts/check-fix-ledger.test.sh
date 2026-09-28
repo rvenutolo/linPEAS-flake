@@ -312,6 +312,61 @@ function main() {
   cat -- "${d}/gate.json" >"${d}/g" && cat -- "${d}/g" >>"${d}/gate.json"
   run_case gate-appended-twice "${d}" 2 'gate.json does not hold exactly one JSON object'
 
+  # A key repeated inside one object resolves to its last value, so an
+  # earlier FALSE verdict would be shadowed by a later TRUE one. The file
+  # is refused, naming the repeated key.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq --raw-output '.pairs[0].hash' "${d}/gate.json" >"${d}/h"
+  printf '{"pairs": [{"id": "p1", "verdict": "FALSE", "note": "artifact disagrees", "verdict": "TRUE", "hash": "%s", "note": ""}], "code_changes": []}\n' \
+    "$(cat -- "${d}/h")" >"${d}/gate.json"
+  run_case gate-duplicate-key "${d}" 2 'gate.json repeats key .pairs[0].verdict'
+
+  # A repeated key whose value is a container is caught too: the second
+  # siblings list replaces the first, whose changed sibling no hunk
+  # touches.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  cat >"${d}/ledger.json" <<'EOF'
+{"report": "r.md", "code_changes": [],
+  "pairs": [{"id": "p1", "finding": 1, "file": "docs/a.md", "lines": "6-6",
+            "artifact": [{"file": "scripts/tool.sh", "lines": "1-5"}],
+            "fix_shape": "scope",
+            "siblings": [{"file": "docs/a.md", "lines": "12-12", "status": "changed"}],
+            "siblings": []}]}
+EOF
+  run_case ledger-duplicate-key "${d}" 2 'ledger.json repeats key .pairs[0].siblings'
+
+  # The second value need share no path with the first: a command
+  # artifact list replacing a file artifact list is caught at the key
+  # that holds them both, not at any leaf.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  cat >"${d}/ledger.json" <<'EOF'
+{"report": "r.md", "code_changes": [],
+  "pairs": [{"id": "p1", "finding": 1, "file": "docs/a.md", "lines": "6-6",
+            "artifact": [{"file": "scripts/tool.sh", "lines": "1-5"}],
+            "artifact": [{"command": "git config --local --get x", "observed": "exit 1"}],
+            "fix_shape": "scope", "siblings": []}]}
+EOF
+  run_case ledger-duplicate-key-new-children "${d}" 2 'ledger.json repeats key .pairs[0].artifact'
+
+  # A key that is not a plain identifier is shown JSON-quoted, so "a.b"
+  # does not read as a nested b and a newline cannot split the message.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq --compact-output '.pairs[0]["x.y\nz"] = 1' "${d}/ledger.json" |
+    sed 's/"x\.y\\nz":1/"x.y\\nz":1,"x.y\\nz":2/' >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case ledger-duplicate-key-quoted "${d}" 2 'ledger.json repeats key .pairs[0]["x.y\nz"]'
+
+  # A trailing newline must not pass the identifier test: jq's $ matches
+  # before it, so "abc\n" would read as a plain abc and split the line.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq --compact-output '.pairs[0]["abc\n"] = 1' "${d}/ledger.json" |
+    sed 's/"abc\\n":1/"abc\\n":1,"abc\\n":2/' >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case ledger-duplicate-key-trailing-newline "${d}" 2 'ledger.json repeats key .pairs[0]["abc\n"]'
+
   d="$(new_repo)"
   beta_fixed "${d}"
   jq '.pairs[0].artifact = []' "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
@@ -534,6 +589,47 @@ function main() {
   run_hash_case hash-reversed-range "${d}" 2 \
     'bad range: 6-3 (start must be >= 1 and <= end)' docs/a.md 6-3
 
+  # The root CHANGELOG.md and tests/fixtures/ sit outside the paragraph
+  # check: a word edit in each needs neither a pair nor a code_changes
+  # entry. Narrowing the in-scope Markdown set's exclusions makes either
+  # edit an uncovered hunk.
+  d="$(new_repo)"
+  git -C "${d}" switch --quiet main
+  mkdir -p -- "${d}/tests/fixtures/deep"
+  printf '%s\n' '# Changelog' '' 'Entry one.' >"${d}/CHANGELOG.md"
+  printf '%s\n' 'Fixture paragraph.' >"${d}/tests/fixtures/deep/x.md"
+  commit_all_special "${d}" out-of-scope CHANGELOG.md tests
+  git -C "${d}" switch --quiet fix
+  git -C "${d}" merge --quiet main
+  sed -i 's/^Entry one\.$/Entry one, reworded./' "${d}/CHANGELOG.md"
+  sed -i 's/^Fixture paragraph\.$/Fixture paragraph, reworded./' "${d}/tests/fixtures/deep/x.md"
+  commit_all_special "${d}" reword CHANGELOG.md tests
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case out-of-scope-markdown-unpaired "${d}" 0 '' \
+    'OK — 0 pairs; 0 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 0 removed siblings'
+
+  # Outside in-scope Markdown any touching hunk clears a changed sibling,
+  # a whitespace-only edit included. Narrowing the exclusions puts the
+  # same trailing space under the substance test, which it fails.
+  d="$(new_repo)"
+  git -C "${d}" switch --quiet main
+  mkdir -p -- "${d}/tests/fixtures/deep"
+  printf '%s\n' '# Changelog' '' 'Entry one.' >"${d}/CHANGELOG.md"
+  printf '%s\n' 'Fixture paragraph.' >"${d}/tests/fixtures/deep/x.md"
+  commit_all_special "${d}" out-of-scope CHANGELOG.md tests
+  git -C "${d}" switch --quiet fix
+  git -C "${d}" merge --quiet main
+  sed -i 's/^Entry one\.$/Entry one. /' "${d}/CHANGELOG.md"
+  sed -i 's/^Fixture paragraph\.$/Fixture paragraph. /' "${d}/tests/fixtures/deep/x.md"
+  commit_all_special "${d}" pad CHANGELOG.md tests
+  beta_fixed "${d}"
+  jq '.pairs[0].siblings = [{file: "CHANGELOG.md", lines: "3-3", status: "changed"},
+      {file: "tests/fixtures/deep/x.md", lines: "1-1", status: "changed"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case out-of-scope-markdown-sibling "${d}" 0 '' \
+    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 2 changed, 0 unchanged and 0 removed siblings'
+
   # Pure reflow: Alpha's two lines joined, same words. Needs no pair.
   d="$(new_repo)"
   sed -i -e '3{N;s/\n/ /}' "${d}/docs/a.md"
@@ -645,6 +741,38 @@ EOF
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
   run_case deleted-md "${d}" 1 'uncovered-file: docs/a.md is changed but not listed in code_changes'
 
+  # A Markdown file replaced by a directory of the same name is a deleted
+  # Markdown file: its text is gone, so it must be listed like any other.
+  # Only a file (a blob) at head survives as Markdown to pair.
+  d="$(new_repo)"
+  seed_main "${d}" docs/x.md 'Ex paragraph.'
+  git -C "${d}" rm --quiet -- docs/x.md
+  mkdir -p -- "${d}/docs/x.md"
+  printf 'inner\n' >"${d}/docs/x.md/inner.txt"
+  commit_all "${d}" 'md becomes a directory'
+  printf '{"report": "r.md", "pairs": [], "code_changes": [{"file": "docs/x.md/inner.txt", "evidence": "e"}]}\n' \
+    >"${d}/ledger.json"
+  jq -n --arg b "$(git -C "${d}" rev-parse HEAD:docs/x.md/inner.txt)" \
+    '{pairs: [], code_changes: [{file: "docs/x.md/inner.txt", blob: $b, attack: "a", result: "r"}]}' \
+    >"${d}/gate.json"
+  run_case md-replaced-by-directory "${d}" 1 \
+    'uncovered-file: docs/x.md is changed but not listed in code_changes'
+
+  # A gitlink named like Markdown is not a file, so it is a code change
+  # too. It points at a commit the repository holds, since a missing
+  # object already reads as absent at head and would not tell a
+  # tracked-name test from a file test.
+  d="$(new_repo)"
+  git -C "${d}" update-index --add --cacheinfo "160000,$(git -C "${d}" rev-parse HEAD),docs/sub.md"
+  git -C "${d}" commit --quiet --message 'gitlink named .md'
+  # An empty directory stands for the unpopulated submodule, so the
+  # working tree is clean.
+  mkdir -p -- "${d}/docs/sub.md"
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case md-named-gitlink "${d}" 1 \
+    'uncovered-file: docs/sub.md is changed but not listed in code_changes'
+
   # A space in a filename must not break hunk attribution.
   d="$(new_repo)"
   printf 'Spaced paragraph.\n' >"${d}/docs/b c.md"
@@ -652,6 +780,35 @@ EOF
   printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
   run_case space-in-name "${d}" 1 'uncovered-hunk: docs/b c.md:1'
+
+  # Git C-quotes a path holding a double quote or a backslash in every
+  # diff the checker reads, so no ledger name matches it, except one
+  # written as git's quoted text. Listed that way with the blob
+  # "deleted", a changed script would pass with an attack tied to no
+  # blob. Such a path stops the run instead, named as git prints it.
+  d="$(new_repo)"
+  printf 'echo q\n' >"${d}/scripts/q\"t.sh"
+  commit_all "${d}" quoted
+  jq -n '{report: "r.md", pairs: [], code_changes: [{file: "\"scripts/q\\\"t.sh\"", evidence: "e"}]}' \
+    >"${d}/ledger.json"
+  jq -n '{pairs: [], code_changes: [{file: "\"scripts/q\\\"t.sh\"", blob: "deleted", attack: "a", result: "r"}]}' \
+    >"${d}/gate.json"
+  run_case quoted-path-code-change "${d}" 2 \
+    'cannot check the change to "scripts/q\"t.sh": git quotes a path holding a double quote, backslash or control character; rename it'
+
+  # A Markdown file with a backslash in its name, paired correctly, would
+  # otherwise report its own hunk as uncovered under a garbled name.
+  d="$(new_repo)"
+  seed_main "${d}" 'docs/b\s.md' 'One.' '' 'Two.'
+  sed -i 's/^Two\.$/Two, fixed./' "${d}/docs/b\\s.md"
+  commit_all "${d}" fix
+  jq -n '{report: "r.md", code_changes: [], pairs: [{id: "p1", finding: 1, file: "docs/b\\s.md",
+    lines: "3-3", artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "scope", siblings: []}]}' \
+    >"${d}/ledger.json"
+  jq -n --arg h "$(gate_hash "${d}" 'docs/b\s.md' 3-3)" \
+    '{pairs: [{id: "p1", verdict: "TRUE", hash: $h, note: ""}], code_changes: []}' >"${d}/gate.json"
+  run_case quoted-path-markdown "${d}" 2 \
+    'cannot check the change to "docs/b\\s.md": git quotes a path holding a double quote, backslash or control character; rename it'
 
   # A hunk whose new side is entirely blank must still need a pair
   # (regression guard for b1a58cce, whose per-block coverage loop left
@@ -1177,6 +1334,37 @@ EOF
     >"${d}/gate.json"
   run_case attack-whitespace "${d}" 1 'missing-attack: code change scripts/w.sh has no gate attack and result'
 
+  # Text made only of invisible format characters is blank: a zero-width
+  # space (U+200B) and a byte-order mark (U+FEFF) print nothing, so a
+  # command or observed made of them records nothing.
+  local zwsp bom
+  zwsp=$'\xe2\x80\x8b'
+  bom=$'\xef\xbb\xbf'
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].artifact = [{command: "​​", observed: "﻿"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case artifact-command-zero-width "${d}" 1 \
+    "schema: pair p1 artifact[0] needs a non-blank command string, got \"${zwsp}${zwsp}\""
+  also_expect "schema: pair p1 artifact[0] needs a non-blank observed string, got \"${bom}\""
+
+  # The same rule holds for a sibling's reason and a gate attack and
+  # result: a word joiner (U+2060) and a soft hyphen (U+00AD) beside
+  # ordinary spaces are no reason and no attack.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  sed -i 's/^echo line5$/echo line5 changed/' "${d}/scripts/tool.sh"
+  commit_all "${d}" code
+  jq '.pairs[0].siblings = [{file: "docs/a.md", lines: "3-4", status: "unchanged", reason: " ⁠ "}]
+    | .code_changes = [{file: "scripts/tool.sh", evidence: "harness"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  jq --arg b "$(git -C "${d}" rev-parse HEAD:scripts/tool.sh)" \
+    '.code_changes = [{file: "scripts/tool.sh", blob: $b, attack: "­", result: "exit 2"}]' \
+    "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
+  run_case reason-and-attack-zero-width "${d}" 1 \
+    'sibling-reason: pair p1 sibling docs/a.md:3-4 is unchanged with no reason'
+  also_expect 'missing-attack: code change scripts/tool.sh has no gate attack and result'
+
   # An unchanged sibling must name a file that exists at head.
   d="$(new_repo)"
   beta_fixed "${d}"
@@ -1184,6 +1372,26 @@ EOF
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case sibling-unchanged-untracked "${d}" 1 \
     'sibling-untracked: pair p1 sibling docs/nope.md is not tracked at the head revision'
+
+  # An unchanged sibling's range names the text its reason is about, so
+  # it must be a forward <start>-<end> range inside its file like any
+  # other sibling's: garbage, a reversed range, a missing one and one past
+  # the end are each reported, and each reason is still checked.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].siblings = [
+      {file: "docs/a.md", lines: "garbage", status: "unchanged", reason: "r"},
+      {file: "docs/a.md", lines: "12-5", status: "unchanged", reason: "r"},
+      {file: "docs/a.md", status: "unchanged"},
+      {file: "docs/a.md", lines: "900-999", status: "unchanged", reason: "r"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case sibling-unchanged-bad-range "${d}" 1 \
+    'schema: pair p1 sibling docs/a.md:garbage is marked unchanged without a valid <start>-<end> range'
+  also_expect 'schema: pair p1 sibling docs/a.md:12-5 is marked unchanged without a valid <start>-<end> range'
+  also_expect 'schema: pair p1 sibling docs/a.md:- is marked unchanged without a valid <start>-<end> range'
+  also_expect 'sibling-reason: pair p1 sibling docs/a.md:- is unchanged with no reason'
+  also_expect 'schema: pair p1 sibling docs/a.md:900-999 runs past end of file (12 lines)'
+  also_expect 'check-fix-ledger: 5 finding(s) (schema 4, sibling-reason 1)'
 
   # An OVERREACHES verdict blocks; with no note, no placeholder shows.
   d="$(new_repo)"
@@ -1404,6 +1612,23 @@ EOF
     "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
   run_case sibling-removed-file-deleted "${d}" 0 '' \
     'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 1 code changes; 0 changed, 0 unchanged and 1 removed siblings'
+
+  # A deleted file has no head position for its text, so a removed
+  # sibling there names the lines the text held at the merge base, and
+  # they must exist: gone.md had three lines, so 3-4 runs past its end.
+  # A deleted file has no deletion point to sit one past, unlike a file
+  # still present at head.
+  d="$(new_repo)"
+  seed_main "${d}" docs/gone.md '# Gone' '' 'Gone paragraph.'
+  git -C "${d}" rm --quiet -- docs/gone.md
+  beta_fixed "${d}"
+  jq '.pairs[0].siblings = [{file: "docs/gone.md", lines: "3-4", status: "removed"}]
+    | .code_changes = [{file: "docs/gone.md", evidence: "whole page retired"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  jq '.code_changes = [{file: "docs/gone.md", blob: "deleted", attack: "links to it", result: "none left"}]' \
+    "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
+  run_case sibling-removed-file-deleted-past-end "${d}" 1 \
+    'schema: pair p1 sibling docs/gone.md:3-4 runs past end of file at the merge base (3 lines)'
 
   # A removed sibling in a file that exists at neither revision names
   # nothing the diff could have deleted.

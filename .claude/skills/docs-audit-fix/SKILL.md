@@ -59,14 +59,17 @@ paragraph in its scope.
     Markdown sibling is itself a rewritten paragraph: it needs a pair
     covering it, unless it shares its pair's paragraph or sits in the root
     `CHANGELOG.md` or `tests/fixtures/`. A `removed` sibling in a file the
-    branch deletes needs only that file's `code_changes` entry.
+    branch deletes needs only that file's `code_changes` entry, with
+    `lines` inside the file as it was at the merge base.
     For each changed file that is not a surviving Markdown file (a deleted
-    `.md` file included), append a `code_changes` entry with the evidence
+    `.md` file included, and a `.md` path that is now a directory or a
+    gitlink), append a `code_changes` entry with the evidence
     (test, harness, mutation) that it is right. Commit as you go; the
     checker reads commits, not the working tree. The gate and the checker
-    both read `lines` at `HEAD`, so bring every pair's range up to date
-    before each gate dispatch and each checker run. A gate that hashes a
-    stale range judges the wrong paragraph, and the checker can pass it.
+    both read a pair's `lines` at `HEAD`, so bring every pair's range up
+    to date before each gate dispatch and each checker run. A gate that
+    hashes a stale range judges the wrong paragraph, and the checker can
+    pass it.
 1. **Gate.** Dispatch one agent that did not write the changes, on the
     strongest model available. The dispatch carries, verbatim: the ledger
     path; the diff command (`git diff main...HEAD`); the twin-sweep scope
@@ -199,8 +202,10 @@ in place of `file` and `lines`.
 
 `lines` is `<start>-<end>` at `HEAD`. A `removed` sibling's `lines` is the
 head-side position its deleted text sat at — for a pure deletion, the line
-before it, the line after it, or both. Here `p3` pairs the paragraph that
-follows the deleted one, where the deletion anchors.
+before it, the line after it, or both. In a file the branch deletes there
+is no head side, so it is the lines the text held at the merge base.
+Here `p3` pairs the paragraph that follows the deleted one, where the
+deletion anchors.
 
 `<report-stem>.gate.json` (gate only):
 
@@ -231,19 +236,23 @@ every check below passes, 1 with one `check-fix-ledger: <class>: <detail>`
 line per finding followed by one count line tallying the findings by class,
 and 2 when it cannot run.
 
-- **Shape.** The ledger and the gate each hold exactly one JSON object;
+- **Shape.** The ledger and the gate each hold exactly one JSON object,
+    with no key repeated inside any object (either fault stops the run
+    with exit 2);
     every list element is an object; an artifact entry holds either `file`
     and `lines` or a non-blank `command` and `observed`, never both;
     every pair and artifact range is
-    `<start>-<end>` with at most six digits a side (a `changed` or `removed`
-    sibling's range is checked with the siblings; an `unchanged` sibling's
-    `lines` is not checked); no ledger file name holds a newline, tab or CR,
+    `<start>-<end>` with at most six digits a side (a sibling's range is
+    checked with the siblings); no ledger file name holds a newline, tab or CR,
     or starts with `./` or `/` (name each from the repository root); pair
     ids and verdict ids are unique, every verdict names a ledger pair,
     and every gate code change carries a `blob` that is an object id or
-    `deleted`. A `schema` finding from this shape pass stops the checks
-    below; the later checks also report some tracking and range faults as
-    `schema`, and those stop nothing.
+    `deleted`. Text made only of white space and invisible format
+    characters, such as a zero-width space or a byte-order mark, is blank
+    wherever a field must not be: `command`, `observed`, a sibling's
+    `reason`, and a gate's `attack` and `result`. A `schema` finding from
+    this shape pass stops the checks below; the later checks also report
+    some tracking and range faults as `schema`, and those stop nothing.
 - **Completeness.** Every changed Markdown hunk is covered, except in the
     root `CHANGELOG.md` and `tests/fixtures/`, inside a generated
     `<!-- BEGIN <name> -->` / `<!-- END <name> -->` block of the same name
@@ -255,25 +264,28 @@ and 2 when it cannot run.
     new side holds no non-blank line (a pure deletion, or text replaced by
     blank lines) is covered by a pair whose paragraph takes in the line
     before or after it, or one of its blank lines. Every other changed
-    file, a deleted Markdown file included, is listed in `code_changes`.
+    file, a deleted Markdown file included (one replaced by a directory or
+    a gitlink counts as deleted), is listed in `code_changes`. A gitlink
+    under a `.md` name also leaves a hunk no pair can cover, since a pair
+    needs a file; see the known limits.
 - **Artifacts and pairs** name files tracked at `HEAD`, with the range
     inside the file. A command artifact is never run.
-- **Siblings.** An `unchanged` one names a file tracked at `HEAD` and a
-    reason that is not blank. A `changed` one lies inside its file and inside
-    one paragraph, clear of its own pair's recorded lines, and a covered hunk
-    adds a line inside it whose whitespace-collapsed text matches no removed
-    line of that hunk. A `removed` one spans at most two lines, may sit one
-    past the end of the file, stays clear of its own pair's recorded lines,
-    and is touched by a covered hunk that removes a line whose collapsed text
-    matches no added line of that hunk. That hunk's reach is the line before
-    and after a pure deletion, its new lines plus the next one when it
-    removes more lines than it adds, and its new lines otherwise. A
-    `removed` one in a file the diff deletes, tracked at the merge base and
-    absent at `HEAD`, needs only a well-formed range of at most two lines,
-    with no hunk. In a file
-    that is not Markdown, or in the root `CHANGELOG.md` or `tests/fixtures/`,
-    any hunk touching the range clears a `changed` or `removed` sibling, a
-    whitespace-only edit included.
+- **Siblings.** An `unchanged` one names a file tracked at `HEAD`, a range
+    inside it, and a reason that is not blank. A `changed` one lies inside
+    its file and inside one paragraph, clear of its own pair's recorded
+    lines, and a covered hunk adds a line inside it whose
+    whitespace-collapsed text matches no removed line of that hunk. A
+    `removed` one spans at most two lines, may sit one past the end of the
+    file, stays clear of its own pair's recorded lines, and is touched by a
+    covered hunk that removes a line whose collapsed text matches no added
+    line of that hunk. That hunk's reach is the line before and after a pure
+    deletion, its new lines plus the next one when it removes more lines
+    than it adds, and its new lines otherwise. A `removed` one in a file the
+    diff deletes, tracked at the merge base and absent at `HEAD`, needs no
+    hunk, only a well-formed range of at most two lines that the file held
+    at the merge base. In a file that is not Markdown, or in the root
+    `CHANGELOG.md` or `tests/fixtures/`, any hunk touching the range clears
+    a `changed` or `removed` sibling, a whitespace-only edit included.
 - **Verdicts.** Every pair is gated `TRUE` with a hash equal to its
     paragraph's hash now: the whole blank-line-delimited block, whitespace
     collapsed, so a re-wrap keeps the verdict current, as does a line shift
@@ -323,3 +335,15 @@ the gate's job. Its known limits:
     whitespace-only line, pair only the paragraph below, and the run
     passes. With a truly empty line instead, git shows a pure deletion,
     and the same pairing fails.
+- A changed file whose name holds a double quote, a backslash or a
+    control character stops the run with exit 2, because git quotes such
+    a name in every diff the checker reads; rename it. A ledger file name
+    holding a backslash is read with it doubled, so it names no file at
+    that path: its entry fails as untracked, or as a sibling nothing
+    changed or removed.
+- A gitlink named like Markdown (`*.md`) cannot pass: its
+    `Subproject commit` hunk needs a pair, and a pair's file must be a
+    file at `HEAD`. Name the submodule path without `.md`.
+- Blank text is white space and invisible format characters (Unicode
+    Cf). Other characters that print nothing, such as a Hangul filler or
+    a braille blank, count as text.

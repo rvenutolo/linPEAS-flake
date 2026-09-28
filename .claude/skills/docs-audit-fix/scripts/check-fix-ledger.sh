@@ -12,11 +12,12 @@
 #                 changed file is listed as a code change
 #   artifacts     every recorded artifact range exists at the head revision;
 #                 a command artifact is shape-checked and never run
-#   siblings      an unchanged sibling names a tracked file and a reason; a
-#                 changed one gains a substantively changed line in a covered
-#                 hunk, a removed one borders a covered hunk that deletes
-#                 text or sits in a file the diff deletes; outside in-scope
-#                 Markdown any touching hunk clears it
+#   siblings      an unchanged sibling names a range inside a tracked
+#                 file and a reason; a changed one gains a substantively
+#                 changed line in a covered hunk, a removed one borders a
+#                 covered hunk that deletes text or sits in a file the
+#                 diff deletes; outside in-scope Markdown any touching
+#                 hunk clears it
 #   verdicts      every pair is gated TRUE against its current text, and
 #                 every code change carries the gate's adversarial attack
 #                 against its current blob (else stale-attack)
@@ -35,7 +36,8 @@
 #   0  the ledger covers the diff and every pair is currently gated TRUE
 #   1  findings (printed to stderr, one line each)
 #   2  the check could not run: missing tool, bad arguments, unparsable
-#      JSON, unresolvable revision, or uncommitted tracked changes
+#      JSON or a key repeated inside one object, unresolvable revision,
+#      uncommitted tracked changes, or a changed path git quotes
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -55,6 +57,27 @@ unset GIT_DIFF_OPTS GIT_GLOB_PATHSPECS GIT_LITERAL_PATHSPECS \
 export GIT_NO_REPLACE_OBJECTS=1
 
 readonly PROG='check-fix-ledger'
+# The Markdown checked paragraph by paragraph, as git pathspecs: every
+# .md file except the root CHANGELOG.md and anything under
+# tests/fixtures/. This is the set's only definition. Completeness diffs
+# through it, and the sibling checks read membership from a diff through
+# it (IN_SCOPE_MD), so git does all the matching and no second spelling
+# can drift from it.
+readonly -a MD_ALL=('*.md')
+readonly -a MD_SCOPE=("${MD_ALL[@]}" ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures')
+# jq definitions every ledger and gate read shares, so a rule is written
+# once: txt is a string holding a character that is neither white space
+# nor an invisible format character (Unicode category Cf: a zero-width
+# space, a byte-order mark, a soft hyphen), so text made only of those
+# is blank. Some other characters print nothing too (a Hangul filler, a
+# braille blank) and still count as text. iscmd marks a command artifact
+# entry, which either of its keys makes one; arr reads anything but an
+# array as an empty one.
+readonly JQ_DEFS='
+  def txt: type == "string" and test("[^\\s\\p{Cf}]");
+  def iscmd: has("command") or has("observed");
+  def arr: if type == "array" then . else [] end;
+'
 findings=0
 # Findings per class, for the summary line.
 declare -A class_count=()
@@ -100,6 +123,22 @@ function block_span() {
       b = e; while (b < NR && !blank[b + 1]) b++
       print a, b
     }'
+}
+
+# @description True when $2 names an object at revision $1.
+function is_tracked() {
+  git cat-file -e "$1:$2" 2>/dev/null
+}
+
+# @description True when $2 names a file (a blob, not a tree or a
+# gitlink) at revision $1.
+function is_file() {
+  is_tracked "$1" "$2" && [[ "$(git cat-file -t "$1:$2")" == blob ]]
+}
+
+# @description The number of lines file $2 holds at revision $1.
+function line_count() {
+  git show "$1:$2" | awk 'END { print NR }'
 }
 
 function block_hash() {
@@ -151,11 +190,11 @@ if ((hash_mode)); then
   hash_end="${BASH_REMATCH[2]}"
   ((hash_start >= 1 && hash_start <= hash_end)) ||
     die "bad range: ${positional[1]} (start must be >= 1 and <= end)"
-  git cat-file -e "${HEAD_REV}:${positional[0]}" 2>/dev/null ||
+  is_tracked "${HEAD_REV}" "${positional[0]}" ||
     die "not tracked at ${HEAD_REV}: ${positional[0]}"
-  [[ "$(git cat-file -t "${HEAD_REV}:${positional[0]}")" == blob ]] ||
+  is_file "${HEAD_REV}" "${positional[0]}" ||
     die "not a file at ${HEAD_REV}: ${positional[0]}"
-  hash_n="$(git show "${HEAD_REV}:${positional[0]}" | awk 'END { print NR }')"
+  hash_n="$(line_count "${HEAD_REV}" "${positional[0]}")"
   ((hash_end <= hash_n)) ||
     die "bad range: ${positional[1]} (end must be <= ${hash_n} lines)"
   block_hash "${HEAD_REV}" "${positional[0]}" "${hash_start}" "${hash_end}"
@@ -179,6 +218,30 @@ for json_file in "${LEDGER}" "${GATE}"; do
   jq --exit-status --slurp 'length == 1 and (.[0] | type) == "object"' \
     "${json_file}" >/dev/null 2>&1 ||
     die "${json_file} does not hold exactly one JSON object"
+  # A key repeated inside one object resolves to its last value, so an
+  # earlier FALSE verdict (or siblings list) would be shadowed by a later
+  # one. The parsed value cannot show it; the token stream can. A value
+  # at path P is finished once its leaf is emitted, and a container once
+  # the event closing its last child is, so a leaf under a finished path
+  # is a second value for that key.
+  repeated="$(jq --stream --null-input --raw-output '
+    reduce inputs as $e ({done: {}, hit: null};
+      . as $s
+      | if $s.hit != null then $s
+        else ($e[0]) as $p
+        | if ($e | length) == 2 then
+            ([range(1; ($p | length) + 1) as $n | $p[:$n]
+              | select($s.done[tojson])] | first) as $hit
+            | if $hit != null then $s | .hit = $hit
+              else $s | .done[$p | tojson] = true end
+          else $s | .done[$p[:-1] | tojson] = true end
+        end)
+    | .hit // empty
+    | map(if type == "number" then "[\(.)]"
+        elif (test("\n") | not) and test("^[A-Za-z_][A-Za-z0-9_]*$") then ".\(.)"
+        else "[\(tojson)]" end) | join("")' \
+    "${json_file}")" || die "could not read the keys of ${json_file}"
+  [[ -z ${repeated} ]] || die "${json_file} repeats key ${repeated}"
 done
 git rev-parse --verify --quiet "${BASE}^{commit}" >/dev/null ||
   die "base revision does not resolve: ${BASE}"
@@ -200,9 +263,8 @@ fi
 # lost. The callers capture this output with `|| die`, so a jq failure
 # the guards miss stops the run instead of reading as no findings.
 function check_schema() {
-  jq --raw-output '
+  jq --raw-output "${JQ_DEFS}"'
     def str: type == "string" and length > 0;
-    def txt: type == "string" and test("\\S");
     # test() with $ matches before a trailing newline (Oniguruma), so
     # "1-999999\n" would otherwise pass; the explicit no-newline check
     # closes that regardless of anchor semantics.
@@ -211,7 +273,6 @@ function check_schema() {
     def rooted: type == "string" and (startswith("./") or startswith("/"));
     def rootmsg: "starts with ./ or /; name it from the repository root";
     def shown: gsub("\n"; "<LF>") | gsub("\t"; "<TAB>") | gsub("\r"; "<CR>");
-    def arr: if type == "array" then . else [] end;
     def nonobj($what): arr | to_entries[] | select(.value | type != "object")
       | ["schema", "\($what)[\(.key)] is not an object"];
     (if (.pairs | type) != "array" then ["schema", "ledger needs a pairs array"] else empty end),
@@ -228,14 +289,14 @@ function check_schema() {
       # entry a command entry. Only the shape of a command entry is
       # checked: the checker never runs it.
       ([.artifact | arr | to_entries[] | select(.value | type == "object")
-        | select((.value | (has("command") or has("observed")) | not)
+        | select((.value | iscmd | not)
             and (((.value.file | str) and (.value.lines | rng)) | not))
         | .key]) as $badfile |
       (if (.artifact | type) == "array" and (.artifact | length) > 0 then
         ($badfile[] | ["schema", "pair \($id) artifact[\(.)] needs a file and a <start>-<end> lines"])
       else ["schema", "pair \($id) needs a non-empty artifact list"] end),
       ((.artifact | arr) | to_entries[] | select(.value | type == "object")
-        | select(.value | has("command") or has("observed")) | .key as $k | .value
+        | select(.value | iscmd) | .key as $k | .value
         | if has("file") or has("lines") then
             ["schema", "pair \($id) artifact[\($k)] holds both command and file keys (\(keys | join(", "))); give each its own entry"]
           else
@@ -293,8 +354,7 @@ function check_schema() {
 # the blob id it attacked, or "deleted" for a file absent at head, so an
 # attack can be tied to the code it ran against.
 function check_gate_schema() {
-  jq --raw-output --slurpfile ledger "${LEDGER}" '
-    def arr: if type == "array" then . else [] end;
+  jq --raw-output --slurpfile ledger "${LEDGER}" "${JQ_DEFS}"'
     def nonobj($what): arr | to_entries[] | select(.value | type != "object")
       | ["schema", "gate \($what)[\(.key)] is not an object"];
     ([$ledger[0].pairs | arr | .[] | objects | .id]) as $ids |
@@ -320,15 +380,15 @@ function check_gate_schema() {
 # inside the file. A command artifact names no file and is skipped.
 function check_artifacts() {
   local id file lines start end n records
-  records="$(jq --raw-output '.pairs[] | .id as $id | .artifact[] | select(has("command") | not) | [$id, .file, .lines] | @tsv' "${LEDGER}")" ||
+  records="$(jq --raw-output "${JQ_DEFS}"'.pairs[] | .id as $id | .artifact[] | select(iscmd | not) | [$id, .file, .lines] | @tsv' "${LEDGER}")" ||
     die "could not read the artifact list from ${LEDGER}"
   while IFS=$'\t' read -r id file lines; do
     [[ -n ${id} ]] || continue
-    if ! git cat-file -e "${HEAD_REV}:${file}" 2>/dev/null; then
+    if ! is_tracked "${HEAD_REV}" "${file}"; then
       finding artifact "pair ${id} ${file} is not tracked at the head revision"
       continue
     fi
-    if [[ "$(git cat-file -t "${HEAD_REV}:${file}")" != blob ]]; then
+    if ! is_file "${HEAD_REV}" "${file}"; then
       finding artifact "pair ${id} ${file} is not a file at the head revision"
       continue
     fi
@@ -343,7 +403,7 @@ function check_artifacts() {
       finding artifact "pair ${id} ${file}:${lines} is reversed (start ${start} > end ${end})"
       continue
     fi
-    n="$(git show "${HEAD_REV}:${file}" | awk 'END { print NR }')"
+    n="$(line_count "${HEAD_REV}" "${file}")"
     if ((end > n)); then
       finding artifact "pair ${id} ${file}:${lines} runs past end of file (${n} lines)"
     fi
@@ -368,6 +428,20 @@ SUBSTANTIVE_LINES=''
 # ones.
 MD_DELETING_HUNKS=''
 DELETING_HUNKS=''
+# Files the diff changes inside MD_SCOPE, as keys; set by
+# check_completeness for check_siblings. A sibling in an in-scope file the
+# diff leaves alone reads as out of scope here, which decides nothing:
+# neither the in-scope test nor the any-hunk test finds a hunk there.
+declare -A IN_SCOPE_MD=()
+
+# @description Names of the files changed between the merge base and
+# head, one per line; "$@" is extra `git diff` arguments (a
+# --diff-filter, then pathspecs after --).
+function changed_names() {
+  git -c core.quotePath=false diff --no-ext-diff --no-textconv \
+    --diff-algorithm=myers --no-indent-heuristic --ignore-submodules=none \
+    --src-prefix=a/ --dst-prefix=b/ --name-only --no-renames "${MB}" "${HEAD_REV}" "$@"
+}
 
 # @description Count one covered hunk ($1..$5, as list_hunks prints it)
 # and record its changed lines in SUBSTANTIVE_LINES and, when it deletes
@@ -530,10 +604,10 @@ function all_blank() {
 # and read as a re-wrap even though real content was added or removed.
 function is_reflow() {
   local -r file="$1" os="$2" ol="$3" ns="$4" nl="$5"
-  git cat-file -e "${MB}:${file}" 2>/dev/null || return 1
+  is_tracked "${MB}" "${file}" || return 1
   local mb_n hd_n
-  mb_n="$(git show "${MB}:${file}" | awk 'END { print NR }')"
-  hd_n="$(git show "${HEAD_REV}:${file}" | awk 'END { print NR }')"
+  mb_n="$(line_count "${MB}" "${file}")"
+  hd_n="$(line_count "${HEAD_REV}" "${file}")"
   local oe=$((os + (ol > 0 ? ol - 1 : 0))) ne=$((ns + (nl > 0 ? nl - 1 : 0)))
   ((os >= 1 && oe <= mb_n && ns >= 1 && ne <= hd_n)) || return 1
   if ((ol == 0)) && ! all_blank "${HEAD_REV}" "${file}" "${ns}" "${ne}"; then
@@ -557,7 +631,7 @@ function is_reflow() {
 # that exists only at HEAD.
 function hunk_is_generated() {
   local -r file="$1" os="$2" ol="$3" ns="$4" nl="$5"
-  git cat-file -e "${MB}:${file}" 2>/dev/null || return 1
+  is_tracked "${MB}" "${file}" || return 1
   local -r oe=$((os + (ol > 0 ? ol - 1 : 0))) ne=$((ns + (nl > 0 ? nl - 1 : 0)))
   local a b name oldname='' newname=''
   while IFS=' ' read -r a b name; do
@@ -616,14 +690,26 @@ function new_side_blocks() {
     }'
 }
 
+# @description True when a pair span of file $1 in the list $4 (as
+# "file\ta\tb" lines) overlaps lines $2..$3.
+function span_overlaps() {
+  local -r file="$1" s="$2" e="$3" spans="$4"
+  local pf pa pb
+  while IFS=$'\t' read -r pf pa pb; do
+    [[ ${pf} == "${file}" ]] || continue
+    ((s <= pb && e >= pa)) && return 0
+  done <<<"${spans}"
+  return 1
+}
+
 function check_completeness() {
-  local file os ol ns nl hs he ne pf pa pb covered block_a block_b bcov all_covered block_count
+  local file os ol ns nl hs he ne block_a block_b all_covered block_count
   local md_hunks
-  md_hunks="$(list_hunks hunks '*.md' ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures')" ||
+  md_hunks="$(list_hunks hunks "${MD_SCOPE[@]}")" ||
     die 'could not parse the Markdown diff'
-  MD_CHANGED_LINES="$(list_hunks lines '*.md' ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures')" ||
+  MD_CHANGED_LINES="$(list_hunks lines "${MD_SCOPE[@]}")" ||
     die 'could not parse the Markdown diff'
-  MD_DELETING_HUNKS="$(list_hunks deletions '*.md' ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures')" ||
+  MD_DELETING_HUNKS="$(list_hunks deletions "${MD_SCOPE[@]}")" ||
     die 'could not parse the Markdown diff'
   # Pair spans at head, as "file\ta\tb". Each pair's own range must also
   # fall inside its file, the same bound check check_artifacts runs for
@@ -633,11 +719,11 @@ function check_completeness() {
     die "could not read the pair list from ${LEDGER}"
   while IFS=$'\t' read -r id pfile plines; do
     [[ -n ${id} ]] || continue
-    git cat-file -e "${HEAD_REV}:${pfile}" 2>/dev/null || {
+    is_tracked "${HEAD_REV}" "${pfile}" || {
       finding schema "pair ${id} file ${pfile} is not tracked at the head revision"
       continue
     }
-    if [[ "$(git cat-file -t "${HEAD_REV}:${pfile}")" != blob ]]; then
+    if ! is_file "${HEAD_REV}" "${pfile}"; then
       finding schema "pair ${id} file ${pfile} is not a file at the head revision"
       continue
     fi
@@ -652,7 +738,7 @@ function check_completeness() {
       finding schema "pair ${id} ${pfile}:${plines} is reversed (start ${pstart} > end ${pend})"
       continue
     fi
-    flen="$(git show "${HEAD_REV}:${pfile}" | awk 'END { print NR }')"
+    flen="$(line_count "${HEAD_REV}" "${pfile}")"
     if ((pend > flen)); then
       finding schema "pair ${id} ${pfile}:${plines} runs past end of file (${flen} lines)"
       continue
@@ -675,15 +761,7 @@ function check_completeness() {
       continue
     fi
     if ((nl == 0)); then
-      covered=0
-      while IFS=$'\t' read -r pf pa pb; do
-        [[ ${pf} == "${file}" ]] || continue
-        if ((hs <= pb && he >= pa)); then
-          covered=1
-          break
-        fi
-      done <<<"${spans}"
-      if ((covered)); then
+      if span_overlaps "${file}" "${hs}" "${he}" "${spans}"; then
         count_covered "${file}" "${os}" "${ol}" "${ns}" "${nl}"
       else
         finding uncovered-hunk "${file}:${hs} changed and no pair covers it"
@@ -699,15 +777,7 @@ function check_completeness() {
     while IFS=' ' read -r block_a block_b; do
       [[ -n ${block_a} ]] || continue
       block_count=$((block_count + 1))
-      bcov=0
-      while IFS=$'\t' read -r pf pa pb; do
-        [[ ${pf} == "${file}" ]] || continue
-        if ((block_a <= pb && block_b >= pa)); then
-          bcov=1
-          break
-        fi
-      done <<<"${spans}"
-      if ((bcov == 0)); then
+      if ! span_overlaps "${file}" "${block_a}" "${block_b}" "${spans}"; then
         all_covered=0
         finding uncovered-hunk "${file}:${block_a} changed and no pair covers it"
       fi
@@ -718,15 +788,7 @@ function check_completeness() {
       # nothing. Like a pure deletion, the hunk anchors on the lines
       # either side of it, hs-1 and he+1, so a pair on the paragraph
       # directly above or below covers it.
-      covered=0
-      while IFS=$'\t' read -r pf pa pb; do
-        [[ ${pf} == "${file}" ]] || continue
-        if ((hs - 1 <= pb && he + 1 >= pa)); then
-          covered=1
-          break
-        fi
-      done <<<"${spans}"
-      if ((covered)); then
+      if span_overlaps "${file}" "$((hs - 1))" "$((he + 1))" "${spans}"; then
         count_covered "${file}" "${os}" "${ol}" "${ns}" "${nl}"
       else
         finding uncovered-hunk "${file}:${hs} changed and no pair covers it"
@@ -736,22 +798,34 @@ function check_completeness() {
     fi
   done <<<"${md_hunks}"
 
-  # Every changed file that is not a surviving Markdown file must be
+  local in_scope
+  in_scope="$(changed_names -- "${MD_SCOPE[@]}")" ||
+    die 'could not list the changed Markdown files'
+  while IFS= read -r changed; do
+    [[ -n ${changed} ]] && IN_SCOPE_MD["${changed}"]=1
+  done <<<"${in_scope}"
+
+  # Every changed file that is not a surviving Markdown file (a .md name
+  # that is still a file at head, not a directory or a gitlink) must be
   # listed. list_hunks diffs with --text, so a surviving .md file git
   # would call binary is still paired per paragraph above; this loop
   # needs no binary case.
-  local listed changed changed_files
+  local listed changed changed_files surviving_md
+  local -A surviving=()
   listed="$(jq --raw-output '.code_changes[].file' "${LEDGER}")" ||
     die "could not read code_changes from ${LEDGER}"
-  changed_files="$(git -c core.quotePath=false diff --no-ext-diff --no-textconv \
-    --diff-algorithm=myers --no-indent-heuristic --ignore-submodules=none \
-    --src-prefix=a/ --dst-prefix=b/ --name-only --no-renames "${MB}" "${HEAD_REV}")" ||
-    die 'could not list the changed files'
+  changed_files="$(changed_names)" || die 'could not list the changed files'
+  surviving_md="$(changed_names -- "${MD_ALL[@]}")" ||
+    die 'could not list the changed Markdown files'
   while IFS= read -r changed; do
     [[ -n ${changed} ]] || continue
-    if [[ ${changed} == *.md ]] && git cat-file -e "${HEAD_REV}:${changed}" 2>/dev/null; then
-      continue
+    if is_file "${HEAD_REV}" "${changed}"; then
+      surviving["${changed}"]=1
     fi
+  done <<<"${surviving_md}"
+  while IFS= read -r changed; do
+    [[ -n ${changed} ]] || continue
+    [[ -n ${surviving["${changed}"]:-} ]] && continue
     if ! grep --line-regexp --fixed-strings --quiet -- "${changed}" <<<"${listed}"; then
       finding uncovered-file "${changed} is changed but not listed in code_changes"
     fi
@@ -783,40 +857,62 @@ function one_block() {
     END { exit blank ? 1 : 0 }'
 }
 
-# @description An unchanged sibling must carry a reason; a sibling marked
-# changed must name a range inside one paragraph of its file, apart from
-# its own pair's lines, and a hunk must change that range. For a Markdown
-# file in check_completeness' scope that means an added line in the range,
-# in a hunk it counted as covered, whose words changed: a trailing space,
-# a re-wrap or a re-aligned table row is not a fix, and prose inside a
-# generated block is fixed at its generator, which is a code change. A
+# @description An unchanged sibling must name a range inside its file
+# and carry a reason; a sibling marked changed must name a range inside
+# one paragraph of its file, apart from its own pair's lines, and a hunk
+# must change that range. For a Markdown file in check_completeness'
+# scope that means an added line in the range, in a hunk it counted as
+# covered, whose words changed: a trailing space, a re-wrap or a
+# re-aligned table row is not a fix, and prose inside a generated block
+# is fixed at its generator, which is a code change. A
 # sibling marked removed names the HEAD position its deleted text sat at,
 # at most two lines (a pure deletion's ns or ns+1, so one past the last
 # line is allowed), and needs a covered hunk touching it that deletes
 # text: a removed line whose collapsed text matches no added line of that
-# hunk; a removed sibling in a file the diff deletes needs no hunk. Any
+# hunk; a removed sibling in a file the diff deletes needs no hunk, only
+# a range inside the file at the merge base. Any
 # other file may be cleared by any hunk. A missing lines, status
 # or reason field is read as "-": tab is IFS whitespace, so an empty field
-# would collapse and shift every field after it. A whitespace-only reason
-# is no reason.
+# would collapse and shift every field after it. A reason txt reads as
+# blank is no reason.
 function check_siblings() {
   local id pfile plines file lines status reason s e n ps pe hit lf line hns hol hnl hs he limit records
-  records="$(jq --raw-output '.pairs[] | .id as $id | .file as $pf | .lines as $pl | .siblings[]
+  records="$(jq --raw-output "${JQ_DEFS}"'.pairs[] | .id as $id | .file as $pf | .lines as $pl | .siblings[]
     | [$id, $pf, $pl, .file,
       (if (.lines | type) == "string" and (.lines | length) > 0 then .lines else "-" end),
       (if (.status | type) == "string" and (.status | length) > 0 then .status else "-" end),
-      (if (.reason | type) == "string" and (.reason | test("\\S")) then .reason else "-" end)]
+      (if .reason | txt then .reason else "-" end)]
     | @tsv' "${LEDGER}")" ||
     die "could not read the sibling list from ${LEDGER}"
   while IFS=$'\t' read -r id pfile plines file lines status reason; do
     [[ -n ${id} ]] || continue
+    s=0
+    e=0
+    if valid_range "${lines}"; then
+      s="${lines%-*}"
+      e="${lines#*-}"
+    fi
     if [[ ${status} == unchanged ]]; then
-      # A reason about a file that does not exist at head clears nothing.
-      if ! git cat-file -e "${HEAD_REV}:${file}" 2>/dev/null; then
+      # A reason about a file that does not exist at head clears nothing,
+      # and one about a range the file does not hold names no text.
+      if ! is_tracked "${HEAD_REV}" "${file}"; then
         finding sibling-untracked "pair ${id} sibling ${file} is not tracked at the head revision"
-      elif [[ "$(git cat-file -t "${HEAD_REV}:${file}")" != blob ]]; then
+        continue
+      elif ! is_file "${HEAD_REV}" "${file}"; then
         finding sibling-untracked "pair ${id} sibling ${file} is not a file at the head revision"
-      elif [[ ${reason} == - ]]; then
+        continue
+      fi
+      # A range fault is a finding, so the tally below is only ever
+      # printed for siblings whose range held.
+      if ((s == 0 || s > e)); then
+        finding schema "pair ${id} sibling ${file}:${lines} is marked unchanged without a valid <start>-<end> range"
+      else
+        n="$(line_count "${HEAD_REV}" "${file}")"
+        if ((e > n)); then
+          finding schema "pair ${id} sibling ${file}:${lines} runs past end of file (${n} lines)"
+        fi
+      fi
+      if [[ ${reason} == - ]]; then
         finding sibling-reason "pair ${id} sibling ${file}:${lines} is unchanged with no reason"
       else
         SIBLINGS_UNCHANGED=$((SIBLINGS_UNCHANGED + 1))
@@ -824,12 +920,6 @@ function check_siblings() {
       continue
     fi
     [[ ${status} == changed || ${status} == removed ]] || continue # check_schema reported the enum
-    s=0
-    e=0
-    if valid_range "${lines}"; then
-      s="${lines%-*}"
-      e="${lines#*-}"
-    fi
     # A reversed range overlaps nothing, so it would read as "no hunk
     # touches it" rather than as the malformed range it is.
     if ((s == 0 || s > e)); then
@@ -844,20 +934,25 @@ function check_siblings() {
     fi
     # A removed sibling in a file the diff deletes: the file holds a blob
     # at the merge base and nothing at head, so all of its text went and
-    # there is no head position to check the range against. A file absent
-    # at both revisions was never in the diff.
-    if [[ ${status} == removed ]] && ! git cat-file -e "${HEAD_REV}:${file}" 2>/dev/null; then
-      if git cat-file -e "${MB}:${file}" 2>/dev/null &&
-        [[ "$(git cat-file -t "${MB}:${file}")" == blob ]]; then
-        SIBLINGS_REMOVED=$((SIBLINGS_REMOVED + 1))
+    # there is no head position to check the range against. The range
+    # names the lines the text held at the merge base instead, with no
+    # line past the end: a deleted file has no deletion point to anchor
+    # one. A file absent at both revisions was never in the diff.
+    if [[ ${status} == removed ]] && ! is_tracked "${HEAD_REV}" "${file}"; then
+      if is_file "${MB}" "${file}"; then
+        n="$(line_count "${MB}" "${file}")"
+        if ((e > n)); then
+          finding schema "pair ${id} sibling ${file}:${lines} runs past end of file at the merge base (${n} lines)"
+        else
+          SIBLINGS_REMOVED=$((SIBLINGS_REMOVED + 1))
+        fi
       else
         finding sibling-not-removed "pair ${id} sibling ${file}:${lines} is marked removed but is absent at the head revision and not a file at the merge base"
       fi
       continue
     fi
-    if git cat-file -e "${HEAD_REV}:${file}" 2>/dev/null &&
-      [[ "$(git cat-file -t "${HEAD_REV}:${file}")" == blob ]]; then
-      n="$(git show "${HEAD_REV}:${file}" | awk 'END { print NR }')"
+    if is_file "${HEAD_REV}" "${file}"; then
+      n="$(line_count "${HEAD_REV}" "${file}")"
       # A deletion at end of file anchors one past the last line.
       limit="${n}"
       if [[ ${status} == removed ]]; then
@@ -888,7 +983,7 @@ function check_siblings() {
     fi
     hit=0
     if [[ ${status} == removed ]]; then
-      if [[ ${file} == *.md && ${file} != CHANGELOG.md && ${file} != tests/fixtures/* ]]; then
+      if [[ -n ${IN_SCOPE_MD["${file}"]:-} ]]; then
         while IFS=$'\t' read -r lf hns hol hnl; do
           [[ ${lf} == "${file}" ]] || continue
           hs=$((hns > 0 ? hns : 1))
@@ -918,7 +1013,7 @@ function check_siblings() {
       fi
       continue
     fi
-    if [[ ${file} == *.md && ${file} != CHANGELOG.md && ${file} != tests/fixtures/* ]]; then
+    if [[ -n ${IN_SCOPE_MD["${file}"]:-} ]]; then
       while IFS=$'\t' read -r lf line; do
         [[ ${lf} == "${file}" ]] || continue
         if ((line >= s && line <= e)); then
@@ -941,7 +1036,7 @@ function check_siblings() {
 
 # @description Every pair needs a gate verdict of TRUE whose hash still
 # matches the pair's whole block at head, and every code change needs a
-# gate entry recording an attack and its result, neither whitespace-only,
+# gate entry recording an attack and its result, neither blank to txt,
 # against the blob the file holds at head.
 # A pair whose own file or range check_completeness already rejected is
 # skipped here, since there is no block to hash. Missing verdict, hash or
@@ -977,12 +1072,11 @@ function check_verdicts() {
       finding missing-hash "pair ${id} has a TRUE verdict with no hash"
       continue
     fi
-    git cat-file -e "${HEAD_REV}:${file}" 2>/dev/null || continue
-    [[ "$(git cat-file -t "${HEAD_REV}:${file}")" == blob ]] || continue
+    is_file "${HEAD_REV}" "${file}" || continue
     valid_range "${lines}" || continue
     start="${lines%-*}"
     end="${lines#*-}"
-    n="$(git show "${HEAD_REV}:${file}" | awk 'END { print NR }')"
+    n="$(line_count "${HEAD_REV}" "${file}")"
     ((start >= 1 && start <= end && end <= n)) || continue
     current="$(block_hash "${HEAD_REV}" "${file}" "${start}" "${end}")"
     [[ ${current} == "${hash}" ]] ||
@@ -990,8 +1084,7 @@ function check_verdicts() {
   done <<<"${records}"
 
   local cfile unattacked attacked blobs current_blob
-  unattacked="$(jq --raw-output --slurpfile gate "${GATE}" '
-    def txt: type == "string" and test("\\S");
+  unattacked="$(jq --raw-output --slurpfile gate "${GATE}" "${JQ_DEFS}"'
     .code_changes[].file as $f
     | select(any($gate[0].code_changes[];
       .file == $f and (.attack | txt) and (.result | txt)) | not)
@@ -1007,8 +1100,7 @@ function check_verdicts() {
   # gate read it is. Each attacked file is printed with the blobs of its
   # attacked gate entries, space-separated (check_gate_schema has already
   # confined every blob to hex or "deleted").
-  attacked="$(jq --raw-output --slurpfile gate "${GATE}" '
-    def txt: type == "string" and test("\\S");
+  attacked="$(jq --raw-output --slurpfile gate "${GATE}" "${JQ_DEFS}"'
     .code_changes[].file as $f
     | [$gate[0].code_changes[]
       | select(.file == $f and (.attack | txt) and (.result | txt)) | .blob]
@@ -1027,6 +1119,20 @@ function check_verdicts() {
 
 function main() {
   local class detail schema_bad=0 schema npairs nchanges ncommands
+  # Even with core.quotePath=false, git C-quotes a path holding a double
+  # quote, a backslash or a control character, in the diff headers and
+  # name lists this script reads alike. No ledger name matches the quoted
+  # spelling except one written as that quoted text, which would then
+  # pass a code change whose attack names no blob. A quoted name always
+  # starts with a double quote and a plain one never can, so the check is
+  # on the first character; the name is shown as git prints it.
+  local changed_all quoted
+  changed_all="$(changed_names)" || die 'could not list the changed files'
+  while IFS= read -r quoted; do
+    if [[ ${quoted} == \"* ]]; then
+      die "cannot check the change to ${quoted}: git quotes a path holding a double quote, backslash or control character; rename it"
+    fi
+  done <<<"${changed_all}"
   schema="$(check_schema)" || die "could not check the schema of ${LEDGER}"
   schema+=$'\n'"$(check_gate_schema)" || die "could not check the schema of ${GATE}"
   while IFS=$'\t' read -r class detail; do
@@ -1051,7 +1157,7 @@ function main() {
   fi
   npairs="$(jq '.pairs | length' "${LEDGER}")" || die "could not count pairs in ${LEDGER}"
   nchanges="$(jq '.code_changes | length' "${LEDGER}")" || die "could not count code_changes in ${LEDGER}"
-  ncommands="$(jq '[.pairs[].artifact[] | select(has("command"))] | length' "${LEDGER}")" ||
+  ncommands="$(jq "${JQ_DEFS}"'[.pairs[].artifact[] | select(iscmd)] | length' "${LEDGER}")" ||
     die "could not count command artifacts in ${LEDGER}"
   # The command tally is printed only when there is one, so a ledger
   # citing no command keeps the OK line it always had.
