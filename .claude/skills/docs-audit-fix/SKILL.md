@@ -259,7 +259,8 @@ and 2 when it cannot run.
     new side holds no non-blank line (a pure deletion, or text replaced by
     blank lines) is covered by a pair whose paragraph takes in the line
     before or after it, or one of its blank lines. Every other changed
-    file, a deleted Markdown file included, is listed in `code_changes`.
+    file, a deleted Markdown file included (one replaced by a directory or
+    a gitlink counts as deleted), is listed in `code_changes`.
 - **Artifacts and pairs** name files tracked at `HEAD`, with the range
     inside the file. A command artifact is never run.
 - **Siblings.** An `unchanged` one names a file tracked at `HEAD`, a

@@ -800,7 +800,8 @@ function check_completeness() {
     [[ -n ${changed} ]] && IN_SCOPE_MD["${changed}"]=1
   done <<<"${in_scope}"
 
-  # Every changed file that is not a surviving Markdown file must be
+  # Every changed file that is not a surviving Markdown file (a .md name
+  # that is still a file at head, not a directory or a gitlink) must be
   # listed. list_hunks diffs with --text, so a surviving .md file git
   # would call binary is still paired per paragraph above; this loop
   # needs no binary case.
@@ -813,7 +814,7 @@ function check_completeness() {
     die 'could not list the changed Markdown files'
   while IFS= read -r changed; do
     [[ -n ${changed} ]] || continue
-    if git cat-file -e "${HEAD_REV}:${changed}" 2>/dev/null; then
+    if is_file "${HEAD_REV}" "${changed}"; then
       surviving["${changed}"]=1
     fi
   done <<<"${surviving_md}"
