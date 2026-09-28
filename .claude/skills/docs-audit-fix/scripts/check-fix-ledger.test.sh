@@ -1522,6 +1522,23 @@ EOF
   run_case sibling-removed-file-deleted "${d}" 0 '' \
     'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 1 code changes; 0 changed, 0 unchanged and 1 removed siblings'
 
+  # A deleted file has no head position for its text, so a removed
+  # sibling there names the lines the text held at the merge base, and
+  # they must exist: gone.md had three lines, so 3-4 runs past its end.
+  # A deleted file has no deletion point to sit one past, unlike a file
+  # still present at head.
+  d="$(new_repo)"
+  seed_main "${d}" docs/gone.md '# Gone' '' 'Gone paragraph.'
+  git -C "${d}" rm --quiet -- docs/gone.md
+  beta_fixed "${d}"
+  jq '.pairs[0].siblings = [{file: "docs/gone.md", lines: "3-4", status: "removed"}]
+    | .code_changes = [{file: "docs/gone.md", evidence: "whole page retired"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  jq '.code_changes = [{file: "docs/gone.md", blob: "deleted", attack: "links to it", result: "none left"}]' \
+    "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
+  run_case sibling-removed-file-deleted-past-end "${d}" 1 \
+    'schema: pair p1 sibling docs/gone.md:3-4 runs past end of file at the merge base (3 lines)'
+
   # A removed sibling in a file that exists at neither revision names
   # nothing the diff could have deleted.
   d="$(new_repo)"
