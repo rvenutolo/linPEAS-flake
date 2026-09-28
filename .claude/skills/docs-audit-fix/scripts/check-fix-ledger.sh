@@ -55,6 +55,14 @@ unset GIT_DIFF_OPTS GIT_GLOB_PATHSPECS GIT_LITERAL_PATHSPECS \
 export GIT_NO_REPLACE_OBJECTS=1
 
 readonly PROG='check-fix-ledger'
+# The Markdown checked paragraph by paragraph, as git pathspecs: every
+# .md file except the root CHANGELOG.md and anything under
+# tests/fixtures/. This is the set's only definition. Completeness diffs
+# through it, and the sibling checks read membership from a diff through
+# it (IN_SCOPE_MD), so git does all the matching and no second spelling
+# can drift from it.
+readonly -a MD_ALL=('*.md')
+readonly -a MD_SCOPE=("${MD_ALL[@]}" ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures')
 findings=0
 # Findings per class, for the summary line.
 declare -A class_count=()
@@ -368,6 +376,20 @@ SUBSTANTIVE_LINES=''
 # ones.
 MD_DELETING_HUNKS=''
 DELETING_HUNKS=''
+# Files the diff changes inside MD_SCOPE, as keys; set by
+# check_completeness for check_siblings. A sibling in an in-scope file the
+# diff leaves alone reads as out of scope here, which decides nothing:
+# neither the in-scope test nor the any-hunk test finds a hunk there.
+declare -A IN_SCOPE_MD=()
+
+# @description Names of the files changed between the merge base and
+# head, one per line; "$@" is extra `git diff` arguments (a
+# --diff-filter, then pathspecs after --).
+function changed_names() {
+  git -c core.quotePath=false diff --no-ext-diff --no-textconv \
+    --diff-algorithm=myers --no-indent-heuristic --ignore-submodules=none \
+    --src-prefix=a/ --dst-prefix=b/ --name-only --no-renames "${MB}" "${HEAD_REV}" "$@"
+}
 
 # @description Count one covered hunk ($1..$5, as list_hunks prints it)
 # and record its changed lines in SUBSTANTIVE_LINES and, when it deletes
@@ -619,11 +641,11 @@ function new_side_blocks() {
 function check_completeness() {
   local file os ol ns nl hs he ne pf pa pb covered block_a block_b bcov all_covered block_count
   local md_hunks
-  md_hunks="$(list_hunks hunks '*.md' ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures')" ||
+  md_hunks="$(list_hunks hunks "${MD_SCOPE[@]}")" ||
     die 'could not parse the Markdown diff'
-  MD_CHANGED_LINES="$(list_hunks lines '*.md' ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures')" ||
+  MD_CHANGED_LINES="$(list_hunks lines "${MD_SCOPE[@]}")" ||
     die 'could not parse the Markdown diff'
-  MD_DELETING_HUNKS="$(list_hunks deletions '*.md' ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures')" ||
+  MD_DELETING_HUNKS="$(list_hunks deletions "${MD_SCOPE[@]}")" ||
     die 'could not parse the Markdown diff'
   # Pair spans at head, as "file\ta\tb". Each pair's own range must also
   # fall inside its file, the same bound check check_artifacts runs for
@@ -736,22 +758,33 @@ function check_completeness() {
     fi
   done <<<"${md_hunks}"
 
+  local in_scope
+  in_scope="$(changed_names -- "${MD_SCOPE[@]}")" ||
+    die 'could not list the changed Markdown files'
+  while IFS= read -r changed; do
+    [[ -n ${changed} ]] && IN_SCOPE_MD["${changed}"]=1
+  done <<<"${in_scope}"
+
   # Every changed file that is not a surviving Markdown file must be
   # listed. list_hunks diffs with --text, so a surviving .md file git
   # would call binary is still paired per paragraph above; this loop
   # needs no binary case.
-  local listed changed changed_files
+  local listed changed changed_files surviving_md
+  local -A surviving=()
   listed="$(jq --raw-output '.code_changes[].file' "${LEDGER}")" ||
     die "could not read code_changes from ${LEDGER}"
-  changed_files="$(git -c core.quotePath=false diff --no-ext-diff --no-textconv \
-    --diff-algorithm=myers --no-indent-heuristic --ignore-submodules=none \
-    --src-prefix=a/ --dst-prefix=b/ --name-only --no-renames "${MB}" "${HEAD_REV}")" ||
-    die 'could not list the changed files'
+  changed_files="$(changed_names)" || die 'could not list the changed files'
+  surviving_md="$(changed_names -- "${MD_ALL[@]}")" ||
+    die 'could not list the changed Markdown files'
   while IFS= read -r changed; do
     [[ -n ${changed} ]] || continue
-    if [[ ${changed} == *.md ]] && git cat-file -e "${HEAD_REV}:${changed}" 2>/dev/null; then
-      continue
+    if git cat-file -e "${HEAD_REV}:${changed}" 2>/dev/null; then
+      surviving["${changed}"]=1
     fi
+  done <<<"${surviving_md}"
+  while IFS= read -r changed; do
+    [[ -n ${changed} ]] || continue
+    [[ -n ${surviving["${changed}"]:-} ]] && continue
     if ! grep --line-regexp --fixed-strings --quiet -- "${changed}" <<<"${listed}"; then
       finding uncovered-file "${changed} is changed but not listed in code_changes"
     fi
@@ -888,7 +921,7 @@ function check_siblings() {
     fi
     hit=0
     if [[ ${status} == removed ]]; then
-      if [[ ${file} == *.md && ${file} != CHANGELOG.md && ${file} != tests/fixtures/* ]]; then
+      if [[ -n ${IN_SCOPE_MD["${file}"]:-} ]]; then
         while IFS=$'\t' read -r lf hns hol hnl; do
           [[ ${lf} == "${file}" ]] || continue
           hs=$((hns > 0 ? hns : 1))
@@ -918,7 +951,7 @@ function check_siblings() {
       fi
       continue
     fi
-    if [[ ${file} == *.md && ${file} != CHANGELOG.md && ${file} != tests/fixtures/* ]]; then
+    if [[ -n ${IN_SCOPE_MD["${file}"]:-} ]]; then
       while IFS=$'\t' read -r lf line; do
         [[ ${lf} == "${file}" ]] || continue
         if ((line >= s && line <= e)); then
