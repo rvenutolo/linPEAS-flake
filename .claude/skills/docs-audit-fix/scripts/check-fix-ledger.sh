@@ -76,15 +76,16 @@ readonly PROG='check-fix-ledger'
 readonly -a MD_ALL=('*.md')
 readonly -a MD_SCOPE=("${MD_ALL[@]}" ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures')
 # Where a pair's sweep terms are searched, as git pathspecs: every tracked
-# file except the two trees that carry deliberate violations (tests/fixtures/
-# and the docs audit's seeded-defect fixtures), the root CHANGELOG.md (a
-# historical record keeps its old wording) and the root flake.lock (data). This is not MD_SCOPE: that set is the Markdown checked paragraph
+# file except the trees that carry deliberate violations (tests/fixtures/
+# and any skill's seeded-defect fixtures), the root CHANGELOG.md (a
+# historical record keeps its old wording) and the root flake.lock
+# (data). This is not MD_SCOPE: that set is the Markdown checked paragraph
 # by paragraph, while a claim's twin can sit in a workflow, a script or
 # Nix comment, a harness or a recipe, so the sweep reads every kind of
 # file. This is the sweep scope's only definition; --sweep and the ledger
 # check both read it.
 readonly -a SWEEP_SCOPE=('.' ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures'
-  ':(exclude).claude/skills/docs-correctness-audit/evals/seeded-defects/fixtures' ':(exclude)flake.lock')
+  ':(exclude,glob).claude/skills/*/evals/seeded-defects/fixtures/**' ':(exclude)flake.lock')
 # jq definitions every ledger and gate read shares, so a rule is written
 # once: txt is a string holding a character that is neither white space
 # nor an invisible format character (Unicode category Cf: a zero-width
@@ -268,13 +269,14 @@ function sweep_hits() {
     exit "${PIPESTATUS[0]}"
   )" || rc=$?
   ((rc <= 1)) || die "could not search the merge base for the term ${term}"
-  local size text
+  local size text row
   while IFS= read -r f; do
     [[ -n ${f} ]] || continue
     f="${f#"${MB}":}"
+    # tr carried a newline as 0x01 and a tab as 0x02, so a name holding
+    # any of the four cannot be told apart; each shows as "?".
     if [[ ${f} == *[$'\001\002']* ]]; then
-      f="${f//$'\001'/<LF>}"
-      die "cannot sweep ${f//$'\002'/<TAB>}: its name holds a tab or newline; rename it"
+      die "cannot sweep ${f//[$'\001\002']/?}: its name holds a tab, newline, 0x01 or 0x02 byte (shown as ?); rename it"
     fi
     size="$(git cat-file -s "${MB}:${f}")" || die "could not read ${f} at the merge base"
     text="$(git cat-file blob "${MB}:${f}" | tr -d '\000' | wc -c)" ||
@@ -283,7 +285,7 @@ function sweep_hits() {
     spans="$(git show "${MB}:${f}" | generated_ranges)" ||
       die "could not read ${f} at the merge base"
     git show "${MB}:${f}" | SWEEP_TERM="${term}" SWEEP_GEN="${spans}" awk "${SWEEP_AWK}" |
-      while IFS=$'\t' read -r s e t; do printf '%s\t%s\t%s\t%s\n' "${f}" "${s}" "${e}" "${t}"; done ||
+      while IFS= read -r row; do printf '%s\t%s\n' "${f}" "${row}"; done ||
       die "could not search ${f} at the merge base"
   done <<<"${names}"
 }
@@ -374,7 +376,15 @@ if ((sweep_mode)); then
       sweep_status=1
       continue
     fi
-    while IFS=$'\t' read -r file start end first; do
+    # Split by expansion, not read: tab is IFS white space, so read would
+    # trim a first line's leading and trailing tabs.
+    while IFS= read -r row; do
+      file="${row%%$'\t'*}"
+      row="${row#*$'\t'}"
+      start="${row%%$'\t'*}"
+      row="${row#*$'\t'}"
+      end="${row%%$'\t'*}"
+      first="${row#*$'\t'}"
       [[ -z ${shown["${file}:${start}-${end}"]:-} ]] || continue
       shown["${file}:${start}-${end}"]=1
       printf '%s:%s-%s: %s\n' "${file}" "${start}" "${end}" "${first}"
