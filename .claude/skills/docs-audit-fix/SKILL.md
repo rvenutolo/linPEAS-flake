@@ -298,28 +298,28 @@ and 2 when it cannot run.
     `CHANGELOG.md` or `tests/fixtures/`, any hunk touching the range clears
     a `changed` or `removed` sibling, a whitespace-only edit included.
 - **Sweep.** Each `sweep` term is searched at the merge base across every
-    tracked file except `tests/fixtures/`, the docs audit's seeded-defect
+    tracked file except `tests/fixtures/`, any skill's seeded-defect
     fixtures, the root `CHANGELOG.md` and the root `flake.lock`
     (`SWEEP_SCOPE` in the checker), skipping files that hold a NUL byte
     (attributes do not decide it) and hits inside a same-named
-    `<!-- BEGIN <name> -->` / `<!-- END <name> -->` block. The match is a fixed string, case-sensitive, within one
-    paragraph: each line loses its leading white space and a leading run
-    of `#` followed by white space, a line left empty ends the paragraph,
-    and white space is collapsed in the text and the term, so a term
-    wrapped across lines or comment lines still matches. Each hit is mapped
-    to `HEAD`: a line a hunk replaced maps to the hunk's new side, a line a
-    pure deletion removed (or one replaced only by blank lines) maps to the
-    lines either side, and any other line moves with the lines above it; in
-    a file that is not a file at `HEAD`, the hit keeps its merge-base lines.
-    The mapped hit must overlap the pair's own paragraph or one of its
-    sibling ranges, whatever their status (`sweep-uncovered`). A term with
-    no hit is `sweep-empty`, and a `finding` value no pair carries a term
-    for is `missing-sweep`, so every pair's `finding` must be a whole
-    number of 1 or more. A `sweep` that is not a non-empty list of terms,
-    a term that is blank or holds a newline, tab or CR, or a bad `finding`
-    is `schema`. `--sweep [--] <term>…` prints the same hits, one
-    `<file>:<start>-<end>: <first line>` per hit, and exits 1 when a term
-    matches nothing.
+    `<!-- BEGIN <name> -->` / `<!-- END <name> -->` block. The match is a
+    fixed string, case-sensitive, within one paragraph: each line loses its
+    leading white space and a leading run of `#` followed by white space, a
+    line left empty ends the paragraph, and white space is collapsed in the
+    text and the term, so a term wrapped across lines or comment lines still
+    matches. Each hit is mapped to `HEAD`: a line a hunk replaced maps to
+    the hunk's new side, a line a pure deletion removed (or one replaced
+    only by blank lines) maps to the lines either side, and any other line
+    moves with the lines above it; in a file that is not a file at `HEAD`,
+    the hit keeps its merge-base lines. The mapped hit must overlap the
+    pair's own paragraph or one of its sibling ranges, whatever their status
+    (`sweep-uncovered`). A term with no hit is `sweep-empty`, and a
+    `finding` value no pair carries a term for is `missing-sweep`, so every
+    pair's `finding` must be a whole number of 1 or more. A `sweep` that is
+    not a non-empty list of terms, a term that is blank or holds a newline,
+    tab or CR, or a bad `finding` is `schema`. `--sweep [--] <term>…` prints
+    the same hits, one `<file>:<start>-<end>: <first line>` per hit, and
+    exits 1 when a term matches nothing.
 - **Verdicts.** Every pair is gated `TRUE` with a hash equal to its
     paragraph's hash now: the whole blank-line-delimited block, whitespace
     collapsed, so a re-wrap keeps the verdict current, as does a line shift
@@ -383,11 +383,11 @@ the gate's job. Its known limits:
     Cf). Other characters that print nothing, such as a Hangul filler or
     a braille blank, count as text.
 - The sweep reads the merge base only, so old wording the branch writes
-    again is not swept; only the gate, reading the diff, sees it. White space inside a term is collapsed,
-    so a term cannot tell one space from two, and only ASCII white space
-    collapses: a no-break space must match exactly. A phrase split across
-    separate strings (two `echo` lines, a concatenation) or across a
-    paragraph break does not match.
+    again is not swept; only the gate, reading the diff, sees it. White
+    space inside a term is collapsed, so a term cannot tell one space from
+    two, and only ASCII white space collapses: a no-break space must match
+    exactly. A phrase split across separate strings (two `echo` lines, a
+    concatenation) or across a paragraph break does not match.
 - A sibling range is read at `HEAD` like a pair's, so a stale one can
     clear a hit that has moved away from it. A hit on a line a hunk
     replaced maps to the hunk's whole new side, so a sibling anywhere on
@@ -401,7 +401,7 @@ the gate's job. Its known limits:
 - A hit in a file the branch turns into a symlink or a directory cannot
     be cleared: its mapped lines fall outside the head file, or it reads as
     deleted while the path still exists, so a `removed` sibling there fails.
-- A swept file whose name holds a tab or newline stops the run with exit
-    2; rename it.
+- A swept file whose name holds a tab, a newline or a 0x01 or 0x02 byte
+    stops the run with exit 2; rename it.
 - A finding fixed only outside in-scope Markdown has no pair, so nothing
     carries or checks its terms.

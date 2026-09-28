@@ -388,7 +388,8 @@ the fix pass's own sweep:
 ```
 
 `--base HEAD` makes the merge base `HEAD`, so it searches the `HEAD`
-commit; commit or stash edits first, since uncommitted text is not read. Its scope and matching are stated once, under **Sweep** in the
+commit; commit or stash edits first, since uncommitted text is not
+read. Its scope and matching are stated once, under **Sweep** in the
 `docs-audit-fix` skill's section on what the checker proves; a phrase that
 wraps across lines still matches, and the fix pass can record the same
 phrases as its `sweep` terms. Pass each alternative wording as its own
