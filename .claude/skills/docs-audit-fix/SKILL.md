@@ -273,8 +273,8 @@ and 2 when it cannot run.
     and after a pure deletion, its new lines plus the next one when it
     removes more lines than it adds, and its new lines otherwise. A
     `removed` one in a file the diff deletes, tracked at the merge base and
-    absent at `HEAD`, needs only a well-formed range of at most two lines,
-    with no hunk. In a file
+    absent at `HEAD`, needs no hunk, only a well-formed range of at most
+    two lines that the file held at the merge base. In a file
     that is not Markdown, or in the root `CHANGELOG.md` or `tests/fixtures/`,
     any hunk touching the range clears a `changed` or `removed` sibling, a
     whitespace-only edit included.

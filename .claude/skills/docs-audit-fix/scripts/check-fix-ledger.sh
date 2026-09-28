@@ -862,7 +862,8 @@ function one_block() {
 # at most two lines (a pure deletion's ns or ns+1, so one past the last
 # line is allowed), and needs a covered hunk touching it that deletes
 # text: a removed line whose collapsed text matches no added line of that
-# hunk; a removed sibling in a file the diff deletes needs no hunk. Any
+# hunk; a removed sibling in a file the diff deletes needs no hunk, only
+# a range inside the file at the merge base. Any
 # other file may be cleared by any hunk. A missing lines, status
 # or reason field is read as "-": tab is IFS whitespace, so an empty field
 # would collapse and shift every field after it. A reason txt reads as
@@ -928,11 +929,18 @@ function check_siblings() {
     fi
     # A removed sibling in a file the diff deletes: the file holds a blob
     # at the merge base and nothing at head, so all of its text went and
-    # there is no head position to check the range against. A file absent
-    # at both revisions was never in the diff.
+    # there is no head position to check the range against. The range
+    # names the lines the text held at the merge base instead, with no
+    # line past the end: a deleted file has no deletion point to anchor
+    # one. A file absent at both revisions was never in the diff.
     if [[ ${status} == removed ]] && ! is_tracked "${HEAD_REV}" "${file}"; then
       if is_file "${MB}" "${file}"; then
-        SIBLINGS_REMOVED=$((SIBLINGS_REMOVED + 1))
+        n="$(line_count "${MB}" "${file}")"
+        if ((e > n)); then
+          finding schema "pair ${id} sibling ${file}:${lines} runs past end of file at the merge base (${n} lines)"
+        else
+          SIBLINGS_REMOVED=$((SIBLINGS_REMOVED + 1))
+        fi
       else
         finding sibling-not-removed "pair ${id} sibling ${file}:${lines} is marked removed but is absent at the head revision and not a file at the merge base"
       fi
