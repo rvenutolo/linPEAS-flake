@@ -361,28 +361,28 @@ function main() {
   jq '.pairs[0].artifact = [{command: "git config --local --get x"}]' \
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case artifact-command-no-observed "${d}" 1 \
-    'schema: pair p1 artifact command needs a non-blank observed string, got null'
+    'schema: pair p1 artifact[0] needs a non-blank observed string, got null'
 
   d="$(new_repo)"
   beta_fixed "${d}"
   jq '.pairs[0].artifact = [{command: "git config --local --get x", observed: "   "}]' \
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case artifact-command-blank-observed "${d}" 1 \
-    'schema: pair p1 artifact command needs a non-blank observed string, got "   "'
+    'schema: pair p1 artifact[0] needs a non-blank observed string, got "   "'
 
   d="$(new_repo)"
   beta_fixed "${d}"
   jq '.pairs[0].artifact = [{command: "", observed: "exit 1"}]' \
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case artifact-command-empty "${d}" 1 \
-    'schema: pair p1 artifact command needs a non-blank command string, got ""'
+    'schema: pair p1 artifact[0] needs a non-blank command string, got ""'
 
   d="$(new_repo)"
   beta_fixed "${d}"
   jq '.pairs[0].artifact = [{command: ["git", "config"], observed: "exit 1"}]' \
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case artifact-command-not-string "${d}" 1 \
-    'schema: pair p1 artifact command needs a non-blank command string, got ["git","config"]'
+    'schema: pair p1 artifact[0] needs a non-blank command string, got ["git","config"]'
 
   # One entry holding both forms is ambiguous about which one the gate
   # reads, so it is refused rather than checked as either.
@@ -392,15 +392,42 @@ function main() {
       command: "git config --local --get x", observed: "exit 1"}]' \
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case artifact-command-and-file "${d}" 1 \
-    'schema: pair p1 artifact names both a command and a file (file "scripts/tool.sh", lines "1-5")'
+    'schema: pair p1 artifact[0] holds both command and file keys (command, file, lines, observed)'
 
-  # A lines range with no file is still half of a file entry.
+  # A lines range with no file is still half of a file entry, and an
+  # observed with no command is half of a command entry.
   d="$(new_repo)"
   beta_fixed "${d}"
   jq '.pairs[0].artifact = [{lines: "1-5", command: "git config --local --get x", observed: "exit 1"}]' \
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case artifact-command-and-lines "${d}" 1 \
-    'schema: pair p1 artifact names both a command and a file (file null, lines "1-5")'
+    'schema: pair p1 artifact[0] holds both command and file keys (command, lines, observed)'
+
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].artifact = [{file: "scripts/tool.sh", lines: "1-5", observed: "exit 1"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case artifact-observed-and-file "${d}" 1 \
+    'schema: pair p1 artifact[0] holds both command and file keys (file, lines, observed)'
+
+  # An observed with no command is a command entry missing its command,
+  # not a file entry missing its file.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].artifact = [{observed: "exit 1"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case artifact-observed-only "${d}" 1 \
+    'schema: pair p1 artifact[0] needs a non-blank command string, got null'
+  expect_absent 'needs a file'
+
+  # Each command entry is reported by its own index.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs[0].artifact = [{command: "git config --local --get x", observed: "exit 1"},
+      {command: "git config --local --get y"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case artifact-command-second-bad "${d}" 1 \
+    'schema: pair p1 artifact[1] needs a non-blank observed string, got null'
 
   # A leading zero must not slip past the range regex into bash's octal
   # arithmetic later. This targets the pair's own lines field; a malformed
