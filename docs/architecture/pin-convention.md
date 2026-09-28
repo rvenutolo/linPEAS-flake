@@ -18,7 +18,7 @@ the convention.
 
 Major tags are designed to be force-moved on every release, so a
 deliberately-moving tag cannot be judged by tag-vs-pin equality, and
-a `# vN` ref gets no audit coverage (see the runtime check under
+a `# vN` ref is left out of the audit's comparison (see the runtime check under
 [Enforcement](#enforcement)). Its integrity rests on the immutable
 digest pin, Renovate currency, and the PR-time digest-provenance gate
 alone.

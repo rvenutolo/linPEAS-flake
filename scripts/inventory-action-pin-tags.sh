@@ -8,11 +8,11 @@
 # downstream rewrite tooling.
 
 # The ratchet-pin-audit workflow can judge a pin only against a tag
-# that does not move, so a pin's comment must name its exact patch tag;
-# floating-major refs are left out of the audit (see
-# docs/architecture/pin-convention.md, Enforcement). This script finds
-# the patch tag for each pin and builds the inventory the comment
-# rewrite consumes.
+# that does not move, so a pin's comment must name a versioned tag
+# rather than a floating major; floating-major refs are left out of the
+# audit's comparison (see docs/architecture/pin-convention.md,
+# Enforcement). This script finds the patch tag for each pin and builds
+# the inventory the comment rewrite consumes.
 #
 # Output TSV columns:
 #   file  line  ref  pinned_sha  current_comment  target_comment  status
