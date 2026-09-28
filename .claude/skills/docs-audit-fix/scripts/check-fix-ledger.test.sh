@@ -351,6 +351,14 @@ EOF
 EOF
   run_case ledger-duplicate-key-new-children "${d}" 2 'ledger.json repeats key .pairs[0].artifact'
 
+  # A key that is not a plain identifier is shown JSON-quoted, so "a.b"
+  # does not read as a nested b and a newline cannot split the message.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq --compact-output '.pairs[0]["x.y\nz"] = 1' "${d}/ledger.json" |
+    sed 's/"x\.y\\nz":1/"x.y\\nz":1,"x.y\\nz":2/' >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case ledger-duplicate-key-quoted "${d}" 2 'ledger.json repeats key .pairs[0]["x.y\nz"]'
+
   d="$(new_repo)"
   beta_fixed "${d}"
   jq '.pairs[0].artifact = []' "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
