@@ -6,6 +6,19 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20260929-8276191d] - 2026-09-29
+
+### Chores
+- Bump linpeas to 20260929-8276191d ([#1186](https://github.com/rvenutolo/linPEAS-flake/pull/1186))
+
+### Features
+- Require a fix-pass pair's lines to hold its anchor ([#1185](https://github.com/rvenutolo/linPEAS-flake/pull/1185))
+- Record and check fix-pass sweep terms; widen the twin sweep ([#1184](https://github.com/rvenutolo/linPEAS-flake/pull/1184))
+- Settle the /docs-fix flow gaps and accept command artifacts ([#1181](https://github.com/rvenutolo/linPEAS-flake/pull/1181))
+
+### Refactor
+- Fold the ledger checker's guards and cut its harness time ([#1183](https://github.com/rvenutolo/linPEAS-flake/pull/1183))
+
 ## [20260928-e04a3639] - 2026-09-28
 
 ### Chores
