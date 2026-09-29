@@ -796,8 +796,11 @@ SIBLINGS_UNCHANGED=0
 SIBLINGS_REMOVED=0
 ALL_HUNKS=''
 # Markdown hunks check_completeness reported uncovered, in list_hunks'
-# "hunks" format, so a sibling they touch is named as waiting on a pair.
+# "hunks" format and, for the removed-sibling reach, as "file\tns\tol\tnl",
+# so a sibling they touch is named as sitting in a hunk that waits on a
+# pair.
 UNCOVERED_HUNKS=''
+UNCOVERED_REMOVALS=''
 # Added Markdown lines whose text changed, as "file\tos\tns\tline" for
 # every hunk (list_hunks lines), and as "file\tline" for only the hunks
 # check_completeness counted as covered: reflow-only and generated-block
@@ -1165,6 +1168,7 @@ function check_completeness() {
       count_covered "${file}" "${os}" "${ol}" "${ns}" "${nl}"
     else
       UNCOVERED_HUNKS+="${file}"$'\t'"${os}"$'\t'"${ol}"$'\t'"${ns}"$'\t'"${nl}"$'\n'
+      UNCOVERED_REMOVALS+="${file}"$'\t'"${ns}"$'\t'"${ol}"$'\t'"${nl}"$'\n'
     fi
   done <<<"${md_hunks}"
 
@@ -1219,6 +1223,30 @@ function hunk_overlaps() {
   return 1
 }
 
+# @description True when a hunk of file $1 in the list $4 (as
+# "file\tns\tol\tnl" lines) reaches lines $2..$3 the way a removed
+# sibling is judged. A pure deletion touches the boundary at ns/ns+1. A
+# hunk with new lines reaches one past them only when it removed more
+# lines than it added (a list item deleted right after its pair's edited
+# item); a one-for-one edit deletes nothing there.
+function removal_reaches() {
+  local -r file="$1" s="$2" e="$3" rows="$4"
+  local lf hns hol hnl hs he
+  while IFS=$'\t' read -r lf hns hol hnl; do
+    [[ ${lf} == "${file}" ]] || continue
+    hs=$((hns > 0 ? hns : 1))
+    if ((hnl == 0)); then
+      he=$((hns + 1))
+    elif ((hol > hnl)); then
+      he=$((hns + hnl))
+    else
+      he=$((hns + hnl - 1))
+    fi
+    ((hs <= e && he >= s)) && return 0
+  done <<<"${rows}"
+  return 1
+}
+
 # @description Exit 0 when stdin lines $1..$2 lie inside one paragraph;
 # 1 when one of them is blank, else 2 when one after the first starts a
 # list item.
@@ -1254,7 +1282,7 @@ function one_paragraph() {
 # would collapse and shift every field after it. A reason txt reads as
 # blank is no reason.
 function check_siblings() {
-  local id pfile plines file lines status reason s e n ps pe hit lf line hns hol hnl hs he limit records
+  local id pfile plines file lines status reason s e n ps pe hit lf line limit records
   records="$(jq --raw-output "${JQ_DEFS}"'.pairs[] | .id as $id | .file as $pf | .lines as $pl | .siblings[]
     | [$id, $pf, $pl, .file,
       (if (.lines | type) == "string" and (.lines | length) > 0 then .lines else "-" end),
@@ -1362,32 +1390,14 @@ function check_siblings() {
     hit=0
     if [[ ${status} == removed ]]; then
       if [[ -n ${IN_SCOPE_MD["${file}"]:-} ]]; then
-        while IFS=$'\t' read -r lf hns hol hnl; do
-          [[ ${lf} == "${file}" ]] || continue
-          hs=$((hns > 0 ? hns : 1))
-          # A pure deletion touches the boundary at ns/ns+1. A hunk with
-          # new lines reaches one past them only when it removed more
-          # lines than it added (a list item deleted right after its
-          # pair's edited item); a one-for-one edit deletes nothing there.
-          if ((hnl == 0)); then
-            he=$((hns + 1))
-          elif ((hol > hnl)); then
-            he=$((hns + hnl))
-          else
-            he=$((hns + hnl - 1))
-          fi
-          if ((hs <= e && he >= s)); then
-            hit=1
-            break
-          fi
-        done <<<"${DELETING_HUNKS}"
+        removal_reaches "${file}" "${s}" "${e}" "${DELETING_HUNKS}" && hit=1
       elif hunk_overlaps "${file}" "${s}" "${e}" "${ALL_HUNKS}"; then
         hit=1
       fi
       if ((hit)); then
         SIBLINGS_REMOVED=$((SIBLINGS_REMOVED + 1))
-      elif hunk_overlaps "${file}" "${s}" "${e}" "${UNCOVERED_HUNKS}"; then
-        finding sibling-not-removed "pair ${id} sibling ${file}:${lines} is marked removed but the hunk there is uncovered; pair its paragraph"
+      elif removal_reaches "${file}" "${s}" "${e}" "${UNCOVERED_REMOVALS}"; then
+        finding sibling-not-removed "pair ${id} sibling ${file}:${lines} is marked removed but the hunk there leaves a paragraph no pair covers (see uncovered-hunk)"
       else
         finding sibling-not-removed "pair ${id} sibling ${file}:${lines} is marked removed but no covered hunk deletes text there"
       fi
@@ -1407,7 +1417,7 @@ function check_siblings() {
     if ((hit)); then
       SIBLINGS_CHANGED=$((SIBLINGS_CHANGED + 1))
     elif hunk_overlaps "${file}" "${s}" "${e}" "${UNCOVERED_HUNKS}"; then
-      finding sibling-not-changed "pair ${id} sibling ${file}:${lines} is marked changed but the hunk there is uncovered; pair its paragraph"
+      finding sibling-not-changed "pair ${id} sibling ${file}:${lines} is marked changed but the hunk there leaves a paragraph no pair covers (see uncovered-hunk)"
     elif hunk_overlaps "${file}" "${s}" "${e}" "${ALL_HUNKS}"; then
       finding sibling-not-changed "pair ${id} sibling ${file}:${lines} is marked changed but no covered hunk changes its text"
     else
