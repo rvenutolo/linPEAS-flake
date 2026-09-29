@@ -954,12 +954,12 @@ EOF
 
   # A hunk whose new side is entirely blank must still need a pair
   # (regression guard for b1a58cce, whose per-block coverage loop left
-  # all_covered at its unproven default of 1 when new_side_blocks finds
+  # covered at its unproven default of 1 when new_side_paragraphs finds
   # no non-blank run at all). A fresh "Epsilon paragraph." is committed
   # to main first (so it is part of the merge base too, at a line
   # number — 14 — no other scenario asserts), then blanked in place on
   # fix; appending it directly on fix instead would diff as a pure
-  # blank-line insertion whose block_span happens to merge backward
+  # blank-line insertion whose paragraph_span happens to merge backward
   # into Gamma's paragraph and gets misclassified as reflow.
   d="$(new_repo)"
   git -C "${d}" switch --quiet main
@@ -1121,7 +1121,7 @@ EOF
   run_case noprefix-configured "${d}" 1 'uncovered-hunk: docs/a.md:22'
 
   # Inserting a second, blank-line-separated copy of Beta right after
-  # Beta must not read as a re-wrap: block_span's blank-anchored
+  # Beta must not read as a re-wrap: paragraph_span's blank-anchored
   # expansion (for the pure-insertion old side, anchored on the blank
   # line between the two paragraphs) joins them into one span whose
   # collapsed text can equal the new span's, even though real content
@@ -1804,6 +1804,22 @@ EOF
   run_case item-blank-between-items-is-reflow "${d}" 0 '' \
     'OK — 0 pairs; 0 hunks covered, 2 reflow-only and 0 generated skipped; 0 code changes'
 
+  # So is a blank line put in or taken out beside a nested list or under
+  # a lead-in line: the edit only adds or removes blank lines, so no word
+  # can change, whichever items the blank line sits between.
+  d="$(new_repo)"
+  seed_main "${d}" docs/n.md '# N' '' '- a' '    - a1' '    - a2' '' 'End.'
+  seed_main "${d}" docs/o.md '# O' '' '- a' '' '    - a1' '    - a2' '' 'End.'
+  seed_main "${d}" docs/p.md 'Intro text:' '- one' '- two'
+  printf '%s\n' '# N' '' '- a' '' '    - a1' '    - a2' '' 'End.' >"${d}/docs/n.md"
+  printf '%s\n' '# O' '' '- a' '    - a1' '    - a2' '' 'End.' >"${d}/docs/o.md"
+  printf '%s\n' 'Intro text:' '' '- one' '- two' >"${d}/docs/p.md"
+  commit_all "${d}" 'loosen n, tighten o, part p'
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case item-blank-beside-nested-list-is-reflow "${d}" 0 '' \
+    'OK — 0 pairs; 0 hunks covered, 3 reflow-only and 0 generated skipped; 0 code changes'
+
   # A sweep hit in another item of the pair's list is not in the pair's
   # paragraph: it needs a sibling entry.
   d="$(new_repo)"
@@ -2092,7 +2108,7 @@ EOF
   # The sibling is another item, so another paragraph: it needs a pair.
   run_case sibling-item-needs-own-pair "${d}" 1 \
     'uncovered-hunk: docs/l.md:2 changed and no pair covers it'
-  also_expect 'sibling-not-changed: pair p1 sibling docs/l.md:2-2 is marked changed but the hunk there is uncovered; pair its paragraph'
+  also_expect 'sibling-not-changed: pair p1 sibling docs/l.md:2-2 is marked changed but the hunk there leaves a paragraph no pair covers (see uncovered-hunk)'
   jq '.pairs += [{id: "p2", finding: 1, file: "docs/l.md", lines: "2-2", anchor: "two right",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]' \
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
@@ -2134,6 +2150,31 @@ EOF
   run_case sibling-removed "${d}" 0 '' \
     'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 1 removed siblings; 2 sweep terms, 2 hits cleared'
 
+  # When a hunk touches two items and only one has a pair, a sibling on
+  # the paired item is named as sitting in a hunk that leaves a
+  # paragraph without a pair, not as needing a pair of its own.
+  d="$(new_repo)"
+  seed_main "${d}" docs/l.md '# L' '' '- a old' '- b old' '' 'P old.'
+  printf '%s\n' '# L' '' '- a new' '- b new' '' 'P new.' >"${d}/docs/l.md"
+  commit_all "${d}" 'fix a, b and P'
+  pairs_ledger "${d}" 'p1|1|docs/l.md|3-3|- a new|["a old"]' 'p2|2|docs/l.md|6-6|P new.|["P old."]'
+  jq '.pairs[1].siblings = [{file: "docs/l.md", lines: "3-3", status: "changed"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  gate_all "${d}"
+  run_case sibling-paired-item-in-uncovered-hunk "${d}" 1 \
+    'sibling-not-changed: pair p2 sibling docs/l.md:3-3 is marked changed but the hunk there leaves a paragraph no pair covers (see uncovered-hunk)'
+  also_expect 'uncovered-hunk: docs/l.md:4 changed and no pair covers it'
+
+  # A removed sibling one line past an uncovered hunk that removes more
+  # lines than it adds is in that hunk's reach, as a covered hunk's is.
+  d="$(new_repo)"
+  seed_main "${d}" docs/l.md '# L' '' '- a old' '- b gone' '- c' '' 'P old.'
+  printf '%s\n' '# L' '' '- a new' '- c' '' 'P new.' >"${d}/docs/l.md"
+  commit_all "${d}" 'fix a, drop b, fix P'
+  sibling_ledger "${d}" docs/l.md 6-6 'P new.' 4-4 removed '["P old.", "b gone"]'
+  run_case sibling-removed-reach-uncovered "${d}" 1 \
+    'sibling-not-removed: pair p1 sibling docs/l.md:4-4 is marked removed but the hunk there leaves a paragraph no pair covers (see uncovered-hunk)'
+
   # A removed sibling whose deletion no pair covers is named as waiting
   # on a pair, not as a sibling nothing deleted.
   d="$(new_repo)"
@@ -2142,7 +2183,7 @@ EOF
   commit_all "${d}" 'drop two, fix the tail'
   sibling_ledger "${d}" docs/l.md 4-4 'Tail new.' 1-2 removed '["Tail old.", "two wrong"]'
   run_case sibling-removed-hunk-uncovered "${d}" 1 \
-    'sibling-not-removed: pair p1 sibling docs/l.md:1-2 is marked removed but the hunk there is uncovered; pair its paragraph'
+    'sibling-not-removed: pair p1 sibling docs/l.md:1-2 is marked removed but the hunk there leaves a paragraph no pair covers (see uncovered-hunk)'
   also_expect 'uncovered-hunk: docs/l.md:1 changed and no pair covers it'
 
   # A hunk that only adds lines removed nothing.
