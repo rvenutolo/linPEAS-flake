@@ -616,6 +616,8 @@ EOF
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case pair-lines-past-end "${d}" 1 \
     'schema: pair p1 docs/a.md:9000-9999 runs past end of file (12 lines)'
+  # A range completeness rejects is not searched for its anchor.
+  expect_absent 'anchor:'
 
   # A reversed range is malformed, not too long: a pair range 2-1 and an
   # artifact range 3-1 each say start > end, and neither says it runs
@@ -634,6 +636,7 @@ EOF
     'schema: pair p1 docs/a.md:2-1 is reversed (start 2 > end 1)'
   also_expect 'artifact: pair p2 scripts/tool.sh:3-1 is reversed (start 3 > end 1)'
   expect_absent 'runs past end of file'
+  expect_absent 'anchor:'
 
   # jq test()'s $ matches before a trailing newline, so "1-999999\n"
   # passed the pre-fix rng check; @tsv then emitted the literal
@@ -1020,6 +1023,7 @@ EOF
                   "fix_shape": "scope", "siblings": []}]' \
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case pair-file-directory "${d}" 1 'schema: pair p1 file docs is not a file at the head revision'
+  expect_absent 'anchor:'
 
   # diff.external must not replace the real diff with an empty one and
   # hide every hunk. Two filler paragraphs land the edited word at a
@@ -1456,15 +1460,18 @@ EOF
   also_expect 'anchor: pair p4 anchor "Gamma paragraph, fixed." matches nothing in docs/a.md at the head revision'
   also_expect 'anchor: pair p5 anchor "# A" matches nothing in docs/a.md at the head revision'
 
-  # A range that starts on a blank line (p1), ends on one (p2) or is one
-  # (p3) is refused even though each holds or borders Beta's anchor: its
-  # block would run over both neighbouring paragraphs.
+  # A range that starts on a blank line (p1), ends on one (p2), is one
+  # (p3) or holds one between two lines of text (p4) is refused even
+  # though each holds or borders Beta's anchor: its block would run over
+  # both neighbouring paragraphs.
   d="$(new_repo)"
   beta_fixed "${d}"
   jq '.pairs += [
       {id: "p2", finding: 1, file: "docs/a.md", lines: "6-7", anchor: "Beta paragraph, corrected",
         artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []},
       {id: "p3", finding: 1, file: "docs/a.md", lines: "7-7", anchor: "Beta paragraph, corrected",
+        artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []},
+      {id: "p4", finding: 1, file: "docs/a.md", lines: "4-6", anchor: "Beta paragraph, corrected",
         artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]
     | .pairs[0].lines = "5-6"' "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   gate_all "${d}"
@@ -1472,6 +1479,7 @@ EOF
     'schema: pair p1 docs/a.md:5-6 holds a blank line; a pair'"'"'s lines lie inside one paragraph'
   also_expect 'schema: pair p2 docs/a.md:6-7 holds a blank line'
   also_expect 'schema: pair p3 docs/a.md:7-7 holds a blank line'
+  also_expect 'schema: pair p4 docs/a.md:4-6 holds a blank line'
   expect_absent 'anchor:'
 
   # The anchor is required, and is a sweep term's shape: text, no
@@ -1493,7 +1501,8 @@ EOF
 
   # Anchors in the shapes a real ledger carries pass: a list item and a
   # table row inside a larger block, text wrapped across lines, non-ASCII
-  # text, and a file's first and last lines.
+  # text, a file's first and last lines, and text inside a generated
+  # block, which an anchor is matched in though a sweep skips it.
   d="$(new_repo)"
   seed_main "${d}" docs/l.md 'Intro line, old.' '' '- one' '- two old' '- three' '' '| k | v |' \
     '| - | - |' '| x | old |' '' 'Café tail, old.'
@@ -1516,11 +1525,13 @@ EOF
       sweep: ["Café tail, old."], siblings: []},
     {id: "p5", finding: 5, file: "docs/a.md", lines: "3-4", anchor: "line one. alpha line two,",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
-      sweep: ["alpha line two."], siblings: []}]}' \
+      sweep: ["alpha line two."], siblings: []},
+    {id: "p6", finding: 5, file: "docs/a.md", lines: "9-9", anchor: "generated row one",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]}' \
     >"${d}/ledger.json"
   gate_all "${d}"
   run_case anchor-shapes-pass "${d}" 0 '' \
-    'OK — 5 pairs; 5 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 0 removed siblings; 5 sweep terms, 5 hits cleared'
+    'OK — 6 pairs; 5 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 0 removed siblings; 5 sweep terms, 5 hits cleared'
 
   # A listed code change with a gate attack: pass.
   d="$(new_repo)"
