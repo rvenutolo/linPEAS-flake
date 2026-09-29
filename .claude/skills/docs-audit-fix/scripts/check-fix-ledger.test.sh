@@ -2170,6 +2170,11 @@ EOF
   seed_files "${d}" scripts/tabs.sh $'\tBeta tabbed line\t\t'
   run_sweep_case sweep-mode-edge-tabs "${d}" 0 '' $'scripts/tabs.sh:1-1: \tBeta tabbed line\t\t' \
     --sweep 'Beta tabbed'
+  # A hit spanning a wrap prints its first line.
+  seed_files "${d}" docs/w.md $'# W\n\nWrapped Beta\nsweep line here'
+  run_sweep_case sweep-mode-wrapped-hit "${d}" 0 '' 'docs/w.md:3-4: Wrapped Beta' \
+    --sweep 'Beta sweep'
+  expect_absent_stdout 'sweep line here'
   expect_absent_stdout 'docs/a.md'
   run_sweep_case sweep-mode-no-hit "${d}" 1 \
     'check-fix-ledger: term "Nowhere text" matches nothing in the sweep scope at the merge base' '' \
