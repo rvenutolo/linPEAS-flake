@@ -1427,8 +1427,8 @@ EOF
     >"${d}/ledger.json"
   gate_all "${d}"
   run_case anchor-swap "${d}" 1 \
-    'anchor: pair p1 anchor "First claim, new." is at docs/s.md:5-5, outside its lines 3-3; bring lines up to date'
-  also_expect 'anchor: pair p2 anchor "Second claim, new." is at docs/s.md:3-3, outside its lines 5-5; bring lines up to date'
+    'anchor: pair p1 anchor "First claim, new." is at docs/s.md:5-5, outside its lines 3-3; point lines at it or anchor on text inside them'
+  also_expect 'anchor: pair p2 anchor "Second claim, new." is at docs/s.md:3-3, outside its lines 5-5; point lines at it or anchor on text inside them'
 
   # An anchor wrapped across two lines must lie wholly inside the lines:
   # the end of the match past them (p1) or its start before them (p2) is
@@ -1447,20 +1447,64 @@ EOF
       sweep: ["Alpha paragraph line one."], siblings: []},
     {id: "p2", finding: 1, file: "docs/a.md", lines: "4-4", anchor: "one, fixed. alpha line two.",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []},
-    {id: "p3", finding: 1, file: "docs/a.md", lines: "6-6", anchor: "Beta paragraph, corrected.",
+    {id: "p3", finding: 1, file: "docs/a.md", lines: "6-6", anchor: "paragraph, corrected.",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []},
     {id: "p4", finding: 1, file: "docs/a.md", lines: "12-12", anchor: "Gamma paragraph, fixed.",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []},
     {id: "p5", finding: 1, file: "docs/a.md", lines: "1-1", anchor: "# A",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []},
+    {id: "p6", finding: 1, file: "docs/a.md", lines: "12-12", anchor: "paragraph",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]}' \
     >"${d}/ledger.json"
   gate_all "${d}"
   run_case anchor-placement "${d}" 1 \
-    'anchor: pair p1 anchor "fixed. alpha line" is at docs/a.md:3-4, outside its lines 3-3; bring lines up to date'
+    'anchor: pair p1 anchor "fixed. alpha line" is at docs/a.md:3-4, outside its lines 3-3; point lines at it or anchor on text inside them'
   also_expect 'anchor: pair p2 anchor "one, fixed. alpha line two." is at docs/a.md:3-4, outside its lines 4-4'
-  also_expect 'anchor: pair p3 anchor "Beta paragraph, corrected." matches docs/a.md more than once (6-6 12-12); name a phrase the file holds once'
+  also_expect 'anchor: pair p3 anchor "paragraph, corrected." matches docs/a.md more than once (6-6 12-12); name a phrase the file holds once'
   also_expect 'anchor: pair p4 anchor "Gamma paragraph, fixed." matches nothing in docs/a.md at the head revision'
   also_expect 'anchor: pair p5 anchor "# A" matches nothing in docs/a.md at the head revision'
+  # Gamma's line holds "paragraph" twice; its position is listed once.
+  also_expect 'anchor: pair p6 anchor "paragraph" matches docs/a.md more than once (3-3 6-6 12-12); name a phrase the file holds once'
+
+  # An anchor that is its paragraph's whole text passes even where the
+  # file repeats it: a heading, whose "#" run the match strips, renamed to
+  # a word the prose uses (p1), and a line fixed to match another
+  # paragraph word for word (p2). Identical paragraphs hash alike, so a
+  # range on either carries the same verdict.
+  d="$(new_repo)"
+  seed_main "${d}" docs/h.md '# H' '' '## Wrong name' '' 'Usage of the tool is below.' '' 'Same line.' \
+    '' 'Same line, old.' '' 'Twin a' 'twin b' '' 'Twin a' 'twin b'
+  sed -i -e 's/^## Wrong name$/## Usage/' -e 's/^Same line, old\.$/Same line./' "${d}/docs/h.md"
+  commit_all "${d}" 'rename usage, fix same line'
+  jq -n '{report: "r.md", code_changes: [], pairs: [
+    {id: "p1", finding: 1, file: "docs/h.md", lines: "3-3", anchor: "Usage",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+      sweep: ["Wrong name", "Wrong"], siblings: []},
+    {id: "p2", finding: 2, file: "docs/h.md", lines: "9-9", anchor: "Same line.",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+      sweep: ["Same line, old."],
+      siblings: [{file: "docs/h.md", lines: "7-7", status: "unchanged",
+        reason: "the line it now matches was already right"}]}]}' >"${d}/ledger.json"
+  gate_all "${d}"
+  run_case anchor-whole-paragraph "${d}" 0 '' \
+    'OK — 2 pairs; 2 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 1 unchanged and 0 removed siblings; 3 sweep terms, 2 hits cleared'
+
+  # The exception is only for the whole text of the paragraph at lines:
+  # the same word as part of a longer paragraph is a repeat (p3), and a
+  # whole two-line paragraph the lines hold only half of is outside them,
+  # at every place it matched (p4).
+  jq '.pairs += [
+    {id: "p3", finding: 1, file: "docs/h.md", lines: "5-5", anchor: "Usage",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []},
+    {id: "p4", finding: 1, file: "docs/h.md", lines: "11-11", anchor: "Twin a twin b",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  gate_all "${d}"
+  run_case anchor-whole-paragraph-limits "${d}" 1 \
+    'anchor: pair p3 anchor "Usage" matches docs/h.md more than once (3-3 5-5); name a phrase the file holds once'
+  also_expect 'anchor: pair p4 anchor "Twin a twin b" is at docs/h.md (11-12 14-15), outside its lines 11-11; point lines at it or anchor on text inside them'
+  expect_absent 'pair p1'
+  expect_absent 'pair p2'
 
   # A range that starts on a blank line (p1), ends on one (p2), is one
   # (p3) or holds one between two lines of text (p4) is refused even
@@ -1491,14 +1535,17 @@ EOF
   beta_fixed "${d}"
   jq '.pairs += [range(2; 7) as $i | .pairs[0] | .id = "p\($i)"]
     | del(.pairs[1].anchor) | .pairs[2].anchor = 3 | .pairs[3].anchor = " ​"
-    | .pairs[4].anchor = "a\nb" | .pairs[5].anchor = "a\tb"' \
+    | .pairs[4].anchor = "a\nb" | .pairs[5].anchor = "a\tb"
+    | .pairs += [.pairs[0] | .id = "p7" | .anchor = "Beta\u0000 paragraph, corrected"]' \
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case schema-anchor "${d}" 1 \
-    'schema: pair p2 needs an anchor (a non-blank phrase from its paragraph, with no newline, tab or CR), got null'
-  also_expect 'schema: pair p3 needs an anchor (a non-blank phrase from its paragraph, with no newline, tab or CR), got 3'
-  also_expect $'schema: pair p4 needs an anchor (a non-blank phrase from its paragraph, with no newline, tab or CR), got " ​"'
-  also_expect 'schema: pair p5 needs an anchor (a non-blank phrase from its paragraph, with no newline, tab or CR), got "a<LF>b"'
-  also_expect 'schema: pair p6 needs an anchor (a non-blank phrase from its paragraph, with no newline, tab or CR), got "a<TAB>b"'
+    'schema: pair p2 needs an anchor (a non-blank phrase inside its lines, with no newline, tab, CR or NUL), got null'
+  also_expect 'schema: pair p3 needs an anchor (a non-blank phrase inside its lines, with no newline, tab, CR or NUL), got 3'
+  also_expect $'schema: pair p4 needs an anchor (a non-blank phrase inside its lines, with no newline, tab, CR or NUL), got " ​"'
+  also_expect 'schema: pair p5 needs an anchor (a non-blank phrase inside its lines, with no newline, tab, CR or NUL), got "a<LF>b"'
+  also_expect 'schema: pair p6 needs an anchor (a non-blank phrase inside its lines, with no newline, tab, CR or NUL), got "a<TAB>b"'
+  also_expect 'schema: pair p7 needs an anchor (a non-blank phrase inside its lines, with no newline, tab, CR or NUL), got "Beta<NUL> paragraph, corrected"'
+  expect_absent 'ignored null byte'
   expect_absent 'pair p1 needs an anchor'
 
   # Anchors in the shapes a real ledger carries pass: a list item and a
@@ -2296,11 +2343,12 @@ EOF
   run_case sweep-not-list "${d}" 1 'schema: pair p1 sweep must be a list of terms, got "Beta paragraph."'
   sweep_case "${d}" '[]'
   run_case sweep-empty-list "${d}" 1 'schema: pair p1 sweep is an empty list; omit the field or name a term'
-  sweep_case "${d}" '["Beta paragraph.", " \u200b", "a\nb", 3]'
+  sweep_case "${d}" '["Beta paragraph.", " \u200b", "a\nb", 3, "Beta\u0000 paragraph."]'
   run_case sweep-bad-terms "${d}" 1 \
-    'schema: pair p1 sweep[1] needs a non-blank term with no newline, tab or CR, got " '
-  also_expect 'schema: pair p1 sweep[2] needs a non-blank term with no newline, tab or CR, got "a<LF>b"'
-  also_expect 'schema: pair p1 sweep[3] needs a non-blank term with no newline, tab or CR, got 3'
+    'schema: pair p1 sweep[1] needs a non-blank term with no newline, tab, CR or NUL, got " '
+  also_expect 'schema: pair p1 sweep[2] needs a non-blank term with no newline, tab, CR or NUL, got "a<LF>b"'
+  also_expect 'schema: pair p1 sweep[3] needs a non-blank term with no newline, tab, CR or NUL, got 3'
+  also_expect 'schema: pair p1 sweep[4] needs a non-blank term with no newline, tab, CR or NUL, got "Beta<NUL> paragraph."'
   expect_absent 'sweep[0]'
 
   # Every finding needs a pair carrying a term; another pair of the same
