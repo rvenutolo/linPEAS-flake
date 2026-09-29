@@ -1370,6 +1370,22 @@ EOF
   jq '.pairs[0].verdict = "FALSE" | .pairs[0].note = "artifact says otherwise"' \
     "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
   run_case verdict-false "${d}" 1 'verdict: pair p1 is FALSE: artifact says otherwise'
+  expect_absent 'changed since'
+
+  # A non-TRUE verdict on a paragraph edited after the gate read it says
+  # so, so its note is not read as a verdict on the new text.
+  sed -i 's/^Beta paragraph, corrected\.$/Beta paragraph, corrected again./' "${d}/docs/a.md"
+  commit_all "${d}" 'post-gate edit'
+  jq '.pairs[0].note = "names the wrong job"' "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
+  run_case verdict-false-edited "${d}" 1 \
+    'verdict: pair p1 is FALSE: names the wrong job (paragraph changed since the gate read it)'
+  jq '.pairs[0].note = ""' "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
+  run_case verdict-false-edited-no-note "${d}" 1 \
+    'verdict: pair p1 is FALSE (paragraph changed since the gate read it)'
+  # With no hash recorded there is nothing to compare, so no note.
+  jq '.pairs[0].note = "no hash" | del(.pairs[0].hash)' "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
+  run_case verdict-false-edited-no-hash "${d}" 1 'verdict: pair p1 is FALSE: no hash'
+  expect_absent 'changed since'
 
   # Edited after the gate: stale.
   d="$(new_repo)"
