@@ -135,6 +135,7 @@ function run_hash_case() {
   harness_assert_record "${name}" "${expected_stderr}" \
     "${outcome_file}" "${stdout_file}" "${stderr_file}"
   LAST_STDERR="${stderr_file}"
+  LAST_STDOUT="${stdout_file}"
   LAST_NAME="${name}"
 }
 
@@ -384,6 +385,32 @@ function seed_files() {
   git -C "${d}" commit --quiet --message seed
   git -C "${d}" switch --quiet fix
   git -C "${d}" merge --quiet main
+}
+
+# @description Write $1/ledger.json with one pair per record after $1,
+# each "id|finding|file|lines|anchor|sweep": sweep is a JSON array of
+# terms, or "-" to leave the field out. Every pair cites scripts/tool.sh
+# and has no siblings.
+function pairs_ledger() {
+  local -r d="$1"
+  shift
+  local pairs='[]' rec id fnum file lines anchor sweep
+  for rec in "$@"; do
+    IFS='|' read -r id fnum file lines anchor sweep <<<"${rec}"
+    pairs="$(jq --arg id "${id}" --argjson fn "${fnum}" --arg f "${file}" --arg l "${lines}" \
+      --arg an "${anchor}" --arg sw "${sweep}" '. + [{id: $id, finding: $fn, file: $f, lines: $l,
+        anchor: $an, artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+        siblings: []} + (if $sw == "-" then {} else {sweep: ($sw | fromjson)} end)]' <<<"${pairs}")"
+  done
+  jq -n --argjson p "${pairs}" '{report: "r.md", code_changes: [], pairs: $p}' >"${d}/ledger.json"
+}
+
+# @description Seed docs/l.md on main as a heading, a three-item list
+# (lines 3-5: Alpha, Bravo, Charlie, each reading "<name> old.") and a
+# tail paragraph at line 7.
+function seed_list() {
+  seed_main "$1" docs/l.md '# L' '' '- **Alpha** alpha old.' '- **Bravo** bravo old.' \
+    '- **Charlie** charlie old.' '' 'Tail.'
 }
 
 function main() {
@@ -1624,6 +1651,230 @@ EOF
   run_case anchor-shapes-pass "${d}" 0 '' \
     'OK — 6 pairs; 5 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 0 removed siblings; 5 sweep terms, 5 hits cleared'
 
+  # A list item is its own paragraph: a block whose first line is a list
+  # marker splits before every later marker at that line's indent. So a
+  # verdict on Bravo stays current when Charlie, in the same list, is
+  # fixed and gated after it.
+  d="$(new_repo)"
+  seed_list "${d}"
+  sed -i 's/bravo old\./bravo fixed./' "${d}/docs/l.md"
+  commit_all "${d}" 'fix bravo'
+  pairs_ledger "${d}" 'p1|1|docs/l.md|4-4|bravo fixed.|["bravo old."]'
+  gate_all "${d}"
+  sed -i 's/charlie old\./charlie fixed./' "${d}/docs/l.md"
+  commit_all "${d}" 'fix charlie after the gate'
+  jq '.pairs += [{id: "p2", finding: 2, file: "docs/l.md", lines: "5-5", anchor: "charlie fixed.",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+      sweep: ["charlie old."], siblings: []}]' "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  jq --arg h "$(gate_hash "${d}" docs/l.md 5-5)" '.pairs += [{id: "p2", verdict: "TRUE", hash: $h, note: ""}]' \
+    "${d}/gate.json" >"${d}/g" && mv -- "${d}/g" "${d}/gate.json"
+  run_case item-verdict-survives-neighbour-edit "${d}" 0 '' \
+    'OK — 2 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 0 removed siblings; 2 sweep terms, 2 hits cleared'
+
+  # --hash reads the item alone: the hash of its collapsed text.
+  run_hash_case hash-list-item "${d}" 0 '' docs/l.md 4-4
+  also_expect_stdout "$(printf '%s' '- **Bravo** bravo fixed.' | sha256sum | cut --delimiter=' ' --fields=1)"
+
+  # Negative fixture: an edit to the item's own continuation line after
+  # the gate makes its verdict stale; the hash is the whole item, not the
+  # recorded lines.
+  d="$(new_repo)"
+  seed_main "${d}" docs/l.md '# L' '' '- **Alpha** alpha one,' '    alpha two old.' '- **Bravo** bravo.'
+  sed -i 's/alpha one,/alpha one, fixed,/' "${d}/docs/l.md"
+  commit_all "${d}" 'fix alpha'
+  pairs_ledger "${d}" 'p1|1|docs/l.md|3-3|alpha one, fixed,|["alpha one,"]'
+  gate_all "${d}"
+  sed -i 's/alpha two old\./alpha two new./' "${d}/docs/l.md"
+  commit_all "${d}" 'edit the continuation after the gate'
+  run_case item-stale-own-continuation "${d}" 1 \
+    'stale-verdict: pair p1 docs/l.md:3-3 changed after the gate read it'
+
+  # A hunk editing the marker lines of two adjacent items touches two
+  # paragraphs, and each needs its own pair.
+  d="$(new_repo)"
+  seed_list "${d}"
+  sed -i -e 's/alpha old\./alpha fixed./' -e 's/bravo old\./bravo fixed./' "${d}/docs/l.md"
+  commit_all "${d}" 'fix alpha and bravo'
+  pairs_ledger "${d}" 'p1|1|docs/l.md|3-3|alpha fixed.|["alpha old."]'
+  gate_all "${d}"
+  run_case item-adjacent-edit-needs-both "${d}" 1 \
+    'uncovered-hunk: docs/l.md:4 changed and no pair covers it'
+  expect_absent 'docs/l.md:3 changed'
+
+  pairs_ledger "${d}" 'p1|1|docs/l.md|3-3|alpha fixed.|["alpha old."]' \
+    'p2|2|docs/l.md|4-4|bravo fixed.|["bravo old.", "**Bravo**"]'
+  gate_all "${d}"
+  run_case item-adjacent-edit-both-paired "${d}" 0 '' \
+    'OK — 2 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 0 removed siblings; 3 sweep terms, 2 hits cleared'
+
+  # A pair's lines lie inside one item.
+  pairs_ledger "${d}" 'p1|1|docs/l.md|3-4|alpha fixed.|["alpha old."]' \
+    'p2|2|docs/l.md|4-4|bravo fixed.|["bravo old."]'
+  gate_all "${d}"
+  run_case item-pair-spans-two-items "${d}" 1 \
+    'schema: pair p1 docs/l.md:3-4 spans more than one list item; a pair'"'"'s lines lie inside one paragraph'
+  expect_absent 'holds a blank line'
+
+  # So does a changed sibling's range.
+  d="$(new_repo)"
+  seed_list "${d}"
+  sed -i -e 's/alpha old\./alpha fixed./' -e 's/bravo old\./bravo fixed./' \
+    -e 's/charlie old\./charlie fixed./' "${d}/docs/l.md"
+  commit_all "${d}" 'fix all three'
+  pairs_ledger "${d}" 'p1|1|docs/l.md|3-3|alpha fixed.|["alpha old."]' \
+    'p2|2|docs/l.md|4-4|bravo fixed.|["bravo old."]' 'p3|3|docs/l.md|5-5|charlie fixed.|["charlie old."]'
+  jq '.pairs[0].siblings = [{file: "docs/l.md", lines: "4-5", status: "changed"}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  gate_all "${d}"
+  run_case item-sibling-spans-two-items "${d}" 1 \
+    'schema: pair p1 sibling docs/l.md:4-5 does not lie within one paragraph'
+
+  # The stale-range shift, one level down: Bravo is paired at 4-5, then an item
+  # inserted above moves it to 5-6. The stale 4-5 is the new item plus
+  # Bravo's first line, which holds the anchor and no blank line, and a
+  # gate hashing it there would match. Only the one-item rule decides it.
+  d="$(new_repo)"
+  seed_main "${d}" docs/l.md '# L' '' '- **Alpha** alpha.' '- **Bravo** bravo old' '    wraps here.' \
+    '- **Charlie** charlie.'
+  sed -i 's/bravo old$/bravo fixed/' "${d}/docs/l.md"
+  commit_all "${d}" 'fix bravo'
+  sed -i '3a - **Inserted** item.' "${d}/docs/l.md"
+  commit_all "${d}" 'insert above bravo'
+  pairs_ledger "${d}" 'p1|1|docs/l.md|4-5|**Bravo** bravo fixed|["bravo old"]' \
+    'p2|1|docs/l.md|4-4|**Inserted** item.|-'
+  gate_all "${d}"
+  run_case item-anchor-shift-straddle "${d}" 1 \
+    'schema: pair p1 docs/l.md:4-5 spans more than one list item; a pair'"'"'s lines lie inside one paragraph'
+  expect_absent 'anchor:'
+
+  # A swap one level down: Bravo and Charlie trade places after the
+  # ledger was written. Each range is one whole item; the anchor decides.
+  d="$(new_repo)"
+  seed_list "${d}"
+  sed -i -e 's/bravo old\./bravo fixed./' -e 's/charlie old\./charlie fixed./' "${d}/docs/l.md"
+  commit_all "${d}" 'fix bravo and charlie'
+  sed -i -e '4{h;d}' -e '5G' "${d}/docs/l.md"
+  commit_all "${d}" 'swap them'
+  pairs_ledger "${d}" 'p1|1|docs/l.md|4-4|bravo fixed.|["bravo old."]' \
+    'p2|2|docs/l.md|5-5|charlie fixed.|["charlie old."]'
+  gate_all "${d}"
+  run_case item-anchor-swap "${d}" 1 \
+    'anchor: pair p1 anchor "bravo fixed." is at docs/l.md:5-5, outside its lines 4-4'
+  also_expect 'anchor: pair p2 anchor "charlie fixed." is at docs/l.md:4-4, outside its lines 5-5'
+
+  # A re-wrap inside one item is a reflow, even when another item of the
+  # same list changes words in a separate hunk.
+  d="$(new_repo)"
+  seed_main "${d}" docs/l.md '# L' '' '- **Alpha** alpha one' '    alpha two.' '- **Bravo** bravo.' \
+    '- **Charlie** charlie old.'
+  printf '%s\n' '# L' '' '- **Alpha** alpha' '    one alpha two.' '- **Bravo** bravo.' \
+    '- **Charlie** charlie fixed.' >"${d}/docs/l.md"
+  commit_all "${d}" 'rewrap alpha, fix charlie'
+  pairs_ledger "${d}" 'p1|1|docs/l.md|6-6|charlie fixed.|["charlie old."]'
+  gate_all "${d}"
+  run_case item-rewrap-is-reflow "${d}" 0 '' \
+    'OK — 1 pairs; 1 hunks covered, 1 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 0 removed siblings; 1 sweep terms, 1 hits cleared'
+
+  # A blank line inserted between two items (tight to loose), or removed
+  # (loose to tight), changes no words: a reflow.
+  d="$(new_repo)"
+  seed_main "${d}" docs/l.md '# L' '' '- one item' '- two item'
+  seed_main "${d}" docs/k.md '# K' '' '- one item' '' '- two item'
+  printf '%s\n' '# L' '' '- one item' '' '- two item' >"${d}/docs/l.md"
+  printf '%s\n' '# K' '' '- one item' '- two item' >"${d}/docs/k.md"
+  commit_all "${d}" 'loosen l, tighten k'
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case item-blank-between-items-is-reflow "${d}" 0 '' \
+    'OK — 0 pairs; 0 hunks covered, 2 reflow-only and 0 generated skipped; 0 code changes'
+
+  # A sweep hit in another item of the pair's list is not in the pair's
+  # paragraph: it needs a sibling entry.
+  d="$(new_repo)"
+  seed_main "${d}" docs/l.md '# L' '' '- **Alpha** alpha.' '- **Bravo** stale claim.' \
+    '- **Charlie** stale claim too.'
+  sed -i 's/Bravo\*\* stale claim\./Bravo** fixed claim./' "${d}/docs/l.md"
+  commit_all "${d}" 'fix bravo'
+  pairs_ledger "${d}" 'p1|1|docs/l.md|4-4|fixed claim.|["stale claim"]'
+  gate_all "${d}"
+  run_case item-sweep-hit-in-neighbour-item "${d}" 1 \
+    'sweep-uncovered: pair p1 term "stale claim" hits docs/l.md:5-5 at the merge base (5-5 at head) and no entry of the pair covers it'
+
+  # An anchor repeated as the whole text of two items that hash alike
+  # passes: either carries the same verdict.
+  d="$(new_repo)"
+  seed_main "${d}" docs/l.md '# L' '' '- same entry' '- other entry' '' 'Middle.'
+  printf '%s\n' '# L' '' '- same entry' '- other entry' '' 'Middle.' '' '- same entry' '- another entry' \
+    >"${d}/docs/l.md"
+  commit_all "${d}" 'add a second list'
+  jq -n '{report: "r.md", code_changes: [], pairs: [
+    {id: "p1", finding: 1, file: "docs/l.md", lines: "8-8", anchor: "- same entry",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", sweep: ["same entry"],
+      siblings: [{file: "docs/l.md", lines: "3-3", status: "unchanged", reason: "true as written"}]},
+    {id: "p2", finding: 1, file: "docs/l.md", lines: "9-9", anchor: "- another entry",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]}' \
+    >"${d}/ledger.json"
+  gate_all "${d}"
+  run_case item-anchor-repeat-whole-items "${d}" 0 '' \
+    'OK — 2 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 1 unchanged and 0 removed siblings; 1 sweep terms, 1 hits cleared'
+
+  # A nested item belongs to its parent's paragraph: a pair on the parent
+  # covers an edit to the child, and a pair on the next item does not.
+  d="$(new_repo)"
+  seed_main "${d}" docs/l.md '# L' '' '- **P1** parent one.' '    - child old.' '- **P2** parent two.'
+  sed -i 's/child old\./child new./' "${d}/docs/l.md"
+  commit_all "${d}" 'fix the child'
+  pairs_ledger "${d}" 'p1|1|docs/l.md|3-3|**P1** parent one.|["child old.", "parent one.", "- child"]'
+  gate_all "${d}"
+  run_case item-nested-child-in-parent "${d}" 0 '' \
+    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 0 removed siblings; 3 sweep terms, 2 hits cleared'
+  pairs_ledger "${d}" 'p1|1|docs/l.md|5-5|**P2** parent two.|["child old."]'
+  gate_all "${d}"
+  run_case item-nested-child-not-in-next-item "${d}" 1 \
+    'uncovered-hunk: docs/l.md:4 changed and no pair covers it'
+
+  # A fence inside an item is part of the item, marker-shaped lines and
+  # all; a fenced block that is not in a list is never split.
+  d="$(new_repo)"
+  seed_main "${d}" docs/l.md '# L' '' '- **F** item.' '    ```text' '    - inner old' '    ```' '- **G** next.' \
+    '' '```text' '- one' '- two old' '```'
+  sed -i -e 's/inner old/inner new/' -e 's/^- two old$/- two new/' "${d}/docs/l.md"
+  commit_all "${d}" 'edit both fences'
+  pairs_ledger "${d}" 'p1|1|docs/l.md|3-3|**F** item.|["inner old", "**F** item."]' \
+    'p2|2|docs/l.md|9-12|- one|["two old"]'
+  gate_all "${d}"
+  run_case item-fences-not-split "${d}" 0 '' \
+    'OK — 2 pairs; 2 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 0 removed siblings; 3 sweep terms, 3 hits cleared'
+
+  # Every marker form starts an item: -, *, + (then a space, a tab or the
+  # end of the line), and one to nine digits then . or ). A line that
+  # only looks like one, or a marker at another indent than the block's
+  # first line, does not.
+  d="$(new_repo)"
+  seed_files "${d}" docs/m1.md $'* one\n* two oldA' docs/m2.md $'+ one\n+ two oldB' \
+    docs/m3.md $'1. one\n1. two oldC' docs/m4.md $'1) one\n1) two oldD' \
+    docs/m5.md $'- one\n-\ttwo oldE' docs/m6.md $'123456789. one\n123456789. two oldF' \
+    docs/m7.md $'- one\n- oldG' \
+    docs/m8.md $'- one\n-x oldH\n1.x oldH\n1234567890. oldH\n    - oldH' docs/m9.md $'  - one\n- two oldI'
+  sed -i 's/old\([A-I]\)/new\1/' "${d}"/docs/m?.md
+  sed -i '2s/.*/-/' "${d}/docs/m7.md"
+  commit_all "${d}" 'edit the second line of each'
+  pairs_ledger "${d}" 'p1|1|docs/m1.md|1-1|* one|["two oldA"]' 'p2|2|docs/m2.md|1-1|+ one|["two oldB"]' \
+    'p3|3|docs/m3.md|1-1|1. one|["two oldC"]' 'p4|4|docs/m4.md|1-1|1) one|["two oldD"]' \
+    'p5|5|docs/m5.md|1-1|- one|["two oldE"]' 'p6|6|docs/m6.md|1-1|123456789. one|["two oldF"]' \
+    'p7|7|docs/m7.md|1-1|- one|["- oldG"]' 'p8|8|docs/m8.md|1-1|- one|["x oldH"]' \
+    'p9|9|docs/m9.md|1-1|- one|["two oldI"]'
+  gate_all "${d}"
+  run_case item-marker-forms "${d}" 1 'uncovered-hunk: docs/m1.md:2 changed and no pair covers it'
+  also_expect 'uncovered-hunk: docs/m2.md:2 changed and no pair covers it'
+  also_expect 'uncovered-hunk: docs/m3.md:2 changed and no pair covers it'
+  also_expect 'uncovered-hunk: docs/m4.md:2 changed and no pair covers it'
+  also_expect 'uncovered-hunk: docs/m5.md:2 changed and no pair covers it'
+  also_expect 'uncovered-hunk: docs/m6.md:2 changed and no pair covers it'
+  also_expect 'uncovered-hunk: docs/m7.md:2 changed and no pair covers it'
+  expect_absent 'docs/m8.md'
+  expect_absent 'docs/m9.md'
+
   # A listed code change with a gate attack: pass.
   d="$(new_repo)"
   sed -i 's/^echo line5$/echo line5 changed/' "${d}/scripts/tool.sh"
@@ -1806,6 +2057,11 @@ EOF
   printf '%s\n' '- one right' '- two wrong ' >"${d}/docs/l.md"
   commit_all "${d}" 'fix one, pad two'
   sibling_ledger "${d}" docs/l.md 1-1 'one right' 2-2
+  # The padded item is its own paragraph, so it carries a pair too.
+  jq '.pairs += [{id: "p2", finding: 1, file: "docs/l.md", lines: "2-2", anchor: "two wrong",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  gate_all "${d}"
   run_case sibling-list-trailing-space "${d}" 1 \
     'sibling-not-changed: pair p1 sibling docs/l.md:2-2 is marked changed but no covered hunk changes its text'
 
@@ -1815,8 +2071,16 @@ EOF
   printf '%s\n' '- one right' '- two right' >"${d}/docs/l.md"
   commit_all "${d}" 'fix both'
   sibling_ledger "${d}" docs/l.md 1-1 'one right' 2-2 changed '["one wrong", "two wrong"]'
+  # The sibling is another item, so another paragraph: it needs a pair.
+  run_case sibling-item-needs-own-pair "${d}" 1 \
+    'uncovered-hunk: docs/l.md:2 changed and no pair covers it'
+  also_expect 'sibling-not-changed: pair p1 sibling docs/l.md:2-2 is marked changed but the hunk there is uncovered; pair its paragraph'
+  jq '.pairs += [{id: "p2", finding: 1, file: "docs/l.md", lines: "2-2", anchor: "two right",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  gate_all "${d}"
   run_case sibling-list-word-change "${d}" 0 '' \
-    'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 1 changed, 0 unchanged and 0 removed siblings; 2 sweep terms, 2 hits cleared'
+    'OK — 2 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 1 changed, 0 unchanged and 0 removed siblings; 2 sweep terms, 2 hits cleared'
 
   # A changed sibling's range must fall inside its file.
   d="$(new_repo)"
