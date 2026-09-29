@@ -1490,10 +1490,11 @@ EOF
   run_case anchor-whole-paragraph "${d}" 0 '' \
     'OK — 2 pairs; 2 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 1 unchanged and 0 removed siblings; 3 sweep terms, 2 hits cleared'
 
-  # The exception is only for the whole text of the paragraph at lines:
-  # the same word as part of a longer paragraph is a repeat (p3), and a
-  # whole two-line paragraph the lines hold only half of is outside them,
-  # at every place it matched (p4).
+  # The exception is only for a match that is its paragraph's whole text:
+  # the same word inside a longer paragraph is not one, so a range there
+  # is outside the heading the anchor names (p3), and a whole two-line
+  # paragraph the lines hold only half of is outside them, at every place
+  # it matched (p4).
   jq '.pairs += [
     {id: "p3", finding: 1, file: "docs/h.md", lines: "5-5", anchor: "Usage",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []},
@@ -1502,10 +1503,50 @@ EOF
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   gate_all "${d}"
   run_case anchor-whole-paragraph-limits "${d}" 1 \
-    'anchor: pair p3 anchor "Usage" matches docs/h.md more than once (3-3 5-5); name a phrase the file holds once'
+    'anchor: pair p3 anchor "Usage" is at docs/h.md:3-3, outside its lines 5-5; point lines at it or anchor on text inside them'
   also_expect 'anchor: pair p4 anchor "Twin a twin b" is at docs/h.md (11-12 14-15), outside its lines 11-11; point lines at it or anchor on text inside them'
   expect_absent 'pair p1'
   expect_absent 'pair p2'
+
+  # Paragraphs whose whole text is the anchor but whose hashes differ are
+  # not interchangeable: a heading and a plain line with its words, fixed
+  # and then swapped, would each pass on the other's verdict.
+  d="$(new_repo)"
+  seed_main "${d}" docs/t.md '# T' '' '## Old name' '' 'Old name' '' 'Tail.'
+  printf '%s\n' '# T' '' '## Usage' '' 'Usage' '' 'Tail.' >"${d}/docs/t.md"
+  commit_all "${d}" 'rename both'
+  printf '%s\n' '# T' '' 'Usage' '' '## Usage' '' 'Tail.' >"${d}/docs/t.md"
+  commit_all "${d}" 'swap them'
+  jq -n '{report: "r.md", code_changes: [], pairs: [
+    {id: "p1", finding: 1, file: "docs/t.md", lines: "3-3", anchor: "Usage",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+      sweep: ["Old name"], siblings: [{file: "docs/t.md", lines: "5-5", status: "changed"}]},
+    {id: "p2", finding: 1, file: "docs/t.md", lines: "5-5", anchor: "Usage",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]}' \
+    >"${d}/ledger.json"
+  gate_all "${d}"
+  run_case anchor-whole-heading-swap "${d}" 1 \
+    'anchor: pair p1 anchor "Usage" matches docs/t.md more than once (3-3 5-5); name a phrase the file holds once'
+  also_expect 'anchor: pair p2 anchor "Usage" matches docs/t.md more than once (3-3 5-5)'
+
+  # A whole-text anchor whose lines went stale is outside them, at each
+  # identical paragraph, whatever the stale lines now hold.
+  d="$(new_repo)"
+  seed_main "${d}" docs/t.md '# T' '' 'Same line, old.' '' 'Middle.' '' 'Same line.'
+  sed -i 's/^Same line, old\.$/Same line./' "${d}/docs/t.md"
+  commit_all "${d}" 'fix same line'
+  sed -i '3i Inserted.\n' "${d}/docs/t.md"
+  commit_all "${d}" 'insert above'
+  jq -n '{report: "r.md", code_changes: [], pairs: [
+    {id: "p1", finding: 1, file: "docs/t.md", lines: "3-3", anchor: "Same line.",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+      sweep: ["Same line, old."], siblings: []},
+    {id: "p2", finding: 1, file: "docs/t.md", lines: "3-3", anchor: "Inserted.",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]}' \
+    >"${d}/ledger.json"
+  gate_all "${d}"
+  run_case anchor-whole-stale "${d}" 1 \
+    'anchor: pair p1 anchor "Same line." is at docs/t.md (5-5 9-9), outside its lines 3-3; point lines at it or anchor on text inside them'
 
   # A range that starts on a blank line (p1), ends on one (p2), is one
   # (p3) or holds one between two lines of text (p4) is refused even
