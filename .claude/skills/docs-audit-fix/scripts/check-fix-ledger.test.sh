@@ -1820,6 +1820,23 @@ EOF
   run_case item-blank-beside-nested-list-is-reflow "${d}" 0 '' \
     'OK — 0 pairs; 0 hunks covered, 3 reflow-only and 0 generated skipped; 0 code changes'
 
+  # Loosening a list of three or more items puts a blank line between
+  # each pair, one hunk each, so each hunk's block differs on the two
+  # sides; a hunk that only adds or removes blank lines still changes no
+  # words. Nested and flat, loosened and tightened.
+  d="$(new_repo)"
+  seed_main "${d}" docs/q.md '# Q' '' '- a' '- b' '- c'
+  seed_main "${d}" docs/r.md '# R' '' '- a' '' '- b' '' '- c'
+  seed_main "${d}" docs/s.md '# S' '' '- a' '    - a1' '    - a2' '- b'
+  printf '%s\n' '# Q' '' '- a' '' '- b' '' '- c' >"${d}/docs/q.md"
+  printf '%s\n' '# R' '' '- a' '- b' '- c' >"${d}/docs/r.md"
+  printf '%s\n' '# S' '' '- a' '' '    - a1' '' '    - a2' '- b' >"${d}/docs/s.md"
+  commit_all "${d}" 'loosen q and s, tighten r'
+  printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
+  printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
+  run_case item-blank-in-long-list-is-reflow "${d}" 0 '' \
+    'OK — 0 pairs; 0 hunks covered, 6 reflow-only and 0 generated skipped; 0 code changes'
+
   # A sweep hit in another item of the pair's list is not in the pair's
   # paragraph: it needs a sibling entry.
   d="$(new_repo)"
@@ -2163,6 +2180,18 @@ EOF
   gate_all "${d}"
   run_case sibling-paired-item-in-uncovered-hunk "${d}" 1 \
     'sibling-not-changed: pair p2 sibling docs/l.md:3-3 is marked changed but the hunk there leaves a paragraph no pair covers (see uncovered-hunk)'
+  also_expect 'uncovered-hunk: docs/l.md:4 changed and no pair covers it'
+
+  # An uncovered hunk that deletes nothing (an inserted item) is not
+  # where a removed sibling's text went, so the finding does not point
+  # at it.
+  d="$(new_repo)"
+  seed_main "${d}" docs/l.md '# L' '' '- a' '- c' '' 'P old.'
+  printf '%s\n' '# L' '' '- a' '- new' '- c' '' 'P new.' >"${d}/docs/l.md"
+  commit_all "${d}" 'insert an item, fix P'
+  sibling_ledger "${d}" docs/l.md 7-7 'P new.' 4-4 removed '["P old."]'
+  run_case sibling-removed-beside-insertion "${d}" 1 \
+    'sibling-not-removed: pair p1 sibling docs/l.md:4-4 is marked removed but no covered hunk deletes text there'
   also_expect 'uncovered-hunk: docs/l.md:4 changed and no pair covers it'
 
   # A removed sibling one line past an uncovered hunk that removes more
