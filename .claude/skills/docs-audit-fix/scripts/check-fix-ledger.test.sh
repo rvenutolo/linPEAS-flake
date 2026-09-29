@@ -230,7 +230,8 @@ function beta_fixed() {
 {"report": "r.md", "code_changes": [],
   "pairs": [{"id": "p1", "finding": 1, "file": "docs/a.md", "lines": "6-6",
             "artifact": [{"file": "scripts/tool.sh", "lines": "1-5"}],
-            "fix_shape": "scope", "sweep": ["Beta paragraph."], "siblings": []}]}
+            "fix_shape": "scope", "sweep": ["Beta paragraph."],
+            "anchor": "Beta paragraph, corrected", "siblings": []}]}
 EOF
   local h
   h="$(gate_hash "${d}" docs/a.md 6-6)"
@@ -274,14 +275,14 @@ function seed_main() {
   git -C "${d}" merge --quiet main
 }
 
-# @description A ledger with pair p1 on $2:$3 and one sibling on $2:$4
-# with status $5 (default changed) and sweep terms $6 (a JSON array,
-# default none), gated TRUE against the current text.
+# @description A ledger with pair p1 on $2:$3 anchored on $4 and one
+# sibling on $2:$5 with status $6 (default changed) and sweep terms $7 (a
+# JSON array, default none), gated TRUE against the current text.
 function sibling_ledger() {
-  local -r d="$1" file="$2" plines="$3" slines="$4" status="${5:-changed}" sweep="${6:-null}"
-  jq -n --arg f "${file}" --arg pl "${plines}" --arg sl "${slines}" --arg st "${status}" \
+  local -r d="$1" file="$2" plines="$3" anchor="$4" slines="$5" status="${6:-changed}" sweep="${7:-null}"
+  jq -n --arg f "${file}" --arg pl "${plines}" --arg an "${anchor}" --arg sl "${slines}" --arg st "${status}" \
     --argjson sw "${sweep}" '{report: "r.md", code_changes: [],
-    pairs: [{id: "p1", finding: 1, file: $f, lines: $pl,
+    pairs: [{id: "p1", finding: 1, file: $f, lines: $pl, anchor: $an,
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
       siblings: [{file: $f, lines: $sl, status: $st}]} + (if $sw == null then {} else {sweep: $sw} end)]}' >"${d}/ledger.json"
   jq -n --arg h "$(gate_hash "${d}" "${file}" "${plines}")" \
@@ -309,7 +310,7 @@ function gate_all() {
   jq -n --argjson p "${pairs}" --argjson c "${changes}" '{pairs: $p, code_changes: $c}' >"${d}/gate.json"
 }
 
-# @description The Beta fix of beta_fixed with pair p1's sweep set to $2
+# @description The Beta fix of beta_fixed (and its anchor) with pair p1's sweep set to $2
 # (a JSON value, or the word "omit" to drop the field) and its siblings
 # to $3 (a JSON array, default []), plus code_changes files $4.. listed
 # with evidence; gated with gate_all.
@@ -324,6 +325,7 @@ function sweep_case() {
   jq -n --arg sw "${sweep}" --argjson sib "${siblings}" --argjson c "${changes}" \
     '{report: "r.md", code_changes: $c,
       pairs: [{id: "p1", finding: 1, file: "docs/a.md", lines: "6-6",
+        anchor: "Beta paragraph, corrected",
         artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
         siblings: $sib} + (if $sw == "omit" then {} else {sweep: ($sw | fromjson)} end)]}' \
     >"${d}/ledger.json"
@@ -608,11 +610,14 @@ EOF
   beta_fixed "${d}"
   jq '.pairs[0].lines = "9000-9999" |
       .pairs += [{"id": "p2", "finding": 2, "file": "docs/a.md", "lines": "6-6",
+                  "anchor": "Beta paragraph, corrected",
                   "artifact": [{"file": "scripts/tool.sh", "lines": "1-5"}],
                   "fix_shape": "scope", "siblings": []}]' \
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case pair-lines-past-end "${d}" 1 \
     'schema: pair p1 docs/a.md:9000-9999 runs past end of file (12 lines)'
+  # A range completeness rejects is not searched for its anchor.
+  expect_absent 'anchor:'
 
   # A reversed range is malformed, not too long: a pair range 2-1 and an
   # artifact range 3-1 each say start > end, and neither says it runs
@@ -622,6 +627,7 @@ EOF
   beta_fixed "${d}"
   jq '.pairs[0].lines = "2-1" |
       .pairs += [{"id": "p2", "finding": 2, "file": "docs/a.md", "lines": "6-6",
+                  "anchor": "Beta paragraph, corrected",
                   "artifact": [{"file": "scripts/tool.sh", "lines": "3-1"}],
                   "fix_shape": "scope", "siblings": []}]' \
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
@@ -630,6 +636,7 @@ EOF
     'schema: pair p1 docs/a.md:2-1 is reversed (start 2 > end 1)'
   also_expect 'artifact: pair p2 scripts/tool.sh:3-1 is reversed (start 3 > end 1)'
   expect_absent 'runs past end of file'
+  expect_absent 'anchor:'
 
   # jq test()'s $ matches before a trailing newline, so "1-999999\n"
   # passed the pre-fix rng check; @tsv then emitted the literal
@@ -646,9 +653,9 @@ EOF
   jq -n --arg bad "${bad_lines}" '{
     report: "r.md", code_changes: [],
     pairs: [
-      { id: "p1", finding: 1, file: "docs/a.md", lines: $bad,
+      { id: "p1", finding: 1, file: "docs/a.md", lines: $bad, anchor: "alpha line WRONG.",
         artifact: [{file: "docs/a.md", lines: "1-1"}], fix_shape: "scope", siblings: [] },
-      { id: "p1", finding: 2, file: "docs/a.md", lines: "4-4",
+      { id: "p1", finding: 2, file: "docs/a.md", lines: "4-4", anchor: "alpha line WRONG.",
         artifact: [{file: "docs/a.md", lines: "1-1"}], fix_shape: "scope", siblings: [] }
     ]}' >"${d}/ledger.json"
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
@@ -824,6 +831,7 @@ EOF
   cat >"${d}/ledger.json" <<'EOF'
 {"report": "r.md", "code_changes": [],
   "pairs": [{"id": "p1", "finding": 1, "file": "docs/a.md", "lines": "3-4",
+            "anchor": "Alpha paragraph line one.",
             "artifact": [{"file": "docs/a.md", "lines": "3-4"}],
             "fix_shape": "scope", "siblings": []}]}
 EOF
@@ -948,6 +956,7 @@ EOF
   commit_all "${d}" blank-alpha-two
   jq -n '{report: "r.md", code_changes: [],
     pairs: [{id: "p1", finding: 1, file: "docs/a.md", lines: "3-3",
+      anchor: "Alpha paragraph line one.",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "drop",
       sweep: ["alpha line two."],
       siblings: [{file: "docs/a.md", lines: "6-6", status: "unchanged",
@@ -973,6 +982,7 @@ EOF
   cat >"${d}/ledger.json" <<'EOF'
 {"report": "r.md", "code_changes": [],
   "pairs": [{"id": "p1", "finding": 1, "file": "docs/a.md", "lines": "8-8",
+            "anchor": "Delta paragraph.",
             "artifact": [{"file": "docs/a.md", "lines": "8-8"}],
             "fix_shape": "scope", "siblings": []}]}
 EOF
@@ -1006,12 +1016,16 @@ EOF
   # directory check, not an incidental uncovered-hunk for Beta.
   d="$(new_repo)"
   beta_fixed "${d}"
-  jq '.pairs[0].file = "docs" |
+  # Its range is 1-1, which git's listing of the tree holds, so only the
+  # file check keeps its anchor from being searched.
+  jq '.pairs[0].file = "docs" | .pairs[0].lines = "1-1" |
       .pairs += [{"id": "p2", "finding": 2, "file": "docs/a.md", "lines": "6-6",
+                  "anchor": "Beta paragraph, corrected",
                   "artifact": [{"file": "scripts/tool.sh", "lines": "1-5"}],
                   "fix_shape": "scope", "siblings": []}]' \
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   run_case pair-file-directory "${d}" 1 'schema: pair p1 file docs is not a file at the head revision'
+  expect_absent 'anchor:'
 
   # diff.external must not replace the real diff with an empty one and
   # hide every hunk. Two filler paragraphs land the edited word at a
@@ -1281,12 +1295,12 @@ EOF
     '{pairs: [{id: "p1", verdict: "TRUE", hash: $h1, note: ""},
       {id: "p2", verdict: "TRUE", hash: $h2, note: ""}], code_changes: []}' >"${d}/gate.json"
   jq -n '{report: "r.md", code_changes: [], pairs: [
-    {id: "p1", finding: 1, file: "docs/a.md", lines: "6-6",
+    {id: "p1", finding: 1, file: "docs/a.md", lines: "6-6", anchor: "Beta paragraph, corrected",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "scope",
       sweep: ["Beta paragraph.", "Gamma paragraph."],
       siblings: [{file: "docs/a.md", lines: "12-12", status: "changed"},
         {file: "docs/a.md", lines: "3-4", status: "unchanged", reason: "already scoped"}]},
-    {id: "p2", finding: 1, file: "docs/a.md", lines: "12-12",
+    {id: "p2", finding: 1, file: "docs/a.md", lines: "12-12", anchor: "Gamma paragraph, corrected",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "scope", siblings: []}]}' \
     >"${d}/ledger.json"
   run_case sibling-changed "${d}" 0 '' \
@@ -1345,6 +1359,7 @@ EOF
   sed -i '3a Alpha inserted line.' "${d}/docs/a.md"
   commit_all "${d}" 'alpha grows'
   jq '.pairs[0].lines = "7-7" | .pairs += [{id: "p2", finding: 2, file: "docs/a.md", lines: "3-5",
+      anchor: "Alpha paragraph line one.",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
       sweep: ["Alpha paragraph line one."], siblings: []}]' \
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
@@ -1360,12 +1375,254 @@ EOF
   sed -i 's/^Alpha paragraph line one\.$/Alpha paragraph line one, fixed./' "${d}/docs/a.md"
   commit_all "${d}" alpha
   jq -n '{report: "r.md", code_changes: [], pairs: [{id: "p1", finding: 1, file: "docs/a.md", lines: "3-3",
+    anchor: "Alpha paragraph line one, fixed.",
     artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "scope", siblings: []}]}' >"${d}/ledger.json"
   jq -n --arg h "$(gate_hash "${d}" docs/a.md 3-3)" \
     '{pairs: [{id: "p1", verdict: "TRUE", hash: $h, note: ""}], code_changes: []}' >"${d}/gate.json"
   sed -i 's/^alpha line two\.$/alpha line two, edited after the gate./' "${d}/docs/a.md"
   commit_all "${d}" 'post-gate same block'
   run_case stale-same-block "${d}" 1 'stale-verdict: pair p1 docs/a.md:3-3 changed after the gate read it'
+
+  # A pair's lines must hold its anchor, the one place the file holds it,
+  # so a range a later commit moved cannot carry a verdict to another
+  # paragraph. Shift: Alpha is fixed and paired at 3-4, then a paragraph
+  # inserted above moves it to 5-6. The stale 3-4 is the new paragraph and
+  # the blank line after it, whose block runs on into Alpha, so it covers
+  # Alpha's hunk and a gate hashing it there matches. Only the rule that a
+  # pair's lines hold no blank line decides it: the anchor sits at 5.
+  d="$(new_repo)"
+  sed -i 's/^alpha line two\.$/alpha line two, fixed./' "${d}/docs/a.md"
+  commit_all "${d}" 'fix alpha'
+  sed -i '3i Inserted paragraph.\n' "${d}/docs/a.md"
+  commit_all "${d}" 'insert above alpha'
+  jq -n '{report: "r.md", code_changes: [], pairs: [
+    {id: "p1", finding: 1, file: "docs/a.md", lines: "3-4", anchor: "alpha line two, fixed.",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+      sweep: ["alpha line two."], siblings: []},
+    {id: "p2", finding: 1, file: "docs/a.md", lines: "3-3", anchor: "Inserted paragraph.",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]}' \
+    >"${d}/ledger.json"
+  gate_all "${d}"
+  run_case anchor-shift-blank-range "${d}" 1 \
+    'schema: pair p1 docs/a.md:3-4 holds a blank line; a pair'"'"'s lines lie inside one paragraph'
+  expect_absent 'anchor:'
+  expect_absent 'uncovered-hunk'
+
+  # Swap: two fixed paragraphs trade places after the ledger was written,
+  # and a gate hashes each at its recorded lines. Each range still holds
+  # one whole paragraph, and each paragraph is covered, so only the
+  # anchor tells them apart. p2 shares p1's finding and carries no terms.
+  d="$(new_repo)"
+  seed_main "${d}" docs/s.md '# S' '' 'First claim, old.' '' 'Second claim, old.' '' 'Tail.'
+  printf '%s\n' '# S' '' 'First claim, new.' '' 'Second claim, new.' '' 'Tail.' >"${d}/docs/s.md"
+  commit_all "${d}" 'fix both claims'
+  printf '%s\n' '# S' '' 'Second claim, new.' '' 'First claim, new.' '' 'Tail.' >"${d}/docs/s.md"
+  commit_all "${d}" 'swap them'
+  jq -n '{report: "r.md", code_changes: [], pairs: [
+    {id: "p1", finding: 1, file: "docs/s.md", lines: "3-3", anchor: "First claim, new.",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+      sweep: ["First claim, old."], siblings: []},
+    {id: "p2", finding: 1, file: "docs/s.md", lines: "5-5", anchor: "Second claim, new.",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]}' \
+    >"${d}/ledger.json"
+  gate_all "${d}"
+  run_case anchor-swap "${d}" 1 \
+    'anchor: pair p1 anchor "First claim, new." is at docs/s.md:5-5, outside its lines 3-3; point lines at it or anchor on text inside them'
+  also_expect 'anchor: pair p2 anchor "Second claim, new." is at docs/s.md:3-3, outside its lines 5-5; point lines at it or anchor on text inside them'
+
+  # An anchor wrapped across two lines must lie wholly inside the lines:
+  # the end of the match past them (p1) or its start before them (p2) is
+  # outside. A match the file holds twice is refused even when one copy
+  # sits inside the lines (p3), and one it holds nowhere is reported
+  # (p4); a heading's "#" run is stripped from the text, so an anchor
+  # that includes it matches nothing (p5).
+  d="$(new_repo)"
+  sed -i -e 's/^Alpha paragraph line one\.$/Alpha paragraph line one, fixed./' \
+    -e 's/^Gamma paragraph\.$/Gamma paragraph. Beta paragraph, corrected./' "${d}/docs/a.md"
+  sed -i 's/^Beta paragraph\.$/Beta paragraph, corrected./' "${d}/docs/a.md"
+  commit_all "${d}" 'fix alpha, beta and gamma'
+  jq -n '{report: "r.md", code_changes: [], pairs: [
+    {id: "p1", finding: 1, file: "docs/a.md", lines: "3-3", anchor: "fixed. alpha line",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+      sweep: ["Alpha paragraph line one."], siblings: []},
+    {id: "p2", finding: 1, file: "docs/a.md", lines: "4-4", anchor: "one, fixed. alpha line two.",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []},
+    {id: "p3", finding: 1, file: "docs/a.md", lines: "6-6", anchor: "paragraph, corrected.",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []},
+    {id: "p4", finding: 1, file: "docs/a.md", lines: "12-12", anchor: "Gamma paragraph, fixed.",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []},
+    {id: "p5", finding: 1, file: "docs/a.md", lines: "1-1", anchor: "# A",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []},
+    {id: "p6", finding: 1, file: "docs/a.md", lines: "12-12", anchor: "paragraph",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]}' \
+    >"${d}/ledger.json"
+  gate_all "${d}"
+  run_case anchor-placement "${d}" 1 \
+    'anchor: pair p1 anchor "fixed. alpha line" is at docs/a.md:3-4, outside its lines 3-3; point lines at it or anchor on text inside them'
+  also_expect 'anchor: pair p2 anchor "one, fixed. alpha line two." is at docs/a.md:3-4, outside its lines 4-4'
+  also_expect 'anchor: pair p3 anchor "paragraph, corrected." matches docs/a.md more than once (6-6 12-12); name a phrase the file holds once'
+  also_expect 'anchor: pair p4 anchor "Gamma paragraph, fixed." matches nothing in docs/a.md at the head revision'
+  also_expect 'anchor: pair p5 anchor "# A" matches nothing in docs/a.md at the head revision'
+  # Gamma's line holds "paragraph" twice; its position is listed once.
+  also_expect 'anchor: pair p6 anchor "paragraph" matches docs/a.md more than once (3-3 6-6 12-12); name a phrase the file holds once'
+
+  # An anchor that is its paragraph's whole text passes even where the
+  # file repeats it: a heading, whose "#" run the match strips, renamed to
+  # a word the prose uses (p1), and a line fixed to match another
+  # paragraph word for word (p2), its anchor's white space collapsed as
+  # the text's is. Identical paragraphs hash alike, so a range on either
+  # carries the same verdict.
+  d="$(new_repo)"
+  seed_main "${d}" docs/h.md '# H' '' '## Wrong name' '' 'Usage of the tool is below.' '' 'Same line.' \
+    '' 'Same line, old.' '' 'Twin a' 'twin b' '' 'Twin a' 'twin b'
+  sed -i -e 's/^## Wrong name$/## Usage/' -e 's/^Same line, old\.$/Same line./' "${d}/docs/h.md"
+  commit_all "${d}" 'rename usage, fix same line'
+  jq -n '{report: "r.md", code_changes: [], pairs: [
+    {id: "p1", finding: 1, file: "docs/h.md", lines: "3-3", anchor: "Usage",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+      sweep: ["Wrong name", "Wrong"], siblings: []},
+    {id: "p2", finding: 2, file: "docs/h.md", lines: "9-9", anchor: "Same  line.",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+      sweep: ["Same line, old."],
+      siblings: [{file: "docs/h.md", lines: "7-7", status: "unchanged",
+        reason: "the line it now matches was already right"}]}]}' >"${d}/ledger.json"
+  gate_all "${d}"
+  run_case anchor-whole-paragraph "${d}" 0 '' \
+    'OK — 2 pairs; 2 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 1 unchanged and 0 removed siblings; 3 sweep terms, 2 hits cleared'
+
+  # The exception is only for a match that is its paragraph's whole text:
+  # the same word inside a longer paragraph is not one, so a range there
+  # is outside the heading the anchor names (p3), and a whole two-line
+  # paragraph the lines hold only half of is outside them, at every place
+  # it matched (p4).
+  jq '.pairs += [
+    {id: "p3", finding: 1, file: "docs/h.md", lines: "5-5", anchor: "Usage",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []},
+    {id: "p4", finding: 1, file: "docs/h.md", lines: "11-11", anchor: "Twin a twin b",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  gate_all "${d}"
+  run_case anchor-whole-paragraph-limits "${d}" 1 \
+    'anchor: pair p3 anchor "Usage" is at docs/h.md:3-3, outside its lines 5-5; point lines at it or anchor on text inside them'
+  also_expect 'anchor: pair p4 anchor "Twin a twin b" is at docs/h.md (11-12 14-15), outside its lines 11-11; point lines at it or anchor on text inside them'
+  expect_absent 'pair p1'
+  expect_absent 'pair p2'
+
+  # Paragraphs whose whole text is the anchor but whose hashes differ are
+  # not interchangeable: a heading and a plain line with its words, fixed
+  # and then swapped, would each pass on the other's verdict.
+  d="$(new_repo)"
+  seed_main "${d}" docs/t.md '# T' '' '## Old name' '' 'Old name' '' 'Tail.'
+  printf '%s\n' '# T' '' '## Usage' '' 'Usage' '' 'Tail.' >"${d}/docs/t.md"
+  commit_all "${d}" 'rename both'
+  printf '%s\n' '# T' '' 'Usage' '' '## Usage' '' 'Tail.' >"${d}/docs/t.md"
+  commit_all "${d}" 'swap them'
+  jq -n '{report: "r.md", code_changes: [], pairs: [
+    {id: "p1", finding: 1, file: "docs/t.md", lines: "3-3", anchor: "Usage",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+      sweep: ["Old name"], siblings: [{file: "docs/t.md", lines: "5-5", status: "changed"}]},
+    {id: "p2", finding: 1, file: "docs/t.md", lines: "5-5", anchor: "Usage",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]}' \
+    >"${d}/ledger.json"
+  gate_all "${d}"
+  run_case anchor-whole-heading-swap "${d}" 1 \
+    'anchor: pair p1 anchor "Usage" matches docs/t.md more than once (3-3 5-5); name a phrase the file holds once'
+  also_expect 'anchor: pair p2 anchor "Usage" matches docs/t.md more than once (3-3 5-5)'
+
+  # A whole-text anchor whose lines went stale is outside them, at each
+  # identical paragraph, whatever the stale lines now hold.
+  d="$(new_repo)"
+  seed_main "${d}" docs/t.md '# T' '' 'Same line, old.' '' 'Middle.' '' 'Same line.'
+  sed -i 's/^Same line, old\.$/Same line./' "${d}/docs/t.md"
+  commit_all "${d}" 'fix same line'
+  sed -i '3i Inserted.\n' "${d}/docs/t.md"
+  commit_all "${d}" 'insert above'
+  jq -n '{report: "r.md", code_changes: [], pairs: [
+    {id: "p1", finding: 1, file: "docs/t.md", lines: "3-3", anchor: "Same line.",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+      sweep: ["Same line, old."], siblings: []},
+    {id: "p2", finding: 1, file: "docs/t.md", lines: "3-3", anchor: "Inserted.",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]}' \
+    >"${d}/ledger.json"
+  gate_all "${d}"
+  run_case anchor-whole-stale "${d}" 1 \
+    'anchor: pair p1 anchor "Same line." is at docs/t.md (5-5 9-9), outside its lines 3-3; point lines at it or anchor on text inside them'
+
+  # A range that starts on a blank line (p1), ends on one (p2), is one
+  # (p3) or holds one between two lines of text (p4) is refused even
+  # though each holds or borders Beta's anchor: its block would run over
+  # both neighbouring paragraphs.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs += [
+      {id: "p2", finding: 1, file: "docs/a.md", lines: "6-7", anchor: "Beta paragraph, corrected",
+        artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []},
+      {id: "p3", finding: 1, file: "docs/a.md", lines: "7-7", anchor: "Beta paragraph, corrected",
+        artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []},
+      {id: "p4", finding: 1, file: "docs/a.md", lines: "4-6", anchor: "Beta paragraph, corrected",
+        artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]
+    | .pairs[0].lines = "5-6"' "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  gate_all "${d}"
+  run_case anchor-blank-edges "${d}" 1 \
+    'schema: pair p1 docs/a.md:5-6 holds a blank line; a pair'"'"'s lines lie inside one paragraph'
+  also_expect 'schema: pair p2 docs/a.md:6-7 holds a blank line'
+  also_expect 'schema: pair p3 docs/a.md:7-7 holds a blank line'
+  also_expect 'schema: pair p4 docs/a.md:4-6 holds a blank line'
+  expect_absent 'anchor:'
+
+  # The anchor is required, and is a sweep term's shape: text, no
+  # newline, tab or CR. Text made only of white space and zero-width
+  # characters is blank.
+  d="$(new_repo)"
+  beta_fixed "${d}"
+  jq '.pairs += [range(2; 7) as $i | .pairs[0] | .id = "p\($i)"]
+    | del(.pairs[1].anchor) | .pairs[2].anchor = 3 | .pairs[3].anchor = " ​"
+    | .pairs[4].anchor = "a\nb" | .pairs[5].anchor = "a\tb"
+    | .pairs += [.pairs[0] | .id = "p7" | .anchor = "Beta\u0000 paragraph, corrected"]' \
+    "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
+  run_case schema-anchor "${d}" 1 \
+    'schema: pair p2 needs an anchor (a non-blank phrase inside its lines, with no newline, tab, CR or NUL), got null'
+  also_expect 'schema: pair p3 needs an anchor (a non-blank phrase inside its lines, with no newline, tab, CR or NUL), got 3'
+  also_expect $'schema: pair p4 needs an anchor (a non-blank phrase inside its lines, with no newline, tab, CR or NUL), got " ​"'
+  also_expect 'schema: pair p5 needs an anchor (a non-blank phrase inside its lines, with no newline, tab, CR or NUL), got "a<LF>b"'
+  also_expect 'schema: pair p6 needs an anchor (a non-blank phrase inside its lines, with no newline, tab, CR or NUL), got "a<TAB>b"'
+  also_expect 'schema: pair p7 needs an anchor (a non-blank phrase inside its lines, with no newline, tab, CR or NUL), got "Beta<NUL> paragraph, corrected"'
+  expect_absent 'ignored null byte'
+  expect_absent 'pair p1 needs an anchor'
+
+  # Anchors in the shapes a real ledger carries pass: a list item and a
+  # table row inside a larger block, text wrapped across lines, non-ASCII
+  # text, a file's first and last lines, and text inside a generated
+  # block, which an anchor is matched in though a sweep skips it.
+  d="$(new_repo)"
+  seed_main "${d}" docs/l.md 'Intro line, old.' '' '- one' '- two old' '- three' '' '| k | v |' \
+    '| - | - |' '| x | old |' '' 'Café tail, old.'
+  printf '%s\n' 'Intro line, new.' '' '- one' '- two fixed' '- three' '' '| k | v |' \
+    '| - | - |' '| x | fixed |' '' 'Café tail, new.' >"${d}/docs/l.md"
+  sed -i 's/^alpha line two\.$/alpha line two, fixed./' "${d}/docs/a.md"
+  commit_all "${d}" 'fix list, table, ends and alpha'
+  jq -n '{report: "r.md", code_changes: [], pairs: [
+    {id: "p1", finding: 1, file: "docs/l.md", lines: "4-4", anchor: "- two fixed",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+      sweep: ["two old"], siblings: []},
+    {id: "p2", finding: 2, file: "docs/l.md", lines: "9-9", anchor: "| x | fixed |",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+      sweep: ["x | old"], siblings: []},
+    {id: "p3", finding: 3, file: "docs/l.md", lines: "1-1", anchor: "Intro line, new.",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+      sweep: ["Intro line, old."], siblings: []},
+    {id: "p4", finding: 4, file: "docs/l.md", lines: "11-11", anchor: "Café tail, new.",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+      sweep: ["Café tail, old."], siblings: []},
+    {id: "p5", finding: 5, file: "docs/a.md", lines: "3-4", anchor: "line one. alpha line two,",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
+      sweep: ["alpha line two."], siblings: []},
+    {id: "p6", finding: 5, file: "docs/a.md", lines: "9-9", anchor: "generated row one",
+      artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]}' \
+    >"${d}/ledger.json"
+  gate_all "${d}"
+  run_case anchor-shapes-pass "${d}" 0 '' \
+    'OK — 6 pairs; 5 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 0 removed siblings; 5 sweep terms, 5 hits cleared'
 
   # A listed code change with a gate attack: pass.
   d="$(new_repo)"
@@ -1538,7 +1795,7 @@ EOF
   printf '%s\n' '# T' '' '| a | b         |' '| - | --------- |' '| x | corrected |' \
     '| y | wrong     |' '| z | ok        |' >"${d}/docs/t.md"
   commit_all "${d}" realign
-  sibling_ledger "${d}" docs/t.md 5-5 6-6
+  sibling_ledger "${d}" docs/t.md 5-5 '| x | corrected |' 6-6
   run_case sibling-table-realigned "${d}" 1 \
     'sibling-not-changed: pair p1 sibling docs/t.md:6-6 is marked changed but no covered hunk changes its text'
 
@@ -1548,7 +1805,7 @@ EOF
   seed_main "${d}" docs/l.md '- one wrong' '- two wrong'
   printf '%s\n' '- one right' '- two wrong ' >"${d}/docs/l.md"
   commit_all "${d}" 'fix one, pad two'
-  sibling_ledger "${d}" docs/l.md 1-1 2-2
+  sibling_ledger "${d}" docs/l.md 1-1 'one right' 2-2
   run_case sibling-list-trailing-space "${d}" 1 \
     'sibling-not-changed: pair p1 sibling docs/l.md:2-2 is marked changed but no covered hunk changes its text'
 
@@ -1557,7 +1814,7 @@ EOF
   seed_main "${d}" docs/l.md '- one wrong' '- two wrong'
   printf '%s\n' '- one right' '- two right' >"${d}/docs/l.md"
   commit_all "${d}" 'fix both'
-  sibling_ledger "${d}" docs/l.md 1-1 2-2 changed '["one wrong", "two wrong"]'
+  sibling_ledger "${d}" docs/l.md 1-1 'one right' 2-2 changed '["one wrong", "two wrong"]'
   run_case sibling-list-word-change "${d}" 0 '' \
     'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 1 changed, 0 unchanged and 0 removed siblings; 2 sweep terms, 2 hits cleared'
 
@@ -1591,7 +1848,7 @@ EOF
   seed_main "${d}" docs/l.md '- one wrong' '- two wrong'
   printf '%s\n' '- one right' >"${d}/docs/l.md"
   commit_all "${d}" 'fix one, drop two'
-  sibling_ledger "${d}" docs/l.md 1-1 2-2 removed '["one wrong", "two wrong"]'
+  sibling_ledger "${d}" docs/l.md 1-1 'one right' 2-2 removed '["one wrong", "two wrong"]'
   run_case sibling-removed "${d}" 0 '' \
     'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 1 removed siblings; 2 sweep terms, 2 hits cleared'
 
@@ -1600,7 +1857,7 @@ EOF
   seed_main "${d}" docs/l.md '- one' '- three'
   printf '%s\n' '- one' '- two' '- three' >"${d}/docs/l.md"
   commit_all "${d}" 'add two'
-  sibling_ledger "${d}" docs/l.md 2-2 3-3 removed
+  sibling_ledger "${d}" docs/l.md 2-2 '- two' 3-3 removed
   run_case sibling-removed-nothing-deleted "${d}" 1 \
     'sibling-not-removed: pair p1 sibling docs/l.md:3-3 is marked removed but no covered hunk deletes text there'
 
@@ -1609,7 +1866,7 @@ EOF
   seed_main "${d}" docs/w.md 'Alpha.' '- two'
   printf '%s\n' 'Alpha.' 'New line.' '  - two' >"${d}/docs/w.md"
   commit_all "${d}" 'insert and indent'
-  sibling_ledger "${d}" docs/w.md 2-2 3-3 removed
+  sibling_ledger "${d}" docs/w.md 2-2 'New line.' 3-3 removed
   run_case sibling-removed-whitespace-only "${d}" 1 \
     'sibling-not-removed: pair p1 sibling docs/w.md:3-3 is marked removed but no covered hunk deletes text there'
 
@@ -1647,7 +1904,8 @@ EOF
   printf '{"report": "r.md", "pairs": [], "code_changes": []}\n' >"${d}/ledger.json"
   printf '{"pairs": [], "code_changes": []}\n' >"${d}/gate.json"
   for pl in 1 3 4 10 12 13; do
-    jq --arg l "${pl}-${pl}" '.pairs += [{id: "p\($l)", finding: 1, file: "docs/p.md", lines: $l,
+    jq --arg l "${pl}-${pl}" --arg an "$(sed --quiet "${pl}p" "${d}/docs/p.md")" \
+      '.pairs += [{id: "p\($l)", finding: 1, file: "docs/p.md", lines: $l, anchor: $an,
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "drop", siblings: []}]' \
       "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
     jq --arg l "${pl}-${pl}" --arg h "$(gate_hash "${d}" docs/p.md "${pl}-${pl}")" \
@@ -1871,9 +2129,9 @@ EOF
   beta_fixed "${d}"
   printf '%s\n' '# B' '' 'Added.' '' 'Lead one.' '' 'Lead two.' '' 'Bravo tail.' >"${d}/docs/b.md"
   commit_all "${d}" 'drop twin, add a paragraph'
-  jq '.pairs += [{id: "p2", finding: 1, file: "docs/b.md", lines: "9-9",
+  jq '.pairs += [{id: "p2", finding: 1, file: "docs/b.md", lines: "9-9", anchor: "Bravo tail.",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "drop", siblings: []},
-      {id: "p3", finding: 1, file: "docs/b.md", lines: "3-3",
+      {id: "p3", finding: 1, file: "docs/b.md", lines: "3-3", anchor: "Added.",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]
     | .pairs[0].siblings = [{file: "docs/b.md", lines: "9-9", status: "removed"}]' \
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
@@ -1888,9 +2146,9 @@ EOF
   beta_fixed "${d}"
   printf '%s\n' '# B' '' 'Added.' '' 'Lead.' '' 'One right.' '' 'Tail.' >"${d}/docs/b.md"
   commit_all "${d}" 'add a paragraph, fix one, drop two'
-  jq '.pairs += [{id: "p2", finding: 1, file: "docs/b.md", lines: "7-7",
+  jq '.pairs += [{id: "p2", finding: 1, file: "docs/b.md", lines: "7-7", anchor: "One right.",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "drop", siblings: []},
-      {id: "p3", finding: 1, file: "docs/b.md", lines: "3-3",
+      {id: "p3", finding: 1, file: "docs/b.md", lines: "3-3", anchor: "Added.",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]
     | .pairs[0].sweep += ["Beta paragraph"]
     | .pairs[0].siblings = [{file: "docs/b.md", lines: "8-8", status: "removed"}]' \
@@ -1906,7 +2164,7 @@ EOF
   beta_fixed "${d}"
   sed -i 's/^Beta paragraph\. Twin\.$/Beta twin, corrected./' "${d}/docs/b.md"
   commit_all "${d}" 'fix twin'
-  jq '.pairs += [{id: "p2", finding: 1, file: "docs/b.md", lines: "5-5",
+  jq '.pairs += [{id: "p2", finding: 1, file: "docs/b.md", lines: "5-5", anchor: "Beta twin, corrected.",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]' \
     "${d}/ledger.json" >"${d}/l" && mv -- "${d}/l" "${d}/ledger.json"
   gate_all "${d}"
@@ -1920,6 +2178,7 @@ EOF
   commit_all "${d}" 'fix alpha'
   jq -n '{report: "r.md", code_changes: [],
     pairs: [{id: "p1", finding: 1, file: "docs/a.md", lines: "3-3",
+      anchor: "Alpha paragraph, corrected.",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
       sweep: ["alpha line two.", " Alpha  paragraph line one. "], siblings: []}]}' >"${d}/ledger.json"
   gate_all "${d}"
@@ -2126,11 +2385,12 @@ EOF
   run_case sweep-not-list "${d}" 1 'schema: pair p1 sweep must be a list of terms, got "Beta paragraph."'
   sweep_case "${d}" '[]'
   run_case sweep-empty-list "${d}" 1 'schema: pair p1 sweep is an empty list; omit the field or name a term'
-  sweep_case "${d}" '["Beta paragraph.", " \u200b", "a\nb", 3]'
+  sweep_case "${d}" '["Beta paragraph.", " \u200b", "a\nb", 3, "Beta\u0000 paragraph."]'
   run_case sweep-bad-terms "${d}" 1 \
-    'schema: pair p1 sweep[1] needs a non-blank term with no newline, tab or CR, got " '
-  also_expect 'schema: pair p1 sweep[2] needs a non-blank term with no newline, tab or CR, got "a<LF>b"'
-  also_expect 'schema: pair p1 sweep[3] needs a non-blank term with no newline, tab or CR, got 3'
+    'schema: pair p1 sweep[1] needs a non-blank term with no newline, tab, CR or NUL, got " '
+  also_expect 'schema: pair p1 sweep[2] needs a non-blank term with no newline, tab, CR or NUL, got "a<LF>b"'
+  also_expect 'schema: pair p1 sweep[3] needs a non-blank term with no newline, tab, CR or NUL, got 3'
+  also_expect 'schema: pair p1 sweep[4] needs a non-blank term with no newline, tab, CR or NUL, got "Beta<NUL> paragraph."'
   expect_absent 'sweep[0]'
 
   # Every finding needs a pair carrying a term; another pair of the same
@@ -2140,10 +2400,10 @@ EOF
     -e 's/^Gamma paragraph\.$/Gamma paragraph, corrected./' "${d}/docs/a.md"
   commit_all "${d}" 'fix beta and gamma'
   jq -n '{report: "r.md", code_changes: [], pairs: [
-    {id: "p1", finding: 1, file: "docs/a.md", lines: "6-6",
+    {id: "p1", finding: 1, file: "docs/a.md", lines: "6-6", anchor: "Beta paragraph, corrected",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
       sweep: ["Beta paragraph."], siblings: []},
-    {id: "p2", finding: 2, file: "docs/a.md", lines: "12-12",
+    {id: "p2", finding: 2, file: "docs/a.md", lines: "12-12", anchor: "Gamma paragraph, corrected",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct", siblings: []}]}' \
     >"${d}/ledger.json"
   gate_all "${d}"

@@ -73,8 +73,8 @@ paragraph in its scope.
     checker reads commits, not the working tree. The gate and the checker
     both read a pair's `lines` at `HEAD`, so bring every pair's range up
     to date before each gate dispatch and each checker run. A gate that
-    hashes a stale range judges the wrong paragraph, and the checker can
-    pass it.
+    hashes a stale range judges the wrong paragraph; the pair's `anchor`
+    is what lets the checker refuse it (see **Anchors**).
 1. **Gate.** Dispatch one agent that did not write the changes, on the
     strongest model available. The dispatch carries, verbatim: the ledger
     path; the diff command (`git diff main...HEAD`); the sweep command
@@ -170,6 +170,7 @@ For each code change record the blob you attacked:
       "finding": 3,
       "file": "docs/security/trust-model.md",
       "lines": "40-46",
+      "anchor": "egress hosts on the allowlist",
       "artifact": [{"file": "scripts/check-egress-allowlist.sh", "lines": "110-131"}],
       "fix_shape": "scope",
       "sweep": ["every egress host", "all egress hosts"],
@@ -185,6 +186,7 @@ For each code change record the blob you attacked:
       "finding": 3,
       "file": "docs/invariant-index.md",
       "lines": "88-88",
+      "anchor": "**Egress allowlist**",
       "artifact": [{"file": "scripts/check-egress-allowlist.sh", "lines": "110-131"}],
       "fix_shape": "scope",
       "siblings": []
@@ -194,6 +196,7 @@ For each code change record the blob you attacked:
       "finding": 3,
       "file": "docs/architecture/ci.md",
       "lines": "212-212",
+      "anchor": "reads the allowlist from",
       "artifact": [{"file": "scripts/check-egress-allowlist.sh", "lines": "110-131"}],
       "fix_shape": "drop",
       "siblings": []
@@ -211,12 +214,18 @@ An artifact entry for a fact outside the tree is
 `{"command": "git config --local --get grep.patternType", "observed": "exit 1, no output"}`
 in place of `file` and `lines`.
 
-`lines` is `<start>-<end>` at `HEAD`. A `removed` sibling's `lines` is the
-head-side position its deleted text sat at — for a pure deletion, the line
-before it, the line after it, or both. In a file the branch deletes there
-is no head side, so it is the lines the text held at the merge base.
+`lines` is `<start>-<end>` at `HEAD`, inside one paragraph: no blank
+line. `anchor` is a phrase inside `lines` that the file holds only once,
+such as the first line of the range or the words of a list item or
+table row, or else the paragraph's whole text, which may repeat (a
+heading's text without its `#` run, say); it ties `lines` to the text
+the pair is about. A `removed` sibling's
+`lines` is the head-side position its deleted text sat at — for a pure
+deletion, the line before it, the line after it, or both. In a file the
+branch deletes there is no head side, so it is the lines the text held
+at the merge base.
 Here `p3` pairs the paragraph that follows the deleted one, where the
-deletion anchors.
+deletion sits.
 
 `<report-stem>.gate.json` (gate only):
 
@@ -258,10 +267,11 @@ and 2 when it cannot run.
     or starts with `./` or `/` (name each from the repository root); pair
     ids and verdict ids are unique, every verdict names a ledger pair,
     and every gate code change carries a `blob` that is an object id or
-    `deleted`. Text made only of white space and invisible format
-    characters, such as a zero-width space or a byte-order mark, is blank
-    wherever a field must not be: `command`, `observed`, a sibling's
-    `reason`, and a gate's `attack` and `result`. A `schema` finding from
+    `deleted`. Every pair has an `anchor` with no newline, tab, CR or NUL. Text
+    made only of white space and invisible format characters, such as a
+    zero-width space or a byte-order mark, is blank wherever a field must
+    not be: a pair's `anchor`, `command`, `observed`, a sibling's `reason`,
+    and a gate's `attack` and `result`. A `schema` finding from
     this shape pass stops the checks below; the later checks also report
     some tracking and range faults as `schema`, and those stop nothing.
 - **Completeness.** Every changed Markdown hunk is covered, except in the
@@ -274,13 +284,26 @@ and 2 when it cannot run.
     overlaps a pair's paragraph, each needing its own pair. A hunk whose
     new side holds no non-blank line (a pure deletion, or text replaced by
     blank lines) is covered by a pair whose paragraph takes in the line
-    before or after it, or one of its blank lines. Every other changed
+    before or after it. Every other changed
     file, a deleted Markdown file included (one replaced by a directory or
     a gitlink counts as deleted), is listed in `code_changes`. A gitlink
     under a `.md` name also leaves a hunk no pair can cover, since a pair
     needs a file; see the known limits.
 - **Artifacts and pairs** name files tracked at `HEAD`, with the range
     inside the file. A command artifact is never run.
+- **Anchors.** A pair's `lines` hold no blank line (`schema`), and they
+    hold its `anchor`: matched in the pair's file at `HEAD` the way a
+    sweep term is (see **Sweep**, with no generated block left out), the
+    anchor must match exactly once, and that match must lie inside
+    `lines` (`anchor`, naming where it matched). An anchor the file holds
+    more than once passes only through the matches that are their
+    paragraph's whole text (as the match reads it, a heading's `#` run
+    stripped): those must all hash alike, so that any of them carries the
+    same verdict, and one must lie inside `lines`. A match inside a
+    longer paragraph does not count, and a heading and a plain line with
+    its words hash apart, so they are a repeat. A stale range is caught
+    this way whether it lands on a blank line, in another paragraph, or
+    on another pair's paragraph.
 - **Siblings.** An `unchanged` one names a file tracked at `HEAD`, a range
     inside it, and a reason that is not blank. A `changed` one lies inside
     its file and inside one paragraph, clear of its own pair's recorded
@@ -317,22 +340,24 @@ and 2 when it cannot run.
     `finding` value no pair carries a term for is `missing-sweep`, so every
     pair's `finding` must be a whole number of 1 or more. A `sweep` that is
     not a non-empty list of terms, a term that is blank or holds a newline,
-    tab or CR, or a bad `finding` is `schema`. `--sweep [--] <term>…` prints
+    tab, CR or NUL, or a bad `finding` is `schema`. `--sweep [--] <term>…` prints
     the same hits, one `<file>:<start>-<end>: <first line>` per hit, and
     exits 1 when a term matches nothing.
 - **Verdicts.** Every pair is gated `TRUE` with a hash equal to its
     paragraph's hash now: the whole blank-line-delimited block, whitespace
     collapsed, so a re-wrap keeps the verdict current, as does a line shift
-    once the pair's `lines` follow it, and any word change makes it stale.
+    once the pair's `lines` follow it (a re-wrap can move the anchor out
+    of `lines` too), and any word change makes it stale.
     A `stale-verdict` on a paragraph whose block is unchanged (the same
     text between the same blank lines) means its range moved: update
-    `lines`, and the recorded hash holds. Every code change has a gate entry whose
+    `lines`, and the recorded hash holds; an `anchor` finding names where
+    the anchor matched. Every code change has a gate entry whose
     `attack` and `result` are not blank and whose `blob` is the one the file
     holds at `HEAD` (or `deleted` when it is absent); a mismatch is
     `stale-attack`.
 
-Finding classes: `schema`, `enum`, `artifact`, `uncovered-hunk`,
-`uncovered-file`, `sibling-untracked`, `sibling-reason`,
+Finding classes: `schema`, `enum`, `artifact`, `anchor`,
+`uncovered-hunk`, `uncovered-file`, `sibling-untracked`, `sibling-reason`,
 `sibling-not-changed`, `sibling-not-removed`, `missing-sweep`,
 `sweep-empty`, `sweep-uncovered`, `missing-verdict`, `verdict`,
 `missing-hash`, `stale-verdict`, `missing-attack`, `stale-attack`. On
@@ -360,12 +385,14 @@ the gate's job. Its known limits:
 - A `changed` or `removed` sibling outside in-scope Markdown is cleared by
     any touching hunk, as **Siblings** above says, so a whitespace-only edit
     clears it.
-- A pure deletion, or a hunk whose new side is only blank lines, anchors
-    at the lines either side of it. When a whole paragraph goes, that is
-    its blank line and the next paragraph, so the pair usually goes on the
-    paragraph that follows. A hunk whose new side is only blank lines is
-    covered by a pair on the paragraph directly above or below it, even
-    when the text it removed belonged to the other one: replace one
+- A pure deletion, or a hunk whose new side is only blank lines, sits at
+    the lines either side of it. When a whole paragraph goes, those are
+    usually its blank line and the next paragraph; a pair's `lines` hold
+    no blank line, so the pair goes on the paragraph that follows, or on
+    the one before when the last paragraph of a file goes. A hunk whose
+    new side is only blank lines is covered by a pair on the paragraph
+    directly above or below it, even when the text it removed belonged to
+    the other one: replace one
     paragraph's last line and the one blank line after it with a single
     whitespace-only line, pair only the paragraph below, and the run
     passes. With a truly empty line instead, git shows a pure deletion,
@@ -388,11 +415,11 @@ the gate's job. Its known limits:
     two, and only ASCII white space collapses: a no-break space must match
     exactly. A phrase split across separate strings (two `echo` lines, a
     concatenation) or across a paragraph break does not match.
-- A sibling range is read at `HEAD` like a pair's, so a stale one can
-    clear a hit that has moved away from it. A hit on a line a hunk
-    replaced maps to the hunk's whole new side, so a sibling anywhere on
-    that side clears it, and one wide range (an `unchanged` sibling has no
-    one-paragraph rule) clears every hit it overlaps.
+- A sibling range is read at `HEAD` like a pair's but carries no anchor,
+    so a stale one can clear a hit that has moved away from it. A hit on
+    a line a hunk replaced maps to the hunk's whole new side, so a sibling
+    anywhere on that side clears it, and one wide range (an `unchanged`
+    sibling has no one-paragraph rule) clears every hit it overlaps.
 - Only a leading `#` marker is stripped. A blockquote's `>` and a `//`
     comment stay text, so a phrase wrapped across them does not match. In
     Markdown the stripping also takes a heading's `#` run, so a term that
@@ -405,3 +432,12 @@ the gate's job. Its known limits:
     stops the run with exit 2; rename it.
 - A finding fixed only outside in-scope Markdown has no pair, so nothing
     carries or checks its terms.
+- An anchor proves that `lines` hold the text the writer named, not that
+    it is the text the finding meant; the gate reads the paragraph. It is
+    matched like a sweep term, so one that includes a heading's `#` run
+    matches nothing, and a phrase the file repeats anchors a pair only as
+    the whole text of paragraphs that hash alike (see **Anchors**).
+- A pure deletion or a blank-only replacement with no non-blank line
+    either side of it (between two blank lines in a row, or at the start
+    or end of a file) can be covered by no pair. Only a code block or an
+    unformatted file holds such a shape.

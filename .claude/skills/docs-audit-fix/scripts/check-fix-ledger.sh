@@ -12,6 +12,9 @@
 #                 changed file is listed as a code change
 #   artifacts     every recorded artifact range exists at the head revision;
 #                 a command artifact is shape-checked and never run
+#   anchors       every pair's lines lie inside one paragraph and hold the
+#                 pair's anchor, a phrase the file holds once at head or
+#                 a paragraph's whole text whose repeats all hash alike
 #   siblings      an unchanged sibling names a range inside a tracked
 #                 file and a reason; a changed one gains a substantively
 #                 changed line in a covered hunk, a removed one borders a
@@ -93,11 +96,13 @@ readonly -a SWEEP_SCOPE=('.' ':(exclude)CHANGELOG.md' ':(exclude)tests/fixtures'
 # is blank. Some other characters print nothing too (a Hangul filler, a
 # braille blank) and still count as text. iscmd marks a command artifact
 # entry, which either of its keys makes one; arr reads anything but an
-# array as an empty one. term is a usable sweep term: text with no
-# newline, tab or CR, since terms are read one per line.
+# array as an empty one. term is a usable sweep term or anchor: text with
+# no newline, tab or CR, since terms are read one per line, and no NUL,
+# which bash drops from jq's raw output. Oniguruma cannot match a NUL in
+# a pattern, so it is found by code point.
 readonly JQ_DEFS='
   def txt: type == "string" and test("[^\\s\\p{Cf}]");
-  def term: txt and (test("[\\n\\t\\r]") | not);
+  def term: txt and (test("[\\n\\t\\r]") | not) and (explode | any(. == 0) | not);
   def iscmd: has("command") or has("observed");
   def arr: if type == "array" then . else [] end;
 '
@@ -462,7 +467,8 @@ function check_schema() {
     def ctl: type == "string" and test("[\n\t\r]");
     def rooted: type == "string" and (startswith("./") or startswith("/"));
     def rootmsg: "starts with ./ or /; name it from the repository root";
-    def shown: gsub("\n"; "<LF>") | gsub("\t"; "<TAB>") | gsub("\r"; "<CR>");
+    def shown: gsub("\n"; "<LF>") | gsub("\t"; "<TAB>") | gsub("\r"; "<CR>")
+      | [explode[] | if . == 0 then "<NUL>" else [.] | implode end] | join("");
     def rendered: if type == "string" then "\"\(shown)\"" else tojson end;
     def nonobj($what): arr | to_entries[] | select(.value | type != "object")
       | ["schema", "\($what)[\(.key)] is not an object"];
@@ -513,8 +519,12 @@ function check_schema() {
         ["schema", "pair \($id) sweep is an empty list; omit the field or name a term"]
       else
         (.sweep | to_entries[] | select(.value | term | not)
-          | ["schema", "pair \($id) sweep[\(.key)] needs a non-blank term with no newline, tab or CR, got \(.value | rendered)"])
+          | ["schema", "pair \($id) sweep[\(.key)] needs a non-blank term with no newline, tab, CR or NUL, got \(.value | rendered)"])
       end),
+      # anchor is required: a phrase inside the lines of the pair, which ties
+      # them to the text the writer paired (check_anchors).
+      (if .anchor | term then empty
+      else ["schema", "pair \($id) needs an anchor (a non-blank phrase inside its lines, with no newline, tab, CR or NUL), got \(.anchor | rendered)"] end),
       ((.siblings | arr)[] | objects | select(.status != "changed" and .status != "unchanged" and .status != "removed")
         | ["enum", "pair \($id) sibling \(.file) status \(.status | tojson) is not changed, unchanged or removed"])),
     ([(.pairs | arr)[] | objects | .id] | group_by(.)[] | select(length > 1)
@@ -613,6 +623,122 @@ function check_artifacts() {
       finding artifact "pair ${id} ${file}:${lines} runs past end of file (${n} lines)"
     fi
   done <<<"${records}"
+}
+
+# @description The text of the paragraph around lines $3..$4 of file $2
+# at revision $1 as SWEEP_AWK reads it: each line loses its leading white
+# space and a leading "#" run, white space is collapsed, and the lines are
+# joined. A line the stripping leaves empty is skipped, where SWEEP_AWK
+# ends its paragraph instead, so a paragraph holding one is never the
+# whole text of a match.
+function block_text() {
+  local -r rev="$1" file="$2" start="$3" end="$4"
+  local span
+  span="$(git show "${rev}:${file}" | block_span "${start}" "${end}")"
+  # shellcheck disable=SC2016 # an awk program: its $0 is awk's, not the shell's
+  git show "${rev}:${file}" | sed --quiet "${span% *},${span#* }p" | awk '
+    { sub(/^[[:space:]]+/, "")
+      if ($0 ~ /^#+([[:space:]]|$)/) sub(/^#+[[:space:]]*/, "")
+      gsub(/[[:space:]]+/, " "); sub(/ $/, "")
+      if ($0 != "") out = out (out == "" ? "" : " ") $0 }
+    END { print out }'
+}
+
+# @description Each pair's lines must lie inside one paragraph and hold
+# its anchor, the file's only match for it at head. The gate hashes and
+# judges the text at lines, so a range a later commit moved would put the
+# verdict on another paragraph; the anchor is the writer's record of which
+# text was paired. The match is SWEEP_AWK's, with no generated range left
+# out. Without the one-paragraph rule a stale range that takes in a blank
+# line and the anchor's line would pass, with its hash spanning both
+# neighbouring blocks. A pair whose file or range check_completeness
+# rejects is skipped here.
+#
+# Where the file holds the anchor more than once, only the matches that
+# are their paragraph's whole text count: a heading, whose text is its
+# only text, or a line fixed to repeat another. They must all hash alike,
+# so that a range on any of them carries the same verdict, and one must
+# lie inside lines. A heading and a plain line with its words are both
+# whole matches that hash apart, so they stay a repeat.
+function check_anchors() {
+  local k id file lines anchor s e n hits hs he where records anchors count inside
+  local flat wholes whole_in hash first_hash hashes_differ
+  local -a aid=() afile=() alines=()
+  records="$(jq --raw-output '.pairs | to_entries[] | [(.key | tostring), .value.id, .value.file, .value.lines] | @tsv' "${LEDGER}")" ||
+    die "could not read the pair list from ${LEDGER}"
+  while IFS=$'\t' read -r k id file lines; do
+    [[ -n ${k} ]] || continue
+    aid[k]="${id}"
+    afile[k]="${file}"
+    alines[k]="${lines}"
+  done <<<"${records}"
+  # Read raw, one per line (check_schema confined an anchor to no
+  # newline, tab, CR or NUL), so a backslash is not doubled as @tsv would.
+  anchors="$(jq --raw-output '.pairs | to_entries[] | [(.key | tostring), .value.anchor] | join("\t")' "${LEDGER}")" ||
+    die "could not read the anchors from ${LEDGER}"
+  while IFS=$'\t' read -r k anchor; do
+    [[ -n ${k} ]] || continue
+    id="${aid[k]}"
+    file="${afile[k]}"
+    lines="${alines[k]}"
+    is_file "${HEAD_REV}" "${file}" || continue
+    valid_range "${lines}" || continue
+    s="${lines%-*}"
+    e="${lines#*-}"
+    n="$(line_count "${HEAD_REV}" "${file}")"
+    ((s <= e && e <= n)) || continue
+    if ! git show "${HEAD_REV}:${file}" | one_block "${s}" "${e}"; then
+      finding schema "pair ${id} ${file}:${lines} holds a blank line; a pair's lines lie inside one paragraph"
+      continue
+    fi
+    # One line holding the anchor twice is listed once.
+    hits="$(git show "${HEAD_REV}:${file}" | SWEEP_TERM="${anchor}" SWEEP_GEN='' awk "${SWEEP_AWK}" | cut --fields=1,2 | uniq)" ||
+      die "could not search ${file} for the anchor of pair ${id}"
+    if [[ -z ${hits} ]]; then
+      finding anchor "pair ${id} anchor \"${anchor}\" matches nothing in ${file} at the head revision"
+      continue
+    fi
+    count=0
+    inside=0
+    where=''
+    while IFS=$'\t' read -r hs he; do
+      count=$((count + 1))
+      where+="${hs}-${he} "
+      ((hs >= s && he <= e)) && inside=1
+    done <<<"${hits}"
+    where="${where% }"
+    if ((count == 1)); then
+      ((inside)) ||
+        finding anchor "pair ${id} anchor \"${anchor}\" is at ${file}:${where}, outside its lines ${lines}; point lines at it or anchor on text inside them"
+      continue
+    fi
+    flat="$(collapse <<<"${anchor}")"
+    wholes=''
+    whole_in=0
+    first_hash=''
+    hashes_differ=0
+    while IFS=$'\t' read -r hs he; do
+      [[ "$(block_text "${HEAD_REV}" "${file}" "${hs}" "${he}")" == "${flat}" ]] || continue
+      wholes+="${hs}-${he} "
+      ((hs >= s && he <= e)) && whole_in=1
+      hash="$(block_hash "${HEAD_REV}" "${file}" "${hs}" "${he}")"
+      if [[ -z ${first_hash} ]]; then
+        first_hash="${hash}"
+      elif [[ ${hash} != "${first_hash}" ]]; then
+        hashes_differ=1
+      fi
+    done <<<"${hits}"
+    wholes="${wholes% }"
+    if [[ -z ${wholes} ]] || ((hashes_differ)); then
+      finding anchor "pair ${id} anchor \"${anchor}\" matches ${file} more than once (${where}); name a phrase the file holds once"
+    elif ((whole_in)); then
+      :
+    elif [[ ${wholes} == *' '* ]]; then
+      finding anchor "pair ${id} anchor \"${anchor}\" is at ${file} (${wholes}), outside its lines ${lines}; point lines at it or anchor on text inside them"
+    else
+      finding anchor "pair ${id} anchor \"${anchor}\" is at ${file}:${wholes}, outside its lines ${lines}; point lines at it or anchor on text inside them"
+    fi
+  done <<<"${anchors}"
 }
 
 HUNKS_COVERED=0
@@ -1446,6 +1572,7 @@ function main() {
   # Later checks read the ledger's shape; a schema finding stops here.
   if ((schema_bad == 0)); then
     check_artifacts
+    check_anchors
     check_completeness
     check_siblings
     check_sweeps
