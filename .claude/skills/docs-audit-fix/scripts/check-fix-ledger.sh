@@ -180,13 +180,11 @@ readonly PARAGRAPH_AWK='
   }'
 
 # @description Print "<a> <b>": the paragraph(s) that contain lines
-# $1..$2 of stdin. With $3 set to "block", list items are not split: the
-# span is the blank-line block(s) instead.
+# $1..$2 of stdin.
 function paragraph_span() {
-  awk -v s="$1" -v e="$2" -v mode="${3:-}" "${PARAGRAPH_AWK}"'
+  awk -v s="$1" -v e="$2" "${PARAGRAPH_AWK}"'
     END {
       mark_paragraphs()
-      if (mode == "block") for (i = 1; i <= NR; i++) cut[i] = 0
       a = s; while (a > 1 && !blank[a - 1] && !cut[a]) a--
       b = e; while (b < NR && !blank[b + 1] && !cut[b + 1]) b++
       print a, b
@@ -965,9 +963,9 @@ function all_blank() {
 # sides, so a duplicated paragraph being inserted or deleted (or a
 # duplicate wrapped differently) can collapse to the same text as its
 # neighbour and read as a re-wrap even though real content was added or
-# removed. Such a hunk changes no words, whichever list items its blank
-# lines sit between, so both sides are compared as whole blank-line
-# blocks, with no item split.
+# removed. A pure insertion or deletion of blank lines alone changes no
+# words, whichever list items or paragraphs they sit between, so it is a
+# re-wrap with no span to compare.
 function is_reflow() {
   local -r file="$1" os="$2" ol="$3" ns="$4" nl="$5"
   is_tracked "${MB}" "${file}" || return 1
@@ -982,11 +980,11 @@ function is_reflow() {
   if ((nl == 0)) && ! all_blank "${MB}" "${file}" "${os}" "${oe}"; then
     return 1
   fi
+  # Only blank lines went in or out, so no word changed.
+  ((ol > 0 && nl > 0)) || return 0
   local ospan nspan old new
-  local mode=''
-  ((ol > 0 && nl > 0)) || mode='block'
-  ospan="$(git show "${MB}:${file}" | paragraph_span "${os}" "${oe}" "${mode}")"
-  nspan="$(git show "${HEAD_REV}:${file}" | paragraph_span "${ns}" "${ne}" "${mode}")"
+  ospan="$(git show "${MB}:${file}" | paragraph_span "${os}" "${oe}")"
+  nspan="$(git show "${HEAD_REV}:${file}" | paragraph_span "${ns}" "${ne}")"
   old="$(git show "${MB}:${file}" | sed --quiet "${ospan% *},${ospan#* }p" | collapse)"
   new="$(git show "${HEAD_REV}:${file}" | sed --quiet "${nspan% *},${nspan#* }p" | collapse)"
   [[ ${old} == "${new}" ]]
@@ -1168,7 +1166,11 @@ function check_completeness() {
       count_covered "${file}" "${os}" "${ol}" "${ns}" "${nl}"
     else
       UNCOVERED_HUNKS+="${file}"$'\t'"${os}"$'\t'"${ol}"$'\t'"${ns}"$'\t'"${nl}"$'\n'
-      UNCOVERED_REMOVALS+="${file}"$'\t'"${ns}"$'\t'"${ol}"$'\t'"${nl}"$'\n'
+      # Only a hunk that deletes text is where a removed sibling's text
+      # went.
+      if grep --line-regexp --fixed-strings --quiet -- "${file}"$'\t'"${os}"$'\t'"${ns}" <<<"${MD_DELETING_HUNKS}"; then
+        UNCOVERED_REMOVALS+="${file}"$'\t'"${ns}"$'\t'"${ol}"$'\t'"${nl}"$'\n'
+      fi
     fi
   done <<<"${md_hunks}"
 
