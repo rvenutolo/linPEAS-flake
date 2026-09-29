@@ -141,14 +141,30 @@ function valid_range() {
   [[ $1 =~ ^[1-9][0-9]{0,5}-[1-9][0-9]{0,5}$ ]]
 }
 
-# @description Print "<a> <b>": the blank-line-delimited block(s) that
-# contain lines $1..$2 of stdin.
-function block_span() {
-  awk -v s="$1" -v e="$2" '
-    { blank[NR] = ($0 ~ /^[[:space:]]*$/) }
+# The paragraph model every paragraph check shares, as an awk prefix: it
+# keeps each line of stdin in ln[], and mark_paragraphs() (called from END)
+# sets blank[i] for a line that is empty or white space only, and cut[i]
+# for a line that starts a paragraph although the line above it is not
+# blank. A paragraph runs from a line after a blank line (or the first
+# line), or from a cut line, to the line before the next blank or cut line.
+# shellcheck disable=SC2016 # an awk program: its $0 is awk's, not the shell's
+readonly PARAGRAPH_AWK='
+  { ln[NR] = $0 }
+  function mark_paragraphs(   i) {
+    for (i = 1; i <= NR; i++) {
+      blank[i] = (ln[i] ~ /^[[:space:]]*$/)
+      cut[i] = 0
+    }
+  }'
+
+# @description Print "<a> <b>": the paragraph(s) that contain lines
+# $1..$2 of stdin.
+function paragraph_span() {
+  awk -v s="$1" -v e="$2" "${PARAGRAPH_AWK}"'
     END {
-      a = s; while (a > 1 && !blank[a - 1]) a--
-      b = e; while (b < NR && !blank[b + 1]) b++
+      mark_paragraphs()
+      a = s; while (a > 1 && !blank[a - 1] && !cut[a]) a--
+      b = e; while (b < NR && !blank[b + 1] && !cut[b + 1]) b++
       print a, b
     }'
 }
@@ -190,10 +206,10 @@ function line_count() {
   git show "$1:$2" | awk 'END { print NR }'
 }
 
-function block_hash() {
+function paragraph_hash() {
   local -r rev="$1" file="$2" start="$3" end="$4"
   local span a b
-  span="$(git show "${rev}:${file}" | block_span "${start}" "${end}")"
+  span="$(git show "${rev}:${file}" | paragraph_span "${start}" "${end}")"
   a="${span% *}"
   b="${span#* }"
   git show "${rev}:${file}" | sed --quiet "${a},${b}p" | collapse |
@@ -359,7 +375,7 @@ if ((hash_mode)); then
   hash_n="$(line_count "${HEAD_REV}" "${positional[0]}")"
   ((hash_end <= hash_n)) ||
     die "bad range: ${positional[1]} (end must be <= ${hash_n} lines)"
-  block_hash "${HEAD_REV}" "${positional[0]}" "${hash_start}" "${hash_end}"
+  paragraph_hash "${HEAD_REV}" "${positional[0]}" "${hash_start}" "${hash_end}"
   exit 0
 fi
 
@@ -631,10 +647,10 @@ function check_artifacts() {
 # joined. A line the stripping leaves empty is skipped, where SWEEP_AWK
 # ends its paragraph instead, so a paragraph holding one is never the
 # whole text of a match.
-function block_text() {
+function paragraph_text() {
   local -r rev="$1" file="$2" start="$3" end="$4"
   local span
-  span="$(git show "${rev}:${file}" | block_span "${start}" "${end}")"
+  span="$(git show "${rev}:${file}" | paragraph_span "${start}" "${end}")"
   # shellcheck disable=SC2016 # an awk program: its $0 is awk's, not the shell's
   git show "${rev}:${file}" | sed --quiet "${span% *},${span#* }p" | awk '
     { sub(/^[[:space:]]+/, "")
@@ -687,7 +703,7 @@ function check_anchors() {
     e="${lines#*-}"
     n="$(line_count "${HEAD_REV}" "${file}")"
     ((s <= e && e <= n)) || continue
-    if ! git show "${HEAD_REV}:${file}" | one_block "${s}" "${e}"; then
+    if ! git show "${HEAD_REV}:${file}" | one_paragraph "${s}" "${e}"; then
       finding schema "pair ${id} ${file}:${lines} holds a blank line; a pair's lines lie inside one paragraph"
       continue
     fi
@@ -718,10 +734,10 @@ function check_anchors() {
     first_hash=''
     hashes_differ=0
     while IFS=$'\t' read -r hs he; do
-      [[ "$(block_text "${HEAD_REV}" "${file}" "${hs}" "${he}")" == "${flat}" ]] || continue
+      [[ "$(paragraph_text "${HEAD_REV}" "${file}" "${hs}" "${he}")" == "${flat}" ]] || continue
       wholes+="${hs}-${he} "
       ((hs >= s && he <= e)) && whole_in=1
-      hash="$(block_hash "${HEAD_REV}" "${file}" "${hs}" "${he}")"
+      hash="$(paragraph_hash "${HEAD_REV}" "${file}" "${hs}" "${he}")"
       if [[ -z ${first_hash} ]]; then
         first_hash="${hash}"
       elif [[ ${hash} != "${first_hash}" ]]; then
@@ -908,7 +924,7 @@ function all_blank() {
 # its file, which a hunk misattributed to the wrong file can produce.
 # A pure insertion or deletion (ol==0 or nl==0) is a re-wrap only when
 # every added/removed line is blank; a blank-line anchor otherwise lets
-# block_span expand across it and join the paragraphs on both sides, so
+# paragraph_span expand across it and join the paragraphs on both sides, so
 # a duplicated paragraph being inserted or deleted (or a duplicate
 # wrapped differently) can collapse to the same text as its neighbour
 # and read as a re-wrap even though real content was added or removed.
@@ -927,8 +943,8 @@ function is_reflow() {
     return 1
   fi
   local ospan nspan old new
-  ospan="$(git show "${MB}:${file}" | block_span "${os}" "${oe}")"
-  nspan="$(git show "${HEAD_REV}:${file}" | block_span "${ns}" "${ne}")"
+  ospan="$(git show "${MB}:${file}" | paragraph_span "${os}" "${oe}")"
+  nspan="$(git show "${HEAD_REV}:${file}" | paragraph_span "${ns}" "${ne}")"
   old="$(git show "${MB}:${file}" | sed --quiet "${ospan% *},${ospan#* }p" | collapse)"
   new="$(git show "${HEAD_REV}:${file}" | sed --quiet "${nspan% *},${nspan#* }p" | collapse)"
   [[ ${old} == "${new}" ]]
@@ -977,20 +993,24 @@ function hunk_is_generated() {
   [[ -n ${newname} && ${newname} == "${oldname}" ]]
 }
 
-# @description Maximal non-blank runs of the line range $2..$3 of file
-# $1 at HEAD, split at any blank line inside that range, as "start end"
-# per run. A run is not extended past $2 or $3 into unchanged context —
-# e.g. a fixed marker line the hunk merely abuts — only the hunk's own
-# range is split.
-function new_side_blocks() {
+# @description Maximal runs of the line range $2..$3 of file $1 at HEAD
+# that lie inside one paragraph, split at any blank line or paragraph
+# start inside that range, as "start end" per run. A run is not extended
+# past $2 or $3 into unchanged context — e.g. a fixed marker line the hunk
+# merely abuts — only the hunk's own range is split.
+function new_side_paragraphs() {
   local -r file="$1" ns="$2" ne="$3"
-  git show "${HEAD_REV}:${file}" | awk -v ns="${ns}" -v ne="${ne}" '
-    { blank[NR] = ($0 ~ /^[[:space:]]*$/) }
+  git show "${HEAD_REV}:${file}" | awk -v ns="${ns}" -v ne="${ne}" "${PARAGRAPH_AWK}"'
     END {
+      mark_paragraphs()
       a = 0
       for (i = ns; i <= ne + 1; i++) {
         isblank = (i > ne) ? 1 : blank[i]
         if (!isblank) {
+          if (a != 0 && cut[i]) {
+            print a, i - 1
+            a = 0
+          }
           if (a == 0) a = i
         } else if (a != 0) {
           print a, i - 1
@@ -1053,7 +1073,7 @@ function check_completeness() {
       finding schema "pair ${id} ${pfile}:${plines} runs past end of file (${flen} lines)"
       continue
     fi
-    span="$(git show "${HEAD_REV}:${pfile}" | block_span "${pstart}" "${pend}")"
+    span="$(git show "${HEAD_REV}:${pfile}" | paragraph_span "${pstart}" "${pend}")"
     spans+="${pfile}"$'\t'"${span% *}"$'\t'"${span#* }"$'\n'
   done <<<"${records}"
 
@@ -1091,7 +1111,7 @@ function check_completeness() {
         all_covered=0
         finding uncovered-hunk "${file}:${block_a} changed and no pair covers it"
       fi
-    done < <(new_side_blocks "${file}" "${ns}" "${ne}")
+    done < <(new_side_paragraphs "${file}" "${ns}" "${ne}")
     if ((block_count == 0)); then
       # The new side is entirely blank/whitespace lines, so there is no
       # paragraph to split on, and all_covered's default of 1 proves
@@ -1159,12 +1179,15 @@ function hunk_overlaps() {
   return 1
 }
 
-# @description True when stdin lines $1..$2 are all non-blank, i.e. they
-# lie inside one blank-line-delimited block.
-function one_block() {
-  awk -v s="$1" -v e="$2" '
-    NR >= s && NR <= e && $0 ~ /^[[:space:]]*$/ { blank = 1 }
-    END { exit blank ? 1 : 0 }'
+# @description True when stdin lines $1..$2 lie inside one paragraph: no
+# line of them is blank, and none after the first starts a paragraph.
+function one_paragraph() {
+  awk -v s="$1" -v e="$2" "${PARAGRAPH_AWK}"'
+    END {
+      mark_paragraphs()
+      for (i = s; i <= e && i <= NR; i++) if (blank[i] || (i > s && cut[i])) exit 1
+      exit 0
+    }'
 }
 
 # @description An unchanged sibling must name a range inside its file
@@ -1274,7 +1297,7 @@ function check_siblings() {
       fi
       # A wide range would be cleared by any hunk it happens to reach. A
       # removed sibling's position may sit on the blank line its text left.
-      if [[ ${status} == changed ]] && ! git show "${HEAD_REV}:${file}" | one_block "${s}" "${e}"; then
+      if [[ ${status} == changed ]] && ! git show "${HEAD_REV}:${file}" | one_paragraph "${s}" "${e}"; then
         finding schema "pair ${id} sibling ${file}:${lines} does not lie within one paragraph"
         continue
       fi
@@ -1427,7 +1450,7 @@ function check_sweeps() {
     # each sibling range, as "file\tstart\tend".
     local entries=''
     if is_file "${HEAD_REV}" "${pf[k]}" && valid_range "${pl[k]}"; then
-      span="$(git show "${HEAD_REV}:${pf[k]}" | block_span "${pl[k]%-*}" "${pl[k]#*-}")"
+      span="$(git show "${HEAD_REV}:${pf[k]}" | paragraph_span "${pl[k]%-*}" "${pl[k]#*-}")"
       entries+="${pf[k]}"$'\t'"${span% *}"$'\t'"${span#* }"$'\n'
     fi
     local sfile slines
@@ -1507,7 +1530,7 @@ function check_verdicts() {
     end="${lines#*-}"
     n="$(line_count "${HEAD_REV}" "${file}")"
     ((start >= 1 && start <= end && end <= n)) || continue
-    current="$(block_hash "${HEAD_REV}" "${file}" "${start}" "${end}")"
+    current="$(paragraph_hash "${HEAD_REV}" "${file}" "${start}" "${end}")"
     [[ ${current} == "${hash}" ]] ||
       finding stale-verdict "pair ${id} ${file}:${lines} changed after the gate read it"
   done <<<"${records}"
