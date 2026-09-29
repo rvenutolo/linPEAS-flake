@@ -1079,7 +1079,7 @@ function span_overlaps() {
 }
 
 function check_completeness() {
-  local file os ol ns nl hs he ne block_a block_b all_covered block_count
+  local file os ol ns nl hs he ne block_a block_b covered block_count
   local md_hunks
   md_hunks="$(list_hunks hunks "${MD_SCOPE[@]}")" ||
     die 'could not parse the Markdown diff'
@@ -1136,42 +1136,39 @@ function check_completeness() {
       HUNKS_REFLOW=$((HUNKS_REFLOW + 1))
       continue
     fi
+    # covered: every paragraph the hunk touches has a pair; each one that
+    # has none is reported, and the hunk is recorded once as uncovered.
+    covered=1
     if ((nl == 0)); then
-      if span_overlaps "${file}" "${hs}" "${he}" "${spans}"; then
-        count_covered "${file}" "${os}" "${ol}" "${ns}" "${nl}"
-      else
+      if ! span_overlaps "${file}" "${hs}" "${he}" "${spans}"; then
+        covered=0
         finding uncovered-hunk "${file}:${hs} changed and no pair covers it"
-        UNCOVERED_HUNKS+="${file}"$'\t'"${os}"$'\t'"${ol}"$'\t'"${ns}"$'\t'"${nl}"$'\n'
       fi
-      continue
-    fi
-    # A hunk can touch more than one HEAD paragraph (e.g. an edit right
-    # up against an inserted paragraph with no blank line recorded as
-    # context between them); every such block needs its own pair.
-    ne=$((ns + nl - 1))
-    all_covered=1
-    block_count=0
-    while IFS=' ' read -r block_a block_b; do
-      [[ -n ${block_a} ]] || continue
-      block_count=$((block_count + 1))
-      if ! span_overlaps "${file}" "${block_a}" "${block_b}" "${spans}"; then
-        all_covered=0
-        finding uncovered-hunk "${file}:${block_a} changed and no pair covers it"
-      fi
-    done < <(new_side_paragraphs "${file}" "${ns}" "${ne}")
-    if ((block_count == 0)); then
+    else
+      # A hunk can touch more than one HEAD paragraph (e.g. an edit right
+      # up against an inserted paragraph with no blank line recorded as
+      # context between them); every such paragraph needs its own pair.
+      ne=$((ns + nl - 1))
+      block_count=0
+      while IFS=' ' read -r block_a block_b; do
+        [[ -n ${block_a} ]] || continue
+        block_count=$((block_count + 1))
+        if ! span_overlaps "${file}" "${block_a}" "${block_b}" "${spans}"; then
+          covered=0
+          finding uncovered-hunk "${file}:${block_a} changed and no pair covers it"
+        fi
+      done < <(new_side_paragraphs "${file}" "${ns}" "${ne}")
       # The new side is entirely blank/whitespace lines, so there is no
-      # paragraph to split on, and all_covered's default of 1 proves
-      # nothing. Like a pure deletion, the hunk anchors on the lines
-      # either side of it, hs-1 and he+1, so a pair on the paragraph
-      # directly above or below covers it.
-      if span_overlaps "${file}" "$((hs - 1))" "$((he + 1))" "${spans}"; then
-        count_covered "${file}" "${os}" "${ol}" "${ns}" "${nl}"
-      else
+      # paragraph to split on, and covered's default of 1 proves nothing.
+      # Like a pure deletion, the hunk anchors on the lines either side of
+      # it, hs-1 and he+1, so a pair on the paragraph directly above or
+      # below covers it.
+      if ((block_count == 0)) && ! span_overlaps "${file}" "$((hs - 1))" "$((he + 1))" "${spans}"; then
+        covered=0
         finding uncovered-hunk "${file}:${hs} changed and no pair covers it"
-        UNCOVERED_HUNKS+="${file}"$'\t'"${os}"$'\t'"${ol}"$'\t'"${ns}"$'\t'"${nl}"$'\n'
       fi
-    elif ((all_covered)); then
+    fi
+    if ((covered)); then
       count_covered "${file}" "${os}" "${ol}" "${ns}" "${nl}"
     else
       UNCOVERED_HUNKS+="${file}"$'\t'"${os}"$'\t'"${ol}"$'\t'"${ns}"$'\t'"${nl}"$'\n'
