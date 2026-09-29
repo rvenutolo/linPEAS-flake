@@ -61,9 +61,10 @@ paragraph in its scope.
     `<report-stem>.ledger.json` beside the report. A `changed` or `removed`
     Markdown sibling is itself a rewritten paragraph: it needs a pair
     covering it, unless it shares its pair's paragraph or sits in the root
-    `CHANGELOG.md` or `tests/fixtures/`. A `removed` sibling in a file the
-    branch deletes needs only that file's `code_changes` entry, with
-    `lines` inside the file as it was at the merge base. Each finding
+    `CHANGELOG.md` or `tests/fixtures/`; another item of the same list is
+    another paragraph. A `removed` sibling in a file the branch deletes
+    needs only that file's `code_changes` entry, with `lines` inside the
+    file as it was at the merge base. Each finding
     needs at least one pair carrying its `sweep` terms; its other pairs
     may leave the field out.
     For each changed file that is not a surviving Markdown file (a deleted
@@ -214,12 +215,14 @@ An artifact entry for a fact outside the tree is
 `{"command": "git config --local --get grep.patternType", "observed": "exit 1, no output"}`
 in place of `file` and `lines`.
 
-`lines` is `<start>-<end>` at `HEAD`, inside one paragraph: no blank
-line. `anchor` is a phrase inside `lines` that the file holds only once,
-such as the first line of the range or the words of a list item or
-table row, or else the paragraph's whole text, which may repeat (a
-heading's text without its `#` run, say); it ties `lines` to the text
-the pair is about. A `removed` sibling's
+`lines` is `<start>-<end>` at `HEAD`, inside one paragraph (see
+**Paragraphs** below): no blank line, and no second list item. `anchor`
+is a phrase inside `lines` that the file holds only once, such as the
+first line of the range or the words of a list item or table row, or
+else the paragraph's whole text, which may repeat (a heading's text
+without its `#` run, or a list item's whole text, marker included,
+say); it ties `lines`
+to the text the pair is about. A `removed` sibling's
 `lines` is the head-side position its deleted text sat at — for a pure
 deletion, the line before it, the line after it, or both. In a file the
 branch deletes there is no head side, so it is the lines the text held
@@ -256,6 +259,19 @@ every check below passes, 1 with one `check-fix-ledger: <class>: <detail>`
 line per finding followed by one count line tallying the findings by class,
 and 2 when it cannot run.
 
+**Paragraphs.** A paragraph is a blank-line-delimited block, except in a
+list: a block whose first line is a list marker (`-`, `*` or `+`, or one
+to nine digits then `.` or `)`, followed by a space, a tab or the end of
+the line) at an indent of N spaces splits before every later marker at
+exactly N spaces. An item's lines in that block (its continuation
+lines, a nested list, a fence or table inside it) are one paragraph. A
+block that does not open with a marker (a fenced block, a table, a plain
+paragraph) is never split. On a file mdformat formats, these are the
+items CommonMark reads, except around a fence holding a blank line (see
+the known limits). The hash, completeness, the one-paragraph rules,
+reflow and the sweep's own-paragraph entry all use this; the sweep's
+matching does not (see **Sweep**).
+
 - **Shape.** The ledger and the gate each hold exactly one JSON object,
     with no key repeated inside any object (either fault stops the run
     with exit 2);
@@ -277,22 +293,24 @@ and 2 when it cannot run.
 - **Completeness.** Every changed Markdown hunk is covered, except in the
     root `CHANGELOG.md` and `tests/fixtures/`, inside a generated
     `<!-- BEGIN <name> -->` / `<!-- END <name> -->` block of the same name
-    on both sides, or a pure re-wrap. Other generated Markdown — the
-    `# BEGIN just-recipes` block in `README.md`, or a generated file with
-    no such markers — is checked like hand-written text.
+    on both sides, or a pure re-wrap (the paragraphs around it hold the same
+    words; a hunk that only adds or removes blank lines is one, but at the
+    start of a file, so loosening or tightening a list is). Other generated
+    Markdown — the `# BEGIN just-recipes` block in `README.md`, or a
+    generated file with no such markers — is checked like hand-written text.
     Covered means every non-blank paragraph the hunk's new side touches
-    overlaps a pair's paragraph, each needing its own pair. A hunk whose
-    new side holds no non-blank line (a pure deletion, or text replaced by
-    blank lines) is covered by a pair whose paragraph takes in the line
-    before or after it. Every other changed
-    file, a deleted Markdown file included (one replaced by a directory or
-    a gitlink counts as deleted), is listed in `code_changes`. A gitlink
-    under a `.md` name also leaves a hunk no pair can cover, since a pair
-    needs a file; see the known limits.
+    overlaps a pair's paragraph, each needing its own pair. A hunk whose new
+    side holds no non-blank line (a pure deletion, or text replaced by blank
+    lines) is covered by a pair whose paragraph takes in the line before or
+    after it. Every other changed file, a deleted Markdown file included
+    (one replaced by a directory or a gitlink counts as deleted), is listed
+    in `code_changes`. A gitlink under a `.md` name also leaves a hunk no
+    pair can cover, since a pair needs a file; see the known limits.
 - **Artifacts and pairs** name files tracked at `HEAD`, with the range
     inside the file. A command artifact is never run.
-- **Anchors.** A pair's `lines` hold no blank line (`schema`), and they
-    hold its `anchor`: matched in the pair's file at `HEAD` the way a
+- **Anchors.** A pair's `lines` lie inside one paragraph: no blank line
+    and no second list item (`schema`, naming which). They hold its
+    `anchor`: matched in the pair's file at `HEAD` the way a
     sweep term is (see **Sweep**, with no generated block left out), the
     anchor must match exactly once, and that match must lie inside
     `lines` (`anchor`, naming where it matched). An anchor the file holds
@@ -302,8 +320,8 @@ and 2 when it cannot run.
     same verdict, and one must lie inside `lines`. A match inside a
     longer paragraph does not count, and a heading and a plain line with
     its words hash apart, so they are a repeat. A stale range is caught
-    this way whether it lands on a blank line, in another paragraph, or
-    on another pair's paragraph.
+    this way whether it lands on a blank line, across two list items, in
+    another paragraph, or on another pair's paragraph.
 - **Siblings.** An `unchanged` one names a file tracked at `HEAD`, a range
     inside it, and a reason that is not blank. A `changed` one lies inside
     its file and inside one paragraph, clear of its own pair's recorded
@@ -320,41 +338,49 @@ and 2 when it cannot run.
     at the merge base. In a file that is not Markdown, or in the root
     `CHANGELOG.md` or `tests/fixtures/`, any hunk touching the range clears
     a `changed` or `removed` sibling, a whitespace-only edit included.
+    When the hunk at a `changed` or `removed` sibling is one no pair
+    covers, the finding says so and points at the `uncovered-hunk`
+    finding, which names the paragraph to pair.
 - **Sweep.** Each `sweep` term is searched at the merge base across every
     tracked file except `tests/fixtures/`, any skill's seeded-defect
     fixtures, the root `CHANGELOG.md` and the root `flake.lock`
     (`SWEEP_SCOPE` in the checker), skipping files that hold a NUL byte
     (attributes do not decide it) and hits inside a same-named
     `<!-- BEGIN <name> -->` / `<!-- END <name> -->` block. The match is a
-    fixed string, case-sensitive, within one paragraph: each line loses its
-    leading white space and a leading run of `#` followed by white space, a
-    line left empty ends the paragraph, and white space is collapsed in the
-    text and the term, so a term wrapped across lines or comment lines still
-    matches. Each hit is mapped to `HEAD`: a line a hunk replaced maps to
-    the hunk's new side, a line a pure deletion removed (or one replaced
-    only by blank lines) maps to the lines either side, and any other line
-    moves with the lines above it; in a file that is not a file at `HEAD`,
-    the hit keeps its merge-base lines. The mapped hit must overlap the
-    pair's own paragraph or one of its sibling ranges, whatever their status
-    (`sweep-uncovered`). A term with no hit is `sweep-empty`, and a
-    `finding` value no pair carries a term for is `missing-sweep`, so every
-    pair's `finding` must be a whole number of 1 or more. A `sweep` that is
-    not a non-empty list of terms, a term that is blank or holds a newline,
-    tab, CR or NUL, or a bad `finding` is `schema`. `--sweep [--] <term>…` prints
-    the same hits, one `<file>:<start>-<end>: <first line>` per hit, and
-    exits 1 when a term matches nothing.
+    fixed string, case-sensitive, within one blank-line block (list
+    items are not split here, since the sweep reads every kind of file):
+    each line loses its leading white space and a leading run of `#`
+    followed by white space, a line left empty ends the block, and white
+    space is collapsed in the text and the term, so a term wrapped across
+    lines or comment lines still matches. Each hit is mapped to `HEAD`: a
+    line a hunk replaced maps to the hunk's new side, a line a pure
+    deletion removed (or one replaced only by blank lines) maps to the lines
+    either side, and any other line moves with the lines above it; in a file
+    that is not a file at `HEAD`, the hit keeps its merge-base lines. The
+    mapped hit must overlap the pair's own paragraph or one of its sibling
+    ranges, whatever their status (`sweep-uncovered`). A term with no hit is
+    `sweep-empty`, and a `finding` value no pair carries a term for is
+    `missing-sweep`, so every pair's `finding` must be a whole number of 1
+    or more. A `sweep` that is not a non-empty list of terms, a term that is
+    blank or holds a newline, tab, CR or NUL, or a bad `finding` is
+    `schema`. `--sweep [--] <term>…` prints the same hits, one
+    `<file>:<start>-<end>: <first line>` per hit, and exits 1 when a term
+    matches nothing.
 - **Verdicts.** Every pair is gated `TRUE` with a hash equal to its
-    paragraph's hash now: the whole blank-line-delimited block, whitespace
-    collapsed, so a re-wrap keeps the verdict current, as does a line shift
-    once the pair's `lines` follow it (a re-wrap can move the anchor out
-    of `lines` too), and any word change makes it stale.
-    A `stale-verdict` on a paragraph whose block is unchanged (the same
-    text between the same blank lines) means its range moved: update
-    `lines`, and the recorded hash holds; an `anchor` finding names where
-    the anchor matched. Every code change has a gate entry whose
-    `attack` and `result` are not blank and whose `blob` is the one the file
-    holds at `HEAD` (or `deleted` when it is absent); a mismatch is
-    `stale-attack`.
+    paragraph's hash now: the whole paragraph, whitespace collapsed, so a
+    re-wrap keeps the verdict current, as does a line shift once the
+    pair's `lines` follow it (a re-wrap can move the anchor out of `lines`
+    too), and any word change makes it stale. An edit to another item of
+    the same list leaves it current.
+    A `stale-verdict` on a paragraph whose text is unchanged means its
+    range moved: update `lines`, and the recorded hash holds; an `anchor`
+    finding names where the anchor matched. A `FALSE` or `OVERREACHES`
+    finding ends "(paragraph changed since the gate read it)" when the
+    gate recorded a hash the paragraph no longer matches, so its note is
+    not read as a verdict on the new text. Every code change has a gate
+    entry whose `attack` and `result` are not blank and whose `blob` is
+    the one the file holds at `HEAD` (or `deleted` when it is absent); a
+    mismatch is `stale-attack`.
 
 Finding classes: `schema`, `enum`, `artifact`, `anchor`,
 `uncovered-hunk`, `uncovered-file`, `sibling-untracked`, `sibling-reason`,
@@ -414,7 +440,8 @@ the gate's job. Its known limits:
     space inside a term is collapsed, so a term cannot tell one space from
     two, and only ASCII white space collapses: a no-break space must match
     exactly. A phrase split across separate strings (two `echo` lines, a
-    concatenation) or across a paragraph break does not match.
+    concatenation) or across a blank line does not match; a list item
+    boundary does not stop it.
 - A sibling range is read at `HEAD` like a pair's but carries no anchor,
     so a stale one can clear a hit that has moved away from it. A hit on
     a line a hunk replaced maps to the hunk's whole new side, so a sibling
@@ -437,6 +464,25 @@ the gate's job. Its known limits:
     matched like a sweep term, so one that includes a heading's `#` run
     matches nothing, and a phrase the file repeats anchors a pair only as
     the whole text of paragraphs that hash alike (see **Anchors**).
+- The list-item split is read from markers alone, block by block. A
+    block that does not open with a marker (a continuation paragraph
+    followed directly by the next item, say), a tab-indented marker, and
+    a marker at a smaller indent than the block's first (a block that
+    opens at a nested item and runs on into the next top-level one) leave
+    one larger paragraph. Table rows are never split. A blank line inside
+    a fence ends a block like any other, so the fence's text after it can
+    split at marker-shaped lines or run on into an item right after the
+    fence. In a file mdformat does not format, a `* * *` break inside a list reads as an item, and a bare
+    `-` ending in a carriage return does not.
+- Moving an item to another nesting level changes only indent, but it
+    changes which paragraph holds the item, so it reads as a change.
+    mdformat writes every ordered item as `1.`, so inserting one
+    renumbers nothing; in a file it does not format, renumbering by hand
+    touches every later item.
+- A verdict covers its own paragraph's text. Text deleted after the gate ran
+    (a whole paragraph, or a list item next to a paired one) leaves the
+    neighbouring verdicts current, since their text did not change; only the
+    gate, reading the diff, sees the deletion. Re-gate after deleting text.
 - A pure deletion or a blank-only replacement with no non-blank line
     either side of it (between two blank lines in a row, or at the start
     or end of a file) can be covered by no pair. Only a code block or an
