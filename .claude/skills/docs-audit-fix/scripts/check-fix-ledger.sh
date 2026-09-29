@@ -12,7 +12,9 @@
 #                 changed file is listed as a code change
 #   artifacts     every recorded artifact range exists at the head revision;
 #                 a command artifact is shape-checked and never run
-#   siblings      an unchanged sibling names a range inside a tracked
+#   anchors       every pair's lines lie inside one paragraph and hold the
+#                 pair's anchor, a phrase the file holds once at head
+#   siblings     an unchanged sibling names a range inside a tracked
 #                 file and a reason; a changed one gains a substantively
 #                 changed line in a covered hunk, a removed one borders a
 #                 covered hunk that deletes text or sits in a file the
@@ -515,6 +517,10 @@ function check_schema() {
         (.sweep | to_entries[] | select(.value | term | not)
           | ["schema", "pair \($id) sweep[\(.key)] needs a non-blank term with no newline, tab or CR, got \(.value | rendered)"])
       end),
+      # anchor is required: a phrase of the paragraph, which ties lines
+      # to the text the writer paired (check_anchors).
+      (if .anchor | term then empty
+      else ["schema", "pair \($id) needs an anchor (a non-blank phrase from its paragraph, with no newline, tab or CR), got \(.anchor | rendered)"] end),
       ((.siblings | arr)[] | objects | select(.status != "changed" and .status != "unchanged" and .status != "removed")
         | ["enum", "pair \($id) sibling \(.file) status \(.status | tojson) is not changed, unchanged or removed"])),
     ([(.pairs | arr)[] | objects | .id] | group_by(.)[] | select(length > 1)
@@ -613,6 +619,64 @@ function check_artifacts() {
       finding artifact "pair ${id} ${file}:${lines} runs past end of file (${n} lines)"
     fi
   done <<<"${records}"
+}
+
+# @description Each pair's lines must lie inside one paragraph and hold
+# its anchor, the file's only match for it at head. The gate hashes and
+# judges the text at lines, so a range a later commit moved would put the
+# verdict on another paragraph; the anchor is the writer's record of which
+# text was paired. The match is SWEEP_AWK's, with no generated range left
+# out. Without the one-paragraph rule a stale range that takes in a blank
+# line and the anchor's line would pass, with its hash spanning both
+# neighbouring blocks. A pair whose file or range check_completeness
+# rejects is skipped here.
+function check_anchors() {
+  local k id file lines anchor s e n hits hs he where records anchors
+  local -a aid=() afile=() alines=()
+  records="$(jq --raw-output '.pairs | to_entries[] | [(.key | tostring), .value.id, .value.file, .value.lines] | @tsv' "${LEDGER}")" ||
+    die "could not read the pair list from ${LEDGER}"
+  while IFS=$'\t' read -r k id file lines; do
+    [[ -n ${k} ]] || continue
+    aid[k]="${id}"
+    afile[k]="${file}"
+    alines[k]="${lines}"
+  done <<<"${records}"
+  # Read raw, one per line (check_schema confined an anchor to no
+  # newline, tab or CR), so a backslash is not doubled as @tsv would.
+  anchors="$(jq --raw-output '.pairs | to_entries[] | [(.key | tostring), .value.anchor] | join("\t")' "${LEDGER}")" ||
+    die "could not read the anchors from ${LEDGER}"
+  while IFS=$'\t' read -r k anchor; do
+    [[ -n ${k} ]] || continue
+    id="${aid[k]}"
+    file="${afile[k]}"
+    lines="${alines[k]}"
+    is_file "${HEAD_REV}" "${file}" || continue
+    valid_range "${lines}" || continue
+    s="${lines%-*}"
+    e="${lines#*-}"
+    n="$(line_count "${HEAD_REV}" "${file}")"
+    ((s <= e && e <= n)) || continue
+    if ! git show "${HEAD_REV}:${file}" | one_block "${s}" "${e}"; then
+      finding schema "pair ${id} ${file}:${lines} holds a blank line; a pair's lines lie inside one paragraph"
+      continue
+    fi
+    hits="$(git show "${HEAD_REV}:${file}" | SWEEP_TERM="${anchor}" SWEEP_GEN='' awk "${SWEEP_AWK}" | cut --fields=1,2)" ||
+      die "could not search ${file} for the anchor of pair ${id}"
+    if [[ -z ${hits} ]]; then
+      finding anchor "pair ${id} anchor \"${anchor}\" matches nothing in ${file} at the head revision"
+      continue
+    fi
+    if [[ ${hits} == *$'\n'* ]]; then
+      where="$(tr '\t\n' '- ' <<<"${hits}")"
+      finding anchor "pair ${id} anchor \"${anchor}\" matches ${file} more than once (${where% }); name a phrase the file holds once"
+      continue
+    fi
+    hs="${hits%$'\t'*}"
+    he="${hits#*$'\t'}"
+    if ((hs < s || he > e)); then
+      finding anchor "pair ${id} anchor \"${anchor}\" is at ${file}:${hs}-${he}, outside its lines ${lines}; bring lines up to date"
+    fi
+  done <<<"${anchors}"
 }
 
 HUNKS_COVERED=0
@@ -1446,6 +1510,7 @@ function main() {
   # Later checks read the ledger's shape; a schema finding stops here.
   if ((schema_bad == 0)); then
     check_artifacts
+    check_anchors
     check_completeness
     check_siblings
     check_sweeps
