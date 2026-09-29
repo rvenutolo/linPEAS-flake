@@ -1469,8 +1469,9 @@ EOF
   # An anchor that is its paragraph's whole text passes even where the
   # file repeats it: a heading, whose "#" run the match strips, renamed to
   # a word the prose uses (p1), and a line fixed to match another
-  # paragraph word for word (p2). Identical paragraphs hash alike, so a
-  # range on either carries the same verdict.
+  # paragraph word for word (p2), its anchor's white space collapsed as
+  # the text's is. Identical paragraphs hash alike, so a range on either
+  # carries the same verdict.
   d="$(new_repo)"
   seed_main "${d}" docs/h.md '# H' '' '## Wrong name' '' 'Usage of the tool is below.' '' 'Same line.' \
     '' 'Same line, old.' '' 'Twin a' 'twin b' '' 'Twin a' 'twin b'
@@ -1480,7 +1481,7 @@ EOF
     {id: "p1", finding: 1, file: "docs/h.md", lines: "3-3", anchor: "Usage",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
       sweep: ["Wrong name", "Wrong"], siblings: []},
-    {id: "p2", finding: 2, file: "docs/h.md", lines: "9-9", anchor: "Same line.",
+    {id: "p2", finding: 2, file: "docs/h.md", lines: "9-9", anchor: "Same  line.",
       artifact: [{file: "scripts/tool.sh", lines: "1-5"}], fix_shape: "correct",
       sweep: ["Same line, old."],
       siblings: [{file: "docs/h.md", lines: "7-7", status: "unchanged",
