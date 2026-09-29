@@ -1016,7 +1016,9 @@ EOF
   # directory check, not an incidental uncovered-hunk for Beta.
   d="$(new_repo)"
   beta_fixed "${d}"
-  jq '.pairs[0].file = "docs" |
+  # Its range is 1-1, which git's listing of the tree holds, so only the
+  # file check keeps its anchor from being searched.
+  jq '.pairs[0].file = "docs" | .pairs[0].lines = "1-1" |
       .pairs += [{"id": "p2", "finding": 2, "file": "docs/a.md", "lines": "6-6",
                   "anchor": "Beta paragraph, corrected",
                   "artifact": [{"file": "scripts/tool.sh", "lines": "1-5"}],
