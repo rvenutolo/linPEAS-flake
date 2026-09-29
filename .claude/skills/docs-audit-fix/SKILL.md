@@ -215,15 +215,17 @@ An artifact entry for a fact outside the tree is
 in place of `file` and `lines`.
 
 `lines` is `<start>-<end>` at `HEAD`, inside one paragraph: no blank
-line. `anchor` is a phrase of that paragraph the file holds only once,
-such as its first line or the words of a list item or table row; it
-ties `lines` to the text the pair is about. A `removed` sibling's
+line. `anchor` is a phrase inside `lines` that the file holds only once,
+such as the first line of the range or the words of a list item or
+table row, or else the paragraph's whole text, which may repeat (a
+heading's text without its `#` run, say); it ties `lines` to the text
+the pair is about. A `removed` sibling's
 `lines` is the head-side position its deleted text sat at — for a pure
 deletion, the line before it, the line after it, or both. In a file the
 branch deletes there is no head side, so it is the lines the text held
 at the merge base.
 Here `p3` pairs the paragraph that follows the deleted one, where the
-deletion anchors.
+deletion sits.
 
 `<report-stem>.gate.json` (gate only):
 
@@ -265,7 +267,7 @@ and 2 when it cannot run.
     or starts with `./` or `/` (name each from the repository root); pair
     ids and verdict ids are unique, every verdict names a ledger pair,
     and every gate code change carries a `blob` that is an object id or
-    `deleted`. Every pair has an `anchor` with no newline, tab or CR. Text
+    `deleted`. Every pair has an `anchor` with no newline, tab, CR or NUL. Text
     made only of white space and invisible format characters, such as a
     zero-width space or a byte-order mark, is blank wherever a field must
     not be: a pair's `anchor`, `command`, `observed`, a sibling's `reason`,
@@ -293,7 +295,10 @@ and 2 when it cannot run.
     hold its `anchor`: matched in the pair's file at `HEAD` the way a
     sweep term is (see **Sweep**, with no generated block left out), the
     anchor must match exactly once, and that match must lie inside
-    `lines` (`anchor`, naming where it matched). A stale range is caught
+    `lines` (`anchor`, naming where it matched). An anchor that is the
+    whole text of the paragraph at `lines` may match elsewhere too, as
+    long as one match lies inside `lines`: identical paragraphs hash
+    alike, so either carries the same verdict. A stale range is caught
     this way whether it lands on a blank line, in another paragraph, or
     on another pair's paragraph.
 - **Siblings.** An `unchanged` one names a file tracked at `HEAD`, a range
@@ -332,13 +337,14 @@ and 2 when it cannot run.
     `finding` value no pair carries a term for is `missing-sweep`, so every
     pair's `finding` must be a whole number of 1 or more. A `sweep` that is
     not a non-empty list of terms, a term that is blank or holds a newline,
-    tab or CR, or a bad `finding` is `schema`. `--sweep [--] <term>…` prints
+    tab, CR or NUL, or a bad `finding` is `schema`. `--sweep [--] <term>…` prints
     the same hits, one `<file>:<start>-<end>: <first line>` per hit, and
     exits 1 when a term matches nothing.
 - **Verdicts.** Every pair is gated `TRUE` with a hash equal to its
     paragraph's hash now: the whole blank-line-delimited block, whitespace
     collapsed, so a re-wrap keeps the verdict current, as does a line shift
-    once the pair's `lines` follow it, and any word change makes it stale.
+    once the pair's `lines` follow it (a re-wrap can move the anchor out
+    of `lines` too), and any word change makes it stale.
     A `stale-verdict` on a paragraph whose block is unchanged (the same
     text between the same blank lines) means its range moved: update
     `lines`, and the recorded hash holds; an `anchor` finding names where
@@ -376,10 +382,10 @@ the gate's job. Its known limits:
 - A `changed` or `removed` sibling outside in-scope Markdown is cleared by
     any touching hunk, as **Siblings** above says, so a whitespace-only edit
     clears it.
-- A pure deletion, or a hunk whose new side is only blank lines, anchors
-    at the lines either side of it. When a whole paragraph goes, that is
-    its blank line and the next paragraph, so the pair usually goes on the
-    paragraph that follows. A hunk whose new side is only blank lines is
+- A pure deletion, or a hunk whose new side is only blank lines, sits at
+    the lines either side of it. When a whole paragraph goes, those are
+    usually its blank line and the next paragraph; a pair's `lines` hold
+    no blank line, so the pair goes on the paragraph that follows. A hunk whose new side is only blank lines is
     covered by a pair on the paragraph directly above or below it, even
     when the text it removed belonged to the other one: replace one
     paragraph's last line and the one blank line after it with a single
@@ -424,7 +430,9 @@ the gate's job. Its known limits:
 - An anchor proves that `lines` hold the text the writer named, not that
     it is the text the finding meant; the gate reads the paragraph. It is
     matched like a sweep term, so one that includes a heading's `#` run
-    matches nothing, and a phrase the file repeats cannot anchor a pair.
-- A pure deletion between two blank lines in a row, which only a code
-    block or an unformatted file holds, has no non-blank line either side,
-    so no pair can cover it.
+    matches nothing, and a phrase the file repeats anchors a pair only as
+    its paragraph's whole text.
+- A pure deletion or a blank-only replacement with no non-blank line
+    either side of it (between two blank lines in a row, or at the start
+    or end of a file) can be covered by no pair. Only a code block or an
+    unformatted file holds such a shape.
