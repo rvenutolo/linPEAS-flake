@@ -293,22 +293,19 @@ matching does not (see **Sweep**).
 - **Completeness.** Every changed Markdown hunk is covered, except in the
     root `CHANGELOG.md` and `tests/fixtures/`, inside a generated
     `<!-- BEGIN <name> -->` / `<!-- END <name> -->` block of the same name
-    on both sides, or a pure re-wrap (the paragraphs around it hold the
-    same words; a hunk that only adds or removes blank lines compares
-    whole blank-line blocks, so a blank line put in or taken out beside a
-    list item is one when no other hunk changes that block). Other
-    generated Markdown — the `# BEGIN just-recipes` block in `README.md`,
-    or a generated file with no such markers — is checked like
-    hand-written text.
+    on both sides, or a pure re-wrap (the paragraphs around it hold the same
+    words; a hunk that only adds or removes blank lines is one, but at the
+    start of a file, so loosening or tightening a list is). Other generated
+    Markdown — the `# BEGIN just-recipes` block in `README.md`, or a
+    generated file with no such markers — is checked like hand-written text.
     Covered means every non-blank paragraph the hunk's new side touches
-    overlaps a pair's paragraph, each needing its own pair. A hunk whose
-    new side holds no non-blank line (a pure deletion, or text replaced by
-    blank lines) is covered by a pair whose paragraph takes in the line
-    before or after it. Every other changed
-    file, a deleted Markdown file included (one replaced by a directory or
-    a gitlink counts as deleted), is listed in `code_changes`. A gitlink
-    under a `.md` name also leaves a hunk no pair can cover, since a pair
-    needs a file; see the known limits.
+    overlaps a pair's paragraph, each needing its own pair. A hunk whose new
+    side holds no non-blank line (a pure deletion, or text replaced by blank
+    lines) is covered by a pair whose paragraph takes in the line before or
+    after it. Every other changed file, a deleted Markdown file included
+    (one replaced by a directory or a gitlink counts as deleted), is listed
+    in `code_changes`. A gitlink under a `.md` name also leaves a hunk no
+    pair can cover, since a pair needs a file; see the known limits.
 - **Artifacts and pairs** name files tracked at `HEAD`, with the range
     inside the file. A command artifact is never run.
 - **Anchors.** A pair's `lines` lie inside one paragraph: no blank line
@@ -482,11 +479,10 @@ the gate's job. Its known limits:
     mdformat writes every ordered item as `1.`, so inserting one
     renumbers nothing; in a file it does not format, renumbering by hand
     touches every later item.
-- A verdict covers its own paragraph's text. Text deleted after the gate
-    ran (a whole paragraph, or a list item in the same hunk as a paired
-    neighbour) leaves the neighbouring verdicts current, since their text
-    did not change; only the gate, reading the diff, sees the deletion.
-    Re-gate after deleting text.
+- A verdict covers its own paragraph's text. Text deleted after the gate ran
+    (a whole paragraph, or a list item next to a paired one) leaves the
+    neighbouring verdicts current, since their text did not change; only the
+    gate, reading the diff, sees the deletion. Re-gate after deleting text.
 - A pure deletion or a blank-only replacement with no non-blank line
     either side of it (between two blank lines in a row, or at the start
     or end of a file) can be covered by no pair. Only a code block or an
