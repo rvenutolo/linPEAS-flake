@@ -1554,7 +1554,7 @@ function check_sweeps() {
 # note fields are read as "-", for the same IFS reason check_siblings
 # gives.
 function check_verdicts() {
-  local id file lines verdict hash note current n start end records
+  local id file lines verdict hash note current n start end records changed
   records="$(jq --raw-output --slurpfile gate "${GATE}" '
     .pairs[] | .id as $id
     | ([$gate[0].pairs[] | select(.id == $id)] | first) as $v
@@ -1571,26 +1571,36 @@ function check_verdicts() {
       finding missing-verdict "pair ${id} has no gate verdict"
       continue
     fi
-    if [[ ${verdict} != TRUE ]]; then
-      if [[ ${note} == - ]]; then
-        finding verdict "pair ${id} is ${verdict}"
-      else
-        finding verdict "pair ${id} is ${verdict}: ${note}"
-      fi
-      continue
-    fi
-    if [[ ${hash} == - ]]; then
+    if [[ ${verdict} == TRUE && ${hash} == - ]]; then
       finding missing-hash "pair ${id} has a TRUE verdict with no hash"
       continue
     fi
-    is_file "${HEAD_REV}" "${file}" || continue
-    valid_range "${lines}" || continue
-    start="${lines%-*}"
-    end="${lines#*-}"
-    n="$(line_count "${HEAD_REV}" "${file}")"
-    ((start >= 1 && start <= end && end <= n)) || continue
-    current="$(paragraph_hash "${HEAD_REV}" "${file}" "${start}" "${end}")"
-    [[ ${current} == "${hash}" ]] ||
+    # The paragraph's hash now, or empty when there is no hash to compare
+    # or no paragraph to hash.
+    current=''
+    if [[ ${hash} != - ]] && is_file "${HEAD_REV}" "${file}" && valid_range "${lines}"; then
+      start="${lines%-*}"
+      end="${lines#*-}"
+      n="$(line_count "${HEAD_REV}" "${file}")"
+      if ((start >= 1 && start <= end && end <= n)); then
+        current="$(paragraph_hash "${HEAD_REV}" "${file}" "${start}" "${end}")"
+      fi
+    fi
+    if [[ ${verdict} != TRUE ]]; then
+      # A note the gate wrote about text since edited must not read as a
+      # verdict on the new text.
+      changed=''
+      if [[ -n ${current} && ${current} != "${hash}" ]]; then
+        changed=' (paragraph changed since the gate read it)'
+      fi
+      if [[ ${note} == - ]]; then
+        finding verdict "pair ${id} is ${verdict}${changed}"
+      else
+        finding verdict "pair ${id} is ${verdict}: ${note}${changed}"
+      fi
+      continue
+    fi
+    [[ -z ${current} || ${current} == "${hash}" ]] ||
       finding stale-verdict "pair ${id} ${file}:${lines} changed after the gate read it"
   done <<<"${records}"
 
