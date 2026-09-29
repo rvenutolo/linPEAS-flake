@@ -220,7 +220,8 @@ in place of `file` and `lines`.
 is a phrase inside `lines` that the file holds only once, such as the
 first line of the range or the words of a list item or table row, or
 else the paragraph's whole text, which may repeat (a heading's text
-without its `#` run, or a list item's whole text, say); it ties `lines`
+without its `#` run, or a list item's whole text, marker included,
+say); it ties `lines`
 to the text the pair is about. A `removed` sibling's
 `lines` is the head-side position its deleted text sat at — for a pure
 deletion, the line before it, the line after it, or both. In a file the
@@ -266,7 +267,8 @@ exactly N spaces. An item's lines in that block (its continuation
 lines, a nested list, a fence or table inside it) are one paragraph. A
 block that does not open with a marker (a fenced block, a table, a plain
 paragraph) is never split. On a file mdformat formats, these are the
-items CommonMark reads. The hash, completeness, the one-paragraph rules,
+items CommonMark reads, except around a fence holding a blank line (see
+the known limits). The hash, completeness, the one-paragraph rules,
 reflow and the sweep's own-paragraph entry all use this; the sweep's
 matching does not (see **Sweep**).
 
@@ -292,10 +294,12 @@ matching does not (see **Sweep**).
     root `CHANGELOG.md` and `tests/fixtures/`, inside a generated
     `<!-- BEGIN <name> -->` / `<!-- END <name> -->` block of the same name
     on both sides, or a pure re-wrap (the paragraphs around it hold the
-    same words, so a blank line put between or taken from two list items
-    is one). Other generated Markdown — the
-    `# BEGIN just-recipes` block in `README.md`, or a generated file with
-    no such markers — is checked like hand-written text.
+    same words; a hunk that only adds or removes blank lines compares
+    whole blank-line blocks, so a blank line put in or taken out beside a
+    list item is one when no other hunk changes that block). Other
+    generated Markdown — the `# BEGIN just-recipes` block in `README.md`,
+    or a generated file with no such markers — is checked like
+    hand-written text.
     Covered means every non-blank paragraph the hunk's new side touches
     overlaps a pair's paragraph, each needing its own pair. A hunk whose
     new side holds no non-blank line (a pure deletion, or text replaced by
@@ -338,7 +342,8 @@ matching does not (see **Sweep**).
     `CHANGELOG.md` or `tests/fixtures/`, any hunk touching the range clears
     a `changed` or `removed` sibling, a whitespace-only edit included.
     When the hunk at a `changed` or `removed` sibling is one no pair
-    covers, the finding says so: pair its paragraph.
+    covers, the finding says so and points at the `uncovered-hunk`
+    finding, which names the paragraph to pair.
 - **Sweep.** Each `sweep` term is searched at the merge base across every
     tracked file except `tests/fixtures/`, any skill's seeded-defect
     fixtures, the root `CHANGELOG.md` and the root `flake.lock`
@@ -438,7 +443,8 @@ the gate's job. Its known limits:
     space inside a term is collapsed, so a term cannot tell one space from
     two, and only ASCII white space collapses: a no-break space must match
     exactly. A phrase split across separate strings (two `echo` lines, a
-    concatenation) or across a paragraph break does not match.
+    concatenation) or across a blank line does not match; a list item
+    boundary does not stop it.
 - A sibling range is read at `HEAD` like a pair's but carries no anchor,
     so a stale one can clear a hit that has moved away from it. A hit on
     a line a hunk replaced maps to the hunk's whole new side, so a sibling
@@ -461,16 +467,26 @@ the gate's job. Its known limits:
     matched like a sweep term, so one that includes a heading's `#` run
     matches nothing, and a phrase the file repeats anchors a pair only as
     the whole text of paragraphs that hash alike (see **Anchors**).
-- The list-item split is read from markers alone. A block that does not
-    open with a marker, a tab-indented marker, and a marker at a smaller
-    indent than the block's first line (a continuation paragraph followed
-    directly by the next item, which only a file mdformat does not format
-    holds) leave one larger paragraph. Table rows are never split.
+- The list-item split is read from markers alone, block by block. A
+    block that does not open with a marker (a continuation paragraph
+    followed directly by the next item, say), a tab-indented marker, and
+    a marker at a smaller indent than the block's first (a block that
+    opens at a nested item and runs on into the next top-level one) leave
+    one larger paragraph. Table rows are never split. A blank line inside
+    a fence ends a block like any other, so the fence's text after it can
+    split at marker-shaped lines or run on into an item right after the
+    fence. In a file mdformat does not format, a `* * *` break inside a list reads as an item, and a bare
+    `-` ending in a carriage return does not.
 - Moving an item to another nesting level changes only indent, but it
     changes which paragraph holds the item, so it reads as a change.
     mdformat writes every ordered item as `1.`, so inserting one
     renumbers nothing; in a file it does not format, renumbering by hand
     touches every later item.
+- A verdict covers its own paragraph's text. Text deleted after the gate
+    ran (a whole paragraph, or a list item in the same hunk as a paired
+    neighbour) leaves the neighbouring verdicts current, since their text
+    did not change; only the gate, reading the diff, sees the deletion.
+    Re-gate after deleting text.
 - A pure deletion or a blank-only replacement with no non-blank line
     either side of it (between two blank lines in a row, or at the start
     or end of a file) can be covered by no pair. Only a code block or an
