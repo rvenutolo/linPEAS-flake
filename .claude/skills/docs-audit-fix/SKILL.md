@@ -295,10 +295,13 @@ and 2 when it cannot run.
     hold its `anchor`: matched in the pair's file at `HEAD` the way a
     sweep term is (see **Sweep**, with no generated block left out), the
     anchor must match exactly once, and that match must lie inside
-    `lines` (`anchor`, naming where it matched). An anchor that is the
-    whole text of the paragraph at `lines` may match elsewhere too, as
-    long as one match lies inside `lines`: identical paragraphs hash
-    alike, so either carries the same verdict. A stale range is caught
+    `lines` (`anchor`, naming where it matched). An anchor the file holds
+    more than once passes only through the matches that are their
+    paragraph's whole text (as the match reads it, a heading's `#` run
+    stripped): those must all hash alike, so that any of them carries the
+    same verdict, and one must lie inside `lines`. A match inside a
+    longer paragraph does not count, and a heading and a plain line with
+    its words hash apart, so they are a repeat. A stale range is caught
     this way whether it lands on a blank line, in another paragraph, or
     on another pair's paragraph.
 - **Siblings.** An `unchanged` one names a file tracked at `HEAD`, a range
@@ -385,9 +388,11 @@ the gate's job. Its known limits:
 - A pure deletion, or a hunk whose new side is only blank lines, sits at
     the lines either side of it. When a whole paragraph goes, those are
     usually its blank line and the next paragraph; a pair's `lines` hold
-    no blank line, so the pair goes on the paragraph that follows. A hunk whose new side is only blank lines is
-    covered by a pair on the paragraph directly above or below it, even
-    when the text it removed belonged to the other one: replace one
+    no blank line, so the pair goes on the paragraph that follows, or on
+    the one before when the last paragraph of a file goes. A hunk whose
+    new side is only blank lines is covered by a pair on the paragraph
+    directly above or below it, even when the text it removed belonged to
+    the other one: replace one
     paragraph's last line and the one blank line after it with a single
     whitespace-only line, pair only the paragraph below, and the run
     passes. With a truly empty line instead, git shows a pure deletion,
@@ -431,7 +436,7 @@ the gate's job. Its known limits:
     it is the text the finding meant; the gate reads the paragraph. It is
     matched like a sweep term, so one that includes a heading's `#` run
     matches nothing, and a phrase the file repeats anchors a pair only as
-    its paragraph's whole text.
+    the whole text of paragraphs that hash alike (see **Anchors**).
 - A pure deletion or a blank-only replacement with no non-blank line
     either side of it (between two blank lines in a row, or at the start
     or end of a file) can be covered by no pair. Only a code block or an
