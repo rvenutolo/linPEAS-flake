@@ -2132,6 +2132,17 @@ EOF
   run_case sibling-removed "${d}" 0 '' \
     'OK — 1 pairs; 1 hunks covered, 0 reflow-only and 0 generated skipped; 0 code changes; 0 changed, 0 unchanged and 1 removed siblings; 2 sweep terms, 2 hits cleared'
 
+  # A removed sibling whose deletion no pair covers is named as waiting
+  # on a pair, not as a sibling nothing deleted.
+  d="$(new_repo)"
+  seed_main "${d}" docs/l.md '- one' '- two wrong' '- three' '' 'Tail old.'
+  printf '%s\n' '- one' '- three' '' 'Tail new.' >"${d}/docs/l.md"
+  commit_all "${d}" 'drop two, fix the tail'
+  sibling_ledger "${d}" docs/l.md 4-4 'Tail new.' 1-2 removed '["Tail old.", "two wrong"]'
+  run_case sibling-removed-hunk-uncovered "${d}" 1 \
+    'sibling-not-removed: pair p1 sibling docs/l.md:1-2 is marked removed but the hunk there is uncovered; pair its paragraph'
+  also_expect 'uncovered-hunk: docs/l.md:1 changed and no pair covers it'
+
   # A hunk that only adds lines removed nothing.
   d="$(new_repo)"
   seed_main "${d}" docs/l.md '- one' '- three'
