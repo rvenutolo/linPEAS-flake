@@ -1864,22 +1864,23 @@ EOF
 
   # Every marker form starts an item: -, *, + (then a space, a tab or the
   # end of the line), and one to nine digits then . or ). A line that
-  # only looks like one, or a marker at another indent than the block's
-  # first line, does not.
+  # only looks like one, a marker at another indent than the block's
+  # first line, or a tab-indented marker, does not.
   d="$(new_repo)"
   seed_files "${d}" docs/m1.md $'* one\n* two oldA' docs/m2.md $'+ one\n+ two oldB' \
     docs/m3.md $'1. one\n1. two oldC' docs/m4.md $'1) one\n1) two oldD' \
     docs/m5.md $'- one\n-\ttwo oldE' docs/m6.md $'123456789. one\n123456789. two oldF' \
     docs/m7.md $'- one\n- oldG' \
-    docs/m8.md $'- one\n-x oldH\n1.x oldH\n1234567890. oldH\n    - oldH' docs/m9.md $'  - one\n- two oldI'
-  sed -i 's/old\([A-I]\)/new\1/' "${d}"/docs/m?.md
+    docs/m8.md $'- one\n-x oldH\n1.x oldH\n1234567890. oldH\n    - oldH' docs/m9.md $'  - one\n- two oldI' \
+    docs/m10.md $'- one\n\t- two oldJ'
+  sed -i 's/old\([A-J]\)/new\1/' "${d}"/docs/m*.md
   sed -i '2s/.*/-/' "${d}/docs/m7.md"
   commit_all "${d}" 'edit the second line of each'
   pairs_ledger "${d}" 'p1|1|docs/m1.md|1-1|* one|["two oldA"]' 'p2|2|docs/m2.md|1-1|+ one|["two oldB"]' \
     'p3|3|docs/m3.md|1-1|1. one|["two oldC"]' 'p4|4|docs/m4.md|1-1|1) one|["two oldD"]' \
     'p5|5|docs/m5.md|1-1|- one|["two oldE"]' 'p6|6|docs/m6.md|1-1|123456789. one|["two oldF"]' \
     'p7|7|docs/m7.md|1-1|- one|["- oldG"]' 'p8|8|docs/m8.md|1-1|- one|["x oldH"]' \
-    'p9|9|docs/m9.md|1-1|- one|["two oldI"]'
+    'p9|9|docs/m9.md|1-1|- one|["two oldI"]' 'p10|10|docs/m10.md|1-1|- one|["two oldJ"]'
   gate_all "${d}"
   run_case item-marker-forms "${d}" 1 'uncovered-hunk: docs/m1.md:2 changed and no pair covers it'
   also_expect 'uncovered-hunk: docs/m2.md:2 changed and no pair covers it'
@@ -1890,6 +1891,7 @@ EOF
   also_expect 'uncovered-hunk: docs/m7.md:2 changed and no pair covers it'
   expect_absent 'docs/m8.md'
   expect_absent 'docs/m9.md'
+  expect_absent 'docs/m10.md'
 
   # A listed code change with a gate attack: pass.
   d="$(new_repo)"
