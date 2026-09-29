@@ -34,8 +34,8 @@ header alone (`references/repo-map.md` §3 says which blocks each scope
 renders). A rationale comment block that restates a mechanism a runbook
 documents — a workflow's header comment, an entry-point script's second comment
 block — is in scope when a pass inside the window touched it: it is prose a
-maintainer reads at the moment they act, the twin sweep's `.github/**` and
-`scripts/*.sh` pathspecs already reach both, and a claim corrected in the
+maintainer reads at the moment they act, the twin sweep already reaches
+both, and a claim corrected in the
 runbook while its comment twin keeps the old wording is the same defect with
 two sites.
 
@@ -127,9 +127,8 @@ git log --oneline --no-merges "${sha}..HEAD" -- '*.md' '.github/**' 'scripts/*.s
 git diff --stat "${sha}..HEAD" -- '*.md' '.github/**' 'scripts/*.sh'
 ```
 
-The pathspecs are the same three the twin sweep below uses: `'*.md'`
-alone misses a pass that touched only a notify body in a workflow or a
-body a script composes, and such passes land here.
+`'*.md'` alone would miss a pass that touched only a notify body in a
+workflow or a body a script composes, and such passes land here.
 
 Hand that file list to the readers as a **priority set, not a scope limit** —
 every tracked doc is still in scope. Prose rewritten by an earlier cycle's fix
@@ -381,28 +380,22 @@ not a reader's.** Grouping by root cause only collapses the sites somebody
 found, and a reader works one cluster: it reports the instance in front of it
 and never learns the same sentence was copied three docs away, sometimes inside
 its own cluster. So for every confirmed finding, take the distinctive part of
-the wrong claim and `git grep` it across all tracked prose before it enters the
-report:
+the wrong claim and sweep it across the tree before it enters the report, with
+the fix pass's own sweep:
 
 ```sh
-git grep -n 'distinctive phrase from the wrong claim' -- '*.md' '.github/**' 'scripts/*.sh'
+.claude/skills/docs-audit-fix/scripts/check-fix-ledger.sh --base HEAD --sweep -- 'distinctive phrase from the wrong claim'
 ```
 
-The third pathspec is what reaches a `--body-file` body whose prose a
-script composes; a body a `run:` step composes inline is already covered by
-the `.github/**` pathspec.
-
-Two ways this sweep returns zero hits while twins exist, both silent:
-
-- **The maintainer's global git config sets `grep.patternType=perl`.** `\|` alternation matches
-    nothing, so a pattern built with it reports a clean tree. Pass each
-    alternative as its own `-e` instead.
-- **An unquoted `*.md` pathspec is expanded by the shell**, so it reaches
-    `git grep` as the root-level Markdown files only and every `docs/**` twin
-    goes unread. Quote every pathspec.
-
-A sweep that found nothing is only evidence if it could have found something —
-re-run it against a phrase you know is present before trusting a zero.
+`--base HEAD` makes the merge base `HEAD`, so it searches the `HEAD`
+commit; commit or stash edits first, since uncommitted text is not
+read. Its scope and matching are stated once, under **Sweep** in the
+`docs-audit-fix` skill's section on what the checker proves; a phrase that
+wraps across lines still matches, and the fix pass can record the same
+phrases as its `sweep` terms. Pass each alternative wording as its own
+argument: a term is a fixed string, so `\|` is two literal characters. A
+term with no hit is reported and exits 1, so a misspelled phrase does not
+pass for a clean tree.
 
 Search the wrong wording, not the corrected one, and loosen the phrase until it
 would catch a paraphrase — a twin rarely matches byte for byte. Every hit joins

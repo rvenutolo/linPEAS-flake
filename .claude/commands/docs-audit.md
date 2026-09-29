@@ -47,12 +47,9 @@ Run a documentation correctness audit of this repository using the
 1. Verify every candidate finding empirically before reporting it — especially
     hand-written claims about CI jobs / required checks, which freshness gates do
     not cover. Run any command a doc hands the reader and derive the same set
-    a second way. Then `git grep` the wrong wording across all tracked prose
-    (`'*.md' '.github/**' 'scripts/*.sh'`) so every twin joins the finding.
-    Quote every pathspec and pass each alternative as its own `-e` — the
-    maintainer's global git config sets `grep.patternType=perl`, so `\|`
-    matches nothing, and an unquoted
-    `*.md` never reaches `docs/`. Both failures report a clean tree.
+    a second way. Then sweep the wrong wording, one argument per
+    alternative, with the command the skill's **Sweep for twins** paragraph gives, so
+    every twin joins the finding.
 1. Before parking anything as a decision for the user, check whether the tree
     already decides it: write down what the code would have to look like for
     each reading to be right, and defer only if both survive.
