@@ -331,17 +331,7 @@ function run_empty_bump_pr_scenario() {
   pass_count=$((pass_count + 1))
 }
 
-# @description Run an API-error soft-fallback scenario. `gh api` writes
-# its JSON error body to stdout, so a failed this-repo lookup arrives as
-# a non-empty non-null string. Per hard-fail rule 2 that must degrade to
-# the documented empty/"unknown" section — never publish the error body's
-# missing keys as data. Asserts exit 0, the documented fallback value, no
-# literal null anywhere in the output, and a WARN naming the lookup.
-# @arg $1 scenario name
-# @arg $2 override var name to point at the 404 body
-# @arg $3 yq path that must read back as the documented fallback
-# @arg $4 expected fallback value at that path
-# @description Run the generator with a live `gh` that is present and
+# @description Run the generator with a `gh` shim that is present and
 # fails, and no override for the required upstream-release lookup, so the
 # fetch itself is the fault. Asserts exit 2 — the lookup never happened,
 # so it says nothing about the pin — and that no dashboard.yml was
@@ -394,6 +384,16 @@ function run_failing_gh_scenario() {
   pass_count=$((pass_count + 1))
 }
 
+# @description Run an API-error soft-fallback scenario. `gh api` writes
+# its JSON error body to stdout, so a failed this-repo lookup arrives as
+# a non-empty non-null string. Per hard-fail rule 2 that must degrade to
+# the documented empty/"unknown" section — never publish the error body's
+# missing keys as data. Asserts exit 0, the documented fallback value, no
+# literal null anywhere in the output, and a WARN naming the lookup.
+# @arg $1 scenario name
+# @arg $2 override var name to point at the 404 body
+# @arg $3 yq path that must read back as the documented fallback
+# @arg $4 expected fallback value at that path
 # @arg $5 expected stderr substring (the WARN)
 function run_api_error_scenario() {
   local -r name="$1"
