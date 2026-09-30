@@ -8,7 +8,9 @@
 # Behind the stub sits a tripwire `gh` for the whole run: a scenario that
 # forgets the stub reaches the tripwire instead of the real gh, and the
 # run fails on any call it logged, even when the scenario's own verdict
-# came out right.
+# came out right. The harness passes with the network blocked, checked
+# with `unshare --user --map-current-user --net` (not --map-root-user,
+# which runs it as root and skips the unreadable-base scenario).
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -231,8 +233,14 @@ runs:
 YAML
 
   local actual_exit=0
-  (cd "${repo_dir}" && env -u BASE_DIR_OVERRIDE -u HEAD_DIR_OVERRIDE BASE_REF=main "${SCRIPT}") \
-    >"${out_file}" 2>&1 || actual_exit=$?
+  # deref-none: both fabricated SHAs name commits, so the tag-object
+  # lookup 404s on each side and the moved SHA stays a repoint.
+  (
+    cd "${repo_dir}" &&
+      PATH="${FIXTURES}/bin:${PATH}" \
+        GH_STUB_MODE=deref-none \
+        env -u BASE_DIR_OVERRIDE -u HEAD_DIR_OVERRIDE BASE_REF=main "${SCRIPT}"
+  ) >"${out_file}" 2>&1 || actual_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
   harness_assert_record "${name}" "${expected_msg}" \
     "${outcome_file}" "${out_file}"
@@ -294,7 +302,8 @@ YAML
   (
     cd "${repo_dir}" &&
       REAL_GIT="${real_git}" \
-        PATH="${FIXTURES}/git-shim-ls-tree-fail:${PATH}" \
+        PATH="${FIXTURES}/git-shim-ls-tree-fail:${FIXTURES}/bin:${PATH}" \
+        GH_STUB_MODE=deny \
         env -u BASE_DIR_OVERRIDE -u HEAD_DIR_OVERRIDE BASE_REF=main "${SCRIPT}"
   ) >"${out_file}" 2>&1 || actual_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"

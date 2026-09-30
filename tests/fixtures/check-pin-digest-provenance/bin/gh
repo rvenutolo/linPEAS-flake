@@ -107,4 +107,8 @@ case "${GH_STUB_MODE:-deny}" in
         ;;
     esac
     ;;
+  *)
+    printf 'unknown GH_STUB_MODE: %s\n' "${GH_STUB_MODE}" >&2
+    exit 97
+    ;;
 esac
