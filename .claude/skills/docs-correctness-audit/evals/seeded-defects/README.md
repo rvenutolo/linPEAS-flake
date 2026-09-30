@@ -24,18 +24,18 @@ below.
     ./plant.sh
     ```
 
-    Clones the repo to `${TMPDIR:-/tmp}/docs-audit-seeded-defects`, on a
-    `main` branch at HEAD — the tracked skill comes with it, so nothing is
-    copied — applies all seeds and writes `results/manifest-resolved.json`.
-    It then rewrites the clone's whole history to commit the seeds, which
-    takes a few minutes (why the seeds are committed: "A third confound"
-    below), and last
-    writes `results/worktree-path.txt`, the clone's path. The rewrite needs the full history, so
-    planting from a shallow clone is refused with exit 2. Leave the checkout
-    alone while it runs: the rewrite re-reads `seeds.json` and re-runs
-    `plant.sh` from it for every commit, and the check that fails a plant
-    whose checkout changed compares tracked-file status only, so a second
-    edit to a file already modified, or a new file, goes unnoticed.
+    Clones the repo to `${TMPDIR:-/tmp}/docs-audit-seeded-defects`, on a `main`
+    branch at HEAD — the tracked skill comes with it, so nothing is copied —
+    applies all seeds and writes `results/manifest-resolved.json`. It then
+    rewrites the clone's whole history to commit the seeds, which takes a few
+    minutes (why the seeds are committed: "A third confound" below), and last
+    writes `results/worktree-path.txt`, the clone's path. The rewrite needs the
+    full history, so planting from a shallow clone is refused with exit 2. Leave
+    the checkout alone while it runs: the rewrite runs `plant.sh` from it for
+    every commit, and re-reads `seeds.json` for each version of a seeded file it
+    has not seen yet; the check that fails a plant whose checkout changed
+    compares tracked-file status only, so a second edit to a file already
+    modified, or a new file, goes unnoticed.
 
 1. Run the audit M times (default M=2, matching the ship gate in
     [`../tuning-results.md`](../tuning-results.md)), fresh session each:
@@ -86,7 +86,10 @@ the anchor's own text, and planting fails if `from` is not part of the anchor.
 An empty payload with `replace-substr` deletes `from`, which is how a
 truncation is planted. Every edit field is a string, and anchor, `from` and
 payload are each one line; planting refuses a newline in any of them, and a
-`replace-substr` anchor that occurs twice on its line. Each seed also needs a
+`replace-substr` anchor that occurs twice on its line. `file` must be a normalized
+repo-relative path to a tracked regular file: the history rewrite replays
+each seed from the file's entry in every commit's index, which holds no
+path through a symlink. Each seed also needs a
 non-empty one-line string `id`, a string `sentinel`, and an integer
 `line_tol` from 0 to 1e9; an `also` that is not absent, `null` or `false`
 must be an array of edit objects. Planting checks these seed-level rules,
@@ -222,12 +225,12 @@ newest merge instead puts them in the first diff the skill says to read. With
 the rewrite, measured at `8854b868`: `git status` and `git diff` are empty,
 the log matches the source commit for commit (subjects, identities, dates,
 touched paths), and `PROSE HOTSPOTS` and `PASS ATTRIBUTION` print what the
-uncommitted plant printed, bar the shas. That was before `seeds.json` was
-dropped too (see below), so the touched paths now differ in one way: a
-commit that changed `seeds.json` no longer lists it, and three commits that
-changed nothing else touch no path at all. Neither ranking counts JSON. A
-seed can also hide a change: a commit whose only edit to a seeded file is
-one a seed undoes no longer lists that file. `generator-truncation`
+uncommitted plant printed, bar the shas. Touched paths can differ from the
+source's in two ways. A commit that changed `seeds.json` no longer lists
+it, since the file is now dropped too (see below), and three commits that
+changed nothing else touch no path at all; neither ranking counts JSON. And
+a commit whose only edit to a seeded file is one a seed undoes no longer
+lists that file. `generator-truncation`
 restores the text its fix commit replaced, but that commit rewrote other
 lines of the page too, so it still lists it.
 

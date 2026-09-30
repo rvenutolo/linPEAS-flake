@@ -323,9 +323,9 @@ check "a shallow source names the cause" "printf '%s' \"\$shallow_out\" | grep -
 
 # An audit point naming a commit that is not an ancestor of the planted head
 # cannot be carried over, and gc would leave it naming nothing: the audit
-# would then read everything at equal priority without saying why. Planting
-# must fail, and must not leave the previous plant's path behind for the
-# audit loop to use.
+# would then skip its ranking as if the source had recorded no usable point,
+# which the source did. Planting must fail, and must not leave the previous
+# plant's path behind for the audit loop to use.
 "$plant" --clean >/dev/null 2>&1 || true
 REPO_OVERRIDE="$src" SEEDS_OVERRIDE="$src/evals/seeds[1].json" "$plant" >/dev/null 2>&1 || true
 git clone --quiet "$src" "$hist/offmain"
