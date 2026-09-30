@@ -86,6 +86,19 @@ apply_edit() {
     echo "seed '$id': no file $file" >&2
     exit 1
   }
+  # The rewrite replays each seed from the file's entry in every commit's
+  # index, so the path must be one: a path the disk resolves but the index
+  # does not hold (through a tracked symlink, say) would plant here and in
+  # no commit.
+  if [ "$replay" = 0 ]; then
+    case "$(git -C "$wt" --literal-pathspecs ls-files --stage -- "$file" | cut -d' ' -f1)" in
+    100644 | 100755) ;;
+    *)
+      echo "seed '$id': $file is not a tracked regular file" >&2
+      exit 1
+      ;;
+    esac
+  fi
   n="$(grep -cF -- "$anchor" "$target" || true)"
   # Replaying into an older commit, an anchor that does not resolve yet means
   # the seed belongs to a later commit: skip it here.
@@ -322,16 +335,17 @@ FILTER
   # before the rewrite left it naming the unseeded head.
   rm -rf "$wt/.git/logs" "$wt/.git/ORIG_HEAD"
   wgit gc --quiet --prune=now
-  # An audit point naming a source commit off main's history was not
-  # rewritten, and gc has just removed what it named: the audit would read
-  # it as unreachable and rank nothing, without saying why.
+  # A recorded audit point is carried over only when it is a full sha on
+  # main's history; one naming a source commit off it, or abbreviated, was
+  # not rewritten, and gc has just removed what it named. The audit would
+  # then skip its ranking as if the source had recorded no usable point.
   while IFS= read -r marker; do
     point="$(wgit show "$marker:$audit_state" 2>/dev/null | sed -n 's/^LAST_AUDIT_SHA=//p' || true)"
     [ -n "$point" ] || continue
     if ! wgit cat-file -e "$point^{commit}" 2>/dev/null &&
       git -C "$repo_root" cat-file -e "$point^{commit}" 2>/dev/null; then
       echo "ERROR: the audit point in '$(wgit log -1 --format=%s "$marker")' names $point," \
-        "which is not on the planted history" >&2
+        "which the rewrite did not carry over: it is off main's history or abbreviated" >&2
       exit 1
     fi
   done < <(wgit log --format=%H main -- "$audit_state")
