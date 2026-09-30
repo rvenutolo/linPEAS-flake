@@ -520,8 +520,9 @@ function main() {
 
   # Scenario 3f-h: the same could-not-run treatment for the three
   # override-or-live fetches gated by require_json_payload. Each keeps
-  # every upstream override valid so the run reaches that fetch, and
-  # points only the override under test at an absent path.
+  # every override before it valid so the run reaches that fetch, the
+  # soft this-repo releases/latest lookup included, and points only the
+  # override under test at an absent path.
   run_scenario 'absent upstream-release payload is a tooling error' \
     'dashboard upstream release: payload from UPSTREAM_RELEASE_JSON_OVERRIDE not found' 2 \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
@@ -530,11 +531,13 @@ function main() {
     'payload from THIS_REPO_RELEASES_JSON_OVERRIDE not found' 2 \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
     "UPSTREAM_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-upstream-release.json" \
+    "LATEST_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-latest-release.json" \
     "THIS_REPO_RELEASES_JSON_OVERRIDE=${FIXTURES_DIR}/this-repo-releases-absent.json"
   run_scenario 'absent upstream-releases payload is a tooling error' \
     'payload from UPSTREAM_RELEASES_JSON_OVERRIDE not found' 2 \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
     "UPSTREAM_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-upstream-release.json" \
+    "LATEST_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-latest-release.json" \
     "THIS_REPO_RELEASES_JSON_OVERRIDE=${FIXTURES_DIR}/good-this-repo-releases.json" \
     "UPSTREAM_RELEASES_JSON_OVERRIDE=${FIXTURES_DIR}/upstream-releases-absent.json"
 
