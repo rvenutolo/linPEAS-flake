@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Exercises plant.sh end-to-end without running the audit.
+# Assertion strings and the helpers they call run through check()'s eval:
+# shellcheck disable=SC2016,SC2329
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,9 +20,12 @@ fi; }
 # shellcheck disable=SC2034 # read via check()'s eval of the assertion string below, not a direct expansion here
 primary_before="$(git -C "$here" status --porcelain --untracked-files=no)"
 
-# Clean slate, then plant.
+# Clean slate, then plant. The real repository's history is too long to
+# rewrite in a harness, and CI checks it out shallow, so these plants skip the
+# history rewrite and leave the seeds as edits; the rewrite is exercised on a
+# small repository built further down.
 "$plant" --clean >/dev/null 2>&1 || true
-"$plant" >/dev/null
+HISTORY_OVERRIDE=skip "$plant" >/dev/null
 
 wt="$(cat "$results/worktree-path.txt")"
 manifest="$results/manifest-resolved.json"
@@ -98,7 +103,7 @@ check "worktree removed after --clean" "[ ! -d '$wt' ]"
 # that quietly does not plant shrinks the recall denominator without saying so.
 bad_rc=0
 # shellcheck disable=SC2034 # read via check()'s eval of the assertion string below, not a direct expansion here
-bad_out="$(SEEDS_OVERRIDE="$here/fixtures/seeds-bad-anchor.json" "$plant" 2>&1)" ||
+bad_out="$(HISTORY_OVERRIDE=skip SEEDS_OVERRIDE="$here/fixtures/seeds-bad-anchor.json" "$plant" 2>&1)" ||
   bad_rc=$?
 check "unresolvable anchor fails the plant" "[ '$bad_rc' -ne 0 ]"
 check "unresolvable anchor names the miss" \
@@ -113,7 +118,7 @@ check "unresolvable anchor names the miss" \
 # replaces a from-string that also appears earlier on its line, outside the
 # anchor, and must edit the occurrence inside the anchor.
 "$plant" --clean >/dev/null 2>&1 || true
-SEEDS_OVERRIDE="$here/fixtures/seeds-also.json" "$plant" >/dev/null
+HISTORY_OVERRIDE=skip SEEDS_OVERRIDE="$here/fixtures/seeds-also.json" "$plant" >/dev/null
 wt="$(cat "$results/worktree-path.txt")"
 check "a two-file seed records both also locations" \
   "[ \"\$(jq '[.[] | select(.id == \"span\") | .also[]] | length' '$manifest')\" = 2 ]"
@@ -137,7 +142,7 @@ assert_planted "$here/fixtures/seeds-also.json"
 while IFS=$'\t' read -r fixture msg; do
   rc=0
   # shellcheck disable=SC2034 # read via check()'s eval of the assertion string below, not a direct expansion here
-  out="$(SEEDS_OVERRIDE="$here/fixtures/$fixture" "$plant" 2>&1)" || rc=$?
+  out="$(HISTORY_OVERRIDE=skip SEEDS_OVERRIDE="$here/fixtures/$fixture" "$plant" 2>&1)" || rc=$?
   check "$fixture fails the plant" "[ '$rc' -ne 0 ]"
   check "$fixture names its fault" "printf '%s' \"\$out\" | grep -qF '$msg'"
   "$plant" --clean >/dev/null 2>&1 || true
@@ -155,6 +160,251 @@ seeds-numeric-id.json	id is not a non-empty one-line string
 seeds-fractional-tol.json	line_tol is not an integer
 seeds-empty.json	no seeds
 seeds-newline-id.json	id is not a non-empty one-line string
+seeds-unnormalized-file.json	file is not a normalized repo-relative path
 EOF
+
+# The seeds are committed, not left as uncommitted edits, so `git status`
+# and `git diff` name none of them. Each seed lands in the commit that first
+# holds its anchor, so the planted history must match the source one commit
+# for commit — same subjects, identities, dates and touched paths, bar the
+# seed set's own — with blame on each seeded line naming the commit that
+# wrote its anchor, and the audit-point markers must still resolve. The real repository's
+# history is too long to rewrite in a harness, and CI checks it out
+# shallow, so the rewrite is exercised on a small repository built here.
+hist="$(mktemp -d)"
+src="$hist/src"
+git init --quiet --initial-branch=main "$src"
+hgit() { GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$src" -c user.name=Seed -c user.email=seed@example.invalid "$@"; }
+hcommit() {
+  hgit add --all
+  hgit commit --quiet --no-verify --no-gpg-sign --message "$1"
+}
+mkdir -p "$src/docs" "$src/scripts" "$src/.github"
+# This repo's own attributes: git normalises line endings on the way into
+# the object store, which a rewrite must not do to the bytes it replays.
+printf '* text=auto eol=lf\n' >"$src/.gitattributes"
+printf '# A\n\nAlpha anchor line.\n\nDelta v1 line.\n' >"$src/docs/a.md"
+printf '#!/usr/bin/env bash\n# Beta anchor\necho x\n' >"$src/scripts/x.sh"
+chmod +x "$src/scripts/x.sh"
+hcommit 'add alpha'
+printf 'other\n' >"$src/docs/other.md"
+# c[1].md starts as a byte-for-byte copy of a.md, whose seeded version
+# differs: a result cached per content alone would carry a.md's seed into
+# it. Its name is a glob that also matches the unseeded c1.md beside it.
+cp "$src/docs/a.md" "$src/docs/c[1].md"
+printf 'sibling\n' >"$src/docs/c1.md"
+# The seed set is committed too, as this repo commits seeds.json: its
+# anchors and payloads name every seed, so no planted commit may keep it. Its
+# name is a glob that also matches the unrelated seeds1.json beside it.
+mkdir -p "$src/evals"
+cp "$here/fixtures/seeds-history.json" "$src/evals/seeds[1].json"
+printf '{}\n' >"$src/evals/seeds1.json"
+hcommit 'add other'
+# A seeded file's version stored with CRLF endings and holding no anchor
+# must come through the rewrite byte for byte.
+printf 'Before twin.\r\n' >"$src/docs/c[1].md"
+hgit update-index --cacheinfo "100644,$(hgit hash-object -w --no-filters 'docs/c[1].md'),docs/c[1].md"
+hgit commit --quiet --no-verify --no-gpg-sign --message 'crlf twin'
+printf '# marker\nLAST_AUDIT_SHA=%s\n' "$(hgit rev-parse HEAD)" >"$src/.github/docs-audit-state"
+hcommit 'record the first audit point'
+printf '\nGamma late anchor.\n' >>"$src/docs/a.md"
+printf '\nTwin anchor.\n' >>"$src/docs/c[1].md"
+hcommit 'add gamma'
+jq --indent 4 . "$here/fixtures/seeds-history.json" >"$src/evals/seeds[1].json"
+hcommit 'reformat the seed set'
+# A replacement anchor twice on its line cannot be planted, so this commit
+# must go unseeded and the next, which leaves it once, must take the seed.
+sed -i 's/^Delta v1 line\.$/Delta v2 line. Delta v2 line./' "$src/docs/a.md"
+hcommit 'double delta'
+sed -i 's/^Delta v2 line\. Delta v2 line\.$/Delta v2 line./' "$src/docs/a.md"
+hcommit 'reword delta'
+hgit switch --quiet --create side
+printf 'b\n' >"$src/docs/b.md"
+hcommit 'add b on a side branch'
+hgit switch --quiet main
+printf 'more\n' >>"$src/docs/other.md"
+hcommit 'extend other'
+hgit merge --quiet --no-ff --no-gpg-sign --message 'merge side' side
+printf '# marker\nLAST_AUDIT_SHA=%s\n' "$(hgit rev-parse HEAD)" >"$src/.github/docs-audit-state"
+hcommit 'record the second audit point'
+printf 'tail\n' >>"$src/docs/other.md"
+hcommit 'extend other again'
+hgit tag v1
+hgit branch --quiet --delete --force side
+src_head="$(hgit rev-parse HEAD)"
+# shellcheck disable=SC2034 # read via check()'s eval of the assertion string below, not a direct expansion here
+src_refs_before="$(hgit for-each-ref)"
+
+"$plant" --clean >/dev/null 2>&1 || true
+hist_rc=0
+REPO_OVERRIDE="$src" SEEDS_OVERRIDE="$src/evals/seeds[1].json" \
+  "$plant" >/dev/null 2>&1 || hist_rc=$?
+check "planting a full history exits 0" "[ '$hist_rc' = 0 ]"
+wt="$(cat "$results/worktree-path.txt")"
+pgit() { git -C "$wt" "$@"; }
+assert_planted "$here/fixtures/seeds-history.json"
+check "planted tree has a clean status" '[ -z "$(pgit status --porcelain --untracked-files=all)" ]'
+check "planted tree is on branch main" '[ "$(pgit symbolic-ref --quiet --short HEAD)" = main ]'
+check "planted repo holds main as its only ref" \
+  "[ \"\$(pgit for-each-ref --format='%(refname)')\" = refs/heads/main ]"
+check "planted repo has no remote" '[ -z "$(pgit remote)" ]'
+check "planted branch tracks no upstream" '! pgit status | grep -qiE "origin|upstream"'
+check "planted repo has no reflog entries" '[ -z "$(pgit reflog list)" ]'
+check "planted repo has no ORIG_HEAD" '[ ! -e "$(pgit rev-parse --path-format=absolute --git-path ORIG_HEAD)" ]'
+# The rewrite's working files list every seeded path and hold seeded copies.
+check "planted repo keeps none of the rewrite's working files" \
+  '[ -z "$(find "$(pgit rev-parse --path-format=absolute --git-dir)" -maxdepth 1 -name "plant*")" ]'
+check "planted repo does not hold the source head" "! pgit cat-file -e '$src_head^{commit}' 2>/dev/null"
+# Commit for commit: the planted log must carry the source's subjects,
+# identities, dates, parent counts and touched paths. The touched paths are
+# what the collector counts a doc's rewrite pressure from, so a seed that
+# added a path to any commit would raise its file in the ranking.
+# The seed set's own path is left out, with the blank separator lines: the
+# planted history must not hold it, so a commit that touched nothing else
+# lists no path at all there.
+hist_shape() { git -C "$1" log --format='%s|%an|%ae|%at|%cn|%ce|%ct|%p' --name-only main |
+  grep -vxF -e 'evals/seeds[1].json' -e '' | awk -F'|' 'NF == 8 { $8 = split($8, p, " ") } 1'; }
+check "planted history matches the source commit for commit" \
+  "[ \"\$(hist_shape '$wt')\" = \"\$(hist_shape '$src')\" ]"
+blame_subject() {
+  pgit log -1 --format=%s "$(pgit blame --porcelain -L "$2,$2" -- "$1" | head -1 | cut -d' ' -f1)"
+}
+while IFS=$'\t' read -r sid sfile sline want; do
+  check "seed '$sid' blames to '$want'" "[ \"\$(blame_subject '$sfile' '$sline')\" = '$want' ]"
+done < <(
+  jq -r '.[] | [.id, .file, .line] + (
+    {early: ["add alpha"], late: ["add gamma"], reworded: ["reword delta"],
+      twin: ["add gamma"]}[.id])
+  | @tsv' "$manifest"
+  jq -r '.[] | select(.id == "early") | .also[0]
+  | ["early also", .file, .line, "add alpha"] | @tsv' "$manifest"
+)
+blob_at() { git -C "$1" rev-parse "$(git -C "$1" log --format=%H --grep="^$2\$" main):$3"; }
+check "an unseeded CRLF version keeps its bytes" \
+  "[ \"\$(blob_at '$wt' 'crlf twin' 'docs/c[1].md')\" = \"\$(blob_at '$src' 'crlf twin' 'docs/c[1].md')\" ]"
+check "no planted commit holds the seed set" \
+  '[ -z "$(pgit log --format= --name-only main -- ":(literal)evals/seeds[1].json")" ] && [ ! -e "$wt/evals/seeds[1].json" ]'
+check "a file the seed set's name also matches as a glob stays" '[ -e "$wt/evals/seeds1.json" ]'
+# No seed text reaches a file its edit does not name, in any commit.
+while IFS=$'\t' read -r pfile payload; do
+  check "'$payload' appears only in $pfile, in every commit" \
+    "[ \"\$(pgit grep -l -F -e '$payload' \$(pgit rev-list main) -- | cut -d: -f2- | sort -u)\" = '$pfile' ]"
+done < <(jq -r '.seeds[] | (., (.also // [])[]) | [.file, .payload] | @tsv' "$here/fixtures/seeds-history.json")
+# Each audit point must still name a commit in the planted history, and the
+# one standing where the source's did, or the priority set loses its base.
+# Markers pair up by position: the history-shape check above already holds
+# the two logs to the same order.
+recorded_subjects() {
+  git -C "$1" log --format=%H main -- .github/docs-audit-state | while IFS= read -r m; do
+    git -C "$1" log -1 --format=%s \
+      "$(git -C "$1" show "$m:.github/docs-audit-state" | sed -n 's/^LAST_AUDIT_SHA=//p')" \
+      2>/dev/null || echo UNRESOLVED
+  done
+}
+check "every audit point resolves to its source commit" \
+  "[ \"\$(recorded_subjects '$wt')\" = \"\$(recorded_subjects '$src')\" ] && ! recorded_subjects '$wt' | grep -qx UNRESOLVED"
+check "the source records two audit points" "[ \"\$(recorded_subjects '$src' | wc -l)\" = 2 ]"
+check "planting a full history changes no file mode" \
+  "[ \"\$(pgit ls-tree -r HEAD | cut -d' ' -f1 | sort | uniq -c)\" = \"\$(hgit ls-tree -r '$src_head' | grep -vF 'evals/seeds[1].json' | cut -d' ' -f1 | sort | uniq -c)\" ] && [ -x '$wt/scripts/x.sh' ]"
+check "planting a full history leaves the source refs alone" \
+  '[ "$(hgit for-each-ref)" = "$src_refs_before" ]'
+check "planting a full history leaves the source tree clean" '[ -z "$(hgit status --porcelain)" ]'
+"$plant" --clean >/dev/null
+
+# A shallow source has too little history to hide the seeds in: every one
+# would land in its only commit, so planting must refuse rather than plant.
+git clone --quiet --depth 1 "file://$src" "$hist/shallow"
+shallow_rc=0
+# shellcheck disable=SC2034 # read via check()'s eval of the assertion string below, not a direct expansion here
+shallow_out="$(REPO_OVERRIDE="$hist/shallow" SEEDS_OVERRIDE="$here/fixtures/seeds-history.json" \
+  "$plant" 2>&1)" || shallow_rc=$?
+check "a shallow source exits 2" "[ '$shallow_rc' = 2 ]"
+check "a shallow source names the cause" "printf '%s' \"\$shallow_out\" | grep -qF 'shallow'"
+
+# An audit point naming a commit that is not an ancestor of the planted head
+# cannot be carried over, and gc would leave it naming nothing: the audit
+# would then skip its ranking as if the source had recorded no usable point,
+# which the source did. Planting must fail, and must not leave the previous
+# plant's path behind for the audit loop to use.
+"$plant" --clean >/dev/null 2>&1 || true
+REPO_OVERRIDE="$src" SEEDS_OVERRIDE="$src/evals/seeds[1].json" "$plant" >/dev/null 2>&1 || true
+git clone --quiet "$src" "$hist/offmain"
+ogit() { GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$hist/offmain" -c user.name=Seed -c user.email=seed@example.invalid "$@"; }
+ogit switch --quiet --create unmerged
+printf 'unmerged\n' >"$hist/offmain/docs/other.md"
+ogit commit --quiet --all --no-verify --no-gpg-sign --message 'unmerged work'
+off_sha="$(ogit rev-parse HEAD)"
+ogit switch --quiet main
+printf '# marker\nLAST_AUDIT_SHA=%s\n' "$off_sha" >"$hist/offmain/.github/docs-audit-state"
+ogit commit --quiet --all --no-verify --no-gpg-sign --message 'record an off-main audit point'
+off_rc=0
+# shellcheck disable=SC2034 # read via check()'s eval of the assertion string below, not a direct expansion here
+off_out="$(REPO_OVERRIDE="$hist/offmain" SEEDS_OVERRIDE="$hist/offmain/evals/seeds[1].json" \
+  "$plant" 2>&1)" || off_rc=$?
+check "an audit point off the planted history fails the plant" "[ '$off_rc' = 1 ]"
+check "an audit point off the planted history is named" "printf '%s' \"\$off_out\" | grep -qF '$off_sha'"
+check "a failed plant leaves no planted path behind" "[ ! -e '$results/worktree-path.txt' ]"
+"$plant" --clean >/dev/null 2>&1 || true
+
+# A point the source cannot resolve either has nothing to carry over: it
+# stays as written, as the source has it, and does not fail the plant.
+git clone --quiet "$src" "$hist/unresolved"
+ugit() { GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$hist/unresolved" -c user.name=Seed -c user.email=seed@example.invalid "$@"; }
+printf '# marker\nLAST_AUDIT_SHA=%s\n' 0000000000000000000000000000000000000000 >"$hist/unresolved/.github/docs-audit-state"
+ugit commit --quiet --all --no-verify --no-gpg-sign --message 'record an unresolvable audit point'
+unres_rc=0
+REPO_OVERRIDE="$hist/unresolved" SEEDS_OVERRIDE="$hist/unresolved/evals/seeds[1].json" \
+  "$plant" >/dev/null 2>&1 || unres_rc=$?
+check "an audit point the source cannot resolve plants as written" \
+  "[ '$unres_rc' = 0 ] && grep -qx 'LAST_AUDIT_SHA=0000000000000000000000000000000000000000' \"\$(cat '$results/worktree-path.txt')/.github/docs-audit-state\""
+"$plant" --clean >/dev/null 2>&1 || true
+
+# A seed whose path runs through a tracked symlink plants on disk at HEAD,
+# but the index holds no such file, so the rewrite would commit nothing.
+# Planting must fail rather than record a seed no commit holds.
+git clone --quiet "$src" "$hist/linked"
+lgit() { GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$hist/linked" -c user.name=Seed -c user.email=seed@example.invalid "$@"; }
+ln -s docs "$hist/linked/linkdir"
+lgit add linkdir
+lgit commit --quiet --no-verify --no-gpg-sign --message 'link the docs directory'
+jq '.seeds[1].file = "linkdir/a.md" | .seeds = [.seeds[1]]' "$hist/linked/evals/seeds[1].json" >"$hist/linked-seeds.json"
+link_rc=0
+# shellcheck disable=SC2034 # read via check()'s eval of the assertion string below, not a direct expansion here
+link_out="$(REPO_OVERRIDE="$hist/linked" SEEDS_OVERRIDE="$hist/linked-seeds.json" "$plant" 2>&1)" || link_rc=$?
+check "a seed through a tracked symlink fails the plant" "[ '$link_rc' = 1 ]"
+check "a seed through a tracked symlink names its file" "printf '%s' \"\$link_out\" | grep -qF 'linkdir/a.md'"
+"$plant" --clean >/dev/null 2>&1 || true
+# A tracked symlink as the seed's own file is refused the same way.
+ln -s docs/a.md "$hist/linked/linkfile.md"
+lgit add linkfile.md
+lgit commit --quiet --no-verify --no-gpg-sign --message 'link a doc'
+jq '.seeds[0].file = "linkfile.md"' "$hist/linked-seeds.json" >"$hist/linkfile-seeds.json"
+linkf_rc=0
+# shellcheck disable=SC2034 # read via check()'s eval of the assertion string below, not a direct expansion here
+linkf_out="$(REPO_OVERRIDE="$hist/linked" SEEDS_OVERRIDE="$hist/linkfile-seeds.json" "$plant" 2>&1)" || linkf_rc=$?
+check "a seed on a tracked symlink fails the plant" \
+  "[ '$linkf_rc' = 1 ] && printf '%s' \"\$linkf_out\" | grep -qF 'linkfile.md'"
+"$plant" --clean >/dev/null 2>&1 || true
+
+# Every branch of the normalized-path rule, each on its own seed set.
+while IFS= read -r badpath; do
+  jq --arg f "$badpath" '.seeds[0].file = $f' "$here/fixtures/seeds-unnormalized-file.json" >"$hist/badpath.json"
+  bp_rc=0
+  # shellcheck disable=SC2034 # read via check()'s eval of the assertion string below, not a direct expansion here
+  bp_out="$(HISTORY_OVERRIDE=skip SEEDS_OVERRIDE="$hist/badpath.json" "$plant" 2>&1)" || bp_rc=$?
+  check "seed file '$badpath' is refused as not normalized" \
+    "[ '$bp_rc' = 1 ] && printf '%s' \"\$bp_out\" | grep -qF 'file is not a normalized repo-relative path'"
+  "$plant" --clean >/dev/null 2>&1 || true
+done <<'EOF_PATHS'
+
+/docs/index.md
+docs/
+docs//index.md
+docs/./index.md
+docs/../docs/index.md
+../docs/index.md
+EOF_PATHS
+"$plant" --clean >/dev/null 2>&1 || true
+rm -rf "$hist"
 
 exit "$fail"
