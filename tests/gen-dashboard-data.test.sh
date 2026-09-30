@@ -18,17 +18,25 @@
 #
 # Each scenario sets an *_OVERRIDE for every lookup the script reaches
 # before its asserted outcome, except the one scenario that exercises a
-# failing `gh`, which puts its own shim first on PATH instead. Behind both sits a tripwire `gh` for the whole run:
-# a `gh` call from any scenario that inherits the harness PATH reaches
-# the tripwire instead of the real gh, and the run fails on any call it
-# logged, even when the scenario's own verdict came out right — a soft
-# lookup absorbs the tripwire's exit 97 as a degraded lookup. A scenario
-# that builds its own PATH (env -i, or a literal PATH=) bypasses the
-# tripwire, and nothing in the automated run catches it.
-# The harness passes with the network blocked, checked by hand with
-# `unshare --user --map-current-user --net`. Under that block an escaping
-# soft lookup only logs a WARN and an escaping required lookup exits 2,
-# so neither fails a scenario that expects exit 2.
+# failing `gh`, which puts its own shim first on PATH instead. Behind
+# both sits a tripwire `gh` for the whole run: a `gh` call from any other
+# scenario whose PATH still holds the harness PATH reaches the tripwire
+# instead of the real gh, and the run fails on any call it logged.
+#
+# A soft lookup that escapes absorbs the tripwire's exit 97 as a
+# degraded lookup, logs a WARN, and leaves the scenario's own verdict
+# unchanged, so only the log check catches it. A
+# required lookup that escapes exits 2 with "could not fetch …", which
+# fails the scenario's own exit or stderr assertion in every scenario but
+# the failing-`gh` one, where the log check catches it instead.
+#
+# A scenario whose PATH drops the harness PATH (env -i, or a PATH= that
+# does not extend it) bypasses the tripwire, and nothing in the automated
+# run catches a soft lookup that escapes there. The harness passes with
+# the network blocked, checked by hand with
+# `unshare --user --map-current-user --net`; under that block an escaping
+# soft lookup degrades the same way, so the block alone does not catch it
+# either.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -64,7 +72,7 @@ function install_gh_tripwire() {
   printf '#!/usr/bin/env bash\nlog=%q\n' "${TRIPWIRE_LOG}" >"${TRIPWIRE_DIR}/gh"
   cat >>"${TRIPWIRE_DIR}/gh" <<'TRIPWIRE'
 printf '%s\n' "$*" >>"${log}"
-printf 'real gh reached outside the overrides: %s\n' "$*" >&2
+printf 'gh called outside the overrides: %s\n' "$*" >&2
 exit 97
 TRIPWIRE
   chmod +x -- "${TRIPWIRE_DIR}/gh"
@@ -76,7 +84,7 @@ TRIPWIRE
 # @noargs
 function check_gh_tripwire() {
   if [[ -s ${TRIPWIRE_LOG} ]]; then
-    printf 'FAIL: a scenario reached gh outside the overrides; calls that reached the tripwire:\n' >&2
+    printf 'FAIL: a scenario called gh outside the overrides; calls that reached the tripwire:\n' >&2
     sed 's/^/  gh /' -- "${TRIPWIRE_LOG}" >&2
     fail_count=$((fail_count + 1))
   fi
