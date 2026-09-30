@@ -194,9 +194,11 @@ printf 'other\n' >"$src/docs/other.md"
 cp "$src/docs/a.md" "$src/docs/c[1].md"
 printf 'sibling\n' >"$src/docs/c1.md"
 # The seed set is committed too, as this repo commits seeds.json: its
-# anchors and payloads name every seed, so no planted commit may keep it.
+# anchors and payloads name every seed, so no planted commit may keep it. Its
+# name is a glob that also matches the unrelated seeds1.json beside it.
 mkdir -p "$src/evals"
-cp "$here/fixtures/seeds-history.json" "$src/evals/seeds.json"
+cp "$here/fixtures/seeds-history.json" "$src/evals/seeds[1].json"
+printf '{}\n' >"$src/evals/seeds1.json"
 hcommit 'add other'
 # A seeded file's version stored with CRLF endings and holding no anchor
 # must come through the rewrite byte for byte.
@@ -208,7 +210,7 @@ hcommit 'record the first audit point'
 printf '\nGamma late anchor.\n' >>"$src/docs/a.md"
 printf '\nTwin anchor.\n' >>"$src/docs/c[1].md"
 hcommit 'add gamma'
-jq --indent 4 . "$here/fixtures/seeds-history.json" >"$src/evals/seeds.json"
+jq --indent 4 . "$here/fixtures/seeds-history.json" >"$src/evals/seeds[1].json"
 hcommit 'reformat the seed set'
 # A replacement anchor twice on its line cannot be planted, so this commit
 # must go unseeded and the next, which leaves it once, must take the seed.
@@ -235,7 +237,7 @@ src_refs_before="$(hgit for-each-ref)"
 
 "$plant" --clean >/dev/null 2>&1 || true
 hist_rc=0
-REPO_OVERRIDE="$src" SEEDS_OVERRIDE="$src/evals/seeds.json" \
+REPO_OVERRIDE="$src" SEEDS_OVERRIDE="$src/evals/seeds[1].json" \
   "$plant" >/dev/null 2>&1 || hist_rc=$?
 check "planting a full history exits 0" "[ '$hist_rc' = 0 ]"
 wt="$(cat "$results/worktree-path.txt")"
@@ -258,7 +260,7 @@ check "planted repo does not hold the source head" "! pgit cat-file -e '$src_hea
 # planted history must not hold it, so a commit that touched nothing else
 # lists no path at all there.
 hist_shape() { git -C "$1" log --format='%s|%an|%ae|%at|%cn|%ce|%ct|%p' --name-only main |
-  grep -vxF -e evals/seeds.json -e '' | awk -F'|' 'NF == 8 { $8 = split($8, p, " ") } 1'; }
+  grep -vxF -e 'evals/seeds[1].json' -e '' | awk -F'|' 'NF == 8 { $8 = split($8, p, " ") } 1'; }
 check "planted history matches the source commit for commit" \
   "[ \"\$(hist_shape '$wt')\" = \"\$(hist_shape '$src')\" ]"
 blame_subject() {
@@ -278,7 +280,8 @@ blob_at() { git -C "$1" rev-parse "$(git -C "$1" log --format=%H --grep="^$2\$" 
 check "an unseeded CRLF version keeps its bytes" \
   "[ \"\$(blob_at '$wt' 'crlf twin' 'docs/c[1].md')\" = \"\$(blob_at '$src' 'crlf twin' 'docs/c[1].md')\" ]"
 check "no planted commit holds the seed set" \
-  '[ -z "$(pgit log --format= --name-only main -- evals/seeds.json)" ] && [ ! -e "$wt/evals/seeds.json" ]'
+  '[ -z "$(pgit log --format= --name-only main -- ":(literal)evals/seeds[1].json")" ] && [ ! -e "$wt/evals/seeds[1].json" ]'
+check "a file the seed set's name also matches as a glob stays" '[ -e "$wt/evals/seeds1.json" ]'
 # No seed text reaches a file its edit does not name, in any commit.
 while IFS=$'\t' read -r pfile payload; do
   check "'$payload' appears only in $pfile, in every commit" \
@@ -299,7 +302,7 @@ check "every audit point resolves to its source commit" \
   "[ \"\$(recorded_subjects '$wt')\" = \"\$(recorded_subjects '$src')\" ] && ! recorded_subjects '$wt' | grep -qx UNRESOLVED"
 check "the source records two audit points" "[ \"\$(recorded_subjects '$src' | wc -l)\" = 2 ]"
 check "planting a full history changes no file mode" \
-  "[ \"\$(pgit ls-tree -r HEAD | cut -d' ' -f1 | sort | uniq -c)\" = \"\$(hgit ls-tree -r '$src_head' | grep -vF evals/seeds.json | cut -d' ' -f1 | sort | uniq -c)\" ] && [ -x '$wt/scripts/x.sh' ]"
+  "[ \"\$(pgit ls-tree -r HEAD | cut -d' ' -f1 | sort | uniq -c)\" = \"\$(hgit ls-tree -r '$src_head' | grep -vF 'evals/seeds[1].json' | cut -d' ' -f1 | sort | uniq -c)\" ] && [ -x '$wt/scripts/x.sh' ]"
 check "planting a full history leaves the source refs alone" \
   '[ "$(hgit for-each-ref)" = "$src_refs_before" ]'
 check "planting a full history leaves the source tree clean" '[ -z "$(hgit status --porcelain)" ]'
