@@ -6,6 +6,18 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20260930-df86658b] - 2026-09-30
+
+### Chores
+- Bump linpeas to 20260930-df86658b ([#1193](https://github.com/rvenutolo/linPEAS-flake/pull/1193))
+
+### Features
+- Judge fix-pass verdicts per list item, not per blank-line block ([#1188](https://github.com/rvenutolo/linPEAS-flake/pull/1188))
+
+### Fixes
+- Stop gen-dashboard-data scenarios calling the real gh ([#1192](https://github.com/rvenutolo/linPEAS-flake/pull/1192))
+- Stub gh in every pin-digest-provenance scenario, trip on escapes ([#1190](https://github.com/rvenutolo/linPEAS-flake/pull/1190))
+
 ## [20260929-8276191d] - 2026-09-29
 
 ### Chores
