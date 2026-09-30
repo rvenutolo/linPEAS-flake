@@ -1,0 +1,49 @@
+{
+  "seeds": [
+    {
+      "id": "early",
+      "category": "anchor present since the first commit",
+      "file": "docs/a.md",
+      "anchor": "Alpha anchor line.",
+      "op": "insert-after",
+      "from": "",
+      "payload": "zzq7 early seed",
+      "expected_severity": "high",
+      "sentinel": "",
+      "line_tol": 3,
+      "also": [
+        {
+          "file": "scripts/x.sh",
+          "anchor": "# Beta anchor",
+          "op": "replace-substr",
+          "from": "Beta",
+          "payload": "zzq7-beta"
+        }
+      ]
+    },
+    {
+      "id": "late",
+      "category": "anchor added after the first audit point",
+      "file": "docs/a.md",
+      "anchor": "Gamma late anchor.",
+      "op": "insert-after",
+      "from": "",
+      "payload": "zzq7 late seed",
+      "expected_severity": "high",
+      "sentinel": "",
+      "line_tol": 3
+    },
+    {
+      "id": "reworded",
+      "category": "replacement on a line a later commit rewrote",
+      "file": "docs/a.md",
+      "anchor": "Delta v2 line.",
+      "op": "replace-substr",
+      "from": "v2",
+      "payload": "zzq7",
+      "expected_severity": "high",
+      "sentinel": "",
+      "line_tol": 3
+    }
+  ]
+}
