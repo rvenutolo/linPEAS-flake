@@ -151,7 +151,8 @@ fi
 # once per commit. Every seeded file in that commit's index is replaced by the
 # same content with each of its edits that resolves there applied, so a seed
 # enters history at the first commit holding its anchor. Results are cached
-# per file version, since most commits leave the seeded files alone.
+# per file version, since most commits leave the seeded files alone. The seed
+# set itself is dropped from every commit: it names every anchor and payload.
 if [ "${1:-}" = "--replay-index" ]; then
   replay=1
   root="$PLANT_DIR/replay"
@@ -172,6 +173,9 @@ if [ "${1:-}" = "--replay-index" ]; then
     new="$(cat "$key")"
     [ "$new" = "$blob" ] || git update-index --cacheinfo "$mode,$new,$f"
   done < <(git --literal-pathspecs ls-files --stage -z -- "${files[@]}")
+  if [ -n "$PLANT_STRIP" ]; then
+    git --literal-pathspecs rm --cached --quiet --ignore-unmatch -- "$PLANT_STRIP"
+  fi
   exit 0
 fi
 
@@ -271,6 +275,15 @@ if [ "$history" != skip ]; then
   plant_dir="$wt/.git/plant"
   mkdir -p "$plant_dir/cache"
   jq -r '[.seeds[] | (., (.also // [])[]) | .file] | unique[]' "$seeds" >"$plant_dir/files"
+  # The seed set's path inside the planted repo, when it lives there: this
+  # repo commits seeds.json, and a reader who searches the tree finds every
+  # seed in it. The plant reads it from the source checkout, not the clone.
+  seeds_abs="$(realpath -- "$seeds")"
+  root_abs="$(realpath -- "$repo_root")"
+  case "$seeds_abs" in
+  "$root_abs"/*) strip="${seeds_abs#"$root_abs"/}" ;;
+  *) strip="" ;;
+  esac
   cat >"$plant_dir/audit-point.sh" <<'FILTER'
 plant_old="$(git cat-file blob ":$PLANT_AUDIT_STATE" 2>/dev/null | sed -n 's/^LAST_AUDIT_SHA=//p' | head -n 1)"
 if [ -n "$plant_old" ] && git cat-file -e "$plant_old^{commit}" 2>/dev/null; then
@@ -286,7 +299,7 @@ FILTER
   if ! (
     unset BASH_ENV
     export PLANT_DIR="$plant_dir" PLANT_AUDIT_STATE="$audit_state" SEEDS_OVERRIDE="$seeds"
-    export FILTER_BRANCH_SQUELCH_WARNING=1 PLANT_SELF="$here/plant.sh"
+    export FILTER_BRANCH_SQUELCH_WARNING=1 PLANT_SELF="$here/plant.sh" PLANT_STRIP="$strip"
     # shellcheck disable=SC2016 # filter-branch evals the filter; it expands there
     wgit filter-branch -d "$wt/.git/plant-rewrite" \
       --index-filter '"$PLANT_SELF" --replay-index && . "$PLANT_DIR/audit-point.sh"' -- main

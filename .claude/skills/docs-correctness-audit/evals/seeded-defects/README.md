@@ -238,6 +238,16 @@ What stays visible:
 - Every rewritten commit is unsigned, and a commit sha quoted in tracked text
     (this README's measurement base among them) names nothing in the clone.
     These say the history was rewritten, not where the seeds are.
+- `seeds.json` is dropped from every planted commit: it holds every anchor
+    and payload, and the first audit over committed seeds found them through
+    it, since the controller's own searches and the twin sweep the skill
+    requires both read it. So the harness docs name a `seeds.json` the
+    planted tree lacks. This README stays, and it still names each seed's
+    file and section and quotes several payloads; the `claude-tooling`
+    reader audits it as a tracked `.claude/` file, and dropping it would lose
+    that coverage and break the links to it. A report that reaches a seed
+    through this README, rather than through the doc the seed sits in, marks
+    that hit as unearned.
 
 ## Last measurement
 
