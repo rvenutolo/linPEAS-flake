@@ -185,12 +185,20 @@ printf '#!/usr/bin/env bash\n# Beta anchor\necho x\n' >"$src/scripts/x.sh"
 chmod +x "$src/scripts/x.sh"
 hcommit 'add alpha'
 printf 'other\n' >"$src/docs/other.md"
+# c.md starts as a byte-for-byte copy of a.md, whose seeded version differs:
+# a result cached per content alone would carry a.md's seed into c.md.
+cp "$src/docs/a.md" "$src/docs/c.md"
 hcommit 'add other'
 printf '# marker\nLAST_AUDIT_SHA=%s\n' "$(hgit rev-parse HEAD)" >"$src/.github/docs-audit-state"
 hcommit 'record the first audit point'
 printf '\nGamma late anchor.\n' >>"$src/docs/a.md"
+printf '\nTwin anchor.\n' >>"$src/docs/c.md"
 hcommit 'add gamma'
-sed -i 's/Delta v1 line\./Delta v2 line./' "$src/docs/a.md"
+# A replacement anchor twice on its line cannot be planted, so this commit
+# must go unseeded and the next, which leaves it once, must take the seed.
+sed -i 's/^Delta v1 line\.$/Delta v2 line. Delta v2 line./' "$src/docs/a.md"
+hcommit 'double delta'
+sed -i 's/^Delta v2 line\. Delta v2 line\.$/Delta v2 line./' "$src/docs/a.md"
 hcommit 'reword delta'
 hgit switch --quiet --create side
 printf 'b\n' >"$src/docs/b.md"
@@ -240,11 +248,17 @@ while IFS=$'\t' read -r sid sfile sline want; do
   check "seed '$sid' blames to '$want'" "[ \"\$(blame_subject '$sfile' '$sline')\" = '$want' ]"
 done < <(
   jq -r '.[] | [.id, .file, .line] + (
-    {early: ["add alpha"], late: ["add gamma"], reworded: ["reword delta"]}[.id])
+    {early: ["add alpha"], late: ["add gamma"], reworded: ["reword delta"],
+      twin: ["add gamma"]}[.id])
   | @tsv' "$manifest"
   jq -r '.[] | select(.id == "early") | .also[0]
   | ["early also", .file, .line, "add alpha"] | @tsv' "$manifest"
 )
+# No seed text reaches a file its edit does not name, in any commit.
+while IFS=$'\t' read -r pfile payload; do
+  check "'$payload' appears only in $pfile, in every commit" \
+    "[ \"\$(pgit grep -l -F -e '$payload' \$(pgit rev-list main) -- | cut -d: -f2- | sort -u)\" = '$pfile' ]"
+done < <(jq -r '.seeds[] | (., (.also // [])[]) | [.file, .payload] | @tsv' "$here/fixtures/seeds-history.json")
 # Each audit point must still name a commit in the planted history, and the
 # one standing where the source's did, or the priority set loses its base.
 # Markers pair up by position: the history-shape check above already holds
