@@ -19,24 +19,26 @@
 # Each scenario sets an *_OVERRIDE for every lookup the script reaches
 # before its asserted outcome, except the one scenario that exercises a
 # failing `gh`, which puts its own shim first on PATH instead. Behind
-# both sits a tripwire `gh` for the whole run: a `gh` call from any other
-# scenario whose PATH still holds the harness PATH reaches the tripwire
-# instead of the real gh, and the run fails on any call it logged.
+# both sits a tripwire `gh` for the whole run, and the run fails on any
+# call it logged. A `gh` call reaches it from any scenario where it is
+# the first `gh` on PATH: every scenario but the failing-`gh` one.
 #
-# A soft lookup that escapes absorbs the tripwire's exit 97 as a
-# degraded lookup, logs a WARN, and leaves the scenario's own verdict
-# unchanged, so only the log check catches it. A
-# required lookup that escapes exits 2 with "could not fetch …", which
-# fails the scenario's own exit or stderr assertion in every scenario but
-# the failing-`gh` one, where the log check catches it instead.
+# A required lookup that escapes its override exits 2 with "could not
+# fetch …", which the scenario's own exit or stderr assertion already
+# fails on. A soft lookup that escapes absorbs the tripwire's exit 97 as
+# a degraded lookup, logs a WARN and leaves the scenario's verdict
+# unchanged, so only the log check catches it. The log check also
+# catches the failing-`gh` scenario losing its shim, since the exit 2
+# the tripwire then causes is that scenario's expected outcome.
 #
-# A scenario whose PATH drops the harness PATH (env -i, or a PATH= that
-# does not extend it) bypasses the tripwire, and nothing in the automated
-# run catches a soft lookup that escapes there. The harness passes with
-# the network blocked, checked by hand with
-# `unshare --user --map-current-user --net`; under that block an escaping
-# soft lookup degrades the same way, so the block alone does not catch it
-# either.
+# Where another `gh` comes first on PATH, nothing in the automated run
+# catches a soft lookup that escapes: in the failing-`gh` scenario its
+# shim answers the call, and a scenario that builds a PATH finding a
+# real `gh` first reaches the network. The harness passes with the
+# network blocked, checked by hand with
+# `unshare --user --map-current-user --net`; under that block an
+# escaping soft lookup degrades the same way, so the block alone does
+# not catch it either.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
