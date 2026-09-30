@@ -48,7 +48,7 @@
     {
       "id": "twin",
       "category": "seeded file that starts as a copy of another",
-      "file": "docs/c.md",
+      "file": "docs/c[1].md",
       "anchor": "Twin anchor.",
       "op": "insert-after",
       "from": "",

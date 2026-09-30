@@ -180,19 +180,29 @@ hcommit() {
   hgit commit --quiet --no-verify --no-gpg-sign --message "$1"
 }
 mkdir -p "$src/docs" "$src/scripts" "$src/.github"
+# This repo's own attributes: git normalises line endings on the way into
+# the object store, which a rewrite must not do to the bytes it replays.
+printf '* text=auto eol=lf\n' >"$src/.gitattributes"
 printf '# A\n\nAlpha anchor line.\n\nDelta v1 line.\n' >"$src/docs/a.md"
 printf '#!/usr/bin/env bash\n# Beta anchor\necho x\n' >"$src/scripts/x.sh"
 chmod +x "$src/scripts/x.sh"
 hcommit 'add alpha'
 printf 'other\n' >"$src/docs/other.md"
-# c.md starts as a byte-for-byte copy of a.md, whose seeded version differs:
-# a result cached per content alone would carry a.md's seed into c.md.
-cp "$src/docs/a.md" "$src/docs/c.md"
+# c[1].md starts as a byte-for-byte copy of a.md, whose seeded version
+# differs: a result cached per content alone would carry a.md's seed into
+# it. Its name is a glob that also matches the unseeded c1.md beside it.
+cp "$src/docs/a.md" "$src/docs/c[1].md"
+printf 'sibling\n' >"$src/docs/c1.md"
 hcommit 'add other'
+# A seeded file's version stored with CRLF endings and holding no anchor
+# must come through the rewrite byte for byte.
+printf 'Before twin.\r\n' >"$src/docs/c[1].md"
+hgit update-index --cacheinfo "100644,$(hgit hash-object -w --no-filters 'docs/c[1].md'),docs/c[1].md"
+hgit commit --quiet --no-verify --no-gpg-sign --message 'crlf twin'
 printf '# marker\nLAST_AUDIT_SHA=%s\n' "$(hgit rev-parse HEAD)" >"$src/.github/docs-audit-state"
 hcommit 'record the first audit point'
 printf '\nGamma late anchor.\n' >>"$src/docs/a.md"
-printf '\nTwin anchor.\n' >>"$src/docs/c.md"
+printf '\nTwin anchor.\n' >>"$src/docs/c[1].md"
 hcommit 'add gamma'
 # A replacement anchor twice on its line cannot be planted, so this commit
 # must go unseeded and the next, which leaves it once, must take the seed.
@@ -254,6 +264,9 @@ done < <(
   jq -r '.[] | select(.id == "early") | .also[0]
   | ["early also", .file, .line, "add alpha"] | @tsv' "$manifest"
 )
+blob_at() { git -C "$1" rev-parse "$(git -C "$1" log --format=%H --grep="^$2\$" main):$3"; }
+check "an unseeded CRLF version keeps its bytes" \
+  "[ \"\$(blob_at '$wt' 'crlf twin' 'docs/c[1].md')\" = \"\$(blob_at '$src' 'crlf twin' 'docs/c[1].md')\" ]"
 # No seed text reaches a file its edit does not name, in any commit.
 while IFS=$'\t' read -r pfile payload; do
   check "'$payload' appears only in $pfile, in every commit" \
