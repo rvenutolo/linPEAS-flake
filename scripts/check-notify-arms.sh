@@ -187,10 +187,19 @@ function notify_jobs() {
 #              before its first notify step, `-` for a `run:` step.
 # @arg $1 workflow path
 # @arg $2 job id
+# @exitcode yq's status when it fails
 function steps_before_notify() {
-  JOB="$2" yq -r '
+  # yq's whole output is read before the cut: a reader that stops at the
+  # notify step while yq is still writing the steps after it gets yq
+  # killed by SIGPIPE, which pipefail turns into a failed read.
+  local uses step
+  uses="$(JOB="$2" yq -r '
     .jobs[strenv(JOB)].steps // [] | .[] | (.uses // "-") | tostring
-  ' "$1" | awk '/notify-workflow-result/ { exit } { print }'
+  ' "$1")" || return
+  while IFS= read -r step; do
+    [[ ${step} == *notify-workflow-result* ]] && break
+    printf '%s\n' "${step}"
+  done <<<"${uses}"
 }
 
 # @description Print the events a workflow runs on, one per line: its
@@ -683,7 +692,7 @@ function main() {
         # checkout, whose failure is not an arm the prose describes.
         local prior
         prior="$(steps_before_notify "${wf}" "${job}")" ||
-          die2 "cannot read the steps of ${WORKFLOWS_REL}/${base} job ${job}"
+          die2 "cannot read the steps of ${WORKFLOWS_REL}/${base} job ${job}: yq exited $?"
         while IFS= read -r step; do
           [[ -n ${step} ]] || continue
           [[ ${step} == step-security/harden-runner@* || ${step} == actions/checkout@* ]] && continue
