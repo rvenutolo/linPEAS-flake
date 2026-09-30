@@ -5,6 +5,10 @@
 # Drives the check off fixture directory trees via BASE_DIR_OVERRIDE /
 # HEAD_DIR_OVERRIDE; the gh CLI is replaced by a PATH stub whose
 # behavior is selected with GH_STUB_MODE, so no network is touched.
+# Behind the stub sits a tripwire `gh` for the whole run: a scenario that
+# forgets the stub reaches the tripwire instead of the real gh, and the
+# run fails on any call it logged, even when the scenario's own verdict
+# came out right.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -17,6 +21,37 @@ readonly SCRIPT="${REPO_ROOT}/scripts/check-pin-digest-provenance.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-pin-digest-provenance"
 
 failures=0
+
+tripwire_dir="$(mktemp --directory)"
+readonly TRIPWIRE_DIR="${tripwire_dir}"
+readonly TRIPWIRE_LOG="${TRIPWIRE_DIR}/calls.log"
+trap 'rm --recursive --force -- "${TRIPWIRE_DIR}"' EXIT
+
+# Installs the tripwire `gh` ahead of the real one on PATH. Every stubbed
+# invocation prepends ${FIXTURES}/bin, so the stub still wins there; only
+# an invocation without the stub reaches this one. The log path is baked
+# into the tripwire so a scenario that rewrites its environment cannot
+# lose it.
+function install_gh_tripwire() {
+  : >"${TRIPWIRE_LOG}"
+  printf '#!/usr/bin/env bash\nlog=%q\n' "${TRIPWIRE_LOG}" >"${TRIPWIRE_DIR}/gh"
+  cat >>"${TRIPWIRE_DIR}/gh" <<'TRIPWIRE'
+printf '%s\n' "$*" >>"${log}"
+printf 'real gh reached outside the stub: %s\n' "$*" >&2
+exit 97
+TRIPWIRE
+  chmod +x -- "${TRIPWIRE_DIR}/gh"
+  PATH="${TRIPWIRE_DIR}:${PATH}"
+}
+
+# Fails the run when any scenario reached the tripwire, naming each call.
+function check_gh_tripwire() {
+  if [[ -s ${TRIPWIRE_LOG} ]]; then
+    printf 'FAIL: a scenario ran the script without the gh stub; calls that reached the tripwire:\n' >&2
+    sed 's/^/  gh /' -- "${TRIPWIRE_LOG}" >&2
+    failures=$((failures + 1))
+  fi
+}
 
 # @arg $1 scenario name
 # @arg $2 head fixture dir basename
@@ -284,6 +319,7 @@ YAML
 }
 
 function main() {
+  install_gh_tripwire
   # Each passing scenario asserts the count-bearing pass banner its own
   # fixture produces. The counts are what make a pass scenario
   # self-identifying: the fixtures carry deliberately distinct pin and
@@ -345,12 +381,17 @@ function main() {
   run_scenario 'floating repoint compare-API 404 fails as violation, not exit 2' \
     'head-floating-repoint' compare-not-found 1 \
     'compare API reports no such commit'
+  # A mistyped GH_STUB_MODE must be refused by the stub, not answered with
+  # an empty success that the script then reads as a real API response.
+  run_scenario 'unknown stub mode is refused by the stub' \
+    'head-semver-repoint' no-such-mode 2 'unknown GH_STUB_MODE: no-such-mode'
   run_git_mode_scenario 'git BASE_REF mode: zero-level composite action repoint fails' 1 \
     'digest repointed under unchanged version: actions/setup-node (v4.0.0): 1111111111111111111111111111111111111111 -> 3333333333333333333333333333333333333333'
   run_git_ls_tree_failure_scenario
   run_unreadable_base_scenario
   run_directory_base_scenario
   harness_assert_verify || failures=$((failures + 1))
+  check_gh_tripwire
 
   if ((failures > 0)); then
     printf '\n%d test(s) failed\n' "${failures}" >&2
