@@ -5,14 +5,17 @@
 # Drives the check off fixture directory trees via BASE_DIR_OVERRIDE /
 # HEAD_DIR_OVERRIDE; the gh CLI is replaced by a PATH stub whose
 # behavior is selected with GH_STUB_MODE, so no network is touched.
-# Behind the stub sits a tripwire `gh` for the whole run: a scenario that
-# forgets the stub but inherits the harness PATH reaches the tripwire
-# instead of the real gh, and the run fails on any call it logged, even
-# when the scenario's own verdict came out right. A scenario that builds
-# its own PATH (env -i, or a literal PATH=) bypasses the tripwire; only
-# the network block below would catch it. The harness passes with the network blocked, checked
-# with `unshare --user --map-current-user --net` (not --map-root-user,
-# which runs it as root and skips the unreadable-base scenario).
+# Behind the stub sits a tripwire `gh` for the whole run: a scenario
+# that forgets the stub but inherits the harness PATH reaches the
+# tripwire instead of the real gh, and the run fails on any call it
+# logged, even when the scenario's own verdict came out right. A
+# scenario that builds its own PATH (env -i, or a literal PATH=)
+# bypasses the tripwire, and nothing in the automated run catches it.
+# The harness passes with the network blocked, checked by hand with
+# `unshare --user --map-current-user --net` (not --map-root-user, which
+# runs it as root and skips the unreadable-base scenario). Under that
+# block an escaping call becomes an exit 2, which fails any scenario
+# not expecting one.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
