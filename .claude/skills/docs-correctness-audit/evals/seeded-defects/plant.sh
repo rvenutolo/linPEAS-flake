@@ -2,8 +2,9 @@
 # Plant one defect per category into a disposable clone of the repo so the
 # docs-correctness-audit skill's recall can be measured. The seeds are
 # committed into a rewrite of the clone's whole history, each in the commit
-# that first holds its anchor, so neither `git status` nor any diff the
-# audit reads points a reader at them.
+# that first holds its anchor, so `git status` names none of them and no
+# commit exists only to carry them. What stays visible is listed in the
+# README, under "A confound to keep in view".
 # Usage: plant.sh           build the planted clone
 #        plant.sh --clean   remove it
 set -euo pipefail
@@ -243,8 +244,8 @@ if [ "$history" != skip ] && [ "$(git -C "$repo_root" rev-parse --is-shallow-rep
 fi
 # A clone, not a worktree: a worktree shares the primary's refs, so a diff
 # against its branch from inside the planted tree would show every seed. The
-# clone keeps main alone, on the commit under test, with no remote, tag or
-# other branch pointing back at the unseeded history.
+# clone keeps main alone, on the commit under test (rewritten, below), with
+# no remote, tag or other branch pointing back at the unseeded history.
 git clone --quiet --no-hardlinks --no-checkout "$repo_root" "$wt"
 wgit() { git -C "$wt" "$@"; }
 wgit checkout --quiet -B main "$head"

@@ -28,11 +28,14 @@ below.
     `main` branch at HEAD — the tracked skill comes with it, so nothing is
     copied — applies all seeds and writes `results/manifest-resolved.json`.
     It then rewrites the clone's whole history to commit the seeds, which
-    takes a few minutes (see "A third confound" below for why), and last
+    takes a few minutes (why the seeds are committed: "A third confound"
+    below), and last
     writes `results/worktree-path.txt`, the clone's path. The rewrite needs the full history, so
-    planting from a shallow clone is refused with exit 2. Leave the checkout alone
-    while it runs: planting compares its status before and after, and any
-    edit in between fails the plant.
+    planting from a shallow clone is refused with exit 2. Leave the checkout
+    alone while it runs: the rewrite re-reads `seeds.json` and re-runs
+    `plant.sh` from it for every commit, and the check that fails a plant
+    whose checkout changed compares tracked-file status only, so a second
+    edit to a file already modified, or a new file, goes unnoticed.
 
 1. Run the audit M times (default M=2, matching the ship gate in
     [`../tuning-results.md`](../tuning-results.md)), fresh session each:
@@ -219,7 +222,14 @@ newest merge instead puts them in the first diff the skill says to read. With
 the rewrite, measured at `8854b868`: `git status` and `git diff` are empty,
 the log matches the source commit for commit (subjects, identities, dates,
 touched paths), and `PROSE HOTSPOTS` and `PASS ATTRIBUTION` print what the
-uncommitted plant printed, bar the shas.
+uncommitted plant printed, bar the shas. That was before `seeds.json` was
+dropped too (see below), so the touched paths now differ in one way: a
+commit that changed `seeds.json` no longer lists it, and three commits that
+changed nothing else touch no path at all. Neither ranking counts JSON. A
+seed can also hide a change: a commit whose only edit to a seeded file is
+one a seed undoes no longer lists that file. `generator-truncation`
+restores the text its fix commit replaced, but that commit rewrote other
+lines of the page too, so it still lists it.
 
 What stays visible:
 
@@ -239,6 +249,10 @@ What stays visible:
 - Every rewritten commit is unsigned, and a commit sha quoted in tracked text
     (this README's measurement base among them) names nothing in the clone.
     These say the history was rewritten, not where the seeds are.
+- This directory's `fixtures/` stay in every commit. Many of them anchor on
+    the lines `broken-link` and `wrong-check-count` edit, and some quote the
+    unseeded "pass 27" the planted `CONTRIBUTING.md` no longer holds. The audit's scope and its twin sweep both leave these fixtures
+    out, so only a search the skill does not ask for reaches them.
 - `seeds.json` is dropped from every planted commit: it holds every anchor
     and payload, and the first audit over committed seeds found them through
     it, since the controller's own searches and the twin sweep the skill

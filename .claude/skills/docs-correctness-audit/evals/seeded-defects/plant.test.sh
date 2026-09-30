@@ -163,13 +163,12 @@ seeds-newline-id.json	id is not a non-empty one-line string
 seeds-unnormalized-file.json	file is not a normalized repo-relative path
 EOF
 
-# The seeds are committed, not left as uncommitted edits, so `git status`,
-# `git diff` and every diff the audit's priority set reads show nothing a
-# reader could follow straight to them. Each seed lands in the commit that
-# first holds its anchor, so the planted history must match the source one
-# commit for commit — same subjects, identities, dates and touched paths —
-# with blame on each seeded line naming the commit that wrote its anchor,
-# and the audit-point markers must still resolve. The real repository's
+# The seeds are committed, not left as uncommitted edits, so `git status`
+# and `git diff` name none of them. Each seed lands in the commit that first
+# holds its anchor, so the planted history must match the source one commit
+# for commit — same subjects, identities, dates and touched paths, bar the
+# seed set's own — with blame on each seeded line naming the commit that
+# wrote its anchor, and the audit-point markers must still resolve. The real repository's
 # history is too long to rewrite in a harness, and CI checks it out
 # shallow, so the rewrite is exercised on a small repository built here.
 hist="$(mktemp -d)"
