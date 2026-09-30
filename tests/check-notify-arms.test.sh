@@ -447,10 +447,14 @@ failure cancelled non-pr -->.'
   run_scenario two-notify-steps-exits-2 2 'job notify runs more than one notify-workflow-result step'
 
   # Steps after the notify step are not read, however many there are. The
-  # list here is longer than a pipe buffer, so a reader that stops at the
-  # notify step while its producer is still writing gets the producer
-  # killed by SIGPIPE on every run, not only on an unlucky one.
+  # list in long.yml is longer than a pipe buffer, so a reader that stops
+  # at the notify step while its producer is still writing gets the
+  # producer killed by SIGPIPE on every run, not only on an unlucky one.
+  # long.yml's job is never derived, so the scorecard job, which is, also
+  # gets a step after its notify step: a reader that skipped the notify
+  # step and kept reading would refuse it.
   fresh_root
+  printf '      - uses: example/after-notify@0123456789abcdef0123456789abcdef01234567\n' >>"${ROOT}/${SC}"
   {
     printf 'name: long\non: push\njobs:\n  work:\n    runs-on: ubuntu-latest\n    steps:\n      - run: "true"\n'
     printf '  notify:\n    needs: work\n    if: always()\n    runs-on: ubuntu-latest\n    steps:\n'
