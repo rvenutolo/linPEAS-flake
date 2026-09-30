@@ -26,10 +26,10 @@ below.
 
     Clones the repo to `${TMPDIR:-/tmp}/docs-audit-seeded-defects`, on a
     `main` branch at HEAD — the tracked skill comes with it, so nothing is
-    copied — applies all seeds, and writes `results/manifest-resolved.json`
-    plus `results/worktree-path.txt` (the clone's path). It then rewrites the
-    clone's whole history to commit the seeds, which takes a few minutes; see
-    "A third confound" below for why. The rewrite needs the full history, so
+    copied — applies all seeds and writes `results/manifest-resolved.json`.
+    It then rewrites the clone's whole history to commit the seeds, which
+    takes a few minutes (see "A third confound" below for why), and last
+    writes `results/worktree-path.txt`, the clone's path. The rewrite needs the full history, so
     planting from a shallow clone is refused with exit 2. Leave the checkout alone
     while it runs: planting compares its status before and after, and any
     edit in between fails the plant.
@@ -127,12 +127,11 @@ column) is exactly the signal being measured.
     of every member of its set but one, and that one exception is listed in the
     same table the claim sits under. The near-miss was expected to be the
     weaker of the two, on the reasoning that a reader who spot-checks two or
-    three members finds nothing wrong; measured, both hit 2/2. Two runs is too
-    thin to retire the concern, so the expectation stayed open. A later M=2
-    run confirmed it: `near-miss-exclusive`
-    came back 1/2 FLAKY while `false-exclusive` held 2/2, which is the
-    predicted ordering. Treat the near-miss end of the class as the weaker
-    one, and expect it to carry the set's flake.
+    three members finds nothing wrong. Across four M=2 measurements the
+    near-miss has scored 2/2, 1/2, 2/2 and 2/2, and `false-exclusive` 2/2
+    each time, so the predicted ordering showed once in eight runs. Treat
+    the near-miss as the end of the class more likely to flake, not as the
+    set's known flake.
 - **Rewrite-shaped** seeds (`distant-contradiction`, `dangling-deixis`) carry
     no bundle support whatsoever and are the hardest of the set. Both encode a
     defect a fix pass leaves behind rather than one that rots on its own:
@@ -153,10 +152,12 @@ column) is exactly the signal being measured.
     `agreed-false-annotation`) sit inside the generated body of
     `docs/reference/scripts.md`, which `SKILL.md` tells readers never to flag
     except as a low-confidence generator-vs-reality gap. They were expected
-    to score low because of that instruction. Measured at M=2, they did not:
-    both runs compared the rendered lines with their source comments and
-    reported `generator-truncation` and `agreed-false-annotation`, and one
-    run reported `rendering-divergence`, the set's only flake.
+    to score low because of that instruction. With the seeds planted as
+    uncommitted edits, they scored 5/6, as readers compared the listed
+    seeded lines with their source comments. With the seeds committed they
+    scored 2/6: `rendering-divergence` 0/2, the other two 1/2 each. They are
+    the only seeds the committed plant moved, so read their earlier figure
+    as inflated by the diff.
     `generator-truncation` cuts the `refresh-flake-show.sh` `--check` line
     where its source comment wraps, the shape the script-docs parser once
     published; `rendering-divergence` strips the backslashes from the rendered
@@ -251,9 +252,15 @@ What stays visible:
 
 ## Last measurement
 
-M=2 at `bd61a8c5`, fifteen seeds: 29/30 (96%). Every seed hit in both runs
-except `rendering-divergence`, which hit in one (FLAKY). Read the figure as
-an upper bound, for the confounds above.
+M=2 at `e56b2ca0`, fifteen seeds committed into the planted history: 26/30
+(86%). Every seed hit in both runs except the generator class:
+`generator-truncation` and `agreed-false-annotation` hit in one run each
+(FLAKY), and `rendering-divergence` in neither. The same seeds planted as
+uncommitted edits scored 29/30 (96%) at `bd61a8c5`, with only
+`rendering-divergence` missing once; the whole difference is the generator
+class. The first two confounds above, and the tells the third lists, still
+apply, so read 26/30 as an upper bound too, but not one that `git status`
+sets.
 
 ## Tests
 
