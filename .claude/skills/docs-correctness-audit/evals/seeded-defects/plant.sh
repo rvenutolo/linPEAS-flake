@@ -162,7 +162,6 @@ if [ "${1:-}" = "--replay-index" ]; then
     read -r mode blob _ <<<"$meta"
     key="$PLANT_DIR/cache/${index_of["$f"]}.$blob"
     if [ ! -f "$key" ]; then
-      rm -rf "$root"
       mkdir -p "$(dirname -- "$root/$f")"
       git cat-file blob "$blob" >"$root/$f"
       while IFS= read -r edit; do
@@ -237,9 +236,8 @@ fi
 # clone keeps main alone, on the commit under test, with no remote, tag or
 # other branch pointing back at the unseeded history.
 git clone --quiet --no-hardlinks --no-checkout "$repo_root" "$wt"
-wgit() { git -C "$wt" -c commit.gpgSign=false "$@"; }
+wgit() { git -C "$wt" "$@"; }
 wgit checkout --quiet -B main "$head"
-wgit branch --quiet --unset-upstream main 2>/dev/null || true # absent when the source is detached
 wgit remote remove origin
 while IFS= read -r ref; do
   [ "$ref" = refs/heads/main ] || wgit update-ref -d "$ref"
@@ -299,9 +297,9 @@ FILTER
   fi
   rm -rf "$plant_dir" "$wt/.git/plant-rewrite.log"
   wgit update-ref -d refs/original/refs/heads/main
-  wgit reset --quiet --hard main
-  # Nothing may still reach the unseeded commits: the reflogs and ORIG_HEAD
-  # go, then gc drops the originals from the object store.
+  # Nothing may still reach the unseeded commits: the reflogs go, so gc drops
+  # the originals from the object store. ORIG_HEAD goes too, since the reset
+  # before the rewrite left it naming the unseeded head.
   rm -rf "$wt/.git/logs" "$wt/.git/ORIG_HEAD"
   wgit gc --quiet --prune=now
 fi
