@@ -160,6 +160,7 @@ seeds-numeric-id.json	id is not a non-empty one-line string
 seeds-fractional-tol.json	line_tol is not an integer
 seeds-empty.json	no seeds
 seeds-newline-id.json	id is not a non-empty one-line string
+seeds-unnormalized-file.json	file is not a normalized repo-relative path
 EOF
 
 # The seeds are committed, not left as uncommitted edits, so `git status`,
@@ -251,6 +252,9 @@ check "planted repo has no remote" '[ -z "$(pgit remote)" ]'
 check "planted branch tracks no upstream" '! pgit status | grep -qiE "origin|upstream"'
 check "planted repo has no reflog entries" '[ -z "$(pgit reflog list)" ]'
 check "planted repo has no ORIG_HEAD" '[ ! -e "$(pgit rev-parse --path-format=absolute --git-path ORIG_HEAD)" ]'
+# The rewrite's working files list every seeded path and hold seeded copies.
+check "planted repo keeps none of the rewrite's working files" \
+  '[ -z "$(find "$(pgit rev-parse --path-format=absolute --git-dir)" -maxdepth 1 -name "plant*")" ]'
 check "planted repo does not hold the source head" "! pgit cat-file -e '$src_head^{commit}' 2>/dev/null"
 # Commit for commit: the planted log must carry the source's subjects,
 # identities, dates, parent counts and touched paths. The touched paths are
@@ -317,6 +321,30 @@ shallow_out="$(REPO_OVERRIDE="$hist/shallow" SEEDS_OVERRIDE="$here/fixtures/seed
   "$plant" 2>&1)" || shallow_rc=$?
 check "a shallow source exits 2" "[ '$shallow_rc' = 2 ]"
 check "a shallow source names the cause" "printf '%s' \"\$shallow_out\" | grep -qF 'shallow'"
+
+# An audit point naming a commit that is not an ancestor of the planted head
+# cannot be carried over, and gc would leave it naming nothing: the audit
+# would then read everything at equal priority without saying why. Planting
+# must fail, and must not leave the previous plant's path behind for the
+# audit loop to use.
+"$plant" --clean >/dev/null 2>&1 || true
+REPO_OVERRIDE="$src" SEEDS_OVERRIDE="$src/evals/seeds[1].json" "$plant" >/dev/null 2>&1 || true
+git clone --quiet "$src" "$hist/offmain"
+ogit() { GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$hist/offmain" -c user.name=Seed -c user.email=seed@example.invalid "$@"; }
+ogit switch --quiet --create unmerged
+printf 'unmerged\n' >"$hist/offmain/docs/other.md"
+ogit commit --quiet --all --no-verify --no-gpg-sign --message 'unmerged work'
+off_sha="$(ogit rev-parse HEAD)"
+ogit switch --quiet main
+printf '# marker\nLAST_AUDIT_SHA=%s\n' "$off_sha" >"$hist/offmain/.github/docs-audit-state"
+ogit commit --quiet --all --no-verify --no-gpg-sign --message 'record an off-main audit point'
+off_rc=0
+# shellcheck disable=SC2034 # read via check()'s eval of the assertion string below, not a direct expansion here
+off_out="$(REPO_OVERRIDE="$hist/offmain" SEEDS_OVERRIDE="$hist/offmain/evals/seeds[1].json" \
+  "$plant" 2>&1)" || off_rc=$?
+check "an audit point off the planted history fails the plant" "[ '$off_rc' = 1 ]"
+check "an audit point off the planted history is named" "printf '%s' \"\$off_out\" | grep -qF '$off_sha'"
+check "a failed plant leaves no planted path behind" "[ ! -e '$results/worktree-path.txt' ]"
 "$plant" --clean >/dev/null 2>&1 || true
 rm -rf "$hist"
 
