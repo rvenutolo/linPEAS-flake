@@ -92,12 +92,12 @@ Paths below are relative to this file's directory — `cd` to the skill's
 
 ```sh
 bash seeded-defects/plant.sh
-# In the planted worktree, edit the cluster map in
+# In the planted clone, edit the cluster map in
 # ../references/repo-map.md §2 to the configuration under test — that table
 # is the only thing that sets reader granularity; no flag or env var
 # switches it, so measuring a second configuration means varying that
 # section and re-running.
-# Then run /docs-audit against the planted worktree, save the report, repeat.
+# Then run /docs-audit against the planted clone, save the report, repeat.
 bash seeded-defects/score.sh <report1.md> <report2.md>
 bash seeded-defects/plant.sh --clean
 ```
