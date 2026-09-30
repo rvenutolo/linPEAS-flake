@@ -345,6 +345,66 @@ check "an audit point off the planted history fails the plant" "[ '$off_rc' = 1 
 check "an audit point off the planted history is named" "printf '%s' \"\$off_out\" | grep -qF '$off_sha'"
 check "a failed plant leaves no planted path behind" "[ ! -e '$results/worktree-path.txt' ]"
 "$plant" --clean >/dev/null 2>&1 || true
+
+# A point the source cannot resolve either has nothing to carry over: it
+# stays as written, as the source has it, and does not fail the plant.
+git clone --quiet "$src" "$hist/unresolved"
+ugit() { GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$hist/unresolved" -c user.name=Seed -c user.email=seed@example.invalid "$@"; }
+printf '# marker\nLAST_AUDIT_SHA=%s\n' 0000000000000000000000000000000000000000 >"$hist/unresolved/.github/docs-audit-state"
+ugit commit --quiet --all --no-verify --no-gpg-sign --message 'record an unresolvable audit point'
+unres_rc=0
+REPO_OVERRIDE="$hist/unresolved" SEEDS_OVERRIDE="$hist/unresolved/evals/seeds[1].json" \
+  "$plant" >/dev/null 2>&1 || unres_rc=$?
+check "an audit point the source cannot resolve plants as written" \
+  "[ '$unres_rc' = 0 ] && grep -qx 'LAST_AUDIT_SHA=0000000000000000000000000000000000000000' \"\$(cat '$results/worktree-path.txt')/.github/docs-audit-state\""
+"$plant" --clean >/dev/null 2>&1 || true
+
+# A seed whose path runs through a tracked symlink plants on disk at HEAD,
+# but the index holds no such file, so the rewrite would commit nothing.
+# Planting must fail rather than record a seed no commit holds.
+git clone --quiet "$src" "$hist/linked"
+lgit() { GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$hist/linked" -c user.name=Seed -c user.email=seed@example.invalid "$@"; }
+ln -s docs "$hist/linked/linkdir"
+lgit add linkdir
+lgit commit --quiet --no-verify --no-gpg-sign --message 'link the docs directory'
+jq '.seeds[1].file = "linkdir/a.md" | .seeds = [.seeds[1]]' "$hist/linked/evals/seeds[1].json" >"$hist/linked-seeds.json"
+link_rc=0
+# shellcheck disable=SC2034 # read via check()'s eval of the assertion string below, not a direct expansion here
+link_out="$(REPO_OVERRIDE="$hist/linked" SEEDS_OVERRIDE="$hist/linked-seeds.json" "$plant" 2>&1)" || link_rc=$?
+check "a seed through a tracked symlink fails the plant" "[ '$link_rc' = 1 ]"
+check "a seed through a tracked symlink names its file" "printf '%s' \"\$link_out\" | grep -qF 'linkdir/a.md'"
+"$plant" --clean >/dev/null 2>&1 || true
+# A tracked symlink as the seed's own file is refused the same way.
+ln -s docs/a.md "$hist/linked/linkfile.md"
+lgit add linkfile.md
+lgit commit --quiet --no-verify --no-gpg-sign --message 'link a doc'
+jq '.seeds[0].file = "linkfile.md"' "$hist/linked-seeds.json" >"$hist/linkfile-seeds.json"
+linkf_rc=0
+# shellcheck disable=SC2034 # read via check()'s eval of the assertion string below, not a direct expansion here
+linkf_out="$(REPO_OVERRIDE="$hist/linked" SEEDS_OVERRIDE="$hist/linkfile-seeds.json" "$plant" 2>&1)" || linkf_rc=$?
+check "a seed on a tracked symlink fails the plant" \
+  "[ '$linkf_rc' = 1 ] && printf '%s' \"\$linkf_out\" | grep -qF 'linkfile.md'"
+"$plant" --clean >/dev/null 2>&1 || true
+
+# Every branch of the normalized-path rule, each on its own seed set.
+while IFS= read -r badpath; do
+  jq --arg f "$badpath" '.seeds[0].file = $f' "$here/fixtures/seeds-unnormalized-file.json" >"$hist/badpath.json"
+  bp_rc=0
+  # shellcheck disable=SC2034 # read via check()'s eval of the assertion string below, not a direct expansion here
+  bp_out="$(HISTORY_OVERRIDE=skip SEEDS_OVERRIDE="$hist/badpath.json" "$plant" 2>&1)" || bp_rc=$?
+  check "seed file '$badpath' is refused as not normalized" \
+    "[ '$bp_rc' = 1 ] && printf '%s' \"\$bp_out\" | grep -qF 'file is not a normalized repo-relative path'"
+  "$plant" --clean >/dev/null 2>&1 || true
+done <<'EOF_PATHS'
+
+/docs/index.md
+docs/
+docs//index.md
+docs/./index.md
+docs/../docs/index.md
+../docs/index.md
+EOF_PATHS
+"$plant" --clean >/dev/null 2>&1 || true
 rm -rf "$hist"
 
 exit "$fail"
