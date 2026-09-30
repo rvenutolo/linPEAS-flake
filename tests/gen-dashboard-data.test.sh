@@ -15,6 +15,30 @@
 #   - expected diagnostic substring on stderr
 #   - no partial dashboard.yml was written (file does not appear; if a
 #     pre-existing file is on disk, its mtime is unchanged)
+#
+# Each scenario sets an *_OVERRIDE for every lookup the script reaches
+# before its asserted outcome, except the one scenario that exercises a
+# failing `gh`, which puts its own shim first on PATH instead. Behind
+# both sits a tripwire `gh` for the whole run, and the run fails on any
+# call it logged. A `gh` call reaches it from any scenario where it is
+# the first `gh` on PATH: every scenario but the failing-`gh` one.
+#
+# A required lookup that escapes its override exits 2 with "could not
+# fetch …", which the scenario's own exit or stderr assertion already
+# fails on. A soft lookup that escapes absorbs the tripwire's exit 97 as
+# a degraded lookup, logs a WARN and leaves the scenario's verdict
+# unchanged, so only the log check catches it. The log check also
+# catches the failing-`gh` scenario losing its shim, since the exit 2
+# the tripwire then causes is that scenario's expected outcome.
+#
+# Where another `gh` comes first on PATH, nothing in the automated run
+# catches a soft lookup that escapes: in the failing-`gh` scenario its
+# shim answers the call, and a scenario that builds a PATH finding a
+# real `gh` first reaches the network. The harness passes with the
+# network blocked, checked by hand with
+# `unshare --user --map-current-user --net`; under that block an
+# escaping soft lookup degrades the same way, so the block alone does
+# not catch it either.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -33,6 +57,40 @@ readonly OUT_FILE="${REPO_ROOT}/docs/_data/dashboard.yml"
 
 fail_count=0
 pass_count=0
+
+tripwire_dir="$(mktemp --directory)"
+readonly TRIPWIRE_DIR="${tripwire_dir}"
+readonly TRIPWIRE_LOG="${TRIPWIRE_DIR}/calls.log"
+trap 'rm --recursive --force -- "${TRIPWIRE_DIR}"' EXIT
+
+# @description Install the tripwire `gh` ahead of the real one on PATH.
+# `run_failing_gh_scenario` prepends its shim to this PATH, so the shim
+# still wins there; any other scenario that inherits PATH and calls `gh`
+# reaches this one. The log path is baked into the tripwire so a
+# scenario that rewrites other variables cannot lose it.
+# @noargs
+function install_gh_tripwire() {
+  : >"${TRIPWIRE_LOG}"
+  printf '#!/usr/bin/env bash\nlog=%q\n' "${TRIPWIRE_LOG}" >"${TRIPWIRE_DIR}/gh"
+  cat >>"${TRIPWIRE_DIR}/gh" <<'TRIPWIRE'
+printf '%s\n' "$*" >>"${log}"
+printf 'gh called outside the overrides: %s\n' "$*" >&2
+exit 97
+TRIPWIRE
+  chmod +x -- "${TRIPWIRE_DIR}/gh"
+  PATH="${TRIPWIRE_DIR}:${PATH}"
+}
+
+# @description Fail the run when any scenario reached the tripwire,
+# naming each call.
+# @noargs
+function check_gh_tripwire() {
+  if [[ -s ${TRIPWIRE_LOG} ]]; then
+    printf 'FAIL: a scenario called gh outside the overrides; calls that reached the tripwire:\n' >&2
+    sed 's/^/  gh /' -- "${TRIPWIRE_LOG}" >&2
+    fail_count=$((fail_count + 1))
+  fi
+}
 
 # @description Snapshot the dashboard.yml output path before a scenario so we
 # can detect partial writes. Writes the mtime to stdout, or 'ABSENT' if the
@@ -283,17 +341,7 @@ function run_empty_bump_pr_scenario() {
   pass_count=$((pass_count + 1))
 }
 
-# @description Run an API-error soft-fallback scenario. `gh api` writes
-# its JSON error body to stdout, so a failed this-repo lookup arrives as
-# a non-empty non-null string. Per hard-fail rule 2 that must degrade to
-# the documented empty/"unknown" section — never publish the error body's
-# missing keys as data. Asserts exit 0, the documented fallback value, no
-# literal null anywhere in the output, and a WARN naming the lookup.
-# @arg $1 scenario name
-# @arg $2 override var name to point at the 404 body
-# @arg $3 yq path that must read back as the documented fallback
-# @arg $4 expected fallback value at that path
-# @description Run the generator with a live `gh` that is present and
+# @description Run the generator with a `gh` shim that is present and
 # fails, and no override for the required upstream-release lookup, so the
 # fetch itself is the fault. Asserts exit 2 — the lookup never happened,
 # so it says nothing about the pin — and that no dashboard.yml was
@@ -346,6 +394,16 @@ function run_failing_gh_scenario() {
   pass_count=$((pass_count + 1))
 }
 
+# @description Run an API-error soft-fallback scenario. `gh api` writes
+# its JSON error body to stdout, so a failed this-repo lookup arrives as
+# a non-empty non-null string. Per hard-fail rule 2 that must degrade to
+# the documented empty/"unknown" section — never publish the error body's
+# missing keys as data. Asserts exit 0, the documented fallback value, no
+# literal null anywhere in the output, and a WARN naming the lookup.
+# @arg $1 scenario name
+# @arg $2 override var name to point at the 404 body
+# @arg $3 yq path that must read back as the documented fallback
+# @arg $4 expected fallback value at that path
 # @arg $5 expected stderr substring (the WARN)
 function run_api_error_scenario() {
   local -r name="$1"
@@ -428,6 +486,8 @@ function main() {
     exit 1
   fi
 
+  install_gh_tripwire
+
   # Scenario 1: bad pin.version regex. Pin URL is shaped correctly so only
   # the regex check trips; nothing else hard-fails first.
   run_scenario 'bad pin.version regex' \
@@ -470,8 +530,9 @@ function main() {
 
   # Scenario 3f-h: the same could-not-run treatment for the three
   # override-or-live fetches gated by require_json_payload. Each keeps
-  # every upstream override valid so the run reaches that fetch, and
-  # points only the override under test at an absent path.
+  # every override before it valid so the run reaches that fetch, the
+  # soft this-repo releases/latest lookup included, and points only the
+  # override under test at an absent path.
   run_scenario 'absent upstream-release payload is a tooling error' \
     'dashboard upstream release: payload from UPSTREAM_RELEASE_JSON_OVERRIDE not found' 2 \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
@@ -480,11 +541,13 @@ function main() {
     'payload from THIS_REPO_RELEASES_JSON_OVERRIDE not found' 2 \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
     "UPSTREAM_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-upstream-release.json" \
+    "LATEST_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-latest-release.json" \
     "THIS_REPO_RELEASES_JSON_OVERRIDE=${FIXTURES_DIR}/this-repo-releases-absent.json"
   run_scenario 'absent upstream-releases payload is a tooling error' \
     'payload from UPSTREAM_RELEASES_JSON_OVERRIDE not found' 2 \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
     "UPSTREAM_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-upstream-release.json" \
+    "LATEST_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-latest-release.json" \
     "THIS_REPO_RELEASES_JSON_OVERRIDE=${FIXTURES_DIR}/good-this-repo-releases.json" \
     "UPSTREAM_RELEASES_JSON_OVERRIDE=${FIXTURES_DIR}/upstream-releases-absent.json"
 
@@ -540,6 +603,7 @@ function main() {
     'could not fetch repos/peass-ng/PEASS-ng/releases/latest'
 
   harness_assert_verify || fail_count=$((fail_count + 1))
+  check_gh_tripwire
 
   printf '\n%d passed, %d failed\n' "${pass_count}" "${fail_count}"
   if ((fail_count > 0)); then
