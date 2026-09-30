@@ -15,6 +15,20 @@
 #   - expected diagnostic substring on stderr
 #   - no partial dashboard.yml was written (file does not appear; if a
 #     pre-existing file is on disk, its mtime is unchanged)
+#
+# Each scenario sets an *_OVERRIDE for every lookup the script reaches
+# before its asserted outcome, except the one scenario that exercises a
+# failing `gh`, which puts its own shim first on PATH instead. Behind both sits a tripwire `gh` for the whole run:
+# a `gh` call from any scenario that inherits the harness PATH reaches
+# the tripwire instead of the real gh, and the run fails on any call it
+# logged, even when the scenario's own verdict came out right — a soft
+# lookup absorbs the tripwire's exit 97 as a degraded lookup. A scenario
+# that builds its own PATH (env -i, or a literal PATH=) bypasses the
+# tripwire, and nothing in the automated run catches it.
+# The harness passes with the network blocked, checked by hand with
+# `unshare --user --map-current-user --net`. Under that block an escaping
+# soft lookup only logs a WARN and an escaping required lookup exits 2,
+# so neither fails a scenario that expects exit 2.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -33,6 +47,40 @@ readonly OUT_FILE="${REPO_ROOT}/docs/_data/dashboard.yml"
 
 fail_count=0
 pass_count=0
+
+tripwire_dir="$(mktemp --directory)"
+readonly TRIPWIRE_DIR="${tripwire_dir}"
+readonly TRIPWIRE_LOG="${TRIPWIRE_DIR}/calls.log"
+trap 'rm --recursive --force -- "${TRIPWIRE_DIR}"' EXIT
+
+# @description Install the tripwire `gh` ahead of the real one on PATH.
+# `run_failing_gh_scenario` prepends its shim to this PATH, so the shim
+# still wins there; any other scenario that inherits PATH and calls `gh`
+# reaches this one. The log path is baked into the tripwire so a
+# scenario that rewrites other variables cannot lose it.
+# @noargs
+function install_gh_tripwire() {
+  : >"${TRIPWIRE_LOG}"
+  printf '#!/usr/bin/env bash\nlog=%q\n' "${TRIPWIRE_LOG}" >"${TRIPWIRE_DIR}/gh"
+  cat >>"${TRIPWIRE_DIR}/gh" <<'TRIPWIRE'
+printf '%s\n' "$*" >>"${log}"
+printf 'real gh reached outside the overrides: %s\n' "$*" >&2
+exit 97
+TRIPWIRE
+  chmod +x -- "${TRIPWIRE_DIR}/gh"
+  PATH="${TRIPWIRE_DIR}:${PATH}"
+}
+
+# @description Fail the run when any scenario reached the tripwire,
+# naming each call.
+# @noargs
+function check_gh_tripwire() {
+  if [[ -s ${TRIPWIRE_LOG} ]]; then
+    printf 'FAIL: a scenario reached gh outside the overrides; calls that reached the tripwire:\n' >&2
+    sed 's/^/  gh /' -- "${TRIPWIRE_LOG}" >&2
+    fail_count=$((fail_count + 1))
+  fi
+}
 
 # @description Snapshot the dashboard.yml output path before a scenario so we
 # can detect partial writes. Writes the mtime to stdout, or 'ABSENT' if the
@@ -428,6 +476,8 @@ function main() {
     exit 1
   fi
 
+  install_gh_tripwire
+
   # Scenario 1: bad pin.version regex. Pin URL is shaped correctly so only
   # the regex check trips; nothing else hard-fails first.
   run_scenario 'bad pin.version regex' \
@@ -540,6 +590,7 @@ function main() {
     'could not fetch repos/peass-ng/PEASS-ng/releases/latest'
 
   harness_assert_verify || fail_count=$((fail_count + 1))
+  check_gh_tripwire
 
   printf '\n%d passed, %d failed\n' "${pass_count}" "${fail_count}"
   if ((fail_count > 0)); then
