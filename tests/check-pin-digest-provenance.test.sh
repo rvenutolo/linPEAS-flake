@@ -6,9 +6,11 @@
 # HEAD_DIR_OVERRIDE; the gh CLI is replaced by a PATH stub whose
 # behavior is selected with GH_STUB_MODE, so no network is touched.
 # Behind the stub sits a tripwire `gh` for the whole run: a scenario that
-# forgets the stub reaches the tripwire instead of the real gh, and the
-# run fails on any call it logged, even when the scenario's own verdict
-# came out right. The harness passes with the network blocked, checked
+# forgets the stub but inherits the harness PATH reaches the tripwire
+# instead of the real gh, and the run fails on any call it logged, even
+# when the scenario's own verdict came out right. A scenario that builds
+# its own PATH (env -i, or a literal PATH=) bypasses the tripwire; only
+# the network block below would catch it. The harness passes with the network blocked, checked
 # with `unshare --user --map-current-user --net` (not --map-root-user,
 # which runs it as root and skips the unreadable-base scenario).
 
@@ -31,9 +33,9 @@ trap 'rm --recursive --force -- "${TRIPWIRE_DIR}"' EXIT
 
 # Installs the tripwire `gh` ahead of the real one on PATH. Every stubbed
 # invocation prepends ${FIXTURES}/bin, so the stub still wins there; only
-# an invocation without the stub reaches this one. The log path is baked
-# into the tripwire so a scenario that rewrites its environment cannot
-# lose it.
+# an invocation without the stub reaches this one, as long as it inherits
+# PATH. The log path is baked into the tripwire so a scenario that
+# rewrites other variables cannot lose it.
 function install_gh_tripwire() {
   : >"${TRIPWIRE_LOG}"
   printf '#!/usr/bin/env bash\nlog=%q\n' "${TRIPWIRE_LOG}" >"${TRIPWIRE_DIR}/gh"
@@ -233,8 +235,8 @@ runs:
 YAML
 
   local actual_exit=0
-  # deref-none: both fabricated SHAs name commits, so the tag-object
-  # lookup 404s on each side and the moved SHA stays a repoint.
+  # deref-none: the stub treats both fabricated SHAs as commits, so the
+  # tag-object lookup 404s on each side and the moved SHA stays a repoint.
   (
     cd "${repo_dir}" &&
       PATH="${FIXTURES}/bin:${PATH}" \
