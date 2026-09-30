@@ -446,6 +446,39 @@ failure cancelled non-pr -->.'
       - uses: ./.github/actions/notify-workflow-result'
   run_scenario two-notify-steps-exits-2 2 'job notify runs more than one notify-workflow-result step'
 
+  # Steps after the notify step are not read, however many there are. The
+  # list in long.yml is longer than a pipe buffer, so a reader that stops
+  # at the notify step while its producer is still writing gets the
+  # producer killed by SIGPIPE on every run, not only on an unlucky one.
+  # long.yml's job is never derived, so the scorecard job, which is, also
+  # gets a step after its notify step: a reader that skipped the notify
+  # step and kept reading would refuse it.
+  fresh_root
+  printf '      - uses: example/after-notify@0123456789abcdef0123456789abcdef01234567\n' >>"${ROOT}/${SC}"
+  {
+    printf 'name: long\non: push\njobs:\n  work:\n    runs-on: ubuntu-latest\n    steps:\n      - run: "true"\n'
+    printf '  notify:\n    needs: work\n    if: always()\n    runs-on: ubuntu-latest\n    steps:\n'
+    printf '      - uses: ./.github/actions/notify-workflow-result\n        with:\n          result: failure\n'
+    local -i i
+    for ((i = 0; i < 2000; i++)); do
+      printf '      - uses: example/after-notify-%04d@0123456789abcdef0123456789abcdef01234567\n' "${i}"
+    done
+  } >"${ROOT}/.github/workflows/long.yml"
+  run_scenario steps-after-notify-past-pipe-buffer-pass 0 '' "${CLEAN/6 workflow/7 workflow}"
+
+  # A failed read of a job's steps names the command and its status, so a
+  # killed or failing yq is not mistaken for anything about the workflow.
+  fresh_root
+  local stub_dir real_yq
+  stub_dir="$(mktemp --directory)"
+  real_yq="$(command -v yq)"
+  printf '#!/usr/bin/env bash\ncase "$*" in *%q*) exit 7 ;; esac\nexec %q "$@"\n' \
+    '.jobs[strenv(JOB)].steps // []' "${real_yq}" >"${stub_dir}/yq"
+  chmod +x -- "${stub_dir}/yq"
+  PATH="${stub_dir}:${PATH}" run_scenario steps-read-failure-names-yq-exits-2 2 \
+    'cannot read the steps of .github/workflows/codeql.yml job notify-finding: yq exited 7'
+  rm --recursive --force -- "${stub_dir}"
+
   fresh_root
   edit '.github/workflows/octoscan.yml' \
     '          result: ${{ needs.scan.result }}
