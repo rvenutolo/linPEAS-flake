@@ -73,6 +73,9 @@ apply_edit() {
     + [("anchor", "from", "payload") as $k
       | select((.[$k] | type) == "string" and (.[$k] | test("[\n\r]")))
       | "\($k) holds a newline"]
+    + [select((.file | type) == "string"
+        and (.file | test("^$|^/|/$|//|(^|/)[.][.]?(/|$)")))
+      | "file is not a normalized repo-relative path"]
     | join(", ")' <<<"$edit")"
   [ -z "$fault" ] || {
     echo "seed '$id': $fault" >&2
@@ -218,6 +221,9 @@ dup="$(jq -r '[.seeds[].id] | group_by(.) | map(select(length > 1)[0]) | join(" 
 }
 
 mkdir -p "$results"
+# The audit loop reads the planted clone's path from here, so a plant that
+# fails must not leave the previous plant's path standing.
+rm -f "$results/worktree-path.txt"
 # Planting must leave the primary tree exactly as it found it. Comparing the
 # tracked-file status before and after asserts that; an absolute "tree is
 # clean" test would instead refuse to run for anyone holding uncommitted
@@ -285,13 +291,13 @@ if [ "$history" != skip ]; then
   *) strip="" ;;
   esac
   cat >"$plant_dir/audit-point.sh" <<'FILTER'
-plant_old="$(git cat-file blob ":$PLANT_AUDIT_STATE" 2>/dev/null | sed -n 's/^LAST_AUDIT_SHA=//p' | head -n 1)"
-if [ -n "$plant_old" ] && git cat-file -e "$plant_old^{commit}" 2>/dev/null; then
+plant_old="$(git cat-file blob ":$PLANT_AUDIT_STATE" 2>/dev/null | sed -n 's/^LAST_AUDIT_SHA=//p')"
+if [ -n "$plant_old" ]; then
   plant_new="$(map "$plant_old")" &&
     git cat-file blob ":$PLANT_AUDIT_STATE" |
     sed "s/^LAST_AUDIT_SHA=$plant_old\$/LAST_AUDIT_SHA=$plant_new/" >"$PLANT_DIR/state" &&
     git update-index --cacheinfo \
-      "$(git ls-files --stage -- ":(literal)$PLANT_AUDIT_STATE" | cut -d' ' -f1),$(git hash-object -w --no-filters "$PLANT_DIR/state"),$PLANT_AUDIT_STATE"
+      "$(git ls-files --stage -- "$PLANT_AUDIT_STATE" | cut -d' ' -f1),$(git hash-object -w --no-filters "$PLANT_DIR/state"),$PLANT_AUDIT_STATE"
 fi
 FILTER
   wgit reset --quiet --hard
@@ -315,6 +321,19 @@ FILTER
   # before the rewrite left it naming the unseeded head.
   rm -rf "$wt/.git/logs" "$wt/.git/ORIG_HEAD"
   wgit gc --quiet --prune=now
+  # An audit point naming a source commit off main's history was not
+  # rewritten, and gc has just removed what it named: the audit would read
+  # it as unreachable and rank nothing, without saying why.
+  while IFS= read -r marker; do
+    point="$(wgit show "$marker:$audit_state" 2>/dev/null | sed -n 's/^LAST_AUDIT_SHA=//p' || true)"
+    [ -n "$point" ] || continue
+    if ! wgit cat-file -e "$point^{commit}" 2>/dev/null &&
+      git -C "$repo_root" cat-file -e "$point^{commit}" 2>/dev/null; then
+      echo "ERROR: the audit point in '$(wgit log -1 --format=%s "$marker")' names $point," \
+        "which is not on the planted history" >&2
+      exit 1
+    fi
+  done < <(wgit log --format=%H main -- "$audit_state")
 fi
 printf '%s\n' "$wt" >"$results/worktree-path.txt"
 
