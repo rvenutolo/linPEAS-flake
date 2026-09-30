@@ -242,6 +242,7 @@ check "planted repo holds main as its only ref" \
 check "planted repo has no remote" '[ -z "$(pgit remote)" ]'
 check "planted branch tracks no upstream" '! pgit status | grep -qiE "origin|upstream"'
 check "planted repo has no reflog entries" '[ -z "$(pgit reflog list)" ]'
+check "planted repo has no ORIG_HEAD" '[ ! -e "$(pgit rev-parse --path-format=absolute --git-path ORIG_HEAD)" ]'
 check "planted repo does not hold the source head" "! pgit cat-file -e '$src_head^{commit}' 2>/dev/null"
 # Commit for commit: the planted log must carry the source's subjects,
 # identities, dates, parent counts and touched paths. The touched paths are
