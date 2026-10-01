@@ -419,6 +419,25 @@ that keeps the path-keyed exemption visible. Full
 rationale:
 [Workflow hardening → guard-exit-code](../security/workflow-hardening.md#guard-exit-code).
 
+## Guarded repository-root lookup
+
+The same lint bans a bare `git rev-parse --show-toplevel` anywhere under
+`scripts/`. Outside a git work tree git exits 128, which an unguarded
+assignment hands to the caller in place of the documented 2, and a
+fallback such as `|| echo .` reads the wrong tree. Scripts resolve the
+root through `repo_toplevel` (`scripts/lib/repo.sh`), which exits **2**
+naming the script and the directory:
+
+```bash
+REPO_ROOT="$(repo_toplevel)"
+readonly ROOT="${ROOT_OVERRIDE:-$(repo_toplevel)}"
+```
+
+Assign on a line of its own: a `local` or `readonly` on the same line
+masks the 2. `tests/repo-root-guard.test.sh` runs every script that calls
+the helper from outside a work tree. Full rationale:
+[Workflow hardening → Bare repository-root lookup](../security/workflow-hardening.md#bare-repository-root-lookup).
+
 ## Glob-driven scan breadth
 
 `scripts/check-enumerate-helper-required.sh` bans a `for` loop that

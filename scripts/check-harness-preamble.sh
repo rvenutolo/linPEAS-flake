@@ -43,7 +43,7 @@ readonly WANT_SET_LINE="set -Eeuo pipefail"
 readonly WANT_IFS_LINE="IFS=\$'\\n\\t'"
 # The substitution is literal search text, never expanded here.
 # shellcheck disable=SC2016
-readonly WANT_DERIVE='$(git rev-parse --show-toplevel)'
+readonly WANT_DERIVE='$(git rev-parse --show-toplevel)' # exit-code-exempt: the literal text the preamble rule compares against, never run
 
 failed=0
 shopt -s nullglob

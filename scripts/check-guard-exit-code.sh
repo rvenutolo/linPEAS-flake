@@ -3,8 +3,9 @@
 #
 # @description Lint: no script anywhere under `scripts/` may exit 1 out
 # of a guard whose test is only an availability check, none may create
-# a temp file with a bare `mktemp`, and none may take a required value
-# through a `${var:?}` expansion. The exit codes separate what the
+# a temp file with a bare `mktemp`, none may resolve the repository root
+# with a bare `git rev-parse --show-toplevel`, and none may take a
+# required value through a `${var:?}` expansion. The exit codes separate what the
 # operator has to do about a run: 2 means the check could not run (a
 # required tool is absent, an input is missing, unreadable or
 # malformed), 1 means it ran and found a violation, 0 means clean. An
@@ -44,9 +45,24 @@
 # opening, or one of the keywords `then`, `do` and `else` — so prose
 # naming the command, including a parenthetical, is not a hit.
 #
+# The third rule is the same class again. Outside a git work tree, `git
+# rev-parse --show-toplevel` exits 128, and an unguarded
+# `x="$(git rev-parse --show-toplevel)"` under `set -e` ends the caller
+# with that status, which no caller reads as could-not-run; a fallback
+# such as `|| echo .` reads the wrong tree instead. Every lookup therefore
+# routes through `repo_toplevel` (`scripts/lib/repo.sh`), which reports a
+# missing work tree as exit 2; that library holds the one sanctioned
+# lookup and is the only file this rule skips. Matching uses the same
+# command positions as the temp-file rule, with any words between `git`
+# and `rev-parse` (so `git -C <dir>` is read too), and `--show-toplevel`
+# anywhere later in the same command. A string operand that opens with
+# `$(` does match, since the matcher does not read quotes; such a literal
+# takes the marker.
+#
 # Escape hatch: `# exit-code-exempt: <rationale>`, on the exit line of a
 # guard whose missing input genuinely IS the finding, or on the line of a
-# bare temp-file creation whose failure IS the finding. The marker has
+# bare temp-file creation or repository-root lookup whose failure IS the
+# finding. The marker has
 # to open the comment — matching drops everything up to and including
 # the line's first `#` and requires the remainder to begin with the
 # marker word, so prose naming it exempts nothing — and the rationale
@@ -60,10 +76,10 @@
 # rather than open-ended.
 #
 # The same predicate that opens a marker's comment for classification
-# also opens it for a census that runs after every hit and bare-mktemp
-# check: a line whose comment opens with `exit-code-exempt:` is recorded
-# as the file is read, marked consumed only when a hit or a bare mktemp
-# is actually routed through it, and any recorded line left unconsumed
+# also opens it for a census that runs after every rule's check: a line
+# whose comment opens with `exit-code-exempt:` is recorded as the file is
+# read, marked consumed only when a site some rule matched is actually
+# routed through it, and any recorded line left unconsumed
 # once the file is done is reported as its own finding and fails the
 # run — a marker still reads as a decision someone made about the guard
 # beneath it, and keeps asserting that decision after the guard was
@@ -194,7 +210,7 @@ function marker_open(text) {
 
 # Route one flagged line through the exit-code-exempt marker: a marker
 # carrying a rationale is tallied as an exemption, an empty one is its
-# own finding, and an unmarked line is the hit. Both rules below share
+# own finding, and an unmarked line is the hit. Every rule below shares
 # this, so the marker means the same thing wherever it sits and neither
 # rule can drift into honoring an empty rationale on its own. A line
 # whose marker is read here is also marked consumed, so the census below
@@ -227,7 +243,7 @@ function scan_exit(ln, text) {
 # every other pattern here, so this program never matches its own text.
 # A `:?` parameter expansion, which fails with the shell default exit
 # status of 1. The
-# shape is a third route to the same wrong answer: an operator who typed
+# shape is another route to the same wrong answer: an operator who typed
 # an incomplete command line gets the status that means the check ran and
 # found a violation. The pattern is spelled as character classes so this
 # program never matches its own text, and whole-line comments are blanked
@@ -240,6 +256,16 @@ function scan_paramexp(ln, text) {
 function scan_temp(ln, text) {
   if (text !~ /(^|[$][(]|[|;!{&]|[ \t]then[ \t]|[ \t]do[ \t]|[ \t]else[ \t])[ \t]*(command[ \t]+)?[m]ktemp([ \t)|;&]|$)/) return
   classify("baretemp", "temp_norationale", ln, trim(text), text, ln)
+}
+
+# A bare repository-root lookup, in the command positions of the
+# temp-file rule. The words between the command and the subcommand may be any
+# options (`-C <dir>`, `-c k=v`); the flag may follow later options, but
+# not a separator, so a flag of a second command on the line is not
+# read as belonging to this one.
+function scan_root(ln, text) {
+  if (text !~ /(^|[$][(]|[|;!{&]|[ \t]then[ \t]|[ \t]do[ \t]|[ \t]else[ \t])[ \t]*(command[ \t]+)?[g]it[ \t][^;|&)]*rev-parse[ \t][^;|&)]*--show-toplevel/) return
+  classify("bareroot", "root_norationale", ln, trim(text), text, ln)
 }
 
 # Enter the branch body of an accumulated `if` condition, but only when
@@ -291,7 +317,7 @@ BEGIN {
   # file is read and ahead of the mode branches below that `next` past a
   # line once they have consumed it — a marker can sit on a line no guard
   # shape ever visits, so the census has to see every line, not only the
-  # ones a hit or a bare mktemp already walks. The subtraction at END is
+  # ones a rule already matches. The subtraction at END is
   # what turns a marker the rules never consumed into a finding: this
   # marker is a trailing comment on the guard line itself, so one written
   # a line off, or left behind when a guard was rewritten, reaches
@@ -305,6 +331,7 @@ BEGIN {
   # Scanned ahead of the branch-tracking modes below, each of which
   # consumes its line, so a creation inside a guard body is still seen.
   if (sanctioned != 1) scan_temp(FNR, line)
+  if (sanctioned_root != 1) scan_root(FNR, line)
   scan_paramexp(FNR, line)
 
   if (mode == "cond") {
@@ -363,8 +390,8 @@ BEGIN {
 }
 
 # One record per marker the classification pass above never consumed:
-# a marker read as it went by, but no exit-line or bare-mktemp branch
-# ever routed it through classify() to mark it used.
+# a marker read as it went by, but no branch of any rule ever routed it
+# through classify() to mark it used.
 END {
   for (ln in marker_lines) {
     if (!(ln in marker_used)) {
@@ -397,9 +424,16 @@ for f in "${repo_scripts[@]}"; do
     sanctioned=1
     sanctioned_sites=$((sanctioned_sites + 1))
   fi
+  # `scripts/lib/repo.sh` is the same arrangement for the root-lookup
+  # rule, keyed the same way on the whole path.
+  sanctioned_root=0
+  if [[ ${f} == "${DIR}/lib/repo.sh" ]]; then
+    sanctioned_root=1
+    sanctioned_sites=$((sanctioned_sites + 1))
+  fi
   # Captured rather than piped so a scanner failure aborts the run
   # instead of handing this loop an empty stream to score as clean.
-  findings="$(awk -v sanctioned="${sanctioned}" -- "${SCANNER}" <"${f}")"
+  findings="$(awk -v sanctioned="${sanctioned}" -v sanctioned_root="${sanctioned_root}" -- "${SCANNER}" <"${f}")"
   [[ -z ${findings} ]] && continue
   while IFS=$'\t' read -r kind exit_line guard_line detail; do
     [[ -z ${kind} ]] && continue
@@ -421,6 +455,16 @@ for f in "${repo_scripts[@]}"; do
       ;;
     temp_norationale)
       printf '%s:%s: exit-code-exempt marker on a bare mktemp carries no rationale (%s); the call stays a hit until the marker says why a temp file this script cannot create is the finding\n' \
+        "${f}" "${exit_line}" "${detail}" >&2
+      failed=$((failed + 1))
+      ;;
+    bareroot)
+      printf '%s:%s: resolves the repository root with a bare git rev-parse --show-toplevel (%s); outside a work tree git exits 128, a status no caller reads as could-not-run — route it through repo_toplevel from scripts/lib/repo.sh\n' \
+        "${f}" "${exit_line}" "${detail}" >&2
+      failed=$((failed + 1))
+      ;;
+    root_norationale)
+      printf '%s:%s: exit-code-exempt marker on a repository-root lookup carries no rationale (%s); the lookup stays a hit until the marker says why a missing work tree there is the finding\n' \
         "${f}" "${exit_line}" "${detail}" >&2
       failed=$((failed + 1))
       ;;

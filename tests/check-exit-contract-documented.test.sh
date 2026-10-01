@@ -72,6 +72,8 @@ expect good-comment-only 0 ''
 # --- both routes to exit 2 are found ---
 expect bad-literal 1 'can reach exit 2 but its header documents no exit-2 case'
 expect bad-helper 1 'can reach exit 2 but its header documents no exit-2 case'
+# The repository-root helper exits 2 in the caller's shell like the others.
+expect bad-repo-helper 1 'check-r.sh'
 
 # --- a 2 that is prose rather than an exit code excuses nothing ---
 # 2FA and v2 open words; the token guard is what stops either from

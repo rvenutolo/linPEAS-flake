@@ -90,7 +90,7 @@ function main() {
   # The full summary line, orphan field included, so a census that stopped
   # running is a missing substring here rather than a silent pass.
   run_scenario 'guards already exiting 2 pass' \
-    'good-clean' 0 '2 script(s) scanned, 0 exemption(s), 0 orphan marker(s)'
+    'good-clean' 0 '2 script(s) scanned, 0 exemption(s), 0 orphan marker(s), 0 sanctioned site(s)'
   # The violation sits under lib/ beside a clean top-level script, so a
   # scan that stops at the root still reads a file and reports nothing.
   # The asserted path is what discriminates this from the tool-guard
@@ -116,7 +116,7 @@ function main() {
   # path keeps its bare invocation. The tally is what proves the
   # exemption fired rather than the file merely scanning clean.
   run_scenario 'the guarded helper at lib/temp.sh stays exempt' \
-    'good-sanctioned-temp' 0 '1 sanctioned site(s)'
+    'good-sanctioned-temp' 0 '1 script(s) scanned, 0 exemption(s), 0 orphan marker(s), 1 sanctioned site(s)'
   # Each fixture below scans a different number of files so that no two
   # clean scenarios share the summary line, which is their whole output.
   run_scenario 'every guarded-helper form passes' \
@@ -137,7 +137,7 @@ function main() {
     'bad-orphan-marker' 1 \
     'bad-orphan-marker/scripts/no-guard.sh:7: exit-code-exempt marker excuses no site this rule matches'
 
-  # The third route to the same wrong answer: a required-parameter
+  # Another route to the same wrong answer: a required-parameter
   # expansion fails with the shell default status of 1, so an operator who
   # typed an incomplete command line is told the check found a violation.
   run_scenario 'a required-parameter expansion is a hit' \
@@ -146,6 +146,37 @@ function main() {
   # The marker means the same thing on this shape as on the other two.
   run_scenario 'rationale-bearing expansion exemption is counted' \
     'good-param-exempted' 0 '2 script(s) scanned, 1 exemption(s)'
+
+  # The repository-root lookup is the same class again: outside a work
+  # tree git exits 128, which the caller reports as neither could-not-run
+  # nor a finding. Each shape below asserts its own fixture path.
+  run_scenario 'a bare repository-root lookup is a hit' \
+    'bad-bare-root' 1 \
+    'bad-bare-root/scripts/find-root.sh:7: resolves the repository root with a bare git rev-parse --show-toplevel'
+  # Options between the command and the subcommand do not hide it.
+  run_scenario 'a lookup with -C before the subcommand is a hit' \
+    'bad-root-dash-c' 1 \
+    'bad-root-dash-c/scripts/find-root.sh:7: resolves the repository root with a bare git rev-parse --show-toplevel'
+  # A fallback that reads the current directory instead is still a hit.
+  run_scenario 'a lookup with a fallback is a hit' \
+    'bad-root-fallback' 1 \
+    'bad-root-fallback/scripts/find-root.sh:6: resolves the repository root with a bare git rev-parse --show-toplevel'
+  # The exemption is keyed on the whole path, as for the temp helper.
+  run_scenario 'a repo.sh outside lib/ does not inherit the exemption' \
+    'bad-stray-repo' 1 \
+    'bad-stray-repo/scripts/util/repo.sh:6: resolves the repository root with a bare git rev-parse --show-toplevel'
+  # The helper at the sanctioned path keeps its lookup; the tally proves
+  # the exemption fired rather than the file scanning clean.
+  run_scenario 'the guarded helper at lib/repo.sh stays exempt' \
+    'good-sanctioned-repo' 0 '2 script(s) scanned, 0 exemption(s), 0 orphan marker(s), 1 sanctioned site(s)'
+  # Every caller form passes, and prose naming the lookup (a comment, a
+  # parenthetical, a string operand, a trailing comment) is not a hit.
+  run_scenario 'helper callers and prose naming the lookup pass' \
+    'good-repo-toplevel' 0 '5 script(s) scanned, 0 exemption(s), 0 orphan marker(s), 1 sanctioned site(s)'
+  run_scenario 'a rationale-bearing root-lookup exemption is counted' \
+    'good-root-exempted' 0 '3 script(s) scanned, 1 exemption(s)'
+  run_scenario 'a root-lookup exemption without a rationale is a hit' \
+    'bad-root-no-rationale' 1 'exit-code-exempt marker on a repository-root lookup carries no rationale'
 
   harness_assert_verify || failures=$((failures + 1))
 

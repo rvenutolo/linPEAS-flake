@@ -637,7 +637,7 @@ A script can reach exit 2 two ways, and both count:
   - a call to a library helper that exits 2 in the caller's shell:
     require_tool, enumerate_into, glob_into, filter_into,
     require_json_payload, payload_source_into, read_json_payload_into,
-    make_temp
+    make_temp, repo_toplevel
 ```
 
 Detection is textual and direct-call-only: a helper reached through
@@ -751,8 +751,9 @@ selection and reporting.
 
 Lint: no script anywhere under `scripts/` may exit 1 out
 of a guard whose test is only an availability check, none may create
-a temp file with a bare `mktemp`, and none may take a required value
-through a `${var:?}` expansion. The exit codes separate what the
+a temp file with a bare `mktemp`, none may resolve the repository root
+with a bare `git rev-parse --show-toplevel`, and none may take a
+required value through a `${var:?}` expansion. The exit codes separate what the
 operator has to do about a run: 2 means the check could not run (a
 required tool is absent, an input is missing, unreadable or
 malformed), 1 means it ran and found a violation, 0 means clean. An
@@ -794,9 +795,23 @@ command substitution, a pipe, a separator, a negation, a group
 opening, or one of the keywords `then`, `do` and `else` — so prose
 naming the command, including a parenthetical, is not a hit.
 
+The third rule is the same class again. Outside a git work tree, `git rev-parse --show-toplevel` exits 128, and an unguarded
+`x="$(git rev-parse --show-toplevel)"` under `set -e` ends the caller
+with that status, which no caller reads as could-not-run; a fallback
+such as `|| echo .` reads the wrong tree instead. Every lookup therefore
+routes through `repo_toplevel` (`scripts/lib/repo.sh`), which reports a
+missing work tree as exit 2; that library holds the one sanctioned
+lookup and is the only file this rule skips. Matching uses the same
+command positions as the temp-file rule, with any words between `git`
+and `rev-parse` (so `git -C <dir>` is read too), and `--show-toplevel`
+anywhere later in the same command. A string operand that opens with
+`$(` does match, since the matcher does not read quotes; such a literal
+takes the marker.
+
 Escape hatch: `# exit-code-exempt: <rationale>`, on the exit line of a
 guard whose missing input genuinely IS the finding, or on the line of a
-bare temp-file creation whose failure IS the finding. The marker has
+bare temp-file creation or repository-root lookup whose failure IS the
+finding. The marker has
 to open the comment — matching drops everything up to and including
 the line's first `#` and requires the remainder to begin with the
 marker word, so prose naming it exempts nothing — and the rationale
@@ -810,10 +825,10 @@ clean run prints the exemption count, so the exempt set is stated
 rather than open-ended.
 
 The same predicate that opens a marker's comment for classification
-also opens it for a census that runs after every hit and bare-mktemp
-check: a line whose comment opens with `exit-code-exempt:` is recorded
-as the file is read, marked consumed only when a hit or a bare mktemp
-is actually routed through it, and any recorded line left unconsumed
+also opens it for a census that runs after every rule's check: a line
+whose comment opens with `exit-code-exempt:` is recorded as the file is
+read, marked consumed only when a site some rule matched is actually
+routed through it, and any recorded line left unconsumed
 once the file is done is reported as its own finding and fails the
 run — a marker still reads as a decision someone made about the guard
 beneath it, and keeps asserting that decision after the guard was
