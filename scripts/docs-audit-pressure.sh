@@ -43,11 +43,19 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/log.sh
 source "${_lib_dir}/lib/log.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 
 # The job enumeration below ends in `|| true`, so an absent `yq`
 # yields an empty list and the pressure figure silently undercounts
 # rather than reporting that it read nothing.
 require_tool yq
+
+# Every default path below is relative to the repository root, which is
+# also what `repo_relative` rebases against, so a run from outside a work
+# tree stops here rather than reporting a missing input.
+REPO_ROOT="$(repo_toplevel)"
+readonly REPO_ROOT
 
 readonly AUDIT_STATE="${DOCS_AUDIT_STATE_OVERRIDE:-.github/docs-audit-state}"
 readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-.github/workflows}"
@@ -128,10 +136,8 @@ function job_ids_at() {
 # @arg $1 path, absolute or already relative
 function repo_relative() {
   local -r path="$1"
-  local root
-  root="$(git rev-parse --show-toplevel)"
-  if [[ ${path} == "${root}"/* ]]; then
-    printf '%s\n' "${path#"${root}"/}"
+  if [[ ${path} == "${REPO_ROOT}"/* ]]; then
+    printf '%s\n' "${path#"${REPO_ROOT}"/}"
   else
     printf '%s\n' "${path}"
   fi

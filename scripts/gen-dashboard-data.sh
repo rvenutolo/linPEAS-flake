@@ -48,6 +48,8 @@ source "${_lib_dir}/lib/log.sh"
 source "${_lib_dir}/lib/temp.sh"
 # shellcheck source=scripts/lib/payload.sh
 source "${_lib_dir}/lib/payload.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 install_err_trap
 
 # @description Verify a JSON-extracted field is non-empty and not 'null';
@@ -183,7 +185,7 @@ function main() {
   require_tool yq
 
   local repo_root pin_file out_file out_tmp
-  repo_root="$(git rev-parse --show-toplevel)"
+  repo_root="$(repo_toplevel)"
   pin_file="${repo_root}/linpeas-pin.json"
   if [[ -n ${PIN_FILE_OVERRIDE:-} ]]; then
     pin_file="${PIN_FILE_OVERRIDE}"
