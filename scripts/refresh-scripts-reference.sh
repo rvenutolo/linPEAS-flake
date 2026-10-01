@@ -29,6 +29,8 @@ source "${_lib_dir}/lib/awk-path.sh"
 source "${_lib_dir}/lib/temp.sh"
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 install_err_trap
 
 # Temp files removed by the EXIT trap. Declared at script scope, not main-local:
@@ -250,7 +252,7 @@ function main() {
   require_tool treefmt
 
   local scripts_dir doc awk_parser
-  repo_root="$(git rev-parse --show-toplevel)"
+  repo_root="$(repo_toplevel)"
   readonly repo_root
   scripts_dir="${SCRIPTS_DIR_OVERRIDE:-${repo_root}/scripts}"
   doc="${repo_root}/docs/reference/scripts.md"

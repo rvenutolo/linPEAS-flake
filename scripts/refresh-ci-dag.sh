@@ -37,6 +37,8 @@ source "${_lib_dir}/lib/log.sh"
 source "${_lib_dir}/lib/awk-path.sh"
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 install_err_trap
 
 # Category display name -> mermaid classDef key. Any job whose category
@@ -70,7 +72,7 @@ function main() {
   require_tool cmp
 
   local repo_root workflow cat_map doc
-  repo_root="$(git rev-parse --show-toplevel)"
+  repo_root="$(repo_toplevel)"
   workflow="${CI_WORKFLOW_OVERRIDE:-${repo_root}/.github/workflows/ci.yml}"
   cat_map="${CATEGORIES_FILE_OVERRIDE:-${repo_root}/docs/_data/ci-check-categories.yml}"
   doc="${DOC_OVERRIDE:-${repo_root}/docs/architecture/ci-dag.md}"

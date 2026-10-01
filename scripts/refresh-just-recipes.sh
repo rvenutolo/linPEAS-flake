@@ -30,6 +30,8 @@ source "${_lib_dir}/lib/log.sh"
 source "${_lib_dir}/lib/awk-path.sh"
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 install_err_trap
 
 function main() {
@@ -48,7 +50,7 @@ function main() {
   require_tool cmp
 
   local repo_root
-  repo_root="$(git rev-parse --show-toplevel)"
+  repo_root="$(repo_toplevel)"
   readonly repo_root
 
   # (doc, begin_marker, end_marker, wrap_with_fence) tuples — README

@@ -71,6 +71,8 @@ source "${_lib_dir}/lib/enumerate.sh"
 source "${_lib_dir}/lib/awk-path.sh"
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 install_err_trap
 
 # Temp files removed by the EXIT trap. Declared at script scope, not main-local:
@@ -750,7 +752,7 @@ function parse_and_render() {
   ci_jobs="$(make_temp)"
   roster="$(make_temp)"
   tmp_out="$(make_temp)"
-  repo_top="$(git rev-parse --show-toplevel)"
+  repo_top="$(repo_toplevel)"
   sibling="${EXEMPT_SOURCE_OVERRIDE:-${repo_top}/scripts/check-ci-job-in-summary.sh}"
   roster_source="${ROSTER_SOURCE_OVERRIDE:-${repo_top}/scripts/run-harness-group.sh}"
   check_reverse='1'
@@ -775,7 +777,7 @@ function parse_and_render() {
     # fmt_target is script-scoped (declared at top) so the EXIT trap can
     # remove the in-repo .md temp; do not redeclare it local here.
     local fmt_root
-    fmt_root="$(git rev-parse --show-toplevel)"
+    fmt_root="$(repo_toplevel)"
     fmt_target="$(make_temp "${fmt_root}/.refresh-enforcement-matrix-XXXXXX.md")"
     cp -- "${tmp_out}" "${fmt_target}"
     # The failure is caught rather than left to `set -e`: an unformatted
@@ -830,7 +832,7 @@ function main() {
 
   # repo_root is script-scoped (declared above) so the EXIT trap's sweep
   # can find the in-repo .md temp; assign it before any `make_temp` runs.
-  repo_root="$(git rev-parse --show-toplevel)"
+  repo_root="$(repo_toplevel)"
   local index_file output_file ci_yml scripts_dir
   index_file="${INVARIANT_INDEX_OVERRIDE:-${repo_root}/docs/invariant-index.md}"
   output_file="${MATRIX_OUTPUT_OVERRIDE:-${repo_root}/docs/security/enforcement-matrix.md}"

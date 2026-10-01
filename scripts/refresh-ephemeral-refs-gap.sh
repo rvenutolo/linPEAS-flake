@@ -43,9 +43,11 @@ source "${_lib_dir}/lib/temp.sh"
 source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/ephemeral-refs-scope.sh
 source "${_lib_dir}/lib/ephemeral-refs-scope.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 install_err_trap
 
-REPO_ROOT="${EPHEMERAL_REFS_GAP_ROOT_OVERRIDE:-$(git rev-parse --show-toplevel)}"
+REPO_ROOT="${EPHEMERAL_REFS_GAP_ROOT_OVERRIDE:-$(repo_toplevel)}"
 readonly REPO_ROOT
 
 # The block sits inside a bullet of `### Exemptions`, so every line it

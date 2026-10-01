@@ -28,6 +28,8 @@ source "${_lib_dir}/lib/log.sh"
 source "${_lib_dir}/lib/awk-path.sh"
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 install_err_trap
 
 function main() {
@@ -48,7 +50,7 @@ function main() {
   require_tool sed
 
   local repo_root doc
-  repo_root="$(git rev-parse --show-toplevel)"
+  repo_root="$(repo_toplevel)"
   doc="${repo_root}/docs/reference/flake-outputs.md"
   readonly repo_root doc
 
