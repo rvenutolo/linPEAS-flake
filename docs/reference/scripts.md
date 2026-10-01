@@ -2625,6 +2625,37 @@ filled.
 
 - `2` — the path is absent, unreadable, or the read failed
 
+### scripts/lib/repo.sh
+
+Guarded repository-root lookup. Source after
+`set -Eeuo pipefail`.
+
+#### repo_toplevel()
+
+Print the top level of the git work tree holding the
+current directory, reporting a work tree git cannot resolve as a
+could-not-run.
+Run outside a work tree (no repository, a bare repository, or inside a
+`.git` directory), `git rev-parse --show-toplevel` exits 128, and an
+unguarded `x="$(git rev-parse --show-toplevel)"` under `set -e` ends the
+caller with that 128, a status no caller reads as "could not run".
+Exiting 2 from inside the command substitution propagates through the
+enclosing assignment, so the call site needs no guard of its own; a
+`local` or `readonly` declaration on the same line would mask it, so
+assign on a line of its own. git's own diagnostic is left on stderr
+above this one, because it names the cause: no repository, no work tree,
+or a work tree git refuses to open (a `safe.directory` refusal). The
+lookup follows git's
+rules, so a set `GIT_DIR` or `GIT_WORK_TREE` decides the answer.
+
+**Exit codes:**
+
+- `2` — git is not on PATH, or git cannot resolve a work tree for the current directory
+
+**Stdout:**
+
+- the work tree's top-level path
+
 ### scripts/lib/temp.sh
 
 Guarded temp-file creation. Source after `set -Eeuo pipefail`.

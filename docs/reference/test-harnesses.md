@@ -101,6 +101,7 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/lib-harness-assert.test.sh` | `scripts/lib/harness-assert.sh` | —        |
 | `tests/lib-log.test.sh`            | `scripts/lib/log.sh`            | —        |
 | `tests/lib-payload.test.sh`        | `scripts/lib/payload.sh`        | —        |
+| `tests/lib-repo.test.sh`           | `scripts/lib/repo.sh`           | —        |
 | `tests/lib-temp.test.sh`           | `scripts/lib/temp.sh`           | —        |
 
 ## Refresh harnesses

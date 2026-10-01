@@ -53,6 +53,7 @@ readonly -a HARNESSES=(
   'refresh-notify-result|classify-refresh-notify-result.test.sh|'
   'lib-log|lib-log.test.sh|'
   'lib-enumerate|lib-enumerate.test.sh|'
+  'lib-repo|lib-repo.test.sh|'
   'lib-temp|lib-temp.test.sh|'
   'lib-awk-path|lib-awk-path.test.sh|'
   'lib-payload|lib-payload.test.sh|'
