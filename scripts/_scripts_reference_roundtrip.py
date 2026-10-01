@@ -425,9 +425,24 @@ def optional_markers(lines):
     return [MARKER.sub(lambda m: m.group(1) + OPTIONAL + m.group(2), line) for line in lines]
 
 
+# A run that may show either of two texts is one word: EITHER, then the
+# two readings with their blanks as SPACE, split by OR.
+EITHER, OR, SPACE = "\x02", "\x03", "\x04"
+
+
+def either(first, second):
+    return EITHER + OR.join(re.sub(r"\s+", SPACE, normalize(t)) for t in (first, second))
+
+
+def readings(word):
+    return [r.replace(SPACE, " ") for r in word[1:].split(OR)]
+
+
 def shown(text):
-    """Text for a diagnostic, without the optional-marker flags."""
-    return text.replace(OPTIONAL, "")
+    """Text for a diagnostic, without the optional-marker flags; a run read
+    two ways shows its first reading."""
+    words = [readings(w)[0] if w.startswith(EITHER) else w for w in text.split(" ")]
+    return " ".join(words).replace(OPTIONAL, "")
 
 
 def prose(lines):
@@ -447,25 +462,23 @@ def prose(lines):
 
 # A Markdown table. The page is formatted by mdformat, whose GFM rules decide
 # what is a table before python-markdown renders it, and python-markdown
-# renders every table mdformat writes, so these are GFM's rules: a header
-# row holding a pipe, then a delimiter row of as many cells, each indented
-# under four columns. Body rows run to a blank line, a line indented four
-# columns or more, or a list item; a row without a pipe is still a row.
-# A line opening another kind of block (a quote, heading, rule or fence)
-# may end a table too, but the description comparison rejects its marker
-# on either reading, so only a list item changes the outcome. A cell splits
-# at every pipe a backslash does not escape, code span or not.
+# renders a table mdformat writes as its own block, so these are GFM's
+# rules: a header row holding a pipe, then a delimiter row of as many cells,
+# each indented under four columns. Body rows run to a blank line, a line
+# indented four columns or more, a list item or a code fence; a row without
+# a pipe is still a row. A quote, heading, rule or HTML block ends a table
+# too, but the description comparison rejects its marker on either
+# reading, so only a list item and a fence change the outcome. A cell
+# splits at every pipe a backslash does not escape, code span or not.
 #
 # The two renderers disagree on one shape: a delimiter row whose cells hold
 # only colons and blanks, no dash. GFM reads no table there, so mdformat
 # leaves the lines as text, and python-markdown renders a table when they
-# open a block. Such a run is read both ways: each word made only of
-# pipes, colons and dashes may be absent.
+# open a block. Such a run is read both ways: as its text or as its cells.
 PIPE = re.compile(r"(?<!\\)\|")
 DELIMITER_CELL = re.compile(r"^[ \t]*:?-+:?[ \t]*$")
 LOOSE_DELIMITER_CELL = re.compile(r"^[ :-]*$")
-TABLE_MARKUP = re.compile(r"^[|:-]+$")
-ENDS_TABLE = re.compile(r"^[ \t]*(?:[-*+]|[0-9]+[.)])(?:[ \t]|$)")
+ENDS_TABLE = re.compile(r"^[ \t]*(?:(?:[-*+]|[0-9]{1,9}[.)])(?:[ \t]|$)|```|~~~)")
 
 
 def indent_of(line):
@@ -506,16 +519,27 @@ def table_end(lines, k):
     return end, both
 
 
+def unescape_pipes(text):
+    r"""Outside a code span a pipe's backslash is removed twice: GFM's table
+    split turns `\|` into `|`, then the inline escape does the same, so
+    `\\|` shows as `|` too."""
+    return text.replace("\\|", "|").replace("\\|", "|")
+
+
 def cell_text(cell):
     """A cell as the page shows it: a code span loses its backticks and keeps
     a backslash before a pipe; outside one, the backslash goes."""
     out, at = [], 0
     for m in CODE_SPAN.finditer(cell):
-        out.append(cell[at:m.start()].replace("\\|", "|"))
+        out.append(unescape_pipes(cell[at:m.start()]))
         out.append(m.group(2).strip())
         at = m.end()
-    out.append(cell[at:].replace("\\|", "|"))
+    out.append(unescape_pipes(cell[at:]))
     return "".join(out)
+
+
+def table_cells_text(rows):
+    return " ".join(cell_text(c) for row in rows for c in cells(row))
 
 
 def prose_pieces(lines, nos):
@@ -529,14 +553,10 @@ def prose_pieces(lines, nos):
             continue
         end, both = found
         out.append((prose(optional_markers(lines[i:k])), None))
+        rows = [lines[k]] + lines[k + 2:end]
+        text = table_cells_text(rows)
         if both:
-            # Read as text, with every word that is only table markup
-            # optional, so a rendered table matches too.
-            words = prose(lines[k:end]).split()
-            text = " ".join(OPTIONAL + w if TABLE_MARKUP.match(w) else w for w in words)
-        else:
-            rows = [lines[k]] + lines[k + 2:end]
-            text = " ".join(cell_text(c) for row in rows for c in cells(row))
+            text = either(prose(lines[k:end]), text)
         out.append((text, nos[k]))
         i = k = end
     out.append((prose(optional_markers(lines[i:])), None))
@@ -551,10 +571,15 @@ def normalize(text):
 
 def contains(have, want, start=0):
     """Offset just past `want` found as whole words in `have`, or -1. A
-    word flagged as an optional list marker may be absent."""
-    pattern = " " + "".join(
-        f"(?:{re.escape(w[1:])} )?" if w.startswith(OPTIONAL) else re.escape(w) + " "
-        for w in want.split(" ") if w)
+    word flagged as an optional list marker may be absent, and a run read
+    two ways matches either reading."""
+    def word(w):
+        if w.startswith(OPTIONAL):
+            return f"(?:{re.escape(w[1:])} )?"
+        if w.startswith(EITHER):
+            return "(?:" + "|".join(re.escape(r) + " " if r else "" for r in readings(w)) + ")"
+        return re.escape(w) + " "
+    pattern = " " + "".join(word(w) for w in want.split(" ") if w)
     m = re.compile(pattern).search(" " + have + " ", start)
     return -1 if m is None else m.end() - 1
 

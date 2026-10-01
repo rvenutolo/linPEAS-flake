@@ -1517,8 +1517,8 @@ function `@description` blocks are read as well. The reader splits a
 header into units at each tag. A unit's text must appear in that script's
 or function's entry: prose with whitespace collapsed and code-span
 backticks removed, a table in description text as its cells' words
-without pipes or delimiter row, an `@arg`, `@option`, `@exitcode` or `@stdout` as one
-whole item of its list, and an `@example` as the entry's example block,
+without pipes or delimiter row, an `@arg`, `@option`, `@exitcode` or
+`@stdout` as one whole item of its list, and an `@example` as the entry's example block,
 line for line. Prose after a blank comment line that closes an `@arg`, `@option`,
 `@exitcode` or `@stdout` is a further description unit. An indented run
 whose lead-in line ends in a colon must also stay one preformatted block,
