@@ -27,6 +27,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/enumerate.sh
+source "${REPO_ROOT}/scripts/lib/enumerate.sh"
 
 failures=0
 rc=0
@@ -151,11 +153,15 @@ done
 # Every script that calls the helper must have a row, or a new caller's
 # guard would go unexercised. The helper's own file is not a caller.
 shopt -s nullglob globstar
+declare -a repo_scripts=()
+glob_into repo_scripts 'repo shell scripts' "${REPO_ROOT}/scripts/**/*.sh"
 callers=0
-for f in "${REPO_ROOT}"/scripts/**/*.sh; do
+for f in "${repo_scripts[@]}"; do
   rel="${f#"${REPO_ROOT}/scripts/"}"
   [[ ${rel} == lib/repo.sh ]] && continue
-  grep --quiet --extended-regexp -- '(^|[^[:alnum:]_])repo_toplevel([^[:alnum:]_]|$)' "${f}" || continue
+  # A call is a command substitution or a command at the start of a line;
+  # a lint naming the helper in a message or a pattern is not a caller.
+  grep --quiet --extended-regexp -- '(\$\(|^[[:space:]]*)repo_toplevel([^[:alnum:]_]|$)' "${f}" || continue
   callers=$((callers + 1))
   found=0
   for row in "${ROWS[@]}"; do
