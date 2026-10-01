@@ -159,9 +159,13 @@ expect_could_not_run 'git-absent' 'git-absent.sh: git is not on PATH' \
 # 9. refused-work-tree — git refuses a work tree it judges to belong to
 # someone else (`safe.directory`). git's own line names that cause and is
 # left on stderr above the helper's. GIT_TEST_ASSUME_DIFFERENT_OWNER is
-# git's own switch for producing that refusal without a second user.
+# git's own switch for producing that refusal without a second user. The
+# global and system config are set aside, because a `safe.directory`
+# entry there lets git open the work tree anyway, as it did on the CI
+# runner.
 # shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
 run_scenario 'refused-work-tree' 'detected dubious ownership' "${WT}" 'export GIT_TEST_ASSUME_DIFFERENT_OWNER=1
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 t="$(repo_toplevel)"
 printf "continued top=%s\n" "${t}"'
 expect_could_not_run 'refused-work-tree' 'refused-work-tree.sh: cannot resolve the git work tree' \
