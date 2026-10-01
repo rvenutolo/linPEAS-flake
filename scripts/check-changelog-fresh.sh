@@ -56,8 +56,10 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/awk-path.sh"
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || printf '.')"
+REPO_ROOT="$(repo_toplevel)"
 readonly REPO_ROOT
 readonly CHANGELOG="${CHANGELOG_OVERRIDE:-${REPO_ROOT}/CHANGELOG.md}"
 readonly CLIFF_TOML="${CLIFF_TOML_OVERRIDE:-${REPO_ROOT}/cliff.toml}"

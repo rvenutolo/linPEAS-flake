@@ -65,6 +65,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 
 OCTOSCAN_DIGEST="sha256:3368f42651f9ca0d7a7cd08de3b734476046d17ffa0b2b0c6c55acef556300db"
 OCTOSCAN_VERSION="v0.1.7"
@@ -128,7 +130,7 @@ if [[ -n ${sarif_out} ]] && ! command -v jq >/dev/null 2>&1; then
   exit 2
 fi
 
-repo_root="$(git rev-parse --show-toplevel 2>/dev/null || printf '%s' "$PWD")"
+repo_root="$(repo_toplevel)"
 workflows_dir="${repo_root}/.github/workflows"
 
 shopt -s nullglob

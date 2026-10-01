@@ -42,8 +42,10 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/payload.sh
 source "${_lib_dir}/lib/payload.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || printf '.')"
+REPO_ROOT="$(repo_toplevel)"
 readonly REPO_ROOT
 readonly FLAKE_NIX="${FLAKE_NIX_OVERRIDE:-${REPO_ROOT}/flake.nix}"
 readonly FLAKE_LOCK="${FLAKE_LOCK_OVERRIDE:-${REPO_ROOT}/flake.lock}"

@@ -637,7 +637,7 @@ A script can reach exit 2 two ways, and both count:
   - a call to a library helper that exits 2 in the caller's shell:
     require_tool, enumerate_into, glob_into, filter_into,
     require_json_payload, payload_source_into, read_json_payload_into,
-    make_temp
+    make_temp, repo_toplevel
 ```
 
 Detection is textual and direct-call-only: a helper reached through
@@ -751,8 +751,10 @@ selection and reporting.
 
 Lint: no script anywhere under `scripts/` may exit 1 out
 of a guard whose test is only an availability check, none may create
-a temp file with a bare `mktemp`, and none may take a required value
-through a `${var:?}` expansion. The exit codes separate what the
+a temp file with a bare `mktemp`, none may resolve the repository root
+with a bare `git rev-parse --show-toplevel` or lose the status of the
+guarded `repo_toplevel` to a declaration builtin on the same line, and
+none may take a required value through a `${var:?}` expansion. The exit codes separate what the
 operator has to do about a run: 2 means the check could not run (a
 required tool is absent, an input is missing, unreadable or
 malformed), 1 means it ran and found a violation, 0 means clean. An
@@ -794,9 +796,31 @@ command substitution, a pipe, a separator, a negation, a group
 opening, or one of the keywords `then`, `do` and `else` — so prose
 naming the command, including a parenthetical, is not a hit.
 
+The third rule is the same class again. Outside a git work tree, `git rev-parse --show-toplevel` exits 128, and an unguarded
+`x="$(git rev-parse --show-toplevel)"` under `set -e` ends the caller
+with that status, which no caller reads as could-not-run; a fallback
+such as `|| echo .` reads the wrong tree instead. Every lookup therefore
+routes through `repo_toplevel` (`scripts/lib/repo.sh`), which reports a
+missing work tree as exit 2; that library holds the one sanctioned
+lookup and is the only file this rule skips. Matching uses the same
+command positions as the temp-file rule, with any words between `git`
+and `rev-parse` (so `git -C <dir>` is read too, a `$(…)` in `<dir>`
+with no `;`, `|` or `&` inside it included), and `--show-toplevel` later in the same command. Matching is
+per physical line, so a lookup split by a backslash continuation is not
+read, and neither is a lookup in a position the temp-file rule does not
+list (a subshell, `env git`, a path to git) or `--show-cdup`. A string
+operand or trailing comment holding `$(git rev-parse --show-toplevel)`
+does match, since the matcher reads neither quotes nor trailing
+comments; such a literal takes the marker. A `repo_toplevel` call inside
+the arguments of `local`, `readonly`, `declare`, `export` or `typeset` is
+its own hit: the builtin returns its own status, so the 2 is lost. That
+arm reads neither quotes nor heredocs either, and does not see a call in
+backticks.
+
 Escape hatch: `# exit-code-exempt: <rationale>`, on the exit line of a
 guard whose missing input genuinely IS the finding, or on the line of a
-bare temp-file creation whose failure IS the finding. The marker has
+bare temp-file creation or repository-root lookup whose failure IS the
+finding. The marker has
 to open the comment — matching drops everything up to and including
 the line's first `#` and requires the remainder to begin with the
 marker word, so prose naming it exempts nothing — and the rationale
@@ -810,10 +834,10 @@ clean run prints the exemption count, so the exempt set is stated
 rather than open-ended.
 
 The same predicate that opens a marker's comment for classification
-also opens it for a census that runs after every hit and bare-mktemp
-check: a line whose comment opens with `exit-code-exempt:` is recorded
-as the file is read, marked consumed only when a hit or a bare mktemp
-is actually routed through it, and any recorded line left unconsumed
+also opens it for a census that runs after every rule's check: a line
+whose comment opens with `exit-code-exempt:` is recorded as the file is
+read, marked consumed only when a site some rule matched is actually
+routed through it, and any recorded line left unconsumed
 once the file is done is reported as its own finding and fails the
 run — a marker still reads as a decision someone made about the guard
 beneath it, and keeps asserting that decision after the guard was
@@ -2624,6 +2648,37 @@ filled.
 **Exit codes:**
 
 - `2` — the path is absent, unreadable, or the read failed
+
+### scripts/lib/repo.sh
+
+Guarded repository-root lookup. Source after
+`set -Eeuo pipefail`.
+
+#### repo_toplevel()
+
+Print the top level of the git work tree git resolves for
+the current directory, reporting a work tree git cannot resolve as a
+could-not-run.
+Run outside a work tree (no repository, a bare repository, or inside a
+`.git` directory), `git rev-parse --show-toplevel` exits 128, and an
+unguarded `x="$(git rev-parse --show-toplevel)"` under `set -e` ends the
+caller with that 128, a status no caller reads as "could not run".
+Exiting 2 from inside the command substitution propagates through the
+enclosing assignment, so the call site needs no guard of its own; a
+`local`, `readonly`, `declare`, `export` or `typeset` on the same line
+returns its own status and masks it, so assign on a line of its own. git's own diagnostic is left on stderr
+above this one, because it names the cause: no repository, no work tree,
+or a work tree git refuses to open (a `safe.directory` refusal). The
+lookup follows git's
+rules, so a set `GIT_DIR` or `GIT_WORK_TREE` decides the answer.
+
+**Exit codes:**
+
+- `2` — git is not on PATH, or git cannot resolve a work tree for the current directory
+
+**Stdout:**
+
+- the work tree's top-level path
 
 ### scripts/lib/temp.sh
 

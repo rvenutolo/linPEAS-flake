@@ -101,6 +101,7 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/lib-harness-assert.test.sh` | `scripts/lib/harness-assert.sh` | —        |
 | `tests/lib-log.test.sh`            | `scripts/lib/log.sh`            | —        |
 | `tests/lib-payload.test.sh`        | `scripts/lib/payload.sh`        | —        |
+| `tests/lib-repo.test.sh`           | `scripts/lib/repo.sh`           | —        |
 | `tests/lib-temp.test.sh`           | `scripts/lib/temp.sh`           | —        |
 
 ## Refresh harnesses
@@ -139,6 +140,7 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/linpeas-pin-assert.test.sh`             | `nix/linpeas.nix`                           | —                                            |
 | `tests/mark-docs-audit.test.sh`                | `scripts/mark-docs-audit.sh`                | —                                            |
 | `tests/octoscan-scan.test.sh`                  | `scripts/octoscan-scan.sh`                  | —                                            |
+| `tests/repo-root-guard.test.sh`                | `scripts/*.sh`                              | —                                            |
 | `tests/run-doc-freshness.test.sh`              | `scripts/run-doc-freshness.sh`              | —                                            |
 | `tests/run-harness-group.test.sh`              | `scripts/run-harness-group.sh`              | —                                            |
 | `tests/run-lint-group.test.sh`                 | `scripts/run-lint-group.sh`                 | —                                            |

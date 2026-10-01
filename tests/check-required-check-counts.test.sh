@@ -409,7 +409,7 @@ function main() {
   run_scenario 'non-repo-scan-root-exits-2' 2 'failed enumerating the scan set' '' "${root}"
   # Run from outside any repository, the repo root cannot be found; that
   # is a could-not-run too, not git's own exit status.
-  run_scenario 'non-repo-cwd-exits-2' 2 'required-check-counts: not inside a git repository' '' \
+  run_scenario 'non-repo-cwd-exits-2' 2 'check-required-check-counts.sh: cannot resolve the git work tree' '' \
     "${root}" "${root}"
   rm --recursive --force -- "${root}"
 

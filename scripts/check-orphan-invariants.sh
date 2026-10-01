@@ -32,8 +32,10 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
+REPO_ROOT="$(repo_toplevel)"
 readonly REPO_ROOT
 readonly INDEX="${INVARIANT_INDEX_OVERRIDE:-${REPO_ROOT}/docs/invariant-index.md}"
 readonly DOCS_ROOT="${DOCS_ROOT_OVERRIDE:-${REPO_ROOT}/docs}"

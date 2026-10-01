@@ -34,9 +34,11 @@ source "${_lib_dir}/lib/awk-path.sh"
 source "${_lib_dir}/lib/temp.sh"
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 install_err_trap
 
-REPO_ROOT="${PIN_PARITY_ROOT_OVERRIDE:-$(git rev-parse --show-toplevel)}"
+REPO_ROOT="${PIN_PARITY_ROOT_OVERRIDE:-$(repo_toplevel)}"
 readonly REPO_ROOT
 
 readonly MARKER_BEGIN='<!-- BEGIN pin-parity -->'

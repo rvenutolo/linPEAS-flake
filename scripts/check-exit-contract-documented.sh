@@ -14,7 +14,7 @@
 #   - a call to a library helper that exits 2 in the caller's shell:
 #     require_tool, enumerate_into, glob_into, filter_into,
 #     require_json_payload, payload_source_into, read_json_payload_into,
-#     make_temp
+#     make_temp, repo_toplevel
 # Detection is textual and direct-call-only: a helper reached through
 # another helper is already covered by that helper's own call site, and
 # chasing the source graph would report a script for code it never runs.
@@ -61,7 +61,7 @@ source "${_lib_dir}/lib/enumerate.sh"
 readonly SCRIPTS_DIR="${SCRIPTS_DIR_OVERRIDE:-scripts}"
 
 # Helpers that exit 2 in the shell that calls them.
-readonly HELPER_RE='require_tool|enumerate_into|glob_into|filter_into|require_json_payload|payload_source_into|read_json_payload_into|make_temp'
+readonly HELPER_RE='require_tool|enumerate_into|glob_into|filter_into|require_json_payload|payload_source_into|read_json_payload_into|make_temp|repo_toplevel'
 
 # @description Emit a script's header: every line above the first that is
 #              neither blank nor a comment.

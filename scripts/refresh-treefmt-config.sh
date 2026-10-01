@@ -30,6 +30,8 @@ source "${_lib_dir}/lib/log.sh"
 source "${_lib_dir}/lib/awk-path.sh"
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 install_err_trap
 
 # Temp files removed by the EXIT trap. Declared at script scope, not main-local:
@@ -80,7 +82,7 @@ function main() {
   require_tool treefmt
 
   local doc
-  repo_root="$(git rev-parse --show-toplevel)"
+  repo_root="$(repo_toplevel)"
   doc="${repo_root}/docs/reference/treefmt-config.md"
   readonly repo_root doc
   # Set before the temp files are made so even a failed `make_temp` triggers

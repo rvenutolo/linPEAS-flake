@@ -68,6 +68,8 @@ source "${_lib_dir}/lib/enumerate.sh"
 source "${_lib_dir}/lib/awk-path.sh"
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 
 require_tool git
 require_tool yq
@@ -78,7 +80,7 @@ require_tool sed
 require_tool sort
 require_tool basename
 
-REPO_ROOT="$(git rev-parse --show-toplevel)"
+REPO_ROOT="$(repo_toplevel)"
 readonly REPO_ROOT
 
 # Env overrides (test-only):

@@ -32,6 +32,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 shopt -s nullglob
 
 readonly TESTS_DIR="${TESTS_DIR_OVERRIDE:-tests}"
@@ -41,7 +43,7 @@ readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-.github/workflows}"
 
 repo_root="${REPO_ROOT_OVERRIDE:-}"
 if [[ -z ${repo_root} ]]; then
-  repo_root="$(git rev-parse --show-toplevel)"
+  repo_root="$(repo_toplevel)"
 fi
 readonly REPO_ROOT="${repo_root}"
 # Single star, not double: git pathspecs default to non-glob magic where `*`

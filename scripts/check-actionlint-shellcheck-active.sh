@@ -26,8 +26,10 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 
-repo_root="$(git rev-parse --show-toplevel)"
+repo_root="$(repo_toplevel)"
 readonly REPO_ROOT="${repo_root}"
 readonly DEFAULT_FIXTURE="${REPO_ROOT}/tests/fixtures/actionlint-shellcheck-smoke.yml"
 readonly FIXTURE="${ACTIONLINT_SMOKE_FIXTURE_OVERRIDE:-${DEFAULT_FIXTURE}}"

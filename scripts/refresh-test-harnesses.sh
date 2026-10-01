@@ -29,6 +29,8 @@ source "${_lib_dir}/lib/log.sh"
 source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 install_err_trap
 
 # Temp files removed by the EXIT trap. Declared at script scope, not
@@ -166,7 +168,7 @@ function main() {
   require_tool treefmt
 
   local tests_dir doc fixtures_root
-  repo_root="$(git rev-parse --show-toplevel)"
+  repo_root="$(repo_toplevel)"
   readonly repo_root
   tests_dir="${TESTS_DIR_OVERRIDE:-${repo_root}/tests}"
   doc="${DOC_OVERRIDE:-${repo_root}/docs/reference/test-harnesses.md}"

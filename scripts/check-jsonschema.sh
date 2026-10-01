@@ -39,6 +39,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 
 # renovate: datasource=git-refs depName=SchemaStore/schemastore packageName=https://github.com/SchemaStore/schemastore currentValue=master
 readonly SCHEMASTORE_SHA='ecae713b273dfed09cb9e29398f21b7da0bf9cd9'
@@ -56,7 +58,7 @@ if ! command -v check-jsonschema >/dev/null 2>&1; then
   exit 2
 fi
 
-repo_root="$(git rev-parse --show-toplevel)"
+repo_root="$(repo_toplevel)"
 cd "${repo_root}"
 
 failed=0
