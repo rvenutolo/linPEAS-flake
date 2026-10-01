@@ -9,9 +9,10 @@
     {
       checks = {
         formatting = config.treefmt.build.check inputs.self;
-        # `checks.pre-commit` is supplied by the flakeModule, and
-        # `checks.lint-shell-tools` by nix/devshell-lint.nix, which keeps it
-        # next to the tool list it validates.
+        # `checks.pre-commit` is supplied by the flakeModule,
+        # `checks.lint-shell-tools` by nix/devshell-lint.nix and
+        # `checks.devshell-renderer-python` by nix/devshell.nix, each kept
+        # next to the list it validates.
         # Wire the derivation builds into `nix flake check` so a
         # contributor running only the local check still exercises the
         # build path (fetchurl hash, patchShebangs, install rules).
