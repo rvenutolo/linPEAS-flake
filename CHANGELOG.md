@@ -6,6 +6,22 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20261001-5c755dbf] - 2026-10-01
+
+### Build
+- Declare the round-trip check's Python in the dev shell ([#1201](https://github.com/rvenutolo/linPEAS-flake/pull/1201))
+
+### Chores
+- Bump linpeas to 20261001-5c755dbf ([#1204](https://github.com/rvenutolo/linPEAS-flake/pull/1204))
+
+### Features
+- Commit recall seeds into a rewritten history of a clone ([#1197](https://github.com/rvenutolo/linPEAS-flake/pull/1197))
+
+### Fixes
+- Exit 2, not git's 128, when a script runs outside a work tree ([#1203](https://github.com/rvenutolo/linPEAS-flake/pull/1203))
+- Read header tables in the scripts-reference round trip ([#1202](https://github.com/rvenutolo/linPEAS-flake/pull/1202))
+- Stop notify-arms' step reader racing yq into SIGPIPE ([#1199](https://github.com/rvenutolo/linPEAS-flake/pull/1199))
+
 ## [20260930-df86658b] - 2026-09-30
 
 ### Chores
