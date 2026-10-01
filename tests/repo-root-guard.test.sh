@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # @subject scripts/*.sh
 # tests/repo-root-guard.test.sh — proves every script that resolves the
-# repository root exits 2 when started outside a git work tree, naming the
-# cause, rather than with git's own status.
+# repository root through `repo_toplevel` exits 2 when started outside a git
+# work tree, naming the cause, rather than with git's own status. A lookup
+# that bypasses the helper is the guard-exit-code lint's to catch.
 #
 # Each of these scripts documents exit 2 as "could not run". A bare
 # `x="$(git rev-parse --show-toplevel)"` under `set -e` ends the script
@@ -18,8 +19,9 @@
 # script that got past its root lookup cannot reach the network or a
 # container; any call is logged and fails the run.
 #
-# Two rows prove the other half: a root override still works outside a
-# work tree for the scripts whose override replaces the repository root.
+# Two rows prove the other half: `check-doc-anchors.sh` and
+# `check-ephemeral-refs.sh` call the helper only when their root override
+# is unset, so with it set they still run outside a work tree.
 set -Eeuo pipefail
 IFS=$'\n\t'
 

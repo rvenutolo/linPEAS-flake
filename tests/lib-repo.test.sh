@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # @subject scripts/lib/repo.sh
 # tests/lib-repo.test.sh — proves scripts/lib/repo.sh prints the work
-# tree's top level from anywhere inside it, and reports every place that is
-# not inside a work tree (no repository, a bare repository, a `.git`
-# directory, a work tree git refuses, no git on PATH) as a could-not-run (exit 2) naming the calling
-# script, both called directly and from inside a command substitution, so a
-# caller's `x="$(repo_toplevel)"` cannot leak git's own 128.
+# tree's top level from anywhere inside it, and reports every directory git
+# cannot resolve to a work tree (no repository, a bare repository, a `.git`
+# directory, a work tree git refuses), and a PATH without git, as a
+# could-not-run (exit 2) naming the calling script. The failures are driven
+# through a caller's `x="$(repo_toplevel)"`, so git's own 128 cannot leak
+# through the substitution, and once as a direct call.
 set -Eeuo pipefail
 IFS=$'\n\t'
 

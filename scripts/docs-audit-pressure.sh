@@ -51,9 +51,10 @@ source "${_lib_dir}/lib/repo.sh"
 # rather than reporting that it read nothing.
 require_tool yq
 
-# Every default path below is relative to the repository root, which is
-# also what `repo_relative` rebases against, so a run from outside a work
-# tree stops here rather than reporting a missing input.
+# Resolving the root first makes a run from outside a work tree stop here,
+# naming that, rather than report a missing input. The default paths below
+# stay relative to the current directory; `repo_relative` rebases override
+# paths against this root.
 REPO_ROOT="$(repo_toplevel)"
 readonly REPO_ROOT
 
