@@ -1481,8 +1481,9 @@ EOF
 }
 
 # What ends a table, as GFM reads it: a code fence and a numbered list item
-# end it; a number of ten digits is no list marker, so its line stays a row;
-# a table indented two columns is still a table.
+# end it; a number of ten digits is no list marker, and three backticks with
+# a backtick after them open no fence, so each line stays a row; a table
+# indented two columns is still a table.
 function scenario_table_endings() {
   new_tree tableendings
   cat >"${TREE}/scripts/a.sh" <<'EOF'
@@ -1525,6 +1526,15 @@ EOF
 #   | x | y |
 true
 EOF
+  cat >"${TREE}/scripts/e.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Backticks in a row.
+#
+# | A | B |
+# |---|---|
+# ```x``` | y
+true
+EOF
   write_page <<'EOF'
 ### scripts/a.sh
 
@@ -1563,9 +1573,17 @@ Two-column indent.
 | A   | B   |
 | --- | --- |
 | x   | y   |
+
+### scripts/e.sh
+
+Backticks in a row.
+
+| A   | B   |
+| --- | --- |
+| `x` | y   |
 EOF
   run_scenario 'a fence and a list item end a table; a long number does not' 0 '' \
-    'ok — 5 file(s), 5 annotation unit(s), 0 indented block(s), 4 table(s) published intact'
+    'ok — 6 file(s), 6 annotation unit(s), 0 indented block(s), 5 table(s) published intact'
 }
 
 # A pipe a backslash escapes is cell text, also at the end of a row: the
@@ -1637,7 +1655,9 @@ EOF
 
 # A delimiter row with no dash is no table to GFM, so mdformat leaves the
 # lines as text, but python-markdown renders a table when they open a
-# block. Either reading is accepted; a changed cell is still reported.
+# block. Either reading is accepted, its cells split as python-markdown
+# splits them, keeping a code span's pipes; a changed cell is still
+# reported.
 function scenario_dashless_delimiter_read_both_ways() {
   new_tree dashless
   cat >"${TREE}/scripts/t.sh" <<'EOF'
@@ -1666,6 +1686,15 @@ EOF
 # |x|y|
 true
 EOF
+  cat >"${TREE}/scripts/w.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Code pipe.
+#
+# | A | B |
+# | : | : |
+# | `a|b` | y |
+true
+EOF
   write_page <<'EOF'
 ### scripts/t.sh
 
@@ -1689,9 +1718,17 @@ Glued.
 |A|B|
 |:|:|
 |x|y|
+
+### scripts/w.sh
+
+Code pipe.
+
+| A | B |
+| : | : |
+| `a|b` | y |
 EOF
   run_scenario 'a dashless delimiter row may show as a table or as text' 0 '' \
-    'ok — 4 file(s), 4 annotation unit(s), 0 indented block(s), 3 table(s) published intact'
+    'ok — 5 file(s), 5 annotation unit(s), 0 indented block(s), 4 table(s) published intact'
   write_page <<'EOF'
 ### scripts/t.sh
 
@@ -1715,6 +1752,14 @@ Glued.
 |A|B|
 |:|:|
 |x|y|
+
+### scripts/w.sh
+
+Code pipe.
+
+| A | B |
+| : | : |
+| `a|b` | y |
 EOF
   run_scenario 'a changed cell in a dashless table is reported' 1 \
     "scripts/t.sh: @description (line 2) published 1 of 2 words; dropped or altered from: '| Alpha | Beta | | : | : | | one | two |' (in the table at line 4)"
