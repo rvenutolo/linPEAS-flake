@@ -804,16 +804,18 @@ routes through `repo_toplevel` (`scripts/lib/repo.sh`), which reports a
 missing work tree as exit 2; that library holds the one sanctioned
 lookup and is the only file this rule skips. Matching uses the same
 command positions as the temp-file rule, with any words between `git`
-and `rev-parse` (so `git -C <dir>` is read too, a substitution in `<dir>`
-included), and `--show-toplevel` later in the same command. Matching is
+and `rev-parse` (so `git -C <dir>` is read too, a `$(…)` in `<dir>`
+with no `;`, `|` or `&` inside it included), and `--show-toplevel` later in the same command. Matching is
 per physical line, so a lookup split by a backslash continuation is not
 read, and neither is a lookup in a position the temp-file rule does not
 list (a subshell, `env git`, a path to git) or `--show-cdup`. A string
 operand or trailing comment holding `$(git rev-parse --show-toplevel)`
 does match, since the matcher reads neither quotes nor trailing
-comments; such a literal takes the marker. A `repo_toplevel` call on the same line as
-`local`, `readonly`, `declare`, `export` or `typeset` is its own hit:
-the builtin returns its own status, so the 2 is lost.
+comments; such a literal takes the marker. A `repo_toplevel` call inside
+the arguments of `local`, `readonly`, `declare`, `export` or `typeset` is
+its own hit: the builtin returns its own status, so the 2 is lost. That
+arm reads neither quotes nor heredocs either, and does not see a call in
+backticks.
 
 Escape hatch: `# exit-code-exempt: <rationale>`, on the exit line of a
 guard whose missing input genuinely IS the finding, or on the line of a

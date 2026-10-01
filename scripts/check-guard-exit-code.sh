@@ -55,16 +55,18 @@
 # missing work tree as exit 2; that library holds the one sanctioned
 # lookup and is the only file this rule skips. Matching uses the same
 # command positions as the temp-file rule, with any words between `git`
-# and `rev-parse` (so `git -C <dir>` is read too, a substitution in `<dir>`
-# included), and `--show-toplevel` later in the same command. Matching is
+# and `rev-parse` (so `git -C <dir>` is read too, a `$(…)` in `<dir>`
+# with no `;`, `|` or `&` inside it included), and `--show-toplevel` later in the same command. Matching is
 # per physical line, so a lookup split by a backslash continuation is not
 # read, and neither is a lookup in a position the temp-file rule does not
 # list (a subshell, `env git`, a path to git) or `--show-cdup`. A string
 # operand or trailing comment holding `$(git rev-parse --show-toplevel)`
 # does match, since the matcher reads neither quotes nor trailing
-# comments; such a literal takes the marker. A `repo_toplevel` call on the same line as
-# `local`, `readonly`, `declare`, `export` or `typeset` is its own hit:
-# the builtin returns its own status, so the 2 is lost.
+# comments; such a literal takes the marker. A `repo_toplevel` call inside
+# the arguments of `local`, `readonly`, `declare`, `export` or `typeset` is
+# its own hit: the builtin returns its own status, so the 2 is lost. That
+# arm reads neither quotes nor heredocs either, and does not see a call in
+# backticks.
 #
 # Escape hatch: `# exit-code-exempt: <rationale>`, on the exit line of a
 # guard whose missing input genuinely IS the finding, or on the line of a
@@ -275,13 +277,18 @@ function scan_root(ln, text) {
   classify("bareroot", "root_norationale", ln, trim(text), text, ln)
 }
 
-# A helper call on the same line as a declaration builtin. The builtin
-# returns its own status, so the 2 the helper exits with inside the
-# substitution is lost and the caller carries on with an empty root.
+# A helper call inside the arguments of a declaration builtin. The
+# builtin returns its own status, so the 2 the helper exits with inside
+# the substitution is lost and the caller carries on with an empty root.
 # shellcheck reports the plain form but not one inside a default
-# expansion, so both are read here.
+# expansion, so both are read here. The builtin is matched in the same
+# command positions as the other rules, and its arguments run to a `;`,
+# `&`, `|` or a `#` that opens a comment, so a declaration that ends
+# before the call (`local x; x="$(repo_toplevel)"`) is not a hit while a
+# `${v#p}` expansion ahead of the call does not end the match. Inside the
+# substitution the call may follow other commands.
 function scan_maskroot(ln, text) {
-  if (text !~ /(^|[;&|{( \t])(local|readonly|declare|export|typeset)[ \t][^#]*[$][(][ \t]*[r]epo_toplevel([ \t)]|$)/) return
+  if (text !~ /(^|[;&|{(!]|[ \t]then[ \t]|[ \t]do[ \t]|[ \t]else[ \t])[ \t]*(builtin[ \t]+)?(local|readonly|declare|export|typeset)[ \t]([^#;&|]|[^ \t;&|]#)*[$][(]([^)]*[ \t;&|(])?[r]epo_toplevel([ \t)]|$)/) return
   classify("maskroot", "maskroot_norationale", ln, trim(text), text, ln)
 }
 
@@ -482,7 +489,7 @@ for f in "${repo_scripts[@]}"; do
       failed=$((failed + 1))
       ;;
     maskroot)
-      printf '%s:%s: calls repo_toplevel on the same line as a declaration builtin (%s); the builtin returns its own status, so the exit 2 is lost and the script carries on with an empty root — assign on a line of its own, then declare\n' \
+      printf '%s:%s: calls repo_toplevel inside the arguments of a declaration builtin (%s); the builtin returns its own status, so the exit 2 is lost and the script carries on with an empty root — split it: declare local or declare names on a line of their own first, then assign; assign first, then mark the name readonly or export\n' \
         "${f}" "${exit_line}" "${detail}" >&2
       failed=$((failed + 1))
       ;;

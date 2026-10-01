@@ -434,9 +434,12 @@ ROOT="${ROOT_OVERRIDE:-$(repo_toplevel)}"
 readonly ROOT
 ```
 
-Assign on a line of its own and declare afterwards: `local`, `readonly`,
-`declare`, `export` or `typeset` on the same line returns its own status
-and loses the 2, and the lint reports that shape too.
+Keep the call out of a declaration's arguments: `local`, `readonly`,
+`declare`, `export` or `typeset` returns its own status and loses the 2,
+and the lint reports that shape too. For `local` or `declare`, declare
+the name first and assign on the next line (`local root` then
+`root="$(repo_toplevel)"`); for `readonly` or `export`, assign first and
+then mark the name, as above.
 `tests/repo-root-guard.test.sh` runs every script that calls the helper
 from outside a work tree. Full rationale:
 [Workflow hardening → Bare repository-root lookup](../security/workflow-hardening.md#bare-repository-root-lookup).

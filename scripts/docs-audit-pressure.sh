@@ -53,8 +53,8 @@ require_tool yq
 
 # Resolving the root first makes a run from outside a work tree stop here,
 # naming that, rather than report a missing input. The default paths below
-# stay relative to the current directory; `repo_relative` rebases override
-# paths against this root.
+# stay relative to the current directory; `repo_relative` strips this
+# root from an absolute lint-groups path before it reaches `git show`.
 REPO_ROOT="$(repo_toplevel)"
 readonly REPO_ROOT
 

@@ -120,7 +120,7 @@ function main() {
   # Each fixture below scans a different number of files so that no two
   # clean scenarios share the summary line, which is their whole output.
   run_scenario 'every guarded-helper form passes' \
-    'good-make-temp' 0 '3 script(s) scanned, 0 exemption(s)'
+    'good-make-temp' 0 '3 script(s) scanned, 0 exemption(s), 0 orphan marker(s), 0 sanctioned site(s)'
   run_scenario 'rationale-bearing temp-file exemptions are counted' \
     'good-mktemp-exempted' 0 '1 script(s) scanned, 2 exemption(s)'
   run_scenario 'temp-file exemption without a rationale is a hit' \
@@ -186,10 +186,23 @@ function main() {
   # default-expansion one, so each has its own fixture.
   run_scenario 'a helper call masked by readonly in a default expansion is a hit' \
     'bad-masked-root-default' 1 \
-    'bad-masked-root-default/scripts/masked.sh:7: calls repo_toplevel on the same line as a declaration builtin'
+    'bad-masked-root-default/scripts/masked.sh:7: calls repo_toplevel inside the arguments of a declaration builtin'
   run_scenario 'a helper call masked by local is a hit' \
     'bad-masked-root-local' 1 \
-    'bad-masked-root-local/scripts/masked.sh:8: calls repo_toplevel on the same line as a declaration builtin'
+    'bad-masked-root-local/scripts/masked.sh:8: calls repo_toplevel inside the arguments of a declaration builtin'
+  # A ${v#p} expansion ahead of the call is not a comment, and the call
+  # may follow another command inside the substitution.
+  run_scenario 'a masked call after a hash expansion is a hit' \
+    'bad-masked-root-hash' 1 \
+    'bad-masked-root-hash/scripts/masked.sh:9: calls repo_toplevel inside the arguments of a declaration builtin'
+  run_scenario 'a masked call after another command is a hit' \
+    'bad-masked-root-after-cd' 1 \
+    'bad-masked-root-after-cd/scripts/masked.sh:8: calls repo_toplevel inside the arguments of a declaration builtin'
+  # A declaration that ends before the call keeps the status, and text
+  # naming the shape (a string, a trailing comment, a declaration word
+  # used as an argument) is not a declaration.
+  run_scenario 'declare-first forms and prose naming the masked shape pass' \
+    'good-mask-forms' 0 '3 script(s) scanned, 0 exemption(s), 0 orphan marker(s), 1 sanctioned site(s)'
   run_scenario 'a masked-call exemption without a rationale is a hit' \
     'bad-masked-root-no-rationale' 1 'exit-code-exempt marker on a masked repo_toplevel call carries no rationale'
   run_scenario 'a rationale-bearing root-lookup exemption is counted' \
