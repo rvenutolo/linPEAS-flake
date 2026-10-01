@@ -161,9 +161,11 @@ callers=0
 for f in "${repo_scripts[@]}"; do
   rel="${f#"${REPO_ROOT}/scripts/"}"
   [[ ${rel} == lib/repo.sh ]] && continue
-  # A call is a command substitution or a command at the start of a line;
-  # a lint naming the helper in a message or a pattern is not a caller.
-  grep --quiet --extended-regexp -- '(\$\(|^[[:space:]]*)repo_toplevel([^[:alnum:]_]|$)' "${f}" || continue
+  # A call is a command substitution or a command at the start of a line,
+  # outside a whole-line comment; a lint naming the helper in a message, a
+  # pattern or a comment is not a caller.
+  # shellcheck disable=SC2016 # awk program text: $0 is awk's, not the shell's
+  awk -- '!/^[[:space:]]*#/ && /(\$\(|^[[:space:]]*)repo_toplevel([^[:alnum:]_]|$)/ { found = 1 } END { exit !found }' <"${f}" || continue
   callers=$((callers + 1))
   found=0
   for row in "${ROWS[@]}"; do
