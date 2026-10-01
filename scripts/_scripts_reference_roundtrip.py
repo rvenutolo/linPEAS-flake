@@ -468,31 +468,43 @@ def prose(lines):
 # indented four columns or more, a list item or a code fence; a row without
 # a pipe is still a row. A quote, heading, rule or HTML block ends a table
 # too, but the description comparison rejects its marker on either
-# reading, so only a list item and a fence change the outcome. A cell
-# splits at every pipe a backslash does not escape, code span or not.
+# reading, as it does a tilde fence and a fence's info string, so only a
+# list item and a bare backtick fence change the outcome. A cell splits at
+# every pipe a backslash does not escape, code span or not.
 #
 # The two renderers disagree on one shape: a delimiter row whose cells hold
 # only colons and blanks, no dash. GFM reads no table there, so mdformat
 # leaves the lines as text, and python-markdown renders a table when they
-# open a block. Such a run is read both ways: as its text or as its cells.
+# open a block. Such a run is read both ways: as its text or as its cells,
+# split as python-markdown splits them, which keeps a code span's pipes.
 PIPE = re.compile(r"(?<!\\)\|")
 DELIMITER_CELL = re.compile(r"^[ \t]*:?-+:?[ \t]*$")
 LOOSE_DELIMITER_CELL = re.compile(r"^[ :-]*$")
-ENDS_TABLE = re.compile(r"^[ \t]*(?:(?:[-*+]|[0-9]{1,9}[.)])(?:[ \t]|$)|```|~~~)")
+ENDS_TABLE = re.compile(r"^[ \t]*(?:(?:[-*+]|[0-9]{1,9}[.)])(?:[ \t]|$)|```+[^`]*$|~~~)")
 
 
 def indent_of(line):
     return len(line.expandtabs(4)) - len(line.expandtabs(4).lstrip(" "))
 
 
-def cells(row):
-    """A table row's cells, the pipes at its edges dropped."""
+def cells(row, code_pipes=False):
+    """A table row's cells, the pipes at its edges dropped. With code_pipes,
+    a pipe inside a code span is cell text, as python-markdown splits."""
     text = row.strip()
     if text.startswith("|"):
         text = text[1:]
     if text.endswith("|") and not text.endswith("\\|"):
         text = text[:-1]
-    return PIPE.split(text)
+    if not code_pipes:
+        return PIPE.split(text)
+    spans = [m.span() for m in CODE_SPAN.finditer(text)]
+    out, at = [], 0
+    for m in PIPE.finditer(text):
+        if not any(a <= m.start() < b for a, b in spans):
+            out.append(text[at:m.start()])
+            at = m.end()
+    out.append(text[at:])
+    return out
 
 
 def table_end(lines, k):
@@ -538,8 +550,8 @@ def cell_text(cell):
     return "".join(out)
 
 
-def table_cells_text(rows):
-    return " ".join(cell_text(c) for row in rows for c in cells(row))
+def table_cells_text(rows, code_pipes=False):
+    return " ".join(cell_text(c) for row in rows for c in cells(row, code_pipes))
 
 
 def prose_pieces(lines, nos):
@@ -554,9 +566,10 @@ def prose_pieces(lines, nos):
         end, both = found
         out.append((prose(optional_markers(lines[i:k])), None))
         rows = [lines[k]] + lines[k + 2:end]
-        text = table_cells_text(rows)
         if both:
-            text = either(prose(lines[k:end]), text)
+            text = either(prose(lines[k:end]), table_cells_text(rows, code_pipes=True))
+        else:
+            text = table_cells_text(rows)
         out.append((text, nos[k]))
         i = k = end
     out.append((prose(optional_markers(lines[i:])), None))

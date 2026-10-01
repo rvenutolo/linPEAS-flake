@@ -698,7 +698,8 @@ backslashes shows bare; inside one, the backslash shows. The renderers
 disagree on a delimiter row whose cells hold only colons and blanks: GFM
 reads no table, so mdformat leaves the lines as text, and python-markdown
 renders a table when they open a block. Such a run may show as its text or
-as its cells. Other pipes that do not form a table are text and must show
+as its cells, split as python-markdown splits them, which keeps a pipe
+inside a code span in its cell. Other pipes that do not form a table are text and must show
 as written. A table under an `@arg`, `@option`, `@exitcode` or `@stdout` is
 joined into one line, and one in an `@example` or a colon-led indented run
 is fenced, so neither renders as a table and each is compared as written. A
