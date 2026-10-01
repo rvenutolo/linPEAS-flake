@@ -15,11 +15,14 @@
         # `rendererPython` comes first so its `python3` leads `PATH`. The
         # `lint-doc-invariants` group runs the scripts-reference round-trip
         # check here, and that check runs whatever `python3` leads `PATH`.
-        # Later inputs propagate a plain `python3` (mkdocs-material among
-        # them) that imports the check's libraries only through the
-        # `PYTHONPATH` they propagate; listed after them, this entry is
-        # shadowed and declares nothing. `checks.devshell-renderer-python`
-        # fails the build if it stops being first.
+        # Later inputs propagate their own `python3` (yamllint and
+        # mkdocs-material among them); listed first, the interpreter that
+        # runs the check is the one built with its libraries rather than
+        # whichever propagated `python3` sorts ahead. Its site-packages also
+        # reach `PYTHONPATH` through the propagated interpreter's setup hook,
+        # but only for an interpreter of the same minor version.
+        # `checks.devshell-renderer-python` fails `nix flake check` if it
+        # stops being first.
         buildInputs = [
           rendererPython
         ]
@@ -56,13 +59,19 @@
         ]);
       };
 
-      # Reordering `buildInputs` puts a propagated `python3` ahead of
-      # `rendererPython`, and nothing else would notice until a nixpkgs
-      # bump stops mkdocs-material propagating a library the check needs.
+      # Fails its build, so `nix flake check` goes red while `nix flake
+      # show` still evaluates, when `rendererPython` is not the first
+      # `buildInputs` entry of `devShells.default`.
       checks.devshell-renderer-python =
-        if builtins.head config.devShells.default.buildInputs == rendererPython then
-          pkgs-unstable.runCommandLocal "check-devshell-renderer-python" { } "touch $out"
-        else
-          throw "devShells.default: rendererPython must be the first buildInputs entry, or its python3 does not lead PATH (see nix/devshell.nix)";
+        pkgs-unstable.runCommandLocal "check-devshell-renderer-python" { }
+          (
+            if builtins.head config.devShells.default.buildInputs == rendererPython then
+              "touch $out"
+            else
+              ''
+                echo "devShells.default: rendererPython must be the first buildInputs entry, or its python3 does not lead PATH (see nix/devshell.nix)" >&2
+                exit 1
+              ''
+          );
     };
 }

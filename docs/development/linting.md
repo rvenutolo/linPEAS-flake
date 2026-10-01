@@ -727,11 +727,11 @@ It runs in the `lint-doc-invariants` group and as the
 Python bound in `nix/renderer-python.nix`, which carries python-markdown,
 Pygments, pymdown-extensions and PyYAML itself. The hook puts that Python
 first on its own `PATH`. The group runs in `devShells.default`, where other
-inputs propagate a plain `python3` that imports those libraries only through
-the `PYTHONPATH` they propagate, so the shell lists the bound Python as its
-first `buildInputs` entry: listed later, a propagated `python3` leads `PATH`
-and the entry declares nothing. `checks.devshell-renderer-python` fails
-`nix flake check` when it is not first. A `python3` that cannot import
+inputs propagate their own `python3`, so the shell lists the bound Python as
+its first `buildInputs` entry and its interpreter leads `PATH`; listed later,
+a propagated `python3` would run the check instead.
+`checks.devshell-renderer-python` fails `nix flake check` when it is not
+first. A `python3` that cannot import
 python-markdown or PyYAML makes the check exit 2.
 
 ## Payload shape-gate scenario coverage
