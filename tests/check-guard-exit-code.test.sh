@@ -157,6 +157,10 @@ function main() {
   run_scenario 'a lookup with -C before the subcommand is a hit' \
     'bad-root-dash-c' 1 \
     'bad-root-dash-c/scripts/find-root.sh:7: resolves the repository root with a bare git rev-parse --show-toplevel'
+  # Nor does an option between the subcommand and the flag.
+  run_scenario 'a lookup with an option before the flag is a hit' \
+    'bad-root-flag-later' 1 \
+    'bad-root-flag-later/scripts/find-root.sh:6: resolves the repository root with a bare git rev-parse --show-toplevel'
   # A fallback that reads the current directory instead is still a hit.
   run_scenario 'a lookup with a fallback is a hit' \
     'bad-root-fallback' 1 \
