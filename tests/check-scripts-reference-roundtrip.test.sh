@@ -1330,6 +1330,23 @@ EOF
 
 Lead-in.
 
+| Alpha | Beta |
+| ----- | ---- |
+| one   | two  |
+
+Ending prose.
+EOF
+  run_scenario 'text altered just after a table is not named as in the table' 1 \
+    "scripts/t.sh: @description (line 2) published 5 of 7 words; dropped or altered from: 'Trailing prose.'"
+  if grep --fixed-strings --quiet -- 'in the table' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — a finding past the table names the table\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
+  write_page <<'EOF'
+### scripts/t.sh
+
+Lead-in.
+
 \| Alpha | Beta |
 \| ----- | ---- |
 \| one   | two  |
@@ -1342,9 +1359,10 @@ EOF
 
 # The table shapes GFM reads, as mdformat rewrites them: no blank line
 # before the header row, no edge pipes, edge pipes on the header row only,
-# alignment colons, a delimiter row with no pipe, a prose line the table takes in as a row, a row indented
-# four columns that ends the table as a code block, a list item that ends
-# it, a table in a library function, and one after a closed @arg.
+# alignment colons, a delimiter row with no pipe, a prose line the table
+# takes in as a row, a row indented four columns that ends the table as a
+# code block, a list item that ends it, a table in a library function, and
+# one after a closed @arg.
 function scenario_header_table_shapes() {
   new_tree tableshapes
   cat >"${TREE}/scripts/a.sh" <<'EOF'
@@ -1462,9 +1480,99 @@ EOF
     'ok — 5 file(s), 8 annotation unit(s), 0 indented block(s), 5 table(s) published intact'
 }
 
+# What ends a table, as GFM reads it: a code fence and a numbered list item
+# end it; a number of ten digits is no list marker, so its line stays a row;
+# a table indented two columns is still a table.
+function scenario_table_endings() {
+  new_tree tableendings
+  cat >"${TREE}/scripts/a.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Fence after.
+#
+# | A | B |
+# |---|---|
+# | x | y |
+# ```
+# code here
+# ```
+true
+EOF
+  cat >"${TREE}/scripts/b.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Numbered item after.
+#
+# | A | B |
+# |---|---|
+# | x | y |
+# 1. one | x
+true
+EOF
+  cat >"${TREE}/scripts/c.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Long number.
+#
+# | A | B |
+# |---|---|
+# 1234567890. x | y
+true
+EOF
+  cat >"${TREE}/scripts/d.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Two-column indent.
+#
+#   | A | B |
+#   |---|---|
+#   | x | y |
+true
+EOF
+  write_page <<'EOF'
+### scripts/a.sh
+
+Fence after.
+
+| A   | B   |
+| --- | --- |
+| x   | y   |
+
+```
+code here
+```
+
+### scripts/b.sh
+
+Numbered item after.
+
+| A   | B   |
+| --- | --- |
+| x   | y   |
+
+1. one | x
+
+### scripts/c.sh
+
+Long number.
+
+| A             | B   |
+| ------------- | --- |
+| 1234567890. x | y   |
+
+### scripts/d.sh
+
+Two-column indent.
+
+| A   | B   |
+| --- | --- |
+| x   | y   |
+EOF
+  run_scenario 'a fence and a list item end a table; a long number does not' 0 '' \
+    'ok — 5 file(s), 5 annotation unit(s), 0 indented block(s), 4 table(s) published intact'
+}
+
 # A pipe a backslash escapes is cell text, also at the end of a row: the
-# page shows it bare outside a code span and with its backslash inside one. A pipe inside a code span
-# still splits the cell, so the formatter loses the row's last cell.
+# page shows it bare outside a code span and with its backslash inside one.
+# A pipe after an escaped backslash (`\\|`) shows bare too. A pipe inside a
+# code span still splits the cell, so the formatter loses the row's last
+# cell.
 function scenario_table_escaped_pipes() {
   new_tree tablepipes
   cat >"${TREE}/scripts/t.sh" <<'EOF'
@@ -1478,6 +1586,10 @@ function scenario_table_escaped_pipes() {
 # | Gamma | Delta |
 # |---|---|
 # | c\|d | `e\|f` |
+#
+# | a\\|b | c |
+# |---|---|
+# | x | y\\|
 true
 EOF
   write_page <<'EOF'
@@ -1492,9 +1604,13 @@ Lead-in.
 | Gamma | Delta  |
 | ----- | ------ |
 | c\|d  | `e\|f` |
+
+| a\|b | c   |
+| ---- | --- |
+| x    | y\| |
 EOF
   run_scenario 'escaped pipes in table cells are published intact' 0 '' \
-    'ok — 2 file(s), 2 annotation unit(s), 0 indented block(s), 2 table(s) published intact'
+    'ok — 2 file(s), 2 annotation unit(s), 0 indented block(s), 3 table(s) published intact'
   cat >"${TREE}/scripts/t.sh" <<'EOF'
 #!/usr/bin/env bash
 # @description Lead-in.
@@ -1541,6 +1657,15 @@ EOF
 # | one | two |
 true
 EOF
+  cat >"${TREE}/scripts/v.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Glued.
+#
+# |A|B|
+# |:|:|
+# |x|y|
+true
+EOF
   write_page <<'EOF'
 ### scripts/t.sh
 
@@ -1556,9 +1681,17 @@ Lead-in
 | Alpha | Beta |
 | | :|
 | one | two |
+
+### scripts/v.sh
+
+Glued.
+
+|A|B|
+|:|:|
+|x|y|
 EOF
   run_scenario 'a dashless delimiter row may show as a table or as text' 0 '' \
-    'ok — 3 file(s), 3 annotation unit(s), 0 indented block(s), 2 table(s) published intact'
+    'ok — 4 file(s), 4 annotation unit(s), 0 indented block(s), 3 table(s) published intact'
   write_page <<'EOF'
 ### scripts/t.sh
 
@@ -1574,14 +1707,22 @@ Lead-in
 | Alpha | Beta |
 | | :|
 | one | two |
+
+### scripts/v.sh
+
+Glued.
+
+|A|B|
+|:|:|
+|x|y|
 EOF
   run_scenario 'a changed cell in a dashless table is reported' 1 \
-    "scripts/t.sh: @description (line 2) published 14 of 16 words; dropped or altered from: 'two |' (in the table at line 4)"
+    "scripts/t.sh: @description (line 2) published 1 of 2 words; dropped or altered from: '| Alpha | Beta | | : | : | | one | two |' (in the table at line 4)"
 }
 
 # Pipes that GFM does not read as a table stay text with their pipes (a
-# delimiter row of another width, a header row indented four columns or
-# with no pipe at all), and
+# delimiter row of another width, a header or delimiter row indented four
+# columns, a tab counted to its stop, or a header row with no pipe), and
 # so does a table under an @arg, which the generator joins into one line,
 # and one in a colon-led indented run, which it fences.
 function scenario_pipes_not_a_table() {
@@ -1619,6 +1760,17 @@ EOF
 # | one |
 true
 EOF
+  cat >"${TREE}/scripts/x.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Delimiter indented four.
+#
+# | A | B |
+#     |---|---|
+# | x | y |
+true
+EOF
+  printf '%s\n' '#!/usr/bin/env bash' '# @description Tab-indented header row.' '#' \
+    $'# \t| A | B |' '# |---|---|' '# | x | y |' 'true' >"${TREE}/scripts/y.sh"
   cat >"${TREE}/scripts/w.sh" <<'EOF'
 #!/usr/bin/env bash
 # @description No pipe in the header row.
@@ -1670,9 +1822,28 @@ No pipe in the header row.
 Alpha
 :\---
 one
+
+### scripts/x.sh
+
+Delimiter indented four.
+
+| A | B |
+|\---|---|
+| x | y |
+
+### scripts/y.sh
+
+Tab-indented header row.
+
+```
+| A | B |
+```
+
+|\---|---|
+| x | y |
 EOF
   run_scenario 'pipes GFM does not read as a table stay text' 0 '' \
-    'ok — 5 file(s), 6 annotation unit(s), 1 indented block(s), 0 table(s) published intact'
+    'ok — 7 file(s), 8 annotation unit(s), 1 indented block(s), 0 table(s) published intact'
 }
 
 # A code span never crosses a blank line, so a lone backtick in one
@@ -1793,6 +1964,7 @@ function main() {
   scenario_lone_backtick
   scenario_header_table_published
   scenario_header_table_shapes
+  scenario_table_endings
   scenario_table_escaped_pipes
   scenario_pipes_not_a_table
   scenario_dashless_delimiter_read_both_ways
