@@ -71,6 +71,12 @@ def blank(text):
 class Unit:
     def __init__(self, tag, head, line):
         self.tag, self.head, self.line, self.lines = tag, head, line, []
+        # The file line of the head and of each later line, in step with them.
+        self.nos = [line]
+
+    def add(self, text, no):
+        self.lines.append(text)
+        self.nos.append(no)
 
     def closes_on_blank(self):
         return self.tag in ("arg", "option", "exitcode", "stdout")
@@ -92,19 +98,34 @@ class Unit:
         if self.tag == "example":
             return "\n".join(self.example_lines())
         if self.tag == "description":
-            # A fenced run is shown as written; everything around it is
-            # prose, where a list item's marker renders as a bullet.
-            lines = [self.head] + self.lines
-            out, i = [], 0
-            for start, end, fenced in run_spans(lines):
-                if not fenced:
-                    continue
-                out.append(prose(optional_markers(lines[i:start])))
-                out.append(" ".join(lines[start:end]))
-                i = end
-            out.append(prose(optional_markers(lines[i:])))
-            return " ".join(out)
+            return " ".join(text for text, _ in self.pieces())
         return prose([self.head] + self.lines)
+
+    def pieces(self):
+        """A description as (text, table line) pieces in source order. A
+        fenced run is shown as written; a table shows its cells' text; the
+        rest is prose, where a list item's marker renders as a bullet. The
+        table line is the file line of a table's header row, else None."""
+        lines = [self.head] + self.lines
+        out, i = [], 0
+        for start, end, fenced in run_spans(lines):
+            if not fenced:
+                continue
+            out += prose_pieces(lines[i:start], self.nos[i:start])
+            out.append((" ".join(lines[start:end]), None))
+            i = end
+        out += prose_pieces(lines[i:], self.nos[i:])
+        return out
+
+    def table_spans(self):
+        """(first word, end word, table line) of each table in expected()."""
+        spans, at = [], 0
+        for text, table in self.pieces():
+            n = len(normalize(text).split(" ")) if normalize(text) else 0
+            if table is not None:
+                spans.append((at, at + n, table))
+            at += n
+        return spans
 
     def example_lines(self):
         """The lines an @example's fence must hold: its body as written,
@@ -139,12 +160,12 @@ def units_of(run, findings, rel):
                     # renders every example line in one fence.
                     cur = next(u for u in units if u.tag == "example")
                     if m.group(2).strip():
-                        cur.lines.append(m.group(2))
+                        cur.add(m.group(2), no)
                 elif m and m.group(1) in KNOWN:
                     cur = Unit(m.group(1), m.group(2), no)
                     units.append(cur)
                 elif cur is not None:
-                    cur.lines.append(seg)
+                    cur.add(seg, no)
                 else:
                     cur = Unit("?", seg, no)
                     units.append(cur)
@@ -168,7 +189,7 @@ def units_of(run, findings, rel):
                 continue
             # A resumed paragraph is reported at its first line of text.
             cur.line = no
-        cur.lines.append(body)
+        cur.add(body, no)
     return [u for u in units if not (getattr(u, "resumed", False) and not "".join(u.lines).strip())]
 
 
@@ -231,7 +252,8 @@ def extract(path, library, findings):
 class PageText(html.parser.HTMLParser):
     """Each H3 script and H4 function entry as an ordered list of blocks.
 
-    A block is (region, kind, text): kind is "p", "li" or "pre", and region
+    A block is (region, kind, text): kind is "p", "li", "pre" or a table
+    cell, "th" or "td", and region
     is "description" until a paragraph holding only a bold list label
     ("Args:", "Options:", "Exit codes:", "Stdout:") switches it to that
     label. That is the order the generator emits an entry in, so a unit can
@@ -239,7 +261,7 @@ class PageText(html.parser.HTMLParser):
     """
 
     LABELS = {"Args:": "arg", "Options:": "option", "Exit codes:": "exitcode", "Stdout:": "stdout"}
-    BLOCKS = ("p", "li", "pre")
+    BLOCKS = ("p", "li", "pre", "th", "td")
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -423,6 +445,104 @@ def prose(lines):
     return " ".join(CODE_SPAN.sub(lambda m: m.group(2).strip(), " ".join(p)) for p in paragraphs if p)
 
 
+# A Markdown table. The page is formatted by mdformat, whose GFM rules decide
+# what is a table before python-markdown renders it, and python-markdown
+# renders every table mdformat writes, so these are GFM's rules: a header
+# row holding a pipe, then a delimiter row of as many cells, each indented
+# under four columns. Body rows run to a blank line, a line indented four
+# columns or more, or a list item; a row without a pipe is still a row.
+# A line opening another kind of block (a quote, heading, rule or fence)
+# may end a table too, but the description comparison rejects its marker
+# on either reading, so only a list item changes the outcome. A cell splits
+# at every pipe a backslash does not escape, code span or not.
+#
+# The two renderers disagree on one shape: a delimiter row whose cells hold
+# only colons and blanks, no dash. GFM reads no table there, so mdformat
+# leaves the lines as text, and python-markdown renders a table when they
+# open a block. Such a run is read both ways: each word made only of
+# pipes, colons and dashes may be absent.
+PIPE = re.compile(r"(?<!\\)\|")
+DELIMITER_CELL = re.compile(r"^[ \t]*:?-+:?[ \t]*$")
+LOOSE_DELIMITER_CELL = re.compile(r"^[ :-]*$")
+TABLE_MARKUP = re.compile(r"^[|:-]+$")
+ENDS_TABLE = re.compile(r"^[ \t]*(?:[-*+]|[0-9]+[.)])(?:[ \t]|$)")
+
+
+def indent_of(line):
+    return len(line.expandtabs(4)) - len(line.expandtabs(4).lstrip(" "))
+
+
+def cells(row):
+    """A table row's cells, the pipes at its edges dropped."""
+    text = row.strip()
+    if text.startswith("|"):
+        text = text[1:]
+    if text.endswith("|") and not text.endswith("\\|"):
+        text = text[:-1]
+    return PIPE.split(text)
+
+
+def table_end(lines, k):
+    """(end, both) for the table whose header row is lines[k], or None when
+    no table starts there. both is true when only python-markdown reads a
+    table there, so the run may show as a table or as text."""
+    if k + 1 >= len(lines):
+        return None
+    head, delim = lines[k], lines[k + 1]
+    if "|" not in head or indent_of(head) >= 4 or indent_of(delim) >= 4:
+        return None
+    aligns = cells(delim)
+    if len(aligns) != len(cells(head)):
+        return None
+    if all(DELIMITER_CELL.match(c) for c in aligns):
+        both = False
+    elif all(LOOSE_DELIMITER_CELL.match(c) for c in aligns):
+        both = True
+    else:
+        return None
+    end = k + 2
+    while end < len(lines) and not blank(lines[end]) and indent_of(lines[end]) < 4 and not ENDS_TABLE.match(lines[end]):
+        end += 1
+    return end, both
+
+
+def cell_text(cell):
+    """A cell as the page shows it: a code span loses its backticks and keeps
+    a backslash before a pipe; outside one, the backslash goes."""
+    out, at = [], 0
+    for m in CODE_SPAN.finditer(cell):
+        out.append(cell[at:m.start()].replace("\\|", "|"))
+        out.append(m.group(2).strip())
+        at = m.end()
+    out.append(cell[at:].replace("\\|", "|"))
+    return "".join(out)
+
+
+def prose_pieces(lines, nos):
+    """Prose lines as (text, table line) pieces: each table is its cells'
+    text, pipes and delimiter row dropped; the rest is prose."""
+    out, i, k = [], 0, 0
+    while k < len(lines):
+        found = table_end(lines, k)
+        if found is None:
+            k += 1
+            continue
+        end, both = found
+        out.append((prose(optional_markers(lines[i:k])), None))
+        if both:
+            # Read as text, with every word that is only table markup
+            # optional, so a rendered table matches too.
+            words = prose(lines[k:end]).split()
+            text = " ".join(OPTIONAL + w if TABLE_MARKUP.match(w) else w for w in words)
+        else:
+            rows = [lines[k]] + lines[k + 2:end]
+            text = " ".join(cell_text(c) for row in rows for c in cells(row))
+        out.append((text, nos[k]))
+        i = k = end
+    out.append((prose(optional_markers(lines[i:])), None))
+    return out
+
+
 def normalize(text):
     # Text is compared as words, so line-join, indent and fence markers fall
     # away. The same transform runs on both sides.
@@ -533,10 +653,10 @@ def main(argv):
     entries = render(doc, mkdocs_yml)
     if not files and os.environ.get("LINT_ALLOW_EMPTY_SCAN"):
         # The scan set is empty and the caller said that is deliberate.
-        print("check-scripts-reference-roundtrip: ok — 0 file(s), 0 annotation unit(s), 0 indented block(s) published intact")
+        print("check-scripts-reference-roundtrip: ok — 0 file(s), 0 annotation unit(s), 0 indented block(s), 0 table(s) published intact")
         return 0
 
-    findings, n_units, n_runs = [], 0, 0
+    findings, n_units, n_runs, n_tables = [], 0, 0, 0
     for path, library in files:
         unreached = []
         units = extract(path, library, unreached)
@@ -587,9 +707,12 @@ def main(argv):
                 have = normalize(" ".join(b[2] for b in desc_blocks))
                 start = desc_from.get(key, 0)
                 end = contains(have, want, start)
+                spans = unit.table_spans()
+                n_tables += len(spans)
                 if end < 0:
                     got, total, frag = first_divergence(want, have[start:])
-                    findings.append(f"{where} published {got} of {total} words; dropped or altered from: {frag!r}")
+                    table = next((f" (in the table at line {line})" for lo, hi, line in spans if lo <= got < hi), "")
+                    findings.append(f"{where} published {got} of {total} words; dropped or altered from: {frag!r}{table}")
                 else:
                     desc_from[key] = end
                 pres = [pre_lines(b[2]) for b in desc_blocks if b[1] == "pre"]
@@ -619,7 +742,7 @@ def main(argv):
               "then regenerate.", file=sys.stderr)
         return 3
     print(f"check-scripts-reference-roundtrip: ok — {len(files)} file(s), {n_units} annotation unit(s), "
-          f"{n_runs} indented block(s) published intact")
+          f"{n_runs} indented block(s), {n_tables} table(s) published intact")
     return 0
 
 

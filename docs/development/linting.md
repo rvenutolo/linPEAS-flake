@@ -686,6 +686,24 @@ passes through mdformat, whose CommonMark rules decide which lines become list
 items, before python-markdown renders it by its own rules, so the marker may
 show as text or as a bullet.
 
+A table in description text is read by GFM's rules, because mdformat decides
+what is a table and python-markdown renders every table mdformat writes: a
+row holding a pipe, followed by a delimiter row of as many cells, both
+indented less than four columns. Its rows run to a blank line, a line
+indented four columns or more, or a list item. Its cells' text must appear
+as words in the description, without the pipes and the delimiter row; a cell
+splits at every pipe a backslash does not escape, inside a code span or not,
+and an escaped pipe shows bare outside a code span and with its backslash
+inside one. The renderers disagree on a delimiter row whose cells hold only
+colons and blanks: GFM reads no table, so mdformat leaves the lines as text,
+and python-markdown renders a table when they open a block. Such a run may
+show either way, so each of its words made only of pipes, colons and dashes,
+which covers its pipes and delimiter row, may be absent. Other pipes
+that do not form a table are text and must show as written. A table under an `@arg`, `@option`, `@exitcode` or `@stdout` is
+joined into one line, and one in an `@example` or a colon-led indented run is
+fenced, so neither renders as a table and each is compared as written. A
+finding inside a table names the line of its header row.
+
 An indented run whose lead-in line ends in a colon must be exactly one
 preformatted block on the page, line for line with its blank lines and
 indentation, a tab in the indent read as two spaces and an odd indent rounded
@@ -706,9 +724,10 @@ Six limits are known. The check reads from header to page only: text the page
 adds, such as an invented sentence or item, is not reported, and text counts
 as shown when it is in the rendered text, even where a browser would hide it.
 A description compared as words does not see its blocks change kind — a
-sentence the page shows as a list item or a quote still matches. Text the page
-renders as a table is not collected from the page, so a table in a header is
-reported as dropped even when the page shows it. A run of backticks that opens
+sentence the page shows as a list item or a quote still matches. A table's
+cells are compared as one run of words, so a page that merges, splits or
+regroups cells while keeping their words in order passes, and so does a page
+that drops such a word from a run with a dashless delimiter row. A run of backticks that opens
 no matching run is compared as the regular expression reads it, which can differ from the
 renderer. A line such as `- - -`, which python-markdown renders as a rule, is
 read as text. And since a leading marker may be absent, a page that drops a
@@ -720,7 +739,10 @@ renders as an HTML tag and vanishes, a `<` in `<-` or `<=` shows with a
 backslash, and a glob's asterisks can open emphasis, so put such text in
 backticks. Escaping a `<` in the generator does not work: mdformat rewrites
 `&lt;` to `\<`, which python-markdown does not treat as an escape, so the site
-prints the backslash and still swallows the tag.
+prints the backslash and still swallows the tag. In a table cell, a pipe
+inside a code span still ends the cell, and mdformat drops the cells a row has
+beyond its header's; escaping it as `\|` keeps the cell, but the site shows
+the backslash inside the code span.
 
 It runs in the `lint-doc-invariants` group and as the
 `check-scripts-reference-roundtrip` pre-commit hook. Both run it with the
