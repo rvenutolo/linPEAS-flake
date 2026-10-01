@@ -40,12 +40,7 @@ let
   # Markdown renderer and reads mkdocs.yml for its extensions, so its hook
   # carries those libraries rather than trusting whatever python3 the
   # committer's shell has.
-  rendererPython = pkgs-unstable.python3.withPackages (ps: [
-    ps.markdown
-    ps.pygments
-    ps.pymdown-extensions
-    ps.pyyaml
-  ]);
+  rendererPython = import ../renderer-python.nix { inherit pkgs-unstable; };
 in
 {
   # Refuse to commit if the flake-show block in docs/reference/flake-outputs.md

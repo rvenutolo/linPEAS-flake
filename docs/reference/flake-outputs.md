@@ -23,11 +23,13 @@ the markers by hand.
 │       └───linpeas: app: Linux Privilege Escalation Awesome Script (LinPEAS) from peass-ng
 ├───checks
 │   ├───aarch64-linux
+│   │   ├───devshell-renderer-python: derivation 'check-devshell-renderer-python'
 │   │   ├───formatting: derivation 'treefmt-check'
 │   │   ├───linpeas-build: derivation 'linpeas-20260930-df86658b'
 │   │   ├───lint-shell-tools: derivation 'check-lint-shell-tools'
 │   │   └───pre-commit: derivation 'pre-commit-run'
 │   └───x86_64-linux
+│       ├───devshell-renderer-python: derivation 'check-devshell-renderer-python'
 │       ├───formatting: derivation 'treefmt-check'
 │       ├───linpeas-build: derivation 'linpeas-20260930-df86658b'
 │       ├───lint-shell-tools: derivation 'check-lint-shell-tools'
