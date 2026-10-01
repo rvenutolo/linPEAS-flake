@@ -182,7 +182,7 @@ Env overrides (test-only):
 ```
 EOF
   run_scenario 'every header shape published intact' 0 '' \
-    'ok — 2 file(s), 7 annotation unit(s), 2 indented block(s) published intact'
+    'ok — 2 file(s), 7 annotation unit(s), 2 indented block(s), 0 table(s) published intact'
 }
 
 function scenario_truncated_annotation() {
@@ -263,7 +263,7 @@ A header that wraps
 at an indent is prose.
 EOF
   run_scenario 'an indented wrap with no colon lead-in may be a paragraph' 0 '' \
-    'ok — 2 file(s), 2 annotation unit(s), 0 indented block(s) published intact'
+    'ok — 2 file(s), 2 annotation unit(s), 0 indented block(s), 0 table(s) published intact'
 }
 
 function scenario_split_and_tab_runs() {
@@ -423,7 +423,7 @@ EOF
     '### scripts/lib/l.sh' '' 'Lib header.' '' '#### thing()' '' 'Do the thing.' '' \
     '**Args:**' '' '- `$1` — the input' | write_page
   run_scenario 'a library function entry is matched under its own heading' 0 '' \
-    'ok — 2 file(s), 4 annotation unit(s), 0 indented block(s) published intact'
+    'ok — 2 file(s), 4 annotation unit(s), 0 indented block(s), 0 table(s) published intact'
   # shellcheck disable=SC2016 # `$1` is page text, not an expansion
   printf '%s\n' '### scripts/t.sh' '' 'Body.' '' '## Libraries' '' \
     '### scripts/lib/l.sh' '' 'Lib header.' '' 'Do the thing.' '' \
@@ -648,7 +648,7 @@ Exit codes:
 - `0` — clean
 EOF
   run_scenario 'a description list and a prose "Exit codes:" line are published intact' 0 '' \
-    'ok — 2 file(s), 3 annotation unit(s), 1 indented block(s) published intact'
+    'ok — 2 file(s), 3 annotation unit(s), 1 indented block(s), 0 table(s) published intact'
 }
 
 # Description units are matched in source order, so a resumed paragraph
@@ -706,7 +706,7 @@ function scenario_outside_work_tree() {
   cd -- "${TREE}"
   GIT_CEILING_DIRECTORIES="${work}" run_scenario \
     'outside a work tree with both overrides runs' 0 '' \
-    'ok — 3 file(s), 3 annotation unit(s), 0 indented block(s) published intact'
+    'ok — 3 file(s), 3 annotation unit(s), 0 indented block(s), 0 table(s) published intact'
   cd -- "${REPO_ROOT}"
 }
 
@@ -851,7 +851,7 @@ function scenario_tab_run_fenced_intact() {
   } >"${TREE}/scripts/t.sh"
   printf '%s\n' '### scripts/t.sh' '' 'Tab run:' '' '```text' '    gamma' '      delta' '```' | write_page
   run_scenario 'a tab-indented run fenced with two spaces per tab is intact' 0 '' \
-    'ok — 2 file(s), 2 annotation unit(s), 1 indented block(s) published intact'
+    'ok — 2 file(s), 2 annotation unit(s), 1 indented block(s), 0 table(s) published intact'
 }
 
 # Description text is matched only before the first list label: a
@@ -1043,7 +1043,7 @@ Body.
 ```
 EOF
   run_scenario 'two examples in one fence and a code-span arg name are intact' 0 '' \
-    'ok — 2 file(s), 5 annotation unit(s), 0 indented block(s) published intact'
+    'ok — 2 file(s), 5 annotation unit(s), 0 indented block(s), 0 table(s) published intact'
 }
 
 # An empty scan set is accepted when the caller says it is deliberate.
@@ -1052,7 +1052,7 @@ function scenario_allowed_empty_scan() {
   rm --force -- "${TREE}/scripts/lib/l.sh"
   printf '%s\n' '### scripts/x.sh' '' 'Body.' | write_page
   LINT_ALLOW_EMPTY_SCAN=1 run_scenario 'an empty scan with LINT_ALLOW_EMPTY_SCAN set is clean' 0 '' \
-    'ok — 0 file(s), 0 annotation unit(s), 0 indented block(s) published intact'
+    'ok — 0 file(s), 0 annotation unit(s), 0 indented block(s), 0 table(s) published intact'
   printf '%s\n' '# Scripts' >"${TREE}/page.md"
   LINT_ALLOW_EMPTY_SCAN=1 run_scenario 'an allowed empty scan still needs a readable page' 2 \
     'lacks the scripts-reference BEGIN/END markers'
@@ -1076,7 +1076,7 @@ EOF
     '**Exit codes:**' '' '- `0` — clean' '' '### scripts/u.sh' '' 'Other.' | write_page
   sed --in-place 's/^markdown_extensions:$/markdown_extensions:\n  - smarty:\n      smart_dashes: false\n      smart_quotes: false/' "${TREE}/mkdocs.yml"
   run_scenario 'a wrapped dash line and a configured extension are published intact' 0 '' \
-    'ok — 3 file(s), 4 annotation unit(s), 0 indented block(s) published intact'
+    'ok — 3 file(s), 4 annotation unit(s), 0 indented block(s), 0 table(s) published intact'
 }
 
 # An @example drops the blank lines at its edges, as its fence does, but
@@ -1144,7 +1144,7 @@ EOF
     '### scripts/u.sh' '' 'Other.' '' '**Stdout:**' '' '- nothing' '' '### scripts/w.sh' '' 'Fourth.' | write_page
   printf '%s\n' '#!/usr/bin/env bash' '# @description Fourth.' 'true' >"${TREE}/scripts/w.sh"
   run_scenario 'list items, their wrapped lines and a non-marker are read as rendered' 0 '' \
-    'ok — 4 file(s), 5 annotation unit(s), 0 indented block(s) published intact'
+    'ok — 4 file(s), 5 annotation unit(s), 0 indented block(s), 0 table(s) published intact'
 }
 
 # mkdocs.yml is read as mkdocs reads it: `!ENV` resolves to its default
@@ -1162,7 +1162,7 @@ EOF
   printf '%s\n' '### scripts/t.sh' '' 'Usage:' '' '```text' '  a -- b' '```' '' '### scripts/u.sh' '' 'Other.' | write_page
   printf '%s\n' 'site_name: x' 'markdown_extensions:' '  - smarty' >"${TREE}/mkdocs.yml"
   run_scenario 'the built-in fenced_code loads when mkdocs.yml omits it' 0 '' \
-    'ok — 3 file(s), 3 annotation unit(s), 1 indented block(s) published intact'
+    'ok — 3 file(s), 3 annotation unit(s), 1 indented block(s), 0 table(s) published intact'
   rm --force -- "${TREE}/scripts/u.sh"
   cat >"${TREE}/scripts/t.sh" <<'EOF'
 #!/usr/bin/env bash
@@ -1194,7 +1194,7 @@ EOF
   printf '%s\n' '### scripts/t.sh' '' 'Dash a -- b here.' '' '### scripts/v.sh' '' 'Probed v.' '' \
     '### scripts/w.sh' '' 'Probed w.' '' '### scripts/x.sh' '' 'Probed x.' | write_page
   PYTHONPATH="${probe_py}:${PYTHONPATH:-}" run_scenario 'a built-in the list names later still loads first' 0 '' \
-    'ok — 5 file(s), 5 annotation unit(s), 0 indented block(s) published intact'
+    'ok — 5 file(s), 5 annotation unit(s), 0 indented block(s), 0 table(s) published intact'
 }
 
 # The page is formatted by mdformat, whose CommonMark rules decide which
@@ -1220,7 +1220,7 @@ function scenario_formatter_lists_and_tabs() {
   } | write_page
   printf '%s\n' '#!/usr/bin/env bash' '# @description Other.' 'true' >"${TREE}/scripts/u.sh"
   run_scenario 'list items the formatter opens and tabs in fences are intact' 0 '' \
-    'ok — 3 file(s), 4 annotation unit(s), 1 indented block(s) published intact'
+    'ok — 3 file(s), 4 annotation unit(s), 1 indented block(s), 0 table(s) published intact'
   rm --force -- "${TREE}/scripts/u.sh"
   cat >"${TREE}/scripts/t.sh" <<'EOF'
 #!/usr/bin/env bash
@@ -1254,7 +1254,7 @@ EOF
   printf '%s\n' 'site_name: x' 'markdown_extensions:' '  - smarty:' \
     '      smart_dashes: !ENV [SCRIPTS_REFERENCE_SET_VARIABLE]' >"${TREE}/mkdocs.yml"
   SCRIPTS_REFERENCE_SET_VARIABLE='~' run_scenario 'a set !ENV variable is read as a YAML scalar' 0 '' \
-    'ok — 4 file(s), 4 annotation unit(s), 0 indented block(s) published intact'
+    'ok — 4 file(s), 4 annotation unit(s), 0 indented block(s), 0 table(s) published intact'
 }
 
 # Python puts the checker's own directory on its import path; the checker
@@ -1284,22 +1284,395 @@ function scenario_import_path_scrubbed() {
     "could not render the page: ModuleNotFoundError: No module named 'zzlinked'"
 }
 
-# A known limit: the page's table cells are not collected, so a header
-# table the page renders as a table reads as dropped text.
-function scenario_header_table_reads_as_dropped() {
+# A header table is published as a table: the page shows its cells, not
+# its pipes or delimiter row, and the cells' words are what must appear.
+function scenario_header_table_published() {
   new_tree headertable
-  cat >"${TREE}/scripts/t.sh" <<'EOF2'
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
 #!/usr/bin/env bash
-# @description Table:
+# @description Lead-in.
 #
-# | a | b |
+# | Alpha | Beta |
 # |---|---|
-# | x | y |
+# | one | two |
+#
+# Trailing prose.
 true
-EOF2
-  printf '%s\n' '### scripts/t.sh' '' 'Table:' '' '| a | b |' '|---|---|' '| x | y |' | write_page
-  run_scenario 'a header table the page renders as a table reads as dropped' 1 \
-    "scripts/t.sh: @description (line 2) published 1 of 12 words; dropped or altered from: '| a | b | |---|---| | x | y |'"
+EOF
+  write_page <<'EOF'
+### scripts/t.sh
+
+Lead-in.
+
+| Alpha | Beta |
+| ----- | ---- |
+| one   | two  |
+
+Trailing prose.
+EOF
+  run_scenario 'a header table the page shows as a table is published intact' 0 '' \
+    'ok — 2 file(s), 2 annotation unit(s), 0 indented block(s), 1 table(s) published intact'
+  write_page <<'EOF'
+### scripts/t.sh
+
+Lead-in.
+
+| Alpha | Beta |
+| ----- | ---- |
+| one   | too  |
+
+Trailing prose.
+EOF
+  run_scenario 'a table cell whose text the page changes is reported' 1 \
+    "scripts/t.sh: @description (line 2) published 4 of 7 words; dropped or altered from: 'two Trailing prose.' (in the table at line 4)"
+  write_page <<'EOF'
+### scripts/t.sh
+
+Lead-in.
+
+\| Alpha | Beta |
+\| ----- | ---- |
+\| one   | two  |
+
+Trailing prose.
+EOF
+  run_scenario 'a header table the page shows as pipes is reported' 1 \
+    "scripts/t.sh: @description (line 2) published 1 of 7 words; dropped or altered from: 'Alpha Beta one two Trailing prose.' (in the table at line 4)"
+}
+
+# The table shapes GFM reads, as mdformat rewrites them: no blank line
+# before the header row, no edge pipes, edge pipes on the header row only,
+# alignment colons, a delimiter row with no pipe, a prose line the table takes in as a row, a row indented
+# four columns that ends the table as a code block, a list item that ends
+# it, a table in a library function, and one after a closed @arg.
+function scenario_header_table_shapes() {
+  new_tree tableshapes
+  cat >"${TREE}/scripts/a.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Lead-in
+# Alpha | Beta
+# :--- | ---:
+# one | two
+# Taken in as a row.
+true
+EOF
+  cat >"${TREE}/scripts/b.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description B.
+#
+# | Alpha |
+# ---
+# | one |
+#     | four | five |
+true
+EOF
+  cat >"${TREE}/scripts/c.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description C.
+# @arg $1 the mode
+#
+# | Alpha | Beta |
+# |---|---|
+# | one | two |
+# - a | list item
+true
+EOF
+  cat >"${TREE}/scripts/d.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description D.
+#
+# | Alpha | Beta |
+# --- | ---
+# one | two
+true
+EOF
+  cat >"${TREE}/scripts/lib/l.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Lib header.
+
+# @description Do the thing.
+#
+# | Gamma | Delta |
+# |---|---|
+# | three | four |
+function thing() {
+  :
+}
+EOF
+  # shellcheck disable=SC2016 # `$1` is page text, not an expansion
+  write_page <<'EOF'
+### scripts/a.sh
+
+Lead-in
+
+| Alpha              | Beta |
+| :----------------- | ---: |
+| one                |  two |
+| Taken in as a row. |      |
+
+### scripts/b.sh
+
+B.
+
+| Alpha |
+| ----- |
+| one   |
+
+```
+| four | five |
+```
+
+### scripts/c.sh
+
+C.
+
+| Alpha | Beta |
+| ----- | ---- |
+| one   | two  |
+
+- a | list item
+
+**Args:**
+
+- `$1` — the mode
+
+### scripts/d.sh
+
+D.
+
+| Alpha | Beta |
+| ----- | ---- |
+| one   | two  |
+
+## Libraries
+
+### scripts/lib/l.sh
+
+Lib header.
+
+#### thing()
+
+Do the thing.
+
+| Gamma | Delta |
+| ----- | ----- |
+| three | four  |
+EOF
+  run_scenario 'every table shape GFM reads is published intact' 0 '' \
+    'ok — 5 file(s), 8 annotation unit(s), 0 indented block(s), 5 table(s) published intact'
+}
+
+# A pipe a backslash escapes is cell text, also at the end of a row: the
+# page shows it bare outside a code span and with its backslash inside one. A pipe inside a code span
+# still splits the cell, so the formatter loses the row's last cell.
+function scenario_table_escaped_pipes() {
+  new_tree tablepipes
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Lead-in.
+#
+# | Al\|pha | Beta |
+# |---|---|
+# | one | two\|
+#
+# | Gamma | Delta |
+# |---|---|
+# | c\|d | `e\|f` |
+true
+EOF
+  write_page <<'EOF'
+### scripts/t.sh
+
+Lead-in.
+
+| Al\|pha | Beta  |
+| ------- | ----- |
+| one     | two\| |
+
+| Gamma | Delta  |
+| ----- | ------ |
+| c\|d  | `e\|f` |
+EOF
+  run_scenario 'escaped pipes in table cells are published intact' 0 '' \
+    'ok — 2 file(s), 2 annotation unit(s), 0 indented block(s), 2 table(s) published intact'
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Lead-in.
+#
+# | Shape | Meaning |
+# |---|---|
+# | `a|b` | alternation |
+# | one | two | extra |
+true
+EOF
+  write_page <<'EOF'
+### scripts/t.sh
+
+Lead-in.
+
+| Shape | Meaning |
+| ----- | ------- |
+| \`a   | b\`     |
+| one   | two     |
+EOF
+  run_scenario 'a cell the formatter drops past the header width is reported' 1 \
+    "scripts/t.sh: @description (line 2) published 5 of 9 words; dropped or altered from: 'alternation one two extra' (in the table at line 4)"
+}
+
+# A delimiter row with no dash is no table to GFM, so mdformat leaves the
+# lines as text, but python-markdown renders a table when they open a
+# block. Either reading is accepted; a changed cell is still reported.
+function scenario_dashless_delimiter_read_both_ways() {
+  new_tree dashless
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Lead-in.
+#
+# | Alpha | Beta |
+# | : | : |
+# | one | two |
+true
+EOF
+  cat >"${TREE}/scripts/u.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Lead-in
+# | Alpha | Beta |
+# |  | :|
+# | one | two |
+true
+EOF
+  write_page <<'EOF'
+### scripts/t.sh
+
+Lead-in.
+
+| Alpha | Beta |
+| : | : |
+| one | two |
+
+### scripts/u.sh
+
+Lead-in
+| Alpha | Beta |
+| | :|
+| one | two |
+EOF
+  run_scenario 'a dashless delimiter row may show as a table or as text' 0 '' \
+    'ok — 3 file(s), 3 annotation unit(s), 0 indented block(s), 2 table(s) published intact'
+  write_page <<'EOF'
+### scripts/t.sh
+
+Lead-in.
+
+| Alpha | Beta |
+| : | : |
+| one | too |
+
+### scripts/u.sh
+
+Lead-in
+| Alpha | Beta |
+| | :|
+| one | two |
+EOF
+  run_scenario 'a changed cell in a dashless table is reported' 1 \
+    "scripts/t.sh: @description (line 2) published 14 of 16 words; dropped or altered from: 'two |' (in the table at line 4)"
+}
+
+# Pipes that GFM does not read as a table stay text with their pipes (a
+# delimiter row of another width, a header row indented four columns or
+# with no pipe at all), and
+# so does a table under an @arg, which the generator joins into one line,
+# and one in a colon-led indented run, which it fences.
+function scenario_pipes_not_a_table() {
+  new_tree notatable
+  cat >"${TREE}/scripts/t.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Lead-in.
+#
+# | Alpha | Beta | Gamma |
+# |---|---|
+# | one | two | three |
+#
+# Fenced after a colon:
+#
+#   | Alpha | Beta |
+#   |---|---|
+# @arg $1 the mode:
+# | Alpha | Beta |
+# |---|---|
+true
+EOF
+  cat >"${TREE}/scripts/u.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Indented four without a lead-in colon
+#     | Alpha | Beta |
+#     |---|---|
+true
+EOF
+  cat >"${TREE}/scripts/v.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description Wider delimiter.
+#
+# | Alpha |
+# |---|---|
+# | one |
+true
+EOF
+  cat >"${TREE}/scripts/w.sh" <<'EOF'
+#!/usr/bin/env bash
+# @description No pipe in the header row.
+#
+# Alpha
+# :---
+# one
+true
+EOF
+  # shellcheck disable=SC2016 # `$1` is page text, not an expansion
+  write_page <<'EOF'
+### scripts/t.sh
+
+Lead-in.
+
+| Alpha | Beta | Gamma |
+|\---|---|
+| one | two | three |
+
+Fenced after a colon:
+
+```text
+  | Alpha | Beta |
+  |---|---|
+```
+
+**Args:**
+
+- `$1` — the mode: | Alpha | Beta | |---|---|
+
+### scripts/u.sh
+
+Indented four without a lead-in colon
+| Alpha | Beta |
+|\---|---|
+
+### scripts/v.sh
+
+Wider delimiter.
+
+| Alpha |
+|\---|---|
+| one |
+
+### scripts/w.sh
+
+No pipe in the header row.
+
+Alpha
+:\---
+one
+EOF
+  run_scenario 'pipes GFM does not read as a table stay text' 0 '' \
+    'ok — 5 file(s), 6 annotation unit(s), 1 indented block(s), 0 table(s) published intact'
 }
 
 # A code span never crosses a blank line, so a lone backtick in one
@@ -1322,7 +1695,7 @@ EOF
     '### scripts/u.sh' '' 'Other.' | write_page
   printf '%s\n' '#!/usr/bin/env bash' '# @description Other.' 'true' >"${TREE}/scripts/u.sh"
   run_scenario 'a lone backtick does not pair with the next paragraph' 0 '' \
-    'ok — 3 file(s), 5 annotation unit(s), 0 indented block(s) published intact'
+    'ok — 3 file(s), 5 annotation unit(s), 0 indented block(s), 0 table(s) published intact'
 }
 
 # Only `# @tag`, one blank after the hash, is an annotation. An indented
@@ -1360,7 +1733,7 @@ function scenario_live_tree() {
   printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
   if [[ ${actual_exit} -eq 0 ]] &&
     grep --fixed-strings --quiet -- "${want}" "${stdout_file}" &&
-    grep --quiet -- '^check-scripts-reference-roundtrip: ok — [1-9][0-9]* file(s), [1-9][0-9]* annotation unit(s), [1-9][0-9]* indented block(s) published intact$' "${stdout_file}"; then
+    grep --quiet -- '^check-scripts-reference-roundtrip: ok — [1-9][0-9]* file(s), [1-9][0-9]* annotation unit(s), [1-9][0-9]* indented block(s), [0-9][0-9]* table(s) published intact$' "${stdout_file}"; then
     printf 'PASS: live tree publishes every header intact (exit 0)\n'
   else
     printf 'FAIL: live tree publishes every header intact — exit %d\n' "${actual_exit}" >&2
@@ -1418,7 +1791,11 @@ function main() {
   scenario_env_value_resolution
   scenario_import_path_scrubbed
   scenario_lone_backtick
-  scenario_header_table_reads_as_dropped
+  scenario_header_table_published
+  scenario_header_table_shapes
+  scenario_table_escaped_pipes
+  scenario_pipes_not_a_table
+  scenario_dashless_delimiter_read_both_ways
   scenario_indented_tag_is_prose
   scenario_cannot_run
   scenario_interpreter_failures
