@@ -59,9 +59,11 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 install_err_trap
 
-repo_root="$(git rev-parse --show-toplevel)"
+repo_root="$(repo_toplevel)"
 readonly REPO_ROOT="${repo_root}"
 readonly SCRIPTS_DIR="${SCRIPTS_DIR_OVERRIDE:-${REPO_ROOT}/scripts}"
 

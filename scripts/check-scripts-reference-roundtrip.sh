@@ -65,6 +65,8 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 
 require_tool git
 require_tool python3
@@ -75,7 +77,7 @@ function main() {
   # works outside a work tree; without them, not finding it is a could-not-run.
   if [[ -z ${SCRIPTS_DIR_OVERRIDE:-} || -z ${SCRIPTS_REFERENCE_DOC_OVERRIDE:-} ||
     -z ${SCRIPTS_REFERENCE_MKDOCS_OVERRIDE:-} ]] &&
-    ! repo_root="$(git rev-parse --show-toplevel)"; then
+    ! repo_root="$(repo_toplevel)"; then
     log_err 'scripts-reference-roundtrip: not in a git work tree, and the overrides do not name the scripts root, page and mkdocs.yml'
     exit 2
   fi

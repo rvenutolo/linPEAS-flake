@@ -136,8 +136,10 @@ source "${_lib_dir}/lib/log.sh"
 source "${_lib_dir}/lib/temp.sh"
 # shellcheck source=scripts/lib/ephemeral-refs-scope.sh
 source "${_lib_dir}/lib/ephemeral-refs-scope.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 
-REPO_ROOT="${EPHEMERAL_REFS_ROOT_OVERRIDE:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)}"
+REPO_ROOT="${EPHEMERAL_REFS_ROOT_OVERRIDE:-$(repo_toplevel)}"
 readonly REPO_ROOT
 
 ADVISORY=0

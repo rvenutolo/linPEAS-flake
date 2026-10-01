@@ -61,15 +61,14 @@ source "${_lib_dir}/lib/enumerate.sh"
 source "${_lib_dir}/lib/awk-path.sh"
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 
 require_tool git
 require_tool awk
 require_tool sort
 
-if ! REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
-  printf 'required-check-counts: not inside a git repository\n' >&2
-  exit 2
-fi
+REPO_ROOT="$(repo_toplevel)"
 readonly REPO_ROOT
 
 # Env override (test-only):

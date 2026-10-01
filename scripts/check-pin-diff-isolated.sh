@@ -32,8 +32,12 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+_lib_dir="${BASH_SOURCE[0]%/*}"
+if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || printf '.')"
+REPO_ROOT="$(repo_toplevel)"
 readonly REPO_ROOT
 readonly SCRIPTS_DIR="${SCRIPTS_DIR_OVERRIDE:-${REPO_ROOT}/scripts}"
 readonly PIN_FILENAME='linpeas-pin.json'

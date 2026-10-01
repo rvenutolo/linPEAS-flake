@@ -55,8 +55,10 @@ source "${_lib_dir}/lib/enumerate.sh"
 source "${_lib_dir}/lib/awk-path.sh"
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 
-root="${ROOT_OVERRIDE:-$(git rev-parse --show-toplevel)}"
+root="${ROOT_OVERRIDE:-$(repo_toplevel)}"
 readonly ROOT="${root}"
 
 shopt -s nullglob

@@ -35,8 +35,10 @@ source "${_lib_dir}/lib/awk-path.sh"
 source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/generates.sh
 source "${_lib_dir}/lib/generates.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 
-root="${ROOT_OVERRIDE:-$(git rev-parse --show-toplevel)}"
+root="${ROOT_OVERRIDE:-$(repo_toplevel)}"
 readonly ROOT="${root}"
 readonly HOOKS="${ROOT}/nix/hooks/freshness.nix"
 

@@ -57,8 +57,10 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/awk-path.sh
 source "${_lib_dir}/lib/awk-path.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 
-REPO_ROOT="$(git rev-parse --show-toplevel)"
+REPO_ROOT="$(repo_toplevel)"
 readonly REPO_ROOT
 readonly DEFAULT_REPO_SLUG="rvenutolo/linPEAS-flake"
 readonly REPO_SLUG="${REPO_SLUG_OVERRIDE:-${DEFAULT_REPO_SLUG}}"

@@ -33,8 +33,10 @@ source "${_lib_dir}/lib/temp.sh"
 source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/payload.sh
 source "${_lib_dir}/lib/payload.sh"
+# shellcheck source=scripts/lib/repo.sh
+source "${_lib_dir}/lib/repo.sh"
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
+REPO_ROOT="$(repo_toplevel)"
 readonly REPO_ROOT
 readonly RENOVATE_JSON="${RENOVATE_JSON_OVERRIDE:-${REPO_ROOT}/renovate.json}"
 readonly SCAN_ROOT="${SCAN_ROOT:-${REPO_ROOT}}"
