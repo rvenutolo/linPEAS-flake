@@ -430,12 +430,15 @@ naming the script and the directory:
 
 ```bash
 REPO_ROOT="$(repo_toplevel)"
-readonly ROOT="${ROOT_OVERRIDE:-$(repo_toplevel)}"
+ROOT="${ROOT_OVERRIDE:-$(repo_toplevel)}"
+readonly ROOT
 ```
 
-Assign on a line of its own: a `local` or `readonly` on the same line
-masks the 2. `tests/repo-root-guard.test.sh` runs every script that calls
-the helper from outside a work tree. Full rationale:
+Assign on a line of its own and declare afterwards: `local`, `readonly`,
+`declare`, `export` or `typeset` on the same line returns its own status
+and loses the 2, and the lint reports that shape too.
+`tests/repo-root-guard.test.sh` runs every script that calls the helper
+from outside a work tree. Full rationale:
 [Workflow hardening → Bare repository-root lookup](../security/workflow-hardening.md#bare-repository-root-lookup).
 
 ## Glob-driven scan breadth

@@ -161,6 +161,10 @@ function main() {
   run_scenario 'a lookup with an option before the flag is a hit' \
     'bad-root-flag-later' 1 \
     'bad-root-flag-later/scripts/find-root.sh:6: resolves the repository root with a bare git rev-parse --show-toplevel'
+  # A substitution inside the -C argument does not end the match.
+  run_scenario 'a lookup with a substitution in -C is a hit' \
+    'bad-root-nested-dash-c' 1 \
+    'bad-root-nested-dash-c/scripts/find-root.sh:6: resolves the repository root with a bare git rev-parse --show-toplevel'
   # A fallback that reads the current directory instead is still a hit.
   run_scenario 'a lookup with a fallback is a hit' \
     'bad-root-fallback' 1 \
@@ -177,6 +181,17 @@ function main() {
   # parenthetical, a string operand, a trailing comment) is not a hit.
   run_scenario 'helper callers and prose naming the lookup pass' \
     'good-repo-toplevel' 0 '5 script(s) scanned, 0 exemption(s), 0 orphan marker(s), 1 sanctioned site(s)'
+  # A declaration builtin on the helper's line returns its own status and
+  # loses the 2. shellcheck reports the plain local form but not the
+  # default-expansion one, so each has its own fixture.
+  run_scenario 'a helper call masked by readonly in a default expansion is a hit' \
+    'bad-masked-root-default' 1 \
+    'bad-masked-root-default/scripts/masked.sh:7: calls repo_toplevel on the same line as a declaration builtin'
+  run_scenario 'a helper call masked by local is a hit' \
+    'bad-masked-root-local' 1 \
+    'bad-masked-root-local/scripts/masked.sh:8: calls repo_toplevel on the same line as a declaration builtin'
+  run_scenario 'a masked-call exemption without a rationale is a hit' \
+    'bad-masked-root-no-rationale' 1 'exit-code-exempt marker on a masked repo_toplevel call carries no rationale'
   run_scenario 'a rationale-bearing root-lookup exemption is counted' \
     'good-root-exempted' 0 '3 script(s) scanned, 1 exemption(s)'
   run_scenario 'a root-lookup exemption without a rationale is a hit' \
