@@ -190,8 +190,8 @@ jobs:
               - `linpeas-flake-bumper` GitHub App installation intact
                 (`BUMP_APP_PRIVATE_KEY` not rotated, App not uninstalled)
               - Asset-URL prefix check rejecting upstream (peass-ng moved host)
-              - Upstream `.digest` field absent (silent skip is supposed to
-                hard-fail now; verify `bump-linpeas.sh`)
+              - Upstream `.digest` field absent (`bump-linpeas.sh` exits 1 on
+                that; look for its `has no .digest field` error in the run log)
             - `upstream-api-failure` — the `gh api
               repos/peass-ng/PEASS-ng/releases/latest` call failed or returned
               empty. Likely a transient GitHub API issue or rate-limit

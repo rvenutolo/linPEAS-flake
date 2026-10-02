@@ -23,7 +23,7 @@ During burn-in (`continue-on-error: true` on the compare job), workflow runs rep
 
 To ensure mismatches are seen, the repo owner watches "All Activity" or "Issues" notifications on this repo.
 
-The `gh issue create` invocation sets no `--assignee`; mismatches rely on default repo notification settings. Add `--assignee` to that invocation once a maintainer wants direct paging, and revisit after the first real mismatch (the runbook's "What to do when it fails" section assumes the responder has already seen the issue).
+The `gh issue create` invocation sets no `--assignee`; mismatches rely on default repo notification settings. Add `--assignee` to that invocation once a maintainer wants direct paging, and revisit after the first real mismatch (the "What to do when it fails" section below assumes the responder has already seen the issue).
 
 ## What to do when it fails
 

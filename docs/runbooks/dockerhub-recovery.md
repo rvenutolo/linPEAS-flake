@@ -57,11 +57,17 @@ The push loop inside `release-on-bump.yml` per-arch jobs runs
     signature (those steps run after the push and never ran), so
     deleting it loses nothing.
 
-A third path arrives here from elsewhere: when a published release's two
-registries disagree, `verify-latest-release.yml` files its
-`verify-latest-release-failure` issue with
+A third path arrives here from elsewhere: `verify-latest-release.yml`
+files its `verify-latest-release-failure` issue with
 `Reason: cross-registry-manifest-mismatch` and points it at this runbook.
-That body says to treat the Docker Hub token as compromised until proven
+That reason covers two outcomes of the
+`verify ghcr.io and docker.io serve the same manifest` step, and its log
+says which. If the step could not fetch the `:VERSION` manifest from a
+registry, the log ends at the fetch error and nothing was compared:
+dispatch the workflow again, and this path applies only if a run prints a
+mismatch. If the log prints `ghcr.io and docker.io disagree on` the tag,
+followed by both manifests, the two registries disagree, and the issue
+body says to treat the Docker Hub token as compromised until proven
 otherwise. A cross-registry mismatch is a post-publication tag rewrite,
 not a half-finished push, and the steps below assume the opposite —
 they spend `DOCKERHUB_TOKEN_DELETE` on the working assumption that the
@@ -247,7 +253,7 @@ third path there is no such issue: close the
 
 **Username mismatch.** `DOCKERHUB_USERNAME` must equal the owner segment of the `rvenutolo/linpeas` repo path.
 
-**Docker Hub partial outage.** Manual re-run via `workflow_dispatch` is usually enough; if multiple retries fail with the same shape, check <https://status.docker.com>.
+**Docker Hub partial outage.** Re-trigger as [step 3](#3-re-trigger-the-release-pipeline) describes, after any cleanup steps 1 and 2 call for. Once the GitHub release exists, a `workflow_dispatch` without `force-republish: true` skips the image jobs. If multiple retries fail with the same shape, check <https://status.docker.com>.
 
 ## DOCKERHUB_TOKEN split (RW + DELETE)<a name="dockerhub_token-split-rw--delete"></a>
 
@@ -265,8 +271,9 @@ Binding:
     token is release-only).
 1. `secrets.DOCKERHUB_TOKEN_DELETE` must never be consumed in
     `release-on-bump.yml` or `verify-latest-release.yml`.
-1. Any shell-fenced Docker Hub tag delete (`--request DELETE`
-    or `-X DELETE`) in a tracked Markdown file outside `tests/` —
+1. Any Docker Hub tag delete (`--request DELETE` or `-X DELETE`) in a
+    fence that is unlabelled or tagged `sh`, `bash`, `shell`, `console` or
+    `text`, in a tracked Markdown file outside `tests/` —
     including this runbook's own step-2 recovery snippet — must name
     `DOCKERHUB_TOKEN_DELETE` and must not name
     `DOCKERHUB_TOKEN_RW` (the `_RW` token returns `403`). The lint
@@ -299,7 +306,8 @@ valid, just not delete-scoped — so the first `curl --fail` returns a JWT
 and it is the `DELETE` that dies. A failure on the login call instead
 means the token itself is bad, not merely under-scoped.
 
-Rotation: on suspected compromise only.
+Rotation: no calendar cadence — on suspected compromise, or when a token
+has expired or been revoked.
 
 ## Notify-body parity invariant<a name="notify-body-parity-invariant"></a>
 
