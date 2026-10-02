@@ -23,9 +23,10 @@
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures.
 # Exits 0 on full coverage, 1 on any drift. Exits 2 when the check
 # cannot run: `yq` is absent from PATH, the workflow globs match no
-# file, or WORKFLOW_FILE_FILTER selects none of the files they matched.
-# An empty scan set is a could-not-run rather than a clean tree;
-# LINT_ALLOW_EMPTY_SCAN=1 accepts one deliberately.
+# file, WORKFLOW_FILE_FILTER selects none of the files they matched, or
+# the `yq` read that tells a trigger present with no value from an absent
+# one fails. An empty scan set is a could-not-run rather than a clean
+# tree; LINT_ALLOW_EMPTY_SCAN=1 accepts one deliberately.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -65,11 +66,24 @@ function read_workflow() {
   printf '%s' "${value}"
 }
 
+# @description Stop the run on a `yq` read that failed after the same
+# trigger's tag has been read, so the file parses and the failure is
+# `yq` failing rather than a fact about the workflow. Carrying on would
+# compare an empty value and score the trigger absent.
+# @arg $1 what was being read
+# @arg $2 workflow path
+# @arg $3 the status `yq` exited with
+# @exitcode 2 always
+function die_unread() {
+  printf 'cannot read %s of %s: yq exited %d\n' "$1" "$2" "$3" >&2
+  exit 2
+}
+
 # Check one trigger (pull_request / push) within one workflow file.
 # Args: file, trigger-name
 check_trigger() {
   local -r file="$1" trigger="$2"
-  local trig_tag
+  local trig_tag trig_present
   trig_tag="$(read_workflow "${file}" ".on.\"${trigger}\" | tag")" || return 1
   case "${trig_tag}" in
   '!!null')
@@ -78,7 +92,9 @@ check_trigger() {
     # (`pull_request:` with nothing under it) fires on every branch —
     # exactly the implicit all-branches this lint forbids — so treat
     # only the absent case as unaffected.
-    if [[ "$(yq eval ".on | has(\"${trigger}\")" "${file}")" == "true" ]]; then
+    trig_present="$(yq eval ".on | has(\"${trigger}\")" "${file}")" ||
+      die_unread "the on.${trigger} key" "${file}" "$?"
+    if [[ ${trig_present} == "true" ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
       printf '%s: on.%s is present but null (implicit all-branches forbidden; need `branches: [main]`)\n' \
         "${file}" "${trigger}" >&2

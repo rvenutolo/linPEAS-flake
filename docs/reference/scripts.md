@@ -2010,7 +2010,8 @@ Exit codes:
   2  missing inputs / parse error / nothing enumerated to measure,
       including an audit-state file that is absent, carries no
       LAST_AUDIT_SHA=<40-hex> line, or names a commit this history does
-      not contain
+      not contain, and a workflow at either ref that git cannot show or
+      whose job ids `yq` cannot read
 ```
 
 ### scripts/gen-dashboard-data.sh

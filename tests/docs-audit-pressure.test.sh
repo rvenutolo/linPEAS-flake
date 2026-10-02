@@ -24,14 +24,16 @@ failures=0
 # @arg $1 scenario name
 # @arg $2 expected exit code
 # @arg $@ `--expect <substring>` (must appear in stdout),
-#         `--expect-err <substring>` (must appear in stderr) and
-#         `--forbid <substring>` (must not appear), each repeatable
+#         `--expect-err <substring>` (must appear in stderr),
+#         `--forbid <substring>` (must not appear in stdout) and
+#         `--forbid-err <substring>` (must not appear in stderr), each
+#         repeatable
 function run_scenario() {
   local -r name="$1"
   local -r expected_exit="$2"
   shift 2
 
-  local -a expect_subs=() expect_err_subs=() forbid_subs=()
+  local -a expect_subs=() expect_err_subs=() forbid_subs=() forbid_err_subs=()
   while (($#)); do
     case "$1" in
     --expect)
@@ -46,6 +48,10 @@ function run_scenario() {
       forbid_subs+=("$2")
       shift 2
       ;;
+    --forbid-err)
+      forbid_err_subs+=("$2")
+      shift 2
+      ;;
     *)
       printf 'FAIL: %s — run_scenario got unknown argument %q\n' "${name}" "$1" >&2
       exit 1
@@ -53,12 +59,17 @@ function run_scenario() {
     esac
   done
 
-  local out_file err_file outcome_file actual_exit=0
+  local out_file err_file outcome_file run_tmp leftover actual_exit=0
   out_file="$(mktemp)"
   err_file="$(mktemp)"
   outcome_file="$(mktemp)"
+  # The script's own temp files go to a directory of this run's, so that
+  # one it leaves behind can be seen.
+  run_tmp="$(mktemp --directory)"
 
-  DOCS_AUDIT_STATE_OVERRIDE="${STATE_FILE}" \
+  # SCRIPT_PATH, when a scenario sets it, is the PATH of the script alone:
+  # a stub of a tool this function also runs must not answer its calls.
+  PATH="${SCRIPT_PATH:-${PATH}}" TMPDIR="${run_tmp}" DOCS_AUDIT_STATE_OVERRIDE="${STATE_FILE}" \
     WORKFLOWS_DIR_OVERRIDE="${WF_DIR}" \
     LINT_GROUPS_OVERRIDE="${LG_FILE}" \
     "${SCRIPT}" >"${out_file}" 2>"${err_file}" || actual_exit=$?
@@ -72,6 +83,13 @@ function run_scenario() {
     harness_assert_also "${sub}"
   done
 
+  leftover="$(ls --almost-all -- "${run_tmp}")"
+  rm --recursive --force -- "${run_tmp}"
+  if [[ -n ${leftover} ]]; then
+    printf 'FAIL: %s — the script left a temp file behind (%s)\n' "${name}" "${leftover}" >&2
+    failures=$((failures + 1))
+    return
+  fi
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${expected_exit}" "${actual_exit}" >&2
     cat -- "${out_file}" >&2
@@ -89,6 +107,14 @@ function run_scenario() {
   for sub in "${expect_err_subs[@]}"; do
     if ! grep --fixed-strings --quiet -- "${sub}" "${err_file}"; then
       printf 'FAIL: %s — stderr missing %q\n' "${name}" "${sub}" >&2
+      cat -- "${err_file}" >&2
+      failures=$((failures + 1))
+      return
+    fi
+  done
+  for sub in "${forbid_err_subs[@]}"; do
+    if grep --fixed-strings --quiet -- "${sub}" "${err_file}"; then
+      printf 'FAIL: %s — stderr must not contain %q\n' "${name}" "${sub}" >&2
       cat -- "${err_file}" >&2
       failures=$((failures + 1))
       return
@@ -250,6 +276,140 @@ cd "${SANDBOX}"
 run_scenario 'removed job and member are reported' 0 \
   --expect 'Jobs removed:' --expect 'oldjob' \
   --expect 'Lint-group members removed:' --expect 'gamma'
+
+# @description Make a directory holding a `yq` that exits with a given
+# status for one job-id read and hands every other call to the real `yq`,
+# and point STUB_DIR at it. The job-id read is the one whose expression
+# holds `| keys`, which the lint-group read does not; it takes its
+# workflow as a file, its last argument, under one temp name for every
+# workflow at a ref, so the read to fail is picked by text that file
+# holds.
+# `-` fails every job-id read, of which the first is the audit point's.
+# A scenario puts the directory first on PATH for its own run only.
+# @arg $1 exit status for the failing read
+# @arg $2 text the failing read's input holds, or `-`
+function yq_stub() {
+  local real_yq
+  real_yq="$(command -v yq)"
+  STUB_DIR="$(mktemp --directory)"
+  # shellcheck disable=SC2016 # the stub's own expansions, written literally
+  printf '#!/usr/bin/env bash\ncase "$*" in *%q*)\n  if [[ %q == - ]]; then exit %d; fi\n  if grep --quiet --fixed-strings -- %q "${!#}"; then exit %d; fi ;;\nesac\nexec %q "$@"\n' \
+    '| keys' "$2" "$1" "$2" "$1" "${real_yq}" >"${STUB_DIR}/yq"
+  chmod +x -- "${STUB_DIR}/yq"
+}
+
+# @description Make a directory holding a `git` that exits with a given
+# status for every call whose arguments hold a given string and hands any
+# other call to the real `git`, and point STUB_DIR at it.
+# @arg $1 argument text that marks the failing call
+# @arg $2 exit status for that call
+function git_stub() {
+  local real_git
+  real_git="$(command -v git)"
+  STUB_DIR="$(mktemp --directory)"
+  printf '#!/usr/bin/env bash\ncase "$*" in *%q*) exit %d ;; esac\nexec %q "$@"\n' \
+    "$1" "$2" "${real_git}" >"${STUB_DIR}/git"
+  chmod +x -- "${STUB_DIR}/git"
+}
+
+# @description Make a directory holding a `mktemp` that fails on one of
+# its calls, counted from 1, and hands every other call to the real
+# `mktemp`, and point STUB_DIR at it.
+# @arg $1 the call to fail
+function mktemp_stub() {
+  local real_mktemp
+  real_mktemp="$(command -v mktemp)"
+  STUB_DIR="$(mktemp --directory)"
+  # shellcheck disable=SC2016 # the stub's own expansions, written literally
+  printf '#!/usr/bin/env bash\ncount=%q\nn=$(($(cat -- "${count}" 2>/dev/null || printf 0) + 1))\nprintf "%%d" "${n}" >"${count}"\nif ((n == %d)); then exit 1; fi\nexec %q "$@"\n' \
+    "${STUB_DIR}/count" "$1" "${real_mktemp}" >"${STUB_DIR}/mktemp"
+  chmod +x -- "${STUB_DIR}/mktemp"
+}
+
+# --- scenarios: a workflow's job ids cannot be read ---
+# A read that fails drops no workflow from the set: the run stops, naming
+# the workflow, the ref, the tool and its status. Left to pass, the jobs
+# of a workflow unread at the audit point are reported as added since,
+# and those of one unread at HEAD as removed.
+make_sandbox
+cd "${SANDBOX}"
+base_sha="$(git -C "${SANDBOX}" rev-parse HEAD)"
+printf 'name: a\njobs:\n  build:\n    runs-on: x\n  rollout:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: add rollout job'
+
+yq_stub 7 -
+PATH="${STUB_DIR}:${PATH}" run_scenario 'failed job-id read at the audit point stops the run' 2 \
+  --expect-err "cannot read job ids from .github/workflows/a.yml at ${base_sha}: yq exited 7" \
+  --forbid 'PRESSURE='
+rm --recursive --force -- "${STUB_DIR}"
+
+# `rollout` is in the workflow at HEAD only, so only that read fails.
+yq_stub 9 rollout
+PATH="${STUB_DIR}:${PATH}" run_scenario 'failed job-id read at HEAD stops the run' 2 \
+  --expect-err 'cannot read job ids from .github/workflows/a.yml at HEAD: yq exited 9' \
+  --forbid 'PRESSURE='
+rm --recursive --force -- "${STUB_DIR}"
+
+# The second temp file the script asks for is the one the audit point's
+# workflows are written to. Without it nothing was read, and the line
+# names the temp file, not a git read that never ran.
+mktemp_stub 2
+SCRIPT_PATH="${STUB_DIR}:${PATH}" run_scenario 'no temp file for the workflows stops the run' 2 \
+  --expect-err 'cannot create a temp file' \
+  --forbid-err 'git show exited' --forbid 'PRESSURE='
+rm --recursive --force -- "${STUB_DIR}"
+
+git_stub "show ${base_sha}:.github/workflows/a.yml" 5
+PATH="${STUB_DIR}:${PATH}" run_scenario 'workflow git cannot show stops the run' 2 \
+  --expect-err "cannot read .github/workflows/a.yml at ${base_sha}: git show exited 5" \
+  --forbid 'PRESSURE='
+rm --recursive --force -- "${STUB_DIR}"
+
+# A workflow with no `jobs:` and one with an empty `jobs:` hold no id and
+# are not unreadable: the job added beside them is still reported.
+printf 'name: b\non: push\n' >"${WF_DIR}/b.yml"
+printf 'name: c\njobs: {}\n' >"${WF_DIR}/c.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: add jobless workflows'
+run_scenario 'workflows without jobs read as no ids' 0 \
+  --expect 'rollout'
+
+# The job set is every document's: a file whose first document holds no
+# `jobs:` still contributes the jobs of its second. A `jobs:` written as
+# an alias stands for the map it names. The job the scenario above
+# reports is taken back out, so each report names its own jobs.
+printf 'name: a\njobs:\n  build:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
+printf 'name: d\n---\njobs:\n  canary:\n    runs-on: x\n' >"${WF_DIR}/d.yml"
+printf 'x: &j\n  mirror:\n    runs-on: x\njobs: *j\n' >"${WF_DIR}/e.yml"
+# Only `jobs:` is resolved: a merge key `yq` cannot resolve elsewhere in
+# a workflow leaves its job ids readable.
+printf 'c: &c [x]\nenv:\n  <<: *c\njobs:\n  sentinel:\n    runs-on: x\n' >"${WF_DIR}/g.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: add a two-document and an aliased workflow'
+run_scenario 'later documents and aliased jobs are counted' 0 \
+  --expect 'canary' --expect 'mirror' --expect 'sentinel'
+
+# A workflow holding a NUL byte is one `yq` cannot read. The bytes git
+# prints must reach `yq` as they are: a shell variable drops the NUL and
+# hands `yq` a different, readable file.
+printf 'name: f\njobs:\n  ghost:\n    runs-on: x\n# \0\n' >"${WF_DIR}/f.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: add a workflow holding a NUL'
+run_scenario 'workflow holding a NUL byte stops the run' 2 \
+  --expect-err 'cannot read job ids from .github/workflows/f.yml at HEAD: yq exited 1' \
+  --forbid 'ghost'
+git -C "${SANDBOX}" rm --quiet -- "${WF_DIR}/f.yml"
+git -C "${SANDBOX}" commit --quiet -m 'ci: drop the workflow holding a NUL'
+
+# A workflow that does not parse at HEAD, committed at run time so no
+# unparsable file sits in the tree for the formatters to refuse.
+printf 'name: a\njobs: [build\n' >"${WF_DIR}/a.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: break a workflow'
+run_scenario 'unparsable workflow at HEAD stops the run' 2 \
+  --expect-err 'cannot read job ids from .github/workflows/a.yml at HEAD: yq exited 1' \
+  --forbid 'Jobs removed:'
 
 cd "${REPO_ROOT}"
 

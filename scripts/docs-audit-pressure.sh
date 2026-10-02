@@ -33,7 +33,8 @@
 #   2  missing inputs / parse error / nothing enumerated to measure,
 #      including an audit-state file that is absent, carries no
 #      LAST_AUDIT_SHA=<40-hex> line, or names a commit this history does
-#      not contain
+#      not contain, and a workflow at either ref that git cannot show or
+#      whose job ids `yq` cannot read
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -45,10 +46,12 @@ source "${_lib_dir}/lib/enumerate.sh"
 source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/repo.sh
 source "${_lib_dir}/lib/repo.sh"
+# shellcheck source=scripts/lib/temp.sh
+source "${_lib_dir}/lib/temp.sh"
 
-# The job enumeration below ends in `|| true`, so an absent `yq`
-# yields an empty list and the pressure figure silently undercounts
-# rather than reporting that it read nothing.
+# An absent `yq` fails the first job-id read, which would be reported as
+# a workflow that could not be read. That is a tool this run lacks, not
+# a fact about the workflow.
 require_tool yq
 
 # Resolving the root first makes a run from outside a work tree stop here,
@@ -102,6 +105,8 @@ function last_audit_ref() {
 # @description Emit sorted job ids present at a given ref. Only ids matching
 #              JOB_ID_RE are emitted; the rest are counted by the caller.
 # @arg $1 git ref
+# @exitcode 2 no workflow file at the ref, or one that git cannot show or
+#             whose job ids `yq` cannot read
 function job_ids_at() {
   local -r ref="$1"
   local path
@@ -125,10 +130,37 @@ function job_ids_at() {
       "${WORKFLOWS_DIR}" "${ref}" >&2
     return 2
   fi
+  # Each workflow is written to a file and read from it, with each status
+  # tested before its ids join the set. The file carries the bytes git
+  # printed: a shell variable would drop a NUL and hand `yq` a workflow
+  # that is not the one at the ref. A workflow with no `jobs:` reads as
+  # no ids through `// {}`, and `explode`, given `jobs:` alone, reads one
+  # written as an alias as the map it names, so a failure is a workflow
+  # whose job ids this run does not have. Dropping that workflow instead
+  # leaves the set short by its jobs: at the audit point they are
+  # reported as added since, at HEAD as removed.
+  local blob_file ids status all_ids=''
+  # `make_temp` exits inside the substitution, which ends the
+  # substitution alone: without the test, the loop would go on with no
+  # file to write to and report a git read that never ran.
+  blob_file="$(make_temp)" || return 2
   for path in ${workflow_paths+"${workflow_paths[@]}"}; do
-    git show "${ref}:${path}" 2>/dev/null |
-      yq --exit-status '.jobs | keys | .[]' - 2>/dev/null || true
-  done | tr -d '"' | sort -u
+    git show "${ref}:${path}" >"${blob_file}" || {
+      status=$?
+      rm --force -- "${blob_file}"
+      log_err "cannot read ${path} at ${ref}: git show exited ${status}"
+      return 2
+    }
+    ids="$(yq '(.jobs // {}) | explode(.) | keys | .[]' "${blob_file}")" || {
+      status=$?
+      rm --force -- "${blob_file}"
+      log_err "cannot read job ids from ${path} at ${ref}: yq exited ${status}"
+      return 2
+    }
+    all_ids+="${ids}"$'\n'
+  done
+  rm --force -- "${blob_file}"
+  printf '%s' "${all_ids}" | tr -d '"' | sort -u
 }
 
 # @description Print a path relative to the repo root. `git show ref:path`

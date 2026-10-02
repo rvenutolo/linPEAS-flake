@@ -23,7 +23,8 @@
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures.
 # Exits 0 on full coverage, 1 on any drift. Exits 2 when the check
 # cannot run: `yq` is absent from PATH, the workflow globs match no
-# file, or WORKFLOW_FILE_FILTER selects none of the files they matched.
+# file, WORKFLOW_FILE_FILTER selects none of the files they matched, or
+# a `yq` read of `on:` fails for a workflow whose first read succeeded.
 # An empty scan set is a could-not-run rather than a clean tree;
 # LINT_ALLOW_EMPTY_SCAN=1 accepts one deliberately.
 
@@ -65,6 +66,20 @@ function read_workflow() {
   printf '%s' "${value}"
 }
 
+# @description Stop the run on a `yq` read that failed. Not for a
+# workflow's first read, whose failure `read_workflow` counts as a
+# finding: once that read has succeeded the file parses, so a later
+# failure is `yq` failing and says nothing about the workflow. Carrying
+# on would compare an empty value and score the workflow clean.
+# @arg $1 what was being read
+# @arg $2 workflow path
+# @arg $3 the status `yq` exited with
+# @exitcode 2 always
+function die_unread() {
+  printf 'cannot read %s of %s: yq exited %d\n' "$1" "$2" "$3" >&2
+  exit 2
+}
+
 failed=0
 shopt -s nullglob
 declare -a workflow_files=()
@@ -85,7 +100,8 @@ for f in "${selected_files[@]}"; do
     continue
     ;;
   '!!str')
-    if [[ "$(yq eval '.on' "${f}")" == "pull_request_target" ]]; then
+    on_string="$(yq eval '.on' "${f}")" || die_unread 'the on: string' "${f}" "$?"
+    if [[ ${on_string} == "pull_request_target" ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
       printf '%s: uses `pull_request_target` trigger (forbidden — base-ref workflow with head-ref code + full secrets)\n' \
         "${f}" >&2
@@ -93,7 +109,9 @@ for f in "${selected_files[@]}"; do
     fi
     ;;
   '!!seq')
-    if yq eval '.on[] | select(. == "pull_request_target")' "${f}" | grep --quiet pull_request_target; then
+    on_items="$(yq eval '.on[] | select(. == "pull_request_target")' "${f}")" ||
+      die_unread 'the on: list' "${f}" "$?"
+    if [[ ${on_items} == *pull_request_target* ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
       printf '%s: uses `pull_request_target` trigger (forbidden — base-ref workflow with head-ref code + full secrets)\n' \
         "${f}" >&2
@@ -105,7 +123,8 @@ for f in "${selected_files[@]}"; do
     # sub-keys) is still the forbidden trigger — GitHub fires on all its
     # activity types. `has()` is true for the null case; inspecting the
     # value tag is not (it yields `!!null` for both absent and null).
-    pr_target_present="$(read_workflow "${f}" '.on | has("pull_request_target")')" || true
+    pr_target_present="$(yq eval '.on | has("pull_request_target")' "${f}")" ||
+      die_unread 'the on: keys' "${f}" "$?"
     if [[ ${pr_target_present} == "true" ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
       printf '%s: uses `pull_request_target` trigger (forbidden — base-ref workflow with head-ref code + full secrets)\n' \
