@@ -135,7 +135,9 @@ substring to the preceding record). The last-resort relief valve is
 harnesses named on the `PARITY_EXEMPT_ALLOWED` array in
 `scripts/check-harness-assert-wired.sh` may register one — reaching for
 it means widening that allowlist in the same change, which is the
-review moment it deserves.
+review moment it deserves. What an exemption does and does not excuse is
+under
+[harness census parity](../docs/security/workflow-hardening.md#harness-census-parity).
 
 A harness that enumerates the filesystem is held to the same
 scan-breadth rules as a repo script: `find` / `git ls-files` /

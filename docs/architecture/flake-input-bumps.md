@@ -9,7 +9,8 @@ flake-input pins in `flake.nix`:
 - **`NixOS/nixpkgs`** — stable-branch tracker. Fires when the next
     NixOS GA tag (`YY.MM`) lands plus the global 7-day
     `minimumReleaseAge` quarantine. **Blast: the linpeas runtime
-    derivation and the image's bundled payload. No tooling.**
+    derivation and the image's bundled payload. Of the tooling, the
+    `nixpkgs-hammering` lint (see the ownership note below).**
 - **`nixpkgs-unstable`** — also declared, but **Renovate does not track
     it**. Its URL names a branch that never renames
     (`github:NixOS/nixpkgs/nixos-unstable`), so the weekly
@@ -134,16 +135,15 @@ rather than on the bump's own checks. Walk the list when one does.
     changes its trusted root in a way older clients cannot parse (a new
     key type, for example), a runner image whose `gh` CLI predates the
     change fails every attestation verify (see
-    [Tools needed](../security/verification.md#tools-needed)). A nixpkgs
-    bump does not affect this, since the workflows use the runner's
-    `gh`, but a coincident change can look like attestation drift. The
-    cosign steps are the exception: they run the lock-pinned `.#cosign`
-    from `nixpkgs-unstable`, so a bump changes the client that loads
-    the root.
+    [Tools needed](../security/verification.md#tools-needed)). A stable
+    bump does not affect this: the workflows use the runner's `gh`, and
+    the cosign steps run the lock-pinned `.#cosign`, which comes from
+    `nixpkgs-unstable` (see the unstable section below). A coincident
+    change can still look like attestation drift.
     The step log shows a trusted-root load error (the errors under
     [Tools needed](../security/verification.md#tools-needed)); confirm
-    that before assuming drift. It clears once the runner image ships a
-    `gh` that parses the new root.
+    that before assuming drift. A `gh` failure of this kind clears once
+    the runner image ships a `gh` that parses the new root.
 
 Step 5 of the step-by-step below covers most of this surface as a
 symptom → fix lookup table; use this section to anticipate before
@@ -180,6 +180,12 @@ lands weekly on the cron's lockfile PR rather than on a Renovate one:
     enables sometimes break before that pin's own bump lands. Surfaces
     as `nix flake check` failures unrelated to any workflow change. See
     "Interaction between the pins" below.
+- **cosign client change.** The release and verification workflows run
+    the lock-pinned `.#cosign`, which `nix/packages.nix` takes from
+    `nixpkgs-unstable`, so this bump changes the client that signs and
+    that loads Sigstore's trusted root. What a client prints when it
+    cannot load that root, and what that error does and does not prove,
+    is under [Tools needed](../security/verification.md#tools-needed).
 
 Out of scope for unstable bumps (these only happen on stable):
 
