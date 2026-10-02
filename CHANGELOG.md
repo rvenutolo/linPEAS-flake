@@ -6,6 +6,19 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20261002-82d9fad1] - 2026-10-02
+
+### Chores
+- Bump linpeas to 20261002-82d9fad1 ([#1213](https://github.com/rvenutolo/linPEAS-flake/pull/1213))
+- Update flake.lock ([#1212](https://github.com/rvenutolo/linPEAS-flake/pull/1212))
+- Update github-actions ([#1208](https://github.com/rvenutolo/linPEAS-flake/pull/1208))
+
+### Documentation
+- Fix the drift the committed-seed recall runs found ([#1211](https://github.com/rvenutolo/linPEAS-flake/pull/1211))
+
+### Tests
+- Confine gen-dashboard-data failure scenarios to a scratch dir ([#1207](https://github.com/rvenutolo/linPEAS-flake/pull/1207))
+
 ## [20261001-5c755dbf] - 2026-10-01
 
 ### Build
