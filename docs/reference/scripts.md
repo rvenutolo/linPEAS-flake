@@ -1086,17 +1086,16 @@ case-insensitive. A gate without `always()` carries GitHub's implicit
 and empty; the events tried are the ones the workflow's `on:` names:
 what `yq` prints for a string, for the items of a list or for the keys
 of a map, split at spaces, tabs and newlines. A job of a workflow whose
-`on:` carries any other tag (an alias does, and a file of several
-documents prints several), or prints no event, is refused when it has to
-be derived. So is a job whose notify step has an `if:` of its own,
-follows a step other than step-security/harden-runner or
-actions/checkout, runs the composite twice, or reaches it by any other
-`uses:` than ./.github/actions/notify-workflow-result. The composite's
-own result handling (failure and cancelled file, success closes, skipped
-does nothing) is taken as fixed: its text from `runs:` through the
-success branch is pinned by hash, and a gated step is refused, so a
-change there stops this lint rather than silently changing what an arm
-means.
+`on:` carries any other tag, as an alias does, or prints no event, is
+refused when it has to be derived. So is a job whose notify step has an
+`if:` of its own, follows a step other than step-security/harden-runner
+or actions/checkout, runs the composite twice, or reaches it by any
+other `uses:` than ./.github/actions/notify-workflow-result. The
+composite's own result handling (failure and cancelled file, success
+closes, skipped does nothing) is taken as fixed: its text from `runs:`
+through the success branch is pinned by hash, and a gated step is
+refused, so a change there stops this lint rather than silently changing
+what an arm means.
 
 Exit codes: 0 every marker matches its job's derived arms and every
 scanner notify job carries its markers, 1 a marker disagrees with the
