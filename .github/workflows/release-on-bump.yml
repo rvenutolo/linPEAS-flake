@@ -1747,7 +1747,7 @@ jobs:
               `gh secret set DOCKERHUB_TOKEN_RW`.
             - `DOCKERHUB_USERNAME` mismatch with the `rvenutolo/linpeas` repo owner.
             - Docker Hub partial outage; re-trigger per the runbook's step 3. Once
-              the GitHub release exists, a `workflow_dispatch` without
-              `force-republish: true` skips the image jobs.
+              the GitHub release exists, a `workflow_dispatch` with default
+              inputs skips the image jobs.
           label-description: release-on-bump workflow failure
           github-token: ${{ secrets.GITHUB_TOKEN }}

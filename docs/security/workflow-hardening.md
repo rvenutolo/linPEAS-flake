@@ -631,7 +631,7 @@ Every `label-description` a workflow hands to the `notify-workflow-result` compo
 The composite writes the description onto the label when a run opens a new issue: it creates the label, or updates the description when the label exists and its live description differs. A run that comments on an open issue or closes one writes no label. The value in the tree therefore reaches the label the next time a run opens an issue, and is what a maintainer triaging an auto-filed issue reads. Two ways that stops being true, both invisible in the tree:
 
 - **Over the cap.** The labels API rejects a description longer than 100 characters with a 422. The label keeps whichever wording it was created with, each later run that opens an issue re-attempts the write and warns, and the workflow file goes on looking like the source of truth for text that has never reached the label.
-- **Two callers, two descriptions.** A label filed by more than one workflow with different wording is rewritten by whichever of them last opened an issue, so the description changes with which workflow failed last.
+- **Two callers, two descriptions.** A label filed by more than one workflow with different wording is rewritten by whichever of them last opened an issue.
 
 Enforced by `scripts/check-notify-label-descriptions.sh`. Wired as the `lint-workflow-security` CI job (member check `notify-label-descriptions`) and as a pre-commit hook. The scan set is `.github/workflows/*.yml`; a scan that matches workflows but finds no caller of the composite exits 2 rather than reporting a clean tree, because the composite having moved is not the same fact as every description being fine.
 

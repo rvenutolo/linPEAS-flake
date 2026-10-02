@@ -253,7 +253,7 @@ third path there is no such issue: close the
 
 **Username mismatch.** `DOCKERHUB_USERNAME` must equal the owner segment of the `rvenutolo/linpeas` repo path.
 
-**Docker Hub partial outage.** Re-trigger as [step 3](#3-re-trigger-the-release-pipeline) describes, after any cleanup steps 1 and 2 call for. Once the GitHub release exists, a `workflow_dispatch` without `force-republish: true` skips the image jobs. If multiple retries fail with the same shape, check <https://status.docker.com>.
+**Docker Hub partial outage.** Re-trigger as [step 3](#3-re-trigger-the-release-pipeline) describes, after any cleanup steps 1 and 2 call for. Once the GitHub release exists, a `workflow_dispatch` with default inputs skips the image jobs. If multiple retries fail with the same shape, check <https://status.docker.com>.
 
 ## DOCKERHUB_TOKEN split (RW + DELETE)<a name="dockerhub_token-split-rw--delete"></a>
 
