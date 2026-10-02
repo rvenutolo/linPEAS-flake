@@ -14,9 +14,8 @@
 # Exits 0 if every listed workflow is clean. Exits 1 on a path filter, on
 # a doc that lists no workflow, on a listed workflow whose file is
 # missing, and on one `yq` cannot evaluate: that workflow is named with
-# the status `yq` exited with, under `yq`'s own message, and the scan
-# goes on to the next. Exits 2 when the doc that names the workflows is
-# not there to read.
+# the status `yq` exited with, and the scan goes on to the next. Exits 2
+# when the doc that names the workflows is not there to read.
 set -Eeuo pipefail
 IFS=$'\n\t'
 _lib_dir="${BASH_SOURCE[0]%/*}"
@@ -105,13 +104,14 @@ for wf in "${workflows[@]}"; do
   # the read happened. Judged by status alone (`--exit-status`), an
   # expression that is false and a `yq` that failed both exit 1, and a
   # workflow nothing read would be scored clean. The `select` keeps an
-  # `on:` written as a string or a list from failing the read: neither
-  # can hold a filter, so it prints nothing. `explode` resolves aliases
-  # first, so a trigger or a filter written through an anchor is read as
-  # the map it stands for.
+  # `on:` written as a list from failing the read, where `yq` cannot
+  # index by key: a list holds no filter, so it prints nothing. It tests
+  # the node's kind, not its tag, so a map carrying a tag of its own is
+  # still read. `explode` resolves aliases first, so a trigger or a
+  # filter written through an anchor is read as the map it stands for.
   yq_status=0
   has_filter="$(yq '
-    explode(.) | .on | select(tag == "!!map") | .pull_request | (
+    explode(.) | .on | select(kind == "map") | .pull_request | (
       has("paths") or has("paths-ignore")
     )
   ' "${resolved}")" || yq_status=$?
@@ -121,8 +121,8 @@ for wf in "${workflows[@]}"; do
     failed=1
     continue
   fi
-  # One line per YAML document in the file; any of them declaring a
-  # filter is the finding.
+  # A file holding several documents prints an answer for each whose
+  # `on:` is a map; any of them declaring a filter is the finding.
   if [[ $'\n'"${has_filter}"$'\n' == *$'\n'true$'\n'* ]]; then
     printf 'required-checks-no-paths lint: %s declares paths/paths-ignore under pull_request\n' \
       "${resolved}" >&2

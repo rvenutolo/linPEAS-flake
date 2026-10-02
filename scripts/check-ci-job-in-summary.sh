@@ -154,6 +154,35 @@ if ! yq eval 'keys | .[]' "${CATEGORIES_FILE}" | sort --unique >"${cat_keys_file
   exit 2
 fi
 
+# The job set the reverse check below holds every category entry against:
+# the map does not say which workflow an entry points at, so the set is
+# every workflow's. It is built here, before any check prints, so that a
+# workflow whose keys cannot be read stops the run with nothing reported.
+all_jobs_file="$(make_temp)"
+trap 'rm --force -- "${ci_jobs_file}" "${cat_keys_file}" "${all_jobs_file}"' EXIT
+shopt -s nullglob
+declare -a workflow_files=()
+glob_into workflow_files 'workflow YAML' "${WORKFLOWS_DIR}/*.yml" "${WORKFLOWS_DIR}/*.yaml"
+# Each workflow's keys are captured and the read's status tested before
+# they join the set, in this shell rather than in a pipeline's subshell,
+# where an exit would end that subshell alone and leave the redirect
+# writing a short job set. A workflow with no `jobs:` reads as no keys
+# through `// {}`, and `explode` reads a `jobs:` written as an alias as
+# the map it names, so a failure here is a file whose job keys this run
+# does not have: a category entry naming a job only that file holds
+# would be reported as matching nothing.
+all_jobs=''
+for f in "${workflow_files[@]}"; do
+  [[ -f ${f} ]] || continue
+  workflow_jobs="$(yq eval 'explode(.) | .jobs // {} | keys | .[]' "${f}")" || {
+    printf 'cannot read job keys from %s: yq exited %d\n' "${f}" "$?" >&2
+    exit 2
+  }
+  all_jobs+="${workflow_jobs}"$'\n'
+done
+sort --unique >"${all_jobs_file}" <<<"${all_jobs}"
+shopt -u nullglob
+
 failed=0
 
 # Forward: ci.yml job not in categories AND not exempt = fail.
@@ -186,35 +215,9 @@ for e in ${EXEMPT[@]+"${EXEMPT[@]}"}; do
   fi
 done
 
-# Reverse: a category entry that targets a ci.yml job must exist.
-# We can't tell from categories.yml alone which entries point at
-# ci.yml vs other workflows, so the reverse check is: any entry that
-# is NOT a job in some workflow file is a drift signal. Build the
-# full job set across all workflows once.
-all_jobs_file="$(make_temp)"
-trap 'rm --force -- "${ci_jobs_file}" "${cat_keys_file}" "${all_jobs_file}"' EXIT
-shopt -s nullglob
-declare -a workflow_files=()
-glob_into workflow_files 'workflow YAML' "${WORKFLOWS_DIR}/*.yml" "${WORKFLOWS_DIR}/*.yaml"
-# Each workflow's keys are captured and the read's status tested before
-# they join the set, in this shell rather than in a pipeline's subshell,
-# where an exit would end that subshell alone and leave the redirect
-# writing a short job set. A workflow with no `jobs:` reads as no keys
-# through `// {}`, so a failure here is a read that did not happen: the
-# set is short by whatever that file holds, and every category entry
-# naming one of its jobs would be reported as matching nothing.
-all_jobs=''
-for f in "${workflow_files[@]}"; do
-  [[ -f ${f} ]] || continue
-  workflow_jobs="$(yq eval '.jobs // {} | keys | .[]' "${f}")" || {
-    printf 'cannot read job keys from %s: yq exited %d\n' "${f}" "$?" >&2
-    exit 2
-  }
-  all_jobs+="${workflow_jobs}"$'\n'
-done
-sort --unique >"${all_jobs_file}" <<<"${all_jobs}"
-shopt -u nullglob
-
+# Reverse: every category entry must name a job in some workflow file.
+# The entries do not say which workflow they point at, so each is held
+# against the job set of all of them, built above.
 while IFS= read -r key; do
   [[ -z ${key} ]] && continue
   if ! grep --quiet --fixed-strings --line-regexp -- "${key}" "${all_jobs_file}"; then

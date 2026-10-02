@@ -46,6 +46,8 @@ source "${_lib_dir}/lib/enumerate.sh"
 source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/repo.sh
 source "${_lib_dir}/lib/repo.sh"
+# shellcheck source=scripts/lib/temp.sh
+source "${_lib_dir}/lib/temp.sh"
 
 # An absent `yq` fails the first job-id read, which would be reported as
 # a workflow that could not be read. That is a tool this run lacks, not
@@ -128,23 +130,33 @@ function job_ids_at() {
       "${WORKFLOWS_DIR}" "${ref}" >&2
     return 2
   fi
-  # Each workflow is captured and each status tested before its ids join
-  # the set. A workflow with no `jobs:` reads as no ids through `// {}`,
-  # so a failure is a read that did not happen. Dropping that workflow
-  # instead leaves the set short by its jobs: at the audit point they
-  # are reported as added since, at HEAD as removed.
-  local blob ids all_ids=''
+  # Each workflow is written to a file and read from it, with each status
+  # tested before its ids join the set. The file carries the bytes git
+  # printed: a shell variable would drop a NUL and hand `yq` a workflow
+  # that is not the one at the ref. A workflow with no `jobs:` reads as
+  # no ids through `// {}`, and `explode` reads a `jobs:` written as an
+  # alias as the map it names, so a failure is a workflow whose job ids
+  # this run does not have. Dropping that workflow instead leaves the
+  # set short by its jobs: at the audit point they are reported as added
+  # since, at HEAD as removed.
+  local blob_file ids status all_ids=''
+  blob_file="$(make_temp)"
   for path in ${workflow_paths+"${workflow_paths[@]}"}; do
-    blob="$(git show "${ref}:${path}")" || {
-      log_err "cannot read ${path} at ${ref}: git show exited $?"
+    git show "${ref}:${path}" >"${blob_file}" || {
+      status=$?
+      rm --force -- "${blob_file}"
+      log_err "cannot read ${path} at ${ref}: git show exited ${status}"
       return 2
     }
-    ids="$(yq '.jobs // {} | keys | .[]' - <<<"${blob}")" || {
-      log_err "cannot read job ids from ${path} at ${ref}: yq exited $?"
+    ids="$(yq 'explode(.) | .jobs // {} | keys | .[]' "${blob_file}")" || {
+      status=$?
+      rm --force -- "${blob_file}"
+      log_err "cannot read job ids from ${path} at ${ref}: yq exited ${status}"
       return 2
     }
     all_ids+="${ids}"$'\n'
   done
+  rm --force -- "${blob_file}"
   printf '%s' "${all_ids}" | tr -d '"' | sort -u
 }
 
