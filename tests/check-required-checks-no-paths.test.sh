@@ -169,6 +169,12 @@ run_built_scenario 'a filter reached through an alias is named' 1 exact \
   clean-alias.yml $'x: &t\n  pull_request:\n    branches: [main]\non: *t\njobs: {}\n' \
   pr-alias.yml $'x: &t\n  paths: [a]\non:\n  pull_request: *t\njobs: {}\n'
 
+# An `on:` map carrying a tag of its own is still a map.
+run_built_scenario 'a filter under a tagged on: map is named' 1 exact \
+  "${LINT} .github/workflows/tagged.yml ${PATHS_FINDING}" \
+  '' 0 \
+  tagged.yml $'on: !custom\n  pull_request:\n    paths: [a]\njobs: {}\n'
+
 # A file holding two documents prints one answer per document; a filter
 # in either is the finding.
 run_built_scenario 'a filter in the second document is named' 1 exact \

@@ -145,6 +145,45 @@ expect_unread_workflow 'unparsable workflow beside ci.yml' \
   "${unparsable_dir}" "${unparsable_dir}/broken.yml" 1 ''
 rm --recursive --force -- "${unparsable_dir}"
 
+# A run that could not read a workflow has cross-checked nothing, so it
+# prints no drift line either: the unmapped job beside the unparsable
+# workflow is not reported under the could-not-run code.
+drift_dir="$(mktemp --directory)"
+cp -- "${FIXTURES}/bad-missing-category/ci.yml" "${FIXTURES}/bad-missing-category/categories.yml" "${drift_dir}/"
+printf 'on: [push\n' >"${drift_dir}/broken.yml"
+drift_exit=0
+drift_stderr="$(WORKFLOWS_DIR_OVERRIDE="${drift_dir}" \
+  CI_WORKFLOW_OVERRIDE="${drift_dir}/ci.yml" \
+  CATEGORIES_FILE_OVERRIDE="${drift_dir}/categories.yml" \
+  "${SCRIPT}" 2>&1 >/dev/null)" || drift_exit=$?
+rm --recursive --force -- "${drift_dir}"
+if [[ ${drift_exit} != 2 || ${drift_stderr} == *'EXEMPT'* ||
+  ${drift_stderr} != *"cannot read job keys from ${drift_dir}/broken.yml: yq exited 1" ]]; then
+  printf 'FAIL drift beside an unparsable workflow: exit %s, want 2 and no drift line\n  stderr: %s\n' \
+    "${drift_exit}" "${drift_stderr}" >&2
+  exit 1
+fi
+printf 'OK   drift beside an unparsable workflow\n'
+
+# A `jobs:` written as an alias stands for the map it names: its keys are
+# job keys, and the category entry naming one of them resolves.
+alias_dir="$(mktemp --directory)"
+cp -- "${FIXTURES}/good/ci.yml" "${alias_dir}/"
+printf 'foo: Category-A\nbar: Category-B\nbaz: Category-C\n' >"${alias_dir}/categories.yml"
+printf 'x: &j\n  baz:\n    runs-on: ubuntu-latest\njobs: *j\n' >"${alias_dir}/aliased.yml"
+alias_exit=0
+alias_stderr="$(WORKFLOWS_DIR_OVERRIDE="${alias_dir}" \
+  CI_WORKFLOW_OVERRIDE="${alias_dir}/ci.yml" \
+  CATEGORIES_FILE_OVERRIDE="${alias_dir}/categories.yml" \
+  "${SCRIPT}" 2>&1 >/dev/null)" || alias_exit=$?
+rm --recursive --force -- "${alias_dir}"
+if [[ ${alias_exit} != 0 || -n ${alias_stderr} ]]; then
+  printf 'FAIL jobs written as an alias: exit %s, want 0 and no output\n  stderr: %s\n' \
+    "${alias_exit}" "${alias_stderr}" >&2
+  exit 1
+fi
+printf 'OK   jobs written as an alias\n'
+
 missing_categories_exit=0
 missing_categories_stderr="$(env \
   "WORKFLOWS_DIR_OVERRIDE=${FIXTURES}/good" \

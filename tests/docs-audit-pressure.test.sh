@@ -253,12 +253,12 @@ run_scenario 'removed job and member are reported' 0 \
 
 # @description Make a directory holding a `yq` that exits with a given
 # status for one job-id read and hands every other call to the real `yq`,
-# and point STUB_DIR at it. The job-id read takes its workflow on stdin
-# and has the same arguments for every workflow at both refs (they end
-# in `keys | .[] -`, which the lint-group read does not), so the read to
-# fail is picked by text its input holds; `-` fails every job-id read,
-# of which the first is the audit point's. A scenario puts the directory
-# first on PATH for its own run only.
+# and point STUB_DIR at it. The job-id read is the one whose expression
+# holds `// {} | keys`, which the lint-group read does not; it takes its
+# workflow as a file, its last argument, under the same temp name for
+# every workflow, so the read to fail is picked by text that file holds.
+# `-` fails every job-id read, of which the first is the audit point's.
+# A scenario puts the directory first on PATH for its own run only.
 # @arg $1 exit status for the failing read
 # @arg $2 text the failing read's input holds, or `-`
 function yq_stub() {
@@ -266,8 +266,8 @@ function yq_stub() {
   real_yq="$(command -v yq)"
   STUB_DIR="$(mktemp --directory)"
   # shellcheck disable=SC2016 # the stub's own expansions, written literally
-  printf '#!/usr/bin/env bash\ncase "$*" in *%q*)\n  if [[ %q == - ]]; then exit %d; fi\n  input="$(cat)"\n  if [[ ${input} == *%q* ]]; then exit %d; fi\n  exec %q "$@" <<<"${input}" ;;\nesac\nexec %q "$@"\n' \
-    'keys | .[] -' "$2" "$1" "$2" "$1" "${real_yq}" "${real_yq}" >"${STUB_DIR}/yq"
+  printf '#!/usr/bin/env bash\ncase "$*" in *%q*)\n  if [[ %q == - ]]; then exit %d; fi\n  if grep --quiet --fixed-strings -- %q "${!#}"; then exit %d; fi ;;\nesac\nexec %q "$@"\n' \
+    '// {} | keys' "$2" "$1" "$2" "$1" "${real_yq}" >"${STUB_DIR}/yq"
   chmod +x -- "${STUB_DIR}/yq"
 }
 
@@ -324,6 +324,30 @@ git -C "${SANDBOX}" add --all
 git -C "${SANDBOX}" commit --quiet -m 'ci: add jobless workflows'
 run_scenario 'workflows without jobs read as no ids' 0 \
   --expect 'rollout'
+
+# The job set is every document's: a file whose first document holds no
+# `jobs:` still contributes the jobs of its second. A `jobs:` written as
+# an alias stands for the map it names. The job the scenario above
+# reports is taken back out, so each report names its own jobs.
+printf 'name: a\njobs:\n  build:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
+printf 'name: d\n---\njobs:\n  canary:\n    runs-on: x\n' >"${WF_DIR}/d.yml"
+printf 'x: &j\n  mirror:\n    runs-on: x\njobs: *j\n' >"${WF_DIR}/e.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: add a two-document and an aliased workflow'
+run_scenario 'later documents and aliased jobs are counted' 0 \
+  --expect 'canary' --expect 'mirror'
+
+# A workflow holding a NUL byte is one `yq` cannot read. The bytes git
+# prints must reach `yq` as they are: a shell variable drops the NUL and
+# hands `yq` a different, readable file.
+printf 'name: f\njobs:\n  ghost:\n    runs-on: x\n# \0\n' >"${WF_DIR}/f.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: add a workflow holding a NUL'
+run_scenario 'workflow holding a NUL byte stops the run' 2 \
+  --expect-err 'cannot read job ids from .github/workflows/f.yml at HEAD: yq exited 1' \
+  --forbid 'ghost'
+git -C "${SANDBOX}" rm --quiet -- "${WF_DIR}/f.yml"
+git -C "${SANDBOX}" commit --quiet -m 'ci: drop the workflow holding a NUL'
 
 # A workflow that does not parse at HEAD, committed at run time so no
 # unparsable file sits in the tree for the formatters to refuse.
