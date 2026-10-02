@@ -1083,11 +1083,13 @@ quoted strings, `github.event_name`, and the watched job's `result` and
 `outputs.has-finding`, with context names and string comparison
 case-insensitive. A gate without `always()` carries GitHub's implicit
 `success()`. A declared `has-finding` output is tried as 'true', 'false'
-and empty; the events tried are the ones the workflow's `on:` names: the
-value of a string, the items of a list or the keys of a map. A job of a
-workflow whose `on:` is any other value, or names no event, is refused
-when it has to be derived. So is a job whose notify step has an `if:` of
-its own, follows a step other than step-security/harden-runner or
+and empty; the events tried are the ones the workflow's `on:` names:
+what `yq` prints for a string, for the items of a list or for the keys
+of a map, split at spaces, tabs and newlines. A job of a workflow whose
+`on:` carries any other tag (an alias does, and a file of several
+documents prints several), or prints no event, is refused when it has to
+be derived. So is a job whose notify step has an `if:` of its own,
+follows a step other than step-security/harden-runner or
 actions/checkout, runs the composite twice, or reaches it by any other
 `uses:` than ./.github/actions/notify-workflow-result. The composite's
 own result handling (failure and cancelled file, success closes, skipped

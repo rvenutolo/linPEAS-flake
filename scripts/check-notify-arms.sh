@@ -59,11 +59,13 @@
 # `outputs.has-finding`, with context names and string comparison
 # case-insensitive. A gate without `always()` carries GitHub's implicit
 # `success()`. A declared `has-finding` output is tried as 'true', 'false'
-# and empty; the events tried are the ones the workflow's `on:` names: the
-# value of a string, the items of a list or the keys of a map. A job of a
-# workflow whose `on:` is any other value, or names no event, is refused
-# when it has to be derived. So is a job whose notify step has an `if:` of
-# its own, follows a step other than step-security/harden-runner or
+# and empty; the events tried are the ones the workflow's `on:` names:
+# what `yq` prints for a string, for the items of a list or for the keys
+# of a map, split at spaces, tabs and newlines. A job of a workflow whose
+# `on:` carries any other tag (an alias does, and a file of several
+# documents prints several), or prints no event, is refused when it has to
+# be derived. So is a job whose notify step has an `if:` of its own,
+# follows a step other than step-security/harden-runner or
 # actions/checkout, runs the composite twice, or reaches it by any other
 # `uses:` than ./.github/actions/notify-workflow-result. The composite's
 # own result handling (failure and cancelled file, success closes, skipped
@@ -214,7 +216,7 @@ function on_shape() {
 
 # @description Print the events a workflow runs on, one per line: its
 #              `on:` value as a string, the items of a list, or the keys
-#              of a map. Any other shape prints nothing.
+#              of a map, as yq prints them. Any other shape prints nothing.
 # @arg $1 workflow path
 # @arg $2 the tag `on_shape` printed for it
 # @exitcode yq's status when it fails
@@ -742,9 +744,10 @@ function main() {
       esac
       events="$(workflow_events "${path}" "${shape}")" ||
         die2 "cannot read the on: triggers of ${rel}: yq exited $?"
-      # The evaluator tries each event in turn, so with none it would
-      # report a gate that admits no result, which the gate never decided.
-      [[ ${events} == *[![:space:]]* ]] || die2 "${rel}: job ${job}: on: names no event"
+      # The evaluator splits the events at spaces, tabs and newlines and
+      # tries each in turn, so with none it would report a gate that
+      # admits no result, which the gate never decided.
+      [[ ${events} == *[!$' \t\n']* ]] || die2 "${rel}: job ${job}: on: names no event"
       out="$(derive_arms "${needs}" "${gate}" "${result_in}" "${has_out}" "${events}")" ||
         die2 "cannot read ${WORKFLOWS_REL}/${key}"
       [[ ${out} == OK$'\t'* ]] || die2 "${rel}: job ${job}: ${out#ERR$'\t'}"
