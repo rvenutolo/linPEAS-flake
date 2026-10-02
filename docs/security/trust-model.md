@@ -211,6 +211,8 @@ passing silently.
 
 PR-triggered workflows (`on: pull_request` or `on: pull_request_target`) MUST NOT reference any `secrets.*` other than `secrets.GITHUB_TOKEN`. Enforced by `scripts/check-pr-workflows-no-secrets.sh` via `pr-workflows-no-secrets` required CI job.
 
+The script decides whether a workflow is PR-triggered from `on:` read with its YAML aliases resolved, so a `pull_request` or `pull_request_target` trigger written through an anchor puts the workflow in scope.
+
 Exception for a non-`GITHUB_TOKEN` secret requires documenting here BEFORE relaxing the script.
 
 ## harden-runner
