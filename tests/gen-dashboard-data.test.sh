@@ -13,7 +13,8 @@
 #   - exit code 1 for a rejected input, 2 when the script could not run
 #     at all (a missing input artifact or tool)
 #   - expected diagnostic substring on stderr
-#   - no file was written: see "Confinement" below
+#   - nothing was written where the output could land: see
+#     "Confinement" below
 #
 # Confinement. Each failure scenario runs in a directory of its own:
 # the script's cwd is an empty `git init` sandbox there, so even its
@@ -26,9 +27,17 @@
 # under `out/` are allowed: the script creates the output directory once
 # the pin is read.
 # A last check compares every `docs/_data/dashboard.yml*` entry of the
-# real tree (inode, size, nanosecond mtime and ctime, SHA-256) before
-# and after the run; it is the only check that sees a scenario aimed at
-# the real path, and it reads nothing but those entries.
+# real tree (inode, size, nanosecond mtime and ctime, SHA-256), and
+# whether `docs/_data/` exists, before and after the run; it is the only
+# check that sees a scenario aimed at the real path, and it reads nothing
+# but those entries. Writes anywhere else, such as TMPDIR or the sandbox
+# outside `docs/`, are not checked.
+#
+# Git finds the sandbox only if the caller's environment does not name a
+# repository for it: a hook running in a linked worktree exports GIT_DIR,
+# which would point both the sandbox's `git init` and the script's root
+# lookup at the real repository. Every variable `git rev-parse
+# --local-env-vars` lists is unset for both.
 #
 # Each scenario sets an *_OVERRIDE for every lookup the script reaches
 # before its asserted outcome, except the one scenario that exercises a
@@ -71,6 +80,18 @@ readonly SCRIPT="${REPO_ROOT}/scripts/gen-dashboard-data.sh"
 readonly FIXTURES_DIR="${REPO_ROOT}/tests/fixtures/dashboard-data"
 readonly REAL_OUT_DIR="${REPO_ROOT}/docs/_data"
 
+git_local_vars="$(git rev-parse --local-env-vars)"
+if [[ -z ${git_local_vars} ]]; then
+  printf 'FAIL: git rev-parse --local-env-vars listed no variables\n' >&2
+  exit 2
+fi
+mapfile -t git_local_var_list <<<"${git_local_vars}"
+git_unset_args=()
+for git_local_var in "${git_local_var_list[@]}"; do
+  git_unset_args+=(-u "${git_local_var}")
+done
+readonly -a GIT_UNSET_ARGS=("${git_unset_args[@]}")
+
 fail_count=0
 pass_count=0
 
@@ -111,7 +132,10 @@ function check_gh_tripwire() {
 }
 
 # @description Print one line per `dashboard.yml*` entry in the real
-# docs/_data/ (inode, size, nanosecond mtime and ctime, SHA-256). A
+# docs/_data/ (inode, size, nanosecond mtime and ctime, SHA-256), or one
+# line saying the directory is absent. The entries are listed by `find
+# -name`, not by a glob, so a repository path holding glob characters
+# cannot turn the pattern into one that matches nothing. A
 # scenario aimed at the real path that replaces the file changes the
 # inode, one that rewrites it in place changes the timestamps even with
 # the same bytes, and a temp file left beside it adds a line. Prints
@@ -119,12 +143,16 @@ function check_gh_tripwire() {
 # @noargs
 # @stdout one line per entry
 function snapshot_real_out() {
+  if [[ ! -d ${REAL_OUT_DIR} ]]; then
+    printf '%s is absent\n' "${REAL_OUT_DIR}"
+    return 0
+  fi
   # No entry is a valid state: the file is gitignored, so a fresh clone
   # or a CI checkout has none.
   local LINT_ALLOW_EMPTY_SCAN=1
   local -a entries=()
-  glob_into entries 'the real docs/_data/dashboard.yml* entries' \
-    "${REAL_OUT_DIR}/dashboard.yml*"
+  enumerate_into entries 'find over the real docs/_data/' \
+    find "${REAL_OUT_DIR}" -mindepth 1 -maxdepth 1 -name 'dashboard.yml*' -print0
   local entry
   for entry in "${entries[@]}"; do
     printf '%s %s\n' \
@@ -136,13 +164,14 @@ function snapshot_real_out() {
 # @description Make a scenario directory holding an empty `git init`
 # sandbox, the script's cwd, and print its path. `out/`, the override's
 # parent, is left absent. The global and system git config are kept out so
-# a runner's config cannot change how git resolves the sandbox.
+# a runner's config cannot change how git resolves the sandbox, and the
+# caller's repository variables are unset (see the header).
 # @noargs
 # @stdout the scenario directory
 function make_scenario_dir() {
   local dir
   dir="$(mktemp --directory)"
-  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+  env "${GIT_UNSET_ARGS[@]}" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
     git init --quiet -- "${dir}/sandbox"
   printf '%s\n' "${dir}"
 }
@@ -161,7 +190,7 @@ function run_confined() {
   shift 3
   (
     cd -- "${dir}/sandbox"
-    env GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 "$@" \
+    env "${GIT_UNSET_ARGS[@]}" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 "$@" \
       "OUT_FILE_OVERRIDE=${dir}/out/dashboard.yml" \
       bash "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}"
   )
@@ -646,8 +675,8 @@ function main() {
   # proves each `published_at` is a string, not a date, so one that
   # `fromdateiso8601` cannot parse fails the lag pairing, which runs after
   # make_temp has created the temp file. That file must not outlive the
-  # run. The fixture
-  # is built here rather than checked in, from the good releases list.
+  # run. The fixture is built here rather than checked in, from the good
+  # releases list.
   local bad_date_releases="${RUNTIME_DIR}/bad-date-this-repo-releases.json"
   jq '.[0].published_at = "not-a-date"' \
     "${FIXTURES_DIR}/good-this-repo-releases.json" >"${bad_date_releases}"
