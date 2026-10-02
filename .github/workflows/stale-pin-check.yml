@@ -191,7 +191,8 @@ jobs:
                 (`BUMP_APP_PRIVATE_KEY` not rotated, App not uninstalled)
               - Asset-URL prefix check rejecting upstream (peass-ng moved host)
               - Upstream `.digest` field absent (`bump-linpeas.sh` exits 1 on
-                that; look for its `has no .digest field` error in the run log)
+                that, which fails the `update-linpeas.yml` run; look for
+                `has no .digest field` in that run's log)
             - `upstream-api-failure` — the `gh api
               repos/peass-ng/PEASS-ng/releases/latest` call failed or returned
               empty. Likely a transient GitHub API issue or rate-limit

@@ -60,15 +60,16 @@ The push loop inside `release-on-bump.yml` per-arch jobs runs
 A third path arrives here from elsewhere: `verify-latest-release.yml`
 files its `verify-latest-release-failure` issue with
 `Reason: cross-registry-manifest-mismatch` and points it at this runbook.
-That reason covers two outcomes of the
+That reason covers any failure of the
 `verify ghcr.io and docker.io serve the same manifest` step, and its log
-says which. If the step could not fetch the `:VERSION` manifest from a
-registry, the log ends at the fetch error and nothing was compared:
-dispatch the workflow again, and this path applies only if a run prints a
-mismatch. If the log prints `ghcr.io and docker.io disagree on` the tag,
-followed by both manifests, the two registries disagree, and the issue
-body says to treat the Docker Hub token as compromised until proven
-otherwise. A cross-registry mismatch is a post-publication tag rewrite,
+says which. A log that prints `ghcr.io and docker.io disagree on` the
+tag, followed by a non-empty manifest for each registry, shows the two
+registries disagreeing, and the issue body says to treat the Docker Hub
+token as compromised until proven otherwise. A log that stops at a fetch
+error or a `jq` parse error, or that prints an empty manifest for a
+registry, compared nothing: dispatch the workflow again, and this path
+applies only if a run prints a mismatch. A cross-registry mismatch is a
+post-publication tag rewrite,
 not a half-finished push, and the steps below assume the opposite —
 they spend `DOCKERHUB_TOKEN_DELETE` on the working assumption that the
 credential is sound. Take these first instead:
@@ -272,8 +273,9 @@ Binding:
 1. `secrets.DOCKERHUB_TOKEN_DELETE` must never be consumed in
     `release-on-bump.yml` or `verify-latest-release.yml`.
 1. Any Docker Hub tag delete (`--request DELETE` or `-X DELETE`) in a
-    fence that is unlabelled or tagged `sh`, `bash`, `shell`, `console` or
-    `text`, in a tracked Markdown file outside `tests/` —
+    three-backtick fence that is unlabelled or tagged `sh`, `bash`,
+    `shell`, `console` or `text`, in a tracked Markdown file outside
+    `tests/` —
     including this runbook's own step-2 recovery snippet — must name
     `DOCKERHUB_TOKEN_DELETE` and must not name
     `DOCKERHUB_TOKEN_RW` (the `_RW` token returns `403`). The lint

@@ -1479,11 +1479,11 @@ rephrase it.
 
 Paragraphs are read with their lines joined, so a count wrapped across a
 line break is still one phrase. Fenced blocks, inline code spans and
-comment blocks (an HTML comment opening a line and closing on a later
-one) are skipped, which is how a document shows the marker or the phrase
-without making a claim. Fences are tracked marker-aware, as in
-check-prose-ci-names.sh, and a file ending inside a fence or a comment
-block is a precondition failure.
+comment blocks (an HTML comment opening a line at up to three spaces of
+indent and closing on a later one) are skipped, which is how a document
+shows the marker or the phrase without making a claim. Fences are tracked
+marker-aware, as in check-prose-ci-names.sh, and a file ending inside a
+fence or a comment block is a precondition failure.
 
 Exit codes: 0 every declared count matches the table and no undeclared
 count was found, 1 a count disagrees with the table, is undeclared, or

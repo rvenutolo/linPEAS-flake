@@ -58,10 +58,10 @@ Expected: green run, or red run with the `scorecard-drift` tracking issue surfac
 ## Revoke the superseded token
 
 GitHub → top-right avatar → **Settings** → **Developer settings** →
-**Personal access tokens** → **Fine-grained tokens** → delete the token you
-replaced. Both entries share the `linpeas-flake-scorecard-drift-check`
-prefix, so delete the unsuffixed entry if one exists, otherwise the one
-with the older `-<yyyymm>` suffix.
+**Personal access tokens** → **Fine-grained tokens** → delete the old
+token's entry. Once a replacement exists, both entries share the
+`linpeas-flake-scorecard-drift-check` prefix, so delete the unsuffixed
+entry if one exists, otherwise the one with the older `-<yyyymm>` suffix.
 
 When to do it depends on why you rotated:
 
@@ -73,8 +73,8 @@ When to do it depends on why you rotated:
     which can be up to a year out. The secret then holds a dead token until
     the replacement is stored, so a `scorecard-drift-check.yml` run in
     between gets an auth error.
-- **Revoked by GitHub.** The old token is already dead; delete its entry
-    at any point.
+- **Expired, or revoked by GitHub.** The old token is already dead;
+    delete its entry, if one is still listed, at any point.
 
 ## Calendar reminder
 
