@@ -13,8 +13,22 @@
 #   - exit code 1 for a rejected input, 2 when the script could not run
 #     at all (a missing input artifact or tool)
 #   - expected diagnostic substring on stderr
-#   - no partial dashboard.yml was written (file does not appear; if a
-#     pre-existing file is on disk, its mtime is unchanged)
+#   - no file was written: see "Confinement" below
+#
+# Confinement. Each failure scenario runs in a directory of its own:
+# the script's cwd is an empty `git init` sandbox there, so even its
+# default output path resolves inside the sandbox, and OUT_FILE_OVERRIDE
+# points at `out/dashboard.yml` beside it, with `out/` absent beforehand.
+# After the run the scenario fails if anything but a directory sits
+# under `out/` (a partial dashboard.yml or a stray temp file) or if the
+# sandbox holds a `docs/` directory, which the script creates only when
+# it is aiming at its default path instead of the override. Directories
+# under `out/` are allowed: the script creates the output directory once
+# the pin is read.
+# A last check compares every `docs/_data/dashboard.yml*` entry of the
+# real tree (inode, size, nanosecond mtime and ctime, SHA-256) before
+# and after the run; it is the only check that sees a scenario aimed at
+# the real path, and it reads nothing but those entries.
 #
 # Each scenario sets an *_OVERRIDE for every lookup the script reaches
 # before its asserted outcome, except the one scenario that exercises a
@@ -51,9 +65,11 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/enumerate.sh
+source "${REPO_ROOT}/scripts/lib/enumerate.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/gen-dashboard-data.sh"
 readonly FIXTURES_DIR="${REPO_ROOT}/tests/fixtures/dashboard-data"
-readonly OUT_FILE="${REPO_ROOT}/docs/_data/dashboard.yml"
+readonly REAL_OUT_DIR="${REPO_ROOT}/docs/_data"
 
 fail_count=0
 pass_count=0
@@ -61,7 +77,9 @@ pass_count=0
 tripwire_dir="$(mktemp --directory)"
 readonly TRIPWIRE_DIR="${tripwire_dir}"
 readonly TRIPWIRE_LOG="${TRIPWIRE_DIR}/calls.log"
-trap 'rm --recursive --force -- "${TRIPWIRE_DIR}"' EXIT
+runtime_dir="$(mktemp --directory)"
+readonly RUNTIME_DIR="${runtime_dir}"
+trap 'rm --recursive --force -- "${TRIPWIRE_DIR}" "${RUNTIME_DIR}"' EXIT
 
 # @description Install the tripwire `gh` ahead of the real one on PATH.
 # `run_failing_gh_scenario` prepends its shim to this PATH, so the shim
@@ -92,47 +110,104 @@ function check_gh_tripwire() {
   fi
 }
 
-# @description Snapshot the dashboard.yml output path before a scenario so we
-# can detect partial writes. Writes the mtime to stdout, or 'ABSENT' if the
-# file does not exist. We do not try to be clever about race conditions —
-# the script is sequential and the test harness is sequential, so a stable
-# mtime across the script invocation is a reliable signal.
+# @description Print one line per `dashboard.yml*` entry in the real
+# docs/_data/ (inode, size, nanosecond mtime and ctime, SHA-256). A
+# scenario aimed at the real path that replaces the file changes the
+# inode, one that rewrites it in place changes the timestamps even with
+# the same bytes, and a temp file left beside it adds a line. Prints
+# nothing when no such entry exists.
 # @noargs
-# @stdout 'ABSENT' or the file's mtime in epoch seconds
-function snapshot_out_file() {
-  if [[ -e ${OUT_FILE} ]]; then
-    stat --format='%Y' "${OUT_FILE}"
-  else
-    printf '%s\n' 'ABSENT'
-  fi
+# @stdout one line per entry
+function snapshot_real_out() {
+  # No entry is a valid state: the file is gitignored, so a fresh clone
+  # or a CI checkout has none.
+  local LINT_ALLOW_EMPTY_SCAN=1
+  local -a entries=()
+  glob_into entries 'the real docs/_data/dashboard.yml* entries' \
+    "${REAL_OUT_DIR}/dashboard.yml*"
+  local entry
+  for entry in "${entries[@]}"; do
+    printf '%s %s\n' \
+      "$(stat --format='%n %i %s %.9Y %.9Z' -- "${entry}")" \
+      "$(sha256sum -- "${entry}" | cut --delimiter=' ' --fields=1)"
+  done
 }
 
-# @description Assert that the dashboard.yml output state matches a prior
-# snapshot. Fails the calling scenario if the file appeared (was 'ABSENT'),
-# or if its mtime changed.
-# @arg $1 prior snapshot value from snapshot_out_file
-# @arg $2 scenario name (for the diagnostic message)
+# @description Make a scenario directory holding an empty `git init`
+# sandbox, the script's cwd, and print its path. `out/`, the override's
+# parent, is left absent. The global and system git config are kept out so
+# a runner's config cannot change how git resolves the sandbox.
+# @noargs
+# @stdout the scenario directory
+function make_scenario_dir() {
+  local dir
+  dir="$(mktemp --directory)"
+  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+    git init --quiet -- "${dir}/sandbox"
+  printf '%s\n' "${dir}"
+}
+
+# @description Run the script confined to a scenario directory: cwd in
+# its sandbox, OUT_FILE_OVERRIDE at its `out/dashboard.yml`.
+# @arg $1 scenario directory from make_scenario_dir
+# @arg $2 stdout capture file
+# @arg $3 stderr capture file
+# @arg $@ remaining args: env-var assignments forwarded to the env command
+# @exitcode the script's exit code
+function run_confined() {
+  local -r dir="$1"
+  local -r stdout_file="$2"
+  local -r stderr_file="$3"
+  shift 3
+  (
+    cd -- "${dir}/sandbox"
+    env GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 "$@" \
+      "OUT_FILE_OVERRIDE=${dir}/out/dashboard.yml" \
+      bash "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}"
+  )
+}
+
+# @description Assert a confined run wrote nothing: nothing but
+# directories under `out/`, no `docs/` in the sandbox, and the real
+# `dashboard.yml*` entries as they were before the run.
+# @arg $1 scenario directory from make_scenario_dir
+# @arg $2 snapshot_real_out output taken before the run
+# @arg $3 scenario name (for the diagnostic message)
 # @stdout nothing on success; failure prints to stderr and returns 1
-function assert_out_file_unchanged() {
-  local -r prior="$1"
-  local -r scenario="$2"
-  local current
-  current="$(snapshot_out_file)"
-  if [[ ${prior} == 'ABSENT' && ${current} != 'ABSENT' ]]; then
-    printf 'FAIL: %s — partial dashboard.yml was written\n' "${scenario}" >&2
+function assert_confined() {
+  local -r dir="$1"
+  local -r prior="$2"
+  local -r scenario="$3"
+  # Finding nothing is the expected outcome here, not an empty scan.
+  local LINT_ALLOW_EMPTY_SCAN=1
+  local -a written=()
+  if [[ -e ${dir}/out ]]; then
+    enumerate_into written 'find over the override directory' \
+      find "${dir}/out" ! -type d -print0
+  fi
+  if ((${#written[@]} > 0)); then
+    printf 'FAIL: %s — a failing run wrote under the override directory:\n' "${scenario}" >&2
+    printf '  %s\n' "${written[@]}" >&2
     return 1
   fi
-  if [[ ${prior} != 'ABSENT' && ${prior} != "${current}" ]]; then
-    printf 'FAIL: %s — dashboard.yml mtime changed (%s -> %s)\n' \
-      "${scenario}" "${prior}" "${current}" >&2
+  if [[ -e ${dir}/sandbox/docs ]]; then
+    printf 'FAIL: %s — the script aimed at its default path, not OUT_FILE_OVERRIDE (sandbox docs/ created)\n' \
+      "${scenario}" >&2
+    return 1
+  fi
+  local current
+  current="$(snapshot_real_out)"
+  if [[ ${current} != "${prior}" ]]; then
+    printf 'FAIL: %s — the real docs/_data/dashboard.yml* entries changed\n' "${scenario}" >&2
+    printf '  before: %s\n  after:  %s\n' "${prior:-<none>}" "${current:-<none>}" >&2
     return 1
   fi
   return 0
 }
 
-# @description Run one failure scenario: invoke the script with the provided
-# override env vars, capture stderr, then assert exit code, stderr
-# substring, and that no partial output file was written.
+# @description Run one failure scenario: invoke the script confined to a
+# scenario directory with the provided override env vars, capture stderr,
+# then assert exit code, stderr substring, and that nothing was written.
 # @arg $1 scenario name (printed on PASS/FAIL line)
 # @arg $2 expected stderr substring
 # @arg $3 expected exit code — 1 for a rejected input, 2 when the script
@@ -146,17 +221,18 @@ function run_scenario() {
   local -a env_vars=("$@")
 
   local snapshot
-  snapshot="$(snapshot_out_file)"
+  snapshot="$(snapshot_real_out)"
 
-  local stderr_tmp stdout_tmp outcome_tmp
+  local scenario_dir stderr_tmp stdout_tmp outcome_tmp
+  scenario_dir="$(make_scenario_dir)"
   stderr_tmp="$(mktemp)"
   stdout_tmp="$(mktemp)"
   outcome_tmp="$(mktemp)"
   # shellcheck disable=SC2064  # capture the paths at trap-set time
-  trap "rm --force -- '${stderr_tmp}' '${stdout_tmp}' '${outcome_tmp}'" RETURN
+  trap "rm --recursive --force -- '${scenario_dir}' '${stderr_tmp}' '${stdout_tmp}' '${outcome_tmp}'" RETURN
 
   local exit_code=0
-  env "${env_vars[@]}" bash "${SCRIPT}" >"${stdout_tmp}" 2>"${stderr_tmp}" ||
+  run_confined "${scenario_dir}" "${stdout_tmp}" "${stderr_tmp}" "${env_vars[@]}" ||
     exit_code=$?
   printf 'harness-assert-outcome: exit=%d\n' "${exit_code}" >"${outcome_tmp}"
   harness_assert_record "${name}" "${expected_msg}" \
@@ -179,7 +255,7 @@ function run_scenario() {
     return 0
   fi
 
-  if ! assert_out_file_unchanged "${snapshot}" "${name}"; then
+  if ! assert_confined "${scenario_dir}" "${snapshot}" "${name}"; then
     fail_count=$((fail_count + 1))
     return 0
   fi
@@ -351,25 +427,24 @@ function run_failing_gh_scenario() {
   local -r name="$1"
   local -r expected_stderr="$2"
 
-  local shim_dir out_tmp stderr_tmp stdout_tmp outcome_tmp
+  local shim_dir scenario_dir stderr_tmp stdout_tmp outcome_tmp
   shim_dir="$(mktemp --directory)"
   printf '#!/usr/bin/env bash\nexit 1\n' >"${shim_dir}/gh"
   chmod +x -- "${shim_dir}/gh"
-  out_tmp="$(mktemp)"
+  scenario_dir="$(make_scenario_dir)"
   stderr_tmp="$(mktemp)"
   stdout_tmp="$(mktemp)"
   outcome_tmp="$(mktemp)"
   # shellcheck disable=SC2064  # capture paths at trap-set time
-  trap "rm --force --recursive -- '${shim_dir}' '${out_tmp}' '${stderr_tmp}' '${stdout_tmp}' '${outcome_tmp}'" RETURN
+  trap "rm --force --recursive -- '${shim_dir}' '${scenario_dir}' '${stderr_tmp}' '${stdout_tmp}' '${outcome_tmp}'" RETURN
 
   local prior
-  prior="$(snapshot_out_file)"
+  prior="$(snapshot_real_out)"
 
   local exit_code=0
-  env "PATH=${shim_dir}:${PATH}" \
-    "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
-    "OUT_FILE_OVERRIDE=${out_tmp}" \
-    bash "${SCRIPT}" >"${stdout_tmp}" 2>"${stderr_tmp}" || exit_code=$?
+  run_confined "${scenario_dir}" "${stdout_tmp}" "${stderr_tmp}" \
+    "PATH=${shim_dir}:${PATH}" \
+    "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" || exit_code=$?
   printf 'harness-assert-outcome: exit=%d\n' "${exit_code}" >"${outcome_tmp}"
   harness_assert_record "${name}" "${expected_stderr}" \
     "${outcome_tmp}" "${stdout_tmp}" "${stderr_tmp}"
@@ -386,7 +461,7 @@ function run_failing_gh_scenario() {
     fail_count=$((fail_count + 1))
     return 0
   fi
-  if ! assert_out_file_unchanged "${prior}" "${name}"; then
+  if ! assert_confined "${scenario_dir}" "${prior}" "${name}"; then
     fail_count=$((fail_count + 1))
     return 0
   fi
@@ -566,6 +641,25 @@ function main() {
   run_scenario 'boolean-typed pin payload is a tooling error' \
     'dashboard pin: unexpected payload shape from PIN_FILE_OVERRIDE: payload is boolean, want object' 2 \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/bad-pin-wrong-type.json"
+
+  # Scenario 3i: a failure after the temp file exists. The payload gate
+  # proves each `published_at` is a string, not a date, so one that
+  # `fromdateiso8601` cannot parse fails the lag pairing, which runs after
+  # make_temp has created the temp file. That file must not outlive the
+  # run. The fixture
+  # is built here rather than checked in, from the good releases list.
+  local bad_date_releases="${RUNTIME_DIR}/bad-date-this-repo-releases.json"
+  jq '.[0].published_at = "not-a-date"' \
+    "${FIXTURES_DIR}/good-this-repo-releases.json" >"${bad_date_releases}"
+  run_scenario 'unparsable release date after the temp file is a tooling error' \
+    'could not pair this-repo releases with upstream releases for bump lag' 2 \
+    "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/good-pin.json" \
+    "UPSTREAM_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-upstream-release.json" \
+    "LATEST_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-latest-release.json" \
+    "THIS_REPO_RELEASES_JSON_OVERRIDE=${bad_date_releases}" \
+    "UPSTREAM_RELEASES_JSON_OVERRIDE=${FIXTURES_DIR}/good-upstream-releases.json" \
+    "BUMP_PR_JSON_OVERRIDE=${FIXTURES_DIR}/good-bump-pr.json" \
+    "PARITY_JSON_OVERRIDE=${FIXTURES_DIR}/good-parity.json"
 
   # Scenario 4: happy-path bump-lag pairing. Two of three this-repo releases
   # match upstream entries; the third is older than the upstream window and
