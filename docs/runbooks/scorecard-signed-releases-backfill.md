@@ -25,8 +25,9 @@ Do NOT use for:
     gated on the release not existing OR `backfill-tag`, so use
     `backfill-tag=<current tag>`.)
 - A release with a PARTIAL per-arch image set (some but not all six of
-    the `{ghcr.io,docker.io}:<tag>-{amd64,arm64}` tags and the
-    `{ghcr.io,docker.io}:<tag>` indexes present). The preflight fails
+    the `{ghcr.io,docker.io}/rvenutolo/linpeas:<tag>-{amd64,arm64}` tags
+    and the `{ghcr.io,docker.io}/rvenutolo/linpeas:<tag>` indexes
+    present). The preflight fails
     loudly on this half-published state — see "Partial image set" below.
 
 An IMAGE-LESS release (all six absent) is fully supported: backfill

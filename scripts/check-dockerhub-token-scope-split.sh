@@ -28,6 +28,11 @@
 # Token names are matched over the whole fence, not the delete line: a
 # real snippet assigns its credential many lines above the request.
 #
+# In Markdown, a line that starts, after indentation, with three
+# backticks toggles a fence; the fence is read when the text directly
+# after those backticks, up to the first whitespace, is empty or one of
+# sh/bash/shell/console/text.
+#
 # Honors WORKFLOWS_DIR_OVERRIDE (defaults to .github/workflows) so the test
 # harness can point at a temp dir, PATHS_OVERRIDE (newline-separated file
 # list) for the Markdown scan set, and LINT_ALLOW_EMPTY_SCAN=1 to accept a

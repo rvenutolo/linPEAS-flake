@@ -367,6 +367,11 @@ alone would exempt a snippet that spells the host through a variable.
 Token names are matched over the whole fence, not the delete line: a
 real snippet assigns its credential many lines above the request.
 
+In Markdown, a line that starts, after indentation, with three
+backticks toggles a fence; the fence is read when the text directly
+after those backticks, up to the first whitespace, is empty or one of
+sh/bash/shell/console/text.
+
 Honors WORKFLOWS_DIR_OVERRIDE (defaults to .github/workflows) so the test
 harness can point at a temp dir, PATHS_OVERRIDE (newline-separated file
 list) for the Markdown scan set, and LINT_ALLOW_EMPTY_SCAN=1 to accept a
@@ -1364,7 +1369,9 @@ list-item fences are indented past the CommonMark limit, so a document
 displaying a marker inside an indented block opens a fence the lint
 believes is real. A file ending with a fence still open is therefore a
 precondition failure rather than a clean file. Inline code spans are
-kept: they are what the lint reads.
+kept: they are what the lint reads. A name in bold or italic with no code
+span is not read, and neither is a code span wrapped in its own emphasis
+markers, which stand between the span and the noun.
 
 Exit codes:
 
@@ -1475,11 +1482,12 @@ backstop's shape is reported too, since a marker cannot name a subset;
 rephrase it.
 
 Paragraphs are read with their lines joined, so a count wrapped across a
-line break is still one phrase. Fenced blocks and inline code spans are
-skipped, which is how a document shows the marker or the phrase without
-making a claim. Fences are tracked marker-aware, as in
-check-prose-ci-names.sh, and a file ending inside a fence is a precondition
-failure.
+line break is still one phrase. Fenced blocks, inline code spans and
+comment blocks (an HTML comment opening a line at up to three spaces of
+indent and closing on a later one) are skipped, which is how a document
+shows the marker or the phrase without making a claim. Fences are tracked
+marker-aware, as in check-prose-ci-names.sh, and a file ending inside a
+fence or a comment block is a precondition failure.
 
 Exit codes: 0 every declared count matches the table and no undeclared
 count was found, 1 a count disagrees with the table, is undeclared, or
@@ -1487,7 +1495,8 @@ carries a malformed marker (details printed to stderr), 2 the check could
 not run: a required tool is missing, the table doc is missing, holds no
 Required contexts section or more than one, holds no table, a table with
 no separator row, a second table or no data rows there, the scan set could
-not be listed or is empty, or a scanned file leaves a code fence open
+not be listed or is empty, or a scanned file leaves a code fence or a
+comment block open
 
 ### scripts/check-required-checks-no-paths.sh
 

@@ -58,15 +58,23 @@ Expected: green run, or red run with the `scorecard-drift` tracking issue surfac
 ## Revoke the superseded token
 
 GitHub → top-right avatar → **Settings** → **Developer settings** →
-**Personal access tokens** → **Fine-grained tokens** → delete the token you
-replaced. Both entries share the `linpeas-flake-scorecard-drift-check`
-prefix, so delete the unsuffixed entry if one exists, otherwise the one
-with the older `-<yyyymm>` suffix.
+**Personal access tokens** → **Fine-grained tokens** → delete the old
+token's entry. Once a replacement exists, both entries share the
+`linpeas-flake-scorecard-drift-check` prefix, so delete the unsuffixed
+entry if one exists, otherwise the one with the older `-<yyyymm>` suffix.
 
-Do this only once the verification run above is green, so a bad new PAT can
-still be rolled back — but do not skip it. Rotating on suspected compromise
-without this step leaves the compromised token live with its granted scopes
-until it expires, which can be up to a year out.
+When to do it depends on why you rotated:
+
+- **Before expiry.** Wait until the verification run above shows an outcome
+    "Verify" expects: green, or red on real findings with no auth error. Do
+    not skip it afterwards.
+- **Suspected compromise.** Do it first, before "Create the token". A
+    compromised token left live keeps its granted scopes until it expires,
+    which can be up to a year out. The secret then holds a dead token until
+    the replacement is stored, so a `scorecard-drift-check.yml` run in
+    between gets an auth error.
+- **Expired, or revoked by GitHub.** The old token is already dead;
+    delete its entry, if one is still listed, at any point.
 
 ## Calendar reminder
 

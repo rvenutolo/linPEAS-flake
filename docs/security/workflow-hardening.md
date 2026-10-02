@@ -529,6 +529,17 @@ The shapes above sit in a fenced block for the same reason the lint skips fences
 
 Two adjacency shapes are still not claims and are dropped, each with its own tally in the summary line so a clean run says which exclusion it rested on. A filename-shaped name (`` `ci.yml` job ``) names the file a job lives in. An adjectival use (`` `cancelled` job conclusion ``, `` `has-finding` job output ``) names a job's field, with the job itself unnamed. Fenced blocks are skipped, because a fence quoting workflow YAML shows a name rather than claiming one; inline code spans are kept, since they are what the lint reads.
 
+A name is read as a code span standing directly against the noun, so emphasis decides whether a claim is seen:
+
+```text
+**NAME** job     *NAME* job       not read: the name is in no code span
+**`NAME`** job   job **`NAME`**   not read: the emphasis markers stand between the span and the noun
+**`NAME` job**   *`NAME` job*     read: asterisks wrap the whole phrase
+_`NAME` job_                      not read: the closing underscore joins the noun
+```
+
+A bold word with no code span is left unread on purpose: live prose also puts a bold adjective directly before "job", and a matcher cannot tell that from a name. Write a job or check name as a code span.
+
 The scan set is every Markdown and YAML file a commit would carry — tracked files plus not-yet-added ones, minus anything gitignored — so the lint sees a new doc and its fixtures on the commit that adds them. It is not every committed file: claims sitting in Nix and shell comments are outside it. `tests/fixtures/` is excluded because it exists to carry deliberate violations, the Claude-behavior tree is excluded because almost all of it is untracked, and `CHANGELOG.md` and `docs/releases.md` are excluded as historical records that must keep naming jobs as they stood at the time.
 
 A fence is tracked by its marker character and run length, so a fence closes only on a marker of the same character that is at least as long as the one that opened it — a shorter or different marker quoted inside is content. A same-character marker of equal or greater length does close the fence, including one carrying an info string, which CommonMark treats as an opener rather than a closer; the lint does not model that distinction. Fences inside blockquotes are recognised. A file that ends with a fence still open is a precondition failure, not a clean file: every line after the opener went unread, so there is nothing for a clean verdict to rest on.
@@ -561,7 +572,7 @@ NN required context(s)
 
 Matching is case-insensitive and whole-word at the noun. Emphasis markers and HTML comments read as whitespace, so a bold number or a stray comment does not hide a count. The words in between may not include "of", so a partitive ("one of the required checks") is not reported, while a total written inside one ("any one of NN required checks") still is. The bare word "one" reads as an article and is not a count. A clock time written with a colon or a four-digit year is not read as a count, but a number followed by a unit word ("5 pm required checks") is. Any other phrasing of the count is not seen: "the required set of NN", "NN checks are required", a count after the noun, a number inside a link or glued to punctuation, or one separated from the phrase by a non-breaking space. A wider window was measured on this tree and rejected, because every site it added was a different number standing near the phrase — a cron time, a sentence counting something else. A subset count in the backstop's shape is reported too, since a marker cannot name a subset; rephrase it.
 
-Paragraphs are read with their lines joined, so a count wrapped across a line break is one phrase, and a finding about a count names the line its number sits on. Fenced blocks, inline code spans and comment blocks — a comment opening a line and closing on a later one, across blank lines — are skipped, which is how a document shows the marker or the phrase without making a claim; a file that ends inside a fence or a comment block is a precondition failure. A backslash-escaped backtick opens no span, and a line that opens with an inline span is prose, since a backtick fence's info string cannot hold a backtick. Otherwise fences are tracked by marker character and length as in [prose-ci-names](#prose-ci-names), with the same accepted gaps: indentation is uncapped, and a same-character marker carrying an info string closes a fence. Indented code blocks are read as prose, because this repo's list-item paragraphs are indented the same way.
+Paragraphs are read with their lines joined, so a count wrapped across a line break is one phrase, and a finding about a count names the line its number sits on. Fenced blocks, inline code spans and comment blocks — a comment opening a line at up to three spaces of indent and closing on a later one, across blank lines — are skipped, which is how a document shows the marker or the phrase without making a claim; a file that ends inside a fence or a comment block is a precondition failure. A backslash-escaped backtick opens no span, and a line that opens with an inline span is prose, since a backtick fence's info string cannot hold a backtick. Otherwise fences are tracked by marker character and length as in [prose-ci-names](#prose-ci-names), with the same accepted gaps: indentation is uncapped, and a same-character marker carrying an info string closes a fence. Indented code blocks are read as prose, because this repo's list-item paragraphs are indented the same way.
 
 The table doc must hold exactly one `## Required contexts` section, which runs to the next level-one or level-two heading, and it must hold exactly one table with a separator row under its header. Rows are counted as GFM renders them, whether or not a row opens with a pipe, up to the next blank line or the start of another block: a heading, a blockquote, a list item, an HTML line or a fence. A missing section or a duplicated one, a missing table or a second one, a table with no separator row, or one with no data rows is a precondition failure rather than a count of zero. The table doc's own fences and comments are not tracked, so a fenced example holding the section heading or a pipe line in the section fails the run as a precondition failure rather than being skipped.
 
@@ -599,7 +610,7 @@ Enforced by `scripts/check-fork-guard-release.sh`. Wired as the `lint-workflow-s
 
 ## nix-run-pinned
 
-No workflow, script, or shell-fenced documentation runs any `nix` subcommand — `run`, `shell`, `develop`, `build`, or otherwise — against the bare `nixpkgs` flake reference, with or without intervening flags.
+No workflow, script, or documentation fence the lint reads runs any `nix` subcommand — `run`, `shell`, `develop`, `build`, or otherwise — against the bare `nixpkgs` flake reference, with or without intervening flags. Which documentation fences it reads is stated in the header of `scripts/check-nix-run-pinned.sh`.
 
 At runtime the bare `nixpkgs` resolves through the user's (or runner's) flake registry — not this repo's `flake.lock`. A step that calls `nix run nixpkgs#cosign` therefore pulls whatever nixpkgs commit the runner's registry happens to point at, bypassing the Renovate-pinned `nixpkgs` input in `flake.lock`. A malicious or compromised nixpkgs revision could ship a backdoored tool. The registry lookup is what makes the reference unpinned, so the hazard is identical no matter which subcommand consumes it.
 
@@ -617,10 +628,10 @@ Enforced by `scripts/check-nix-run-pinned.sh`. Wired as the `lint-workflow-secur
 
 Every `label-description` a workflow hands to the `notify-workflow-result` composite fits GitHub's 100-character label-description cap, and no label name is filed with two different descriptions.
 
-The composite writes the description onto the label — on creation, and on any later run where the live label's description differs — so the value in the tree is what a maintainer triaging an auto-filed issue reads. Two ways that stops being true, both invisible in the tree:
+The composite writes the description onto the label when a run opens a new issue: it creates the label, or updates the description when the label exists and its live description differs. A run that comments on an open issue or closes one writes no label. The value in the tree therefore reaches the label the next time a run opens an issue, and is what a maintainer triaging an auto-filed issue reads. Two ways that stops being true, both invisible in the tree:
 
-- **Over the cap.** The labels API rejects a description longer than 100 characters with a 422. The label keeps whichever wording it was created with, every subsequent run re-attempts the write and warns, and the workflow file goes on looking like the source of truth for text that has never reached the label.
-- **Two callers, two descriptions.** A label filed by more than one workflow with different wording is rewritten by whichever workflow ran last, so the description flips between runs.
+- **Over the cap.** The labels API rejects a description longer than 100 characters with a 422. The label keeps whichever wording it was created with, each later run that opens an issue re-attempts the write and warns, and the workflow file goes on looking like the source of truth for text that has never reached the label.
+- **Two callers, two descriptions.** A label filed by more than one workflow with different wording is rewritten by whichever of them last opened an issue.
 
 Enforced by `scripts/check-notify-label-descriptions.sh`. Wired as the `lint-workflow-security` CI job (member check `notify-label-descriptions`) and as a pre-commit hook. The scan set is `.github/workflows/*.yml`; a scan that matches workflows but finds no caller of the composite exits 2 rather than reporting a clean tree, because the composite having moved is not the same fact as every description being fine.
 

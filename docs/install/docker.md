@@ -108,8 +108,11 @@ Every `docker buildx imagetools create`, `docker manifest create`, and
 `docker manifest annotate` invocation in this repo MUST name its source
 images by immutable digest — an `@sha256:` literal or an `@${…DIGEST}`
 expansion — never a mutable tag. The rule spans the workflows and
-composite actions under `.github/`, the `scripts/*.sh` entry points, and
-shell-fenced blocks in `README.md` and everything under `docs/`.
+composite actions under `.github/`, the shell scripts under `scripts/`
+(the `scripts/*.sh` git pathspec crosses `/`, so `scripts/lib/` is in
+scope), and fenced blocks in `README.md` and everything under `docs/`.
+Which fences the lint reads is stated in the header of
+`scripts/check-manifest-digest-pinned.sh`.
 Target list names are exempt, because they are tags by necessity.
 
 The rule's live instance is `release-on-bump.yml`'s `manifest` job, which

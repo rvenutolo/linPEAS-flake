@@ -25,10 +25,14 @@
 #   - `nix run nixpkgs/<rev>#<pkg>` — explicit commit pin.
 #
 # Detection scans workflows, composite actions under .github/actions/,
-# scripts, and shell-fenced markdown
-# blocks. The check matches a `nix` command word followed by a bare
-# `nixpkgs#` ref, with any subcommand and any flags in between.
-# A `/<rev>` between `nixpkgs` and `#` passes.
+# scripts, and shell-fenced markdown blocks. The check matches a `nix`
+# command word followed by a bare `nixpkgs#` ref, with any subcommand and
+# any flags in between. A `/<rev>` between `nixpkgs` and `#` passes.
+#
+# In Markdown, a line that starts, after indentation, with three
+# backticks toggles a fence; the fence is read when the text directly
+# after those backticks, up to the first whitespace, is empty or one of
+# sh/bash/shell/console/text.
 #
 # See docs/security/workflow-hardening.md.
 #

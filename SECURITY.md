@@ -212,8 +212,8 @@ PR, via the failed check.
     The `Delete` capability is required by the `peter-evans/dockerhub-description`
     action used in `dockerhub-sync.yml`, which calls the Docker Hub repo-metadata
     endpoint; a `Read, Write`-only PAT returns `403 Forbidden` on that endpoint.
-    Rotation: on suspected compromise only —
-    no calendar cadence. If compromise is suspected: revoke at
+    Rotation: no calendar cadence — on suspected compromise, or when a
+    token has expired or been revoked. If compromise is suspected: revoke at
     <https://hub.docker.com/settings/security>, generate a replacement, then store it with
     `gh secret set DOCKERHUB_TOKEN_RW --repo rvenutolo/linPEAS-flake` or
     `gh secret set DOCKERHUB_TOKEN_DELETE --repo rvenutolo/linPEAS-flake` as

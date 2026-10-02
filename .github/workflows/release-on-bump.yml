@@ -755,8 +755,6 @@ jobs:
         # ephemeral, but `if: always()` ensures the logout runs even if an
         # intervening step fails — narrows the window for any later-step
         # compromise (e.g. a future SHA-pinned action) to read the creds.
-        # Mirrors the docker logout already present in the verify-latest-
-        # release.yml cron.
         if: always()
         run: |
           set -Eeuo pipefail
@@ -1748,7 +1746,8 @@ jobs:
               <https://hub.docker.com/settings/security> and
               `gh secret set DOCKERHUB_TOKEN_RW`.
             - `DOCKERHUB_USERNAME` mismatch with the `rvenutolo/linpeas` repo owner.
-            - Docker Hub partial outage; manual re-run via `workflow_dispatch` is
-              often enough.
+            - Docker Hub partial outage; re-trigger per the runbook's step 3. Once
+              the GitHub release exists, a `workflow_dispatch` with default
+              inputs skips the image jobs.
           label-description: release-on-bump workflow failure
           github-token: ${{ secrets.GITHUB_TOKEN }}
