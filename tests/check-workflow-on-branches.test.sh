@@ -156,6 +156,15 @@ expect_body alias-branch-item.yml $'name: &m dev\non:\n  push:\n    branches: [*
   "DIR/alias-branch-item.yml: on.push.branches must be exactly ${Q}[main]${Q}; got [\"dev\"]${ONE}"
 expect_body alias-whole.yml $'env:\n  X: &t\n    push: {}\non: *t\n' 1 "DIR/alias-whole.yml: on.push ${MISSING}${ONE}"
 expect_body alias-whole-good.yml $'env:\n  X: &t\n    push:\n      branches: [main]\non: *t\n' 0 ''
+# An alias inside what another alias stands for, and an `on` key itself
+# written as an alias.
+expect_body nested-branches-good.yml $'env:\n  X: &b [main]\n  Y: &v {branches: *b}\non:\n  push: *v\n' 0 ''
+expect_body nested-branches-extra.yml $'env:\n  X: &b [main, dev]\n  Y: &v {branches: *b}\non:\n  push: *v\n' 1 \
+  "DIR/nested-branches-extra.yml: on.push.branches must be exactly ${Q}[main]${Q}; got [\"main\",\"dev\"]${ONE}"
+# Three levels: the branch list is read only after three passes.
+expect_body nested-three-deep.yml $'env:\n  C: &c [main]\n  B: &b {branches: *c}\n  A: &a {push: *b}\non: *a\n' 0 ''
+expect_body nested-key.yml $'name: &k push\nenv:\n  A: &m {*k : {}}\non: *m\n' 1 "DIR/nested-key.yml: on.push ${MISSING}${ONE}"
+expect_body alias-on-key.yml $'name: &k on\n*k :\n  push: {}\n' 1 "DIR/alias-on-key.yml: on.push ${MISSING}${ONE}"
 # GitHub Actions refuses a merge key, so this workflow cannot run; the
 # lint still reads the trigger the merge brings in.
 expect_body merge-key.yml $'env:\n  X: &t\n    pull_request: {}\non:\n  <<: *t\n' 1 "DIR/merge-key.yml: on.pull_request ${MISSING}${ONE}"

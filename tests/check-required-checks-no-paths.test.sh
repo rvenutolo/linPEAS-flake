@@ -173,6 +173,14 @@ run_built_scenario 'a filter reached through an alias is named' 1 exact \
   clean-alias.yml $'x: &t\n  pull_request:\n    branches: [main]\non: *t\njobs: {}\n' \
   pr-alias.yml $'x: &t\n  paths: [a]\non:\n  pull_request: *t\njobs: {}\n'
 
+# An alias inside what another alias stands for, and an `on` key itself
+# written as an alias.
+run_built_scenario 'a filter behind nested aliases is named' 1 exact \
+  "${LINT} .github/workflows/alias-on-key.yml ${PATHS_FINDING}"$'\n'"${LINT} .github/workflows/nested.yml ${PATHS_FINDING}" \
+  '' 0 \
+  nested.yml $'env:\n  X: &p\n    paths: [a]\n  Y: &v\n    pull_request: *p\non: *v\njobs: {}\n' \
+  alias-on-key.yml $'name: &k on\n*k :\n  pull_request:\n    paths: [a]\njobs: {}\n'
+
 # An `on:` map carrying a tag of its own is still a map.
 run_built_scenario 'a filter under a tagged on: map is named' 1 exact \
   "${LINT} .github/workflows/tagged.yml ${PATHS_FINDING}" \

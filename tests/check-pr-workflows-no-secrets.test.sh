@@ -162,6 +162,14 @@ function main() {
     'alias-list.yml' $'env:\n  X: &t [pull_request]\non: *t\n' 1 'ALIAS_LIST'
   run_body_scenario 'aliased map on: with secret fails' \
     'alias-map.yml' $'env:\n  X: &t\n    pull_request: {}\non: *t\n' 1 'ALIAS_MAP'
+  # An alias inside what another alias stands for, and an `on` key
+  # itself written as an alias.
+  run_body_scenario 'nested aliased list item pull_request with secret fails' \
+    'nested-item.yml' $'name: &k pull_request\nenv:\n  A: &m [push, *k]\non: *m\n' 1 'NESTED_ITEM'
+  run_body_scenario 'nested aliased map key pull_request with secret fails' \
+    'nested-key.yml' $'name: &k pull_request\nenv:\n  A: &m {*k : {}}\non: *m\n' 1 'NESTED_KEY'
+  run_body_scenario 'aliased on key with pull_request and secret fails' \
+    'alias-on-key.yml' $'name: &k on\n*k : [pull_request]\n' 1 'ALIAS_ON_KEY'
   # GitHub Actions refuses a merge key, so this workflow cannot run; the
   # guard still scans a workflow whose merge brings in a PR trigger.
   run_body_scenario 'merge-key pull_request with secret fails' \

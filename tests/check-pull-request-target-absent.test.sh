@@ -155,6 +155,19 @@ expect_body alias-list-item-clean.yml $'name: &t pull_request\non: [push, *t]\n'
 # A list is judged by its items, each as a whole name.
 expect_body list-near-miss.yml $'on: [push, pull_request_target_x]\n' 0 ''
 expect_body alias-map-key-clean.yml $'name: &t push\non:\n  *t : {}\n' 0 ''
+# An alias inside what another alias stands for, at any depth the lint
+# resolves, and an `on` key itself written as an alias.
+too_deep=$'name: &a0 pull_request_target\nenv:\n'
+for ((i = 1; i <= 30; i++)); do
+  too_deep+="  A${i}: &a${i} [*a$((i - 1))]"$'\n'
+done
+too_deep+=$'on: *a30\n'
+expect_body nested-list-item.yml $'name: &k pull_request_target\nenv:\n  A: &m [push, *k]\non: *m\n' 1 "DIR/nested-list-item.yml: ${USES}${ONE}"
+expect_body nested-map-key.yml $'name: &k pull_request_target\nenv:\n  A: &m {*k : {}}\non: *m\n' 1 "DIR/nested-map-key.yml: ${USES}${ONE}"
+expect_body alias-on-key.yml $'name: &k on\n*k : [push, pull_request_target]\n' 1 "DIR/alias-on-key.yml: ${USES}${ONE}"
+# Past the depth the lint resolves, the workflow is refused, not passed.
+expect_body too-deep.yml "${too_deep}" 1 \
+  $'Error: on: holds an alias nested too deep to resolve\nDIR/too-deep.yml: could not evaluate workflow with yq (malformed?)'"${ONE}"
 # A list or a map is read whatever tag it carries.
 expect_body tagged-map.yml $'on: !x\n  pull_request_target: {}\n' 1 "DIR/tagged-map.yml: ${USES}${ONE}"
 expect_body tagged-list.yml $'on: !x [push, pull_request_target]\n' 1 "DIR/tagged-list.yml: ${USES}${ONE}"
