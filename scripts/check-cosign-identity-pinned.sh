@@ -20,9 +20,13 @@
 # verification to a specific signer.
 #
 # Detection joins backslash-continued shell invocations; ignores prose
-# in backticks and command names quoted inside message strings; for
-# markdown, only considers fenced blocks tagged
-# sh/bash/shell/console/text (or unlabeled). Skips this script.
+# in backticks and command names quoted inside message strings. Skips
+# this script.
+#
+# In Markdown, a line that starts, after indentation, with three
+# backticks toggles a fence; the fence is read when the text directly
+# after those backticks, up to the first whitespace, is empty or one of
+# sh/bash/shell/console/text.
 #
 # See docs/security/verification.md.
 #

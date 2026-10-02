@@ -276,9 +276,9 @@ Binding:
     fence the lint reads, in a tracked Markdown file outside `tests/` —
     including this runbook's own step-2 recovery snippet — must name
     `DOCKERHUB_TOKEN_DELETE` and must not name
-    `DOCKERHUB_TOKEN_RW` (the `_RW` token returns `403`). The lint
-    reads only fences that are unlabelled or tagged `sh`, `bash`,
-    `shell`, `console` or `text`, and
+    `DOCKERHUB_TOKEN_RW` (the `_RW` token returns `403`). Which fences
+    the lint reads is stated in the header of
+    `scripts/check-dockerhub-token-scope-split.sh`. It
     counts a fence as a Docker Hub delete when it performs a DELETE and
     either addresses `hub.docker.com` or names a `DOCKERHUB_TOKEN`
     variant.

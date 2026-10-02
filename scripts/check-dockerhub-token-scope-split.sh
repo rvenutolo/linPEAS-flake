@@ -15,9 +15,7 @@
 # refused.
 #
 # The same split binds every manual recovery snippet in the docs. A
-# shell-fenced Markdown block (only a fence tagged
-# sh/bash/shell/console/text, or unlabeled, is considered) that performs
-# a tag delete
+# shell-fenced Markdown block that performs a tag delete
 # (`--request DELETE` / `-X DELETE`) against Docker Hub must name
 # DOCKERHUB_TOKEN_DELETE and must not name DOCKERHUB_TOKEN_RW: the
 # write-scoped PAT returns 403 (access denied: insufficient scope) on a
@@ -29,6 +27,11 @@
 # alone would exempt a snippet that spells the host through a variable.
 # Token names are matched over the whole fence, not the delete line: a
 # real snippet assigns its credential many lines above the request.
+#
+# In Markdown, a line that starts, after indentation, with three
+# backticks toggles a fence; the fence is read when the text directly
+# after those backticks, up to the first whitespace, is empty or one of
+# sh/bash/shell/console/text.
 #
 # Honors WORKFLOWS_DIR_OVERRIDE (defaults to .github/workflows) so the test
 # harness can point at a temp dir, PATHS_OVERRIDE (newline-separated file
