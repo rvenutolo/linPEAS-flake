@@ -534,10 +534,11 @@ A name is read as a code span standing directly against the noun, so emphasis de
 ```text
 **NAME** job     *NAME* job       not read: the name is in no code span
 **`NAME`** job   job **`NAME`**   not read: the emphasis markers stand between the span and the noun
-**`NAME` job**                    read: the emphasis wraps the whole phrase
+**`NAME` job**   *`NAME` job*     read: asterisks wrap the whole phrase
+_`NAME` job_                      not read: the closing underscore joins the noun
 ```
 
-Reading a bold name with no code span was measured on this tree and rejected: the one site it added was an adjective standing before "job", not a name. Write a job or check name as a code span.
+A bold word with no code span is left unread on purpose: live prose also puts a bold adjective directly before "job", and a matcher cannot tell that from a name. Write a job or check name as a code span.
 
 The scan set is every Markdown and YAML file a commit would carry — tracked files plus not-yet-added ones, minus anything gitignored — so the lint sees a new doc and its fixtures on the commit that adds them. It is not every committed file: claims sitting in Nix and shell comments are outside it. `tests/fixtures/` is excluded because it exists to carry deliberate violations, the Claude-behavior tree is excluded because almost all of it is untracked, and `CHANGELOG.md` and `docs/releases.md` are excluded as historical records that must keep naming jobs as they stood at the time.
 
