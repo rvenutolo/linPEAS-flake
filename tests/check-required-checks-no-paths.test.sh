@@ -161,10 +161,14 @@ run_built_scenario 'filterless shapes of on: are clean beside a finding' 1 exact
 
 # An alias stands for the map it names: an `on:` and a `pull_request:`
 # written through an anchor are read as that map. The clean workflow
-# beside them keeps a reader that names every aliased file out.
+# beside them keeps a reader that names every aliased file out. Only
+# `on:` is resolved: a merge key `yq` cannot resolve elsewhere in the
+# file leaves the read of `on:` as it is, filter or none.
 run_built_scenario 'a filter reached through an alias is named' 1 exact \
-  "${LINT} .github/workflows/on-alias.yml ${PATHS_FINDING}"$'\n'"${LINT} .github/workflows/pr-alias.yml ${PATHS_FINDING}" \
+  "${LINT} .github/workflows/merge-elsewhere.yml ${PATHS_FINDING}"$'\n'"${LINT} .github/workflows/on-alias.yml ${PATHS_FINDING}"$'\n'"${LINT} .github/workflows/pr-alias.yml ${PATHS_FINDING}" \
   '' 0 \
+  merge-elsewhere.yml $'c: &c [x]\nenv:\n  <<: *c\non:\n  pull_request:\n    paths: [a]\njobs: {}\n' \
+  clean-merge-elsewhere.yml $'c: &c [x]\nenv:\n  <<: *c\non:\n  pull_request:\n    branches: [main]\njobs: {}\n' \
   on-alias.yml $'x: &t\n  pull_request:\n    paths: [a]\non: *t\njobs: {}\n' \
   clean-alias.yml $'x: &t\n  pull_request:\n    branches: [main]\non: *t\njobs: {}\n' \
   pr-alias.yml $'x: &t\n  paths: [a]\non:\n  pull_request: *t\njobs: {}\n'

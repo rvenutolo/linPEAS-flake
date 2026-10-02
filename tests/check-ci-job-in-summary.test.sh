@@ -166,11 +166,14 @@ fi
 printf 'OK   drift beside an unparsable workflow\n'
 
 # A `jobs:` written as an alias stands for the map it names: its keys are
-# job keys, and the category entry naming one of them resolves.
+# job keys, and the category entry naming one of them resolves. Only
+# `jobs:` is resolved: a merge key `yq` cannot resolve elsewhere in a
+# workflow leaves its job keys readable.
 alias_dir="$(mktemp --directory)"
 cp -- "${FIXTURES}/good/ci.yml" "${alias_dir}/"
 printf 'foo: Category-A\nbar: Category-B\nbaz: Category-C\n' >"${alias_dir}/categories.yml"
 printf 'x: &j\n  baz:\n    runs-on: ubuntu-latest\njobs: *j\n' >"${alias_dir}/aliased.yml"
+printf 'c: &c [x]\nenv:\n  <<: *c\njobs:\n  foo:\n    runs-on: ubuntu-latest\n' >"${alias_dir}/merge-elsewhere.yml"
 alias_exit=0
 alias_stderr="$(WORKFLOWS_DIR_OVERRIDE="${alias_dir}" \
   CI_WORKFLOW_OVERRIDE="${alias_dir}/ci.yml" \
