@@ -59,16 +59,18 @@
 # `outputs.has-finding`, with context names and string comparison
 # case-insensitive. A gate without `always()` carries GitHub's implicit
 # `success()`. A declared `has-finding` output is tried as 'true', 'false'
-# and empty; the events tried are the ones the workflow's `on:` names. A
-# job whose notify step has an `if:` of its own, follows a step other than
-# step-security/harden-runner or actions/checkout, runs the composite
-# twice, or reaches it by any other `uses:` than
-# ./.github/actions/notify-workflow-result, is refused when it has to be
-# derived. The composite's own result handling (failure and cancelled
-# file, success closes, skipped does nothing) is taken as fixed: its text
-# from `runs:` through the success branch is pinned by hash, and a gated
-# step is refused, so a change there stops this lint rather than silently
-# changing what an arm means.
+# and empty; the events tried are the ones the workflow's `on:` names: the
+# value of a string, the items of a list or the keys of a map. A job of a
+# workflow whose `on:` is any other value, or names no event, is refused
+# when it has to be derived. So is a job whose notify step has an `if:` of
+# its own, follows a step other than step-security/harden-runner or
+# actions/checkout, runs the composite twice, or reaches it by any other
+# `uses:` than ./.github/actions/notify-workflow-result. The composite's
+# own result handling (failure and cancelled file, success closes, skipped
+# does nothing) is taken as fixed: its text from `runs:` through the
+# success branch is pinned by hash, and a gated step is refused, so a
+# change there stops this lint rather than silently changing what an arm
+# means.
 #
 # Exit codes: 0 every marker matches its job's derived arms and every
 # scanner notify job carries its markers, 1 a marker disagrees with the
@@ -77,11 +79,13 @@
 # declaring cancelled has no cancel word beside it, or a scanner notify job
 # is missing a marker or files on no arm (details printed to stderr), 2
 # the check could not run: a required tool is missing, the composite or a
-# scanner workflow is missing or has changed, a workflow cannot be parsed,
-# a job it must derive has a gate, `needs:`, `result:`, notify step or
-# `on:` outside what it models, a scanner workflow has no notify job, the
-# scan set could not be listed or is empty, or a scanned file leaves a code
-# fence or HTML comment open
+# scanner workflow is missing or has changed, a `yq` read of the composite
+# or of a workflow fails, as it does on a file it cannot parse (the line
+# names what was being read and the status `yq` exited with), a job it
+# must derive has a gate, `needs:`, `result:`, notify step or `on:` outside
+# what it models, a scanner workflow has no notify job, the scan set could
+# not be listed or is empty, or a scanned file leaves a code fence or HTML
+# comment open
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -138,7 +142,7 @@ function check_composite() {
   local composite="${SCAN_ROOT}/${COMPOSITE_REL}" gated prefix sum
   [[ -f ${composite} ]] || die2 "missing ${COMPOSITE_REL}"
   gated="$(yq -r '[.runs.steps // [] | .[] | select(has("if"))] | length' "${composite}")" ||
-    die2 "cannot parse ${COMPOSITE_REL}"
+    die2 "cannot read the steps of ${COMPOSITE_REL}: yq exited $?"
   [[ ${gated} == 0 ]] ||
     die2 "${COMPOSITE_REL} gates its step with an if:, so a result can skip it; the arm model in this script needs review"
   prefix="$(make_temp)" || die2 'cannot create a temporary file'
@@ -201,18 +205,24 @@ function steps_before_notify() {
   done <<<"${uses}"
 }
 
+# @description Print the YAML tag of a workflow's `on:` value.
+# @arg $1 workflow path
+# @exitcode yq's status when it fails
+function on_shape() {
+  yq -r '.on | tag' "$1"
+}
+
 # @description Print the events a workflow runs on, one per line: its
 #              `on:` value as a string, the items of a list, or the keys
-#              of a map.
+#              of a map. Any other shape prints nothing.
 # @arg $1 workflow path
+# @arg $2 the tag `on_shape` printed for it
+# @exitcode yq's status when it fails
 function workflow_events() {
-  local shape
-  shape="$(yq -r '.on | tag' "$1")" || return 1
-  case "${shape}" in
+  case "$2" in
   '!!str') yq -r '.on' "$1" ;;
   '!!seq') yq -r '.on[]' "$1" ;;
   '!!map') yq -r '.on | keys | .[]' "$1" ;;
-  *) return 1 ;;
   esac
 }
 
@@ -341,26 +351,17 @@ BEGIN {
 }
 '
 
-# @description Derive one notify job's arms.
-# @arg $1 workflow path
-# @arg $2 job id
-# @arg $3 the watched job, or -
-# @arg $4 `if:` gate, or -
-# @arg $5 `result:` input, or -
+# @description Derive one notify job's arms from what was read of it.
+# @arg $1 the watched job
+# @arg $2 `if:` gate, or -
+# @arg $3 `result:` input, or -
+# @arg $4 whether the watched job declares a `has-finding` output
+# @arg $5 the events the workflow runs on, one per line
 # @stdout "OK<TAB><arms>" (arms may be empty) or "ERR<TAB><why>"
 function derive_arms() {
-  local wf="$1" job="$2" needs="$3" gate="$4" result_in="$5" has_out events
-  if [[ ${needs} == - ]]; then
-    printf 'ERR\tneeds: does not name exactly one job\n'
-    return 0
-  fi
-  has_out="$(declares_has_finding "${wf}" "${needs}")" || return 1
-  if ! events="$(workflow_events "${wf}")"; then
-    printf 'ERR\tthe workflow has no on: trigger the lint can read\n'
-    return 0
-  fi
-  NA_GATE="${gate}" NA_NEEDS="${needs}" NA_RESULTIN="${result_in}" \
-    NA_HASOUT="${has_out}" NA_EVENTS="${events//$'\n'/ }" \
+  local events="$5"
+  NA_GATE="$2" NA_NEEDS="$1" NA_RESULTIN="$3" \
+    NA_HASOUT="$4" NA_EVENTS="${events//$'\n'/ }" \
     awk "${EVAL_AWK}" </dev/null
 }
 
@@ -666,7 +667,8 @@ function main() {
   for wf in "${workflows[@]}"; do
     base="${wf##*/}"
     local listing
-    listing="$(notify_jobs "${wf}")" || die2 "cannot parse ${WORKFLOWS_REL}/${base}"
+    listing="$(notify_jobs "${wf}")" ||
+      die2 "cannot read the notify jobs of ${WORKFLOWS_REL}/${base}: yq exited $?"
     while IFS= read -r rec; do
       # yq prints empty lines between records; anything else must be a
       # whole six-field record.
@@ -717,17 +719,35 @@ function main() {
   done
 
   # @description Derive and memoize one job's arms into ARMS; exit 2 on a
-  #              gate the grammar cannot read. Called outside a command
-  #              substitution, so the memo and the exit both reach main.
+  #              job, gate or `on:` the lint cannot model and on a read
+  #              that fails. Called outside a command substitution, so the
+  #              memo and the exit both reach main.
   function arms_of() {
     local key="$1" out
     if [[ -z ${derived["${key}"]+set} ]]; then
-      [[ -z ${job_block["${key}"]:-} ]] || die2 "${WORKFLOWS_REL}/${key%%/*}: ${job_block["${key}"]}"
+      local rel="${WORKFLOWS_REL}/${key%%/*}" job="${key#*/}" has_out shape events
+      local path="${SCAN_ROOT}/${rel}"
+      [[ -z ${job_block["${key}"]:-} ]] || die2 "${rel}: ${job_block["${key}"]}"
       IFS=$'\t' read -r needs gate result_in <<<"${job_fields["${key}"]}"
-      out="$(derive_arms "${SCAN_ROOT}/${WORKFLOWS_REL}/${key%%/*}" "${key#*/}" \
-        "${needs}" "${gate}" "${result_in}")" ||
+      [[ ${needs} != - ]] || die2 "${rel}: job ${job}: needs: does not name exactly one job"
+      # A read that fails says nothing about the workflow, so it is
+      # reported as the failed command rather than as a shape of `on:`.
+      has_out="$(declares_has_finding "${path}" "${needs}")" ||
+        die2 "cannot read the outputs of ${rel} job ${needs}: yq exited $?"
+      shape="$(on_shape "${path}")" ||
+        die2 "cannot read the on: triggers of ${rel}: yq exited $?"
+      case "${shape}" in
+      '!!str' | '!!seq' | '!!map') ;;
+      *) die2 "${rel}: job ${job}: the workflow has no on: trigger the lint can read" ;;
+      esac
+      events="$(workflow_events "${path}" "${shape}")" ||
+        die2 "cannot read the on: triggers of ${rel}: yq exited $?"
+      # The evaluator tries each event in turn, so with none it would
+      # report a gate that admits no result, which the gate never decided.
+      [[ ${events} == *[![:space:]]* ]] || die2 "${rel}: job ${job}: on: names no event"
+      out="$(derive_arms "${needs}" "${gate}" "${result_in}" "${has_out}" "${events}")" ||
         die2 "cannot read ${WORKFLOWS_REL}/${key}"
-      [[ ${out} == OK$'\t'* ]] || die2 "${WORKFLOWS_REL}/${key%%/*}: job ${key#*/}: ${out#ERR$'\t'}"
+      [[ ${out} == OK$'\t'* ]] || die2 "${rel}: job ${job}: ${out#ERR$'\t'}"
       derived["${key}"]="${out#OK$'\t'}"
     fi
     ARMS="${derived["${key}"]}"
@@ -801,7 +821,7 @@ function main() {
 
   for key in "${!job_fields[@]}"; do
     notify_body "${SCAN_ROOT}/${WORKFLOWS_REL}/${key%%/*}" "${key#*/}" >"${tmp}" ||
-      die2 "cannot read the body of ${WORKFLOWS_REL}/${key}"
+      die2 "cannot read the body of ${WORKFLOWS_REL}/${key%%/*} job ${key#*/}: yq exited $?"
     scan_file "${tmp}" "${WORKFLOWS_REL}/${key%%/*} (job ${key#*/} body)" body "${key}"
   done
   local f
