@@ -28,7 +28,7 @@
 # the pin is read.
 # A last check compares every `docs/_data/dashboard.yml*` entry of the
 # real tree (inode, size, nanosecond mtime and ctime, SHA-256), and
-# whether `docs/_data/` exists, before and after the run; it is the only
+# whether `docs/_data/` is a directory, before and after the run; it is the only
 # check that sees a scenario aimed at the real path, and it reads nothing
 # but those entries. Writes anywhere else, such as TMPDIR or the sandbox
 # outside `docs/`, are not checked.
@@ -133,10 +133,10 @@ function check_gh_tripwire() {
 
 # @description Print one line per `dashboard.yml*` entry in the real
 # docs/_data/ (inode, size, nanosecond mtime and ctime, SHA-256), or one
-# line saying the directory is absent. The entries are listed by `find
+# line saying it is not a directory. The entries are listed by `find -H
 # -name`, not by a glob, so a repository path holding glob characters
-# cannot turn the pattern into one that matches nothing. A
-# scenario aimed at the real path that replaces the file changes the
+# cannot turn the pattern into one that matches nothing, and `-H` follows
+# a docs/_data/ that is a symlink. A scenario aimed at the real path that replaces the file changes the
 # inode, one that rewrites it in place changes the timestamps even with
 # the same bytes, and a temp file left beside it adds a line. Prints
 # nothing when no such entry exists.
@@ -144,7 +144,7 @@ function check_gh_tripwire() {
 # @stdout one line per entry
 function snapshot_real_out() {
   if [[ ! -d ${REAL_OUT_DIR} ]]; then
-    printf '%s is absent\n' "${REAL_OUT_DIR}"
+    printf '%s is not a directory\n' "${REAL_OUT_DIR}"
     return 0
   fi
   # No entry is a valid state: the file is gitignored, so a fresh clone
@@ -152,12 +152,17 @@ function snapshot_real_out() {
   local LINT_ALLOW_EMPTY_SCAN=1
   local -a entries=()
   enumerate_into entries 'find over the real docs/_data/' \
-    find "${REAL_OUT_DIR}" -mindepth 1 -maxdepth 1 -name 'dashboard.yml*' -print0
-  local entry
+    find -H "${REAL_OUT_DIR}" -mindepth 1 -maxdepth 1 -name 'dashboard.yml*' -print0
+  local entry digest
   for entry in "${entries[@]}"; do
+    # Only a readable regular file has a digest; any other entry is
+    # compared on its stat fields alone.
+    digest='-'
+    if [[ -f ${entry} && -r ${entry} ]]; then
+      digest="$(sha256sum -- "${entry}" | cut --delimiter=' ' --fields=1)"
+    fi
     printf '%s %s\n' \
-      "$(stat --format='%n %i %s %.9Y %.9Z' -- "${entry}")" \
-      "$(sha256sum -- "${entry}" | cut --delimiter=' ' --fields=1)"
+      "$(stat --format='%n %i %s %.9Y %.9Z' -- "${entry}")" "${digest}"
   done
 }
 
