@@ -273,12 +273,12 @@ Binding:
 1. `secrets.DOCKERHUB_TOKEN_DELETE` must never be consumed in
     `release-on-bump.yml` or `verify-latest-release.yml`.
 1. Any Docker Hub tag delete (`--request DELETE` or `-X DELETE`) in a
-    three-backtick fence that is unlabelled or tagged `sh`, `bash`,
-    `shell`, `console` or `text`, in a tracked Markdown file outside
-    `tests/` —
+    fence the lint reads, in a tracked Markdown file outside `tests/` —
     including this runbook's own step-2 recovery snippet — must name
     `DOCKERHUB_TOKEN_DELETE` and must not name
     `DOCKERHUB_TOKEN_RW` (the `_RW` token returns `403`). The lint
+    reads only fences that are unlabelled or tagged `sh`, `bash`,
+    `shell`, `console` or `text`, and
     counts a fence as a Docker Hub delete when it performs a DELETE and
     either addresses `hub.docker.com` or names a `DOCKERHUB_TOKEN`
     variant.

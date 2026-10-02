@@ -110,9 +110,11 @@ images by immutable digest — an `@sha256:` literal or an `@${…DIGEST}`
 expansion — never a mutable tag. The rule spans the workflows and
 composite actions under `.github/`, the shell scripts under `scripts/`
 (the `scripts/*.sh` git pathspec crosses `/`, so `scripts/lib/` is in
-scope), and three-backtick fenced blocks in `README.md` and everything
-under `docs/` that are unlabelled or tagged `sh`, `bash`, `shell`,
-`console` or `text`.
+scope), and fenced blocks in `README.md` and everything under `docs/`.
+Of those fences the lint reads only ones that are unlabelled or tagged
+`sh`, `bash`, `shell`, `console` or `text`; the header of
+`scripts/check-manifest-digest-pinned.sh` and its matcher are the
+authority on which fence forms it recognises.
 Target list names are exempt, because they are tags by necessity.
 
 The rule's live instance is `release-on-bump.yml`'s `manifest` job, which

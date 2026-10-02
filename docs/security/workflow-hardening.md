@@ -610,7 +610,7 @@ Enforced by `scripts/check-fork-guard-release.sh`. Wired as the `lint-workflow-s
 
 ## nix-run-pinned
 
-No workflow, script, or three-backtick documentation fence that is unlabelled or tagged `sh`, `bash`, `shell`, `console` or `text` runs any `nix` subcommand — `run`, `shell`, `develop`, `build`, or otherwise — against the bare `nixpkgs` flake reference, with or without intervening flags.
+No workflow, script, or documentation fence the lint reads runs any `nix` subcommand — `run`, `shell`, `develop`, `build`, or otherwise — against the bare `nixpkgs` flake reference, with or without intervening flags. Of documentation fences it reads only ones that are unlabelled or tagged `sh`, `bash`, `shell`, `console` or `text`.
 
 At runtime the bare `nixpkgs` resolves through the user's (or runner's) flake registry — not this repo's `flake.lock`. A step that calls `nix run nixpkgs#cosign` therefore pulls whatever nixpkgs commit the runner's registry happens to point at, bypassing the Renovate-pinned `nixpkgs` input in `flake.lock`. A malicious or compromised nixpkgs revision could ship a backdoored tool. The registry lookup is what makes the reference unpinned, so the hazard is identical no matter which subcommand consumes it.
 
