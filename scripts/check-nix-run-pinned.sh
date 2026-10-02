@@ -25,8 +25,8 @@
 #   - `nix run nixpkgs/<rev>#<pkg>` — explicit commit pin.
 #
 # Detection scans workflows, composite actions under .github/actions/,
-# scripts, and shell-fenced markdown
-# blocks. The check matches a `nix` command word followed by a bare
+# scripts, and shell-fenced markdown blocks: fences tagged
+# sh/bash/shell/console/text (or unlabeled). The check matches a `nix` command word followed by a bare
 # `nixpkgs#` ref, with any subcommand and any flags in between.
 # A `/<rev>` between `nixpkgs` and `#` passes.
 #

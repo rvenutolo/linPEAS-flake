@@ -57,7 +57,7 @@ inputs:
     required: false
     default: b60205
   label-description:
-    description: "Description string for the label. Set on creation, and refreshed on a later run when the live label's description differs."
+    description: "Description string for the label. Written when a run opens a new issue: set on label creation, and refreshed when the live label's description differs."
     required: false
     default: Workflow failure auto-filed by .github/actions/notify-workflow-result
   github-token:

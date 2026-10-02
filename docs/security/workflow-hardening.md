@@ -599,7 +599,7 @@ Enforced by `scripts/check-fork-guard-release.sh`. Wired as the `lint-workflow-s
 
 ## nix-run-pinned
 
-No workflow, script, or shell-fenced documentation runs any `nix` subcommand — `run`, `shell`, `develop`, `build`, or otherwise — against the bare `nixpkgs` flake reference, with or without intervening flags.
+No workflow, script, or documentation fence that is unlabelled or tagged `sh`, `bash`, `shell`, `console` or `text` runs any `nix` subcommand — `run`, `shell`, `develop`, `build`, or otherwise — against the bare `nixpkgs` flake reference, with or without intervening flags.
 
 At runtime the bare `nixpkgs` resolves through the user's (or runner's) flake registry — not this repo's `flake.lock`. A step that calls `nix run nixpkgs#cosign` therefore pulls whatever nixpkgs commit the runner's registry happens to point at, bypassing the Renovate-pinned `nixpkgs` input in `flake.lock`. A malicious or compromised nixpkgs revision could ship a backdoored tool. The registry lookup is what makes the reference unpinned, so the hazard is identical no matter which subcommand consumes it.
 
@@ -617,10 +617,10 @@ Enforced by `scripts/check-nix-run-pinned.sh`. Wired as the `lint-workflow-secur
 
 Every `label-description` a workflow hands to the `notify-workflow-result` composite fits GitHub's 100-character label-description cap, and no label name is filed with two different descriptions.
 
-The composite writes the description onto the label — on creation, and on any later run where the live label's description differs — so the value in the tree is what a maintainer triaging an auto-filed issue reads. Two ways that stops being true, both invisible in the tree:
+The composite writes the description onto the label when a run opens a new issue: it creates the label, or updates the description when the label exists and its live description differs. A run that comments on an open issue or closes one writes no label. The value in the tree therefore reaches the label the next time a run opens an issue, and is what a maintainer triaging an auto-filed issue reads. Two ways that stops being true, both invisible in the tree:
 
-- **Over the cap.** The labels API rejects a description longer than 100 characters with a 422. The label keeps whichever wording it was created with, every subsequent run re-attempts the write and warns, and the workflow file goes on looking like the source of truth for text that has never reached the label.
-- **Two callers, two descriptions.** A label filed by more than one workflow with different wording is rewritten by whichever workflow ran last, so the description flips between runs.
+- **Over the cap.** The labels API rejects a description longer than 100 characters with a 422. The label keeps whichever wording it was created with, each later run that opens an issue re-attempts the write and warns, and the workflow file goes on looking like the source of truth for text that has never reached the label.
+- **Two callers, two descriptions.** A label filed by more than one workflow with different wording is rewritten by whichever of them last opened an issue, so the description changes with which workflow failed last.
 
 Enforced by `scripts/check-notify-label-descriptions.sh`. Wired as the `lint-workflow-security` CI job (member check `notify-label-descriptions`) and as a pre-commit hook. The scan set is `.github/workflows/*.yml`; a scan that matches workflows but finds no caller of the composite exits 2 rather than reporting a clean tree, because the composite having moved is not the same fact as every description being fine.
 

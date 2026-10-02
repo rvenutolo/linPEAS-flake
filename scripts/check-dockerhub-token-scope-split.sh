@@ -15,7 +15,8 @@
 # refused.
 #
 # The same split binds every manual recovery snippet in the docs. A
-# shell-fenced Markdown block that performs a tag delete
+# shell-fenced Markdown block (a fence tagged sh/bash/shell/console/text,
+# or unlabeled) that performs a tag delete
 # (`--request DELETE` / `-X DELETE`) against Docker Hub must name
 # DOCKERHUB_TOKEN_DELETE and must not name DOCKERHUB_TOKEN_RW: the
 # write-scoped PAT returns 403 (access denied: insufficient scope) on a

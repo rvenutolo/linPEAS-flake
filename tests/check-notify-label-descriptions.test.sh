@@ -90,8 +90,8 @@ function main() {
     'label alpha-drift description is 101 characters, over the 100-character cap'
 
   # Two workflows filing one label with different wording overwrite each
-  # other on every run, so the description a maintainer sees is whichever
-  # ran last.
+  # other whenever one opens an issue, so the description a maintainer sees
+  # is whichever opened one last.
   mkdir -p "${root}/conflict"
   write_caller "${root}/conflict/a.yml" 'beta-drift' 'beta drifted, or the check could not run'
   write_caller "${root}/conflict/b.yml" 'beta-drift' 'beta drifted'

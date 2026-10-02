@@ -6,19 +6,21 @@
 # description cap, and no label name carries two different descriptions
 # across the workflows that file it.
 
-# The composite writes the description onto the label: on creation, and
-# on any later run where the live label's description differs. Both
-# assertions below exist because that write is the one the maintainer
-# reading a label sees.
+# The composite writes the description onto the label when a run opens a
+# new issue: on label creation, and when the live label's description
+# differs. Both assertions below exist because that write is the one the
+# maintainer reading a label sees.
 #
 #   1. Length — the labels API rejects a description over 100 characters
 #      with a 422. An over-length value in a workflow can therefore never
 #      reach the label it describes: the label keeps whatever wording it
-#      was created with, and every run re-attempts the write and warns.
+#      was created with, and every run that opens an issue re-attempts
+#      the write and warns.
 #      The tree looks like the source of truth and is not one.
 #   2. Agreement — two workflows filing the same label with different
-#      descriptions each rewrite the other's wording on every run, so the
-#      description a maintainer sees is whichever workflow ran last.
+#      descriptions each rewrite the other's wording when they open an
+#      issue, so the description a maintainer sees is whichever workflow
+#      opened one last.
 #
 # Honors WORKFLOWS_DIR_OVERRIDE (default: .github/workflows) and
 # LINT_ALLOW_EMPTY_SCAN=1 for fixtures.

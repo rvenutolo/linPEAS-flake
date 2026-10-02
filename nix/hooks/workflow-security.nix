@@ -471,8 +471,8 @@
   # The composite writes label-description onto the label, so a value
   # past the labels API's 100-character cap never reaches the label it
   # describes, and two callers disagreeing about one label overwrite each
-  # other on every run. Both are invisible in the tree, which goes on
-  # looking like the source of truth.
+  # other whenever one opens an issue. Both are invisible in the tree,
+  # which goes on looking like the source of truth.
   # See docs/security/workflow-hardening.md.
   notify-label-descriptions = {
     enable = true;

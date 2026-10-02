@@ -35,11 +35,12 @@
 # rephrase it.
 #
 # Paragraphs are read with their lines joined, so a count wrapped across a
-# line break is still one phrase. Fenced blocks and inline code spans are
-# skipped, which is how a document shows the marker or the phrase without
-# making a claim. Fences are tracked marker-aware, as in
-# check-prose-ci-names.sh, and a file ending inside a fence is a precondition
-# failure.
+# line break is still one phrase. Fenced blocks, inline code spans and
+# comment blocks (an HTML comment opening a line and closing on a later
+# one) are skipped, which is how a document shows the marker or the phrase
+# without making a claim. Fences are tracked marker-aware, as in
+# check-prose-ci-names.sh, and a file ending inside a fence or a comment
+# block is a precondition failure.
 #
 # Exit codes: 0 every declared count matches the table and no undeclared
 # count was found, 1 a count disagrees with the table, is undeclared, or
@@ -47,7 +48,8 @@
 # not run: a required tool is missing, the table doc is missing, holds no
 # Required contexts section or more than one, holds no table, a table with
 # no separator row, a second table or no data rows there, the scan set could
-# not be listed or is empty, or a scanned file leaves a code fence open
+# not be listed or is empty, or a scanned file leaves a code fence or a
+# comment block open
 
 set -Eeuo pipefail
 IFS=$'\n\t'
