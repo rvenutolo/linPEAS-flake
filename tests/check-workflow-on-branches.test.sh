@@ -95,6 +95,36 @@ function expect_failed_read() {
   printf 'OK   %s with a failing yq read (%s)\n' "${fixture}" "${thing}"
 }
 
+# @description Scan one workflow written to a temp dir at run time and
+# hold the lint to its exit status and to the whole of what it prints on
+# stderr. The shapes scanned this way (aliases, merge keys, tags, several
+# documents) are built here so that no formatter or workflow linter reads
+# them as tracked files. The line `yq` itself prints when it resolves a
+# merge key carries a timestamp, so it is dropped before the comparison;
+# every line the lint prints is compared.
+# @arg $1 file name, which is also the scenario's label
+# @arg $2 file body  @arg $3 expected exit status
+# @arg $4 expected stderr, with DIR standing for the temp dir
+function expect_body() {
+  local -r name="$1" body="$2" want_exit="$3"
+  local dir got_exit=0 got_stderr want
+  dir="$(mktemp --directory)"
+  printf '%s' "${body}" >"${dir}/${name}"
+  want="${4//DIR/${dir}}"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${dir}" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  rm --recursive --force -- "${dir}"
+  got_stderr="$(grep --invert-match --fixed-strings -- '--yaml-fix-merge-anchor-to-spec' <<<"${got_stderr}" || true)"
+  if [[ ${got_exit} != "${want_exit}" ]]; then
+    printf 'FAIL %s: exit %s, want %s\n  stderr: %s\n' "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" >&2
+    return 1
+  fi
+  if [[ ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s: stderr is not %q\n  got: %s\n' "${name}" "${want}" "${got_stderr}" >&2
+    return 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+
 expect good.yml 0 ""
 expect good-cron-only.yml 0 ""
 expect bad-pr-no-branches.yml 1 "bad-pr-no-branches.yml: on.pull_request is missing"
@@ -104,6 +134,36 @@ expect bad-push-no-branches.yml 1 "bad-push-no-branches.yml: on.push is missing"
 expect bad-pr-null.yml 1 "bad-pr-null.yml: on.pull_request is present but null"
 expect bad-push-null.yml 1 "bad-push-null.yml: on.push is present but null"
 expect no-such-workflow.yml 2 'selected 0 of'
+
+# A trigger, its value or its branch list written through an anchor is
+# read as what it stands for.
+# The lint's lines quote the branch list in backticks; Q holds one, so
+# that no assertion string here does.
+readonly Q=$'\x60'
+readonly ONE=$'\n'"1 workflow trigger(s) missing or non-canonical ${Q}branches: [main]${Q}"
+readonly MISSING="is missing ${Q}branches: [main]${Q} (implicit all-branches forbidden)"
+expect_body alias-key.yml $'name: &t push\non:\n  *t : {}\n' 1 "DIR/alias-key.yml: on.push ${MISSING}${ONE}"
+expect_body alias-key-null.yml $'name: &t pull_request\non:\n  *t :\n' 1 \
+  "DIR/alias-key-null.yml: on.pull_request is present but null (implicit all-branches forbidden; need ${Q}branches: [main]${Q})${ONE}"
+expect_body alias-key-good.yml $'name: &t push\non:\n  *t :\n    branches: [main]\n' 0 ''
+expect_body alias-value-good.yml $'on:\n  push: &v\n    branches: [main]\n  pull_request: *v\n' 0 ''
+expect_body alias-value-no-branches.yml $'env:\n  X: &v\n    types: [opened]\non:\n  pull_request: *v\n' 1 \
+  "DIR/alias-value-no-branches.yml: on.pull_request ${MISSING}${ONE}"
+expect_body alias-branches-good.yml $'env:\n  X: &b [main]\non:\n  push:\n    branches: *b\n' 0 ''
+expect_body alias-branches-extra.yml $'env:\n  X: &b [main, dev]\non:\n  push:\n    branches: *b\n' 1 \
+  "DIR/alias-branches-extra.yml: on.push.branches must be exactly ${Q}[main]${Q}; got [\"main\",\"dev\"]${ONE}"
+expect_body alias-branch-item.yml $'name: &m dev\non:\n  push:\n    branches: [*m]\n' 1 \
+  "DIR/alias-branch-item.yml: on.push.branches must be exactly ${Q}[main]${Q}; got [\"dev\"]${ONE}"
+expect_body alias-whole.yml $'env:\n  X: &t\n    push: {}\non: *t\n' 1 "DIR/alias-whole.yml: on.push ${MISSING}${ONE}"
+expect_body alias-whole-good.yml $'env:\n  X: &t\n    push:\n      branches: [main]\non: *t\n' 0 ''
+# GitHub Actions refuses a merge key, so this workflow cannot run; the
+# lint still reads the trigger the merge brings in.
+expect_body merge-key.yml $'env:\n  X: &t\n    pull_request: {}\non:\n  <<: *t\n' 1 "DIR/merge-key.yml: on.pull_request ${MISSING}${ONE}"
+expect_body tagged-map.yml $'on: !x\n  push: {}\n' 1 "DIR/tagged-map.yml: on.push ${MISSING}${ONE}"
+# Only `on:` is resolved: an alias `yq` cannot resolve elsewhere in the
+# file (a merge of a string) does not stop a readable `on:` being read.
+expect_body merge-elsewhere.yml $'name: &s str\non:\n  push:\n    branches: [main]\njobs:\n  a:\n    <<: *s\n' 0 ''
+expect_body merge-elsewhere-bad.yml $'name: &s str\non:\n  push: {}\njobs:\n  a:\n    <<: *s\n' 1 "DIR/merge-elsewhere-bad.yml: on.push ${MISSING}${ONE}"
 
 expect_unparsable 'on: [\n' 'bad-unparsable.yml: could not evaluate'
 

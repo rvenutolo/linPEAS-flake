@@ -72,6 +72,52 @@ function run_scenario() {
     "${stdout_file}" "${outcome_file}"
 }
 
+# @description Run the guard against one workflow written at run time, so
+# that no formatter or workflow linter reads its shape (an alias, a merge
+# key, a tag) as a tracked file. The body gets a job that reads a secret
+# named after the scenario's file; the finding line is asserted whole.
+# @arg $1 scenario name  @arg $2 file name  @arg $3 the workflow's lines above `jobs:`
+# @arg $4 expected exit code  @arg $5 secret name
+function run_body_scenario() {
+  local -r name="$1" file="$2" head="$3" expected_exit="$4" secret="$5"
+  local tmpdir stderr_file stdout_file outcome_file
+  tmpdir="$(mktemp --directory)"
+  stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  # shellcheck disable=SC2016 # the workflow expression is literal text
+  printf '%sjobs:\n  a:\n    runs-on: x\n    steps:\n      - run: echo\n        env:\n          T: ${{ secrets.%s }}\n' \
+    "${head}" "${secret}" >"${tmpdir}/${file}"
+  local lineno
+  lineno="$(wc --lines <"${tmpdir}/${file}")"
+  local -r expected_stderr="${tmpdir}/${file}:${lineno}: secrets.${secret} not allowed in PR-triggered workflow"
+
+  local actual_exit=0
+  WORKFLOWS_DIR_OVERRIDE="${tmpdir}" \
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${file}:${lineno}: secrets.${secret} not allowed in PR-triggered workflow" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+
+  if [[ ${actual_exit} -ne ${expected_exit} ]]; then
+    printf 'FAIL: %s — expected exit %d, got %d\n' \
+      "${name}" "${expected_exit}" "${actual_exit}" >&2
+    printf 'stderr was:\n' >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --line-regexp --quiet -- "${expected_stderr}" "${stderr_file}"; then
+    printf 'FAIL: %s — stderr has no line %q\n' "${name}" "${expected_stderr}" >&2
+    printf 'stderr was:\n' >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+
+  rm --recursive --force -- "${tmpdir}" "${stderr_file}" \
+    "${stdout_file}" "${outcome_file}"
+}
+
 function main() {
   # A pass states how much of the directory was actually read. A workflow
   # that was scanned and held no disallowed secret and a workflow that
@@ -104,6 +150,33 @@ function main() {
   # not a silent skip.
   run_scenario 'malformed workflow is a tooling error' \
     'bad-malformed.yml' 2 'could not evaluate' ''
+  # A PR trigger written through an anchor puts the workflow in scope,
+  # whichever part of `on:` the alias stands for.
+  run_body_scenario 'aliased list item pull_request with secret fails' \
+    'alias-item.yml' $'name: &t pull_request\non: [push, *t]\n' 1 'ALIAS_ITEM'
+  run_body_scenario 'aliased map key pull_request with secret fails' \
+    'alias-key.yml' $'name: &t pull_request\non:\n  *t : {}\n' 1 'ALIAS_KEY'
+  run_body_scenario 'aliased string on: pull_request_target with secret fails' \
+    'alias-string.yml' $'name: &t pull_request_target\non: *t\n' 1 'ALIAS_STRING'
+  run_body_scenario 'aliased list on: with secret fails' \
+    'alias-list.yml' $'env:\n  X: &t [pull_request]\non: *t\n' 1 'ALIAS_LIST'
+  run_body_scenario 'aliased map on: with secret fails' \
+    'alias-map.yml' $'env:\n  X: &t\n    pull_request: {}\non: *t\n' 1 'ALIAS_MAP'
+  # GitHub Actions refuses a merge key, so this workflow cannot run; the
+  # guard still scans a workflow whose merge brings in a PR trigger.
+  run_body_scenario 'merge-key pull_request with secret fails' \
+    'merge-key.yml' $'env:\n  X: &t\n    pull_request: {}\non:\n  <<: *t\n' 1 'MERGE_KEY'
+  # A list or a map is read whatever tag it carries.
+  run_body_scenario 'tagged map pull_request with secret fails' \
+    'tagged-map.yml' $'on: !x\n  pull_request: {}\n' 1 'TAGGED_MAP'
+  run_body_scenario 'tagged list pull_request with secret fails' \
+    'tagged-list.yml' $'on: !x [pull_request]\n' 1 'TAGGED_LIST'
+  run_body_scenario 'tagged string pull_request with secret fails' \
+    'tagged-string.yml' $'on: !x pull_request\n' 1 'TAGGED_STRING'
+  # Only `on:` is resolved: an alias `yq` cannot resolve elsewhere in the
+  # file (a merge of a string) does not stop a readable `on:` being read.
+  run_body_scenario 'pull_request beside an unresolvable merge elsewhere fails' \
+    'merge-elsewhere.yml' $'name: &s str\non: pull_request\nenv:\n  <<: *s\n' 1 'MERGE_ELSEWHERE'
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
