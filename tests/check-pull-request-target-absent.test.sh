@@ -169,6 +169,8 @@ expect_body two-documents.yml $'on: push\n---\non: pull_request_target\n' 1 $'DI
 # Only `on:` is resolved: an alias `yq` cannot resolve elsewhere in the
 # file (a merge of a string) does not stop a readable `on:` being read.
 expect_body merge-elsewhere.yml $'name: &s str\non:\n  push: {}\njobs:\n  a:\n    <<: *s\n' 0 ''
+expect_body merge-elsewhere-string.yml $'name: &s str\non: pull_request_target\njobs:\n  a:\n    <<: *s\n' 1 "DIR/merge-elsewhere-string.yml: ${USES}${ONE}"
+expect_body merge-elsewhere-list.yml $'name: &s str\non: [push, pull_request_target]\njobs:\n  a:\n    <<: *s\n' 1 "DIR/merge-elsewhere-list.yml: ${USES}${ONE}"
 expect_body merge-elsewhere-bad.yml $'name: &s str\non:\n  pull_request_target: {}\njobs:\n  a:\n    <<: *s\n' 1 "DIR/merge-elsewhere-bad.yml: ${USES}${ONE}"
 
 expect_unparsable 'on: [\n' 'bad-unparsable.yml: could not evaluate'
