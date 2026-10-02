@@ -83,10 +83,10 @@ function run_scenario() {
     harness_assert_also "${sub}"
   done
 
-  leftover="$(find "${run_tmp}" -mindepth 1 -print -quit)"
+  leftover="$(ls --almost-all -- "${run_tmp}")"
   rm --recursive --force -- "${run_tmp}"
   if [[ -n ${leftover} ]]; then
-    printf 'FAIL: %s — the script left a temp file behind (%s)\n' "${name}" "${leftover##*/}" >&2
+    printf 'FAIL: %s — the script left a temp file behind (%s)\n' "${name}" "${leftover}" >&2
     failures=$((failures + 1))
     return
   fi

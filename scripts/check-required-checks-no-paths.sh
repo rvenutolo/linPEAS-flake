@@ -107,11 +107,13 @@ for wf in "${workflows[@]}"; do
   # `on:` written as a list from failing the read, where `yq` cannot
   # index by key: a list holds no filter, so it prints nothing. It tests
   # the node's kind, not its tag, so a map carrying a tag of its own is
-  # still read. `explode` resolves aliases first, so a trigger or a
-  # filter written through an anchor is read as the map it stands for.
+  # still read. `explode` resolves the aliases of `on:` first, so a
+  # trigger or a filter written through an anchor is read as the map it
+  # stands for; it is given `on:` alone, so an alias `yq` cannot resolve
+  # elsewhere in the file does not fail this read.
   yq_status=0
   has_filter="$(yq '
-    explode(.) | .on | select(kind == "map") | .pull_request | (
+    .on | explode(.) | select(kind == "map") | .pull_request | (
       has("paths") or has("paths-ignore")
     )
   ' "${resolved}")" || yq_status=$?

@@ -167,14 +167,14 @@ glob_into workflow_files 'workflow YAML' "${WORKFLOWS_DIR}/*.yml" "${WORKFLOWS_D
 # they join the set, in this shell rather than in a pipeline's subshell,
 # where an exit would end that subshell alone and leave the redirect
 # writing a short job set. A workflow with no `jobs:` reads as no keys
-# through `// {}`, and `explode` reads a `jobs:` written as an alias as
-# the map it names, so a failure here is a file whose job keys this run
-# does not have: a category entry naming a job only that file holds
-# would be reported as matching nothing.
+# through `// {}`, and `explode`, given `jobs:` alone, reads one written
+# as an alias as the map it names, so a failure here is a file whose job
+# keys this run does not have: a category entry naming a job only that
+# file holds would be reported as matching nothing.
 all_jobs=''
 for f in "${workflow_files[@]}"; do
   [[ -f ${f} ]] || continue
-  workflow_jobs="$(yq eval 'explode(.) | .jobs // {} | keys | .[]' "${f}")" || {
+  workflow_jobs="$(yq eval '(.jobs // {}) | explode(.) | keys | .[]' "${f}")" || {
     printf 'cannot read job keys from %s: yq exited %d\n' "${f}" "$?" >&2
     exit 2
   }

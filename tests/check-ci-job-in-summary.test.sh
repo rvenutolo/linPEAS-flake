@@ -127,14 +127,14 @@ function expect_unread_workflow() {
 }
 
 # The stub text ends in the file's path, which only the per-workflow read
-# of that one file carries: the read of ci.yml's own job list above it has
-# no `// {}`.
+# of that one file carries: the read of ci.yml's own job list has no
+# `explode`.
 expect_unread_workflow 'failed read of a workflow holding mapped jobs' \
   "${FIXTURES}/good" "${FIXTURES}/good/ci.yml" 7 \
-  ".jobs // {} | keys | .[] ${FIXTURES}/good/ci.yml"
+  "explode(.) | keys | .[] ${FIXTURES}/good/ci.yml"
 expect_unread_workflow 'failed read of a workflow holding no job' \
   "${FIXTURES}/good" "${FIXTURES}/good/categories.yml" 9 \
-  ".jobs // {} | keys | .[] ${FIXTURES}/good/categories.yml"
+  "explode(.) | keys | .[] ${FIXTURES}/good/categories.yml"
 
 # A workflow that does not parse, written at run time so no unparsable
 # file sits in the tree for the formatters to refuse.

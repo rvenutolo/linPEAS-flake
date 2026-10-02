@@ -134,13 +134,16 @@ function job_ids_at() {
   # tested before its ids join the set. The file carries the bytes git
   # printed: a shell variable would drop a NUL and hand `yq` a workflow
   # that is not the one at the ref. A workflow with no `jobs:` reads as
-  # no ids through `// {}`, and `explode` reads a `jobs:` written as an
-  # alias as the map it names, so a failure is a workflow whose job ids
-  # this run does not have. Dropping that workflow instead leaves the
-  # set short by its jobs: at the audit point they are reported as added
-  # since, at HEAD as removed.
+  # no ids through `// {}`, and `explode`, given `jobs:` alone, reads one
+  # written as an alias as the map it names, so a failure is a workflow
+  # whose job ids this run does not have. Dropping that workflow instead
+  # leaves the set short by its jobs: at the audit point they are
+  # reported as added since, at HEAD as removed.
   local blob_file ids status all_ids=''
-  blob_file="$(make_temp)"
+  # `make_temp` exits inside the substitution, which ends the
+  # substitution alone: without the test, the loop would go on with no
+  # file to write to and report a git read that never ran.
+  blob_file="$(make_temp)" || return 2
   for path in ${workflow_paths+"${workflow_paths[@]}"}; do
     git show "${ref}:${path}" >"${blob_file}" || {
       status=$?
@@ -148,7 +151,7 @@ function job_ids_at() {
       log_err "cannot read ${path} at ${ref}: git show exited ${status}"
       return 2
     }
-    ids="$(yq 'explode(.) | .jobs // {} | keys | .[]' "${blob_file}")" || {
+    ids="$(yq '(.jobs // {}) | explode(.) | keys | .[]' "${blob_file}")" || {
       status=$?
       rm --force -- "${blob_file}"
       log_err "cannot read job ids from ${path} at ${ref}: yq exited ${status}"
