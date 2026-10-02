@@ -1083,16 +1083,19 @@ quoted strings, `github.event_name`, and the watched job's `result` and
 `outputs.has-finding`, with context names and string comparison
 case-insensitive. A gate without `always()` carries GitHub's implicit
 `success()`. A declared `has-finding` output is tried as 'true', 'false'
-and empty; the events tried are the ones the workflow's `on:` names. A
-job whose notify step has an `if:` of its own, follows a step other than
-step-security/harden-runner or actions/checkout, runs the composite
-twice, or reaches it by any other `uses:` than
-./.github/actions/notify-workflow-result, is refused when it has to be
-derived. The composite's own result handling (failure and cancelled
-file, success closes, skipped does nothing) is taken as fixed: its text
-from `runs:` through the success branch is pinned by hash, and a gated
-step is refused, so a change there stops this lint rather than silently
-changing what an arm means.
+and empty; the events tried are the ones the workflow's `on:` names:
+what `yq` prints for a string, for the items of a list or for the keys
+of a map, split at spaces, tabs and newlines. A job of a workflow whose
+`on:` carries any other tag, as an alias does, or prints no event, is
+refused when it has to be derived. So is a job whose notify step has an
+`if:` of its own, follows a step other than step-security/harden-runner
+or actions/checkout, runs the composite twice, or reaches it by any
+other `uses:` than ./.github/actions/notify-workflow-result. The
+composite's own result handling (failure and cancelled file, success
+closes, skipped does nothing) is taken as fixed: its text from `runs:`
+through the success branch is pinned by hash, and a gated step is
+refused, so a change there stops this lint rather than silently changing
+what an arm means.
 
 Exit codes: 0 every marker matches its job's derived arms and every
 scanner notify job carries its markers, 1 a marker disagrees with the
@@ -1101,11 +1104,13 @@ a line an HTML block holds, sits in the wrong body, or a docs marker
 declaring cancelled has no cancel word beside it, or a scanner notify job
 is missing a marker or files on no arm (details printed to stderr), 2
 the check could not run: a required tool is missing, the composite or a
-scanner workflow is missing or has changed, a workflow cannot be parsed,
-a job it must derive has a gate, `needs:`, `result:`, notify step or
-`on:` outside what it models, a scanner workflow has no notify job, the
-scan set could not be listed or is empty, or a scanned file leaves a code
-fence or HTML comment open
+scanner workflow is missing or has changed, a `yq` read of the composite
+or of a workflow fails, as it does on a file it cannot parse (the line
+names what was being read and the status `yq` exited with), a job it
+must derive has a gate, `needs:`, `result:`, notify step or `on:` outside
+what it models, a scanner workflow has no notify job, the scan set could
+not be listed or is empty, or a scanned file leaves a code fence or HTML
+comment open
 
 ### scripts/check-notify-label-descriptions.sh
 
