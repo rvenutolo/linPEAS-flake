@@ -57,7 +57,7 @@ Every workflow that declares `on.pull_request:` or `on.push:` sets `branches: [m
 
 Without the allowlist, Actions fires the workflow on every branch — burning runner minutes on stale topic branches and attaching surprising status checks to refs nobody is watching. Workflows that only run on `schedule:`, `workflow_dispatch:`, or `workflow_call:` are unaffected; `pull_request_target:` is handled by a separate lint that forbids it outright.
 
-The lint reads `on:` with its YAML aliases resolved, so a trigger, its value or its `branches:` list written through an anchor is read as what it stands for. The script header states how a merge key is read.
+The lint reads `on:` after passing it through `yq`'s `explode` a fixed number of times, and refuses a workflow whose `on:` still holds an alias after them, so an anchor cannot hide a trigger, its value or its `branches:` list. The script header states the mechanism and how a merge key is read.
 
 Enforced by `scripts/check-workflow-on-branches.sh`. Wired as the `lint-workflow-security` CI job (member check `workflow-on-branches`) and as a pre-commit hook.
 
@@ -69,7 +69,7 @@ No workflow uses the `pull_request_target` trigger.
 
 This repo has no use for the trigger. The lint hard-fails any workflow that adopts it. Removing the ban requires deleting this script, its `pull-request-target-absent` member entry under `lint-workflow-security` in `.github/lint-groups.yml`, and the pre-commit hook.
 
-The lint reads `on:` with its YAML aliases resolved, so the trigger written through an anchor is still the trigger. The script header states which shapes of `on:` are read and which are reported as an unexpected shape.
+The lint reads `on:` after passing it through `yq`'s `explode` a fixed number of times, and refuses a workflow whose `on:` still holds an alias after them, so an anchor cannot hide the trigger. The script header states the mechanism and which shapes of `on:` are read and which are reported as an unexpected shape.
 
 Enforced by `scripts/check-pull-request-target-absent.sh`. Wired as the `lint-workflow-security` CI job (member check `pull-request-target-absent`) and as a pre-commit hook.
 
