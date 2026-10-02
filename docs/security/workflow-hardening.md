@@ -673,7 +673,9 @@ The gate grammar is what these workflows use: `always()`, `==`, `!=`, `!` (which
 - a step before the notify step other than `step-security/harden-runner` or `actions/checkout`, since its failure would skip the composite;
 - a job that runs the composite twice;
 - a job that reaches the composite by any other `uses:` than `./.github/actions/notify-workflow-result`, such as a pinned remote revision the hash does not cover;
-- a workflow with no readable `on:`.
+- a workflow whose `on:` gives no event. The events are a string's value, a list's items or a map's keys, so any other value is refused, and so is one of those three that names no event.
+
+A `yq` read that fails is not one of these: the lint stops on a line naming what it was reading and the status `yq` exited with, and says nothing about the workflow.
 
 Known limits:
 
