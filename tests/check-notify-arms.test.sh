@@ -24,6 +24,7 @@ failures=0
 LAST_STDERR=''
 LAST_NAME=''
 ROOT=''
+STUB_DIR=''
 
 # @description Make a fresh scratch root holding a copy of the base
 # fixture, in its own git repository, and point ROOT at it.
@@ -51,6 +52,35 @@ function edit() {
     exit 1
   fi
   printf '%s\n' "${content/"${old}"/"${new}"}" >"${path}"
+}
+
+# @description Make a directory holding a `yq` that exits with a given
+# status for every call whose arguments hold a given string and hands any
+# other call to the real `yq`, and point STUB_DIR at it. A scenario puts
+# the directory first on PATH for its own run only.
+# @arg $1 argument text that marks the failing call
+# @arg $2 exit status for that call
+function yq_stub() {
+  local real_yq
+  real_yq="$(command -v yq)"
+  STUB_DIR="$(mktemp --directory)"
+  printf '#!/usr/bin/env bash\ncase "$*" in *%q*) exit %d ;; esac\nexec %q "$@"\n' \
+    "$1" "$2" "${real_yq}" >"${STUB_DIR}/yq"
+  chmod +x -- "${STUB_DIR}/yq"
+}
+
+# @description Add a workflow outside the scanner set to ROOT, with one
+# notify job, and a docs marker naming that job, so the job is derived.
+# @arg $1 workflow file name
+# @arg $2 the workflow's `on:` line
+function marked_workflow() {
+  printf '%s\n' "name: ${1%.*}" "$2" 'jobs:' '  build:' '    runs-on: ubuntu-latest' \
+    '    steps:' '      - run: "true"' '  notify:' '    needs: build' '    if: always()' \
+    '    runs-on: ubuntu-latest' '    steps:' '      - uses: ./.github/actions/notify-workflow-result' \
+    '        with:' '          result: ${{ needs.build.result }}' "          label: ${1%.*}" \
+    "          title: ${1%.*}" "          body: ${1%.*}" >"${ROOT}/.github/workflows/$1"
+  printf 'A failed or cancelled run <!-- notify-arms: %s/notify = failure cancelled -->.\n' "$1" \
+    >>"${ROOT}/${DOC}"
 }
 
 # @description Run the script against ROOT; assert exit code, stderr, and
@@ -423,9 +453,69 @@ failure cancelled non-pr -->.'
   run_scenario untriggered-pr-not-tried-fails 1 \
     '.github/workflows/zizmor-drift-check.yml: job notify files on no arm'
 
+  # The events are read from an `on:` that is a string, a list or a map.
+  # Any other value is refused, and so is an `on:` key with no value and a
+  # workflow with no `on:` key at all.
   fresh_root
   edit "${SC}" 'on: push' 'on: 5'
   run_scenario unreadable-on-exits-2 2 'the workflow has no on: trigger the lint can read'
+  also_expect '.github/workflows/scorecard-drift-check.yml: job notify: the workflow has no on: trigger'
+
+  fresh_root
+  edit '.github/workflows/zizmor-drift-check.yml' 'on: push' 'on:'
+  run_scenario null-on-exits-2 2 'the workflow has no on: trigger the lint can read'
+  also_expect '.github/workflows/zizmor-drift-check.yml: job notify: the workflow has no on: trigger'
+
+  fresh_root
+  edit '.github/workflows/image-cve-scan.yml' 'on: push' ''
+  run_scenario missing-on-exits-2 2 'the workflow has no on: trigger the lint can read'
+  also_expect '.github/workflows/image-cve-scan.yml: job image-cve-scan-'
+
+  # An `on:` of a readable shape that names no event leaves no run to
+  # evaluate the gate over. It is refused as such, rather than read as a
+  # gate that admits no result: an empty list, an empty map, an empty
+  # string and a string of spaces.
+  fresh_root
+  edit "${SC}" 'on: push' 'on: []'
+  run_scenario empty-list-on-exits-2 2 \
+    '.github/workflows/scorecard-drift-check.yml: job notify: on: names no event'
+  refute_stderr 'files on no arm'
+
+  fresh_root
+  edit '.github/workflows/zizmor-drift-check.yml' 'on: push' 'on: {}'
+  run_scenario empty-map-on-exits-2 2 \
+    '.github/workflows/zizmor-drift-check.yml: job notify: on: names no event'
+  refute_stderr 'files on no arm'
+
+  fresh_root
+  marked_workflow extra.yml 'on: ""'
+  run_scenario empty-string-on-exits-2 2 '.github/workflows/extra.yml: job notify: on: names no event'
+  refute_stderr 'files on no arm'
+
+  fresh_root
+  marked_workflow spare.yml 'on: " "'
+  run_scenario blank-string-on-exits-2 2 '.github/workflows/spare.yml: job notify: on: names no event'
+  refute_stderr 'files on no arm'
+
+  # A failed read of the triggers names the command and its status, so a
+  # killed or failing yq is not reported as a workflow with no trigger.
+  # The first stub fails the read of the shape of `on:`, the second the
+  # read of the events a list names.
+  fresh_root
+  yq_stub '.on | tag' 7
+  PATH="${STUB_DIR}:${PATH}" run_scenario on-shape-read-failure-names-yq-exits-2 2 \
+    'cannot read the on: triggers of .github/workflows/'
+  also_expect '.yml: yq exited 7'
+  refute_stderr 'the workflow has no on: trigger the lint can read'
+  rm --recursive --force -- "${STUB_DIR}"
+
+  fresh_root
+  yq_stub '.on[]' 9
+  PATH="${STUB_DIR}:${PATH}" run_scenario on-events-read-failure-names-yq-exits-2 2 \
+    'cannot read the on: triggers of .github/workflows/'
+  also_expect '.yml: yq exited 9'
+  refute_stderr 'the workflow has no on: trigger the lint can read'
+  rm --recursive --force -- "${STUB_DIR}"
 
   # --- notify steps the derivation cannot model ---
 
@@ -469,15 +559,38 @@ failure cancelled non-pr -->.'
   # A failed read of a job's steps names the command and its status, so a
   # killed or failing yq is not mistaken for anything about the workflow.
   fresh_root
-  local stub_dir real_yq
-  stub_dir="$(mktemp --directory)"
-  real_yq="$(command -v yq)"
-  printf '#!/usr/bin/env bash\ncase "$*" in *%q*) exit 7 ;; esac\nexec %q "$@"\n' \
-    '.jobs[strenv(JOB)].steps // []' "${real_yq}" >"${stub_dir}/yq"
-  chmod +x -- "${stub_dir}/yq"
-  PATH="${stub_dir}:${PATH}" run_scenario steps-read-failure-names-yq-exits-2 2 \
+  yq_stub '.jobs[strenv(JOB)].steps // []' 7
+  PATH="${STUB_DIR}:${PATH}" run_scenario steps-read-failure-names-yq-exits-2 2 \
     'cannot read the steps of .github/workflows/codeql.yml job notify-finding: yq exited 7'
-  rm --recursive --force -- "${stub_dir}"
+  rm --recursive --force -- "${STUB_DIR}"
+
+  # So does every other read: of the composite's steps, of a workflow's
+  # notify jobs, of the watched job's outputs and of a notify step's body.
+  fresh_root
+  yq_stub 'runs.steps' 3
+  PATH="${STUB_DIR}:${PATH}" run_scenario composite-read-failure-names-yq-exits-2 2 \
+    'cannot read the steps of .github/actions/notify-workflow-result/action.yml: yq exited 3'
+  rm --recursive --force -- "${STUB_DIR}"
+
+  fresh_root
+  yq_stub 'to_entries' 6
+  PATH="${STUB_DIR}:${PATH}" run_scenario notify-jobs-read-failure-names-yq-exits-2 2 \
+    'cannot read the notify jobs of .github/workflows/codeql.yml: yq exited 6'
+  rm --recursive --force -- "${STUB_DIR}"
+
+  fresh_root
+  yq_stub 'has-finding' 5
+  PATH="${STUB_DIR}:${PATH}" run_scenario outputs-read-failure-names-yq-exits-2 2 \
+    'cannot read the outputs of .github/workflows/'
+  also_expect ': yq exited 5'
+  rm --recursive --force -- "${STUB_DIR}"
+
+  fresh_root
+  yq_stub '.with.body' 4
+  PATH="${STUB_DIR}:${PATH}" run_scenario body-read-failure-names-yq-exits-2 2 \
+    'cannot read the body of .github/workflows/'
+  also_expect ': yq exited 4'
+  rm --recursive --force -- "${STUB_DIR}"
 
   fresh_root
   edit '.github/workflows/octoscan.yml' \
@@ -711,7 +824,8 @@ and `codeql-infra` <!-- notify-arms: codeql.yml/notify-infra = failure cancelled
 
   fresh_root
   printf 'jobs: [unclosed\n' >"${ROOT}/.github/workflows/broken.yml"
-  run_scenario unparsable-workflow-exits-2 2 'cannot parse .github/workflows/broken.yml'
+  run_scenario unparsable-workflow-exits-2 2 \
+    'cannot read the notify jobs of .github/workflows/broken.yml: yq exited 1'
 
   fresh_root
   edit "${CQ}" "${CQ_FINDING_GATE}" "if: always() && github.ref == 'refs/heads/main'"
