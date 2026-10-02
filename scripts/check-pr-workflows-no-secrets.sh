@@ -43,8 +43,13 @@ fi
 # @description Return 0 if the workflow file is triggered by pull_request
 # or pull_request_target; 1 otherwise. Handles every `on:` shape yq can
 # parse: scalar, flow/block sequence, and flow/block map (quoted or
-# comment-trailing keys included). Exits 2 on a workflow yq cannot
-# parse — fail closed, never skip-scan.
+# comment-trailing keys included), whatever tag the node carries. `on:`
+# is read with its YAML aliases resolved (`explode`, given that node
+# alone), so a trigger written through an anchor (the whole of `on:`, a
+# list item, a map key) or brought in by a merge key puts the workflow
+# in scope, and an alias `yq` cannot resolve elsewhere in the file does
+# not fail the read. Exits 2 on a workflow yq cannot parse — fail
+# closed, never skip-scan.
 # @arg $1 path to workflow YAML
 function is_pr_triggered() {
   local -r file="$1"
@@ -57,9 +62,9 @@ function is_pr_triggered() {
   # mikefarah/yq does not lex `if $t == ... then ... else ... end`
   # (tested empirically: bare `if true then 1 else 2 end` fails with a
   # lexer error), so trigger-shape branching is done via three
-  # tag-filtered alternatives unioned by the comma operator instead of a
-  # single conditional.
-  if ! triggers="$(yq eval '(.on | select(tag == "!!str")), (.on | select(tag == "!!seq") | .[]), (.on | select(tag == "!!map") | keys | .[])' "${file}")"; then
+  # alternatives, each selecting on the node's kind, unioned by the comma
+  # operator instead of a single conditional.
+  if ! triggers="$(yq eval '.on | explode(.) | ((select(kind == "scalar")), (select(kind == "seq") | .[]), (select(kind == "map") | keys | .[]))' "${file}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${file}" >&2
     exit 2
   fi

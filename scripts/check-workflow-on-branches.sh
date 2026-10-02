@@ -18,6 +18,12 @@
 # workflow_call only) are unaffected. `pull_request_target:` is out of
 # scope here — a separate lint forbids it outright.
 #
+# `on:` is read with its YAML aliases resolved, so a trigger, its value
+# or its `branches:` list written through an anchor is read as what it
+# stands for. A merge key, which `actionlint` reports as unsupported by
+# GitHub Actions, is resolved by `yq`'s rule, and `yq` prints a warning
+# of its own on stderr when it resolves one.
+#
 # See docs/security/workflow-hardening.md.
 #
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures.
@@ -84,7 +90,7 @@ function die_unread() {
 check_trigger() {
   local -r file="$1" trigger="$2"
   local trig_tag trig_present
-  trig_tag="$(read_workflow "${file}" ".on.\"${trigger}\" | tag")" || return 1
+  trig_tag="$(read_workflow "${file}" ".on | explode(.) | .\"${trigger}\" | tag")" || return 1
   case "${trig_tag}" in
   '!!null')
     # yq reports !!null for both an absent trigger and one that is
@@ -92,7 +98,7 @@ check_trigger() {
     # (`pull_request:` with nothing under it) fires on every branch —
     # exactly the implicit all-branches this lint forbids — so treat
     # only the absent case as unaffected.
-    trig_present="$(yq eval ".on | has(\"${trigger}\")" "${file}")" ||
+    trig_present="$(yq eval ".on | explode(.) | has(\"${trigger}\")" "${file}")" ||
       die_unread "the on.${trigger} key" "${file}" "$?"
     if [[ ${trig_present} == "true" ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
@@ -111,7 +117,7 @@ check_trigger() {
   esac
 
   local branches_tag
-  branches_tag="$(read_workflow "${file}" ".on.\"${trigger}\".branches | tag")" || return 1
+  branches_tag="$(read_workflow "${file}" ".on | explode(.) | .\"${trigger}\".branches | tag")" || return 1
   if [[ ${branches_tag} == "!!null" ]]; then
     # shellcheck disable=SC2016 # literal backticks in human-readable prose
     printf '%s: on.%s is missing `branches: [main]` (implicit all-branches forbidden)\n' \
@@ -126,7 +132,7 @@ check_trigger() {
 
   local rendered
   if ! rendered="$(yq eval --output-format=json --indent=0 \
-    ".on.\"${trigger}\".branches" "${file}")"; then
+    ".on | explode(.) | .\"${trigger}\".branches" "${file}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${file}" >&2
     return 1
   fi

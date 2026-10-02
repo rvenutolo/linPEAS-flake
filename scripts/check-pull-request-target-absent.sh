@@ -18,6 +18,15 @@
 # This repo never uses it. The lint forecloses regression — adding
 # the trigger requires also deleting this script.
 #
+# `on:` is read with its YAML aliases resolved, so a trigger written
+# through an anchor (the whole of `on:`, a list item, a map key) is read
+# as the trigger it stands for. A list or a map is read whatever tag it
+# carries; a scalar is read only as a plain string or as an absent
+# `on:`, and any other scalar is reported as an unexpected shape, as is
+# a file holding several documents. A merge key, which `actionlint`
+# reports as unsupported by GitHub Actions, is resolved by `yq`'s rule,
+# and `yq` prints a warning of its own on stderr when it resolves one.
+#
 # See docs/security/workflow-hardening.md.
 #
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures.
@@ -91,16 +100,27 @@ for f in "${selected_files[@]}"; do
 
   # `on:` may be a string ("push"), a sequence ([push, pull_request]),
   # or a map ({push: ..., pull_request_target: ...}). Check all three.
-  if ! on_tag="$(read_workflow "${f}" '.on | tag')"; then
+  # Every read is handed `on:` with its aliases resolved (`explode`,
+  # given that node alone), so a trigger written through an anchor (the
+  # whole of `on:`, a list item, a map key) is read as the name it
+  # stands for. The shape is the node's kind, with its tag beside it to
+  # tell an absent `on:` and a string from any other scalar: a list or a
+  # map carrying a tag of its own is still read.
+  if ! on_shape="$(read_workflow "${f}" '.on | explode(.) | kind + " " + tag')"; then
     failed=$((failed + 1))
     continue
   fi
-  case "${on_tag}" in
-  '!!null')
+  case "${on_shape}" in
+  *$'\n'*)
+    # One line per document: a file holding several has no one `on:`.
+    printf '%s: on: has unexpected shape (several documents)\n' "${f}" >&2
+    failed=$((failed + 1))
+    ;;
+  'scalar !!null')
     continue
     ;;
-  '!!str')
-    on_string="$(yq eval '.on' "${f}")" || die_unread 'the on: string' "${f}" "$?"
+  'scalar !!str')
+    on_string="$(yq eval '.on | explode(.)' "${f}")" || die_unread 'the on: string' "${f}" "$?"
     if [[ ${on_string} == "pull_request_target" ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
       printf '%s: uses `pull_request_target` trigger (forbidden — base-ref workflow with head-ref code + full secrets)\n' \
@@ -108,22 +128,22 @@ for f in "${selected_files[@]}"; do
       failed=$((failed + 1))
     fi
     ;;
-  '!!seq')
-    on_items="$(yq eval '.on[] | select(. == "pull_request_target")' "${f}")" ||
+  'seq '*)
+    on_items="$(yq eval '.on | explode(.) | .[] | select(. == "pull_request_target")' "${f}")" ||
       die_unread 'the on: list' "${f}" "$?"
-    if [[ ${on_items} == *pull_request_target* ]]; then
+    if [[ -n ${on_items} ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
       printf '%s: uses `pull_request_target` trigger (forbidden — base-ref workflow with head-ref code + full secrets)\n' \
         "${f}" >&2
       failed=$((failed + 1))
     fi
     ;;
-  '!!map')
+  'map '*)
     # A present-but-null key (bare `pull_request_target:` with no
     # sub-keys) is still the forbidden trigger — GitHub fires on all its
     # activity types. `has()` is true for the null case; inspecting the
     # value tag is not (it yields `!!null` for both absent and null).
-    pr_target_present="$(yq eval '.on | has("pull_request_target")' "${f}")" ||
+    pr_target_present="$(yq eval '.on | explode(.) | has("pull_request_target")' "${f}")" ||
       die_unread 'the on: keys' "${f}" "$?"
     if [[ ${pr_target_present} == "true" ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
@@ -133,7 +153,7 @@ for f in "${selected_files[@]}"; do
     fi
     ;;
   *)
-    printf '%s: on: has unexpected shape (tag=%s)\n' "${f}" "${on_tag}" >&2
+    printf '%s: on: has unexpected shape (tag=%s)\n' "${f}" "${on_shape#* }" >&2
     failed=$((failed + 1))
     ;;
   esac
