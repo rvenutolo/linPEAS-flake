@@ -18,9 +18,10 @@
 # workflow_call only) are unaffected. `pull_request_target:` is out of
 # scope here — a separate lint forbids it outright.
 #
-# `on:` is read with its YAML aliases resolved, so a trigger, its value
-# or its `branches:` list written through an anchor is read as what it
-# stands for. A merge key, which `actionlint` reports as unsupported by
+# Every read starts from the `on:` node as ON_NODE below builds it: the
+# `on` key or a key written as an alias of `on`, passed through `explode`
+# sixteen times, and refused as a workflow `yq` cannot read when an
+# alias is still left in it. A merge key, which `actionlint` reports as unsupported by
 # GitHub Actions, is resolved by `yq`'s rule, and `yq` prints a warning
 # of its own on stderr when it resolves one.
 #
@@ -85,12 +86,22 @@ function die_unread() {
   exit 2
 }
 
+# The `on:` node every read starts from, with its aliases resolved. It is
+# the `on` key, or a key written as an alias of `on`. `explode`, handed
+# that node alone, resolves one level of aliases per pass: the aliases a
+# node holds, not those inside what they stand for. So the node goes
+# through sixteen passes, and one that still holds an alias after them is
+# refused by `yq` with an error rather than read. A file `yq` reads
+# through this is never passed with an alias left in it.
+# shellcheck disable=SC2016 # yq program literal; $n and $i are yq variables
+readonly ON_NODE='(.on // ([to_entries[] | select(.key | kind == "alias") | select((.key | explode(.)) == "on") | .value] | .[0])) as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)) | with(select([... | select(kind == "alias")] | length > 0); error("on: holds an alias nested too deep to resolve"))'
+
 # Check one trigger (pull_request / push) within one workflow file.
 # Args: file, trigger-name
 check_trigger() {
   local -r file="$1" trigger="$2"
   local trig_tag trig_present
-  trig_tag="$(read_workflow "${file}" ".on | explode(.) | .\"${trigger}\" | tag")" || return 1
+  trig_tag="$(read_workflow "${file}" "${ON_NODE} | .\"${trigger}\" | tag")" || return 1
   case "${trig_tag}" in
   '!!null')
     # yq reports !!null for both an absent trigger and one that is
@@ -98,7 +109,7 @@ check_trigger() {
     # (`pull_request:` with nothing under it) fires on every branch —
     # exactly the implicit all-branches this lint forbids — so treat
     # only the absent case as unaffected.
-    trig_present="$(yq eval ".on | explode(.) | has(\"${trigger}\")" "${file}")" ||
+    trig_present="$(yq eval "${ON_NODE} | has(\"${trigger}\")" "${file}")" ||
       die_unread "the on.${trigger} key" "${file}" "$?"
     if [[ ${trig_present} == "true" ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
@@ -117,7 +128,7 @@ check_trigger() {
   esac
 
   local branches_tag
-  branches_tag="$(read_workflow "${file}" ".on | explode(.) | .\"${trigger}\".branches | tag")" || return 1
+  branches_tag="$(read_workflow "${file}" "${ON_NODE} | .\"${trigger}\".branches | tag")" || return 1
   if [[ ${branches_tag} == "!!null" ]]; then
     # shellcheck disable=SC2016 # literal backticks in human-readable prose
     printf '%s: on.%s is missing `branches: [main]` (implicit all-branches forbidden)\n' \
@@ -132,7 +143,7 @@ check_trigger() {
 
   local rendered
   if ! rendered="$(yq eval --output-format=json --indent=0 \
-    ".on | explode(.) | .\"${trigger}\".branches" "${file}")"; then
+    "${ON_NODE} | .\"${trigger}\".branches" "${file}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${file}" >&2
     return 1
   fi

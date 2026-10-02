@@ -189,14 +189,14 @@ expect_body merge-elsewhere-bad.yml $'name: &s str\non:\n  pull_request_target: 
 expect_unparsable 'on: [\n' 'bad-unparsable.yml: could not evaluate'
 
 # One read per shape of `on:`. Each stub text is carried by that read
-# alone: `explode(.) /` is the string read followed by the fixture's
-# absolute path, which no other read holds, since each of them goes on
-# past `explode`.
-expect_failed_read bad-string.yml 'explode(.) /' 7 'the on: string'
-expect_failed_read bad-seq.yml 'explode(.) | .[]' 9 'the on: list'
+# alone: `resolve")) /` is the end of ON_NODE followed by the fixture's
+# absolute path, which only the string read holds, since every other
+# read goes on past ON_NODE.
+expect_failed_read bad-string.yml 'resolve")) /' 7 'the on: string'
+expect_failed_read bad-seq.yml '| .[] | select' 9 'the on: list'
 expect_failed_read bad-map.yml 'has("pull_request_target")' 11 'the on: keys'
 # A workflow without the trigger is not passed on a failed read either.
-expect_failed_read good-string.yml 'explode(.) /' 13 'the on: string'
+expect_failed_read good-string.yml 'resolve")) /' 13 'the on: string'
 expect_failed_read good-map.yml 'has("pull_request_target")' 15 'the on: keys'
 
 printf 'all tests passed\n'

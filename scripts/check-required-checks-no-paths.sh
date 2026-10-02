@@ -74,6 +74,16 @@ if ((${#workflows[@]} == 0)); then
   exit 1
 fi
 
+# The `on:` node every read starts from, with its aliases resolved. It is
+# the `on` key, or a key written as an alias of `on`. `explode`, handed
+# that node alone, resolves one level of aliases per pass: the aliases a
+# node holds, not those inside what they stand for. So the node goes
+# through sixteen passes, and one that still holds an alias after them is
+# refused by `yq` with an error rather than read. A file `yq` reads
+# through this is never passed with an alias left in it.
+# shellcheck disable=SC2016 # yq program literal; $n and $i are yq variables
+readonly ON_NODE='(.on // ([to_entries[] | select(.key | kind == "alias") | select((.key | explode(.)) == "on") | .value] | .[0])) as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)) | with(select([... | select(kind == "alias")] | length > 0); error("on: holds an alias nested too deep to resolve"))'
+
 failed=0
 for wf in "${workflows[@]}"; do
   # Test harness writes a fixture filename into the doc; resolve relative
@@ -107,13 +117,13 @@ for wf in "${workflows[@]}"; do
   # `on:` written as a list from failing the read, where `yq` cannot
   # index by key: a list holds no filter, so it prints nothing. It tests
   # the node's kind, not its tag, so a map carrying a tag of its own is
-  # still read. `explode` resolves the aliases of `on:` first, so a
-  # trigger or a filter written through an anchor is read as the map it
-  # stands for; it is given `on:` alone, so an alias `yq` cannot resolve
-  # elsewhere in the file does not fail this read.
+  # still read. It starts from ON_NODE, so a trigger or a filter written
+  # through an anchor is read as the map it stands for; `explode` is
+  # handed `on:` alone, so a merge key `yq` cannot resolve elsewhere in
+  # the file does not fail this read.
   yq_status=0
-  has_filter="$(yq '
-    .on | explode(.) | select(kind == "map") | .pull_request | (
+  has_filter="$(yq "${ON_NODE}"'
+    | select(kind == "map") | .pull_request | (
       has("paths") or has("paths-ignore")
     )
   ' "${resolved}")" || yq_status=$?

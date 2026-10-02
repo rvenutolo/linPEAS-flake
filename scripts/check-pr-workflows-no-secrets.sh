@@ -40,16 +40,25 @@ if ! command -v yq >/dev/null 2>&1; then
   exit 2
 fi
 
+# The `on:` node every read starts from, with its aliases resolved. It is
+# the `on` key, or a key written as an alias of `on`. `explode`, handed
+# that node alone, resolves one level of aliases per pass: the aliases a
+# node holds, not those inside what they stand for. So the node goes
+# through sixteen passes, and one that still holds an alias after them is
+# refused by `yq` with an error rather than read. A file `yq` reads
+# through this is never passed with an alias left in it.
+# shellcheck disable=SC2016 # yq program literal; $n and $i are yq variables
+readonly ON_NODE='(.on // ([to_entries[] | select(.key | kind == "alias") | select((.key | explode(.)) == "on") | .value] | .[0])) as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)) | with(select([... | select(kind == "alias")] | length > 0); error("on: holds an alias nested too deep to resolve"))'
+
 # @description Return 0 if the workflow file is triggered by pull_request
 # or pull_request_target; 1 otherwise. Handles every `on:` shape yq can
 # parse: scalar, flow/block sequence, and flow/block map (quoted or
-# comment-trailing keys included), whatever tag the node carries. `on:`
-# is read with its YAML aliases resolved (`explode`, given that node
-# alone), so a trigger written through an anchor (the whole of `on:`, a
-# list item, a map key) or brought in by a merge key puts the workflow
-# in scope, and an alias `yq` cannot resolve elsewhere in the file does
-# not fail the read. Exits 2 on a workflow yq cannot parse — fail
-# closed, never skip-scan.
+# comment-trailing keys included), whatever tag the node carries. The
+# read starts from ON_NODE above, so a trigger written through an anchor
+# or brought in by a merge key puts the workflow in scope, and a merge
+# key `yq` cannot resolve elsewhere in the file does not fail the read.
+# Exits 2 on a workflow yq cannot parse, and on one whose `on:` still
+# holds an alias after ON_NODE's passes — fail closed, never skip-scan.
 # @arg $1 path to workflow YAML
 function is_pr_triggered() {
   local -r file="$1"
@@ -64,7 +73,7 @@ function is_pr_triggered() {
   # lexer error), so trigger-shape branching is done via three
   # alternatives, each selecting on the node's kind, unioned by the comma
   # operator instead of a single conditional.
-  if ! triggers="$(yq eval '.on | explode(.) | ((select(kind == "scalar")), (select(kind == "seq") | .[]), (select(kind == "map") | keys | .[]))' "${file}")"; then
+  if ! triggers="$(yq eval "${ON_NODE}"' | ((select(kind == "scalar")), (select(kind == "seq") | .[]), (select(kind == "map") | keys | .[]))' "${file}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${file}" >&2
     exit 2
   fi

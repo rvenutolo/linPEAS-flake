@@ -18,9 +18,10 @@
 # This repo never uses it. The lint forecloses regression — adding
 # the trigger requires also deleting this script.
 #
-# `on:` is read with its YAML aliases resolved, so a trigger written
-# through an anchor (the whole of `on:`, a list item, a map key) is read
-# as the trigger it stands for. A list or a map is read whatever tag it
+# Every read starts from the `on:` node as ON_NODE below builds it: the
+# `on` key or a key written as an alias of `on`, passed through `explode`
+# sixteen times, and refused as a workflow `yq` cannot read when an
+# alias is still left in it. A list or a map is read whatever tag it
 # carries; a scalar is read only as a plain string or as an absent
 # `on:`, and any other scalar is reported as an unexpected shape, as is
 # a file holding several documents. A merge key, which `actionlint`
@@ -89,6 +90,16 @@ function die_unread() {
   exit 2
 }
 
+# The `on:` node every read starts from, with its aliases resolved. It is
+# the `on` key, or a key written as an alias of `on`. `explode`, handed
+# that node alone, resolves one level of aliases per pass: the aliases a
+# node holds, not those inside what they stand for. So the node goes
+# through sixteen passes, and one that still holds an alias after them is
+# refused by `yq` with an error rather than read. A file `yq` reads
+# through this is never passed with an alias left in it.
+# shellcheck disable=SC2016 # yq program literal; $n and $i are yq variables
+readonly ON_NODE='(.on // ([to_entries[] | select(.key | kind == "alias") | select((.key | explode(.)) == "on") | .value] | .[0])) as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)) | with(select([... | select(kind == "alias")] | length > 0); error("on: holds an alias nested too deep to resolve"))'
+
 failed=0
 shopt -s nullglob
 declare -a workflow_files=()
@@ -100,13 +111,11 @@ for f in "${selected_files[@]}"; do
 
   # `on:` may be a string ("push"), a sequence ([push, pull_request]),
   # or a map ({push: ..., pull_request_target: ...}). Check all three.
-  # Every read is handed `on:` with its aliases resolved (`explode`,
-  # given that node alone), so a trigger written through an anchor (the
-  # whole of `on:`, a list item, a map key) is read as the name it
-  # stands for. The shape is the node's kind, with its tag beside it to
+  # Every read starts from ON_NODE, so a trigger written through an
+  # anchor is read as the name it stands for. The shape is the node's kind, with its tag beside it to
   # tell an absent `on:` and a string from any other scalar: a list or a
   # map carrying a tag of its own is still read.
-  if ! on_shape="$(read_workflow "${f}" '.on | explode(.) | kind + " " + tag')"; then
+  if ! on_shape="$(read_workflow "${f}" "${ON_NODE}"' | kind + " " + tag')"; then
     failed=$((failed + 1))
     continue
   fi
@@ -120,7 +129,7 @@ for f in "${selected_files[@]}"; do
     continue
     ;;
   'scalar !!str')
-    on_string="$(yq eval '.on | explode(.)' "${f}")" || die_unread 'the on: string' "${f}" "$?"
+    on_string="$(yq eval "${ON_NODE}" "${f}")" || die_unread 'the on: string' "${f}" "$?"
     if [[ ${on_string} == "pull_request_target" ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
       printf '%s: uses `pull_request_target` trigger (forbidden — base-ref workflow with head-ref code + full secrets)\n' \
@@ -129,7 +138,7 @@ for f in "${selected_files[@]}"; do
     fi
     ;;
   'seq '*)
-    on_items="$(yq eval '.on | explode(.) | .[] | select(. == "pull_request_target")' "${f}")" ||
+    on_items="$(yq eval "${ON_NODE}"' | .[] | select(. == "pull_request_target")' "${f}")" ||
       die_unread 'the on: list' "${f}" "$?"
     if [[ -n ${on_items} ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
@@ -143,7 +152,7 @@ for f in "${selected_files[@]}"; do
     # sub-keys) is still the forbidden trigger — GitHub fires on all its
     # activity types. `has()` is true for the null case; inspecting the
     # value tag is not (it yields `!!null` for both absent and null).
-    pr_target_present="$(yq eval '.on | explode(.) | has("pull_request_target")' "${f}")" ||
+    pr_target_present="$(yq eval "${ON_NODE}"' | has("pull_request_target")' "${f}")" ||
       die_unread 'the on: keys' "${f}" "$?"
     if [[ ${pr_target_present} == "true" ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
