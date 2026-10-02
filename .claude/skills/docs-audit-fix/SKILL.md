@@ -294,9 +294,9 @@ matching does not (see **Sweep**).
     root `CHANGELOG.md` and `tests/fixtures/`, inside a generated
     `<!-- BEGIN <name> -->` / `<!-- END <name> -->` block of the same name
     on both sides, or a pure re-wrap (the paragraphs around it hold the same
-    words; a hunk that only adds or removes blank lines is one, but at the
-    start of a file, so loosening or tightening a list is). Other generated
-    Markdown — the `# BEGIN just-recipes` block in `README.md`, or a
+    words; a hunk that only adds or removes blank lines is one, except at
+    the first line of a file, so loosening or tightening a list is). Other
+    generated Markdown — the `# BEGIN just-recipes` block in `README.md`, or a
     generated file with no such markers — is checked like hand-written text.
     Covered means every non-blank paragraph the hunk's new side touches
     overlaps a pair's paragraph, each needing its own pair. A hunk whose new
