@@ -1365,7 +1365,9 @@ list-item fences are indented past the CommonMark limit, so a document
 displaying a marker inside an indented block opens a fence the lint
 believes is real. A file ending with a fence still open is therefore a
 precondition failure rather than a clean file. Inline code spans are
-kept: they are what the lint reads.
+kept: they are what the lint reads. A name in bold or italic with no code
+span is not read, and neither is a code span wrapped in its own emphasis
+markers, which stand between the span and the noun.
 
 Exit codes:
 

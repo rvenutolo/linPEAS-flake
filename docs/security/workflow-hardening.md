@@ -529,6 +529,16 @@ The shapes above sit in a fenced block for the same reason the lint skips fences
 
 Two adjacency shapes are still not claims and are dropped, each with its own tally in the summary line so a clean run says which exclusion it rested on. A filename-shaped name (`` `ci.yml` job ``) names the file a job lives in. An adjectival use (`` `cancelled` job conclusion ``, `` `has-finding` job output ``) names a job's field, with the job itself unnamed. Fenced blocks are skipped, because a fence quoting workflow YAML shows a name rather than claiming one; inline code spans are kept, since they are what the lint reads.
 
+A name is read as a code span standing directly against the noun, so emphasis decides whether a claim is seen:
+
+```text
+**NAME** job     *NAME* job       not read: the name is in no code span
+**`NAME`** job   job **`NAME`**   not read: the emphasis markers stand between the span and the noun
+**`NAME` job**                    read: the emphasis wraps the whole phrase
+```
+
+Reading a bold name with no code span was measured on this tree and rejected: the one site it added was an adjective standing before "job", not a name. Write a job or check name as a code span.
+
 The scan set is every Markdown and YAML file a commit would carry — tracked files plus not-yet-added ones, minus anything gitignored — so the lint sees a new doc and its fixtures on the commit that adds them. It is not every committed file: claims sitting in Nix and shell comments are outside it. `tests/fixtures/` is excluded because it exists to carry deliberate violations, the Claude-behavior tree is excluded because almost all of it is untracked, and `CHANGELOG.md` and `docs/releases.md` are excluded as historical records that must keep naming jobs as they stood at the time.
 
 A fence is tracked by its marker character and run length, so a fence closes only on a marker of the same character that is at least as long as the one that opened it — a shorter or different marker quoted inside is content. A same-character marker of equal or greater length does close the fence, including one carrying an info string, which CommonMark treats as an opener rather than a closer; the lint does not model that distinction. Fences inside blockquotes are recognised. A file that ends with a fence still open is a precondition failure, not a clean file: every line after the opener went unread, so there is nothing for a clean verdict to rest on.
