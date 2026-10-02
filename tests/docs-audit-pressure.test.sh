@@ -251,6 +251,89 @@ run_scenario 'removed job and member are reported' 0 \
   --expect 'Jobs removed:' --expect 'oldjob' \
   --expect 'Lint-group members removed:' --expect 'gamma'
 
+# @description Make a directory holding a `yq` that exits with a given
+# status for one job-id read and hands every other call to the real `yq`,
+# and point STUB_DIR at it. The job-id read takes its workflow on stdin
+# and has the same arguments for every workflow at both refs (they end
+# in `keys | .[] -`, which the lint-group read does not), so the read to
+# fail is picked by text its input holds; `-` fails every job-id read,
+# of which the first is the audit point's. A scenario puts the directory
+# first on PATH for its own run only.
+# @arg $1 exit status for the failing read
+# @arg $2 text the failing read's input holds, or `-`
+function yq_stub() {
+  local real_yq
+  real_yq="$(command -v yq)"
+  STUB_DIR="$(mktemp --directory)"
+  # shellcheck disable=SC2016 # the stub's own expansions, written literally
+  printf '#!/usr/bin/env bash\ncase "$*" in *%q*)\n  if [[ %q == - ]]; then exit %d; fi\n  input="$(cat)"\n  if [[ ${input} == *%q* ]]; then exit %d; fi\n  exec %q "$@" <<<"${input}" ;;\nesac\nexec %q "$@"\n' \
+    'keys | .[] -' "$2" "$1" "$2" "$1" "${real_yq}" "${real_yq}" >"${STUB_DIR}/yq"
+  chmod +x -- "${STUB_DIR}/yq"
+}
+
+# @description Make a directory holding a `git` that exits with a given
+# status for every call whose arguments hold a given string and hands any
+# other call to the real `git`, and point STUB_DIR at it.
+# @arg $1 argument text that marks the failing call
+# @arg $2 exit status for that call
+function git_stub() {
+  local real_git
+  real_git="$(command -v git)"
+  STUB_DIR="$(mktemp --directory)"
+  printf '#!/usr/bin/env bash\ncase "$*" in *%q*) exit %d ;; esac\nexec %q "$@"\n' \
+    "$1" "$2" "${real_git}" >"${STUB_DIR}/git"
+  chmod +x -- "${STUB_DIR}/git"
+}
+
+# --- scenarios: a workflow's job ids cannot be read ---
+# A read that fails drops no workflow from the set: the run stops, naming
+# the workflow, the ref, the tool and its status. Left to pass, the jobs
+# of a workflow unread at the audit point are reported as added since,
+# and those of one unread at HEAD as removed.
+make_sandbox
+cd "${SANDBOX}"
+base_sha="$(git -C "${SANDBOX}" rev-parse HEAD)"
+printf 'name: a\njobs:\n  build:\n    runs-on: x\n  rollout:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: add rollout job'
+
+yq_stub 7 -
+PATH="${STUB_DIR}:${PATH}" run_scenario 'failed job-id read at the audit point stops the run' 2 \
+  --expect-err "cannot read job ids from .github/workflows/a.yml at ${base_sha}: yq exited 7" \
+  --forbid 'PRESSURE='
+rm --recursive --force -- "${STUB_DIR}"
+
+# `rollout` is in the workflow at HEAD only, so only that read fails.
+yq_stub 9 rollout
+PATH="${STUB_DIR}:${PATH}" run_scenario 'failed job-id read at HEAD stops the run' 2 \
+  --expect-err 'cannot read job ids from .github/workflows/a.yml at HEAD: yq exited 9' \
+  --forbid 'PRESSURE='
+rm --recursive --force -- "${STUB_DIR}"
+
+git_stub "show ${base_sha}:.github/workflows/a.yml" 5
+PATH="${STUB_DIR}:${PATH}" run_scenario 'workflow git cannot show stops the run' 2 \
+  --expect-err "cannot read .github/workflows/a.yml at ${base_sha}: git show exited 5" \
+  --forbid 'PRESSURE='
+rm --recursive --force -- "${STUB_DIR}"
+
+# A workflow with no `jobs:` and one with an empty `jobs:` hold no id and
+# are not unreadable: the job added beside them is still reported.
+printf 'name: b\non: push\n' >"${WF_DIR}/b.yml"
+printf 'name: c\njobs: {}\n' >"${WF_DIR}/c.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: add jobless workflows'
+run_scenario 'workflows without jobs read as no ids' 0 \
+  --expect 'rollout'
+
+# A workflow that does not parse at HEAD, committed at run time so no
+# unparsable file sits in the tree for the formatters to refuse.
+printf 'name: a\njobs: [build\n' >"${WF_DIR}/a.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: break a workflow'
+run_scenario 'unparsable workflow at HEAD stops the run' 2 \
+  --expect-err 'cannot read job ids from .github/workflows/a.yml at HEAD: yq exited 1' \
+  --forbid 'Jobs removed:'
+
 cd "${REPO_ROOT}"
 
 harness_assert_verify || failures=$((failures + 1))

@@ -69,6 +69,82 @@ expect does-not-exist 2 "ci workflow not found"
 expect bad-malformed-ci 2 "cannot read job keys"
 expect bad-malformed-categories 2 "cannot read category keys"
 
+# @description Make a directory holding a `yq` that exits with a given
+# status for every call whose arguments hold a given string and hands any
+# other call to the real `yq`, and point STUB_DIR at it. A scenario puts
+# the directory first on PATH for its own run only.
+# @arg $1 argument text that marks the failing call
+# @arg $2 exit status for that call
+function yq_stub() {
+  local real_yq
+  real_yq="$(command -v yq)"
+  STUB_DIR="$(mktemp --directory)"
+  printf '#!/usr/bin/env bash\ncase "$*" in *%q*) exit %d ;; esac\nexec %q "$@"\n' \
+    "$1" "$2" "${real_yq}" >"${STUB_DIR}/yq"
+  chmod +x -- "${STUB_DIR}/yq"
+}
+
+# @description Run the lint over a workflows directory whose job keys one
+# `yq` read cannot produce. The reverse check holds every category entry
+# against the jobs of every workflow, so a workflow it could not read
+# leaves that set short: the run must stop as a could-not-run, on a line
+# naming the file, `yq` and its status, rather than report entries the
+# unread file may hold, or pass without it.
+# @arg $1 scenario label
+# @arg $2 workflows directory (holding ci.yml and categories.yml)
+# @arg $3 file the line must name
+# @arg $4 status the line must carry
+# @arg $5 argument text of the read to fail, or empty for the real `yq`,
+#         whose own message must then sit above the line
+function expect_unread_workflow() {
+  local -r label="$1" dir="$2" file="$3" status="$4" pattern="$5"
+  local -r want="cannot read job keys from ${file}: yq exited ${status}"
+  local run_path="${PATH}" got_exit=0 got_stderr
+  if [[ -n ${pattern} ]]; then
+    yq_stub "${pattern}" "${status}"
+    run_path="${STUB_DIR}:${PATH}"
+  fi
+  got_stderr="$(PATH="${run_path}" WORKFLOWS_DIR_OVERRIDE="${dir}" \
+    CI_WORKFLOW_OVERRIDE="${dir}/ci.yml" \
+    CATEGORIES_FILE_OVERRIDE="${dir}/categories.yml" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  if [[ -n ${pattern} ]]; then rm --recursive --force -- "${STUB_DIR}"; fi
+  if [[ ${got_exit} != 2 ]]; then
+    printf 'FAIL %s: exit %s, want 2\n  stderr: %s\n' "${label}" "${got_exit}" "${got_stderr}" >&2
+    return 1
+  fi
+  # The last line, so that `yq`'s own message above it is allowed and a
+  # verdict printed after it is not.
+  if [[ -z ${pattern} && ${got_stderr} != *$'\n'* ]]; then
+    printf 'FAIL %s: nothing printed above the line\n  got: %s\n' "${label}" "${got_stderr}" >&2
+    return 1
+  fi
+  if [[ ${got_stderr##*$'\n'} != "${want}" ]]; then
+    printf 'FAIL %s: last stderr line is not %q\n  got: %s\n' "${label}" "${want}" "${got_stderr}" >&2
+    return 1
+  fi
+  printf 'OK   %s\n' "${label}"
+}
+
+# The stub text ends in the file's path, which only the per-workflow read
+# of that one file carries: the read of ci.yml's own job list above it has
+# no `// {}`.
+expect_unread_workflow 'failed read of a workflow holding mapped jobs' \
+  "${FIXTURES}/good" "${FIXTURES}/good/ci.yml" 7 \
+  ".jobs // {} | keys | .[] ${FIXTURES}/good/ci.yml"
+expect_unread_workflow 'failed read of a workflow holding no job' \
+  "${FIXTURES}/good" "${FIXTURES}/good/categories.yml" 9 \
+  ".jobs // {} | keys | .[] ${FIXTURES}/good/categories.yml"
+
+# A workflow that does not parse, written at run time so no unparsable
+# file sits in the tree for the formatters to refuse.
+unparsable_dir="$(mktemp --directory)"
+cp -- "${FIXTURES}/good/ci.yml" "${FIXTURES}/good/categories.yml" "${unparsable_dir}/"
+printf 'on: [push\n' >"${unparsable_dir}/broken.yml"
+expect_unread_workflow 'unparsable workflow beside ci.yml' \
+  "${unparsable_dir}" "${unparsable_dir}/broken.yml" 1 ''
+rm --recursive --force -- "${unparsable_dir}"
+
 missing_categories_exit=0
 missing_categories_stderr="$(env \
   "WORKFLOWS_DIR_OVERRIDE=${FIXTURES}/good" \
