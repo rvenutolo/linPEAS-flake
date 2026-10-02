@@ -125,6 +125,21 @@ function expect_body() {
   printf 'OK   %s\n' "${name}"
 }
 
+# @description Print an `env:` block holding a chain of aliases DEPTH
+# deep: A0 is anchored on INNERMOST and each later entry is a map holding
+# the one before it under `x`. Sixteen `explode` passes resolve a chain
+# fifteen deep and leave an alias in one sixteen deep; a key written as
+# an alias at the end of a chain fifteen deep is left too.
+# @arg $1 depth  @arg $2 innermost value, as YAML flow text
+function alias_chain() {
+  local -r depth="$1" innermost="$2"
+  local i
+  printf 'env:\n  A0: &a0 %s\n' "${innermost}"
+  for ((i = 1; i <= depth; i++)); do
+    printf '  A%d: &a%d {x: *a%d}\n' "${i}" "${i}" "$((i - 1))"
+  done
+}
+
 expect good.yml 0 ""
 expect good-cron-only.yml 0 ""
 expect bad-pr-no-branches.yml 1 "bad-pr-no-branches.yml: on.pull_request is missing"
@@ -163,6 +178,18 @@ expect_body nested-branches-extra.yml $'env:\n  X: &b [main, dev]\n  Y: &v {bran
   "DIR/nested-branches-extra.yml: on.push.branches must be exactly ${Q}[main]${Q}; got [\"main\",\"dev\"]${ONE}"
 # Three levels: the branch list is read only after three passes.
 expect_body nested-three-deep.yml $'env:\n  C: &c [main]\n  B: &b {branches: *c}\n  A: &a {push: *b}\non: *a\n' 0 ''
+# The depth boundary: a chain fifteen deep is read, one sixteen deep is
+# refused, and so is one fifteen deep ending in a key written as an
+# alias, the one alias the passes leave there. Each trigger's
+# read is refused on its own.
+readonly TOO_DEEP=$'Error: on: holds an alias nested too deep to resolve\n'
+readonly UNREAD='could not evaluate workflow with yq (malformed?)'
+readonly TWO=$'\n'"2 workflow trigger(s) missing or non-canonical ${Q}branches: [main]${Q}"
+expect_body chain-15.yml "$(alias_chain 15 '[main]')"$'\non:\n  push:\n    branches: [main]\n    x: *a15\n' 0 ''
+expect_body chain-16.yml "$(alias_chain 16 '[main]')"$'\non:\n  push:\n    branches: [main]\n    x: *a16\n' 1 \
+  "${TOO_DEEP}DIR/chain-16.yml: ${UNREAD}"$'\n'"${TOO_DEEP}DIR/chain-16.yml: ${UNREAD}${TWO}"
+expect_body chain-15-key.yml $'name: &k push\n'"$(alias_chain 15 '{*k : {}}')"$'\non:\n  push:\n    branches: [main]\n    x: *a15\n' 1 \
+  "${TOO_DEEP}DIR/chain-15-key.yml: ${UNREAD}"$'\n'"${TOO_DEEP}DIR/chain-15-key.yml: ${UNREAD}${TWO}"
 expect_body nested-key.yml $'name: &k push\nenv:\n  A: &m {*k : {}}\non: *m\n' 1 "DIR/nested-key.yml: on.push ${MISSING}${ONE}"
 expect_body alias-on-key.yml $'name: &k on\n*k :\n  push: {}\n' 1 "DIR/alias-on-key.yml: on.push ${MISSING}${ONE}"
 # GitHub Actions refuses a merge key, so this workflow cannot run; the

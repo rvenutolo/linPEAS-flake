@@ -125,6 +125,21 @@ function expect_body() {
   printf 'OK   %s\n' "${name}"
 }
 
+# @description Print an `env:` block holding a chain of aliases DEPTH
+# deep: A0 is anchored on INNERMOST and each later entry is a map holding
+# the one before it under `x`. Sixteen `explode` passes resolve a chain
+# fifteen deep and leave an alias in one sixteen deep; a key written as
+# an alias at the end of a chain fifteen deep is left too.
+# @arg $1 depth  @arg $2 innermost value, as YAML flow text
+function alias_chain() {
+  local -r depth="$1" innermost="$2"
+  local i
+  printf 'env:\n  A0: &a0 %s\n' "${innermost}"
+  for ((i = 1; i <= depth; i++)); do
+    printf '  A%d: &a%d {x: *a%d}\n' "${i}" "${i}" "$((i - 1))"
+  done
+}
+
 expect good-map.yml 0 ""
 expect good-string.yml 0 ""
 expect bad-map.yml 1 'bad-map.yml: uses '
@@ -168,6 +183,14 @@ expect_body alias-on-key.yml $'name: &k on\n*k : [push, pull_request_target]\n' 
 # Past the depth the lint resolves, the workflow is refused, not passed.
 expect_body too-deep.yml "${too_deep}" 1 \
   $'Error: on: holds an alias nested too deep to resolve\nDIR/too-deep.yml: could not evaluate workflow with yq (malformed?)'"${ONE}"
+# The depth boundary: a chain fifteen deep is read, one sixteen deep is
+# refused, and so is one fifteen deep ending in a key written as an
+# alias, the one alias the passes leave there.
+expect_body chain-15.yml "$(alias_chain 15 '[main]')"$'\non:\n  push: *a15\n' 0 ''
+expect_body chain-16.yml "$(alias_chain 16 '[main]')"$'\non:\n  push: *a16\n' 1 \
+  $'Error: on: holds an alias nested too deep to resolve\nDIR/chain-16.yml: could not evaluate workflow with yq (malformed?)'"${ONE}"
+expect_body chain-15-key.yml $'name: &k pull_request_target\n'"$(alias_chain 15 '{*k : {}}')"$'\non:\n  push: *a15\n' 1 \
+  $'Error: on: holds an alias nested too deep to resolve\nDIR/chain-15-key.yml: could not evaluate workflow with yq (malformed?)'"${ONE}"
 # A list or a map is read whatever tag it carries.
 expect_body tagged-map.yml $'on: !x\n  pull_request_target: {}\n' 1 "DIR/tagged-map.yml: ${USES}${ONE}"
 expect_body tagged-list.yml $'on: !x [push, pull_request_target]\n' 1 "DIR/tagged-list.yml: ${USES}${ONE}"

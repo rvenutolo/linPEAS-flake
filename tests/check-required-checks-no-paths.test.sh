@@ -119,6 +119,21 @@ function run_built_scenario() {
   printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
 }
 
+# @description Print an `env:` block holding a chain of aliases DEPTH
+# deep: A0 is anchored on INNERMOST and each later entry is a map holding
+# the one before it under `x`. Sixteen `explode` passes resolve a chain
+# fifteen deep and leave an alias in one sixteen deep; a key written as
+# an alias at the end of a chain fifteen deep is left too.
+# @arg $1 depth  @arg $2 innermost value, as YAML flow text
+function alias_chain() {
+  local -r depth="$1" innermost="$2"
+  local i
+  printf 'env:\n  A0: &a0 %s\n' "${innermost}"
+  for ((i = 1; i <= depth; i++)); do
+    printf '  A%d: &a%d {x: *a%d}\n' "${i}" "${i}" "$((i - 1))"
+  done
+}
+
 readonly PATHS_BODY=$'on:\n  pull_request:\n    paths: [a]\njobs: {}\n'
 readonly PATHS_FINDING='declares paths/paths-ignore under pull_request'
 readonly UNREAD='could not evaluate workflow with yq (malformed?): yq exited'
@@ -180,6 +195,22 @@ run_built_scenario 'a filter behind nested aliases is named' 1 exact \
   '' 0 \
   nested.yml $'env:\n  X: &p\n    paths: [a]\n  Y: &v\n    pull_request: *p\non: *v\njobs: {}\n' \
   alias-on-key.yml $'name: &k on\n*k :\n  pull_request:\n    paths: [a]\njobs: {}\n'
+
+# The depth boundary: a chain fifteen deep is read, one sixteen deep is
+# refused, and so is one fifteen deep ending in a key written as an
+# alias, the one alias the passes leave there.
+run_built_scenario 'a filter beside a chain fifteen deep is named' 1 exact \
+  "${LINT} .github/workflows/chain-15.yml ${PATHS_FINDING}" \
+  '' 0 \
+  chain-15.yml "$(alias_chain 15 '[a]')"$'\non:\n  pull_request:\n    paths: [a]\n    x: *a15\njobs: {}\n'
+run_built_scenario 'a chain sixteen deep is refused' 1 exact \
+  $'Error: on: holds an alias nested too deep to resolve\n'"${LINT} .github/workflows/chain-16.yml: ${UNREAD} 1" \
+  '' 0 \
+  chain-16.yml "$(alias_chain 16 '{paths: [a]}')"$'\non:\n  pull_request: *a16\njobs: {}\n'
+run_built_scenario 'a chain fifteen deep ending in a key is refused' 1 exact \
+  $'Error: on: holds an alias nested too deep to resolve\n'"${LINT} .github/workflows/chain-15-key.yml: ${UNREAD} 1" \
+  '' 0 \
+  chain-15-key.yml $'name: &k pull_request\n'"$(alias_chain 15 '{*k : {}}')"$'\non:\n  pull_request:\n    paths: [a]\n    x: *a15\njobs: {}\n'
 
 # An `on:` map carrying a tag of its own is still a map.
 run_built_scenario 'a filter under a tagged on: map is named' 1 exact \

@@ -118,6 +118,54 @@ function run_body_scenario() {
     "${stdout_file}" "${outcome_file}"
 }
 
+# @description Print an `env:` block holding a chain of aliases DEPTH
+# deep: A0 is anchored on INNERMOST and each later entry is a map holding
+# the one before it under `x`. Sixteen `explode` passes resolve a chain
+# fifteen deep and leave an alias in one sixteen deep; a key written as
+# an alias at the end of a chain fifteen deep is left too.
+# @arg $1 depth  @arg $2 innermost value, as YAML flow text
+function alias_chain() {
+  local -r depth="$1" innermost="$2"
+  local i
+  printf 'env:\n  A0: &a0 %s\n' "${innermost}"
+  for ((i = 1; i <= depth; i++)); do
+    printf '  A%d: &a%d {x: *a%d}\n' "${i}" "${i}" "$((i - 1))"
+  done
+}
+
+# @description Run the guard against one workflow written at run time
+# whose `on:` it must refuse: exit 2, with its own line last.
+# @arg $1 scenario name  @arg $2 file name  @arg $3 file body
+function run_refused_scenario() {
+  local -r name="$1" file="$2" body="$3"
+  local tmpdir stderr_file stdout_file outcome_file
+  tmpdir="$(mktemp --directory)"
+  stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  printf '%s' "${body}" >"${tmpdir}/${file}"
+  local -r want="${tmpdir}/${file}: could not evaluate workflow with yq (malformed?)"
+  local actual_exit=0
+  WORKFLOWS_DIR_OVERRIDE="${tmpdir}" \
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${file}: could not evaluate workflow with yq (malformed?)" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  if [[ ${actual_exit} -ne 2 ]]; then
+    printf 'FAIL: %s — expected exit 2, got %d\n' "${name}" "${actual_exit}" >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif [[ $(tail --lines=1 -- "${stderr_file}") != "${want}" ]]; then
+    printf 'FAIL: %s — last stderr line is not %q\n' "${name}" "${want}" >&2
+    cat -- "${stderr_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+  rm --recursive --force -- "${tmpdir}" "${stderr_file}" \
+    "${stdout_file}" "${outcome_file}"
+}
+
 function main() {
   # A pass states how much of the directory was actually read. A workflow
   # that was scanned and held no disallowed secret and a workflow that
@@ -149,7 +197,7 @@ function main() {
   # Malformed YAML: a workflow yq cannot parse is a loud tooling error,
   # not a silent skip.
   run_scenario 'malformed workflow is a tooling error' \
-    'bad-malformed.yml' 2 'could not evaluate' ''
+    'bad-malformed.yml' 2 'bad-malformed.yml: could not evaluate' ''
   # A PR trigger written through an anchor puts the workflow in scope,
   # whichever part of `on:` the alias stands for.
   run_body_scenario 'aliased list item pull_request with secret fails' \
@@ -170,6 +218,15 @@ function main() {
     'nested-key.yml' $'name: &k pull_request\nenv:\n  A: &m {*k : {}}\non: *m\n' 1 'NESTED_KEY'
   run_body_scenario 'aliased on key with pull_request and secret fails' \
     'alias-on-key.yml' $'name: &k on\n*k : [pull_request]\n' 1 'ALIAS_ON_KEY'
+  # The depth boundary: a chain fifteen deep is read, one sixteen deep is
+  # refused, and so is one fifteen deep ending in a key written as an
+  # alias, the one alias the passes leave there.
+  run_body_scenario 'pull_request beside a chain fifteen deep with secret fails' \
+    'chain-15.yml' "$(alias_chain 15 '[a]')"$'\non:\n  pull_request:\n    x: *a15\n' 1 'CHAIN_FIFTEEN'
+  run_refused_scenario 'on: holding a chain sixteen deep is refused' \
+    'chain-16.yml' "$(alias_chain 16 '[a]')"$'\non:\n  pull_request:\n    x: *a16\n'
+  run_refused_scenario 'on: holding a chain fifteen deep ending in a key is refused' \
+    'chain-15-key.yml' $'name: &k push\n'"$(alias_chain 15 '{*k : {}}')"$'\non:\n  pull_request:\n    x: *a15\n'
   # GitHub Actions refuses a merge key, so this workflow cannot run; the
   # guard still scans a workflow whose merge brings in a PR trigger.
   run_body_scenario 'merge-key pull_request with secret fails' \
