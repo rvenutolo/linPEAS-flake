@@ -53,10 +53,11 @@
 # Honors CI_WORKFLOW_OVERRIDE + CATEGORIES_FILE_OVERRIDE +
 # LINT_GROUPS_OVERRIDE + SCRIPTS_DIR_OVERRIDE + EXEMPT_OVERRIDE for
 # fixtures. Exits 0 on full coverage, 1 on any drift, 2 when the lint
-# could not run: a usage error, a missing tool, or an input file
-# (ci.yml, the category map, the lint-groups manifest) missing or
-# unparsable. Nothing was cross-checked in that case, so it must not
-# borrow the drift code.
+# could not run: a usage error, a missing tool, an input file (ci.yml,
+# the category map, the lint-groups manifest) missing or unparsable, or
+# a workflow whose job keys `yq` could not read for the reverse check.
+# Nothing was cross-checked in that case, so it must not borrow the
+# drift code.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -193,15 +194,25 @@ done
 all_jobs_file="$(make_temp)"
 trap 'rm --force -- "${ci_jobs_file}" "${cat_keys_file}" "${all_jobs_file}"' EXIT
 shopt -s nullglob
-# Enumerated before the pipeline rather than inside it: a glob expanded in
-# the `for` head runs in the pipeline's own subshell, where an exit would
-# end that subshell alone and leave the redirect writing an empty job set.
 declare -a workflow_files=()
 glob_into workflow_files 'workflow YAML' "${WORKFLOWS_DIR}/*.yml" "${WORKFLOWS_DIR}/*.yaml"
+# Each workflow's keys are captured and the read's status tested before
+# they join the set, in this shell rather than in a pipeline's subshell,
+# where an exit would end that subshell alone and leave the redirect
+# writing a short job set. A workflow with no `jobs:` reads as no keys
+# through `// {}`, so a failure here is a read that did not happen: the
+# set is short by whatever that file holds, and every category entry
+# naming one of its jobs would be reported as matching nothing.
+all_jobs=''
 for f in "${workflow_files[@]}"; do
   [[ -f ${f} ]] || continue
-  yq eval '.jobs // {} | keys | .[]' "${f}" 2>/dev/null || true
-done | sort --unique >"${all_jobs_file}"
+  workflow_jobs="$(yq eval '.jobs // {} | keys | .[]' "${f}")" || {
+    printf 'cannot read job keys from %s: yq exited %d\n' "${f}" "$?" >&2
+    exit 2
+  }
+  all_jobs+="${workflow_jobs}"$'\n'
+done
+sort --unique >"${all_jobs_file}" <<<"${all_jobs}"
 shopt -u nullglob
 
 while IFS= read -r key; do

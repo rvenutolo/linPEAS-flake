@@ -11,8 +11,12 @@
 # would create the auto-merge path-filter trap (skipped checks merging with
 # zero coverage on path-narrow PRs).
 #
-# Exits 0 if every listed workflow is clean, 1 on a path filter, 2 when
-# the doc that names the workflows is not there to read.
+# Exits 0 if every listed workflow is clean. Exits 1 on a path filter, on
+# a doc that lists no workflow, on a listed workflow whose file is
+# missing, and on one `yq` cannot evaluate: that workflow is named with
+# the status `yq` exited with, under `yq`'s own message, and the scan
+# goes on to the next. Exits 2 when the doc that names the workflows is
+# not there to read.
 set -Eeuo pipefail
 IFS=$'\n\t'
 _lib_dir="${BASH_SOURCE[0]%/*}"
@@ -22,10 +26,9 @@ source "${_lib_dir}/lib/awk-path.sh"
 # shellcheck source=scripts/lib/log.sh
 source "${_lib_dir}/lib/log.sh"
 
-# The paths/paths-ignore probe treats a successful `yq` as the
-# violation, so an absent one cannot succeed and every workflow is
-# scored clean. That reading exits 0 having examined nothing, which is
-# the one failure here no caller can see.
+# An absent `yq` fails every paths/paths-ignore read, which would report
+# each listed workflow as one it could not evaluate. That is a tool this
+# run lacks, not a fact about the workflows.
 require_tool yq
 
 readonly doc='docs/security/required-checks.md'
@@ -98,11 +101,29 @@ for wf in "${workflows[@]}"; do
     continue
   fi
 
-  if yq --exit-status '
-    .on.pull_request | (
+  # The answer is the text `yq` prints, read only once its status says
+  # the read happened. Judged by status alone (`--exit-status`), an
+  # expression that is false and a `yq` that failed both exit 1, and a
+  # workflow nothing read would be scored clean. The `select` keeps an
+  # `on:` written as a string or a list from failing the read: neither
+  # can hold a filter, so it prints nothing. `explode` resolves aliases
+  # first, so a trigger or a filter written through an anchor is read as
+  # the map it stands for.
+  yq_status=0
+  has_filter="$(yq '
+    explode(.) | .on | select(tag == "!!map") | .pull_request | (
       has("paths") or has("paths-ignore")
     )
-  ' "${resolved}" >/dev/null 2>&1; then
+  ' "${resolved}")" || yq_status=$?
+  if ((yq_status != 0)); then
+    printf 'required-checks-no-paths lint: %s: could not evaluate workflow with yq (malformed?): yq exited %d\n' \
+      "${resolved}" "${yq_status}" >&2
+    failed=1
+    continue
+  fi
+  # One line per YAML document in the file; any of them declaring a
+  # filter is the finding.
+  if [[ $'\n'"${has_filter}"$'\n' == *$'\n'true$'\n'* ]]; then
     printf 'required-checks-no-paths lint: %s declares paths/paths-ignore under pull_request\n' \
       "${resolved}" >&2
     failed=1
