@@ -208,6 +208,12 @@ expect_body root-merge.yml $'env:\n  X: &b {on: {push: {}}}\n<<: *b\n' 1 "DIR/ro
 # The file's own `on` key is read, not one a later merge key would put
 # over it: under YAML's merge rule the explicit key wins.
 expect_body plain-then-merge.yml $'env:\n  X: &b {on: {push: {}}}\non:\n  push:\n    branches: [main]\n<<: *b\n' 0 ''
+# A node whose tag yq cannot decode fails a later read too: the run
+# stops, as it does for yq failing, though the fault is the workflow's.
+expect_body mistag-branches.yml $'on:\n  pull_request:\n    branches: [.nan]\n' 2 \
+  'cannot read the on.pull_request.branches list of DIR/mistag-branches.yml: yq exited 1' tail
+expect_body mistag-push.yml $'on:\n  pull_request:\n    branches: [main]\n  push: !!map [a]\n' 2 \
+  'cannot read the on.push.branches shape of DIR/mistag-push.yml: yq exited 1' tail
 expect_body false-on.yml $'on: false\njobs: {}\n' 1 \
   $'DIR/false-on.yml: on.pull_request has unexpected shape (tag=); expected map\nDIR/false-on.yml: on.push has unexpected shape (tag=); expected map'"${TWO}"
 expect_body nested-key.yml $'name: &k push\nenv:\n  A: &m {*k : {}}\non: *m\n' 1 "DIR/nested-key.yml: on.push ${MISSING}${ONE}"

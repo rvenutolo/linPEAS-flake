@@ -109,8 +109,9 @@ expect_unparsable 'permissions: [\n' 'bad-unparsable.yml: could not evaluate'
 
 # Every read of the top-level `permissions:` after its shape has been
 # read is held to the run-stopping line, on a workflow that holds the
-# fault the read is for and on one that does not. Each stub text is carried by that read alone: the scalar
-# read is `eval .permissions` followed by the fixture's absolute path.
+# fault the read is for and on one that does not. Each stub text is
+# carried by that read alone: the scalar read is `eval .permissions`
+# followed by the fixture's absolute path.
 expect_failed_read bad-top-write-all.yml 'eval .permissions /' 7 'the top-level permissions'
 expect_failed_read good.yml '.permissions | length' 9 'the top-level permissions size'
 expect_failed_read bad-top-nonempty.yml '.permissions | length' 11 'the top-level permissions size'
@@ -131,5 +132,20 @@ if [[ ${jobs_exit} != 1 || ${jobs_stderr} != *$'\n'"${jobs_want}" ]]; then
   exit 1
 fi
 printf 'OK   jobs-number.yml: a jobs: yq cannot list is a counted finding\n'
+
+# A node whose tag yq cannot decode fails a later read too: the run
+# stops, as it does for yq failing, though the fault is the workflow's.
+mistag_dir="$(mktemp --directory)"
+printf 'permissions: !!map 5\njobs: {}\n' >"${mistag_dir}/mistag.yml"
+mistag_exit=0
+mistag_stderr="$(WORKFLOWS_DIR_OVERRIDE="${mistag_dir}" "${SCRIPT}" 2>&1 >/dev/null)" || mistag_exit=$?
+rm --recursive --force -- "${mistag_dir}"
+mistag_want="cannot read the top-level permissions keys of ${mistag_dir}/mistag.yml: yq exited 1"
+if [[ ${mistag_exit} != 2 || ${mistag_stderr} != *$'\n'"${mistag_want}" ]]; then
+  printf 'FAIL mistag.yml: exit %s, want 2, and stderr ending %q\n  got: %s\n' \
+    "${mistag_exit}" "${mistag_want}" "${mistag_stderr}" >&2
+  exit 1
+fi
+printf 'OK   mistag.yml: a node yq cannot decode stops the run\n'
 
 printf 'all tests passed\n'

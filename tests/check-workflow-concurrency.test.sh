@@ -120,4 +120,19 @@ expect_failed_read bad-seq-group.yml '.concurrency.group | tag' 9 'the concurren
 expect_failed_read good.yml 'eval .concurrency.group /' 11 'the concurrency group'
 expect_failed_read bad-empty-group.yml 'eval .concurrency.group /' 13 'the concurrency group'
 
+# A node whose tag yq cannot decode fails a later read too: the run
+# stops, as it does for yq failing, though the fault is the workflow's.
+mistag_dir="$(mktemp --directory)"
+printf 'concurrency: !!map [a]\n' >"${mistag_dir}/mistag.yml"
+mistag_exit=0
+mistag_stderr="$(WORKFLOWS_DIR_OVERRIDE="${mistag_dir}" "${SCRIPT}" 2>&1 >/dev/null)" || mistag_exit=$?
+rm --recursive --force -- "${mistag_dir}"
+mistag_want="cannot read the concurrency group shape of ${mistag_dir}/mistag.yml: yq exited 1"
+if [[ ${mistag_exit} != 2 || ${mistag_stderr} != *$'\n'"${mistag_want}" ]]; then
+  printf 'FAIL mistag.yml: exit %s, want 2, and stderr ending %q\n  got: %s\n' \
+    "${mistag_exit}" "${mistag_want}" "${mistag_stderr}" >&2
+  exit 1
+fi
+printf 'OK   mistag.yml: a node yq cannot decode stops the run\n'
+
 printf 'all tests passed\n'
