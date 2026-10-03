@@ -210,6 +210,8 @@ expect_body root-merge.yml $'env:\n  X: &b {on: {push: {}}}\n<<: *b\n' 1 "DIR/ro
 expect_body plain-then-merge.yml $'env:\n  X: &b {on: {push: {}}}\non:\n  push:\n    branches: [main]\n<<: *b\n' 0 ''
 # A node whose tag yq cannot decode fails a later read too: the run
 # stops, as it does for yq failing, though the fault is the workflow's.
+expect_body mistag-branch-item.yml $'on:\n  push:\n    branches: [!!int a]\n' 2 \
+  'cannot read the on.push.branches list of DIR/mistag-branch-item.yml: yq exited 1' tail
 expect_body mistag-branches.yml $'on:\n  pull_request:\n    branches: [.nan]\n' 2 \
   'cannot read the on.pull_request.branches list of DIR/mistag-branches.yml: yq exited 1' tail
 # A trigger and its branch list are read by kind: a map or a list
@@ -279,16 +281,16 @@ expect_failed_read good-cron-only.yml 'has("pull_request")' 11 'the on.pull_requ
 
 # The reads after a workflow's first: the second trigger's shape, and a
 # trigger's branch list, its shape and its rendered value.
-expect_failed_read good.yml '"push" | tag' 13 'the on.push trigger'
-expect_failed_read bad-push-no-branches.yml '"push" | tag' 15 'the on.push trigger'
-expect_failed_read good.yml '"pull_request".branches | tag' 17 'the on.pull_request.branches shape'
-expect_failed_read bad-pr-wildcard.yml '"pull_request".branches | tag' 19 'the on.pull_request.branches shape'
+expect_failed_read good.yml '"push" | kind' 13 'the on.push trigger'
+expect_failed_read bad-push-no-branches.yml '"push" | kind' 15 'the on.push trigger'
+expect_failed_read good.yml '"pull_request".branches | kind' 17 'the on.pull_request.branches shape'
+expect_failed_read bad-pr-wildcard.yml '"pull_request".branches | kind' 19 'the on.pull_request.branches shape'
 expect_failed_read good.yml '--output-format=json' 21 'the on.pull_request.branches list'
 expect_failed_read bad-pr-wildcard.yml '--output-format=json' 23 'the on.pull_request.branches list'
 
 # The trigger read is not the workflow's first, and the read of the
 # names an `on:` written as a name or a list gives.
-expect_failed_read good.yml '"pull_request" | tag' 25 'the on.pull_request trigger'
+expect_failed_read good.yml '"pull_request" | kind' 25 'the on.pull_request trigger'
 expect_failed_read bad-on-name.yml '| (select(kind' 27 'the on: names'
 expect_failed_read good-on-list.yml '| (select(kind' 29 'the on: names'
 expect_failed_read good-on-list.yml 'select(kind != "scalar")' 33 'the on: list items'

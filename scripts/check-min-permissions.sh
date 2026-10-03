@@ -12,7 +12,9 @@
 #      granted at workflow scope — every scope must be explicit per-job.
 #   2. Every job declares its own `permissions:` block. Inheritance
 #      from top-level (which is empty anyway) is not allowed; an
-#      omitted block is a lint failure.
+#      omitted block is a lint failure. A job's block is read by its
+#      kind: a map, whatever tag it carries, passes, and any other shape
+#      is reported with its kind and tag.
 #   3. Top-level cannot be `read-all`, `write-all`, or any scalar/
 #      list form. (Subsumed by rule 1; a scalar gets a dedicated
 #      message, any other shape is reported by its YAML tag.)
@@ -136,27 +138,28 @@ for f in "${selected_files[@]}"; do
   # scan would pass silently. Unlike the reads above, this one fails on
   # the workflow's own shape (a `jobs:` that is not a map or a list), so
   # its failure stays a counted finding.
-  if ! rows="$(yq eval '.jobs | to_entries[] | .key + "\t" + (.value.permissions | tag)' "${f}")"; then
+  if ! rows="$(yq eval '.jobs | to_entries[] | .key + "\t" + (.value.permissions | kind + " " + tag)' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
   fi
   [[ -n ${rows} ]] || continue
-  while IFS=$'\t' read -r job job_tag; do
+  while IFS=$'\t' read -r job job_shape; do
     [[ -z ${job} ]] && continue
-    case "${job_tag}" in
-    '!!null')
+    # An absent key reads as no kind at all, a key with no value as null.
+    case "${job_shape}" in
+    '' | 'scalar !!null')
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
       printf '%s: job %q missing `permissions:` block (every job must declare its own)\n' \
         "${f}" "${job}" >&2
       failed=$((failed + 1))
       ;;
-    '!!map')
+    'map '*)
       : # ok; scope-level audit out of scope for this lint
       ;;
     *)
-      printf '%s: job %q permissions has unexpected shape (tag=%s)\n' \
-        "${f}" "${job}" "${job_tag}" >&2
+      printf '%s: job %q permissions has unexpected shape (kind=%s, tag=%s)\n' \
+        "${f}" "${job}" "${job_shape%% *}" "${job_shape#* }" >&2
       failed=$((failed + 1))
       ;;
     esac

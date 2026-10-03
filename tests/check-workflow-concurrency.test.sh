@@ -138,8 +138,8 @@ expect_unparsable 'concurrency: [\n' 'bad-unparsable.yml: could not evaluate'
 # on a workflow that holds the fault the read is for and on one that
 # does not. The group read is `eval .concurrency.group` followed by the
 # fixture's absolute path, which the shape read does not hold.
-expect_failed_read good.yml '.concurrency.group | tag' 7 'the concurrency group shape'
-expect_failed_read bad-seq-group.yml '.concurrency.group | tag' 9 'the concurrency group shape'
+expect_failed_read good.yml '.concurrency.group | kind' 7 'the concurrency group shape'
+expect_failed_read bad-seq-group.yml '.concurrency.group | kind' 9 'the concurrency group shape'
 expect_failed_read good.yml 'eval .concurrency.group /' 11 'the concurrency group'
 expect_failed_read bad-empty-group.yml 'eval .concurrency.group /' 13 'the concurrency group'
 

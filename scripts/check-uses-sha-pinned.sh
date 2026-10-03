@@ -46,8 +46,9 @@ else
 fi
 
 # Extract every `uses:` value anywhere in the document, regardless of
-# block/flow style, with surrounding quotes stripped by yq.
-readonly USES_QUERY='.. | select(tag == "!!map" and has("uses")) | .uses'
+# block/flow style, with surrounding quotes stripped by yq. A map is
+# selected by its kind, so one carrying a tag of its own is still read.
+readonly USES_QUERY='.. | select(kind == "map" and has("uses")) | .uses'
 
 failed=0
 shopt -s nullglob globstar

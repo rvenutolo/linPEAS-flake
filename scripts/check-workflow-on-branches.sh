@@ -90,8 +90,8 @@ function read_workflow() {
 
 # @description Stop the run on a `yq` read that failed after the
 # workflow's first read succeeded. The file parses, so the failure is
-# usually `yq` failing. A node whose tag `yq` cannot decode
-# (`push: !!map [a]`), or a branch list it cannot render as JSON
+# usually `yq` failing. A branch list holding a node whose tag `yq`
+# cannot decode (`branches: [!!int a]`), or one it cannot render as JSON
 # (`branches: [.nan]`), fails such a read too, and is reported the same
 # way, though it is a fact about the workflow. Carrying on would
 # compare an empty value and score the trigger absent.
@@ -127,11 +127,14 @@ readonly ON_NODE='.on as $plain | [to_entries[] | select((.key | explode(.)) == 
 # Returns 0 when the trigger is clean and 1 on a finding it has printed.
 check_trigger() {
   local -r file="$1" trigger="$2"
-  local trig_tag trig_present
-  trig_tag="$(yq eval "${ON_NODE} | .\"${trigger}\" | tag" "${file}")" ||
+  local trig_shape trig_present
+  # The trigger and its branch list are read by kind, with the tag beside
+  # it to tell an absent or null value from any other scalar: a map or a
+  # list carrying a tag of its own is still read.
+  trig_shape="$(yq eval "${ON_NODE} | .\"${trigger}\" | kind + \" \" + tag" "${file}")" ||
     die_unread "the on.${trigger} trigger" "${file}" "$?"
-  case "${trig_tag}" in
-  '!!null')
+  case "${trig_shape}" in
+  'scalar !!null')
     # yq reports !!null for both an absent trigger and one that is
     # present with no value. A present-but-null trigger
     # (`pull_request:` with nothing under it) fires on every branch —
@@ -147,26 +150,26 @@ check_trigger() {
     fi
     return 0
     ;;
-  '!!map') ;;
+  'map '*) ;;
   *)
-    printf '%s: on.%s has unexpected shape (tag=%s); expected map\n' \
-      "${file}" "${trigger}" "${trig_tag}" >&2
+    printf '%s: on.%s has unexpected shape (kind=%s, tag=%s); expected map\n' \
+      "${file}" "${trigger}" "${trig_shape%% *}" "${trig_shape#* }" >&2
     return 1
     ;;
   esac
 
-  local branches_tag
-  branches_tag="$(yq eval "${ON_NODE} | .\"${trigger}\".branches | tag" "${file}")" ||
+  local branches_shape
+  branches_shape="$(yq eval "${ON_NODE} | .\"${trigger}\".branches | kind + \" \" + tag" "${file}")" ||
     die_unread "the on.${trigger}.branches shape" "${file}" "$?"
-  if [[ ${branches_tag} == "!!null" ]]; then
+  if [[ ${branches_shape} == "scalar !!null" ]]; then
     # shellcheck disable=SC2016 # literal backticks in human-readable prose
     printf '%s: on.%s is missing `branches: [main]` (implicit all-branches forbidden)\n' \
       "${file}" "${trigger}" >&2
     return 1
   fi
-  if [[ ${branches_tag} != "!!seq" ]]; then
-    printf '%s: on.%s.branches has unexpected shape (tag=%s); expected sequence\n' \
-      "${file}" "${trigger}" "${branches_tag}" >&2
+  if [[ ${branches_shape} != "seq "* ]]; then
+    printf '%s: on.%s.branches has unexpected shape (kind=%s, tag=%s); expected sequence\n' \
+      "${file}" "${trigger}" "${branches_shape%% *}" "${branches_shape#* }" >&2
     return 1
   fi
 
