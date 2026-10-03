@@ -33,9 +33,12 @@
 # Exits 0 on full coverage, 1 on any drift. Exits 2 when the check
 # cannot run: `yq` is absent from PATH, the workflow globs match no
 # file, WORKFLOW_FILE_FILTER selects none of the files they matched, or
-# the `yq` read that tells a trigger present with no value from an absent
-# one fails. An empty scan set is a could-not-run rather than a clean
-# tree; LINT_ALLOW_EMPTY_SCAN=1 accepts one deliberately.
+# a `yq` read fails for a workflow whose first read succeeded, which a
+# node whose tag `yq` cannot decode does too. The first read, of the
+# `pull_request` trigger, stays a counted finding when it fails, and the
+# workflow's `push` trigger is then not read. An empty scan set is a
+# could-not-run rather than a clean tree; LINT_ALLOW_EMPTY_SCAN=1 accepts
+# one deliberately.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -75,9 +78,12 @@ function read_workflow() {
   printf '%s' "${value}"
 }
 
-# @description Stop the run on a `yq` read that failed after the same
-# trigger's tag has been read, so the file parses and the failure is
-# `yq` failing rather than a fact about the workflow. Carrying on would
+# @description Stop the run on a `yq` read that failed after the
+# workflow's first read succeeded. The file parses, so the failure is
+# usually `yq` failing. A node whose tag `yq` cannot decode
+# (`push: !!map [a]`), or a branch list it cannot render as JSON
+# (`branches: [.nan]`), fails such a read too, and is reported the same
+# way, though it is a fact about the workflow. Carrying on would
 # compare an empty value and score the trigger absent.
 # @arg $1 what was being read
 # @arg $2 workflow path
@@ -100,15 +106,27 @@ function die_unread() {
 # So the node goes through sixteen passes, and one that still holds an
 # alias after them is refused by `yq` with an error rather than read. A
 # file `yq` reads through this is never passed with an alias left in it.
+# Its memory cost is a stated limit: docs/development/linting.md, section
+# "YAML aliases in workflow reads".
 # shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
 readonly ON_NODE='.on as $plain | [to_entries[] | select((.key | explode(.)) == "on") | .value] as $all | with(select($all | length > 1); error("on: is given more than once")) | ($all + [$plain] | .[0]) as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)) | with(select([... | select(kind == "alias")] | length > 0); error("on: holds an alias nested too deep to resolve"))'
 
 # Check one trigger (pull_request / push) within one workflow file.
-# Args: file, trigger-name
+# Args: file, trigger-name, and 1 when an earlier read of the file has
+# succeeded (0 for its first read).
+# Returns 0 when the trigger is clean, 1 on a finding it has printed, and
+# 3 when the file's first read failed: that is the counted finding
+# read_workflow has printed, and the file is not read further. A later
+# read that fails ends the run with exit 2 through die_unread.
 check_trigger() {
-  local -r file="$1" trigger="$2"
+  local -r file="$1" trigger="$2" read_before="$3"
   local trig_tag trig_present
-  trig_tag="$(read_workflow "${file}" "${ON_NODE} | .\"${trigger}\" | tag")" || return 1
+  if ((read_before)); then
+    trig_tag="$(yq eval "${ON_NODE} | .\"${trigger}\" | tag" "${file}")" ||
+      die_unread "the on.${trigger} trigger" "${file}" "$?"
+  else
+    trig_tag="$(read_workflow "${file}" "${ON_NODE} | .\"${trigger}\" | tag")" || return 3
+  fi
   case "${trig_tag}" in
   '!!null')
     # yq reports !!null for both an absent trigger and one that is
@@ -135,7 +153,8 @@ check_trigger() {
   esac
 
   local branches_tag
-  branches_tag="$(read_workflow "${file}" "${ON_NODE} | .\"${trigger}\".branches | tag")" || return 1
+  branches_tag="$(yq eval "${ON_NODE} | .\"${trigger}\".branches | tag" "${file}")" ||
+    die_unread "the on.${trigger}.branches shape" "${file}" "$?"
   if [[ ${branches_tag} == "!!null" ]]; then
     # shellcheck disable=SC2016 # literal backticks in human-readable prose
     printf '%s: on.%s is missing `branches: [main]` (implicit all-branches forbidden)\n' \
@@ -149,11 +168,9 @@ check_trigger() {
   fi
 
   local rendered
-  if ! rendered="$(yq eval --output-format=json --indent=0 \
-    "${ON_NODE} | .\"${trigger}\".branches" "${file}")"; then
-    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${file}" >&2
-    return 1
-  fi
+  rendered="$(yq eval --output-format=json --indent=0 \
+    "${ON_NODE} | .\"${trigger}\".branches" "${file}")" ||
+    die_unread "the on.${trigger}.branches list" "${file}" "$?"
   if [[ ${rendered} != '["main"]' ]]; then
     # shellcheck disable=SC2016 # literal backticks in human-readable prose
     printf '%s: on.%s.branches must be exactly `[main]`; got %s\n' \
@@ -172,10 +189,18 @@ filter_into selected_files 'workflow YAML' "${FILE_FILTER}" "${workflow_files[@]
 for f in "${selected_files[@]}"; do
   [[ -f ${f} ]] || continue
 
+  read_before=0
   for trigger in pull_request push; do
-    if ! check_trigger "${f}" "${trigger}"; then
+    trigger_status=0
+    check_trigger "${f}" "${trigger}" "${read_before}" || trigger_status=$?
+    if ((trigger_status == 3)); then
+      failed=$((failed + 1))
+      continue 2
+    fi
+    if ((trigger_status != 0)); then
       failed=$((failed + 1))
     fi
+    read_before=1
   done
 done
 shopt -u nullglob

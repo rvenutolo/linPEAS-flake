@@ -22,7 +22,9 @@
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures.
 # Exits 0 on full coverage, 1 on any drift. Exits 2 when the check
 # cannot run: `yq` is absent from PATH, the workflow globs match no
-# file, or WORKFLOW_FILE_FILTER selects none of the files they matched.
+# file, WORKFLOW_FILE_FILTER selects none of the files they matched, or
+# a read of the top-level `permissions:` fails after its shape has been
+# read, which a node whose tag `yq` cannot decode does too.
 # An empty scan set is a could-not-run rather than a clean tree;
 # LINT_ALLOW_EMPTY_SCAN=1 accepts one deliberately.
 
@@ -64,6 +66,21 @@ function read_workflow() {
   printf '%s' "${value}"
 }
 
+# @description Stop the run on a `yq` read that failed after the
+# workflow's first read succeeded. The file parses, so the failure is
+# usually `yq` failing. A node whose tag `yq` cannot decode
+# (`permissions: !!map 5`) fails such a read too, and is reported the
+# same way, though it is a fact about the workflow. Carrying on would
+# print a verdict about a value nothing read.
+# @arg $1 what was being read
+# @arg $2 workflow path
+# @arg $3 the status `yq` exited with
+# @exitcode 2 always
+function die_unread() {
+  printf 'cannot read %s of %s: yq exited %d\n' "$1" "$2" "$3" >&2
+  exit 2
+}
+
 failed=0
 shopt -s nullglob
 declare -a workflow_files=()
@@ -85,16 +102,19 @@ for f in "${selected_files[@]}"; do
     failed=$((failed + 1))
     ;;
   '!!str')
-    top_val="$(read_workflow "${f}" '.permissions')" || true
+    top_val="$(yq eval '.permissions' "${f}")" ||
+      die_unread 'the top-level permissions' "${f}" "$?"
     # shellcheck disable=SC2016 # literal backticks in human-readable prose
     printf '%s: top-level permissions is scalar %q (need `permissions: {}`)\n' \
       "${f}" "${top_val}" >&2
     failed=$((failed + 1))
     ;;
   '!!map')
-    top_len="$(read_workflow "${f}" '.permissions | length')" || true
+    top_len="$(yq eval '.permissions | length' "${f}")" ||
+      die_unread 'the top-level permissions size' "${f}" "$?"
     if [[ ${top_len} != "0" ]]; then
-      top_keys="$(read_workflow "${f}" '.permissions | keys | join(",")')" || true
+      top_keys="$(yq eval '.permissions | keys | join(",")' "${f}")" ||
+        die_unread 'the top-level permissions keys' "${f}" "$?"
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
       printf '%s: top-level permissions non-empty (keys: %s); need `permissions: {}`\n' \
         "${f}" "${top_keys}" >&2
@@ -113,7 +133,9 @@ for f in "${selected_files[@]}"; do
   # feeding the loop from `< <(yq ...)`: a process substitution's exit
   # status is not propagated under set -Eeuo pipefail, so a yq failure
   # (e.g. `jobs:` is not a map) would yield empty input and the per-job
-  # scan would pass silently.
+  # scan would pass silently. Unlike the reads above, this one fails on
+  # the workflow's own shape (a `jobs:` that is not a map or a list), so
+  # its failure stays a counted finding.
   if ! rows="$(yq eval '.jobs | to_entries[] | .key + "\t" + (.value.permissions | tag)' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))

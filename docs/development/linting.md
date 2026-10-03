@@ -575,6 +575,21 @@ is reported as its own finding rather than passed over. The clean run's
 summary line counts it as a fourth field alongside files scanned, sites
 classified and exemptions applied.
 
+## YAML aliases in workflow reads
+
+A script that reads a workflow node through an alias resolves it with
+`yq`'s `explode`, which replaces each alias with a copy of what it
+stands for. Every such read in `scripts/` hands `explode` only the node
+it reads, so aliases elsewhere in the file cost nothing.
+
+The copies are not capped. Aliases that each repeat another alias
+several times multiply at every level: a 408-byte workflow whose `on:`
+nests seven levels of nine aliases makes `yq` take about 1.8 GB. No
+script limits `yq`'s memory. When `yq` cannot allocate it dies, printing
+a Go runtime dump, and the script treats the read as one that failed,
+by the exit contract its header states. Such a workflow is never passed;
+one that fits in memory is read in full.
+
 ## Treefmt YAML quote gotcha
 
 Prettier rewrites single-quoted YAML scalars to double-quoted. Run

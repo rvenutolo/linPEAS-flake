@@ -174,6 +174,8 @@ glob_into workflow_files 'workflow YAML' "${WORKFLOWS_DIR}/*.yml" "${WORKFLOWS_D
 all_jobs=''
 for f in "${workflow_files[@]}"; do
   [[ -f ${f} ]] || continue
+  # The cost of `explode` is a stated limit: docs/development/linting.md,
+  # section "YAML aliases in workflow reads".
   workflow_jobs="$(yq eval '(.jobs // {}) | explode(.) | keys | .[]' "${f}")" || {
     printf 'cannot read job keys from %s: yq exited %d\n' "${f}" "$?" >&2
     exit 2
@@ -182,6 +184,31 @@ for f in "${workflow_files[@]}"; do
 done
 sort --unique >"${all_jobs_file}" <<<"${all_jobs}"
 shopt -u nullglob
+
+# The lint-groups manifest is read here, before any check prints, for the
+# same reason as the job set above: a manifest that is missing or that
+# `yq` cannot read stops the run with nothing reported. Manifest coverage
+# guards against a check silently dropping off the merge gate once its
+# job is folded into a grouped lint job. A missing manifest is a
+# load-bearing infrastructure error, not drift — it carries the
+# could-not-run code, like the CI_FILE / CATEGORIES_FILE preamble guards
+# above.
+if [[ ! -f ${LINT_GROUPS_FILE} ]]; then
+  printf 'lint-groups manifest not found: %s\n' "${LINT_GROUPS_FILE}" >&2
+  exit 2
+fi
+
+# Capture yq's output (and exit status) into a variable rather than
+# feeding the loop from `< <(yq ...)`: a process substitution's exit
+# status is not propagated under set -Eeuo pipefail, so a yq failure
+# would yield empty input and manifest coverage would pass silently. The
+# manifest is a precondition file, not a scanned artifact, so an
+# unparsable manifest is a tooling error (exit 2) like the missing-file
+# guard above.
+if ! basenames_rows="$(yq eval '.[] | .[]' "${LINT_GROUPS_FILE}")"; then
+  printf '%s: could not evaluate lint-groups manifest with yq (malformed?)\n' "${LINT_GROUPS_FILE}" >&2
+  exit 2
+fi
 
 failed=0
 
@@ -228,28 +255,8 @@ while IFS= read -r key; do
 done <"${cat_keys_file}"
 
 # Manifest coverage: every check basename in lint-groups.yml must
-# resolve to a real scripts/check-<basename>.sh. Guards against a check
-# silently dropping off the merge gate once its job is folded into a
-# grouped lint job.
-# A missing manifest is a load-bearing infrastructure error, not drift —
-# it carries the could-not-run code, like the CI_FILE / CATEGORIES_FILE
-# preamble guards above.
-if [[ ! -f ${LINT_GROUPS_FILE} ]]; then
-  printf 'lint-groups manifest not found: %s\n' "${LINT_GROUPS_FILE}" >&2
-  exit 2
-fi
-
-# Capture yq's output (and exit status) into a variable rather than
-# feeding the loop from `< <(yq ...)`: a process substitution's exit
-# status is not propagated under set -Eeuo pipefail, so a yq failure
-# would yield empty input and manifest coverage would pass silently. The
-# manifest is a precondition file, not a scanned artifact, so an
-# unparsable manifest is a tooling error (exit 2) like the missing-file
-# guard above.
-if ! basenames_rows="$(yq eval '.[] | .[]' "${LINT_GROUPS_FILE}")"; then
-  printf '%s: could not evaluate lint-groups manifest with yq (malformed?)\n' "${LINT_GROUPS_FILE}" >&2
-  exit 2
-fi
+# resolve to a real scripts/check-<basename>.sh. Its rows are read above,
+# before any check prints.
 while IFS= read -r basename; do
   [[ -z ${basename} ]] && continue
   script="${SCRIPTS_DIR}/check-${basename}.sh"

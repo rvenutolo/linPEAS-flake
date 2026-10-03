@@ -23,7 +23,9 @@
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures.
 # Exits 0 on full coverage, 1 on any drift. Exits 2 when the check
 # cannot run: `yq` is absent from PATH, the workflow globs match no
-# file, or WORKFLOW_FILE_FILTER selects none of the files they matched.
+# file, WORKFLOW_FILE_FILTER selects none of the files they matched, or
+# a `yq` read fails for a workflow whose first read succeeded, which a
+# node whose tag `yq` cannot decode does too.
 # An empty scan set is a could-not-run rather than a clean tree;
 # LINT_ALLOW_EMPTY_SCAN=1 accepts one deliberately.
 
@@ -65,6 +67,21 @@ function read_workflow() {
   printf '%s' "${value}"
 }
 
+# @description Stop the run on a `yq` read that failed after the
+# workflow's first read succeeded. The file parses, so the failure is
+# usually `yq` failing. A node whose tag `yq` cannot decode
+# (`concurrency: !!map [a]`) fails such a read too, and is reported the
+# same way, though it is a fact about the workflow. Carrying on would
+# print a verdict about a value nothing read.
+# @arg $1 what was being read
+# @arg $2 workflow path
+# @arg $3 the status `yq` exited with
+# @exitcode 2 always
+function die_unread() {
+  printf 'cannot read %s of %s: yq exited %d\n' "$1" "$2" "$3" >&2
+  exit 2
+}
+
 failed=0
 shopt -s nullglob
 declare -a workflow_files=()
@@ -94,7 +111,8 @@ for f in "${selected_files[@]}"; do
     ;;
   esac
 
-  group_tag="$(read_workflow "${f}" '.concurrency.group | tag')" || true
+  group_tag="$(yq eval '.concurrency.group | tag' "${f}")" ||
+    die_unread 'the concurrency group shape' "${f}" "$?"
   case "${group_tag}" in
   '!!null')
     # shellcheck disable=SC2016 # literal backticks in human-readable prose
@@ -102,7 +120,8 @@ for f in "${selected_files[@]}"; do
     failed=$((failed + 1))
     ;;
   '!!str')
-    group_val="$(read_workflow "${f}" '.concurrency.group')" || true
+    group_val="$(yq eval '.concurrency.group' "${f}")" ||
+      die_unread 'the concurrency group' "${f}" "$?"
     if [[ -z ${group_val} ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
       printf '%s: top-level concurrency `group:` is empty\n' "${f}" >&2
