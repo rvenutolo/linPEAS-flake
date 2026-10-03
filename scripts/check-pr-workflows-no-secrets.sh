@@ -42,15 +42,18 @@ fi
 
 # The `on:` node every read starts from, with its aliases resolved. It
 # is the one root key that is `on` or an alias of `on`: a root holding
-# more than one makes `yq` fail ("on: is given more than once"), and
-# `.on` is read first so that a root that is not a map fails the read.
+# more than one makes `yq` fail ("on: is given more than once"). With no
+# such key it is `.on`, which is how an `on:` a root merge key brings in
+# is read, since the merged keys are not the root's own. Reading `.on`
+# also makes a root that is a list fail the read; a scalar root fails
+# when its keys are listed.
 # `explode`, handed that node alone, resolves one level of aliases per
 # pass: the aliases a node holds, not those inside what they stand for.
 # So the node goes through sixteen passes, and one that still holds an
 # alias after them is refused by `yq` with an error rather than read. A
 # file `yq` reads through this is never passed with an alias left in it.
 # shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
-readonly ON_NODE='.on as $plain | [to_entries[] | select((.key | explode(.)) == "on") | .value] as $all | with(select($all | length > 1); error("on: is given more than once")) | ($all | .[0]) as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)) | with(select([... | select(kind == "alias")] | length > 0); error("on: holds an alias nested too deep to resolve"))'
+readonly ON_NODE='.on as $plain | [to_entries[] | select((.key | explode(.)) == "on") | .value] as $all | with(select($all | length > 1); error("on: is given more than once")) | ($all + [$plain] | .[0]) as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)) | with(select([... | select(kind == "alias")] | length > 0); error("on: holds an alias nested too deep to resolve"))'
 
 # @description Return 0 if the workflow file is triggered by pull_request
 # or pull_request_target; 1 otherwise. Handles every `on:` shape yq can
