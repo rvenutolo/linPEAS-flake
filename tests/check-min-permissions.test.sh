@@ -200,6 +200,10 @@ expect_body jobs-merge-inline.yml $'permissions: {}\njobs:\n  <<:\n    evil:\n  
 readonly ODD_ID='jobs: holds a job id with a tab or a line break, which GitHub Actions refuses; its jobs are not read'
 expect_body job-id-tab.yml $'permissions: {}\njobs:\n  "x\\t!!str\\tmap !!map\\tmap !!map":\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
   "DIR/job-id-tab.yml: ${ODD_ID}"$'\n1 permissions posture violation(s) found'
+expect_body job-id-xtag.yml $'permissions: {}\njobs:\n  !x "x\\t!!str\\tmap !!map\\tmap !!map":\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
+  "DIR/job-id-xtag.yml: ${ODD_ID}"$'\n1 permissions posture violation(s) found'
+expect_body job-id-merge-tag.yml $'permissions: {}\njobs:\n  !!merge "x\\t!!str\\tmap !!map\\tmap !!map":\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
+  "DIR/job-id-merge-tag.yml: ${ODD_ID}"$'\n1 permissions posture violation(s) found'
 expect_body job-id-break.yml $'permissions: {}\njobs:\n  "y\\nz":\n    permissions: {}\n' 1 \
   "DIR/job-id-break.yml: ${ODD_ID}"$'\n1 permissions posture violation(s) found'
 # The job-id read failing is a counted finding, like the job rows' read.
@@ -216,15 +220,16 @@ if [[ ${ids_exit} != 1 || ${ids_stderr} != "${ids_want}" ]]; then
 fi
 printf 'OK   good.yml with the job-id read failing\n'
 # yq prints one job-id count per document; counts of 0 in a file of
-# several documents are no odd id. (Several documents are not refused by
+# several documents are no odd id, and a document whose jobs: is null
+# has no ids to count rather than a read that fails. (Several documents are not refused by
 # this lint; only the id message is held here.)
 docs_dir="$(mktemp --directory)"
-printf 'permissions: {}\njobs:\n  a:\n    permissions: {}\n---\npermissions: {}\njobs:\n  b:\n    permissions: {}\n' \
+printf 'permissions: {}\njobs:\n  a:\n    permissions: {}\n---\npermissions: {}\njobs:\n' \
   >"${docs_dir}/two-docs.yml"
 docs_exit=0
 docs_stderr="$(WORKFLOWS_DIR_OVERRIDE="${docs_dir}" "${SCRIPT}" 2>&1 >/dev/null)" || docs_exit=$?
 rm --recursive --force -- "${docs_dir}"
-if [[ ${docs_exit} != 1 || ${docs_stderr} == *'tab or a line break'* ]]; then
+if [[ ${docs_exit} != 1 || ${docs_stderr} == *'tab or a line break'* || ${docs_stderr} == *'could not evaluate'* ]]; then
   printf 'FAIL two-docs.yml: exit %s, want 1, and no job-id line\n  got: %s\n' "${docs_exit}" "${docs_stderr}" >&2
   exit 1
 fi
