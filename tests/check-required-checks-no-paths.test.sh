@@ -119,6 +119,21 @@ function run_built_scenario() {
   printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
 }
 
+# @description Print an `env:` block holding a chain of aliases DEPTH
+# deep: A0 is anchored on INNERMOST and each later entry is a map holding
+# the one before it under `x`. Sixteen `explode` passes resolve a chain
+# fifteen deep and leave an alias in one sixteen deep; a key written as
+# an alias at the end of a chain fifteen deep is left too.
+# @arg $1 depth  @arg $2 innermost value, as YAML flow text
+function alias_chain() {
+  local -r depth="$1" innermost="$2"
+  local i
+  printf 'env:\n  A0: &a0 %s\n' "${innermost}"
+  for ((i = 1; i <= depth; i++)); do
+    printf '  A%d: &a%d {x: *a%d}\n' "${i}" "${i}" "$((i - 1))"
+  done
+}
+
 readonly PATHS_BODY=$'on:\n  pull_request:\n    paths: [a]\njobs: {}\n'
 readonly PATHS_FINDING='declares paths/paths-ignore under pull_request'
 readonly UNREAD='could not evaluate workflow with yq (malformed?): yq exited'
@@ -172,6 +187,60 @@ run_built_scenario 'a filter reached through an alias is named' 1 exact \
   on-alias.yml $'x: &t\n  pull_request:\n    paths: [a]\non: *t\njobs: {}\n' \
   clean-alias.yml $'x: &t\n  pull_request:\n    branches: [main]\non: *t\njobs: {}\n' \
   pr-alias.yml $'x: &t\n  paths: [a]\non:\n  pull_request: *t\njobs: {}\n'
+
+# An alias inside what another alias stands for, and an `on` key itself
+# written as an alias.
+run_built_scenario 'a filter behind nested aliases is named' 1 exact \
+  "${LINT} .github/workflows/alias-on-key.yml ${PATHS_FINDING}"$'\n'"${LINT} .github/workflows/nested.yml ${PATHS_FINDING}" \
+  '' 0 \
+  nested.yml $'env:\n  X: &p\n    paths: [a]\n  Y: &v\n    pull_request: *p\non: *v\njobs: {}\n' \
+  alias-on-key.yml $'name: &k on\n*k :\n  pull_request:\n    paths: [a]\njobs: {}\n'
+
+# The depth boundary: a chain fifteen deep is read, one sixteen deep is
+# refused, and so is one fifteen deep ending in a key written as an
+# alias, the one alias the passes leave there.
+run_built_scenario 'a filter beside a chain fifteen deep is named' 1 exact \
+  "${LINT} .github/workflows/chain-15.yml ${PATHS_FINDING}" \
+  '' 0 \
+  chain-15.yml "$(alias_chain 15 '[a]')"$'\non:\n  pull_request:\n    paths: [a]\n    x: *a15\njobs: {}\n'
+run_built_scenario 'a chain sixteen deep is refused' 1 exact \
+  $'Error: on: holds an alias nested too deep to resolve\n'"${LINT} .github/workflows/chain-16.yml: ${UNREAD} 1" \
+  '' 0 \
+  chain-16.yml "$(alias_chain 16 '{paths: [a]}')"$'\non:\n  pull_request: *a16\njobs: {}\n'
+run_built_scenario 'a chain fifteen deep ending in a key is refused' 1 exact \
+  $'Error: on: holds an alias nested too deep to resolve\n'"${LINT} .github/workflows/chain-15-key.yml: ${UNREAD} 1" \
+  '' 0 \
+  chain-15-key.yml $'name: &k pull_request\n'"$(alias_chain 15 '{*k : {}}')"$'\non:\n  pull_request:\n    paths: [a]\n    x: *a15\njobs: {}\n'
+
+# A root with more than one key that resolves to `on` has no one `on:`.
+run_built_scenario 'on: given twice is refused' 1 exact \
+  $'Error: on: is given more than once\n'"${LINT} .github/workflows/on-twice.yml: ${UNREAD} 1" \
+  '' 0 \
+  on-twice.yml $'name: &k on\non:\n  pull_request:\n    branches: [main]\n*k :\n  pull_request:\n    paths: [a]\njobs: {}\n'
+
+# A workflow with no `on:` holds no filter; one whose top level is a list
+# is not a workflow `yq` can read.
+run_built_scenario 'a workflow with no on: is clean beside a finding' 1 exact \
+  "${LINT} .github/workflows/filtered.yml ${PATHS_FINDING}" \
+  '' 0 \
+  filtered.yml "${PATHS_BODY}" \
+  no-on.yml $'jobs: {}\n'
+# yq prints its own warning when it resolves a merge key, so only the
+# lint's last line is compared.
+run_built_scenario 'a filter under an on: a root merge key brings in is named' 1 under \
+  "${LINT} .github/workflows/root-merge.yml ${PATHS_FINDING}" \
+  '' 0 \
+  root-merge.yml $'env:\n  X: &b {on: {pull_request: {paths: [a]}}}\n<<: *b\njobs: {}\n'
+# The file's own `on` key is read, not one a later merge key would put
+# over it: under YAML's merge rule the explicit key wins.
+run_built_scenario 'a filter in the own on key beside a merged one is named' 1 under \
+  "${LINT} .github/workflows/plain-then-merge.yml ${PATHS_FINDING}" \
+  '' 0 \
+  plain-then-merge.yml $'env:\n  X: &b {on: {pull_request: {branches: [main]}}}\non:\n  pull_request:\n    paths: [a]\n<<: *b\njobs: {}\n'
+run_built_scenario 'a top-level list is refused' 1 under \
+  "${LINT} .github/workflows/top-list.yml: ${UNREAD} 1" \
+  '' 0 \
+  top-list.yml $'- on: pull_request\n'
 
 # An `on:` map carrying a tag of its own is still a map.
 run_built_scenario 'a filter under a tagged on: map is named' 1 exact \

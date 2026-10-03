@@ -95,6 +95,55 @@ function expect_failed_read() {
   printf 'OK   %s with a failing yq read (%s)\n' "${fixture}" "${thing}"
 }
 
+# @description Scan one workflow written to a temp dir at run time and
+# hold the lint to its exit status and to the whole of what it prints on
+# stderr. The shapes scanned this way (aliases, merge keys, tags, several
+# documents) are built here so that no formatter or workflow linter reads
+# them as tracked files. The line `yq` itself prints when it resolves a
+# merge key carries a timestamp, so it is dropped before the comparison;
+# every line the lint prints is compared. With `tail` as a fifth argument
+# only the end of stderr is compared, for a run whose first lines are
+# `yq`'s own error, whose wording is not the lint's.
+# @arg $1 file name, which is also the scenario's label
+# @arg $2 file body  @arg $3 expected exit status
+# @arg $4 expected stderr, with DIR standing for the temp dir
+# @arg $5 `tail` to compare only the end of stderr (optional)
+function expect_body() {
+  local -r name="$1" body="$2" want_exit="$3" mode="${5:-whole}"
+  local dir got_exit=0 got_stderr want
+  dir="$(mktemp --directory)"
+  printf '%s' "${body}" >"${dir}/${name}"
+  want="${4//DIR/${dir}}"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${dir}" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  rm --recursive --force -- "${dir}"
+  got_stderr="$(grep --invert-match --fixed-strings -- '--yaml-fix-merge-anchor-to-spec' <<<"${got_stderr}" || true)"
+  if [[ ${got_exit} != "${want_exit}" ]]; then
+    printf 'FAIL %s: exit %s, want %s\n  stderr: %s\n' "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" >&2
+    return 1
+  fi
+  if [[ ${mode} == tail && ${got_stderr} != *$'\n'"${want}" ]] ||
+    [[ ${mode} != tail && ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s: stderr is not %q\n  got: %s\n' "${name}" "${want}" "${got_stderr}" >&2
+    return 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+
+# @description Print an `env:` block holding a chain of aliases DEPTH
+# deep: A0 is anchored on INNERMOST and each later entry is a map holding
+# the one before it under `x`. Sixteen `explode` passes resolve a chain
+# fifteen deep and leave an alias in one sixteen deep; a key written as
+# an alias at the end of a chain fifteen deep is left too.
+# @arg $1 depth  @arg $2 innermost value, as YAML flow text
+function alias_chain() {
+  local -r depth="$1" innermost="$2"
+  local i
+  printf 'env:\n  A0: &a0 %s\n' "${innermost}"
+  for ((i = 1; i <= depth; i++)); do
+    printf '  A%d: &a%d {x: *a%d}\n' "${i}" "${i}" "$((i - 1))"
+  done
+}
+
 expect good.yml 0 ""
 expect good-cron-only.yml 0 ""
 expect bad-pr-no-branches.yml 1 "bad-pr-no-branches.yml: on.pull_request is missing"
@@ -104,6 +153,73 @@ expect bad-push-no-branches.yml 1 "bad-push-no-branches.yml: on.push is missing"
 expect bad-pr-null.yml 1 "bad-pr-null.yml: on.pull_request is present but null"
 expect bad-push-null.yml 1 "bad-push-null.yml: on.push is present but null"
 expect no-such-workflow.yml 2 'selected 0 of'
+
+# A trigger, its value or its branch list written through an anchor is
+# read as what it stands for.
+# The lint's lines quote the branch list in backticks; Q holds one, so
+# that no assertion string here does.
+readonly Q=$'\x60'
+readonly ONE=$'\n'"1 workflow trigger(s) missing or non-canonical ${Q}branches: [main]${Q}"
+readonly MISSING="is missing ${Q}branches: [main]${Q} (implicit all-branches forbidden)"
+expect_body alias-key.yml $'name: &t push\non:\n  *t : {}\n' 1 "DIR/alias-key.yml: on.push ${MISSING}${ONE}"
+expect_body alias-key-null.yml $'name: &t pull_request\non:\n  *t :\n' 1 \
+  "DIR/alias-key-null.yml: on.pull_request is present but null (implicit all-branches forbidden; need ${Q}branches: [main]${Q})${ONE}"
+expect_body alias-key-good.yml $'name: &t push\non:\n  *t :\n    branches: [main]\n' 0 ''
+expect_body alias-value-good.yml $'on:\n  push: &v\n    branches: [main]\n  pull_request: *v\n' 0 ''
+expect_body alias-value-no-branches.yml $'env:\n  X: &v\n    types: [opened]\non:\n  pull_request: *v\n' 1 \
+  "DIR/alias-value-no-branches.yml: on.pull_request ${MISSING}${ONE}"
+expect_body alias-branches-good.yml $'env:\n  X: &b [main]\non:\n  push:\n    branches: *b\n' 0 ''
+expect_body alias-branches-extra.yml $'env:\n  X: &b [main, dev]\non:\n  push:\n    branches: *b\n' 1 \
+  "DIR/alias-branches-extra.yml: on.push.branches must be exactly ${Q}[main]${Q}; got [\"main\",\"dev\"]${ONE}"
+expect_body alias-branch-item.yml $'name: &m dev\non:\n  push:\n    branches: [*m]\n' 1 \
+  "DIR/alias-branch-item.yml: on.push.branches must be exactly ${Q}[main]${Q}; got [\"dev\"]${ONE}"
+expect_body alias-whole.yml $'env:\n  X: &t\n    push: {}\non: *t\n' 1 "DIR/alias-whole.yml: on.push ${MISSING}${ONE}"
+expect_body alias-whole-good.yml $'env:\n  X: &t\n    push:\n      branches: [main]\non: *t\n' 0 ''
+# An alias inside what another alias stands for, and an `on` key itself
+# written as an alias.
+expect_body nested-branches-good.yml $'env:\n  X: &b [main]\n  Y: &v {branches: *b}\non:\n  push: *v\n' 0 ''
+expect_body nested-branches-extra.yml $'env:\n  X: &b [main, dev]\n  Y: &v {branches: *b}\non:\n  push: *v\n' 1 \
+  "DIR/nested-branches-extra.yml: on.push.branches must be exactly ${Q}[main]${Q}; got [\"main\",\"dev\"]${ONE}"
+# Three levels: the branch list is read only after three passes.
+expect_body nested-three-deep.yml $'env:\n  C: &c [main]\n  B: &b {branches: *c}\n  A: &a {push: *b}\non: *a\n' 0 ''
+# The depth boundary: a chain fifteen deep is read, one sixteen deep is
+# refused, and so is one fifteen deep ending in a key written as an
+# alias, the one alias the passes leave there. Each trigger's
+# read is refused on its own.
+readonly TOO_DEEP=$'Error: on: holds an alias nested too deep to resolve\n'
+readonly ON_TWICE=$'Error: on: is given more than once\n'
+readonly UNREAD='could not evaluate workflow with yq (malformed?)'
+readonly TWO=$'\n'"2 workflow trigger(s) missing or non-canonical ${Q}branches: [main]${Q}"
+expect_body chain-15.yml "$(alias_chain 15 '[main]')"$'\non:\n  push:\n    branches: [main]\n    x: *a15\n' 0 ''
+expect_body chain-16.yml "$(alias_chain 16 '[main]')"$'\non:\n  push:\n    branches: [main]\n    x: *a16\n' 1 \
+  "${TOO_DEEP}DIR/chain-16.yml: ${UNREAD}"$'\n'"${TOO_DEEP}DIR/chain-16.yml: ${UNREAD}${TWO}"
+expect_body chain-15-key.yml $'name: &k push\n'"$(alias_chain 15 '{*k : {}}')"$'\non:\n  push:\n    branches: [main]\n    x: *a15\n' 1 \
+  "${TOO_DEEP}DIR/chain-15-key.yml: ${UNREAD}"$'\n'"${TOO_DEEP}DIR/chain-15-key.yml: ${UNREAD}${TWO}"
+# A file whose root has more than one key that resolves to `on` has no
+# one `on:` to read, and an `on:` that is not a map is no trigger map.
+expect_body on-twice.yml $'name: &k on\non:\n  push:\n    branches: [main]\n*k :\n  push: {}\n' 1 \
+  "${ON_TWICE}DIR/on-twice.yml: ${UNREAD}"$'\n'"${ON_TWICE}DIR/on-twice.yml: ${UNREAD}${TWO}"
+expect_body no-on.yml $'jobs: {}\n' 0 ''
+expect_body top-list.yml $'- on: push\n' 1 \
+  $'DIR/top-list.yml: could not evaluate workflow with yq (malformed?)'"${TWO}" tail
+# GitHub Actions refuses a merge key, so this workflow cannot run; an
+# `on:` a root merge key brings in is still read.
+expect_body root-merge.yml $'env:\n  X: &b {on: {push: {}}}\n<<: *b\n' 1 "DIR/root-merge.yml: on.push ${MISSING}${ONE}"
+# The file's own `on` key is read, not one a later merge key would put
+# over it: under YAML's merge rule the explicit key wins.
+expect_body plain-then-merge.yml $'env:\n  X: &b {on: {push: {}}}\non:\n  push:\n    branches: [main]\n<<: *b\n' 0 ''
+expect_body false-on.yml $'on: false\njobs: {}\n' 1 \
+  $'DIR/false-on.yml: on.pull_request has unexpected shape (tag=); expected map\nDIR/false-on.yml: on.push has unexpected shape (tag=); expected map'"${TWO}"
+expect_body nested-key.yml $'name: &k push\nenv:\n  A: &m {*k : {}}\non: *m\n' 1 "DIR/nested-key.yml: on.push ${MISSING}${ONE}"
+expect_body alias-on-key.yml $'name: &k on\n*k :\n  push: {}\n' 1 "DIR/alias-on-key.yml: on.push ${MISSING}${ONE}"
+# GitHub Actions refuses a merge key, so this workflow cannot run; the
+# lint still reads the trigger the merge brings in.
+expect_body merge-key.yml $'env:\n  X: &t\n    pull_request: {}\non:\n  <<: *t\n' 1 "DIR/merge-key.yml: on.pull_request ${MISSING}${ONE}"
+expect_body tagged-map.yml $'on: !x\n  push: {}\n' 1 "DIR/tagged-map.yml: on.push ${MISSING}${ONE}"
+# Only `on:` is resolved: an alias `yq` cannot resolve elsewhere in the
+# file (a merge of a string) does not stop a readable `on:` being read.
+expect_body merge-elsewhere.yml $'name: &s str\non:\n  push:\n    branches: [main]\njobs:\n  a:\n    <<: *s\n' 0 ''
+expect_body merge-elsewhere-bad.yml $'name: &s str\non:\n  push: {}\njobs:\n  a:\n    <<: *s\n' 1 "DIR/merge-elsewhere-bad.yml: on.push ${MISSING}${ONE}"
 
 expect_unparsable 'on: [\n' 'bad-unparsable.yml: could not evaluate'
 
