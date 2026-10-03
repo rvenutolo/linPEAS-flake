@@ -174,6 +174,8 @@ glob_into workflow_files 'workflow YAML' "${WORKFLOWS_DIR}/*.yml" "${WORKFLOWS_D
 all_jobs=''
 for f in "${workflow_files[@]}"; do
   [[ -f ${f} ]] || continue
+  # The cost of `explode` is a stated limit: docs/development/linting.md,
+  # section "YAML aliases in workflow reads".
   workflow_jobs="$(yq eval '(.jobs // {}) | explode(.) | keys | .[]' "${f}")" || {
     printf 'cannot read job keys from %s: yq exited %d\n' "${f}" "$?" >&2
     exit 2

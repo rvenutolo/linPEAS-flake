@@ -101,6 +101,8 @@ function die_unread() {
 # So the node goes through sixteen passes, and one that still holds an
 # alias after them is refused by `yq` with an error rather than read. A
 # file `yq` reads through this is never passed with an alias left in it.
+# Its memory cost is a stated limit: docs/development/linting.md, section
+# "YAML aliases in workflow reads".
 # shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
 readonly ON_NODE='.on as $plain | [to_entries[] | select((.key | explode(.)) == "on") | .value] as $all | with(select($all | length > 1); error("on: is given more than once")) | ($all + [$plain] | .[0]) as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)) | with(select([... | select(kind == "alias")] | length > 0); error("on: holds an alias nested too deep to resolve"))'
 

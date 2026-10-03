@@ -151,6 +151,8 @@ function job_ids_at() {
       log_err "cannot read ${path} at ${ref}: git show exited ${status}"
       return 2
     }
+    # The cost of `explode` is a stated limit: docs/development/linting.md,
+    # section "YAML aliases in workflow reads".
     ids="$(yq '(.jobs // {}) | explode(.) | keys | .[]' "${blob_file}")" || {
       status=$?
       rm --force -- "${blob_file}"
