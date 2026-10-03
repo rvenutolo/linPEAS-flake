@@ -19,9 +19,10 @@
 # the trigger requires also deleting this script.
 #
 # Every read starts from the `on:` node as ON_NODE below builds it: the
-# `on` key or a key written as an alias of `on`, passed through `explode`
-# sixteen times, and refused as a workflow `yq` cannot read when an
-# alias is still left in it. A list or a map is read whatever tag it
+# one root key that is `on` or an alias of `on`, passed through
+# `explode` sixteen times. A root with more than one such key, or an
+# `on:` still holding an alias after the passes, is refused as a
+# workflow `yq` cannot read. A list or a map is read whatever tag it
 # carries; a scalar is read only as a plain string or as an absent
 # `on:`, and any other scalar is reported as an unexpected shape, as is
 # a file holding several documents. A merge key, which `actionlint`
@@ -90,15 +91,17 @@ function die_unread() {
   exit 2
 }
 
-# The `on:` node every read starts from, with its aliases resolved. It is
-# the `on` key, or a key written as an alias of `on`. `explode`, handed
-# that node alone, resolves one level of aliases per pass: the aliases a
-# node holds, not those inside what they stand for. So the node goes
-# through sixteen passes, and one that still holds an alias after them is
-# refused by `yq` with an error rather than read. A file `yq` reads
-# through this is never passed with an alias left in it.
-# shellcheck disable=SC2016 # yq program literal; $n and $i are yq variables
-readonly ON_NODE='(.on // ([to_entries[] | select(.key | kind == "alias") | select((.key | explode(.)) == "on") | .value] | .[0])) as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)) | with(select([... | select(kind == "alias")] | length > 0); error("on: holds an alias nested too deep to resolve"))'
+# The `on:` node every read starts from, with its aliases resolved. It
+# is the one root key that is `on` or an alias of `on`: a root holding
+# more than one makes `yq` fail ("on: is given more than once"), and
+# `.on` is read first so that a root that is not a map fails the read.
+# `explode`, handed that node alone, resolves one level of aliases per
+# pass: the aliases a node holds, not those inside what they stand for.
+# So the node goes through sixteen passes, and one that still holds an
+# alias after them is refused by `yq` with an error rather than read. A
+# file `yq` reads through this is never passed with an alias left in it.
+# shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
+readonly ON_NODE='.on as $plain | [to_entries[] | select((.key | explode(.)) == "on") | .value] as $all | with(select($all | length > 1); error("on: is given more than once")) | ($all | .[0]) as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)) | with(select([... | select(kind == "alias")] | length > 0); error("on: holds an alias nested too deep to resolve"))'
 
 failed=0
 shopt -s nullglob
@@ -112,9 +115,10 @@ for f in "${selected_files[@]}"; do
   # `on:` may be a string ("push"), a sequence ([push, pull_request]),
   # or a map ({push: ..., pull_request_target: ...}). Check all three.
   # Every read starts from ON_NODE, so a trigger written through an
-  # anchor is read as the name it stands for. The shape is the node's kind, with its tag beside it to
-  # tell an absent `on:` and a string from any other scalar: a list or a
-  # map carrying a tag of its own is still read.
+  # anchor is read as the name it stands for. The shape is the node's
+  # kind, with its tag beside it to tell an absent `on:` and a string
+  # from any other scalar: a list or a map carrying a tag of its own is
+  # still read.
   if ! on_shape="$(read_workflow "${f}" "${ON_NODE}"' | kind + " " + tag')"; then
     failed=$((failed + 1))
     continue

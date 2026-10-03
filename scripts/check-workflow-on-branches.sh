@@ -19,11 +19,13 @@
 # scope here — a separate lint forbids it outright.
 #
 # Every read starts from the `on:` node as ON_NODE below builds it: the
-# `on` key or a key written as an alias of `on`, passed through `explode`
-# sixteen times, and refused as a workflow `yq` cannot read when an
-# alias is still left in it. A merge key, which `actionlint` reports as unsupported by
-# GitHub Actions, is resolved by `yq`'s rule, and `yq` prints a warning
-# of its own on stderr when it resolves one.
+# one root key that is `on` or an alias of `on`, passed through
+# `explode` sixteen times. A root with more than one such key, or an
+# `on:` still holding an alias after the passes, is refused as a
+# workflow `yq` cannot read.
+# A merge key, which `actionlint` reports as unsupported by GitHub
+# Actions, is resolved by `yq`'s rule, and `yq` prints a warning of its
+# own on stderr when it resolves one.
 #
 # See docs/security/workflow-hardening.md.
 #
@@ -86,15 +88,17 @@ function die_unread() {
   exit 2
 }
 
-# The `on:` node every read starts from, with its aliases resolved. It is
-# the `on` key, or a key written as an alias of `on`. `explode`, handed
-# that node alone, resolves one level of aliases per pass: the aliases a
-# node holds, not those inside what they stand for. So the node goes
-# through sixteen passes, and one that still holds an alias after them is
-# refused by `yq` with an error rather than read. A file `yq` reads
-# through this is never passed with an alias left in it.
-# shellcheck disable=SC2016 # yq program literal; $n and $i are yq variables
-readonly ON_NODE='(.on // ([to_entries[] | select(.key | kind == "alias") | select((.key | explode(.)) == "on") | .value] | .[0])) as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)) | with(select([... | select(kind == "alias")] | length > 0); error("on: holds an alias nested too deep to resolve"))'
+# The `on:` node every read starts from, with its aliases resolved. It
+# is the one root key that is `on` or an alias of `on`: a root holding
+# more than one makes `yq` fail ("on: is given more than once"), and
+# `.on` is read first so that a root that is not a map fails the read.
+# `explode`, handed that node alone, resolves one level of aliases per
+# pass: the aliases a node holds, not those inside what they stand for.
+# So the node goes through sixteen passes, and one that still holds an
+# alias after them is refused by `yq` with an error rather than read. A
+# file `yq` reads through this is never passed with an alias left in it.
+# shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
+readonly ON_NODE='.on as $plain | [to_entries[] | select((.key | explode(.)) == "on") | .value] as $all | with(select($all | length > 1); error("on: is given more than once")) | ($all | .[0]) as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)) | with(select([... | select(kind == "alias")] | length > 0); error("on: holds an alias nested too deep to resolve"))'
 
 # Check one trigger (pull_request / push) within one workflow file.
 # Args: file, trigger-name
