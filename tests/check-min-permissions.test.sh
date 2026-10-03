@@ -179,6 +179,8 @@ expect_body job-mapscalar.yml $'permissions: {}\njobs:\n  a:\n    permissions: !
   $'DIR/job-mapscalar.yml: job a permissions has unexpected shape (kind=scalar, tag=!!map)\n1 permissions posture violation(s) found'
 expect_body job-null.yml $'permissions: {}\njobs:\n  c:\n    permissions:\n' 1 \
   "DIR/job-null.yml: job c missing ${Q}permissions:${Q} block (every job must declare its own)"$'\n1 permissions posture violation(s) found'
+expect_body job-scalar.yml $'permissions: {}\njobs:\n  d: 5\n' 1 \
+  $'DIR/job-scalar.yml: job d has unexpected shape (kind=scalar, tag=!!int); expected a map\n1 permissions posture violation(s) found'
 expect_body job-xtag.yml $'permissions: {}\njobs:\n  a:\n    permissions: !x\n      contents: read\n' 0 ''
 expect_body job-strseq.yml $'permissions: {}\njobs:\n  b:\n    permissions: !!str [contents]\n' 1 \
   $'DIR/job-strseq.yml: job b permissions has unexpected shape (kind=seq, tag=!!str)\n1 permissions posture violation(s) found'

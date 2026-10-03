@@ -259,6 +259,12 @@ expect_body list-nested.yml $'on: [workflow_dispatch, [push]]\n' 1 \
   "DIR/list-nested.yml: on: has a list item of unexpected shape (kind=seq, tag=!!seq); expected a name${ONE}"
 expect_body list-map-item.yml $'on: [{push: {}}, push]\n' 1 \
   "DIR/list-map-item.yml: on: has a list item of unexpected shape (kind=map, tag=!!map); expected a name"$'\n'"DIR/list-map-item.yml: on.push ${NAMED}${TWO}"
+# A list item is a name only as a scalar carrying the string tag.
+expect_body list-null-item.yml $'on: [!!null push]\n' 1 \
+  "DIR/list-null-item.yml: on: has a list item of unexpected shape (kind=scalar, tag=!!null); expected a name${ONE}"
+expect_body list-xtag-item.yml $'on: [!x push, workflow_dispatch]\n' 1 \
+  "DIR/list-xtag-item.yml: on: has a list item of unexpected shape (kind=scalar, tag=!x); expected a name${ONE}"
+expect_body on-int.yml $'on: 5\n' 1 "DIR/on-int.yml: on: has unexpected shape (kind=scalar, tag=!!int); ${SHAPES}${ONE}"
 expect_body list-alias.yml $'name: &p pull_request\non: [*p]\n' 1 "DIR/list-alias.yml: on.pull_request ${NAMED}${ONE}"
 expect_body nested-key.yml $'name: &k push\nenv:\n  A: &m {*k : {}}\non: *m\n' 1 "DIR/nested-key.yml: on.push ${MISSING}${ONE}"
 expect_body alias-on-key.yml $'name: &k on\n*k :\n  push: {}\n' 1 "DIR/alias-on-key.yml: on.push ${MISSING}${ONE}"

@@ -197,10 +197,6 @@ if [[ ${manifest_exit} != 2 || ${manifest_stderr} == *'EXEMPT'* ||
 fi
 printf 'OK   drift beside an unparsable manifest\n'
 
-# A `jobs:` written as an alias stands for the map it names: its keys are
-# job keys, and the category entry naming one of them resolves. Only
-# `jobs:` is resolved: a merge key `yq` cannot resolve elsewhere in a
-# workflow leaves its job keys readable.
 # @description Run the lint with a lint-groups manifest written to a
 # temp dir at run time, beside one fixture's ci.yml and category map, and
 # compare the whole of stderr. The scripts dir holds check-foo.sh only.
@@ -254,8 +250,16 @@ expect_manifest item-int.yml $'g:\n  - 5\n' bad-orphan-category 2 \
   'DIR/item-int.yml: lint-groups group g holds an item that is not a check name (kind=scalar, tag=!!int)'
 expect_manifest item-strtag.yml $'g:\n  - foo\n  - !!str [nosuch]\n' good 2 \
   'DIR/item-strtag.yml: lint-groups group g holds an item that is not a check name (kind=seq, tag=!!str)'
-expect_manifest alias.yml $'x: &l [foo]\ng: *l\n' good 2 'DIR/alias.yml: lint-groups manifest holds an alias'
-expect_manifest merge.yml $'x: &m {g: [foo]}\n<<: *m\n' good 2 'DIR/merge.yml: lint-groups manifest holds an alias'
+readonly ALIAS='lint-groups manifest holds an alias or a merge key'
+expect_manifest alias.yml $'x: &l [foo]\ng: *l\n' good 2 "DIR/alias.yml: ${ALIAS}"
+expect_manifest merge.yml $'x: &m {g: [foo]}\n<<: *m\n' good 2 "DIR/merge.yml: ${ALIAS}"
+expect_manifest alias-key.yml $'g: [&k foo]\n*k : [foo]\n' good 2 "DIR/alias-key.yml: ${ALIAS}"
+expect_manifest merge-list.yml $'<<: [foo]\ng: [foo]\n' good 2 "DIR/merge-list.yml: ${ALIAS}"
+# A check name is one non-empty line: the coverage below reads names a
+# line at a time.
+readonly BAD_NAME='holds a check name that is empty or spans lines'
+expect_manifest name-empty.yml $'g:\n  - foo\n  - ""\n' good 2 "DIR/name-empty.yml: lint-groups group g ${BAD_NAME}"
+expect_manifest name-lines.yml $'h:\n  - "foo\\nfoo"\n' good 2 "DIR/name-lines.yml: lint-groups group h ${BAD_NAME}"
 # A list or a map carrying a tag of its own is still read by its kind.
 expect_manifest group-strtag.yml $'g: !!str [foo, nosuch]\n' good 1 \
   "DIR/group-strtag.yml: lint-groups basename nosuch has no check script (${FIXTURES}/bad-missing-manifest-check/scripts/check-nosuch.sh)"$'\n1 ci.yml / categories drift entry/entries'
@@ -286,6 +290,10 @@ for read in 'eval kind + ' 'select(kind == "alias")' 'eval length ' 'kind != "se
   printf 'OK   manifest read %s failing\n' "${read}"
 done
 
+# A `jobs:` written as an alias stands for the map it names: its keys are
+# job keys, and the category entry naming one of them resolves. Only
+# `jobs:` is resolved: a merge key `yq` cannot resolve elsewhere in a
+# workflow leaves its job keys readable.
 alias_dir="$(mktemp --directory)"
 cp -- "${FIXTURES}/good/ci.yml" "${alias_dir}/"
 printf 'foo: Category-A\nbar: Category-B\nbaz: Category-C\n' >"${alias_dir}/categories.yml"
