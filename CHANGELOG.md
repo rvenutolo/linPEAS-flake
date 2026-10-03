@@ -6,6 +6,16 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20261003-ea9b2e92] - 2026-10-03
+
+### Chores
+- Bump linpeas to 20261003-ea9b2e92 ([#1223](https://github.com/rvenutolo/linPEAS-flake/pull/1223))
+
+### Fixes
+- Resolve aliases in every read of on: in four workflow lints ([#1219](https://github.com/rvenutolo/linPEAS-flake/pull/1219))
+- Stop a failed yq read passing as a verdict in five lints ([#1218](https://github.com/rvenutolo/linPEAS-flake/pull/1218))
+- Name yq and its status when a notify-arms read fails ([#1216](https://github.com/rvenutolo/linPEAS-flake/pull/1216))
+
 ## [20261002-82d9fad1] - 2026-10-02
 
 ### Chores
