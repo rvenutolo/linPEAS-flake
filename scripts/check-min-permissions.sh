@@ -68,9 +68,9 @@ function read_workflow() {
 
 # @description Stop the run on a `yq` read that failed after the
 # workflow's first read succeeded. The file parses, so the failure is
-# usually `yq` failing. A node whose tag `yq` cannot decode (`!!map [a]`,
-# or `[.nan]` rendered as JSON) fails such a read too, and is reported
-# the same way, though it is a fact about the workflow. Carrying on would
+# usually `yq` failing. A node whose tag `yq` cannot decode
+# (`permissions: !!map 5`) fails such a read too, and is reported the
+# same way, though it is a fact about the workflow. Carrying on would
 # print a verdict about a value nothing read.
 # @arg $1 what was being read
 # @arg $2 workflow path

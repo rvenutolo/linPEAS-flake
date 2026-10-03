@@ -83,8 +83,8 @@ function read_workflow() {
 # failure is usually `yq` failing. A node whose tag `yq` cannot decode
 # would fail one too and is reported the same way, though no such input
 # has been found to reach these reads, which follow a shape the first
-# read has decoded. Carrying
-# on would compare an empty value and score the workflow clean.
+# read has decoded. Carrying on would compare an empty value and score
+# the workflow clean.
 # @arg $1 what was being read
 # @arg $2 workflow path
 # @arg $3 the status `yq` exited with
