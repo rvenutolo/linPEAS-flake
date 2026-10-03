@@ -194,6 +194,14 @@ expect_body jobs-merge.yml $'x-b: &b\n  permissions: {}\n  evil:\n    runs-on: x
   "DIR/jobs-merge.yml: ${MERGE}"$'\n1 permissions posture violation(s) found'
 expect_body jobs-merge-inline.yml $'permissions: {}\njobs:\n  <<:\n    evil:\n      runs-on: x\n' 1 \
   "DIR/jobs-merge-inline.yml: ${MERGE}"$'\n1 permissions posture violation(s) found'
+# The job rows are tab-separated, and GitHub Actions refuses a job id
+# holding a tab or a line break, so such an id is a finding and the
+# workflow's jobs are not read.
+readonly ODD_ID='jobs: holds a job id with a tab or a line break, which GitHub Actions refuses; its jobs are not read'
+expect_body job-id-tab.yml $'permissions: {}\njobs:\n  "x\\t!!str\\tmap !!map\\tmap !!map":\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
+  "DIR/job-id-tab.yml: ${ODD_ID}"$'\n1 permissions posture violation(s) found'
+expect_body job-id-break.yml $'permissions: {}\njobs:\n  "y\\nz":\n    permissions: {}\n' 1 \
+  "DIR/job-id-break.yml: ${ODD_ID}"$'\n1 permissions posture violation(s) found'
 expect_body job-xtag.yml $'permissions: {}\njobs:\n  a:\n    permissions: !x\n      contents: read\n' 0 ''
 expect_body job-strseq.yml $'permissions: {}\njobs:\n  b:\n    permissions: !!str [contents]\n' 1 \
   $'DIR/job-strseq.yml: job b permissions has unexpected shape (kind=seq, tag=!!str)\n1 permissions posture violation(s) found'
