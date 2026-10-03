@@ -181,6 +181,10 @@ expect_body job-null.yml $'permissions: {}\njobs:\n  c:\n    permissions:\n' 1 \
   "DIR/job-null.yml: job c missing ${Q}permissions:${Q} block (every job must declare its own)"$'\n1 permissions posture violation(s) found'
 expect_body job-scalar.yml $'permissions: {}\njobs:\n  d: 5\n' 1 \
   $'DIR/job-scalar.yml: job d has unexpected shape (kind=scalar, tag=!!int); expected a map\n1 permissions posture violation(s) found'
+# A job written as an alias is read through it, as GitHub Actions reads it.
+expect_body job-alias.yml $'x-job: &j\n  permissions: {}\n  steps:\n    - run: echo PAYLOAD_RAN\npermissions: {}\njobs:\n  e: *j\n' 0 ''
+expect_body job-alias-bare.yml $'x-job: &j\n  steps:\n    - run: echo PAYLOAD_RAN\npermissions: {}\njobs:\n  f: *j\n' 1 \
+  "DIR/job-alias-bare.yml: job f missing ${Q}permissions:${Q} block (every job must declare its own)"$'\n1 permissions posture violation(s) found'
 expect_body job-xtag.yml $'permissions: {}\njobs:\n  a:\n    permissions: !x\n      contents: read\n' 0 ''
 expect_body job-strseq.yml $'permissions: {}\njobs:\n  b:\n    permissions: !!str [contents]\n' 1 \
   $'DIR/job-strseq.yml: job b permissions has unexpected shape (kind=seq, tag=!!str)\n1 permissions posture violation(s) found'
