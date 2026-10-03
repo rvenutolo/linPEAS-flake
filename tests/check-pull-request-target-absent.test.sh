@@ -206,6 +206,9 @@ expect_body top-list.yml $'- on: pull_request_target\n' 1 \
 # GitHub Actions refuses a merge key, so this workflow cannot run; an
 # `on:` a root merge key brings in is still read.
 expect_body root-merge.yml $'env:\n  X: &b {on: [push, pull_request_target]}\n<<: *b\n' 1 "DIR/root-merge.yml: ${USES}${ONE}"
+# The file's own `on` key is read, not one a later merge key would put
+# over it: under YAML's merge rule the explicit key wins.
+expect_body plain-then-merge.yml $'env:\n  X: &b {on: [pull_request_target]}\non: [push]\n<<: *b\n' 0 ''
 expect_body false-on.yml $'on: false\njobs: {}\n' 1 $'DIR/false-on.yml: on: has unexpected shape (tag=!!bool)'"${ONE}"
 # A list or a map is read whatever tag it carries.
 expect_body tagged-map.yml $'on: !x\n  pull_request_target: {}\n' 1 "DIR/tagged-map.yml: ${USES}${ONE}"

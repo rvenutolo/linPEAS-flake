@@ -232,6 +232,10 @@ function main() {
     'on-twice.yml' $'name: &k on\non: [push]\n*k : [pull_request]\n'
   run_body_scenario 'pull_request a root merge key brings in with secret fails' \
     'root-merge.yml' $'env:\n  X: &b {on: [pull_request]}\n<<: *b\n' 1 'ROOT_MERGE'
+  # The file's own `on` key is read, not one a later merge key would put
+  # over it: under YAML's merge rule the explicit key wins.
+  run_body_scenario 'pull_request in the own on key beside a merged push with secret fails' \
+    'plain-then-merge.yml' $'env:\n  X: &b {on: [push]}\non: [pull_request]\n<<: *b\n' 1 'PLAIN_THEN_MERGE'
   run_refused_scenario 'a top-level list is refused' 'top-list.yml' $'- on: pull_request\n'
   # GitHub Actions refuses a merge key, so this workflow cannot run; the
   # guard still scans a workflow whose merge brings in a PR trigger.

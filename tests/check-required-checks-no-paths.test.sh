@@ -231,6 +231,12 @@ run_built_scenario 'a filter under an on: a root merge key brings in is named' 1
   "${LINT} .github/workflows/root-merge.yml ${PATHS_FINDING}" \
   '' 0 \
   root-merge.yml $'env:\n  X: &b {on: {pull_request: {paths: [a]}}}\n<<: *b\njobs: {}\n'
+# The file's own `on` key is read, not one a later merge key would put
+# over it: under YAML's merge rule the explicit key wins.
+run_built_scenario 'a filter in the own on key beside a merged one is named' 1 under \
+  "${LINT} .github/workflows/plain-then-merge.yml ${PATHS_FINDING}" \
+  '' 0 \
+  plain-then-merge.yml $'env:\n  X: &b {on: {pull_request: {branches: [main]}}}\non:\n  pull_request:\n    paths: [a]\n<<: *b\njobs: {}\n'
 run_built_scenario 'a top-level list is refused' 1 under \
   "${LINT} .github/workflows/top-list.yml: ${UNREAD} 1" \
   '' 0 \

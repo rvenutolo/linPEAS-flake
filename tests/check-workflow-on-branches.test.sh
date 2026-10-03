@@ -205,6 +205,9 @@ expect_body top-list.yml $'- on: push\n' 1 \
 # GitHub Actions refuses a merge key, so this workflow cannot run; an
 # `on:` a root merge key brings in is still read.
 expect_body root-merge.yml $'env:\n  X: &b {on: {push: {}}}\n<<: *b\n' 1 "DIR/root-merge.yml: on.push ${MISSING}${ONE}"
+# The file's own `on` key is read, not one a later merge key would put
+# over it: under YAML's merge rule the explicit key wins.
+expect_body plain-then-merge.yml $'env:\n  X: &b {on: {push: {}}}\non:\n  push:\n    branches: [main]\n<<: *b\n' 0 ''
 expect_body false-on.yml $'on: false\njobs: {}\n' 1 \
   $'DIR/false-on.yml: on.pull_request has unexpected shape (tag=); expected map\nDIR/false-on.yml: on.push has unexpected shape (tag=); expected map'"${TWO}"
 expect_body nested-key.yml $'name: &k push\nenv:\n  A: &m {*k : {}}\non: *m\n' 1 "DIR/nested-key.yml: on.push ${MISSING}${ONE}"
