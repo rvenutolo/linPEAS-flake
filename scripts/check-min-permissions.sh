@@ -138,17 +138,27 @@ for f in "${selected_files[@]}"; do
   # scan would pass silently. Unlike the reads above, this one fails on
   # the workflow's own shape (a `jobs:` that is not a map or a list), so
   # its failure stays a counted finding.
-  if ! rows="$(yq eval '.jobs | to_entries[] | .key + "\t" + (.value | kind + " " + tag) + "\t" + (.value.permissions | kind + " " + tag)' "${f}")"; then
+  # Each row: the job's key and the key's tag, which is `!!merge` for a
+  # `<<` merge key; the kind and tag of the job, read through an alias
+  # by `explode` handed only that node (an anchor cannot sit on an
+  # alias, so one pass resolves it); and those of its `permissions:`.
+  if ! rows="$(yq eval '.jobs | to_entries[] | .key + "\t" + (.key | tag) + "\t" + ((.value | select(kind == "alias") | explode(.) | kind + " " + tag) // (.value | kind + " " + tag)) + "\t" + (.value.permissions | kind + " " + tag)' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
   fi
   [[ -n ${rows} ]] || continue
-  while IFS=$'\t' read -r job job_node job_shape; do
+  while IFS=$'\t' read -r job key_tag job_node job_shape; do
     [[ -z ${job} ]] && continue
-    # An alias is read through by the permissions read, as GitHub
-    # Actions reads it, so only a node that is neither is not a job.
-    if [[ ${job_node} != 'map '* && ${job_node} != 'alias '* ]]; then
+    # GitHub Actions refuses a merge key, and the jobs one brings in are
+    # not listed as the map's own, so they would go unread.
+    if [[ ${key_tag} == '!!merge' ]]; then
+      printf '%s: jobs: holds a merge key, which GitHub Actions refuses; the jobs it brings in are not read\n' \
+        "${f}" >&2
+      failed=$((failed + 1))
+      continue
+    fi
+    if [[ ${job_node} != 'map '* ]]; then
       printf '%s: job %q has unexpected shape (kind=%s, tag=%s); expected a map\n' \
         "${f}" "${job}" "${job_node%% *}" "${job_node#* }" >&2
       failed=$((failed + 1))

@@ -226,10 +226,10 @@ function die_manifest_shape() {
 # non-empty list of check names. Every shape is read by its kind, with
 # the tag beside it: a map or a list carrying a tag of its own is still
 # read, and a check name is a scalar carrying the string tag, neither
-# empty nor spanning lines. Anything else lists no check the coverage can hold to a
-# script, or names one only through an alias or a merge key, which the
-# manifest's other readers resolve by their own rules, so the run stops
-# before any check prints.
+# empty nor spanning lines. Anything else lists no check the coverage
+# can hold to a script, or names one only through an alias or a merge
+# key, which the manifest's other readers resolve by their own rules, so
+# the run stops before any check prints.
 manifest_shape="$(yq eval 'kind + " " + tag' "${LINT_GROUPS_FILE}")" || die_manifest_unread
 if [[ ${manifest_shape} == *$'\n'* ]]; then
   die_manifest_shape 'lint-groups manifest holds several YAML documents'
