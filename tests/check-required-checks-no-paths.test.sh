@@ -212,6 +212,12 @@ run_built_scenario 'a chain fifteen deep ending in a key is refused' 1 exact \
   '' 0 \
   chain-15-key.yml $'name: &k pull_request\n'"$(alias_chain 15 '{*k : {}}')"$'\non:\n  pull_request:\n    paths: [a]\n    x: *a15\njobs: {}\n'
 
+# A root with more than one key that resolves to `on` has no one `on:`.
+run_built_scenario 'on: given twice is refused' 1 exact \
+  $'Error: on: is given more than once\n'"${LINT} .github/workflows/on-twice.yml: ${UNREAD} 1" \
+  '' 0 \
+  on-twice.yml $'name: &k on\non:\n  pull_request:\n    branches: [main]\n*k :\n  pull_request:\n    paths: [a]\njobs: {}\n'
+
 # An `on:` map carrying a tag of its own is still a map.
 run_built_scenario 'a filter under a tagged on: map is named' 1 exact \
   "${LINT} .github/workflows/tagged.yml ${PATHS_FINDING}" \

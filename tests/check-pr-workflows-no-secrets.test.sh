@@ -227,6 +227,9 @@ function main() {
     'chain-16.yml' "$(alias_chain 16 '[a]')"$'\non:\n  pull_request:\n    x: *a16\n'
   run_refused_scenario 'on: holding a chain fifteen deep ending in a key is refused' \
     'chain-15-key.yml' $'name: &k push\n'"$(alias_chain 15 '{*k : {}}')"$'\non:\n  pull_request:\n    x: *a15\n'
+  # A root with more than one key that resolves to `on` has no one `on:`.
+  run_refused_scenario 'on: given twice is refused' \
+    'on-twice.yml' $'name: &k on\non: [push]\n*k : [pull_request]\n'
   # GitHub Actions refuses a merge key, so this workflow cannot run; the
   # guard still scans a workflow whose merge brings in a PR trigger.
   run_body_scenario 'merge-key pull_request with secret fails' \

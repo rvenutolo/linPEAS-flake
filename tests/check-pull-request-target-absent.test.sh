@@ -191,6 +191,13 @@ expect_body chain-16.yml "$(alias_chain 16 '[main]')"$'\non:\n  push: *a16\n' 1 
   $'Error: on: holds an alias nested too deep to resolve\nDIR/chain-16.yml: could not evaluate workflow with yq (malformed?)'"${ONE}"
 expect_body chain-15-key.yml $'name: &k pull_request_target\n'"$(alias_chain 15 '{*k : {}}')"$'\non:\n  push: *a15\n' 1 \
   $'Error: on: holds an alias nested too deep to resolve\nDIR/chain-15-key.yml: could not evaluate workflow with yq (malformed?)'"${ONE}"
+# A file whose root has more than one key that resolves to `on` (a
+# plain one beside an alias, or two aliases) has no one `on:` to read.
+expect_body on-twice.yml $'name: &k on\non: [push]\n*k : [pull_request_target]\n' 1 \
+  $'Error: on: is given more than once\nDIR/on-twice.yml: could not evaluate workflow with yq (malformed?)'"${ONE}"
+expect_body on-twice-aliases.yml $'name: &k on\nenv:\n  X: &j on\n*k : [push]\n*j : [pull_request_target]\n' 1 \
+  $'Error: on: is given more than once\nDIR/on-twice-aliases.yml: could not evaluate workflow with yq (malformed?)'"${ONE}"
+expect_body false-on.yml $'on: false\njobs: {}\n' 1 $'DIR/false-on.yml: on: has unexpected shape (tag=!!bool)'"${ONE}"
 # A list or a map is read whatever tag it carries.
 expect_body tagged-map.yml $'on: !x\n  pull_request_target: {}\n' 1 "DIR/tagged-map.yml: ${USES}${ONE}"
 expect_body tagged-list.yml $'on: !x [push, pull_request_target]\n' 1 "DIR/tagged-list.yml: ${USES}${ONE}"

@@ -183,6 +183,7 @@ expect_body nested-three-deep.yml $'env:\n  C: &c [main]\n  B: &b {branches: *c}
 # alias, the one alias the passes leave there. Each trigger's
 # read is refused on its own.
 readonly TOO_DEEP=$'Error: on: holds an alias nested too deep to resolve\n'
+readonly ON_TWICE=$'Error: on: is given more than once\n'
 readonly UNREAD='could not evaluate workflow with yq (malformed?)'
 readonly TWO=$'\n'"2 workflow trigger(s) missing or non-canonical ${Q}branches: [main]${Q}"
 expect_body chain-15.yml "$(alias_chain 15 '[main]')"$'\non:\n  push:\n    branches: [main]\n    x: *a15\n' 0 ''
@@ -190,6 +191,12 @@ expect_body chain-16.yml "$(alias_chain 16 '[main]')"$'\non:\n  push:\n    branc
   "${TOO_DEEP}DIR/chain-16.yml: ${UNREAD}"$'\n'"${TOO_DEEP}DIR/chain-16.yml: ${UNREAD}${TWO}"
 expect_body chain-15-key.yml $'name: &k push\n'"$(alias_chain 15 '{*k : {}}')"$'\non:\n  push:\n    branches: [main]\n    x: *a15\n' 1 \
   "${TOO_DEEP}DIR/chain-15-key.yml: ${UNREAD}"$'\n'"${TOO_DEEP}DIR/chain-15-key.yml: ${UNREAD}${TWO}"
+# A file whose root has more than one key that resolves to `on` has no
+# one `on:` to read, and an `on:` that is not a map is no trigger map.
+expect_body on-twice.yml $'name: &k on\non:\n  push:\n    branches: [main]\n*k :\n  push: {}\n' 1 \
+  "${ON_TWICE}DIR/on-twice.yml: ${UNREAD}"$'\n'"${ON_TWICE}DIR/on-twice.yml: ${UNREAD}${TWO}"
+expect_body false-on.yml $'on: false\njobs: {}\n' 1 \
+  $'DIR/false-on.yml: on.pull_request has unexpected shape (tag=); expected map\nDIR/false-on.yml: on.push has unexpected shape (tag=); expected map'"${TWO}"
 expect_body nested-key.yml $'name: &k push\nenv:\n  A: &m {*k : {}}\non: *m\n' 1 "DIR/nested-key.yml: on.push ${MISSING}${ONE}"
 expect_body alias-on-key.yml $'name: &k on\n*k :\n  push: {}\n' 1 "DIR/alias-on-key.yml: on.push ${MISSING}${ONE}"
 # GitHub Actions refuses a merge key, so this workflow cannot run; the
