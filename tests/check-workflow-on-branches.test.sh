@@ -101,12 +101,15 @@ function expect_failed_read() {
 # documents) are built here so that no formatter or workflow linter reads
 # them as tracked files. The line `yq` itself prints when it resolves a
 # merge key carries a timestamp, so it is dropped before the comparison;
-# every line the lint prints is compared.
+# every line the lint prints is compared. With `tail` as a fifth argument
+# only the end of stderr is compared, for a run whose first lines are
+# `yq`'s own error, whose wording is not the lint's.
 # @arg $1 file name, which is also the scenario's label
 # @arg $2 file body  @arg $3 expected exit status
 # @arg $4 expected stderr, with DIR standing for the temp dir
+# @arg $5 `tail` to compare only the end of stderr (optional)
 function expect_body() {
-  local -r name="$1" body="$2" want_exit="$3"
+  local -r name="$1" body="$2" want_exit="$3" mode="${5:-whole}"
   local dir got_exit=0 got_stderr want
   dir="$(mktemp --directory)"
   printf '%s' "${body}" >"${dir}/${name}"
@@ -118,7 +121,8 @@ function expect_body() {
     printf 'FAIL %s: exit %s, want %s\n  stderr: %s\n' "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" >&2
     return 1
   fi
-  if [[ ${got_stderr} != "${want}" ]]; then
+  if [[ ${mode} == tail && ${got_stderr} != *$'\n'"${want}" ]] ||
+    [[ ${mode} != tail && ${got_stderr} != "${want}" ]]; then
     printf 'FAIL %s: stderr is not %q\n  got: %s\n' "${name}" "${want}" "${got_stderr}" >&2
     return 1
   fi
@@ -195,6 +199,9 @@ expect_body chain-15-key.yml $'name: &k push\n'"$(alias_chain 15 '{*k : {}}')"$'
 # one `on:` to read, and an `on:` that is not a map is no trigger map.
 expect_body on-twice.yml $'name: &k on\non:\n  push:\n    branches: [main]\n*k :\n  push: {}\n' 1 \
   "${ON_TWICE}DIR/on-twice.yml: ${UNREAD}"$'\n'"${ON_TWICE}DIR/on-twice.yml: ${UNREAD}${TWO}"
+expect_body no-on.yml $'jobs: {}\n' 0 ''
+expect_body top-list.yml $'- on: push\n' 1 \
+  $'DIR/top-list.yml: could not evaluate workflow with yq (malformed?)'"${TWO}" tail
 expect_body false-on.yml $'on: false\njobs: {}\n' 1 \
   $'DIR/false-on.yml: on.pull_request has unexpected shape (tag=); expected map\nDIR/false-on.yml: on.push has unexpected shape (tag=); expected map'"${TWO}"
 expect_body nested-key.yml $'name: &k push\nenv:\n  A: &m {*k : {}}\non: *m\n' 1 "DIR/nested-key.yml: on.push ${MISSING}${ONE}"

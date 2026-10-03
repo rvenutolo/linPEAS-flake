@@ -218,6 +218,18 @@ run_built_scenario 'on: given twice is refused' 1 exact \
   '' 0 \
   on-twice.yml $'name: &k on\non:\n  pull_request:\n    branches: [main]\n*k :\n  pull_request:\n    paths: [a]\njobs: {}\n'
 
+# A workflow with no `on:` holds no filter; one whose top level is a list
+# is not a workflow `yq` can read.
+run_built_scenario 'a workflow with no on: is clean beside a finding' 1 exact \
+  "${LINT} .github/workflows/filtered.yml ${PATHS_FINDING}" \
+  '' 0 \
+  filtered.yml "${PATHS_BODY}" \
+  no-on.yml $'jobs: {}\n'
+run_built_scenario 'a top-level list is refused' 1 under \
+  "${LINT} .github/workflows/top-list.yml: ${UNREAD} 1" \
+  '' 0 \
+  top-list.yml $'- on: pull_request\n'
+
 # An `on:` map carrying a tag of its own is still a map.
 run_built_scenario 'a filter under a tagged on: map is named' 1 exact \
   "${LINT} .github/workflows/tagged.yml ${PATHS_FINDING}" \

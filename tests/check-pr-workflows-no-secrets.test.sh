@@ -230,6 +230,7 @@ function main() {
   # A root with more than one key that resolves to `on` has no one `on:`.
   run_refused_scenario 'on: given twice is refused' \
     'on-twice.yml' $'name: &k on\non: [push]\n*k : [pull_request]\n'
+  run_refused_scenario 'a top-level list is refused' 'top-list.yml' $'- on: pull_request\n'
   # GitHub Actions refuses a merge key, so this workflow cannot run; the
   # guard still scans a workflow whose merge brings in a PR trigger.
   run_body_scenario 'merge-key pull_request with secret fails' \
@@ -245,6 +246,30 @@ function main() {
   # file (a merge of a string) does not stop a readable `on:` being read.
   run_body_scenario 'pull_request beside an unresolvable merge elsewhere fails' \
     'merge-elsewhere.yml' $'name: &s str\non: pull_request\nenv:\n  <<: *s\n' 1 'MERGE_ELSEWHERE'
+  # A workflow with no `on:` is not PR-triggered: beside a clean
+  # PR-triggered one, it is counted as skipped.
+  local no_on_dir no_on_out no_on_err no_on_outcome no_on_exit=0
+  no_on_dir="$(mktemp --directory)"
+  no_on_out="$(mktemp)"
+  no_on_err="$(mktemp)"
+  no_on_outcome="$(mktemp)"
+  cp -- "${FIXTURES}/clean-pr-workflow.yml" "${no_on_dir}/"
+  # shellcheck disable=SC2016 # the workflow expression is literal text
+  printf 'jobs:\n  a:\n    steps:\n      - run: echo ${{ secrets.NO_ON }}\n' >"${no_on_dir}/no-on.yml"
+  WORKFLOWS_DIR_OVERRIDE="${no_on_dir}" "${SCRIPT}" >"${no_on_out}" 2>"${no_on_err}" || no_on_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${no_on_exit}" >"${no_on_outcome}"
+  local -r no_on_want='examined 2 workflow(s): 1 scanned as PR-triggered, 1 skipped as not PR-triggered; 1 secrets.GITHUB_TOKEN reference(s) allowed'
+  harness_assert_record 'a workflow with no on: is skipped' "${no_on_want}" \
+    "${no_on_outcome}" "${no_on_out}" "${no_on_err}"
+  if [[ ${no_on_exit} -ne 0 ]] || ! grep --fixed-strings --quiet -- "${no_on_want}" "${no_on_out}"; then
+    printf 'FAIL: a workflow with no on: is skipped — exit %d\n' "${no_on_exit}" >&2
+    cat -- "${no_on_out}" "${no_on_err}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: a workflow with no on: is skipped (exit 0)\n'
+  fi
+  rm --recursive --force -- "${no_on_dir}" "${no_on_out}" "${no_on_err}" "${no_on_outcome}"
+
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
