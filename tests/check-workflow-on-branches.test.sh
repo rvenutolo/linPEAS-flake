@@ -214,8 +214,36 @@ expect_body mistag-branches.yml $'on:\n  pull_request:\n    branches: [.nan]\n' 
   'cannot read the on.pull_request.branches list of DIR/mistag-branches.yml: yq exited 1' tail
 expect_body mistag-push.yml $'on:\n  pull_request:\n    branches: [main]\n  push: !!map [a]\n' 2 \
   'cannot read the on.push.branches shape of DIR/mistag-push.yml: yq exited 1' tail
+readonly SHAPES='expected a map, a list or a name'
 expect_body false-on.yml $'on: false\njobs: {}\n' 1 \
-  $'DIR/false-on.yml: on.pull_request has unexpected shape (tag=); expected map\nDIR/false-on.yml: on.push has unexpected shape (tag=); expected map'"${TWO}"
+  "DIR/false-on.yml: on: has unexpected shape (kind=scalar, tag=!!bool); ${SHAPES}${ONE}"
+expect_body tagged-name.yml $'on: !x push\n' 1 \
+  "DIR/tagged-name.yml: on: has unexpected shape (kind=scalar, tag=!x); ${SHAPES}${ONE}"
+# GitHub Actions reads a workflow file as one YAML document and refuses
+# one holding several, so such a file is a finding whatever each
+# document holds, and is read no further.
+readonly SEVERAL='holds several YAML documents; a workflow file must hold one'
+readonly CLEAN_ON=$'on:\n  pull_request:\n    branches: [main]\n  push:\n    branches: [main]\n'
+expect_body several-docs.yml "${CLEAN_ON}"$'---\non: push\n' 1 "DIR/several-docs.yml: ${SEVERAL}${ONE}"
+expect_body several-docs-first.yml $'on: push\n---\n'"${CLEAN_ON}" 1 "DIR/several-docs-first.yml: ${SEVERAL}${ONE}"
+expect_body several-docs-clean.yml "${CLEAN_ON}"$'---\n'"${CLEAN_ON}" 1 "DIR/several-docs-clean.yml: ${SEVERAL}${ONE}"
+expect_body several-docs-trailing.yml "${CLEAN_ON}"$'---\n' 1 "DIR/several-docs-trailing.yml: ${SEVERAL}${ONE}"
+# An `on:` written as a name or a list of names runs each trigger it
+# names on every branch; one naming neither trigger is out of scope.
+readonly NAMED="is given as a name, with no branches (implicit all-branches forbidden; need ${Q}branches: [main]${Q})"
+expect_body name-push.yml $'on: push\n' 1 "DIR/name-push.yml: on.push ${NAMED}${ONE}"
+expect_body name-pr.yml $'on: pull_request\n' 1 "DIR/name-pr.yml: on.pull_request ${NAMED}${ONE}"
+expect_body name-alias.yml $'name: &p push\non: *p\n' 1 "DIR/name-alias.yml: on.push ${NAMED}${ONE}"
+expect_body name-dispatch.yml $'on: workflow_dispatch\n' 0 ''
+expect_body list-dispatch.yml $'on: [workflow_dispatch, schedule]\n' 0 ''
+expect_body list-both.yml $'on: [push, workflow_dispatch, pull_request]\n' 1 \
+  "DIR/list-both.yml: on.pull_request ${NAMED}"$'\n'"DIR/list-both.yml: on.push ${NAMED}${TWO}"
+expect_body list-tagged.yml $'on: !!str [push]\n' 1 "DIR/list-tagged.yml: on.push ${NAMED}${ONE}"
+expect_body list-nested.yml $'on: [workflow_dispatch, [push]]\n' 1 \
+  "DIR/list-nested.yml: on: has a list item of unexpected shape (kind=seq, tag=!!seq); expected a name${ONE}"
+expect_body list-map-item.yml $'on: [{push: {}}, push]\n' 1 \
+  "DIR/list-map-item.yml: on: has a list item of unexpected shape (kind=map, tag=!!map); expected a name"$'\n'"DIR/list-map-item.yml: on.push ${NAMED}${TWO}"
+expect_body list-alias.yml $'name: &p pull_request\non: [*p]\n' 1 "DIR/list-alias.yml: on.pull_request ${NAMED}${ONE}"
 expect_body nested-key.yml $'name: &k push\nenv:\n  A: &m {*k : {}}\non: *m\n' 1 "DIR/nested-key.yml: on.push ${MISSING}${ONE}"
 expect_body alias-on-key.yml $'name: &k on\n*k :\n  push: {}\n' 1 "DIR/alias-on-key.yml: on.push ${MISSING}${ONE}"
 # GitHub Actions refuses a merge key, so this workflow cannot run; the
