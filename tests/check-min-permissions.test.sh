@@ -185,6 +185,15 @@ expect_body job-scalar.yml $'permissions: {}\njobs:\n  d: 5\n' 1 \
 expect_body job-alias.yml $'x-job: &j\n  permissions: {}\n  steps:\n    - run: echo PAYLOAD_RAN\npermissions: {}\njobs:\n  e: *j\n' 0 ''
 expect_body job-alias-bare.yml $'x-job: &j\n  steps:\n    - run: echo PAYLOAD_RAN\npermissions: {}\njobs:\n  f: *j\n' 1 \
   "DIR/job-alias-bare.yml: job f missing ${Q}permissions:${Q} block (every job must declare its own)"$'\n1 permissions posture violation(s) found'
+expect_body job-alias-scalar.yml $'x-s: &s 5\npermissions: {}\njobs:\n  g: *s\n' 1 \
+  $'DIR/job-alias-scalar.yml: job g has unexpected shape (kind=scalar, tag=!!int); expected a map\n1 permissions posture violation(s) found'
+# GitHub Actions refuses a merge key, and the jobs one brings into jobs:
+# are not listed as its own, so a merge key there is a finding.
+readonly MERGE='jobs: holds a merge key, which GitHub Actions refuses; the jobs it brings in are not read'
+expect_body jobs-merge.yml $'x-b: &b\n  permissions: {}\n  evil:\n    runs-on: x\npermissions: {}\njobs:\n  <<: *b\n  a:\n    permissions: {}\n' 1 \
+  "DIR/jobs-merge.yml: ${MERGE}"$'\n1 permissions posture violation(s) found'
+expect_body jobs-merge-inline.yml $'permissions: {}\njobs:\n  <<:\n    evil:\n      runs-on: x\n' 1 \
+  "DIR/jobs-merge-inline.yml: ${MERGE}"$'\n1 permissions posture violation(s) found'
 expect_body job-xtag.yml $'permissions: {}\njobs:\n  a:\n    permissions: !x\n      contents: read\n' 0 ''
 expect_body job-strseq.yml $'permissions: {}\njobs:\n  b:\n    permissions: !!str [contents]\n' 1 \
   $'DIR/job-strseq.yml: job b permissions has unexpected shape (kind=seq, tag=!!str)\n1 permissions posture violation(s) found'
