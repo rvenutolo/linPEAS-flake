@@ -33,10 +33,12 @@
 # Exits 0 on full coverage, 1 on any drift. Exits 2 when the check
 # cannot run: `yq` is absent from PATH, the workflow globs match no
 # file, WORKFLOW_FILE_FILTER selects none of the files they matched, or
-# a `yq` read fails for a workflow whose first read succeeded. The first
-# read, of the `pull_request` trigger, stays a counted finding when it
-# fails, and the workflow's `push` trigger is then not read. An empty scan set is a could-not-run rather than a clean
-# tree; LINT_ALLOW_EMPTY_SCAN=1 accepts one deliberately.
+# a `yq` read fails for a workflow whose first read succeeded, which a
+# node whose tag `yq` cannot decode does too. The first read, of the
+# `pull_request` trigger, stays a counted finding when it fails, and the
+# workflow's `push` trigger is then not read. An empty scan set is a
+# could-not-run rather than a clean tree; LINT_ALLOW_EMPTY_SCAN=1 accepts
+# one deliberately.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -77,8 +79,10 @@ function read_workflow() {
 }
 
 # @description Stop the run on a `yq` read that failed after the
-# workflow's first read succeeded, so the file parses and the failure is
-# `yq` failing rather than a fact about the workflow. Carrying on would
+# workflow's first read succeeded. The file parses, so the failure is
+# usually `yq` failing. A node whose tag `yq` cannot decode (`!!map [a]`,
+# or `[.nan]` rendered as JSON) fails such a read too, and is reported
+# the same way, though it is a fact about the workflow. Carrying on would
 # compare an empty value and score the trigger absent.
 # @arg $1 what was being read
 # @arg $2 workflow path
@@ -111,7 +115,8 @@ readonly ON_NODE='.on as $plain | [to_entries[] | select((.key | explode(.)) == 
 # succeeded (0 for its first read).
 # Returns 0 when the trigger is clean, 1 on a finding it has printed, and
 # 3 when the file's first read failed: that is the counted finding
-# read_workflow has printed, and the file is not read further.
+# read_workflow has printed, and the file is not read further. A later
+# read that fails ends the run with exit 2 through die_unread.
 check_trigger() {
   local -r file="$1" trigger="$2" read_before="$3"
   local trig_tag trig_present

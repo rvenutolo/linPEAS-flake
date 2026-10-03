@@ -80,7 +80,10 @@ function read_workflow() {
 # @description Stop the run on a `yq` read that failed. Not for a
 # workflow's first read, whose failure `read_workflow` counts as a
 # finding: once that read has succeeded the file parses, so a later
-# failure is `yq` failing and says nothing about the workflow. Carrying
+# failure is usually `yq` failing. A node whose tag `yq` cannot decode
+# would fail one too and is reported the same way, though no such input
+# has been found to reach these reads, which follow a shape the first
+# read has decoded. Carrying
 # on would compare an empty value and score the workflow clean.
 # @arg $1 what was being read
 # @arg $2 workflow path

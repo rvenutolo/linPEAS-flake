@@ -24,7 +24,7 @@
 # cannot run: `yq` is absent from PATH, the workflow globs match no
 # file, WORKFLOW_FILE_FILTER selects none of the files they matched, or
 # a read of the top-level `permissions:` fails after its shape has been
-# read.
+# read, which a node whose tag `yq` cannot decode does too.
 # An empty scan set is a could-not-run rather than a clean tree;
 # LINT_ALLOW_EMPTY_SCAN=1 accepts one deliberately.
 
@@ -67,8 +67,10 @@ function read_workflow() {
 }
 
 # @description Stop the run on a `yq` read that failed after the
-# workflow's first read succeeded: the file parses, so the failure is
-# `yq` failing and says nothing about the workflow. Carrying on would
+# workflow's first read succeeded. The file parses, so the failure is
+# usually `yq` failing. A node whose tag `yq` cannot decode (`!!map [a]`,
+# or `[.nan]` rendered as JSON) fails such a read too, and is reported
+# the same way, though it is a fact about the workflow. Carrying on would
 # print a verdict about a value nothing read.
 # @arg $1 what was being read
 # @arg $2 workflow path
