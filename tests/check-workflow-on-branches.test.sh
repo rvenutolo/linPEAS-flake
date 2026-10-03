@@ -272,10 +272,17 @@ expect_failed_read bad-pr-wildcard.yml '"pull_request".branches | tag' 19 'the o
 expect_failed_read good.yml '--output-format=json' 21 'the on.pull_request.branches list'
 expect_failed_read bad-pr-wildcard.yml '--output-format=json' 23 'the on.pull_request.branches list'
 
-# The first read failing is a counted finding, and the workflow is read
-# no further: its push trigger, which would be a finding of its own, is
-# not reported beside a read that failed.
-yq_stub '"pull_request" | tag' 25
+# The trigger read is not the workflow's first, and the read of the
+# names an `on:` written as a name or a list gives.
+expect_failed_read good.yml '"pull_request" | tag' 25 'the on.pull_request trigger'
+expect_failed_read bad-on-name.yml '| (select(kind' 27 'the on: names'
+expect_failed_read good-on-list.yml '| (select(kind' 29 'the on: names'
+expect_failed_read good-on-list.yml 'select(kind != "scalar")' 33 'the on: list items'
+
+# The first read, of the kind of `on:`, failing is a counted finding, and
+# the workflow is read no further: its push trigger, which would be a
+# finding of its own, is not reported beside a read that failed.
+yq_stub 'resolve")) | kind + " " + tag' 31
 first_exit=0
 first_stderr="$(PATH="${STUB_DIR}:${PATH}" WORKFLOWS_DIR_OVERRIDE="${FIXTURES}" \
   WORKFLOW_FILE_FILTER=bad-push-extra.yml "${SCRIPT}" 2>&1 >/dev/null)" || first_exit=$?

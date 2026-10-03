@@ -38,14 +38,20 @@
 # in its own `if:` expression. The lint matches the literal string
 # `github.repository == 'rvenutolo/linPEAS-flake'`.
 #
+# GitHub Actions reads a workflow file as one YAML document and refuses
+# one holding several, so a file that `yq` reads as several is a finding
+# and its jobs are not read. A failure of that first read, or of the
+# read listing the jobs, is a counted finding too.
+#
 # See docs/security/workflow-hardening.md.
 #
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures.
 # REPO_SLUG_OVERRIDE swaps the expected slug for fixtures.
 # Exits 0 on full coverage, 1 on any drift. Exits 2 when the check
 # cannot run: `yq` is absent from PATH, the workflow globs match no
-# file, or WORKFLOW_FILE_FILTER selects none of the files they matched.
-# An empty scan set is a could-not-run rather than a clean tree;
+# file, WORKFLOW_FILE_FILTER selects none of the files they matched, or
+# a read of one job's permissions, body or `if:` fails once the job list
+# has been read. An empty scan set is a could-not-run rather than a clean tree;
 # LINT_ALLOW_EMPTY_SCAN=1 accepts one deliberately.
 
 set -Eeuo pipefail
@@ -118,6 +124,20 @@ declare -a selected_files=()
 filter_into selected_files 'workflow YAML' "${FILE_FILTER}" "${workflow_files[@]}"
 for f in "${selected_files[@]}"; do
   [[ -f ${f} ]] || continue
+
+  # The workflow's first read: `yq` prints one index per document, and
+  # GitHub Actions refuses a file holding several, so such a file is a
+  # finding and is read no further.
+  if ! doc_indexes="$(yq eval 'document_index' "${f}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  if [[ ${doc_indexes} == *$'\n'* ]]; then
+    printf '%s: holds several YAML documents; a workflow file must hold one\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
 
   # Capture yq's output (and exit status) into a variable rather than
   # feeding the loop from `< <(yq ...)`: a process substitution's exit

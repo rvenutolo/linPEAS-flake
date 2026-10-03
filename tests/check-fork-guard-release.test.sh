@@ -86,5 +86,8 @@ expect_body one-doc-guarded.yml "${WRITE_GUARDED}" 0 ''
 # counted finding, and the workflow is read no further.
 expect_body count-unread.yml "${WRITE_BARE}" 1 \
   "DIR/count-unread.yml: could not evaluate workflow with yq (malformed?)${ONE_JOB}" 'document_index'
+# A read of one job after the job list has been read stops the run.
+expect_body if-unread.yml "${WRITE_GUARDED}" 2 \
+  'cannot read .jobs."b".if // "" from DIR/if-unread.yml' '"b".if'
 
 printf 'all tests passed\n'

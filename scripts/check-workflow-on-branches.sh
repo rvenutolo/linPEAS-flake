@@ -18,6 +18,16 @@
 # workflow_call only) are unaffected. `pull_request_target:` is out of
 # scope here — a separate lint forbids it outright.
 #
+# `on:` is read by its kind. A map is read trigger by trigger. A name, or
+# a list of names, gives each trigger it names no `branches:` at all, so
+# naming `pull_request` or `push` that way is a finding, as is a list item
+# that is a list or a map. A list or a map carrying a tag of its own is
+# still read; a scalar is read only as a name or as an absent `on:`, and
+# any other scalar is reported as an unexpected shape. GitHub Actions
+# reads a workflow file as one YAML document and refuses one holding
+# several, so a file that `yq` reads as several is a finding and is read
+# no further.
+#
 # Every read starts from the `on:` node as ON_NODE below builds it: the
 # one root key that is `on` or an alias of `on`, passed through
 # `explode` sixteen times. A root with more than one such key, or an
@@ -35,8 +45,8 @@
 # file, WORKFLOW_FILE_FILTER selects none of the files they matched, or
 # a `yq` read fails for a workflow whose first read succeeded, which a
 # node whose tag `yq` cannot decode does too. The first read, of the
-# `pull_request` trigger, stays a counted finding when it fails, and the
-# workflow's `push` trigger is then not read. An empty scan set is a
+# kind of `on:`, stays a counted finding when it fails, and the workflow
+# is then read no further. An empty scan set is a
 # could-not-run rather than a clean tree; LINT_ALLOW_EMPTY_SCAN=1 accepts
 # one deliberately.
 
@@ -111,22 +121,15 @@ function die_unread() {
 # shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
 readonly ON_NODE='.on as $plain | [to_entries[] | select((.key | explode(.)) == "on") | .value] as $all | with(select($all | length > 1); error("on: is given more than once")) | ($all + [$plain] | .[0]) as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)) | with(select([... | select(kind == "alias")] | length > 0); error("on: holds an alias nested too deep to resolve"))'
 
-# Check one trigger (pull_request / push) within one workflow file.
-# Args: file, trigger-name, and 1 when an earlier read of the file has
-# succeeded (0 for its first read).
-# Returns 0 when the trigger is clean, 1 on a finding it has printed, and
-# 3 when the file's first read failed: that is the counted finding
-# read_workflow has printed, and the file is not read further. A later
-# read that fails ends the run with exit 2 through die_unread.
+# Check one trigger (pull_request / push) of an `on:` written as a map.
+# Args: file, trigger-name. Every read here follows the workflow's first,
+# so a read that fails ends the run with exit 2 through die_unread.
+# Returns 0 when the trigger is clean and 1 on a finding it has printed.
 check_trigger() {
-  local -r file="$1" trigger="$2" read_before="$3"
+  local -r file="$1" trigger="$2"
   local trig_tag trig_present
-  if ((read_before)); then
-    trig_tag="$(yq eval "${ON_NODE} | .\"${trigger}\" | tag" "${file}")" ||
-      die_unread "the on.${trigger} trigger" "${file}" "$?"
-  else
-    trig_tag="$(read_workflow "${file}" "${ON_NODE} | .\"${trigger}\" | tag")" || return 3
-  fi
+  trig_tag="$(yq eval "${ON_NODE} | .\"${trigger}\" | tag" "${file}")" ||
+    die_unread "the on.${trigger} trigger" "${file}" "$?"
   case "${trig_tag}" in
   '!!null')
     # yq reports !!null for both an absent trigger and one that is
@@ -189,19 +192,56 @@ filter_into selected_files 'workflow YAML' "${FILE_FILTER}" "${workflow_files[@]
 for f in "${selected_files[@]}"; do
   [[ -f ${f} ]] || continue
 
-  read_before=0
-  for trigger in pull_request push; do
-    trigger_status=0
-    check_trigger "${f}" "${trigger}" "${read_before}" || trigger_status=$?
-    if ((trigger_status == 3)); then
+  # The workflow's first read: the kind of its `on:`, with the tag beside
+  # it to tell an absent `on:` and a name from any other scalar. A list or
+  # a map carrying a tag of its own is still read. `yq` prints one line
+  # per document, and GitHub Actions refuses a file holding several, so
+  # such a file is a finding and is read no further.
+  if ! on_shape="$(read_workflow "${f}" "${ON_NODE}"' | kind + " " + tag')"; then
+    failed=$((failed + 1))
+    continue
+  fi
+  case "${on_shape}" in
+  *$'\n'*)
+    printf '%s: holds several YAML documents; a workflow file must hold one\n' "${f}" >&2
+    failed=$((failed + 1))
+    ;;
+  'scalar !!null') ;;
+  'scalar !!str' | 'seq '*)
+    # A trigger given by name, alone or in a list, has no `branches:`
+    # and runs on every branch.
+    on_names="$(yq eval "${ON_NODE}"' | (select(kind == "scalar"), .[]?) | select(. == "pull_request" or . == "push")' "${f}")" ||
+      die_unread 'the on: names' "${f}" "$?"
+    # A list item that is not a name (a list or a map) names no trigger
+    # GitHub Actions accepts.
+    on_odd_items="$(yq eval "${ON_NODE}"' | .[]? | select(kind != "scalar") | kind + " " + tag' "${f}")" ||
+      die_unread 'the on: list items' "${f}" "$?"
+    while IFS= read -r item; do
+      [[ -z ${item} ]] && continue
+      printf '%s: on: has a list item of unexpected shape (kind=%s, tag=%s); expected a name\n' \
+        "${f}" "${item%% *}" "${item#* }" >&2
       failed=$((failed + 1))
-      continue 2
-    fi
-    if ((trigger_status != 0)); then
-      failed=$((failed + 1))
-    fi
-    read_before=1
-  done
+    done <<<"${on_odd_items}"
+    for trigger in pull_request push; do
+      if grep --quiet --fixed-strings --line-regexp -- "${trigger}" <<<"${on_names}"; then
+        # shellcheck disable=SC2016 # literal backticks in human-readable prose
+        printf '%s: on.%s is given as a name, with no branches (implicit all-branches forbidden; need `branches: [main]`)\n' \
+          "${f}" "${trigger}" >&2
+        failed=$((failed + 1))
+      fi
+    done
+    ;;
+  'map '*)
+    for trigger in pull_request push; do
+      check_trigger "${f}" "${trigger}" || failed=$((failed + 1))
+    done
+    ;;
+  *)
+    printf '%s: on: has unexpected shape (kind=%s, tag=%s); expected a map, a list or a name\n' \
+      "${f}" "${on_shape%% *}" "${on_shape#* }" >&2
+    failed=$((failed + 1))
+    ;;
+  esac
 done
 shopt -u nullglob
 

@@ -1,0 +1,4 @@
+name: good-on-list
+on: [workflow_dispatch, schedule]
+permissions: {}
+jobs: {}
