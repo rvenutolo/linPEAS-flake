@@ -252,6 +252,8 @@ expect_manifest item-map.yml $'g:\n  - foo\n  - {a: nosuch}\n' good 2 \
   'DIR/item-map.yml: lint-groups group g holds an item that is not a check name (kind=map, tag=!!map)'
 expect_manifest item-int.yml $'g:\n  - 5\n' bad-orphan-category 2 \
   'DIR/item-int.yml: lint-groups group g holds an item that is not a check name (kind=scalar, tag=!!int)'
+expect_manifest item-strtag.yml $'g:\n  - foo\n  - !!str [nosuch]\n' good 2 \
+  'DIR/item-strtag.yml: lint-groups group g holds an item that is not a check name (kind=seq, tag=!!str)'
 expect_manifest alias.yml $'x: &l [foo]\ng: *l\n' good 2 'DIR/alias.yml: lint-groups manifest holds an alias'
 expect_manifest merge.yml $'x: &m {g: [foo]}\n<<: *m\n' good 2 'DIR/merge.yml: lint-groups manifest holds an alias'
 # A list or a map carrying a tag of its own is still read by its kind.
