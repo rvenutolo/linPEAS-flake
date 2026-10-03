@@ -54,7 +54,9 @@
 # LINT_GROUPS_OVERRIDE + SCRIPTS_DIR_OVERRIDE + EXEMPT_OVERRIDE for
 # fixtures. Exits 0 on full coverage, 1 on any drift, 2 when the lint
 # could not run: a usage error, a missing tool, an input file (ci.yml,
-# the category map, the lint-groups manifest) missing or unparsable, or
+# the category map, the lint-groups manifest) missing or unparsable, a
+# lint-groups manifest that is not one YAML document mapping each group
+# to a non-empty list of check names written out without an alias, or
 # a workflow whose job keys `yq` could not read for the reverse check.
 # Nothing was cross-checked in that case, so it must not borrow the
 # drift code.
@@ -198,17 +200,75 @@ if [[ ! -f ${LINT_GROUPS_FILE} ]]; then
   exit 2
 fi
 
-# Capture yq's output (and exit status) into a variable rather than
-# feeding the loop from `< <(yq ...)`: a process substitution's exit
-# status is not propagated under set -Eeuo pipefail, so a yq failure
-# would yield empty input and manifest coverage would pass silently. The
-# manifest is a precondition file, not a scanned artifact, so an
-# unparsable manifest is a tooling error (exit 2) like the missing-file
-# guard above.
-if ! basenames_rows="$(yq eval '.[] | .[]' "${LINT_GROUPS_FILE}")"; then
+# The manifest is a precondition file, not a scanned artifact, so one
+# `yq` cannot read is a tooling error (exit 2) like the missing-file
+# guard above. Each read is captured into a variable, in this shell,
+# rather than fed to a loop from `< <(yq ...)`: a process substitution's
+# exit status is not propagated under set -Eeuo pipefail, so a yq failure
+# would yield empty input and manifest coverage would pass silently.
+# @description Stop the run on a lint-groups manifest `yq` cannot read.
+# @exitcode 2 always
+function die_manifest_unread() {
   printf '%s: could not evaluate lint-groups manifest with yq (malformed?)\n' "${LINT_GROUPS_FILE}" >&2
   exit 2
+}
+
+# @description Stop the run on a lint-groups manifest whose shape names
+# no check the coverage below can hold to a script.
+# @arg $1 what is wrong with it
+# @exitcode 2 always
+function die_manifest_shape() {
+  printf '%s: %s\n' "${LINT_GROUPS_FILE}" "$1" >&2
+  exit 2
+}
+
+# The manifest must be one YAML document mapping each group to a
+# non-empty list of check names. Every shape is read by its kind, with
+# the tag beside it: a map or a list carrying a tag of its own is still
+# read, and a check name is a scalar carrying the string tag. Anything
+# else lists no check the coverage can hold to a script, or names one
+# only through an alias or a merge key, which the manifest's other
+# readers resolve by their own rules, so the run stops before any check
+# prints.
+manifest_shape="$(yq eval 'kind + " " + tag' "${LINT_GROUPS_FILE}")" || die_manifest_unread
+if [[ ${manifest_shape} == *$'\n'* ]]; then
+  die_manifest_shape 'lint-groups manifest holds several YAML documents'
 fi
+if [[ ${manifest_shape} != 'map '* ]]; then
+  die_manifest_shape "$(printf 'lint-groups manifest is not a map of groups (kind=%s, tag=%s)' \
+    "${manifest_shape%% *}" "${manifest_shape#* }")"
+fi
+manifest_aliases="$(yq eval '[.. | select(kind == "alias")] | length' "${LINT_GROUPS_FILE}")" ||
+  die_manifest_unread
+if [[ ${manifest_aliases} != 0 ]]; then
+  die_manifest_shape 'lint-groups manifest holds an alias'
+fi
+manifest_groups="$(yq eval 'length' "${LINT_GROUPS_FILE}")" || die_manifest_unread
+if [[ ${manifest_groups} == 0 ]]; then
+  die_manifest_shape 'lint-groups manifest names no group'
+fi
+# shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
+bad_groups="$(yq eval 'to_entries[] | select(.value | kind != "seq") | .key + "\t" + (.value | kind + " " + tag)' \
+  "${LINT_GROUPS_FILE}")" || die_manifest_unread
+if [[ -n ${bad_groups} ]]; then
+  IFS=$'\t' read -r group group_shape <<<"${bad_groups%%$'\n'*}"
+  die_manifest_shape "$(printf 'lint-groups group %q is not a list (kind=%s, tag=%s)' \
+    "${group}" "${group_shape%% *}" "${group_shape#* }")"
+fi
+empty_groups="$(yq eval 'to_entries[] | select(.value | length == 0) | .key' "${LINT_GROUPS_FILE}")" ||
+  die_manifest_unread
+if [[ -n ${empty_groups} ]]; then
+  die_manifest_shape "$(printf 'lint-groups group %q lists no check' "${empty_groups%%$'\n'*}")"
+fi
+# shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
+bad_items="$(yq eval 'to_entries[] | .key as $g | .value[] | select(kind != "scalar" or tag != "!!str") | $g + "\t" + kind + " " + tag' \
+  "${LINT_GROUPS_FILE}")" || die_manifest_unread
+if [[ -n ${bad_items} ]]; then
+  IFS=$'\t' read -r group item_shape <<<"${bad_items%%$'\n'*}"
+  die_manifest_shape "$(printf 'lint-groups group %q holds an item that is not a check name (kind=%s, tag=%s)' \
+    "${group}" "${item_shape%% *}" "${item_shape#* }")"
+fi
+basenames_rows="$(yq eval '.[] | .[]' "${LINT_GROUPS_FILE}")" || die_manifest_unread
 
 failed=0
 
