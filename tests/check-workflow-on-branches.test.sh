@@ -299,7 +299,7 @@ expect_failed_read bad-pr-wildcard.yml '--output-format=json' 23 'the on.pull_re
 expect_failed_read good.yml '"pull_request" | kind' 25 'the on.pull_request trigger'
 expect_failed_read bad-on-name.yml '| (select(kind' 27 'the on: names'
 expect_failed_read good-on-list.yml '| (select(kind' 29 'the on: names'
-expect_failed_read good-on-list.yml 'select(kind != "scalar")' 33 'the on: list items'
+expect_failed_read good-on-list.yml 'select(kind != "scalar" or' 33 'the on: list items'
 
 # The first read, of the kind of `on:`, failing is a counted finding, and
 # the workflow is read no further: its push trigger, which would be a

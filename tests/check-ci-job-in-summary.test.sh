@@ -268,7 +268,7 @@ expect_manifest root-xtag.yml $'!x\ng:\n  - foo\n' good 0 ''
 # Each read of the manifest is status-tested: with `yq` failing it, the
 # run stops (exit 2) on the manifest line alone. Each scenario names its
 # own manifest, so no two print the same line.
-for read in 'eval kind + ' 'select(kind == "alias")' 'eval length ' 'kind != "seq"' 'length == 0' 'tag != "!!str"' 'eval .[] | .[]'; do
+for read in 'eval kind + ' 'select(kind == "alias" or' 'eval length ' 'kind != "seq"' 'length == 0' 'tag != "!!str"' 'select(. == ""' 'eval .[] | .[]'; do
   unread_dir="$(mktemp --directory)"
   unread_name="unread-$((++unread_n)).yml"
   printf 'g:\n  - foo\n' >"${unread_dir}/${unread_name}"

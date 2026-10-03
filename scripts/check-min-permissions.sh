@@ -138,14 +138,20 @@ for f in "${selected_files[@]}"; do
   # scan would pass silently. Unlike the reads above, this one fails on
   # the workflow's own shape (a `jobs:` that is not a map or a list), so
   # its failure stays a counted finding.
-  if ! rows="$(yq eval '.jobs | to_entries[] | .key + "\t" + (.value.permissions | kind + " " + tag)' "${f}")"; then
+  if ! rows="$(yq eval '.jobs | to_entries[] | .key + "\t" + (.value | kind + " " + tag) + "\t" + (.value.permissions | kind + " " + tag)' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
   fi
   [[ -n ${rows} ]] || continue
-  while IFS=$'\t' read -r job job_shape; do
+  while IFS=$'\t' read -r job job_node job_shape; do
     [[ -z ${job} ]] && continue
+    if [[ ${job_node} != 'map '* ]]; then
+      printf '%s: job %q has unexpected shape (kind=%s, tag=%s); expected a map\n' \
+        "${f}" "${job}" "${job_node%% *}" "${job_node#* }" >&2
+      failed=$((failed + 1))
+      continue
+    fi
     # An absent key reads as no kind at all, a key with no value as null.
     case "${job_shape}" in
     '' | 'scalar !!null')

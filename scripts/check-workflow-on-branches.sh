@@ -20,10 +20,11 @@
 #
 # `on:` is read by its kind. A map is read trigger by trigger. A name, or
 # a list of names, gives each trigger it names no `branches:` at all, so
-# naming `pull_request` or `push` that way is a finding, as is a list item
-# that is a list or a map. A list or a map carrying a tag of its own is
-# still read; a scalar is read only as a name or as an absent `on:`, and
-# any other scalar is reported as an unexpected shape. GitHub Actions
+# naming `pull_request` or `push` that way is a finding. A list or a map
+# carrying a tag of its own is still read; a scalar, the `on:` itself or
+# a list item, is a name only when it carries the string tag, `on:` may
+# also be absent or null, and any other shape is reported as an
+# unexpected shape. GitHub Actions
 # reads a workflow file as one YAML document and refuses one holding
 # several, so a file that `yq` reads as several is a finding and is read
 # no further.
@@ -213,11 +214,11 @@ for f in "${selected_files[@]}"; do
   'scalar !!str' | 'seq '*)
     # A trigger given by name, alone or in a list, has no `branches:`
     # and runs on every branch.
-    on_names="$(yq eval "${ON_NODE}"' | (select(kind == "scalar"), .[]?) | select(. == "pull_request" or . == "push")' "${f}")" ||
+    on_names="$(yq eval "${ON_NODE}"' | (select(kind == "scalar"), .[]?) | select(tag == "!!str" and (. == "pull_request" or . == "push"))' "${f}")" ||
       die_unread 'the on: names' "${f}" "$?"
-    # A list item that is not a name (a list or a map) names no trigger
-    # GitHub Actions accepts.
-    on_odd_items="$(yq eval "${ON_NODE}"' | .[]? | select(kind != "scalar") | kind + " " + tag' "${f}")" ||
+    # A list item is a name only as a scalar carrying the string tag;
+    # any other item names no trigger GitHub Actions accepts.
+    on_odd_items="$(yq eval "${ON_NODE}"' | .[]? | select(kind != "scalar" or tag != "!!str") | kind + " " + tag' "${f}")" ||
       die_unread 'the on: list items' "${f}" "$?"
     while IFS= read -r item; do
       [[ -z ${item} ]] && continue
