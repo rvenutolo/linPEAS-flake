@@ -52,6 +52,50 @@ function expect_unparsable() {
   printf 'OK   unparsable workflow reported as a finding\n'
 }
 
+# @description Make a directory holding a `yq` that exits with a given
+# status for every call whose arguments hold a given string and hands any
+# other call to the real `yq`, and point STUB_DIR at it. A scenario puts
+# the directory first on PATH for its own run only.
+# @arg $1 argument text that marks the failing call
+# @arg $2 exit status for that call
+function yq_stub() {
+  local real_yq
+  real_yq="$(command -v yq)"
+  STUB_DIR="$(mktemp --directory)"
+  printf '#!/usr/bin/env bash\ncase "$*" in *%q*) exit %d ;; esac\nexec %q "$@"\n' \
+    "$1" "$2" "${real_yq}" >"${STUB_DIR}/yq"
+  chmod +x -- "${STUB_DIR}/yq"
+}
+
+# @description Scan one fixture with one `yq` read failing after the
+# workflow's first read has succeeded. The file parses, so the failure
+# says nothing about it: the run must stop as a could-not-run, printing
+# only a line naming what was being read, `yq` and the status it exited
+# with, whatever the workflow holds.
+# @arg $1 fixture  @arg $2 argument text of the failing read
+# @arg $3 status the stub exits with  @arg $4 what the line says was read
+function expect_failed_read() {
+  local -r fixture="$1" pattern="$2" status="$3" thing="$4"
+  local -r want="cannot read ${thing} of ${FIXTURES}/${fixture}: yq exited ${status}"
+  local got_exit=0 got_stderr
+  yq_stub "${pattern}" "${status}"
+  got_stderr="$(PATH="${STUB_DIR}:${PATH}" WORKFLOWS_DIR_OVERRIDE="${FIXTURES}" \
+    WORKFLOW_FILE_FILTER="${fixture}" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  rm --recursive --force -- "${STUB_DIR}"
+  if [[ ${got_exit} != 2 ]]; then
+    printf 'FAIL %s with a failing yq read: exit %s, want 2\n  stderr: %s\n' \
+      "${fixture}" "${got_exit}" "${got_stderr}" >&2
+    return 1
+  fi
+  if [[ ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s with a failing yq read: stderr is not %q\n  got: %s\n' \
+      "${fixture}" "${want}" "${got_stderr}" >&2
+    return 1
+  fi
+  printf 'OK   %s with a failing yq read (%s)\n' "${fixture}" "${thing}"
+}
+
 expect good.yml 0 ""
 expect bad-no-top.yml 1 "missing top-level"
 expect bad-top-nonempty.yml 1 "non-empty"
@@ -62,5 +106,30 @@ expect bad-job-shape.yml 1 "unexpected shape"
 expect no-such-workflow.yml 2 'selected 0 of'
 
 expect_unparsable 'permissions: [\n' 'bad-unparsable.yml: could not evaluate'
+
+# Every read of the top-level `permissions:` after its shape has been
+# read is held to the run-stopping line, on a workflow that holds the
+# fault the read is for and on one that does not. Each stub text is carried by that read alone: the scalar
+# read is `eval .permissions` followed by the fixture's absolute path.
+expect_failed_read bad-top-write-all.yml 'eval .permissions /' 7 'the top-level permissions'
+expect_failed_read good.yml '.permissions | length' 9 'the top-level permissions size'
+expect_failed_read bad-top-nonempty.yml '.permissions | length' 11 'the top-level permissions size'
+expect_failed_read bad-top-nonempty.yml 'keys | join' 13 'the top-level permissions keys'
+
+# The per-job read can fail on the workflow's own shape, so its failure
+# is a counted finding, not a could-not-run.
+jobs_dir="$(mktemp --directory)"
+printf 'permissions: {}\njobs: 5\n' >"${jobs_dir}/jobs-number.yml"
+jobs_exit=0
+jobs_stderr="$(WORKFLOWS_DIR_OVERRIDE="${jobs_dir}" "${SCRIPT}" 2>&1 >/dev/null)" || jobs_exit=$?
+rm --recursive --force -- "${jobs_dir}"
+# The lines before these two are yq's own, whose wording is not the lint's.
+jobs_want="${jobs_dir}/jobs-number.yml: could not evaluate workflow with yq (malformed?)"$'\n''1 permissions posture violation(s) found'
+if [[ ${jobs_exit} != 1 || ${jobs_stderr} != *$'\n'"${jobs_want}" ]]; then
+  printf 'FAIL jobs-number.yml: exit %s, want 1, and stderr ending %q\n  got: %s\n' \
+    "${jobs_exit}" "${jobs_want}" "${jobs_stderr}" >&2
+  exit 1
+fi
+printf 'OK   jobs-number.yml: a jobs: yq cannot list is a counted finding\n'
 
 printf 'all tests passed\n'

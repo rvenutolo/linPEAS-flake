@@ -165,6 +165,38 @@ if [[ ${drift_exit} != 2 || ${drift_stderr} == *'EXEMPT'* ||
 fi
 printf 'OK   drift beside an unparsable workflow\n'
 
+# A missing or unreadable lint-groups manifest stops the run before any
+# check prints: beside an unmapped job, no drift line is reported under
+# the could-not-run code.
+manifest_dir="$(mktemp --directory)"
+manifest_exit=0
+manifest_stderr="$(WORKFLOWS_DIR_OVERRIDE="${FIXTURES}/bad-missing-category" \
+  CI_WORKFLOW_OVERRIDE="${FIXTURES}/bad-missing-category/ci.yml" \
+  CATEGORIES_FILE_OVERRIDE="${FIXTURES}/bad-missing-category/categories.yml" \
+  LINT_GROUPS_OVERRIDE="${manifest_dir}/absent.yml" \
+  "${SCRIPT}" 2>&1 >/dev/null)" || manifest_exit=$?
+if [[ ${manifest_exit} != 2 || ${manifest_stderr} != "lint-groups manifest not found: ${manifest_dir}/absent.yml" ]]; then
+  printf 'FAIL drift beside a missing manifest: exit %s, want 2 and only the manifest line\n  stderr: %s\n' \
+    "${manifest_exit}" "${manifest_stderr}" >&2
+  exit 1
+fi
+printf 'OK   drift beside a missing manifest\n'
+printf 'a: [\n' >"${manifest_dir}/broken.yml"
+manifest_exit=0
+manifest_stderr="$(WORKFLOWS_DIR_OVERRIDE="${FIXTURES}/bad-missing-category" \
+  CI_WORKFLOW_OVERRIDE="${FIXTURES}/bad-missing-category/ci.yml" \
+  CATEGORIES_FILE_OVERRIDE="${FIXTURES}/bad-missing-category/categories.yml" \
+  LINT_GROUPS_OVERRIDE="${manifest_dir}/broken.yml" \
+  "${SCRIPT}" 2>&1 >/dev/null)" || manifest_exit=$?
+rm --recursive --force -- "${manifest_dir}"
+if [[ ${manifest_exit} != 2 || ${manifest_stderr} == *'EXEMPT'* ||
+  ${manifest_stderr} != *$'\n'"${manifest_dir}/broken.yml: could not evaluate lint-groups manifest with yq (malformed?)" ]]; then
+  printf 'FAIL drift beside an unparsable manifest: exit %s, want 2 and no drift line\n  stderr: %s\n' \
+    "${manifest_exit}" "${manifest_stderr}" >&2
+  exit 1
+fi
+printf 'OK   drift beside an unparsable manifest\n'
+
 # A `jobs:` written as an alias stands for the map it names: its keys are
 # job keys, and the category entry naming one of them resolves. Only
 # `jobs:` is resolved: a merge key `yq` cannot resolve elsewhere in a
