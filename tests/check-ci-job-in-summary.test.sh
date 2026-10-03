@@ -201,6 +201,89 @@ printf 'OK   drift beside an unparsable manifest\n'
 # job keys, and the category entry naming one of them resolves. Only
 # `jobs:` is resolved: a merge key `yq` cannot resolve elsewhere in a
 # workflow leaves its job keys readable.
+# @description Run the lint with a lint-groups manifest written to a
+# temp dir at run time, beside one fixture's ci.yml and category map, and
+# compare the whole of stderr. The scripts dir holds check-foo.sh only.
+# @arg $1 manifest file name, which is also the scenario's label
+# @arg $2 manifest body  @arg $3 fixture  @arg $4 expected exit status
+# @arg $5 expected stderr, with DIR standing for the temp dir
+function expect_manifest() {
+  local -r name="$1" body="$2" fixture="$3" want_exit="$4"
+  local dir got_exit=0 got_stderr want
+  dir="$(mktemp --directory)"
+  printf '%s' "${body}" >"${dir}/${name}"
+  want="${5//DIR/${dir}}"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${FIXTURES}/${fixture}" \
+    CI_WORKFLOW_OVERRIDE="${FIXTURES}/${fixture}/ci.yml" \
+    CATEGORIES_FILE_OVERRIDE="${FIXTURES}/${fixture}/categories.yml" \
+    LINT_GROUPS_OVERRIDE="${dir}/${name}" \
+    SCRIPTS_DIR_OVERRIDE="${FIXTURES}/bad-missing-manifest-check/scripts" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  rm --recursive --force -- "${dir}"
+  if [[ ${got_exit} != "${want_exit}" || ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL manifest %s: exit %s, want %s, and stderr %q\n  got: %s\n' \
+      "${name}" "${got_exit}" "${want_exit}" "${want}" "${got_stderr}" >&2
+    return 1
+  fi
+  printf 'OK   manifest %s\n' "${name}"
+}
+
+# The manifest is a precondition: one YAML document mapping each group
+# to a non-empty list of check names. Any other shape lists no check the
+# coverage can hold to a script, so the run stops (exit 2) before any
+# check prints, beside drift (bad-orphan-category) as beside none.
+readonly NOT_MAP='lint-groups manifest is not a map of groups'
+unread_n=0
+expect_manifest valid.yml $'g:\n  - foo\n' good 0 ''
+expect_manifest empty.yml '' good 2 "DIR/empty.yml: ${NOT_MAP} (kind=scalar, tag=!!null)"
+expect_manifest comment.yml $'# only a comment\n' bad-orphan-category 2 "DIR/comment.yml: ${NOT_MAP} (kind=scalar, tag=!!null)"
+expect_manifest tilde.yml $'~\n' bad-orphan-category 2 "DIR/tilde.yml: ${NOT_MAP} (kind=scalar, tag=!!null)"
+expect_manifest scalar.yml $'foo\n' good 2 "DIR/scalar.yml: ${NOT_MAP} (kind=scalar, tag=!!str)"
+expect_manifest list.yml $'- foo\n- nosuch\n' bad-orphan-category 2 "DIR/list.yml: ${NOT_MAP} (kind=seq, tag=!!seq)"
+expect_manifest empty-map.yml $'{}\n' good 2 'DIR/empty-map.yml: lint-groups manifest names no group'
+expect_manifest several.yml $'g:\n  - foo\n---\nh:\n  - foo\n' bad-orphan-category 2 \
+  'DIR/several.yml: lint-groups manifest holds several YAML documents'
+expect_manifest group-scalar.yml $'g: foo\n' bad-orphan-category 2 \
+  'DIR/group-scalar.yml: lint-groups group g is not a list (kind=scalar, tag=!!str)'
+expect_manifest group-null.yml $'h:\n  - foo\ng:\n' good 2 \
+  'DIR/group-null.yml: lint-groups group g is not a list (kind=scalar, tag=!!null)'
+expect_manifest group-empty.yml $'g: []\nh:\n  - foo\n' good 2 'DIR/group-empty.yml: lint-groups group g lists no check'
+expect_manifest item-map.yml $'g:\n  - foo\n  - {a: nosuch}\n' good 2 \
+  'DIR/item-map.yml: lint-groups group g holds an item that is not a check name (kind=map, tag=!!map)'
+expect_manifest item-int.yml $'g:\n  - 5\n' bad-orphan-category 2 \
+  'DIR/item-int.yml: lint-groups group g holds an item that is not a check name (kind=scalar, tag=!!int)'
+expect_manifest alias.yml $'x: &l [foo]\ng: *l\n' good 2 'DIR/alias.yml: lint-groups manifest holds an alias'
+expect_manifest merge.yml $'x: &m {g: [foo]}\n<<: *m\n' good 2 'DIR/merge.yml: lint-groups manifest holds an alias'
+# A list or a map carrying a tag of its own is still read by its kind.
+expect_manifest group-strtag.yml $'g: !!str [foo, nosuch]\n' good 1 \
+  "DIR/group-strtag.yml: lint-groups basename nosuch has no check script (${FIXTURES}/bad-missing-manifest-check/scripts/check-nosuch.sh)"$'\n1 ci.yml / categories drift entry/entries'
+expect_manifest root-xtag.yml $'!x\ng:\n  - foo\n' good 0 ''
+
+# Each read of the manifest is status-tested: with `yq` failing it, the
+# run stops (exit 2) on the manifest line alone. Each scenario names its
+# own manifest, so no two print the same line.
+for read in 'eval kind + ' 'select(kind == "alias")' 'eval length ' 'kind != "seq"' 'length == 0' 'tag != "!!str"' 'eval .[] | .[]'; do
+  unread_dir="$(mktemp --directory)"
+  unread_name="unread-$((++unread_n)).yml"
+  printf 'g:\n  - foo\n' >"${unread_dir}/${unread_name}"
+  yq_stub "${read}" 7
+  unread_exit=0
+  unread_stderr="$(PATH="${STUB_DIR}:${PATH}" WORKFLOWS_DIR_OVERRIDE="${FIXTURES}/good" \
+    CI_WORKFLOW_OVERRIDE="${FIXTURES}/good/ci.yml" \
+    CATEGORIES_FILE_OVERRIDE="${FIXTURES}/good/categories.yml" \
+    LINT_GROUPS_OVERRIDE="${unread_dir}/${unread_name}" \
+    SCRIPTS_DIR_OVERRIDE="${FIXTURES}/bad-missing-manifest-check/scripts" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || unread_exit=$?
+  rm --recursive --force -- "${unread_dir}" "${STUB_DIR}"
+  unread_want="${unread_dir}/${unread_name}: could not evaluate lint-groups manifest with yq (malformed?)"
+  if [[ ${unread_exit} != 2 || ${unread_stderr} != "${unread_want}" ]]; then
+    printf 'FAIL manifest read %q failing: exit %s, want 2, and stderr %q\n  got: %s\n' \
+      "${read}" "${unread_exit}" "${unread_want}" "${unread_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   manifest read %s failing\n' "${read}"
+done
+
 alias_dir="$(mktemp --directory)"
 cp -- "${FIXTURES}/good/ci.yml" "${alias_dir}/"
 printf 'foo: Category-A\nbar: Category-B\nbaz: Category-C\n' >"${alias_dir}/categories.yml"
