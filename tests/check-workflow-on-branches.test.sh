@@ -212,8 +212,22 @@ expect_body plain-then-merge.yml $'env:\n  X: &b {on: {push: {}}}\non:\n  push:\
 # stops, as it does for yq failing, though the fault is the workflow's.
 expect_body mistag-branches.yml $'on:\n  pull_request:\n    branches: [.nan]\n' 2 \
   'cannot read the on.pull_request.branches list of DIR/mistag-branches.yml: yq exited 1' tail
-expect_body mistag-push.yml $'on:\n  pull_request:\n    branches: [main]\n  push: !!map [a]\n' 2 \
-  'cannot read the on.push.branches shape of DIR/mistag-push.yml: yq exited 1' tail
+# A trigger and its branch list are read by kind: a map or a list
+# carrying a tag of its own is still read, and the message names the
+# kind and the tag of any other shape.
+expect_body mistag-push.yml $'on:\n  pull_request:\n    branches: [main]\n  push: !!map [a]\n' 1 \
+  "DIR/mistag-push.yml: on.push has unexpected shape (kind=seq, tag=!!map); expected map${ONE}"
+expect_body push-xtag.yml $'on:\n  push: !x\n    branches: [main]\n' 0 ''
+expect_body push-strseq.yml $'on:\n  push: !!str [a]\n' 1 \
+  "DIR/push-strseq.yml: on.push has unexpected shape (kind=seq, tag=!!str); expected map${ONE}"
+expect_body push-mapint.yml $'on:\n  push: !!map 5\n' 1 \
+  "DIR/push-mapint.yml: on.push has unexpected shape (kind=scalar, tag=!!map); expected map${ONE}"
+expect_body branches-strseq.yml $'on:\n  push:\n    branches: !!str [main]\n' 0 ''
+expect_body branches-xtag.yml $'on:\n  pull_request:\n    branches: !x [main]\n' 0 ''
+expect_body branches-mapint.yml $'on:\n  push:\n    branches: !!map 5\n' 1 \
+  "DIR/branches-mapint.yml: on.push.branches has unexpected shape (kind=scalar, tag=!!map); expected sequence${ONE}"
+expect_body branches-xtag-str.yml $'on:\n  push:\n    branches: !x main\n' 1 \
+  "DIR/branches-xtag-str.yml: on.push.branches has unexpected shape (kind=scalar, tag=!x); expected sequence${ONE}"
 readonly SHAPES='expected a map, a list or a name'
 expect_body false-on.yml $'on: false\njobs: {}\n' 1 \
   "DIR/false-on.yml: on: has unexpected shape (kind=scalar, tag=!!bool); ${SHAPES}${ONE}"

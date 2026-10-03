@@ -78,4 +78,33 @@ if [[ ${count} != 1 ]]; then
 fi
 printf 'OK   bad-tag.yml violation counted once\n'
 
+# @description Scan one workflow written to a temp dir at run time and
+# compare the whole of stderr, so the shapes built here (tags) are not
+# tracked files a formatter or workflow linter reads.
+# @arg $1 file name, which is also the scenario's label
+# @arg $2 file body  @arg $3 expected exit status
+# @arg $4 expected stderr, with DIR standing for the temp dir
+function expect_body() {
+  local -r name="$1" body="$2" want_exit="$3"
+  local dir got_exit=0 got_stderr want
+  dir="$(mktemp --directory)"
+  printf '%s' "${body}" >"${dir}/${name}"
+  want="${4//DIR/${dir}}"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${dir}" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  rm --recursive --force -- "${dir}"
+  if [[ ${got_exit} != "${want_exit}" || ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s: exit %s, want %s, and stderr %q\n  got: %s\n' \
+      "${name}" "${got_exit}" "${want_exit}" "${want}" "${got_stderr}" >&2
+    return 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+
+# A step is read by kind: a step map carrying a tag of its own is still
+# a step, and its reference is checked.
+expect_body step-xtag.yml $'on: push\njobs:\n  a:\n    steps:\n      - !x {uses: actions/checkout@v4}\n' 1 \
+  $'DIR/step-xtag.yml: actions/checkout@v4 not SHA-pinned (need owner/repo@<40-hex>)\n1 unpinned uses: reference(s) found'
+expect_body step-strtag.yml $'on: push\njobs:\n  a:\n    steps:\n      - !!str {uses: actions/setup-node@v4}\n' 1 \
+  $'DIR/step-strtag.yml: actions/setup-node@v4 not SHA-pinned (need owner/repo@<40-hex>)\n1 unpinned uses: reference(s) found'
+
 printf 'all tests passed\n'

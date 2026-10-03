@@ -100,7 +100,10 @@ expect good.yml 0 ""
 expect bad-no-top.yml 1 "missing top-level"
 expect bad-top-nonempty.yml 1 "non-empty"
 expect bad-top-write-all.yml 1 "scalar"
-expect bad-job-missing.yml 1 "missing"
+# The lint quotes the key in backticks; Q holds one, so that no
+# assertion string here does.
+readonly Q=$'\x60'
+expect bad-job-missing.yml 1 "bad-job-missing.yml: job a missing ${Q}permissions:${Q} block (every job must declare its own)"
 expect bad-top-list.yml 1 "unexpected shape"
 expect bad-job-shape.yml 1 "unexpected shape"
 expect no-such-workflow.yml 2 'selected 0 of'
@@ -147,5 +150,37 @@ if [[ ${mistag_exit} != 2 || ${mistag_stderr} != *$'\n'"${mistag_want}" ]]; then
   exit 1
 fi
 printf 'OK   mistag.yml: a node yq cannot decode stops the run\n'
+
+# @description Scan one workflow written to a temp dir at run time and
+# compare the whole of stderr, so the shapes built here (tags) are not
+# tracked files a formatter or workflow linter reads.
+# @arg $1 file name, which is also the scenario's label
+# @arg $2 file body  @arg $3 expected exit status
+# @arg $4 expected stderr, with DIR standing for the temp dir
+function expect_body() {
+  local -r name="$1" body="$2" want_exit="$3"
+  local dir got_exit=0 got_stderr want
+  dir="$(mktemp --directory)"
+  printf '%s' "${body}" >"${dir}/${name}"
+  want="${4//DIR/${dir}}"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${dir}" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  rm --recursive --force -- "${dir}"
+  if [[ ${got_exit} != "${want_exit}" || ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s: exit %s, want %s, and stderr %q\n  got: %s\n' \
+      "${name}" "${got_exit}" "${want_exit}" "${want}" "${got_stderr}" >&2
+    return 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+
+# A job's permissions are read by kind: a map carrying a tag of its own
+# is still read, and a scalar carrying a map tag is no map.
+expect_body job-mapscalar.yml $'permissions: {}\njobs:\n  a:\n    permissions: !!map write-all\n' 1 \
+  $'DIR/job-mapscalar.yml: job a permissions has unexpected shape (kind=scalar, tag=!!map)\n1 permissions posture violation(s) found'
+expect_body job-null.yml $'permissions: {}\njobs:\n  c:\n    permissions:\n' 1 \
+  "DIR/job-null.yml: job c missing ${Q}permissions:${Q} block (every job must declare its own)"$'\n1 permissions posture violation(s) found'
+expect_body job-xtag.yml $'permissions: {}\njobs:\n  a:\n    permissions: !x\n      contents: read\n' 0 ''
+expect_body job-strseq.yml $'permissions: {}\njobs:\n  b:\n    permissions: !!str [contents]\n' 1 \
+  $'DIR/job-strseq.yml: job b permissions has unexpected shape (kind=seq, tag=!!str)\n1 permissions posture violation(s) found'
 
 printf 'all tests passed\n'
