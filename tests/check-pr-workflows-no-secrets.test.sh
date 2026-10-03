@@ -230,6 +230,8 @@ function main() {
   # A root with more than one key that resolves to `on` has no one `on:`.
   run_refused_scenario 'on: given twice is refused' \
     'on-twice.yml' $'name: &k on\non: [push]\n*k : [pull_request]\n'
+  run_body_scenario 'pull_request a root merge key brings in with secret fails' \
+    'root-merge.yml' $'env:\n  X: &b {on: [pull_request]}\n<<: *b\n' 1 'ROOT_MERGE'
   run_refused_scenario 'a top-level list is refused' 'top-list.yml' $'- on: pull_request\n'
   # GitHub Actions refuses a merge key, so this workflow cannot run; the
   # guard still scans a workflow whose merge brings in a PR trigger.

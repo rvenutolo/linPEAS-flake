@@ -203,6 +203,9 @@ expect_body on-twice-aliases.yml $'name: &k on\nenv:\n  X: &j on\n*k : [push]\n*
   $'Error: on: is given more than once\nDIR/on-twice-aliases.yml: could not evaluate workflow with yq (malformed?)'"${ONE}"
 expect_body top-list.yml $'- on: pull_request_target\n' 1 \
   $'DIR/top-list.yml: could not evaluate workflow with yq (malformed?)'"${ONE}" tail
+# GitHub Actions refuses a merge key, so this workflow cannot run; an
+# `on:` a root merge key brings in is still read.
+expect_body root-merge.yml $'env:\n  X: &b {on: [push, pull_request_target]}\n<<: *b\n' 1 "DIR/root-merge.yml: ${USES}${ONE}"
 expect_body false-on.yml $'on: false\njobs: {}\n' 1 $'DIR/false-on.yml: on: has unexpected shape (tag=!!bool)'"${ONE}"
 # A list or a map is read whatever tag it carries.
 expect_body tagged-map.yml $'on: !x\n  pull_request_target: {}\n' 1 "DIR/tagged-map.yml: ${USES}${ONE}"

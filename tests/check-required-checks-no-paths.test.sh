@@ -225,6 +225,12 @@ run_built_scenario 'a workflow with no on: is clean beside a finding' 1 exact \
   '' 0 \
   filtered.yml "${PATHS_BODY}" \
   no-on.yml $'jobs: {}\n'
+# yq prints its own warning when it resolves a merge key, so only the
+# lint's last line is compared.
+run_built_scenario 'a filter under an on: a root merge key brings in is named' 1 under \
+  "${LINT} .github/workflows/root-merge.yml ${PATHS_FINDING}" \
+  '' 0 \
+  root-merge.yml $'env:\n  X: &b {on: {pull_request: {paths: [a]}}}\n<<: *b\njobs: {}\n'
 run_built_scenario 'a top-level list is refused' 1 under \
   "${LINT} .github/workflows/top-list.yml: ${UNREAD} 1" \
   '' 0 \
