@@ -37,7 +37,8 @@ below.
 
 - top-level `permissions:` missing, non-empty map, scalar (`read-all` /
     `write-all`), or any other shape such as a list
-- any job whose `permissions:` block is omitted or not a map
+- any job whose `permissions:` block is omitted or not a map (read by its
+    YAML kind, so a map carrying a tag of its own passes)
 
 Wired as the `lint-workflow-security` CI job (member check
 `min-permissions`) and as a pre-commit hook.

@@ -14,6 +14,13 @@
 #   - `.concurrency` is a map
 #   - `.concurrency.group` is a non-empty string
 #
+# Each shape is read by its kind, with the tag beside it: a map carrying
+# a tag of its own is still a map, a list or a map is no string whatever
+# tag it carries, and a scalar is a string only with the string tag. An
+# alias is reported by its kind, unresolved. GitHub Actions reads a
+# workflow file as one YAML document and refuses one holding several, so
+# a file that `yq` reads as several is a finding and is read no further.
+#
 # `cancel-in-progress` is not required by this lint; the group alone
 # is the load-bearing setting. Some pipelines (release-on-bump) keep
 # `cancel-in-progress: false` deliberately to serialize.
@@ -24,8 +31,7 @@
 # Exits 0 on full coverage, 1 on any drift. Exits 2 when the check
 # cannot run: `yq` is absent from PATH, the workflow globs match no
 # file, WORKFLOW_FILE_FILTER selects none of the files they matched, or
-# a `yq` read fails for a workflow whose first read succeeded, which a
-# node whose tag `yq` cannot decode does too.
+# a `yq` read fails for a workflow whose first read succeeded.
 # An empty scan set is a could-not-run rather than a clean tree;
 # LINT_ALLOW_EMPTY_SCAN=1 accepts one deliberately.
 
@@ -69,10 +75,11 @@ function read_workflow() {
 
 # @description Stop the run on a `yq` read that failed after the
 # workflow's first read succeeded. The file parses, so the failure is
-# usually `yq` failing. A node whose tag `yq` cannot decode
-# (`concurrency: !!map [a]`) fails such a read too, and is reported the
-# same way, though it is a fact about the workflow. Carrying on would
-# print a verdict about a value nothing read.
+# usually `yq` failing. A node whose tag `yq` cannot decode would fail
+# one too and is reported the same way, though no such input has been
+# found to reach these reads: they read a node's kind and tag, which
+# decode nothing, and the group's value only once it is a string.
+# Carrying on would print a verdict about a value nothing read.
 # @arg $1 what was being read
 # @arg $2 workflow path
 # @arg $3 the status `yq` exited with
@@ -91,35 +98,48 @@ filter_into selected_files 'workflow YAML' "${FILE_FILTER}" "${workflow_files[@]
 for f in "${selected_files[@]}"; do
   [[ -f ${f} ]] || continue
 
-  if ! conc_tag="$(read_workflow "${f}" '.concurrency | tag')"; then
+  # The workflow's first read: the kind of `concurrency:`, with the tag
+  # beside it to tell an absent or null value from any other scalar. A
+  # map carrying a tag of its own is still read. `yq` prints one line per
+  # document, and GitHub Actions refuses a file holding several, so such a
+  # file is a finding and is read no further. An alias is reported by its
+  # kind, unresolved.
+  if ! conc_shape="$(read_workflow "${f}" '.concurrency | kind + " " + tag')"; then
     failed=$((failed + 1))
     continue
   fi
-  case "${conc_tag}" in
-  '!!null')
+  case "${conc_shape}" in
+  *$'\n'*)
+    printf '%s: holds several YAML documents; a workflow file must hold one\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+    ;;
+  'scalar !!null')
     # shellcheck disable=SC2016 # literal backticks in human-readable prose
     printf '%s: missing top-level `concurrency:` (need `group:` to bound parallel runs on a ref)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
     ;;
-  '!!map') ;;
+  'map '*) ;;
   *)
-    printf '%s: top-level concurrency has unexpected shape (tag=%s); expected map\n' \
-      "${f}" "${conc_tag}" >&2
+    printf '%s: top-level concurrency has unexpected shape (kind=%s, tag=%s); expected map\n' \
+      "${f}" "${conc_shape%% *}" "${conc_shape#* }" >&2
     failed=$((failed + 1))
     continue
     ;;
   esac
 
-  group_tag="$(yq eval '.concurrency.group | tag' "${f}")" ||
+  # The group is a string: a scalar carrying the string tag. A list or a
+  # map is no string whatever tag it carries.
+  group_shape="$(yq eval '.concurrency.group | kind + " " + tag' "${f}")" ||
     die_unread 'the concurrency group shape' "${f}" "$?"
-  case "${group_tag}" in
-  '!!null')
+  case "${group_shape}" in
+  'scalar !!null')
     # shellcheck disable=SC2016 # literal backticks in human-readable prose
     printf '%s: top-level concurrency is missing `group:`\n' "${f}" >&2
     failed=$((failed + 1))
     ;;
-  '!!str')
+  'scalar !!str')
     group_val="$(yq eval '.concurrency.group' "${f}")" ||
       die_unread 'the concurrency group' "${f}" "$?"
     if [[ -z ${group_val} ]]; then
@@ -129,8 +149,8 @@ for f in "${selected_files[@]}"; do
     fi
     ;;
   *)
-    printf '%s: top-level concurrency.group has unexpected shape (tag=%s); expected string\n' \
-      "${f}" "${group_tag}" >&2
+    printf '%s: top-level concurrency.group has unexpected shape (kind=%s, tag=%s); expected string\n' \
+      "${f}" "${group_shape%% *}" "${group_shape#* }" >&2
     failed=$((failed + 1))
     ;;
   esac

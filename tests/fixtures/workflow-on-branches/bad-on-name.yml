@@ -1,0 +1,4 @@
+name: bad-on-name
+on: push
+permissions: {}
+jobs: {}
