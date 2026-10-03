@@ -154,7 +154,9 @@ for f in "${selected_files[@]}"; do
   # The rows are tab-separated, one per line, so a job id holding a tab
   # or a line break could forge or split one. GitHub Actions refuses such
   # an id, so it is a finding and the workflow's jobs are not read.
-  if ! odd_ids="$(yq eval '[.jobs | keys[] | select(tag == "!!str" and test("[\t\n]"))] | length' "${f}")"; then
+  # Every key is tested as the text it renders to, whatever its tag, and
+  # a document whose `jobs:` is not a map has no ids to test.
+  if ! odd_ids="$(yq eval '[.jobs | select(kind == "map") | keys[] | select(tostring | test("[\t\n]"))] | length' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue

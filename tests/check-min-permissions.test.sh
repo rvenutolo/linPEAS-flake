@@ -207,7 +207,7 @@ expect_body job-id-merge-tag.yml $'permissions: {}\njobs:\n  !!merge "x\\t!!str\
 expect_body job-id-break.yml $'permissions: {}\njobs:\n  "y\\nz":\n    permissions: {}\n' 1 \
   "DIR/job-id-break.yml: ${ODD_ID}"$'\n1 permissions posture violation(s) found'
 # The job-id read failing is a counted finding, like the job rows' read.
-yq_stub 'select(tag == "!!str" and test(' 7
+yq_stub 'select(tostring | test(' 7
 ids_exit=0
 ids_stderr="$(PATH="${STUB_DIR}:${PATH}" WORKFLOWS_DIR_OVERRIDE="${FIXTURES}" \
   WORKFLOW_FILE_FILTER=good.yml "${SCRIPT}" 2>&1 >/dev/null)" || ids_exit=$?
