@@ -146,7 +146,9 @@ for f in "${selected_files[@]}"; do
   [[ -n ${rows} ]] || continue
   while IFS=$'\t' read -r job job_node job_shape; do
     [[ -z ${job} ]] && continue
-    if [[ ${job_node} != 'map '* ]]; then
+    # An alias is read through by the permissions read, as GitHub
+    # Actions reads it, so only a node that is neither is not a job.
+    if [[ ${job_node} != 'map '* && ${job_node} != 'alias '* ]]; then
       printf '%s: job %q has unexpected shape (kind=%s, tag=%s); expected a map\n' \
         "${f}" "${job}" "${job_node%% *}" "${job_node#* }" >&2
       failed=$((failed + 1))

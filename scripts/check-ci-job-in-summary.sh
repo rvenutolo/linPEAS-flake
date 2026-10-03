@@ -225,8 +225,8 @@ function die_manifest_shape() {
 # The manifest must be one YAML document mapping each group to a
 # non-empty list of check names. Every shape is read by its kind, with
 # the tag beside it: a map or a list carrying a tag of its own is still
-# read, and a check name is one non-empty line, a scalar carrying the
-# string tag. Anything else lists no check the coverage can hold to a
+# read, and a check name is a scalar carrying the string tag, neither
+# empty nor spanning lines. Anything else lists no check the coverage can hold to a
 # script, or names one only through an alias or a merge key, which the
 # manifest's other readers resolve by their own rules, so the run stops
 # before any check prints.
@@ -270,8 +270,9 @@ if [[ -n ${bad_items} ]]; then
   die_manifest_shape "$(printf 'lint-groups group %q holds an item that is not a check name (kind=%s, tag=%s)' \
     "${group}" "${item_shape%% *}" "${item_shape#* }")"
 fi
-# The coverage below reads the names a line at a time, so a name must be
-# one non-empty line.
+# The coverage below reads the names a line at a time, so a name that is
+# empty or spans lines stops the run; any other text that names no
+# script is reported as drift there.
 # A bare `| $g` after a `select` that keeps nothing still prints the
 # group in `yq`, so the group is selected by its names instead.
 bad_names="$(yq eval 'to_entries[] | select([.value[] | select(. == "" or test("\n"))] | length > 0) | .key' \
