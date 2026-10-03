@@ -202,6 +202,33 @@ expect_body job-id-tab.yml $'permissions: {}\njobs:\n  "x\\t!!str\\tmap !!map\\t
   "DIR/job-id-tab.yml: ${ODD_ID}"$'\n1 permissions posture violation(s) found'
 expect_body job-id-break.yml $'permissions: {}\njobs:\n  "y\\nz":\n    permissions: {}\n' 1 \
   "DIR/job-id-break.yml: ${ODD_ID}"$'\n1 permissions posture violation(s) found'
+# The job-id read failing is a counted finding, like the job rows' read.
+yq_stub 'select(tag == "!!str" and test(' 7
+ids_exit=0
+ids_stderr="$(PATH="${STUB_DIR}:${PATH}" WORKFLOWS_DIR_OVERRIDE="${FIXTURES}" \
+  WORKFLOW_FILE_FILTER=good.yml "${SCRIPT}" 2>&1 >/dev/null)" || ids_exit=$?
+rm --recursive --force -- "${STUB_DIR}"
+ids_want="${FIXTURES}/good.yml: could not evaluate workflow with yq (malformed?)"$'\n''1 permissions posture violation(s) found'
+if [[ ${ids_exit} != 1 || ${ids_stderr} != "${ids_want}" ]]; then
+  printf 'FAIL good.yml with the job-id read failing: exit %s, want 1, and stderr %q\n  got: %s\n' \
+    "${ids_exit}" "${ids_want}" "${ids_stderr}" >&2
+  exit 1
+fi
+printf 'OK   good.yml with the job-id read failing\n'
+# yq prints one job-id count per document; counts of 0 in a file of
+# several documents are no odd id. (Several documents are not refused by
+# this lint; only the id message is held here.)
+docs_dir="$(mktemp --directory)"
+printf 'permissions: {}\njobs:\n  a:\n    permissions: {}\n---\npermissions: {}\njobs:\n  b:\n    permissions: {}\n' \
+  >"${docs_dir}/two-docs.yml"
+docs_exit=0
+docs_stderr="$(WORKFLOWS_DIR_OVERRIDE="${docs_dir}" "${SCRIPT}" 2>&1 >/dev/null)" || docs_exit=$?
+rm --recursive --force -- "${docs_dir}"
+if [[ ${docs_exit} != 1 || ${docs_stderr} == *'tab or a line break'* ]]; then
+  printf 'FAIL two-docs.yml: exit %s, want 1, and no job-id line\n  got: %s\n' "${docs_exit}" "${docs_stderr}" >&2
+  exit 1
+fi
+printf 'OK   two-docs.yml: per-document id counts of 0\n'
 expect_body job-xtag.yml $'permissions: {}\njobs:\n  a:\n    permissions: !x\n      contents: read\n' 0 ''
 expect_body job-strseq.yml $'permissions: {}\njobs:\n  b:\n    permissions: !!str [contents]\n' 1 \
   $'DIR/job-strseq.yml: job b permissions has unexpected shape (kind=seq, tag=!!str)\n1 permissions posture violation(s) found'

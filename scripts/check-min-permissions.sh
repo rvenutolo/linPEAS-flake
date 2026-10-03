@@ -14,7 +14,10 @@
 #      from top-level (which is empty anyway) is not allowed; an
 #      omitted block is a lint failure. A job's block is read by its
 #      kind: a map, whatever tag it carries, passes, and any other shape
-#      is reported with its kind and tag.
+#      is reported with its kind and tag. A job written as an alias is
+#      read through it. A merge key under `jobs:`, and a job id holding
+#      a tab or a line break, are findings: GitHub Actions refuses both,
+#      and the jobs behind them are not read.
 #   3. Top-level cannot be `read-all`, `write-all`, or any scalar/
 #      list form. (Subsumed by rule 1; a scalar gets a dedicated
 #      message, any other shape is reported by its YAML tag.)
@@ -148,6 +151,21 @@ for f in "${selected_files[@]}"; do
     continue
   fi
   [[ -n ${rows} ]] || continue
+  # The rows are tab-separated, one per line, so a job id holding a tab
+  # or a line break could forge or split one. GitHub Actions refuses such
+  # an id, so it is a finding and the workflow's jobs are not read.
+  if ! odd_ids="$(yq eval '[.jobs | keys[] | select(tag == "!!str" and test("[\t\n]"))] | length' "${f}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  # One count per document: any count above 0 is a finding.
+  if [[ ${odd_ids} == *[1-9]* ]]; then
+    printf '%s: jobs: holds a job id with a tab or a line break, which GitHub Actions refuses; its jobs are not read\n' \
+      "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
   while IFS=$'\t' read -r job key_tag job_node job_shape; do
     [[ -z ${job} ]] && continue
     # GitHub Actions refuses a merge key, and the jobs one brings in are
