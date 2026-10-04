@@ -370,6 +370,10 @@ function expect_allowlist_shape() {
   fi
   printf 'OK   %s\n' "${name}"
 }
+expect_allowlist_shape allowlist-entry-twice $'good.yml: {writer: [contents]}\ngood.yml: {writer: [issues]}\n' 0 ''
+expect_names scope-twice w.yml \
+  $'permissions: {}\njobs:\n  writer:\n    permissions:\n      issues: read\n      issues: write\n    steps:\n      - run: echo PAYLOAD_RAN\n' \
+  $'w.yml:\n  writer: [issues]\n' 0 ''
 expect_allowlist_shape allowlist-entry-alias $'x: &X {writer: [issues]}\ngood.yml: *X\n' 0 ''
 expect_allowlist_shape allowlist-entry-merge $'x: &X {writer: [issues]}\ngood.yml:\n  <<: *X\n' 0 ''
 expect_allowlist_shape allowlist-root-list $'- good.yml\n' 2 \

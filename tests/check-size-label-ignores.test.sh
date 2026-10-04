@@ -241,6 +241,18 @@ EOF
   expect 'key as data: wildcard' "${DECLARING_SCRIPTS}" "${work}/key-wildcard.yml" 0 '' '' '' \
     "check-size-label-ignores.sh: ok — 2 declaration(s) (1 @generates, 1 @generates-block) across 2 script(s) under ${DECLARING_SCRIPTS}, checked against 3 IGNORED entry(ies) in ${work}/key-wildcard.yml"
 
+  # (p) A job keyed by an alias is looked up by the key the job list
+  # prints, and a key written twice reads its last job.
+  local size_step='      - uses: pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7'
+  printf 'name: a\non:\n  workflow_dispatch: {}\nx-name: &ka named\njobs:\n  *ka :\n    steps:\n%s\n        env:\n          IGNORED: "docs/alpha.md\\ndocs/key-alias.md"\n' \
+    "${size_step}" >"${work}/key-alias.yml"
+  expect 'key as data: an alias key' "${DECLARING_SCRIPTS}" "${work}/key-alias.yml" 1 \
+    "${work}/key-alias.yml: IGNORED lists docs/key-alias.md, which no script declares with @generates and which is not one of this lint's exemptions; every hand edit to it counts as zero toward the PR size label"
+  printf 'name: a\non:\n  workflow_dispatch: {}\njobs:\n  size:\n    steps:\n%s\n        env:\n          IGNORED: "docs/alpha.md"\n  size:\n    steps:\n%s\n        env:\n          IGNORED: "docs/alpha.md\\ndocs/key-twice.md"\n' \
+    "${size_step}" "${size_step}" >"${work}/key-twice.yml"
+  expect 'key as data: a key written twice' "${DECLARING_SCRIPTS}" "${work}/key-twice.yml" 1 \
+    "${work}/key-twice.yml: IGNORED lists docs/key-twice.md, which no script declares with @generates and which is not one of this lint's exemptions; every hand edit to it counts as zero toward the PR size label"
+
   # (m) LIVE: the real tree must satisfy the lint.
   expect 'live: real tree agrees' \
     "${REPO_ROOT}/scripts" "${REPO_ROOT}/.github/workflows/labeler.yml" 0 ''

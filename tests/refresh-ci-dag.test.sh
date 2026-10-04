@@ -36,6 +36,39 @@ function cleanup() {
 }
 trap cleanup EXIT
 
+# @description Render one workflow holding job-a and a job under the
+# given key, with the given category map, and require the key's node to
+# take the Doc quality class and job-a the build class, and the run to log
+# only its one line (yq's own warning about a merge key aside).
+# @arg $1 work dir  @arg $2 case name  @arg $3 job key  @arg $4 category map
+function ci_dag_key_case() {
+  local -r work="$1" case_name="$2" key="$3" cats="$4"
+  local key_rc=0 err
+  printf "name: ci\non: push\njobs:\n  job-a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: \"true\"\n  '%s':\n    runs-on: ubuntu-latest\n    steps:\n      - run: \"true\"\n" \
+    "${key//\'/\'\'}" >"${work}/${case_name}.yml"
+  printf '%s' "${cats}" >"${work}/${case_name}.cats.yml"
+  printf '<!-- BEGIN ci-dag -->\n<!-- END ci-dag -->\n' >"${work}/${case_name}.md"
+  PROBE=PAYLOAD_RAN PROBE_FILE="${work}/probe.txt" \
+    CI_WORKFLOW_OVERRIDE="${work}/${case_name}.yml" \
+    CATEGORIES_FILE_OVERRIDE="${work}/${case_name}.cats.yml" \
+    DOC_OVERRIDE="${work}/${case_name}.md" \
+    "${SCRIPT}" >"${work}/${case_name}.out" 2>"${work}/${case_name}.err" || key_rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${key_rc}" >"${work}/${case_name}.outcome"
+  harness_assert_record "job key as data: ${case_name}" '' \
+    "${work}/${case_name}.outcome" "${work}/${case_name}.md" "${work}/${case_name}.err"
+  err="$(grep --invert-match --fixed-strings -- '--yaml-fix-merge-anchor-to-spec' "${work}/${case_name}.err" || true)"
+  if [[ ${key_rc} -eq 0 ]] &&
+    [[ ${err} =~ ^\[[^]]*\]\ INFO\ \ refreshed\ ci-dag\ block\ in\ (.*)$ ]] &&
+    [[ ${BASH_REMATCH[1]} == "${work}/${case_name}.md" ]] &&
+    grep --line-regexp --fixed-strings --quiet -- "  ${key}:::doc" "${work}/${case_name}.md" &&
+    grep --line-regexp --fixed-strings --quiet -- '  job-a:::build' "${work}/${case_name}.md"; then
+    pass "job key as data: ${case_name} renders its own category"
+  else
+    fail "job key as data: ${case_name}: exit ${key_rc}, want 0 and the line '  ${key}:::doc'"
+    cat -- "${work}/${case_name}.err" "${work}/${case_name}.md" >&2
+  fi
+}
+
 function main() {
   # Scenario 1: real-repo --check passes after a fresh generate.
   "${SCRIPT}"
@@ -260,7 +293,9 @@ EOF
   # closes a quoted segment if spliced into the category read: it would
   # take job-a's category, or print an environment variable or a file
   # through `error()`, or match job-a as a pattern. Read as data, each
-  # key takes its own category and the run logs only its one line.
+  # key takes its own category and the run logs only its one line. The
+  # key's own entry comes first, so a pattern that also matched job-a
+  # would end on job-a's.
   local key_work
   key_work="$(mktemp --directory)"
   printf 'FILE_READ_MARK\n' >"${key_work}/probe.txt"
@@ -270,33 +305,18 @@ EOF
     'reads-file' 'zz" | error(load_str(strenv(PROBE_FILE))) | ."y'
     'wildcard' 'job-*'
   )
-  local i case_name key key_rc
+  local i quoted
   for ((i = 0; i < ${#key_cases[@]}; i += 2)); do
-    case_name="${key_cases[i]}" key="${key_cases[i + 1]}"
-    printf "name: ci\non: push\njobs:\n  job-a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: \"true\"\n  '%s':\n    runs-on: ubuntu-latest\n    steps:\n      - run: \"true\"\n" \
-      "${key//\'/\'\'}" >"${key_work}/${case_name}.yml"
-    printf "job-a: Build + smoke\n'%s': Doc quality\n" "${key//\'/\'\'}" >"${key_work}/${case_name}.cats.yml"
-    printf '<!-- BEGIN ci-dag -->\n<!-- END ci-dag -->\n' >"${key_work}/${case_name}.md"
-    key_rc=0
-    PROBE=PAYLOAD_RAN PROBE_FILE="${key_work}/probe.txt" \
-      CI_WORKFLOW_OVERRIDE="${key_work}/${case_name}.yml" \
-      CATEGORIES_FILE_OVERRIDE="${key_work}/${case_name}.cats.yml" \
-      DOC_OVERRIDE="${key_work}/${case_name}.md" \
-      "${SCRIPT}" >"${key_work}/${case_name}.out" 2>"${key_work}/${case_name}.err" || key_rc=$?
-    printf 'harness-assert-outcome: exit=%d\n' "${key_rc}" >"${key_work}/${case_name}.outcome"
-    harness_assert_record "job key as data: ${case_name}" '' \
-      "${key_work}/${case_name}.outcome" "${key_work}/${case_name}.md" "${key_work}/${case_name}.err"
-    if [[ ${key_rc} -eq 0 ]] &&
-      [[ $(<"${key_work}/${case_name}.err") =~ ^\[[^]]*\]\ INFO\ \ refreshed\ ci-dag\ block\ in\ (.*)$ ]] &&
-      [[ ${BASH_REMATCH[1]} == "${key_work}/${case_name}.md" ]] &&
-      grep --line-regexp --fixed-strings --quiet -- "  ${key}:::doc" "${key_work}/${case_name}.md" &&
-      grep --line-regexp --fixed-strings --quiet -- '  job-a:::build' "${key_work}/${case_name}.md"; then
-      pass "job key as data: ${case_name} renders its own category"
-    else
-      fail "job key as data: ${case_name}: exit ${key_rc}, want 0 and the line '  ${key}:::doc'"
-      cat -- "${key_work}/${case_name}.err" "${key_work}/${case_name}.md" >&2
-    fi
+    quoted=${key_cases[i + 1]//\'/\'\'}
+    ci_dag_key_case "${key_work}" "${key_cases[i]}" "${key_cases[i + 1]}" \
+      "'${quoted}': Doc quality"$'\njob-a: Build + smoke\n'
   done
+  # A category a merge key brings in is read, and of a job written twice
+  # in the map the last entry is read, as yq's own lookup reads them.
+  ci_dag_key_case "${key_work}" 'through-merge' 'job-m' \
+    $'x-base: &base\n  job-m: Doc quality\n<<: *base\njob-a: Build + smoke\n'
+  ci_dag_key_case "${key_work}" 'written-twice' 'job-d' \
+    $'job-d: Build + smoke\njob-d: Doc quality\njob-a: Build + smoke\n'
   rm --recursive --force -- "${key_work}"
 
   harness_assert_verify || failures=$((failures + 1))

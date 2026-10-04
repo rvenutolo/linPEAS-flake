@@ -131,5 +131,8 @@ expect_body job-key-wildcard.yml $'jobs:\n  \'a*\':\n    permissions:\n      con
 # one, once for each time the job list holds it.
 expect_body job-key-twice.yml $'jobs:\n  a:\n    permissions:\n      contents: read\n    steps:\n      - run: echo PAYLOAD_RAN\n  a:\n    permissions:\n      contents: write\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
   "DIR/job-key-twice.yml: job a holds guard-required write scope but is missing fork guard ${BT}github.repository == 'rvenutolo/linPEAS-flake'${BT}; got if=''"$'\n'"DIR/job-key-twice.yml: job a holds guard-required write scope but is missing fork guard ${BT}github.repository == 'rvenutolo/linPEAS-flake'${BT}; got if=''"$'\n2 guard-required job(s) missing fork guard'
+# A job keyed by an alias is looked up by the key the job list prints.
+expect_body job-key-alias.yml $'x-name: &ka named\njobs:\n  *ka :\n    permissions:\n      contents: write\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
+  "DIR/job-key-alias.yml: job \\*ka holds guard-required write scope but is missing fork guard ${BT}github.repository == 'rvenutolo/linPEAS-flake'${BT}; got if=''${ONE_JOB}"
 
 printf 'all tests passed\n'

@@ -386,6 +386,31 @@ if [[ ${wild_exit} != 1 || ${wild_err} != "${wild_want}" ]]; then
 fi
 printf 'OK   job-key-wildcard\n'
 
+# A job keyed by an alias is looked up by the key the job list prints,
+# and a key written twice reads its last job, once for each time the job
+# list holds it.
+# @arg $1 scenario name  @arg $2 the jobs: block  @arg $3 expected stderr
+function expect_jobs_block() {
+  local -r name="$1" jobs="$2" want="$3"
+  local got_exit=0 got_stderr
+  printf 'name: %s\non:\n  workflow_dispatch: {}\nx-name: &ka named\njobs:\n%s' "${name}" "${jobs}" \
+    >"${key_dir}/wf/${name}.yml"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER="${name}.yml" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  if [[ ${got_exit} != 1 || ${got_stderr} != "${want//@F@/${key_dir}/wf/${name}.yml}" ]]; then
+    printf 'FAIL %s: exit %s, want 1\n  stderr: %s\n' "${name}" "${got_exit}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+readonly CAFE_STEPS=$'    runs-on: ubuntu-latest\n    steps:\n      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3\n        with:\n          egress-policy: block\n          allowed-endpoints: >\n            api.github.com:443\n            cafe.github.com:443\n'
+readonly CLEAN_STEPS=$'    runs-on: ubuntu-latest\n    steps:\n      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3\n        with:\n          egress-policy: block\n          allowed-endpoints: >\n            api.github.com:443\n'
+readonly CAFE_FINDING="which no tool in this repo reaches"
+expect_jobs_block job-key-alias $'  *ka :\n'"${CAFE_STEPS}" \
+  "@F@: job '*ka' allowlists cafe.github.com, ${CAFE_FINDING}"$'\n1 egress-allowlist violation(s)'
+expect_jobs_block job-key-twice $'  a:\n'"${CLEAN_STEPS}"$'  a:\n'"${CAFE_STEPS}" \
+  "@F@: job 'a' allowlists cafe.github.com, ${CAFE_FINDING}"$'\n'"@F@: job 'a' allowlists cafe.github.com, ${CAFE_FINDING}"$'\n2 egress-allowlist violation(s)'
+
 # A key that prints as an empty name still opens a block, so it ends the
 # job before it. Here the job before it carries a nix host but runs no
 # nix, and the empty-named job's block holds an exempt marker: a range
