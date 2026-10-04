@@ -236,8 +236,8 @@ printf 'OK   job-key-in-arithmetic\n'
 # moves a job's range instead. Each such key is a counted finding naming
 # the key, with nothing run and nothing else read from the file: the
 # build job downloads a release asset its allowlist omits, a violation
-# only a further read would report. An empty key is read as main read
-# it, which that same violation shows.
+# only a further read would report. An empty key's job is read too, and
+# the same violation shows the build job still is.
 # @arg $1 scenario name, which also names its marker file  @arg $2 the
 # job key, as a YAML double-quoted body  @arg $3 the expected finding
 # line, after the file name; it and the tally are the whole of stderr
@@ -298,6 +298,47 @@ expect_job_key job-key-integer 5 "${release_finding}" raw
 expect_job_key job-key-tagged-tab '!!int "b\t6"' "job key \"b\\t6\" ${odd_key}" raw
 # Two such keys: the finding names the first.
 expect_job_key job-key-two-odd $'"b\\t7": {}\n  "c\\t8"' "job key \"b\\t7\" ${odd_key}" raw
+
+# A key that prints as an empty name still opens a block, so it ends the
+# job before it. Here the job before it carries a nix host but runs no
+# nix, and the empty-named job's block holds an exempt marker: a range
+# that ran on past the empty-named key read that marker as the earlier
+# job's and passed it.
+# @arg $1 scenario name  @arg $2 the key, written as given
+function expect_empty_name_ends_range() {
+  local -r name="$1" key="$2"
+  local got_exit=0 got_stderr want
+  cat >"${key_dir}/wf/${name}.yml" <<EOF
+name: ${name}
+on:
+  workflow_dispatch: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            cache.nixos.org:443
+      - run: echo PAYLOAD_RAN
+  ${key}:
+    # egress-nix-exempt: belongs to the job with the empty name
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+EOF
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER="${name}.yml" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  want="${key_dir}/wf/${name}.yml: job 'build' allowlists cache.nixos.org/releases.nixos.org but reaches no nix tooling — neither ./.github/actions/setup-nix nor a run: nix invocation is detected, and no '# egress-nix-exempt: <reason>' marker justifies it"$'\n1 egress-allowlist violation(s)'
+  if [[ ${got_exit} != 1 || ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s: exit %s\n  stderr: %s\n' "${name}" "${got_exit}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+expect_empty_name_ends_range job-key-null-ends-range null
+expect_empty_name_ends_range job-key-empty-ends-range '""'
 
 # The row check is the range arithmetic's own guard. The key test above
 # leaves yq no way to print a row it fails, so a yq stub answers the job
