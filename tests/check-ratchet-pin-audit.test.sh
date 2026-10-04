@@ -63,6 +63,150 @@ function expect_unparsable() {
 }
 expect_unparsable
 
+# --- shapes of permissions: and on:, built from good.yml at run time ---
+# A formatter would rewrite a tagged or quoted node checked in as a
+# fixture. Each scenario asserts the whole of stderr.
+
+# @description Run the script on good.yml with one line replaced (or a
+# text appended), and compare the exit code and the whole of stderr.
+# @arg $1 scenario name
+# @arg $2 the line of good.yml to replace (empty: replace nothing)
+# @arg $3 its replacement, printf-style (may span lines)
+# @arg $4 text appended to the file, printf-style (may be empty)
+# @arg $5 expected exit code
+# @arg $6 expected stderr
+function expect_shape() {
+  local -r name="$1" old="$2" new="$3" tail="$4" want_exit="$5" want="$6"
+  local dir content got_exit=0 got_stderr replacement appended
+  dir="$(mktemp --directory)"
+  content="$(<"${FIXTURES}/good.yml")"
+  # printf -v keeps a trailing line break a substitution would drop.
+  # shellcheck disable=SC2059 # the replacement is the format
+  printf -v replacement -- "${new}"
+  # shellcheck disable=SC2059 # the appended text is the format
+  printf -v appended -- "${tail}"
+  if [[ -n ${old} ]]; then
+    local rest="${content#*"${old}"}"
+    if [[ ${rest} == "${content}" || ${rest} == *"${old}"* ]]; then
+      printf 'HARNESS BUG: %q does not occur exactly once in good.yml\n' "${old}" >&2
+      exit 1
+    fi
+    content="${content/"${old}"/"${replacement}"}"
+  fi
+  printf '%s\n%s' "${content}" "${appended}" >"${dir}/wf.yml"
+  got_stderr="$(WORKFLOW_PATH_OVERRIDE="${dir}/wf.yml" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  local expected="${want//%W/${dir}/wf.yml}"
+  rm --recursive --force -- "${dir}"
+  # yq's own lines are not the lint's: its timestamped merge-key warning
+  # is dropped, and `YQ_ERROR` on a line of its own stands for one line of
+  # yq's error, which must open with `Error: `.
+  local line kept=''
+  while IFS= read -r line; do
+    [[ ${line} == 'time='*' level=WARN '* ]] && continue
+    kept+="${kept:+$'\n'}${line}"
+  done <<<"${got_stderr}"
+  got_stderr="${kept}"
+  if [[ ${expected} == YQ_ERROR$'\n'* ]]; then
+    if [[ ${got_stderr} != 'Error: '*$'\n'* ]]; then
+      printf 'FAIL %s: stderr does not open with a line of yq'"'"'s own\n  got: %q\n' "${name}" "${got_stderr}" >&2
+      return 1
+    fi
+    expected="${expected#YQ_ERROR$'\n'}"
+    got_stderr="${got_stderr#*$'\n'}"
+  fi
+  if [[ ${got_exit} != "${want_exit}" || ${got_stderr} != "${expected}" ]]; then
+    printf 'FAIL %s: exit %s, want %s\n  got:  %q\n  want: %q\n' \
+      "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" "${expected}" >&2
+    return 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+
+readonly PERMS_LINE=$'\npermissions: {}\n'
+readonly SCHED_LINES=$'  schedule:\n    - cron: "0 11 * * *" # daily 11:00 UTC\n'
+readonly ON_BLOCK=$'on:\n  schedule:\n    - cron: "0 11 * * *" # daily 11:00 UTC\n  workflow_dispatch:\n'
+readonly ONE_FAILED='1 invariant(s) failed'
+
+# permissions: is read by kind, through an alias.
+expect_shape 'an empty scalar carrying the map tag is no empty map' \
+  "${PERMS_LINE}" "\\npermissions: !!map ''\\n" '' 1 \
+  "top-level permissions must be {} (got kind=scalar tag=!!map length=0)
+${ONE_FAILED}"
+expect_shape 'an empty map carrying a tag of its own is an empty map' \
+  "${PERMS_LINE}" '\npermissions: !x {}\n' '' 0 ''
+expect_shape 'an empty list carrying the map tag is no empty map' \
+  "${PERMS_LINE}" '\npermissions: !!map []\n' '' 1 \
+  "top-level permissions must be {} (got kind=seq tag=!!map length=0)
+${ONE_FAILED}"
+expect_shape 'permissions: written as an alias of an empty map passes' \
+  "${PERMS_LINE}" '\nx-p: &p {}\npermissions: *p\n' '' 0 ''
+expect_shape 'permissions: written as an alias of a granting map is a finding' \
+  "${PERMS_LINE}" '\nx-p: &p {contents: read}\npermissions: *p\n' '' 1 \
+  "top-level permissions must be {} (got kind=map tag=!!map length=1)
+${ONE_FAILED}"
+expect_shape 'a map tag holding a space is printed whole' \
+  "${PERMS_LINE}" '\npermissions: !<x%%200> {a: b}\n' '' 1 \
+  "top-level permissions must be {} (got kind=map tag=x 0 length=1)
+${ONE_FAILED}"
+
+# on: is read from ON_NODE by kind; schedule must be a non-empty list.
+expect_shape 'a scalar carrying the list tag is no schedule' \
+  "${SCHED_LINES}" '  schedule: !!seq x\n' '' 1 \
+  "on: must include a schedule sequence (got kind=scalar tag=!!seq length=1)
+${ONE_FAILED}"
+expect_shape 'an empty scalar carrying the list tag is no schedule' \
+  "${SCHED_LINES}" "  schedule: !!seq ''\\n" '' 1 \
+  "on: must include a schedule sequence (got kind=scalar tag=!!seq length=0)
+${ONE_FAILED}"
+expect_shape 'an empty schedule list runs nothing' \
+  "${SCHED_LINES}" '  schedule: []\n' '' 1 \
+  "on: must include a schedule sequence (got kind=seq tag=!!seq length=0)
+${ONE_FAILED}"
+expect_shape 'a schedule list carrying a tag of its own is a schedule' \
+  "${SCHED_LINES}" '  schedule: !x [{cron: "0 11 * * *"}]\n' '' 0 ''
+expect_shape 'a schedule written as an alias is read through it' \
+  "${ON_BLOCK}" 'x-s: &s [{cron: "0 11 * * *"}]\non:\n  schedule: *s\n  workflow_dispatch:\n' '' 0 ''
+expect_shape 'an on: written as an alias is read through it' \
+  "${ON_BLOCK}" 'x-o: &o {schedule: [{cron: "0 11 * * *"}], workflow_dispatch: }\non: *o\n' '' 0 ''
+expect_shape 'an on: with no schedule names its absence' \
+  "${SCHED_LINES}" '' '' 1 \
+  "on: must include a schedule sequence (got kind=absent tag=- length=0)
+${ONE_FAILED}"
+expect_shape 'an on: given as a list holds neither schedule nor dispatch' \
+  "${ON_BLOCK}" 'on: [schedule, workflow_dispatch]\n' '' 1 \
+  "on: must include a schedule sequence (got kind=absent tag=- length=0)
+on: must include workflow_dispatch
+2 invariant(s) failed"
+expect_shape 'on: given twice stops the run' \
+  "${ON_BLOCK}" "${ON_BLOCK//%/%%}"'"on": push\n' '' 2 \
+  "Error: on: is given more than once
+cannot read the on: schedule from %W"
+
+# An alias chain deeper than ON_NODE's passes stops the run too: each
+# anchor holds a list holding an alias of the one before.
+deep='x-a0: &a0 [workflow_dispatch]\n'
+for i in $(seq 1 17); do
+  deep+="x-a${i}: &a${i} [*a$((i - 1))]\\n"
+done
+expect_shape 'an on: alias nested too deep to resolve stops the run' \
+  "${ON_BLOCK}" "${deep}"'on:\n  schedule: [{cron: "0 11 * * *"}]\n  workflow_dispatch:\n  x: *a17\n' '' 2 \
+  "Error: on: holds an alias nested too deep to resolve
+cannot read the on: schedule from %W"
+expect_shape 'a merge key in on: that brings in a list stops the run' \
+  "${ON_BLOCK}" 'x-l: &l [a]\non:\n  schedule: {<<: *l}\n  workflow_dispatch:\n' '' 2 \
+  "YQ_ERROR
+cannot read the on: schedule from %W"
+
+# Several documents are one finding; a trailing --- starts a second one.
+expect_shape 'a trailing document separator is several documents' \
+  '' '' '---\n' 1 \
+  "workflow holds several YAML documents, which GitHub Actions refuses; it is read no further
+${ONE_FAILED}"
+expect_shape 'a second document is several documents' \
+  '' '' '---\npermissions: {contents: write}\n' 1 \
+  "workflow holds several YAML documents, which GitHub Actions refuses; it is read no further
+${ONE_FAILED}"
+
 # --- documented ratchet version vs the installed tool ----------------
 # `ratchet` floats with the nixpkgs input while three sites assert a
 # specific number, so the mismatch has to be reachable. RATCHET_VERSION
