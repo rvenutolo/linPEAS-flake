@@ -182,7 +182,7 @@ expect_body jobs-merge-inline.yml $'permissions: {}\njobs:\n  <<:\n    evil:\n  
 # The job rows are tab-separated, and GitHub Actions refuses a job id
 # holding a tab or a line break, so such an id is a finding and the
 # workflow's jobs are not read.
-readonly ODD_ID='jobs: holds a job id, or a job or permissions: tag, with a tab or a line break, which GitHub Actions refuses; its jobs are not read'
+readonly ODD_ID='jobs: holds a job id, or the tag of a job id, a job or a permissions: block, with a tab or a line break, which GitHub Actions refuses; its jobs are not read'
 expect_body job-id-tab.yml $'permissions: {}\njobs:\n  "x\\t!!str\\tmap !!map\\tmap !!map":\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
   "DIR/job-id-tab.yml: ${ODD_ID}"$'\n1 permissions posture violation(s) found'
 expect_body job-id-xtag.yml $'permissions: {}\njobs:\n  !x "x\\t!!str\\tmap !!map\\tmap !!map":\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
@@ -245,11 +245,13 @@ expect_body job-perms-alias-scalar.yml $'x-p: &p write-all\npermissions: {}\njob
 # The rows carry tags as text, and a verbatim tag decodes %09 and %0A to
 # a tab and a line break, so a tag holding either could forge a row; it
 # is refused like an odd job id.
-readonly ODD_TAG='jobs: holds a job id, or a job or permissions: tag, with a tab or a line break, which GitHub Actions refuses; its jobs are not read'
+readonly ODD_TAG='jobs: holds a job id, or the tag of a job id, a job or a permissions: block, with a tab or a line break, which GitHub Actions refuses; its jobs are not read'
 expect_body job-tag-forge-scalar.yml $'permissions: {}\njobs:\n  b: !<tag:x%09map%20q%0Az%09k%09map%20m%09map%20n>\n    permissions: write-all\n' 1 \
   "DIR/job-tag-forge-scalar.yml: ${ODD_TAG}${ONE}"
 expect_body job-tag-forge-missing.yml $'permissions: {}\njobs:\n  e: !<tag:x%09map%20q%0Az%09k%09map%20m%09map%20n>\n    runs-on: x\n' 1 \
   "DIR/job-tag-forge-missing.yml: ${ODD_TAG}${ONE}"
+expect_body key-tag-break.yml $'permissions: {}\njobs:\n  ? !<tag:x%09y> h\n  : {permissions: {}}\n' 1 \
+  "DIR/key-tag-break.yml: ${ODD_TAG}${ONE}"
 expect_body perms-tag-break.yml $'permissions: {}\njobs:\n  g:\n    permissions: !<tag:x%0Ay> {}\n' 1 \
   "DIR/perms-tag-break.yml: ${ODD_TAG}${ONE}"
 
