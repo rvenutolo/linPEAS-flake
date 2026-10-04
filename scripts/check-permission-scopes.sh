@@ -20,9 +20,13 @@
 #      docs/security/min-permissions.md stays enforced, diffs stay
 #      minimal, and a duplicate-prone append-anywhere habit cannot form.
 #
-# A job's `permissions:` may also be the scalar `read-all` (ignored) or
-# any other scalar such as `write-all` (a violation — scalar grants
-# bypass the per-scope allowlist entirely).
+# A job's `permissions:` is read by its kind, through an alias. A map
+# carrying a tag of its own is still read scope by scope. It may also be
+# the string `read-all` (ignored); any other shape, such as the string
+# `write-all` or a scalar carrying the map tag, is a violation (a scalar
+# grant bypasses the per-scope allowlist entirely). A job id or a scope
+# name that is not a string, is empty, or holds a tab, a line break or a
+# NUL is a violation, and that workflow's jobs are not read.
 #
 # Read and `none` scope values are ignored — least-privilege concern is
 # write over-grant. See docs/security/min-permissions.md.
@@ -61,6 +65,10 @@ function allowed() {
   yq eval ".\"$1\".\"$2\" // [] | .[]" "${ALLOWLIST}"
 }
 
+# The `jobs:` node, read through an alias: `explode` handed only that
+# node resolves it in one pass, since an anchor cannot sit on an alias.
+readonly JOBS_NODE='[(.jobs | select(kind == "alias") | explode(.)), (.jobs | select(kind != "alias"))] | .[0]'
+
 failed=0
 shopt -s nullglob
 
@@ -72,32 +80,67 @@ filter_into selected_files 'workflow YAML' "${FILE_FILTER}" "${workflow_files[@]
 for f in "${selected_files[@]}"; do
   [[ -f ${f} ]] || continue
   base="$(basename "${f}")"
+  # The rows below are tab-separated, with the job id and the scope name
+  # written as raw text, so an id or a scope name that is not a scalar,
+  # is empty, or holds a tab, a line break or a NUL could forge, split or
+  # garble a row. GitHub Actions refuses such a name, so it is a finding
+  # and the workflow's jobs are not read. Each name is resolved through
+  # an alias first, then tested as the text it renders to, whatever its
+  # tag. The read prints, per document, the first such name's kind, and
+  # its text as JSON (`-` for none).
+  if ! odd_names="$(yq eval "[${JOBS_NODE}"' | select(kind == "map") | to_entries[] | ((.key | explode(.)), (.value | explode(.) | explode(.) | explode(.) | [.permissions] | .[] | select(kind == "map") | keys[] | explode(.))) | select(kind != "scalar" or (tostring | test("^$|[\t\n\x00]"))) | "kind=" + kind + ", name=" + (tostring | to_json(0))] | .[0] // "-"' "${f}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  odd_name=''
+  while IFS= read -r line; do
+    if [[ ${line} != '-' ]]; then
+      odd_name="${line}"
+      break
+    fi
+  done <<<"${odd_names}"
+  if [[ -n ${odd_name} ]]; then
+    printf '%s: jobs: holds a job id or a scope name that is not a string, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: %s)\n' \
+      "${f}" "${odd_name}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
   # Capture yq's output (and exit status) into a variable rather than
   # feeding the loop from `< <(yq ...)`: a process substitution's exit
   # status is not propagated under set -Eeuo pipefail, so a yq failure
   # (unparsable workflow, or a query that errors on a valid-but-odd
   # shape) would yield empty input and the check would pass silently.
   #
-  # A scalar `permissions:` value (e.g. `read-all`, `write-all`) breaks
-  # the map-shaped `to_entries[]` traversal above, so the query branches
-  # on the value's tag: map-shaped permissions still yield write-scope
-  # rows, `read-all` is the one legitimate scalar and yields nothing,
-  # and any other scalar yields a SCALAR row the loop below reports as
-  # a violation instead of letting it abort the yq stream mid-file.
-  if ! rows="$(yq eval '.jobs | to_entries[] | .key as $k
-    | (.value.permissions // {}) as $p
-    | ( ($p | select(tag == "!!map") | to_entries[] | select(.value == "write") | $k + "\t" + .key),
-        ($p | select(tag != "!!map") | select(. != "read-all") | $k + "\tSCALAR\t" + (. | tostring)) )' "${f}")"; then
+  # A job's `permissions:` is read by its kind, through an alias: the job
+  # is handed to `explode` three times, so a job written as an alias, its
+  # `permissions:` and a scope's value each resolve. A map, whatever tag
+  # it carries, yields one row per scope it grants `write`. The string
+  # `read-all` (a scalar carrying the string tag) and a null or absent
+  # block yield nothing. Any other shape yields a row with its kind, and
+  # its tag and text as JSON strings, which hold no tab or line break;
+  # the loop reports it as a violation instead of letting it abort the
+  # yq stream mid-file. Every expression after a `select` reads `.`,
+  # since one that does not prints even when the `select` keeps nothing.
+  if ! rows="$(yq eval --no-doc "${JOBS_NODE}"' | to_entries[] | (.key | explode(.) | tostring) as $k | (.value | explode(.) | explode(.) | explode(.) | [.permissions] | .[])
+    | ( (select(kind == "map") | to_entries[] | select(.value == "write") | $k + "\tW\t" + (.key | tostring)),
+        (select(kind != "map") | select(tag != "!!null") | select((kind == "scalar" and tag == "!!str" and . == "read-all") | not)
+          | $k + "\tS\t" + kind + "\t" + (tag | to_json(0)) + "\t" + (tostring | to_json(0))) )' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
   fi
   [[ -n ${rows} ]] || continue
-  while IFS=$'\t' read -r job scope scalar_val; do
-    [[ -z ${scope} ]] && continue
-    if [[ ${scope} == "SCALAR" ]]; then
-      printf '%s: job %q uses scalar permissions %q (only read-all is allowed as a scalar)\n' \
-        "${f}" "${job}" "${scalar_val}" >&2
+  while IFS=$'\t' read -r job row_kind scope shape_tag shape_text; do
+    [[ -z ${job} ]] && continue
+    if [[ ${row_kind} == "S" ]]; then
+      if [[ ${scope} == "scalar" && ${shape_tag} == '"!!str"' ]]; then
+        printf '%s: job %q uses scalar permissions %s (only read-all is allowed as a scalar)\n' \
+          "${f}" "${job}" "${shape_text}" >&2
+      else
+        printf '%s: job %q permissions has unexpected shape (kind=%s, tag=%s, value=%s); only a map or the string read-all is allowed\n' \
+          "${f}" "${job}" "${scope}" "${shape_tag}" "${shape_text}" >&2
+      fi
       failed=$((failed + 1))
       continue
     fi

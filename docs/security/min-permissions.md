@@ -9,9 +9,9 @@ Strict least-privilege rule for every workflow in `.github/workflows/`.
 1. **Every job declares its own `permissions:` block.** Inheritance from
     the (empty) top is not allowed; an omitted block fails the lint.
 1. **No scalar or list top-level `permissions:` (`read-all` /
-    `write-all`, or a sequence).** Subsumed by rule 1; a scalar is
+    `write-all`, or a sequence).** Subsumed by rule 1; a string is
     reported with a dedicated message, any other shape (a sequence
-    included) by its YAML tag.
+    included) by its YAML kind and tag.
 
 ## Why
 
@@ -36,7 +36,10 @@ below.
 `scripts/check-min-permissions.sh` parses every workflow with `yq` and rejects:
 
 - top-level `permissions:` missing, non-empty map, scalar (`read-all` /
-    `write-all`), or any other shape such as a list
+    `write-all`), or any other shape such as a list (read by its YAML
+    kind and through an alias, so an empty map carrying a tag of its own
+    passes and an empty scalar carrying the map tag does not)
+- a workflow file `yq` reads as several YAML documents
 - any job whose `permissions:` block is omitted or not a map (read by its
     YAML kind, so a map carrying a tag of its own passes)
 
@@ -82,11 +85,16 @@ against the allowlist in both directions and fails on any of:
 - **Unsorted scope list** — a job's scope list departs from sorted
     order. Sorting keeps allowlist diffs minimal and blocks the
     duplicate-prone append-anywhere edit pattern.
-- **Scalar job permissions** — a job whose `permissions:` is a scalar
-    other than `read-all`; a scalar grant bypasses the per-scope
+- **Scalar job permissions** — a job whose `permissions:` is neither a
+    map nor the string `read-all`; a scalar grant bypasses the per-scope
     allowlist entirely (`read-all` is tolerated by this lint, but
     `min-permissions` still rejects any non-map `permissions:`, so the
-    combined posture forbids it).
+    combined posture forbids it). How the block is read (by kind,
+    through aliases) is stated in the header of
+    `scripts/check-permission-scopes.sh`.
+- **Unreadable job id or scope name** — one that is not a string, is
+    empty, or holds a tab, a line break or a NUL; that workflow's jobs
+    are not read.
 
 Wired into the `lint-workflow-security` CI group and as the
 `permission-scopes` pre-commit hook.
