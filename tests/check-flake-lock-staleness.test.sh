@@ -176,7 +176,8 @@ function main() {
   # bad octal literal, `0777` as octal, a word as a variable name and a
   # subscript as code to run, and wraps a number past its integer range.
   # An arithmetic error there ends the input loop rather than the run, so
-  # the check reported the inputs it had read so far and exited 0. Each
+  # the check reported the inputs it had read so far and exited 0, or,
+  # when the bad value came first, reported no inputs at all. Each
   # value below is refused before any arithmetic, naming the value.
   local -r bad_ts='has a locked.lastModified that is not a unix timestamp of at most 12 digits with no leading zero'
   local -r bad_now='STALENESS_NOW_EPOCH is not a unix timestamp of at most 12 digits with no leading zero'
@@ -186,8 +187,8 @@ function main() {
   run_value_scenario 'a lastModified with a leading zero is a could-not-run' \
     nixpkgs-unstable '"0777"' 2 \
     "flake-lock-staleness: top-level input 'nixpkgs-unstable' (node 'nixpkgs-unstable') ${bad_ts}: \"0777\"" '' "${NOW}"
-  # In a locale such as en_US.UTF-8, bash's `[0-9]` also matches
-  # other scripts' digits, which bash arithmetic then cannot read. Where
+  # In a locale such as en_US.UTF-8, bash's `[0-9]` also matches some
+  # characters other than 0-9, which bash arithmetic then cannot read. Where
   # that locale is not installed the run falls back to C and this
   # scenario cannot tell an ASCII-only class from a locale-bound one; the
   # C twin below holds the refusal either way.

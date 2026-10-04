@@ -50,15 +50,17 @@
 #
 # A `locked.lastModified` and "now" are each read as text and must be a
 # unix timestamp written as at most 12 ASCII digits with no leading zero
-# (`0` itself is allowed) before any arithmetic touches them. A value in
-# any other form is an operational error naming it; a lastModified that
-# is absent, null, false or `-` is the operational error "has no numeric
-# locked.lastModified". Bash arithmetic would otherwise read `0777` as
-# octal, fail on `08` or on another script's digits (which `[0-9]` admits
-# in a locale such as en_US.UTF-8) and drop the inputs not yet checked,
-# wrap a number past its integer range, and run a command placed in an
-# array subscript. A timestamp after "now" is accepted and
-# reads as a negative age, so it passes.
+# (`0` itself is allowed) before any arithmetic touches them; the
+# lastModified read is a command substitution, which drops trailing line
+# breaks first. A value in any other form is an operational error naming
+# it; a lastModified that is absent, null, false or `-` is the
+# operational error "has no numeric locked.lastModified". Bash
+# arithmetic would otherwise read `0777` as octal, fail on `08` or on a
+# character other than 0-9 that `[0-9]` admits in a locale such as
+# en_US.UTF-8 (`١٢٣`, `５`, `²`) and drop the inputs not yet checked, wrap
+# a number past its integer range, and run a command placed in an array
+# subscript. A timestamp after "now" is accepted and reads as a negative
+# age, so it passes.
 #
 # Exit: 0 every input fresh, 1 one or more stale, 2 operational error.
 #
@@ -116,8 +118,8 @@ function die_op() {
 }
 
 # The digit class is spelled out because a `[0-9]` range follows the
-# locale's collation and matches non-ASCII digits in en_US.UTF-8. Twelve
-# digits stay far inside bash's integer range.
+# locale's collation and matches characters other than 0-9 in
+# en_US.UTF-8. Twelve digits stay far inside bash's integer range.
 readonly TIMESTAMP_RE='^(0|[123456789][0123456789]{0,11})$'
 readonly TIMESTAMP_RULE='a unix timestamp of at most 12 digits with no leading zero'
 

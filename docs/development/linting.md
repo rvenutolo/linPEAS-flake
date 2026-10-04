@@ -606,8 +606,9 @@ its input. In a `(( ))` condition the error reads as false.
 
 A script that puts text it did not compute itself into arithmetic
 first matches it against a regex whose digit class is spelled out
-(`[0123456789]`), since a `[0-9]` range follows the locale and matches
-other scripts' digits in `en_US.UTF-8`, and bounds its length, or it
+(`[0123456789]`), since a `[0-9]` range follows the locale's collation
+and in `en_US.UTF-8` matches characters other than 0–9, and bounds its
+length, or it
 compares the text as text. A number a tool prints is text too when it
 travels in a delimited row beside free text: a field holding the
 delimiter moves the fields after it, and one holding a line break as
