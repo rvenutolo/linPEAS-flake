@@ -590,6 +590,41 @@ a Go runtime dump, and the script treats the read as one that failed,
 by the exit contract its header states. Such a workflow is never passed;
 one that fits in memory is read in full.
 
+## Text from files in bash arithmetic
+
+Bash evaluates as an expression the text of an operand in contexts
+including `(( ))`, `$(( ))`, `let`, the `-eq`-style tests of `[[ ]]`, an
+indexed array's subscript, a `${var:offset}` slice and any value stored
+in a `declare -i` variable. A name in that text is read as a variable
+(an unset one stops a `set -u` script), an array subscript in it runs
+any command substitution it holds, a leading zero makes it octal, and a
+number past the integer range wraps. In a script file, an error in
+`$(( ))` abandons the top-level command it sits in (a whole loop, or a
+whole `main` call) and the script goes on to its next top-level command
+without tripping `set -e`, so a lint can exit 0 having read only part of
+its input. In a `(( ))` condition the error reads as false.
+
+A script that puts text it did not compute itself into arithmetic
+first matches it against a regex whose digit class is spelled out
+(`[0123456789]`), since a `[0-9]` range follows the locale's collation
+and in `en_US.UTF-8` matches characters other than 0–9, and bounds its
+length, or it
+compares the text as text. A number a tool prints is text too when it
+travels in a delimited row beside free text: a field holding the
+delimiter moves the fields after it, and one holding a line break as
+well can make whole rows of its own that each look well formed.
+`check-egress-allowlist.sh` tests the free text before it splits its
+rows for that reason. `check-flake-lock-staleness.sh` and
+`check-egress-allowlist.sh` state the rule each applies in their
+headers.
+
+No lint enforces this. Telling a script-owned operand from file text
+needs the value's provenance through assignments, reads and helpers,
+and nearly every operand such a trace flags in `scripts/` is a
+counter, a `grep -c` or `wc` count, `date +%s` output, or a number the
+script's own `awk`, `jq` or `yq` program printed. A provenance label
+also misses text that reaches a field through its delimiter.
+
 ## Treefmt YAML quote gotcha
 
 Prettier rewrites single-quoted YAML scalars to double-quoted. Run

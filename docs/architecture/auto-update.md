@@ -144,7 +144,7 @@ the pull-request path asserts an age: the check's harness, which the required
 `flake.lock`, but it pins "now" to that lock's newest `lastModified` and
 accepts a stale verdict — it asserts only that every directly-pinned input
 still has a bound declared, resolves to a node rather than through `follows`,
-and carries a numeric `lastModified`.
+and carries a `lastModified` in the timestamp form the script header states.
 
 `locked.lastModified` is an upstream commit time, not a record of when this
 repo last checked, which is what makes the bounds uneven rather than
