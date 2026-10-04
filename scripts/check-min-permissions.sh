@@ -15,10 +15,10 @@
 #      omitted block is a lint failure. A job's block is read by its
 #      kind: a map, whatever tag it carries, passes, and any other shape
 #      is reported with its kind and tag. A job written as an alias is
-#      read through it. A merge key under `jobs:`, and a job id or a
-#      job or `permissions:` tag holding a tab or a line break, are
-#      findings: GitHub Actions refuses them, and the jobs behind them
-#      are not read.
+#      read through it. A merge key under `jobs:`, and a job id, or the
+#      tag of a job id, a job or its `permissions:`, holding a tab or a
+#      line break, are findings: GitHub Actions refuses them, and the
+#      jobs behind them are not read.
 #   3. Top-level cannot be `read-all`, `write-all`, or any scalar/
 #      list form. (Subsumed by rule 1; a string gets a dedicated
 #      message, any other shape is reported with its kind and tag.)
@@ -189,7 +189,7 @@ for f in "${selected_files[@]}"; do
     continue
   fi
   if [[ ${odd_ids} != 0 ]]; then
-    printf '%s: jobs: holds a job id, or a job or permissions: tag, with a tab or a line break, which GitHub Actions refuses; its jobs are not read\n' \
+    printf '%s: jobs: holds a job id, or the tag of a job id, a job or a permissions: block, with a tab or a line break, which GitHub Actions refuses; its jobs are not read\n' \
       "${f}" >&2
     failed=$((failed + 1))
     continue
