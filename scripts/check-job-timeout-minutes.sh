@@ -12,14 +12,16 @@
 #
 # A job satisfies the lint when `.jobs.<name>.timeout-minutes` is a
 # scalar carrying the integer tag, written in decimal digits, and not
-# zero. Any other value is reported with its kind, tag and text. The
+# zero. A value of any other shape is reported with its kind, tag and
+# text; a null or absent one is reported as missing. The
 # value is compared as text, never as a shell number, so a value bash
 # would read as an expression is never evaluated. Reusable-workflow jobs
 # (those whose `uses:` is a scalar carrying the string tag) are exempt
 # because `timeout-minutes` is not valid on that shape. A job, its
 # `uses:` and its `timeout-minutes:` written as aliases are read through
-# them, as is a job id. A job id that is not a scalar, is empty, or
-# holds a tab or a line break is a finding, whatever its tag: GitHub
+# them, as are a job id and `jobs:` itself. A job id that is not a
+# scalar, is empty, or holds a tab, a line break or a NUL is a finding,
+# whatever its tag: GitHub
 # Actions refuses such an id, and it could forge, split or garble the
 # tab-separated row the jobs are read through, so that workflow's jobs
 # are not read.
@@ -54,6 +56,11 @@ if ! command -v yq >/dev/null 2>&1; then
   exit 2
 fi
 
+# The `jobs:` node, read through an alias: `explode` handed only that
+# node resolves it in one pass, since an anchor cannot sit on an alias.
+# shellcheck disable=SC2016 # yq program literal
+readonly JOBS_NODE='[(.jobs | select(kind == "alias") | explode(.)), (.jobs | select(kind != "alias"))] | .[0]'
+
 failed=0
 shopt -s nullglob
 declare -a workflow_files=()
@@ -65,18 +72,18 @@ for f in "${selected_files[@]}"; do
 
   # The jobs are read below as tab-separated rows, and the job id is the
   # one field written as raw text, so an id that is not a scalar, is
-  # empty, or holds a tab or a line break could forge, split or garble a
-  # row. Each key is resolved through an alias first, then tested as the
+  # empty, or holds a tab, a line break or a NUL could forge, split or
+  # garble a row. Each key is resolved through an alias first, then tested as the
   # text it renders to, whatever its tag; a document whose `jobs:` is not
   # a map has no ids to test.
-  if ! odd_ids="$(yq eval '[.jobs | select(kind == "map") | keys[] | explode(.) | select(kind != "scalar" or (tostring | test("^$|[\t\n]")))] | length' "${f}")"; then
+  if ! odd_ids="$(yq eval "[${JOBS_NODE}"' | select(kind == "map") | keys[] | explode(.) | select(kind != "scalar" or (tostring | test("^$|[\t\n\x00]")))] | length' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
   fi
   # One count per document: any count above 0 is a finding.
   if [[ ${odd_ids} == *[1-9]* ]]; then
-    printf '%s: jobs: holds a job id that is not a string, is empty, or holds a tab or a line break, which GitHub Actions refuses; its jobs are not read\n' \
+    printf '%s: jobs: holds a job id that is not a string, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read\n' \
       "${f}" >&2
     failed=$((failed + 1))
     continue
@@ -92,13 +99,15 @@ for f in "${selected_files[@]}"; do
   # so a job written as an alias and an alias inside it are both read
   # through (an anchor cannot sit on an alias). Each node is collected
   # into a list first, since `yq` yields nothing at all for an absent key.
+  # `--no-doc` keeps `yq` from printing a `---` line between the rows of
+  # two documents, which would read as a job.
   #
   # Capture yq's output (and exit status) into a variable rather than
   # feeding the loop from `< <(yq ...)`: a process substitution's exit
   # status is not propagated under set -Eeuo pipefail, so a yq failure
   # (unparsable workflow, or a query that errors on a valid-but-odd
   # shape) would yield empty input and the check would pass silently.
-  if ! rows="$(yq eval '.jobs | to_entries[] | (.key | explode(.) | tostring) + "\t" + (.value | explode(.) | explode(.) | ([.uses | select((kind == "scalar") and (tag == "!!str"))] | length > 0 | tostring) + "\t" + ([."timeout-minutes" | kind + "\t" + ((select((kind == "scalar") and (tag == "!!int")) | tostring | select(test("^[0-9]+$"))) // "-") + "\t" + (tag | to_json(0)) + "\t" + (tostring | to_json(0))] + ["none\t-\t\"\"\t\"\""] | .[0]))' "${f}")"; then
+  if ! rows="$(yq eval --no-doc "${JOBS_NODE}"' | to_entries[] | (.key | explode(.) | tostring) + "\t" + (.value | explode(.) | explode(.) | ([.uses | select((kind == "scalar") and (tag == "!!str"))] | length > 0 | tostring) + "\t" + ([."timeout-minutes" | kind + "\t" + ((select((kind == "scalar") and (tag == "!!int")) | tostring | select(test("^[0-9]+$"))) // "-") + "\t" + (tag | to_json(0)) + "\t" + (tostring | to_json(0))] + ["none\t-\t\"\"\t\"\""] | .[0]))' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
