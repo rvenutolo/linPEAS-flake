@@ -145,4 +145,20 @@ expect_spliced_key job-key-backslash 'k\x'
 expect_spliced_key job-key-row-separator 'a|1'
 expect_spliced_key job-key-row-separator-index 'decoy|0'
 
+# Each block is read from its own document. A composite of two documents
+# whose second holds the weak block reported it from the first, strict
+# one, and passed.
+mkdir -- "${key_dir}/two-docs"
+printf 'runs:\n  using: composite\n  steps:\n    - shell: bash\n      run: |\n        set -Eeuo pipefail\n---\nruns:\n  using: composite\n  steps:\n    - shell: bash\n      run: |\n        set -euo pipefail\n' \
+  >"${key_dir}/two-docs/action.yml"
+two_docs_exit=0
+two_docs_err="$(ACTIONS_DIR_OVERRIDE="${key_dir}/two-docs" "${SCRIPT}" 2>&1 >/dev/null)" || two_docs_exit=$?
+printf -v two_docs_want '%s: composite step[0] run: block must start with %q (got %q)\n1 run: block(s) missing strict-mode prelude' \
+  "${key_dir}/two-docs/action.yml" 'set -Eeuo pipefail' 'set -euo pipefail'
+if [[ ${two_docs_exit} != 1 || ${two_docs_err} != "${two_docs_want}" ]]; then
+  printf 'FAIL composite-second-document: exit %s, want 1\n  stderr: %s\n' "${two_docs_exit}" "${two_docs_err}" >&2
+  exit 1
+fi
+printf 'OK   composite-second-document\n'
+
 printf 'all tests passed\n'
