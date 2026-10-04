@@ -168,7 +168,9 @@ function main() {
     if [[ -n ${job_keys} ]]; then
       while IFS= read -r job; do
         [[ -z ${job} ]] && continue
-        if ! cat="$(yq ".\"${job}\" // \"\"" "${cat_map}")"; then
+        # The job key reaches `yq` as data, through `strenv`: spliced into
+        # the expression, a key holding a quote would be read as `yq` code.
+        if ! cat="$(JOB="${job}" yq '.[strenv(JOB)] // ""' "${cat_map}")"; then
           log_err "could not read the category of job ${job}"
           exit 2
         fi
