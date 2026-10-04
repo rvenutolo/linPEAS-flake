@@ -229,6 +229,22 @@ check update-flake-lock.yml runs and the Renovate dependency dashboard.' '' "${N
     nixpkgs 1786913600 2 \
     "flake-lock-staleness: ${bad_now}: ١٧٨٧٠٠٠٠٠٠" en_US.UTF-8 ١٧٨٧٠٠٠٠٠٠
 
+  # The refused value is shown through jq. A jq that fails there reports
+  # the input it could not show (exit 2), never jq's own status. The shim
+  # fails only that call, the one run with --null-input.
+  local shim_dir real_jq
+  shim_dir="$(mktemp --directory)"
+  real_jq="$(command -v jq)"
+  # shellcheck disable=SC2016 # the loop is the shim's own text
+  printf '%s\n' "#!${BASH}" \
+    'for a in "$@"; do [[ ${a} == --null-input ]] && exit 5; done' \
+    "exec ${real_jq@Q} \"\$@\"" >"${shim_dir}/jq"
+  chmod +x -- "${shim_dir}/jq"
+  PATH="${shim_dir}:${PATH}" run_value_scenario 'a jq that cannot show a refused lastModified is a could-not-run' \
+    flake-parts '"08"' 2 \
+    "flake-lock-staleness: top-level input 'flake-parts' (node 'flake-parts') could not be read" '' "${NOW}"
+  rm --recursive --force -- "${shim_dir}"
+
   # The absent-payload sentence comes from the shared reader and names
   # the override by kind, never the path a scenario pointed it at.
   actual_exit=0

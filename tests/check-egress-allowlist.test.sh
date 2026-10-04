@@ -233,8 +233,11 @@ printf 'OK   job-key-in-arithmetic\n'
 # with its own text, which the range arithmetic then evaluated: the
 # subscript ran its command, the run dropped the nix job and exited 0.
 # Each variant is a counted finding naming the first row that fails,
-# with nothing run and nothing else read from the file. A forged field
-# can start with digits, and a key's first line can be digits alone.
+# with nothing run and nothing else read from the file: the build job
+# downloads a release asset its allowlist omits, a violation only a
+# further read would report. A forged field can start with digits, a
+# key's first line can be digits alone, and a key that opens with a line
+# break gives an empty first row.
 # @arg $1 scenario name, which also names its marker file  @arg $2 the
 # job key, as a YAML double-quoted body  @arg $3 the expected finding
 # line, after the file name; it and the tally are the whole of stderr
@@ -255,6 +258,7 @@ jobs:
           allowed-endpoints: >
             cache.nixos.org:443
       - run: nix build .#linpeas
+      - run: curl --location --remote-name https://github.com/o/r/releases/download/v1/a
   "${key}":
     runs-on: ubuntu-latest
     steps:
@@ -275,14 +279,16 @@ EOF
 }
 expect_forged_key job-key-tab-forges-line \
   "b\\tBASH_VERSINFO[\$(>${key_dir}/job-key-tab-forges-line.marker)]" \
-  "a job key holds a tab or a line break, so its line row cannot be read: \$'b\\tBASH_VERSINFO[\$(>${key_dir}/job-key-tab-forges-line.marker)]\\t14'"
+  "a job key holds a tab or a line break, so its line row cannot be read: \$'b\\tBASH_VERSINFO[\$(>${key_dir}/job-key-tab-forges-line.marker)]\\t15'"
 expect_forged_key job-key-line-break-forges-line \
   "b\\nc\\tBASH_VERSINFO[\$(>${key_dir}/job-key-line-break-forges-line.marker)]" \
   "a job key holds a tab or a line break, so its line row cannot be read: 'b'"
 expect_forged_key job-key-tab-digits-forges-line 'b\t5' \
-  "a job key holds a tab or a line break, so its line row cannot be read: \$'b\\t5\\t14'"
+  "a job key holds a tab or a line break, so its line row cannot be read: \$'b\\t5\\t15'"
 expect_forged_key job-key-digits-line-break-forges-line '7\n5' \
   "a job key holds a tab or a line break, so its line row cannot be read: '7'"
+expect_forged_key job-key-leading-line-break '\nx' \
+  "a job key holds a tab or a line break, so its line row cannot be read: ''"
 
 # LIVE: the real tree must satisfy assertion 7, and the run must have
 # actually scanned something. The assertion checks the printed count is
