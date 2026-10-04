@@ -56,6 +56,54 @@ function run_scenario() {
   rm --force -- "${outcome_file}" "${out_file}"
 }
 
+# A lock built at run time from all-fresh.lock with one node's
+# lastModified replaced, so a value no formatter should see (a string, a
+# number past bash's integer range) never sits in a tracked fixture. The
+# whole output is asserted, and any `@DIR@` in the value or the expected
+# output names the scenario's own temp directory, where an inert payload
+# would leave its marker.
+# @arg $1 scenario name  @arg $2 node whose lastModified is replaced
+# @arg $3 the new lastModified, as JSON  @arg $4 expected exit
+# @arg $5 the whole expected output  @arg $6 LC_ALL to run under (empty
+# leaves the caller's)  @arg $7 STALENESS_NOW_EPOCH
+function run_value_scenario() {
+  local -r name="$1" node="$2" expected_exit="$4" locale="$6" now="$7"
+  local dir value expected out_file outcome_file actual_exit=0
+  local -a lc=()
+  dir="$(mktemp --directory)"
+  value="${3//@DIR@/${dir}}"
+  expected="${5//@DIR@/${dir}}"
+  out_file="${dir}/out"
+  outcome_file="${dir}/outcome"
+  jq --arg n "${node}" --argjson v "${value}" \
+    '.nodes[$n].locked.lastModified = $v' \
+    "${FIXTURES}/all-fresh.lock" >"${dir}/flake.lock"
+  [[ -n ${locale} ]] && lc=("LC_ALL=${locale}")
+  env ${lc[@]+"${lc[@]}"} FLAKE_LOCK_OVERRIDE="${dir}/flake.lock" \
+    STALENESS_NOW_EPOCH="${now}" \
+    "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  if [[ -e "${dir}/MARKER" ]]; then
+    printf 'FAIL: %s — the payload in lastModified ran\n' "${name}" >&2
+    failures=$((failures + 1))
+  elif [[ ${actual_exit} -ne ${expected_exit} ]]; then
+    printf 'FAIL: %s — expected exit %d, got %d\n' \
+      "${name}" "${expected_exit}" "${actual_exit}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  elif [[ "$(<"${out_file}")" != "${expected}" ]]; then
+    # Multi-line output is compared whole here; the record below carries
+    # its first line, since a recorded substring holds no newline.
+    printf 'FAIL: %s — output is not exactly %q\n' "${name}" "${expected}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+  harness_assert_record "${name}" "${expected%%$'\n'*}" "${outcome_file}" "${out_file}"
+  rm --recursive --force -- "${dir}"
+}
+
 function main() {
   # The clean run asserts the whole summary, not the bare verdict: the
   # per-input age/bound pairs are the evidence that each input was
@@ -123,6 +171,63 @@ function main() {
     printf 'PASS: a non-numeric now is a could-not-run (exit %d)\n' "${actual_exit}"
   fi
   rm --force -- "${out_file}"
+
+  # lastModified and "now" reach bash arithmetic, which reads `08` as a
+  # bad octal literal, `0777` as octal, a word as a variable name and a
+  # subscript as code to run, and wraps a number past its integer range.
+  # An arithmetic error there ends the input loop rather than the run, so
+  # the check reported the inputs it had read so far and exited 0. Each
+  # value below is refused before any arithmetic, naming the value.
+  local -r bad_ts='has a locked.lastModified that is not a unix timestamp of at most 12 digits with no leading zero'
+  local -r bad_now='STALENESS_NOW_EPOCH is not a unix timestamp of at most 12 digits with no leading zero'
+  run_value_scenario 'a lastModified of 08 is a could-not-run' \
+    nixpkgs '"08"' 2 \
+    "flake-lock-staleness: top-level input 'nixpkgs' (node 'nixpkgs') ${bad_ts}: \"08\"" '' "${NOW}"
+  run_value_scenario 'a lastModified with a leading zero is a could-not-run' \
+    nixpkgs-unstable '"0777"' 2 \
+    "flake-lock-staleness: top-level input 'nixpkgs-unstable' (node 'nixpkgs-unstable') ${bad_ts}: \"0777\"" '' "${NOW}"
+  # In a UTF-8 locale such as en_US.UTF-8, bash's `[0-9]` also matches
+  # other scripts' digits, which bash arithmetic then cannot read. Where
+  # that locale is not installed the run falls back to C and this
+  # scenario cannot tell an ASCII-only class from a locale-bound one; the
+  # C twin below holds the refusal either way.
+  run_value_scenario 'Arabic-Indic digits in lastModified are a could-not-run under en_US.UTF-8' \
+    flake-parts '"١٢٣"' 2 \
+    "flake-lock-staleness: top-level input 'flake-parts' (node 'flake-parts') ${bad_ts}: \"١٢٣\"" en_US.UTF-8 "${NOW}"
+  run_value_scenario 'Arabic-Indic digits in lastModified are a could-not-run under C' \
+    treefmt-nix '"١٢٣"' 2 \
+    "flake-lock-staleness: top-level input 'treefmt-nix' (node 'treefmt-nix') ${bad_ts}: \"١٢٣\"" C "${NOW}"
+  run_value_scenario 'fullwidth digits in lastModified are a could-not-run under en_US.UTF-8' \
+    pre-commit-hooks '"５"' 2 \
+    "flake-lock-staleness: top-level input 'pre-commit-hooks' (node 'pre-commit-hooks') ${bad_ts}: \"５\"" en_US.UTF-8 "${NOW}"
+  run_value_scenario 'a 13-digit lastModified is a could-not-run' \
+    nixpkgs 1000000000000 2 \
+    "flake-lock-staleness: top-level input 'nixpkgs' (node 'nixpkgs') ${bad_ts}: \"1000000000000\"" '' "${NOW}"
+  run_value_scenario 'a lastModified past the integer range is a could-not-run' \
+    nixpkgs-unstable 99999999999999999999 2 \
+    "flake-lock-staleness: top-level input 'nixpkgs-unstable' (node 'nixpkgs-unstable') ${bad_ts}: \"99999999999999999999\"" '' "${NOW}"
+  # shellcheck disable=SC2016 # the payload is lock text, never expanded here
+  run_value_scenario 'a subscript in lastModified is refused and never run' \
+    flake-parts '"a[$(touch @DIR@/MARKER)]"' 2 \
+    "flake-lock-staleness: top-level input 'flake-parts' (node 'flake-parts') ${bad_ts}: \"a[\$(touch @DIR@/MARKER)]\"" '' "${NOW}"
+  # The bounds of the accepted form: twelve digits, and a lone zero. A
+  # timestamp after "now" reads as a negative age and passes, as the
+  # header states.
+  run_value_scenario 'a 12-digit lastModified is read' \
+    nixpkgs 999999999999 0 \
+    'flake.lock staleness OK: 5 input(s) within bounds (flake-parts=19d/120d nixpkgs=-11553391d/14d nixpkgs-unstable=2d/14d pre-commit-hooks=102d/120d treefmt-nix=5d/120d)' '' "${NOW}"
+  run_value_scenario 'a lastModified of 0 is read' \
+    treefmt-nix 0 1 \
+    'STALE: treefmt-nix last moved 20682 days ago, over its 120-day bound
+flake.lock staleness check FAILED — 1 of 5 input(s) past their bound.
+An input stops moving when the mechanism that refreshes it stops:
+check update-flake-lock.yml runs and the Renovate dependency dashboard.' '' "${NOW}"
+  run_value_scenario 'a now of 08 is a could-not-run' \
+    nixpkgs 1786913600 2 \
+    "flake-lock-staleness: ${bad_now}: 08" '' 08
+  run_value_scenario 'Arabic-Indic digits in now are a could-not-run under en_US.UTF-8' \
+    nixpkgs 1786913600 2 \
+    "flake-lock-staleness: ${bad_now}: ١٧٨٧٠٠٠٠٠٠" en_US.UTF-8 ١٧٨٧٠٠٠٠٠٠
 
   # The absent-payload sentence comes from the shared reader and names
   # the override by kind, never the path a scenario pointed it at.
