@@ -31,8 +31,10 @@ function main() {
   local checks
   # A manifest that does not parse is an input this runner could not
   # read. Unchecked, yq's own exit 1 becomes the runner's status and
-  # reads as a lint in the group having found a violation.
-  if ! checks="$(yq eval ".\"${group}\" // [] | .[]" "${MANIFEST}")"; then
+  # reads as a lint in the group having found a violation. The group name
+  # reaches `yq` as data, through `strenv`: spliced into the expression, a
+  # name holding a quote would be read as `yq` code.
+  if ! checks="$(GROUP="${group}" yq eval '.[strenv(GROUP)] // [] | .[]' "${MANIFEST}")"; then
     printf 'cannot read group %s from %s\n' "${group}" "${MANIFEST}" >&2
     exit 2
   fi
