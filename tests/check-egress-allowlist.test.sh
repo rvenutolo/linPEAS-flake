@@ -241,9 +241,11 @@ printf 'OK   job-key-in-arithmetic\n'
 # @arg $1 scenario name, which also names its marker file  @arg $2 the
 # job key, as a YAML double-quoted body  @arg $3 the expected finding
 # line, after the file name; it and the tally are the whole of stderr
+# @arg $4 `raw` to write the key as given rather than double-quoted
 function expect_job_key() {
-  local -r name="$1" key="$2" want_line="$3"
-  local got_exit=0 got_stderr
+  local -r name="$1" key="$2" want_line="$3" form="${4:-}"
+  local got_exit=0 got_stderr key_text="\"$2\""
+  [[ ${form} == raw ]] && key_text="${key}"
   cat >"${key_dir}/wf/${name}.yml" <<EOF
 name: ${name}
 on:
@@ -259,7 +261,7 @@ jobs:
             cache.nixos.org:443
       - run: nix build .#linpeas
       - run: curl --location --remote-name https://github.com/o/r/releases/download/v1/a
-  "${key}":
+  ${key_text}:
     runs-on: ubuntu-latest
     steps:
       - run: echo PAYLOAD_RAN
@@ -288,32 +290,53 @@ expect_job_key job-key-tab-digits-forges-line 'b\t5' "job key \"b\\t5\" ${odd_ke
 expect_job_key job-key-digits-line-break-forges-line '7\n5' "job key \"7\\n5\" ${odd_key}"
 expect_job_key job-key-leading-line-break '\nx' "job key \"\\nx\" ${odd_key}"
 expect_job_key job-key-forges-whole-rows 'b\t999\nc' "job key \"b\\t999\\nc\" ${odd_key}"
-expect_job_key job-key-empty '' \
-  "job 'build' downloads a GitHub release asset but does not allowlist release-assets.githubusercontent.com (the github.com redirect is unconditional)"
+readonly release_finding="job 'build' downloads a GitHub release asset but does not allowlist release-assets.githubusercontent.com (the github.com redirect is unconditional)"
+expect_job_key job-key-empty '' "${release_finding}"
+# A key is tested whatever its tag: an integer key is read, and a tag
+# on a key holding a tab does not hide it.
+expect_job_key job-key-integer 5 "${release_finding}" raw
+expect_job_key job-key-tagged-tab '!!int "b\t6"' "job key \"b\\t6\" ${odd_key}" raw
+# Two such keys: the finding names the first.
+expect_job_key job-key-two-odd $'"b\\t7": {}\n  "c\\t8"' "job key \"b\\t7\" ${odd_key}" raw
 
 # The row check is the range arithmetic's own guard. The key test above
-# leaves yq no way to print a row it fails, so a yq stub that answers the
-# job line read with a malformed row reaches it; every other read goes
-# to the real yq.
+# leaves yq no way to print a row it fails, so a yq stub answers the job
+# line read with the rows in STUB_ROWS, and fails the key read when
+# STUB_FAIL_KEYS is set; every other read goes to the real yq.
 real_yq="$(command -v yq)"
 mkdir -- "${key_dir}/stub"
 # shellcheck disable=SC2016 # the shim's own text
 printf '%s\n' "#!${BASH}" \
   'for a in "$@"; do' \
-  '  if [[ ${a} == *"[., line]"* ]]; then printf "build\\t5\\nbuild\\tX\\n"; exit 0; fi' \
+  '  if [[ -n ${STUB_FAIL_KEYS:-} && ${a} == *"test("* ]]; then exit 7; fi' \
+  '  if [[ ${a} == *"[., line]"* ]]; then printf "%s\n" "${STUB_ROWS}"; exit 0; fi' \
   'done' \
   "exec ${real_yq@Q} \"\$@\"" >"${key_dir}/stub/yq"
 chmod +x -- "${key_dir}/stub/yq"
-cp -- "${key_dir}/wf/job-key-empty.yml" "${key_dir}/wf/job-line-row-malformed.yml"
-got_exit=0
-got_stderr="$(PATH="${key_dir}/stub:${PATH}" WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" \
-  WORKFLOW_FILE_FILTER=job-line-row-malformed.yml "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
-want_stderr="${key_dir}/wf/job-line-row-malformed.yml: a job line row is not a key and a line number: \$'build\\tX'"$'\n1 egress-allowlist violation(s)'
-if [[ ${got_exit} != 1 || ${got_stderr} != "${want_stderr}" ]]; then
-  printf 'FAIL job-line-row-malformed: exit %s\n  stderr: %s\n' "${got_exit}" "${got_stderr}" >&2
-  exit 1
-fi
-printf 'OK   job-line-row-malformed\n'
+cp -- "${key_dir}/wf/job-key-empty.yml" "${key_dir}/wf/stubbed.yml"
+# @arg $1 scenario name  @arg $2 STUB_ROWS  @arg $3 STUB_FAIL_KEYS
+# @arg $4 the expected finding line, after the file name
+function expect_stubbed() {
+  local -r name="$1" rows="$2" fail_keys="$3" want_line="$4"
+  local got_exit=0 got_stderr
+  got_stderr="$(PATH="${key_dir}/stub:${PATH}" STUB_ROWS="${rows}" STUB_FAIL_KEYS="${fail_keys}" \
+    WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER=stubbed.yml \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  if [[ ${got_exit} != 1 || ${got_stderr} != "${key_dir}/wf/stubbed.yml: ${want_line}"$'\n1 egress-allowlist violation(s)' ]]; then
+    printf 'FAIL %s: exit %s, want 1 and %q\n  stderr: %s\n' \
+      "${name}" "${got_exit}" "${want_line}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+readonly bad_row='a job line row is not a key and a line number:'
+expect_stubbed job-line-row-word $'build\t5\nbuild\tX' '' "${bad_row} \$'build\\tX'"
+expect_stubbed job-line-row-no-tab $'build\t5\n7' '' "${bad_row} '7'"
+expect_stubbed job-line-row-empty $'build\t5\n\nbuild\t9' '' "${bad_row} ''"
+expect_stubbed job-line-row-digits-then-text $'build\t5\nbuild\t5x' '' "${bad_row} \$'build\\t5x'"
+expect_stubbed job-line-row-text-then-digits $'build\t5\nbuild\tx5' '' "${bad_row} \$'build\\tx5'"
+expect_stubbed job-line-row-ten-digits $'build\t5\nbuild\t1234567890' '' "${bad_row} \$'build\\t1234567890'"
+expect_stubbed job-key-read-fails '' 1 'could not evaluate job keys with yq (malformed?)'
 
 # LIVE: the real tree must satisfy assertion 7, and the run must have
 # actually scanned something. The assertion checks the printed count is
