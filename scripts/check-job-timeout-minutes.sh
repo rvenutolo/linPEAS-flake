@@ -21,10 +21,10 @@
 # `uses:` and its `timeout-minutes:` written as aliases are read through
 # them, as are a job id and `jobs:` itself. A job id that is not a
 # scalar, is empty, or holds a tab, a line break or a NUL is a finding,
-# whatever its tag, and is named with its kind: GitHub
-# Actions refuses such an id, and it could forge, split or garble the
-# tab-separated row the jobs are read through, so that workflow's jobs
-# are not read.
+# whatever its tag, and the first one is named by its kind and text:
+# GitHub Actions refuses such an id, and it could forge, split or garble
+# the tab-separated row the jobs are read through, so that workflow's
+# jobs are not read.
 #
 # No read stops the run. Each can fail on the workflow's own content (an
 # unparsable file fails the first, `jobs: 5` the second), and a failure
@@ -76,7 +76,8 @@ for f in "${selected_files[@]}"; do
   # garble a row. Each key is resolved through an alias first, then
   # tested as the text it renders to, whatever its tag; a document whose
   # `jobs:` is not a map has no ids to test. The read prints, per
-  # document, the first such id's kind and text as JSON (`-` for none).
+  # document, the first such id's kind, and its text as JSON (`-` for
+  # none).
   if ! odd_ids="$(yq eval "[${JOBS_NODE}"' | select(kind == "map") | keys[] | explode(.) | select(kind != "scalar" or (tostring | test("^$|[\t\n\x00]"))) | "kind=" + kind + ", id=" + (tostring | to_json(0))] | .[0] // "-"' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
@@ -90,7 +91,7 @@ for f in "${selected_files[@]}"; do
     fi
   done <<<"${odd_ids}"
   if [[ -n ${odd_id} ]]; then
-    printf '%s: jobs: holds a job id that is not a string, is empty, or holds a tab, a line break or a NUL (%s), which GitHub Actions refuses; its jobs are not read\n' \
+    printf '%s: jobs: holds a job id that is not a string, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: %s)\n' \
       "${f}" "${odd_id}" >&2
     failed=$((failed + 1))
     continue
