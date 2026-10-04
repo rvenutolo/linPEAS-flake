@@ -21,6 +21,8 @@ GitHub Actions defaults a job timeout to 6 hours. A hung job at that ceiling bur
 
 Reusable-workflow callers (jobs that carry a job-level `uses:`) are exempt because `timeout-minutes` is not valid on that shape; the timeout belongs in the called workflow's jobs.
 
+What the lint reads as a positive integer, as a reusable-workflow call and as a job id is stated in the header of `scripts/check-job-timeout-minutes.sh`. It compares the value as text and never evaluates it.
+
 Enforced by `scripts/check-job-timeout-minutes.sh`. Wired as the `lint-workflow-security` CI job (member check `job-timeout-minutes`) and as a pre-commit hook.
 
 ## workflow-concurrency

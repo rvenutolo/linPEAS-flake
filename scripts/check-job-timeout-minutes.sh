@@ -10,10 +10,25 @@
 # which lets a hung job burn the runner budget and stall the merge
 # queue. Requiring an explicit per-job value bounds blast radius.
 #
-# A job satisfies the lint when `.jobs.<name>.timeout-minutes` is an
-# integer scalar. Reusable-workflow jobs (those calling another
-# workflow via `uses:`) are exempt because `timeout-minutes` is not
-# valid on that shape.
+# A job satisfies the lint when `.jobs.<name>.timeout-minutes` is a
+# scalar carrying the integer tag, written in decimal digits, and not
+# zero. A value of any other shape is reported with its kind, tag and
+# text; a null or absent one is reported as missing. The
+# value is compared as text, never as a shell number, so a value bash
+# would read as an expression is never evaluated. Reusable-workflow jobs
+# (those whose `uses:` is a scalar carrying the string tag) are exempt
+# because `timeout-minutes` is not valid on that shape. A job, its
+# `uses:` and its `timeout-minutes:` written as aliases are read through
+# them, as are a job id and `jobs:` itself. A job id that is not a
+# scalar, is empty, or holds a tab, a line break or a NUL is a finding,
+# whatever its tag, and the first one is named by its kind and text:
+# GitHub Actions refuses such an id, and it could forge, split or garble
+# the tab-separated row the jobs are read through, so that workflow's
+# jobs are not read.
+#
+# No read stops the run. Each can fail on the workflow's own content (an
+# unparsable file fails the first, `jobs: 5` the second), and a failure
+# is a finding against the file, with the scan going on.
 #
 # See docs/security/workflow-hardening.md.
 #
@@ -41,6 +56,11 @@ if ! command -v yq >/dev/null 2>&1; then
   exit 2
 fi
 
+# The `jobs:` node, read through an alias: `explode` handed only that
+# node resolves it in one pass, since an anchor cannot sit on an alias.
+# shellcheck disable=SC2016 # yq program literal
+readonly JOBS_NODE='[(.jobs | select(kind == "alias") | explode(.)), (.jobs | select(kind != "alias"))] | .[0]'
+
 failed=0
 shopt -s nullglob
 declare -a workflow_files=()
@@ -50,45 +70,89 @@ filter_into selected_files 'workflow YAML' "${FILE_FILTER}" "${workflow_files[@]
 for f in "${selected_files[@]}"; do
   [[ -f ${f} ]] || continue
 
+  # The jobs are read below as tab-separated rows, and the job id is the
+  # one field written as raw text, so an id that is not a scalar, is
+  # empty, or holds a tab, a line break or a NUL could forge, split or
+  # garble a row. Each key is resolved through an alias first, then
+  # tested as the text it renders to, whatever its tag; a document whose
+  # `jobs:` is not a map has no ids to test. The read prints, per
+  # document, the first such id's kind, and its text as JSON (`-` for
+  # none).
+  if ! odd_ids="$(yq eval "[${JOBS_NODE}"' | select(kind == "map") | keys[] | explode(.) | select(kind != "scalar" or (tostring | test("^$|[\t\n\x00]"))) | "kind=" + kind + ", id=" + (tostring | to_json(0))] | .[0] // "-"' "${f}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  odd_id=''
+  while IFS= read -r line; do
+    if [[ ${line} != '-' ]]; then
+      odd_id="${line}"
+      break
+    fi
+  done <<<"${odd_ids}"
+  if [[ -n ${odd_id} ]]; then
+    printf '%s: jobs: holds a job id that is not a string, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: %s)\n' \
+      "${f}" "${odd_id}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  # Each row: the job id, resolved through an alias; whether its `uses:`
+  # is a scalar carrying the string tag; the kind of its
+  # `timeout-minutes:` (`none` when absent);
+  # the value when it is a scalar carrying the integer tag and written in
+  # decimal digits (`-` otherwise); and the value's tag and text as JSON
+  # strings. A tag is free text too (a verbatim tag decodes `%7C` to a
+  # pipe and `%0A` to a line break), and JSON holds neither a tab nor a
+  # line break, so no field but the id can split a row, and no field is
+  # empty for `read` to collapse. The job is handed to `explode` twice,
+  # so a job written as an alias and an alias inside it are both read
+  # through (an anchor cannot sit on an alias). Each node is collected
+  # into a list first, since `yq` yields nothing at all for an absent key.
+  # `--no-doc` keeps `yq` from printing a `---` line between the rows of
+  # two documents, which would read as a job.
+  #
   # Capture yq's output (and exit status) into a variable rather than
   # feeding the loop from `< <(yq ...)`: a process substitution's exit
   # status is not propagated under set -Eeuo pipefail, so a yq failure
   # (unparsable workflow, or a query that errors on a valid-but-odd
   # shape) would yield empty input and the check would pass silently.
-  if ! rows="$(yq eval '.jobs | to_entries[] | .key + "|" + (.value.uses | tag) + "|" + (.value."timeout-minutes" | tag) + "|" + (.value."timeout-minutes" | tostring)' "${f}")"; then
+  if ! rows="$(yq eval --no-doc "${JOBS_NODE}"' | to_entries[] | (.key | explode(.) | tostring) + "\t" + (.value | explode(.) | explode(.) | ([.uses | select((kind == "scalar") and (tag == "!!str"))] | length > 0 | tostring) + "\t" + ([."timeout-minutes" | kind + "\t" + ((select((kind == "scalar") and (tag == "!!int")) | tostring | select(test("^[0-9]+$"))) // "-") + "\t" + (tag | to_json(0)) + "\t" + (tostring | to_json(0))] + ["none\t-\t\"\"\t\"\""] | .[0]))' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
   fi
 
-  while IFS='|' read -r job uses_tag timeout_tag timeout_val; do
+  while IFS=$'\t' read -r job reusable timeout_kind timeout_digits timeout_tag timeout_text; do
     [[ -z ${job} ]] && continue
-
-    # Reusable-workflow jobs (uses: <ref>) don't accept timeout-minutes.
-    if [[ ${uses_tag} == "!!str" ]]; then
+    # Every field is printed non-empty, so an empty one is a row this
+    # loop cannot read, which is a finding rather than a pass.
+    if [[ -z ${timeout_text} || (${reusable} != true && ${reusable} != false) ]]; then
+      printf '%s: job %q: cannot read its uses: and timeout-minutes:\n' "${f}" "${job}" >&2
+      failed=$((failed + 1))
       continue
     fi
 
-    case "${timeout_tag}" in
-    '!!null')
+    # Reusable-workflow jobs (uses: <ref>) don't accept timeout-minutes.
+    if [[ ${reusable} == 'true' ]]; then
+      continue
+    fi
+
+    # An absent key, or one carrying the null tag (which yq reads as a
+    # null scalar whatever it is written on), is a missing one.
+    if [[ ${timeout_kind} == 'none' || ${timeout_tag} == '"!!null"' ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
       printf '%s: job %q missing `timeout-minutes` (default is 6h; declare an explicit value)\n' \
         "${f}" "${job}" >&2
       failed=$((failed + 1))
-      ;;
-    '!!int')
-      if [[ ${timeout_val} -le 0 ]]; then
-        printf '%s: job %q timeout-minutes must be positive (got %s)\n' \
-          "${f}" "${job}" "${timeout_val}" >&2
-        failed=$((failed + 1))
-      fi
-      ;;
-    *)
-      printf '%s: job %q timeout-minutes has unexpected shape (tag=%s, value=%s); expected integer\n' \
-        "${f}" "${job}" "${timeout_tag}" "${timeout_val}" >&2
+    elif [[ ${timeout_digits} == '-' ]]; then
+      printf '%s: job %q timeout-minutes has unexpected shape (kind=%s, tag=%s, value=%s); expected an integer in decimal digits\n' \
+        "${f}" "${job}" "${timeout_kind}" "${timeout_tag}" "${timeout_text}" >&2
       failed=$((failed + 1))
-      ;;
-    esac
+    elif [[ ${timeout_digits} =~ ^0+$ ]]; then
+      printf '%s: job %q timeout-minutes must be positive (got %s)\n' \
+        "${f}" "${job}" "${timeout_digits}" >&2
+      failed=$((failed + 1))
+    fi
   done <<<"${rows}"
 done
 shopt -u nullglob
