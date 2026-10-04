@@ -96,17 +96,40 @@ function expect_failed_read() {
   printf 'OK   %s with a failing yq read (%s)\n' "${fixture}" "${thing}"
 }
 
+# @description Scan one workflow written to a temp dir at run time and
+# compare the whole of stderr, so the shapes built here (tags, aliases,
+# several documents) are not tracked files a formatter or workflow linter
+# reads.
+# @arg $1 file name, which is also the scenario's label
+# @arg $2 file body  @arg $3 expected exit status
+# @arg $4 expected stderr, with DIR standing for the temp dir
+function expect_body() {
+  local -r name="$1" body="$2" want_exit="$3"
+  local dir got_exit=0 got_stderr want
+  dir="$(mktemp --directory)"
+  printf '%s' "${body}" >"${dir}/${name}"
+  want="${4//DIR/${dir}}"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${dir}" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  rm --recursive --force -- "${dir}"
+  if [[ ${got_exit} != "${want_exit}" || ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s: exit %s, want %s, and stderr %q\n  got: %s\n' \
+      "${name}" "${got_exit}" "${want_exit}" "${want}" "${got_stderr}" >&2
+    return 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+
 # The lint quotes the key in backticks; Q holds one, so that no
 # assertion string here does.
 readonly Q=$'\x60'
 expect good.yml 0 ""
 expect good-no-cancel.yml 0 ""
 expect bad-missing.yml 1 "bad-missing.yml: missing top-level"
-expect bad-scalar.yml 1 "bad-scalar.yml: top-level concurrency has unexpected shape (tag=!!str); expected map"
+expect bad-scalar.yml 1 "bad-scalar.yml: top-level concurrency has unexpected shape (kind=scalar, tag=!!str); expected map"
 expect bad-no-group.yml 1 "bad-no-group.yml: top-level concurrency is missing ${Q}group:${Q}"
 expect bad-empty-group.yml 1 "bad-empty-group.yml: top-level concurrency ${Q}group:${Q} is empty"
-expect bad-seq-group.yml 1 "bad-seq-group.yml: top-level concurrency.group has unexpected shape (tag=!!seq); expected string"
-expect bad-map-group.yml 1 "bad-map-group.yml: top-level concurrency.group has unexpected shape (tag=!!map); expected string"
+expect bad-seq-group.yml 1 "bad-seq-group.yml: top-level concurrency.group has unexpected shape (kind=seq, tag=!!seq); expected string"
+expect bad-map-group.yml 1 "bad-map-group.yml: top-level concurrency.group has unexpected shape (kind=map, tag=!!map); expected string"
 expect no-such-workflow.yml 2 'selected 0 of'
 
 expect_unparsable 'concurrency: [\n' 'bad-unparsable.yml: could not evaluate'
@@ -115,24 +138,31 @@ expect_unparsable 'concurrency: [\n' 'bad-unparsable.yml: could not evaluate'
 # on a workflow that holds the fault the read is for and on one that
 # does not. The group read is `eval .concurrency.group` followed by the
 # fixture's absolute path, which the shape read does not hold.
-expect_failed_read good.yml '.concurrency.group | tag' 7 'the concurrency group shape'
-expect_failed_read bad-seq-group.yml '.concurrency.group | tag' 9 'the concurrency group shape'
+expect_failed_read good.yml '.concurrency.group | kind' 7 'the concurrency group shape'
+expect_failed_read bad-seq-group.yml '.concurrency.group | kind' 9 'the concurrency group shape'
 expect_failed_read good.yml 'eval .concurrency.group /' 11 'the concurrency group'
 expect_failed_read bad-empty-group.yml 'eval .concurrency.group /' 13 'the concurrency group'
 
-# A node whose tag yq cannot decode fails a later read too: the run
-# stops, as it does for yq failing, though the fault is the workflow's.
-mistag_dir="$(mktemp --directory)"
-printf 'concurrency: !!map [a]\n' >"${mistag_dir}/mistag.yml"
-mistag_exit=0
-mistag_stderr="$(WORKFLOWS_DIR_OVERRIDE="${mistag_dir}" "${SCRIPT}" 2>&1 >/dev/null)" || mistag_exit=$?
-rm --recursive --force -- "${mistag_dir}"
-mistag_want="cannot read the concurrency group shape of ${mistag_dir}/mistag.yml: yq exited 1"
-if [[ ${mistag_exit} != 2 || ${mistag_stderr} != *$'\n'"${mistag_want}" ]]; then
-  printf 'FAIL mistag.yml: exit %s, want 2, and stderr ending %q\n  got: %s\n' \
-    "${mistag_exit}" "${mistag_want}" "${mistag_stderr}" >&2
-  exit 1
-fi
-printf 'OK   mistag.yml: a node yq cannot decode stops the run\n'
+# The map and the group are read by kind: a map carrying a tag of its
+# own is still read, a list carrying a string tag is no string, and the
+# message names the kind and the tag of any other shape. An alias is
+# reported by its kind, unresolved.
+readonly ONE=$'\n1 workflow(s) missing or invalid top-level concurrency'
+readonly TOP='top-level concurrency has unexpected shape'
+readonly GROUP='top-level concurrency.group has unexpected shape'
+expect_body mistag.yml $'concurrency: !!map [a]\n' 1 "DIR/mistag.yml: ${TOP} (kind=seq, tag=!!map); expected map${ONE}"
+expect_body conc-mapint.yml $'concurrency: !!map 5\n' 1 "DIR/conc-mapint.yml: ${TOP} (kind=scalar, tag=!!map); expected map${ONE}"
+expect_body conc-xtag.yml $'concurrency: !x\n  group: g\n' 0 ''
+expect_body conc-strtag.yml $'concurrency: !!str {group: g}\n' 0 ''
+expect_body conc-alias.yml $'x-c: &c\n  group: g\nconcurrency: *c\n' 1 "DIR/conc-alias.yml: ${TOP} (kind=alias, tag=); expected map${ONE}"
+expect_body group-strseq.yml $'concurrency:\n  group: !!str [a]\n' 1 "DIR/group-strseq.yml: ${GROUP} (kind=seq, tag=!!str); expected string${ONE}"
+expect_body group-mapint.yml $'concurrency:\n  group: !!map 5\n' 1 "DIR/group-mapint.yml: ${GROUP} (kind=scalar, tag=!!map); expected string${ONE}"
+expect_body group-xtag.yml $'concurrency:\n  group: !x g\n' 1 "DIR/group-xtag.yml: ${GROUP} (kind=scalar, tag=!x); expected string${ONE}"
+expect_body group-alias.yml $'x-s: &s g\nconcurrency:\n  group: *s\n' 1 "DIR/group-alias.yml: ${GROUP} (kind=alias, tag=); expected string${ONE}"
+# GitHub Actions reads a workflow file as one YAML document and refuses
+# one holding several, so such a file is a finding and is read no
+# further.
+expect_body several-docs.yml $'concurrency:\n  group: g\n---\non: push\n' 1 \
+  "DIR/several-docs.yml: holds several YAML documents; a workflow file must hold one${ONE}"
 
 printf 'all tests passed\n'

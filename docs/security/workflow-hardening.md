@@ -31,6 +31,8 @@ Without a concurrency group, cron pile-ups and back-to-back PR pushes can spawn 
 
 `cancel-in-progress` is not required by this lint; the group alone is the load-bearing setting. Pipelines that must run to completion once started (e.g., `release-on-bump.yml`) deliberately set `cancel-in-progress: false` so back-to-back triggers queue instead of cancelling.
 
+The lint reads `concurrency:` and its `group:` by their YAML kind, and reports a file `yq` reads as several YAML documents (GitHub Actions refuses a workflow file holding several) without reading it further. The script header states which shapes are read and which are reported as an unexpected shape.
+
 Enforced by `scripts/check-workflow-concurrency.sh`. Wired as the `lint-workflow-security` CI job (member check `workflow-concurrency`) and as a pre-commit hook.
 
 ## checkout-persist-credentials
@@ -58,6 +60,8 @@ Every workflow that declares `on.pull_request:` or `on.push:` sets `branches: [m
 Without the allowlist, Actions fires the workflow on every branch — burning runner minutes on stale topic branches and attaching surprising status checks to refs nobody is watching. Workflows that only run on `schedule:`, `workflow_dispatch:`, or `workflow_call:` are unaffected; `pull_request_target:` is handled by a separate lint that forbids it outright.
 
 The lint reads `on:` after passing it through `yq`'s `explode` a fixed number of times, so a trigger, its value or its `branches:` list written through an anchor is read as what it stands for. It refuses a workflow whose `on:` still holds an alias after the passes, or whose root names `on` more than once. The script header states the mechanism and how a merge key is read.
+
+`on:` is read by its YAML kind, so a trigger given by name or in a list of names is read as well as one in a map, and a file `yq` reads as several YAML documents (GitHub Actions refuses a workflow file holding several) is reported without being read further. The script header states which shapes of `on:` are read and which are reported as an unexpected shape.
 
 Enforced by `scripts/check-workflow-on-branches.sh`. Wired as the `lint-workflow-security` CI job (member check `workflow-on-branches`) and as a pre-commit hook.
 
@@ -496,7 +500,7 @@ Every `jobs.<name>:` in `.github/workflows/ci.yml` either appears as a key in `d
 
 Adding a new ci.yml job that should be a required status check requires updating the categories map, the required-checks doc, and the protect-main ruleset. Adding an auxiliary job requires only an `EXEMPT` entry justified in the script comment. The list is self-policed: an entry must name a real `ci.yml` job that has no category-map key, so it cannot rot into a name that exempts nothing while the lint stays green.
 
-The same lint asserts a third thing, manifest coverage: every check basename in `.github/lint-groups.yml` resolves to a real `scripts/check-<basename>.sh`. The grouped lint jobs name their members in `.github/lint-groups.yml` rather than individually in `ci.yml`, so without this a check could silently leave the merge gate — its manifest entry orphaned, or its script deleted — while the group job stayed green.
+The same lint asserts a third thing, manifest coverage: every check basename in `.github/lint-groups.yml` resolves to a real `scripts/check-<basename>.sh`. The grouped lint jobs name their members in `.github/lint-groups.yml` rather than individually in `ci.yml`, so without this a check could silently leave the merge gate — its manifest entry orphaned, or its script deleted — while the group job stayed green. The manifest is a precondition: one in any shape other than the one the script header states stops the run as a could-not-run (exit 2) before any check prints.
 
 The `EXEMPT` list is also the ci-job exemption source for the enforcement matrix: `scripts/refresh-enforcement-matrix.sh` reads it through this script's `--print-exempt` mode, so one declaration serves both checks and they cannot disagree about which auxiliary jobs are expected to have no invariant behind them. `--print-exempt` prints one job name per line and exits 0; an empty list prints nothing, so exit status — not output length — is what says the list is readable. The generator treats any nonzero exit as fatal, so a dropped or renamed mode aborts the refresh instead of quietly widening the orphan-job check to every unmapped job.
 
@@ -609,6 +613,8 @@ Guard-required write scopes are any of: `contents: write`, `packages: write`, `i
 A job that mints a GitHub App installation token (via `actions/create-github-app-token`, or referencing `secrets.BUMP_APP_PRIVATE_KEY`) is likewise privileged despite declaring a read-only `GITHUB_TOKEN`: the App token carries its own write scopes, so the job can commit via the REST contents API, open pull requests, and enable auto-merge — all under the canonical repo's identity. Such a job must carry the same fork guard, otherwise a fork holding the App's private key as a secret could drive those writes against the canonical repo.
 
 GitHub Actions `if:` is job-scoped (no workflow-level syntax), so every guard-required job must carry the guard in its own `if:` expression. Existing `if:` clauses are AND-ed with the repository check.
+
+A file `yq` reads as several YAML documents (GitHub Actions refuses a workflow file holding several) is reported without its jobs being read.
 
 Enforced by `scripts/check-fork-guard-release.sh`. Wired as the `lint-workflow-security` CI job (member check `fork-guard-release`) and as a pre-commit hook.
 

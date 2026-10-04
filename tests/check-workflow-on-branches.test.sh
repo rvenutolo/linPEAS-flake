@@ -210,12 +210,62 @@ expect_body root-merge.yml $'env:\n  X: &b {on: {push: {}}}\n<<: *b\n' 1 "DIR/ro
 expect_body plain-then-merge.yml $'env:\n  X: &b {on: {push: {}}}\non:\n  push:\n    branches: [main]\n<<: *b\n' 0 ''
 # A node whose tag yq cannot decode fails a later read too: the run
 # stops, as it does for yq failing, though the fault is the workflow's.
+expect_body mistag-branch-item.yml $'on:\n  push:\n    branches: [!!int a]\n' 2 \
+  'cannot read the on.push.branches list of DIR/mistag-branch-item.yml: yq exited 1' tail
 expect_body mistag-branches.yml $'on:\n  pull_request:\n    branches: [.nan]\n' 2 \
   'cannot read the on.pull_request.branches list of DIR/mistag-branches.yml: yq exited 1' tail
-expect_body mistag-push.yml $'on:\n  pull_request:\n    branches: [main]\n  push: !!map [a]\n' 2 \
-  'cannot read the on.push.branches shape of DIR/mistag-push.yml: yq exited 1' tail
+# A trigger and its branch list are read by kind: a map or a list
+# carrying a tag of its own is still read, and the message names the
+# kind and the tag of any other shape.
+expect_body mistag-push.yml $'on:\n  pull_request:\n    branches: [main]\n  push: !!map [a]\n' 1 \
+  "DIR/mistag-push.yml: on.push has unexpected shape (kind=seq, tag=!!map); expected map${ONE}"
+expect_body push-xtag.yml $'on:\n  push: !x\n    branches: [main]\n' 0 ''
+expect_body push-strseq.yml $'on:\n  push: !!str [a]\n' 1 \
+  "DIR/push-strseq.yml: on.push has unexpected shape (kind=seq, tag=!!str); expected map${ONE}"
+expect_body push-mapint.yml $'on:\n  push: !!map 5\n' 1 \
+  "DIR/push-mapint.yml: on.push has unexpected shape (kind=scalar, tag=!!map); expected map${ONE}"
+expect_body branches-strseq.yml $'on:\n  push:\n    branches: !!str [main]\n' 0 ''
+expect_body branches-xtag.yml $'on:\n  pull_request:\n    branches: !x [main]\n' 0 ''
+expect_body branches-mapint.yml $'on:\n  push:\n    branches: !!map 5\n' 1 \
+  "DIR/branches-mapint.yml: on.push.branches has unexpected shape (kind=scalar, tag=!!map); expected sequence${ONE}"
+expect_body branches-xtag-str.yml $'on:\n  push:\n    branches: !x main\n' 1 \
+  "DIR/branches-xtag-str.yml: on.push.branches has unexpected shape (kind=scalar, tag=!x); expected sequence${ONE}"
+readonly SHAPES='expected a map, a list or a name'
 expect_body false-on.yml $'on: false\njobs: {}\n' 1 \
-  $'DIR/false-on.yml: on.pull_request has unexpected shape (tag=); expected map\nDIR/false-on.yml: on.push has unexpected shape (tag=); expected map'"${TWO}"
+  "DIR/false-on.yml: on: has unexpected shape (kind=scalar, tag=!!bool); ${SHAPES}${ONE}"
+expect_body tagged-name.yml $'on: !x push\n' 1 \
+  "DIR/tagged-name.yml: on: has unexpected shape (kind=scalar, tag=!x); ${SHAPES}${ONE}"
+# GitHub Actions reads a workflow file as one YAML document and refuses
+# one holding several, so such a file is a finding whatever each
+# document holds, and is read no further.
+readonly SEVERAL='holds several YAML documents; a workflow file must hold one'
+readonly CLEAN_ON=$'on:\n  pull_request:\n    branches: [main]\n  push:\n    branches: [main]\n'
+expect_body several-docs.yml "${CLEAN_ON}"$'---\non: push\n' 1 "DIR/several-docs.yml: ${SEVERAL}${ONE}"
+expect_body several-docs-first.yml $'on: push\n---\n'"${CLEAN_ON}" 1 "DIR/several-docs-first.yml: ${SEVERAL}${ONE}"
+expect_body several-docs-clean.yml "${CLEAN_ON}"$'---\n'"${CLEAN_ON}" 1 "DIR/several-docs-clean.yml: ${SEVERAL}${ONE}"
+expect_body several-docs-trailing.yml "${CLEAN_ON}"$'---\n' 1 "DIR/several-docs-trailing.yml: ${SEVERAL}${ONE}"
+# An `on:` written as a name or a list of names runs each trigger it
+# names on every branch; one naming neither trigger is out of scope.
+readonly NAMED="is given as a name, with no branches (implicit all-branches forbidden; need ${Q}branches: [main]${Q})"
+expect_body name-push.yml $'on: push\n' 1 "DIR/name-push.yml: on.push ${NAMED}${ONE}"
+expect_body name-pr.yml $'on: pull_request\n' 1 "DIR/name-pr.yml: on.pull_request ${NAMED}${ONE}"
+expect_body name-alias.yml $'name: &p push\non: *p\n' 1 "DIR/name-alias.yml: on.push ${NAMED}${ONE}"
+expect_body name-dispatch.yml $'on: workflow_dispatch\n' 0 ''
+expect_body list-dispatch.yml $'on: [workflow_dispatch, schedule]\n' 0 ''
+expect_body list-both.yml $'on: [push, workflow_dispatch, pull_request]\n' 1 \
+  "DIR/list-both.yml: on.pull_request ${NAMED}"$'\n'"DIR/list-both.yml: on.push ${NAMED}${TWO}"
+expect_body list-tagged.yml $'on: !!str [push]\n' 1 "DIR/list-tagged.yml: on.push ${NAMED}${ONE}"
+expect_body list-nested.yml $'on: [workflow_dispatch, [push]]\n' 1 \
+  "DIR/list-nested.yml: on: has a list item of unexpected shape (kind=seq, tag=!!seq); expected a name${ONE}"
+expect_body list-map-item.yml $'on: [{push: {}}, push]\n' 1 \
+  "DIR/list-map-item.yml: on: has a list item of unexpected shape (kind=map, tag=!!map); expected a name"$'\n'"DIR/list-map-item.yml: on.push ${NAMED}${TWO}"
+# A list item is a name only as a scalar carrying the string tag.
+expect_body list-null-item.yml $'on: [!!null push]\n' 1 \
+  "DIR/list-null-item.yml: on: has a list item of unexpected shape (kind=scalar, tag=!!null); expected a name${ONE}"
+expect_body list-xtag-item.yml $'on: [!x push, workflow_dispatch]\n' 1 \
+  "DIR/list-xtag-item.yml: on: has a list item of unexpected shape (kind=scalar, tag=!x); expected a name${ONE}"
+expect_body on-int.yml $'on: 5\n' 1 "DIR/on-int.yml: on: has unexpected shape (kind=scalar, tag=!!int); ${SHAPES}${ONE}"
+expect_body list-alias.yml $'name: &p pull_request\non: [*p]\n' 1 "DIR/list-alias.yml: on.pull_request ${NAMED}${ONE}"
 expect_body nested-key.yml $'name: &k push\nenv:\n  A: &m {*k : {}}\non: *m\n' 1 "DIR/nested-key.yml: on.push ${MISSING}${ONE}"
 expect_body alias-on-key.yml $'name: &k on\n*k :\n  push: {}\n' 1 "DIR/alias-on-key.yml: on.push ${MISSING}${ONE}"
 # GitHub Actions refuses a merge key, so this workflow cannot run; the
@@ -237,17 +287,24 @@ expect_failed_read good-cron-only.yml 'has("pull_request")' 11 'the on.pull_requ
 
 # The reads after a workflow's first: the second trigger's shape, and a
 # trigger's branch list, its shape and its rendered value.
-expect_failed_read good.yml '"push" | tag' 13 'the on.push trigger'
-expect_failed_read bad-push-no-branches.yml '"push" | tag' 15 'the on.push trigger'
-expect_failed_read good.yml '"pull_request".branches | tag' 17 'the on.pull_request.branches shape'
-expect_failed_read bad-pr-wildcard.yml '"pull_request".branches | tag' 19 'the on.pull_request.branches shape'
+expect_failed_read good.yml '"push" | kind' 13 'the on.push trigger'
+expect_failed_read bad-push-no-branches.yml '"push" | kind' 15 'the on.push trigger'
+expect_failed_read good.yml '"pull_request".branches | kind' 17 'the on.pull_request.branches shape'
+expect_failed_read bad-pr-wildcard.yml '"pull_request".branches | kind' 19 'the on.pull_request.branches shape'
 expect_failed_read good.yml '--output-format=json' 21 'the on.pull_request.branches list'
 expect_failed_read bad-pr-wildcard.yml '--output-format=json' 23 'the on.pull_request.branches list'
 
-# The first read failing is a counted finding, and the workflow is read
-# no further: its push trigger, which would be a finding of its own, is
-# not reported beside a read that failed.
-yq_stub '"pull_request" | tag' 25
+# The trigger read is not the workflow's first, and the read of the
+# names an `on:` written as a name or a list gives.
+expect_failed_read good.yml '"pull_request" | kind' 25 'the on.pull_request trigger'
+expect_failed_read bad-on-name.yml '| (select(kind' 27 'the on: names'
+expect_failed_read good-on-list.yml '| (select(kind' 29 'the on: names'
+expect_failed_read good-on-list.yml 'select(kind != "scalar" or' 33 'the on: list items'
+
+# The first read, of the kind of `on:`, failing is a counted finding, and
+# the workflow is read no further: its push trigger, which would be a
+# finding of its own, is not reported beside a read that failed.
+yq_stub 'resolve")) | kind + " " + tag' 31
 first_exit=0
 first_stderr="$(PATH="${STUB_DIR}:${PATH}" WORKFLOWS_DIR_OVERRIDE="${FIXTURES}" \
   WORKFLOW_FILE_FILTER=bad-push-extra.yml "${SCRIPT}" 2>&1 >/dev/null)" || first_exit=$?

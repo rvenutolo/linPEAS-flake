@@ -12,7 +12,12 @@
 #      granted at workflow scope — every scope must be explicit per-job.
 #   2. Every job declares its own `permissions:` block. Inheritance
 #      from top-level (which is empty anyway) is not allowed; an
-#      omitted block is a lint failure.
+#      omitted block is a lint failure. A job's block is read by its
+#      kind: a map, whatever tag it carries, passes, and any other shape
+#      is reported with its kind and tag. A job written as an alias is
+#      read through it. A merge key under `jobs:`, and a job id holding
+#      a tab or a line break, are findings: GitHub Actions refuses both,
+#      and the jobs behind them are not read.
 #   3. Top-level cannot be `read-all`, `write-all`, or any scalar/
 #      list form. (Subsumed by rule 1; a scalar gets a dedicated
 #      message, any other shape is reported by its YAML tag.)
@@ -136,27 +141,63 @@ for f in "${selected_files[@]}"; do
   # scan would pass silently. Unlike the reads above, this one fails on
   # the workflow's own shape (a `jobs:` that is not a map or a list), so
   # its failure stays a counted finding.
-  if ! rows="$(yq eval '.jobs | to_entries[] | .key + "\t" + (.value.permissions | tag)' "${f}")"; then
+  # Each row: the job's key and the key's tag, which is `!!merge` for a
+  # `<<` merge key; the kind and tag of the job, read through an alias
+  # by `explode` handed only that node (an anchor cannot sit on an
+  # alias, so one pass resolves it); and those of its `permissions:`.
+  if ! rows="$(yq eval '.jobs | to_entries[] | .key + "\t" + (.key | tag) + "\t" + ((.value | select(kind == "alias") | explode(.) | kind + " " + tag) // (.value | kind + " " + tag)) + "\t" + (.value.permissions | kind + " " + tag)' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
   fi
   [[ -n ${rows} ]] || continue
-  while IFS=$'\t' read -r job job_tag; do
+  # The rows are tab-separated, one per line, so a job id holding a tab
+  # or a line break could forge or split one. GitHub Actions refuses such
+  # an id, so it is a finding and the workflow's jobs are not read.
+  # Every key is tested as the text it renders to, whatever its tag, and
+  # a document whose `jobs:` is not a map has no ids to test.
+  if ! odd_ids="$(yq eval '[.jobs | select(kind == "map") | keys[] | select(tostring | test("[\t\n]"))] | length' "${f}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  # One count per document: any count above 0 is a finding.
+  if [[ ${odd_ids} == *[1-9]* ]]; then
+    printf '%s: jobs: holds a job id with a tab or a line break, which GitHub Actions refuses; its jobs are not read\n' \
+      "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  while IFS=$'\t' read -r job key_tag job_node job_shape; do
     [[ -z ${job} ]] && continue
-    case "${job_tag}" in
-    '!!null')
+    # GitHub Actions refuses a merge key, and the jobs one brings in are
+    # not listed as the map's own, so they would go unread.
+    if [[ ${key_tag} == '!!merge' ]]; then
+      printf '%s: jobs: holds a merge key, which GitHub Actions refuses; the jobs it brings in are not read\n' \
+        "${f}" >&2
+      failed=$((failed + 1))
+      continue
+    fi
+    if [[ ${job_node} != 'map '* ]]; then
+      printf '%s: job %q has unexpected shape (kind=%s, tag=%s); expected a map\n' \
+        "${f}" "${job}" "${job_node%% *}" "${job_node#* }" >&2
+      failed=$((failed + 1))
+      continue
+    fi
+    # An absent key reads as no kind at all, a key with no value as null.
+    case "${job_shape}" in
+    '' | 'scalar !!null')
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
       printf '%s: job %q missing `permissions:` block (every job must declare its own)\n' \
         "${f}" "${job}" >&2
       failed=$((failed + 1))
       ;;
-    '!!map')
+    'map '*)
       : # ok; scope-level audit out of scope for this lint
       ;;
     *)
-      printf '%s: job %q permissions has unexpected shape (tag=%s)\n' \
-        "${f}" "${job}" "${job_tag}" >&2
+      printf '%s: job %q permissions has unexpected shape (kind=%s, tag=%s)\n' \
+        "${f}" "${job}" "${job_shape%% *}" "${job_shape#* }" >&2
       failed=$((failed + 1))
       ;;
     esac
