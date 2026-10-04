@@ -37,6 +37,7 @@ function run_scenario() {
   printf '#!/usr/bin/env bash\nexit 0\n' >"${scripts_dir}/check-ccc.sh"
   printf '#!/usr/bin/env bash\nexit 1\n' >"${scripts_dir}/check-fff.sh"
   printf '#!/usr/bin/env bash\nexit 0\n' >"${scripts_dir}/check-zzz.sh"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"${scripts_dir}/check-qqq.sh"
   chmod +x "${scripts_dir}"/check-*.sh
   # demo-first-fail puts its failing check first, so a zzz row proves the
   # runner kept going instead of aborting on the first failure.
@@ -54,7 +55,7 @@ demo-missing:
   - aaa
   - nope
 'q"x':
-  - aaa
+  - qqq
 YAML
 
   outcome_file="$(mktemp)"
@@ -196,7 +197,7 @@ function main() {
     'x" | error(load_str(strenv(PROBE_FILE))) | ."y' 2 \
     'unknown or empty group: x" | error(load_str(strenv(PROBE_FILE))) | ."y'
   rm --recursive --force -- "${probe_dir}"
-  run_scenario 'group name as data: a quote in a manifest key' 'q"x' 0 '| aaa | pass |'
+  run_scenario 'group name as data: a quote in a manifest key' 'q"x' 0 '| qqq | pass |'
   run_test_gate_scenario
   run_unparsable_manifest_scenario
 
