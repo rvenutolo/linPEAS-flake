@@ -113,6 +113,135 @@ expect_forward_allowlist good.yml "${FIXTURES}/malformed-allowlist/allowlist.yml
 
 expect no-such-workflow.yml 2 'selected 0 of'
 
+# --- shapes of a job's permissions:, built at run time ---------------
+# A formatter would rewrite a tagged or quoted node checked in as a
+# fixture. Each scenario writes a numbered workflow beside an allowlist
+# granting job a `contents` and nothing else, runs the forward pass on
+# it, and compares the exit code and the whole of stderr.
+
+# @description Run the forward pass on one built workflow.
+# @arg $1 scenario name
+# @arg $2 workflow text (printf format, no arguments)
+# @arg $3 expected exit code
+# @arg $4 expected stderr: %W stands for the workflow path, %A for the
+#   allowlist path
+function expect_built() {
+  local -r name="$1" text="$2" want_exit="$3" want="$4"
+  local dir got_exit=0 got_stderr base expected
+  SCENARIO_N=$((SCENARIO_N + 1))
+  dir="$(mktemp --directory)"
+  base="wf-${SCENARIO_N}.yml"
+  # shellcheck disable=SC2059 # the workflow text is the format
+  printf "${text}" >"${dir}/${base}"
+  printf '%s:\n  a:\n    - contents\n' "${base}" >"${dir}/allowlist.yml"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${dir}" WORKFLOW_FILE_FILTER="${base}" \
+    SCOPE_ALLOWLIST_OVERRIDE="${dir}/allowlist.yml" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  expected="${want//%W/${dir}/${base}}"
+  expected="${expected//%A/${dir}/allowlist.yml}"
+  rm --recursive --force -- "${dir}"
+  if [[ ${got_exit} != "${want_exit}" || ${got_stderr} != "${expected}" ]]; then
+    printf 'FAIL %s: exit %s, want %s\n  got:  %q\n  want: %q\n' \
+      "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" "${expected}" >&2
+    return 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+SCENARIO_N=0
+readonly ONE='1 permission-scope violation(s) found'
+readonly HEAD=$'on: push\njobs:\n'
+
+# @description A scenario whose job a passes: a sentinel job granting a
+# scope the allowlist does not list follows it, so the run ends in that
+# one finding alone.
+# @arg $1 scenario name
+# @arg $2 workflow text ending in its jobs: block (printf format)
+function expect_passes() {
+  expect_built "$1" "$2"'  sentinel:\n    permissions: {issues: write}\n' 1 \
+    "%W: job sentinel grants write scope issues not allowed by %A
+${ONE}"
+}
+
+expect_passes 'a map carrying a tag of its own is read scope by scope' \
+  "${HEAD}"'  a:\n    permissions: !x {contents: write}\n'
+expect_built 'a tagged map granting an unlisted scope is an over-grant' \
+  "${HEAD}"'  a:\n    permissions: !x {pull-requests: write}\n' 1 \
+  "%W: job a grants write scope pull-requests not allowed by %A
+${ONE}"
+expect_built 'an empty scalar carrying the map tag is no map' \
+  "${HEAD}""  a:\\n    permissions: !!map ''\\n" 1 \
+  "%W: job a permissions has unexpected shape (kind=scalar, tag=\"!!map\", value=\"\"); only a map or the string read-all is allowed
+${ONE}"
+expect_built 'read-all carrying the map tag is no string' \
+  "${HEAD}"'  a:\n    permissions: !!map read-all\n' 1 \
+  "%W: job a permissions has unexpected shape (kind=scalar, tag=\"!!map\", value=\"read-all\"); only a map or the string read-all is allowed
+${ONE}"
+expect_built 'read-all carrying a tag of its own is no string' \
+  "${HEAD}"'  a:\n    permissions: !x read-all\n' 1 \
+  "%W: job a permissions has unexpected shape (kind=scalar, tag=\"!x\", value=\"read-all\"); only a map or the string read-all is allowed
+${ONE}"
+expect_built 'a list carrying the string tag is no string' \
+  "${HEAD}"'  a:\n    permissions: !!str [contents]\n' 1 \
+  "%W: job a permissions has unexpected shape (kind=seq, tag=\"!!str\", value=\"\"); only a map or the string read-all is allowed
+${ONE}"
+expect_built 'a string other than read-all is a scalar grant' \
+  "${HEAD}"'  a:\n    permissions: write-all\n' 1 \
+  "%W: job a uses scalar permissions \"write-all\" (only read-all is allowed as a scalar)
+${ONE}"
+expect_passes 'permissions: written as an alias of a map is read through it' \
+  'x-p: &p {contents: write}\n'"${HEAD}"'  a:\n    permissions: *p\n'
+expect_passes 'permissions: written as an alias of read-all is read through it' \
+  'x-p: &p read-all\n'"${HEAD}"'  a:\n    permissions: *p\n'
+expect_built 'a scope value written as an alias is read through it' \
+  'x-w: &w write\n'"${HEAD}"'  a:\n    permissions: {pull-requests: *w}\n' 1 \
+  "%W: job a grants write scope pull-requests not allowed by %A
+${ONE}"
+expect_built 'a job written as an alias is read through it' \
+  'x-j: &j {permissions: {pull-requests: write}}\n'"${HEAD}"'  a: *j\n' 1 \
+  "%W: job a grants write scope pull-requests not allowed by %A
+${ONE}"
+expect_built 'a job written as an alias holding an alias is read through both' \
+  'x-p: &p {pull-requests: write}\nx-j: &j {permissions: *p}\n'"${HEAD}"'  a: *j\n' 1 \
+  "%W: job a grants write scope pull-requests not allowed by %A
+${ONE}"
+expect_built 'jobs: written as an alias is read through it' \
+  'x-js: &js {a: {permissions: {pull-requests: write}}}\non: push\njobs: *js\n' 1 \
+  "%W: job a grants write scope pull-requests not allowed by %A
+${ONE}"
+expect_built 'a second document is read as jobs, with no separator row' \
+  "${HEAD}"'  a:\n    permissions: {contents: write}\n---\n'"${HEAD}"'  a:\n    permissions: {deployments: write}\n' 1 \
+  "%W: job a grants write scope deployments not allowed by %A
+${ONE}"
+
+# A job id or a scope name is raw text in a tab-separated row, so one
+# that is not a string, is empty, or holds a tab, a line break or a NUL
+# is refused and the workflow's jobs are not read.
+readonly ODD='jobs: holds a job id or a scope name that is not a string, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: '
+expect_built 'a job id holding a tab cannot forge an allowed scope' \
+  "${HEAD}"'  "a\\tcontents":\n    permissions: {pull-requests: write}\n' 1 \
+  "%W: ${ODD}kind=scalar, name=\"a\\tcontents\")
+${ONE}"
+expect_built 'a scope name holding a tab is refused' \
+  "${HEAD}"'  a:\n    permissions: {"contents\\tx": write}\n' 1 \
+  "%W: ${ODD}kind=scalar, name=\"contents\\tx\")
+${ONE}"
+expect_built 'a scope name holding a line break is refused' \
+  "${HEAD}"'  a:\n    permissions: {"x\\ncontents": write}\n' 1 \
+  "%W: ${ODD}kind=scalar, name=\"x\\ncontents\")
+${ONE}"
+expect_built 'a scope name that is a list is refused' \
+  "${HEAD}"'  a:\n    permissions: {? [contents] : write}\n' 1 \
+  "%W: ${ODD}kind=seq, name=\"[contents]\")
+${ONE}"
+expect_built 'an empty job id is refused' \
+  "${HEAD}"'  "":\n    permissions: {contents: write}\n' 1 \
+  "%W: ${ODD}kind=scalar, name=\"\")
+${ONE}"
+expect_built 'a job id holding a NUL is refused' \
+  "${HEAD}"'  "a\\0b":\n    permissions: {contents: write}\n' 1 \
+  "%W: ${ODD}kind=scalar, name=\"a\\u0000b\")
+${ONE}"
+
 # Real-tree guard: the committed allowlist must match the live workflows.
 real_exit=0
 "${SCRIPT}" >/dev/null 2>&1 || real_exit=$?
