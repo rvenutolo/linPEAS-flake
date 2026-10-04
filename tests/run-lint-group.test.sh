@@ -39,6 +39,8 @@ function run_scenario() {
   printf '#!/usr/bin/env bash\nexit 1\n' >"${scripts_dir}/check-fff.sh"
   printf '#!/usr/bin/env bash\nexit 0\n' >"${scripts_dir}/check-zzz.sh"
   printf '#!/usr/bin/env bash\nexit 0\n' >"${scripts_dir}/check-qqq.sh"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"${scripts_dir}/check-mmm.sh"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"${scripts_dir}/check-ddd.sh"
   chmod +x "${scripts_dir}"/check-*.sh
   # demo-first-fail puts its failing check first, so a zzz row proves the
   # runner kept going instead of aborting on the first failure.
@@ -57,7 +59,16 @@ demo-missing:
   - nope
 'q"x':
   - qqq
+twice:
+  - aaa
+twice:
+  - ddd
 YAML
+  # A merge key makes yq warn on stderr whatever is read, so it goes
+  # only into the manifest of the scenario that sets MANIFEST_EXTRA.
+  if [[ -n ${MANIFEST_EXTRA:-} ]]; then
+    printf '%s' "${MANIFEST_EXTRA}" >>"${manifest}"
+  fi
 
   outcome_file="$(mktemp)"
   out_file="$(mktemp)"
@@ -207,6 +218,11 @@ function main() {
   run_scenario 'group name as data: a wildcard' '*' 2 'unknown or empty group: *' 'unknown or empty group: *'
   rm --recursive --force -- "${probe_dir}"
   run_scenario 'group name as data: a quote in a manifest key' 'q"x' 0 '| qqq | pass |'
+  # A group a merge key brings in is found, and of a group written twice
+  # the last is run, as yq's own lookup reads them.
+  MANIFEST_EXTRA=$'x-base: &base\n  merged:\n    - mmm\n<<: *base\n' \
+    run_scenario 'group name as data: through a merge key' 'merged' 0 '| mmm | pass |'
+  run_scenario 'group name as data: written twice' 'twice' 0 '| ddd | pass |'
   run_test_gate_scenario
   run_unparsable_manifest_scenario
 

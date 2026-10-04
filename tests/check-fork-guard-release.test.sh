@@ -127,5 +127,9 @@ expect_body job-key-reads-decoy-guard.yml $'jobs:\n  \'x" // .jobs."decoy\':\n  
 # Read as a pattern, the key below would borrow its sibling's guard.
 expect_body job-key-wildcard.yml $'jobs:\n  \'a*\':\n    permissions:\n      contents: write\n    steps:\n      - run: echo PAYLOAD_RAN\n  ab:\n    if: github.repository == \'rvenutolo/linPEAS-flake\'\n    permissions:\n      contents: write\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
   "DIR/job-key-wildcard.yml: job a\\* holds guard-required write scope but is missing fork guard ${BT}github.repository == 'rvenutolo/linPEAS-flake'${BT}; got if=''${ONE_JOB}"
+# A key written twice is read as `yq`'s own lookup reads it, the last
+# one, once for each time the job list holds it.
+expect_body job-key-twice.yml $'jobs:\n  a:\n    permissions:\n      contents: read\n    steps:\n      - run: echo PAYLOAD_RAN\n  a:\n    permissions:\n      contents: write\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
+  "DIR/job-key-twice.yml: job a holds guard-required write scope but is missing fork guard ${BT}github.repository == 'rvenutolo/linPEAS-flake'${BT}; got if=''"$'\n'"DIR/job-key-twice.yml: job a holds guard-required write scope but is missing fork guard ${BT}github.repository == 'rvenutolo/linPEAS-flake'${BT}; got if=''"$'\n2 guard-required job(s) missing fork guard'
 
 printf 'all tests passed\n'

@@ -338,6 +338,46 @@ expect_names allowlist-read-all w.yml \
 expect_names allowlist-permissions-alias w.yml \
   $'permissions: {}\nx-perms: &p\n  packages: write\njobs:\n  writer:\n    permissions: *p\n    steps:\n      - run: echo PAYLOAD_RAN\n' \
   $'w.yml:\n  writer: [packages]\n' 0 ''
+# A name written twice is read as `yq`'s own lookup reads it, the last
+# one; and every listed allowlist row is still checked.
+expect_names job-key-twice w.yml \
+  $'permissions: {}\njobs:\n  a:\n    permissions:\n      issues: read\n    steps:\n      - run: echo PAYLOAD_RAN\n  a:\n    permissions:\n      issues: write\n    steps:\n      - run: echo PAYLOAD_RAN\n' \
+  $'w.yml:\n  a: [issues]\n' 0 ''
+expect_names allowlist-job-twice w.yml \
+  $'permissions: {}\njobs:\n  a:\n    permissions:\n      issues: write\n    steps:\n      - run: echo PAYLOAD_RAN\n' \
+  $'w.yml:\n  a: [contents]\n  a: [issues]\n' 1 \
+  '@AL@: stale entry w.yml/a/contents (job does not grant that write scope)'$'\n1 permission-scope violation(s) found'
+# The forward pass reads an allowlist entry through an alias or a merge
+# key, and refuses an allowlist that is not one map of workflow maps
+# (exit 2). Filtered to one workflow, it runs alone.
+# @arg $1 scenario name  @arg $2 allowlist body  @arg $3 expected exit
+# @arg $4 expected stderr, whole, with @AL@ standing for the allowlist
+function expect_allowlist_shape() {
+  local -r name="$1" body="$2" want_exit="$3"
+  local got_exit=0 got_stderr want
+  printf '%s' "${body}" >"${key_dir}/${name}.allow.yml"
+  want="${4//@AL@/${key_dir}/${name}.allow.yml}"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${FIXTURES}" WORKFLOW_FILE_FILTER=good.yml \
+    SCOPE_ALLOWLIST_OVERRIDE="${key_dir}/${name}.allow.yml" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  # yq itself warns on stderr about any merge key it reads; that line is
+  # yq's, not the lint's.
+  got_stderr="$(grep --invert-match --fixed-strings -- '--yaml-fix-merge-anchor-to-spec' <<<"${got_stderr}" || true)"
+  if [[ ${got_exit} != "${want_exit}" || ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s: exit %s, want %s and %q\n  stderr: %s\n' \
+      "${name}" "${got_exit}" "${want_exit}" "${want}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+expect_allowlist_shape allowlist-entry-alias $'x: &X {writer: [issues]}\ngood.yml: *X\n' 0 ''
+expect_allowlist_shape allowlist-entry-merge $'x: &X {writer: [issues]}\ngood.yml:\n  <<: *X\n' 0 ''
+expect_allowlist_shape allowlist-root-list $'- good.yml\n' 2 \
+  '@AL@: the allowlist must be one map of workflow maps (got seq\ scalar)'
+expect_allowlist_shape allowlist-entry-list $'good.yml: [writer]\n' 2 \
+  '@AL@: the allowlist must be one map of workflow maps (got map\ seq)'
+expect_allowlist_shape allowlist-entry-null $'good.yml:\nother.yml: {writer: [issues]}\n' 1 \
+  "${FIXTURES}/good.yml: job writer grants write scope issues not allowed by @AL@"$'\n1 permission-scope violation(s) found'
 # A workflow file name is data too.
 expect_names file-name-quote 'q"x.yml' "${WRITER}" \
   $'\'q"x.yml\':\n  writer: [issues]\n' 0 ''
