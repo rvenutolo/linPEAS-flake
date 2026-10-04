@@ -48,6 +48,16 @@
 # of thing that rots when an input is added, and the silent-pass
 # version of that rot is a new input nobody is watching.
 #
+# A `locked.lastModified` and "now" are each read as text and must be a
+# unix timestamp written as at most 12 ASCII digits with no leading zero
+# (`0` itself is allowed) before any arithmetic touches them; anything
+# else is an operational error naming the value. Bash arithmetic would
+# otherwise read `0777` as octal, fail on `08` or on another script's
+# digits (which a UTF-8 locale's `[0-9]` admits) and drop the inputs not
+# yet checked, wrap a number past its integer range, and run a command
+# placed in an array subscript. A timestamp after "now" is accepted and
+# reads as a negative age, so it passes.
+#
 # Exit: 0 every input fresh, 1 one or more stale, 2 operational error.
 #
 # Env overrides (test-only):
@@ -103,6 +113,12 @@ function die_op() {
   exit 2
 }
 
+# The digit class is spelled out because a `[0-9]` range follows the
+# locale's collation and matches non-ASCII digits in en_US.UTF-8. Twelve
+# digits stay far inside bash's integer range.
+readonly TIMESTAMP_RE='^(0|[123456789][0123456789]{0,11})$'
+readonly TIMESTAMP_RULE='a unix timestamp of at most 12 digits with no leading zero'
+
 # The tool guard stands in front of every read below, because each of
 # those reads reports a defect in the lock's contents and a pipeline that
 # never ran read no contents. Without it an absent `jq` fails the first
@@ -126,8 +142,8 @@ printf '%s' "${lock_json}" | jq -e '.nodes | type == "object"' >/dev/null 2>&1 |
 # verdict depends on the day the suite runs is a fixture that starts
 # failing on its own.
 now="${STALENESS_NOW_EPOCH:-$(date +%s)}"
-if [[ ! ${now} =~ ^[0-9]+$ ]]; then
-  die_op "STALENESS_NOW_EPOCH is not a unix timestamp: ${now}"
+if [[ ! ${now} =~ ${TIMESTAMP_RE} ]]; then
+  die_op "STALENESS_NOW_EPOCH is not ${TIMESTAMP_RULE}: ${now}"
 fi
 readonly now
 
@@ -182,8 +198,15 @@ while IFS=$'\t' read -r name node; do
     jq -r --arg n "${node}" '.nodes[$n].locked.lastModified // "-"' 2>/dev/null)"; then
     die_op "top-level input '${name}' (node '${node}') could not be read"
   fi
-  if [[ ${last_modified} == "-" || ! ${last_modified} =~ ^[0-9]+$ ]]; then
+  if [[ ${last_modified} == "-" ]]; then
     die_op "top-level input '${name}' (node '${node}') has no numeric locked.lastModified"
+  fi
+  if [[ ! ${last_modified} =~ ${TIMESTAMP_RE} ]]; then
+    # Shown as a JSON string so a line break or a control character in
+    # the value cannot split or disguise the diagnostic line.
+    shown="$(jq --null-input --arg v "${last_modified}" '$v')" ||
+      die_op "top-level input '${name}' (node '${node}') could not be read"
+    die_op "top-level input '${name}' (node '${node}') has a locked.lastModified that is not ${TIMESTAMP_RULE}: ${shown}"
   fi
   limit_days="${THRESHOLD_DAYS[${name}]}"
   age_days=$(((now - last_modified) / SECONDS_PER_DAY))
