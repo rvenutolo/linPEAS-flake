@@ -236,8 +236,9 @@ printf 'OK   job-key-in-arithmetic\n'
 # moves a job's range instead. Each such key is a counted finding naming
 # the key, with nothing run and nothing else read from the file: the
 # build job downloads a release asset its allowlist omits, a violation
-# only a further read would report. An empty key's job is read too, and
-# the same violation shows the build job still is.
+# only a further read would report. An empty key's own job is not read
+# (the job list skips an empty name, as on main), and the same violation
+# shows the build job still is.
 # @arg $1 scenario name, which also names its marker file  @arg $2 the
 # job key, as a YAML double-quoted body  @arg $3 the expected finding
 # line, after the file name; it and the tally are the whole of stderr
@@ -339,6 +340,46 @@ EOF
 }
 expect_empty_name_ends_range job-key-null-ends-range null
 expect_empty_name_ends_range job-key-empty-ends-range '""'
+
+# The range itself, for a job that is not the last: a marker inside the
+# first job's block exempts it.
+# @arg $1 scenario name  @arg $2 the build job's marker line, or empty
+# @arg $3 the comment on the next job's key line, or empty
+# @arg $4 the whole expected stderr, after any file name prefix
+function expect_range() {
+  local -r name="$1" own_marker="$2" key_comment="$3" finding="$4"
+  local got_exit=0 got_stderr want_exit=0 want=''
+  [[ -n ${finding} ]] && want_exit=1
+  cat >"${key_dir}/wf/${name}.yml" <<EOF
+name: ${name}
+on:
+  workflow_dispatch: {}
+jobs:
+  build:
+${own_marker}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            cache.nixos.org:443
+      - run: echo PAYLOAD_RAN
+  other: ${key_comment}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+EOF
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER="${name}.yml" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  [[ -n ${finding} ]] && want="${key_dir}/wf/${name}.yml: ${finding}"$'\n1 egress-allowlist violation(s)'
+  if [[ ${got_exit} != "${want_exit}" || ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s: exit %s\n  stderr: %s\n' "${name}" "${got_exit}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+expect_range job-range-holds-own-marker '    # egress-nix-exempt: reaches nix through a script' '' ''
 
 # The row check is the range arithmetic's own guard. The key test above
 # leaves yq no way to print a row it fails, so a yq stub answers the job
