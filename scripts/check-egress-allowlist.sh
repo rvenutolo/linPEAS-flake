@@ -293,6 +293,12 @@ readonly DECLARATION_REL=".github/actions/${NOTIFY_COMPOSITE}/egress-allowlist.t
 readonly NIX_SETUP_COMPOSITE='./.github/actions/setup-nix'
 readonly NIX_SUBCOMMANDS='build|develop|shell|run|flake|profile|eval|copy|store|search|registry|repl|show-config'
 readonly NIX_EXEMPT_MARKER='egress-nix-exempt:'
+# The job a key names, read through an alias of `jobs:`. The key reaches
+# `yq` as data, through `strenv`, and is compared by its base64 text:
+# spliced into the expression, a key holding a quote would be read as
+# `yq` code, and `yq` reads `*` and `?` in an index or an `==` comparison
+# as wildcards, which base64 text never holds.
+readonly JOB_BY_KEY='[(.jobs | select(kind == "alias") | explode(.)), (.jobs | select(kind != "alias"))] | .[0] | to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64)) | .value'
 
 # Resolved against this script's own location rather than the scan root:
 # the fixture harness repoints the scan root at tests/fixtures, and the
@@ -445,11 +451,10 @@ for f in "${selected_files[@]}"; do
 
     # Every endpoint finding below is derived from this list. A yq that
     # dies on the step walk has read no allowlist at all, and its exit 1
-    # would surface as an allowlist found wanting. The job key reaches
-    # `yq` as data, through `strenv`: spliced into the expression, a key
-    # holding a quote would be read as `yq` code.
-    if ! endpoints="$(JOB="${job}" yq eval '
-      .jobs[strenv(JOB)].steps[]
+    # would surface as an allowlist found wanting. Each read below
+    # finds the job through JOB_BY_KEY.
+    if ! endpoints="$(JOB="${job}" yq eval "${JOB_BY_KEY}"'
+      | .steps[]
       | select(.uses // "" | test("step-security/harden-runner@"))
       | .with."allowed-endpoints" // ""
     ' "${f}" | tr ' ' '\n' | sed '/^$/d')"; then
@@ -460,11 +465,11 @@ for f in "${selected_files[@]}"; do
     # A job with no harden-runner step has no allowlist to lint.
     [[ -z ${endpoints} ]] && continue
 
-    if ! uses="$(JOB="${job}" yq eval '.jobs[strenv(JOB)].steps[].uses // ""' "${f}")"; then
+    if ! uses="$(JOB="${job}" yq eval "${JOB_BY_KEY}"' | .steps[].uses // ""' "${f}")"; then
       printf '%s: cannot read the step uses: list for job %q\n' "${f}" "${job}" >&2
       exit 2
     fi
-    if ! runs="$(JOB="${job}" yq eval '.jobs[strenv(JOB)].steps[].run // ""' "${f}")"; then
+    if ! runs="$(JOB="${job}" yq eval "${JOB_BY_KEY}"' | .steps[].run // ""' "${f}")"; then
       printf '%s: cannot read the step run: list for job %q\n' "${f}" "${job}" >&2
       exit 2
     fi

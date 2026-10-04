@@ -168,9 +168,12 @@ function main() {
     if [[ -n ${job_keys} ]]; then
       while IFS= read -r job; do
         [[ -z ${job} ]] && continue
-        # The job key reaches `yq` as data, through `strenv`: spliced into
-        # the expression, a key holding a quote would be read as `yq` code.
-        if ! cat="$(JOB="${job}" yq '.[strenv(JOB)] // ""' "${cat_map}")"; then
+        # The job key reaches `yq` as data, through `strenv`, and is
+        # compared by its base64 text: spliced into the expression, a key
+        # holding a quote would be read as `yq` code, and `yq` reads `*`
+        # and `?` in an index or an `==` comparison as wildcards, which
+        # base64 text never holds.
+        if ! cat="$(JOB="${job}" yq '[to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64)) | .value] | .[0] // ""' "${cat_map}")"; then
           log_err "could not read the category of job ${job}"
           exit 2
         fi

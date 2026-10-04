@@ -74,6 +74,12 @@ source "${_lib_dir}/lib/generates.sh"
 readonly SCRIPTS_DIR="${SCRIPTS_DIR_OVERRIDE:-scripts}"
 readonly LABELER="${LABELER_YML_OVERRIDE:-.github/workflows/labeler.yml}"
 readonly SIZE_ACTION='pascalgn/size-label-action'
+# The job a key names, read through an alias of `jobs:`. The key reaches
+# `yq` as data, through `strenv`, and is compared by its base64 text:
+# spliced into the expression, a key holding a quote would be read as
+# `yq` code, and `yq` reads `*` and `?` in an index or an `==` comparison
+# as wildcards, which base64 text never holds.
+readonly JOB_BY_KEY='[(.jobs | select(kind == "alias") | explode(.)), (.jobs | select(kind != "alias"))] | .[0] | to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64)) | .value'
 
 # IGNORED entries no `@generates` annotation can ever claim, because
 # nothing under scripts/ writes them. Each carries the reason it is not
@@ -163,16 +169,14 @@ size_steps=0
 ignored_raw=''
 while IFS= read -r job; do
   [[ -n ${job} ]] || continue
-  # The job key reaches `yq` as data, through `strenv`: spliced into the
-  # expression, a key holding a quote would be read as `yq` code.
-  if ! uses="$(JOB="${job}" yq eval '.jobs[strenv(JOB)].steps[].uses // ""' "${LABELER}")"; then
+  if ! uses="$(JOB="${job}" yq eval "${JOB_BY_KEY}"' | .steps[].uses // ""' "${LABELER}")"; then
     printf '%s: could not evaluate job %s in %s with yq\n' "${0##*/}" "${job}" "${LABELER}" >&2
     exit 2
   fi
   [[ ${uses} == *"${SIZE_ACTION}"* ]] || continue
   size_steps=$((size_steps + 1))
-  if ! step_ignored="$(JOB="${job}" yq eval "
-    .jobs[strenv(JOB)].steps[]
+  if ! step_ignored="$(JOB="${job}" yq eval "${JOB_BY_KEY}
+    | .steps[]
     | select(.uses // \"\" | test(\"${SIZE_ACTION}\"))
     | .env.IGNORED // \"\"
   " "${LABELER}")"; then

@@ -88,7 +88,7 @@ expect_body count-unread.yml "${WRITE_BARE}" 1 \
   "DIR/count-unread.yml: could not evaluate workflow with yq (malformed?)${ONE_JOB}" 'document_index'
 # A read of one job after the job list has been read stops the run.
 expect_body if-unread.yml "${WRITE_GUARDED}" 2 \
-  'cannot read .jobs[strenv(JOB)].if // "" for job b from DIR/if-unread.yml' 'strenv(JOB)].if'
+  'cannot read the if: of job b from DIR/if-unread.yml' '| .if //'
 
 # A job key is data, never expression text. Each key below closes a
 # quoted segment if spliced into a `yq` expression: it would read no

@@ -32,9 +32,11 @@ function main() {
   # A manifest that does not parse is an input this runner could not
   # read. Unchecked, yq's own exit 1 becomes the runner's status and
   # reads as a lint in the group having found a violation. The group name
-  # reaches `yq` as data, through `strenv`: spliced into the expression, a
-  # name holding a quote would be read as `yq` code.
-  if ! checks="$(GROUP="${group}" yq eval '.[strenv(GROUP)] // [] | .[]' "${MANIFEST}")"; then
+  # reaches `yq` as data, through `strenv`, and is compared by its base64
+  # text: spliced into the expression, a name holding a quote would be
+  # read as `yq` code, and `yq` reads `*` and `?` in an index or an `==`
+  # comparison as wildcards, which base64 text never holds.
+  if ! checks="$(GROUP="${group}" yq eval '[to_entries[] | select((.key | tostring | @base64) == (strenv(GROUP) | @base64)) | .value] | .[0] // [] | .[]' "${MANIFEST}")"; then
     printf 'cannot read group %s from %s\n' "${group}" "${MANIFEST}" >&2
     exit 2
   fi

@@ -68,6 +68,12 @@ readonly FILE_FILTER="${WORKFLOW_FILE_FILTER:-}"
 readonly DIR="${OVERRIDE:-${DEFAULT_DIR}}"
 readonly REPO_SLUG="${REPO_SLUG_OVERRIDE:-${DEFAULT_REPO_SLUG}}"
 readonly GUARD_NEEDLE="github.repository == '${REPO_SLUG}'"
+# The job a key names, read through an alias of `jobs:`. The key reaches
+# `yq` as data, through `strenv`, and is compared by its base64 text:
+# spliced into the expression, a key holding a quote would be read as
+# `yq` code, and `yq` reads `*` and `?` in an index or an `==` comparison
+# as wildcards, which base64 text never holds.
+readonly JOB_BY_KEY='[(.jobs | select(kind == "alias") | explode(.)), (.jobs | select(kind != "alias"))] | .[0] | to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64)) | .value'
 
 if ! command -v yq >/dev/null 2>&1; then
   printf 'yq not found on PATH\n' >&2
@@ -75,23 +81,23 @@ if ! command -v yq >/dev/null 2>&1; then
 fi
 
 # @description Print one expression's value from a workflow. Returns
-# non-zero, naming the expression and the job, when `yq` cannot evaluate
+# non-zero, naming what it read and the job, when `yq` cannot evaluate
 # it. The scan has already proved this file parses, so a failure here is
 # an expression its shape does not support — nothing about the job's
 # permissions was read, and an unchecked read would leave the run
 # carrying yq's own exit 1, indistinguishable from a job found missing
-# its fork guard. The job key reaches `yq` as data, as `strenv(JOB)`:
-# spliced into the expression, a key holding a quote would be read as
-# `yq` code.
+# its fork guard. The job key reaches `yq` as `strenv(JOB)`, which the
+# expression reads through JOB_BY_KEY.
 # @arg $1 workflow path
-# @arg $2 yq expression, naming the job as `strenv(JOB)`
+# @arg $2 yq expression, finding the job through JOB_BY_KEY
 # @arg $3 job key
+# @arg $4 what the expression reads, for the message
 # @exitcode 1 yq could not evaluate the expression against the file
 function read_workflow() {
-  local -r file="$1" expr="$2" job="$3"
+  local -r file="$1" expr="$2" job="$3" what="$4"
   local value
   if ! value="$(JOB="${job}" yq eval "${expr}" "${file}")"; then
-    printf 'cannot read %s for job %q from %s\n' "${expr}" "${job}" "${file}" >&2
+    printf 'cannot read the %s of job %q from %s\n' "${what}" "${job}" "${file}" >&2
     return 1
   fi
   printf '%s' "${value}"
@@ -102,7 +108,7 @@ job_needs_fork_guard() {
   local -r file="$1" job="$2"
   for scope in contents packages id-token attestations actions; do
     local val
-    if ! val="$(read_workflow "${file}" ".jobs[strenv(JOB)].permissions.\"${scope}\" // \"\"" "${job}")"; then
+    if ! val="$(read_workflow "${file}" "${JOB_BY_KEY} | .permissions.\"${scope}\" // \"\"" "${job}" "${scope} permission")"; then
       exit 2
     fi
     if [[ ${val} == "write" ]]; then
@@ -112,7 +118,7 @@ job_needs_fork_guard() {
   # App installation token = real write privilege despite a read-only
   # GITHUB_TOKEN. A job minting one must carry the fork guard.
   local body
-  if ! body="$(read_workflow "${file}" '.jobs[strenv(JOB)]' "${job}")"; then
+  if ! body="$(read_workflow "${file}" "${JOB_BY_KEY}" "${job}" body)"; then
     exit 2
   fi
   [[ ${body} == *"actions/create-github-app-token"* ]] && return 0
@@ -159,7 +165,7 @@ for f in "${selected_files[@]}"; do
     if ! job_needs_fork_guard "${f}" "${job}"; then
       continue
     fi
-    if ! if_clause="$(read_workflow "${f}" '.jobs[strenv(JOB)].if // ""' "${job}")"; then
+    if ! if_clause="$(read_workflow "${f}" "${JOB_BY_KEY}"' | .if // ""' "${job}" 'if:')"; then
       exit 2
     fi
     if [[ ${if_clause} != *"${GUARD_NEEDLE}"* ]]; then

@@ -64,10 +64,18 @@ if [[ ! -f ${ALLOWLIST} ]]; then
 fi
 
 # allowed <workflow-basename> <job> -> newline-separated allowed scope names
-# The names reach `yq` as data, through `strenv`: spliced into the
-# expression, a name holding a quote would be read as `yq` code.
+# The names reach `yq` as data, through `strenv`, and are compared by
+# their base64 text: spliced into the expression, a name holding a quote
+# would be read as `yq` code, and `yq` reads `*` and `?` in an index or
+# an `==` comparison as wildcards, which base64 text never holds.
 function allowed() {
-  WF="$1" JOB="$2" yq eval '.[strenv(WF)][strenv(JOB)] // [] | .[]' "${ALLOWLIST}"
+  WF="$1" JOB="$2" yq eval '[to_entries[] | '"$(eq WF)"' | .value | to_entries[] | '"$(eq JOB)"' | .value] | .[0] // [] | .[]' "${ALLOWLIST}"
+}
+
+# eq <variable> -> a yq select keeping the entry whose key's text is the
+# variable's, compared as base64 so neither side is read as a pattern.
+function eq() {
+  printf 'select((.key | tostring | @base64) == (strenv(%s) | @base64))' "$1"
 }
 
 # The `jobs:` node, read through an alias: `explode` handed only that
@@ -195,7 +203,8 @@ if [[ -z ${FILE_FILTER} ]]; then
       # pass says the same thing rather than inventing a second verdict
       # for the same file.
       if ! granted="$(JOB="${job}" SCOPE="${scope}" yq eval \
-        '.jobs[strenv(JOB)].permissions[strenv(SCOPE)] // ""' "${wf_path}")"; then
+        "[${JOBS_NODE} | to_entries[] | $(eq JOB) | .value | [.permissions | explode(.)] | .[] | select(kind == \"map\") | to_entries[] | $(eq SCOPE) | .value] | .[0] // \"\"" \
+        "${wf_path}")"; then
         printf '%s: could not evaluate workflow with yq (malformed?)\n' "${wf_path}" >&2
         failed=$((failed + 1))
         continue
