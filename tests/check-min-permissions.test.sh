@@ -113,11 +113,11 @@ expect_unparsable 'permissions: [\n' 'bad-unparsable.yml: could not evaluate'
 # Every read of the top-level `permissions:` after its shape has been
 # read is held to the run-stopping line, on a workflow that holds the
 # fault the read is for and on one that does not. Each stub text is
-# carried by that read alone: the scalar read is `eval .permissions`
+# carried by that read alone: the scalar read is the node's expression
 # followed by the fixture's absolute path.
-expect_failed_read bad-top-write-all.yml 'eval .permissions /' 7 'the top-level permissions'
-expect_failed_read good.yml '.permissions | length' 9 'the top-level permissions size'
-expect_failed_read bad-top-nonempty.yml '.permissions | length' 11 'the top-level permissions size'
+expect_failed_read bad-top-write-all.yml '.[0] /' 7 'the top-level permissions'
+expect_failed_read good.yml '.[0] | length' 9 'the top-level permissions size'
+expect_failed_read bad-top-nonempty.yml '.[0] | length' 11 'the top-level permissions size'
 expect_failed_read bad-top-nonempty.yml 'keys | join' 13 'the top-level permissions keys'
 
 # The per-job read can fail on the workflow's own shape, so its failure
@@ -135,21 +135,6 @@ if [[ ${jobs_exit} != 1 || ${jobs_stderr} != *$'\n'"${jobs_want}" ]]; then
   exit 1
 fi
 printf 'OK   jobs-number.yml: a jobs: yq cannot list is a counted finding\n'
-
-# A node whose tag yq cannot decode fails a later read too: the run
-# stops, as it does for yq failing, though the fault is the workflow's.
-mistag_dir="$(mktemp --directory)"
-printf 'permissions: !!map 5\njobs: {}\n' >"${mistag_dir}/mistag.yml"
-mistag_exit=0
-mistag_stderr="$(WORKFLOWS_DIR_OVERRIDE="${mistag_dir}" "${SCRIPT}" 2>&1 >/dev/null)" || mistag_exit=$?
-rm --recursive --force -- "${mistag_dir}"
-mistag_want="cannot read the top-level permissions keys of ${mistag_dir}/mistag.yml: yq exited 1"
-if [[ ${mistag_exit} != 2 || ${mistag_stderr} != *$'\n'"${mistag_want}" ]]; then
-  printf 'FAIL mistag.yml: exit %s, want 2, and stderr ending %q\n  got: %s\n' \
-    "${mistag_exit}" "${mistag_want}" "${mistag_stderr}" >&2
-  exit 1
-fi
-printf 'OK   mistag.yml: a node yq cannot decode stops the run\n'
 
 # @description Scan one workflow written to a temp dir at run time and
 # compare the whole of stderr, so the shapes built here (tags) are not
@@ -197,7 +182,7 @@ expect_body jobs-merge-inline.yml $'permissions: {}\njobs:\n  <<:\n    evil:\n  
 # The job rows are tab-separated, and GitHub Actions refuses a job id
 # holding a tab or a line break, so such an id is a finding and the
 # workflow's jobs are not read.
-readonly ODD_ID='jobs: holds a job id with a tab or a line break, which GitHub Actions refuses; its jobs are not read'
+readonly ODD_ID='jobs: holds a job id, or the tag of a job id, a job or a permissions: block, with a tab or a line break, which GitHub Actions refuses; its jobs are not read'
 expect_body job-id-tab.yml $'permissions: {}\njobs:\n  "x\\t!!str\\tmap !!map\\tmap !!map":\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
   "DIR/job-id-tab.yml: ${ODD_ID}"$'\n1 permissions posture violation(s) found'
 expect_body job-id-xtag.yml $'permissions: {}\njobs:\n  !x "x\\t!!str\\tmap !!map\\tmap !!map":\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
@@ -207,7 +192,7 @@ expect_body job-id-merge-tag.yml $'permissions: {}\njobs:\n  !!merge "x\\t!!str\
 expect_body job-id-break.yml $'permissions: {}\njobs:\n  "y\\nz":\n    permissions: {}\n' 1 \
   "DIR/job-id-break.yml: ${ODD_ID}"$'\n1 permissions posture violation(s) found'
 # The job-id read failing is a counted finding, like the job rows' read.
-yq_stub 'select(tostring | test(' 7
+yq_stub '| select(test("[' 7
 ids_exit=0
 ids_stderr="$(PATH="${STUB_DIR}:${PATH}" WORKFLOWS_DIR_OVERRIDE="${FIXTURES}" \
   WORKFLOW_FILE_FILTER=good.yml "${SCRIPT}" 2>&1 >/dev/null)" || ids_exit=$?
@@ -219,23 +204,55 @@ if [[ ${ids_exit} != 1 || ${ids_stderr} != "${ids_want}" ]]; then
   exit 1
 fi
 printf 'OK   good.yml with the job-id read failing\n'
-# yq prints one job-id count per document; counts of 0 in a file of
-# several documents are no odd id, and a document whose jobs: is null
-# has no ids to count rather than a read that fails. (Several documents are not refused by
-# this lint; only the id message is held here.)
-docs_dir="$(mktemp --directory)"
-printf 'permissions: {}\njobs:\n  a:\n    permissions: {}\n---\npermissions: {}\njobs:\n' \
-  >"${docs_dir}/two-docs.yml"
-docs_exit=0
-docs_stderr="$(WORKFLOWS_DIR_OVERRIDE="${docs_dir}" "${SCRIPT}" 2>&1 >/dev/null)" || docs_exit=$?
-rm --recursive --force -- "${docs_dir}"
-if [[ ${docs_exit} != 1 || ${docs_stderr} == *'tab or a line break'* || ${docs_stderr} == *'could not evaluate'* ]]; then
-  printf 'FAIL two-docs.yml: exit %s, want 1, and no job-id line\n  got: %s\n' "${docs_exit}" "${docs_stderr}" >&2
-  exit 1
-fi
-printf 'OK   two-docs.yml: per-document id counts of 0\n'
 expect_body job-xtag.yml $'permissions: {}\njobs:\n  a:\n    permissions: !x\n      contents: read\n' 0 ''
 expect_body job-strseq.yml $'permissions: {}\njobs:\n  b:\n    permissions: !!str [contents]\n' 1 \
   $'DIR/job-strseq.yml: job b permissions has unexpected shape (kind=seq, tag=!!str)\n1 permissions posture violation(s) found'
+
+# The top-level block is read by kind and through an alias, like a
+# job's. An empty scalar carrying the map tag is no empty map.
+readonly ONE=$'\n1 permissions posture violation(s) found'
+expect_body top-map-empty-scalar.yml $'permissions: !!map \'\'\njobs: {}\n' 1 \
+  "DIR/top-map-empty-scalar.yml: top-level permissions has unexpected shape (kind=scalar, tag=!!map)${ONE}"
+expect_body top-map-five.yml $'permissions: !!map 5\njobs: {}\n' 1 \
+  "DIR/top-map-five.yml: top-level permissions has unexpected shape (kind=scalar, tag=!!map)${ONE}"
+expect_body top-xtag.yml $'permissions: !x {}\njobs: {}\n' 0 ''
+expect_body top-xtag-granting.yml $'permissions: !x {contents: read}\njobs: {}\n' 1 \
+  "DIR/top-xtag-granting.yml: top-level permissions non-empty (keys: contents); need ${Q}permissions: {}${Q}${ONE}"
+expect_body top-str-list.yml $'permissions: !!str [a]\njobs: {}\n' 1 \
+  "DIR/top-str-list.yml: top-level permissions has unexpected shape (kind=seq, tag=!!str)${ONE}"
+expect_body top-xtag-string.yml $'permissions: !x read-all\njobs: {}\n' 1 \
+  "DIR/top-xtag-string.yml: top-level permissions has unexpected shape (kind=scalar, tag=!x)${ONE}"
+expect_body top-alias.yml $'x-p: &p {}\npermissions: *p\njobs: {}\n' 0 ''
+expect_body top-alias-granting.yml $'x-p: &p {issues: write}\npermissions: *p\njobs: {}\n' 1 \
+  "DIR/top-alias-granting.yml: top-level permissions non-empty (keys: issues); need ${Q}permissions: {}${Q}${ONE}"
+expect_body top-alias-string.yml $'x-p: &p write-all\npermissions: *p\njobs: {}\n' 1 \
+  "DIR/top-alias-string.yml: top-level permissions is scalar write-all (need ${Q}permissions: {}${Q})${ONE}"
+# Several documents are one finding, read no further: a trailing ---
+# starts a second one, and a granting block in it is not reported.
+expect_body two-docs.yml $'permissions: {}\njobs:\n  a:\n    permissions: {}\n---\npermissions: {contents: write}\njobs:\n' 1 \
+  "DIR/two-docs.yml: holds several YAML documents, which GitHub Actions refuses; it is read no further${ONE}"
+expect_body trailing-separator.yml $'permissions: {}\njobs:\n  b:\n    runs-on: x\n---\n' 1 \
+  "DIR/trailing-separator.yml: holds several YAML documents, which GitHub Actions refuses; it is read no further${ONE}"
+
+# A job's block is read through an alias too, in a job written as one.
+expect_body job-perms-alias.yml $'x-p: &p {contents: write}\npermissions: {}\njobs:\n  a:\n    permissions: *p\n  b:\n    runs-on: x\n' 1 \
+  "DIR/job-perms-alias.yml: job b missing ${Q}permissions:${Q} block (every job must declare its own)${ONE}"
+expect_body job-perms-alias-in-job-alias.yml $'x-p: &p {contents: read}\nx-j: &j {permissions: *p}\npermissions: {}\njobs:\n  a: *j\n  c:\n    runs-on: x\n' 1 \
+  "DIR/job-perms-alias-in-job-alias.yml: job c missing ${Q}permissions:${Q} block (every job must declare its own)${ONE}"
+expect_body job-perms-alias-scalar.yml $'x-p: &p write-all\npermissions: {}\njobs:\n  d:\n    permissions: *p\n' 1 \
+  "DIR/job-perms-alias-scalar.yml: job d permissions has unexpected shape (kind=scalar, tag=!!str)${ONE}"
+
+# The rows carry tags as text, and a verbatim tag decodes %09 and %0A to
+# a tab and a line break, so a tag holding either could forge a row; it
+# is refused like an odd job id.
+readonly ODD_TAG='jobs: holds a job id, or the tag of a job id, a job or a permissions: block, with a tab or a line break, which GitHub Actions refuses; its jobs are not read'
+expect_body job-tag-forge-scalar.yml $'permissions: {}\njobs:\n  b: !<tag:x%09map%20q%0Az%09k%09map%20m%09map%20n>\n    permissions: write-all\n' 1 \
+  "DIR/job-tag-forge-scalar.yml: ${ODD_TAG}${ONE}"
+expect_body job-tag-forge-missing.yml $'permissions: {}\njobs:\n  e: !<tag:x%09map%20q%0Az%09k%09map%20m%09map%20n>\n    runs-on: x\n' 1 \
+  "DIR/job-tag-forge-missing.yml: ${ODD_TAG}${ONE}"
+expect_body key-tag-break.yml $'permissions: {}\njobs:\n  ? !<tag:x%09y> h\n  : {permissions: {}}\n' 1 \
+  "DIR/key-tag-break.yml: ${ODD_TAG}${ONE}"
+expect_body perms-tag-break.yml $'permissions: {}\njobs:\n  g:\n    permissions: !<tag:x%0Ay> {}\n' 1 \
+  "DIR/perms-tag-break.yml: ${ODD_TAG}${ONE}"
 
 printf 'all tests passed\n'

@@ -189,11 +189,11 @@ expect_built 'a uses: tag rendering a line break is no reusable-workflow call' \
   "%W: job verbatim missing ${BT}timeout-minutes${BT} (default is 6h; declare an explicit value)
 ${ONE_BAD}"
 
-# A job id is the one raw field of a row, so one that is not a string,
+# A job id is the one raw field of a row, so one that is not a scalar,
 # is empty, or holds a tab, a line break or a NUL could forge, split or
 # garble it, and is refused, naming the first such id. A pipe cannot.
 # An id written as an alias is read through it.
-readonly ODD_A='jobs: holds a job id that is not a string, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: '
+readonly ODD_A='jobs: holds a job id that is not a scalar, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: '
 readonly ODD_B=')'
 expect_built 'a job id written as an alias is read through it' \
   'x-k: &k idalias\non: push\njobs:\n  *k :\n    runs-on: x\n' 1 \

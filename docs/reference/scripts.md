@@ -1084,10 +1084,16 @@ quoted strings, `github.event_name`, and the watched job's `result` and
 case-insensitive. A gate without `always()` carries GitHub's implicit
 `success()`. A declared `has-finding` output is tried as 'true', 'false'
 and empty; the events tried are the ones the workflow's `on:` names:
-what `yq` prints for a string, for the items of a list or for the keys
-of a map, split at spaces, tabs and newlines. A job of a workflow whose
-`on:` carries any other tag, as an alias does, or prints no event, is
-refused when it has to be derived. So is a job whose notify step has an
+what `yq` prints for a scalar carrying the string tag, for the items of
+a list or for the keys of a map, whatever tag the list or map carries,
+split at spaces, tabs and newlines. `on:` is read from ON_NODE, so an
+alias in it is read through. A job of a workflow whose `on:` is any
+other shape, or prints no event, or whose file `yq` reads as several
+YAML documents, is refused when it has to be derived, and so is one
+whose `needs:` is not one job named by a scalar carrying the string
+tag (read through an alias, including an alias of a list whose one
+item is an alias of the job's name). So is
+a job whose notify step has an
 `if:` of its own, follows a step other than step-security/harden-runner
 or actions/checkout, runs the composite twice, or reaches it by any
 other `uses:` than ./.github/actions/notify-workflow-result. The

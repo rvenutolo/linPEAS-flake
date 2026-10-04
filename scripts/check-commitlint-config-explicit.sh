@@ -18,7 +18,13 @@
 # Assertions:
 #   1. Every step whose `uses:` starts with
 #      `wagoid/commitlint-github-action` has a `with:` block carrying a
-#      non-empty `configFile:`.
+#      non-empty `configFile:`. `with:` is read by kind: a map carrying a
+#      tag of its own is read, and any other shape is a finding, as is a
+#      `configFile:` that is not a scalar. `jobs:`, a job, its steps, a
+#      step, its `with:` and the value written as aliases are read
+#      through them. A job id that is not a scalar, is empty, or holds a
+#      tab, a line break or a NUL is a finding, and that workflow's jobs
+#      are not read.
 #   2. Every config path named by such a `configFile` exists on disk.
 #      The value may be a literal path or a GitHub Actions ternary
 #      expression `${{ <cond> && 'A' || 'B' }}`, in which case both `A`
@@ -86,6 +92,22 @@ else
 fi
 readonly base_dir
 
+# The `jobs:` node, read through an alias: `explode` handed only that
+# node resolves it in one pass, since an anchor cannot sit on an alias.
+readonly JOBS_NODE='[(.jobs | select(kind == "alias") | explode(.)), (.jobs | select(kind != "alias"))] | .[0]'
+
+# @description Print a JSON string's text when it holds no escape or
+# quote, else the JSON string itself, so a plain value reads as written
+# and any other is shown unambiguously.
+# @arg $1 a JSON string
+function json_text() {
+  if [[ $1 =~ ^\"([^\"\\]*)\"$ ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  else
+    printf '%s' "$1"
+  fi
+}
+
 failed=0
 
 fail() {
@@ -100,43 +122,104 @@ for f in "${paths[@]}"; do
   "${SELF}" | */"${SELF}") continue ;;
   esac
 
+  # The steps are read below as tab-separated rows, and the job id is
+  # the one field written as raw text, so an id that is not a scalar, is
+  # empty, or holds a tab, a line break or a NUL could forge, split or
+  # garble a row. GitHub Actions refuses such an id, so it is a finding
+  # and the workflow's jobs are not read. Each key is resolved through an
+  # alias first, then tested as the text it renders to, whatever its
+  # tag. The read prints, per document, the first such id's kind, and
+  # its text as JSON (`-` for none).
+  if ! odd_ids="$(yq eval "[${JOBS_NODE}"' | select(kind == "map") | keys[] | explode(.) | select(kind != "scalar" or (tostring | test("^$|[\t\n\x00]"))) | "kind=" + kind + ", id=" + (tostring | to_json(0))] | .[0] // "-"' "${f}")"; then
+    fail "$(printf '%s: could not evaluate workflow with yq (malformed?)' "${f}")"
+    continue
+  fi
+  odd_id=''
+  while IFS= read -r line; do
+    if [[ ${line} != '-' ]]; then
+      odd_id="${line}"
+      break
+    fi
+  done <<<"${odd_ids}"
+  if [[ -n ${odd_id} ]]; then
+    fail "$(printf '%s: jobs: holds a job id that is not a scalar, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: %s)' \
+      "${f}" "${odd_id}")"
+    continue
+  fi
+
+  # A `steps:` that is not a list holds no step to read; GitHub Actions
+  # refuses such a job.
+  # Each row: the step's index; the job id; the kind of the step's
+  # `with:` (`none` when absent) and its tag as a JSON string; the kind
+  # of its `configFile:` (`none` when absent or when `with:` is no map),
+  # and that value's tag and text as JSON strings. A tag is free text (a
+  # verbatim tag decodes `%7C` to a pipe and `%0A` to a line break), as
+  # is a value, and JSON holds neither a tab nor a line break, so no
+  # field but the id can split a row, and none is empty for `read` to
+  # collapse. The job is handed to `explode` twice and each step three
+  # times more, so a job, its steps, a step, its `with:` and the value
+  # written as aliases are read through them. A `with:` map is read
+  # whatever tag it carries. Each value a row reads is collected into a
+  # list with a default appended, and the row opens with an operand that
+  # reads the step, because after a `select` that keeps nothing `yq`
+  # still prints an expression made only of variables, literals and
+  # collections.
+  #
   # Capture yq's output (and exit status) into a variable rather than
   # feeding the loop from `< <(yq ...)`: a process substitution's exit
   # status is not propagated under set -Eeuo pipefail, so a yq failure
   # (unparsable workflow, or a query that errors on a valid-but-odd
   # shape) would yield empty input and the check would pass silently.
   # shellcheck disable=SC2016 # yq expression + literal `${{` needle: no shell expansion wanted
-  if ! rows="$(yq eval '
-    .jobs // {} | to_entries[] as $j
-    | $j.value.steps // [] | to_entries[]
-    | select(.value.uses // "" | test("^'"${ACTION_PREFIX}"'"))
-    | $j.key
-      + "|" + (.key | tostring)
-      + "|" + (.value.with | tag)
-      + "|" + (.value.with.configFile | tag)
-      + "|" + (.value.with.configFile // "" | tostring)
+  if ! rows="$(yq eval --no-doc "${JOBS_NODE}"' | to_entries[] | (.key | explode(.) | tostring) as $k
+    | .value | explode(.) | explode(.) | [.steps] | .[] | select(kind == "seq") | to_entries[]
+    | select(.value | explode(.) | explode(.) | explode(.) | (.uses // "") | test("^'"${ACTION_PREFIX}"'"))
+    | (.key | tostring) + "\t" + $k + "\t" + (.value | explode(.) | explode(.) | explode(.) |
+        ([.with | kind] + ["none"] | .[0]) + "\t" + ([.with | tag | to_json(0)] + ["\"\""] | .[0]) + "\t"
+        + ([.with | select(kind == "map") | .configFile | kind + "\t" + (tag | to_json(0)) + "\t" + (tostring | to_json(0))]
+          + ["none\t\"\"\t\"\""] | .[0]))
   ' "${f}")"; then
     fail "$(printf '%s: could not evaluate workflow with yq (malformed?)' "${f}")"
     continue
   fi
   [[ -n ${rows} ]] || continue
   # shellcheck disable=SC2016 # literal `${{` needle below: no shell expansion wanted
-  while IFS='|' read -r job idx with_tag cfg_tag cfg_val; do
+  while IFS=$'\t' read -r idx job with_kind with_tag cfg_kind cfg_tag cfg_text; do
     [[ -z ${job} ]] && continue
-    # A missing key yields an empty tag; an explicit `with:` with a null
-    # body yields `!!null`. Both mean "no usable `with:` block".
-    if [[ -z ${with_tag} || ${with_tag} == '!!null' ]]; then
+    # No `with:`, or one with a null body, is no usable `with:` block.
+    if [[ ${with_kind} == 'none' || ${with_tag} == '"!!null"' ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
       fail "$(printf '%s: job %q step[%s] %s has no `with:` block; add `with.configFile: <path>` (an unset configFile silently falls back to a bundled preset)' \
         "${f}" "${job}" "${idx}" "${ACTION_PREFIX}")"
       continue
     fi
-    if [[ -z ${cfg_tag} || ${cfg_tag} == '!!null' || -z ${cfg_val} ]]; then
+    if [[ ${with_kind} != 'map' ]]; then
+      # shellcheck disable=SC2016 # literal backticks in human-readable prose
+      fail "$(printf '%s: job %q step[%s] %s `with:` has unexpected shape (kind=%s, tag=%s); it must be a map holding `configFile: <path>`' \
+        "${f}" "${job}" "${idx}" "${ACTION_PREFIX}" "${with_kind}" "${with_tag}")"
+      continue
+    fi
+    if [[ ${cfg_kind} == 'none' || ${cfg_tag} == '"!!null"' ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
       fail "$(printf '%s: job %q step[%s] %s has no non-empty `with.configFile:`; add one (an unset configFile silently falls back to a bundled preset)' \
         "${f}" "${job}" "${idx}" "${ACTION_PREFIX}")"
       continue
     fi
+    if [[ ${cfg_kind} != 'scalar' ]]; then
+      # shellcheck disable=SC2016 # literal backticks in human-readable prose
+      fail "$(printf '%s: job %q step[%s] %s `configFile:` has unexpected shape (kind=%s, tag=%s, value=%s); it must be a path' \
+        "${f}" "${job}" "${idx}" "${ACTION_PREFIX}" "${cfg_kind}" "${cfg_tag}" "${cfg_text}")"
+      continue
+    fi
+    if [[ ${cfg_text} == '""' ]]; then
+      # shellcheck disable=SC2016 # literal backticks in human-readable prose
+      fail "$(printf '%s: job %q step[%s] %s has no non-empty `with.configFile:`; add one (an unset configFile silently falls back to a bundled preset)' \
+        "${f}" "${job}" "${idx}" "${ACTION_PREFIX}")"
+      continue
+    fi
+    # A value holding a quote, a backslash or a control character stays
+    # JSON-quoted, so it names no file and is reported as missing below.
+    cfg_val="$(json_text "${cfg_text}")"
 
     refs=()
     if [[ ${cfg_val} == *'${{'* ]]; then

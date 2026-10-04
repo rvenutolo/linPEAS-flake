@@ -186,6 +186,18 @@ git -C "${SANDBOX}" add -A
 git -C "${SANDBOX}" commit --quiet -m 'ci: add beta member'
 run_scenario 'lint-group member added is reported' 0 --expect 'beta'
 
+# --- scenario: lint-group members read by kind ---
+# A group written as a list carrying a tag of its own still lists its
+# members; a group written as a map lists none, so its values are not
+# counted as members.
+printf 'lint-a: !x [alpha, epsilon]\nlint-b: {delta: 1}\n' >"${LG_FILE}"
+git -C "${SANDBOX}" add -A
+git -C "${SANDBOX}" commit --quiet -m 'ci: tag a group and add a map group'
+BT=$'\x60'
+run_scenario 'a tagged member list is read and a map group lists no member' 0 \
+  --expect "- ${BT}epsilon${BT}" --forbid 'delta' --forbid "${BT}1${BT}"
+printf 'lint-a:\n  - alpha\n  - beta\n' >"${LG_FILE}"
+
 # --- scenario: malformed job id dropped from body ---
 printf 'lint-a:\n  - alpha\n' >"${LG_FILE}"
 printf 'name: a\njobs:\n  build:\n    runs-on: x\n  "Bad Job":\n    runs-on: x\n' >"${WF_DIR}/a.yml"

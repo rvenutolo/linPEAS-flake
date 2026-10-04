@@ -45,6 +45,8 @@ Without it, `actions/checkout` writes `GITHUB_TOKEN` into `.git/config` and leav
 
 Boolean `false` is required rather than the string `"false"`. Actions serializes every `with:` value to a string before the action runs, so both spellings reach `actions/checkout` identically — only the YAML node type distinguishes a deliberate setting from a copy-pasted string, and the lint keys on that tag to keep the spelling unambiguous across the workflow set.
 
+How the lint reads `with:` and the value (by kind, through aliases, compared whole) is stated in the header of `scripts/check-checkout-persist-credentials.sh`.
+
 Enforced by `scripts/check-checkout-persist-credentials.sh`. Wired as the `lint-workflow-security` CI job (member check `checkout-persist-credentials`) and as a pre-commit hook.
 
 ## upload-artifact-strict
@@ -52,6 +54,8 @@ Enforced by `scripts/check-checkout-persist-credentials.sh`. Wired as the `lint-
 Every `actions/upload-artifact` step sets `with.if-no-files-found: error`.
 
 The action's default is `warn`, which emits a warning and uploads nothing when the `path:` glob matches nothing. That hides build-output drift: a broken path produces a green job with no artifact, and the consumer side only notices when something downstream goes missing — sometimes many runs later. `error` turns the path-mismatch into a hard upload failure, surfacing the bug at its source.
+
+How the lint reads `with:` and the value (by kind, through aliases, compared whole) is stated in the header of `scripts/check-upload-artifact-strict.sh`.
 
 Enforced by `scripts/check-upload-artifact-strict.sh`. Wired as the `lint-workflow-security` CI job (member check `upload-artifact-strict`) and as a pre-commit hook.
 
@@ -679,13 +683,13 @@ Every notify job in the scanner workflows (`codeql.yml`, `image-cve-scan.yml`, `
 The gate grammar is what these workflows use: `always()`, `==`, `!=`, `!` (which binds to one operand, so `!x == 'y'` compares a boolean and is refused), `&&`, `||`, parentheses, quoted strings, `github.event_name`, and the watched job's `result` and `outputs.has-finding`. Context names and string comparison are case-insensitive, as in GitHub's expressions, and a literal is compared as written, with no escape decoding. A gate with no `always()` carries GitHub's implicit `success()`. The lint refuses a job it cannot model when it has to derive it, which it does for every scanner notify job and for any job a marker names. That covers:
 
 - a gate outside the grammar;
-- a `needs:` naming more than one job;
+- a `needs:` that is not one job named by a string;
 - a `result:` other than a literal result or the watched job's raw result;
 - a notify step with an `if:` of its own;
 - a step before the notify step other than `step-security/harden-runner` or `actions/checkout`, since its failure would skip the composite;
 - a job that runs the composite twice;
 - a job that reaches the composite by any other `uses:` than `./.github/actions/notify-workflow-result`, such as a pinned remote revision the hash does not cover;
-- a workflow whose `on:` gives no event. The lint reads the tag `yq` reports for the value and takes a string, a list's items or a map's keys as `yq` prints them, split at spaces, tabs and newlines. Any other tag is refused, an alias's among them, and so is a value that prints only spaces, tabs and newlines.
+- a workflow whose `on:` gives no event, or that `yq` reads as several YAML documents. How the lint reads `on:` (by kind, through aliases) is stated in the header of `scripts/check-notify-arms.sh`; a value that prints only spaces, tabs and newlines is refused.
 
 A `yq` read that fails is not one of these: the lint stops on a line naming what it was reading and the status `yq` exited with, and says nothing about the workflow.
 

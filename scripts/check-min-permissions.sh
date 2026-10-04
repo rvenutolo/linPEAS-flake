@@ -15,12 +15,17 @@
 #      omitted block is a lint failure. A job's block is read by its
 #      kind: a map, whatever tag it carries, passes, and any other shape
 #      is reported with its kind and tag. A job written as an alias is
-#      read through it. A merge key under `jobs:`, and a job id holding
-#      a tab or a line break, are findings: GitHub Actions refuses both,
-#      and the jobs behind them are not read.
+#      read through it. A merge key under `jobs:`, and a job id, or the
+#      tag of a job id, a job or its `permissions:`, holding a tab or a
+#      line break, are findings: GitHub Actions refuses them, and the
+#      jobs behind them are not read.
 #   3. Top-level cannot be `read-all`, `write-all`, or any scalar/
-#      list form. (Subsumed by rule 1; a scalar gets a dedicated
-#      message, any other shape is reported by its YAML tag.)
+#      list form. (Subsumed by rule 1; a string gets a dedicated
+#      message, any other shape is reported with its kind and tag.)
+#      The top-level block is read by kind and through an alias, like a
+#      job's: a map carrying a tag of its own is read, and an empty
+#      scalar carrying the map tag is no empty map. A file `yq` reads as
+#      several YAML documents is a finding and is read no further.
 #
 # See docs/security/min-permissions.md.
 #
@@ -29,7 +34,8 @@
 # cannot run: `yq` is absent from PATH, the workflow globs match no
 # file, WORKFLOW_FILE_FILTER selects none of the files they matched, or
 # a read of the top-level `permissions:` fails after its shape has been
-# read, which a node whose tag `yq` cannot decode does too.
+# read. Those later reads run only on a map, whose size and keys `yq`
+# reads whatever tag it carries, so such a failure is `yq` failing.
 # An empty scan set is a could-not-run rather than a clean tree;
 # LINT_ALLOW_EMPTY_SCAN=1 accepts one deliberately.
 
@@ -72,11 +78,9 @@ function read_workflow() {
 }
 
 # @description Stop the run on a `yq` read that failed after the
-# workflow's first read succeeded. The file parses, so the failure is
-# usually `yq` failing. A node whose tag `yq` cannot decode
-# (`permissions: !!map 5`) fails such a read too, and is reported the
-# same way, though it is a fact about the workflow. Carrying on would
-# print a verdict about a value nothing read.
+# workflow's first read succeeded. The file parses, and the later reads
+# run only on a shape the first read found, so the failure is `yq`
+# failing. Carrying on would print a verdict about a value nothing read.
 # @arg $1 what was being read
 # @arg $2 workflow path
 # @arg $3 the status `yq` exited with
@@ -85,6 +89,13 @@ function die_unread() {
   printf 'cannot read %s of %s: yq exited %d\n' "$1" "$2" "$3" >&2
   exit 2
 }
+
+# The top-level `permissions:` node, read through an alias: `explode`
+# handed only that node resolves it in one pass, since an anchor cannot
+# sit on an alias. The node is collected into a list first, so an absent
+# key reads as null rather than as nothing at all.
+# shellcheck disable=SC2016 # yq program literal
+readonly TOP_PERMS='[(.permissions | select(kind == "alias") | explode(.)), (.permissions | select(kind != "alias"))] | .[0]'
 
 failed=0
 shopt -s nullglob
@@ -96,29 +107,40 @@ for f in "${selected_files[@]}"; do
   [[ -f ${f} ]] || continue
 
   # --- top-level permissions ---------------------------------------
-  if ! top_tag="$(read_workflow "${f}" '.permissions | tag')"; then
+  # The node is read by its kind, with its tag beside it to tell an
+  # absent key and a string from any other scalar: a map carrying a tag
+  # of its own is still a map, and an empty scalar carrying the map tag
+  # is not one. It is read through an alias (TOP_PERMS). One line per
+  # document: a file holding several has no one top-level block, so it
+  # is a finding and is read no further.
+  if ! top_shape="$(read_workflow "${f}" "${TOP_PERMS}"' | kind + " " + tag')"; then
     failed=$((failed + 1))
     continue
   fi
-  case "${top_tag}" in
-  '!!null')
+  case "${top_shape}" in
+  *$'\n'*)
+    printf '%s: holds several YAML documents, which GitHub Actions refuses; it is read no further\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+    ;;
+  'scalar !!null')
     # shellcheck disable=SC2016 # literal backticks in human-readable prose
     printf '%s: missing top-level `permissions:` (need `permissions: {}`)\n' "${f}" >&2
     failed=$((failed + 1))
     ;;
-  '!!str')
-    top_val="$(yq eval '.permissions' "${f}")" ||
+  'scalar !!str')
+    top_val="$(yq eval "${TOP_PERMS}" "${f}")" ||
       die_unread 'the top-level permissions' "${f}" "$?"
     # shellcheck disable=SC2016 # literal backticks in human-readable prose
     printf '%s: top-level permissions is scalar %q (need `permissions: {}`)\n' \
       "${f}" "${top_val}" >&2
     failed=$((failed + 1))
     ;;
-  '!!map')
-    top_len="$(yq eval '.permissions | length' "${f}")" ||
+  'map '*)
+    top_len="$(yq eval "${TOP_PERMS}"' | length' "${f}")" ||
       die_unread 'the top-level permissions size' "${f}" "$?"
     if [[ ${top_len} != "0" ]]; then
-      top_keys="$(yq eval '.permissions | keys | join(",")' "${f}")" ||
+      top_keys="$(yq eval "${TOP_PERMS}"' | keys | join(",")' "${f}")" ||
         die_unread 'the top-level permissions keys' "${f}" "$?"
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
       printf '%s: top-level permissions non-empty (keys: %s); need `permissions: {}`\n' \
@@ -127,8 +149,8 @@ for f in "${selected_files[@]}"; do
     fi
     ;;
   *)
-    printf '%s: top-level permissions has unexpected shape (tag=%s)\n' \
-      "${f}" "${top_tag}" >&2
+    printf '%s: top-level permissions has unexpected shape (kind=%s, tag=%s)\n' \
+      "${f}" "${top_shape%% *}" "${top_shape#* }" >&2
     failed=$((failed + 1))
     ;;
   esac
@@ -144,8 +166,10 @@ for f in "${selected_files[@]}"; do
   # Each row: the job's key and the key's tag, which is `!!merge` for a
   # `<<` merge key; the kind and tag of the job, read through an alias
   # by `explode` handed only that node (an anchor cannot sit on an
-  # alias, so one pass resolves it); and those of its `permissions:`.
-  if ! rows="$(yq eval '.jobs | to_entries[] | .key + "\t" + (.key | tag) + "\t" + ((.value | select(kind == "alias") | explode(.) | kind + " " + tag) // (.value | kind + " " + tag)) + "\t" + (.value.permissions | kind + " " + tag)' "${f}")"; then
+  # alias, so one pass resolves it); and those of its `permissions:`,
+  # read from the job handed to `explode` twice, so a block written as
+  # an alias, in a job written as one, is read through both.
+  if ! rows="$(yq eval '.jobs | to_entries[] | .key + "\t" + (.key | tag) + "\t" + ((.value | select(kind == "alias") | explode(.) | kind + " " + tag) // (.value | kind + " " + tag)) + "\t" + ([.value | explode(.) | explode(.) | .permissions | kind + " " + tag] + [""] | .[0])' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
@@ -155,15 +179,17 @@ for f in "${selected_files[@]}"; do
   # or a line break could forge or split one. GitHub Actions refuses such
   # an id, so it is a finding and the workflow's jobs are not read.
   # Every key is tested as the text it renders to, whatever its tag, and
-  # a document whose `jobs:` is not a map has no ids to test.
-  if ! odd_ids="$(yq eval '[.jobs | select(kind == "map") | keys[] | select(tostring | test("[\t\n]"))] | length' "${f}")"; then
+  # a `jobs:` that is not a map has no ids to test. The rows also carry
+  # three tags as text (the key's, the job's, its `permissions:`'s), and
+  # a verbatim tag decodes `%09` and `%0A` to a tab and a line break, so
+  # a tag holding either is refused the same way.
+  if ! odd_ids="$(yq eval '[.jobs | select(kind == "map") | to_entries[] | ((.key | tostring), (.key | tag), (.value | explode(.) | explode(.) | (tag, ([.permissions] | .[] | tag)))) | select(test("[\t\n]"))] | length' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
   fi
-  # One count per document: any count above 0 is a finding.
-  if [[ ${odd_ids} == *[1-9]* ]]; then
-    printf '%s: jobs: holds a job id with a tab or a line break, which GitHub Actions refuses; its jobs are not read\n' \
+  if [[ ${odd_ids} != 0 ]]; then
+    printf '%s: jobs: holds a job id, or the tag of a job id, a job or a permissions: block, with a tab or a line break, which GitHub Actions refuses; its jobs are not read\n' \
       "${f}" >&2
     failed=$((failed + 1))
     continue

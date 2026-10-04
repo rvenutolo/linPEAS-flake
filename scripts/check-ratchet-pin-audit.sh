@@ -28,7 +28,11 @@
 # Exits 0 on full coverage, 1 on any drift, 2 when the check cannot run
 # — `yq` or `ratchet` absent from PATH, the workflow file itself missing,
 # a workflow expression yq cannot evaluate, an unreadable version site, or
-# a `ratchet --version` string carrying no X.Y.Z. With no workflow to
+# a `ratchet --version` string carrying no X.Y.Z. The `on:` reads stop the
+# run on the workflow's own content too: a root giving `on` twice, an
+# `on:` holding an alias nested too deep to resolve, or a merge key in
+# `on:` that `yq` cannot resolve (see ON_NODE). A file `yq` reads as
+# several YAML documents, or whose root is not a map, is one finding. With no workflow to
 # parse there is no invariant to score, and counting that as a failed
 # invariant would report drift in a file the check never read.
 
@@ -64,16 +68,42 @@ fi
 # unchecked read would instead leave the run carrying yq's own exit 1,
 # read by the caller as hardening drift in a file nothing was read from.
 # @arg $1 yq expression
+# @arg $2 what the expression reads, named in place of it (optional)
 # @exitcode 1 yq could not evaluate the expression
 function read_workflow() {
-  local -r expr="$1"
+  local -r expr="$1" what="${2:-$1}"
   local value
   if ! value="$(yq eval "${expr}" "${WORKFLOW}")"; then
-    printf 'cannot read %s from %s\n' "${expr}" "${WORKFLOW}" >&2
+    printf 'cannot read %s from %s\n' "${what}" "${WORKFLOW}" >&2
     return 1
   fi
   printf '%s' "${value}"
 }
+
+# The `on:` node every `on:` read starts from, with its aliases resolved.
+# It is the one root key that is `on` or an alias of `on`: a root holding
+# more than one makes `yq` fail ("on: is given more than once"). With no
+# such key it is `.on`, which is how an `on:` a root merge key brings in
+# is read, since the merged keys are not the root's own.
+# `explode`, handed that node alone, resolves one level of aliases per
+# pass: the aliases a node holds, not those inside what they stand for.
+# So the node goes through sixteen passes, and one that still holds an
+# alias after them is refused by `yq` with an error rather than read. A
+# file `yq` reads through this is never passed with an alias left in it.
+# Both refusals, and a merge key in `on:` that `explode` cannot resolve
+# (one bringing in a list), stop the run like any read `yq` cannot
+# evaluate (exit 2).
+# Its memory cost is a stated limit: docs/development/linting.md, section
+# "YAML aliases in workflow reads".
+# shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
+readonly ON_NODE='.on as $plain | [to_entries[] | select((.key | explode(.)) == "on") | .value] as $all | with(select($all | length > 1); error("on: is given more than once")) | ($all + [$plain] | .[0]) as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)) | with(select([... | select(kind == "alias")] | length > 0); error("on: holds an alias nested too deep to resolve"))'
+
+# The top-level `permissions:` node, read through an alias: `explode`
+# handed only that node resolves it in one pass, since an anchor cannot
+# sit on an alias. The node is collected into a list first, so an absent
+# key reads as null rather than as nothing at all.
+# shellcheck disable=SC2016 # yq program literal
+readonly PERMS_NODE='[(.permissions | select(kind == "alias") | explode(.)), (.permissions | select(kind != "alias"))] | .[0]'
 
 failed=0
 fail() {
@@ -88,16 +118,37 @@ if [[ ! -f ${WORKFLOW} ]]; then
   exit 2
 fi
 
-# 2. Top-level permissions is exactly the empty map.
-if ! perms_tag="$(read_workflow '.permissions | tag')"; then
+# A file `yq` reads as several YAML documents has no one workflow to
+# score (GitHub Actions refuses such a file), and every read below would
+# print one answer per document, so it is one finding, read no further.
+# A trailing `---` starts a second document.
+if ! doc_kinds="$(read_workflow 'kind')"; then
   exit 2
 fi
-if ! perms_len="$(read_workflow '.permissions | length')"; then
-  exit 2
+if [[ ${doc_kinds} == *$'\n'* ]]; then
+  fail "workflow holds several YAML documents, which GitHub Actions refuses; it is read no further"
+  printf '%d invariant(s) failed\n' "${failed}" >&2
+  exit 1
+fi
+# A root that is not a map holds none of the keys below, and the `on:`
+# reads would fail on it, so it too is one finding, read no further.
+if [[ ${doc_kinds} != 'map' ]]; then
+  fail "workflow root is not a map (kind=${doc_kinds}); it is read no further"
+  printf '%d invariant(s) failed\n' "${failed}" >&2
+  exit 1
 fi
 
-if [[ ${perms_tag} != "!!map" || ${perms_len} != "0" ]]; then
-  fail "top-level permissions must be {} (got tag=${perms_tag} length=${perms_len})"
+# 2. Top-level permissions is exactly the empty map. The node is read by
+# its kind, so a map carrying a tag of its own is still a map, and an
+# empty scalar carrying the map tag is not one.
+if ! perms_shape="$(read_workflow "${PERMS_NODE}"' | kind + " " + (length | tostring) + " " + tag' 'the top-level permissions')"; then
+  exit 2
+fi
+# The tag is free text (a verbatim tag decodes %20 to a space), so it is
+# the last field.
+IFS=' ' read -r perms_kind perms_len perms_tag <<<"${perms_shape}"
+if [[ ${perms_kind} != "map" || ${perms_len} != "0" ]]; then
+  fail "top-level permissions must be {} (got kind=${perms_kind} tag=${perms_tag} length=${perms_len})"
 fi
 
 # 3. Both jobs declare timeout-minutes.
@@ -134,16 +185,19 @@ if [[ ${checkout_count} != "${safe_count}" ]]; then
   fail "actions/checkout: ${checkout_count} steps total, only ${safe_count} set persist-credentials: false"
 fi
 
-# 6. on: includes schedule AND workflow_dispatch.
-if ! sched="$(read_workflow '.on.schedule | tag')"; then
+# 6. on: includes a non-empty schedule list AND workflow_dispatch. Both
+# are read from ON_NODE by kind: a list or a map carrying a tag of its
+# own is still read, and an `on:` that is not a map holds neither.
+if ! sched="$(read_workflow "[${ON_NODE}"' | select(kind == "map") | .schedule | kind + " " + (length | tostring) + " " + tag] + ["absent 0 -"] | .[0]' 'the on: schedule')"; then
   exit 2
 fi
-if ! disp="$(read_workflow '.on | has("workflow_dispatch")')"; then
+if ! disp="$(read_workflow "[${ON_NODE}"' | select(kind == "map") | has("workflow_dispatch")] + [false] | .[0]' 'the on: workflow_dispatch')"; then
   exit 2
 fi
 
-if [[ ${sched} != "!!seq" ]]; then
-  fail "on: must include a schedule sequence"
+IFS=' ' read -r sched_kind sched_len sched_tag <<<"${sched}"
+if [[ ${sched_kind} != "seq" || ${sched_len} == "0" ]]; then
+  fail "on: must include a schedule sequence (got kind=${sched_kind} tag=${sched_tag} length=${sched_len})"
 fi
 if [[ ${disp} != "true" ]]; then
   fail "on: must include workflow_dispatch"

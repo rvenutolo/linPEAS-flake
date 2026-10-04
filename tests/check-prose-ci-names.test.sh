@@ -272,6 +272,46 @@ function main() {
 
   rm --force -- "${LAST_STDERR}"
 
+  # A lint group is read by its kind, so a member of a list carrying a
+  # tag of its own is a member: the name resolves, and a job claim on it
+  # is a mislabel rather than a ghost. A group written as a scalar or a
+  # map lists no member, so a claim on its value is a ghost.
+  local tag_root bt
+  bt=$'\x60'
+  for shape in 'tagged-list:!x [tagged-member]' 'scalar-group:scalar-member' 'map-group:{k: map-member}'; do
+    tag_root="$(mktemp --directory)"
+    mkdir --parents "${tag_root}/docs" "${tag_root}/workflows"
+    git -C "${tag_root}" init --quiet
+    cp -- "${FIXTURES}/clean-passes/workflows/ci.yml" "${tag_root}/workflows/ci.yml"
+    cp -- "${FIXTURES}/clean-passes/roster.txt" "${tag_root}/roster.txt"
+    printf 'lint-doc-invariants: %s\n' "${shape#*:}" >"${tag_root}/lint-groups.yml"
+    local member
+    case "${shape%%:*}" in
+    tagged-list) member=tagged-member ;;
+    scalar-group) member=scalar-member ;;
+    *) member=map-member ;;
+    esac
+    printf 'The \x60%s\x60 job runs in a group.\n' "${member}" >"${tag_root}/docs/x.md"
+    case "${shape%%:*}" in
+    tagged-list)
+      run_scenario 'tagged-list-member-is-a-mislabel' 1 \
+        "docs/x.md:1: mislabel: tagged-member — The ${bt}tagged-member${bt} job runs in a group." '' \
+        "${tag_root}/workflows" "${tag_root}"
+      ;;
+    scalar-group)
+      run_scenario 'scalar-group-member-is-a-ghost' 1 \
+        "docs/x.md:1: ghost: scalar-member — The ${bt}scalar-member${bt} job runs in a group." '' \
+        "${tag_root}/workflows" "${tag_root}"
+      ;;
+    *)
+      run_scenario 'map-group-value-is-a-ghost' 1 \
+        "docs/x.md:1: ghost: map-member — The ${bt}map-member${bt} job runs in a group." '' \
+        "${tag_root}/workflows" "${tag_root}"
+      ;;
+    esac
+    rm --recursive --force -- "${tag_root}"
+  done
+
   # A scan root git cannot enumerate must be loud. Reading the listing
   # through a process substitution instead would lose git's exit status to
   # its subshell, and the run would report a clean tree it never read.
