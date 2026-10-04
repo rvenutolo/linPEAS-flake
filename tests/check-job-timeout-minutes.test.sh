@@ -41,8 +41,9 @@ readonly BT
 # text, and compare its exit code and the whole of its stderr. `%W` in
 # the expected stderr stands for the workflow's path, which is numbered
 # per scenario, so no two scenarios share an output. An expected stderr
-# opening with `YQ_ERROR` and a line break stands for one line of `yq`'s
-# own, whose wording is not the lint's: it must start with `Error: `.
+# opening with `YQ_ERROR <token>` and a line break stands for one line of
+# `yq`'s own, whose wording is not the lint's: it must start with
+# `Error: ` and hold the token (a path or a tag, not a phrase).
 # @arg $1 scenario name
 # @arg $2 workflow text (printf format, no arguments)
 # @arg $3 expected exit code
@@ -58,10 +59,12 @@ function expect_built() {
   got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${dir}" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
   local expected="${want//%W/${path}}"
   rm --recursive --force -- "${dir}"
-  if [[ ${expected} == YQ_ERROR$'\n'* ]]; then
-    expected="${expected#YQ_ERROR$'\n'}"
-    if [[ ${got_stderr} != 'Error: '*$'\n'* ]]; then
-      printf 'FAIL %s: stderr does not open with a line of yq'"'"'s own\n  got: %q\n' "${name}" "${got_stderr}" >&2
+  if [[ ${expected} == 'YQ_ERROR '* ]]; then
+    local token="${expected%%$'\n'*}"
+    token="${token#YQ_ERROR }"
+    expected="${expected#*$'\n'}"
+    if [[ ${got_stderr%%$'\n'*} != 'Error: '*"${token}"* ]]; then
+      printf 'FAIL %s: stderr does not open with a line of yq'"'"'s own holding %q\n  got: %q\n' "${name}" "${token}" "${got_stderr}" >&2
       return 1
     fi
     got_stderr="${got_stderr#*$'\n'}"
@@ -80,12 +83,14 @@ SCENARIO_N=0
 
 # @description A scenario whose job passes: a sentinel job with no
 # timeout follows it, so the run ends in that one finding alone, which
-# shows the job before it was read and passed.
+# shows the scan reached the rows. Each passing scenario has a failing
+# twin reached the same way, which shows the job itself is read.
 # @arg $1 scenario name
 # @arg $2 workflow text ending in its jobs: block (printf format)
 function expect_passes() {
-  expect_built "$1" "$2"'  sentinel:\n    runs-on: x\n' 1 \
-    "%W: job sentinel missing ${BT}timeout-minutes${BT} (default is 6h; declare an explicit value)
+  local -r sentinel="sentinel$((SCENARIO_N + 1))"
+  expect_built "$1" "$2""  ${sentinel}:\\n    runs-on: x\\n" 1 \
+    "%W: job ${sentinel} missing ${BT}timeout-minutes${BT} (default is 6h; declare an explicit value)
 ${ONE_BAD}"
 }
 
@@ -134,8 +139,8 @@ expect_built 'a custom-tagged integer is a finding' \
   "%W: job a timeout-minutes has unexpected shape (kind=scalar, tag=\"!x\", value=\"5\"); expected an integer in decimal digits
 ${ONE_BAD}"
 expect_built 'a key with no value is a missing one' \
-  "${JOB_HEAD}"'    timeout-minutes:\n' 1 \
-  "%W: job a missing ${BT}timeout-minutes${BT} (default is 6h; declare an explicit value)
+  'on: push\njobs:\n  nokey:\n    runs-on: x\n    timeout-minutes:\n' 1 \
+  "%W: job nokey missing ${BT}timeout-minutes${BT} (default is 6h; declare an explicit value)
 ${ONE_BAD}"
 expect_passes 'an integer-tagged value with a leading zero is read in decimal' \
   "${JOB_HEAD}"'    timeout-minutes: !!int "09"\n'
@@ -145,16 +150,28 @@ expect_built 'zeros only is not positive' \
 ${ONE_BAD}"
 expect_passes 'a value written as an alias is read through it' \
   'x-t: &t 7\n'"${JOB_HEAD}"'    timeout-minutes: *t\n'
+expect_built 'a value written as an alias of zero is read through it' \
+  'x-t: &t 0\non: push\njobs:\n  zalias:\n    runs-on: x\n    timeout-minutes: *t\n' 1 \
+  "%W: job zalias timeout-minutes must be positive (got 0)
+${ONE_BAD}"
 expect_passes 'a job written as an alias is read through it' \
   'x-t: &t 7\nx-j: &j {runs-on: x, timeout-minutes: *t}\non: push\njobs:\n  a: *j\n'
+expect_built 'a job written as an alias of a zero timeout is read through it' \
+  'x-t: &t 000\nx-j: &j {runs-on: x, timeout-minutes: *t}\non: push\njobs:\n  jalias: *j\n' 1 \
+  "%W: job jalias timeout-minutes must be positive (got 000)
+${ONE_BAD}"
 
 # A job is a reusable-workflow call only when its uses: is a string.
 expect_built 'a uses: list carrying the string tag is no reusable-workflow call' \
-  'on: push\njobs:\n  a:\n    uses: !!str [a]\n' 1 \
-  "%W: job a missing ${BT}timeout-minutes${BT} (default is 6h; declare an explicit value)
+  'on: push\njobs:\n  strlist:\n    uses: !!str [a]\n' 1 \
+  "%W: job strlist missing ${BT}timeout-minutes${BT} (default is 6h; declare an explicit value)
 ${ONE_BAD}"
 expect_passes 'a uses: written as an alias is read through it' \
   'x-u: &u o/r/.github/workflows/x.yml@v1\non: push\njobs:\n  a:\n    uses: *u\n'
+expect_built 'a uses: written as an alias of a list is no reusable-workflow call' \
+  'x-u: &u [o/r/.github/workflows/x.yml@v1]\non: push\njobs:\n  ualias:\n    uses: *u\n' 1 \
+  "%W: job ualias missing ${BT}timeout-minutes${BT} (default is 6h; declare an explicit value)
+${ONE_BAD}"
 
 # A tag is free text: a verbatim tag decodes %7C to a pipe, which must
 # not split the value's fields.
@@ -163,25 +180,27 @@ expect_built 'a tag rendering pipes is printed whole' \
   "%W: job a timeout-minutes has unexpected shape (kind=scalar, tag=\"tag:x|5|y\", value=\"5\"); expected an integer in decimal digits
 ${ONE_BAD}"
 expect_built 'a uses: tag rendering a line break is no reusable-workflow call' \
-  'on: push\njobs:\n  a:\n    uses: !<tag:yaml.org,2002:str%%0Ax> o/r/.github/workflows/x.yml@v1\n' 1 \
-  "%W: job a missing ${BT}timeout-minutes${BT} (default is 6h; declare an explicit value)
+  'on: push\njobs:\n  verbatim:\n    uses: !<tag:yaml.org,2002:str%%0Ax> o/r/.github/workflows/x.yml@v1\n' 1 \
+  "%W: job verbatim missing ${BT}timeout-minutes${BT} (default is 6h; declare an explicit value)
 ${ONE_BAD}"
 
 # A job id is the one raw field of a row, so one that is not a string,
-# is empty, or holds a tab or a line break could forge, split or garble
-# it. A pipe cannot. An id written as an alias is read through it.
-readonly ODD_ID='jobs: holds a job id that is not a string, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read'
+# is empty, or holds a tab, a line break or a NUL could forge, split or
+# garble it, and is refused, named by its kind and text. A pipe cannot.
+# An id written as an alias is read through it.
+readonly ODD_A='jobs: holds a job id that is not a string, is empty, or holds a tab, a line break or a NUL ('
+readonly ODD_B='), which GitHub Actions refuses; its jobs are not read'
 expect_built 'a job id written as an alias is read through it' \
-  'x-k: &k a\non: push\njobs:\n  *k :\n    runs-on: x\n' 1 \
-  "%W: job a missing ${BT}timeout-minutes${BT} (default is 6h; declare an explicit value)
+  'x-k: &k idalias\non: push\njobs:\n  *k :\n    runs-on: x\n' 1 \
+  "%W: job idalias missing ${BT}timeout-minutes${BT} (default is 6h; declare an explicit value)
 ${ONE_BAD}"
 expect_built 'a job id that is a list is refused' \
   'on: push\njobs:\n  ? [a]\n  : {runs-on: x}\n' 1 \
-  "%W: ${ODD_ID}
+  "%W: ${ODD_A}kind=seq, id=\"[a]\"${ODD_B}
 ${ONE_BAD}"
 expect_built 'a job id written as an alias of a list is refused' \
-  'x-k: &k [a]\non: push\njobs:\n  *k : {runs-on: x}\n' 1 \
-  "%W: ${ODD_ID}
+  'x-k: &k [b, c]\non: push\njobs:\n  *k : {runs-on: x}\n' 1 \
+  "%W: ${ODD_A}kind=seq, id=\"[b, c]\"${ODD_B}
 ${ONE_BAD}"
 expect_built 'a job id holding a pipe is read as written' \
   'on: push\njobs:\n  "a|!!str":\n    runs-on: x\n' 1 \
@@ -189,27 +208,31 @@ expect_built 'a job id holding a pipe is read as written' \
 ${ONE_BAD}"
 expect_built 'an empty job id is refused' \
   'on: push\njobs:\n  "":\n    runs-on: x\n' 1 \
-  "%W: ${ODD_ID}
+  "%W: ${ODD_A}kind=scalar, id=\"\"${ODD_B}
 ${ONE_BAD}"
 expect_built 'a job id holding a tab is refused' \
   'on: push\njobs:\n  "a\\tb":\n    runs-on: x\n    timeout-minutes: 5\n' 1 \
-  "%W: ${ODD_ID}
+  "%W: ${ODD_A}kind=scalar, id=\"a\\tb\"${ODD_B}
 ${ONE_BAD}"
 expect_built 'a job id holding a line break in a second document is refused' \
   'on: push\njobs:\n  a:\n    runs-on: x\n    timeout-minutes: 5\n---\non: push\njobs:\n  "b\\nc":\n    runs-on: x\n    timeout-minutes: 5\n' 1 \
-  "%W: ${ODD_ID}
+  "%W: ${ODD_A}kind=scalar, id=\"b\\nc\"${ODD_B}
+${ONE_BAD}"
+expect_built 'the first document holding an odd job id is the one named' \
+  'on: push\njobs:\n  "f\\tg":\n    runs-on: x\n---\non: push\njobs:\n  "h\\ti":\n    runs-on: x\n' 1 \
+  "%W: ${ODD_A}kind=scalar, id=\"f\\tg\"${ODD_B}
 ${ONE_BAD}"
 
 # A workflow that does not parse fails the first read, once.
 expect_built 'an unparsable workflow is one finding against the file' \
   'on: push\njobs: [a: b\n' 1 \
-  "YQ_ERROR
+  "YQ_ERROR %W
 %W: could not evaluate workflow with yq (malformed?)
 ${ONE_BAD}"
 
 expect_built 'a job id holding a NUL is refused' \
   'on: push\njobs:\n  "a\\0b":\n    runs-on: x\n    timeout-minutes: 5\n' 1 \
-  "%W: ${ODD_ID}
+  "%W: ${ODD_A}kind=scalar, id=\"a\\u0000b\"${ODD_B}
 ${ONE_BAD}"
 
 # jobs: written as an alias is read through it, and a second document's
@@ -219,8 +242,8 @@ expect_built 'a jobs: alias of a map lacking a timeout names its job' \
   "%W: job aliased missing ${BT}timeout-minutes${BT} (default is 6h; declare an explicit value)
 ${ONE_BAD}"
 expect_built 'a jobs: alias holding a job id with a tab is refused' \
-  'x-j: &j {"a\\tb": {runs-on: x}}\non: push\njobs: *j\n' 1 \
-  "%W: ${ODD_ID}
+  'x-j: &j {"d\\te": {runs-on: x}}\non: push\njobs: *j\n' 1 \
+  "%W: ${ODD_A}kind=scalar, id=\"d\\te\"${ODD_B}
 ${ONE_BAD}"
 expect_built 'a null jobs: in a later document has no ids to test' \
   'on: push\njobs:\n  first:\n    runs-on: x\n---\non: push\njobs:\n' 1 \
@@ -235,7 +258,7 @@ ${ONE_BAD}"
 # a map), which stays a finding against the file.
 expect_built 'a jobs: yq cannot list is a finding against the file' \
   'on: push\njobs: 5\n' 1 \
-  "YQ_ERROR
+  "YQ_ERROR !!int
 %W: could not evaluate workflow with yq (malformed?)
 ${ONE_BAD}"
 
