@@ -681,6 +681,13 @@ on: [push]' '[*n]'
   also_expect 'needsitem.yml/notify'
 
   fresh_root
+  gated_workflow needschain.yml 'x-m: &m build
+x-n: &n [*m]
+on: [push]' '*n'
+  run_scenario needs-alias-of-a-list-holding-an-alias-is-read-through 1 \
+    'marker for needschain.yml/notify declares "failure"; the workflow files on "failure cancelled"'
+
+  fresh_root
   gated_workflow needsx.yml 'on: push' '!x build'
   run_scenario needs-scalar-carrying-a-tag-of-its-own-exits-2 2 \
     '.github/workflows/needsx.yml: job notify: needs: does not name exactly one job as a string'

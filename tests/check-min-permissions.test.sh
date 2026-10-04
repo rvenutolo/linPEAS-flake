@@ -234,4 +234,12 @@ expect_body two-docs.yml $'permissions: {}\njobs:\n  a:\n    permissions: {}\n--
 expect_body trailing-separator.yml $'permissions: {}\njobs:\n  b:\n    runs-on: x\n---\n' 1 \
   "DIR/trailing-separator.yml: holds several YAML documents, which GitHub Actions refuses; it is read no further${ONE}"
 
+# A job's block is read through an alias too, in a job written as one.
+expect_body job-perms-alias.yml $'x-p: &p {contents: write}\npermissions: {}\njobs:\n  a:\n    permissions: *p\n  b:\n    runs-on: x\n' 1 \
+  "DIR/job-perms-alias.yml: job b missing ${Q}permissions:${Q} block (every job must declare its own)${ONE}"
+expect_body job-perms-alias-in-job-alias.yml $'x-p: &p {contents: read}\nx-j: &j {permissions: *p}\npermissions: {}\njobs:\n  a: *j\n  c:\n    runs-on: x\n' 1 \
+  "DIR/job-perms-alias-in-job-alias.yml: job c missing ${Q}permissions:${Q} block (every job must declare its own)${ONE}"
+expect_body job-perms-alias-scalar.yml $'x-p: &p write-all\npermissions: {}\njobs:\n  d:\n    permissions: *p\n' 1 \
+  "DIR/job-perms-alias-scalar.yml: job d permissions has unexpected shape (kind=scalar, tag=!!str)${ONE}"
+
 printf 'all tests passed\n'

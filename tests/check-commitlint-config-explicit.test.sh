@@ -133,10 +133,17 @@ expect_built 'a second document is read as jobs, with no separator row' \
   "${HEAD}"'  first:\n    steps:\n'"${GOOD}"'---\n'"${HEAD}"'  second:\n    steps:\n'"${BARE}" 1 \
   "%W: job second step[0] wagoid/commitlint-github-action ${NO_WITH}
 ${ONE}"
-readonly ODD='jobs: holds a job id that is not a string, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: '
+readonly ODD='jobs: holds a job id that is not a scalar, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: '
 expect_built 'a job id holding a tab is refused' \
   "${HEAD}"'  "a\\tb":\n    steps:\n'"${BARE}" 1 \
   "%W: ${ODD}kind=scalar, id=\"a\\tb\")
+${ONE}"
+expect_fails_first 'a configFile: list carrying the string tag is no path' '' cfgstrlist \
+  '      - uses: wagoid/commitlint-github-action@x\n        with: {configFile: !!str [.commitlintrc.yml]}\n' \
+  "wagoid/commitlint-github-action ${BT}configFile:${BT} has unexpected shape (kind=seq, tag=\"!!str\", value=\"\"); it must be a path"
+expect_built 'a steps: that is not a list holds no step' \
+  "${HEAD}"'  mapsteps:\n    steps: {0: {uses: wagoid/commitlint-github-action@x}}\n  after:\n    steps:\n'"${BARE}" 1 \
+  "%W: job after step[0] wagoid/commitlint-github-action ${NO_WITH}
 ${ONE}"
 expect_built 'an empty job id is refused' \
   "${HEAD}"'  "":\n    steps:\n'"${BARE}" 1 \

@@ -220,9 +220,9 @@ expect_built 'a second document is read as jobs, with no separator row' \
 ${ONE}"
 
 # A job id or a scope name is raw text in a tab-separated row, so one
-# that is not a string, is empty, or holds a tab, a line break or a NUL
+# that is not a scalar, is empty, or holds a tab, a line break or a NUL
 # is refused and the workflow's jobs are not read.
-readonly ODD='jobs: holds a job id or a scope name that is not a string, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: '
+readonly ODD='jobs: holds a job id or a scope name that is not a scalar, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: '
 expect_built 'a job id holding a tab cannot forge an allowed scope' \
   "${HEAD}"'  "a\\tcontents":\n    permissions: {pull-requests: write}\n' 1 \
   "%W: ${ODD}kind=scalar, name=\"a\\tcontents\")

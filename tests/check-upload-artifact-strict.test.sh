@@ -127,6 +127,10 @@ expect_built 'a step alias whose uses: is an alias is read through both' \
   'x-u: &u actions/upload-artifact@abc\nx-s: &s {uses: *u, with: {if-no-files-found: warn}}\non: push\njobs:\n  usesalias:\n    steps:\n      - *s\n' 1 \
   "%W: job usesalias step[0] actions/upload-artifact has ${BT}if-no-files-found: warn${BT}; must be ${BT}error${BT}
 ${ONE}"
+expect_built 'a steps: that is not a list holds no step' \
+  'on: push\njobs:\n  mapsteps:\n    steps: {0: {uses: actions/upload-artifact@abc}}\n  after:\n    steps:\n      - uses: actions/upload-artifact@abc\n' 1 \
+  "%W: job after step[0] actions/upload-artifact missing ${BT}with.if-no-files-found: error${BT}
+${ONE}"
 expect_built 'a step written as an alias is read through it' \
   'x-s: &s {uses: actions/upload-artifact@abc, with: {if-no-files-found: warn}}\non: push\njobs:\n  salias:\n    steps:\n      - *s\n      - uses: actions/upload-artifact@abc\n        with:\n          if-no-files-found: error\n' 1 \
   "%W: job salias step[0] actions/upload-artifact has ${BT}if-no-files-found: warn${BT}; must be ${BT}error${BT}
@@ -143,7 +147,7 @@ expect_built 'a second document is read as jobs, with no separator row' \
   'on: push\njobs:\n  first:\n    steps:\n      - uses: actions/upload-artifact@abc\n        with:\n          if-no-files-found: error\n---\non: push\njobs:\n  second:\n    steps:\n      - uses: actions/upload-artifact@abc\n        with:\n          if-no-files-found: warn\n' 1 \
   "%W: job second step[0] actions/upload-artifact has ${BT}if-no-files-found: warn${BT}; must be ${BT}error${BT}
 ${ONE}"
-readonly ODD='jobs: holds a job id that is not a string, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: '
+readonly ODD='jobs: holds a job id that is not a scalar, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: '
 expect_built 'a job id holding a tab is refused' \
   'on: push\njobs:\n  "a\\tb":\n    steps:\n      - uses: actions/upload-artifact@abc\n        with:\n          if-no-files-found: warn\n' 1 \
   "%W: ${ODD}kind=scalar, id=\"a\\tb\")

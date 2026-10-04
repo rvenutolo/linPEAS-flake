@@ -199,6 +199,23 @@ expect_shape 'a merge key in on: that brings in a list stops the run' \
   "YQ_ERROR
 cannot read the on: schedule from %W"
 
+# A root that is not a map is one finding, read no further.
+for root in 'hello' '- push'; do
+  root_dir="$(mktemp --directory)"
+  printf '%s\n' "${root}" >"${root_dir}/wf.yml"
+  root_exit=0
+  root_stderr="$(WORKFLOW_PATH_OVERRIDE="${root_dir}/wf.yml" "${SCRIPT}" 2>&1 >/dev/null)" || root_exit=$?
+  rm --recursive --force -- "${root_dir}"
+  root_kind=scalar
+  [[ ${root} == -* ]] && root_kind=seq
+  root_want="workflow root is not a map (kind=${root_kind}); it is read no further"$'\n'"${ONE_FAILED}"
+  if [[ ${root_exit} != 1 || ${root_stderr} != "${root_want}" ]]; then
+    printf 'FAIL a %s root is one finding: exit %s\n  got:  %q\n  want: %q\n' "${root_kind}" "${root_exit}" "${root_stderr}" "${root_want}" >&2
+    exit 1
+  fi
+  printf 'OK   a %s root is one finding\n' "${root_kind}"
+done
+
 # Several documents are one finding; a trailing --- starts a second one.
 expect_shape 'a trailing document separator is several documents' \
   '' '' '---\n' 1 \
