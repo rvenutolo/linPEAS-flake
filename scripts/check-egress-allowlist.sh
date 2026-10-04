@@ -388,14 +388,17 @@ for f in "${selected_files[@]}"; do
   # such a key is a finding naming it, read no further. The line field
   # is then held to ASCII digits before it is stored, since the range
   # arithmetic below would evaluate any other text (an array subscript
-  # in it runs a command). A row with an empty name (an empty, null or
-  # complex key) is skipped: an associative array cannot hold it. The
-  # next job's start is read into a variable before the subtraction, so
-  # no key text sits inside the arithmetic: bash 5.1 expands a command
-  # substitution held in an associative subscript there.
+  # in it runs a command). Every row's start ends the job before it,
+  # named or not: a key that prints as an empty name (empty or null)
+  # still opens a block, and skipping its row would stretch the previous
+  # job's range over a marker in that block. Such a job gets no range of
+  # its own, since an associative array cannot hold an empty key. The
+  # ranges are computed from indexed arrays, so no key text sits inside
+  # the arithmetic: bash 5.1 expands a command substitution held in an
+  # associative subscript there.
   declare -A JOB_START=()
   declare -A JOB_END=()
-  declare -a job_order=()
+  declare -a row_names=() row_starts=()
   if ! odd_keys="$(yq eval '.jobs | keys | .[] | select(tostring | test("[\t\n]")) | tostring | @json' "${f}")"; then
     fail "${f}: could not evaluate job keys with yq (malformed?)"
     continue
@@ -416,9 +419,8 @@ for f in "${selected_files[@]}"; do
       bad_row=1
       break
     fi
-    [[ -z ${jline_name} ]] && continue
-    JOB_START["${jline_name}"]="${jline_num}"
-    job_order+=("${jline_name}")
+    row_names+=("${jline_name}")
+    row_starts+=("${jline_num}")
   done <<<"${job_line_rows}"
   # A flag, not a test of the row's text, which can be empty.
   if ((bad_row)); then
@@ -427,11 +429,12 @@ for f in "${selected_files[@]}"; do
     continue
   fi
   file_lines="$(wc -l <"${f}")"
-  for jidx in "${!job_order[@]}"; do
-    jline_name="${job_order[${jidx}]}"
-    if ((jidx + 1 < ${#job_order[@]})); then
-      next_start="${JOB_START["${job_order[jidx + 1]}"]}"
-      JOB_END["${jline_name}"]=$((next_start - 1))
+  for jidx in "${!row_names[@]}"; do
+    jline_name="${row_names[jidx]}"
+    [[ -n ${jline_name} ]] || continue
+    JOB_START["${jline_name}"]="${row_starts[jidx]}"
+    if ((jidx + 1 < ${#row_starts[@]})); then
+      JOB_END["${jline_name}"]=$((row_starts[jidx + 1] - 1))
     else
       JOB_END["${jline_name}"]="${file_lines}"
     fi
