@@ -194,6 +194,6 @@ printf '#!/usr/bin/env bash\ncase "$*" in *"].key | explode"*) exit 7 ;; esac\ne
   "$(command -v yq)" >"${key_dir}/stub/yq"
 chmod +x -- "${key_dir}/stub/yq"
 expect_workflow job-key-unread $'jobs:\n  a:\n'"${WEAK_STEP}" 2 \
-  '@F@: cannot read the key of job 0' "${key_dir}/stub:${PATH}"
+  '@F@: cannot read the key of the job at position 0' "${key_dir}/stub:${PATH}"
 
 printf 'all tests passed\n'

@@ -47,8 +47,9 @@
 # fixture run never reaches the real .github/ tree.
 # Exits 0 on full coverage, 1 on any drift. Exits 2 when the check
 # cannot run: `yq` is absent from PATH, the workflow and
-# composite-action globs match no file, or WORKFLOW_FILE_FILTER selects
-# none of the files they matched. An empty scan set is a could-not-run
+# composite-action globs match no file, WORKFLOW_FILE_FILTER selects
+# none of the files they matched, or a read of one step's run: block or
+# its job's key fails once the file's steps have been listed. An empty scan set is a could-not-run
 # rather than a clean tree; LINT_ALLOW_EMPTY_SCAN=1 accepts one
 # deliberately.
 
@@ -86,7 +87,7 @@ readonly MULTILINE_SELECT='select(.value.run != null and ((.value.run | contains
 # Emits one `<shape>|<document>|<job position>|<step index>` row per
 # multi-line run: block. Both document shapes are read from every file:
 # `jobs.<id>.steps` (workflow) and `runs.steps` (composite action). The
-# job field is empty for a composite, which has no job layer. A row holds
+# job position is empty for a composite, which has no job layer. A row holds
 # only words and numbers `yq` prints, never a job key: a key is free
 # text, and one holding the `|` separator would move its own text into
 # the index. The reads below find the job by its document and position.
@@ -149,7 +150,7 @@ for f in "${selected_files[@]}"; do
       where="$(printf 'composite step[%s]' "${idx}")"
     else
       if ! job="$(DOC="${doc}" JPOS="${jpos}" yq eval 'select(document_index == env(DOC)) | .jobs | to_entries | .[env(JPOS)].key | explode(.)' "${f}")"; then
-        printf '%s: cannot read the key of job %s\n' "${f}" "${jpos}" >&2
+        printf '%s: cannot read the key of the job at position %s\n' "${f}" "${jpos}" >&2
         exit 2
       fi
       if ! body="$(DOC="${doc}" JPOS="${jpos}" IDX="${idx}" yq eval 'select(document_index == env(DOC)) | .jobs | to_entries | .[env(JPOS)].value.steps[env(IDX)].run' "${f}")"; then

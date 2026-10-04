@@ -628,23 +628,25 @@ also misses text that reaches a field through its delimiter.
 ## Text from files in yq expressions
 
 A `yq` expression is a program, and text spliced into it is parsed as
-part of that program. A job key, a scope name or a group name read from
-a file can close the quoted segment it was spliced into and go on as
-code: it can read another node, read nothing, or call the operators that
-read environment variables (`env`, `strenv`, `envsubst`) or files
-(`load`, `load_str`, `load_props`) and print what they read through
-`error()`. Text that breaks the expression, such as a quote or a space
-in a quoted path segment, stops the read instead.
+part of that program. A job key or a scope name read from a file, or a
+group name given as an argument, can close the quoted segment it was
+spliced into and go on as code: it can read another node, read nothing,
+or call the operators that read environment variables (`env`, `strenv`,
+`envsubst`) or files (`load`, `load_str`, `load_props`) and print what
+they read through `error()`. Text that breaks the expression, such as a
+quote or a space in a quoted path segment, stops the read instead.
 
 A script hands such text to `yq` as data and never splices it into the
 expression: it sets an environment variable on the `yq` call and reads
-it with `strenv`, as `JOB="${job}" yq '.jobs[strenv(JOB)]'`, which looks
-the key up by its text, so no character in it is read as code. A number
-`yq` printed in an
-earlier read goes back the same way, through `env`. A delimited row
-carries no free text a later read is keyed on:
-`check-run-block-strict.sh` rows hold only the document, job position
-and step index, and its reads find the job by them.
+it with `strenv`. A lookup by that text is still not exact, because
+`yq` reads `*` and `?` as wildcards both in an index (`.[strenv(X)]`)
+and in an `==` comparison, so `a*` also finds `abc`. A script therefore
+finds a key by comparing base64 text, which holds neither character:
+`to_entries[] | select((.key | tostring | @base64) == (strenv(X) | @base64)) | .value`.
+A number `yq` printed in an earlier read goes back through `env`.
+`check-run-block-strict.sh` reads no key back at all: its rows hold the
+document, job position and step index `yq` printed, and its reads find
+the job by them.
 
 No script passes `yq`'s `--security-disable-env-ops`, which also turns
 off `strenv`, or `--security-disable-file-ops`; with nothing spliced
