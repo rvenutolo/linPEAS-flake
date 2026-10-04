@@ -166,6 +166,47 @@ function main() {
     'could not read every shell script under'
   chmod 644 -- "${work}/unreadable/scripts/refresh-alpha.sh"
 
+  # (o) KEY AS DATA: a job key is data, never expression text. Each key
+  # below closes a quoted segment if spliced into a `yq` expression: it
+  # would read the clean decoy job's list or none at all, or print an
+  # environment variable or a file through `error()`. Read as data, every
+  # one reports the undeclared entry its own job's list carries, which
+  # each scenario names after itself.
+  printf 'FILE_READ_MARK\n' >"${work}/probe.txt"
+  local -a key_cases=(
+    'reads-decoy' 'x" // .jobs."decoy'
+    'reads-nothing' 'x" | select(false) | ."y'
+    'reads-env' 'x" | error(strenv(PROBE)) | ."y'
+    'reads-file' 'x" | error(load_str(strenv(PROBE_FILE))) | ."y'
+    'quote' 'k"x'
+    'backslash' 'k\x'
+  )
+  local i case_name key
+  for ((i = 0; i < ${#key_cases[@]}; i += 2)); do
+    case_name="${key_cases[i]}" key="${key_cases[i + 1]}"
+    cat >"${work}/key-${case_name}.yml" <<EOF
+name: key-${case_name}
+on:
+  workflow_dispatch: {}
+jobs:
+  '${key//\'/\'\'}':
+    runs-on: ubuntu-latest
+    steps:
+      - uses: pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7
+        env:
+          IGNORED: "docs/alpha.md\ndocs/key-${case_name}.md"
+  decoy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7
+        env:
+          IGNORED: "docs/alpha.md"
+EOF
+    PROBE=PAYLOAD_RAN PROBE_FILE="${work}/probe.txt" expect "key as data: ${case_name}" \
+      "${DECLARING_SCRIPTS}" "${work}/key-${case_name}.yml" 1 \
+      "${work}/key-${case_name}.yml: IGNORED lists docs/key-${case_name}.md, which no script declares with @generates and which is not one of this lint's exemptions; every hand edit to it counts as zero toward the PR size label"$'\n1 size-label ignore-list violation(s)'
+  done
+
   # (m) LIVE: the real tree must satisfy the lint.
   expect 'live: real tree agrees' \
     "${REPO_ROOT}/scripts" "${REPO_ROOT}/.github/workflows/labeler.yml" 0 ''

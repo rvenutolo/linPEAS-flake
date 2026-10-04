@@ -256,6 +256,45 @@ EOF
   fi
   rm --force -- "${jq_err}" "${jq_out}" "${jq_outcome}"
 
+  # Scenario: a job key is data, never expression text. Each key below
+  # closes a quoted segment if spliced into the category read: it would
+  # take job-a's category, or print an environment variable or a file
+  # through `error()`. Read as data, each key takes its own category.
+  local key_work
+  key_work="$(mktemp --directory)"
+  printf 'FILE_READ_MARK\n' >"${key_work}/probe.txt"
+  local -a key_cases=(
+    'reads-other' 'zz" // ."job-a'
+    'reads-env' 'zz" | error(strenv(PROBE)) | ."y'
+    'reads-file' 'zz" | error(load_str(strenv(PROBE_FILE))) | ."y'
+  )
+  local i case_name key key_rc
+  for ((i = 0; i < ${#key_cases[@]}; i += 2)); do
+    case_name="${key_cases[i]}" key="${key_cases[i + 1]}"
+    printf "name: ci\non: push\njobs:\n  job-a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: \"true\"\n  '%s':\n    runs-on: ubuntu-latest\n    steps:\n      - run: \"true\"\n" \
+      "${key//\'/\'\'}" >"${key_work}/${case_name}.yml"
+    printf "job-a: Build + smoke\n'%s': Doc quality\n" "${key//\'/\'\'}" >"${key_work}/${case_name}.cats.yml"
+    printf '<!-- BEGIN ci-dag -->\n<!-- END ci-dag -->\n' >"${key_work}/${case_name}.md"
+    key_rc=0
+    PROBE=PAYLOAD_RAN PROBE_FILE="${key_work}/probe.txt" \
+      CI_WORKFLOW_OVERRIDE="${key_work}/${case_name}.yml" \
+      CATEGORIES_FILE_OVERRIDE="${key_work}/${case_name}.cats.yml" \
+      DOC_OVERRIDE="${key_work}/${case_name}.md" \
+      "${SCRIPT}" >"${key_work}/${case_name}.out" 2>"${key_work}/${case_name}.err" || key_rc=$?
+    printf 'harness-assert-outcome: exit=%d\n' "${key_rc}" >"${key_work}/${case_name}.outcome"
+    harness_assert_record "job key as data: ${case_name}" '' \
+      "${key_work}/${case_name}.outcome" "${key_work}/${case_name}.md" "${key_work}/${case_name}.err"
+    if [[ ${key_rc} -eq 0 ]] &&
+      grep --line-regexp --fixed-strings --quiet -- "  ${key}:::doc" "${key_work}/${case_name}.md" &&
+      grep --line-regexp --fixed-strings --quiet -- '  job-a:::build' "${key_work}/${case_name}.md"; then
+      pass "job key as data: ${case_name} renders its own category"
+    else
+      fail "job key as data: ${case_name}: exit ${key_rc}, want 0 and the line '  ${key}:::doc'"
+      cat -- "${key_work}/${case_name}.err" "${key_work}/${case_name}.md" >&2
+    fi
+  done
+  rm --recursive --force -- "${key_work}"
+
   harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then

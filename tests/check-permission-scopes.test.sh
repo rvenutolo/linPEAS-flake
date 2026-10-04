@@ -248,6 +248,70 @@ expect_built 'a job id holding a NUL is refused' \
   "%W: ${ODD}kind=scalar, name=\"a\\u0000b\")
 ${ONE}"
 
+# Names are data, never expression text. Each name below closes a quoted
+# segment if spliced into a `yq` expression: a job key would read the
+# decoy job's allowlist entry, a scope or job name in the allowlist would
+# read `write` or nothing, and either could print an environment variable
+# or a file through `error()`. Read as data, each run reports exactly the
+# finding its own names earn. Every run is unfiltered, so both passes run.
+key_dir="$(mktemp --directory)"
+trap 'rm --recursive --force -- "${key_dir}"' EXIT
+printf 'FILE_READ_MARK\n' >"${key_dir}/probe.txt"
+# @arg $1 scenario name  @arg $2 workflow file name  @arg $3 workflow body
+# @arg $4 allowlist body  @arg $5 expected exit  @arg $6 expected stderr,
+# whole, with @WF@ standing for the workflow path and @AL@ for the allowlist
+function expect_names() {
+  local -r name="$1" wf_name="$2" wf_body="$3" al_body="$4" want_exit="$5"
+  local got_exit=0 got_stderr want
+  mkdir -- "${key_dir}/${name}"
+  printf '%s' "${wf_body}" >"${key_dir}/${name}/${wf_name}"
+  printf '%s' "${al_body}" >"${key_dir}/${name}.allow.yml"
+  want="${6//@WF@/${key_dir}/${name}/${wf_name}}"
+  want="${want//@AL@/${key_dir}/${name}.allow.yml}"
+  got_stderr="$(PROBE=PAYLOAD_RAN PROBE_FILE="${key_dir}/probe.txt" WORKFLOWS_DIR_OVERRIDE="${key_dir}/${name}" \
+    SCOPE_ALLOWLIST_OVERRIDE="${key_dir}/${name}.allow.yml" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  if [[ ${got_exit} != "${want_exit}" || ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s: exit %s, want %s and %q\n  stderr: %s\n' \
+      "${name}" "${got_exit}" "${want_exit}" "${want}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+# The job key names an over-grant; the allowlist lists the decoy job's
+# wider grant under the decoy, and the key's own entry under the key.
+# @arg $1 scenario name  @arg $2 the job key
+function expect_job_key() {
+  local -r name="$1" key="$2"
+  local -r k="'${key//\'/\'\'}'"
+  local quoted
+  printf -v quoted '%q' "${key}"
+  expect_names "${name}" w.yml \
+    $'permissions: {}\njobs:\n  '"${k}"$':\n    permissions:\n      contents: write\n      issues: write\n    steps:\n      - run: echo PAYLOAD_RAN\n  decoy:\n    permissions:\n      contents: write\n      issues: write\n    steps:\n      - run: echo PAYLOAD_RAN\n' \
+    $'w.yml:\n  '"${k}"$': [issues]\n  decoy: [contents, issues]\n' 1 \
+    "@WF@: job ${quoted} grants write scope contents not allowed by @AL@"$'\n1 permission-scope violation(s) found'
+}
+expect_job_key job-key-reads-decoy-entry 'x" // ."w.yml"."decoy'
+expect_job_key job-key-reads-env 'x" | error(strenv(PROBE)) | ."y'
+expect_job_key job-key-reads-file 'x" | error(load_str(strenv(PROBE_FILE))) | ."y'
+expect_job_key job-key-quote 'k"x'
+expect_job_key job-key-backslash 'k\x'
+# An allowlist scope or job name that the workflow does not grant is
+# stale, whatever text it holds.
+readonly WRITER=$'permissions: {}\njobs:\n  writer:\n    permissions:\n      issues: write\n    steps:\n      - run: echo PAYLOAD_RAN\n'
+expect_names scope-name-reads-write w.yml "${WRITER}" \
+  $'w.yml:\n  writer: [issues, \'packages" // "write\']\n' 1 \
+  '@AL@: stale entry w.yml/writer/packages\"\ //\ \"write (job does not grant that write scope)'$'\n1 permission-scope violation(s) found'
+expect_names scope-name-reads-env w.yml "${WRITER}" \
+  $'w.yml:\n  writer: [issues, \'x" | error(strenv(PROBE)) | ."y\']\n' 1 \
+  '@AL@: stale entry w.yml/writer/x\"\ \|\ error\(strenv\(PROBE\)\)\ \|\ .\"y (job does not grant that write scope)'$'\n1 permission-scope violation(s) found'
+expect_names allowlist-job-reads-writer w.yml "${WRITER}" \
+  $'w.yml:\n  writer: [issues]\n  \'x" // .jobs."writer\': [issues]\n' 1 \
+  '@AL@: stale entry w.yml/x\"\ //\ .jobs.\"writer/issues (job does not grant that write scope)'$'\n1 permission-scope violation(s) found'
+# A workflow file name is data too.
+expect_names file-name-quote 'q"x.yml' "${WRITER}" \
+  $'\'q"x.yml\':\n  writer: [issues]\n' 0 ''
+
 # Real-tree guard: the committed allowlist must match the live workflows.
 real_exit=0
 "${SCRIPT}" >/dev/null 2>&1 || real_exit=$?

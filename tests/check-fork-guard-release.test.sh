@@ -90,4 +90,29 @@ expect_body count-unread.yml "${WRITE_BARE}" 1 \
 expect_body if-unread.yml "${WRITE_GUARDED}" 2 \
   'cannot read .jobs."b".if // "" from DIR/if-unread.yml' '"b".if'
 
+# A job key is data, never expression text. Each key below closes a
+# quoted segment if spliced into a `yq` expression: it would read no
+# permission (or the read-only decoy's) and pass the job, or print an
+# environment variable or a file through `error()`. Read as data, every
+# one names its own unguarded write job.
+probe_dir="$(mktemp --directory)"
+trap 'rm --recursive --force -- "${probe_dir}"' EXIT
+printf 'FILE_READ_MARK\n' >"${probe_dir}/probe.txt"
+export PROBE=PAYLOAD_RAN PROBE_FILE="${probe_dir}/probe.txt"
+readonly BT=$'\x60'
+# @arg $1 scenario name, which is also the file name  @arg $2 the job key
+function expect_spliced_key() {
+  local -r name="$1" key="$2"
+  local quoted
+  printf -v quoted '%q' "${key}"
+  expect_body "${name}" $'jobs:\n  \''"${key//\'/\'\'}"$'\':\n    permissions:\n      contents: write\n    steps:\n      - run: echo PAYLOAD_RAN\n  decoy:\n    permissions:\n      contents: read\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
+    "DIR/${name}: job ${quoted} holds guard-required write scope but is missing fork guard ${BT}github.repository == 'rvenutolo/linPEAS-flake'${BT}; got if=''${ONE_JOB}"
+}
+expect_spliced_key job-key-reads-decoy.yml 'x" // .jobs."decoy'
+expect_spliced_key job-key-reads-nothing.yml 'x" | select(false) | ."y'
+expect_spliced_key job-key-reads-env.yml 'x" | error(strenv(PROBE)) | ."y'
+expect_spliced_key job-key-reads-file.yml 'x" | error(load_str(strenv(PROBE_FILE))) | ."y'
+expect_spliced_key job-key-quote.yml 'k"x'
+expect_spliced_key job-key-backslash.yml 'k\x'
+
 printf 'all tests passed\n'

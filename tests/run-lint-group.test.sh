@@ -53,6 +53,8 @@ demo-first-fail:
 demo-missing:
   - aaa
   - nope
+'q"x':
+  - aaa
 YAML
 
   outcome_file="$(mktemp)"
@@ -178,6 +180,23 @@ function main() {
   run_scenario 'failing check does not abort the rest' 'demo-first-fail' 1 '| zzz | pass |'
   run_scenario 'missing script -> exit 1' 'demo-missing' 1 '| nope | FAIL |'
   run_scenario 'unknown group -> exit 2' 'no-such-group' 2 ''
+  # A group name is data, never expression text. Each name below closes
+  # a quoted segment if spliced into the manifest read: it would run
+  # another group, or print an environment variable or a file through
+  # `error()`. Read as data, each is a group the manifest does not hold,
+  # and a manifest key holding a quote is a group like any other.
+  local probe_dir
+  probe_dir="$(mktemp -d)"
+  printf 'FILE_READ_MARK\n' >"${probe_dir}/probe.txt"
+  run_scenario 'group name as data: reads another group' 'nope" // ."demo-one-fail' 2 \
+    'unknown or empty group: nope" // ."demo-one-fail'
+  PROBE=PAYLOAD_RAN run_scenario 'group name as data: reads env' 'x" | error(strenv(PROBE)) | ."y' 2 \
+    'unknown or empty group: x" | error(strenv(PROBE)) | ."y'
+  PROBE_FILE="${probe_dir}/probe.txt" run_scenario 'group name as data: reads a file' \
+    'x" | error(load_str(strenv(PROBE_FILE))) | ."y' 2 \
+    'unknown or empty group: x" | error(load_str(strenv(PROBE_FILE))) | ."y'
+  rm --recursive --force -- "${probe_dir}"
+  run_scenario 'group name as data: a quote in a manifest key' 'q"x' 0 '| aaa | pass |'
   run_test_gate_scenario
   run_unparsable_manifest_scenario
 

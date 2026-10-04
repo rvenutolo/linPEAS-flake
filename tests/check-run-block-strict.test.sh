@@ -93,4 +93,56 @@ if [[ ${empty_exit} != 2 ||
 fi
 printf 'OK   empty scan set rejected\n'
 
+# A job key is data, never expression text or a row field. Each key
+# below closes a quoted segment if spliced into a `yq` expression (it
+# would read the strict decoy's block, or print an environment variable
+# or a file through `error()`), or holds the row separator `|`, which
+# would move text into the step index. Read as data, every one names its
+# own weak block.
+key_dir="$(mktemp --directory)"
+trap 'rm --recursive --force -- "${key_dir}"' EXIT
+printf 'FILE_READ_MARK\n' >"${key_dir}/probe.txt"
+# @arg $1 scenario name  @arg $2 the job key, written single-quoted
+function expect_spliced_key() {
+  local -r name="$1" key="$2"
+  local got_exit=0 got_stderr want
+  mkdir -- "${key_dir}/${name}"
+  cat >"${key_dir}/${name}/w.yml" <<EOF
+name: ${name}
+on: push
+jobs:
+  '${key//\'/\'\'}':
+    runs-on: ubuntu-latest
+    steps:
+      - name: weak
+        run: |
+          set -euo pipefail
+          echo PAYLOAD_RAN
+  decoy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: strict
+        run: |
+          set -Eeuo pipefail
+          echo PAYLOAD_RAN
+EOF
+  got_stderr="$(PROBE=PAYLOAD_RAN PROBE_FILE="${key_dir}/probe.txt" WORKFLOWS_DIR_OVERRIDE="${key_dir}/${name}" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  printf -v want '%s: job %q step[0] run: block must start with %q (got %q)\n1 run: block(s) missing strict-mode prelude' \
+    "${key_dir}/${name}/w.yml" "${key}" 'set -Eeuo pipefail' 'set -euo pipefail'
+  if [[ ${got_exit} != 1 || ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s: exit %s, want 1\n  stderr: %s\n' "${name}" "${got_exit}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+expect_spliced_key job-key-reads-decoy 'x" // .jobs."decoy'
+expect_spliced_key job-key-env-no-pipe 'x" // error(strenv(PROBE)) // .jobs."y'
+expect_spliced_key job-key-reads-env 'x" | error(strenv(PROBE)) | ."y'
+expect_spliced_key job-key-reads-file 'x" | error(load_str(strenv(PROBE_FILE))) | ."y'
+expect_spliced_key job-key-quote 'k"x'
+expect_spliced_key job-key-backslash 'k\x'
+expect_spliced_key job-key-row-separator 'a|1'
+expect_spliced_key job-key-row-separator-index 'decoy|0'
+
 printf 'all tests passed\n'
