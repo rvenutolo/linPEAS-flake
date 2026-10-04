@@ -445,12 +445,14 @@ for f in "${selected_files[@]}"; do
 
     # Every endpoint finding below is derived from this list. A yq that
     # dies on the step walk has read no allowlist at all, and its exit 1
-    # would surface as an allowlist found wanting.
-    if ! endpoints="$(yq eval "
-      .jobs.\"${job}\".steps[]
-      | select(.uses // \"\" | test(\"step-security/harden-runner@\"))
-      | .with.\"allowed-endpoints\" // \"\"
-    " "${f}" | tr ' ' '\n' | sed '/^$/d')"; then
+    # would surface as an allowlist found wanting. The job key reaches
+    # `yq` as data, through `strenv`: spliced into the expression, a key
+    # holding a quote would be read as `yq` code.
+    if ! endpoints="$(JOB="${job}" yq eval '
+      .jobs[strenv(JOB)].steps[]
+      | select(.uses // "" | test("step-security/harden-runner@"))
+      | .with."allowed-endpoints" // ""
+    ' "${f}" | tr ' ' '\n' | sed '/^$/d')"; then
       printf '%s: cannot read allowed-endpoints for job %q\n' "${f}" "${job}" >&2
       exit 2
     fi
@@ -458,11 +460,11 @@ for f in "${selected_files[@]}"; do
     # A job with no harden-runner step has no allowlist to lint.
     [[ -z ${endpoints} ]] && continue
 
-    if ! uses="$(yq eval ".jobs.\"${job}\".steps[].uses // \"\"" "${f}")"; then
+    if ! uses="$(JOB="${job}" yq eval '.jobs[strenv(JOB)].steps[].uses // ""' "${f}")"; then
       printf '%s: cannot read the step uses: list for job %q\n' "${f}" "${job}" >&2
       exit 2
     fi
-    if ! runs="$(yq eval ".jobs.\"${job}\".steps[].run // \"\"" "${f}")"; then
+    if ! runs="$(JOB="${job}" yq eval '.jobs[strenv(JOB)].steps[].run // ""' "${f}")"; then
       printf '%s: cannot read the step run: list for job %q\n' "${f}" "${job}" >&2
       exit 2
     fi
