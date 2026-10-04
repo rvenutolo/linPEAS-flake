@@ -83,12 +83,15 @@ fi
 # empty for a plain one-line command.
 readonly MULTILINE_SELECT='select(.value.run != null and ((.value.run | contains("\n")) or (.value.run | style) == "folded" or (.value.run | style) == "literal"))'
 
-# Emits one `<shape>|<job>|<index>` row per multi-line run: block. Both
-# document shapes are read from every file: `jobs.<id>.steps` (workflow)
-# and `runs.steps` (composite action). The job field is empty for a
-# composite, which has no job layer.
+# Emits one `<shape>|<document>|<job position>|<step index>` row per
+# multi-line run: block. Both document shapes are read from every file:
+# `jobs.<id>.steps` (workflow) and `runs.steps` (composite action). The
+# job field is empty for a composite, which has no job layer. A row holds
+# only words and numbers `yq` prints, never a job key: a key is free
+# text, and one holding the `|` separator would move its own text into
+# the index. The reads below find the job by its document and position.
 # shellcheck disable=SC2016 # yq expression: literal $ refs, not shell expansion
-readonly ROWS_QUERY="((.jobs // {}) | to_entries[] as \$j | (\$j.value.steps // []) | to_entries[] | ${MULTILINE_SELECT} | \"job|\" + \$j.key + \"|\" + (.key | tostring)), ((.runs.steps // []) | to_entries[] | ${MULTILINE_SELECT} | \"composite||\" + (.key | tostring))"
+readonly ROWS_QUERY="document_index as \$d | (((.jobs // {}) | to_entries | to_entries[] as \$j | (\$j.value.value.steps // []) | to_entries[] | ${MULTILINE_SELECT} | \"job|\" + (\$d | tostring) + \"|\" + (\$j.key | tostring) + \"|\" + (.key | tostring)), ((.runs.steps // []) | to_entries[] | ${MULTILINE_SELECT} | \"composite|\" + (\$d | tostring) + \"||\" + (.key | tostring)))"
 
 # Return first non-blank, non-comment line of a run: block.
 # Args: run-body-on-stdin
@@ -131,20 +134,25 @@ for f in "${selected_files[@]}"; do
     failed=$((failed + 1))
     continue
   fi
-  while IFS='|' read -r shape job idx; do
+  while IFS='|' read -r shape doc jpos idx; do
     [[ -z ${shape} ]] && continue
     # The rows query above proves the step exists, not that this read of
     # its body succeeds. A yq that dies here has read no run: block, and
     # its exit 1 would surface as a strict-mode violation in a block
-    # nothing was read from.
+    # nothing was read from. The row's numbers reach `yq` as data, through
+    # `env`.
     if [[ ${shape} == composite ]]; then
-      if ! body="$(yq eval ".runs.steps[${idx}].run" "${f}")"; then
+      if ! body="$(DOC="${doc}" IDX="${idx}" yq eval 'select(document_index == env(DOC)) | .runs.steps[env(IDX)].run' "${f}")"; then
         printf '%s: cannot read composite step[%s] run: block\n' "${f}" "${idx}" >&2
         exit 2
       fi
       where="$(printf 'composite step[%s]' "${idx}")"
     else
-      if ! body="$(yq eval ".jobs.\"${job}\".steps[${idx}].run" "${f}")"; then
+      if ! job="$(DOC="${doc}" JPOS="${jpos}" yq eval 'select(document_index == env(DOC)) | .jobs | to_entries | .[env(JPOS)].key | explode(.)' "${f}")"; then
+        printf '%s: cannot read the key of job %s\n' "${f}" "${jpos}" >&2
+        exit 2
+      fi
+      if ! body="$(DOC="${doc}" JPOS="${jpos}" IDX="${idx}" yq eval 'select(document_index == env(DOC)) | .jobs | to_entries | .[env(JPOS)].value.steps[env(IDX)].run' "${f}")"; then
         printf '%s: cannot read job %q step[%s] run: block\n' "${f}" "${job}" "${idx}" >&2
         exit 2
       fi
