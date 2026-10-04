@@ -194,11 +194,11 @@
 #      builtin, to one line before the next job's key line, or to the
 #      end of the file for the last job) rather than by any yq query.
 #      The key and its line are read as one tab-separated row, so a job
-#      key holding a tab or a line break is a finding naming the row,
-#      and that file is read no further: such a key would put its own
-#      text where the line number goes, and the range is computed in
-#      bash arithmetic, which runs a command placed in an array
-#      subscript.
+#      key holding a tab or a line break, whatever its tag, is a finding
+#      naming the key, and that file is read no further: such a key
+#      would choose its own rows and line numbers, and the range is
+#      computed in bash arithmetic, which runs a command placed in an
+#      array subscript.
 #
 #      Breadth is asserted the same way as assertion 6: the run reports
 #      how many jobs carry either host, and finding none on an
@@ -381,40 +381,49 @@ for f in "${selected_files[@]}"; do
   # runs from there to one line before the next job key's line, or to the
   # end of the file for the last job in document order.
   #
-  # The key is free text ahead of the line number in each row, so a key
-  # holding a tab or a line break would put its own text where the
-  # number goes, and the range arithmetic below would evaluate it (an
-  # array subscript in it runs a command). The line field is held to
-  # ASCII digits with no leading zero before it is stored, and the file
-  # is read no further when a row fails. The next job's start is read
-  # into a variable first, so no key text sits inside the arithmetic:
-  # bash 5.1 expands a command substitution held in an associative
-  # subscript there.
+  # The key is free text ahead of the line number in each row. A key
+  # holding a tab or a line break splits into rows of its own choosing
+  # (`b<TAB>999<LF>c` reads as a job `b` on line 999), so every key is
+  # tested, whatever its tag, before the rows are read, and a file with
+  # such a key is a finding naming it, read no further. The line field
+  # is then held to ASCII digits before it is stored, since the range
+  # arithmetic below would evaluate any other text (an array subscript
+  # in it runs a command). A row with an empty name (an empty, null or
+  # complex key) is skipped: an associative array cannot hold it. The
+  # next job's start is read into a variable before the subtraction, so
+  # no key text sits inside the arithmetic: bash 5.1 expands a command
+  # substitution held in an associative subscript there.
   declare -A JOB_START=()
   declare -A JOB_END=()
   declare -a job_order=()
+  if ! odd_keys="$(yq eval '.jobs | keys | .[] | select(tostring | test("[\t\n]")) | tostring | @json' "${f}")"; then
+    fail "${f}: could not evaluate job keys with yq (malformed?)"
+    continue
+  fi
+  if [[ -n ${odd_keys} ]]; then
+    fail "${f}: job key ${odd_keys%%$'\n'*} holds a tab or a line break, which the job line read cannot carry"
+    continue
+  fi
   if ! job_line_rows="$(yq eval '.jobs | keys | .[] | [., line] | join("\t")' "${f}")"; then
     fail "${f}: could not evaluate job line numbers with yq (malformed?)"
     continue
   fi
-  forged=0
-  forged_row=''
+  bad_row=0
   while IFS= read -r jline_row; do
     jline_name="${jline_row%%$'\t'*}"
     jline_num="${jline_row#*$'\t'}"
     if [[ ${jline_row} != *$'\t'* || ! ${jline_num} =~ ^[123456789][0123456789]{0,8}$ ]]; then
-      forged=1
-      forged_row="${jline_row}"
+      bad_row=1
       break
     fi
+    [[ -z ${jline_name} ]] && continue
     JOB_START["${jline_name}"]="${jline_num}"
     job_order+=("${jline_name}")
   done <<<"${job_line_rows}"
-  # A flag, not a test of the row: the row a key opening with a line
-  # break leaves behind is empty.
-  if ((forged)); then
-    # Quoted with @Q so the tab or line break shows as an escape.
-    fail "${f}: a job key holds a tab or a line break, so its line row cannot be read: ${forged_row@Q}"
+  # A flag, not a test of the row's text, which can be empty.
+  if ((bad_row)); then
+    # Quoted with @Q so a tab or a line break shows as an escape.
+    fail "${f}: a job line row is not a key and a line number: ${jline_row@Q}"
     continue
   fi
   file_lines="$(wc -l <"${f}")"
