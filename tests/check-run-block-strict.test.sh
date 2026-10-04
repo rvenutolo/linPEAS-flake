@@ -161,4 +161,39 @@ if [[ ${two_docs_exit} != 1 || ${two_docs_err} != "${two_docs_want}" ]]; then
 fi
 printf 'OK   composite-second-document\n'
 
+# A workflow's job is read from its own document, and its message names
+# the key it is written under, through an alias.
+# @arg $1 scenario name  @arg $2 workflow body  @arg $3 expected exit
+# @arg $4 expected stderr, whole, with @F@ standing for the file
+# @arg $5 PATH to run under (optional)
+function expect_workflow() {
+  local -r name="$1" body="$2" want_exit="$3" run_path="${5:-${PATH}}"
+  local got_exit=0 got_stderr want
+  mkdir -- "${key_dir}/${name}"
+  printf '%s' "${body}" >"${key_dir}/${name}/w.yml"
+  want="${4//@F@/${key_dir}/${name}/w.yml}"
+  got_stderr="$(PATH="${run_path}" WORKFLOWS_DIR_OVERRIDE="${key_dir}/${name}" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  if [[ ${got_exit} != "${want_exit}" || ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s: exit %s, want %s\n  stderr: %s\n' "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+readonly WEAK_STEP=$'    steps:\n      - run: |\n          set -euo pipefail\n          echo PAYLOAD_RAN\n'
+readonly STRICT_STEP=$'    steps:\n      - run: |\n          set -Eeuo pipefail\n          echo PAYLOAD_RAN\n'
+printf -v weak_tail ' step[0] run: block must start with %q (got %q)\n1 run: block(s) missing strict-mode prelude' \
+  'set -Eeuo pipefail' 'set -euo pipefail'
+expect_workflow workflow-second-document \
+  $'jobs:\n  a:\n'"${STRICT_STEP}"$'---\njobs:\n  b:\n'"${WEAK_STEP}" 1 "@F@: job b${weak_tail}"
+expect_workflow job-key-alias \
+  $'x-name: &ka named\njobs:\n  *ka :\n'"${WEAK_STEP}" 1 "@F@: job named${weak_tail}"
+# A failing read of the job's key stops the run rather than naming no job.
+mkdir -- "${key_dir}/stub"
+printf '#!/usr/bin/env bash\ncase "$*" in *"].key | explode"*) exit 7 ;; esac\nexec %q "$@"\n' \
+  "$(command -v yq)" >"${key_dir}/stub/yq"
+chmod +x -- "${key_dir}/stub/yq"
+expect_workflow job-key-unread $'jobs:\n  a:\n'"${WEAK_STEP}" 2 \
+  '@F@: cannot read the key of job 0' "${key_dir}/stub:${PATH}"
+
 printf 'all tests passed\n'

@@ -115,4 +115,13 @@ expect_spliced_key job-key-reads-file.yml 'x" | error(load_str(strenv(PROBE_FILE
 expect_spliced_key job-key-quote.yml 'k"x'
 expect_spliced_key job-key-backslash.yml 'k\x'
 
+# The job's body and its `if:` are read by the same key: a key that
+# reads the decoy's body misses an App token the job mints, and one that
+# reads the decoy's `if:` borrows its guard.
+printf -v quoted_decoy '%q' 'x" // .jobs."decoy'
+expect_body job-key-reads-decoy-body.yml $'jobs:\n  \'x" // .jobs."decoy\':\n    permissions:\n      contents: read\n    steps:\n      - uses: actions/create-github-app-token@v1\n  decoy:\n    permissions:\n      contents: read\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
+  "DIR/job-key-reads-decoy-body.yml: job ${quoted_decoy} holds guard-required write scope but is missing fork guard ${BT}github.repository == 'rvenutolo/linPEAS-flake'${BT}; got if=''${ONE_JOB}"
+expect_body job-key-reads-decoy-guard.yml $'jobs:\n  \'x" // .jobs."decoy\':\n    permissions:\n      contents: write\n    steps:\n      - run: echo PAYLOAD_RAN\n  decoy:\n    if: github.repository == \'rvenutolo/linPEAS-flake\'\n    permissions:\n      contents: write\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
+  "DIR/job-key-reads-decoy-guard.yml: job ${quoted_decoy} holds guard-required write scope but is missing fork guard ${BT}github.repository == 'rvenutolo/linPEAS-flake'${BT}; got if=''${ONE_JOB}"
+
 printf 'all tests passed\n'
