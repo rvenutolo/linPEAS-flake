@@ -84,7 +84,8 @@ SCENARIO_N=0
 # @description A scenario whose job passes: a sentinel job with no
 # timeout follows it, so the run ends in that one finding alone, which
 # shows the scan reached the rows. Each passing scenario has a failing
-# twin reached the same way, which shows the job itself is read.
+# twin reached the same way, written first of two jobs and followed by a
+# passing one, which shows the job itself is read wherever it sits.
 # @arg $1 scenario name
 # @arg $2 workflow text ending in its jobs: block (printf format)
 function expect_passes() {
@@ -144,6 +145,10 @@ expect_built 'a key with no value is a missing one' \
 ${ONE_BAD}"
 expect_passes 'an integer-tagged value with a leading zero is read in decimal' \
   "${JOB_HEAD}"'    timeout-minutes: !!int "09"\n'
+expect_built 'an integer-tagged value of zeros is not positive' \
+  'on: push\njobs:\n  tagzero:\n    runs-on: x\n    timeout-minutes: !!int "00"\n  after:\n    runs-on: x\n    timeout-minutes: 5\n' 1 \
+  "%W: job tagzero timeout-minutes must be positive (got 00)
+${ONE_BAD}"
 expect_built 'zeros only is not positive' \
   "${JOB_HEAD}"'    timeout-minutes: 00\n' 1 \
   "%W: job a timeout-minutes must be positive (got 00)
@@ -151,13 +156,13 @@ ${ONE_BAD}"
 expect_passes 'a value written as an alias is read through it' \
   'x-t: &t 7\n'"${JOB_HEAD}"'    timeout-minutes: *t\n'
 expect_built 'a value written as an alias of zero is read through it' \
-  'x-t: &t 0\non: push\njobs:\n  zalias:\n    runs-on: x\n    timeout-minutes: *t\n' 1 \
+  'x-t: &t 0\non: push\njobs:\n  zalias:\n    runs-on: x\n    timeout-minutes: *t\n  after:\n    runs-on: x\n    timeout-minutes: 5\n' 1 \
   "%W: job zalias timeout-minutes must be positive (got 0)
 ${ONE_BAD}"
 expect_passes 'a job written as an alias is read through it' \
   'x-t: &t 7\nx-j: &j {runs-on: x, timeout-minutes: *t}\non: push\njobs:\n  a: *j\n'
 expect_built 'a job written as an alias of a zero timeout is read through it' \
-  'x-t: &t 000\nx-j: &j {runs-on: x, timeout-minutes: *t}\non: push\njobs:\n  jalias: *j\n' 1 \
+  'x-t: &t 000\nx-j: &j {runs-on: x, timeout-minutes: *t}\non: push\njobs:\n  jalias: *j\n  after:\n    runs-on: x\n    timeout-minutes: 5\n' 1 \
   "%W: job jalias timeout-minutes must be positive (got 000)
 ${ONE_BAD}"
 
@@ -169,7 +174,7 @@ ${ONE_BAD}"
 expect_passes 'a uses: written as an alias is read through it' \
   'x-u: &u o/r/.github/workflows/x.yml@v1\non: push\njobs:\n  a:\n    uses: *u\n'
 expect_built 'a uses: written as an alias of a list is no reusable-workflow call' \
-  'x-u: &u [o/r/.github/workflows/x.yml@v1]\non: push\njobs:\n  ualias:\n    uses: *u\n' 1 \
+  'x-u: &u [o/r/.github/workflows/x.yml@v1]\non: push\njobs:\n  ualias:\n    uses: *u\n  after:\n    runs-on: x\n    timeout-minutes: 5\n' 1 \
   "%W: job ualias missing ${BT}timeout-minutes${BT} (default is 6h; declare an explicit value)
 ${ONE_BAD}"
 
@@ -186,10 +191,10 @@ ${ONE_BAD}"
 
 # A job id is the one raw field of a row, so one that is not a string,
 # is empty, or holds a tab, a line break or a NUL could forge, split or
-# garble it, and is refused, named by its kind and text. A pipe cannot.
+# garble it, and is refused, naming the first such id. A pipe cannot.
 # An id written as an alias is read through it.
-readonly ODD_A='jobs: holds a job id that is not a string, is empty, or holds a tab, a line break or a NUL ('
-readonly ODD_B='), which GitHub Actions refuses; its jobs are not read'
+readonly ODD_A='jobs: holds a job id that is not a string, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: '
+readonly ODD_B=')'
 expect_built 'a job id written as an alias is read through it' \
   'x-k: &k idalias\non: push\njobs:\n  *k :\n    runs-on: x\n' 1 \
   "%W: job idalias missing ${BT}timeout-minutes${BT} (default is 6h; declare an explicit value)
@@ -226,7 +231,7 @@ ${ONE_BAD}"
 # A workflow that does not parse fails the first read, once.
 expect_built 'an unparsable workflow is one finding against the file' \
   'on: push\njobs: [a: b\n' 1 \
-  "YQ_ERROR %W
+  "YQ_ERROR bad file
 %W: could not evaluate workflow with yq (malformed?)
 ${ONE_BAD}"
 
