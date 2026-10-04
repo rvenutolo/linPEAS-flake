@@ -86,6 +86,24 @@ function marked_workflow() {
     >>"${ROOT}/${DOC}"
 }
 
+# @description Add a workflow outside the scanner set to ROOT whose notify
+# job's gate excludes pull_request, and a docs marker declaring only
+# `failure` for it. The marker never matches, so the finding prints the
+# derived set, which carries `non-pr` exactly when the lint read
+# pull_request among the workflow's events.
+# @arg $1 workflow file name
+# @arg $2 the text from `on:` (lines before it may hold anchors)
+# @arg $3 the notify job's `needs:` value (default `build`)
+function gated_workflow() {
+  printf '%s\n' "name: ${1%.*}" "$2" 'jobs:' '  build:' '    runs-on: ubuntu-latest' \
+    '    steps:' '      - run: "true"' '  notify:' "    needs: ${3:-build}" \
+    "    if: always() && github.event_name != 'pull_request'" \
+    '    runs-on: ubuntu-latest' '    steps:' '      - uses: ./.github/actions/notify-workflow-result' \
+    '        with:' '          result: ${{ needs.build.result }}' "          label: ${1%.*}" \
+    "          title: ${1%.*}" "          body: ${1%.*}" >"${ROOT}/.github/workflows/$1"
+  printf 'A failed run <!-- notify-arms: %s/notify = failure -->.\n' "$1" >>"${ROOT}/${DOC}"
+}
+
 # @description Run the script against ROOT; assert exit code, stderr, and
 # stdout. The clean path's summary carries the marker tallies and the scan
 # breadth, which is what tells two clean scenarios apart.
@@ -461,18 +479,18 @@ failure cancelled non-pr -->.'
   # workflow with no `on:` key at all.
   fresh_root
   edit "${SC}" 'on: push' 'on: 5'
-  run_scenario unreadable-on-exits-2 2 'the workflow has no on: trigger the lint can read'
-  also_expect '.github/workflows/scorecard-drift-check.yml: job notify: the workflow has no on: trigger'
+  run_scenario unreadable-on-exits-2 2 \
+    '.github/workflows/scorecard-drift-check.yml: job notify: the workflow has no on: trigger the lint can read (kind=scalar, tag=!!int)'
 
   fresh_root
   edit '.github/workflows/zizmor-drift-check.yml' 'on: push' 'on:'
-  run_scenario null-on-exits-2 2 'the workflow has no on: trigger the lint can read'
-  also_expect '.github/workflows/zizmor-drift-check.yml: job notify: the workflow has no on: trigger'
+  run_scenario null-on-exits-2 2 \
+    '.github/workflows/zizmor-drift-check.yml: job notify: the workflow has no on: trigger the lint can read (kind=scalar, tag=!!null)'
 
   fresh_root
-  edit '.github/workflows/image-cve-scan.yml' 'on: push' ''
-  run_scenario missing-on-exits-2 2 'the workflow has no on: trigger the lint can read'
-  also_expect '.github/workflows/image-cve-scan.yml: job image-cve-scan-'
+  edit "${SC}" 'on: push' ''
+  run_scenario missing-on-exits-2 2 \
+    '.github/workflows/scorecard-drift-check.yml: job notify: the workflow has no on: trigger the lint can read (kind=scalar, tag=!!null)'
 
   # An `on:` of a readable shape that prints no event leaves no run to
   # evaluate the gate over. It is refused as such, rather than read as a
@@ -521,41 +539,151 @@ failure cancelled non-pr -->.'
 
   # A failed read of the triggers names the command and its status, so a
   # killed or failing yq is not reported as a workflow with no trigger.
+  # Which workflow is derived first follows hash order, so the first
+  # three assert the status at the end of the line, which no other
+  # scenario prints.
   # The first stub fails the read of the shape of `on:`, and the others
-  # the read of the events a list, a string and a map name.
+  # the read of the events a list, a string and a map name; each matches
+  # the end of the `on:` node's expression (ON_NODE) and what follows it.
   fresh_root
-  yq_stub '.on | tag' 7
+  yq_stub 'resolve")) | kind' 7
   PATH="${STUB_DIR}:${PATH}" run_scenario on-shape-read-failure-names-yq-exits-2 2 \
-    'cannot read the on: triggers of .github/workflows/'
-  also_expect '.yml: yq exited 7'
+    '.yml: yq exited 7'
   refute_stderr 'the workflow has no on: trigger the lint can read'
   rm --recursive --force -- "${STUB_DIR}"
 
   fresh_root
-  yq_stub '.on[]' 9
+  yq_stub 'resolve")) | .[]' 9
   PATH="${STUB_DIR}:${PATH}" run_scenario on-events-read-failure-names-yq-exits-2 2 \
-    'cannot read the on: triggers of .github/workflows/'
-  also_expect '.yml: yq exited 9'
+    '.yml: yq exited 9'
   refute_stderr 'the workflow has no on: trigger the lint can read'
   rm --recursive --force -- "${STUB_DIR}"
 
   # The path that follows the expression tells this read from the others,
-  # which all carry more of an expression after `.on`.
+  # which all carry more of an expression after the `on:` node's.
   fresh_root
-  yq_stub '-r .on /' 11
+  yq_stub 'resolve")) /' 11
   PATH="${STUB_DIR}:${PATH}" run_scenario on-string-read-failure-names-yq-exits-2 2 \
-    'cannot read the on: triggers of .github/workflows/'
-  also_expect '.yml: yq exited 11'
+    '.yml: yq exited 11'
   rm --recursive --force -- "${STUB_DIR}"
 
   fresh_root
   edit "${SC}" 'on: push' 'on:
   push:'
-  yq_stub '.on | keys' 13
+  yq_stub 'resolve")) | keys' 13
   PATH="${STUB_DIR}:${PATH}" run_scenario on-map-read-failure-names-yq-exits-2 2 \
-    'cannot read the on: triggers of .github/workflows/'
-  also_expect 'scorecard-drift-check.yml: yq exited 13'
+    'cannot read the on: triggers of .github/workflows/scorecard-drift-check.yml: yq exited 13'
   rm --recursive --force -- "${STUB_DIR}"
+
+  # --- on: read by kind from ON_NODE, and needs: through an alias ---
+  # Each workflow's gate excludes pull_request and its marker declares
+  # only `failure`, so the finding names the derived set: `non-pr` in it
+  # shows pull_request was read among the events.
+  fresh_root
+  gated_workflow strlist.yml 'on: !!str [push, pull_request]'
+  run_scenario on-list-carrying-the-string-tag-is-read 1 \
+    'marker for strlist.yml/notify declares "failure"; the workflow files on "failure cancelled non-pr"'
+
+  fresh_root
+  gated_workflow strmap.yml 'on: !!str {push: , pull_request: }'
+  run_scenario on-map-carrying-the-string-tag-is-read 1 \
+    'marker for strmap.yml/notify declares "failure"; the workflow files on "failure cancelled non-pr"'
+
+  fresh_root
+  gated_workflow xmap.yml 'on: !x {push: , pull_request: }'
+  run_scenario on-map-carrying-a-tag-of-its-own-is-read 1 \
+    'marker for xmap.yml/notify declares "failure"; the workflow files on "failure cancelled non-pr"'
+
+  fresh_root
+  gated_workflow itemalias.yml 'x-p: &p pull_request
+on: [push, *p]'
+  run_scenario on-list-item-alias-is-read-through 1 \
+    'marker for itemalias.yml/notify declares "failure"; the workflow files on "failure cancelled non-pr"'
+
+  fresh_root
+  gated_workflow keyalias.yml 'x-p: &p pull_request
+on: {push: , *p : }'
+  run_scenario on-map-key-alias-is-read-through 1 \
+    'marker for keyalias.yml/notify declares "failure"; the workflow files on "failure cancelled non-pr"'
+
+  fresh_root
+  gated_workflow mergein.yml 'x-m: &m {pull_request: }
+on: {push: , <<: *m}'
+  run_scenario on-merge-key-is-read-through 1 \
+    'marker for mergein.yml/notify declares "failure"; the workflow files on "failure cancelled non-pr"'
+
+  fresh_root
+  gated_workflow onalias.yml 'x-o: &o [push, pull_request]
+on: *o'
+  run_scenario on-alias-is-read-through 1 \
+    'marker for onalias.yml/notify declares "failure"; the workflow files on "failure cancelled non-pr"'
+
+  fresh_root
+  gated_workflow pushonly.yml 'on: [push]'
+  run_scenario on-without-pull-request-has-no-non-pr 1 \
+    'marker for pushonly.yml/notify declares "failure"; the workflow files on "failure cancelled"'
+
+  # A scalar is told apart by its tag; any other shape is refused,
+  # naming its kind and tag.
+  fresh_root
+  gated_workflow xstr.yml 'on: !x push'
+  run_scenario on-scalar-carrying-a-tag-of-its-own-exits-2 2 \
+    '.github/workflows/xstr.yml: job notify: the workflow has no on: trigger the lint can read (kind=scalar, tag=!x)'
+
+  fresh_root
+  gated_workflow seqscalar.yml 'on: !!seq push'
+  run_scenario on-scalar-carrying-the-list-tag-exits-2 2 \
+    '.github/workflows/seqscalar.yml: job notify: the workflow has no on: trigger the lint can read (kind=scalar, tag=!!seq)'
+
+  # Several documents, and the two ON_NODE refusals, stop the run.
+  fresh_root
+  gated_workflow twodocs.yml 'on: push'
+  printf -- '---\non: pull_request\n' >>"${ROOT}/.github/workflows/twodocs.yml"
+  run_scenario on-in-several-documents-exits-2 2 \
+    '.github/workflows/twodocs.yml: job notify: the workflow holds several YAML documents, so no one on: to read'
+
+  fresh_root
+  gated_workflow twice.yml 'on: push
+"on": pull_request'
+  run_scenario on-given-twice-exits-2 2 \
+    'cannot read the on: triggers of .github/workflows/twice.yml: yq exited 1'
+  also_expect 'Error: on: is given more than once'
+
+  fresh_root
+  deep='x-a0: &a0 [push]'
+  for i in $(seq 1 17); do
+    deep+=$'\n'"x-a${i}: &a${i} [*a$((i - 1))]"
+  done
+  gated_workflow deep.yml "${deep}"$'\non: {push: , x: *a17}'
+  run_scenario on-alias-nested-too-deep-exits-2 2 \
+    'cannot read the on: triggers of .github/workflows/deep.yml: yq exited 1'
+  also_expect 'Error: on: holds an alias nested too deep to resolve'
+
+  fresh_root
+  gated_workflow mergelist.yml 'x-l: &l [a]
+on: {push: , <<: *l}'
+  run_scenario on-merge-key-bringing-in-a-list-exits-2 2 \
+    'cannot read the on: triggers of .github/workflows/mergelist.yml: yq exited 1'
+
+  # needs: is read through an alias; one job named by anything but a
+  # scalar carrying the string tag is refused.
+  fresh_root
+  gated_workflow needsalias.yml 'x-n: &n build
+on: [push, pull_request]' '*n'
+  run_scenario needs-alias-is-read-through 1 \
+    'marker for needsalias.yml/notify declares "failure"; the workflow files on "failure cancelled non-pr"'
+
+  fresh_root
+  gated_workflow needsitem.yml 'x-n: &n build
+on: [push]' '[*n]'
+  run_scenario needs-list-item-alias-is-read-through 1 \
+    'marker for needsitem.yml/notify declares "failure"; the workflow files on "failure cancelled"'
+  also_expect 'needsitem.yml/notify'
+
+  fresh_root
+  gated_workflow needsx.yml 'on: push' '!x build'
+  run_scenario needs-scalar-carrying-a-tag-of-its-own-exits-2 2 \
+    '.github/workflows/needsx.yml: job notify: needs: does not name exactly one job as a string'
 
   # --- notify steps the derivation cannot model ---
 
@@ -890,7 +1018,7 @@ and `codeql-infra` <!-- notify-arms: codeql.yml/notify-infra = failure cancelled
 
   fresh_root
   edit "${SC}" 'needs: drift-check' 'needs: [drift-check, other]'
-  run_scenario multi-needs-exits-2 2 'job notify: needs: does not name exactly one job'
+  run_scenario multi-needs-exits-2 2 'scorecard-drift-check.yml: job notify: needs: does not name exactly one job as a string'
 
   fresh_root
   edit "${SC}" 'result: ${{ needs.drift-check.result }}' 'result: ${{ needs.drift-check.outputs.result || needs.drift-check.result }}'
@@ -907,7 +1035,7 @@ and `codeql-infra` <!-- notify-arms: codeql.yml/notify-infra = failure cancelled
   # A non-scanner job outside the grammar is derived once a marker names it.
   fresh_root
   printf 'Other <!-- notify-arms: other.yml/notify = failure -->.\n' >>"${ROOT}/${DOC}"
-  run_scenario named-unreadable-gate-exits-2 2 'job notify: needs: does not name exactly one job'
+  run_scenario named-unreadable-gate-exits-2 2 '.github/workflows/other.yml: job notify: needs: does not name exactly one job as a string'
 
   fresh_root
   printf '```text\nopen fence\n' >>"${ROOT}/${DOC}"
