@@ -193,6 +193,12 @@
 #      own line range (from its key's line, taken from yq's `line`
 #      builtin, to one line before the next job's key line, or to the
 #      end of the file for the last job) rather than by any yq query.
+#      The key and its line are read as one tab-separated row, so a job
+#      key holding a tab or a line break is a finding naming the row,
+#      and that file is read no further: such a key would put its own
+#      text where the line number goes, and the range is computed in
+#      bash arithmetic, which runs a command placed in an array
+#      subscript.
 #
 #      Breadth is asserted the same way as assertion 6: the run reports
 #      how many jobs carry either host, and finding none on an
