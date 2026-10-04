@@ -114,12 +114,11 @@ for f in "${selected_files[@]}"; do
   # twice and each step three times more, so a job, its steps, a step,
   # its `with:` and the value written as aliases are read through them.
   # A `with:` map is read whatever tag it carries; the value is a scalar
-  # told apart by its tag. Each node is collected into a list, with a default
-  # appended, because an expression after a `select` that keeps
-  # nothing would print its literals anyway. The row opens with an
-  # operand that reads the step, because after a `select` that keeps
-  # nothing `yq` still prints an expression made only of variables,
-  # literals and collections.
+  # told apart by its tag. Each value a row reads is collected into a
+  # list with a default appended, and the row opens with an operand that
+  # reads the step, because after a `select` that keeps nothing `yq`
+  # still prints an expression made only of variables, literals and
+  # collections.
   #
   # Capture yq's output (and exit status) into a variable rather than
   # feeding the loop from `< <(yq ...)`: a process substitution's exit

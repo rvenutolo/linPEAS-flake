@@ -15,9 +15,10 @@
 #      omitted block is a lint failure. A job's block is read by its
 #      kind: a map, whatever tag it carries, passes, and any other shape
 #      is reported with its kind and tag. A job written as an alias is
-#      read through it. A merge key under `jobs:`, and a job id holding
-#      a tab or a line break, are findings: GitHub Actions refuses both,
-#      and the jobs behind them are not read.
+#      read through it. A merge key under `jobs:`, and a job id or a
+#      job or `permissions:` tag holding a tab or a line break, are
+#      findings: GitHub Actions refuses them, and the jobs behind them
+#      are not read.
 #   3. Top-level cannot be `read-all`, `write-all`, or any scalar/
 #      list form. (Subsumed by rule 1; a string gets a dedicated
 #      message, any other shape is reported with its kind and tag.)
@@ -178,14 +179,17 @@ for f in "${selected_files[@]}"; do
   # or a line break could forge or split one. GitHub Actions refuses such
   # an id, so it is a finding and the workflow's jobs are not read.
   # Every key is tested as the text it renders to, whatever its tag, and
-  # a `jobs:` that is not a map has no ids to test.
-  if ! odd_ids="$(yq eval '[.jobs | select(kind == "map") | keys[] | select(tostring | test("[\t\n]"))] | length' "${f}")"; then
+  # a `jobs:` that is not a map has no ids to test. The rows also carry
+  # three tags as text (the key's, the job's, its `permissions:`'s), and
+  # a verbatim tag decodes `%09` and `%0A` to a tab and a line break, so
+  # a tag holding either is refused the same way.
+  if ! odd_ids="$(yq eval '[.jobs | select(kind == "map") | to_entries[] | ((.key | tostring), (.key | tag), (.value | explode(.) | explode(.) | (tag, ([.permissions] | .[] | tag)))) | select(test("[\t\n]"))] | length' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
   fi
   if [[ ${odd_ids} != 0 ]]; then
-    printf '%s: jobs: holds a job id with a tab or a line break, which GitHub Actions refuses; its jobs are not read\n' \
+    printf '%s: jobs: holds a job id, or a job or permissions: tag, with a tab or a line break, which GitHub Actions refuses; its jobs are not read\n' \
       "${f}" >&2
     failed=$((failed + 1))
     continue

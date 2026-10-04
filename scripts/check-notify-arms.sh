@@ -67,7 +67,8 @@
 # other shape, or prints no event, or whose file `yq` reads as several
 # YAML documents, is refused when it has to be derived, and so is one
 # whose `needs:` is not one job named by a scalar carrying the string
-# tag (read through an alias, or an alias of a list holding one). So is
+# tag (read through an alias, including an alias of a list whose one
+# item is an alias of the job's name). So is
 # a job whose notify step has an
 # `if:` of its own, follows a step other than step-security/harden-runner
 # or actions/checkout, runs the composite twice, or reaches it by any
