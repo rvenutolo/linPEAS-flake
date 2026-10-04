@@ -642,11 +642,18 @@ it with `strenv`. A lookup by that text is still not exact, because
 `yq` reads `*` and `?` as wildcards both in an index (`.[strenv(X)]`)
 and in an `==` comparison, so `a*` also finds `abc`. A script therefore
 finds a key by comparing base64 text, which holds neither character:
-`to_entries[] | select((.key | tostring | @base64) == (strenv(X) | @base64)) | .value`.
+`explode(.) | [to_entries[] | select((.key | tostring | @base64) == (strenv(X) | @base64))] | reverse | .[0] | .value`.
+`explode` resolves merge keys and aliased entries, which `to_entries`
+does not follow, and the last of the matches is read, as `yq`'s own
+index reads a name written twice. One case reads differently from that
+index: under a merge key given a list of mappings, `explode` takes a
+name from the first mapping that holds it, as the YAML merge spec says,
+and the index takes it from the last.
+
 A number `yq` printed in an earlier read goes back through `env`.
-`check-run-block-strict.sh` reads no key back at all: its rows hold the
-document, job position and step index `yq` printed, and its reads find
-the job by them.
+`check-run-block-strict.sh` looks up no job by its key: its rows hold
+the document, job position and step index `yq` printed, and its reads
+find the job by them.
 
 No script passes `yq`'s `--security-disable-env-ops`, which also turns
 off `strenv`, or `--security-disable-file-ops`; with nothing spliced

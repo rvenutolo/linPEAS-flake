@@ -49,9 +49,9 @@
 # cannot run: `yq` is absent from PATH, the workflow and
 # composite-action globs match no file, WORKFLOW_FILE_FILTER selects
 # none of the files they matched, or a read of one step's run: block or
-# its job's key fails once the file's steps have been listed. An empty scan set is a could-not-run
-# rather than a clean tree; LINT_ALLOW_EMPTY_SCAN=1 accepts one
-# deliberately.
+# its job's key fails once the file's steps have been listed. An empty
+# scan set is a could-not-run rather than a clean tree;
+# LINT_ALLOW_EMPTY_SCAN=1 accepts one deliberately.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
