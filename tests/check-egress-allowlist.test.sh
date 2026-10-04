@@ -179,6 +179,105 @@ LINT_ALLOW_EMPTY_SCAN=1 WORKFLOWS_DIR_OVERRIDE="${REPO_ROOT}/tests/fixtures/egre
   }
 printf 'OK   zero-nix-host-discovery-override\n'
 
+# A job key is workflow text, and the end of the job before it is computed
+# from the key's start line. The key must never reach the arithmetic as
+# text: bash 5.1 expands a command substitution held in an associative
+# subscript there, and ran this one. The devShell's bash does not, so on
+# it this scenario holds the outcome rather than telling the two forms
+# apart. The workflow is built at run time so the marker lands in this
+# run's own directory.
+key_dir="$(mktemp --directory)"
+trap 'rm --recursive --force -- "${key_dir}"' EXIT
+mkdir -- "${key_dir}/wf"
+cat >"${key_dir}/wf/key.yml" <<EOF
+name: job-key-in-arithmetic
+on:
+  workflow_dispatch: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            cache.nixos.org:443
+      - run: nix build .#linpeas
+  "a\$(>${key_dir}/MARKER)":
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+      - run: echo PAYLOAD_RAN
+EOF
+got_exit=0
+got_stdout="$(WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER=key.yml \
+  "${SCRIPT}" 2>"${key_dir}/stderr")" || got_exit=$?
+want_stdout=$'0 notify job(s) checked against the declared egress allowlist\n1 nix-host job(s) checked for reachability'
+if [[ -e "${key_dir}/MARKER" ]]; then
+  printf 'FAIL job-key-in-arithmetic: the command in the job key ran\n' >&2
+  exit 1
+fi
+if [[ ${got_exit} != 0 || ${got_stdout} != "${want_stdout}" || -s "${key_dir}/stderr" ]]; then
+  printf 'FAIL job-key-in-arithmetic: exit %s\n  stdout: %s\n  stderr: %s\n' \
+    "${got_exit}" "${got_stdout}" "$(<"${key_dir}/stderr")" >&2
+  exit 1
+fi
+printf 'OK   job-key-in-arithmetic\n'
+
+# The job line read is one tab-separated row per key, key first. A key
+# holding a tab, or a line break and then a tab, fills the line field
+# with its own text, which the range arithmetic then evaluated: the
+# subscript ran its command, the run dropped the nix job and exited 0.
+# Each variant is a counted finding naming the row, with nothing run.
+# @arg $1 scenario name, which also names its marker file  @arg $2 the
+# job key, as a YAML double-quoted body  @arg $3 the expected finding
+# line, after the file name
+function expect_forged_key() {
+  local -r name="$1" key="$2" want_line="$3"
+  local got_exit=0 got_stderr
+  cat >"${key_dir}/wf/${name}.yml" <<EOF
+name: ${name}
+on:
+  workflow_dispatch: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            cache.nixos.org:443
+      - run: nix build .#linpeas
+  "${key}":
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+EOF
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER="${name}.yml" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  if [[ -e "${key_dir}/${name}.marker" ]]; then
+    printf 'FAIL %s: the command in the job key ran\n' "${name}" >&2
+    exit 1
+  fi
+  if [[ ${got_exit} != 1 || ${got_stderr} != *"${key_dir}/wf/${name}.yml: ${want_line}"$'\n'* ]]; then
+    printf 'FAIL %s: exit %s, want 1 and %q\n  stderr: %s\n' \
+      "${name}" "${got_exit}" "${want_line}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+expect_forged_key job-key-tab-forges-line \
+  "b\\tBASH_VERSINFO[\$(>${key_dir}/job-key-tab-forges-line.marker)]" \
+  "a job key holds a tab or a line break, so its line row cannot be read: \$'b\\tBASH_VERSINFO[\$(>${key_dir}/job-key-tab-forges-line.marker)]\\t14'"
+expect_forged_key job-key-line-break-forges-line \
+  "b\\nc\\tBASH_VERSINFO[\$(>${key_dir}/job-key-line-break-forges-line.marker)]" \
+  "a job key holds a tab or a line break, so its line row cannot be read: 'b'"
+
 # LIVE: the real tree must satisfy assertion 7, and the run must have
 # actually scanned something. The assertion checks the printed count is
 # nonzero rather than pinning it to today's exact job count, which would
