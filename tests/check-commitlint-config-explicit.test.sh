@@ -35,6 +35,113 @@ expect extends-mismatch/ci.yml 1 "declare different"
 
 # A workflow yq cannot parse must fail loud, not empty the scan silently.
 expect bad-malformed/ci.yml 1 "could not evaluate"
+
+# --- shapes of with: and configFile:, built at run time ---------------
+# A formatter would rewrite a tagged or quoted node checked in as a
+# fixture. Each scenario writes a numbered workflow beside the good
+# fixture's two configs and asserts the whole of stderr.
+BT='`'
+readonly BT
+
+# @description Run the script on one built workflow and compare the exit
+# code and the whole of stderr; `%W` stands for the workflow path and
+# `%D` for its directory.
+# @arg $1 scenario name
+# @arg $2 workflow text (printf format, no arguments)
+# @arg $3 expected exit code
+# @arg $4 expected stderr
+function expect_built() {
+  local -r name="$1" text="$2" want_exit="$3" want="$4"
+  local dir got_exit=0 got_stderr path expected
+  SCENARIO_N=$((SCENARIO_N + 1))
+  dir="$(mktemp --directory)"
+  path="${dir}/wf-${SCENARIO_N}.yml"
+  cp -- "${FIXTURES}/good/.commitlintrc.yml" "${FIXTURES}/good/.commitlintrc.merge.yml" "${dir}/"
+  # shellcheck disable=SC2059 # the workflow text is the format
+  printf "${text}" >"${path}"
+  got_stderr="$(PATHS_OVERRIDE="${path}" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  expected="${want//%W/${path}}"
+  expected="${expected//%D/${dir}}"
+  rm --recursive --force -- "${dir}"
+  if [[ ${got_exit} != "${want_exit}" || ${got_stderr} != "${expected}" ]]; then
+    printf 'FAIL %s: exit %s, want %s\n  got:  %q\n  want: %q\n' \
+      "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" "${expected}" >&2
+    return 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+SCENARIO_N=0
+readonly ONE='1 commitlint config drift(s) found'
+readonly HEAD=$'on: push\njobs:\n'
+readonly NO_WITH="has no ${BT}with:${BT} block; add ${BT}with.configFile: <path>${BT} (an unset configFile silently falls back to a bundled preset)"
+readonly NO_CFG="has no non-empty ${BT}with.configFile:${BT}; add one (an unset configFile silently falls back to a bundled preset)"
+readonly BARE='      - uses: wagoid/commitlint-github-action@x\n'
+readonly GOOD='      - uses: wagoid/commitlint-github-action@x\n        with: {configFile: .commitlintrc.yml}\n'
+
+# @description A passing step, then a sentinel step with no with:, in a
+# job named after the scenario: the run ends in the sentinel's finding.
+# @arg $1 scenario name  @arg $2 text before on:  @arg $3 job id
+# @arg $4 the passing step (printf format)
+function expect_passes() {
+  expect_built "$1" "$2${HEAD}  $3:\n    steps:\n$4${BARE}" 1 \
+    "%W: job $3 step[1] wagoid/commitlint-github-action ${NO_WITH}
+${ONE}"
+}
+
+# @description A failing step first, then a passing one.
+# @arg $1 scenario name  @arg $2 text before on:  @arg $3 job id
+# @arg $4 the failing step  @arg $5 its finding after "step[0] "
+function expect_fails_first() {
+  expect_built "$1" "$2${HEAD}  $3:\n    steps:\n$4${GOOD}" 1 \
+    "%W: job $3 step[0] $5
+${ONE}"
+}
+
+expect_passes 'a with: map carrying a tag of its own is read' '' withx \
+  '      - uses: wagoid/commitlint-github-action@x\n        with: !x {configFile: .commitlintrc.yml}\n'
+expect_fails_first 'a with: map carrying a tag of its own lacking configFile is read' '' withxbad \
+  '      - uses: wagoid/commitlint-github-action@x\n        with: !x {other: 1}\n' "wagoid/commitlint-github-action ${NO_CFG}"
+expect_fails_first 'a with: that is a list is no map' '' withlist \
+  '      - uses: wagoid/commitlint-github-action@x\n        with: !!str [a]\n' \
+  "wagoid/commitlint-github-action ${BT}with:${BT} has unexpected shape (kind=seq, tag=\"!!str\"); it must be a map holding ${BT}configFile: <path>${BT}"
+expect_fails_first 'a with: that is a string is no map' '' withstr \
+  '      - uses: wagoid/commitlint-github-action@x\n        with: hello\n' \
+  "wagoid/commitlint-github-action ${BT}with:${BT} has unexpected shape (kind=scalar, tag=\"!!str\"); it must be a map holding ${BT}configFile: <path>${BT}"
+expect_fails_first 'a configFile: that is a list is no path' '' cfglist \
+  '      - uses: wagoid/commitlint-github-action@x\n        with: {configFile: [.commitlintrc.yml]}\n' \
+  "wagoid/commitlint-github-action ${BT}configFile:${BT} has unexpected shape (kind=seq, tag=\"!!seq\", value=\"[.commitlintrc.yml]\"); it must be a path"
+expect_fails_first 'a configFile: holding a line break names no file' '' cfgbreak \
+  '      - uses: wagoid/commitlint-github-action@x\n        with: {configFile: ".commitlintrc.yml\\nx"}\n' \
+  "${BT}configFile${BT} names \\\".commitlintrc.yml\\\\nx\\\", which does not exist at %D/\\\".commitlintrc.yml\\\\nx\\\""
+expect_passes 'a with: written as an alias is read through it' 'x-w: &w {configFile: .commitlintrc.yml}\n' walias \
+  '      - uses: wagoid/commitlint-github-action@x\n        with: *w\n'
+expect_passes 'a configFile: written as an alias is read through it' 'x-c: &c .commitlintrc.yml\n' calias \
+  '      - uses: wagoid/commitlint-github-action@x\n        with: {configFile: *c}\n'
+expect_fails_first 'a configFile: written as an alias of an empty string is read through it' "x-c: &c ''\\n" caliasempty \
+  '      - uses: wagoid/commitlint-github-action@x\n        with: {configFile: *c}\n' "wagoid/commitlint-github-action ${NO_CFG}"
+expect_fails_first 'a step written as an alias is read through it' 'x-s: &s {uses: wagoid/commitlint-github-action@x}\n' salias \
+  '      - *s\n' "wagoid/commitlint-github-action ${NO_WITH}"
+expect_built 'a job written as an alias is read through it' \
+  'x-j: &j {steps: [{uses: wagoid/commitlint-github-action@x}]}\n'"${HEAD}"'  jalias: *j\n' 1 \
+  "%W: job jalias step[0] wagoid/commitlint-github-action ${NO_WITH}
+${ONE}"
+expect_built 'jobs: written as an alias is read through it' \
+  'x-js: &js {jsalias: {steps: [{uses: wagoid/commitlint-github-action@x}]}}\non: push\njobs: *js\n' 1 \
+  "%W: job jsalias step[0] wagoid/commitlint-github-action ${NO_WITH}
+${ONE}"
+expect_built 'a second document is read as jobs, with no separator row' \
+  "${HEAD}"'  first:\n    steps:\n'"${GOOD}"'---\n'"${HEAD}"'  second:\n    steps:\n'"${BARE}" 1 \
+  "%W: job second step[0] wagoid/commitlint-github-action ${NO_WITH}
+${ONE}"
+readonly ODD='jobs: holds a job id that is not a string, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: '
+expect_built 'a job id holding a tab is refused' \
+  "${HEAD}"'  "a\\tb":\n    steps:\n'"${BARE}" 1 \
+  "%W: ${ODD}kind=scalar, id=\"a\\tb\")
+${ONE}"
+expect_built 'a job id that is a list is refused' \
+  "${HEAD}"'  ? [a]\n  : {steps: [{uses: wagoid/commitlint-github-action@x}]}\n' 1 \
+  "%W: ${ODD}kind=seq, id=\"[a]\")
+${ONE}"
 # A commitlint config that does not parse is a file this lint could not
 # read: yq exits 1 on it, and reporting that as the rule-set drift
 # verdict would name rules nothing was ever read. The config is written
