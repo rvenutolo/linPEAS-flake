@@ -64,8 +64,10 @@ if [[ ! -f ${ALLOWLIST} ]]; then
 fi
 
 # allowed <workflow-basename> <job> -> newline-separated allowed scope names
+# The names reach `yq` as data, through `strenv`: spliced into the
+# expression, a name holding a quote would be read as `yq` code.
 function allowed() {
-  yq eval ".\"$1\".\"$2\" // [] | .[]" "${ALLOWLIST}"
+  WF="$1" JOB="$2" yq eval '.[strenv(WF)][strenv(JOB)] // [] | .[]' "${ALLOWLIST}"
 }
 
 # The `jobs:` node, read through an alias: `explode` handed only that
@@ -192,8 +194,8 @@ if [[ -z ${FILE_FILTER} ]]; then
       # evaluate as a finding against that file and moves on, so this
       # pass says the same thing rather than inventing a second verdict
       # for the same file.
-      if ! granted="$(yq eval ".jobs.\"${job}\".permissions.\"${scope}\" // \"\"" \
-        "${wf_path}")"; then
+      if ! granted="$(JOB="${job}" SCOPE="${scope}" yq eval \
+        '.jobs[strenv(JOB)].permissions[strenv(SCOPE)] // ""' "${wf_path}")"; then
         printf '%s: could not evaluate workflow with yq (malformed?)\n' "${wf_path}" >&2
         failed=$((failed + 1))
         continue
