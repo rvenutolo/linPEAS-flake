@@ -163,14 +163,16 @@ size_steps=0
 ignored_raw=''
 while IFS= read -r job; do
   [[ -n ${job} ]] || continue
-  if ! uses="$(yq eval ".jobs.\"${job}\".steps[].uses // \"\"" "${LABELER}")"; then
+  # The job key reaches `yq` as data, through `strenv`: spliced into the
+  # expression, a key holding a quote would be read as `yq` code.
+  if ! uses="$(JOB="${job}" yq eval '.jobs[strenv(JOB)].steps[].uses // ""' "${LABELER}")"; then
     printf '%s: could not evaluate job %s in %s with yq\n' "${0##*/}" "${job}" "${LABELER}" >&2
     exit 2
   fi
   [[ ${uses} == *"${SIZE_ACTION}"* ]] || continue
   size_steps=$((size_steps + 1))
-  if ! step_ignored="$(yq eval "
-    .jobs.\"${job}\".steps[]
+  if ! step_ignored="$(JOB="${job}" yq eval "
+    .jobs[strenv(JOB)].steps[]
     | select(.uses // \"\" | test(\"${SIZE_ACTION}\"))
     | .env.IGNORED // \"\"
   " "${LABELER}")"; then
