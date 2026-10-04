@@ -182,7 +182,7 @@ expect_body jobs-merge-inline.yml $'permissions: {}\njobs:\n  <<:\n    evil:\n  
 # The job rows are tab-separated, and GitHub Actions refuses a job id
 # holding a tab or a line break, so such an id is a finding and the
 # workflow's jobs are not read.
-readonly ODD_ID='jobs: holds a job id with a tab or a line break, which GitHub Actions refuses; its jobs are not read'
+readonly ODD_ID='jobs: holds a job id, or a job or permissions: tag, with a tab or a line break, which GitHub Actions refuses; its jobs are not read'
 expect_body job-id-tab.yml $'permissions: {}\njobs:\n  "x\\t!!str\\tmap !!map\\tmap !!map":\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
   "DIR/job-id-tab.yml: ${ODD_ID}"$'\n1 permissions posture violation(s) found'
 expect_body job-id-xtag.yml $'permissions: {}\njobs:\n  !x "x\\t!!str\\tmap !!map\\tmap !!map":\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
@@ -192,7 +192,7 @@ expect_body job-id-merge-tag.yml $'permissions: {}\njobs:\n  !!merge "x\\t!!str\
 expect_body job-id-break.yml $'permissions: {}\njobs:\n  "y\\nz":\n    permissions: {}\n' 1 \
   "DIR/job-id-break.yml: ${ODD_ID}"$'\n1 permissions posture violation(s) found'
 # The job-id read failing is a counted finding, like the job rows' read.
-yq_stub 'select(tostring | test(' 7
+yq_stub '| select(test("[' 7
 ids_exit=0
 ids_stderr="$(PATH="${STUB_DIR}:${PATH}" WORKFLOWS_DIR_OVERRIDE="${FIXTURES}" \
   WORKFLOW_FILE_FILTER=good.yml "${SCRIPT}" 2>&1 >/dev/null)" || ids_exit=$?
@@ -241,5 +241,16 @@ expect_body job-perms-alias-in-job-alias.yml $'x-p: &p {contents: read}\nx-j: &j
   "DIR/job-perms-alias-in-job-alias.yml: job c missing ${Q}permissions:${Q} block (every job must declare its own)${ONE}"
 expect_body job-perms-alias-scalar.yml $'x-p: &p write-all\npermissions: {}\njobs:\n  d:\n    permissions: *p\n' 1 \
   "DIR/job-perms-alias-scalar.yml: job d permissions has unexpected shape (kind=scalar, tag=!!str)${ONE}"
+
+# The rows carry tags as text, and a verbatim tag decodes %09 and %0A to
+# a tab and a line break, so a tag holding either could forge a row; it
+# is refused like an odd job id.
+readonly ODD_TAG='jobs: holds a job id, or a job or permissions: tag, with a tab or a line break, which GitHub Actions refuses; its jobs are not read'
+expect_body job-tag-forge-scalar.yml $'permissions: {}\njobs:\n  b: !<tag:x%09map%20q%0Az%09k%09map%20m%09map%20n>\n    permissions: write-all\n' 1 \
+  "DIR/job-tag-forge-scalar.yml: ${ODD_TAG}${ONE}"
+expect_body job-tag-forge-missing.yml $'permissions: {}\njobs:\n  e: !<tag:x%09map%20q%0Az%09k%09map%20m%09map%20n>\n    runs-on: x\n' 1 \
+  "DIR/job-tag-forge-missing.yml: ${ODD_TAG}${ONE}"
+expect_body perms-tag-break.yml $'permissions: {}\njobs:\n  g:\n    permissions: !<tag:x%0Ay> {}\n' 1 \
+  "DIR/perms-tag-break.yml: ${ODD_TAG}${ONE}"
 
 printf 'all tests passed\n'
