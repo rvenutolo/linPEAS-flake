@@ -166,6 +166,8 @@ expect_shape 'a schedule list carrying a tag of its own is a schedule' \
   "${SCHED_LINES}" '  schedule: !x [{cron: "0 11 * * *"}]\n' '' 0 ''
 expect_shape 'a schedule written as an alias is read through it' \
   "${ON_BLOCK}" 'x-s: &s [{cron: "0 11 * * *"}]\non:\n  schedule: *s\n  workflow_dispatch:\n' '' 0 ''
+expect_shape 'an on: alias holding a schedule alias is read through both' \
+  "${ON_BLOCK}" 'x-s: &s [{cron: "0 11 * * *"}]\nx-o: &o {schedule: *s, workflow_dispatch: }\non: *o\n' '' 0 ''
 expect_shape 'an on: written as an alias is read through it' \
   "${ON_BLOCK}" 'x-o: &o {schedule: [{cron: "0 11 * * *"}], workflow_dispatch: }\non: *o\n' '' 0 ''
 expect_shape 'an on: with no schedule names its absence' \

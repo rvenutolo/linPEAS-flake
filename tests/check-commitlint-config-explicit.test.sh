@@ -138,6 +138,23 @@ expect_built 'a job id holding a tab is refused' \
   "${HEAD}"'  "a\\tb":\n    steps:\n'"${BARE}" 1 \
   "%W: ${ODD}kind=scalar, id=\"a\\tb\")
 ${ONE}"
+expect_built 'an empty job id is refused' \
+  "${HEAD}"'  "":\n    steps:\n'"${BARE}" 1 \
+  "%W: ${ODD}kind=scalar, id=\"\")
+${ONE}"
+expect_fails_first 'a with: with no value is no with: block' '' withnull \
+  '      - uses: wagoid/commitlint-github-action@x\n        with:\n' "wagoid/commitlint-github-action ${NO_WITH}"
+# A chain five aliases deep: the job, its steps, a step, the step's
+# uses: and with:, and the value. The job's two passes resolve the first
+# two, and the step's three the rest.
+expect_built 'a five-deep alias chain is read through' \
+  'x-u: &u wagoid/commitlint-github-action@x\nx-v: &v ''\nx-w: &w {configFile: *v}\nx-s: &s {uses: *u, with: *w}\nx-l: &l [*s]\nx-j: &j {steps: *l}\non: push\njobs:\n  deep: *j\n' 1 \
+  "%W: job deep step[0] wagoid/commitlint-github-action ${NO_CFG}
+${ONE}"
+expect_built 'a step alias whose uses: is an alias is read through both' \
+  'x-u: &u wagoid/commitlint-github-action@x\nx-s: &s {uses: *u}\n'"${HEAD}"'  usesalias:\n    steps:\n      - *s\n' 1 \
+  "%W: job usesalias step[0] wagoid/commitlint-github-action ${NO_WITH}
+${ONE}"
 expect_built 'a job id that is a list is refused' \
   "${HEAD}"'  ? [a]\n  : {steps: [{uses: wagoid/commitlint-github-action@x}]}\n' 1 \
   "%W: ${ODD}kind=seq, id=\"[a]\")

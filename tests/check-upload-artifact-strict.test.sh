@@ -116,6 +116,17 @@ expect_built 'a with: alias holding an alias of a bad value is read through both
   'x-v: &v warn\nx-w: &w {if-no-files-found: *v}\non: push\njobs:\n  wnested:\n    steps:\n      - uses: actions/upload-artifact@abc\n        with: *w\n      - uses: actions/upload-artifact@abc\n        with:\n          if-no-files-found: error\n' 1 \
   "%W: job wnested step[0] actions/upload-artifact has ${BT}if-no-files-found: warn${BT}; must be ${BT}error${BT}
 ${ONE}"
+# A chain five aliases deep: the job, its steps, a step, the step's
+# uses: and with:, and the value. The job's two passes resolve the first
+# two, and the step's three the rest.
+expect_built 'a five-deep alias chain is read through' \
+  'x-u: &u actions/upload-artifact@abc\nx-v: &v warn\nx-w: &w {if-no-files-found: *v}\nx-s: &s {uses: *u, with: *w}\nx-l: &l [*s]\nx-j: &j {steps: *l}\non: push\njobs:\n  deep: *j\n' 1 \
+  "%W: job deep step[0] actions/upload-artifact has ${BT}if-no-files-found: warn${BT}; must be ${BT}error${BT}
+${ONE}"
+expect_built 'a step alias whose uses: is an alias is read through both' \
+  'x-u: &u actions/upload-artifact@abc\nx-s: &s {uses: *u, with: {if-no-files-found: warn}}\non: push\njobs:\n  usesalias:\n    steps:\n      - *s\n' 1 \
+  "%W: job usesalias step[0] actions/upload-artifact has ${BT}if-no-files-found: warn${BT}; must be ${BT}error${BT}
+${ONE}"
 expect_built 'a step written as an alias is read through it' \
   'x-s: &s {uses: actions/upload-artifact@abc, with: {if-no-files-found: warn}}\non: push\njobs:\n  salias:\n    steps:\n      - *s\n      - uses: actions/upload-artifact@abc\n        with:\n          if-no-files-found: error\n' 1 \
   "%W: job salias step[0] actions/upload-artifact has ${BT}if-no-files-found: warn${BT}; must be ${BT}error${BT}

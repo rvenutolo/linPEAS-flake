@@ -200,6 +200,12 @@ expect_built 'a job written as an alias is read through it' \
   'x-j: &j {permissions: {pull-requests: write}}\n'"${HEAD}"'  a: *j\n' 1 \
   "%W: job a grants write scope pull-requests not allowed by %A
 ${ONE}"
+expect_passes 'a null permissions: yields no scope row' \
+  "${HEAD}"'  a:\n    permissions:\n'
+expect_built 'a job alias holding a permissions alias holding a value alias is read through all three' \
+  'x-w: &w write\nx-p: &p {pull-requests: *w}\nx-j: &j {permissions: *p}\n'"${HEAD}"'  a: *j\n' 1 \
+  "%W: job a grants write scope pull-requests not allowed by %A
+${ONE}"
 expect_built 'a job written as an alias holding an alias is read through both' \
   'x-p: &p {pull-requests: write}\nx-j: &j {permissions: *p}\n'"${HEAD}"'  a: *j\n' 1 \
   "%W: job a grants write scope pull-requests not allowed by %A
