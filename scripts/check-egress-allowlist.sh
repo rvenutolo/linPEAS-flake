@@ -374,6 +374,16 @@ for f in "${selected_files[@]}"; do
   # builtin) reports a job key's own 1-indexed source line; a job's range
   # runs from there to one line before the next job key's line, or to the
   # end of the file for the last job in document order.
+  #
+  # The key is free text ahead of the line number in each row, so a key
+  # holding a tab or a line break would put its own text where the
+  # number goes, and the range arithmetic below would evaluate it (an
+  # array subscript in it runs a command). The line field is held to
+  # ASCII digits with no leading zero before it is stored, and the file
+  # is read no further when a row fails. The next job's start is read
+  # into a variable first, so no key text sits inside the arithmetic:
+  # bash 5.1 expands a command substitution held in an associative
+  # subscript there.
   declare -A JOB_START=()
   declare -A JOB_END=()
   declare -a job_order=()
@@ -381,16 +391,29 @@ for f in "${selected_files[@]}"; do
     fail "${f}: could not evaluate job line numbers with yq (malformed?)"
     continue
   fi
-  while IFS=$'\t' read -r jline_name jline_num; do
-    [[ -z ${jline_name} ]] && continue
+  forged_row=''
+  while IFS= read -r jline_row; do
+    [[ -z ${jline_row} ]] && continue
+    jline_name="${jline_row%%$'\t'*}"
+    jline_num="${jline_row#*$'\t'}"
+    if [[ ${jline_row} != *$'\t'* || ! ${jline_num} =~ ^[123456789][0123456789]{0,8}$ ]]; then
+      forged_row="${jline_row}"
+      break
+    fi
     JOB_START["${jline_name}"]="${jline_num}"
     job_order+=("${jline_name}")
   done <<<"${job_line_rows}"
+  if [[ -n ${forged_row} ]]; then
+    # Quoted with @Q so the tab or line break shows as an escape.
+    fail "${f}: a job key holds a tab or a line break, so its line row cannot be read: ${forged_row@Q}"
+    continue
+  fi
   file_lines="$(wc -l <"${f}")"
   for jidx in "${!job_order[@]}"; do
     jline_name="${job_order[${jidx}]}"
     if ((jidx + 1 < ${#job_order[@]})); then
-      JOB_END["${jline_name}"]=$((JOB_START["${job_order[$((jidx + 1))]}"] - 1))
+      next_start="${JOB_START["${job_order[jidx + 1]}"]}"
+      JOB_END["${jline_name}"]=$((next_start - 1))
     else
       JOB_END["${jline_name}"]="${file_lines}"
     fi
