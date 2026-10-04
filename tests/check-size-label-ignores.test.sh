@@ -32,9 +32,11 @@ trap cleanup EXIT
 # ${1}=scenario name  ${2}=scripts root  ${3}=labeler path
 # ${4}=wanted exit    ${5}=wanted stderr substring ('' for none)
 # ${6}=1 to run with LINT_ALLOW_EMPTY_SCAN set (default: unset)
+# ${7}=the whole wanted stderr, and ${8} the whole wanted stdout ('' for
+#      either skips it)
 function expect() {
   local -r name="$1" scripts_dir="$2" labeler="$3" want_exit="$4" want_msg="$5"
-  local -r allow_empty="${6:-}"
+  local -r allow_empty="${6:-}" want_stderr="${7:-}" want_stdout="${8:-}"
 
   local stdout_file stderr_file outcome_file
   stdout_file="$(mktemp)"
@@ -59,6 +61,14 @@ function expect() {
   elif [[ -n ${want_msg} && ${got_stderr} != *"${want_msg}"* ]]; then
     printf 'FAIL %s: stderr missing %q\n  got: %s\n' \
       "${name}" "${want_msg}" "${got_stderr}" >&2
+    failures=$((failures + 1))
+  elif [[ -n ${want_stderr} && ${got_stderr} != "${want_stderr}" ]]; then
+    printf 'FAIL %s: stderr is not %q\n  got: %s\n' \
+      "${name}" "${want_stderr}" "${got_stderr}" >&2
+    failures=$((failures + 1))
+  elif [[ -n ${want_stdout} && $(<"${stdout_file}") != "${want_stdout}" ]]; then
+    printf 'FAIL %s: stdout is not %q\n  got: %s\n' \
+      "${name}" "${want_stdout}" "$(<"${stdout_file}")" >&2
     failures=$((failures + 1))
   else
     printf 'PASS: %s (exit %s)\n' "${name}" "${got_exit}"
@@ -202,10 +212,34 @@ jobs:
         env:
           IGNORED: "docs/alpha.md"
 EOF
+    local finding="${work}/key-${case_name}.yml: IGNORED lists docs/key-${case_name}.md, which no script declares with @generates and which is not one of this lint's exemptions; every hand edit to it counts as zero toward the PR size label"
     PROBE=PAYLOAD_RAN PROBE_FILE="${work}/probe.txt" expect "key as data: ${case_name}" \
-      "${DECLARING_SCRIPTS}" "${work}/key-${case_name}.yml" 1 \
-      "${work}/key-${case_name}.yml: IGNORED lists docs/key-${case_name}.md, which no script declares with @generates and which is not one of this lint's exemptions; every hand edit to it counts as zero toward the PR size label"
+      "${DECLARING_SCRIPTS}" "${work}/key-${case_name}.yml" 1 "${finding}" '' \
+      "${finding}"$'\n1 size-label ignore-list violation(s)'
   done
+  # A key is looked up by its exact text: `*` is no wildcard. Read as a
+  # pattern, the first job's key would read its sibling's list as well,
+  # and the run would count four entries instead of three.
+  cat >"${work}/key-wildcard.yml" <<'EOF'
+name: key-wildcard
+on:
+  workflow_dispatch: {}
+jobs:
+  'a*':
+    runs-on: ubuntu-latest
+    steps:
+      - uses: pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7
+        env:
+          IGNORED: "docs/alpha.md\nCHANGELOG.md"
+  ab:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7
+        env:
+          IGNORED: "docs/alpha.md"
+EOF
+  expect 'key as data: wildcard' "${DECLARING_SCRIPTS}" "${work}/key-wildcard.yml" 0 '' '' '' \
+    "check-size-label-ignores.sh: ok — 2 declaration(s) (1 @generates, 1 @generates-block) across 2 script(s) under ${DECLARING_SCRIPTS}, checked against 3 IGNORED entry(ies) in ${work}/key-wildcard.yml"
 
   # (m) LIVE: the real tree must satisfy the lint.
   expect 'live: real tree agrees' \

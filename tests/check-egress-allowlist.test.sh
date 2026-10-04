@@ -348,6 +348,43 @@ expect_spliced_key job-key-reads-env 'x" | error(strenv(PROBE)) | ."y'
 expect_spliced_key job-key-reads-file 'x" | error(load_str(strenv(PROBE_FILE))) | ."y'
 expect_spliced_key job-key-quote 'k"x'
 expect_spliced_key job-key-backslash 'k\x'
+# A key is looked up by its exact text: `*` and `?` are no wildcards.
+# Read as a pattern, the key below would take its sibling's nix run and
+# pass its own nix host.
+cat >"${key_dir}/wf/job-key-wildcard.yml" <<'EOF'
+name: job-key-wildcard
+on:
+  workflow_dispatch: {}
+jobs:
+  'b*':
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            cache.nixos.org:443
+      - run: echo PAYLOAD_RAN
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            cache.nixos.org:443
+            releases.nixos.org:443
+      - run: nix build .#linpeas
+EOF
+wild_exit=0
+wild_err="$(WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER=job-key-wildcard.yml \
+  "${SCRIPT}" 2>&1 >/dev/null)" || wild_exit=$?
+wild_want="${key_dir}/wf/job-key-wildcard.yml: job 'b*' allowlists cache.nixos.org/releases.nixos.org but reaches no nix tooling — neither ./.github/actions/setup-nix nor a run: nix invocation is detected, and no '# egress-nix-exempt: <reason>' marker justifies it"$'\n1 egress-allowlist violation(s)'
+if [[ ${wild_exit} != 1 || ${wild_err} != "${wild_want}" ]]; then
+  printf 'FAIL job-key-wildcard: exit %s, want 1\n  stderr: %s\n' "${wild_exit}" "${wild_err}" >&2
+  exit 1
+fi
+printf 'OK   job-key-wildcard\n'
 
 # A key that prints as an empty name still opens a block, so it ends the
 # job before it. Here the job before it carries a nix host but runs no

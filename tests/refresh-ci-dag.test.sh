@@ -259,7 +259,8 @@ EOF
   # Scenario: a job key is data, never expression text. Each key below
   # closes a quoted segment if spliced into the category read: it would
   # take job-a's category, or print an environment variable or a file
-  # through `error()`. Read as data, each key takes its own category.
+  # through `error()`, or match job-a as a pattern. Read as data, each
+  # key takes its own category and the run logs only its one line.
   local key_work
   key_work="$(mktemp --directory)"
   printf 'FILE_READ_MARK\n' >"${key_work}/probe.txt"
@@ -267,6 +268,7 @@ EOF
     'reads-other' 'zz" // ."job-a'
     'reads-env' 'zz" | error(strenv(PROBE)) | ."y'
     'reads-file' 'zz" | error(load_str(strenv(PROBE_FILE))) | ."y'
+    'wildcard' 'job-*'
   )
   local i case_name key key_rc
   for ((i = 0; i < ${#key_cases[@]}; i += 2)); do
@@ -285,6 +287,8 @@ EOF
     harness_assert_record "job key as data: ${case_name}" '' \
       "${key_work}/${case_name}.outcome" "${key_work}/${case_name}.md" "${key_work}/${case_name}.err"
     if [[ ${key_rc} -eq 0 ]] &&
+      [[ $(<"${key_work}/${case_name}.err") =~ ^\[[^]]*\]\ INFO\ \ refreshed\ ci-dag\ block\ in\ (.*)$ ]] &&
+      [[ ${BASH_REMATCH[1]} == "${key_work}/${case_name}.md" ]] &&
       grep --line-regexp --fixed-strings --quiet -- "  ${key}:::doc" "${key_work}/${case_name}.md" &&
       grep --line-regexp --fixed-strings --quiet -- '  job-a:::build' "${key_work}/${case_name}.md"; then
       pass "job key as data: ${case_name} renders its own category"

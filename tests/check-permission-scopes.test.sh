@@ -308,6 +308,17 @@ expect_names scope-name-reads-env w.yml "${WRITER}" \
 expect_names allowlist-job-reads-writer w.yml "${WRITER}" \
   $'w.yml:\n  writer: [issues]\n  \'x" // .jobs."writer\': [issues]\n' 1 \
   '@AL@: stale entry w.yml/x\"\ //\ .jobs.\"writer/issues (job does not grant that write scope)'$'\n1 permission-scope violation(s) found'
+# A name is looked up by its exact text: `*` and `?` are no wildcards.
+# Read as patterns, the job key would borrow its sibling's entry and the
+# file name another workflow's.
+expect_names job-key-wildcard w.yml \
+  $'permissions: {}\njobs:\n  \'rel*\':\n    permissions:\n      contents: write\n    steps:\n      - run: echo PAYLOAD_RAN\n  release:\n    permissions:\n      contents: write\n    steps:\n      - run: echo PAYLOAD_RAN\n' \
+  $'w.yml:\n  release: [contents]\n' 1 \
+  '@WF@: job rel\* grants write scope contents not allowed by @AL@'$'\n1 permission-scope violation(s) found'
+expect_names file-name-wildcard 'rel?.yml' \
+  $'permissions: {}\njobs:\n  publish:\n    permissions:\n      contents: write\n    steps:\n      - run: echo PAYLOAD_RAN\n' \
+  $'relz.yml:\n  publish: [contents]\n' 1 \
+  '@WF@: job publish grants write scope contents not allowed by @AL@'$'\n@AL@: stale entry relz.yml/publish/contents (job does not grant that write scope)\n2 permission-scope violation(s) found'
 # A workflow file name is data too.
 expect_names file-name-quote 'q"x.yml' "${WRITER}" \
   $'\'q"x.yml\':\n  writer: [issues]\n' 0 ''

@@ -123,5 +123,9 @@ expect_body job-key-reads-decoy-body.yml $'jobs:\n  \'x" // .jobs."decoy\':\n   
   "DIR/job-key-reads-decoy-body.yml: job ${quoted_decoy} holds guard-required write scope but is missing fork guard ${BT}github.repository == 'rvenutolo/linPEAS-flake'${BT}; got if=''${ONE_JOB}"
 expect_body job-key-reads-decoy-guard.yml $'jobs:\n  \'x" // .jobs."decoy\':\n    permissions:\n      contents: write\n    steps:\n      - run: echo PAYLOAD_RAN\n  decoy:\n    if: github.repository == \'rvenutolo/linPEAS-flake\'\n    permissions:\n      contents: write\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
   "DIR/job-key-reads-decoy-guard.yml: job ${quoted_decoy} holds guard-required write scope but is missing fork guard ${BT}github.repository == 'rvenutolo/linPEAS-flake'${BT}; got if=''${ONE_JOB}"
+# A key is looked up by its exact text: `*` and `?` are no wildcards.
+# Read as a pattern, the key below would borrow its sibling's guard.
+expect_body job-key-wildcard.yml $'jobs:\n  \'a*\':\n    permissions:\n      contents: write\n    steps:\n      - run: echo PAYLOAD_RAN\n  ab:\n    if: github.repository == \'rvenutolo/linPEAS-flake\'\n    permissions:\n      contents: write\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
+  "DIR/job-key-wildcard.yml: job a\\* holds guard-required write scope but is missing fork guard ${BT}github.repository == 'rvenutolo/linPEAS-flake'${BT}; got if=''${ONE_JOB}"
 
 printf 'all tests passed\n'

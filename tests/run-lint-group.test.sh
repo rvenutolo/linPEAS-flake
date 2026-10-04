@@ -21,8 +21,9 @@ failures=0
 # @arg $2 group arg to pass
 # @arg $3 expected exit
 # @arg $4 expected stdout substring (empty skips)
+# @arg $5 the whole expected output (optional)
 function run_scenario() {
-  local -r name="$1" group="$2" expected_exit="$3" expected_out="$4"
+  local -r name="$1" group="$2" expected_exit="$3" expected_out="$4" expected_whole="${5-}"
   local outcome_file out_file step_file work scripts_dir tests_dir manifest
   work="$(mktemp -d)"
   scripts_dir="${work}/scripts"
@@ -75,6 +76,10 @@ YAML
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${expected_exit}" "${actual_exit}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  elif [[ -n ${expected_whole} && $(<"${out_file}") != "${expected_whole}" ]]; then
+    printf 'FAIL: %s — output is not %q\n' "${name}" "${expected_whole}" >&2
     cat -- "${out_file}" >&2
     failures=$((failures + 1))
   elif [[ -n ${expected_out} ]] && ! grep --fixed-strings --quiet -- "${expected_out}" "${out_file}"; then
@@ -190,12 +195,16 @@ function main() {
   probe_dir="$(mktemp -d)"
   printf 'FILE_READ_MARK\n' >"${probe_dir}/probe.txt"
   run_scenario 'group name as data: reads another group' 'nope" // ."demo-one-fail' 2 \
-    'unknown or empty group: nope" // ."demo-one-fail'
+    'unknown or empty group: nope" // ."demo-one-fail' 'unknown or empty group: nope" // ."demo-one-fail'
   PROBE=PAYLOAD_RAN run_scenario 'group name as data: reads env' 'x" | error(strenv(PROBE)) | ."y' 2 \
-    'unknown or empty group: x" | error(strenv(PROBE)) | ."y'
+    'unknown or empty group: x" | error(strenv(PROBE)) | ."y' 'unknown or empty group: x" | error(strenv(PROBE)) | ."y'
   PROBE_FILE="${probe_dir}/probe.txt" run_scenario 'group name as data: reads a file' \
     'x" | error(load_str(strenv(PROBE_FILE))) | ."y' 2 \
+    'unknown or empty group: x" | error(load_str(strenv(PROBE_FILE))) | ."y' \
     'unknown or empty group: x" | error(load_str(strenv(PROBE_FILE))) | ."y'
+  # A name is looked up by its exact text: `*` is no wildcard. Read as a
+  # pattern, it would run every group.
+  run_scenario 'group name as data: a wildcard' '*' 2 'unknown or empty group: *' 'unknown or empty group: *'
   rm --recursive --force -- "${probe_dir}"
   run_scenario 'group name as data: a quote in a manifest key' 'q"x' 0 '| qqq | pass |'
   run_test_gate_scenario
