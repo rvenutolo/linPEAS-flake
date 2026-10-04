@@ -319,6 +319,25 @@ expect_names file-name-wildcard 'rel?.yml' \
   $'permissions: {}\njobs:\n  publish:\n    permissions:\n      contents: write\n    steps:\n      - run: echo PAYLOAD_RAN\n' \
   $'relz.yml:\n  publish: [contents]\n' 1 \
   '@WF@: job publish grants write scope contents not allowed by @AL@'$'\n@AL@: stale entry relz.yml/publish/contents (job does not grant that write scope)\n2 permission-scope violation(s) found'
+# The stale-entry read looks names up the same way: an allowlist job
+# or scope name read as a pattern would find the grant of another.
+expect_names allowlist-job-wildcard w.yml \
+  $'permissions: {}\njobs:\n  release:\n    permissions:\n      packages: write\n    steps:\n      - run: echo PAYLOAD_RAN\n' \
+  $'w.yml:\n  release: [packages]\n  \'rel*\': [packages]\n' 1 \
+  '@AL@: stale entry w.yml/rel\*/packages (job does not grant that write scope)'$'\n1 permission-scope violation(s) found'
+expect_names allowlist-scope-wildcard w.yml \
+  $'permissions: {}\njobs:\n  writer:\n    permissions:\n      issues: write\n      packages: write\n    steps:\n      - run: echo PAYLOAD_RAN\n' \
+  $'w.yml:\n  writer: [issues, \'pack*\', packages]\n' 1 \
+  '@AL@: stale entry w.yml/writer/pack\* (job does not grant that write scope)'$'\n1 permission-scope violation(s) found'
+# The stale-entry read takes a permissions: map, through an alias; the
+# string read-all grants no scope.
+expect_names allowlist-read-all w.yml \
+  $'permissions: {}\njobs:\n  reader:\n    permissions: read-all\n    steps:\n      - run: echo PAYLOAD_RAN\n' \
+  $'w.yml:\n  reader: [packages]\n' 1 \
+  '@AL@: stale entry w.yml/reader/packages (job does not grant that write scope)'$'\n1 permission-scope violation(s) found'
+expect_names allowlist-permissions-alias w.yml \
+  $'permissions: {}\nx-perms: &p\n  packages: write\njobs:\n  writer:\n    permissions: *p\n    steps:\n      - run: echo PAYLOAD_RAN\n' \
+  $'w.yml:\n  writer: [packages]\n' 0 ''
 # A workflow file name is data too.
 expect_names file-name-quote 'q"x.yml' "${WRITER}" \
   $'\'q"x.yml\':\n  writer: [issues]\n' 0 ''
