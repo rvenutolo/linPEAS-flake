@@ -113,11 +113,11 @@ expect_unparsable 'permissions: [\n' 'bad-unparsable.yml: could not evaluate'
 # Every read of the top-level `permissions:` after its shape has been
 # read is held to the run-stopping line, on a workflow that holds the
 # fault the read is for and on one that does not. Each stub text is
-# carried by that read alone: the scalar read is `eval .permissions`
+# carried by that read alone: the scalar read is the node's expression
 # followed by the fixture's absolute path.
-expect_failed_read bad-top-write-all.yml 'eval .permissions /' 7 'the top-level permissions'
-expect_failed_read good.yml '.permissions | length' 9 'the top-level permissions size'
-expect_failed_read bad-top-nonempty.yml '.permissions | length' 11 'the top-level permissions size'
+expect_failed_read bad-top-write-all.yml '.[0] /' 7 'the top-level permissions'
+expect_failed_read good.yml '.[0] | length' 9 'the top-level permissions size'
+expect_failed_read bad-top-nonempty.yml '.[0] | length' 11 'the top-level permissions size'
 expect_failed_read bad-top-nonempty.yml 'keys | join' 13 'the top-level permissions keys'
 
 # The per-job read can fail on the workflow's own shape, so its failure
@@ -135,21 +135,6 @@ if [[ ${jobs_exit} != 1 || ${jobs_stderr} != *$'\n'"${jobs_want}" ]]; then
   exit 1
 fi
 printf 'OK   jobs-number.yml: a jobs: yq cannot list is a counted finding\n'
-
-# A node whose tag yq cannot decode fails a later read too: the run
-# stops, as it does for yq failing, though the fault is the workflow's.
-mistag_dir="$(mktemp --directory)"
-printf 'permissions: !!map 5\njobs: {}\n' >"${mistag_dir}/mistag.yml"
-mistag_exit=0
-mistag_stderr="$(WORKFLOWS_DIR_OVERRIDE="${mistag_dir}" "${SCRIPT}" 2>&1 >/dev/null)" || mistag_exit=$?
-rm --recursive --force -- "${mistag_dir}"
-mistag_want="cannot read the top-level permissions keys of ${mistag_dir}/mistag.yml: yq exited 1"
-if [[ ${mistag_exit} != 2 || ${mistag_stderr} != *$'\n'"${mistag_want}" ]]; then
-  printf 'FAIL mistag.yml: exit %s, want 2, and stderr ending %q\n  got: %s\n' \
-    "${mistag_exit}" "${mistag_want}" "${mistag_stderr}" >&2
-  exit 1
-fi
-printf 'OK   mistag.yml: a node yq cannot decode stops the run\n'
 
 # @description Scan one workflow written to a temp dir at run time and
 # compare the whole of stderr, so the shapes built here (tags) are not
@@ -219,23 +204,34 @@ if [[ ${ids_exit} != 1 || ${ids_stderr} != "${ids_want}" ]]; then
   exit 1
 fi
 printf 'OK   good.yml with the job-id read failing\n'
-# yq prints one job-id count per document; counts of 0 in a file of
-# several documents are no odd id, and a document whose jobs: is null
-# has no ids to count rather than a read that fails. (Several documents are not refused by
-# this lint; only the id message is held here.)
-docs_dir="$(mktemp --directory)"
-printf 'permissions: {}\njobs:\n  a:\n    permissions: {}\n---\npermissions: {}\njobs:\n' \
-  >"${docs_dir}/two-docs.yml"
-docs_exit=0
-docs_stderr="$(WORKFLOWS_DIR_OVERRIDE="${docs_dir}" "${SCRIPT}" 2>&1 >/dev/null)" || docs_exit=$?
-rm --recursive --force -- "${docs_dir}"
-if [[ ${docs_exit} != 1 || ${docs_stderr} == *'tab or a line break'* || ${docs_stderr} == *'could not evaluate'* ]]; then
-  printf 'FAIL two-docs.yml: exit %s, want 1, and no job-id line\n  got: %s\n' "${docs_exit}" "${docs_stderr}" >&2
-  exit 1
-fi
-printf 'OK   two-docs.yml: per-document id counts of 0\n'
 expect_body job-xtag.yml $'permissions: {}\njobs:\n  a:\n    permissions: !x\n      contents: read\n' 0 ''
 expect_body job-strseq.yml $'permissions: {}\njobs:\n  b:\n    permissions: !!str [contents]\n' 1 \
   $'DIR/job-strseq.yml: job b permissions has unexpected shape (kind=seq, tag=!!str)\n1 permissions posture violation(s) found'
+
+# The top-level block is read by kind and through an alias, like a
+# job's. An empty scalar carrying the map tag is no empty map.
+readonly ONE=$'\n1 permissions posture violation(s) found'
+expect_body top-map-empty-scalar.yml $'permissions: !!map \'\'\njobs: {}\n' 1 \
+  "DIR/top-map-empty-scalar.yml: top-level permissions has unexpected shape (kind=scalar, tag=!!map)${ONE}"
+expect_body top-map-five.yml $'permissions: !!map 5\njobs: {}\n' 1 \
+  "DIR/top-map-five.yml: top-level permissions has unexpected shape (kind=scalar, tag=!!map)${ONE}"
+expect_body top-xtag.yml $'permissions: !x {}\njobs: {}\n' 0 ''
+expect_body top-xtag-granting.yml $'permissions: !x {contents: read}\njobs: {}\n' 1 \
+  "DIR/top-xtag-granting.yml: top-level permissions non-empty (keys: contents); need ${Q}permissions: {}${Q}${ONE}"
+expect_body top-str-list.yml $'permissions: !!str [a]\njobs: {}\n' 1 \
+  "DIR/top-str-list.yml: top-level permissions has unexpected shape (kind=seq, tag=!!str)${ONE}"
+expect_body top-xtag-string.yml $'permissions: !x read-all\njobs: {}\n' 1 \
+  "DIR/top-xtag-string.yml: top-level permissions has unexpected shape (kind=scalar, tag=!x)${ONE}"
+expect_body top-alias.yml $'x-p: &p {}\npermissions: *p\njobs: {}\n' 0 ''
+expect_body top-alias-granting.yml $'x-p: &p {issues: write}\npermissions: *p\njobs: {}\n' 1 \
+  "DIR/top-alias-granting.yml: top-level permissions non-empty (keys: issues); need ${Q}permissions: {}${Q}${ONE}"
+expect_body top-alias-string.yml $'x-p: &p write-all\npermissions: *p\njobs: {}\n' 1 \
+  "DIR/top-alias-string.yml: top-level permissions is scalar write-all (need ${Q}permissions: {}${Q})${ONE}"
+# Several documents are one finding, read no further: a trailing ---
+# starts a second one, and a granting block in it is not reported.
+expect_body two-docs.yml $'permissions: {}\njobs:\n  a:\n    permissions: {}\n---\npermissions: {contents: write}\njobs:\n' 1 \
+  "DIR/two-docs.yml: holds several YAML documents, which GitHub Actions refuses; it is read no further${ONE}"
+expect_body trailing-separator.yml $'permissions: {}\njobs:\n  b:\n    runs-on: x\n---\n' 1 \
+  "DIR/trailing-separator.yml: holds several YAML documents, which GitHub Actions refuses; it is read no further${ONE}"
 
 printf 'all tests passed\n'
