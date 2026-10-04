@@ -21,7 +21,7 @@
 # `uses:` and its `timeout-minutes:` written as aliases are read through
 # them, as are a job id and `jobs:` itself. A job id that is not a
 # scalar, is empty, or holds a tab, a line break or a NUL is a finding,
-# whatever its tag: GitHub
+# whatever its tag, and is named with its kind: GitHub
 # Actions refuses such an id, and it could forge, split or garble the
 # tab-separated row the jobs are read through, so that workflow's jobs
 # are not read.
@@ -73,23 +73,31 @@ for f in "${selected_files[@]}"; do
   # The jobs are read below as tab-separated rows, and the job id is the
   # one field written as raw text, so an id that is not a scalar, is
   # empty, or holds a tab, a line break or a NUL could forge, split or
-  # garble a row. Each key is resolved through an alias first, then tested as the
-  # text it renders to, whatever its tag; a document whose `jobs:` is not
-  # a map has no ids to test.
-  if ! odd_ids="$(yq eval "[${JOBS_NODE}"' | select(kind == "map") | keys[] | explode(.) | select(kind != "scalar" or (tostring | test("^$|[\t\n\x00]")))] | length' "${f}")"; then
+  # garble a row. Each key is resolved through an alias first, then
+  # tested as the text it renders to, whatever its tag; a document whose
+  # `jobs:` is not a map has no ids to test. The read prints, per
+  # document, the first such id's kind and text as JSON (`-` for none).
+  if ! odd_ids="$(yq eval "[${JOBS_NODE}"' | select(kind == "map") | keys[] | explode(.) | select(kind != "scalar" or (tostring | test("^$|[\t\n\x00]"))) | "kind=" + kind + ", id=" + (tostring | to_json(0))] | .[0] // "-"' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
   fi
-  # One count per document: any count above 0 is a finding.
-  if [[ ${odd_ids} == *[1-9]* ]]; then
-    printf '%s: jobs: holds a job id that is not a string, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read\n' \
-      "${f}" >&2
+  odd_id=''
+  while IFS= read -r line; do
+    if [[ ${line} != '-' ]]; then
+      odd_id="${line}"
+      break
+    fi
+  done <<<"${odd_ids}"
+  if [[ -n ${odd_id} ]]; then
+    printf '%s: jobs: holds a job id that is not a string, is empty, or holds a tab, a line break or a NUL (%s), which GitHub Actions refuses; its jobs are not read\n' \
+      "${f}" "${odd_id}" >&2
     failed=$((failed + 1))
     continue
   fi
-  # Each row: the job id, resolved through an alias; whether its `uses:` is a scalar carrying the
-  # string tag; the kind of its `timeout-minutes:` (`none` when absent);
+  # Each row: the job id, resolved through an alias; whether its `uses:`
+  # is a scalar carrying the string tag; the kind of its
+  # `timeout-minutes:` (`none` when absent);
   # the value when it is a scalar carrying the integer tag and written in
   # decimal digits (`-` otherwise); and the value's tag and text as JSON
   # strings. A tag is free text too (a verbatim tag decodes `%7C` to a
