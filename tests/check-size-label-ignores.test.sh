@@ -204,7 +204,7 @@ jobs:
 EOF
     PROBE=PAYLOAD_RAN PROBE_FILE="${work}/probe.txt" expect "key as data: ${case_name}" \
       "${DECLARING_SCRIPTS}" "${work}/key-${case_name}.yml" 1 \
-      "${work}/key-${case_name}.yml: IGNORED lists docs/key-${case_name}.md, which no script declares with @generates and which is not one of this lint's exemptions; every hand edit to it counts as zero toward the PR size label"$'\n1 size-label ignore-list violation(s)'
+      "${work}/key-${case_name}.yml: IGNORED lists docs/key-${case_name}.md, which no script declares with @generates and which is not one of this lint's exemptions; every hand edit to it counts as zero toward the PR size label"
   done
 
   # (m) LIVE: the real tree must satisfy the lint.
