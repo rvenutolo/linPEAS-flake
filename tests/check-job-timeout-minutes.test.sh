@@ -39,20 +39,33 @@ readonly BT
 
 # @description Run the script on one workflow built from printf-style
 # text, and compare its exit code and the whole of its stderr. `%W` in
-# the expected stderr stands for the workflow's path.
+# the expected stderr stands for the workflow's path, which is numbered
+# per scenario, so no two scenarios share an output. An expected stderr
+# opening with `YQ_ERROR` and a line break stands for one line of `yq`'s
+# own, whose wording is not the lint's: it must start with `Error: `.
 # @arg $1 scenario name
 # @arg $2 workflow text (printf format, no arguments)
 # @arg $3 expected exit code
 # @arg $4 expected stderr, `%W` for the workflow path
 function expect_built() {
   local -r name="$1" text="$2" want_exit="$3" want="$4"
-  local dir got_exit=0 got_stderr
+  local dir got_exit=0 got_stderr path
+  SCENARIO_N=$((SCENARIO_N + 1))
   dir="$(mktemp --directory)"
+  path="${dir}/wf-${SCENARIO_N}.yml"
   # shellcheck disable=SC2059 # the workflow text is the format
-  printf "${text}" >"${dir}/wf.yml"
+  printf "${text}" >"${path}"
   got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${dir}" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
-  local -r expected="${want//%W/${dir}/wf.yml}"
+  local expected="${want//%W/${path}}"
   rm --recursive --force -- "${dir}"
+  if [[ ${expected} == YQ_ERROR$'\n'* ]]; then
+    expected="${expected#YQ_ERROR$'\n'}"
+    if [[ ${got_stderr} != 'Error: '*$'\n'* ]]; then
+      printf 'FAIL %s: stderr does not open with a line of yq'"'"'s own\n  got: %q\n' "${name}" "${got_stderr}" >&2
+      return 1
+    fi
+    got_stderr="${got_stderr#*$'\n'}"
+  fi
   if [[ ${got_exit} != "${want_exit}" ]]; then
     printf 'FAIL %s: exit %s, want %s\n  stderr: %s\n' "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" >&2
     return 1
@@ -62,6 +75,18 @@ function expect_built() {
     return 1
   fi
   printf 'OK   %s\n' "${name}"
+}
+SCENARIO_N=0
+
+# @description A scenario whose job passes: a sentinel job with no
+# timeout follows it, so the run ends in that one finding alone, which
+# shows the job before it was read and passed.
+# @arg $1 scenario name
+# @arg $2 workflow text ending in its jobs: block (printf format)
+function expect_passes() {
+  expect_built "$1" "$2"'  sentinel:\n    runs-on: x\n' 1 \
+    "%W: job sentinel missing ${BT}timeout-minutes${BT} (default is 6h; declare an explicit value)
+${ONE_BAD}"
 }
 
 readonly ONE_BAD='1 job(s) missing or invalid timeout-minutes'
@@ -112,24 +137,24 @@ expect_built 'a key with no value is a missing one' \
   "${JOB_HEAD}"'    timeout-minutes:\n' 1 \
   "%W: job a missing ${BT}timeout-minutes${BT} (default is 6h; declare an explicit value)
 ${ONE_BAD}"
-expect_built 'an integer-tagged value with a leading zero is read in decimal' \
-  "${JOB_HEAD}"'    timeout-minutes: !!int "09"\n' 0 ''
+expect_passes 'an integer-tagged value with a leading zero is read in decimal' \
+  "${JOB_HEAD}"'    timeout-minutes: !!int "09"\n'
 expect_built 'zeros only is not positive' \
   "${JOB_HEAD}"'    timeout-minutes: 00\n' 1 \
   "%W: job a timeout-minutes must be positive (got 00)
 ${ONE_BAD}"
-expect_built 'a value written as an alias is read through it' \
-  'x-t: &t 7\n'"${JOB_HEAD}"'    timeout-minutes: *t\n' 0 ''
-expect_built 'a job written as an alias is read through it' \
-  'x-t: &t 7\nx-j: &j {runs-on: x, timeout-minutes: *t}\non: push\njobs:\n  a: *j\n' 0 ''
+expect_passes 'a value written as an alias is read through it' \
+  'x-t: &t 7\n'"${JOB_HEAD}"'    timeout-minutes: *t\n'
+expect_passes 'a job written as an alias is read through it' \
+  'x-t: &t 7\nx-j: &j {runs-on: x, timeout-minutes: *t}\non: push\njobs:\n  a: *j\n'
 
 # A job is a reusable-workflow call only when its uses: is a string.
 expect_built 'a uses: list carrying the string tag is no reusable-workflow call' \
   'on: push\njobs:\n  a:\n    uses: !!str [a]\n' 1 \
   "%W: job a missing ${BT}timeout-minutes${BT} (default is 6h; declare an explicit value)
 ${ONE_BAD}"
-expect_built 'a uses: written as an alias is read through it' \
-  'x-u: &u o/r/.github/workflows/x.yml@v1\non: push\njobs:\n  a:\n    uses: *u\n' 0 ''
+expect_passes 'a uses: written as an alias is read through it' \
+  'x-u: &u o/r/.github/workflows/x.yml@v1\non: push\njobs:\n  a:\n    uses: *u\n'
 
 # A tag is free text: a verbatim tag decodes %7C to a pipe, which must
 # not split the value's fields.
@@ -145,7 +170,7 @@ ${ONE_BAD}"
 # A job id is the one raw field of a row, so one that is not a string,
 # is empty, or holds a tab or a line break could forge, split or garble
 # it. A pipe cannot. An id written as an alias is read through it.
-readonly ODD_ID='jobs: holds a job id that is not a string, is empty, or holds a tab or a line break, which GitHub Actions refuses; its jobs are not read'
+readonly ODD_ID='jobs: holds a job id that is not a string, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read'
 expect_built 'a job id written as an alias is read through it' \
   'x-k: &k a\non: push\njobs:\n  *k :\n    runs-on: x\n' 1 \
   "%W: job a missing ${BT}timeout-minutes${BT} (default is 6h; declare an explicit value)
@@ -178,15 +203,39 @@ ${ONE_BAD}"
 # A workflow that does not parse fails the first read, once.
 expect_built 'an unparsable workflow is one finding against the file' \
   'on: push\njobs: [a: b\n' 1 \
-  "Error: bad file '%W': yaml: while parsing a flow sequence at line 1, column 7: line 2: did not find expected ',' or ']'
+  "YQ_ERROR
 %W: could not evaluate workflow with yq (malformed?)
+${ONE_BAD}"
+
+expect_built 'a job id holding a NUL is refused' \
+  'on: push\njobs:\n  "a\\0b":\n    runs-on: x\n    timeout-minutes: 5\n' 1 \
+  "%W: ${ODD_ID}
+${ONE_BAD}"
+
+# jobs: written as an alias is read through it, and a second document's
+# jobs are read as rows of their own.
+expect_built 'a jobs: alias of a map lacking a timeout names its job' \
+  'x-j: &j {aliased: {runs-on: x}}\non: push\njobs: *j\n' 1 \
+  "%W: job aliased missing ${BT}timeout-minutes${BT} (default is 6h; declare an explicit value)
+${ONE_BAD}"
+expect_built 'a jobs: alias holding a job id with a tab is refused' \
+  'x-j: &j {"a\\tb": {runs-on: x}}\non: push\njobs: *j\n' 1 \
+  "%W: ${ODD_ID}
+${ONE_BAD}"
+expect_built 'a null jobs: in a later document has no ids to test' \
+  'on: push\njobs:\n  first:\n    runs-on: x\n---\non: push\njobs:\n' 1 \
+  "%W: job first missing ${BT}timeout-minutes${BT} (default is 6h; declare an explicit value)
+${ONE_BAD}"
+expect_built 'a second document is read as jobs, with no separator row' \
+  'on: push\njobs:\n  a:\n    runs-on: x\n    timeout-minutes: 5\n---\non: push\njobs:\n  second:\n    runs-on: x\n' 1 \
+  "%W: job second missing ${BT}timeout-minutes${BT} (default is 6h; declare an explicit value)
 ${ONE_BAD}"
 
 # The job read fails on the workflow's own content (a jobs: that is not
 # a map), which stays a finding against the file.
 expect_built 'a jobs: yq cannot list is a finding against the file' \
   'on: push\njobs: 5\n' 1 \
-  "Error: !!int has no keys
+  "YQ_ERROR
 %W: could not evaluate workflow with yq (malformed?)
 ${ONE_BAD}"
 
