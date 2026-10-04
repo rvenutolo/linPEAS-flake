@@ -133,9 +133,13 @@ function workflow_names() {
 
 # @description Emit every lint-group name and every group member, one per
 #              line. Both are in the set: a group name is a real ci.yml job,
-#              and a member is a unit that only ever runs inside one.
+#              and a member is a unit that only ever runs inside one. A
+#              group is read by its kind, so a list carrying a tag of its
+#              own is still read. The manifest's shape is held by
+#              check-ci-job-in-summary.sh, which stops the run on any
+#              other; this read changes only what a name resolves to.
 function lint_group_names() {
-  yq '(keys | .[]), (.[] | select(type == "!!seq") | .[])' "${LINT_GROUPS}"
+  yq '(keys | .[]), (.[] | select(kind == "seq") | .[])' "${LINT_GROUPS}"
 }
 
 # @description Emit the first pipe-delimited field of every harness-roster

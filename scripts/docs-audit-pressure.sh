@@ -194,8 +194,13 @@ function members_at() {
   if ! blob="$(git show "${ref}:${lint_groups_rel}" 2>/dev/null)"; then
     return 0
   fi
+  # A group is read by its kind, and a member is one of its items that
+  # is a scalar, so a list carrying a tag of its own is still read and a
+  # group written as a map or a scalar lists no member. The manifest's
+  # shape is held by check-ci-job-in-summary.sh, which stops CI on any
+  # other; this read changes only which names are counted.
   local members
-  if ! members="$(yq '.[] | .[]' - <<<"${blob}")"; then
+  if ! members="$(yq '.[] | select(kind == "seq") | .[] | select(kind == "scalar")' - <<<"${blob}")"; then
     log_err "cannot read lint-group members from ${lint_groups_rel} at ${ref}"
     return 2
   fi
