@@ -650,6 +650,12 @@ index: under a merge key given a list of mappings, `explode` takes a
 name from the first mapping that holds it, as the YAML merge spec says,
 and the index takes it from the last.
 
+A lookup whose name came from `keys` on the same map leaves `explode`
+out. `keys` prints a key written as an alias as the alias (`*ka`),
+`explode` would turn it into its anchor's text, and the two would never
+match; the lints that list jobs this way look a job up in `jobs:` as
+written, and their later reads follow aliases inside the job.
+
 A number `yq` printed in an earlier read goes back through `env`.
 `check-run-block-strict.sh` looks up no job by its key: its rows hold
 the document, job position and step index `yq` printed, and its reads

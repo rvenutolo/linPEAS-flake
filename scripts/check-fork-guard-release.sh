@@ -73,10 +73,13 @@ readonly GUARD_NEEDLE="github.repository == '${REPO_SLUG}'"
 # `yq` as data, through `strenv`, and is compared by its base64 text:
 # spliced into the expression, a key holding a quote would be read as
 # `yq` code, and `yq` reads `*` and `?` in an index or an `==` comparison
-# as wildcards, which base64 text never holds. `explode` resolves merge
-# keys and aliases first, and of keys written twice the last is read, as
-# `yq`'s own lookup reads it.
-readonly JOB_BY_KEY='.jobs | explode(.) | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
+# as wildcards, which base64 text never holds. Of keys written twice the
+# last is read, as `yq`'s own lookup reads it. `jobs:` is not handed to
+# `explode`: that would turn a key written as an alias into its anchor's
+# text, which the job list (printing the alias) never names, and would
+# expand every alias in `jobs:` on each lookup. The reads after a lookup
+# follow aliases and merge keys inside the job themselves.
+readonly JOB_BY_KEY='.jobs | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
 
 if ! command -v yq >/dev/null 2>&1; then
   printf 'yq not found on PATH\n' >&2
