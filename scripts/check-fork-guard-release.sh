@@ -68,12 +68,15 @@ readonly FILE_FILTER="${WORKFLOW_FILE_FILTER:-}"
 readonly DIR="${OVERRIDE:-${DEFAULT_DIR}}"
 readonly REPO_SLUG="${REPO_SLUG_OVERRIDE:-${DEFAULT_REPO_SLUG}}"
 readonly GUARD_NEEDLE="github.repository == '${REPO_SLUG}'"
-# The job a key names, read through an alias of `jobs:`. The key reaches
+# The job a key names. The job list is read with `keys`, which refuses
+# `jobs:` written as an alias, so no lookup meets one. The key reaches
 # `yq` as data, through `strenv`, and is compared by its base64 text:
 # spliced into the expression, a key holding a quote would be read as
 # `yq` code, and `yq` reads `*` and `?` in an index or an `==` comparison
-# as wildcards, which base64 text never holds.
-readonly JOB_BY_KEY='[(.jobs | select(kind == "alias") | explode(.)), (.jobs | select(kind != "alias"))] | .[0] | to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64)) | .value'
+# as wildcards, which base64 text never holds. `explode` resolves merge
+# keys and aliases first, and of keys written twice the last is read, as
+# `yq`'s own lookup reads it.
+readonly JOB_BY_KEY='.jobs | explode(.) | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
 
 if ! command -v yq >/dev/null 2>&1; then
   printf 'yq not found on PATH\n' >&2

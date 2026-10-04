@@ -74,12 +74,15 @@ source "${_lib_dir}/lib/generates.sh"
 readonly SCRIPTS_DIR="${SCRIPTS_DIR_OVERRIDE:-scripts}"
 readonly LABELER="${LABELER_YML_OVERRIDE:-.github/workflows/labeler.yml}"
 readonly SIZE_ACTION='pascalgn/size-label-action'
-# The job a key names, read through an alias of `jobs:`. The key reaches
+# The job a key names. The job list is read with `keys`, which refuses
+# `jobs:` written as an alias, so no lookup meets one. The key reaches
 # `yq` as data, through `strenv`, and is compared by its base64 text:
 # spliced into the expression, a key holding a quote would be read as
 # `yq` code, and `yq` reads `*` and `?` in an index or an `==` comparison
-# as wildcards, which base64 text never holds.
-readonly JOB_BY_KEY='[(.jobs | select(kind == "alias") | explode(.)), (.jobs | select(kind != "alias"))] | .[0] | to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64)) | .value'
+# as wildcards, which base64 text never holds. `explode` resolves merge
+# keys and aliases first, and of keys written twice the last is read, as
+# `yq`'s own lookup reads it.
+readonly JOB_BY_KEY='.jobs | explode(.) | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
 
 # IGNORED entries no `@generates` annotation can ever claim, because
 # nothing under scripts/ writes them. Each carries the reason it is not

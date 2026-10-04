@@ -37,7 +37,8 @@
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER + SCOPE_ALLOWLIST_OVERRIDE
 # for fixtures. Exit 0 clean, 1 on drift (including a scalar permissions
 # violation or a workflow yq cannot parse), 2 on config/tooling error
-# (including an unparsable allowlist file).
+# (including an allowlist file that does not parse or is not one map of
+# workflow maps).
 
 # $k/$wf/$job in the yq expressions below are yq variables, not shell.
 # shellcheck disable=SC2016
@@ -62,14 +63,27 @@ if [[ ! -f ${ALLOWLIST} ]]; then
   printf 'allowlist file not found: %s\n' "${ALLOWLIST}" >&2
   exit 2
 fi
+# The lookups below walk the allowlist's entries, which a list would
+# also have, keyed by index; so it must be one map whose entries are
+# workflow maps or null.
+if ! allowlist_shape="$(yq eval 'explode(.) | kind + " " + ([.[] | select(tag != "!!null") | kind] | unique | join(","))' "${ALLOWLIST}")"; then
+  printf '%s: could not evaluate allowlist with yq (malformed?)\n' "${ALLOWLIST}" >&2
+  exit 2
+fi
+if [[ ${allowlist_shape} != 'map map' && ${allowlist_shape} != 'map ' ]]; then
+  printf '%s: the allowlist must be one map of workflow maps (got %q)\n' "${ALLOWLIST}" "${allowlist_shape}" >&2
+  exit 2
+fi
 
 # allowed <workflow-basename> <job> -> newline-separated allowed scope names
 # The names reach `yq` as data, through `strenv`, and are compared by
 # their base64 text: spliced into the expression, a name holding a quote
 # would be read as `yq` code, and `yq` reads `*` and `?` in an index or
 # an `==` comparison as wildcards, which base64 text never holds.
+# `explode` resolves merge keys and aliases first, and of names written
+# twice the last is read, as `yq`'s own lookup reads it.
 function allowed() {
-  WF="$1" JOB="$2" yq eval '[to_entries[] | '"$(eq WF)"' | .value | to_entries[] | '"$(eq JOB)"' | .value] | .[0] // [] | .[]' "${ALLOWLIST}"
+  WF="$1" JOB="$2" yq eval 'explode(.) | [to_entries[] | '"$(eq WF)"'] | reverse | .[0] | .value | [to_entries[] | '"$(eq JOB)"'] | reverse | .[0] | .value // [] | .[]' "${ALLOWLIST}"
 }
 
 # eq <variable> -> a yq select keeping the entry whose key's text is the
@@ -203,7 +217,7 @@ if [[ -z ${FILE_FILTER} ]]; then
       # pass says the same thing rather than inventing a second verdict
       # for the same file.
       if ! granted="$(JOB="${job}" SCOPE="${scope}" yq eval \
-        "[${JOBS_NODE} | to_entries[] | $(eq JOB) | .value | [.permissions | explode(.)] | .[] | select(kind == \"map\") | to_entries[] | $(eq SCOPE) | .value] | .[0] // \"\"" \
+        "[${JOBS_NODE} | explode(.) | [to_entries[] | $(eq JOB)] | reverse | .[0] | .value | .permissions | select(kind == \"map\") | [to_entries[] | $(eq SCOPE)] | reverse | .[0] | .value] | .[0] // \"\"" \
         "${wf_path}")"; then
         printf '%s: could not evaluate workflow with yq (malformed?)\n' "${wf_path}" >&2
         failed=$((failed + 1))

@@ -293,12 +293,15 @@ readonly DECLARATION_REL=".github/actions/${NOTIFY_COMPOSITE}/egress-allowlist.t
 readonly NIX_SETUP_COMPOSITE='./.github/actions/setup-nix'
 readonly NIX_SUBCOMMANDS='build|develop|shell|run|flake|profile|eval|copy|store|search|registry|repl|show-config'
 readonly NIX_EXEMPT_MARKER='egress-nix-exempt:'
-# The job a key names, read through an alias of `jobs:`. The key reaches
+# The job a key names. The job list is read with `keys`, which refuses
+# `jobs:` written as an alias, so no lookup meets one. The key reaches
 # `yq` as data, through `strenv`, and is compared by its base64 text:
 # spliced into the expression, a key holding a quote would be read as
 # `yq` code, and `yq` reads `*` and `?` in an index or an `==` comparison
-# as wildcards, which base64 text never holds.
-readonly JOB_BY_KEY='[(.jobs | select(kind == "alias") | explode(.)), (.jobs | select(kind != "alias"))] | .[0] | to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64)) | .value'
+# as wildcards, which base64 text never holds. `explode` resolves merge
+# keys and aliases first, and of keys written twice the last is read, as
+# `yq`'s own lookup reads it.
+readonly JOB_BY_KEY='.jobs | explode(.) | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
 
 # Resolved against this script's own location rather than the scan root:
 # the fixture harness repoints the scan root at tests/fixtures, and the

@@ -35,8 +35,10 @@ function main() {
   # reaches `yq` as data, through `strenv`, and is compared by its base64
   # text: spliced into the expression, a name holding a quote would be
   # read as `yq` code, and `yq` reads `*` and `?` in an index or an `==`
-  # comparison as wildcards, which base64 text never holds.
-  if ! checks="$(GROUP="${group}" yq eval '[to_entries[] | select((.key | tostring | @base64) == (strenv(GROUP) | @base64)) | .value] | .[0] // [] | .[]' "${MANIFEST}")"; then
+  # comparison as wildcards, which base64 text never holds. Merge keys and
+  # aliases are resolved, and of names written twice the last is read, as
+  # `yq`'s own lookup reads it.
+  if ! checks="$(GROUP="${group}" yq eval 'explode(.) | [to_entries[] | select((.key | tostring | @base64) == (strenv(GROUP) | @base64))] | reverse | .[0] | .value // [] | .[]' "${MANIFEST}")"; then
     printf 'cannot read group %s from %s\n' "${group}" "${MANIFEST}" >&2
     exit 2
   fi
