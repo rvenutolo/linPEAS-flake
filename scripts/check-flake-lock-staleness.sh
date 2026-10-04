@@ -50,12 +50,14 @@
 #
 # A `locked.lastModified` and "now" are each read as text and must be a
 # unix timestamp written as at most 12 ASCII digits with no leading zero
-# (`0` itself is allowed) before any arithmetic touches them; anything
-# else is an operational error naming the value. Bash arithmetic would
-# otherwise read `0777` as octal, fail on `08` or on another script's
-# digits (which a UTF-8 locale's `[0-9]` admits) and drop the inputs not
-# yet checked, wrap a number past its integer range, and run a command
-# placed in an array subscript. A timestamp after "now" is accepted and
+# (`0` itself is allowed) before any arithmetic touches them. A value in
+# any other form is an operational error naming it; a lastModified that
+# is absent, null, false or `-` is the operational error "has no numeric
+# locked.lastModified". Bash arithmetic would otherwise read `0777` as
+# octal, fail on `08` or on another script's digits (which `[0-9]` admits
+# in a locale such as en_US.UTF-8) and drop the inputs not yet checked,
+# wrap a number past its integer range, and run a command placed in an
+# array subscript. A timestamp after "now" is accepted and
 # reads as a negative age, so it passes.
 #
 # Exit: 0 every input fresh, 1 one or more stale, 2 operational error.

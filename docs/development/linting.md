@@ -592,10 +592,10 @@ one that fits in memory is read in full.
 
 ## Text from files in bash arithmetic
 
-Bash evaluates the text of an operand in `(( ))`, `$(( ))`, `let`, the
-`-eq`-style tests of `[[ ]]`, an indexed array's subscript, a
-`${var:offset}` slice and any value stored in a `declare -i` variable
-as an expression. A name in that text is read as a variable (an unset one
+Bash evaluates as an expression the text of an operand in contexts
+including `(( ))`, `$(( ))`, `let`, the `-eq`-style tests of `[[ ]]`,
+an indexed array's subscript, a `${var:offset}` slice and any value
+stored in a `declare -i` variable. A name in that text is read as a variable (an unset one
 stops a `set -u` script), an array subscript in it runs any command
 substitution it holds, a leading zero makes it octal, and a number past
 the integer range wraps. In a script file, an error in `$(( ))`
@@ -610,16 +610,18 @@ first matches it against a regex whose digit class is spelled out
 other scripts' digits in `en_US.UTF-8`, and bounds its length, or it
 compares the text as text. A number a tool prints is text too when it
 travels in a delimited row beside free text: a field holding the
-delimiter moves the next field. `check-flake-lock-staleness.sh` and
+delimiter moves the fields after it, and one holding a line break as
+well can make whole rows of its own that each look well formed, so the
+free text is tested before the rows are split. `check-flake-lock-staleness.sh` and
 `check-egress-allowlist.sh` state the rule each applies in their
 headers.
 
 No lint enforces this. Telling a script-owned operand from file text
-needs the value's provenance through assignments, reads and helpers;
-traced over the syntax trees of `scripts/`, that test flagged 114
-arithmetic sites, of which two read file text. The rest read
-counters, `grep -c` or `wc` counts, `date +%s` output, or numbers the
-script's own `awk`, `jq` or `yq` program printed.
+needs the value's provenance through assignments, reads and helpers,
+and nearly every operand such a trace flags in `scripts/` is a
+counter, a `grep -c` or `wc` count, `date +%s` output, or a number the
+script's own `awk`, `jq` or `yq` program printed. A provenance label
+also misses text that reaches a field through its delimiter.
 
 ## Treefmt YAML quote gotcha
 

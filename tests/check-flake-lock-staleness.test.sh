@@ -186,7 +186,7 @@ function main() {
   run_value_scenario 'a lastModified with a leading zero is a could-not-run' \
     nixpkgs-unstable '"0777"' 2 \
     "flake-lock-staleness: top-level input 'nixpkgs-unstable' (node 'nixpkgs-unstable') ${bad_ts}: \"0777\"" '' "${NOW}"
-  # In a UTF-8 locale such as en_US.UTF-8, bash's `[0-9]` also matches
+  # In a locale such as en_US.UTF-8, bash's `[0-9]` also matches
   # other scripts' digits, which bash arithmetic then cannot read. Where
   # that locale is not installed the run falls back to C and this
   # scenario cannot tell an ASCII-only class from a locale-bound one; the
