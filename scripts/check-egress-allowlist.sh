@@ -397,19 +397,22 @@ for f in "${selected_files[@]}"; do
     fail "${f}: could not evaluate job line numbers with yq (malformed?)"
     continue
   fi
+  forged=0
   forged_row=''
   while IFS= read -r jline_row; do
-    [[ -z ${jline_row} ]] && continue
     jline_name="${jline_row%%$'\t'*}"
     jline_num="${jline_row#*$'\t'}"
     if [[ ${jline_row} != *$'\t'* || ! ${jline_num} =~ ^[123456789][0123456789]{0,8}$ ]]; then
+      forged=1
       forged_row="${jline_row}"
       break
     fi
     JOB_START["${jline_name}"]="${jline_num}"
     job_order+=("${jline_name}")
   done <<<"${job_line_rows}"
-  if [[ -n ${forged_row} ]]; then
+  # A flag, not a test of the row: the row a key opening with a line
+  # break leaves behind is empty.
+  if ((forged)); then
     # Quoted with @Q so the tab or line break shows as an escape.
     fail "${f}: a job key holds a tab or a line break, so its line row cannot be read: ${forged_row@Q}"
     continue
