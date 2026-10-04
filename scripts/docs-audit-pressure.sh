@@ -196,7 +196,8 @@ function members_at() {
   fi
   # A group is read by its kind, and a member is one of its items that
   # is a scalar, so a list carrying a tag of its own is still read and a
-  # group written as a map or a scalar lists no member. The manifest's
+  # group written as a map or a scalar lists no member, nor does an
+  # alias item. The manifest's
   # shape is held by check-ci-job-in-summary.sh, which stops CI on any
   # other; this read changes only which names are counted.
   local members

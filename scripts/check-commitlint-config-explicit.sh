@@ -142,11 +142,13 @@ for f in "${paths[@]}"; do
     fi
   done <<<"${odd_ids}"
   if [[ -n ${odd_id} ]]; then
-    fail "$(printf '%s: jobs: holds a job id that is not a string, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: %s)' \
+    fail "$(printf '%s: jobs: holds a job id that is not a scalar, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: %s)' \
       "${f}" "${odd_id}")"
     continue
   fi
 
+  # A `steps:` that is not a list holds no step to read; GitHub Actions
+  # refuses such a job.
   # Each row: the step's index; the job id; the kind of the step's
   # `with:` (`none` when absent) and its tag as a JSON string; the kind
   # of its `configFile:` (`none` when absent or when `with:` is no map),
@@ -154,12 +156,12 @@ for f in "${paths[@]}"; do
   # verbatim tag decodes `%7C` to a pipe and `%0A` to a line break), as
   # is a value, and JSON holds neither a tab nor a line break, so no
   # field but the id can split a row, and none is empty for `read` to
-  # collapse. The job is handed to `explode` twice (a job written as an
-  # alias, and its `steps:`), and each step three times (the step, its
-  # `with:`, and the value), so each is read through an alias; an anchor
-  # cannot sit on an alias. A `with:` map is read whatever tag it
-  # carries. Each node is collected into a list first, since `yq` yields
-  # nothing at all for an absent key. The row opens with an operand that
+  # collapse. The job is handed to `explode` twice and each step three
+  # times more, so a job, its steps, a step, its `with:` and the value
+  # written as aliases are read through them. A `with:` map is read
+  # whatever tag it carries. Each node is collected into a list, with a default appended,
+  # because an expression after a `select` that keeps nothing would
+  # print its literals anyway. The row opens with an operand that
   # reads the step, because after a `select` that keeps nothing `yq`
   # still prints an expression made only of variables, literals and
   # collections.
@@ -198,7 +200,7 @@ for f in "${paths[@]}"; do
         "${f}" "${job}" "${idx}" "${ACTION_PREFIX}" "${with_kind}" "${with_tag}")"
       continue
     fi
-    if [[ ${cfg_kind} == 'none' || ${cfg_tag} == '"!!null"' || ${cfg_text} == '""' ]]; then
+    if [[ ${cfg_kind} == 'none' || ${cfg_tag} == '"!!null"' ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
       fail "$(printf '%s: job %q step[%s] %s has no non-empty `with.configFile:`; add one (an unset configFile silently falls back to a bundled preset)' \
         "${f}" "${job}" "${idx}" "${ACTION_PREFIX}")"
@@ -208,6 +210,12 @@ for f in "${paths[@]}"; do
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
       fail "$(printf '%s: job %q step[%s] %s `configFile:` has unexpected shape (kind=%s, tag=%s, value=%s); it must be a path' \
         "${f}" "${job}" "${idx}" "${ACTION_PREFIX}" "${cfg_kind}" "${cfg_tag}" "${cfg_text}")"
+      continue
+    fi
+    if [[ ${cfg_text} == '""' ]]; then
+      # shellcheck disable=SC2016 # literal backticks in human-readable prose
+      fail "$(printf '%s: job %q step[%s] %s has no non-empty `with.configFile:`; add one (an unset configFile silently falls back to a bundled preset)' \
+        "${f}" "${job}" "${idx}" "${ACTION_PREFIX}")"
       continue
     fi
     # A value holding a quote, a backslash or a control character stays

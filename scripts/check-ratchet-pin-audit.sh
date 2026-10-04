@@ -31,8 +31,8 @@
 # a `ratchet --version` string carrying no X.Y.Z. The `on:` reads stop the
 # run on the workflow's own content too: a root giving `on` twice, an
 # `on:` holding an alias nested too deep to resolve, or a merge key in
-# `on:` that `yq` cannot resolve (see ON_NODE).
-# A file `yq` reads as several YAML documents is one finding. With no workflow to
+# `on:` that `yq` cannot resolve (see ON_NODE). A file `yq` reads as
+# several YAML documents, or whose root is not a map, is one finding. With no workflow to
 # parse there is no invariant to score, and counting that as a failed
 # invariant would report drift in a file the check never read.
 
@@ -127,6 +127,13 @@ if ! doc_kinds="$(read_workflow 'kind')"; then
 fi
 if [[ ${doc_kinds} == *$'\n'* ]]; then
   fail "workflow holds several YAML documents, which GitHub Actions refuses; it is read no further"
+  printf '%d invariant(s) failed\n' "${failed}" >&2
+  exit 1
+fi
+# A root that is not a map holds none of the keys below, and the `on:`
+# reads would fail on it, so it too is one finding, read no further.
+if [[ ${doc_kinds} != 'map' ]]; then
+  fail "workflow root is not a map (kind=${doc_kinds}); it is read no further"
   printf '%d invariant(s) failed\n' "${failed}" >&2
   exit 1
 fi

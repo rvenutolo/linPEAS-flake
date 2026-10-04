@@ -92,7 +92,7 @@ against the allowlist in both directions and fails on any of:
     combined posture forbids it). How the block is read (by kind,
     through aliases) is stated in the header of
     `scripts/check-permission-scopes.sh`.
-- **Unreadable job id or scope name** — one that is not a string, is
+- **Unreadable job id or scope name** — one that is not a scalar, is
     empty, or holds a tab, a line break or a NUL; that workflow's jobs
     are not read.
 

@@ -165,8 +165,10 @@ for f in "${selected_files[@]}"; do
   # Each row: the job's key and the key's tag, which is `!!merge` for a
   # `<<` merge key; the kind and tag of the job, read through an alias
   # by `explode` handed only that node (an anchor cannot sit on an
-  # alias, so one pass resolves it); and those of its `permissions:`.
-  if ! rows="$(yq eval '.jobs | to_entries[] | .key + "\t" + (.key | tag) + "\t" + ((.value | select(kind == "alias") | explode(.) | kind + " " + tag) // (.value | kind + " " + tag)) + "\t" + (.value.permissions | kind + " " + tag)' "${f}")"; then
+  # alias, so one pass resolves it); and those of its `permissions:`,
+  # read from the job handed to `explode` twice, so a block written as
+  # an alias, in a job written as one, is read through both.
+  if ! rows="$(yq eval '.jobs | to_entries[] | .key + "\t" + (.key | tag) + "\t" + ((.value | select(kind == "alias") | explode(.) | kind + " " + tag) // (.value | kind + " " + tag)) + "\t" + ([.value | explode(.) | explode(.) | .permissions | kind + " " + tag] + [""] | .[0])' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue

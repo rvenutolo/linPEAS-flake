@@ -98,12 +98,14 @@ for f in "${selected_files[@]}"; do
     fi
   done <<<"${odd_ids}"
   if [[ -n ${odd_id} ]]; then
-    printf '%s: jobs: holds a job id that is not a string, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: %s)\n' \
+    printf '%s: jobs: holds a job id that is not a scalar, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: %s)\n' \
       "${f}" "${odd_id}" >&2
     failed=$((failed + 1))
     continue
   fi
 
+  # A `steps:` that is not a list holds no step to read; GitHub Actions
+  # refuses such a job.
   # Each row: the step's index; the job id; `with` when the step's
   # `with:` is present but not a map, else `value`; then the kind of
   # that node (`none` when absent), and its tag and text as JSON
@@ -111,12 +113,12 @@ for f in "${selected_files[@]}"; do
   # and `%0A` to a line break), as is a value, and JSON holds neither a
   # tab nor a line break, so no field but the id can split a row, and
   # none is empty for `read` to collapse. The job is handed to `explode`
-  # twice (a job written as an alias, and its `steps:`), and each step
-  # three times (the step, its `with:`, and the value), so each is read
-  # through an alias; an anchor cannot sit on an alias. A `with:` map is
-  # read whatever tag it carries; the value is a scalar told apart by
-  # its tag. Each node is collected into a list first, since `yq`
-  # yields nothing at all for an absent key. The row opens with an
+  # twice and each step three times more, so a job, its steps, a step,
+  # its `with:` and the value written as aliases are read through them.
+  # A `with:` map is read whatever tag it carries; the value is a scalar
+  # told apart by its tag. Each node is collected into a list, with a default
+  # appended, because an expression after a `select` that keeps
+  # nothing would print its literals anyway. The row opens with an
   # operand that reads the step, because after a `select` that keeps
   # nothing `yq` still prints an expression made only of variables,
   # literals and collections.

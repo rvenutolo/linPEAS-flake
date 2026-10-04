@@ -22,10 +22,13 @@
 #
 # A job's `permissions:` is read by its kind, through an alias. A map
 # carrying a tag of its own is still read scope by scope. It may also be
-# the string `read-all` (ignored); any other shape, such as the string
-# `write-all` or a scalar carrying the map tag, is a violation (a scalar
+# the string `read-all` (ignored), and a null or absent block yields
+# nothing (min-permissions reports it missing; `yq` reads a block
+# carrying the null tag as null whatever it is written on). Any other
+# shape, such as the string `write-all` or a scalar carrying the map
+# tag, is a violation (a scalar
 # grant bypasses the per-scope allowlist entirely). A job id or a scope
-# name that is not a string, is empty, or holds a tab, a line break or a
+# name that is not a scalar, is empty, or holds a tab, a line break or a
 # NUL is a violation, and that workflow's jobs are not read.
 #
 # Read and `none` scope values are ignored — least-privilege concern is
@@ -101,7 +104,7 @@ for f in "${selected_files[@]}"; do
     fi
   done <<<"${odd_names}"
   if [[ -n ${odd_name} ]]; then
-    printf '%s: jobs: holds a job id or a scope name that is not a string, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: %s)\n' \
+    printf '%s: jobs: holds a job id or a scope name that is not a scalar, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: %s)\n' \
       "${f}" "${odd_name}" >&2
     failed=$((failed + 1))
     continue

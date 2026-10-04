@@ -91,7 +91,7 @@ for f in "${selected_files[@]}"; do
     fi
   done <<<"${odd_ids}"
   if [[ -n ${odd_id} ]]; then
-    printf '%s: jobs: holds a job id that is not a string, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: %s)\n' \
+    printf '%s: jobs: holds a job id that is not a scalar, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: %s)\n' \
       "${f}" "${odd_id}" >&2
     failed=$((failed + 1))
     continue
@@ -107,7 +107,8 @@ for f in "${selected_files[@]}"; do
   # empty for `read` to collapse. The job is handed to `explode` twice,
   # so a job written as an alias and an alias inside it are both read
   # through (an anchor cannot sit on an alias). Each node is collected
-  # into a list first, since `yq` yields nothing at all for an absent key.
+  # into a list, with a default appended, because an expression after a
+  # `select` that keeps nothing would print its literals anyway.
   # `--no-doc` keeps `yq` from printing a `---` line between the rows of
   # two documents, which would read as a job.
   #
