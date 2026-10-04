@@ -229,19 +229,19 @@ fi
 printf 'OK   job-key-in-arithmetic\n'
 
 # The job line read is one tab-separated row per key, key first. A key
-# holding a tab, or a line break and then a tab, fills the line field
-# with its own text, which the range arithmetic then evaluated: the
-# subscript ran its command, the run dropped the nix job and exited 0.
-# Each variant is a counted finding naming the first row that fails,
-# with nothing run and nothing else read from the file: the build job
-# downloads a release asset its allowlist omits, a violation only a
-# further read would report. A forged field can start with digits, a
-# key's first line can be digits alone, and a key that opens with a line
-# break gives an empty first row.
+# holding a tab or a line break splits into rows of its own choosing,
+# and the range arithmetic evaluated the text that landed in the line
+# field: the subscript ran its command, the run dropped the nix job and
+# exited 0. A key shaped `b<TAB>999<LF>c` gives well-formed rows and
+# moves a job's range instead. Each such key is a counted finding naming
+# the key, with nothing run and nothing else read from the file: the
+# build job downloads a release asset its allowlist omits, a violation
+# only a further read would report. An empty key is read as main read
+# it, which that same violation shows.
 # @arg $1 scenario name, which also names its marker file  @arg $2 the
 # job key, as a YAML double-quoted body  @arg $3 the expected finding
 # line, after the file name; it and the tally are the whole of stderr
-function expect_forged_key() {
+function expect_job_key() {
   local -r name="$1" key="$2" want_line="$3"
   local got_exit=0 got_stderr
   cat >"${key_dir}/wf/${name}.yml" <<EOF
@@ -277,18 +277,43 @@ EOF
   fi
   printf 'OK   %s\n' "${name}"
 }
-expect_forged_key job-key-tab-forges-line \
+readonly odd_key='holds a tab or a line break, which the job line read cannot carry'
+expect_job_key job-key-tab-forges-line \
   "b\\tBASH_VERSINFO[\$(>${key_dir}/job-key-tab-forges-line.marker)]" \
-  "a job key holds a tab or a line break, so its line row cannot be read: \$'b\\tBASH_VERSINFO[\$(>${key_dir}/job-key-tab-forges-line.marker)]\\t15'"
-expect_forged_key job-key-line-break-forges-line \
+  "job key \"b\\tBASH_VERSINFO[\$(>${key_dir}/job-key-tab-forges-line.marker)]\" ${odd_key}"
+expect_job_key job-key-line-break-forges-line \
   "b\\nc\\tBASH_VERSINFO[\$(>${key_dir}/job-key-line-break-forges-line.marker)]" \
-  "a job key holds a tab or a line break, so its line row cannot be read: 'b'"
-expect_forged_key job-key-tab-digits-forges-line 'b\t5' \
-  "a job key holds a tab or a line break, so its line row cannot be read: \$'b\\t5\\t15'"
-expect_forged_key job-key-digits-line-break-forges-line '7\n5' \
-  "a job key holds a tab or a line break, so its line row cannot be read: '7'"
-expect_forged_key job-key-leading-line-break '\nx' \
-  "a job key holds a tab or a line break, so its line row cannot be read: ''"
+  "job key \"b\\nc\\tBASH_VERSINFO[\$(>${key_dir}/job-key-line-break-forges-line.marker)]\" ${odd_key}"
+expect_job_key job-key-tab-digits-forges-line 'b\t5' "job key \"b\\t5\" ${odd_key}"
+expect_job_key job-key-digits-line-break-forges-line '7\n5' "job key \"7\\n5\" ${odd_key}"
+expect_job_key job-key-leading-line-break '\nx' "job key \"\\nx\" ${odd_key}"
+expect_job_key job-key-forges-whole-rows 'b\t999\nc' "job key \"b\\t999\\nc\" ${odd_key}"
+expect_job_key job-key-empty '' \
+  "job 'build' downloads a GitHub release asset but does not allowlist release-assets.githubusercontent.com (the github.com redirect is unconditional)"
+
+# The row check is the range arithmetic's own guard. The key test above
+# leaves yq no way to print a row it fails, so a yq stub that answers the
+# job line read with a malformed row reaches it; every other read goes
+# to the real yq.
+real_yq="$(command -v yq)"
+mkdir -- "${key_dir}/stub"
+# shellcheck disable=SC2016 # the shim's own text
+printf '%s\n' "#!${BASH}" \
+  'for a in "$@"; do' \
+  '  if [[ ${a} == *"[., line]"* ]]; then printf "build\\t5\\nbuild\\tX\\n"; exit 0; fi' \
+  'done' \
+  "exec ${real_yq@Q} \"\$@\"" >"${key_dir}/stub/yq"
+chmod +x -- "${key_dir}/stub/yq"
+cp -- "${key_dir}/wf/job-key-empty.yml" "${key_dir}/wf/job-line-row-malformed.yml"
+got_exit=0
+got_stderr="$(PATH="${key_dir}/stub:${PATH}" WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" \
+  WORKFLOW_FILE_FILTER=job-line-row-malformed.yml "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+want_stderr="${key_dir}/wf/job-line-row-malformed.yml: a job line row is not a key and a line number: \$'build\\tX'"$'\n1 egress-allowlist violation(s)'
+if [[ ${got_exit} != 1 || ${got_stderr} != "${want_stderr}" ]]; then
+  printf 'FAIL job-line-row-malformed: exit %s\n  stderr: %s\n' "${got_exit}" "${got_stderr}" >&2
+  exit 1
+fi
+printf 'OK   job-line-row-malformed\n'
 
 # LIVE: the real tree must satisfy assertion 7, and the run must have
 # actually scanned something. The assertion checks the printed count is
