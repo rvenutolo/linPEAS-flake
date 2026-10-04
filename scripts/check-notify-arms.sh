@@ -60,10 +60,14 @@
 # case-insensitive. A gate without `always()` carries GitHub's implicit
 # `success()`. A declared `has-finding` output is tried as 'true', 'false'
 # and empty; the events tried are the ones the workflow's `on:` names:
-# what `yq` prints for a string, for the items of a list or for the keys
-# of a map, split at spaces, tabs and newlines. A job of a workflow whose
-# `on:` carries any other tag, as an alias does, or prints no event, is
-# refused when it has to be derived. So is a job whose notify step has an
+# what `yq` prints for a scalar carrying the string tag, for the items of
+# a list or for the keys of a map, whatever tag the list or map carries,
+# split at spaces, tabs and newlines. `on:` is read from ON_NODE, so an
+# alias in it is read through. A job of a workflow whose `on:` is any
+# other shape, or prints no event, or whose file `yq` reads as several
+# YAML documents, is refused when it has to be derived, and so is one
+# whose `needs:` is not one job named by a scalar carrying the string
+# tag (read through an alias). So is a job whose notify step has an
 # `if:` of its own, follows a step other than step-security/harden-runner
 # or actions/checkout, runs the composite twice, or reaches it by any
 # other `uses:` than ./.github/actions/notify-workflow-result. The
@@ -175,11 +179,11 @@ function notify_jobs() {
   # shellcheck disable=SC2016 # $job, $j and $n are yq variables
   yq -r '
     .jobs // {} | to_entries | .[] | .key as $job | .value as $j
-    | ($j.needs | [.] | flatten) as $n
+    | ($j.needs | explode(.) | [.] | flatten) as $n
     | ($j.steps // [])[]
     | select((.uses // "") | test("notify-workflow-result"))
     | [(.uses | tostring), $job,
-        (($n | select(length == 1) | .[0] | select(tag == "!!str")) // "-"),
+        (($n | select(length == 1) | .[0] | select(kind == "scalar" and tag == "!!str")) // "-"),
         (($j.if // "-") | tostring),
         ((.with.result // "-") | tostring),
         ((.if // "-") | tostring)]
@@ -206,24 +210,42 @@ function steps_before_notify() {
   done <<<"${uses}"
 }
 
-# @description Print the YAML tag of a workflow's `on:` value.
+# The `on:` node every `on:` read starts from, with its aliases resolved.
+# It is the one root key that is `on` or an alias of `on`: a root holding
+# more than one makes `yq` fail ("on: is given more than once"). With no
+# such key it is `.on`, which is how an `on:` a root merge key brings in
+# is read, since the merged keys are not the root's own.
+# `explode`, handed that node alone, resolves one level of aliases per
+# pass: the aliases a node holds, not those inside what they stand for.
+# So the node goes through sixteen passes, and one that still holds an
+# alias after them is refused by `yq` with an error rather than read. A
+# file `yq` reads through this is never passed with an alias left in it.
+# Both refusals, and a merge key in `on:` that `explode` cannot resolve
+# (one bringing in a list), fail the read, which stops the run (exit 2)
+# like any failed read. Its memory cost is a stated limit:
+# docs/development/linting.md, section "YAML aliases in workflow reads".
+# shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
+readonly ON_NODE='.on as $plain | [to_entries[] | select((.key | explode(.)) == "on") | .value] as $all | with(select($all | length > 1); error("on: is given more than once")) | ($all + [$plain] | .[0]) as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)) | with(select([... | select(kind == "alias")] | length > 0); error("on: holds an alias nested too deep to resolve"))'
+
+# @description Print the kind and tag of a workflow's `on:` value, read
+#              from ON_NODE, one line per document.
 # @arg $1 workflow path
 # @exitcode yq's status when it fails
 function on_shape() {
-  yq -r '.on | tag' "$1"
+  yq -r "${ON_NODE}"' | kind + " " + tag' "$1"
 }
 
 # @description Print the events a workflow runs on, one per line: its
 #              `on:` value as a string, the items of a list, or the keys
 #              of a map, as yq prints them. Any other shape prints nothing.
 # @arg $1 workflow path
-# @arg $2 the tag `on_shape` printed for it
+# @arg $2 the kind and tag `on_shape` printed for it
 # @exitcode yq's status when it fails
 function workflow_events() {
   case "$2" in
-  '!!str') yq -r '.on' "$1" ;;
-  '!!seq') yq -r '.on[]' "$1" ;;
-  '!!map') yq -r '.on | keys | .[]' "$1" ;;
+  'scalar !!str') yq -r "${ON_NODE}" "$1" ;;
+  'seq '*) yq -r "${ON_NODE}"' | .[]' "$1" ;;
+  'map '*) yq -r "${ON_NODE}"' | keys | .[]' "$1" ;;
   esac
 }
 
@@ -730,7 +752,7 @@ function main() {
       local path="${SCAN_ROOT}/${rel}"
       [[ -z ${job_block["${key}"]:-} ]] || die2 "${rel}: ${job_block["${key}"]}"
       IFS=$'\t' read -r needs gate result_in <<<"${job_fields["${key}"]}"
-      [[ ${needs} != - ]] || die2 "${rel}: job ${job}: needs: does not name exactly one job"
+      [[ ${needs} != - ]] || die2 "${rel}: job ${job}: needs: does not name exactly one job as a string"
       # A read that fails says nothing about the workflow, so it is
       # reported as the failed command rather than as a shape of `on:`.
       has_out="$(declares_has_finding "${path}" "${needs}")" ||
@@ -738,8 +760,9 @@ function main() {
       shape="$(on_shape "${path}")" ||
         die2 "cannot read the on: triggers of ${rel}: yq exited $?"
       case "${shape}" in
-      '!!str' | '!!seq' | '!!map') ;;
-      *) die2 "${rel}: job ${job}: the workflow has no on: trigger the lint can read" ;;
+      *$'\n'*) die2 "${rel}: job ${job}: the workflow holds several YAML documents, so no one on: to read" ;;
+      'scalar !!str' | 'seq '* | 'map '*) ;;
+      *) die2 "${rel}: job ${job}: the workflow has no on: trigger the lint can read (kind=${shape%% *}, tag=${shape#* })" ;;
       esac
       events="$(workflow_events "${path}" "${shape}")" ||
         die2 "cannot read the on: triggers of ${rel}: yq exited $?"
