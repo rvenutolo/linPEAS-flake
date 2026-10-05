@@ -69,6 +69,10 @@ YAML
   if [[ -n ${MANIFEST_EXTRA:-} ]]; then
     printf '%s' "${MANIFEST_EXTRA}" >>"${manifest}"
   fi
+  # MANIFEST_BODY replaces the manifest whole.
+  if [[ -n ${MANIFEST_BODY:-} ]]; then
+    printf '%s' "${MANIFEST_BODY}" >"${manifest}"
+  fi
 
   outcome_file="$(mktemp)"
   out_file="$(mktemp)"
@@ -223,6 +227,11 @@ function main() {
   MANIFEST_EXTRA=$'x-base: &base\n  merged:\n    - mmm\n<<: *base\n' \
     run_scenario 'group name as data: through a merge key' 'merged' 0 '| mmm | pass |'
   run_scenario 'group name as data: written twice' 'twice' 0 '| ddd | pass |'
+  # A manifest that is not one map of groups is a config error naming the
+  # manifest, not an unknown group.
+  MANIFEST_BODY=$'- demo-all-pass:\n    - aaa\n' \
+    run_scenario 'manifest that is a list' 'demo-all-pass' 2 \
+    'the manifest must be one map of groups (got seq)'
   run_test_gate_scenario
   run_unparsable_manifest_scenario
 

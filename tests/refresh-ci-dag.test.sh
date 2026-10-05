@@ -317,6 +317,29 @@ EOF
     $'x-base: &base\n  job-m: Doc quality\n<<: *base\njob-a: Build + smoke\n'
   ci_dag_key_case "${key_work}" 'written-twice' 'job-d' \
     $'job-d: Build + smoke\njob-d: Doc quality\njob-a: Build + smoke\n'
+  # A category map that is not one map of jobs stops the run (exit 2),
+  # as a tool failing to read it does: a list's entries are keyed by
+  # index, and every job would read as uncategorised.
+  local shape_rc=0
+  printf "name: ci\non: push\njobs:\n  job-a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: \"true\"\n" >"${key_work}/shape.yml"
+  printf -- '- job-a: Build + smoke\n' >"${key_work}/shape.cats.yml"
+  printf '<!-- BEGIN ci-dag -->\n<!-- END ci-dag -->\n' >"${key_work}/shape.md"
+  cp -- "${key_work}/shape.md" "${key_work}/shape.md.orig"
+  CI_WORKFLOW_OVERRIDE="${key_work}/shape.yml" CATEGORIES_FILE_OVERRIDE="${key_work}/shape.cats.yml" \
+    DOC_OVERRIDE="${key_work}/shape.md" \
+    "${SCRIPT}" >"${key_work}/shape.out" 2>"${key_work}/shape.err" || shape_rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${shape_rc}" >"${key_work}/shape.outcome"
+  harness_assert_record 'category map that is a list' 'the category map must be one map of job names (got seq)' \
+    "${key_work}/shape.outcome" "${key_work}/shape.out" "${key_work}/shape.err"
+  if [[ ${shape_rc} -eq 2 ]] &&
+    [[ $(<"${key_work}/shape.err") =~ ^\[[^]]*\]\ ERROR\ (.*)$ ]] &&
+    [[ ${BASH_REMATCH[1]} == "${key_work}/shape.cats.yml: the category map must be one map of job names (got seq)" ]] &&
+    cmp --silent -- "${key_work}/shape.md" "${key_work}/shape.md.orig"; then
+    pass 'a category map that is a list exits 2 and leaves the doc alone'
+  else
+    fail "category map that is a list: exit ${shape_rc}, want 2"
+    cat -- "${key_work}/shape.err" >&2
+  fi
   rm --recursive --force -- "${key_work}"
 
   harness_assert_verify || failures=$((failures + 1))

@@ -380,6 +380,9 @@ expect_allowlist_shape allowlist-root-list $'- good.yml\n' 2 \
   '@AL@: the allowlist must be one map of workflow maps (got seq\ scalar)'
 expect_allowlist_shape allowlist-entry-list $'good.yml: [writer]\n' 2 \
   '@AL@: the allowlist must be one map of workflow maps (got map\ seq)'
+expect_allowlist_shape allowlist-empty '' 2 '@AL@: the allowlist is empty'
+expect_allowlist_shape allowlist-several-documents $'good.yml: {writer: [issues]}\n---\ngood.yml: {writer: [issues]}\n' 2 \
+  '@AL@: the allowlist holds several YAML documents; it must hold one'
 expect_allowlist_shape allowlist-entry-null $'good.yml:\nother.yml: {writer: [issues]}\n' 1 \
   "${FIXTURES}/good.yml: job writer grants write scope issues not allowed by @AL@"$'\n1 permission-scope violation(s) found'
 # A workflow file name is data too.
