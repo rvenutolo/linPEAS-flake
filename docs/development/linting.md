@@ -581,12 +581,13 @@ A script that reads a workflow node through an alias resolves it with
 `yq`'s `explode`, which replaces each alias with a copy of what it
 stands for. A read of one node hands `explode` only that node, so
 aliases elsewhere in the file cost nothing. The name lookups described
-under "Text from files in yq expressions" are the exception: each hands
-`explode` the whole map it searches, which is the workflow's `jobs:`
-for the stale-entry read of `check-permission-scopes.sh`, and the whole
-file for its allowlist read and for the category map of
-`refresh-ci-dag.sh` and the manifest of `run-lint-group.sh`. An alias
-nest anywhere in such a map is expanded on every lookup.
+under "Text from files in yq expressions" that use `explode` are the
+exception: each hands it the whole map it searches, which is the
+workflow's `jobs:` for the stale-entry read of
+`check-permission-scopes.sh`, and the whole file for its allowlist
+reads and for the category map of `refresh-ci-dag.sh` and the manifest
+of `run-lint-group.sh`. An alias nest anywhere in such a map is
+expanded on every lookup.
 
 The copies are not capped. Aliases that each repeat another alias
 several times multiply at every level: a 408-byte workflow whose `on:`
@@ -651,10 +652,12 @@ finds a key by comparing base64 text, which holds neither character:
 `explode(.) | [to_entries[] | select((.key | tostring | @base64) == (strenv(X) | @base64))] | reverse | .[0] | .value`.
 `explode` resolves merge keys and aliased entries, which `to_entries`
 does not follow, and the last of the matches is read, as `yq`'s own
-index reads a name written twice. One case reads differently from that
-index: under a merge key given a list of mappings, `explode` takes a
+index reads a name written twice. Two cases read differently from that
+index. Under a merge key given a list of mappings, `explode` takes a
 name from the first mapping that holds it, as the YAML merge spec says,
-and the index takes it from the last.
+and the index takes it from the last. A key written as an alias is
+found by its anchor's text after `explode`, and by the alias (`*ka`)
+through the index.
 
 A lookup whose name came from `keys` on the same map leaves `explode`
 out. `keys` prints a key written as an alias as the alias (`*ka`),

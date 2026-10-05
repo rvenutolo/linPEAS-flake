@@ -145,9 +145,9 @@ expect_spliced_key job-key-backslash 'k\x'
 expect_spliced_key job-key-row-separator 'a|1'
 expect_spliced_key job-key-row-separator-index 'decoy|0'
 
-# Each block is read from its own document. A composite of two documents
-# whose second holds the weak block reported it from the first, strict
-# one, and passed.
+# Each block is read from its own document: in a composite of two
+# documents whose second holds the weak block, that block is reported,
+# not judged by the first document's strict one.
 mkdir -- "${key_dir}/two-docs"
 printf 'runs:\n  using: composite\n  steps:\n    - shell: bash\n      run: |\n        set -Eeuo pipefail\n---\nruns:\n  using: composite\n  steps:\n    - shell: bash\n      run: |\n        set -euo pipefail\n' \
   >"${key_dir}/two-docs/action.yml"
