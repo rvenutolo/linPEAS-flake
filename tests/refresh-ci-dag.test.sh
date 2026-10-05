@@ -36,6 +36,39 @@ function cleanup() {
 }
 trap cleanup EXIT
 
+# @description Render one workflow holding job-a and a job under the
+# given key, with the given category map, and require the key's node to
+# take the Doc quality class and job-a the build class, and the run to log
+# only its one line (yq's own warning about a merge key aside).
+# @arg $1 work dir  @arg $2 case name  @arg $3 job key  @arg $4 category map
+function ci_dag_key_case() {
+  local -r work="$1" case_name="$2" key="$3" cats="$4"
+  local key_rc=0 err
+  printf "name: ci\non: push\njobs:\n  job-a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: \"true\"\n  '%s':\n    runs-on: ubuntu-latest\n    steps:\n      - run: \"true\"\n" \
+    "${key//\'/\'\'}" >"${work}/${case_name}.yml"
+  printf '%s' "${cats}" >"${work}/${case_name}.cats.yml"
+  printf '<!-- BEGIN ci-dag -->\n<!-- END ci-dag -->\n' >"${work}/${case_name}.md"
+  PROBE=PAYLOAD_RAN PROBE_FILE="${work}/probe.txt" \
+    CI_WORKFLOW_OVERRIDE="${work}/${case_name}.yml" \
+    CATEGORIES_FILE_OVERRIDE="${work}/${case_name}.cats.yml" \
+    DOC_OVERRIDE="${work}/${case_name}.md" \
+    "${SCRIPT}" >"${work}/${case_name}.out" 2>"${work}/${case_name}.err" || key_rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${key_rc}" >"${work}/${case_name}.outcome"
+  harness_assert_record "job key as data: ${case_name}" '' \
+    "${work}/${case_name}.outcome" "${work}/${case_name}.md" "${work}/${case_name}.err"
+  err="$(grep --invert-match --fixed-strings -- '--yaml-fix-merge-anchor-to-spec' "${work}/${case_name}.err" || true)"
+  if [[ ${key_rc} -eq 0 ]] &&
+    [[ ${err} =~ ^\[[^]]*\]\ INFO\ \ refreshed\ ci-dag\ block\ in\ (.*)$ ]] &&
+    [[ ${BASH_REMATCH[1]} == "${work}/${case_name}.md" ]] &&
+    grep --line-regexp --fixed-strings --quiet -- "  ${key}:::doc" "${work}/${case_name}.md" &&
+    grep --line-regexp --fixed-strings --quiet -- '  job-a:::build' "${work}/${case_name}.md"; then
+    pass "job key as data: ${case_name} renders its own category"
+  else
+    fail "job key as data: ${case_name}: exit ${key_rc}, want 0 and the line '  ${key}:::doc'"
+    cat -- "${work}/${case_name}.err" "${work}/${case_name}.md" >&2
+  fi
+}
+
 function main() {
   # Scenario 1: real-repo --check passes after a fresh generate.
   "${SCRIPT}"
@@ -255,6 +288,77 @@ EOF
     cat -- "${jq_err}" >&2
   fi
   rm --force -- "${jq_err}" "${jq_out}" "${jq_outcome}"
+
+  # Scenario: a job key is data, never expression text. Each key below
+  # closes a quoted segment if spliced into the category read: it would
+  # take job-a's category, or print an environment variable or a file
+  # through `error()`, or match job-a as a pattern. Read as data, each
+  # key takes its own category and the run logs only its one line. The
+  # key's own entry comes first, so a pattern that also matched job-a
+  # would end on job-a's.
+  local key_work
+  key_work="$(mktemp --directory)"
+  printf 'FILE_READ_MARK\n' >"${key_work}/probe.txt"
+  local -a key_cases=(
+    'reads-other' 'zz" // ."job-a'
+    'reads-env' 'zz" | error(strenv(PROBE)) | ."y'
+    'reads-file' 'zz" | error(load_str(strenv(PROBE_FILE))) | ."y'
+    'wildcard' 'job-*'
+  )
+  local i quoted
+  for ((i = 0; i < ${#key_cases[@]}; i += 2)); do
+    quoted=${key_cases[i + 1]//\'/\'\'}
+    ci_dag_key_case "${key_work}" "${key_cases[i]}" "${key_cases[i + 1]}" \
+      "'${quoted}': Doc quality"$'\njob-a: Build + smoke\n'
+  done
+  # A category a merge key brings in is read, and of a job written twice
+  # in the map the last entry is read, as yq's own lookup reads them.
+  ci_dag_key_case "${key_work}" 'through-merge' 'job-m' \
+    $'x-base: &base\n  job-m: Doc quality\n<<: *base\njob-a: Build + smoke\n'
+  ci_dag_key_case "${key_work}" 'written-twice' 'job-d' \
+    $'job-d: Build + smoke\njob-d: Doc quality\njob-a: Build + smoke\n'
+  # A category map that is not one map of jobs stops the run (exit 2),
+  # as a tool failing to read it does: a list's entries are keyed by
+  # index, and every job would read as uncategorised.
+  local shape_rc=0
+  printf "name: ci\non: push\njobs:\n  job-a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: \"true\"\n" >"${key_work}/shape.yml"
+  printf -- '- job-a: Build + smoke\n' >"${key_work}/shape.cats.yml"
+  printf '<!-- BEGIN ci-dag -->\n<!-- END ci-dag -->\n' >"${key_work}/shape.md"
+  cp -- "${key_work}/shape.md" "${key_work}/shape.md.orig"
+  CI_WORKFLOW_OVERRIDE="${key_work}/shape.yml" CATEGORIES_FILE_OVERRIDE="${key_work}/shape.cats.yml" \
+    DOC_OVERRIDE="${key_work}/shape.md" \
+    "${SCRIPT}" >"${key_work}/shape.out" 2>"${key_work}/shape.err" || shape_rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${shape_rc}" >"${key_work}/shape.outcome"
+  harness_assert_record 'category map that is a list' 'the category map must be one map of job names (got seq)' \
+    "${key_work}/shape.outcome" "${key_work}/shape.out" "${key_work}/shape.err"
+  if [[ ${shape_rc} -eq 2 ]] &&
+    [[ $(<"${key_work}/shape.err") =~ ^\[[^]]*\]\ ERROR\ (.*)$ ]] &&
+    [[ ${BASH_REMATCH[1]} == "${key_work}/shape.cats.yml: the category map must be one map of job names (got seq)" ]] &&
+    cmp --silent -- "${key_work}/shape.md" "${key_work}/shape.md.orig"; then
+    pass 'a category map that is a list exits 2 and leaves the doc alone'
+  else
+    fail "category map that is a list: exit ${shape_rc}, want 2"
+    cat -- "${key_work}/shape.err" >&2
+  fi
+  # A category map of two documents stops the run the same way.
+  shape_rc=0
+  printf 'job-a: Build + smoke\n---\njob-a: Doc quality\n' >"${key_work}/shape.cats.yml"
+  CI_WORKFLOW_OVERRIDE="${key_work}/shape.yml" CATEGORIES_FILE_OVERRIDE="${key_work}/shape.cats.yml" \
+    DOC_OVERRIDE="${key_work}/shape.md" \
+    "${SCRIPT}" >"${key_work}/shape2.out" 2>"${key_work}/shape2.err" || shape_rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${shape_rc}" >"${key_work}/shape2.outcome"
+  harness_assert_record 'category map of two documents' 'the category map holds several YAML documents; it must hold one' \
+    "${key_work}/shape2.outcome" "${key_work}/shape2.out" "${key_work}/shape2.err"
+  if [[ ${shape_rc} -eq 2 ]] &&
+    [[ $(<"${key_work}/shape2.err") =~ ^\[[^]]*\]\ ERROR\ (.*)$ ]] &&
+    [[ ${BASH_REMATCH[1]} == "${key_work}/shape.cats.yml: the category map holds several YAML documents; it must hold one" ]] &&
+    cmp --silent -- "${key_work}/shape.md" "${key_work}/shape.md.orig"; then
+    pass 'a category map of two documents exits 2 and leaves the doc alone'
+  else
+    fail "category map of two documents: exit ${shape_rc}, want 2"
+    cat -- "${key_work}/shape2.err" >&2
+  fi
+  rm --recursive --force -- "${key_work}"
 
   harness_assert_verify || failures=$((failures + 1))
 

@@ -579,8 +579,15 @@ classified and exemptions applied.
 
 A script that reads a workflow node through an alias resolves it with
 `yq`'s `explode`, which replaces each alias with a copy of what it
-stands for. Every such read in `scripts/` hands `explode` only the node
-it reads, so aliases elsewhere in the file cost nothing.
+stands for. A read of one node hands `explode` only that node, so
+aliases elsewhere in the file cost nothing. The name lookups described
+under "Text from files in yq expressions" that use `explode` are the
+exception: each hands it the whole map it searches, which is the
+workflow's `jobs:` for the stale-entry read of
+`check-permission-scopes.sh`, and the whole file for its allowlist
+reads and for the category map of `refresh-ci-dag.sh` and the manifest
+of `run-lint-group.sh`. An alias nest anywhere in such a map is
+expanded on every lookup.
 
 The copies are not capped. Aliases that each repeat another alias
 several times multiply at every level: a 408-byte workflow whose `on:`
@@ -624,6 +631,57 @@ and nearly every operand such a trace flags in `scripts/` is a
 counter, a `grep -c` or `wc` count, `date +%s` output, or a number the
 script's own `awk`, `jq` or `yq` program printed. A provenance label
 also misses text that reaches a field through its delimiter.
+
+## Text from files in yq expressions
+
+A `yq` expression is a program, and text spliced into it is parsed as
+part of that program. A job key or a scope name read from a file, or a
+group name given as an argument, can close the quoted segment it was
+spliced into and go on as code: it can read another node, read nothing,
+or call the operators that read environment variables (`env`, `strenv`,
+`envsubst`) or files (`load`, `load_str`, `load_props`) and print what
+they read through `error()`. Text that breaks the expression, such as a
+quote or a space in a quoted path segment, stops the read instead.
+
+A script hands such text to `yq` as data and never splices it into the
+expression: it sets an environment variable on the `yq` call and reads
+it with `strenv`. A lookup by that text is still not exact, because
+`yq` reads `*` and `?` as wildcards both in an index (`.[strenv(X)]`)
+and in an `==` comparison, so `a*` also finds `abc`. A script therefore
+finds a key by comparing base64 text, which holds neither character:
+`explode(.) | [to_entries[] | select((.key | tostring | @base64) == (strenv(X) | @base64))] | reverse | .[0] | .value`.
+`explode` resolves merge keys and aliased entries, which `to_entries`
+does not follow, and the last of the matches is read, as `yq`'s own
+index reads a name written twice. Two cases read differently from that
+index. Under a merge key given a list of mappings, `explode` takes a
+name from the first mapping that holds it, as the YAML merge spec says,
+and the index takes it from the last. A key written as an alias is
+found by its anchor's text after `explode`, and by the alias (`*ka`)
+through the index.
+
+A lookup whose name came from `keys` on the same map leaves `explode`
+out. `keys` prints a key written as an alias as the alias (`*ka`),
+`explode` would turn it into its anchor's text, and the two would never
+match; the lints that list jobs this way look a job up in `jobs:` as
+written. A path read after the lookup (`.steps[]`, `.permissions`) then
+follows aliases and merge keys inside the job, and a read that prints
+the whole job prints them as written.
+
+A number `yq` printed in an earlier read goes back through `env`.
+`check-run-block-strict.sh` looks up no job by its key: its rows hold
+the document, job position and step index `yq` printed, and its reads
+find the job by them.
+
+No script passes `yq`'s `--security-disable-env-ops`, which also turns
+off `strenv`, or `--security-disable-file-ops`; with nothing spliced
+into an expression, neither guards anything. `yq`'s `system` operator
+stays off unless `--security-enable-system-operator` is passed, and no
+script passes it.
+
+No lint enforces this. Most expressions in `scripts/` built with a
+variable splice a `readonly` constant, and an expression handed to a
+helper reaches `yq` as a single variable, so a matcher on the `yq` call
+cannot tell file text from a constant.
 
 ## Treefmt YAML quote gotcha
 

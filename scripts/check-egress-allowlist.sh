@@ -239,8 +239,10 @@
 # names no host, and assertion 6's could-not-run branch is reachable only by
 # hand.
 # Exits 0 clean, 1 on any drift, 2 if yq is missing, if the declaration
-# file is missing or empty, or if an unfiltered scan discovers no notify
-# job or no cache.nixos.org/releases.nixos.org-carrying job at all.
+# file is missing or empty, if a read of one job's allowed-endpoints,
+# uses: or run: list fails once its workflow's jobs have been listed, or
+# if an unfiltered scan discovers no notify job or no
+# cache.nixos.org/releases.nixos.org-carrying job at all.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -293,6 +295,18 @@ readonly DECLARATION_REL=".github/actions/${NOTIFY_COMPOSITE}/egress-allowlist.t
 readonly NIX_SETUP_COMPOSITE='./.github/actions/setup-nix'
 readonly NIX_SUBCOMMANDS='build|develop|shell|run|flake|profile|eval|copy|store|search|registry|repl|show-config'
 readonly NIX_EXEMPT_MARKER='egress-nix-exempt:'
+# The job a key names. The job list is read with `keys`, which refuses
+# `jobs:` written as an alias, so no lookup meets one. The key reaches
+# `yq` as data, through `strenv`, and is compared by its base64 text:
+# spliced into the expression, a key holding a quote would be read as
+# `yq` code, and `yq` reads `*` and `?` in an index or an `==` comparison
+# as wildcards, which base64 text never holds. Of keys written twice the
+# last is read, as `yq`'s own lookup reads it. `jobs:` is not handed to
+# `explode`: that would turn a key written as an alias into its anchor's
+# text, which the job list (printing the alias) never names, and would
+# expand every alias in `jobs:` on each lookup. The `.steps[]` reads after
+# the lookup follow aliases and merge keys inside the job.
+readonly JOB_BY_KEY='.jobs | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
 
 # Resolved against this script's own location rather than the scan root:
 # the fixture harness repoints the scan root at tests/fixtures, and the
@@ -445,12 +459,13 @@ for f in "${selected_files[@]}"; do
 
     # Every endpoint finding below is derived from this list. A yq that
     # dies on the step walk has read no allowlist at all, and its exit 1
-    # would surface as an allowlist found wanting.
-    if ! endpoints="$(yq eval "
-      .jobs.\"${job}\".steps[]
-      | select(.uses // \"\" | test(\"step-security/harden-runner@\"))
-      | .with.\"allowed-endpoints\" // \"\"
-    " "${f}" | tr ' ' '\n' | sed '/^$/d')"; then
+    # would surface as an allowlist found wanting. Each read below
+    # finds the job through JOB_BY_KEY.
+    if ! endpoints="$(JOB="${job}" yq eval "${JOB_BY_KEY}"'
+      | .steps[]
+      | select(.uses // "" | test("step-security/harden-runner@"))
+      | .with."allowed-endpoints" // ""
+    ' "${f}" | tr ' ' '\n' | sed '/^$/d')"; then
       printf '%s: cannot read allowed-endpoints for job %q\n' "${f}" "${job}" >&2
       exit 2
     fi
@@ -458,11 +473,11 @@ for f in "${selected_files[@]}"; do
     # A job with no harden-runner step has no allowlist to lint.
     [[ -z ${endpoints} ]] && continue
 
-    if ! uses="$(yq eval ".jobs.\"${job}\".steps[].uses // \"\"" "${f}")"; then
+    if ! uses="$(JOB="${job}" yq eval "${JOB_BY_KEY}"' | .steps[].uses // ""' "${f}")"; then
       printf '%s: cannot read the step uses: list for job %q\n' "${f}" "${job}" >&2
       exit 2
     fi
-    if ! runs="$(yq eval ".jobs.\"${job}\".steps[].run // \"\"" "${f}")"; then
+    if ! runs="$(JOB="${job}" yq eval "${JOB_BY_KEY}"' | .steps[].run // ""' "${f}")"; then
       printf '%s: cannot read the step run: list for job %q\n' "${f}" "${job}" >&2
       exit 2
     fi

@@ -32,9 +32,11 @@ trap cleanup EXIT
 # ${1}=scenario name  ${2}=scripts root  ${3}=labeler path
 # ${4}=wanted exit    ${5}=wanted stderr substring ('' for none)
 # ${6}=1 to run with LINT_ALLOW_EMPTY_SCAN set (default: unset)
+# ${7}=the whole wanted stderr, and ${8} the whole wanted stdout ('' for
+#      either skips it)
 function expect() {
   local -r name="$1" scripts_dir="$2" labeler="$3" want_exit="$4" want_msg="$5"
-  local -r allow_empty="${6:-}"
+  local -r allow_empty="${6:-}" want_stderr="${7:-}" want_stdout="${8:-}"
 
   local stdout_file stderr_file outcome_file
   stdout_file="$(mktemp)"
@@ -59,6 +61,14 @@ function expect() {
   elif [[ -n ${want_msg} && ${got_stderr} != *"${want_msg}"* ]]; then
     printf 'FAIL %s: stderr missing %q\n  got: %s\n' \
       "${name}" "${want_msg}" "${got_stderr}" >&2
+    failures=$((failures + 1))
+  elif [[ -n ${want_stderr} && ${got_stderr} != "${want_stderr}" ]]; then
+    printf 'FAIL %s: stderr is not %q\n  got: %s\n' \
+      "${name}" "${want_stderr}" "${got_stderr}" >&2
+    failures=$((failures + 1))
+  elif [[ -n ${want_stdout} && $(<"${stdout_file}") != "${want_stdout}" ]]; then
+    printf 'FAIL %s: stdout is not %q\n  got: %s\n' \
+      "${name}" "${want_stdout}" "$(<"${stdout_file}")" >&2
     failures=$((failures + 1))
   else
     printf 'PASS: %s (exit %s)\n' "${name}" "${got_exit}"
@@ -165,6 +175,83 @@ function main() {
     "${work}/unreadable/scripts" "${FIXTURES}/good.yml" 2 \
     'could not read every shell script under'
   chmod 644 -- "${work}/unreadable/scripts/refresh-alpha.sh"
+
+  # (o) KEY AS DATA: a job key is data, never expression text. Each key
+  # below closes a quoted segment if spliced into a `yq` expression: it
+  # would read the clean decoy job's list or none at all, or print an
+  # environment variable or a file through `error()`. Read as data, every
+  # one reports the undeclared entry its own job's list carries, which
+  # each scenario names after itself.
+  printf 'FILE_READ_MARK\n' >"${work}/probe.txt"
+  local -a key_cases=(
+    'reads-decoy' 'x" // .jobs."decoy'
+    'reads-nothing' 'x" | select(false) | ."y'
+    'reads-env' 'x" | error(strenv(PROBE)) | ."y'
+    'reads-file' 'x" | error(load_str(strenv(PROBE_FILE))) | ."y'
+    'quote' 'k"x'
+    'backslash' 'k\x'
+  )
+  local i case_name key
+  for ((i = 0; i < ${#key_cases[@]}; i += 2)); do
+    case_name="${key_cases[i]}" key="${key_cases[i + 1]}"
+    cat >"${work}/key-${case_name}.yml" <<EOF
+name: key-${case_name}
+on:
+  workflow_dispatch: {}
+jobs:
+  '${key//\'/\'\'}':
+    runs-on: ubuntu-latest
+    steps:
+      - uses: pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7
+        env:
+          IGNORED: "docs/alpha.md\ndocs/key-${case_name}.md"
+  decoy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7
+        env:
+          IGNORED: "docs/alpha.md"
+EOF
+    local finding="${work}/key-${case_name}.yml: IGNORED lists docs/key-${case_name}.md, which no script declares with @generates and which is not one of this lint's exemptions; every hand edit to it counts as zero toward the PR size label"
+    PROBE=PAYLOAD_RAN PROBE_FILE="${work}/probe.txt" expect "key as data: ${case_name}" \
+      "${DECLARING_SCRIPTS}" "${work}/key-${case_name}.yml" 1 "${finding}" '' \
+      "${finding}"$'\n1 size-label ignore-list violation(s)'
+  done
+  # A key is looked up by its exact text: `*` is no wildcard. Read as a
+  # pattern, the first job's key would read its sibling's list as well,
+  # and the run would count four entries instead of three.
+  cat >"${work}/key-wildcard.yml" <<'EOF'
+name: key-wildcard
+on:
+  workflow_dispatch: {}
+jobs:
+  'a*':
+    runs-on: ubuntu-latest
+    steps:
+      - uses: pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7
+        env:
+          IGNORED: "docs/alpha.md\nCHANGELOG.md"
+  ab:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7
+        env:
+          IGNORED: "docs/alpha.md"
+EOF
+  expect 'key as data: wildcard' "${DECLARING_SCRIPTS}" "${work}/key-wildcard.yml" 0 '' '' '' \
+    "check-size-label-ignores.sh: ok — 2 declaration(s) (1 @generates, 1 @generates-block) across 2 script(s) under ${DECLARING_SCRIPTS}, checked against 3 IGNORED entry(ies) in ${work}/key-wildcard.yml"
+
+  # (p) A job keyed by an alias is looked up by the key the job list
+  # prints, and a key written twice reads its last job.
+  local size_step='      - uses: pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7'
+  printf 'name: a\non:\n  workflow_dispatch: {}\nx-name: &ka named\njobs:\n  *ka :\n    steps:\n%s\n        env:\n          IGNORED: "docs/alpha.md\\ndocs/key-alias.md"\n' \
+    "${size_step}" >"${work}/key-alias.yml"
+  expect 'key as data: an alias key' "${DECLARING_SCRIPTS}" "${work}/key-alias.yml" 1 \
+    "${work}/key-alias.yml: IGNORED lists docs/key-alias.md, which no script declares with @generates and which is not one of this lint's exemptions; every hand edit to it counts as zero toward the PR size label"
+  printf 'name: a\non:\n  workflow_dispatch: {}\njobs:\n  size:\n    steps:\n%s\n        env:\n          IGNORED: "docs/alpha.md"\n  size:\n    steps:\n%s\n        env:\n          IGNORED: "docs/alpha.md\\ndocs/key-twice.md"\n' \
+    "${size_step}" "${size_step}" >"${work}/key-twice.yml"
+  expect 'key as data: a key written twice' "${DECLARING_SCRIPTS}" "${work}/key-twice.yml" 1 \
+    "${work}/key-twice.yml: IGNORED lists docs/key-twice.md, which no script declares with @generates and which is not one of this lint's exemptions; every hand edit to it counts as zero toward the PR size label"
 
   # (m) LIVE: the real tree must satisfy the lint.
   expect 'live: real tree agrees' \

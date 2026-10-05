@@ -21,8 +21,9 @@ failures=0
 # @arg $2 group arg to pass
 # @arg $3 expected exit
 # @arg $4 expected stdout substring (empty skips)
+# @arg $5 the whole expected output (optional)
 function run_scenario() {
-  local -r name="$1" group="$2" expected_exit="$3" expected_out="$4"
+  local -r name="$1" group="$2" expected_exit="$3" expected_out="$4" expected_whole="${5-}"
   local outcome_file out_file step_file work scripts_dir tests_dir manifest
   work="$(mktemp -d)"
   scripts_dir="${work}/scripts"
@@ -37,6 +38,9 @@ function run_scenario() {
   printf '#!/usr/bin/env bash\nexit 0\n' >"${scripts_dir}/check-ccc.sh"
   printf '#!/usr/bin/env bash\nexit 1\n' >"${scripts_dir}/check-fff.sh"
   printf '#!/usr/bin/env bash\nexit 0\n' >"${scripts_dir}/check-zzz.sh"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"${scripts_dir}/check-qqq.sh"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"${scripts_dir}/check-mmm.sh"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"${scripts_dir}/check-ddd.sh"
   chmod +x "${scripts_dir}"/check-*.sh
   # demo-first-fail puts its failing check first, so a zzz row proves the
   # runner kept going instead of aborting on the first failure.
@@ -53,7 +57,22 @@ demo-first-fail:
 demo-missing:
   - aaa
   - nope
+'q"x':
+  - qqq
+twice:
+  - aaa
+twice:
+  - ddd
 YAML
+  # A merge key makes yq warn on stderr whatever is read, so it goes
+  # only into the manifest of the scenario that sets MANIFEST_EXTRA.
+  if [[ -n ${MANIFEST_EXTRA:-} ]]; then
+    printf '%s' "${MANIFEST_EXTRA}" >>"${manifest}"
+  fi
+  # MANIFEST_BODY replaces the manifest whole.
+  if [[ -n ${MANIFEST_BODY:-} ]]; then
+    printf '%s' "${MANIFEST_BODY}" >"${manifest}"
+  fi
 
   outcome_file="$(mktemp)"
   out_file="$(mktemp)"
@@ -72,6 +91,10 @@ YAML
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
     printf 'FAIL: %s — expected exit %d, got %d\n' "${name}" "${expected_exit}" "${actual_exit}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  elif [[ -n ${expected_whole} && $(<"${out_file}") != "${expected_whole}" ]]; then
+    printf 'FAIL: %s — output is not %q\n' "${name}" "${expected_whole}" >&2
     cat -- "${out_file}" >&2
     failures=$((failures + 1))
   elif [[ -n ${expected_out} ]] && ! grep --fixed-strings --quiet -- "${expected_out}" "${out_file}"; then
@@ -178,6 +201,37 @@ function main() {
   run_scenario 'failing check does not abort the rest' 'demo-first-fail' 1 '| zzz | pass |'
   run_scenario 'missing script -> exit 1' 'demo-missing' 1 '| nope | FAIL |'
   run_scenario 'unknown group -> exit 2' 'no-such-group' 2 ''
+  # A group name is data, never expression text. Each name below closes
+  # a quoted segment if spliced into the manifest read: it would run
+  # another group, or print an environment variable or a file through
+  # `error()`. Read as data, each is a group the manifest does not hold,
+  # and a manifest key holding a quote is a group like any other.
+  local probe_dir
+  probe_dir="$(mktemp -d)"
+  printf 'FILE_READ_MARK\n' >"${probe_dir}/probe.txt"
+  run_scenario 'group name as data: reads another group' 'nope" // ."demo-one-fail' 2 \
+    'unknown or empty group: nope" // ."demo-one-fail' 'unknown or empty group: nope" // ."demo-one-fail'
+  PROBE=PAYLOAD_RAN run_scenario 'group name as data: reads env' 'x" | error(strenv(PROBE)) | ."y' 2 \
+    'unknown or empty group: x" | error(strenv(PROBE)) | ."y' 'unknown or empty group: x" | error(strenv(PROBE)) | ."y'
+  PROBE_FILE="${probe_dir}/probe.txt" run_scenario 'group name as data: reads a file' \
+    'x" | error(load_str(strenv(PROBE_FILE))) | ."y' 2 \
+    'unknown or empty group: x" | error(load_str(strenv(PROBE_FILE))) | ."y' \
+    'unknown or empty group: x" | error(load_str(strenv(PROBE_FILE))) | ."y'
+  # A name is looked up by its exact text: `*` is no wildcard. Read as a
+  # pattern, it would run every group.
+  run_scenario 'group name as data: a wildcard' '*' 2 'unknown or empty group: *' 'unknown or empty group: *'
+  rm --recursive --force -- "${probe_dir}"
+  run_scenario 'group name as data: a quote in a manifest key' 'q"x' 0 '| qqq | pass |'
+  # A group a merge key brings in is found, and of a group written twice
+  # the last is run, as yq's own lookup reads them.
+  MANIFEST_EXTRA=$'x-base: &base\n  merged:\n    - mmm\n<<: *base\n' \
+    run_scenario 'group name as data: through a merge key' 'merged' 0 '| mmm | pass |'
+  run_scenario 'group name as data: written twice' 'twice' 0 '| ddd | pass |'
+  # A manifest that is not one map of groups is a config error naming the
+  # manifest, not an unknown group.
+  MANIFEST_BODY=$'- demo-all-pass:\n    - aaa\n' \
+    run_scenario 'manifest that is a list' 'demo-all-pass' 2 \
+    'the manifest must be one map of groups (got seq)'
   run_test_gate_scenario
   run_unparsable_manifest_scenario
 

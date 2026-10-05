@@ -37,7 +37,8 @@
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER + SCOPE_ALLOWLIST_OVERRIDE
 # for fixtures. Exit 0 clean, 1 on drift (including a scalar permissions
 # violation or a workflow yq cannot parse), 2 on config/tooling error
-# (including an unparsable allowlist file).
+# (including an allowlist file that does not parse or is not one map of
+# workflow maps).
 
 # $k/$wf/$job in the yq expressions below are yq variables, not shell.
 # shellcheck disable=SC2016
@@ -62,10 +63,43 @@ if [[ ! -f ${ALLOWLIST} ]]; then
   printf 'allowlist file not found: %s\n' "${ALLOWLIST}" >&2
   exit 2
 fi
+# The lookups below walk the allowlist's entries, which a list would
+# also have, keyed by index; so it must be one map whose entries are
+# workflow maps or null.
+if ! allowlist_shape="$(yq eval 'explode(.) | kind + " " + ([.[] | select(tag != "!!null") | kind] | unique | join(","))' "${ALLOWLIST}")"; then
+  printf '%s: could not evaluate allowlist with yq (malformed?)\n' "${ALLOWLIST}" >&2
+  exit 2
+fi
+if [[ ${allowlist_shape} == *$'\n'* ]]; then
+  printf '%s: the allowlist holds several YAML documents; it must hold one\n' "${ALLOWLIST}" >&2
+  exit 2
+fi
+if [[ ${allowlist_shape} == 'scalar ' ]] && [[ "$(yq eval 'tag' "${ALLOWLIST}")" == '!!null' ]]; then
+  printf '%s: the allowlist is empty\n' "${ALLOWLIST}" >&2
+  exit 2
+fi
+if [[ ${allowlist_shape} != 'map map' && ${allowlist_shape} != 'map ' ]]; then
+  printf '%s: the allowlist must be one map of workflow maps (got %q)\n' "${ALLOWLIST}" "${allowlist_shape}" >&2
+  exit 2
+fi
 
 # allowed <workflow-basename> <job> -> newline-separated allowed scope names
+# The names reach `yq` as data, through `strenv`, and are compared by
+# their base64 text: spliced into the expression, a name holding a quote
+# would be read as `yq` code, and `yq` reads `*` and `?` in an index or
+# an `==` comparison as wildcards, which base64 text never holds.
+# `explode` resolves merge keys and aliases first, and of names written
+# twice the last is read, as `yq`'s own lookup reads it. The stale-entry
+# and sort passes read the allowlist as written, so an entry written as an
+# alias or through a merge key stops an unfiltered run (exit 2).
 function allowed() {
-  yq eval ".\"$1\".\"$2\" // [] | .[]" "${ALLOWLIST}"
+  WF="$1" JOB="$2" yq eval 'explode(.) | [to_entries[] | '"$(eq WF)"'] | reverse | .[0] | .value | [to_entries[] | '"$(eq JOB)"'] | reverse | .[0] | .value // [] | .[]' "${ALLOWLIST}"
+}
+
+# eq <variable> -> a yq select keeping the entry whose key's text is the
+# variable's, compared as base64 so neither side is read as a pattern.
+function eq() {
+  printf 'select((.key | tostring | @base64) == (strenv(%s) | @base64))' "$1"
 }
 
 # The `jobs:` node, read through an alias: `explode` handed only that
@@ -192,7 +226,8 @@ if [[ -z ${FILE_FILTER} ]]; then
       # evaluate as a finding against that file and moves on, so this
       # pass says the same thing rather than inventing a second verdict
       # for the same file.
-      if ! granted="$(yq eval ".jobs.\"${job}\".permissions.\"${scope}\" // \"\"" \
+      if ! granted="$(JOB="${job}" SCOPE="${scope}" yq eval \
+        "[${JOBS_NODE} | explode(.) | [to_entries[] | $(eq JOB)] | reverse | .[0] | .value | .permissions | select(kind == \"map\") | [to_entries[] | $(eq SCOPE)] | reverse | .[0] | .value] | .[0] // \"\"" \
         "${wf_path}")"; then
         printf '%s: could not evaluate workflow with yq (malformed?)\n' "${wf_path}" >&2
         failed=$((failed + 1))

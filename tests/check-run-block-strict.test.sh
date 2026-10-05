@@ -93,4 +93,107 @@ if [[ ${empty_exit} != 2 ||
 fi
 printf 'OK   empty scan set rejected\n'
 
+# A job key is data, never expression text or a row field. Each key
+# below closes a quoted segment if spliced into a `yq` expression (it
+# would read the strict decoy's block, or print an environment variable
+# or a file through `error()`), or holds the row separator `|`, which
+# would move text into the step index. Read as data, every one names its
+# own weak block.
+key_dir="$(mktemp --directory)"
+trap 'rm --recursive --force -- "${key_dir}"' EXIT
+printf 'FILE_READ_MARK\n' >"${key_dir}/probe.txt"
+# @arg $1 scenario name  @arg $2 the job key, written single-quoted
+function expect_spliced_key() {
+  local -r name="$1" key="$2"
+  local got_exit=0 got_stderr want
+  mkdir -- "${key_dir}/${name}"
+  cat >"${key_dir}/${name}/w.yml" <<EOF
+name: ${name}
+on: push
+jobs:
+  '${key//\'/\'\'}':
+    runs-on: ubuntu-latest
+    steps:
+      - name: weak
+        run: |
+          set -euo pipefail
+          echo PAYLOAD_RAN
+  decoy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: strict
+        run: |
+          set -Eeuo pipefail
+          echo PAYLOAD_RAN
+EOF
+  got_stderr="$(PROBE=PAYLOAD_RAN PROBE_FILE="${key_dir}/probe.txt" WORKFLOWS_DIR_OVERRIDE="${key_dir}/${name}" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  printf -v want '%s: job %q step[0] run: block must start with %q (got %q)\n1 run: block(s) missing strict-mode prelude' \
+    "${key_dir}/${name}/w.yml" "${key}" 'set -Eeuo pipefail' 'set -euo pipefail'
+  if [[ ${got_exit} != 1 || ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s: exit %s, want 1\n  stderr: %s\n' "${name}" "${got_exit}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+expect_spliced_key job-key-reads-decoy 'x" // .jobs."decoy'
+expect_spliced_key job-key-env-no-pipe 'x" // error(strenv(PROBE)) // .jobs."y'
+expect_spliced_key job-key-reads-env 'x" | error(strenv(PROBE)) | ."y'
+expect_spliced_key job-key-reads-file 'x" | error(load_str(strenv(PROBE_FILE))) | ."y'
+expect_spliced_key job-key-quote 'k"x'
+expect_spliced_key job-key-backslash 'k\x'
+expect_spliced_key job-key-row-separator 'a|1'
+expect_spliced_key job-key-row-separator-index 'decoy|0'
+
+# Each block is read from its own document: in a composite of two
+# documents whose second holds the weak block, that block is reported,
+# not judged by the first document's strict one.
+mkdir -- "${key_dir}/two-docs"
+printf 'runs:\n  using: composite\n  steps:\n    - shell: bash\n      run: |\n        set -Eeuo pipefail\n---\nruns:\n  using: composite\n  steps:\n    - shell: bash\n      run: |\n        set -euo pipefail\n' \
+  >"${key_dir}/two-docs/action.yml"
+two_docs_exit=0
+two_docs_err="$(ACTIONS_DIR_OVERRIDE="${key_dir}/two-docs" "${SCRIPT}" 2>&1 >/dev/null)" || two_docs_exit=$?
+printf -v two_docs_want '%s: composite step[0] run: block must start with %q (got %q)\n1 run: block(s) missing strict-mode prelude' \
+  "${key_dir}/two-docs/action.yml" 'set -Eeuo pipefail' 'set -euo pipefail'
+if [[ ${two_docs_exit} != 1 || ${two_docs_err} != "${two_docs_want}" ]]; then
+  printf 'FAIL composite-second-document: exit %s, want 1\n  stderr: %s\n' "${two_docs_exit}" "${two_docs_err}" >&2
+  exit 1
+fi
+printf 'OK   composite-second-document\n'
+
+# A workflow's job is read from its own document, and its message names
+# the key it is written under, through an alias.
+# @arg $1 scenario name  @arg $2 workflow body  @arg $3 expected exit
+# @arg $4 expected stderr, whole, with @F@ standing for the file
+# @arg $5 PATH to run under (optional)
+function expect_workflow() {
+  local -r name="$1" body="$2" want_exit="$3" run_path="${5:-${PATH}}"
+  local got_exit=0 got_stderr want
+  mkdir -- "${key_dir}/${name}"
+  printf '%s' "${body}" >"${key_dir}/${name}/w.yml"
+  want="${4//@F@/${key_dir}/${name}/w.yml}"
+  got_stderr="$(PATH="${run_path}" WORKFLOWS_DIR_OVERRIDE="${key_dir}/${name}" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  if [[ ${got_exit} != "${want_exit}" || ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s: exit %s, want %s\n  stderr: %s\n' "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+readonly WEAK_STEP=$'    steps:\n      - run: |\n          set -euo pipefail\n          echo PAYLOAD_RAN\n'
+readonly STRICT_STEP=$'    steps:\n      - run: |\n          set -Eeuo pipefail\n          echo PAYLOAD_RAN\n'
+printf -v weak_tail ' step[0] run: block must start with %q (got %q)\n1 run: block(s) missing strict-mode prelude' \
+  'set -Eeuo pipefail' 'set -euo pipefail'
+expect_workflow workflow-second-document \
+  $'jobs:\n  a:\n'"${STRICT_STEP}"$'---\njobs:\n  b:\n'"${WEAK_STEP}" 1 "@F@: job b${weak_tail}"
+expect_workflow job-key-alias \
+  $'x-name: &ka named\njobs:\n  *ka :\n'"${WEAK_STEP}" 1 "@F@: job named${weak_tail}"
+# A failing read of the job's key stops the run rather than naming no job.
+mkdir -- "${key_dir}/stub"
+printf '#!/usr/bin/env bash\ncase "$*" in *"].key | explode"*) exit 7 ;; esac\nexec %q "$@"\n' \
+  "$(command -v yq)" >"${key_dir}/stub/yq"
+chmod +x -- "${key_dir}/stub/yq"
+expect_workflow job-key-unread $'jobs:\n  a:\n'"${WEAK_STEP}" 2 \
+  '@F@: cannot read the key of the job at position 0' "${key_dir}/stub:${PATH}"
+
 printf 'all tests passed\n'

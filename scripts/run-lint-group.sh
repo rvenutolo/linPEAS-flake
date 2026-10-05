@@ -28,11 +28,29 @@ function main() {
     exit 2
   fi
 
+  # The group lookup walks the manifest's entries, which a list would
+  # also have, keyed by index, and would report every group as unknown.
+  local manifest_shape
+  if ! manifest_shape="$(yq eval 'kind' "${MANIFEST}")"; then
+    printf 'cannot read group %s from %s\n' "${group}" "${MANIFEST}" >&2
+    exit 2
+  fi
+  if [[ ${manifest_shape} != map ]]; then
+    printf '%s: the manifest must be one map of groups (got %s)\n' "${MANIFEST}" "${manifest_shape//$'\n'/,}" >&2
+    exit 2
+  fi
+
   local checks
   # A manifest that does not parse is an input this runner could not
   # read. Unchecked, yq's own exit 1 becomes the runner's status and
-  # reads as a lint in the group having found a violation.
-  if ! checks="$(yq eval ".\"${group}\" // [] | .[]" "${MANIFEST}")"; then
+  # reads as a lint in the group having found a violation. The group name
+  # reaches `yq` as data, through `strenv`, and is compared by its base64
+  # text: spliced into the expression, a name holding a quote would be
+  # read as `yq` code, and `yq` reads `*` and `?` in an index or an `==`
+  # comparison as wildcards, which base64 text never holds. Merge keys and
+  # aliases are resolved, and of names written twice the last is read, as
+  # `yq`'s own lookup reads it.
+  if ! checks="$(GROUP="${group}" yq eval 'explode(.) | [to_entries[] | select((.key | tostring | @base64) == (strenv(GROUP) | @base64))] | reverse | .[0] | .value // [] | .[]' "${MANIFEST}")"; then
     printf 'cannot read group %s from %s\n' "${group}" "${MANIFEST}" >&2
     exit 2
   fi
