@@ -23,6 +23,8 @@ readonly REPO_ROOT="${repo_root}"
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 # shellcheck source=scripts/lib/enumerate.sh
 source "${REPO_ROOT}/scripts/lib/enumerate.sh"
+# shellcheck source=scripts/lib/locale-gap.sh
+source "${REPO_ROOT}/scripts/lib/locale-gap.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/refresh-test-harnesses.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/test-harnesses"
 readonly DOC="${REPO_ROOT}/docs/reference/test-harnesses.md"
@@ -236,6 +238,29 @@ function main() {
     fail 'section grouping: expected Check present and Refresh absent'
     cat -- "${sections_seen}" >&2
   fi
+
+  # Under en_US.UTF-8 a bash `[A-Za-z0-9._-]` range also matches
+  # non-ASCII letters. A fixture directory name is read as ASCII under any
+  # locale, so a directory holding one is named by no harness, whether the
+  # harness names it in its body or in a header annotation.
+  require_locale_gap en_US.UTF-8 || exit 1
+  local name
+  for name in body:fé annotation:gé; do
+    mkdir --parents "${work}/${name%%:*}-root/fixtures/${name#*:}"
+    if [[ ${name%%:*} == body ]]; then
+      # shellcheck disable=SC2016 # the ${…} is harness text, not an expansion
+      printf '#!/usr/bin/env bash\nreadonly SCRIPT="${REPO_ROOT}/scripts/y.sh"\nls tests/fixtures/%s\n' \
+        "${name#*:}" >"${work}/${name%%:*}-root/y.test.sh"
+    else
+      printf '#!/usr/bin/env bash\n# @subject scripts/y.sh\n# @fixtures tests/fixtures/%s\nset -e\n' \
+        "${name#*:}" >"${work}/${name%%:*}-root/y.test.sh"
+    fi
+    LC_ALL=en_US.UTF-8 run_gen "non-ascii-${name%%:*}" "${work}/${name%%:*}-root" \
+      "${work}/non-ascii-${name%%:*}.md"
+    expect_failure "non-ascii-${name%%:*}" 2 \
+      "ERROR tests/fixtures/${name#*:} is named by no harness: reference it from the harness that reads it, or declare it with a # @fixtures tests/fixtures/${name#*:} header annotation when only an override reaches it" \
+      "a non-ASCII fixture name in a harness ${name%%:*} names nothing under en_US.UTF-8"
+  done
 
   harness_assert_verify || failures=$((failures + 1))
 

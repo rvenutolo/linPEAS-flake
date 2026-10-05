@@ -553,4 +553,34 @@ if [[ -z ${live_count} || ${live_count} -eq 0 ]]; then
 fi
 printf 'OK   live-nix-host-tree (%s job(s) checked)\n' "${live_count}"
 
+# A bare `nix` must stand as its own word. A letter outside ASCII before
+# it makes it part of a longer word (`énix` is not `nix`), under any
+# locale: in C.UTF-8 such a byte falls outside every ASCII class, and in
+# en_US.UTF-8 collation would put it inside `[a-z]`. Both twins expect the
+# job to reach no nix tooling; the whole of stderr is compared.
+# shellcheck source=scripts/lib/locale-gap.sh
+source "${REPO_ROOT}/scripts/lib/locale-gap.sh"
+require_locale_gap en_US.UTF-8 || exit 1
+# @arg $1 scenario name  @arg $2 locale  @arg $3 the run: line's command
+function expect_nix_word() {
+  local -r name="$1" locale="$2" command="$3"
+  local got_exit=0 got_stderr want
+  printf '%s\n' "name: ${name}" 'on:' '  workflow_dispatch: {}' 'jobs:' "  ${name}:" \
+    '    runs-on: ubuntu-latest' '    steps:' \
+    '      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3' \
+    '        with:' '          egress-policy: block' '          allowed-endpoints: >' \
+    '            cache.nixos.org:443' "      - run: ${command}" >"${key_dir}/wf/${name}.yml"
+  got_stderr="$(LC_ALL="${locale}" WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" \
+    WORKFLOW_FILE_FILTER="${name}.yml" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  want="${key_dir}/wf/${name}.yml: job '${name}' allowlists cache.nixos.org/releases.nixos.org but reaches no nix tooling — neither ./.github/actions/setup-nix nor a run: nix invocation is detected, and no '# egress-nix-exempt: <reason>' marker justifies it"$'\n1 egress-allowlist violation(s)'
+  if [[ ${got_exit} != 1 || ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s: exit %s (want 1)\n  stderr: %s\n  want:   %s\n' \
+      "${name}" "${got_exit}" "${got_stderr}" "${want}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+expect_nix_word nix-word-c-utf8 C.UTF-8 'énix build .#x'
+expect_nix_word nix-word-en-us en_US.UTF-8 'énix build .#x'
+
 printf 'all tests passed\n'

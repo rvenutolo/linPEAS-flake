@@ -13,6 +13,8 @@ repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/locale-gap.sh
+source "${REPO_ROOT}/scripts/lib/locale-gap.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-flake-lock-provenance.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-flake-lock-provenance"
 
@@ -200,6 +202,38 @@ function run_directory_lock_scenario() {
   rm --recursive --force -- "${payload}"
 }
 
+# Runs the routine bump under en_US.UTF-8 and the `ahead` stub, with both
+# locks rewritten at run time by one jq filter, and compares the whole of
+# the output. In that locale a bash range such as `[0-9a-f]` or
+# `[A-Za-z0-9_.-]` also matches non-ASCII characters, and a value the
+# shape gates let through would be handed to the ancestry probe.
+# @arg $1 scenario name  @arg $2 jq filter applied to both locks
+# @arg $3 expected exit  @arg $4 the whole expected output
+function run_en_us_scenario() {
+  local -r name="$1" filter="$2" expected_exit="$3" expected="$4"
+  local dir out_file outcome_file
+  dir="$(mktemp --directory)"
+  out_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  jq "${filter}" -- "${FIXTURES}/base.lock" >"${dir}/base.lock"
+  jq "${filter}" -- "${FIXTURES}/head-routine.lock" >"${dir}/head.lock"
+  local actual_exit=0
+  LC_ALL=en_US.UTF-8 GH_STUB_MODE=ahead \
+    BASE_LOCK_FILE="${dir}/base.lock" \
+    HEAD_LOCK_FILE="${dir}/head.lock" \
+    timeout "${SCENARIO_TIMEOUT_SECS}" "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${expected}" "${outcome_file}" "${out_file}"
+  if [[ ${actual_exit} -ne ${expected_exit} || "$(cat -- "${out_file}")" != "${expected}" ]]; then
+    printf 'FAIL: %s — expected exit %d and output %q; got exit %d and output %q\n' \
+      "${name}" "${expected_exit}" "${expected}" "${actual_exit}" "$(cat -- "${out_file}")" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+  rm --recursive --force -- "${dir}" "${out_file}" "${outcome_file}"
+}
+
 function main() {
   # Every clean scenario asserts the whole summary line rather than the bare
   # `provenance OK`. The ten of them resolve different graphs — different
@@ -380,6 +414,13 @@ function main() {
   run_ancestry_scenario 'non-github rev move is named, not probed' 'base-mixed.lock' 'head-mixed-routine.lock' deny 0 \
     'note: ancestry not probed (non-github source, tolerated): delta (type=git)'
 
+  require_locale_gap en_US.UTF-8 || exit 1
+  run_en_us_scenario 'non-ASCII letter in a moved rev is a could-not-run under en_US.UTF-8' \
+    'if .nodes.alpha.locked.rev == "aaa999aaa999aaa999aaa999aaa999aaa999aaa9" then .nodes.alpha.locked.rev = "aaa999aaa999aaa999aaa999aaa999aaa999aaaé" else . end' \
+    2 'flake-lock-provenance: rev on alpha is not a 40-hex commit id: aaa999aaa999aaa999aaa999aaa999aaa999aaaé'
+  run_en_us_scenario 'non-ASCII letter in an owner is a could-not-run under en_US.UTF-8' \
+    '.nodes.alpha.locked.owner = "orgé" | .nodes.alpha.original.owner = "orgé"' \
+    2 'flake-lock-provenance: source of alpha is not a plain owner/repo: orgé/alpha'
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then

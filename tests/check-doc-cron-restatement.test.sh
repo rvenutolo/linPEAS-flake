@@ -10,6 +10,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/locale-gap.sh
+source "${REPO_ROOT}/scripts/lib/locale-gap.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-doc-cron-restatement.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-doc-cron-restatement"
 
@@ -173,6 +175,22 @@ function main() {
     "${split_root}" \
     1 'docs/split'
   rm --recursive --force -- "${split_root}"
+
+  # Under en_US.UTF-8 a bash `[0-9]` range also matches non-ASCII digits,
+  # so a time or cadence written in them would read as a restatement here
+  # and as none on the runner. The doc is built at run time from the
+  # failing fixture with its digits replaced.
+  require_locale_gap en_US.UTF-8 || exit 1
+  local digits_root
+  digits_root="$(mktemp --directory)"
+  mkdir -- "${digits_root}/docs"
+  cp --recursive -- "${FIXTURES}/restatement-fails/workflows" "${digits_root}/workflows"
+  printf '%s\n' 'update-flake-lock.yml fires Friday ٠٦:٠٠ UTC' \
+    'update-flake-lock.yml fires every ５ hours' >"${digits_root}/docs/x.md"
+  LC_ALL=en_US.UTF-8 run_scenario 'non-ASCII digits carry no clock time or cadence under en_US.UTF-8' \
+    "${digits_root}/workflows" "${digits_root}" 0 '' \
+    'ok — scanned 1 doc(s), 2 line(s) against 1 workflow(s); 0 line(s) carried a clock time or cadence; exemptions applied: none'
+  rm --recursive --force -- "${digits_root}"
 
   harness_assert_verify || failures=$((failures + 1))
 
