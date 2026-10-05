@@ -602,7 +602,7 @@ function main() {
   # Scenario 1: bad pin.version regex. Pin URL is shaped correctly so only
   # the regex check trips; nothing else hard-fails first.
   run_scenario 'bad pin.version regex' \
-    'pin.version does not match expected format' 1 \
+    'ERROR pin.version does not match expected format: not-a-pin' 1 \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/bad-version-pin.json"
 
   # Under en_US.UTF-8 a bash `[0-9]` range also matches non-ASCII digits.

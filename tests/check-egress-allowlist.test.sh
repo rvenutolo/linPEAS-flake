@@ -582,5 +582,8 @@ function expect_nix_word() {
 }
 expect_nix_word nix-word-c-utf8 C.UTF-8 'énix build .#x'
 expect_nix_word nix-word-en-us en_US.UTF-8 'énix build .#x'
+# The word test runs under C, where [[:space:]] is ASCII whitespace, so an
+# em space after `nix` (written as its UTF-8 bytes) separates nothing.
+expect_nix_word nix-word-em-space C.UTF-8 $'nix\342\200\203build .#x'
 
 printf 'all tests passed\n'

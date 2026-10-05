@@ -186,10 +186,11 @@ function main() {
   mkdir -- "${digits_root}/docs"
   cp --recursive -- "${FIXTURES}/restatement-fails/workflows" "${digits_root}/workflows"
   printf '%s\n' 'update-flake-lock.yml fires Friday ٠٦:٠٠ UTC' \
-    'update-flake-lock.yml fires every ５ hours' >"${digits_root}/docs/x.md"
+    'update-flake-lock.yml fires every ５ hours' \
+    'update-flake-lock.yml fires on ١٢ May' >"${digits_root}/docs/x.md"
   LC_ALL=en_US.UTF-8 run_scenario 'non-ASCII digits carry no clock time or cadence under en_US.UTF-8' \
     "${digits_root}/workflows" "${digits_root}" 0 '' \
-    'ok — scanned 1 doc(s), 2 line(s) against 1 workflow(s); 0 line(s) carried a clock time or cadence; exemptions applied: none'
+    'ok — scanned 1 doc(s), 3 line(s) against 1 workflow(s); 0 line(s) carried a clock time or cadence; exemptions applied: none'
   rm --recursive --force -- "${digits_root}"
 
   harness_assert_verify || failures=$((failures + 1))

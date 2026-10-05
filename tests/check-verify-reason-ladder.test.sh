@@ -158,10 +158,10 @@ function main() {
   expect 'good' 'workflow.yml' 0 ''
 
   expect 'bad-env-key-regex' 'workflow.yml' 1 \
-    'is not a shell identifier'
+    'attribution env key A\{1 is not a shell identifier; attribution env names must match ^[A-Za-z_][A-Za-z0-9_]*$'
 
   expect 'bad-missing-env' 'workflow.yml' 1 \
-    'has no steps.<id>.outcome entry'
+    'step id step-delta has no steps.<id>.outcome entry in the attribution env'
 
   expect 'bad-unread-env' 'workflow.yml' 1 \
     'is never read by the reason ladder'

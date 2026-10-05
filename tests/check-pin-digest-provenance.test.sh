@@ -100,7 +100,9 @@ function run_scenario() {
 # trees built at run time, each holding one workflow pin and the octoscan
 # pair, and compare the whole of the output. In that locale a bash range
 # such as `[0-9]` or `[a-f]` also matches non-ASCII characters, so each
-# case puts one where collation would admit it.
+# case puts one where collation would admit it. OCTOSCAN_EXTRA_BASE and
+# OCTOSCAN_EXTRA_HEAD, when set by the caller, are lines appended to that
+# side's octoscan file.
 # @arg $1 scenario name  @arg $2 GH_STUB_MODE value  @arg $3 expected exit
 # @arg $4 the whole expected output
 # @arg $5-$10 base pin sha, base label, base octoscan digest and version,
@@ -119,6 +121,11 @@ function run_en_us_scenario() {
       "$1" "$2" >"${trees}/${side}/.github/workflows/wf.yml"
     printf '#!/usr/bin/env bash\nOCTOSCAN_DIGEST="sha256:%s"\nOCTOSCAN_VERSION="%s"\n' \
       "$3" "$4" >"${trees}/${side}/scripts/octoscan-scan.sh"
+    if [[ ${side} == base ]]; then
+      printf '%s' "${OCTOSCAN_EXTRA_BASE:-}" >>"${trees}/${side}/scripts/octoscan-scan.sh"
+    else
+      printf '%s' "${OCTOSCAN_EXTRA_HEAD:-}" >>"${trees}/${side}/scripts/octoscan-scan.sh"
+    fi
     shift 4
   done
   local actual_exit=0
@@ -412,7 +419,8 @@ function main() {
     'digest repointed under unchanged version: ghcr.io/synacktiv/octoscan (v0.1.7): sha256:1111111111111111111111111111111111111111111111111111111111111111 -> sha256:2222222222222222222222222222222222222222222222222222222222222222'
   run_scenario 'octoscan lockstep bump passes' 'head-octoscan-lockstep' deny 0 \
     'pin digest provenance OK: 9 pin(s) across 3 file(s)'
-  run_scenario 'octoscan shape drift errors' 'head-octoscan-shape' deny 2 'octoscan digest/version pair not found'
+  run_scenario 'octoscan shape drift errors' 'head-octoscan-shape' deny 2 \
+    'pin-digest-provenance: octoscan digest/version pair not found in scripts/octoscan-scan.sh (extraction shape drift?)'
   run_scenario 'floating repoint reachable passes' 'head-floating-repoint' reachable 0 \
     'verified reachable from master (behind) via direct commit pin'
   run_scenario 'floating repoint tag-object deref passes' 'head-floating-repoint' tagobject-reachable 0 \
@@ -426,14 +434,17 @@ function main() {
   # the deref call must fire rather than let `[[ ... =~ ^[0-9a-f]{40}$
   # ]]` silently fail the reachability check for the wrong reason.
   run_scenario 'floating repoint malformed tag-deref payload exits 2' \
-    'head-floating-repoint' tagobject-malformed 2 'malformed tag deref payload'
+    'head-floating-repoint' tagobject-malformed 2 \
+    'pin-digest-provenance: malformed tag deref payload for cachix/install-nix-action@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee: not-a-forty-hex-sha'
   # Under en_US.UTF-8 a bash `[0-9a-f]` range also matches non-ASCII
   # letters, so the payload would be taken for a commit SHA and probed.
   LC_ALL=en_US.UTF-8 run_scenario 'floating repoint non-ASCII tag-deref payload exits 2 under en_US.UTF-8' \
     'head-floating-repoint' tagobject-nonascii 2 \
     'pin-digest-provenance: malformed tag deref payload for cachix/install-nix-action@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee: 999999999999999999999999999999999999999é'
-  run_scenario 'quoted pin shape errors' 'head-quoted-pin' deny 2 'unrecognized uses: pin shape'
-  run_scenario 'comment-less pin shape errors' 'head-commentless-pin' deny 2 'unrecognized uses: pin shape'
+  run_scenario 'quoted pin shape errors' 'head-quoted-pin' deny 2 \
+    'pin-digest-provenance: unrecognized uses: pin shape at .github/workflows/wf.yml:5:       - uses: "actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" # v4.3.1'
+  run_scenario 'comment-less pin shape errors' 'head-commentless-pin' deny 2 \
+    'pin-digest-provenance: unrecognized uses: pin shape at .github/workflows/wf.yml:5:       - uses: actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
   run_scenario 'nested action dir repoint fails' 'head-nested-action-repoint' deref-none 1 \
     'digest repointed under unchanged version: actions/setup-node (v4.0.0): 3333333333333333333333333333333333333333 -> 4444444444444444444444444444444444444444'
   run_scenario 'uppercase-SHA case-only change passes' 'head-uppercase-sha-same-pin' deny 0 \
@@ -467,12 +478,21 @@ ${repoint_tail}" \
   run_en_us_scenario 'non-ASCII letter in a pin sha is an unrecognized shape under en_US.UTF-8' \
     deny 2 "pin-digest-provenance: unrecognized uses: pin shape at .github/workflows/wf.yml:4:       - uses: actions/checkout@${sha_b:1}é # v4.3.1" \
     "${sha_b}" v4.3.1 "${dig_1}" v0.1.7 "${sha_b:1}é" v4.3.1 "${dig_1}" v0.1.7
-  run_en_us_scenario 'non-ASCII digit in the octoscan version is a shape drift under en_US.UTF-8' \
-    deny 2 'pin-digest-provenance: octoscan digest/version pair not found in scripts/octoscan-scan.sh (extraction shape drift?)' \
-    "${sha_b}" v4.3.1 "${dig_1}" 'v0.1.٧' "${sha_b}" v4.3.1 "${dig_2}" 'v0.1.٧'
-  run_en_us_scenario 'non-ASCII letter in the octoscan digest is a shape drift under en_US.UTF-8' \
-    deny 2 'pin-digest-provenance: octoscan digest/version pair not found in scripts/octoscan-scan.sh (extraction shape drift?)' \
-    "${sha_b}" v4.3.1 "${dig_1}" v0.1.7 "${sha_b}" v4.3.1 "${dig_2:1}é" v0.1.7
+  # The octoscan file keeps the last line each read matches. A second line
+  # holding a non-ASCII character is not one, so the pair read is the
+  # first: a moved digest under v0.1.7 in the one, and no move at all in
+  # the other.
+  local -r dig_3='3333333333333333333333333333333333333333333333333333333333333333'
+  local -r dig_4='4444444444444444444444444444444444444444444444444444444444444444'
+  OCTOSCAN_EXTRA_BASE=$'OCTOSCAN_VERSION="v0.1.٧"\n' OCTOSCAN_EXTRA_HEAD=$'OCTOSCAN_VERSION="v0.1.٧"\n' \
+    run_en_us_scenario 'a non-ASCII octoscan version line is not read under en_US.UTF-8' \
+    deny 1 "FAIL: digest repointed under unchanged version: ghcr.io/synacktiv/octoscan (v0.1.7): sha256:${dig_3} -> sha256:${dig_4}
+${repoint_tail}" \
+    "${sha_b}" v4.3.1 "${dig_3}" v0.1.7 "${sha_b}" v4.3.1 "${dig_4}" v0.1.7
+  OCTOSCAN_EXTRA_HEAD="OCTOSCAN_DIGEST=\"sha256:${dig_2:1}é\""$'\n' \
+    run_en_us_scenario 'a non-ASCII octoscan digest line is not read under en_US.UTF-8' \
+    deny 0 'pin digest provenance OK: 2 pin(s) across 2 file(s)' \
+    "${sha_b}" v4.3.1 "${dig_1}" v0.1.7 "${sha_b}" v4.3.1 "${dig_1}" v0.1.7
   run_git_mode_scenario 'git BASE_REF mode: zero-level composite action repoint fails' 1 \
     'digest repointed under unchanged version: actions/setup-node (v4.0.0): 1111111111111111111111111111111111111111 -> 3333333333333333333333333333333333333333'
   run_git_ls_tree_failure_scenario
