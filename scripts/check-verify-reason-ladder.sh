@@ -79,6 +79,8 @@ source "${_lib_dir}/lib/awk-path.sh"
 source "${_lib_dir}/lib/temp.sh"
 # shellcheck source=scripts/lib/repo.sh
 source "${_lib_dir}/lib/repo.sh"
+# shellcheck source=scripts/lib/ascii-match.sh
+source "${_lib_dir}/lib/ascii-match.sh"
 
 REPO_ROOT="$(repo_toplevel)"
 readonly REPO_ROOT
@@ -218,7 +220,9 @@ while IFS=$'\t' read -r name value; do
   # identifier makes both interpolations literal by construction. A
   # GitHub Actions env key is a shell identifier in any workflow that
   # can read it, so a non-conforming key is drift, not a tooling fault.
-  if [[ ! ${name} =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+  # ascii_match holds the ranges to ASCII under any locale, as bash's own
+  # identifiers are.
+  if ! ascii_match "${name}" '^[A-Za-z_][A-Za-z0-9_]*$'; then
     printf '%s: attribution env key %q is not a shell identifier; attribution env names must match ^[A-Za-z_][A-Za-z0-9_]*$\n' \
       "${WORKFLOW}" "${name}" >&2
     bad_env_name=1
@@ -226,7 +230,7 @@ while IFS=$'\t' read -r name value; do
   fi
   env_names+=("${name}")
   ref=''
-  if [[ ${value} =~ steps\.([A-Za-z0-9_-]+)\.outcome ]]; then
+  if ascii_match "${value}" 'steps\.([A-Za-z0-9_-]+)\.outcome'; then
     ref="${BASH_REMATCH[1]}"
     REFERENCED["${ref}"]=1
   fi

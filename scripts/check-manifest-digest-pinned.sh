@@ -46,6 +46,8 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/awk-path.sh
 source "${_lib_dir}/lib/awk-path.sh"
+# shellcheck source=scripts/lib/ascii-match.sh
+source "${_lib_dir}/lib/ascii-match.sh"
 
 # Whitespace is matched as [[:space:]]+ rather than a literal space so
 # the pattern survives an shfmt reflow of a scanned script.
@@ -221,7 +223,8 @@ check_invocation() {
     if [[ ${ref} == *"@sha256:"* ]]; then
       continue
     fi
-    if [[ ${ref} =~ @\$\{?([A-Za-z_][A-Za-z0-9_]*)\}? ]]; then
+    # The variable name is read as bash reads one, ASCII only.
+    if ascii_match "${ref}" '@\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?'; then
       var="${BASH_REMATCH[1]}"
       if [[ ${var^^} == *DIGEST* ]]; then
         continue

@@ -86,8 +86,9 @@ for f in "${selected_files[@]}"; do
     [[ -z ${ref} ]] && continue
     # Path-relative composite (./...) is content-addressed by the checkout.
     [[ ${ref} == ./* ]] && continue
-    # Expect owner/repo[/path]@<40-hex-sha>.
-    if [[ ! ${ref} =~ @[0-9a-f]{40}$ ]]; then
+    # Expect owner/repo[/path]@<40-hex-sha>, the hex digits spelled out:
+    # a `[0-9a-f]` range follows the locale.
+    if [[ ! ${ref} =~ @[0123456789abcdef]{40}$ ]]; then
       printf '%s: %q not SHA-pinned (need owner/repo@<40-hex>)\n' "${f}" "${ref}" >&2
       failed=$((failed + 1))
     fi

@@ -70,7 +70,8 @@ if [[ -z ${url_sha} ]]; then
   printf 'no github:cachix/git-hooks.nix/<sha> URL found in %s\n' "${FLAKE_NIX}" >&2
   exit 1
 fi
-if [[ ! ${url_sha} =~ ^[0-9a-f]{7,40}$ ]]; then
+# Hex digits spelled out: a `[0-9a-f]` range follows the locale.
+if [[ ! ${url_sha} =~ ^[0123456789abcdef]{7,40}$ ]]; then
   printf 'extracted URL SHA has unexpected shape: %q\n' "${url_sha}" >&2
   exit 1
 fi
@@ -117,7 +118,7 @@ if [[ -z ${lock_rev} ]]; then
   printf 'no nodes["pre-commit-hooks"].locked.rev in %s\n' "${FLAKE_LOCK}" >&2
   exit 1
 fi
-if [[ ! ${lock_rev} =~ ^[0-9a-f]{40}$ ]]; then
+if [[ ! ${lock_rev} =~ ^[0123456789abcdef]{40}$ ]]; then
   printf 'lock rev has unexpected shape: %q\n' "${lock_rev}" >&2
   exit 1
 fi

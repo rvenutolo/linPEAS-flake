@@ -68,7 +68,8 @@ for f in "${selected_files[@]}"; do
       failed=$((failed + 1))
       continue
     fi
-    if [[ ! ${first_uses} =~ ^step-security/harden-runner@[0-9a-f]{40}$ ]]; then
+    # Hex digits spelled out: a `[0-9a-f]` range follows the locale.
+    if [[ ! ${first_uses} =~ ^step-security/harden-runner@[0123456789abcdef]{40}$ ]]; then
       printf '%s: job %q harden-runner ref %q not SHA-pinned\n' \
         "${f}" "${job}" "${first_uses}" >&2
       failed=$((failed + 1))
