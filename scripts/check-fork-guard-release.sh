@@ -77,8 +77,10 @@ readonly GUARD_NEEDLE="github.repository == '${REPO_SLUG}'"
 # last is read, as `yq`'s own lookup reads it. `jobs:` is not handed to
 # `explode`: that would turn a key written as an alias into its anchor's
 # text, which the job list (printing the alias) never names, and would
-# expand every alias in `jobs:` on each lookup. The reads after a lookup
-# follow aliases and merge keys inside the job themselves.
+# expand every alias in `jobs:` on each lookup. The `.permissions` and
+# `.if` reads after the lookup follow aliases and merge keys inside the
+# job; the body read prints the job whole, so an alias or a merge key in
+# it reads as written and what it stands for is not searched.
 readonly JOB_BY_KEY='.jobs | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
 
 if ! command -v yq >/dev/null 2>&1; then

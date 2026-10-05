@@ -579,8 +579,14 @@ classified and exemptions applied.
 
 A script that reads a workflow node through an alias resolves it with
 `yq`'s `explode`, which replaces each alias with a copy of what it
-stands for. Every such read in `scripts/` hands `explode` only the node
-it reads, so aliases elsewhere in the file cost nothing.
+stands for. A read of one node hands `explode` only that node, so
+aliases elsewhere in the file cost nothing. The name lookups described
+under "Text from files in yq expressions" are the exception: each hands
+`explode` the whole map it searches, which is the workflow's `jobs:`
+for the stale-entry read of `check-permission-scopes.sh`, and the whole
+file for its allowlist read and for the category map of
+`refresh-ci-dag.sh` and the manifest of `run-lint-group.sh`. An alias
+nest anywhere in such a map is expanded on every lookup.
 
 The copies are not capped. Aliases that each repeat another alias
 several times multiply at every level: a 408-byte workflow whose `on:`
@@ -654,7 +660,9 @@ A lookup whose name came from `keys` on the same map leaves `explode`
 out. `keys` prints a key written as an alias as the alias (`*ka`),
 `explode` would turn it into its anchor's text, and the two would never
 match; the lints that list jobs this way look a job up in `jobs:` as
-written, and their later reads follow aliases inside the job.
+written. A path read after the lookup (`.steps[]`, `.permissions`) then
+follows aliases and merge keys inside the job, and a read that prints
+the whole job prints them as written.
 
 A number `yq` printed in an earlier read goes back through `env`.
 `check-run-block-strict.sh` looks up no job by its key: its rows hold

@@ -83,8 +83,8 @@ readonly SIZE_ACTION='pascalgn/size-label-action'
 # last is read, as `yq`'s own lookup reads it. `jobs:` is not handed to
 # `explode`: that would turn a key written as an alias into its anchor's
 # text, which the job list (printing the alias) never names, and would
-# expand every alias in `jobs:` on each lookup. The reads after a lookup
-# follow aliases and merge keys inside the job themselves.
+# expand every alias in `jobs:` on each lookup. The `.steps[]` reads after
+# the lookup follow aliases and merge keys inside the job.
 readonly JOB_BY_KEY='.jobs | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
 
 # IGNORED entries no `@generates` annotation can ever claim, because
