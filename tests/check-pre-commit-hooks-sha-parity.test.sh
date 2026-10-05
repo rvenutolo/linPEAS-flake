@@ -11,6 +11,8 @@ repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/locale-gap.sh
+source "${REPO_ROOT}/scripts/lib/locale-gap.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-pre-commit-hooks-sha-parity.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-pre-commit-hooks-sha-parity"
 
@@ -60,6 +62,43 @@ function run_scenario() {
   rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
 }
 
+# @description Run the script under en_US.UTF-8 on a copy of the good
+# fixture pair whose URL SHA and lock rev are replaced, and compare exit
+# code and the whole of stderr. In that locale a bash `[0-9a-f]` range
+# also matches non-ASCII characters.
+# @arg $1 scenario name  @arg $2 URL SHA  @arg $3 lock rev
+# @arg $4 expected exit  @arg $5 the whole expected stderr
+function run_en_us_scenario() {
+  local -r name="$1" url_sha="$2" lock_rev="$3" expected_exit="$4" expected_stderr="$5"
+  local -r good_sha='61ab0e80d9c7ab14c256b5b453d8b3fb0189ba0a'
+  local dir stderr_file stdout_file outcome_file
+  dir="$(mktemp --directory)"
+  stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  sed "s|${good_sha}|${url_sha}|" -- "${FIXTURES}/good/flake.nix" >"${dir}/flake.nix"
+  sed "s|${good_sha}|${lock_rev}|g" -- "${FIXTURES}/good/flake.lock" >"${dir}/flake.lock"
+
+  local actual_exit=0
+  LC_ALL=en_US.UTF-8 FLAKE_NIX_OVERRIDE="${dir}/flake.nix" \
+    FLAKE_LOCK_OVERRIDE="${dir}/flake.lock" \
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${expected_stderr}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+
+  if [[ ${actual_exit} -ne ${expected_exit} || "$(cat -- "${stderr_file}")" != "${expected_stderr}" ]]; then
+    printf 'FAIL: %s — expected exit %d and stderr %q; got exit %d and stderr %q\n' \
+      "${name}" "${expected_exit}" "${expected_stderr}" "${actual_exit}" \
+      "$(cat -- "${stderr_file}")" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+
+  rm --recursive --force -- "${dir}" "${stderr_file}" "${stdout_file}" "${outcome_file}"
+}
+
 function main() {
   run_scenario 'matched SHAs pass' \
     'good' 0 ''
@@ -103,6 +142,21 @@ function main() {
   # drift verdict the scenario above covers.
   run_scenario 'scalar pre-commit-hooks node is a tooling error' \
     'bad-lock-scalar-node' 2 'cannot read nodes["pre-commit-hooks"].locked.rev from'
+  # The lock rev is held to 40 lowercase hex digits under any locale; a
+  # URL SHA that is an ASCII prefix of it would otherwise match.
+  require_locale_gap en_US.UTF-8 || exit 1
+  run_en_us_scenario 'non-ASCII letter in the lock rev fails under en_US.UTF-8' \
+    61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0 61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0é 1 \
+    'lock rev has unexpected shape: 61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0é'
+  run_en_us_scenario 'non-ASCII digit in the lock rev fails under en_US.UTF-8' \
+    61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0 61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0５ 1 \
+    'lock rev has unexpected shape: 61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0５'
+  # grep extracts the URL SHA through the same range, so under en_US.UTF-8
+  # the non-ASCII letter reaches the shape gate rather than ending the
+  # match early.
+  run_en_us_scenario 'non-ASCII letter in the URL SHA fails under en_US.UTF-8' \
+    61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0é 61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0a 1 \
+    'extracted URL SHA has unexpected shape: 61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0é'
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then

@@ -7,6 +7,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/locale-gap.sh
+source "${REPO_ROOT}/scripts/lib/locale-gap.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-patch-tag-pins.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-patch-tag-pins"
 
@@ -151,6 +153,28 @@ ACTION_EOF
   fi
   rm --recursive --force -- "${EMPTY_SCAN_DIR}"
   rm --force -- "${es_stdout}" "${es_stderr}" "${es_outcome}"
+
+  # Under en_US.UTF-8 a bash `[0-9]` range also matches non-ASCII digits,
+  # so `# v4.٣.1` would read as an exact patch tag. It names no tag GitHub
+  # holds; the comment is reported as not naming one. Built at run time,
+  # the whole of stderr compared.
+  require_locale_gap en_US.UTF-8 || exit 1
+  local digits_dir digits_err digits_exit=0
+  digits_dir="$(mktemp --directory)"
+  printf 'jobs:\n  a:\n    steps:\n      - uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa # v4.٣.1\n' \
+    >"${digits_dir}/digits.yml"
+  digits_err="$(LC_ALL=en_US.UTF-8 LINT_PATHS_OVERRIDE="${digits_dir}/digits.yml" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || digits_exit=$?
+  local -r digits_want="${digits_dir}/digits.yml:4: ${MSG_MAJOR}:      - uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa # v4.٣.1
+1 violation(s) found"
+  rm --recursive --force -- "${digits_dir}"
+  if [[ ${digits_exit} -ne 1 || ${digits_err} != "${digits_want}" ]]; then
+    printf 'FAIL: non-ASCII digit in a patch tag — expected exit 1 and stderr %q; got exit %d and stderr %q\n' \
+      "${digits_want}" "${digits_exit}" "${digits_err}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: non-ASCII digit in a patch tag is not an exact patch tag under en_US.UTF-8 (exit 1)\n'
+  fi
 
   harness_assert_verify || failures=$((failures + 1))
 
