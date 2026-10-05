@@ -5,6 +5,11 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
 readonly SCRIPT="${REPO_ROOT}/scripts/check-ratchet-pin-audit.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/ratchet-pin-audit"
+# shellcheck source=scripts/lib/locale-gap.sh
+source "${REPO_ROOT}/scripts/lib/locale-gap.sh"
+# The version and floating-major scenarios below pin en_US.UTF-8, where a
+# bash [0-9] range admits non-ASCII digits.
+require_locale_gap en_US.UTF-8 || exit 1
 
 function expect() {
   local -r fixture="$1" want_exit="$2" want_msg="$3"
@@ -265,6 +270,30 @@ expect_version version-absent.md version-absent.yml 0.11.4 1 \
 expect_version version-stated.md good.yml 'not-a-version' 2 \
   "could not read a version"
 
+# In en_US.UTF-8 a bash [0-9] range also matches non-ASCII digits, so a
+# version the tool cannot have printed would be compared as a version and
+# reported as drift. The whole of stderr is compared.
+# @arg $1 stand-in version  @arg $2 expected exit  @arg $3 whole stderr
+function expect_version_en_us() {
+  local -r version="$1" want_exit="$2" want_stderr="$3"
+  local got_exit=0 got_stderr
+  got_stderr="$(LC_ALL=en_US.UTF-8 RATCHET_VERSION_OVERRIDE="${version}" \
+    RATCHET_DOC_OVERRIDE="${FIXTURES}/version-stated.md" \
+    WORKFLOW_PATH_OVERRIDE="${FIXTURES}/good.yml" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  if [[ ${got_exit} != "${want_exit}" || ${got_stderr} != "${want_stderr}" ]]; then
+    printf 'FAIL en_US.UTF-8 @ %s: exit %s, want %s\n  stderr: %s\n  want:   %s\n' \
+      "${version}" "${got_exit}" "${want_exit}" "${got_stderr}" "${want_stderr}" >&2
+    return 1
+  fi
+  printf 'OK   en_US.UTF-8 @ %s\n' "${version}"
+}
+
+expect_version_en_us 0.11.4 0 ""
+expect_version_en_us '0.11.٤' 2 'could not read a version from ratchet --version (got 0.11.٤)'
+expect_version_en_us '0.11.５' 2 'could not read a version from ratchet --version (got 0.11.５)'
+expect_version_en_us '0.1².4' 2 'could not read a version from ratchet --version (got 0.1².4)'
+
 # --- classify-pin-ref.sh verdict tests -------------------------------
 # Pure classifier: <tag> <pinned> <ref_object_sha> <ref_object_type>
 # <deref_commit_sha>. Fake 40-hex SHAs keep the cases offline and
@@ -329,6 +358,28 @@ classify "patch tag not over-skipped" drift \
   v31.2.0 1111111111111111111111111111111111111111 \
   2222222222222222222222222222222222222222 tag \
   3333333333333333333333333333333333333333
+# Under en_US.UTF-8 a bash [0-9] range also matches non-ASCII digits; a
+# tag holding one is not a floating major, so a moved pin is drift.
+LC_ALL=en_US.UTF-8 classify "Arabic-Indic digit tag is not a floating major under en_US.UTF-8" drift \
+  'v٣' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+  7777777777777777777777777777777777777777 tag \
+  8888888888888888888888888888888888888888
+LC_ALL=en_US.UTF-8 classify "fullwidth digit tag is not a floating major under en_US.UTF-8" drift \
+  'v５' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+  7777777777777777777777777777777777777777 tag \
+  8888888888888888888888888888888888888888
+LC_ALL=en_US.UTF-8 classify "superscript digit tag is not a floating major under en_US.UTF-8" drift \
+  'v²' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+  7777777777777777777777777777777777777777 tag \
+  8888888888888888888888888888888888888888
+LC_ALL=en_US.UTF-8 classify "mixed-digit tag is not a floating major under en_US.UTF-8" drift \
+  'v1٢' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+  7777777777777777777777777777777777777777 tag \
+  8888888888888888888888888888888888888888
+LC_ALL=en_US.UTF-8 classify "ASCII floating major still skips under en_US.UTF-8" skip-floating-major \
+  v31 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+  7777777777777777777777777777777777777777 tag \
+  8888888888888888888888888888888888888888
 # usage error: too few args.
 classify "usage error (too few args)" "<error>" v9.0.0 deadbeef
 
