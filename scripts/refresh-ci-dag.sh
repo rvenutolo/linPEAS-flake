@@ -6,8 +6,8 @@
 # docs/_data/ci-check-categories.yml map.
 # @generates docs/architecture/ci-dag.md
 # @option --check exit 1 if the doc would change; exit 2 if an input file
-# is missing, if ci.yml has needs: references to non-existent jobs, or if
-# a tool fails to read them
+# is missing, if ci.yml has needs: references to non-existent jobs, if
+# the category map is not one map, or if a tool fails to read them
 
 # Replace the content between <!-- BEGIN ci-dag --> and <!-- END ci-dag -->
 # in docs/architecture/ci-dag.md with a mermaid `flowchart TD` of the
@@ -19,7 +19,8 @@
 #   scripts/refresh-ci-dag.sh           # mutate the doc in place
 #   scripts/refresh-ci-dag.sh --check   # exit 1 if doc would change;
 #                                       # exit 2 on a missing input file,
-#                                       # dangling needs:, or a tool
+#                                       # dangling needs:, a category map
+#                                       # that is not one map, or a tool
 #                                       # failure reading the jobs
 #
 # Env overrides (for tests):
@@ -91,6 +92,22 @@ function main() {
   fi
   if [[ ! -f ${doc} ]]; then
     log_err "${doc} not found"
+    exit 2
+  fi
+  # The category lookup walks the map's entries, which a list would also
+  # have, keyed by index, so every job would read as uncategorised. An
+  # empty map file reads as no categories.
+  local cat_shape
+  if ! cat_shape="$(yq 'kind + " " + tag' "${cat_map}")"; then
+    log_err "could not read the shape of ${cat_map}"
+    exit 2
+  fi
+  if [[ ${cat_shape} == *$'\n'* ]]; then
+    log_err "${cat_map}: the category map holds several YAML documents; it must hold one"
+    exit 2
+  fi
+  if [[ ${cat_shape} != 'map '* && ${cat_shape} != 'scalar !!null' ]]; then
+    log_err "${cat_map}: the category map must be one map of job names (got ${cat_shape%% *})"
     exit 2
   fi
   if ! grep --quiet '^<!-- BEGIN ci-dag -->$' "${doc}"; then

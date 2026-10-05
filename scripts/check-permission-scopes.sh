@@ -70,6 +70,14 @@ if ! allowlist_shape="$(yq eval 'explode(.) | kind + " " + ([.[] | select(tag !=
   printf '%s: could not evaluate allowlist with yq (malformed?)\n' "${ALLOWLIST}" >&2
   exit 2
 fi
+if [[ ${allowlist_shape} == *$'\n'* ]]; then
+  printf '%s: the allowlist holds several YAML documents; it must hold one\n' "${ALLOWLIST}" >&2
+  exit 2
+fi
+if [[ ${allowlist_shape} == 'scalar ' ]] && [[ "$(yq eval 'tag' "${ALLOWLIST}")" == '!!null' ]]; then
+  printf '%s: the allowlist is empty\n' "${ALLOWLIST}" >&2
+  exit 2
+fi
 if [[ ${allowlist_shape} != 'map map' && ${allowlist_shape} != 'map ' ]]; then
   printf '%s: the allowlist must be one map of workflow maps (got %q)\n' "${ALLOWLIST}" "${allowlist_shape}" >&2
   exit 2
@@ -81,7 +89,9 @@ fi
 # would be read as `yq` code, and `yq` reads `*` and `?` in an index or
 # an `==` comparison as wildcards, which base64 text never holds.
 # `explode` resolves merge keys and aliases first, and of names written
-# twice the last is read, as `yq`'s own lookup reads it.
+# twice the last is read, as `yq`'s own lookup reads it. The stale-entry
+# and sort passes read the allowlist as written, so an entry written as an
+# alias or through a merge key stops an unfiltered run (exit 2).
 function allowed() {
   WF="$1" JOB="$2" yq eval 'explode(.) | [to_entries[] | '"$(eq WF)"'] | reverse | .[0] | .value | [to_entries[] | '"$(eq JOB)"'] | reverse | .[0] | .value // [] | .[]' "${ALLOWLIST}"
 }

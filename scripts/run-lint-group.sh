@@ -28,6 +28,18 @@ function main() {
     exit 2
   fi
 
+  # The group lookup walks the manifest's entries, which a list would
+  # also have, keyed by index, and would report every group as unknown.
+  local manifest_shape
+  if ! manifest_shape="$(yq eval 'kind' "${MANIFEST}")"; then
+    printf 'cannot read group %s from %s\n' "${group}" "${MANIFEST}" >&2
+    exit 2
+  fi
+  if [[ ${manifest_shape} != map ]]; then
+    printf '%s: the manifest must be one map of groups (got %s)\n' "${MANIFEST}" "${manifest_shape//$'\n'/,}" >&2
+    exit 2
+  fi
+
   local checks
   # A manifest that does not parse is an input this runner could not
   # read. Unchecked, yq's own exit 1 becomes the runner's status and

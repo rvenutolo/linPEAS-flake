@@ -239,8 +239,10 @@
 # names no host, and assertion 6's could-not-run branch is reachable only by
 # hand.
 # Exits 0 clean, 1 on any drift, 2 if yq is missing, if the declaration
-# file is missing or empty, or if an unfiltered scan discovers no notify
-# job or no cache.nixos.org/releases.nixos.org-carrying job at all.
+# file is missing or empty, if a read of one job's allowed-endpoints,
+# uses: or run: list fails once its workflow's jobs have been listed, or
+# if an unfiltered scan discovers no notify job or no
+# cache.nixos.org/releases.nixos.org-carrying job at all.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
