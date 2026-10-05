@@ -166,6 +166,8 @@ source "${_lib_dir}/lib/temp.sh"
 source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/payload.sh
 source "${_lib_dir}/lib/payload.sh"
+# shellcheck source=scripts/lib/ascii-match.sh
+source "${_lib_dir}/lib/ascii-match.sh"
 
 # Every lock read below goes through `jq`. Absent, it ends the run
 # under exit 127 with no sentence naming the tool, and the shape
@@ -253,9 +255,9 @@ function flake_inputs_into() {
       continue
     fi
     if ((depth == 1)); then
-      if [[ ${line} =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_-]*)\.url[[:space:]]*=[[:space:]]*\"([^\"]*)\" ]]; then
+      if ascii_match "${line}" '^[[:space:]]*([A-Za-z_][A-Za-z0-9_-]*)\.url[[:space:]]*=[[:space:]]*"([^"]*)"'; then
         args+=(--arg "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}")
-      elif [[ ${line} =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_-]*)[[:space:]]*=[[:space:]]*\{ ]]; then
+      elif ascii_match "${line}" '^[[:space:]]*([A-Za-z_][A-Za-z0-9_-]*)[[:space:]]*=[[:space:]]*\{'; then
         block="${BASH_REMATCH[1]}"
       fi
     elif ((depth == 2)) && [[ -n ${block} ]] &&
@@ -319,11 +321,13 @@ declare -a ANCESTRY_FAILS=()
 function check_ancestry() {
   local -r node="$1" owner="$2" repo="$3" old="$4" new="$5"
   local rev
+  # Hex digits spelled out and names matched through ascii_match: a range
+  # follows the locale, and under en_US.UTF-8 `[0-9a-f]` also matches `é`.
   for rev in "${old}" "${new}"; do
-    [[ ${rev} =~ ^[0-9a-f]{40}$ ]] ||
+    [[ ${rev} =~ ^[0123456789abcdef]{40}$ ]] ||
       die_op "rev on ${node} is not a 40-hex commit id: ${rev}"
   done
-  [[ ${owner} =~ ^[A-Za-z0-9_.-]+$ && ${repo} =~ ^[A-Za-z0-9_.-]+$ ]] ||
+  { ascii_match "${owner}" '^[A-Za-z0-9_.-]+$' && ascii_match "${repo}" '^[A-Za-z0-9_.-]+$'; } ||
     die_op "source of ${node} is not a plain owner/repo: ${owner}/${repo}"
   command -v gh >/dev/null 2>&1 ||
     die_op 'gh not found on PATH (needed for ancestry probe)'

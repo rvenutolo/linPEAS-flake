@@ -31,6 +31,8 @@ source "${_lib_dir}/lib/enumerate.sh"
 source "${_lib_dir}/lib/temp.sh"
 # shellcheck source=scripts/lib/repo.sh
 source "${_lib_dir}/lib/repo.sh"
+# shellcheck source=scripts/lib/ascii-match.sh
+source "${_lib_dir}/lib/ascii-match.sh"
 install_err_trap
 
 # Temp files removed by the EXIT trap. Declared at script scope, not
@@ -110,7 +112,7 @@ function parse_harness() {
       # shape is not recognized here, which leaves the directory it meant
       # to name unreferenced rather than rendering a path that resolves to
       # nothing.
-      if [[ ${line} =~ ^#[[:space:]]+@fixtures[[:space:]]+tests/fixtures/([A-Za-z0-9_][A-Za-z0-9._-]*)[[:space:]]*$ ]]; then
+      if ascii_match "${line}" '^#[[:space:]]+@fixtures[[:space:]]+tests/fixtures/([A-Za-z0-9_][A-Za-z0-9._-]*)[[:space:]]*$'; then
         parse_fixtures+="${BASH_REMATCH[1]}"$'\n'
         continue
       fi
@@ -125,9 +127,10 @@ function parse_harness() {
     fi
     # A leading dot is excluded so `tests/fixtures/.` — which `[[ -d ]]`
     # would accept — and an elided path written `tests/fixtures/...` in
-    # prose are not read as directory names.
+    # prose are not read as directory names. A name is ASCII under any
+    # locale: ascii_match holds the ranges to ASCII.
     rest="${line}"
-    while [[ ${rest} =~ tests/fixtures/([A-Za-z0-9_][A-Za-z0-9._-]*) ]]; do
+    while ascii_match "${rest}" 'tests/fixtures/([A-Za-z0-9_][A-Za-z0-9._-]*)'; do
       name="${BASH_REMATCH[1]}"
       parse_fixtures+="${name}"$'\n'
       rest="${rest#*"tests/fixtures/${name}"}"

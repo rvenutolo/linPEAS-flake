@@ -322,7 +322,8 @@ check update-flake-lock.yml runs and the Renovate dependency dashboard.' '' "${N
   ' "${REPO_ROOT}/flake.lock" 2>/dev/null)" || live_epoch=''
   # A lock this cannot read is a lock the check must reject on its own
   # terms; run unpinned and let the exit-2 assertion below name it.
-  [[ ${live_epoch} =~ ^[0-9]+$ ]] || live_epoch=''
+  # Digits spelled out: a `[0-9]` range follows the locale.
+  [[ ${live_epoch} =~ ^[0123456789]+$ ]] || live_epoch=''
   actual_exit=0
   out_file="$(mktemp)"
   (cd "${REPO_ROOT}" && STALENESS_NOW_EPOCH="${live_epoch}" "${SCRIPT}") \

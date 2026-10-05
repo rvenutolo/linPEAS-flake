@@ -4,6 +4,14 @@
 # Source after `set -Eeuo pipefail` and after `lib/log.sh`.
 # shellcheck shell=bash
 
+# The library directory is resolved by parameter expansion, as in
+# `harness-assert.sh`, into `_lib_self_dir`, so a caller's `_lib_dir`
+# is left as it set it.
+_lib_self_dir="${BASH_SOURCE[0]%/*}"
+if [[ ${_lib_self_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_self_dir=.; fi
+# shellcheck source=scripts/lib/ascii-match.sh
+source "${_lib_self_dir}/ascii-match.sh"
+
 # @description Reject a payload whose shape the reads below cannot rely
 # on, as a could-not-run rather than as a finding.
 #
@@ -130,8 +138,9 @@ function payload_source_into() {
   # Checked rather than assumed: indirect expansion of a non-identifier is
   # a fatal bash error, not an empty result, and this function's whole
   # value is that such a fault stops the caller under the exit code the
-  # convention catalogues instead of naming an empty source.
-  if [[ ! ${__psrc_ovr} =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+  # convention catalogues instead of naming an empty source. ascii_match
+  # holds the ranges to ASCII, as bash's own variable names are.
+  if ! ascii_match "${__psrc_ovr}" '^[A-Za-z_][A-Za-z0-9_]*$'; then
     printf '%s: payload_source_into: not a variable name: %s\n' \
       "${0##*/}" "${__psrc_ovr}" >&2
     exit 2

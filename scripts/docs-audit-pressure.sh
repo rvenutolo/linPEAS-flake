@@ -85,7 +85,8 @@ function last_audit_ref() {
 
   local sha
   sha="$(sed -n 's/^LAST_AUDIT_SHA=//p' "${state}" | head -n 1)"
-  if [[ ! ${sha} =~ ^[0-9a-f]{40}$ ]]; then
+  # Hex digits spelled out: a `[0-9a-f]` range follows the locale.
+  if [[ ! ${sha} =~ ^[0123456789abcdef]{40}$ ]]; then
     printf '%s: no LAST_AUDIT_SHA=<40-hex> line\n' "${state}" >&2
     exit 2
   fi

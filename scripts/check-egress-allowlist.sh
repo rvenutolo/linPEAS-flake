@@ -353,6 +353,23 @@ function fail() {
   failed=$((failed + 1))
 }
 
+# @description Succeed when run: text invokes a recognised nix subcommand:
+# a bare `nix`, whitespace, a subcommand from NIX_SUBCOMMANDS, then
+# whitespace or the end, with the start of the text or a byte that cannot
+# continue a word before `nix`. Matched under `LC_ALL=C` with the bytes
+# 0x80-0xff counted as word bytes, so a letter outside ASCII keeps `énix`
+# one word under any locale: under C.UTF-8 it falls outside the ASCII
+# class and reads as a boundary, and under en_US.UTF-8 collation puts it
+# inside `[a-z]`. `[[:space:]]` is ASCII whitespace there.
+# @arg $1 the job's concatenated run: text
+# @exitcode 0 a nix subcommand is invoked
+# @exitcode 1 none is
+function run_text_invokes_nix() {
+  local LC_ALL=C
+  local -r high=$'\x80'-$'\xff'
+  [[ $1 =~ (^|[^a-zA-Z0-9_./${high}-])nix[[:space:]]+(${NIX_SUBCOMMANDS})([[:space:]]|$) ]]
+}
+
 # Is host $2 present in the newline-separated endpoint list $1?
 function has_host() {
   local -r endpoints="$1" host="$2"
@@ -714,7 +731,8 @@ for f in "${selected_files[@]}"; do
       nix_host_jobs=$((nix_host_jobs + 1))
 
       # `nix` must be followed by whitespace and a recognized subcommand,
-      # with a non-identifier (or start-of-string) character before it:
+      # with a non-word (or start-of-string) character before it, as
+      # run_text_invokes_nix reads one:
       # `nixpkgs-fmt`, `nixos.org`, and the `nix` path segment inside
       # `releases.nixos.org/nix/nix-<version>/install` all fail this, since
       # none has whitespace directly after the bare word `nix`. This is a
@@ -724,7 +742,7 @@ for f in "${selected_files[@]}"; do
       # spot assertion 3's Docker Hub push-branch check has, documented
       # above rather than parsed around.
       invokes_nix=0
-      [[ ${runs} =~ (^|[^a-zA-Z0-9_./-])nix[[:space:]]+(${NIX_SUBCOMMANDS})([[:space:]]|$) ]] && invokes_nix=1
+      run_text_invokes_nix "${runs}" && invokes_nix=1
 
       if ((has_setup_nix == 0 && invokes_nix == 0)); then
         if ((marker_present == 1)); then

@@ -42,11 +42,13 @@ readonly REPO_ROOT
 readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-${REPO_ROOT}/.github/workflows}"
 readonly SCAN_ROOT="${SCAN_ROOT_OVERRIDE:-${REPO_ROOT}}"
 
+# Digit classes are spelled out: a `[0-9]` range follows the locale and in
+# en_US.UTF-8 also matches digits such as `٠` and `５`.
 # Clock-time pattern: HH:MM not embedded in a longer run of digits.
-readonly CLOCK_RE='(^|[^0-9])[0-9]{1,2}:[0-9]{2}([^0-9]|$)'
+readonly CLOCK_RE='(^|[^0123456789])[0123456789]{1,2}:[0123456789]{2}([^0123456789]|$)'
 # Numeric-cadence pattern: `every 30 minutes`, `every 6 hrs`, `every 2 days`.
 # Anchored on a digit run so the bare cadence words stay unreachable.
-readonly CADENCE_RE='[Ee]very[[:space:]]+[0-9]+[[:space:]]*(minutes?|mins?|hours?|hrs?|days?)([^[:alnum:]]|$)'
+readonly CADENCE_RE='[Ee]very[[:space:]]+[0123456789]+[[:space:]]*(minutes?|mins?|hours?|hrs?|days?)([^[:alnum:]]|$)'
 readonly SCHEDULE_RE="(${CLOCK_RE})|(${CADENCE_RE})"
 
 # @description Emit the live workflow file paths (`*.yml`, `*.yaml`), one per
