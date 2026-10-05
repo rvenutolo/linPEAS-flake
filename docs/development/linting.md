@@ -612,11 +612,9 @@ without tripping `set -e`, so a lint can exit 0 having read only part of
 its input. In a `(( ))` condition the error reads as false.
 
 A script that puts text it did not compute itself into arithmetic
-first matches it against a regex whose digit class is spelled out
-(`[0123456789]`), since a `[0-9]` range follows the locale's collation
-and in `en_US.UTF-8` matches characters other than 0–9, and bounds its
-length, or it
-compares the text as text. A number a tool prints is text too when it
+first matches it against a regex whose digit class is ASCII under any
+locale (see [Locale-bound ranges in bash regexes](#locale-bound-ranges-in-bash-regexes))
+and bounds its length, or it compares the text as text. A number a tool prints is text too when it
 travels in a delimited row beside free text: a field holding the
 delimiter moves the fields after it, and one holding a line break as
 well can make whole rows of its own that each look well formed.
@@ -631,6 +629,41 @@ and nearly every operand such a trace flags in `scripts/` is a
 counter, a `grep -c` or `wc` count, `date +%s` output, or a number the
 script's own `awk`, `jq` or `yq` program printed. A provenance label
 also misses text that reaches a field through its delimiter.
+
+## Locale-bound ranges in bash regexes
+
+A range in a bash `[[ … =~ … ]]` regex follows the locale's collation.
+Under `en_US.UTF-8`, a typical developer shell's locale, which the
+devShell and the pre-commit hooks inherit, `[0-9]` also matches digits such as
+`٣`, `５` and `²`, and `[a-f]` or `[A-Za-z]` match `é`. Under `C`,
+`POSIX` and `C.UTF-8` (the CI runner's locale) a range holds ASCII only.
+A validator written with a range therefore accepts on a developer's
+machine a value CI refuses, and CI cannot see the difference.
+
+In a bash `=~` regex, spell a digit or hex class out (`[0123456789]`,
+`[0123456789abcdef]`). Match a regex that holds a letter range, or one
+whose text must stay as written, through `ascii_match` in
+`scripts/lib/ascii-match.sh`: it runs the match under `C.UTF-8`, where
+ranges hold ASCII and character classes keep the reading the runner
+gives them, and it leaves `BASH_REMATCH` set. A function that needs a
+byte reading instead declares `local LC_ALL=C`.
+
+Other matchers measured on this tree do not need this: `[0-9]` is ASCII
+in GNU `grep`, `sed`, `gawk`, `mawk`, `jq` and `yq` in every locale, and
+bash glob patterns read ranges as ASCII while `globasciiranges` is on
+(the default). POSIX classes such as `[[:space:]]` and `[[:alpha:]]`
+match characters outside ASCII in any UTF-8 locale, `C.UTF-8` included,
+and so does a letter range in `grep -E` under `en_US.UTF-8`; that is a
+separate rule, not this one.
+
+A harness scenario that shows a script's answer under a locale pins the
+locale with `LC_ALL` and first calls `require_locale_gap` from
+`scripts/lib/locale-gap.sh`, which fails the run when the locale cannot
+show the difference. A scenario under a locale that is not installed
+would run under C and pass whatever the script does.
+
+Enforced by `scripts/check-regex-range-ascii.sh`; what it reads and
+does not read is stated in its header.
 
 ## Text from files in yq expressions
 

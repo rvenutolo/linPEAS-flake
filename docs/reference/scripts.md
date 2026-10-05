@@ -1411,6 +1411,40 @@ body, ratchet in the nix/devshell.nix devShell, and a documented
 ratchet version matching the one the devShell ships, among others — so
 future edits cannot silently weaken it.
 
+### scripts/check-regex-range-ascii.sh
+
+Lint: a bash `[[ … =~ … ]]` regex under `scripts/` or
+`tests/` must not hold a range between ASCII letters or digits (`[0-9]`,
+`[a-f]`, `[A-Za-z_]`) unless it is matched under a C locale. A range
+follows the locale's collation: under `en_US.UTF-8` `[0-9]` also matches
+digits such as `٣` and `５`, and `[a-f]` matches `é`, while the CI
+runner's `C.UTF-8` matches ASCII only. A validator written with a range
+therefore passes on a developer's machine a value CI refuses, and the
+difference is invisible to CI.
+
+A test is matched under a C locale when it sits in a function that
+declares `local LC_ALL=C` or `local LC_ALL=C.UTF-8` (`ascii_match` in
+`scripts/lib/ascii-match.sh` is one), or in a script that runs
+`export LC_ALL=C`. Otherwise the class is spelled out
+(`[0123456789]`), or the text is matched through `ascii_match`.
+
+The `=~` tests are read from the `shfmt --tojson` parse tree, and the
+operator from the source text between the two operands, since shfmt
+releases encode the operator differently; a file holding no `=~` text
+is not parsed. A regex held in a variable is
+read through the assignments to that variable in the same file,
+following variables they name, three levels deep. Not read: a regex
+that reaches the test as a function argument, from a function's output,
+or from a sourced file; a regex inside `eval` or `bash -c` text; and
+`grep`, `sed`, `awk`, `jq` and `yq` patterns.
+
+Honors SCRIPTS_DIR_OVERRIDE (default: scripts) and TESTS_DIR_OVERRIDE
+(default: tests), and LINT_ALLOW_EMPTY_SCAN=1 for fixtures.
+
+Exits 0 when no such range is found, 1 when one is. Exits 2 when the
+check cannot run: `shfmt` or `jq` absent from PATH, a file `shfmt`
+cannot parse, or a scan set matching no file.
+
 ### scripts/check-renovate-config-validator.sh
 
 Validate renovate.json against the upstream Renovate

@@ -267,6 +267,16 @@ There is no exemption marker. A hit is fixed by adding the guard.
 
 Enforced by `scripts/check-tool-guarded.sh`. Wired as the `lint-script-hygiene` CI job (member check `tool-guarded`).
 
+## regex-range-ascii
+
+A bash `[[ … =~ … ]]` regex in a script under `scripts/` (its libraries included) or a harness directly under `tests/` holds no range between ASCII letters or digits unless the test runs under a C locale. The rule and the two ways to meet it are in [linting.md, Locale-bound ranges in bash regexes](../development/linting.md#locale-bound-ranges-in-bash-regexes): a range follows the locale's collation, so under `en_US.UTF-8` a validator accepts characters the CI runner's `C.UTF-8` refuses, and CI cannot see it.
+
+What counts as a C locale, how a regex held in a variable is read, and what the lint does not read are stated in the header of `scripts/check-regex-range-ascii.sh`.
+
+There is no exemption marker. A hit is fixed by spelling the class out or matching through `ascii_match`.
+
+Enforced by `scripts/check-regex-range-ascii.sh`. Wired as the `lint-script-hygiene` CI job (member check `regex-range-ascii`).
+
 ## path-hygiene
 
 No path git reports for the tree — tracked, or untracked and not ignored — may carry a byte in the 0x01-0x1F control range or DEL (0x7F).
