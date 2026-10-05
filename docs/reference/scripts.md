@@ -2477,6 +2477,34 @@ one output without a parity exemption, or if nothing was recorded at
 all. The census names every group of scenarios sharing one output before
 reporting the counts.
 
+### scripts/lib/locale-gap.sh
+
+Locale precondition for harness scenarios that pin a
+locale to show a locale-bound regex range. Source after
+`set -Eeuo pipefail`.
+
+#### require_locale_gap()
+
+Fail unless a bash run under `LC_ALL=<locale>` matches the
+fullwidth digit `５` (U+FF15) against `^[0-9]$`. A range in a bash
+`[[ =~ ]]` regex follows the locale's collation, so in `en_US.UTF-8` it
+admits characters a C locale does not. Where the pinned locale is not
+installed, bash warns, falls back to C, and a scenario meant to show the
+difference passes whether or not the script under test spells its class
+out. The probe runs the `bash` on PATH, the one the scripts run under,
+rather than asking `locale -a`, whose answer comes from the system C
+library and can disagree with the one bash is linked against. On failure
+it prints one line naming the locale and what the probe printed.
+
+**Args:**
+
+- `$1` — locale name, such as `en_US.UTF-8`
+
+**Exit codes:**
+
+- `0` — the locale shows the gap
+- `1` — it does not
+
 ### scripts/lib/log.sh
 
 Shared logging + ERR-trap helpers for repo bash scripts.

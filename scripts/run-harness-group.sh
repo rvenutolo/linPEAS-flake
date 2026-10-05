@@ -58,6 +58,7 @@ readonly -a HARNESSES=(
   'lib-awk-path|lib-awk-path.test.sh|'
   'lib-payload|lib-payload.test.sh|'
   'lib-generates|lib-generates.test.sh|'
+  'lib-locale-gap|lib-locale-gap.test.sh|'
   'glob-scan-breadth|glob-scan-breadth.test.sh|'
   'repo-root-guard|repo-root-guard.test.sh|'
   'harness-assert|lib-harness-assert.test.sh|'
