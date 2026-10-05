@@ -36,8 +36,10 @@ readonly tag="$1" pinned="$2" ref_object_sha="$3" ref_object_type="$4" deref_com
 
 # Floating-major tags retarget on every release; the audit cannot
 # distinguish a benign move from an attack. Mirror of the early skip
-# in .github/workflows/ratchet-pin-audit.yml.
-if [[ ${tag} =~ ^v[0-9]+$ ]]; then
+# in .github/workflows/ratchet-pin-audit.yml. The digit class is spelled
+# out: a `[0-9]` range follows the locale's collation and in en_US.UTF-8
+# also matches digits such as `٣`.
+if [[ ${tag} =~ ^v[0123456789]+$ ]]; then
   printf 'skip-floating-major\n'
   exit 0
 fi

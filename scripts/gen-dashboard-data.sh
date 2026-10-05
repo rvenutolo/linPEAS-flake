@@ -50,6 +50,8 @@ source "${_lib_dir}/lib/temp.sh"
 source "${_lib_dir}/lib/payload.sh"
 # shellcheck source=scripts/lib/repo.sh
 source "${_lib_dir}/lib/repo.sh"
+# shellcheck source=scripts/lib/ascii-match.sh
+source "${_lib_dir}/lib/ascii-match.sh"
 install_err_trap
 
 # @description Verify a JSON-extracted field is non-empty and not 'null';
@@ -217,7 +219,8 @@ function main() {
   pin_url="$(jq --raw-output .url <<<"${pin_json}")"
   require_field "${pin_version}" 'pin.version'
   require_field "${pin_url}" 'pin.url'
-  if [[ ! ${pin_version} =~ ${VERSION_REGEX} ]]; then
+  # ascii_match holds the ranges to ASCII under any locale.
+  if ! ascii_match "${pin_version}" "${VERSION_REGEX}"; then
     log_err "pin.version does not match expected format: ${pin_version}"
     exit 1
   fi

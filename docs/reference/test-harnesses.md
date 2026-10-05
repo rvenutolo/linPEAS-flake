@@ -95,6 +95,7 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 
 | Harness                            | Subject                         | Fixtures |
 | ---------------------------------- | ------------------------------- | -------- |
+| `tests/lib-ascii-match.test.sh`    | `scripts/lib/ascii-match.sh`    | —        |
 | `tests/lib-awk-path.test.sh`       | `scripts/lib/awk-path.sh`       | —        |
 | `tests/lib-enumerate.test.sh`      | `scripts/lib/enumerate.sh`      | —        |
 | `tests/lib-generates.test.sh`      | `scripts/lib/generates.sh`      | —        |

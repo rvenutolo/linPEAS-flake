@@ -48,6 +48,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/ascii-match.sh
+source "${_lib_dir}/lib/ascii-match.sh"
 
 readonly BASE_REF="${BASE_REF:-origin/main}"
 readonly BASE_DIR="${BASE_DIR_OVERRIDE:-}"
@@ -223,6 +225,10 @@ function base_content() {
 }
 
 # Emit `file|path|version|sha` tuples for one file's content on stdin.
+# Hex and digit classes are spelled out and the reads holding letter
+# ranges go through ascii_match, so a range admits ASCII only under any
+# locale; under en_US.UTF-8 `[0-9a-f]` also matches characters such as
+# `é` and `５`.
 # @arg $1 file path label
 function extract_pins() {
   local -r file="$1"
@@ -230,9 +236,9 @@ function extract_pins() {
   if [[ ${file} == "${OCTOSCAN_FILE}" ]]; then
     local digest="" ver=""
     while IFS= read -r line; do
-      if [[ ${line} =~ ^OCTOSCAN_DIGEST=\"(sha256:[a-f0-9]{64})\" ]]; then
+      if [[ ${line} =~ ^OCTOSCAN_DIGEST=\"(sha256:[0123456789abcdef]{64})\" ]]; then
         digest="${BASH_REMATCH[1]}"
-      elif [[ ${line} =~ ^OCTOSCAN_VERSION=\"(v[0-9][A-Za-z0-9.]*)\" ]]; then
+      elif ascii_match "${line}" '^OCTOSCAN_VERSION="(v[0-9][A-Za-z0-9.]*)"'; then
         ver="${BASH_REMATCH[1]}"
       fi
     done
@@ -244,7 +250,7 @@ function extract_pins() {
   local path sha version line_num=0 value
   while IFS= read -r line; do
     line_num=$((line_num + 1))
-    if [[ ${line} =~ uses:[[:space:]]+([A-Za-z0-9._/-]+)@([0-9a-fA-F]{40})[[:space:]]*#[[:space:]]*([^[:space:]]+) ]]; then
+    if ascii_match "${line}" 'uses:[[:space:]]+([A-Za-z0-9._/-]+)@([0-9a-fA-F]{40})[[:space:]]*#[[:space:]]*([^[:space:]]+)'; then
       path="${BASH_REMATCH[1]}"
       sha="${BASH_REMATCH[2],,}"
       version="${BASH_REMATCH[3]}"
@@ -298,7 +304,7 @@ function deref_tag_object() {
   local tag_out
   if tag_out="$(gh api --header "${GH_API_VERSION_HEADER}" \
     "repos/${owner_repo}/git/tags/${sha}" --jq '.object.sha' 2>&1)"; then
-    [[ ${tag_out} =~ ^[0-9a-f]{40}$ ]] ||
+    [[ ${tag_out} =~ ^[0123456789abcdef]{40}$ ]] ||
       die_op "malformed tag deref payload for ${owner_repo}@${sha}: ${tag_out}"
     DEREF_RESULT="${tag_out}"
     return 0
@@ -317,7 +323,7 @@ function deref_tag_object() {
 # @sets DEREF_RESULT
 function resolve_pin_commit() {
   local -r path="$1" sha="$2"
-  if [[ ! ${sha} =~ ^[0-9a-f]{40}$ ]]; then
+  if [[ ! ${sha} =~ ^[0123456789abcdef]{40}$ ]]; then
     DEREF_RESULT="${sha}"
     return 0
   fi
@@ -471,7 +477,7 @@ while IFS= read -r key; do
   [[ ${base_shas} == "${head_shas}" ]] && continue
   path="${key%%|*}"
   version="${key#*|}"
-  if [[ ${version} =~ ^v[0-9]+$ ]]; then
+  if [[ ${version} =~ ^v[0123456789]+$ ]]; then
     while IFS= read -r sha; do
       [[ -n ${sha} ]] || continue
       grep --quiet --line-regexp --fixed-strings "${sha}" <<<"${base_shas}" && continue

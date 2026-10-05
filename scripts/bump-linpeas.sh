@@ -30,6 +30,8 @@ source "${_lib_dir}/lib/temp.sh"
 source "${_lib_dir}/lib/payload.sh"
 # shellcheck source=scripts/lib/repo.sh
 source "${_lib_dir}/lib/repo.sh"
+# shellcheck source=scripts/lib/ascii-match.sh
+source "${_lib_dir}/lib/ascii-match.sh"
 install_err_trap
 
 function main() {
@@ -104,7 +106,10 @@ function main() {
   # entry of the bump chain so a malformed upstream tag is rejected
   # before any artefact is produced. Mirrors the layered "validate-then-use"
   # pattern (nix/linpeas.nix eval, gen-dashboard-data.sh, release-on-bump.yml).
-  if [[ ! ${new_tag} =~ ^[0-9]{8}-[0-9a-f]{7,40}$ ]]; then
+  # ascii_match holds the ranges to ASCII: under a locale such as
+  # en_US.UTF-8 `[0-9]` also matches digits such as `５`, which the nix
+  # assertion would refuse only after the pin is written.
+  if ! ascii_match "${new_tag}" '^[0-9]{8}-[0-9a-f]{7,40}$'; then
     log_err "upstream tag does not match expected format: ${new_tag}"
     exit 1
   fi

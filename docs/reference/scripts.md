@@ -2154,6 +2154,33 @@ checks even if one fails; exits 1 if any failed, 2 on config error.
 
 ## Libraries
 
+### scripts/lib/ascii-match.sh
+
+Bash regex matching whose ranges hold ASCII only. Source
+after `set -Eeuo pipefail`.
+
+#### ascii_match()
+
+Match text against a bash `[[ =~ ]]` regex under
+`C.UTF-8`, leaving `BASH_REMATCH` as the match sets it. A range such as
+`[0-9]` or `[a-z]` follows the locale's collation, so under `en_US.UTF-8`
+it also matches characters such as `٣`, `５` or `é`; under `C.UTF-8` a
+range holds ASCII only. Character classes such as `[[:space:]]` keep the
+reading `C.UTF-8` gives them, the one the CI runner gives them too. The
+locale is local to the call, so the caller's messages and tools keep
+theirs.
+
+**Args:**
+
+- `$1` — text
+- `$2` — regex
+
+**Exit codes:**
+
+- `0` — the text matches
+- `1` — it does not
+- `2` — the regex does not compile
+
 ### scripts/lib/awk-path.sh
 
 Make a path unambiguous as an `awk` file operand.
