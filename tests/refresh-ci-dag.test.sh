@@ -340,6 +340,24 @@ EOF
     fail "category map that is a list: exit ${shape_rc}, want 2"
     cat -- "${key_work}/shape.err" >&2
   fi
+  # A category map of two documents stops the run the same way.
+  shape_rc=0
+  printf 'job-a: Build + smoke\n---\njob-a: Doc quality\n' >"${key_work}/shape.cats.yml"
+  CI_WORKFLOW_OVERRIDE="${key_work}/shape.yml" CATEGORIES_FILE_OVERRIDE="${key_work}/shape.cats.yml" \
+    DOC_OVERRIDE="${key_work}/shape.md" \
+    "${SCRIPT}" >"${key_work}/shape2.out" 2>"${key_work}/shape2.err" || shape_rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${shape_rc}" >"${key_work}/shape2.outcome"
+  harness_assert_record 'category map of two documents' 'the category map holds several YAML documents; it must hold one' \
+    "${key_work}/shape2.outcome" "${key_work}/shape2.out" "${key_work}/shape2.err"
+  if [[ ${shape_rc} -eq 2 ]] &&
+    [[ $(<"${key_work}/shape2.err") =~ ^\[[^]]*\]\ ERROR\ (.*)$ ]] &&
+    [[ ${BASH_REMATCH[1]} == "${key_work}/shape.cats.yml: the category map holds several YAML documents; it must hold one" ]] &&
+    cmp --silent -- "${key_work}/shape.md" "${key_work}/shape.md.orig"; then
+    pass 'a category map of two documents exits 2 and leaves the doc alone'
+  else
+    fail "category map of two documents: exit ${shape_rc}, want 2"
+    cat -- "${key_work}/shape2.err" >&2
+  fi
   rm --recursive --force -- "${key_work}"
 
   harness_assert_verify || failures=$((failures + 1))
