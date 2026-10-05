@@ -7,7 +7,8 @@
 # @generates docs/architecture/ci-dag.md
 # @option --check exit 1 if the doc would change; exit 2 if an input file
 # is missing, if ci.yml has needs: references to non-existent jobs, if
-# the category map is not one map, or if a tool fails to read them
+# the category map is neither one map nor empty, or if a tool fails to
+# read them
 
 # Replace the content between <!-- BEGIN ci-dag --> and <!-- END ci-dag -->
 # in docs/architecture/ci-dag.md with a mermaid `flowchart TD` of the
@@ -20,8 +21,9 @@
 #   scripts/refresh-ci-dag.sh --check   # exit 1 if doc would change;
 #                                       # exit 2 on a missing input file,
 #                                       # dangling needs:, a category map
-#                                       # that is not one map, or a tool
-#                                       # failure reading the jobs
+#                                       # that is neither one map nor
+#                                       # empty, or a tool failure
+#                                       # reading the jobs
 #
 # Env overrides (for tests):
 #   CI_WORKFLOW_OVERRIDE      path to ci.yml
