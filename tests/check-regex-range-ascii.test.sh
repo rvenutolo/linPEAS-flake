@@ -46,9 +46,14 @@ function run_case() {
   mkdir --parents "${dir}/scripts/lib" "${dir}/tests"
   local out="${work}/${name}.out" err="${work}/${name}.err" outcome="${work}/${name}.outcome"
   local rc=0
-  env --unset=BASH_ENV ${CASE_ENV[@]+"${CASE_ENV[@]}"} \
-    SCRIPTS_DIR_OVERRIDE="${dir}/scripts" TESTS_DIR_OVERRIDE="${dir}/tests" \
-    "${SCRIPT}" >"${out}" 2>"${err}" || rc=$?
+  if [[ ${USE_DEFAULT_DIRS} -eq 1 ]]; then
+    (cd -- "${dir}" && env --unset=BASH_ENV --unset=SCRIPTS_DIR_OVERRIDE --unset=TESTS_DIR_OVERRIDE \
+      ${CASE_ENV[@]+"${CASE_ENV[@]}"} "${SCRIPT}") >"${out}" 2>"${err}" || rc=$?
+  else
+    env --unset=BASH_ENV ${CASE_ENV[@]+"${CASE_ENV[@]}"} \
+      SCRIPTS_DIR_OVERRIDE="${dir}/scripts" TESTS_DIR_OVERRIDE="${dir}/tests" \
+      "${SCRIPT}" >"${out}" 2>"${err}" || rc=$?
+  fi
   printf 'harness-assert-outcome: exit=%d\n' "${rc}" >"${outcome}"
   local asserted="${want_err%%$'\n'*}"
   [[ -n ${asserted} ]] || asserted="${want_out}"
@@ -66,6 +71,7 @@ function run_case() {
 }
 
 declare -a CASE_ENV=()
+USE_DEFAULT_DIRS=0
 
 # shellcheck disable=SC2016 # every put line is file text, not an expansion
 {
@@ -132,6 +138,71 @@ DIR/tests/t.test.sh:2: regex range g-h follows the locale$(footer 2)"
 
   run_case empty-scan 2 '' "check-regex-range-ascii.sh: matched 0 files via scripts, script libraries and harnesses — a real tree cannot have an empty scan set; set LINT_ALLOW_EMPTY_SCAN=1 if this is deliberate"
 
+  # Where the pair sits relative to what precedes it, and what the bracket
+  # scanner skips.
+  put escape-then-range scripts/a.sh '#!/usr/bin/env bash' '[[ $1 =~ ^v\.[0-9]+$ ]]'
+  run_case escape-then-range 1 '' "DIR/scripts/a.sh:2: regex range 0-9 follows the locale$(footer 1)"
+
+  put negated-close-first scripts/a.sh '#!/usr/bin/env bash' '[[ $1 =~ [^]a-z] ]]'
+  run_case negated-close-first 1 '' "DIR/scripts/a.sh:2: regex range a-z follows the locale$(footer 1)"
+
+  put range-after-class scripts/a.sh '#!/usr/bin/env bash' '[[ $1 =~ [[:alnum:]a-f] ]]' '[[ $1 =~ [[:xdigit:]b-g] ]]' \
+    '[[ $1 =~ [[=a=]c-h] ]]' '[[ $1 =~ [[.a.]d-i] ]]'
+  run_case range-after-class 1 '' "DIR/scripts/a.sh:2: regex range a-f follows the locale
+DIR/scripts/a.sh:3: regex range b-g follows the locale
+DIR/scripts/a.sh:4: regex range c-h follows the locale
+DIR/scripts/a.sh:5: regex range d-i follows the locale$(footer 4)"
+
+  put adjacent-brackets scripts/a.sh '#!/usr/bin/env bash' '[[ $1 =~ ^[x][0-9]$ ]]'
+  run_case adjacent-brackets 1 '' "DIR/scripts/a.sh:2: regex range 0-9 follows the locale$(footer 1)"
+
+  put punctuation-start scripts/a.sh '#!/usr/bin/env bash' '[[ $1 =~ [+-9] ]]' '[[ $1 =~ [0-+] ]]' '[[ $1 =~ [,-.] ]]'
+  run_case punctuation-start 0 'regex-range-ascii: ok — scanned 1 file(s), 3 =~ test(s), 0 with a regex in a variable, 0 under a C locale' ''
+
+  put test-over-two-lines scripts/a.sh '#!/usr/bin/env bash' '[[ $1' '  =~ ^v[0-9]$ ]]'
+  run_case test-over-two-lines 1 '' "DIR/scripts/a.sh:2: regex range 0-9 follows the locale$(footer 1)"
+
+  # How a regex held in a variable is followed.
+  put assigned-twice scripts/a.sh '#!/usr/bin/env bash' "re='^[0-9]'" "re='^x'" '[[ $1 =~ $re ]]'
+  run_case assigned-twice 1 '' "DIR/scripts/a.sh:4: regex range 0-9 (through re) follows the locale$(footer 1)"
+
+  put assignments-read-apart scripts/a.sh '#!/usr/bin/env bash' "re='[x'" "re='-9]'" '[[ $1 =~ $re ]]' '[[ $1 =~ p ]]' '[[ $1 =~ q ]]'
+  run_case assignments-read-apart 0 'regex-range-ascii: ok — scanned 1 file(s), 3 =~ test(s), 1 with a regex in a variable, 0 under a C locale' ''
+
+  put range-kept-past-clean-variable scripts/a.sh '#!/usr/bin/env bash' "a='\$c'" "c='x'" "b='[0-9]'" '[[ $1 =~ ${a}${b} ]]'
+  run_case range-kept-past-clean-variable 1 '' "DIR/scripts/a.sh:5: regex range 0-9 (through b) follows the locale$(footer 1)"
+
+  put name-inside-earlier-name scripts/a.sh '#!/usr/bin/env bash' "abc='x'" "b='[0-9]'" '[[ $1 =~ ${abc}${b} ]]'
+  run_case name-inside-earlier-name 1 '' "DIR/scripts/a.sh:4: regex range 0-9 (through b) follows the locale$(footer 1)"
+
+  put bare-word-is-not-a-variable scripts/a.sh '#!/usr/bin/env bash' "v='[0-9]'" '[[ $1 =~ ^v+$ ]]' '[[ $1 =~ ^w+$ ]]'
+  run_case bare-word-is-not-a-variable 0 'regex-range-ascii: ok — scanned 1 file(s), 2 =~ test(s), 0 with a regex in a variable, 0 under a C locale' ''
+
+  put underscore-variable scripts/a.sh '#!/usr/bin/env bash' "_re='[0-9]'" '[[ $1 =~ $_re ]]'
+  run_case underscore-variable 1 '' "DIR/scripts/a.sh:3: regex range 0-9 (through _re) follows the locale$(footer 1)"
+
+  put underscore-variable-clean scripts/a.sh '#!/usr/bin/env bash' "_re='[0123456789]'" '[[ $1 =~ $_re ]]' '[[ $1 =~ r ]]' '[[ $1 =~ s ]]' '[[ $1 =~ t ]]'
+  run_case underscore-variable-clean 0 'regex-range-ascii: ok — scanned 1 file(s), 4 =~ test(s), 1 with a regex in a variable, 0 under a C locale' ''
+
+  # Byte offsets index the text only if the lint reads it as bytes, whatever
+  # locale it is started under.
+  put offsets-after-non-ascii-en_US scripts/a.sh '#!/usr/bin/env bash' '# é à ü ñ ß' '[[ $1 =~ ^v[0-9]$ ]]'
+  put offsets-after-non-ascii-c-utf8 scripts/a.sh '#!/usr/bin/env bash' '# é à ü ñ ß' '[[ $1 =~ ^v[5-9]$ ]]'
+  CASE_ENV=("LC_ALL=en_US.UTF-8")
+  run_case offsets-after-non-ascii-en_US 1 '' "DIR/scripts/a.sh:3: regex range 0-9 follows the locale$(footer 1)"
+  CASE_ENV=("LC_ALL=C.UTF-8")
+  run_case offsets-after-non-ascii-c-utf8 1 '' "DIR/scripts/a.sh:3: regex range 5-9 follows the locale$(footer 1)"
+  CASE_ENV=()
+
+  # With no override the lint reads scripts/ and tests/ under the working
+  # directory.
+  put default-dirs scripts/a.sh '#!/usr/bin/env bash' '[[ $1 =~ [3-5] ]]'
+  put default-dirs tests/t.test.sh '#!/usr/bin/env bash' '[[ $1 =~ [h-k] ]]'
+  USE_DEFAULT_DIRS=1
+  run_case default-dirs 1 '' "scripts/a.sh:2: regex range 3-5 follows the locale
+tests/t.test.sh:2: regex range h-k follows the locale$(footer 2)"
+  USE_DEFAULT_DIRS=0
+
   # An absolute bash and a PATH holding no shfmt: the script is reached,
   # and its own guard is what fires.
   put no-shfmt scripts/a.sh '#!/usr/bin/env bash' '[[ $1 =~ [0-9] ]]'
@@ -141,6 +212,15 @@ DIR/tests/t.test.sh:2: regex range g-h follows the locale$(footer 2)"
   ln --symbolic -- "$(command -v bash)" "${work}/no-shfmt-bin/bash"
   CASE_ENV=("PATH=${work}/no-shfmt-bin")
   run_case no-shfmt 2 '' 'ERROR missing required tool: shfmt'
+  CASE_ENV=()
+
+  put no-jq scripts/a.sh '#!/usr/bin/env bash' '[[ $1 =~ [0-9] ]]'
+  mkdir --parents "${work}/no-jq-bin"
+  ln --symbolic -- "$(command -v shfmt)" "${work}/no-jq-bin/shfmt"
+  ln --symbolic -- "$(command -v grep)" "${work}/no-jq-bin/grep"
+  ln --symbolic -- "$(command -v bash)" "${work}/no-jq-bin/bash"
+  CASE_ENV=("PATH=${work}/no-jq-bin")
+  run_case no-jq 2 '' 'ERROR missing required tool: jq'
   CASE_ENV=()
 }
 

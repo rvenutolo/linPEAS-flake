@@ -293,6 +293,9 @@ expect_version_en_us 0.11.4 0 ""
 expect_version_en_us '0.11.٤' 2 'could not read a version from ratchet --version (got 0.11.٤)'
 expect_version_en_us '0.11.５' 2 'could not read a version from ratchet --version (got 0.11.５)'
 expect_version_en_us '0.1².4' 2 'could not read a version from ratchet --version (got 0.1².4)'
+expect_version_en_us '٠.11.4' 2 'could not read a version from ratchet --version (got ٠.11.4)'
+expect_version_en_us 'é0.11.4' 2 'could not read a version from ratchet --version (got é0.11.4)'
+expect_version_en_us '0.11.4é' 2 'could not read a version from ratchet --version (got 0.11.4é)'
 
 # --- classify-pin-ref.sh verdict tests -------------------------------
 # Pure classifier: <tag> <pinned> <ref_object_sha> <ref_object_type>
@@ -374,6 +377,10 @@ LC_ALL=en_US.UTF-8 classify "superscript digit tag is not a floating major under
   8888888888888888888888888888888888888888
 LC_ALL=en_US.UTF-8 classify "mixed-digit tag is not a floating major under en_US.UTF-8" drift \
   'v1٢' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+  7777777777777777777777777777777777777777 tag \
+  8888888888888888888888888888888888888888
+LC_ALL=en_US.UTF-8 classify "text before a floating major is not one under en_US.UTF-8" drift \
+  'év31' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
   7777777777777777777777777777777777777777 tag \
   8888888888888888888888888888888888888888
 LC_ALL=en_US.UTF-8 classify "ASCII floating major still skips under en_US.UTF-8" skip-floating-major \

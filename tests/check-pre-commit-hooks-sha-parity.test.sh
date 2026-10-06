@@ -157,6 +157,18 @@ function main() {
   run_en_us_scenario 'non-ASCII letter in the URL SHA fails under en_US.UTF-8' \
     61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0é 61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0a 1 \
     'extracted URL SHA has unexpected shape: 61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0é'
+  local -r full_sha='61ab0e80d9c7ab14c256b5b453d8b3fb0189ba0a'
+  # A full-length value with one stray character at either end is not a
+  # SHA either: the shape gates are anchored, not substring searches.
+  run_en_us_scenario 'non-ASCII letter before the URL SHA fails under en_US.UTF-8' \
+    é61ab0e80d9c7ab14c256b5b453d8 "${full_sha}" 1 \
+    'extracted URL SHA has unexpected shape: é61ab0e80d9c7ab14c256b5b453d8'
+  run_en_us_scenario 'non-ASCII letter before a full lock rev fails under en_US.UTF-8' \
+    "${full_sha}" "é${full_sha}" 1 \
+    "lock rev has unexpected shape: é${full_sha}"
+  run_en_us_scenario 'non-ASCII letter after a full lock rev fails under en_US.UTF-8' \
+    "${full_sha}" "${full_sha}é" 1 \
+    "lock rev has unexpected shape: ${full_sha}é"
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then

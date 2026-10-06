@@ -586,4 +586,63 @@ expect_nix_word nix-word-en-us en_US.UTF-8 'énix build .#x'
 # em space after `nix` (written as its UTF-8 bytes) separates nothing.
 expect_nix_word nix-word-em-space C.UTF-8 $'nix\342\200\203build .#x'
 
+# What may precede `nix` and what must follow it. A continuation byte of a
+# multibyte letter (U+0100 ends in 0x80) is a word byte, as are ASCII word
+# characters, `.`, `/` and `-`; `nix` glued to its subcommand is no
+# invocation.
+expect_nix_word nix-word-continuation-byte C.UTF-8 'Ānix build .#x'
+expect_nix_word nix-word-digit C.UTF-8 '9nix build .#x'
+expect_nix_word nix-word-underscore C.UTF-8 '_nix build .#x'
+expect_nix_word nix-word-dot C.UTF-8 '.nix build .#x'
+expect_nix_word nix-word-slash C.UTF-8 '/nix build .#x'
+expect_nix_word nix-word-dash C.UTF-8 '-nix build .#x'
+expect_nix_word nix-glued-to-subcommand C.UTF-8 'nixbuild .#x'
+
+# @description Expect a job whose run: reaches nix to pass clean.
+# @arg $1 scenario name  @arg $2 the run: line's command
+# @arg $3 where the run: step sits, first or last
+function expect_nix_found() {
+  local -r name="$1" command="$2" where="$3"
+  local got_exit=0 got_stderr
+  {
+    printf '%s\n' "name: ${name}" 'on:' '  workflow_dispatch: {}' 'jobs:' "  ${name}:" \
+      '    runs-on: ubuntu-latest' '    steps:'
+    [[ ${where} == first ]] && printf '%s\n' "      - run: ${command}"
+    printf '%s\n' \
+      '      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3' \
+      '        with:' '          egress-policy: block' '          allowed-endpoints: >' \
+      '            cache.nixos.org:443'
+    [[ ${where} == last ]] && printf '%s\n' "      - run: ${command}"
+  } >"${key_dir}/wf/${name}.yml"
+  got_stderr="$(LC_ALL=C.UTF-8 WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" \
+    WORKFLOW_FILE_FILTER="${name}.yml" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  if [[ ${got_exit} != 0 || -n ${got_stderr} ]]; then
+    printf 'FAIL %s: exit %s (want 0)\n  stderr: %s\n' "${name}" "${got_exit}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+expect_nix_found nix-first-in-run 'nix build .#x' first
+expect_nix_found nix-after-control-byte $'\177nix build .#x' last
+
+# The nix word test runs under LC_ALL=C but must not leave it set: the
+# reads after it keep the caller's locale, in which `[[:space:]]` holds the
+# em space, so `cosign` followed by one still reads as an invocation.
+name=nix-test-keeps-locale
+printf '%s\n' "name: ${name}" 'on:' '  workflow_dispatch: {}' 'jobs:' "  ${name}:" \
+  '    runs-on: ubuntu-latest' '    steps:' \
+  '      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3' \
+  '        with:' '          egress-policy: block' '          allowed-endpoints: >' \
+  '            cache.nixos.org:443' '      - run: nix build .#x' \
+  $'      - run: cosign\342\200\203sign image' >"${key_dir}/wf/${name}.yml"
+got_exit=0
+got_stderr="$(LC_ALL=en_US.UTF-8 WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" \
+  WORKFLOW_FILE_FILTER="${name}.yml" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+want="${key_dir}/wf/${name}.yml: job '${name}' runs 'cosign sign' with an incomplete sigstore host set; signing requires fulcio.sigstore.dev, rekor.sigstore.dev, tuf-repo-cdn.sigstore.dev, and timestamp.sigstore.dev (cosign 3.x requests an RFC3161 timestamp when producing a bundle)"$'\n1 egress-allowlist violation(s)'
+if [[ ${got_exit} != 1 || ${got_stderr} != "${want}" ]]; then
+  printf 'FAIL %s: exit %s (want 1)\n  stderr: %s\n  want:   %s\n' "${name}" "${got_exit}" "${got_stderr}" "${want}" >&2
+  exit 1
+fi
+printf 'OK   %s\n' "${name}"
+
 printf 'all tests passed\n'

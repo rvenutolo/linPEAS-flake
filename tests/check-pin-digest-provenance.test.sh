@@ -441,6 +441,12 @@ function main() {
   LC_ALL=en_US.UTF-8 run_scenario 'floating repoint non-ASCII tag-deref payload exits 2 under en_US.UTF-8' \
     'head-floating-repoint' tagobject-nonascii 2 \
     'pin-digest-provenance: malformed tag deref payload for cachix/install-nix-action@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee: 999999999999999999999999999999999999999é'
+  LC_ALL=en_US.UTF-8 run_scenario 'floating repoint tag-deref payload with a letter before the sha exits 2 under en_US.UTF-8' \
+    'head-floating-repoint' tagobject-nonascii-before 2 \
+    'pin-digest-provenance: malformed tag deref payload for cachix/install-nix-action@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee: é9999999999999999999999999999999999999999'
+  LC_ALL=en_US.UTF-8 run_scenario 'floating repoint tag-deref payload with a letter after the sha exits 2 under en_US.UTF-8' \
+    'head-floating-repoint' tagobject-nonascii-after 2 \
+    'pin-digest-provenance: malformed tag deref payload for cachix/install-nix-action@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee: 9999999999999999999999999999999999999999é'
   run_scenario 'quoted pin shape errors' 'head-quoted-pin' deny 2 \
     'pin-digest-provenance: unrecognized uses: pin shape at .github/workflows/wf.yml:5:       - uses: "actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" # v4.3.1'
   run_scenario 'comment-less pin shape errors' 'head-commentless-pin' deny 2 \
@@ -475,6 +481,10 @@ A repointed released tag is the digest-repoint supply-chain class. Review upstre
     reachable 1 "FAIL: digest repointed under unchanged version: actions/checkout (v٤): ${sha_b} -> ${sha_c}
 ${repoint_tail}" \
     "${sha_b}" 'v٤' "${dig_1}" v0.1.7 "${sha_c}" 'v٤' "${dig_1}" v0.1.7
+  run_en_us_scenario 'text before a floating-major label is not a floating major under en_US.UTF-8' \
+    reachable 1 "FAIL: digest repointed under unchanged version: actions/checkout (xv4): ${sha_b} -> ${sha_c}
+${repoint_tail}" \
+    "${sha_b}" 'xv4' "${dig_1}" v0.1.7 "${sha_c}" 'xv4' "${dig_1}" v0.1.7
   run_en_us_scenario 'non-ASCII letter in a pin sha is an unrecognized shape under en_US.UTF-8' \
     deny 2 "pin-digest-provenance: unrecognized uses: pin shape at .github/workflows/wf.yml:4:       - uses: actions/checkout@${sha_b:1}é # v4.3.1" \
     "${sha_b}" v4.3.1 "${dig_1}" v0.1.7 "${sha_b:1}é" v4.3.1 "${dig_1}" v0.1.7
@@ -484,13 +494,14 @@ ${repoint_tail}" \
   # the other.
   local -r dig_3='3333333333333333333333333333333333333333333333333333333333333333'
   local -r dig_4='4444444444444444444444444444444444444444444444444444444444444444'
-  OCTOSCAN_EXTRA_BASE=$'OCTOSCAN_VERSION="v0.1.٧"\n' OCTOSCAN_EXTRA_HEAD=$'OCTOSCAN_VERSION="v0.1.٧"\n' \
-    run_en_us_scenario 'a non-ASCII octoscan version line is not read under en_US.UTF-8' \
+  OCTOSCAN_EXTRA_BASE=$'OCTOSCAN_VERSION="v0.1.٧"\n# OCTOSCAN_VERSION="v0.1.8"\n' \
+    OCTOSCAN_EXTRA_HEAD=$'OCTOSCAN_VERSION="v0.1.٧"\n# OCTOSCAN_VERSION="v0.1.8"\n' \
+    run_en_us_scenario 'a non-ASCII or commented octoscan version line is not read under en_US.UTF-8' \
     deny 1 "FAIL: digest repointed under unchanged version: ghcr.io/synacktiv/octoscan (v0.1.7): sha256:${dig_3} -> sha256:${dig_4}
 ${repoint_tail}" \
     "${sha_b}" v4.3.1 "${dig_3}" v0.1.7 "${sha_b}" v4.3.1 "${dig_4}" v0.1.7
-  OCTOSCAN_EXTRA_HEAD="OCTOSCAN_DIGEST=\"sha256:${dig_2:1}é\""$'\n' \
-    run_en_us_scenario 'a non-ASCII octoscan digest line is not read under en_US.UTF-8' \
+  OCTOSCAN_EXTRA_HEAD="OCTOSCAN_DIGEST=\"sha256:${dig_2:1}é\""$'\n'"# OCTOSCAN_DIGEST=\"sha256:${dig_2}\""$'\n' \
+    run_en_us_scenario 'a non-ASCII or commented octoscan digest line is not read under en_US.UTF-8' \
     deny 0 'pin digest provenance OK: 2 pin(s) across 2 file(s)' \
     "${sha_b}" v4.3.1 "${dig_1}" v0.1.7 "${sha_b}" v4.3.1 "${dig_1}" v0.1.7
   run_git_mode_scenario 'git BASE_REF mode: zero-level composite action repoint fails' 1 \

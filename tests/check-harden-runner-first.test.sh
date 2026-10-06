@@ -38,20 +38,28 @@ expect no-such-workflow.yml 2 'selected 0 of'
 # character would read as SHA-pinned. The workflow is built at run time
 # and the whole of stderr is compared.
 require_locale_gap en_US.UTF-8 || exit 1
-hr_dir="$(mktemp --directory)"
-printf 'on: push\njobs:\n  a:\n    steps:\n      - uses: step-security/harden-runner@%sé\n      - run: "true"\n' \
-  'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' >"${hr_dir}/hr.yml"
-hr_exit=0
-hr_err="$(LC_ALL=en_US.UTF-8 WORKFLOWS_DIR_OVERRIDE="${hr_dir}" WORKFLOW_FILE_FILTER=hr.yml \
-  "${SCRIPT}" 2>&1 >/dev/null)" || hr_exit=$?
-rm --recursive --force -- "${hr_dir}"
-hr_want="${hr_dir}/hr.yml: job a harden-runner ref step-security/harden-runner@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaé not SHA-pinned
+# @arg $1 scenario name  @arg $2 the whole ref of the first step's uses:
+function expect_hr_ref_refused() {
+  local -r name="$1" ref="$2"
+  local hr_dir hr_exit=0 hr_err hr_want
+  hr_dir="$(mktemp --directory)"
+  printf 'on: push\njobs:\n  a:\n    steps:\n      - uses: %s\n      - run: "true"\n' "${ref}" >"${hr_dir}/hr.yml"
+  hr_err="$(LC_ALL=en_US.UTF-8 WORKFLOWS_DIR_OVERRIDE="${hr_dir}" WORKFLOW_FILE_FILTER=hr.yml \
+    "${SCRIPT}" 2>&1 >/dev/null)" || hr_exit=$?
+  hr_want="${hr_dir}/hr.yml: job a harden-runner ref ${ref} not SHA-pinned
 1 job(s) missing harden-runner as first step"
-if [[ ${hr_exit} != 1 || ${hr_err} != "${hr_want}" ]]; then
-  printf 'FAIL non-ASCII harden-runner sha: exit %s (want 1)\n  stderr: %s\n  want:   %s\n' \
-    "${hr_exit}" "${hr_err}" "${hr_want}" >&2
-  exit 1
-fi
-printf 'OK   non-ASCII harden-runner sha rejected under en_US.UTF-8\n'
+  rm --recursive --force -- "${hr_dir}"
+  if [[ ${hr_exit} != 1 || ${hr_err} != "${hr_want}" ]]; then
+    printf 'FAIL %s: exit %s (want 1)\n  stderr: %s\n  want:   %s\n' \
+      "${name}" "${hr_exit}" "${hr_err}" "${hr_want}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+hr_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+expect_hr_ref_refused 'non-ASCII harden-runner sha rejected under en_US.UTF-8' \
+  "step-security/harden-runner@${hr_sha:0:39}é"
+expect_hr_ref_refused 'text after the harden-runner sha rejected under en_US.UTF-8' \
+  "step-security/harden-runner@${hr_sha}é"
 
 printf 'all tests passed\n'

@@ -295,7 +295,8 @@ function main() {
   local tag
   for tag in arabic-indic:2026010١-0000000 fullwidth:2026010５-0000000 \
     superscript:2026010²-0000000 fraction:2026010½-0000000 \
-    hex-letter:20260101-000000é; do
+    hex-letter:20260101-000000é leading-junk:é20260101-0000000 \
+    trailing-junk:20260101-0000000é; do
     run_en_us_scenario "${tag%%:*} upstream tag is refused under en_US.UTF-8" \
       "bad-release-${tag%%:*}-tag.json" 1 \
       "INFO  current pin: 20260101-0000000"$'\n'"INFO  upstream latest: ${tag#*:}"$'\n'"ERROR upstream tag does not match expected format: ${tag#*:}"

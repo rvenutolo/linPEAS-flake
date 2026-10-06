@@ -113,7 +113,7 @@ expect_body step-strtag.yml $'on: push\njobs:\n  a:\n    steps:\n      - !!str {
 # characters, so a ref of 39 hex digits and one such character would read
 # as a SHA. GitHub resolves it as a tag or branch name, which can move.
 require_locale_gap en_US.UTF-8 || exit 1
-LC_ALL=en_US.UTF-8 expect_body sha-non-ascii.yml $'on: push\njobs:\n  a:\n    steps:\n      - uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaé\n      - uses: actions/setup-node@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa５\n' 1 \
-  $'DIR/sha-non-ascii.yml: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaé not SHA-pinned (need owner/repo@<40-hex>)\nDIR/sha-non-ascii.yml: actions/setup-node@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa５ not SHA-pinned (need owner/repo@<40-hex>)\n2 unpinned uses: reference(s) found'
+LC_ALL=en_US.UTF-8 expect_body sha-non-ascii.yml $'on: push\njobs:\n  a:\n    steps:\n      - uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaé\n      - uses: actions/setup-node@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa５\n      - uses: actions/cache@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaé\n' 1 \
+  $'DIR/sha-non-ascii.yml: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaé not SHA-pinned (need owner/repo@<40-hex>)\nDIR/sha-non-ascii.yml: actions/setup-node@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa５ not SHA-pinned (need owner/repo@<40-hex>)\nDIR/sha-non-ascii.yml: actions/cache@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaé not SHA-pinned (need owner/repo@<40-hex>)\n3 unpinned uses: reference(s) found'
 
 printf 'all tests passed\n'

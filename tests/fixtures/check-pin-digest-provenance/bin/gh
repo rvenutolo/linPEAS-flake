@@ -107,6 +107,29 @@ case "${GH_STUB_MODE:-deny}" in
         ;;
     esac
     ;;
+  tagobject-nonascii-before | tagobject-nonascii-after)
+    # A tag-object lookup answering a full 40 hex digits with one non-ASCII
+    # letter before or after them: a payload no commit SHA can be.
+    case "$*" in
+      *"/git/tags/"*)
+        if [[ ${GH_STUB_MODE} == tagobject-nonascii-before ]]; then
+          printf '\303\251%s\n' 9999999999999999999999999999999999999999
+        else
+          printf '%s\303\251\n' 9999999999999999999999999999999999999999
+        fi
+        ;;
+      *".default_branch"*)
+        printf 'master\n'
+        ;;
+      *"/compare/"*)
+        printf 'behind\n'
+        ;;
+      *)
+        printf 'unexpected gh call: %s\n' "$*" >&2
+        exit 97
+        ;;
+    esac
+    ;;
   compare-not-found)
     case "$*" in
       *"/git/tags/"*)

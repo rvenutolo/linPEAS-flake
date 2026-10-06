@@ -421,6 +421,23 @@ function main() {
   run_en_us_scenario 'non-ASCII letter in an owner is a could-not-run under en_US.UTF-8' \
     '.nodes.alpha.locked.owner = "orgé" | .nodes.alpha.original.owner = "orgé"' \
     2 'flake-lock-provenance: source of alpha is not a plain owner/repo: orgé/alpha'
+  # A name or rev with a stray character at one end is no plain owner/repo
+  # or commit id either: the checks are anchored.
+  run_en_us_scenario 'non-ASCII letter after a full moved rev is a could-not-run under en_US.UTF-8' \
+    'if .nodes.alpha.locked.rev == "aaa999aaa999aaa999aaa999aaa999aaa999aaa9" then .nodes.alpha.locked.rev = "aaa999aaa999aaa999aaa999aaa999aaa999aaa9é" else . end' \
+    2 'flake-lock-provenance: rev on alpha is not a 40-hex commit id: aaa999aaa999aaa999aaa999aaa999aaa999aaa9é'
+  run_en_us_scenario 'non-ASCII letter before a full moved rev is a could-not-run under en_US.UTF-8' \
+    'if .nodes.alpha.locked.rev == "aaa999aaa999aaa999aaa999aaa999aaa999aaa9" then .nodes.alpha.locked.rev = "éaaa999aaa999aaa999aaa999aaa999aaa999aaa9" else . end' \
+    2 'flake-lock-provenance: rev on alpha is not a 40-hex commit id: éaaa999aaa999aaa999aaa999aaa999aaa999aaa9'
+  run_en_us_scenario 'non-ASCII letter before an owner is a could-not-run under en_US.UTF-8' \
+    '.nodes.alpha.locked.owner = "éorg" | .nodes.alpha.original.owner = "éorg"' \
+    2 'flake-lock-provenance: source of alpha is not a plain owner/repo: éorg/alpha'
+  run_en_us_scenario 'non-ASCII letter in a repo is a could-not-run under en_US.UTF-8' \
+    '.nodes.alpha.locked.repo = "alphaé" | .nodes.alpha.original.repo = "alphaé"' \
+    2 'flake-lock-provenance: source of alpha is not a plain owner/repo: orgA/alphaé'
+  run_en_us_scenario 'non-ASCII letter before a repo is a could-not-run under en_US.UTF-8' \
+    '.nodes.alpha.locked.repo = "éalpha" | .nodes.alpha.original.repo = "éalpha"' \
+    2 'flake-lock-provenance: source of alpha is not a plain owner/repo: orgA/éalpha'
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then

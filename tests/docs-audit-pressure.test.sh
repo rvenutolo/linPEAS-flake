@@ -439,6 +439,16 @@ printf 'LAST_AUDIT_SHA=%sé\n' "${audit_sha:0:39}" >"${STATE_FILE}"
 LC_ALL=en_US.UTF-8 run_scenario 'audit point with a non-ASCII letter is refused under en_US.UTF-8' 2 \
   --expect-err "${STATE_FILE}: no LAST_AUDIT_SHA=<40-hex> line" \
   --forbid-err 'is not a commit in this history'
+STATE_FILE="${SANDBOX}/.github/state-before"
+printf 'LAST_AUDIT_SHA=é%s\n' "${audit_sha}" >"${STATE_FILE}"
+LC_ALL=en_US.UTF-8 run_scenario 'non-ASCII letter before the audit point is refused under en_US.UTF-8' 2 \
+  --expect-err "${STATE_FILE}: no LAST_AUDIT_SHA=<40-hex> line" \
+  --forbid-err 'is not a commit in this history'
+STATE_FILE="${SANDBOX}/.github/state-after"
+printf 'LAST_AUDIT_SHA=%sé\n' "${audit_sha}" >"${STATE_FILE}"
+LC_ALL=en_US.UTF-8 run_scenario 'non-ASCII letter after the audit point is refused under en_US.UTF-8' 2 \
+  --expect-err "${STATE_FILE}: no LAST_AUDIT_SHA=<40-hex> line" \
+  --forbid-err 'is not a commit in this history'
 cd "${REPO_ROOT}"
 
 harness_assert_verify || failures=$((failures + 1))

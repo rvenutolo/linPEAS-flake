@@ -184,10 +184,11 @@ printf 'OK   empty scan set is a could-not-run\n'
 # --- a pin SHA holding a non-ASCII letter is not a pin ---
 # Under en_US.UTF-8 a bash `[0-9a-fA-F]` range also matches non-ASCII
 # letters, so 39 hex digits and an `é` would be inventoried as a SHA pin.
-# The inventory holds only its header.
+# A `uses:` that follows other text on its line is no pin line either. The
+# inventory holds only its header.
 require_locale_gap en_US.UTF-8 || exit 1
 NONASCII_DIR="$(mktemp --directory)"
-printf 'jobs:\n  a:\n    steps:\n      - uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaé # v4.3.1\n' \
+printf 'jobs:\n  a:\n    steps:\n      - uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaé # v4.3.1\n      - run: echo uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa # v4.3.1\n' \
   >"${NONASCII_DIR}/wf.yml"
 nonascii_exit=0
 LC_ALL=en_US.UTF-8 INVENTORY_PATHS_OVERRIDE="${NONASCII_DIR}/wf.yml" \

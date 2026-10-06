@@ -183,6 +183,9 @@ function main() {
   expect_en_us 'non-ASCII letter in an env key is not a shell identifier under en_US.UTF-8' \
     's/^\( *\)STEP_CHARLIE:/\1STEP_CHARLIé:/' 1 \
     'DIR/workflow.yml: attribution env key STEP_CHARLIé is not a shell identifier; attribution env names must match ^[A-Za-z_][A-Za-z0-9_]*$'
+  expect_en_us 'non-ASCII letter before an env key is not a shell identifier under en_US.UTF-8' \
+    's/^\( *\)STEP_CHARLIE:/\1éSTEP_CHARLIE:/' 1 \
+    'DIR/workflow.yml: attribution env key éSTEP_CHARLIE is not a shell identifier; attribution env names must match ^[A-Za-z_][A-Za-z0-9_]*$'
   expect_en_us 'non-ASCII letter in a step id is not read as an outcome reference under en_US.UTF-8' \
     's/step-charlie/step-charlié/g' 1 \
     'DIR/workflow.yml: step id step-charlié has no steps.<id>.outcome entry in the attribution env'

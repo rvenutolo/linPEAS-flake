@@ -613,7 +613,8 @@ function main() {
   local version
   for version in arabic-indic:2026010١-0000000 fullwidth:2026010５-0000000 \
     superscript:2026010²-0000000 fraction:2026010½-0000000 \
-    hex-letter:20260101-000000é; do
+    hex-letter:20260101-000000é leading-junk:é20260101-0000000 \
+    trailing-junk:20260101-0000000é; do
     run_scenario "${version%%:*} pin.version is refused under en_US.UTF-8" \
       "ERROR pin.version does not match expected format: ${version#*:}" 1 \
       LC_ALL=en_US.UTF-8 \

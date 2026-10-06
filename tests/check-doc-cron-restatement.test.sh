@@ -187,10 +187,27 @@ function main() {
   cp --recursive -- "${FIXTURES}/restatement-fails/workflows" "${digits_root}/workflows"
   printf '%s\n' 'update-flake-lock.yml fires Friday ٠٦:٠٠ UTC' \
     'update-flake-lock.yml fires every ５ hours' \
-    'update-flake-lock.yml fires on ١٢ May' >"${digits_root}/docs/x.md"
+    'update-flake-lock.yml fires on ١٢ May' \
+    'update-flake-lock.yml fires Friday ٥:30 UTC' \
+    'update-flake-lock.yml fires Friday 10:٣٠ UTC' \
+    'update-flake-lock.yml fires every ٥ minutes' >"${digits_root}/docs/x.md"
   LC_ALL=en_US.UTF-8 run_scenario 'non-ASCII digits carry no clock time or cadence under en_US.UTF-8' \
     "${digits_root}/workflows" "${digits_root}" 0 '' \
-    'ok — scanned 1 doc(s), 3 line(s) against 1 workflow(s); 0 line(s) carried a clock time or cadence; exemptions applied: none'
+    'ok — scanned 1 doc(s), 6 line(s) against 1 workflow(s); 0 line(s) carried a clock time or cadence; exemptions applied: none'
+
+  # A non-ASCII digit beside an ASCII time is a boundary, not part of the
+  # number, and a time or cadence may open or close the line; each line is
+  # its own doc so each is read alone.
+  local edge_line edge_n=0
+  for edge_line in 'update-flake-lock.yml fires ٥10:30' 'update-flake-lock.yml fires 10:30٥' \
+    '10:00 update-flake-lock.yml' 'update-flake-lock.yml fires at 10:00' \
+    'update-flake-lock.yml fires every 5 hours'; do
+    edge_n=$((edge_n + 1))
+    rm --force -- "${digits_root}/docs/x.md" "${digits_root}/docs/edge-$((edge_n - 1)).md"
+    printf '%s\n' "${edge_line}" >"${digits_root}/docs/edge-${edge_n}.md"
+    LC_ALL=en_US.UTF-8 run_scenario "restatement at the edge of a line is found: ${edge_line}" \
+      "${digits_root}/workflows" "${digits_root}" 1 "edge-${edge_n}.md:1: ${edge_line}"
+  done
   rm --recursive --force -- "${digits_root}"
 
   harness_assert_verify || failures=$((failures + 1))
