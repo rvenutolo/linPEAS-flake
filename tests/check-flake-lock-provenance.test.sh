@@ -248,6 +248,9 @@ function main() {
   # identity failure ends the run before any ancestry probe is made.
   run_scenario 'top-level owner change fails' 'head-toplevel-owner.lock' 1 \
     'FAIL: node repointed: alpha (original.owner: orgA -> evil)'
+  harness_assert_parity_exempt 'top-level owner change fails' \
+    'declaration-shaped text inside a string corroborates nothing' \
+    'the verdict is the same undeclared move with or without the decoy lines; only a reader that takes them for declarations changes it'
   run_scenario 'top-level type change fails' 'head-toplevel-type.lock' 1 \
     'FAIL: node repointed: alpha (locked.type: github -> git)'
   run_scenario 'top-level input added fails' 'head-toplevel-added.lock' 1 'FAIL: top-level input added: delta'
@@ -343,6 +346,13 @@ function main() {
   run_declared_scenario 'a declared repoint does not cover an undeclared sibling' \
     'head-alpha-beta-repoint.lock' 'head-alpha-repoint.flake.nix' 1 \
     'FAIL: node repointed: beta (original.ref: main -> next)'
+  # A declaration is read only where it starts a line of the inputs block:
+  # text inside a string that looks like one, or like the opening of a
+  # block-shaped one, vouches for nothing. Either reading alone would
+  # corroborate the owner move below.
+  run_declared_scenario 'declaration-shaped text inside a string corroborates nothing' \
+    'head-toplevel-owner.lock' 'head-decoy-declarations.flake.nix' 1 \
+    'FAIL: node repointed: alpha (original.owner: orgA -> evil)'
   # The block-shaped declaration (`<name> = { url = ...; }`) is the other
   # half of the parser, and the one a nested `inputs.<x>.follows` line
   # sits inside — reading that nested line as a top-level source would

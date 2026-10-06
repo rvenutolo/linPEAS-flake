@@ -130,6 +130,10 @@ USE_DEFAULT_DIRS=0
   put argument-regex scripts/a.sh '#!/usr/bin/env bash' 'f() {' '  local -r re="$1"' '  [[ $2 =~ ${re} ]]' '  [[ $2 =~ $1 ]]' '}' "f '[0-9]' x"
   run_case argument-regex 0 'regex-range-ascii: ok — scanned 1 file(s), 2 =~ test(s), 1 with a regex in a variable, 0 under a C locale' ''
 
+  put unassigned-variable scripts/a.sh '#!/usr/bin/env bash' '[[ $1 =~ ${NEVER_SET} ]]' '[[ $1 =~ a ]]' '[[ $1 =~ b ]]' '[[ $1 =~ c ]]' \
+    '[[ $1 =~ d ]]' '[[ $1 =~ e ]]' '[[ $1 =~ f ]]'
+  run_case unassigned-variable 0 'regex-range-ascii: ok — scanned 1 file(s), 7 =~ test(s), 1 with a regex in a variable, 0 under a C locale' ''
+
   put no-test scripts/a.sh '#!/usr/bin/env bash' "grep -E '[0-9]' x" '# [[ $1 =~ [0-9] ]] in a comment is text'
   put no-test scripts/b.sh '#!/usr/bin/env bash' "grep -E '[0-9]' y"
   run_case no-test 0 'regex-range-ascii: ok — scanned 2 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale' ''
