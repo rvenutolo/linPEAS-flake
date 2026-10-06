@@ -240,6 +240,40 @@ tests/t.test.sh:2: regex range h-k follows the locale$(footer 2)"
   put for-loop-last-item scripts/a.sh '#!/usr/bin/env bash' 'for re in x "[0-9]+"; do' '  [[ $1 =~ $re ]]' 'done'
   run_case for-loop-last-item 1 '' "DIR/scripts/a.sh:3: regex range 0-9 (through re) follows the locale$(footer 1)"
 
+  # A later write of another value ends a C locale; a write that does
+  # not reach the test, or a prefix assignment, does not.
+  put nested-local scripts/a.sh '#!/usr/bin/env bash' 'f() { g() { local LC_ALL=C; :; }; [[ $1 =~ [0-9] ]]; }'
+  run_case nested-local 1 '' "DIR/scripts/a.sh:2: regex range 0-9 follows the locale$(footer 1)"
+  put export-then-export scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'export LC_ALL=en_US.UTF-8' '[[ $1 =~ [0-9] ]]'
+  run_case export-then-export 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put export-then-unset scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'unset LC_ALL' '' '[[ $1 =~ [0-9] ]]'
+  run_case export-then-unset 1 '' "DIR/scripts/a.sh:5: regex range 0-9 follows the locale$(footer 1)"
+  put export-then-assign scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'LC_ALL=en_US.UTF-8' '' '' '[[ $1 =~ [0-9] ]]'
+  run_case export-then-assign 1 '' "DIR/scripts/a.sh:6: regex range 0-9 follows the locale$(footer 1)"
+  put export-then-local-other scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'f() { local LC_ALL=en_US.UTF-8; [[ $1 =~ [0-9] ]]; }'
+  run_case export-then-local-other 1 '' "DIR/scripts/a.sh:3: regex range 0-9 follows the locale$(footer 1)"
+  put local-then-assign scripts/a.sh '#!/usr/bin/env bash' 'f() { local LC_ALL=C; LC_ALL=en_US.UTF-8; [[ $1 =~ [0-9] ]]; }' ''
+  run_case local-then-assign 1 '' "DIR/scripts/a.sh:2: regex range 0-9 follows the locale$(footer 1)"
+  put local-in-subshell scripts/a.sh '#!/usr/bin/env bash' 'f() { ( local LC_ALL=C; true ); [[ $1 =~ [0-9] ]]; }' '' ''
+  run_case local-in-subshell 1 '' "DIR/scripts/a.sh:2: regex range 0-9 follows the locale$(footer 1)"
+  put local-in-conditional scripts/a.sh '#!/usr/bin/env bash' 'f() { if (($#)); then local LC_ALL=C; fi; [[ $1 =~ [0-9] ]]; }' '' '' ''
+  run_case local-in-conditional 1 '' "DIR/scripts/a.sh:2: regex range 0-9 follows the locale$(footer 1)"
+  put other-locale-elsewhere scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'f() { local LC_ALL=en_US.UTF-8; :; }' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]'
+  run_case other-locale-elsewhere 0 'regex-range-ascii: ok — scanned 1 file(s), 6 =~ test(s), 0 with a regex in a variable, 6 under a C locale' ''
+  put prefix-assignment scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'LC_ALL=en_US.UTF-8 cmd' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]'
+  run_case prefix-assignment 0 'regex-range-ascii: ok — scanned 1 file(s), 7 =~ test(s), 0 with a regex in a variable, 7 under a C locale' ''
+  put local-nested-other scripts/a.sh '#!/usr/bin/env bash' 'f() { local LC_ALL=C; g() { local LC_ALL=en_US.UTF-8; :; }; [[ $1 =~ [0-9] ]]; [[ $2 =~ [0-9] ]]; [[ $3 =~ [0-9] ]]; [[ $4 =~ [0-9] ]]; [[ $5 =~ [0-9] ]]; [[ $6 =~ [0-9] ]]; [[ $7 =~ [0-9] ]]; [[ $8 =~ [0-9] ]]; }'
+  run_case local-nested-other 0 'regex-range-ascii: ok — scanned 1 file(s), 8 =~ test(s), 0 with a regex in a variable, 8 under a C locale' ''
+  put export-twice-c scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'export LC_ALL=C.UTF-8' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]'
+  run_case export-twice-c 0 'regex-range-ascii: ok — scanned 1 file(s), 9 =~ test(s), 0 with a regex in a variable, 9 under a C locale' ''
+
+  put write-before-export scripts/a.sh '#!/usr/bin/env bash' 'LC_ALL=en_US.UTF-8' 'export LC_ALL=C' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]' '[[ $10 =~ [0-9] ]]'
+  run_case write-before-export 0 'regex-range-ascii: ok — scanned 1 file(s), 10 =~ test(s), 0 with a regex in a variable, 10 under a C locale' ''
+  put write-after-test scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]' '[[ $10 =~ [0-9] ]]' '[[ $11 =~ [0-9] ]]' 'export LC_ALL=en_US.UTF-8'
+  run_case write-after-test 0 'regex-range-ascii: ok — scanned 1 file(s), 11 =~ test(s), 0 with a regex in a variable, 11 under a C locale' ''
+  put c-write-elsewhere scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' '( export LC_ALL=C )' 'LC_ALL=C' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]' '[[ $10 =~ [0-9] ]]' '[[ $11 =~ [0-9] ]]' '[[ $12 =~ [0-9] ]]'
+  run_case c-write-elsewhere 0 'regex-range-ascii: ok — scanned 1 file(s), 12 =~ test(s), 0 with a regex in a variable, 12 under a C locale' ''
+
   put export-before-test scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [a-f] ]]' '[[ $3 =~ [A-Z] ]]' '[[ $4 =~ [a-z] ]]'
   run_case export-before-test 0 'regex-range-ascii: ok — scanned 1 file(s), 4 =~ test(s), 0 with a regex in a variable, 4 under a C locale' ''
   put local-before-test scripts/a.sh '#!/usr/bin/env bash' 'f() { local LC_ALL=C; [[ $1 =~ [0-9] ]]; }'
