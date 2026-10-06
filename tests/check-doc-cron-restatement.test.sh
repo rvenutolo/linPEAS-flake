@@ -179,7 +179,9 @@ function main() {
   # Under en_US.UTF-8 a bash `[0-9]` range also matches non-ASCII digits,
   # so a time or cadence written in them would read as a restatement here
   # and as none on the runner. The doc is built at run time from the
-  # failing fixture with its digits replaced.
+  # failing fixture with its digits replaced. Its last three lines hold a
+  # time inside a longer digit run and a cadence unit with a letter after
+  # it, which are no restatement either.
   require_locale_gap en_US.UTF-8 || exit 1
   local digits_root
   digits_root="$(mktemp --directory)"
@@ -190,10 +192,13 @@ function main() {
     'update-flake-lock.yml fires on ١٢ May' \
     'update-flake-lock.yml fires Friday ٥:30 UTC' \
     'update-flake-lock.yml fires Friday 10:٣٠ UTC' \
-    'update-flake-lock.yml fires every ٥ minutes' >"${digits_root}/docs/x.md"
+    'update-flake-lock.yml fires every ٥ minutes' \
+    'update-flake-lock.yml fires at 110:30 UTC' \
+    'update-flake-lock.yml fires at 10:305 UTC' \
+    'update-flake-lock.yml fires every 5 hoursx' >"${digits_root}/docs/x.md"
   LC_ALL=en_US.UTF-8 run_scenario 'non-ASCII digits carry no clock time or cadence under en_US.UTF-8' \
     "${digits_root}/workflows" "${digits_root}" 0 '' \
-    'ok — scanned 1 doc(s), 6 line(s) against 1 workflow(s); 0 line(s) carried a clock time or cadence; exemptions applied: none'
+    'ok — scanned 1 doc(s), 9 line(s) against 1 workflow(s); 0 line(s) carried a clock time or cadence; exemptions applied: none'
 
   # A non-ASCII digit beside an ASCII time is a boundary, not part of the
   # number, and a time or cadence may open or close the line; each line is

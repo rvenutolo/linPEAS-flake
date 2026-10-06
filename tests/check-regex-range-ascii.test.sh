@@ -108,6 +108,12 @@ USE_DEFAULT_DIRS=0
   put local-c scripts/a.sh '#!/usr/bin/env bash' 'f() {' '  local LC_ALL=C' '  [[ $1 =~ [0-9] ]]' '}' 'g() {' '  local LC_ALL=C.UTF-8' '  [[ $1 =~ [a-z] ]]' '}'
   run_case local-c 0 'regex-range-ascii: ok — scanned 1 file(s), 2 =~ test(s), 0 with a regex in a variable, 2 under a C locale' ''
 
+  put local-posix scripts/a.sh '#!/usr/bin/env bash' 'f() {' '  local LC_ALL=POSIX' '  [[ $1 =~ [8-9] ]]' '}'
+  run_case local-posix 1 '' "DIR/scripts/a.sh:4: regex range 8-9 follows the locale$(footer 1)"
+
+  put assignment-valued-like-operator scripts/a.sh '#!/usr/bin/env bash' 'x==~' '[[ $1 =~ x ]]' '[[ $1 =~ y ]]' '[[ $1 =~ z ]]' '[[ $1 =~ w ]]' '[[ $1 =~ v ]]'
+  run_case assignment-valued-like-operator 0 'regex-range-ascii: ok — scanned 1 file(s), 5 =~ test(s), 0 with a regex in a variable, 0 under a C locale' ''
+
   put local-other-locale scripts/a.sh '#!/usr/bin/env bash' 'f() {' '  local LC_ALL=en_US.UTF-8' '  [[ $1 =~ [5-9] ]]' '}'
   run_case local-other-locale 1 '' "DIR/scripts/a.sh:4: regex range 5-9 follows the locale$(footer 1)"
 
@@ -147,11 +153,12 @@ DIR/tests/t.test.sh:2: regex range g-h follows the locale$(footer 2)"
   run_case negated-close-first 1 '' "DIR/scripts/a.sh:2: regex range a-z follows the locale$(footer 1)"
 
   put range-after-class scripts/a.sh '#!/usr/bin/env bash' '[[ $1 =~ [[:alnum:]a-f] ]]' '[[ $1 =~ [[:xdigit:]b-g] ]]' \
-    '[[ $1 =~ [[=a=]c-h] ]]' '[[ $1 =~ [[.a.]d-i] ]]'
+    '[[ $1 =~ [[=a=]c-h] ]]' '[[ $1 =~ [[.a.]d-i] ]]' '[[ $1 =~ [[:alpha:][:digit:]e-j] ]]'
   run_case range-after-class 1 '' "DIR/scripts/a.sh:2: regex range a-f follows the locale
 DIR/scripts/a.sh:3: regex range b-g follows the locale
 DIR/scripts/a.sh:4: regex range c-h follows the locale
-DIR/scripts/a.sh:5: regex range d-i follows the locale$(footer 4)"
+DIR/scripts/a.sh:5: regex range d-i follows the locale
+DIR/scripts/a.sh:6: regex range e-j follows the locale$(footer 5)"
 
   put adjacent-brackets scripts/a.sh '#!/usr/bin/env bash' '[[ $1 =~ ^[x][0-9]$ ]]'
   run_case adjacent-brackets 1 '' "DIR/scripts/a.sh:2: regex range 0-9 follows the locale$(footer 1)"
@@ -166,7 +173,7 @@ DIR/scripts/a.sh:5: regex range d-i follows the locale$(footer 4)"
   put assigned-twice scripts/a.sh '#!/usr/bin/env bash' "re='^[0-9]'" "re='^x'" '[[ $1 =~ $re ]]'
   run_case assigned-twice 1 '' "DIR/scripts/a.sh:4: regex range 0-9 (through re) follows the locale$(footer 1)"
 
-  put assignments-read-apart scripts/a.sh '#!/usr/bin/env bash' "re='[x'" "re='-9]'" '[[ $1 =~ $re ]]' '[[ $1 =~ p ]]' '[[ $1 =~ q ]]'
+  put assignments-read-apart scripts/a.sh '#!/usr/bin/env bash' 're=[x' 're=-9]' '[[ $1 =~ $re ]]' '[[ $1 =~ p ]]' '[[ $1 =~ q ]]'
   run_case assignments-read-apart 0 'regex-range-ascii: ok — scanned 1 file(s), 3 =~ test(s), 1 with a regex in a variable, 0 under a C locale' ''
 
   put range-kept-past-clean-variable scripts/a.sh '#!/usr/bin/env bash' "a='\$c'" "c='x'" "b='[0-9]'" '[[ $1 =~ ${a}${b} ]]'

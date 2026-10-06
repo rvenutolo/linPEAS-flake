@@ -597,6 +597,7 @@ expect_nix_word nix-word-dot C.UTF-8 '.nix build .#x'
 expect_nix_word nix-word-slash C.UTF-8 '/nix build .#x'
 expect_nix_word nix-word-dash C.UTF-8 '-nix build .#x'
 expect_nix_word nix-glued-to-subcommand C.UTF-8 'nixbuild .#x'
+expect_nix_word nix-subcommand-prefix C.UTF-8 'nix builder .#x'
 
 # @description Expect a job whose run: reaches nix to pass clean.
 # @arg $1 scenario name  @arg $2 the run: line's command
@@ -626,19 +627,24 @@ expect_nix_found nix-first-in-run 'nix build .#x' first
 expect_nix_found nix-after-control-byte $'\177nix build .#x' last
 
 # The nix word test runs under LC_ALL=C but must not leave it set: the
-# reads after it keep the caller's locale, in which `[[:space:]]` holds the
-# em space, so `cosign` followed by one still reads as an invocation.
+# reads of the jobs after it keep the caller's locale, in which
+# `[[:space:]]` holds the em space, so `cosign` followed by one still reads
+# as an invocation.
 name=nix-test-keeps-locale
-printf '%s\n' "name: ${name}" 'on:' '  workflow_dispatch: {}' 'jobs:' "  ${name}:" \
+printf '%s\n' "name: ${name}" 'on:' '  workflow_dispatch: {}' 'jobs:' '  nix-job:' \
   '    runs-on: ubuntu-latest' '    steps:' \
   '      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3' \
   '        with:' '          egress-policy: block' '          allowed-endpoints: >' \
   '            cache.nixos.org:443' '      - run: nix build .#x' \
+  '  sign-job:' '    runs-on: ubuntu-latest' '    steps:' \
+  '      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3' \
+  '        with:' '          egress-policy: block' '          allowed-endpoints: >' \
+  '            api.github.com:443' \
   $'      - run: cosign\342\200\203sign image' >"${key_dir}/wf/${name}.yml"
 got_exit=0
 got_stderr="$(LC_ALL=en_US.UTF-8 WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" \
   WORKFLOW_FILE_FILTER="${name}.yml" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
-want="${key_dir}/wf/${name}.yml: job '${name}' runs 'cosign sign' with an incomplete sigstore host set; signing requires fulcio.sigstore.dev, rekor.sigstore.dev, tuf-repo-cdn.sigstore.dev, and timestamp.sigstore.dev (cosign 3.x requests an RFC3161 timestamp when producing a bundle)"$'\n1 egress-allowlist violation(s)'
+want="${key_dir}/wf/${name}.yml: job 'sign-job' runs 'cosign sign' with an incomplete sigstore host set; signing requires fulcio.sigstore.dev, rekor.sigstore.dev, tuf-repo-cdn.sigstore.dev, and timestamp.sigstore.dev (cosign 3.x requests an RFC3161 timestamp when producing a bundle)"$'\n1 egress-allowlist violation(s)'
 if [[ ${got_exit} != 1 || ${got_stderr} != "${want}" ]]; then
   printf 'FAIL %s: exit %s (want 1)\n  stderr: %s\n  want:   %s\n' "${name}" "${got_exit}" "${got_stderr}" "${want}" >&2
   exit 1
