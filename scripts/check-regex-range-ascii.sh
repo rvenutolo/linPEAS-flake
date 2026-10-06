@@ -11,9 +11,14 @@
 # difference is invisible to CI.
 #
 # A test is matched under a C locale when it follows a
-# `local LC_ALL=C` or `local LC_ALL=C.UTF-8` in its own function
-# (`ascii_match` in `scripts/lib/ascii-match.sh` is one), or follows a
-# top-level `export LC_ALL=C`; the value is one unquoted word. Otherwise the class is spelled out
+# `local LC_ALL=C` or `local LC_ALL=C.UTF-8` that is a direct statement
+# of its own function (`ascii_match` in `scripts/lib/ascii-match.sh` is
+# one), or follows a top-level `export LC_ALL=C`; the value is one
+# unquoted word. A later assignment, `declare`, `local`, `export` or
+# `unset` of `LC_ALL` that is not itself C, in the same function or
+# outside any function, ends that; `read` and `printf -v` are not
+# read. A declaration inside a subshell, a command substitution or a
+# conditional does not count. Otherwise the class is spelled out
 # (`[0123456789]`), or the text is matched through `ascii_match`.
 #
 # The `=~` tests are read from the `shfmt --tojson` parse tree, and the
@@ -73,19 +78,39 @@ function records_of() {
       | .Name.Value? == "LC_ALL" and ($p | length) == 1
         and ($p[0].Value? == "C" or $p[0].Value? == "C.UTF-8");
     def assigns: (.Args[]? | select(.Name? != null)), (.Assigns[]?);
+    def lc_decls: select(.Type? == "DeclClause")
+      | select([assigns | select(.Name.Value? == "LC_ALL")] | length > 0);
+    [ .. | objects | select(.Type? == "FuncDecl") | [.Pos.Offset, .End.Offset] ] as $funcs
+    | def innermost($x): [ $funcs[] | select(.[0] <= $x and $x < .[1]) ]
+        | if length == 0 then [null, null] else max_by(.[0]) end;
+    # Every write to LC_ALL that is not a lone C or C.UTF-8 word:
+    # [offset, enclosing function start, end], null outside a function.
+    [ ( .. | objects | lc_decls
+        | select([assigns | select(c_locale)] | length == 0)
+        | .Pos.Offset as $o | [$o] + innermost($o) ),
+      ( .. | objects | select(.Type? == "CallExpr" and ((.Args // []) | length) == 0)
+        | select([.Assigns[]? | select(.Name.Value? == "LC_ALL")] | length > 0)
+        | select([.Assigns[] | select(c_locale)] | length == 0)
+        | .Pos.Offset as $o | [$o] + innermost($o) ),
+      ( .. | objects | select(.Type? == "CallExpr" and .Args[0]?.Parts[0]?.Value? == "unset")
+        | .Pos.Offset as $o | [$o] + innermost($o) ) ] as $cancels
+    | def cancelled($s; $at): any($cancels[];
+        .[0] > $s and .[0] < $at and (.[1] == null or (.[1] <= $at and $at < .[2])));
+    # A C locale set by a statement of its own scope: a top-level export,
+    # or a local that is a direct statement of its function body.
     [ .Stmts[]?.Cmd | select(.Type? == "DeclClause" and .Variant.Value? == "export")
         | select([assigns | select(c_locale)] | length > 0) | .Pos.Offset ] as $file_safe
-    | [ .. | objects | select(.Type? == "FuncDecl")
-        | [ .Body | .. | objects
-            | select(.Type? == "DeclClause" and .Variant.Value? == "local")
-            | select([assigns | select(c_locale)] | length > 0) | .Pos.Offset ] as $locals
-        | select($locals | length > 0)
-        | [.Pos.Offset, .End.Offset, ($locals | min)] ] as $safe_spans
+    | [ .. | objects | select(.Type? == "FuncDecl") | . as $f
+        | .Body.Cmd.Stmts[]?.Cmd
+        | select(.Type? == "DeclClause" and .Variant.Value? == "local")
+        | select([assigns | select(c_locale)] | length > 0)
+        | [$f.Pos.Offset, $f.End.Offset, .Pos.Offset] ] as $safe_spans
     | ( .. | objects | select(.Type? == "BinaryTest")
         | .Pos.Offset as $at
         | [ "T", .Pos.Line, .X.End.Offset, .Y.Pos.Offset, .Y.End.Offset,
-            (if any($file_safe[]; . < $at)
-                or any($safe_spans[]; .[0] <= $at and $at < .[1] and .[2] < $at)
+            (if any($file_safe[]; . < $at and (cancelled(.; $at) | not))
+                or any($safe_spans[]; .[0] <= $at and $at < .[1] and .[2] < $at
+                  and (cancelled(.[2]; $at) | not))
               then 1 else 0 end) ] ),
       ( .. | objects | select(.Type? == "DeclClause" or .Type? == "CallExpr")
         | assigns | select(.Value? != null and .Value.Pos? != null)
