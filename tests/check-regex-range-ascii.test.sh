@@ -217,6 +217,34 @@ DIR/scripts/a.sh:6: regex range e-j follows the locale$(footer 5)"
 tests/t.test.sh:2: regex range h-k follows the locale$(footer 2)"
   USE_DEFAULT_DIRS=0
 
+  # A regex that a for-loop variable holds is read through its items.
+  put for-loop-item scripts/a.sh '#!/usr/bin/env bash' 'for re in "[0-9]+" x; do' '  [[ $1 =~ $re ]]' 'done'
+  run_case for-loop-item 1 '' "DIR/scripts/a.sh:3: regex range 0-9 (through re) follows the locale$(footer 1)"
+  put for-loop-item-spelled scripts/a.sh '#!/usr/bin/env bash' 'for re in "[0123456789]+" x; do' '  [[ $1 =~ $re ]]' '  [[ $2 =~ $re ]]' 'done'
+  run_case for-loop-item-spelled 0 'regex-range-ascii: ok — scanned 1 file(s), 2 =~ test(s), 2 with a regex in a variable, 0 under a C locale' ''
+
+  # A C locale covers only the tests that follow it, in the scope it was
+  # set in, and only as one unquoted word.
+  put export-after-test scripts/a.sh '#!/usr/bin/env bash' '[[ $1 =~ [0-9] ]]' 'export LC_ALL=C'
+  run_case export-after-test 1 '' "DIR/scripts/a.sh:2: regex range 0-9 follows the locale$(footer 1)"
+  put export-in-subshell scripts/a.sh '#!/usr/bin/env bash' 'f() { ( export LC_ALL=C; true ); }' '[[ $1 =~ [0-9] ]]'
+  run_case export-in-subshell 1 '' "DIR/scripts/a.sh:3: regex range 0-9 follows the locale$(footer 1)"
+  put local-after-test scripts/a.sh '#!/usr/bin/env bash' 'f() { [[ $1 =~ [0-9] ]]; local LC_ALL=C; }'
+  run_case local-after-test 1 '' "DIR/scripts/a.sh:2: regex range 0-9 follows the locale$(footer 1)"
+  put local-suffixed-value scripts/a.sh '#!/usr/bin/env bash' 'f() { local LC_ALL=C${x}; [[ $1 =~ [0-9] ]]; }'
+  run_case local-suffixed-value 1 '' "DIR/scripts/a.sh:2: regex range 0-9 follows the locale$(footer 1)"
+  put local-scope-ends scripts/a.sh '#!/usr/bin/env bash' 'f() { local LC_ALL=C; :; }' '[[ $1 =~ [0-9] ]]'
+  run_case local-scope-ends 1 '' "DIR/scripts/a.sh:3: regex range 0-9 follows the locale$(footer 1)"
+  put local-twice scripts/a.sh '#!/usr/bin/env bash' 'f() { local LC_ALL=C; [[ $1 =~ [0-9] ]]; local LC_ALL=C.UTF-8; [[ $2 =~ [0-9] ]]; [[ $3 =~ [0-9] ]]; [[ $4 =~ [0-9] ]]; [[ $5 =~ [0-9] ]]; }'
+  run_case local-twice 0 'regex-range-ascii: ok — scanned 1 file(s), 5 =~ test(s), 0 with a regex in a variable, 5 under a C locale' ''
+  put for-loop-last-item scripts/a.sh '#!/usr/bin/env bash' 'for re in x "[0-9]+"; do' '  [[ $1 =~ $re ]]' 'done'
+  run_case for-loop-last-item 1 '' "DIR/scripts/a.sh:3: regex range 0-9 (through re) follows the locale$(footer 1)"
+
+  put export-before-test scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [a-f] ]]' '[[ $3 =~ [A-Z] ]]' '[[ $4 =~ [a-z] ]]'
+  run_case export-before-test 0 'regex-range-ascii: ok — scanned 1 file(s), 4 =~ test(s), 0 with a regex in a variable, 4 under a C locale' ''
+  put local-before-test scripts/a.sh '#!/usr/bin/env bash' 'f() { local LC_ALL=C; [[ $1 =~ [0-9] ]]; }'
+  run_case local-before-test 0 'regex-range-ascii: ok — scanned 1 file(s), 1 =~ test(s), 0 with a regex in a variable, 1 under a C locale' ''
+
   # An absolute bash and a PATH holding no shfmt: the script is reached,
   # and its own guard is what fires.
   put no-shfmt scripts/a.sh '#!/usr/bin/env bash' '[[ $1 =~ [0-9] ]]'
