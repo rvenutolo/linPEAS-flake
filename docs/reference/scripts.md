@@ -1435,8 +1435,11 @@ is not parsed. A regex held in a variable is
 read through the assignments to that variable in the same file,
 following variables they name, three levels deep. Not read: a regex
 that reaches the test as a function argument, from a function's output,
-or from a sourced file; a regex inside `eval` or `bash -c` text; and
-`grep`, `sed`, `awk`, `jq` and `yq` patterns.
+from an array element, or from a sourced file; a regex inside `eval`
+or `bash -c` text; and `grep`, `sed`, `awk`, `jq` and `yq` patterns.
+A quoted operand (`=~ "[0-9]"`) is a literal match, but is read like
+an unquoted one and reported; so is a function whose `local LC_ALL`
+value is quoted. Unquote it or spell the class out.
 
 Honors SCRIPTS_DIR_OVERRIDE (default: scripts) and TESTS_DIR_OVERRIDE
 (default: tests), and LINT_ALLOW_EMPTY_SCAN=1 for fixtures.
