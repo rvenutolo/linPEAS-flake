@@ -1422,18 +1422,18 @@ runner's `C.UTF-8` matches ASCII only. A validator written with a range
 therefore passes on a developer's machine a value CI refuses, and the
 difference is invisible to CI.
 
-A test is matched under a C locale when it sits in a function that
-declares `local LC_ALL=C` or `local LC_ALL=C.UTF-8` (`ascii_match` in
-`scripts/lib/ascii-match.sh` is one), or in a script that runs
-`export LC_ALL=C`. Otherwise the class is spelled out
+A test is matched under a C locale when it follows a
+`local LC_ALL=C` or `local LC_ALL=C.UTF-8` in its own function
+(`ascii_match` in `scripts/lib/ascii-match.sh` is one), or follows a
+top-level `export LC_ALL=C`; the value is one unquoted word. Otherwise the class is spelled out
 (`[0123456789]`), or the text is matched through `ascii_match`.
 
 The `=~` tests are read from the `shfmt --tojson` parse tree, and the
 operator from the source text between the two operands, since shfmt
 releases encode the operator differently; a file holding no `=~` text
 is not parsed. A regex held in a variable is
-read through the assignments to that variable in the same file,
-following variables they name, three levels deep. Not read: a regex
+read through the assignments to that variable and the items of a `for`
+loop over it in the same file, following variables they name, three levels deep. Not read: a regex
 that reaches the test as a function argument, from a function's output,
 from an array element, or from a sourced file; a regex inside `eval`
 or `bash -c` text; and `grep`, `sed`, `awk`, `jq` and `yq` patterns.

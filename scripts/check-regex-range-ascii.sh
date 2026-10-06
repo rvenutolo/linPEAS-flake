@@ -10,18 +10,18 @@
 # therefore passes on a developer's machine a value CI refuses, and the
 # difference is invisible to CI.
 #
-# A test is matched under a C locale when it sits in a function that
-# declares `local LC_ALL=C` or `local LC_ALL=C.UTF-8` (`ascii_match` in
-# `scripts/lib/ascii-match.sh` is one), or in a script that runs
-# `export LC_ALL=C`. Otherwise the class is spelled out
+# A test is matched under a C locale when it follows a
+# `local LC_ALL=C` or `local LC_ALL=C.UTF-8` in its own function
+# (`ascii_match` in `scripts/lib/ascii-match.sh` is one), or follows a
+# top-level `export LC_ALL=C`; the value is one unquoted word. Otherwise the class is spelled out
 # (`[0123456789]`), or the text is matched through `ascii_match`.
 #
 # The `=~` tests are read from the `shfmt --tojson` parse tree, and the
 # operator from the source text between the two operands, since shfmt
 # releases encode the operator differently; a file holding no `=~` text
 # is not parsed. A regex held in a variable is
-# read through the assignments to that variable in the same file,
-# following variables they name, three levels deep. Not read: a regex
+# read through the assignments to that variable and the items of a `for`
+# loop over it in the same file, following variables they name, three levels deep. Not read: a regex
 # that reaches the test as a function argument, from a function's output,
 # from an array element, or from a sourced file; a regex inside `eval`
 # or `bash -c` text; and `grep`, `sed`, `awk`, `jq` and `yq` patterns.
@@ -55,9 +55,10 @@ require_tool shfmt
 require_tool jq
 
 # @description Emit the parse-tree records of one file, tab-separated:
-# `T line x_end y_pos y_end safe` for each binary test (safe is 1 inside
-# a function declaring a C locale, or in a file exporting one), and
-# `A name value_pos value_end` for each assignment.
+# `T line x_end y_pos y_end safe` for each binary test (safe is 1 after
+# a `local LC_ALL=C` earlier in its function, or after a top-level
+# `export LC_ALL=C`), and `A name value_pos value_end` for each
+# assignment and each `for` loop item.
 # @arg $1 file path
 # @exitcode 2 shfmt cannot parse the file
 function records_of() {
@@ -68,24 +69,31 @@ function records_of() {
     exit 2
   fi
   jq -r '
-    def c_locale: (.Value.Parts[0].Value? // "") as $v
-      | .Name.Value? == "LC_ALL" and ($v == "C" or $v == "C.UTF-8");
+    def c_locale: (.Value.Parts // []) as $p
+      | .Name.Value? == "LC_ALL" and ($p | length) == 1
+        and ($p[0].Value? == "C" or $p[0].Value? == "C.UTF-8");
     def assigns: (.Args[]? | select(.Name? != null)), (.Assigns[]?);
-    ([ .. | objects | select(.Type? == "DeclClause" and .Variant.Value? == "export")
-        | assigns | select(c_locale) ] | length > 0) as $file_safe
+    [ .Stmts[]?.Cmd | select(.Type? == "DeclClause" and .Variant.Value? == "export")
+        | select([assigns | select(c_locale)] | length > 0) | .Pos.Offset ] as $file_safe
     | [ .. | objects | select(.Type? == "FuncDecl")
-        | select([ .Body | .. | objects
-                  | select(.Type? == "DeclClause" and .Variant.Value? == "local")
-                  | assigns | select(c_locale) ] | length > 0)
-        | [.Pos.Offset, .End.Offset] ] as $safe_spans
+        | [ .Body | .. | objects
+            | select(.Type? == "DeclClause" and .Variant.Value? == "local")
+            | select([assigns | select(c_locale)] | length > 0) | .Pos.Offset ] as $locals
+        | select($locals | length > 0)
+        | [.Pos.Offset, .End.Offset, ($locals | min)] ] as $safe_spans
     | ( .. | objects | select(.Type? == "BinaryTest")
         | .Pos.Offset as $at
         | [ "T", .Pos.Line, .X.End.Offset, .Y.Pos.Offset, .Y.End.Offset,
-            (if $file_safe or any($safe_spans[]; .[0] <= $at and $at < .[1])
+            (if any($file_safe[]; . < $at)
+                or any($safe_spans[]; .[0] <= $at and $at < .[1] and .[2] < $at)
               then 1 else 0 end) ] ),
       ( .. | objects | select(.Type? == "DeclClause" or .Type? == "CallExpr")
         | assigns | select(.Value? != null and .Value.Pos? != null)
-        | [ "A", .Name.Value, .Value.Pos.Offset, .Value.End.Offset ] )
+        | [ "A", .Name.Value, .Value.Pos.Offset, .Value.End.Offset ] ),
+      ( .. | objects | select(.Type? == "ForClause")
+        | .Loop | select(.Type? == "WordIter")
+        | .Name.Value as $n | .Items[]?
+        | [ "A", $n, .Pos.Offset, .End.Offset ] )
     | @tsv' <<<"${tree}"
 }
 
