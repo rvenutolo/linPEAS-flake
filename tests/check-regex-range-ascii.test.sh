@@ -274,6 +274,21 @@ tests/t.test.sh:2: regex range h-k follows the locale$(footer 2)"
   put c-write-elsewhere scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' '( export LC_ALL=C )' 'LC_ALL=C' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]' '[[ $10 =~ [0-9] ]]' '[[ $11 =~ [0-9] ]]' '[[ $12 =~ [0-9] ]]'
   run_case c-write-elsewhere 0 'regex-range-ascii: ok — scanned 1 file(s), 12 =~ test(s), 0 with a regex in a variable, 12 under a C locale' ''
 
+  # Only an unset of LC_ALL ends a C locale; a background export never
+  # starts one; the last word of a declaration is the one that counts.
+  put unset-other-variable scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'foo=1' 'unset foo' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]' '[[ $10 =~ [0-9] ]]' '[[ $11 =~ [0-9] ]]' '[[ $12 =~ [0-9] ]]' '[[ $13 =~ [0-9] ]]'
+  run_case unset-other-variable 0 'regex-range-ascii: ok — scanned 1 file(s), 13 =~ test(s), 0 with a regex in a variable, 13 under a C locale' ''
+  put export-in-background scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C &' '[[ $1 =~ [0-9] ]]'
+  run_case export-in-background 1 '' "DIR/scripts/a.sh:3: regex range 0-9 follows the locale$(footer 1)"
+  put local-in-background scripts/a.sh '#!/usr/bin/env bash' 'f() {' '  local LC_ALL=C &' '  [[ $1 =~ [0-9] ]]' '}'
+  run_case local-in-background 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put local-last-word-wins scripts/a.sh '#!/usr/bin/env bash' 'f() {' '  local LC_ALL=C LC_ALL=en_US.UTF-8' '  [[ $1 =~ [0-9] ]]' '}' ''
+  run_case local-last-word-wins 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put local-last-word-c scripts/a.sh '#!/usr/bin/env bash' 'f() {' '  local LC_ALL=en_US.UTF-8 LC_ALL=C' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]' '[[ $10 =~ [0-9] ]]' '[[ $11 =~ [0-9] ]]' '[[ $12 =~ [0-9] ]]' '[[ $13 =~ [0-9] ]]' '[[ $14 =~ [0-9] ]]' '}'
+  run_case local-last-word-c 0 'regex-range-ascii: ok — scanned 1 file(s), 14 =~ test(s), 0 with a regex in a variable, 14 under a C locale' ''
+  put export-c-utf8 scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C.UTF-8' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]' '[[ $10 =~ [0-9] ]]' '[[ $11 =~ [0-9] ]]' '[[ $12 =~ [0-9] ]]' '[[ $13 =~ [0-9] ]]' '[[ $14 =~ [0-9] ]]' '[[ $15 =~ [0-9] ]]'
+  run_case export-c-utf8 0 'regex-range-ascii: ok — scanned 1 file(s), 15 =~ test(s), 0 with a regex in a variable, 15 under a C locale' ''
+
   put export-before-test scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [a-f] ]]' '[[ $3 =~ [A-Z] ]]' '[[ $4 =~ [a-z] ]]'
   run_case export-before-test 0 'regex-range-ascii: ok — scanned 1 file(s), 4 =~ test(s), 0 with a regex in a variable, 4 under a C locale' ''
   put local-before-test scripts/a.sh '#!/usr/bin/env bash' 'f() { local LC_ALL=C; [[ $1 =~ [0-9] ]]; }'
