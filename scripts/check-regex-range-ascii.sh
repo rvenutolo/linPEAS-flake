@@ -13,12 +13,15 @@
 # A test is matched under a C locale when it follows a
 # `local LC_ALL=C` or `local LC_ALL=C.UTF-8` that is a direct statement
 # of its own function (`ascii_match` in `scripts/lib/ascii-match.sh` is
-# one), or follows a top-level `export LC_ALL=C`; the value is one
-# unquoted word. A later assignment, `declare`, `local`, `export` or
-# `unset` of `LC_ALL` that is not itself C, in the same function or
-# outside any function, ends that; `read` and `printf -v` are not
-# read. A declaration inside a subshell, a command substitution or a
-# conditional does not count. Otherwise the class is spelled out
+# one), or follows a top-level `export LC_ALL=C` or
+# `export LC_ALL=C.UTF-8`; the value is one unquoted word, the last
+# `LC_ALL` word on its line. A later assignment, `declare`, `local`,
+# `export` or `unset LC_ALL` that does not leave C, in the same function
+# or outside any function, ends that; `read` and `printf -v` are not
+# read, nor is the order in which functions are called. A declaration
+# inside a subshell, a command substitution, a conditional or a
+# background statement does not count. Otherwise the class is spelled
+# out
 # (`[0123456789]`), or the text is matched through `ascii_match`.
 #
 # The `=~` tests are read from the `shfmt --tojson` parse tree, and the
@@ -62,8 +65,8 @@ require_tool jq
 # @description Emit the parse-tree records of one file, tab-separated:
 # `T line x_end y_pos y_end safe` for each binary test (safe is 1 after
 # a `local LC_ALL=C` earlier in its function, or after a top-level
-# `export LC_ALL=C`), and `A name value_pos value_end` for each
-# assignment and each `for` loop item.
+# `export LC_ALL=C` or `=C.UTF-8`), and `A name value_pos value_end` for
+# each assignment and each `for` loop item.
 # @arg $1 file path
 # @exitcode 2 shfmt cannot parse the file
 function records_of() {
@@ -78,32 +81,33 @@ function records_of() {
       | .Name.Value? == "LC_ALL" and ($p | length) == 1
         and ($p[0].Value? == "C" or $p[0].Value? == "C.UTF-8");
     def assigns: (.Args[]? | select(.Name? != null)), (.Assigns[]?);
-    def lc_decls: select(.Type? == "DeclClause")
-      | select([assigns | select(.Name.Value? == "LC_ALL")] | length > 0);
+    def lc_writes: [assigns | select(.Name.Value? == "LC_ALL")];
+    # The last word wins: `local LC_ALL=C LC_ALL=x` leaves x.
+    def last_c: (lc_writes | last // {}) | c_locale;
     [ .. | objects | select(.Type? == "FuncDecl") | [.Pos.Offset, .End.Offset] ] as $funcs
     | def innermost($x): [ $funcs[] | select(.[0] <= $x and $x < .[1]) ]
         | if length == 0 then [null, null] else max_by(.[0]) end;
     # Every write to LC_ALL that is not a lone C or C.UTF-8 word:
     # [offset, enclosing function start, end], null outside a function.
-    [ ( .. | objects | lc_decls
-        | select([assigns | select(c_locale)] | length == 0)
-        | .Pos.Offset as $o | [$o] + innermost($o) ),
-      ( .. | objects | select(.Type? == "CallExpr" and ((.Args // []) | length) == 0)
-        | select([.Assigns[]? | select(.Name.Value? == "LC_ALL")] | length > 0)
-        | select([.Assigns[] | select(c_locale)] | length == 0)
+    [ ( .. | objects
+        | select(.Type? == "DeclClause"
+            or (.Type? == "CallExpr" and ((.Args // []) | length) == 0))
+        | select((lc_writes | length) > 0 and (last_c | not))
         | .Pos.Offset as $o | [$o] + innermost($o) ),
       ( .. | objects | select(.Type? == "CallExpr" and .Args[0]?.Parts[0]?.Value? == "unset")
+        | select([.Args[1:][]? | .Parts[0]?.Value?] | any(. == "LC_ALL"))
         | .Pos.Offset as $o | [$o] + innermost($o) ) ] as $cancels
     | def cancelled($s; $at): any($cancels[];
         .[0] > $s and .[0] < $at and (.[1] == null or (.[1] <= $at and $at < .[2])));
     # A C locale set by a statement of its own scope: a top-level export,
     # or a local that is a direct statement of its function body.
-    [ .Stmts[]?.Cmd | select(.Type? == "DeclClause" and .Variant.Value? == "export")
-        | select([assigns | select(c_locale)] | length > 0) | .Pos.Offset ] as $file_safe
+    [ .Stmts[]? | select(.Background | not) | .Cmd
+        | select(.Type? == "DeclClause" and .Variant.Value? == "export")
+        | select(last_c) | .Pos.Offset ] as $file_safe
     | [ .. | objects | select(.Type? == "FuncDecl") | . as $f
-        | .Body.Cmd.Stmts[]?.Cmd
+        | .Body.Cmd.Stmts[]? | select(.Background | not) | .Cmd
         | select(.Type? == "DeclClause" and .Variant.Value? == "local")
-        | select([assigns | select(c_locale)] | length > 0)
+        | select(last_c)
         | [$f.Pos.Offset, $f.End.Offset, .Pos.Offset] ] as $safe_spans
     | ( .. | objects | select(.Type? == "BinaryTest")
         | .Pos.Offset as $at

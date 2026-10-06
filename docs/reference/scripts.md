@@ -1425,12 +1425,15 @@ difference is invisible to CI.
 A test is matched under a C locale when it follows a
 `local LC_ALL=C` or `local LC_ALL=C.UTF-8` that is a direct statement
 of its own function (`ascii_match` in `scripts/lib/ascii-match.sh` is
-one), or follows a top-level `export LC_ALL=C`; the value is one
-unquoted word. A later assignment, `declare`, `local`, `export` or
-`unset` of `LC_ALL` that is not itself C, in the same function or
-outside any function, ends that; `read` and `printf -v` are not
-read. A declaration inside a subshell, a command substitution or a
-conditional does not count. Otherwise the class is spelled out
+one), or follows a top-level `export LC_ALL=C` or
+`export LC_ALL=C.UTF-8`; the value is one unquoted word, the last
+`LC_ALL` word on its line. A later assignment, `declare`, `local`,
+`export` or `unset LC_ALL` that does not leave C, in the same function
+or outside any function, ends that; `read` and `printf -v` are not
+read, nor is the order in which functions are called. A declaration
+inside a subshell, a command substitution, a conditional or a
+background statement does not count. Otherwise the class is spelled
+out
 (`[0123456789]`), or the text is matched through `ascii_match`.
 
 The `=~` tests are read from the `shfmt --tojson` parse tree, and the
