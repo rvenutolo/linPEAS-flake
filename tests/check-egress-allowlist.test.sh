@@ -236,9 +236,8 @@ printf 'OK   job-key-in-arithmetic\n'
 # moves a job's range instead. Each such key is a counted finding naming
 # the key, with nothing run and nothing else read from the file: the
 # build job downloads a release asset its allowlist omits, a violation
-# only a further read would report. An empty key's own job is not read
-# (the job list skips an empty name, as on main), and the same violation
-# shows the build job still is.
+# only a further read would report. An empty key is the same kind of
+# finding: its own job could not be read.
 # @arg $1 scenario name, which also names its marker file  @arg $2 the
 # job key, as a YAML double-quoted body  @arg $3 the expected finding
 # line, after the file name; it and the tally are the whole of stderr
@@ -292,7 +291,7 @@ expect_job_key job-key-digits-line-break-forges-line '7\n5' "job key \"7\\n5\" $
 expect_job_key job-key-leading-line-break '\nx' "job key \"\\nx\" ${odd_key}"
 expect_job_key job-key-forges-whole-rows 'b\t999\nc' "job key \"b\\t999\\nc\" ${odd_key}"
 readonly release_finding="job 'build' downloads a GitHub release asset but does not allowlist release-assets.githubusercontent.com (the github.com redirect is unconditional)"
-expect_job_key job-key-empty '' "${release_finding}"
+expect_job_key job-key-empty '' "a job key is empty or null, so that job's allowlist cannot be read"
 # A key is tested whatever its tag: an integer key is read, and a tag
 # on a key holding a tab does not hide it.
 expect_job_key job-key-integer 5 "${release_finding}" raw
@@ -410,47 +409,6 @@ expect_jobs_block job-key-alias $'  *ka :\n'"${CAFE_STEPS}" \
   "@F@: job '*ka' allowlists cafe.github.com, ${CAFE_FINDING}"$'\n1 egress-allowlist violation(s)'
 expect_jobs_block job-key-twice $'  a:\n'"${CLEAN_STEPS}"$'  a:\n'"${CAFE_STEPS}" \
   "@F@: job 'a' allowlists cafe.github.com, ${CAFE_FINDING}"$'\n'"@F@: job 'a' allowlists cafe.github.com, ${CAFE_FINDING}"$'\n2 egress-allowlist violation(s)'
-
-# A key that prints as an empty name still opens a block, so it ends the
-# job before it. Here the job before it carries a nix host but runs no
-# nix, and the empty-named job's block holds an exempt marker: a range
-# that ran on past the empty-named key read that marker as the earlier
-# job's and passed it.
-# @arg $1 scenario name  @arg $2 the key, written as given
-function expect_empty_name_ends_range() {
-  local -r name="$1" key="$2"
-  local got_exit=0 got_stderr want
-  cat >"${key_dir}/wf/${name}.yml" <<EOF
-name: ${name}
-on:
-  workflow_dispatch: {}
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: block
-          allowed-endpoints: >
-            cache.nixos.org:443
-      - run: echo PAYLOAD_RAN
-  ${key}:
-    # egress-nix-exempt: belongs to the job with the empty name
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo PAYLOAD_RAN
-EOF
-  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER="${name}.yml" \
-    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
-  want="${key_dir}/wf/${name}.yml: job 'build' allowlists cache.nixos.org/releases.nixos.org but reaches no nix tooling — neither ./.github/actions/setup-nix nor a run: nix invocation is detected, and no '# egress-nix-exempt: <reason>' marker justifies it"$'\n1 egress-allowlist violation(s)'
-  if [[ ${got_exit} != 1 || ${got_stderr} != "${want}" ]]; then
-    printf 'FAIL %s: exit %s\n  stderr: %s\n' "${name}" "${got_exit}" "${got_stderr}" >&2
-    exit 1
-  fi
-  printf 'OK   %s\n' "${name}"
-}
-expect_empty_name_ends_range job-key-null-ends-range null
-expect_empty_name_ends_range job-key-empty-ends-range '""'
 
 # The range itself, for a job that is not the last: a marker inside the
 # first job's block exempts it.

@@ -199,6 +199,9 @@
 #      would choose its own rows and line numbers, and the range is
 #      computed in bash arithmetic, which runs a command placed in an
 #      array subscript.
+#      A job key that is empty or null is a finding too: the job list
+#      prints it as an empty name and the main loop skips empty names, so
+#      that job's allowlist would never be read.
 #
 #      Breadth is asserted the same way as assertion 6: the run reports
 #      how many jobs carry either host, and finding none on an
@@ -401,7 +404,19 @@ for f in "${selected_files[@]}"; do
     fail "${f}: could not evaluate workflow with yq (malformed?)"
     continue
   fi
-  [[ -n ${job_rows} ]] || continue
+  # A count, not the job list's text: an empty or null key prints as an
+  # empty line, which command substitution strips, so a file whose only
+  # job has such a key would read as no jobs at all. The count is held to
+  # ASCII digits before the arithmetic below reads it.
+  if ! job_count="$(yq eval '.jobs | keys | length' "${f}")"; then
+    fail "${f}: could not evaluate workflow with yq (malformed?)"
+    continue
+  fi
+  if [[ ! ${job_count} =~ ^[0123456789]{1,9}$ ]]; then
+    fail "${f}: the job count is not a number: ${job_count@Q}"
+    continue
+  fi
+  ((job_count > 0)) || continue
 
   # Assertion 7 prep: each job's own line range, for the marker raw-text
   # scan below. A `# egress-nix-exempt:` marker is a YAML comment, gone
@@ -419,11 +434,10 @@ for f in "${selected_files[@]}"; do
   # such a key is a finding naming it, read no further. The line field
   # is then held to ASCII digits before it is stored, since the range
   # arithmetic below would evaluate any other text (an array subscript
-  # in it runs a command). Every row's start ends the job before it,
-  # named or not: a key that prints as an empty name (empty or null)
-  # still opens a block, and skipping its row would stretch the previous
-  # job's range over a marker in that block. Such a job gets no range of
-  # its own, since an associative array cannot hold an empty key. The
+  # in it runs a command). A key that prints as an empty name (empty or
+  # null) is a finding and the file is read no further: the job list
+  # loop skips an empty name, so that job's allowlist would never be
+  # read, and an associative array cannot hold an empty key. The
   # ranges are computed from indexed arrays, so no key text sits inside
   # the arithmetic: bash 5.1 expands a command substitution held in an
   # associative subscript there.
@@ -443,6 +457,7 @@ for f in "${selected_files[@]}"; do
     continue
   fi
   bad_row=0
+  empty_key=0
   while IFS= read -r jline_row; do
     jline_name="${jline_row%%$'\t'*}"
     jline_num="${jline_row#*$'\t'}"
@@ -452,11 +467,21 @@ for f in "${selected_files[@]}"; do
     fi
     row_names+=("${jline_name}")
     row_starts+=("${jline_num}")
+    # An empty or null key prints as an empty name, which the job list
+    # loop below skips, so that job's allowlist would never be read.
+    if [[ -z ${jline_name} ]]; then
+      empty_key=1
+      break
+    fi
   done <<<"${job_line_rows}"
   # A flag, not a test of the row's text, which can be empty.
   if ((bad_row)); then
     # Quoted with @Q so a tab or a line break shows as an escape.
     fail "${f}: a job line row is not a key and a line number: ${jline_row@Q}"
+    continue
+  fi
+  if ((empty_key)); then
+    fail "${f}: a job key is empty or null, so that job's allowlist cannot be read"
     continue
   fi
   file_lines="$(wc -l <"${f}")"

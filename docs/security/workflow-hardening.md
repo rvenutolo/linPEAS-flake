@@ -760,6 +760,8 @@ Detection deliberately does not follow callees: a job reaching nix indirectly th
 
 The marker is a YAML comment, gone once yq has parsed the document, so it is found by a raw-text scan bounded to the job's own line range — from its key's source line (read via yq's `line` builtin) to one line before the next job's key line, or to the end of the file for the last job in the document — rather than by any yq query.
 
+A job key that is empty or null is a finding, and that file is read no further: the job list prints such a key as an empty name and the main loop skips empty names, so that job's allowlist would never be read.
+
 Breadth is asserted the same way the notify-composite rule asserts it: the run reports how many jobs carry either host, and finding none on an unfiltered scan is a could-not-run, not a clean tree. `WORKFLOW_FILE_FILTER` and `LINT_ALLOW_EMPTY_SCAN=1` suppress that guard the same way they do for the notify rule.
 
 Enforced by `scripts/check-egress-allowlist.sh` via the `lint-workflow-security` CI job (member check `egress-allowlist`) and a pre-commit hook — the same enforcement path as the tool-inventory rules in [trust-model.md](trust-model.md).
