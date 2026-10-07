@@ -386,8 +386,7 @@ fi
 printf 'OK   job-key-wildcard\n'
 
 # A job keyed by an alias is looked up by the key the job list prints,
-# and a key written twice reads its last job, once for each time the job
-# list holds it.
+# and a key written twice is a finding naming it.
 # @arg $1 scenario name  @arg $2 the jobs: block  @arg $3 expected stderr
 function expect_jobs_block() {
   local -r name="$1" jobs="$2" want="$3"
@@ -408,7 +407,7 @@ readonly CAFE_FINDING="which no tool in this repo reaches"
 expect_jobs_block job-key-alias $'  *ka :\n'"${CAFE_STEPS}" \
   "@F@: job '*ka' allowlists cafe.github.com, ${CAFE_FINDING}"$'\n1 egress-allowlist violation(s)'
 expect_jobs_block job-key-twice $'  a:\n'"${CLEAN_STEPS}"$'  a:\n'"${CAFE_STEPS}" \
-  "@F@: job 'a' allowlists cafe.github.com, ${CAFE_FINDING}"$'\n'"@F@: job 'a' allowlists cafe.github.com, ${CAFE_FINDING}"$'\n2 egress-allowlist violation(s)'
+  "@F@: job key 'a' is written more than once, so which job is read is ambiguous"$'\n1 egress-allowlist violation(s)'
 
 # The range itself, for a job that is not the last: a marker inside the
 # first job's block exempts it.

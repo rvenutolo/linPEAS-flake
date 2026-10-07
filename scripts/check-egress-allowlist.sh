@@ -202,6 +202,9 @@
 #      A job key that is empty or null is a finding too: the job list
 #      prints it as an empty name and the main loop skips empty names, so
 #      that job's allowlist would never be read.
+#      Two job keys that print as the same text (a literal `build:` twice,
+#      or `1` beside `"1"`) are a finding too, naming the key: they share
+#      one lookup and one line range, so one job would shadow the other.
 #
 #      Breadth is asserted the same way as assertion 6: the run reports
 #      how many jobs carry either host, and finding none on an
@@ -303,9 +306,9 @@ readonly NIX_EXEMPT_MARKER='egress-nix-exempt:'
 # `yq` as data, through `strenv`, and is compared by its base64 text:
 # spliced into the expression, a key holding a quote would be read as
 # `yq` code, and `yq` reads `*` and `?` in an index or an `==` comparison
-# as wildcards, which base64 text never holds. Of keys written twice the
-# last is read, as `yq`'s own lookup reads it. `jobs:` is not handed to
-# `explode`: that would turn a key written as an alias into its anchor's
+# as wildcards, which base64 text never holds. A key written twice is a
+# finding before any lookup, so the lookup never meets one. `jobs:` is
+# not handed to `explode`: that would turn a key written as an alias into its anchor's
 # text, which the job list (printing the alias) never names, and would
 # expand every alias in `jobs:` on each lookup. The `.steps[]` reads after
 # the lookup follow aliases and merge keys inside the job.
@@ -482,6 +485,18 @@ for f in "${selected_files[@]}"; do
   fi
   if ((empty_key)); then
     fail "${f}: a job key is empty or null, so that job's allowlist cannot be read"
+    continue
+  fi
+  # Keys that print as the same text (a literal `build:` twice, or `1`
+  # beside `"1"`) share one lookup and one range entry, so one job would
+  # shadow the other. Compared as text under LC_ALL=C: no key holds a
+  # tab or a line break at this point.
+  if ! dup_keys="$(printf '%s\n' "${row_names[@]}" | LC_ALL=C sort | LC_ALL=C uniq --repeated)"; then
+    fail "${f}: could not compare job keys (sort or uniq failed)"
+    continue
+  fi
+  if [[ -n ${dup_keys} ]]; then
+    fail "${f}: job key '${dup_keys%%$'\n'*}' is written more than once, so which job is read is ambiguous"
     continue
   fi
   file_lines="$(wc -l <"${f}")"
