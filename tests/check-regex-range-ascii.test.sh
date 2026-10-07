@@ -338,6 +338,31 @@ tests/t.test.sh:2: regex range h-k follows the locale$(footer 2)"
   put builtin-export-last-word-c scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'builtin export LC_ALL=en_US.UTF-8 LC_ALL=C' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]' '[[ $10 =~ [0-9] ]]' '[[ $11 =~ [0-9] ]]' '[[ $12 =~ [0-9] ]]' '[[ $13 =~ [0-9] ]]' '[[ $14 =~ [0-9] ]]' '[[ $15 =~ [0-9] ]]' '[[ $16 =~ [0-9] ]]' '[[ $17 =~ [0-9] ]]'
   run_case builtin-export-last-word-c 0 'regex-range-ascii: ok — scanned 1 file(s), 17 =~ test(s), 0 with a regex in a variable, 17 under a C locale' ''
 
+  put operator-split-by-continuation scripts/a.sh '#!/usr/bin/env bash' '[[ $1 =\' '~ [0-9] ]]'
+  run_case operator-split-by-continuation 1 '' "DIR/scripts/a.sh:2: regex range 0-9 follows the locale$(footer 1)"
+  put c-style-for-writes-lc-all scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'for ((LC_ALL=0; LC_ALL<1; LC_ALL++)); do :; done' '[[ $1 =~ [0-9] ]]'
+  run_case c-style-for-writes-lc-all 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put export-quoted-assignment scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'export "LC_ALL=en_US.UTF-8"' '[[ $1 =~ [0-9] ]]'
+  run_case export-quoted-assignment 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put export-quoted-assignment-last-word scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'export LC_ALL=C "LC_ALL=en_US.UTF-8"' '[[ $1 =~ [0-9] ]]'
+  run_case export-quoted-assignment-last-word 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put wait-p-target scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'wait -p LC_ALL' '[[ $1 =~ [0-9] ]]'
+  run_case wait-p-target 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put exec-fd-variable scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'exec {LC_ALL}>/dev/null' '[[ $1 =~ [0-9] ]]'
+  run_case exec-fd-variable 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put printf-v-element scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' "printf -v 'LC_ALL[0]' x" '[[ $1 =~ [0-9] ]]'
+  run_case printf-v-element 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put unset-escaped-name scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'unset LC\_ALL' '[[ $1 =~ [0-9] ]]'
+  run_case unset-escaped-name 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put element-assignment scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'LC_ALL[0]=x' '[[ $1 =~ [0-9] ]]'
+  run_case element-assignment 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put element-assignment-c scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'LC_ALL[0]=C' '[[ $1 =~ [0-9] ]]'
+  run_case element-assignment-c 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put export-element-c scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL[0]=C' '[[ $1 =~ [0-9] ]]'
+  run_case export-element-c 1 '' "DIR/scripts/a.sh:3: regex range 0-9 follows the locale$(footer 1)"
+  put quoted-whole-assignment-c scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'export "LC_ALL=C"' 'exec {fd}>/dev/null' 'wait -n' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]' '[[ $10 =~ [0-9] ]]' '[[ $11 =~ [0-9] ]]' '[[ $12 =~ [0-9] ]]' '[[ $13 =~ [0-9] ]]' '[[ $14 =~ [0-9] ]]' '[[ $15 =~ [0-9] ]]' '[[ $16 =~ [0-9] ]]' '[[ $17 =~ [0-9] ]]' '[[ $18 =~ [0-9] ]]'
+  run_case quoted-whole-assignment-c 0 'regex-range-ascii: ok — scanned 1 file(s), 18 =~ test(s), 0 with a regex in a variable, 18 under a C locale' ''
+
   put export-before-test scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [a-f] ]]' '[[ $3 =~ [A-Z] ]]' '[[ $4 =~ [a-z] ]]'
   run_case export-before-test 0 'regex-range-ascii: ok — scanned 1 file(s), 4 =~ test(s), 0 with a regex in a variable, 4 under a C locale' ''
   put local-before-test scripts/a.sh '#!/usr/bin/env bash' 'f() { local LC_ALL=C; [[ $1 =~ [0-9] ]]; }'
