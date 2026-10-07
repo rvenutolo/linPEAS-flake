@@ -1428,20 +1428,25 @@ of its own function (`ascii_match` in `scripts/lib/ascii-match.sh` is
 one), or follows a top-level `export LC_ALL=C` or
 `export LC_ALL=C.UTF-8`; the value is one unquoted word, the last
 `LC_ALL` word on its line. A later assignment, `declare`, `local` or
-`export` (also behind `builtin` or `command`) that does not leave C,
-or a later `unset LC_ALL`, `read`, `mapfile`, `getopts`, `printf -v`,
-arithmetic assignment or `for LC_ALL in`, in the same function or
-outside any function, ends that. A write through `eval` or a nameref
-is not read, nor is the order in which functions are called. A
-declaration inside a subshell, a command substitution, a conditional
-or a background statement does not count. A backslash-newline inside
-an operator or a regex is joined before it is read. Otherwise the
+`export` (also behind `builtin` or `command`, and with the whole
+assignment quoted) that sets anything but one lone `C` or `C.UTF-8`
+word, or a later `unset LC_ALL`, `wait -p LC_ALL`, `read`, `mapfile`,
+`getopts`, `printf -v`, arithmetic assignment (also in a C-style `for`),
+`exec {LC_ALL}>` or `for LC_ALL in`, in the same function or outside
+any function, ends that; an element name (`LC_ALL[0]`) counts as
+`LC_ALL`. A write through `eval` or a nameref is not read, nor is the
+order in which functions are called. A declaration inside a subshell, a
+command substitution, a conditional or a background statement does not
+start a C locale; an `unset` or write in one still ends it, as do
+`unset -f`, `unset -n` and `command -v unset LC_ALL`, so a range after
+them is reported although the shell would match it as C. A backslash-newline inside an operator
+or a regex is joined before it is read. Otherwise the
 class is spelled out (`[0123456789]`), or the text is matched through `ascii_match`.
 
 The `=~` tests are read from the `shfmt --tojson` parse tree, and the
 operator from the source text between the two operands, since shfmt
-releases encode the operator differently; a file holding no `=~` text
-is not parsed. A regex held in a variable is
+releases encode the operator differently; a file holding no `~` is not
+parsed. A regex held in a variable is
 read through the assignments to that variable and the items of a `for`
 loop over it in the same file, following variables they name, three levels deep. Not read: a regex
 that reaches the test as a function argument, from a function's output,

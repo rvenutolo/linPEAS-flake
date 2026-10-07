@@ -16,20 +16,25 @@
 # one), or follows a top-level `export LC_ALL=C` or
 # `export LC_ALL=C.UTF-8`; the value is one unquoted word, the last
 # `LC_ALL` word on its line. A later assignment, `declare`, `local` or
-# `export` (also behind `builtin` or `command`) that does not leave C,
-# or a later `unset LC_ALL`, `read`, `mapfile`, `getopts`, `printf -v`,
-# arithmetic assignment or `for LC_ALL in`, in the same function or
-# outside any function, ends that. A write through `eval` or a nameref
-# is not read, nor is the order in which functions are called. A
-# declaration inside a subshell, a command substitution, a conditional
-# or a background statement does not count. A backslash-newline inside
-# an operator or a regex is joined before it is read. Otherwise the
+# `export` (also behind `builtin` or `command`, and with the whole
+# assignment quoted) that sets anything but one lone `C` or `C.UTF-8`
+# word, or a later `unset LC_ALL`, `wait -p LC_ALL`, `read`, `mapfile`,
+# `getopts`, `printf -v`, arithmetic assignment (also in a C-style `for`),
+# `exec {LC_ALL}>` or `for LC_ALL in`, in the same function or outside
+# any function, ends that; an element name (`LC_ALL[0]`) counts as
+# `LC_ALL`. A write through `eval` or a nameref is not read, nor is the
+# order in which functions are called. A declaration inside a subshell, a
+# command substitution, a conditional or a background statement does not
+# start a C locale; an `unset` or write in one still ends it, as do
+# `unset -f`, `unset -n` and `command -v unset LC_ALL`, so a range after
+# them is reported although the shell would match it as C. A backslash-newline inside an operator
+# or a regex is joined before it is read. Otherwise the
 # class is spelled out (`[0123456789]`), or the text is matched through `ascii_match`.
 #
 # The `=~` tests are read from the `shfmt --tojson` parse tree, and the
 # operator from the source text between the two operands, since shfmt
-# releases encode the operator differently; a file holding no `=~` text
-# is not parsed. A regex held in a variable is
+# releases encode the operator differently; a file holding no `~` is not
+# parsed. A regex held in a variable is
 # read through the assignments to that variable and the items of a `for`
 # loop over it in the same file, following variables they name, three levels deep. Not read: a regex
 # that reaches the test as a function argument, from a function's output,
@@ -80,23 +85,29 @@ function records_of() {
   fi
   jq -r '
     def c_locale: (.Value.Parts // []) as $p
-      | .Name.Value? == "LC_ALL" and ($p | length) == 1
+      | .Name.Value? == "LC_ALL" and .Index? == null and ($p | length) == 1
         and ($p[0].Value? == "C" or $p[0].Value? == "C.UTF-8");
-    def assigns: (.Args[]? | select(.Name? != null)), (.Assigns[]?);
+    # A word as the shell reads it when it holds no expansion.
+    def wstr: [.Parts[]?
+        | if .Type? == "Lit" then (.Value | gsub("\\\\"; ""))
+          elif .Type? == "SglQuoted" then .Value
+          elif .Type? == "DblQuoted" then ([.Parts[]? | .Value? // ""] | join(""))
+          else "\u0000" end] | join("");
+    # `export "LC_ALL=x"` keeps the whole assignment in one word.
+    def naked: (.Args[]? | select(.Naked? == true) | .Value | wstr
+        | select(startswith("LC_ALL="))
+        | {Name: {Value: "LC_ALL"}, Value: {Parts: [{Value: .[7:]}]}});
+    def assigns: (.Args[]? | select(.Name? != null)), (.Assigns[]?), naked;
     def lc_writes: [assigns | select(.Name.Value? == "LC_ALL")];
     # The last word wins: `local LC_ALL=C LC_ALL=x` leaves x.
     def last_c: (lc_writes | last // {}) | c_locale;
-    # A word as the shell reads it when it holds no expansion.
-    def wstr: [.Parts[]?
-        | if (.Type? == "Lit" or .Type? == "SglQuoted") then .Value
-          elif .Type? == "DblQuoted" then ([.Parts[]? | .Value? // ""] | join(""))
-          else "\u0000" end] | join("");
     # Drop leading `builtin` and `command` words and their options;
     # [how many were dropped, the words left].
     def strip($n): if (.[0]? == "builtin" or .[0]? == "command") then .[1:] | strip($n + 1)
         elif $n > 0 and (.[0]? | type == "string" and startswith("-")) then .[1:] | strip($n)
         else [$n, .] end;
-    def lc_word: select(. == "LC_ALL" or startswith("LC_ALL="));
+    def lc_name: . == "LC_ALL" or startswith("LC_ALL[");
+    def lc_word: select(lc_name or startswith("LC_ALL="));
     [ .. | objects | select(.Type? == "FuncDecl") | [.Pos.Offset, .End.Offset] ] as $funcs
     | def innermost($x): [ $funcs[] | select(.[0] <= $x and $x < .[1]) ]
         | if length == 0 then [null, null] else max_by(.[0]) end;
@@ -112,7 +123,7 @@ function records_of() {
         | ($w[0] // "") as $cmd
         | $w[1:] as $rest
         | select(
-            ($cmd == "unset" and any($rest[]; . == "LC_ALL"))
+            (($cmd == "unset" or $cmd == "wait") and any($rest[]; lc_name))
             or ($n > 0 and ($cmd | IN("export", "declare", "local", "typeset", "readonly"))
                 and ([$rest[] | lc_word] as $lw
                   | ($lw | length) > 0
@@ -120,12 +131,15 @@ function records_of() {
             or (($cmd | IN("mapfile", "readarray", "getopts", "read"))
                 and any($rest[]; lc_word != null))
             or ($cmd == "printf"
-                and (any($rest[]; . == "-vLC_ALL")
-                  or ([range(0; ($rest | length) - 1) | select($rest[.] == "-v" and $rest[. + 1] == "LC_ALL")] | length > 0))))
+                and (any($rest[]; startswith("-vLC_ALL"))
+                  or ([range(0; ($rest | length) - 1) | select($rest[.] == "-v" and ($rest[. + 1] | lc_name))] | length > 0))))
         | .Pos.Offset as $o | [$o] + innermost($o) ),
-      ( .. | objects | select(.Type? == "LetClause" or .Type? == "ArithmCmd" or .Type? == "ArithmExp")
+      ( .. | objects | select(.Type? == "LetClause" or .Type? == "ArithmCmd" or .Type? == "ArithmExp"
+            or (.Type? == "ForClause" and .Loop.Type? == "CStyleLoop"))
         | select([.. | objects | select(.Type? == "Lit" and .Value? == "LC_ALL")] | length > 0)
         | .Pos.Offset as $o | [$o] + innermost($o) ),
+      ( .. | objects | select(.N? != null and .N.Value? == "{LC_ALL}")
+        | .N.Pos.Offset as $o | [$o] + innermost($o) ),
       ( .. | objects | select(.Type? == "ForClause")
         | .Loop | select(.Type? == "WordIter" and .Name.Value? == "LC_ALL")
         | .Name.Pos.Offset as $o | [$o] + innermost($o) ) ] as $cancels
@@ -207,9 +221,9 @@ function main() {
   local file text records kind f2 f3 f4 f5 f6 op regex range name ref depth value
   local found=0 tests=0 resolved=0 c_locale=0
   for file in "${files[@]}"; do
-    # The operator is two literal bytes in the source, so a file without
-    # them holds no such test and is not parsed.
-    grep --quiet --fixed-strings -- '=~' "${file}" || continue
+    # The operator is `=` and `~`, which a backslash-newline can separate,
+    # so a file without a `~` holds no such test and is not parsed.
+    grep --quiet --fixed-strings -- '~' "${file}" || continue
     text="$(<"${file}")"
     if ! records="$(records_of "${file}")"; then
       exit 2
