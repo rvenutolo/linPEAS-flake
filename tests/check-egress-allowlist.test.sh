@@ -514,6 +514,39 @@ function expect_lone_cr() {
 }
 expect_lone_cr block-lone-cr 'on: push\rjobs:\r  a:\r    runs-on: x\r  b:\r    runs-on: y\r'
 expect_lone_cr block-lone-cr-shifts-block 'name: t\ron: push\njobs:\n  build:\n\n    runs-on: ubuntu-latest\n    steps:\n      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3\n        with:\n          egress-policy: block\n          allowed-endpoints: >\n            cache.nixos.org:443\n      - run: echo PAYLOAD_RAN\n  other:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo PAYLOAD_RAN\n      # egress-nix-exempt: meant for other\n'
+# yq reports a job key's line without the lines before the first content
+# line (comments, blank lines, a `---`), so every key is that many lines
+# early. Job `a` carries a nix host and no marker, job `b` the same host and
+# a marker: only `a` is a finding, whatever precedes the first content.
+# @arg $1 scenario name  @arg $2 the text before the first content line
+function expect_leading() {
+  local -r name="$1" lead="$2"
+  local got_exit=0 got_stderr want
+  local steps=$'    runs-on: ubuntu-latest\n    steps:\n      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3\n        with:\n          egress-policy: block\n          allowed-endpoints: >\n            cache.nixos.org:443\n      - run: echo PAYLOAD_RAN\n'
+  {
+    printf '%b' "${lead}"
+    printf '%s\n' 'on: push' 'jobs:' '  a:'
+    printf '%s' "${steps}"
+    printf '%s\n' '  b:' '    # egress-nix-exempt: reaches nix through a script'
+    printf '%s' "${steps}"
+  } >"${key_dir}/wf/${name}.yml"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER="${name}.yml" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  want="${key_dir}/wf/${name}.yml: job 'a' allowlists cache.nixos.org/releases.nixos.org but reaches no nix tooling — neither ./.github/actions/setup-nix nor a run: nix invocation is detected, and no '# egress-nix-exempt: <reason>' marker justifies it"$'\n1 egress-allowlist violation(s)'
+  if [[ ${got_exit} != 1 || ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s: exit %s\n  stderr: %s\n' "${name}" "${got_exit}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+expect_leading lead-none ''
+expect_leading lead-comment '# lead\n'
+expect_leading lead-comments '# one\n# two\n'
+expect_leading lead-blank-comment '\n# lead\n'
+expect_leading lead-comment-blank '# lead\n\n'
+expect_leading lead-shebang-comment '#!/usr/bin/env x\n'
+expect_leading lead-document-start '---\n'
+expect_leading lead-comment-document-start '# lead\n---\n'
 # CRLF line breaks are ordinary.
 printf 'name: crlf\r\non: push\r\njobs:\r\n  build:\r\n    runs-on: ubuntu-latest\r\n    steps:\r\n      - run: echo PAYLOAD_RAN\r\n' >"${key_dir}/wf/block-crlf-clean.yml"
 crlf_exit=0
@@ -616,6 +649,9 @@ expect_stubbed job-key-read-fails '' 1 'could not evaluate job keys with yq (mal
 # A key row for an empty name ends the read: a malformed row after it is
 # never reached.
 expect_stubbed job-line-row-empty-name-ends-read $'\t5\nbuild\tX' '' "a job key is empty or null, so that job's allowlist cannot be read"
+# A key is read from the line yq reports for it, after the leading lines
+# yq leaves out; a line that does not hold the key is a finding.
+expect_stubbed job-line-row-wrong-line $'build\t1' '' "job key 'build' is not on line 1, where yq reports it, so its line number cannot be trusted to bound its block"
 # The job count is read before the arithmetic that uses it.
 expect_stubbed job-count-not-a-number $'build\t5' '' "the job count is not a number: 'x'" x
 expect_stubbed job-count-read-fails $'build\t5' '' 'could not evaluate workflow with yq (malformed?)' '' 1
