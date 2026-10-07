@@ -513,6 +513,24 @@ expect_key_finding job-key-duplicate-host-first $'  build:\n'"${NIX_HOST_STEPS}"
   "job key 'build' is written more than once, so which job is read is ambiguous"
 expect_key_finding job-key-duplicate-mixed-tag $'  1:\n'"${NIX_HOST_STEPS}"$'  "1":\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo PAYLOAD_RAN\n' \
   "job key '1' is written more than once, so which job is read is ambiguous"
+# Duplicates need not be adjacent, and with several the finding names the
+# first in byte order.
+readonly OTHER_STEPS=$'    runs-on: ubuntu-latest\n    steps:\n      - run: echo PAYLOAD_RAN\n'
+expect_key_finding job-key-duplicate-not-adjacent $'  a:\n'"${OTHER_STEPS}"$'  b:\n'"${OTHER_STEPS}"$'  a:\n'"${OTHER_STEPS}" \
+  "job key 'a' is written more than once, so which job is read is ambiguous"
+expect_key_finding job-key-two-duplicates-name-first $'  b:\n'"${OTHER_STEPS}"$'  a:\n'"${OTHER_STEPS}"$'  b:\n'"${OTHER_STEPS}"$'  a:\n'"${OTHER_STEPS}" \
+  "job key 'a' is written more than once, so which job is read is ambiguous"
+
+# A workflow with no jobs has nothing to read and is clean.
+printf 'name: jobs-empty-map\non:\n  workflow_dispatch: {}\njobs: {}\n' >"${key_dir}/wf/jobs-empty-map.yml"
+empty_exit=0
+empty_err="$(WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER=jobs-empty-map.yml LINT_ALLOW_EMPTY_SCAN=1 \
+  "${SCRIPT}" 2>&1 >/dev/null)" || empty_exit=$?
+if [[ ${empty_exit} != 0 || -n ${empty_err} ]]; then
+  printf 'FAIL jobs-empty-map: exit %s\n  stderr: %s\n' "${empty_exit}" "${empty_err}" >&2
+  exit 1
+fi
+printf 'OK   jobs-empty-map\n'
 
 # The row check is the range arithmetic's own guard. The key test above
 # leaves yq no way to print a row it fails, so a yq stub answers the job
