@@ -191,11 +191,15 @@
 #      The marker is a YAML comment, gone once yq has parsed the
 #      document, so it is found by a raw-text scan bounded to the job's
 #      own block (from its key's line, taken from yq's `line` builtin,
-#      to the last line before the first non-blank line indented no
-#      deeper than the key, or to the end of the file) rather than by
-#      any yq query. A marker comment written at key indentation or
-#      shallower, such as just above the next job's key, sits outside
-#      the block and exempts nothing in the job above it.
+#      to the last line before the first line that is not a comment and
+#      is indented no deeper than the key, or to the end of the file,
+#      without the trailing comments indented no deeper than the key)
+#      rather than by any yq query. A marker comment written at key
+#      indentation or shallower, such as just above the next job's key,
+#      sits outside the block and exempts nothing in the job above it; a
+#      marker indented deeper than the key belongs to the job above it
+#      wherever it sits, and one after a shallower comment still inside
+#      the job is found.
 #      The scan reads text, not YAML comments, so a line of that shape
 #      inside a `run: |` script body also counts as a marker (a known
 #      limit).
@@ -436,10 +440,11 @@ for f in "${selected_files[@]}"; do
   # the file's own text — bounded to one job's block, so a marker sitting
   # in a sibling job's block is never credited to this one. `line` (a yq
   # builtin) reports a job key's own 1-indexed source line; a job's block
-  # runs from there to the last line before the first non-blank line
-  # indented no deeper than the key, or to the end of the file. A comment
-  # written at the next key's indentation or shallower therefore belongs
-  # to that key, not to the job above it.
+  # runs from there to the last line before the first line that is not a
+  # comment and is indented no deeper than the key, or to the end of the
+  # file, without the trailing comments indented no deeper than the key.
+  # A comment written at the next key's indentation or shallower
+  # therefore belongs to that key, not to the job above it.
   #
   # The key is free text ahead of the line number in each row. A key
   # holding a tab or a line break splits into rows of its own choosing
@@ -521,15 +526,21 @@ for f in "${selected_files[@]}"; do
       fail "${f}: job key '${jline_name}' is on line ${jstart} but the file reads as ${file_lines} line(s), so its block cannot be bounded"
       continue 2
     fi
-    # The key's own indentation, from its source line. A later non-blank
-    # line indented no deeper than that ends the block, comment or not.
+    # The key's own indentation, from its source line. A later line that
+    # is not a comment, indented no deeper than that, ends the block. A
+    # comment indented no deeper does not end it: it sits in the block
+    # only when deeper job content follows it, so the run of comments
+    # just above the next key belongs to that key.
     key_lead="${file_text[jstart - 1]%%[![:space:]]*}"
     jend="${jstart}"
     for ((jl = jstart + 1; jl <= file_lines; jl++)); do
       block_text="${file_text[jl - 1]}"
       if [[ ${block_text} == *[![:space:]]* ]]; then
         block_lead="${block_text%%[![:space:]]*}"
-        ((${#block_lead} > ${#key_lead})) || break
+        if ((${#block_lead} <= ${#key_lead})); then
+          [[ ${block_text:${#block_lead}:1} == '#' ]] || break
+          continue
+        fi
       fi
       jend="${jl}"
     done
