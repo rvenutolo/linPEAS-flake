@@ -485,6 +485,27 @@ expect_block block-marker-after-last-job-key-indent $'  # egress-nix-exempt: bel
 expect_block block-marker-last-in-block $'    # egress-nix-exempt: reaches nix through a script' exempt "${NEXT_JOB}"
 expect_block block-marker-after-blank-in-block $'\n    # egress-nix-exempt: reaches nix through a script\n' exempt "${NEXT_JOB}"
 expect_block block-marker-last-job-in-block $'    # egress-nix-exempt: reaches nix through a script' exempt ''
+# A comment shallower than the key does not end the block while job
+# content follows it; the run of comments just above the next key does.
+expect_block block-column-0-comment-inside-job $'# commented-out step at column 0\n    # egress-nix-exempt: reaches nix through a script\n      - run: echo PAYLOAD_RAN' exempt "${NEXT_JOB}"
+expect_block block-column-0-comment-before-next-key $'# note for the next job\n  # egress-nix-exempt: meant for other' finding "${NEXT_JOB}"
+# A marker indented deeper than the key belongs to the job above it, wherever
+# it sits in that block.
+expect_block block-deeper-marker-above-next-key $'    # egress-nix-exempt: reaches nix through a script' exempt "${NEXT_JOB}"
+
+# yq numbers lines by every line break YAML knows, the lint reads by \n.
+# A file whose breaks are lone carriage returns puts a key on a line the
+# read never reaches: a finding, not an unbound-variable abort.
+printf 'on: push\rjobs:\r  a:\r    runs-on: x\r  b:\r    runs-on: y\r' >"${key_dir}/wf/block-lone-cr.yml"
+cr_exit=0
+cr_err="$(WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER=block-lone-cr.yml \
+  "${SCRIPT}" 2>&1 >/dev/null)" || cr_exit=$?
+cr_want="${key_dir}/wf/block-lone-cr.yml: job key 'a' is on line 3 but the file reads as 1 line(s), so its block cannot be bounded"$'\n1 egress-allowlist violation(s)'
+if [[ ${cr_exit} != 1 || ${cr_err} != "${cr_want}" ]]; then
+  printf 'FAIL block-lone-cr: exit %s\n  stderr: %s\n' "${cr_exit}" "${cr_err}" >&2
+  exit 1
+fi
+printf 'OK   block-lone-cr\n'
 
 # A job key the lookup cannot tell apart from another, or cannot name at
 # all, is a finding naming the problem, with nothing else read from the
