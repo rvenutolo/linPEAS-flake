@@ -652,6 +652,11 @@ expect_stubbed job-line-row-empty-name-ends-read $'\t5\nbuild\tX' '' "a job key 
 # A key is read from the line yq reports for it, after the leading lines
 # yq leaves out; a line that does not hold the key is a finding.
 expect_stubbed job-line-row-wrong-line $'build\t1' '' "job key 'build' is not on line 1, where yq reports it, so its line number cannot be trusted to bound its block"
+# Line 1 of the file is `name: job-key-empty`: a key that appears only
+# later in the line, or that is a prefix of a word with no colon after it,
+# is not on that line.
+expect_stubbed job-line-row-key-mid-line $'key\t1' '' "job key 'key' is not on line 1, where yq reports it, so its line number cannot be trusted to bound its block"
+expect_stubbed job-line-row-key-prefix-no-colon $'na\t1' '' "job key 'na' is not on line 1, where yq reports it, so its line number cannot be trusted to bound its block"
 # The job count is read before the arithmetic that uses it.
 expect_stubbed job-count-not-a-number $'build\t5' '' "the job count is not a number: 'x'" x
 expect_stubbed job-count-read-fails $'build\t5' '' 'could not evaluate workflow with yq (malformed?)' '' 1
