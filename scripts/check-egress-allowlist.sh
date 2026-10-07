@@ -196,6 +196,9 @@
 #      any yq query. A marker comment written at key indentation or
 #      shallower, such as just above the next job's key, sits outside
 #      the block and exempts nothing in the job above it.
+#      The scan reads text, not YAML comments, so a line of that shape
+#      inside a `run: |` script body also counts as a marker (a known
+#      limit).
 #      The key and its line are read as one tab-separated row, so a job
 #      key holding a tab or a line break, whatever its tag, is a finding
 #      naming the key, and that file is read no further: such a key

@@ -760,6 +760,8 @@ Detection deliberately does not follow callees: a job reaching nix indirectly th
 
 The marker is a YAML comment, gone once yq has parsed the document, so it is found by a raw-text scan bounded to the job's own block — from its key's source line (read via yq's `line` builtin) to the last line before the first non-blank line indented no deeper than the key, or to the end of the file — rather than by any yq query. A marker comment written at key indentation or shallower, such as just above the next job's key, sits outside the block and exempts nothing in the job above it.
 
+The scan reads text, not YAML comments, so a line of that shape inside a `run: |` script body also counts as a marker. That is a known limit.
+
 A job key that is empty or null is a finding, and that file is read no further: the job list prints such a key as an empty name and the main loop skips empty names, so that job's allowlist would never be read.
 
 Two job keys that print as the same text (a literal `build:` twice, or `1` beside `"1"`) are a finding too, naming the key and ending the read of that file: they share one lookup and one line range, so one job would shadow the other.
