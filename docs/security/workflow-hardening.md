@@ -758,7 +758,7 @@ An empty-reason marker is rejected when the job reaches no nix tooling, which is
 
 Detection deliberately does not follow callees: a job reaching nix indirectly through a `scripts/*.sh` invocation or a `just` recipe is invisible to both the `uses:` and `run:` arms and needs the marker instead. The reason a reviewer reads is what carries the justification in that case, not an approximate call-graph resolver — the same blind-spot tradeoff the [sigstore host-set rule](trust-model.md#egress-allowlist-matches-tool-inventory) (assertion 4 there) makes for cosign reached through a script.
 
-The marker is a YAML comment, gone once yq has parsed the document, so it is found by a raw-text scan bounded to the job's own line range — from its key's source line (read via yq's `line` builtin) to one line before the next job's key line, or to the end of the file for the last job in the document — rather than by any yq query.
+The marker is a YAML comment, gone once yq has parsed the document, so it is found by a raw-text scan bounded to the job's own block — from its key's source line (read via yq's `line` builtin) to the last line before the first non-blank line indented no deeper than the key, or to the end of the file — rather than by any yq query. A marker comment written at key indentation or shallower, such as just above the next job's key, sits outside the block and exempts nothing in the job above it.
 
 A job key that is empty or null is a finding, and that file is read no further: the job list prints such a key as an empty name and the main loop skips empty names, so that job's allowlist would never be read.
 

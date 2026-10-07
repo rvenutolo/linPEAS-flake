@@ -190,9 +190,12 @@
 #
 #      The marker is a YAML comment, gone once yq has parsed the
 #      document, so it is found by a raw-text scan bounded to the job's
-#      own line range (from its key's line, taken from yq's `line`
-#      builtin, to one line before the next job's key line, or to the
-#      end of the file for the last job) rather than by any yq query.
+#      own block (from its key's line, taken from yq's `line` builtin,
+#      to the last line before the first non-blank line indented no
+#      deeper than the key, or to the end of the file) rather than by
+#      any yq query. A marker comment written at key indentation or
+#      shallower, such as just above the next job's key, sits outside
+#      the block and exempts nothing in the job above it.
 #      The key and its line are read as one tab-separated row, so a job
 #      key holding a tab or a line break, whatever its tag, is a finding
 #      naming the key, and that file is read no further: such a key
@@ -308,10 +311,11 @@ readonly NIX_EXEMPT_MARKER='egress-nix-exempt:'
 # `yq` code, and `yq` reads `*` and `?` in an index or an `==` comparison
 # as wildcards, which base64 text never holds. A key written twice is a
 # finding before any lookup, so the lookup never meets one. `jobs:` is
-# not handed to `explode`: that would turn a key written as an alias into its anchor's
-# text, which the job list (printing the alias) never names, and would
-# expand every alias in `jobs:` on each lookup. The `.steps[]` reads after
-# the lookup follow aliases and merge keys inside the job.
+# not handed to `explode`: that would turn a key written as an alias
+# into its anchor's text, which the job list (printing the alias) never
+# names, and would expand every alias in `jobs:` on each lookup. The
+# `.steps[]` reads after the lookup follow aliases and merge keys inside
+# the job.
 readonly JOB_BY_KEY='.jobs | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
 
 # Resolved against this script's own location rather than the scan root:
@@ -424,11 +428,13 @@ for f in "${selected_files[@]}"; do
   # Assertion 7 prep: each job's own line range, for the marker raw-text
   # scan below. A `# egress-nix-exempt:` marker is a YAML comment, gone
   # once yq has parsed the document, so it can only be found by reading
-  # the file's own text — bounded to one job's lines, so a marker sitting
+  # the file's own text — bounded to one job's block, so a marker sitting
   # in a sibling job's block is never credited to this one. `line` (a yq
-  # builtin) reports a job key's own 1-indexed source line; a job's range
-  # runs from there to one line before the next job key's line, or to the
-  # end of the file for the last job in document order.
+  # builtin) reports a job key's own 1-indexed source line; a job's block
+  # runs from there to the last line before the first non-blank line
+  # indented no deeper than the key, or to the end of the file. A comment
+  # written at the next key's indentation or shallower therefore belongs
+  # to that key, not to the job above it.
   #
   # The key is free text ahead of the line number in each row. A key
   # holding a tab or a line break splits into rows of its own choosing
@@ -499,16 +505,25 @@ for f in "${selected_files[@]}"; do
     fail "${f}: job key '${dup_keys%%$'\n'*}' is written more than once, so which job is read is ambiguous"
     continue
   fi
-  file_lines="$(wc -l <"${f}")"
+  mapfile -t file_text <"${f}"
+  file_lines="${#file_text[@]}"
   for jidx in "${!row_names[@]}"; do
     jline_name="${row_names[jidx]}"
-    [[ -n ${jline_name} ]] || continue
-    JOB_START["${jline_name}"]="${row_starts[jidx]}"
-    if ((jidx + 1 < ${#row_starts[@]})); then
-      JOB_END["${jline_name}"]=$((row_starts[jidx + 1] - 1))
-    else
-      JOB_END["${jline_name}"]="${file_lines}"
-    fi
+    jstart="${row_starts[jidx]}"
+    # The key's own indentation, from its source line. A later non-blank
+    # line indented no deeper than that ends the block, comment or not.
+    key_lead="${file_text[jstart - 1]%%[![:space:]]*}"
+    jend="${jstart}"
+    for ((jl = jstart + 1; jl <= file_lines; jl++)); do
+      block_text="${file_text[jl - 1]}"
+      if [[ ${block_text} == *[![:space:]]* ]]; then
+        block_lead="${block_text%%[![:space:]]*}"
+        ((${#block_lead} > ${#key_lead})) || break
+      fi
+      jend="${jl}"
+    done
+    JOB_START["${jline_name}"]="${jstart}"
+    JOB_END["${jline_name}"]="${jend}"
   done
 
   while IFS= read -r job; do
