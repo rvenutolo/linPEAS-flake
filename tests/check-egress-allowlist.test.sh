@@ -493,19 +493,37 @@ expect_block block-column-0-comment-before-next-key $'# note for the next job\n 
 # it sits in that block.
 expect_block block-deeper-marker-above-next-key $'    # egress-nix-exempt: reaches nix through a script' exempt "${NEXT_JOB}"
 
-# yq numbers lines by every line break YAML knows, the lint reads by \n.
-# A file whose breaks are lone carriage returns puts a key on a line the
-# read never reaches: a finding, not an unbound-variable abort.
-printf 'on: push\rjobs:\r  a:\r    runs-on: x\r  b:\r    runs-on: y\r' >"${key_dir}/wf/block-lone-cr.yml"
-cr_exit=0
-cr_err="$(WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER=block-lone-cr.yml \
-  "${SCRIPT}" 2>&1 >/dev/null)" || cr_exit=$?
-cr_want="${key_dir}/wf/block-lone-cr.yml: job key 'a' is on line 3 but the file reads as 1 line(s), so its block cannot be bounded"$'\n1 egress-allowlist violation(s)'
-if [[ ${cr_exit} != 1 || ${cr_err} != "${cr_want}" ]]; then
-  printf 'FAIL block-lone-cr: exit %s\n  stderr: %s\n' "${cr_exit}" "${cr_err}" >&2
+# yq numbers lines by a lone carriage return, the lint reads by \n alone,
+# so every job line after one is off. Whether the shifted number lands past
+# the last line or inside the file, the file is a finding: the block would
+# be bounded from the wrong line, in the second shape crediting the marker
+# at the end of `other` to `build`.
+# @arg $1 scenario name  @arg $2 the file's text
+function expect_lone_cr() {
+  local -r name="$1" text="$2"
+  local got_exit=0 got_stderr want
+  printf '%b' "${text}" >"${key_dir}/wf/${name}.yml"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER="${name}.yml" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  want="${key_dir}/wf/${name}.yml: the file holds a carriage return that is not part of a CRLF line break, which yq counts as a line break and a line-by-line read does not"$'\n1 egress-allowlist violation(s)'
+  if [[ ${got_exit} != 1 || ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s: exit %s\n  stderr: %s\n' "${name}" "${got_exit}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+expect_lone_cr block-lone-cr 'on: push\rjobs:\r  a:\r    runs-on: x\r  b:\r    runs-on: y\r'
+expect_lone_cr block-lone-cr-shifts-block 'name: t\ron: push\njobs:\n  build:\n\n    runs-on: ubuntu-latest\n    steps:\n      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3\n        with:\n          egress-policy: block\n          allowed-endpoints: >\n            cache.nixos.org:443\n      - run: echo PAYLOAD_RAN\n  other:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo PAYLOAD_RAN\n      # egress-nix-exempt: meant for other\n'
+# CRLF line breaks are ordinary.
+printf 'name: crlf\r\non: push\r\njobs:\r\n  build:\r\n    runs-on: ubuntu-latest\r\n    steps:\r\n      - run: echo PAYLOAD_RAN\r\n' >"${key_dir}/wf/block-crlf-clean.yml"
+crlf_exit=0
+crlf_err="$(WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER=block-crlf-clean.yml LINT_ALLOW_EMPTY_SCAN=1 \
+  "${SCRIPT}" 2>&1 >/dev/null)" || crlf_exit=$?
+if [[ ${crlf_exit} != 0 || -n ${crlf_err} ]]; then
+  printf 'FAIL block-crlf-clean: exit %s\n  stderr: %s\n' "${crlf_exit}" "${crlf_err}" >&2
   exit 1
 fi
-printf 'OK   block-lone-cr\n'
+printf 'OK   block-crlf-clean\n'
 
 # A job key the lookup cannot tell apart from another, or cannot name at
 # all, is a finding naming the problem, with nothing else read from the
