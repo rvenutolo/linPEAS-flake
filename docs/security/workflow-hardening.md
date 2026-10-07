@@ -768,6 +768,8 @@ Two job keys that print as the same text (a literal `build:` twice, or `1` besid
 
 A file holding a carriage return that does not end a CRLF line break is a finding too: yq counts it as a line break and the newline-separated read does not, so every job line after it is off and a block would be bounded from the wrong line.
 
+yq also reports each key's line without the comment, blank and `---` lines before the first content line, so that many lines are added back. The line must then hold the key as a plain, quoted or alias key before its colon. Any other line, as with an anchored, tagged or escaped key or a shift of another cause, is a finding naming the key, since a block bounded from the wrong line can credit one job's marker to another.
+
 Breadth is asserted the same way the notify-composite rule asserts it: the run reports how many jobs carry either host, and finding none on an unfiltered scan is a could-not-run, not a clean tree. `WORKFLOW_FILE_FILTER` and `LINT_ALLOW_EMPTY_SCAN=1` suppress that guard the same way they do for the notify rule.
 
 Enforced by `scripts/check-egress-allowlist.sh` via the `lint-workflow-security` CI job (member check `egress-allowlist`) and a pre-commit hook — the same enforcement path as the tool-inventory rules in [trust-model.md](trust-model.md).

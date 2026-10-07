@@ -218,6 +218,13 @@
 #      A file holding a carriage return that does not end a CRLF line
 #      break is a finding too: yq counts it as a line break and the
 #      newline-separated read does not, so every job line after it is off.
+#      yq also reports each key's line without the comment, blank and
+#      `---` lines before the first content line, so that many lines are
+#      added back. The line must then hold the key as a plain, quoted or
+#      alias key before its colon; any other line (an anchored, tagged or
+#      escaped key, or a shift of another cause) is a finding naming the
+#      key, since a block bounded from the wrong line can credit one
+#      job's marker to another.
 #
 #      Breadth is asserted the same way as assertion 6: the run reports
 #      how many jobs carry either host, and finding none on an
@@ -533,9 +540,32 @@ for f in "${selected_files[@]}"; do
   fi
   mapfile -t file_text <"${f}"
   file_lines="${#file_text[@]}"
+  # yq reports a line without the comment, blank and `---` lines before
+  # the first content line, so every job key is that many lines early.
+  lead_lines=0
+  while ((lead_lines < file_lines)) &&
+    [[ ${file_text[lead_lines]} =~ ^[[:space:]]*(#.*|---([[:space:]].*)?)?$ ]]; do
+    lead_lines=$((lead_lines + 1))
+  done
   for jidx in "${!row_names[@]}"; do
     jline_name="${row_names[jidx]}"
-    jstart="${row_starts[jidx]}"
+    jstart=$((row_starts[jidx] + lead_lines))
+    # The line must hold the key, as a plain, quoted or alias key before
+    # its colon: a line number that lands elsewhere would bound the block
+    # from the wrong place.
+    key_line="${file_text[jstart - 1]-}"
+    key_line="${key_line#"${key_line%%[![:space:]]*}"}"
+    key_found=0
+    for key_quote in '' '"' "'" '*'; do
+      if [[ ${key_line} == "${key_quote}${jline_name}"* ]]; then
+        key_rest="${key_line#"${key_quote}${jline_name}"}"
+        [[ ${key_rest} =~ ^[\"\']?[[:space:]]*: ]] && key_found=1
+      fi
+    done
+    if ((! key_found)); then
+      fail "${f}: job key '${jline_name}' is not on line ${jstart}, where yq reports it, so its line number cannot be trusted to bound its block"
+      continue 2
+    fi
     # The key's own indentation, from its source line. A later line that
     # is not a comment, indented no deeper than that, ends the block. A
     # comment indented no deeper does not end it: it sits in the block
