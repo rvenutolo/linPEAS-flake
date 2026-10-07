@@ -74,6 +74,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/locale-gap.sh
+source "${REPO_ROOT}/scripts/lib/locale-gap.sh"
 # shellcheck source=scripts/lib/enumerate.sh
 source "${REPO_ROOT}/scripts/lib/enumerate.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/gen-dashboard-data.sh"
@@ -600,8 +602,30 @@ function main() {
   # Scenario 1: bad pin.version regex. Pin URL is shaped correctly so only
   # the regex check trips; nothing else hard-fails first.
   run_scenario 'bad pin.version regex' \
-    'pin.version does not match expected format' 1 \
+    'ERROR pin.version does not match expected format: not-a-pin' 1 \
     "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/bad-version-pin.json"
+
+  # Under en_US.UTF-8 a bash `[0-9]` range also matches non-ASCII digits.
+  # Each fixture's version holds one character that collation would admit;
+  # the rest of the inputs are good, so a version the gate let through
+  # would be read further instead of refused here.
+  require_locale_gap en_US.UTF-8 || exit 1
+  local version
+  for version in arabic-indic:2026010١-0000000 fullwidth:2026010５-0000000 \
+    superscript:2026010²-0000000 fraction:2026010½-0000000 \
+    hex-letter:20260101-000000é leading-junk:é20260101-0000000 \
+    trailing-junk:20260101-0000000é; do
+    run_scenario "${version%%:*} pin.version is refused under en_US.UTF-8" \
+      "ERROR pin.version does not match expected format: ${version#*:}" 1 \
+      LC_ALL=en_US.UTF-8 \
+      "PIN_FILE_OVERRIDE=${FIXTURES_DIR}/bad-version-${version%%:*}-pin.json" \
+      "UPSTREAM_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-upstream-release.json" \
+      "LATEST_RELEASE_JSON_OVERRIDE=${FIXTURES_DIR}/good-latest-release.json" \
+      "THIS_REPO_RELEASES_JSON_OVERRIDE=${FIXTURES_DIR}/happy-lag-this-repo-releases.json" \
+      "UPSTREAM_RELEASES_JSON_OVERRIDE=${FIXTURES_DIR}/happy-lag-upstream-releases.json" \
+      "BUMP_PR_JSON_OVERRIDE=${FIXTURES_DIR}/good-bump-pr.json" \
+      "PARITY_JSON_OVERRIDE=${FIXTURES_DIR}/good-parity.json"
+  done
 
   # Scenario 2: bad pin.url prefix. Pin version is well-formed
   # so the regex check passes; the URL prefix check then trips.

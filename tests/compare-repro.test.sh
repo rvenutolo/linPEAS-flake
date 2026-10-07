@@ -11,6 +11,8 @@ repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/locale-gap.sh
+source "${REPO_ROOT}/scripts/lib/locale-gap.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/compare-repro.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/compare-repro"
 
@@ -193,6 +195,54 @@ run_bad_input_scenario \
   'malformed hash value is not a match' \
   'bad-shape' \
   'bad-shape/build-a.json: field linpeas_nar_hash has malformed value'
+
+# @description Run the script under en_US.UTF-8 on two copies of the
+# match fixture that set one field to the same value, and compare exit
+# code and the whole of stderr. In that locale a bash range such as
+# `[0-9a-f]` or `[A-Za-z0-9+/=]` also matches non-ASCII characters, and
+# two builds that measured the same malformed value would compare equal.
+# @arg $1 scenario name  @arg $2 field  @arg $3 value
+function run_en_us_scenario() {
+  local -r name="$1" field="$2" value="$3"
+  local dir summary_file stderr_file stdout_file outcome_file want
+  dir="$(mktemp --directory)"
+  summary_file="$(mktemp)"
+  stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  jq --arg k "${field}" --arg v "${value}" '.[$k] = $v' \
+    -- "${FIXTURES}/match/build-a.json" >"${dir}/build-a.json"
+  jq --arg k "${field}" --arg v "${value}" '.[$k] = $v' \
+    -- "${FIXTURES}/match/build-b.json" >"${dir}/build-b.json"
+  want="ERROR: ${dir}/build-a.json: field ${field} has malformed value: ${value}"
+
+  local actual_exit=0
+  LC_ALL=en_US.UTF-8 GITHUB_STEP_SUMMARY="${summary_file}" \
+    "${SCRIPT}" "${dir}/build-a.json" "${dir}/build-b.json" \
+    >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${want}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}" "${summary_file}"
+
+  if [[ ${actual_exit} -ne 2 || "$(cat -- "${stderr_file}")" != "${want}" || -s ${summary_file} ]]; then
+    printf 'FAIL: %s — expected exit 2, stderr %q and no summary; got exit %d, stderr %q\n' \
+      "${name}" "${want}" "${actual_exit}" "$(cat -- "${stderr_file}")" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit 2)\n' "${name}"
+  fi
+
+  rm --recursive --force -- "${dir}" "${summary_file}" "${stderr_file}" \
+    "${stdout_file}" "${outcome_file}"
+}
+
+require_locale_gap en_US.UTF-8 || exit 1
+run_en_us_scenario 'non-ASCII letter in a NAR hash is malformed under en_US.UTF-8' \
+  linpeas_nar_hash 'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAé='
+run_en_us_scenario 'non-ASCII letter in an image tar hash is malformed under en_US.UTF-8' \
+  image_tar_sha256 '000000000000000000000000000000000000000000000000000000000000000é'
+run_en_us_scenario 'non-ASCII digit in a manifest digest is malformed under en_US.UTF-8' \
+  image_manifest_digest 'sha256:111111111111111111111111111111111111111111111111111111111111111５'
 
 harness_assert_verify || failures=$((failures + 1))
 

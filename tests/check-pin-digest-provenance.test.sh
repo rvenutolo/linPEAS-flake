@@ -24,6 +24,8 @@ repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/locale-gap.sh
+source "${REPO_ROOT}/scripts/lib/locale-gap.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-pin-digest-provenance.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-pin-digest-provenance"
 
@@ -92,6 +94,57 @@ function run_scenario() {
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
   rm --force -- "${out_file}" "${outcome_file}"
+}
+
+# @description Run one scenario under en_US.UTF-8 against base and head
+# trees built at run time, each holding one workflow pin and the octoscan
+# pair, and compare the whole of the output. In that locale a bash range
+# such as `[0-9]` or `[a-f]` also matches non-ASCII characters, so each
+# case puts one where collation would admit it. OCTOSCAN_EXTRA_BASE and
+# OCTOSCAN_EXTRA_HEAD, when set by the caller, are lines appended to that
+# side's octoscan file.
+# @arg $1 scenario name  @arg $2 GH_STUB_MODE value  @arg $3 expected exit
+# @arg $4 the whole expected output
+# @arg $5-$10 base pin sha, base label, base octoscan digest and version,
+#   head pin sha, head label; the head octoscan digest and version follow
+#   as $11 and $12
+function run_en_us_scenario() {
+  local -r name="$1" stub_mode="$2" expected_exit="$3" expected="$4"
+  shift 4
+  local trees out_file outcome_file side
+  trees="$(mktemp --directory)"
+  out_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  for side in base head; do
+    mkdir --parents "${trees}/${side}/.github/workflows" "${trees}/${side}/scripts"
+    printf 'jobs:\n  a:\n    steps:\n      - uses: actions/checkout@%s # %s\n' \
+      "$1" "$2" >"${trees}/${side}/.github/workflows/wf.yml"
+    printf '#!/usr/bin/env bash\nOCTOSCAN_DIGEST="sha256:%s"\nOCTOSCAN_VERSION="%s"\n' \
+      "$3" "$4" >"${trees}/${side}/scripts/octoscan-scan.sh"
+    if [[ ${side} == base ]]; then
+      printf '%s' "${OCTOSCAN_EXTRA_BASE:-}" >>"${trees}/${side}/scripts/octoscan-scan.sh"
+    else
+      printf '%s' "${OCTOSCAN_EXTRA_HEAD:-}" >>"${trees}/${side}/scripts/octoscan-scan.sh"
+    fi
+    shift 4
+  done
+  local actual_exit=0
+  LC_ALL=en_US.UTF-8 PATH="${FIXTURES}/bin:${PATH}" \
+    GH_STUB_MODE="${stub_mode}" \
+    BASE_DIR_OVERRIDE="${trees}/base" \
+    HEAD_DIR_OVERRIDE="${trees}/head" \
+    "${SCRIPT}" >"${out_file}" 2>&1 || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record "${name}" "${expected%%$'\n'*}" \
+    "${outcome_file}" "${out_file}"
+  if [[ ${actual_exit} -ne ${expected_exit} || "$(cat -- "${out_file}")" != "${expected}" ]]; then
+    printf 'FAIL: %s — expected exit %d and output:\n%s\ngot exit %d and output:\n%s\n' \
+      "${name}" "${expected_exit}" "${expected}" "${actual_exit}" "$(cat -- "${out_file}")" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
+  fi
+  rm --recursive --force -- "${trees}" "${out_file}" "${outcome_file}"
 }
 
 # Points BASE_DIR_OVERRIDE at a copy of the base fixture tree with one
@@ -366,7 +419,8 @@ function main() {
     'digest repointed under unchanged version: ghcr.io/synacktiv/octoscan (v0.1.7): sha256:1111111111111111111111111111111111111111111111111111111111111111 -> sha256:2222222222222222222222222222222222222222222222222222222222222222'
   run_scenario 'octoscan lockstep bump passes' 'head-octoscan-lockstep' deny 0 \
     'pin digest provenance OK: 9 pin(s) across 3 file(s)'
-  run_scenario 'octoscan shape drift errors' 'head-octoscan-shape' deny 2 'octoscan digest/version pair not found'
+  run_scenario 'octoscan shape drift errors' 'head-octoscan-shape' deny 2 \
+    'pin-digest-provenance: octoscan digest/version pair not found in scripts/octoscan-scan.sh (extraction shape drift?)'
   run_scenario 'floating repoint reachable passes' 'head-floating-repoint' reachable 0 \
     'verified reachable from master (behind) via direct commit pin'
   run_scenario 'floating repoint tag-object deref passes' 'head-floating-repoint' tagobject-reachable 0 \
@@ -380,9 +434,23 @@ function main() {
   # the deref call must fire rather than let `[[ ... =~ ^[0-9a-f]{40}$
   # ]]` silently fail the reachability check for the wrong reason.
   run_scenario 'floating repoint malformed tag-deref payload exits 2' \
-    'head-floating-repoint' tagobject-malformed 2 'malformed tag deref payload'
-  run_scenario 'quoted pin shape errors' 'head-quoted-pin' deny 2 'unrecognized uses: pin shape'
-  run_scenario 'comment-less pin shape errors' 'head-commentless-pin' deny 2 'unrecognized uses: pin shape'
+    'head-floating-repoint' tagobject-malformed 2 \
+    'pin-digest-provenance: malformed tag deref payload for cachix/install-nix-action@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee: not-a-forty-hex-sha'
+  # Under en_US.UTF-8 a bash `[0-9a-f]` range also matches non-ASCII
+  # letters, so the payload would be taken for a commit SHA and probed.
+  LC_ALL=en_US.UTF-8 run_scenario 'floating repoint non-ASCII tag-deref payload exits 2 under en_US.UTF-8' \
+    'head-floating-repoint' tagobject-nonascii 2 \
+    'pin-digest-provenance: malformed tag deref payload for cachix/install-nix-action@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee: 999999999999999999999999999999999999999é'
+  LC_ALL=en_US.UTF-8 run_scenario 'floating repoint tag-deref payload with a letter before the sha exits 2 under en_US.UTF-8' \
+    'head-floating-repoint' tagobject-nonascii-before 2 \
+    'pin-digest-provenance: malformed tag deref payload for cachix/install-nix-action@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee: é9999999999999999999999999999999999999999'
+  LC_ALL=en_US.UTF-8 run_scenario 'floating repoint tag-deref payload with a letter after the sha exits 2 under en_US.UTF-8' \
+    'head-floating-repoint' tagobject-nonascii-after 2 \
+    'pin-digest-provenance: malformed tag deref payload for cachix/install-nix-action@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee: 9999999999999999999999999999999999999999é'
+  run_scenario 'quoted pin shape errors' 'head-quoted-pin' deny 2 \
+    'pin-digest-provenance: unrecognized uses: pin shape at .github/workflows/wf.yml:5:       - uses: "actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" # v4.3.1'
+  run_scenario 'comment-less pin shape errors' 'head-commentless-pin' deny 2 \
+    'pin-digest-provenance: unrecognized uses: pin shape at .github/workflows/wf.yml:5:       - uses: actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
   run_scenario 'nested action dir repoint fails' 'head-nested-action-repoint' deref-none 1 \
     'digest repointed under unchanged version: actions/setup-node (v4.0.0): 3333333333333333333333333333333333333333 -> 4444444444444444444444444444444444444444'
   run_scenario 'uppercase-SHA case-only change passes' 'head-uppercase-sha-same-pin' deny 0 \
@@ -399,6 +467,43 @@ function main() {
   # an empty success that the script then reads as a real API response.
   run_scenario 'unknown stub mode is refused by the stub' \
     'head-semver-repoint' no-such-mode 2 'unknown GH_STUB_MODE: no-such-mode'
+  # Ranges that follow the locale. Each case is one the C locale already
+  # refuses; under en_US.UTF-8 collation would admit the non-ASCII
+  # character into the range the script checks.
+  require_locale_gap en_US.UTF-8 || exit 1
+  local -r sha_b='bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+  local -r sha_c='cccccccccccccccccccccccccccccccccccccccc'
+  local -r dig_1='1111111111111111111111111111111111111111111111111111111111111111'
+  local -r dig_2='2222222222222222222222222222222222222222222222222222222222222222'
+  local -r repoint_tail='pin digest provenance check FAILED — a digest moved under an unchanged version label.
+A repointed released tag is the digest-repoint supply-chain class. Review upstream before unblocking.'
+  run_en_us_scenario 'non-ASCII digit label is not a floating major under en_US.UTF-8' \
+    reachable 1 "FAIL: digest repointed under unchanged version: actions/checkout (v٤): ${sha_b} -> ${sha_c}
+${repoint_tail}" \
+    "${sha_b}" 'v٤' "${dig_1}" v0.1.7 "${sha_c}" 'v٤' "${dig_1}" v0.1.7
+  run_en_us_scenario 'text before a floating-major label is not a floating major under en_US.UTF-8' \
+    reachable 1 "FAIL: digest repointed under unchanged version: actions/checkout (xv4): ${sha_b} -> ${sha_c}
+${repoint_tail}" \
+    "${sha_b}" 'xv4' "${dig_1}" v0.1.7 "${sha_c}" 'xv4' "${dig_1}" v0.1.7
+  run_en_us_scenario 'non-ASCII letter in a pin sha is an unrecognized shape under en_US.UTF-8' \
+    deny 2 "pin-digest-provenance: unrecognized uses: pin shape at .github/workflows/wf.yml:4:       - uses: actions/checkout@${sha_b:1}é # v4.3.1" \
+    "${sha_b}" v4.3.1 "${dig_1}" v0.1.7 "${sha_b:1}é" v4.3.1 "${dig_1}" v0.1.7
+  # The octoscan file keeps the last line each read matches. A second line
+  # holding a non-ASCII character is not one, so the pair read is the
+  # first: a moved digest under v0.1.7 in the one, and no move at all in
+  # the other.
+  local -r dig_3='3333333333333333333333333333333333333333333333333333333333333333'
+  local -r dig_4='4444444444444444444444444444444444444444444444444444444444444444'
+  OCTOSCAN_EXTRA_BASE=$'OCTOSCAN_VERSION="v0.1.٧"\n# OCTOSCAN_VERSION="v0.1.8"\n' \
+    OCTOSCAN_EXTRA_HEAD=$'OCTOSCAN_VERSION="v0.1.٧"\n# OCTOSCAN_VERSION="v0.1.8"\n' \
+    run_en_us_scenario 'a non-ASCII or commented octoscan version line is not read under en_US.UTF-8' \
+    deny 1 "FAIL: digest repointed under unchanged version: ghcr.io/synacktiv/octoscan (v0.1.7): sha256:${dig_3} -> sha256:${dig_4}
+${repoint_tail}" \
+    "${sha_b}" v4.3.1 "${dig_3}" v0.1.7 "${sha_b}" v4.3.1 "${dig_4}" v0.1.7
+  OCTOSCAN_EXTRA_HEAD="OCTOSCAN_DIGEST=\"sha256:${dig_2:1}é\""$'\n'"# OCTOSCAN_DIGEST=\"sha256:${dig_2}\""$'\n' \
+    run_en_us_scenario 'a non-ASCII or commented octoscan digest line is not read under en_US.UTF-8' \
+    deny 0 'pin digest provenance OK: 2 pin(s) across 2 file(s)' \
+    "${sha_b}" v4.3.1 "${dig_1}" v0.1.7 "${sha_b}" v4.3.1 "${dig_1}" v0.1.7
   run_git_mode_scenario 'git BASE_REF mode: zero-level composite action repoint fails' 1 \
     'digest repointed under unchanged version: actions/setup-node (v4.0.0): 1111111111111111111111111111111111111111 -> 3333333333333333333333333333333333333333'
   run_git_ls_tree_failure_scenario

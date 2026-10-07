@@ -25,6 +25,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/locale-gap.sh
+source "${REPO_ROOT}/scripts/lib/locale-gap.sh"
 readonly LOGLIB="${REPO_ROOT}/scripts/lib/log.sh"
 readonly LIB="${REPO_ROOT}/scripts/lib/payload.sh"
 
@@ -348,6 +350,19 @@ if [[ ${rc} -eq 2 ]] &&
 else
   fail "source-into-bad-name: expected exit 2 and no 'named=' line, got exit ${rc}"
   cat -- "${work}/source-into-bad-name.out" "${work}/source-into-bad-name.err" >&2
+fi
+
+# Under en_US.UTF-8 a bash `[A-Za-z0-9_]` range also matches non-ASCII
+# letters, which bash still refuses as a variable name in an indirect
+# expansion. The name check is what must refuse it, with the whole line.
+require_locale_gap en_US.UTF-8 || exit 1
+LC_ALL=en_US.UTF-8 run_source_into 'source-into-non-ascii-name' unset \
+  'OVRé' 'renovate.json' 'source-into-non-ascii-name.sh: payload_source_into: not a variable name: OVRé'
+if [[ ${rc} -eq 2 && "$(cat -- "${work}/source-into-non-ascii-name.err")" == 'source-into-non-ascii-name.sh: payload_source_into: not a variable name: OVRé' ]]; then
+  pass 'source-into-non-ascii-name: a non-ASCII override name is exit 2 under en_US.UTF-8'
+else
+  fail "source-into-non-ascii-name: expected exit 2 and the not-a-variable-name line, got exit ${rc}"
+  cat -- "${work}/source-into-non-ascii-name.out" "${work}/source-into-non-ascii-name.err" >&2
 fi
 
 # @description Run read_json_payload_into in its own bash process — its

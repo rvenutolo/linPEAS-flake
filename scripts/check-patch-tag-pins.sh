@@ -64,16 +64,18 @@ else
   fi
 fi
 
+# Hex and digit classes below are spelled out: a range such as `[0-9]`
+# follows the locale and in en_US.UTF-8 also matches digits such as `٣`.
 # Every `uses: <ref>@<40-hex>` line is in scope, comment or not.
-readonly PIN_RE='uses:[[:space:]]*[^@[:space:]]+@[0-9a-fA-F]{40}'
+readonly PIN_RE='uses:[[:space:]]*[^@[:space:]]+@[0123456789abcdefABCDEF]{40}'
 # Two or more dot-separated numeric components, so `# v1` and `# v23` do
 # not qualify while `# v1.2.3` and `# v0.24.0` do.
-readonly PATCH_TAG_RE='#[[:space:]]*v[0-9]+(\.[0-9]+)+'
+readonly PATCH_TAG_RE='#[[:space:]]*v[0123456789]+(\.[0123456789]+)+'
 # The reason must be non-empty: a bare `patch-tag-exception:` explains
 # nothing and does not waive the rule.
 readonly EXCEPTION_RE='patch-tag-exception:[[:space:]]*[^[:space:]]'
 # Used only to pick the message for a line already known to violate.
-readonly VERSION_TOKEN_RE='#.*v[0-9]'
+readonly VERSION_TOKEN_RE='#.*v[0123456789]'
 
 violations=0
 for file in "${paths[@]}"; do

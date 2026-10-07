@@ -84,6 +84,7 @@ readonly GATE_PARITY_EXEMPT_CALL='^[[:space:]]*harness_assert_parity_exempt([[:s
 # Harness basenames permitted to register a parity exemption. Each entry
 # carries the reason its collapsed pair admits no separating output.
 readonly -a PARITY_EXEMPT_ALLOWED=(
+  'check-flake-lock-provenance.test.sh'          # a declaration-shaped line inside a string and no such line leave the identical undeclared-repoint verdict: the verdict, not the line, is what is required, so a correct reader reports the same failure either way, and only a reader that takes the line for a declaration reports a pass
   'check-freshness-hook-watches-modules.test.sh' # a mention of the evaluated attribute behind a comment and no mention at all leave the identical required-module gap: the transposition, not the mention, is what is required, so a correct guard derives and reports the same gap either way
 )
 

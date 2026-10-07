@@ -5,6 +5,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
 readonly SCRIPT="${REPO_ROOT}/scripts/check-uses-sha-pinned.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/uses-sha-pinned"
+# shellcheck source=scripts/lib/locale-gap.sh
+source "${REPO_ROOT}/scripts/lib/locale-gap.sh"
 
 function expect() {
   local -r fixture="$1" want_exit="$2" want_msg="$3"
@@ -106,5 +108,12 @@ expect_body step-xtag.yml $'on: push\njobs:\n  a:\n    steps:\n      - !x {uses:
   $'DIR/step-xtag.yml: actions/checkout@v4 not SHA-pinned (need owner/repo@<40-hex>)\n1 unpinned uses: reference(s) found'
 expect_body step-strtag.yml $'on: push\njobs:\n  a:\n    steps:\n      - !!str {uses: actions/setup-node@v4}\n' 1 \
   $'DIR/step-strtag.yml: actions/setup-node@v4 not SHA-pinned (need owner/repo@<40-hex>)\n1 unpinned uses: reference(s) found'
+
+# Under en_US.UTF-8 a bash `[0-9a-f]` range also matches non-ASCII
+# characters, so a ref of 39 hex digits and one such character would read
+# as a SHA. GitHub resolves it as a tag or branch name, which can move.
+require_locale_gap en_US.UTF-8 || exit 1
+LC_ALL=en_US.UTF-8 expect_body sha-non-ascii.yml $'on: push\njobs:\n  a:\n    steps:\n      - uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaé\n      - uses: actions/setup-node@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa５\n      - uses: actions/cache@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaé\n' 1 \
+  $'DIR/sha-non-ascii.yml: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaé not SHA-pinned (need owner/repo@<40-hex>)\nDIR/sha-non-ascii.yml: actions/setup-node@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa５ not SHA-pinned (need owner/repo@<40-hex>)\nDIR/sha-non-ascii.yml: actions/cache@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaé not SHA-pinned (need owner/repo@<40-hex>)\n3 unpinned uses: reference(s) found'
 
 printf 'all tests passed\n'

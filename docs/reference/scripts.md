@@ -1411,6 +1411,58 @@ body, ratchet in the nix/devshell.nix devShell, and a documented
 ratchet version matching the one the devShell ships, among others — so
 future edits cannot silently weaken it.
 
+### scripts/check-regex-range-ascii.sh
+
+Lint: a bash `[[ … =~ … ]]` regex under `scripts/` or
+`tests/` must not hold a range between ASCII letters or digits (`[0-9]`,
+`[a-f]`, `[A-Za-z_]`) unless it is matched under a C locale. A range
+follows the locale's collation: under `en_US.UTF-8` `[0-9]` also matches
+digits such as `٣` and `５`, and `[a-f]` matches `é`, while the CI
+runner's `C.UTF-8` matches ASCII only. A validator written with a range
+therefore passes on a developer's machine a value CI refuses, and the
+difference is invisible to CI.
+
+A test is matched under a C locale when it follows a
+`local LC_ALL=C` or `local LC_ALL=C.UTF-8` that is a direct statement
+of its own function (`ascii_match` in `scripts/lib/ascii-match.sh` is
+one), or follows a top-level `export LC_ALL=C` or
+`export LC_ALL=C.UTF-8`; the value is one unquoted word, the last
+`LC_ALL` word on its line. A later assignment, `declare`, `local` or
+`export` (also behind `builtin` or `command`, and with the whole
+assignment quoted) that sets anything but one lone `C` or `C.UTF-8`
+word, or a later `unset LC_ALL`, `wait -p LC_ALL`, `read`, `mapfile`,
+`getopts`, `printf -v`, arithmetic assignment (also in a C-style `for`),
+`exec {LC_ALL}>` or `for LC_ALL in`, in the same function or outside
+any function, ends that; an element name (`LC_ALL[0]`) counts as
+`LC_ALL`. A write through `eval` or a nameref is not read, nor is the
+order in which functions are called. A declaration inside a subshell, a
+command substitution, a conditional or a background statement does not
+start a C locale; an `unset` or write in one still ends it, as do
+`unset -f`, `unset -n` and `command -v unset LC_ALL`, so a range after
+them is reported although the shell would match it as C. A backslash-newline inside an operator
+or a regex is joined before it is read. Otherwise the
+class is spelled out (`[0123456789]`), or the text is matched through `ascii_match`.
+
+The `=~` tests are read from the `shfmt --tojson` parse tree, and the
+operator from the source text between the two operands, since shfmt
+releases encode the operator differently; a file holding no `~` is not
+parsed. A regex held in a variable is
+read through the assignments to that variable and the items of a `for`
+loop over it in the same file, following variables they name, three levels deep. Not read: a regex
+that reaches the test as a function argument, from a function's output,
+from an array element, or from a sourced file; a regex inside `eval`
+or `bash -c` text; and `grep`, `sed`, `awk`, `jq` and `yq` patterns.
+A quoted operand (`=~ "[0-9]"`) is a literal match, but is read like
+an unquoted one and reported; so is a function whose `local LC_ALL`
+value is quoted. Unquote it or spell the class out.
+
+Honors SCRIPTS_DIR_OVERRIDE (default: scripts) and TESTS_DIR_OVERRIDE
+(default: tests), and LINT_ALLOW_EMPTY_SCAN=1 for fixtures.
+
+Exits 0 when no such range is found, 1 when one is. Exits 2 when the
+check cannot run: `shfmt` or `jq` absent from PATH, a file `shfmt`
+cannot parse, or a scan set matching no file.
+
 ### scripts/check-renovate-config-validator.sh
 
 Validate renovate.json against the upstream Renovate
@@ -2154,6 +2206,33 @@ checks even if one fails; exits 1 if any failed, 2 on config error.
 
 ## Libraries
 
+### scripts/lib/ascii-match.sh
+
+Bash regex matching whose ranges hold ASCII only. Source
+after `set -Eeuo pipefail`.
+
+#### ascii_match()
+
+Match text against a bash `[[ =~ ]]` regex under
+`C.UTF-8`, leaving `BASH_REMATCH` as the match sets it. A range such as
+`[0-9]` or `[a-z]` follows the locale's collation, so under `en_US.UTF-8`
+it also matches characters such as `٣`, `５` or `é`; under `C.UTF-8` a
+range holds ASCII only. Character classes such as `[[:space:]]` keep the
+reading `C.UTF-8` gives them, the one the CI runner gives them too. The
+locale is local to the call, so the caller's messages and tools keep
+theirs.
+
+**Args:**
+
+- `$1` — text
+- `$2` — regex
+
+**Exit codes:**
+
+- `0` — the text matches
+- `1` — it does not
+- `2` — the regex does not compile
+
 ### scripts/lib/awk-path.sh
 
 Make a path unambiguous as an `awk` file operand.
@@ -2476,6 +2555,34 @@ one output while asserting different substrings, if two records share
 one output without a parity exemption, or if nothing was recorded at
 all. The census names every group of scenarios sharing one output before
 reporting the counts.
+
+### scripts/lib/locale-gap.sh
+
+Locale precondition for harness scenarios that pin a
+locale to show a locale-bound regex range. Source after
+`set -Eeuo pipefail`.
+
+#### require_locale_gap()
+
+Fail unless a bash run under `LC_ALL=<locale>` matches the
+fullwidth digit `５` (U+FF15) against `^[0-9]$`. A range in a bash
+`[[ =~ ]]` regex follows the locale's collation, so in `en_US.UTF-8` it
+admits characters a C locale does not. Where the pinned locale is not
+installed, bash warns, falls back to C, and a scenario meant to show the
+difference passes whether or not the script under test spells its class
+out. The probe runs the `bash` on PATH, the one the scripts run under,
+rather than asking `locale -a`, whose answer comes from the system C
+library and can disagree with the one bash is linked against. On failure
+it prints one line naming the locale and what the probe printed.
+
+**Args:**
+
+- `$1` — locale name, such as `en_US.UTF-8`
+
+**Exit codes:**
+
+- `0` — the locale shows the gap
+- `1` — it does not
 
 ### scripts/lib/log.sh
 

@@ -14,6 +14,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/locale-gap.sh
+source "${REPO_ROOT}/scripts/lib/locale-gap.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-verify-reason-ladder.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/verify-reason-ladder"
 
@@ -117,14 +119,49 @@ function expect_unearned_exempt() {
   rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
 }
 
+# @description Run the script under en_US.UTF-8 on the good workflow
+# rewritten by one sed program, and compare exit code and the whole of
+# stderr. In that locale a bash range such as `[A-Za-z0-9_]` also matches
+# non-ASCII letters.
+# @arg $1 scenario name  @arg $2 sed program  @arg $3 expected exit
+# @arg $4 the whole expected stderr, with DIR for the temp directory
+function expect_en_us() {
+  local -r name="$1" program="$2" want_exit="$3"
+  local dir stderr_file stdout_file outcome_file want
+  dir="$(mktemp --directory)"
+  stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  sed "${program}" -- "${FIXTURES}/good/workflow.yml" >"${dir}/workflow.yml"
+  want="${4//DIR/${dir}}"
+
+  local got_exit=0
+  LC_ALL=en_US.UTF-8 VERIFY_WORKFLOW_OVERRIDE="${dir}/workflow.yml" \
+    VERIFICATION_DOC_OVERRIDE="${FIXTURES}/good/verification.md" \
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || got_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
+
+  if [[ ${got_exit} -ne ${want_exit} || "$(cat -- "${stderr_file}")" != "${want}" ]]; then
+    printf 'FAIL: %s — expected exit %d and stderr %q; got exit %d and stderr %q\n' \
+      "${name}" "${want_exit}" "${want}" "${got_exit}" "$(cat -- "${stderr_file}")" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${got_exit}"
+  fi
+
+  harness_assert_record "${name}" "${want#"${dir}/"}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  rm --recursive --force -- "${dir}" "${stderr_file}" "${stdout_file}" "${outcome_file}"
+}
+
 function main() {
   expect 'good' 'workflow.yml' 0 ''
 
   expect 'bad-env-key-regex' 'workflow.yml' 1 \
-    'is not a shell identifier'
+    'attribution env key A\{1 is not a shell identifier; attribution env names must match ^[A-Za-z_][A-Za-z0-9_]*$'
 
   expect 'bad-missing-env' 'workflow.yml' 1 \
-    'has no steps.<id>.outcome entry'
+    'step id step-delta has no steps.<id>.outcome entry in the attribution env'
 
   expect 'bad-unread-env' 'workflow.yml' 1 \
     'is never read by the reason ladder'
@@ -142,6 +179,16 @@ function main() {
   expect 'malformed' 'bad-malformed.yml' 2 \
     'could not evaluate'
 
+  require_locale_gap en_US.UTF-8 || exit 1
+  expect_en_us 'non-ASCII letter in an env key is not a shell identifier under en_US.UTF-8' \
+    's/^\( *\)STEP_CHARLIE:/\1STEP_CHARLIé:/' 1 \
+    'DIR/workflow.yml: attribution env key STEP_CHARLIé is not a shell identifier; attribution env names must match ^[A-Za-z_][A-Za-z0-9_]*$'
+  expect_en_us 'non-ASCII letter before an env key is not a shell identifier under en_US.UTF-8' \
+    's/^\( *\)STEP_CHARLIE:/\1éSTEP_CHARLIE:/' 1 \
+    'DIR/workflow.yml: attribution env key éSTEP_CHARLIE is not a shell identifier; attribution env names must match ^[A-Za-z_][A-Za-z0-9_]*$'
+  expect_en_us 'non-ASCII letter in a step id is not read as an outcome reference under en_US.UTF-8' \
+    's/step-charlie/step-charlié/g' 1 \
+    'DIR/workflow.yml: step id step-charlié has no steps.<id>.outcome entry in the attribution env'
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then

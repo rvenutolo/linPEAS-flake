@@ -19,6 +19,8 @@ readonly REPO_ROOT
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/bump-linpeas.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/bump-linpeas"
+# shellcheck source=scripts/lib/locale-gap.sh
+source "${REPO_ROOT}/scripts/lib/locale-gap.sh"
 
 failures=0
 passes=0
@@ -77,6 +79,48 @@ function run_scenario() {
   elif ! grep --fixed-strings --quiet -- "${substring}" "${stderr_file}"; then
     printf 'FAIL: %s — stderr missing %q\n' "${name}" "${substring}" >&2
     sed 's/^/    /' "${stderr_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s\n' "${name}"
+    passes=$((passes + 1))
+  fi
+
+  rm --recursive --force -- "${stub_dir}" "${stdout_file}" "${stderr_file}" "${outcome_file}"
+}
+
+# @description Run one scenario under en_US.UTF-8, where a bash `[0-9]`
+# range also matches non-ASCII digits, and compare the whole of stderr
+# with each line's timestamp stripped. The release fixtures it is given
+# list no assets, so a tag the gate lets through ends at the asset lookup
+# before any download, and the two outcomes differ only in stderr.
+# @arg $1 scenario name  @arg $2 release fixture (under FIXTURES)
+# @arg $3 expected exit code  @arg $4 the whole expected stderr, untimed
+function run_en_us_scenario() {
+  local -r name="$1" release_fixture="$2" want_exit="$3" want_stderr="$4"
+  local -r pin_path="${FIXTURES}/good-pin.json"
+  local stub_dir stdout_file stderr_file outcome_file pin_before got_stderr
+  stub_dir="$(mktemp --directory)"
+  stdout_file="$(mktemp)"
+  stderr_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  write_gh_stub "${stub_dir}" "${FIXTURES}/${release_fixture}"
+  pin_before="$(cat -- "${pin_path}")"
+
+  local rc=0
+  LC_ALL=en_US.UTF-8 PATH="${stub_dir}:${PATH}" \
+    PIN_FILE_OVERRIDE="${pin_path}" \
+    bash "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${rc}" >"${outcome_file}"
+  harness_assert_record "${name}" "${want_stderr##*$'\n'}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  got_stderr="$(sed --regexp-extended 's/^\[[^]]*\] //' -- "${stderr_file}")"
+
+  if [[ ${pin_before} != "$(cat -- "${pin_path}")" ]]; then
+    printf 'FAIL: %s — the pin fixture was modified\n' "${name}" >&2
+    failures=$((failures + 1))
+  elif ((rc != want_exit)) || [[ ${got_stderr} != "${want_stderr}" ]]; then
+    printf 'FAIL: %s — expected exit %d and stderr:\n%s\ngot exit %d and stderr:\n%s\n' \
+      "${name}" "${want_exit}" "${want_stderr}" "${rc}" "${got_stderr}" >&2
     failures=$((failures + 1))
   else
     printf 'PASS: %s\n' "${name}"
@@ -243,6 +287,20 @@ function main() {
     'could not fetch repos/peass-ng/PEASS-ng/releases/latest'
   run_scenario 'non-object assets entry is a tooling error' \
     'good-pin.json' 'bad-release-scalar-asset.json' 2 'an .assets entry is not an object'
+
+  # The tag gate holds the upstream tag to ASCII digits and lowercase hex
+  # under any locale. Each fixture's tag puts one non-ASCII character
+  # where en_US.UTF-8 collation would admit it into a range.
+  require_locale_gap en_US.UTF-8 || exit 1
+  local tag
+  for tag in arabic-indic:2026010١-0000000 fullwidth:2026010５-0000000 \
+    superscript:2026010²-0000000 fraction:2026010½-0000000 \
+    hex-letter:20260101-000000é leading-junk:é20260101-0000000 \
+    trailing-junk:20260101-0000000é; do
+    run_en_us_scenario "${tag%%:*} upstream tag is refused under en_US.UTF-8" \
+      "bad-release-${tag%%:*}-tag.json" 1 \
+      "INFO  current pin: 20260101-0000000"$'\n'"INFO  upstream latest: ${tag#*:}"$'\n'"ERROR upstream tag does not match expected format: ${tag#*:}"
+  done
 
   harness_assert_verify || failures=$((failures + 1))
 

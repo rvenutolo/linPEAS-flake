@@ -149,7 +149,8 @@ printf 'file\tline\tref\tpinned_sha\tcurrent_comment\ttarget_comment\tstatus\n' 
 # Match:  [- ] uses: <owner/repo[/path]>@<40-hex> # <tag>
 # Note: quoted `uses:` forms (e.g. uses: "actions/checkout@..." ) are not
 # supported; the convention in this repo is unquoted.
-re='^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*([^@[:space:]]+)@([0-9a-fA-F]{40})[[:space:]]*#[[:space:]]*([^[:space:]]+)'
+# Hex digits spelled out: a `[0-9a-f]` range follows the locale.
+re='^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*([^@[:space:]]+)@([0123456789abcdefABCDEF]{40})[[:space:]]*#[[:space:]]*([^[:space:]]+)'
 
 for file in "${paths[@]}"; do
   [[ -f ${file} ]] || continue

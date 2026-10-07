@@ -5,6 +5,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/locale-gap.sh
+source "${REPO_ROOT}/scripts/lib/locale-gap.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/inventory-action-pin-tags.sh"
 readonly FIXTURE_DIR="${REPO_ROOT}/tests/fixtures/inventory-action-pin-tags"
 readonly EXPECTED="${FIXTURE_DIR}/expected.tsv"
@@ -178,6 +180,33 @@ fi
 rm --recursive --force -- "${EMPTY_SCAN_DIR}" "${OUT_EMPTY}" \
   "${STDOUT_EMPTY}" "${STDERR_EMPTY}" "${OUTCOME_EMPTY}"
 printf 'OK   empty scan set is a could-not-run\n'
+
+# --- a pin SHA holding a non-ASCII letter is not a pin ---
+# Under en_US.UTF-8 a bash `[0-9a-fA-F]` range also matches non-ASCII
+# letters, so 39 hex digits and an `é` would be inventoried as a SHA pin.
+# A `uses:` that follows other text on its line is no pin line either. The
+# inventory holds only its header.
+require_locale_gap en_US.UTF-8 || exit 1
+NONASCII_DIR="$(mktemp --directory)"
+printf 'jobs:\n  a:\n    steps:\n      - uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaé # v4.3.1\n      - run: echo uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa # v4.3.1\n' \
+  >"${NONASCII_DIR}/wf.yml"
+nonascii_exit=0
+LC_ALL=en_US.UTF-8 INVENTORY_PATHS_OVERRIDE="${NONASCII_DIR}/wf.yml" \
+  INVENTORY_TAG_FIXTURE_DIR="${FIXTURE_DIR}/tag-fixtures" \
+  bash "${SCRIPT}" --output "${NONASCII_DIR}/out.tsv" \
+  >"${NONASCII_DIR}/stdout" 2>"${NONASCII_DIR}/stderr" || nonascii_exit=$?
+printf 'harness-assert-outcome: exit=%d\n' "${nonascii_exit}" >"${NONASCII_DIR}/outcome"
+readonly NONASCII_HEADER=$'file\tline\tref\tpinned_sha\tcurrent_comment\ttarget_comment\tstatus'
+harness_assert_record 'non-ASCII letter in a pin SHA is not inventoried under en_US.UTF-8' '' \
+  "${NONASCII_DIR}/outcome" "${NONASCII_DIR}/stdout" "${NONASCII_DIR}/stderr" "${NONASCII_DIR}/out.tsv"
+if ((nonascii_exit != 0)) || [[ "$(cat -- "${NONASCII_DIR}/out.tsv")" != "${NONASCII_HEADER}" ]]; then
+  printf 'FAIL: non-ASCII pin SHA inventoried (exit %d):\n' "${nonascii_exit}" >&2
+  cat -- "${NONASCII_DIR}/out.tsv" "${NONASCII_DIR}/stderr" >&2
+  rm --recursive --force -- "${NONASCII_DIR}"
+  exit 1
+fi
+rm --recursive --force -- "${NONASCII_DIR}"
+printf 'PASS: non-ASCII letter in a pin SHA is not inventoried under en_US.UTF-8\n'
 
 harness_assert_verify || exit 1
 

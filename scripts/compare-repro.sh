@@ -9,6 +9,10 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+_lib_dir="${BASH_SOURCE[0]%/*}"
+if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
+# shellcheck source=scripts/lib/ascii-match.sh
+source "${_lib_dir}/lib/ascii-match.sh"
 
 if [[ $# -ne 2 ]]; then
   printf 'usage: %s <build-a.json> <build-b.json>\n' "$0" >&2
@@ -73,7 +77,8 @@ for f in "${BUILD_A}" "${BUILD_B}"; do
     fi
     value="$(jq --raw-output --arg k "${field}" '.[$k]' "${f}")"
     pattern="$(expected_pattern "${field}")"
-    if [[ ! ${value} =~ ${pattern} ]]; then
+    # ascii_match holds the ranges to ASCII under any locale.
+    if ! ascii_match "${value}" "${pattern}"; then
       printf 'ERROR: %s: field %s has malformed value: %s\n' "${f}" "${field}" "${value}" >&2
       exit 2
     fi

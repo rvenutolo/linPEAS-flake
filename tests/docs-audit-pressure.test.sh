@@ -10,6 +10,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/locale-gap.sh
+source "${REPO_ROOT}/scripts/lib/locale-gap.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/docs-audit-pressure.sh"
 
 failures=0
@@ -423,6 +425,30 @@ run_scenario 'unparsable workflow at HEAD stops the run' 2 \
   --expect-err 'cannot read job ids from .github/workflows/a.yml at HEAD: yq exited 1' \
   --forbid 'Jobs removed:'
 
+cd "${REPO_ROOT}"
+
+# --- scenario: an audit point holding a non-ASCII letter -> exit 2 ---
+# Under en_US.UTF-8 a bash `[0-9a-f]` range also matches non-ASCII
+# letters, so 39 hex digits and an `é` would pass the shape check and
+# reach git as a revision. The shape check is what must refuse it.
+require_locale_gap en_US.UTF-8 || exit 1
+make_sandbox
+cd "${SANDBOX}"
+audit_sha="$(git -C "${SANDBOX}" rev-parse HEAD)"
+printf 'LAST_AUDIT_SHA=%sé\n' "${audit_sha:0:39}" >"${STATE_FILE}"
+LC_ALL=en_US.UTF-8 run_scenario 'audit point with a non-ASCII letter is refused under en_US.UTF-8' 2 \
+  --expect-err "${STATE_FILE}: no LAST_AUDIT_SHA=<40-hex> line" \
+  --forbid-err 'is not a commit in this history'
+STATE_FILE="${SANDBOX}/.github/state-before"
+printf 'LAST_AUDIT_SHA=é%s\n' "${audit_sha}" >"${STATE_FILE}"
+LC_ALL=en_US.UTF-8 run_scenario 'non-ASCII letter before the audit point is refused under en_US.UTF-8' 2 \
+  --expect-err "${STATE_FILE}: no LAST_AUDIT_SHA=<40-hex> line" \
+  --forbid-err 'is not a commit in this history'
+STATE_FILE="${SANDBOX}/.github/state-after"
+printf 'LAST_AUDIT_SHA=%sé\n' "${audit_sha}" >"${STATE_FILE}"
+LC_ALL=en_US.UTF-8 run_scenario 'non-ASCII letter after the audit point is refused under en_US.UTF-8' 2 \
+  --expect-err "${STATE_FILE}: no LAST_AUDIT_SHA=<40-hex> line" \
+  --forbid-err 'is not a commit in this history'
 cd "${REPO_ROOT}"
 
 harness_assert_verify || failures=$((failures + 1))

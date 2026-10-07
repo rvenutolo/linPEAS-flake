@@ -264,7 +264,8 @@ if [[ -z ${WORKFLOW_PATH_OVERRIDE:-} || -n ${RATCHET_VERSION_OVERRIDE:-} ]]; the
     # `ratchet --version` prints `ratchet X.Y.Z (<sha>, <os>/<arch>)`.
     ratchet_version="$(ratchet --version 2>&1 | awk 'NR == 1 { print $2 }')"
   fi
-  if [[ ! ${ratchet_version} =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  # Digit classes spelled out: a `[0-9]` range follows the locale.
+  if [[ ! ${ratchet_version} =~ ^[0123456789]+\.[0123456789]+\.[0123456789]+$ ]]; then
     printf 'could not read a version from ratchet --version (got %q)\n' \
       "${ratchet_version}" >&2
     exit 2
