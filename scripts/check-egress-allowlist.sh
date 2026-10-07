@@ -215,8 +215,9 @@
 #      Two job keys that print as the same text (a literal `build:` twice,
 #      or `1` beside `"1"`) are a finding too, naming the key: they share
 #      one lookup and one line range, so one job would shadow the other.
-#      A job key on a line the newline-separated read never reaches (a
-#      file with lone carriage returns as line breaks) is a finding too.
+#      A file holding a carriage return that does not end a CRLF line
+#      break is a finding too: yq counts it as a line break and the
+#      newline-separated read does not, so every job line after it is off.
 #
 #      Breadth is asserted the same way as assertion 6: the run reports
 #      how many jobs carry either host, and finding none on an
@@ -515,17 +516,26 @@ for f in "${selected_files[@]}"; do
     fail "${f}: job key '${dup_keys%%$'\n'*}' is written more than once, so which job is read is ambiguous"
     continue
   fi
+  # yq counts a carriage return as a line break, this read splits on
+  # `\n` alone, so every job line after a lone CR is off, and a block
+  # would be bounded from the wrong line. A CR ending a CRLF line break
+  # is the last character of its line; any CR with a character after it
+  # is a lone one. grep exits 1 for no match and 2 for an error.
+  cr_status=0
+  LC_ALL=C grep --quiet --extended-regexp $'\r.' "${f}" || cr_status=$?
+  if ((cr_status > 1)); then
+    fail "${f}: could not search the file for carriage returns"
+    continue
+  fi
+  if ((cr_status == 0)); then
+    fail "${f}: the file holds a carriage return that is not part of a CRLF line break, which yq counts as a line break and a line-by-line read does not"
+    continue
+  fi
   mapfile -t file_text <"${f}"
   file_lines="${#file_text[@]}"
   for jidx in "${!row_names[@]}"; do
     jline_name="${row_names[jidx]}"
     jstart="${row_starts[jidx]}"
-    # yq numbers lines by every line break YAML knows, this read by `\n`
-    # alone, so a key can sit on a line the read never reaches.
-    if ((jstart > file_lines)); then
-      fail "${f}: job key '${jline_name}' is on line ${jstart} but the file reads as ${file_lines} line(s), so its block cannot be bounded"
-      continue 2
-    fi
     # The key's own indentation, from its source line. A later line that
     # is not a comment, indented no deeper than that, ends the block. A
     # comment indented no deeper does not end it: it sits in the block

@@ -766,7 +766,7 @@ A job key that is empty or null is a finding, and that file is read no further: 
 
 Two job keys that print as the same text (a literal `build:` twice, or `1` beside `"1"`) are a finding too, naming the key and ending the read of that file: they share one lookup and one line range, so one job would shadow the other.
 
-A job key on a line the newline-separated read never reaches, as in a file whose line breaks are lone carriage returns, is a finding too, since its block cannot be bounded.
+A file holding a carriage return that does not end a CRLF line break is a finding too: yq counts it as a line break and the newline-separated read does not, so every job line after it is off and a block would be bounded from the wrong line.
 
 Breadth is asserted the same way the notify-composite rule asserts it: the run reports how many jobs carry either host, and finding none on an unfiltered scan is a could-not-run, not a clean tree. `WORKFLOW_FILE_FILTER` and `LINT_ALLOW_EMPTY_SCAN=1` suppress that guard the same way they do for the notify rule.
 
