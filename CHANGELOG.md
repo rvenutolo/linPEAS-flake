@@ -6,6 +6,24 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20261006-4cf2d06d] - 2026-10-06
+
+### Chores
+- Bump linpeas to 20261006-4cf2d06d ([#1240](https://github.com/rvenutolo/linPEAS-flake/pull/1240))
+
+## [20261005-c6b483d8] - 2026-10-05
+
+### Chores
+- Bump linpeas to 20261005-c6b483d8 ([#1238](https://github.com/rvenutolo/linPEAS-flake/pull/1238))
+
+### Fixes
+- Pass file text to yq as data, not as expression text ([#1236](https://github.com/rvenutolo/linPEAS-flake/pull/1236))
+- Keep file text out of bash arithmetic in two lints ([#1234](https://github.com/rvenutolo/linPEAS-flake/pull/1234))
+- Read the remaining workflow and manifest shapes by kind ([#1230](https://github.com/rvenutolo/linPEAS-flake/pull/1230))
+- Never evaluate a timeout value, and read its shapes by kind ([#1229](https://github.com/rvenutolo/linPEAS-flake/pull/1229))
+- Close three false passes in the on-branches, concurrency and summary lints ([#1227](https://github.com/rvenutolo/linPEAS-flake/pull/1227))
+- Stop the run when a yq read fails after a workflow's first ([#1222](https://github.com/rvenutolo/linPEAS-flake/pull/1222))
+
 ## [20261003-ea9b2e92] - 2026-10-03
 
 ### Chores
