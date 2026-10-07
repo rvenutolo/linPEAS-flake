@@ -211,6 +211,8 @@
 #      Two job keys that print as the same text (a literal `build:` twice,
 #      or `1` beside `"1"`) are a finding too, naming the key: they share
 #      one lookup and one line range, so one job would shadow the other.
+#      A job key on a line the newline-separated read never reaches (a
+#      file with lone carriage returns as line breaks) is a finding too.
 #
 #      Breadth is asserted the same way as assertion 6: the run reports
 #      how many jobs carry either host, and finding none on an
@@ -513,6 +515,12 @@ for f in "${selected_files[@]}"; do
   for jidx in "${!row_names[@]}"; do
     jline_name="${row_names[jidx]}"
     jstart="${row_starts[jidx]}"
+    # yq numbers lines by every line break YAML knows, this read by `\n`
+    # alone, so a key can sit on a line the read never reaches.
+    if ((jstart > file_lines)); then
+      fail "${f}: job key '${jline_name}' is on line ${jstart} but the file reads as ${file_lines} line(s), so its block cannot be bounded"
+      continue 2
+    fi
     # The key's own indentation, from its source line. A later non-blank
     # line indented no deeper than that ends the block, comment or not.
     key_lead="${file_text[jstart - 1]%%[![:space:]]*}"
