@@ -1427,14 +1427,16 @@ A test is matched under a C locale when it follows a
 of its own function (`ascii_match` in `scripts/lib/ascii-match.sh` is
 one), or follows a top-level `export LC_ALL=C` or
 `export LC_ALL=C.UTF-8`; the value is one unquoted word, the last
-`LC_ALL` word on its line. A later assignment, `declare`, `local`,
-`export` or `unset LC_ALL` that does not leave C, in the same function
-or outside any function, ends that; `read` and `printf -v` are not
-read, nor is the order in which functions are called. A declaration
-inside a subshell, a command substitution, a conditional or a
-background statement does not count. Otherwise the class is spelled
-out
-(`[0123456789]`), or the text is matched through `ascii_match`.
+`LC_ALL` word on its line. A later assignment, `declare`, `local` or
+`export` (also behind `builtin` or `command`) that does not leave C,
+or a later `unset LC_ALL`, `read`, `mapfile`, `getopts`, `printf -v`,
+arithmetic assignment or `for LC_ALL in`, in the same function or
+outside any function, ends that. A write through `eval` or a nameref
+is not read, nor is the order in which functions are called. A
+declaration inside a subshell, a command substitution, a conditional
+or a background statement does not count. A backslash-newline inside
+an operator or a regex is joined before it is read. Otherwise the
+class is spelled out (`[0123456789]`), or the text is matched through `ascii_match`.
 
 The `=~` tests are read from the `shfmt --tojson` parse tree, and the
 operator from the source text between the two operands, since shfmt
