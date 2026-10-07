@@ -535,13 +535,16 @@ printf 'OK   jobs-empty-map\n'
 # The row check is the range arithmetic's own guard. The key test above
 # leaves yq no way to print a row it fails, so a yq stub answers the job
 # line read with the rows in STUB_ROWS, and fails the key read when
-# STUB_FAIL_KEYS is set; every other read goes to the real yq.
+# STUB_FAIL_KEYS is set; the job count read prints STUB_COUNT, or fails
+# when STUB_FAIL_COUNT is set; every other read goes to the real yq.
 real_yq="$(command -v yq)"
 mkdir -- "${key_dir}/stub"
 # shellcheck disable=SC2016 # the shim's own text
 printf '%s\n' "#!${BASH}" \
   'for a in "$@"; do' \
   '  if [[ -n ${STUB_FAIL_KEYS:-} && ${a} == *"test("* ]]; then exit 7; fi' \
+  '  if [[ -n ${STUB_FAIL_COUNT:-} && ${a} == *"keys | length"* ]]; then exit 7; fi' \
+  '  if [[ -n ${STUB_COUNT:-} && ${a} == *"keys | length"* ]]; then printf "%s\n" "${STUB_COUNT}"; exit 0; fi' \
   '  if [[ ${a} == *"[., line]"* ]]; then printf "%s\n" "${STUB_ROWS}"; exit 0; fi' \
   'done' \
   "exec ${real_yq@Q} \"\$@\"" >"${key_dir}/stub/yq"
@@ -549,11 +552,12 @@ chmod +x -- "${key_dir}/stub/yq"
 cp -- "${key_dir}/wf/job-key-empty.yml" "${key_dir}/wf/stubbed.yml"
 # @arg $1 scenario name  @arg $2 STUB_ROWS  @arg $3 STUB_FAIL_KEYS
 # @arg $4 the expected finding line, after the file name
+# @arg $5 STUB_COUNT  @arg $6 STUB_FAIL_COUNT
 function expect_stubbed() {
-  local -r name="$1" rows="$2" fail_keys="$3" want_line="$4"
+  local -r name="$1" rows="$2" fail_keys="$3" want_line="$4" count="${5:-}" fail_count="${6:-}"
   local got_exit=0 got_stderr
   got_stderr="$(PATH="${key_dir}/stub:${PATH}" STUB_ROWS="${rows}" STUB_FAIL_KEYS="${fail_keys}" \
-    WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER=stubbed.yml \
+    STUB_COUNT="${count}" STUB_FAIL_COUNT="${fail_count}" WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER=stubbed.yml \
     "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
   if [[ ${got_exit} != 1 || ${got_stderr} != "${key_dir}/wf/stubbed.yml: ${want_line}"$'\n1 egress-allowlist violation(s)' ]]; then
     printf 'FAIL %s: exit %s, want 1 and %q\n  stderr: %s\n' \
@@ -570,6 +574,12 @@ expect_stubbed job-line-row-digits-then-text $'build\t5\nbuild\t5x' '' "${bad_ro
 expect_stubbed job-line-row-text-then-digits $'build\t5\nbuild\tx5' '' "${bad_row} \$'build\\tx5'"
 expect_stubbed job-line-row-ten-digits $'build\t5\nbuild\t1234567890' '' "${bad_row} \$'build\\t1234567890'"
 expect_stubbed job-key-read-fails '' 1 'could not evaluate job keys with yq (malformed?)'
+# A key row for an empty name ends the read: a malformed row after it is
+# never reached.
+expect_stubbed job-line-row-empty-name-ends-read $'\t5\nbuild\tX' '' "a job key is empty or null, so that job's allowlist cannot be read"
+# The job count is read before the arithmetic that uses it.
+expect_stubbed job-count-not-a-number $'build\t5' '' "the job count is not a number: 'x'" x
+expect_stubbed job-count-read-fails $'build\t5' '' 'could not evaluate workflow with yq (malformed?)' '' 1
 
 # LIVE: the real tree must satisfy assertion 7, and the run must have
 # actually scanned something. The assertion checks the printed count is
