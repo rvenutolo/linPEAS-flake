@@ -73,7 +73,7 @@ function run_case() {
 declare -a CASE_ENV=()
 USE_DEFAULT_DIRS=0
 
-# shellcheck disable=SC2016 # every put line is file text, not an expansion
+# shellcheck disable=SC2016,SC1003 # every put line is file text, not an expansion; a trailing backslash is file text
 {
   put spelled-out scripts/a.sh '#!/usr/bin/env bash' '[[ $1 =~ ^[0123456789]+$ ]]'
   run_case spelled-out 0 'regex-range-ascii: ok — scanned 1 file(s), 1 =~ test(s), 0 with a regex in a variable, 0 under a C locale' ''
@@ -288,6 +288,55 @@ tests/t.test.sh:2: regex range h-k follows the locale$(footer 2)"
   run_case local-last-word-c 0 'regex-range-ascii: ok — scanned 1 file(s), 14 =~ test(s), 0 with a regex in a variable, 14 under a C locale' ''
   put export-c-utf8 scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C.UTF-8' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]' '[[ $10 =~ [0-9] ]]' '[[ $11 =~ [0-9] ]]' '[[ $12 =~ [0-9] ]]' '[[ $13 =~ [0-9] ]]' '[[ $14 =~ [0-9] ]]' '[[ $15 =~ [0-9] ]]'
   run_case export-c-utf8 0 'regex-range-ascii: ok — scanned 1 file(s), 15 =~ test(s), 0 with a regex in a variable, 15 under a C locale' ''
+
+  # Writers of LC_ALL other than assignments end a C locale; a line
+  # continuation does not hide a test or a range.
+  put unset-quoted scripts/a.sh '#!/usr/bin/env bash' 'f() { local LC_ALL=C; unset "LC_ALL"; [[ $1 =~ [0-9] ]]; }'
+  run_case unset-quoted 1 '' "DIR/scripts/a.sh:2: regex range 0-9 follows the locale$(footer 1)"
+  put unset-builtin scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'builtin unset LC_ALL' '[[ $1 =~ [0-9] ]]'
+  run_case unset-builtin 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put unset-command-options scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'command -p unset -v LC_ALL' '[[ $1 =~ [0-9] ]]'
+  run_case unset-command-options 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put export-builtin-other scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'builtin export LC_ALL=en_US.UTF-8' '[[ $1 =~ [0-9] ]]'
+  run_case export-builtin-other 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put for-loop-variable scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'for LC_ALL in en_US.UTF-8; do :; done' '[[ $1 =~ [0-9] ]]'
+  run_case for-loop-variable 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put let-assignment scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'let LC_ALL=5' '[[ $1 =~ [0-9] ]]'
+  run_case let-assignment 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put arithmetic-assignment scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' '(( LC_ALL=5 ))' '[[ $1 =~ [0-9] ]]'
+  run_case arithmetic-assignment 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put mapfile-target scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'mapfile LC_ALL </dev/null' '[[ $1 =~ [0-9] ]]'
+  run_case mapfile-target 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put getopts-target scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'getopts a LC_ALL' '[[ $1 =~ [0-9] ]]'
+  run_case getopts-target 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put read-target scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'read -r LC_ALL' '[[ $1 =~ [0-9] ]]'
+  run_case read-target 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put printf-v-target scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'printf -v LC_ALL x' '[[ $1 =~ [0-9] ]]'
+  run_case printf-v-target 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put operator-continued scripts/a.sh '#!/usr/bin/env bash' '[[ $1 \' '  =~ [a-f] ]]'
+  run_case operator-continued 1 '' "DIR/scripts/a.sh:2: regex range a-f follows the locale$(footer 1)"
+  put regex-continued scripts/a.sh '#!/usr/bin/env bash' '[[ $1 =~ [0-\' '9] ]]'
+  run_case regex-continued 1 '' "DIR/scripts/a.sh:2: regex range 0-9 follows the locale$(footer 1)"
+  put unset-single-quoted scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' "unset 'LC_ALL'" '[[ $1 =~ [0-9] ]]'
+  run_case unset-single-quoted 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put readonly-builtin-other scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'builtin readonly LC_ALL=en_US.UTF-8' '[[ $1 =~ [0-9] ]]'
+  run_case readonly-builtin-other 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put typeset-builtin-other scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'command typeset LC_ALL=en_US.UTF-8' '[[ $1 =~ [0-9] ]]'
+  run_case typeset-builtin-other 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put declare-builtin-other scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'builtin declare LC_ALL=en_US.UTF-8' '[[ $1 =~ [0-9] ]]'
+  run_case declare-builtin-other 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put local-builtin-other scripts/a.sh '#!/usr/bin/env bash' 'f() { local LC_ALL=C; builtin local LC_ALL=en_US.UTF-8; [[ $1 =~ [0-9] ]]; }'
+  run_case local-builtin-other 1 '' "DIR/scripts/a.sh:2: regex range 0-9 follows the locale$(footer 1)"
+  put printf-v-joined scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'printf -vLC_ALL x' '[[ $1 =~ [0-9] ]]'
+  run_case printf-v-joined 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put arithmetic-expansion-assignment scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'x=$((LC_ALL=5))' '[[ $1 =~ [0-9] ]]'
+  run_case arithmetic-expansion-assignment 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
+  put variable-regex-continued scripts/a.sh '#!/usr/bin/env bash' 'r="[0-\' '9]"' '[[ $1 =~ $r ]]'
+  run_case variable-regex-continued 1 '' "DIR/scripts/a.sh:4: regex range 0-9 (through r) follows the locale$(footer 1)"
+  put unrelated-commands scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'builtin export LC_ALL=C' 'command printf %s LC_ALL' 'builtin unset foo' 'builtin export FOO=1' 'builtin export LC_ALL=C.UTF-8' 'printf -v foo x' 'read -r foo' 'for x in a; do :; done' 'let n=5' '(( n++ ))' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]' '[[ $10 =~ [0-9] ]]' '[[ $11 =~ [0-9] ]]' '[[ $12 =~ [0-9] ]]' '[[ $13 =~ [0-9] ]]' '[[ $14 =~ [0-9] ]]' '[[ $15 =~ [0-9] ]]' '[[ $16 =~ [0-9] ]]'
+  run_case unrelated-commands 0 'regex-range-ascii: ok — scanned 1 file(s), 16 =~ test(s), 0 with a regex in a variable, 16 under a C locale' ''
+  put builtin-export-last-word-c scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'builtin export LC_ALL=en_US.UTF-8 LC_ALL=C' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]' '[[ $10 =~ [0-9] ]]' '[[ $11 =~ [0-9] ]]' '[[ $12 =~ [0-9] ]]' '[[ $13 =~ [0-9] ]]' '[[ $14 =~ [0-9] ]]' '[[ $15 =~ [0-9] ]]' '[[ $16 =~ [0-9] ]]' '[[ $17 =~ [0-9] ]]'
+  run_case builtin-export-last-word-c 0 'regex-range-ascii: ok — scanned 1 file(s), 17 =~ test(s), 0 with a regex in a variable, 17 under a C locale' ''
 
   put export-before-test scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [a-f] ]]' '[[ $3 =~ [A-Z] ]]' '[[ $4 =~ [a-z] ]]'
   run_case export-before-test 0 'regex-range-ascii: ok — scanned 1 file(s), 4 =~ test(s), 0 with a regex in a variable, 4 under a C locale' ''
