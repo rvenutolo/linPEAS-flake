@@ -148,3 +148,4 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/run-doc-freshness.test.sh`              | `scripts/run-doc-freshness.sh`              | —                                            |
 | `tests/run-harness-group.test.sh`              | `scripts/run-harness-group.sh`              | —                                            |
 | `tests/run-lint-group.test.sh`                 | `scripts/run-lint-group.sh`                 | —                                            |
+| `tests/site-no-bytecode.test.sh`               | `mkdocs.yml`                                | `tests/fixtures/site-no-bytecode`            |

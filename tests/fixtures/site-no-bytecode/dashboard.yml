@@ -1,0 +1,37 @@
+pin:
+  version: 20260521-859cab5f
+  url: https://github.com/peass-ng/PEASS-ng/releases/download/20260521-859cab5f/linpeas.sh
+  upstream_tag: 20260521-859cab5f
+  upstream_date: "2026-05-21T11:56:59Z"
+drift:
+  days: 0
+  upstream_latest: 20260521-859cab5f
+last_bump:
+  pr_url: https://github.com/rvenutolo/linPEAS-flake/pull/142
+  pr_number: 142
+  merged_at: "2026-05-22T10:11:52Z"
+release:
+  latest_tag: 20260521-859cab5f
+  image_ref: ghcr.io/rvenutolo/linpeas:20260521-859cab5f
+parity:
+  conclusion: success
+  checked_at: "2026-05-22T12:51:57Z"
+  run_url: https://github.com/rvenutolo/linPEAS-flake/actions/runs/26288742610
+releases:
+  - tag: 20260521-859cab5f
+    date: "2026-05-22T10:12:13Z"
+    image_tag: ghcr.io/rvenutolo/linpeas:20260521-859cab5f
+  - tag: 20260510-cd4bd619
+    date: "2026-05-16T04:25:47Z"
+    image_tag: ghcr.io/rvenutolo/linpeas:20260510-cd4bd619
+lag:
+  recent:
+    - tag: 20260510-cd4bd619
+      our_date: "2026-05-16T04:25:47Z"
+      upstream_date: "2026-05-10T17:31:13Z"
+      lag_hours: 130.9
+    - tag: 20260521-859cab5f
+      our_date: "2026-05-22T10:12:13Z"
+      upstream_date: "2026-05-21T11:56:59Z"
+      lag_hours: 22.3
+generated_at: "2026-05-23T03:18:31+00:00"

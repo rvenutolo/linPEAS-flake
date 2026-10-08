@@ -15,6 +15,15 @@ validation:
   nav:
     omitted_files: warn
 
+# mkdocs copies every non-Markdown file under docs_dir into the site.
+# mkdocs-macros imports docs/_data/macros.py, so Python writes bytecode
+# beside it, and a `path:` build source (`just site`) also carries a local
+# checkout's ignored __pycache__/ into docs_dir. Either lands in the
+# published site and makes two builds of the same content differ.
+exclude_docs: |
+  __pycache__/
+  *.pyc
+
 theme:
   name: material
   custom_dir: docs/overrides
