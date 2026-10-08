@@ -685,12 +685,9 @@ finds a key by comparing base64 text, which holds neither character:
 `explode(.) | [to_entries[] | select((.key | tostring | @base64) == (strenv(X) | @base64))] | reverse | .[0] | .value`.
 `explode` resolves merge keys and aliased entries, which `to_entries`
 does not follow, and the last of the matches is read, as `yq`'s own
-index reads a name written twice. Two cases read differently from that
-index. Under a merge key given a list of mappings, `explode` takes a
-name from the first mapping that holds it, as the YAML merge spec says,
-and the index takes it from the last. A key written as an alias is
-found by its anchor's text after `explode`, and by the alias (`*ka`)
-through the index.
+index reads a name written twice. A key written as an alias is found by
+its anchor's text after `explode`, and by the alias (`*ka`) through the
+index.
 
 A lookup whose name came from `keys` on the same map leaves `explode`
 out. `keys` prints a key written as an alias as the alias (`*ka`),
@@ -698,7 +695,8 @@ out. `keys` prints a key written as an alias as the alias (`*ka`),
 match; the lints that list jobs this way look a job up in `jobs:` as
 written. A path read after the lookup (`.steps[]`, `.permissions`) then
 follows aliases and merge keys inside the job, and a read that prints
-the whole job prints them as written.
+the whole job and must search what an alias or a merge key brings in
+hands the matched job alone to `explode`.
 
 A number `yq` printed in an earlier read goes back through `env`.
 `check-run-block-strict.sh` looks up no job by its key: its rows hold
@@ -715,6 +713,55 @@ No lint enforces this. Most expressions in `scripts/` built with a
 variable splice a `readonly` constant, and an expression handed to a
 helper reaches `yq` as a single variable, so a matcher on the `yq` call
 cannot tell file text from a constant.
+
+## Job keys and merge lists in the `jobs:` reads
+
+Lints that list a workflow's job keys, one per line, and read each back,
+or iterate `jobs:` with `.jobs[]` or `to_entries`, read files GitHub has
+not validated. GitHub Actions refuses a job id outside
+`[A-Za-z_][A-Za-z0-9_-]*`, and does not support YAML merge keys
+(`actionlint` reports `GitHub Actions does not support YAML merge key`),
+so a runnable workflow holds neither. A lint that reads such a file
+anyway misreads it:
+
+- a key holding a line break lists as two names, and an empty key lists
+    as none, so the job under it is read as other jobs or not read;
+- a merge key (`<<`) directly under `jobs:` lists as the job `<<`, and
+    the jobs it brings in are never reached by `.jobs[]` or `to_entries`.
+
+A job key that is empty, holds a line break, a tab, a carriage return or
+a NUL, is not a scalar, or is a merge key is therefore a counted finding
+that names the file and the key, and that file's jobs are not read. A
+generator (`refresh-ci-dag.sh`, `refresh-enforcement-matrix.sh`) stops
+with exit 2 and leaves its output untouched instead. The shared reading
+is `first_odd_job_key` and `odd_job_key_message` in
+`scripts/lib/job-keys.sh`; a lint that refuses odd job ids with a check
+of its own (`check-permission-scopes.sh`, `check-min-permissions.sh`,
+`check-job-timeout-minutes.sh`, `check-checkout-persist-credentials.sh`,
+`check-upload-artifact-strict.sh`, `check-commitlint-config-explicit.sh`,
+`check-egress-allowlist.sh`) refuses the merge key in that check too. A lint that looks up one named job
+(`.jobs.verify`) reads through a merge key, which is correct, and has no
+job key to refuse.
+
+A merge key given a list (`<<: [*P, *Q]`) with a conflicting key is read
+first mapping wins, as the YAML merge specification says. `yq` reads it
+last mapping wins unless it is given `--yaml-fix-merge-anchor-to-spec`,
+so every `yq` read of a workflow that follows a merge key passes
+`"${YQ_MERGE_SPEC[@]}"` from the same library; the flag also silences
+the warning `yq` prints when it is absent. A lint that reads a job after
+`explode` takes the first mapping as well.
+
+The allowlist of `check-permission-scopes.sh` is split into
+tab-separated `workflow`, `job` and `scope` rows, so a workflow, job or
+scope name in it that holds a tab or a line break is refused (exit 1)
+before the rows are split: it could forge a row for another entry.
+
+`docs-audit-pressure.sh` lists job ids only to name them in an advisory
+report, and does not refuse these keys; the verdict it feeds is not
+affected.
+
+No lint enforces this. `tests/lib-job-keys.test.sh` pins the library,
+and each lint's harness pins its own refusals.
 
 ## Treefmt YAML quote gotcha
 
