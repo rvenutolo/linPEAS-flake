@@ -60,6 +60,7 @@ readonly -a HARNESSES=(
   'lib-generates|lib-generates.test.sh|'
   'lib-locale-gap|lib-locale-gap.test.sh|'
   'lib-ascii-match|lib-ascii-match.test.sh|'
+  'lib-job-keys|lib-job-keys.test.sh|'
   'glob-scan-breadth|glob-scan-breadth.test.sh|'
   'repo-root-guard|repo-root-guard.test.sh|'
   'harness-assert|lib-harness-assert.test.sh|'

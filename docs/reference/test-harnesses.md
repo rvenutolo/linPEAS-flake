@@ -101,6 +101,7 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/lib-enumerate.test.sh`      | `scripts/lib/enumerate.sh`      | —        |
 | `tests/lib-generates.test.sh`      | `scripts/lib/generates.sh`      | —        |
 | `tests/lib-harness-assert.test.sh` | `scripts/lib/harness-assert.sh` | —        |
+| `tests/lib-job-keys.test.sh`       | `scripts/lib/job-keys.sh`       | —        |
 | `tests/lib-locale-gap.test.sh`     | `scripts/lib/locale-gap.sh`     | —        |
 | `tests/lib-log.test.sh`            | `scripts/lib/log.sh`            | —        |
 | `tests/lib-payload.test.sh`        | `scripts/lib/payload.sh`        | —        |

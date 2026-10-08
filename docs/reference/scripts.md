@@ -2556,6 +2556,55 @@ one output without a parity exemption, or if nothing was recorded at
 all. The census names every group of scenarios sharing one output before
 reporting the counts.
 
+### scripts/lib/job-keys.sh
+
+Shared reading rules for the `jobs:` map of a workflow.
+Several lints list the job keys one per line and read each key back,
+so a key the line cannot carry (an empty one, one holding a line break
+or a tab, one that is not a scalar) is read as other names or as none,
+and a merge key (`<<`) directly under `jobs:` lists as the key `<<`
+while the jobs it brings in are never read. GitHub Actions refuses a
+job id outside `[A-Za-z_][A-Za-z0-9_-]*`, so no runnable workflow has
+such a key; a lint reads files GitHub has not validated, and counts the
+key as a finding instead of reading around it.
+
+A merge key given a list (`<<: [*P, *Q]`) with a conflicting key is
+read first mapping wins, as the YAML merge specification says. `yq`
+reads it last mapping wins unless it is given
+`--yaml-fix-merge-anchor-to-spec`, so every `yq` read of a workflow
+that follows a merge key passes `"${YQ_MERGE_SPEC[@]}"`. The flag also
+silences the warning `yq` prints when it is absent.
+Source after `set -Eeuo pipefail`.
+
+#### first_odd_job_key()
+
+Print the first job key the job list cannot carry, as a
+JSON string, or nothing when every key is carriable. A key is refused
+when it is a merge key, is not a scalar, is empty, or holds a tab, a
+line break, a carriage return or a NUL. Each key is resolved through an
+alias first. A `jobs:` that is not a map holds no keys.
+
+**Args:**
+
+- `$1` — workflow path
+
+**Exit codes:**
+
+- `1` — yq could not evaluate the file
+
+**Stdout:**
+
+- the first refused key as JSON, or nothing
+
+#### odd_job_key_message()
+
+Print the finding for a refused job key.
+
+**Args:**
+
+- `$1` — workflow path
+- `$2` — the key as JSON, from `first_odd_job_key`
+
 ### scripts/lib/locale-gap.sh
 
 Locale precondition for harness scenarios that pin a
