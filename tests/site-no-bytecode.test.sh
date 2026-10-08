@@ -19,6 +19,10 @@
 #     `.pyc` beside `macros.py`.
 #   - `stale-bytecode-in-docs`: a `.pyc` already sits under `docs/_data/`, as
 #     in a checkout that was built before.
+#   - `loose-pyc-in-docs`: a `.pyc` outside any `__pycache__/` directory, which
+#     only the file pattern of `exclude_docs` removes.
+#   - `stray-file-in-pycache`: a non-`.pyc` file inside a `__pycache__/`
+#     directory, which only the directory pattern removes.
 set -Eeuo pipefail
 IFS=$'\n\t'
 
@@ -104,6 +108,8 @@ function run_scenario() {
 
 run_scenario 'build-writes-bytecode' ''
 run_scenario 'stale-bytecode-in-docs' 'docs/_data/__pycache__/stale.cpython-0.pyc'
+run_scenario 'loose-pyc-in-docs' 'docs/assets/loose.pyc'
+run_scenario 'stray-file-in-pycache' 'docs/_data/__pycache__/note.txt'
 
 harness_assert_verify || failures=$((failures + 1))
 
