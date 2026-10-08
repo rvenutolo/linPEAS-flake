@@ -381,6 +381,12 @@ function main() {
   run_scenario 'job-key-scalar-merge-key-is-refused' 1 \
     "${odd_root}/workflows/scalar-merge.yml: ${odd_refused} (first: \"<<\")" '' \
     "${odd_root}/workflows" "${odd_root}"
+  # The read that fails on the refused file's own shape is not echoed
+  # beside the finding.
+  if grep --fixed-strings --quiet -- 'merge anchors' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — yq message printed beside the finding\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
   rm --force -- "${odd_root}/workflows/scalar-merge.yml" "${odd_root}/workflows/ci.yml"
   mkdir --parents "${odd_root}/solo"
   printf 's: &s 5\njobs:\n  <<: *s\n  z:\n    runs-on: ubuntu-latest\n' >"${odd_root}/solo/only-scalar-merge.yml"

@@ -136,6 +136,12 @@ expect_unread_workflow 'failed read of a workflow holding no job' \
   "${FIXTURES}/good" "${FIXTURES}/good/categories.yml" 9 \
   "explode(.) | keys | .[] ${FIXTURES}/good/categories.yml"
 
+# The refusal read of a workflow is its own read: with it failing and
+# every other read succeeding, the run is still a could-not-run.
+expect_unread_workflow 'failed refusal read of a workflow' \
+  "${FIXTURES}/good" "${FIXTURES}/good/categories.yml" 5 \
+  "// \"\" ${FIXTURES}/good/categories.yml"
+
 # A workflow that does not parse, written at run time so no unparsable
 # file sits in the tree for the formatters to refuse.
 unparsable_dir="$(mktemp --directory)"
@@ -371,6 +377,26 @@ expect_jobs 'other workflow merge key holding a scalar' \
   "${ONE_JOB}" $'foo: A\n' $'t: &t 5\njobs:\n  <<: *t\n  y:\n    runs-on: ubuntu-latest\n' 1 \
   "DIR/other.yml: jobs: ${REFUSED} (first: \"<<\")"
 
+# A ci.yml whose `jobs:` is no map has no job list to read: that is a
+# could-not-read exit, and no drift is reported beside it.
+# The run stops at the first unreadable job list: the last line is that
+# read's, and the per-workflow read of the same file is never reached.
+scalar_jobs_dir="$(mktemp --directory)"
+printf 'jobs: 5\n' >"${scalar_jobs_dir}/ci.yml"
+printf 'foo: A\n' >"${scalar_jobs_dir}/categories.yml"
+scalar_jobs_exit=0
+scalar_jobs_stderr="$(WORKFLOWS_DIR_OVERRIDE="${scalar_jobs_dir}" \
+  CI_WORKFLOW_OVERRIDE="${scalar_jobs_dir}/ci.yml" \
+  CATEGORIES_FILE_OVERRIDE="${scalar_jobs_dir}/categories.yml" \
+  "${SCRIPT}" 2>&1 >/dev/null)" || scalar_jobs_exit=$?
+rm --recursive --force -- "${scalar_jobs_dir}"
+if [[ ${scalar_jobs_exit} != 2 || ${scalar_jobs_stderr} != *$'\n'"cannot read job keys from ${scalar_jobs_dir}/ci.yml" ]]; then
+  printf 'FAIL ci.yml jobs holding a scalar: exit %s, want 2 and the ci.yml line last\n  stderr: %s\n' \
+    "${scalar_jobs_exit}" "${scalar_jobs_stderr}" >&2
+  exit 1
+fi
+printf 'OK   ci.yml jobs holding a scalar\n'
+
 # @description Run the lint over a ci.yml and a category map and compare
 # the exit status and the whole of stderr.
 # @arg $1 scenario label  @arg $2 ci.yml body  @arg $3 category map body
@@ -416,6 +442,20 @@ expect_exact 'ci.yml refused key beside an EXEMPT entry that is a category key' 
   $'jobs:\n  "lint\\nzz":\n    runs-on: ubuntu-latest\n  build:\n    runs-on: ubuntu-latest\n' $'build: A\n' \
   "DIR/ci.yml: jobs: ${REFUSED} (first: \"lint\\nzz\")"$'\n'"EXEMPT entry build is already a key in DIR/categories.yml"$'\n''2 ci.yml / categories drift entry/entries' \
   $'build\n'
+
+# The refused file's own read of its jobs fails on a merge key holding a
+# scalar; that failure is the file's shape, so `yq`'s message is not
+# printed beside the finding.
+expect_exact 'ci.yml merge key holding a scalar prints no yq message' \
+  $'s: &s 5\njobs:\n  <<: *s\n  z:\n    runs-on: ubuntu-latest\n' $'z: A\n' \
+  "DIR/ci.yml: jobs: ${REFUSED} (first: \"<<\")"$'\n'"DIR/categories.yml: category entry z does not match any job in .github/workflows/"$'\n''2 ci.yml / categories drift entry/entries'
+
+# An EXEMPT entry that is not a job is reported once: the already-a-key
+# test is for entries the first test passed.
+expect_exact 'EXEMPT entry that is not a job is reported once' \
+  "${ONE_JOB}" $'foo: A\nbar: B\n' \
+  "EXEMPT entry bar is not a job in DIR/ci.yml"$'\n'"DIR/categories.yml: category entry bar does not match any job in .github/workflows/"$'\n''2 ci.yml / categories drift entry/entries' \
+  $'bar\n'
 
 # ci.yml sits in the workflows directory too and is checked once: a
 # second pass over it would print its finding twice.
