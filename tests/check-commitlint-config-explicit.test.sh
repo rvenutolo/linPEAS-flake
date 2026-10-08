@@ -133,10 +133,15 @@ expect_built 'a second document is read as jobs, with no separator row' \
   "${HEAD}"'  first:\n    steps:\n'"${GOOD}"'---\n'"${HEAD}"'  second:\n    steps:\n'"${BARE}" 1 \
   "%W: job second step[0] wagoid/commitlint-github-action ${NO_WITH}
 ${ONE}"
-readonly ODD='jobs: holds a job id that is not a scalar, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: '
+readonly ODD='jobs: holds a job id that is not a scalar, is empty, is a merge key, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: '
 expect_built 'a job id holding a tab is refused' \
   "${HEAD}"'  "a\\tb":\n    steps:\n'"${BARE}" 1 \
   "%W: ${ODD}kind=scalar, id=\"a\\tb\")
+${ONE}"
+# A merge key under jobs: brings jobs in that the per-job read never reaches.
+expect_built 'a merge key under jobs: is refused' \
+  'base: &base {c: {runs-on: ubuntu-latest, steps: [{uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed, with: {}}]}}\n'"${HEAD}"'  <<: *base\n' 1 \
+  "%W: ${ODD}kind=scalar, id=\"<<\")
 ${ONE}"
 expect_fails_first 'a configFile: list carrying the string tag is no path' '' cfgstrlist \
   '      - uses: wagoid/commitlint-github-action@x\n        with: {configFile: !!str [.commitlintrc.yml]}\n' \

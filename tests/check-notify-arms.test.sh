@@ -104,6 +104,15 @@ function gated_workflow() {
   printf 'A failed run <!-- notify-arms: %s/notify = failure -->.\n' "$1" >>"${ROOT}/${DOC}"
 }
 
+# @description Add a workflow outside the scanner set to ROOT whose jobs
+# are given verbatim, with a build job and a notify job under the keys the
+# text builds. The notify step's body is `PAYLOAD_RAN` text only.
+# @arg $1 workflow file name
+# @arg $2 the text from `jobs:` on (a notify job in some odd shape)
+function odd_workflow() {
+  printf '%s\n' "name: ${1%.*}" 'on: push' "$2" >"${ROOT}/.github/workflows/$1"
+}
+
 # @description Run the script against ROOT; assert exit code, stderr, and
 # stdout. The clean path's summary carries the marker tallies and the scan
 # breadth, which is what tells two clean scenarios apart.
@@ -1060,6 +1069,118 @@ and `codeql-infra` <!-- notify-arms: codeql.yml/notify-infra = failure cancelled
   ROOT="$(mktemp --directory)"
   cp --recursive -- "${BASE}/." "${ROOT}/"
   run_scenario not-a-repository-exits-2 2 'list prose failed enumerating the scan set'
+
+  # A job key GitHub Actions refuses is a counted finding: read as other
+  # names or as none, it would hide a notify job whose marker is wrong.
+  fresh_root
+  odd_workflow linebreak.yml 'jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  "j\nk":
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.build.result }}
+          label: linebreak
+          title: linebreak
+          body: "linebreak <!-- notify-arms: linebreak.yml/j k = success -->"'
+  run_scenario job-key-line-break-is-a-finding 1 \
+    '.github/workflows/linebreak.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "j\nk")'
+
+  fresh_root
+  odd_workflow mergekey.yml 'x-jobs: &more
+  notify:
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.build.result }}
+          label: mergekey
+          title: mergekey
+          body: "mergekey <!-- notify-arms: mergekey.yml/notify = success -->"
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  <<: *more'
+  run_scenario job-key-merge-key-is-a-finding 1 \
+    '.github/workflows/mergekey.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "<<")'
+
+  fresh_root
+  odd_workflow emptykey.yml 'jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  "":
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.build.result }}
+          label: emptykey
+          title: emptykey
+          body: emptykey'
+  run_scenario job-key-empty-is-a-finding 1 \
+    '.github/workflows/emptykey.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "")'
+
+  # A merge list gives the first mapping the win; yq reads the last unless
+  # told otherwise. The two mappings gate on different results.
+  local order marker
+  for order in 'failure:[*first, *second]' 'cancelled:[*first, *second]' 'cancelled:[*second, *first]'; do
+    marker="${order%%:*}"
+    order="${order#*:}"
+    fresh_root
+    odd_workflow "mergelist-${marker}.yml" "x-first: &first
+  if: always() && needs.a.result == 'failure'
+x-second: &second
+  if: always() && needs.a.result == 'cancelled'
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  j:
+    needs: a
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: \${{ needs.a.result }}
+          label: mergelist
+          title: mergelist
+          body: mergelist
+    <<: ${order}"
+    printf 'A cancelled run <!-- notify-arms: mergelist-%s.yml/j = %s -->.\n' "${marker}" "${marker}" >>"${ROOT}/${DOC}"
+    case "${order}:${marker}" in
+    '[*first, *second]:failure')
+      # Spare workflows keep the clean summary of each passing order distinct.
+      odd_workflow spare-one.yml 'jobs: {}'
+      run_scenario merge-list-first-gate-failure-passes 0 '' \
+        "match the arms of 10 scanner notify job(s) (${TALLY}); scanned 8 workflow(s) and 1 Markdown file(s)"
+      ;;
+    '[*first, *second]:cancelled')
+      run_scenario merge-list-first-gate-cancelled-marker-is-a-finding 1 \
+        'marker for mergelist-cancelled.yml/j declares "cancelled"; the workflow files on "failure"'
+      ;;
+    *)
+      odd_workflow spare-one.yml 'jobs: {}'
+      odd_workflow spare-two.yml 'jobs: {}'
+      run_scenario merge-list-second-gate-first-cancelled-passes 0 '' \
+        "match the arms of 10 scanner notify job(s) (${TALLY}); scanned 9 workflow(s) and 1 Markdown file(s)"
+      ;;
+    esac
+  done
 
   harness_assert_verify
   if ((failures)); then

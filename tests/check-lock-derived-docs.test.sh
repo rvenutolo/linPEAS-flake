@@ -452,6 +452,41 @@ function main() {
   expect 'agree: a @generates-block output counts as a declared output' \
     "${work}/block-declaration" 0 ''
 
+  # (v) A merge list inside a job is read first mapping wins, as the YAML
+  # merge specification says: with the lock-writing mapping first, the job
+  # writes flake.lock, so the workflow must declare its generators; with
+  # the benign mapping first it writes nothing. Read last mapping wins,
+  # the two orders would swap verdicts.
+  local merge_name merge_list
+  for merge_name in 'writer-first' 'benign-first'; do
+    merge_list='*P, *Q'
+    if [[ ${merge_name} == 'benign-first' ]]; then merge_list='*Q, *P'; fi
+    write_tree "${work}/merge-${merge_name}" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+      '    scripts/refresh-alpha.sh' \
+      $'    flake.lock\n    docs/reference/alpha.md'
+    cat >"${work}/merge-${merge_name}/.github/workflows/zz.yml" <<EOF
+name: zz
+on:
+  workflow_dispatch:
+permissions: {}
+x-writer: &P
+  steps:
+    - run: nix flake update
+x-benign: &Q
+  steps:
+    - run: echo benign
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    <<: [${merge_list}]
+EOF
+  done
+  expect 'bad: a merge list whose first mapping writes flake.lock is a lock-writing workflow' \
+    "${work}/merge-writer-first" 1 \
+    'zz.yml writes flake.lock but declares no LOCK_DERIVED_GENERATORS'
+  expect 'agree: a merge list whose first mapping is benign writes no lock' \
+    "${work}/merge-benign-first" 0 ''
+
   harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then

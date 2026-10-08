@@ -312,6 +312,41 @@ function main() {
     rm --recursive --force -- "${tag_root}"
   done
 
+  # A job key the job list cannot carry is a finding naming the file and
+  # the key. A line-break key must not resolve as the two names it spells
+  # (the sentence below would pass), and a merge key must not hide the job
+  # it brings in (the sentence names a real job and must stay silent).
+  local odd_root odd_refused
+  odd_refused='jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read'
+  odd_root="$(mktemp --directory)"
+  mkdir --parents "${odd_root}/docs" "${odd_root}/workflows"
+  git -C "${odd_root}" init --quiet
+  cp -- "${FIXTURES}/clean-passes/lint-groups.yml" "${FIXTURES}/clean-passes/roster.txt" "${odd_root}/"
+  printf 'The %sa%s job runs on every PR.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  printf 'jobs:\n  foo:\n    runs-on: ubuntu-latest\n  "a\\nb":\n    runs-on: ubuntu-latest\n' \
+    >"${odd_root}/workflows/ci.yml"
+  run_scenario 'job-key-line-break-is-refused' 1 \
+    "${odd_root}/workflows/ci.yml: ${odd_refused} (first: \"a\\nb\")" '' \
+    "${odd_root}/workflows" "${odd_root}"
+  also_expect 'docs/x.md:1: ghost: a'
+  printf 'The %sfoo%s job runs on every PR.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  printf 'jobs:\n  foo:\n    runs-on: ubuntu-latest\n  "":\n    runs-on: ubuntu-latest\n' \
+    >"${odd_root}/workflows/ci.yml"
+  run_scenario 'job-key-empty-is-refused' 1 \
+    "${odd_root}/workflows/ci.yml: ${odd_refused} (first: \"\")" '' \
+    "${odd_root}/workflows" "${odd_root}"
+  printf 'The %sj%s job runs on every PR.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  printf 'x: &m\n  j:\n    runs-on: ubuntu-latest\njobs:\n  <<: *m\n  foo:\n    runs-on: ubuntu-latest\n' \
+    >"${odd_root}/workflows/ci.yml"
+  run_scenario 'job-key-merge-key-is-refused' 1 \
+    "${odd_root}/workflows/ci.yml: ${odd_refused} (first: \"<<\")" '' \
+    "${odd_root}/workflows" "${odd_root}"
+  if grep --fixed-strings --quiet -- 'ghost: j' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — the merged job j is reported as a ghost\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
+  rm --recursive --force -- "${odd_root}"
+
   # A scan root git cannot enumerate must be loud. Reading the listing
   # through a process substitution instead would lose git's exit status to
   # its subshell, and the run would report a clean tree it never read.

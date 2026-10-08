@@ -62,4 +62,43 @@ expect_hr_ref_refused 'non-ASCII harden-runner sha rejected under en_US.UTF-8' \
 expect_hr_ref_refused 'text after the harden-runner sha rejected under en_US.UTF-8' \
   "step-security/harden-runner@${hr_sha}é"
 
+# --- job keys and merge lists, built at run time ----------------------
+# @description Run the script on one workflow written at run time and
+# compare the exit code and that stderr contains the message.
+# @arg $1 scenario name  @arg $2 workflow text (printf format)
+# @arg $3 expected exit code  @arg $4 expected stderr substring
+function expect_built() {
+  local -r name="$1" text="$2" want_exit="$3" want_msg="$4"
+  local dir got_exit=0 got_stderr
+  dir="$(mktemp --directory)"
+  # shellcheck disable=SC2059 # the workflow text is the format
+  printf "${text}" >"${dir}/built.yml"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${dir}" WORKFLOW_FILE_FILTER=built.yml \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  rm --recursive --force -- "${dir}"
+  if [[ ${got_exit} != "${want_exit}" ]]; then
+    printf 'FAIL %s: exit %s, want %s\n  stderr: %s\n' "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" >&2
+    exit 1
+  fi
+  if [[ -n ${want_msg} && ${got_stderr} != *"${want_msg}"* ]]; then
+    printf 'FAIL %s: stderr missing %q\n  got: %s\n' "${name}" "${want_msg}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+readonly REFUSED='which GitHub Actions refuses'
+readonly HR_STEP="{uses: step-security/harden-runner@${hr_sha}}"
+readonly MERGE_P='x: &p {steps: [{run: echo PAYLOAD_RAN}]}\n'
+readonly MERGE_Q="y: &q {steps: [${HR_STEP}]}\\n"
+expect_built 'merge key under jobs is refused' \
+  'x: &base {j: {steps: [{run: echo PAYLOAD_RAN}]}}\npermissions: {}\njobs:\n  <<: *base\n' 1 "${REFUSED}"
+expect_built 'line-break job key is refused' \
+  "permissions: {}\\njobs:\\n  \"a\\\\nb\": {steps: [${HR_STEP}]}\\n" 1 "${REFUSED}"
+expect_built 'empty job key is refused' \
+  "permissions: {}\\njobs:\\n  \"\": {steps: [${HR_STEP}]}\\n" 1 "${REFUSED}"
+expect_built 'merge list reads the first mapping (run first) as a run step' \
+  "${MERGE_P}${MERGE_Q}"'permissions: {}\njobs:\n  a: {runs-on: x, <<: [*p, *q]}\n' 1 'no first-step'
+expect_built 'merge list reads the first mapping (harden-runner first) as harden-runner' \
+  "${MERGE_P}${MERGE_Q}"'permissions: {}\njobs:\n  a: {runs-on: x, <<: [*q, *p]}\n' 0 ''
+
 printf 'all tests passed\n'

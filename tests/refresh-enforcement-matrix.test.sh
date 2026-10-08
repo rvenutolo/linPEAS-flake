@@ -394,6 +394,63 @@ EOF
   rm --recursive --force -- "${hg_scripts}"
   rm --force -- "${hg_roster}" "${hg_out}" "${hg_err}" "${hg_stdout}" "${hg_outcome}"
 
+  # A ci.yml job key the job list cannot carry (empty, holding a line
+  # break, or a merge key) is refused as a could-not-run with the standard
+  # message, and the matrix file is left as it was: read a name per line,
+  # the key would resolve as other names or as none.
+  local ok_dir ok_scripts ok_out ok_err ok_stdout ok_outcome ok_rc ok_label ok_ci ok_ci_field ok_key
+  ok_dir="$(mktemp --directory)"
+  ok_scripts="$(mktemp --directory)"
+  ok_out="$(mktemp)"
+  ok_err="$(mktemp)"
+  ok_stdout="$(mktemp)"
+  ok_outcome="$(mktemp)"
+  for ok_label in 'empty' 'line-break' 'merge'; do
+    case "${ok_label}" in
+    empty)
+      ok_ci_field='foo'
+      ok_key='""'
+      ok_ci=$'jobs:\n  foo:\n    runs-on: ubuntu-latest\n  "":\n    runs-on: ubuntu-latest\n'
+      ;;
+    line-break)
+      ok_ci_field='a, b'
+      ok_key='"a\nb"'
+      ok_ci=$'jobs:\n  "a\\nb":\n    runs-on: ubuntu-latest\n'
+      ;;
+    *)
+      ok_ci_field='foo'
+      ok_key='"<<"'
+      ok_ci=$'x: &m\n  foo:\n    runs-on: ubuntu-latest\njobs:\n  <<: *m\n'
+      ;;
+    esac
+    printf '%s' "${ok_ci}" >"${ok_dir}/ci.yml"
+    printf -- '# Invariant index (fixture)\n\n- **Rule** — a rule. → [x.md](x.md) <!-- enforcer: -; ci: %s; hook: - -->\n' \
+      "${ok_ci_field}" >"${ok_dir}/index.md"
+    printf 'SENTINEL\n' >"${ok_out}"
+    ok_rc=0
+    ROSTER_SOURCE_OVERRIDE="${test_only_roster}" \
+      PRECOMMIT_HOOK_NAMES_OVERRIDE='shellcheck' \
+      INVARIANT_INDEX_OVERRIDE="${ok_dir}/index.md" \
+      CI_YML_OVERRIDE="${ok_dir}/ci.yml" \
+      SCRIPTS_DIR_OVERRIDE="${ok_scripts}" \
+      MATRIX_OUTPUT_OVERRIDE="${ok_out}" \
+      "${SCRIPT}" >"${ok_stdout}" 2>"${ok_err}" || ok_rc=$?
+    printf 'harness-assert-outcome: exit=%d\n' "${ok_rc}" >"${ok_outcome}"
+    harness_assert_record "ci.yml ${ok_label} job key is refused" \
+      "${ok_dir}/ci.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: ${ok_key})" \
+      "${ok_outcome}" "${ok_stdout}" "${ok_err}"
+    if [[ ${ok_rc} -eq 2 ]] &&
+      grep --fixed-strings --quiet -- "which GitHub Actions refuses; its jobs are not read (first: ${ok_key})" "${ok_err}" &&
+      [[ "$(<"${ok_out}")" == 'SENTINEL' ]]; then
+      pass "ci.yml ${ok_label} job key is refused and the matrix is untouched"
+    else
+      fail "ci.yml ${ok_label} job key: want exit 2, the standard message and an untouched matrix, got exit ${ok_rc}"
+      cat -- "${ok_err}" >&2
+    fi
+  done
+  rm --recursive --force -- "${ok_dir}" "${ok_scripts}"
+  rm --force -- "${ok_out}" "${ok_err}" "${ok_stdout}" "${ok_outcome}"
+
   rm --force -- "${test_only_roster}"
 
   harness_assert_verify || failures=$((failures + 1))

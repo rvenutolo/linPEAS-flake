@@ -37,4 +37,43 @@ expect bad-quick-install.yml 1 \
   "nixbuild/nix-quick-install-action@9d1f2e3a4b5c6d7e8f90a1b2c3d4e5f60718293a installs Nix outside the composite"
 expect no-such-workflow.yml 2 'selected 0 of'
 
+# --- job keys and merge lists, built at run time ----------------------
+# @description Run the script on one workflow written at run time and
+# compare the exit code and that stderr contains the message.
+# @arg $1 scenario name  @arg $2 workflow text (printf format)
+# @arg $3 expected exit code  @arg $4 expected stderr substring
+function expect_built() {
+  local -r name="$1" text="$2" want_exit="$3" want_msg="$4"
+  local dir got_exit=0 got_stderr
+  dir="$(mktemp --directory)"
+  # shellcheck disable=SC2059 # the workflow text is the format
+  printf "${text}" >"${dir}/built.yml"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${dir}" WORKFLOW_FILE_FILTER=built.yml \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  rm --recursive --force -- "${dir}"
+  if [[ ${got_exit} != "${want_exit}" ]]; then
+    printf 'FAIL %s: exit %s, want %s\n  stderr: %s\n' "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" >&2
+    exit 1
+  fi
+  if [[ -n ${want_msg} && ${got_stderr} != *"${want_msg}"* ]]; then
+    printf 'FAIL %s: stderr missing %q\n  got: %s\n' "${name}" "${want_msg}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+readonly REFUSED='which GitHub Actions refuses'
+readonly NIX_STEP='{uses: cachix/install-nix-action@v1}'
+readonly MERGE_P='x: &p {steps: [{uses: cachix/install-nix-action@v1}]}\n'
+readonly MERGE_Q='y: &q {steps: [{run: echo PAYLOAD_RAN}]}\n'
+expect_built 'empty job key is refused' \
+  "jobs:\n  \"\": {runs-on: x, steps: [${NIX_STEP}]}\n" 1 "${REFUSED}"
+expect_built 'line-break job key is refused' \
+  "jobs:\n  \"a\\\\nb\": {runs-on: x, steps: [${NIX_STEP}]}\n" 1 "${REFUSED}"
+expect_built 'merge key under jobs is refused' \
+  'x: &base {j: {runs-on: x, steps: [{uses: cachix/install-nix-action@v1}]}}\njobs:\n  <<: *base\n' 1 "${REFUSED}"
+expect_built 'merge list reads the first mapping (installer first) as the installer' \
+  "${MERGE_P}${MERGE_Q}"'jobs:\n  a: {runs-on: x, <<: [*p, *q]}\n' 1 'installs Nix outside the composite'
+expect_built 'merge list reads the first mapping (run first) as a run step' \
+  "${MERGE_P}${MERGE_Q}"'jobs:\n  a: {runs-on: x, <<: [*q, *p]}\n' 0 ''
+
 printf 'all tests passed\n'

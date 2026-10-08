@@ -43,6 +43,18 @@ jobs:
 EOF
 }
 
+# @description Write a workflow whose job `a` merges two steps' jobs.
+# The over-cap step is P and the in-cap step is Q.
+# @arg $1 destination path  @arg $2 merge list, e.g. "*P, *Q"
+function write_merge_list_caller() {
+  {
+    printf 'name: caller\non:\n  workflow_dispatch:\n'
+    printf 'x-p: &P {steps: [{uses: ./.github/actions/notify-workflow-result, with: {label: l, label-description: "%s"}}]}\n' "${OVER_CAP}"
+    printf 'x-q: &Q {steps: [{uses: ./.github/actions/notify-workflow-result, with: {label: l, label-description: ok}}]}\n'
+    printf 'jobs:\n  a: {<<: [%s]}\n' "$2"
+  } >"$1"
+}
+
 # @description Run the lint against a directory of workflows.
 # @arg $1 scenario name  @arg $2 workflow dir  @arg $3 expected exit
 # @arg $4 expected output substring (empty skips)
@@ -97,6 +109,30 @@ function main() {
   write_caller "${root}/conflict/b.yml" 'beta-drift' 'beta drifted'
   run_scenario 'one label with two descriptions fails' "${root}/conflict" 1 \
     'label beta-drift is filed with more than one description'
+
+  # A merge list inside a job is read first mapping wins, as the YAML
+  # merge specification says, so the first-listed step decides.
+  mkdir -p "${root}/merge-over-first"
+  write_merge_list_caller "${root}/merge-over-first/a.yml" '*P, *Q'
+  run_scenario 'a merge list with the over-cap step first fails' "${root}/merge-over-first" 1 \
+    'label l description is 101 characters, over the 100-character cap'
+  mkdir -p "${root}/merge-ok-first"
+  write_merge_list_caller "${root}/merge-ok-first/a.yml" '*Q, *P'
+  # A second caller keeps this output distinct from the at-cap scenario.
+  write_caller "${root}/merge-ok-first/b.yml" 'gamma-drift' 'gamma'
+  run_scenario 'a merge list with the in-cap step first passes' "${root}/merge-ok-first" 0 \
+    '2 label description(s) across 2 caller workflow(s)'
+
+  # A merge key directly under jobs: is a key GitHub Actions refuses, and
+  # the jobs it brings in are never read, so it is a finding.
+  mkdir -p "${root}/merge-under-jobs"
+  {
+    printf 'name: caller\non:\n  workflow_dispatch:\n'
+    printf 'x-base: &base {a: {steps: [{uses: ./.github/actions/notify-workflow-result, with: {label: l, label-description: "%s"}}]}}\n' "${OVER_CAP}"
+    printf 'jobs:\n  <<: *base\n'
+  } >"${root}/merge-under-jobs/a.yml"
+  run_scenario 'a merge key under jobs: is refused' "${root}/merge-under-jobs" 1 \
+    'which GitHub Actions refuses'
 
   # A scan set holding workflows but no notify caller means the composite
   # moved or was renamed. Scored clean, that is a lint reporting on a

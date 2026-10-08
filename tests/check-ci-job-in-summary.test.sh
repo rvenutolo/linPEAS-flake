@@ -312,6 +312,56 @@ if [[ ${alias_exit} != 0 || -n ${alias_stderr} ]]; then
 fi
 printf 'OK   jobs written as an alias\n'
 
+# @description Run the lint over a temp dir holding ci.yml, a category
+# map and optionally a second workflow, and compare the exit status and
+# that stderr holds a message.
+# @arg $1 scenario label  @arg $2 ci.yml body  @arg $3 category map body
+# @arg $4 second workflow body or empty  @arg $5 expected exit status
+# @arg $6 text stderr must hold, with DIR standing for the temp dir
+function expect_jobs() {
+  local -r label="$1" ci="$2" cats="$3" other="$4" want_exit="$5"
+  local dir got_exit=0 got_stderr want
+  dir="$(mktemp --directory)"
+  printf '%s' "${ci}" >"${dir}/ci.yml"
+  printf '%s' "${cats}" >"${dir}/categories.yml"
+  if [[ -n ${other} ]]; then printf '%s' "${other}" >"${dir}/other.yml"; fi
+  want="${6//DIR/${dir}}"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${dir}" CI_WORKFLOW_OVERRIDE="${dir}/ci.yml" \
+    CATEGORIES_FILE_OVERRIDE="${dir}/categories.yml" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  rm --recursive --force -- "${dir}"
+  if [[ ${got_exit} != "${want_exit}" || ${got_stderr} != *"${want}"* ]]; then
+    printf 'FAIL %s: exit %s, want %s, and stderr holding %q\n  got: %s\n' \
+      "${label}" "${got_exit}" "${want_exit}" "${want}" "${got_stderr}" >&2
+    return 1
+  fi
+  printf 'OK   %s\n' "${label}"
+}
+
+# A job key the job list cannot carry is a finding naming the key, in
+# ci.yml and in any other workflow: listed a line at a time, a line-break
+# key reads as two names that the category map can then match, and an
+# empty key reads as none.
+readonly REFUSED='holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read'
+readonly ONE_JOB=$'jobs:\n  foo:\n    runs-on: ubuntu-latest\n'
+expect_jobs 'ci.yml job key with a line break' \
+  $'jobs:\n  "a\\nb":\n    runs-on: ubuntu-latest\n' $'a: A\nb: B\n' '' 1 \
+  "DIR/ci.yml: jobs: ${REFUSED} (first: \"a\\nb\")"
+expect_jobs 'ci.yml empty job key' \
+  $'jobs:\n  foo:\n    runs-on: ubuntu-latest\n  "":\n    runs-on: ubuntu-latest\n' $'foo: A\n' '' 1 \
+  "DIR/ci.yml: jobs: ${REFUSED}"
+expect_jobs 'ci.yml merge key under jobs' \
+  $'x: &j\n  baz:\n    runs-on: ubuntu-latest\njobs:\n  <<: *j\n  foo:\n    runs-on: ubuntu-latest\n' $'foo: A\nbaz: B\n' '' 1 \
+  "DIR/ci.yml: jobs: ${REFUSED} (first: \"<<\")"
+expect_jobs 'other workflow job key with a line break' \
+  "${ONE_JOB}" $'foo: A\nc: C\nd: D\n' $'jobs:\n  "c\\nd":\n    runs-on: ubuntu-latest\n' 1 \
+  "DIR/other.yml: jobs: ${REFUSED} (first: \"c\\nd\")"
+expect_jobs 'other workflow empty job key' \
+  "${ONE_JOB}" $'foo: A\n' $'jobs:\n  "":\n    runs-on: ubuntu-latest\n' 1 \
+  "DIR/other.yml: jobs: ${REFUSED} (first: \"\")"
+expect_jobs 'other workflow merge key under jobs' \
+  "${ONE_JOB}" $'foo: A\n' $'x: &j\n  qux:\n    runs-on: ubuntu-latest\njobs:\n  <<: *j\n' 1 \
+  "DIR/other.yml: jobs: ${REFUSED} (first: \"<<\")"
+
 missing_categories_exit=0
 missing_categories_stderr="$(env \
   "WORKFLOWS_DIR_OVERRIDE=${FIXTURES}/good" \
