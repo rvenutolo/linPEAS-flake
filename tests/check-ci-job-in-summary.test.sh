@@ -362,6 +362,15 @@ expect_jobs 'other workflow merge key under jobs' \
   "${ONE_JOB}" $'foo: A\n' $'x: &j\n  qux:\n    runs-on: ubuntu-latest\njobs:\n  <<: *j\n' 1 \
   "DIR/other.yml: jobs: ${REFUSED} (first: \"<<\")"
 
+# A merge key whose value is not a mapping cannot be resolved; the refusal
+# is the verdict, not a could-not-read exit.
+expect_jobs 'ci.yml merge key holding a scalar' \
+  $'s: &s 5\njobs:\n  <<: *s\n  z:\n    runs-on: ubuntu-latest\n' $'z: A\n' '' 1 \
+  "DIR/ci.yml: jobs: ${REFUSED} (first: \"<<\")"
+expect_jobs 'other workflow merge key holding a scalar' \
+  "${ONE_JOB}" $'foo: A\n' $'t: &t 5\njobs:\n  <<: *t\n  y:\n    runs-on: ubuntu-latest\n' 1 \
+  "DIR/other.yml: jobs: ${REFUSED} (first: \"<<\")"
+
 # @description Run the lint over a ci.yml and a category map and compare
 # the exit status and the whole of stderr.
 # @arg $1 scenario label  @arg $2 ci.yml body  @arg $3 category map body
@@ -400,6 +409,13 @@ expect_exact 'ci.yml line-break key is one drift entry' \
 expect_exact 'ci.yml merge key is one drift entry beside an EXEMPT entry' \
   $'x: &j\n  baz:\n    runs-on: ubuntu-latest\njobs:\n  <<: *j\n  foo:\n    runs-on: ubuntu-latest\n' $'foo: A\nbaz: B\n' \
   "DIR/ci.yml: jobs: ${REFUSED} (first: \"<<\")"$'\n'"${ONE_ENTRY}" $'zzz\n'
+
+# The EXEMPT-versus-category check does not read ci.yml's job list, so a
+# refused ci.yml still reports an entry that is already a category key.
+expect_exact 'ci.yml refused key beside an EXEMPT entry that is a category key' \
+  $'jobs:\n  "lint\\nzz":\n    runs-on: ubuntu-latest\n  build:\n    runs-on: ubuntu-latest\n' $'build: A\n' \
+  "DIR/ci.yml: jobs: ${REFUSED} (first: \"lint\\nzz\")"$'\n'"EXEMPT entry build is already a key in DIR/categories.yml"$'\n''2 ci.yml / categories drift entry/entries' \
+  $'build\n'
 
 # ci.yml sits in the workflows directory too and is checked once: a
 # second pass over it would print its finding twice.

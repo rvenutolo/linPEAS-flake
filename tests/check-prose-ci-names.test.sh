@@ -373,6 +373,27 @@ function main() {
   run_scenario 'job-key-sequence-is-refused' 1 \
     "${odd_root}/workflows/ci.yml: ${odd_refused} (first: \"[seq, key]\")" '' \
     "${odd_root}/workflows" "${odd_root}"
+  # A merge key whose value is not a mapping cannot be resolved, so the
+  # file's jobs are not read; the refusal is the verdict, beside an
+  # ordinary workflow and as the only workflow alike.
+  printf 'jobs:\n  foo:\n    runs-on: ubuntu-latest\n' >"${odd_root}/workflows/ci.yml"
+  printf 's: &s 5\njobs:\n  <<: *s\n  z:\n    runs-on: ubuntu-latest\n' >"${odd_root}/workflows/scalar-merge.yml"
+  run_scenario 'job-key-scalar-merge-key-is-refused' 1 \
+    "${odd_root}/workflows/scalar-merge.yml: ${odd_refused} (first: \"<<\")" '' \
+    "${odd_root}/workflows" "${odd_root}"
+  rm --force -- "${odd_root}/workflows/scalar-merge.yml" "${odd_root}/workflows/ci.yml"
+  mkdir --parents "${odd_root}/solo"
+  printf 's: &s 5\njobs:\n  <<: *s\n  z:\n    runs-on: ubuntu-latest\n' >"${odd_root}/solo/only-scalar-merge.yml"
+  run_scenario 'job-key-scalar-merge-key-sole-workflow-is-refused' 1 \
+    "${odd_root}/solo/only-scalar-merge.yml: ${odd_refused} (first: \"<<\")" '' \
+    "${odd_root}/solo" "${odd_root}"
+  rm --force -- "${odd_root}/solo/only-scalar-merge.yml"
+  # Every workflow refused still reports the refusal, not an empty name set.
+  printf 'on: push\njobs:\n  ? [a, b]\n  : {runs-on: x}\n' >"${odd_root}/solo/only-seq-key.yml"
+  run_scenario 'job-key-sole-workflow-all-refused-is-refused' 1 \
+    "${odd_root}/solo/only-seq-key.yml: ${odd_refused} (first: \"[a, b]\")" '' \
+    "${odd_root}/solo" "${odd_root}"
+  rm --force -- "${odd_root}/solo/only-seq-key.yml"
   # A merge list inside a job is read first mapping wins, which also keeps
   # `yq` from printing its warning about the default order.
   printf 'Nothing here names a job.\n' >"${odd_root}/docs/x.md"
