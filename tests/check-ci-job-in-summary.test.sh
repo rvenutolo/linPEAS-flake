@@ -443,12 +443,26 @@ expect_exact 'ci.yml refused key beside an EXEMPT entry that is a category key' 
   "DIR/ci.yml: jobs: ${REFUSED} (first: \"lint\\nzz\")"$'\n'"EXEMPT entry build is already a key in DIR/categories.yml"$'\n''2 ci.yml / categories drift entry/entries' \
   $'build\n'
 
-# The refused file's own read of its jobs fails on a merge key holding a
-# scalar; that failure is the file's shape, so `yq`'s message is not
-# printed beside the finding.
-expect_exact 'ci.yml merge key holding a scalar prints no yq message' \
+# The refused file's exploded read of its jobs fails on a merge key holding
+# a scalar; that failure is the file's shape, so `yq`'s message is not
+# printed, and the file's literal job keys still stand for it so the
+# refusal is its only finding.
+expect_exact 'ci.yml merge key holding a scalar is the only finding' \
   $'s: &s 5\njobs:\n  <<: *s\n  z:\n    runs-on: ubuntu-latest\n' $'z: A\n' \
-  "DIR/ci.yml: jobs: ${REFUSED} (first: \"<<\")"$'\n'"DIR/categories.yml: category entry z does not match any job in .github/workflows/"$'\n''2 ci.yml / categories drift entry/entries'
+  "DIR/ci.yml: jobs: ${REFUSED} (first: \"<<\")"$'\n'"${ONE_ENTRY}"
+expect_exact 'ci.yml merge list holding a scalar is the only finding' \
+  $'p: &p\n  a:\n    runs-on: ubuntu-latest\njobs:\n  <<: [*p, 5]\n  zl:\n    runs-on: ubuntu-latest\n' $'zl: A\n' \
+  "DIR/ci.yml: jobs: ${REFUSED} (first: \"<<\")"$'\n'"${ONE_ENTRY}"
+# The literal keys of every document stand in, not only the last one's.
+expect_exact 'ci.yml multi-document scalar merge keeps the first document jobs' \
+  $'jobs:\n  ma:\n    runs-on: ubuntu-latest\n---\ns: &s 5\njobs:\n  <<: *s\n  mz:\n    runs-on: ubuntu-latest\n' $'ma: A\nmz: B\n' \
+  "DIR/ci.yml: jobs: ${REFUSED} (first: \"<<\")"$'\n'"${ONE_ENTRY}"
+# A refused file's other names are listed one key a line: a key holding a
+# line break is not two names, so a category entry spelling half of it
+# still matches no job.
+expect_exact 'ci.yml line-break key does not list as two names' \
+  $'jobs:\n  zk:\n    runs-on: ubuntu-latest\n  "ak\\nbk":\n    runs-on: ubuntu-latest\n' $'zk: A\nak: B\n' \
+  "DIR/ci.yml: jobs: ${REFUSED} (first: \"ak\\nbk\")"$'\n'"DIR/categories.yml: category entry ak does not match any job in .github/workflows/"$'\n''2 ci.yml / categories drift entry/entries'
 
 # An EXEMPT entry that is not a job is reported once: the already-a-key
 # test is for entries the first test passed.

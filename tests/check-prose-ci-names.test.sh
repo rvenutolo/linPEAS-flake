@@ -394,6 +394,39 @@ function main() {
     "${odd_root}/solo/only-scalar-merge.yml: ${odd_refused} (first: \"<<\")" '' \
     "${odd_root}/solo" "${odd_root}"
   rm --force -- "${odd_root}/solo/only-scalar-merge.yml"
+  # A refused file whose exploded read fails lists its literal job keys, so
+  # the refusal is its only finding and a sentence naming one of its jobs is
+  # not a ghost. A merge list holding a scalar and a later document with the
+  # scalar merge are the same shape.
+  printf 'The %sz%s job runs.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  printf 's: &s 5\njobs:\n  <<: *s\n  z:\n    runs-on: ubuntu-latest\n' >"${odd_root}/solo/lit-scalar-merge.yml"
+  run_scenario 'job-key-scalar-merge-key-keeps-literal-jobs' 1 \
+    "${odd_root}/solo/lit-scalar-merge.yml: ${odd_refused} (first: \"<<\")" '' \
+    "${odd_root}/solo" "${odd_root}"
+  if grep --fixed-strings --quiet -- 'ghost: z' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — the literal job z is reported as a ghost\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
+  rm --force -- "${odd_root}/solo/lit-scalar-merge.yml"
+  printf 'p: &p\n  a:\n    runs-on: ubuntu-latest\njobs:\n  <<: [*p, 5]\n  z:\n    runs-on: ubuntu-latest\n' >"${odd_root}/solo/lit-merge-list.yml"
+  run_scenario 'job-key-merge-list-with-scalar-keeps-literal-jobs' 1 \
+    "${odd_root}/solo/lit-merge-list.yml: ${odd_refused} (first: \"<<\")" '' \
+    "${odd_root}/solo" "${odd_root}"
+  if grep --fixed-strings --quiet -- 'ghost: z' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — the literal job z is reported as a ghost\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
+  rm --force -- "${odd_root}/solo/lit-merge-list.yml"
+  printf 'The %sma%s job runs.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  printf 'jobs:\n  ma:\n    runs-on: ubuntu-latest\n---\ns: &s 5\njobs:\n  <<: *s\n  mz:\n    runs-on: ubuntu-latest\n' >"${odd_root}/solo/lit-multidoc.yml"
+  run_scenario 'job-key-scalar-merge-key-multi-document-keeps-literal-jobs' 1 \
+    "${odd_root}/solo/lit-multidoc.yml: ${odd_refused} (first: \"<<\")" '' \
+    "${odd_root}/solo" "${odd_root}"
+  if grep --fixed-strings --quiet -- 'ghost: ma' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — the first document job ma is reported as a ghost\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
+  rm --force -- "${odd_root}/solo/lit-multidoc.yml"
   # Every workflow refused still reports the refusal, not an empty name set.
   printf 'on: push\njobs:\n  ? [a, b]\n  : {runs-on: x}\n' >"${odd_root}/solo/only-seq-key.yml"
   run_scenario 'job-key-sole-workflow-all-refused-is-refused' 1 \
