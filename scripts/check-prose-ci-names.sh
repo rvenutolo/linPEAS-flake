@@ -53,7 +53,9 @@
 # tab, not a scalar, or a merge key) is a finding naming the workflow and
 # the key. Such a key is never a job name: a line-break key does not
 # resolve as the two names it spells, and the jobs a merge key brings in
-# resolve as the jobs they are.
+# resolve as the jobs they are. The refusal is the only finding for that
+# file: the names it can still resolve are listed, so a sentence naming one
+# of them is not reported as a ghost.
 #
 # Exit codes:
 #   0  every name claimed in prose resolves to something the sentence's own
@@ -113,10 +115,11 @@ readonly HARNESS_RUNNER="${REPO_ROOT}/scripts/run-harness-group.sh"
 #              is not a scalar. A scalar key YAML types as an int, a bool or
 #              null is listed as its text. A file whose jobs carry a
 #              refused key reports its finding through odd_job_key_findings
-#              and lists what it can resolve: a merge key that is not a
-#              mapping cannot be resolved, so that file lists nothing.
+#              and lists the names it can still resolve, so no other check
+#              reports them missing: a merge key that is not a mapping
+#              cannot be resolved, so that file lists its literal job keys.
 function job_names() {
-  local f odd
+  local f odd names
   local -a workflow_files=()
   glob_into workflow_files 'workflow YAML' \
     "${WORKFLOWS_DIR}/*.yml" "${WORKFLOWS_DIR}/*.yaml"
@@ -131,7 +134,12 @@ function job_names() {
     if [[ -n ${odd} ]]; then
       # The refusal is already a finding; a read that fails here is the
       # refused file's own shape, not a missing precondition.
-      yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | explode(.) | to_entries[] | .key | select(kind == "scalar") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" 2>/dev/null || true
+      # A read that fails (a merge key that is not a mapping) falls back to
+      # the file's literal job keys, so the refusal is its only finding.
+      names="$(yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | explode(.) | to_entries[] | .key | select(kind == "scalar") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" 2>/dev/null)" ||
+        names="$(yq eval "${YQ_MERGE_SPEC[@]}" --no-doc '(.jobs // {}) | select(kind == "map") | to_entries[] | .key | select(kind == "scalar" and tag != "!!merge") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" 2>/dev/null)" ||
+        names=''
+      if [[ -n ${names} ]]; then printf '%s\n' "${names}"; fi
       continue
     fi
     yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | explode(.) | to_entries[] | .key | select(kind == "scalar") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" || return 1

@@ -67,7 +67,9 @@
 # are read a name per line, so such a key would read as other names or
 # as none, and a merge key brings in jobs that are never listed. The
 # refusal is the only finding for that ci.yml: its job list is not held
-# against the category map or the EXEMPT list.
+# against the category map or the EXEMPT list. The names a refused file can
+# still resolve are listed for the reverse check, so a category entry naming
+# one of them is not reported as matching no job.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -223,9 +225,14 @@ for f in "${workflow_files[@]}"; do
     fi
   fi
   if [[ -n ${workflow_odd_key} ]]; then
-    # The refusal is the finding; a read that fails is the refused file's
-    # own shape (a merge key that is not a mapping), so it lists no job.
-    workflow_jobs="$(yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | explode(.) | keys | .[]' "${f}" 2>/dev/null)" || workflow_jobs=''
+    # The refusal is the finding, and the names the file can still resolve
+    # are listed so the reverse check does not report them missing. A key a
+    # line cannot carry is dropped from the list. A read that fails is the
+    # refused file's own shape (a merge key that is not a mapping), and its
+    # literal job keys stand for it.
+    workflow_jobs="$(yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | explode(.) | keys | .[] | select(test("^$|[\t\n\r\x00]") | not)' "${f}" 2>/dev/null)" ||
+      workflow_jobs="$(yq eval "${YQ_MERGE_SPEC[@]}" --no-doc '(.jobs // {}) | select(kind == "map") | to_entries[] | .key | select(kind == "scalar" and tag != "!!merge") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" 2>/dev/null)" ||
+      workflow_jobs=''
   else
     # The cost of `explode` is a stated limit: docs/development/linting.md,
     # section "YAML aliases in workflow reads".

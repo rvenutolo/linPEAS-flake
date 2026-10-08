@@ -1398,7 +1398,9 @@ A `jobs:` key GitHub Actions refuses (empty, holding a line break or a
 tab, not a scalar, or a merge key) is a finding naming the workflow and
 the key. Such a key is never a job name: a line-break key does not
 resolve as the two names it spells, and the jobs a merge key brings in
-resolve as the jobs they are.
+resolve as the jobs they are. The refusal is the only finding for that
+file: the names it can still resolve are listed, so a sentence naming one
+of them is not reported as a ghost.
 
 Exit codes:
 

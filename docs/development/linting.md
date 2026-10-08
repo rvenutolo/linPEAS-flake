@@ -731,7 +731,10 @@ anyway misreads it:
 
 A job key that is empty, holds a line break or a tab, is not a scalar,
 or is a merge key is therefore a counted finding that names the file and
-the key, and that file's jobs are not read. The shared reading also
+the key, and that file's jobs are not read. `check-ci-job-in-summary.sh`
+and `check-prose-ci-names.sh` still list the names they can resolve in
+such a file, so the refusal is its only finding and their other checks do
+not report those names missing. The shared reading also
 refuses a carriage return and a NUL. `yq` counts a lone carriage return
 as a line break and a line-by-line read does not. A lint with a check of
 its own refuses a line break and a tab, most also refuse a NUL, and none
