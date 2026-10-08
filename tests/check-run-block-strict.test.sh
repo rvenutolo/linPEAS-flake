@@ -199,11 +199,12 @@ expect_workflow job-key-unread $'jobs:\n  a:\n'"${WEAK_STEP}" 2 \
 # A job key the job list cannot carry, and a merge key under `jobs:`,
 # are findings: the weak run: block each one hides is otherwise unread.
 readonly REFUSED_KEY='which GitHub Actions refuses'
+readonly KEY_TAIL=$'\n1 run: block(s) missing strict-mode prelude'
 expect_workflow job-key-line-break $'jobs:\n  "a\\nb":\n'"${WEAK_STEP}" 1 \
-  "@F@: jobs: holds a job key that is empty, holds a line break or a tab, or is a merge key, ${REFUSED_KEY}; its jobs are not read (first: \"a\\nb\")"
+  "@F@: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, ${REFUSED_KEY}; its jobs are not read (first: \"a\\nb\")${KEY_TAIL}"
 expect_workflow job-key-empty $'jobs:\n  "":\n'"${WEAK_STEP}" 1 \
-  "@F@: jobs: holds a job key that is empty, holds a line break or a tab, or is a merge key, ${REFUSED_KEY}; its jobs are not read (first: \"\")"
+  "@F@: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, ${REFUSED_KEY}; its jobs are not read (first: \"\")${KEY_TAIL}"
 expect_workflow job-key-merge-key $'x: &base\n  j:\n'"${WEAK_STEP}"$'jobs:\n  <<: *base\n' 1 \
-  "@F@: jobs: holds a job key that is empty, holds a line break or a tab, or is a merge key, ${REFUSED_KEY}; its jobs are not read (first: \"<<\")"
+  "@F@: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, ${REFUSED_KEY}; its jobs are not read (first: \"<<\")${KEY_TAIL}"
 
 printf 'all tests passed\n'
