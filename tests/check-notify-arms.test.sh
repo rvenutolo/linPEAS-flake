@@ -1174,6 +1174,35 @@ jobs:
     '.github/workflows/refused-marked.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "")'
   refute_stderr 'which is not a notify-workflow-result job'
 
+  # Skipping a marker under a refused workflow does not end the scan: a
+  # marker after it is still judged.
+  fresh_root
+  odd_workflow refused-marked.yml 'jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  "":
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  notify:
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.build.result }}
+          label: refused
+          title: refused
+          body: refused'
+  printf 'A failed run <!-- notify-arms: refused-marked.yml/notify = failure cancelled -->.\nA ghost run <!-- notify-arms: ghost.yml/notify = failure -->.\n' >>"${ROOT}/${DOC}"
+  run_scenario refused-workflow-marker-does-not-end-the-scan 1 \
+    '.github/workflows/refused-marked.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "")'
+  also_expect 'marker names ghost.yml/notify, which is not a notify-workflow-result job'
+  refute_stderr 'marker names refused-marked.yml/notify'
+
   # A merge list gives the first mapping the win; yq reads the last unless
   # told otherwise. The two mappings gate on different results.
   local order marker

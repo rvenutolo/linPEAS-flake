@@ -366,6 +366,7 @@ expect_jobs 'other workflow merge key under jobs' \
 # the exit status and the whole of stderr.
 # @arg $1 scenario label  @arg $2 ci.yml body  @arg $3 category map body
 # @arg $4 expected stderr, with DIR standing for the temp dir
+# @arg $5 optional EXEMPT list, one name per line
 function expect_exact() {
   local -r label="$1" ci="$2" cats="$3"
   local dir got_exit=0 got_stderr want
@@ -374,7 +375,7 @@ function expect_exact() {
   printf '%s' "${cats}" >"${dir}/categories.yml"
   want="${4//DIR/${dir}}"
   got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${dir}" CI_WORKFLOW_OVERRIDE="${dir}/ci.yml" \
-    CATEGORIES_FILE_OVERRIDE="${dir}/categories.yml" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+    CATEGORIES_FILE_OVERRIDE="${dir}/categories.yml" EXEMPT_OVERRIDE="${5:-}" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
   rm --recursive --force -- "${dir}"
   if [[ ${got_exit} != 1 || ${got_stderr} != "${want}" ]]; then
     printf 'FAIL %s: exit %s, want 1, and exactly:\n%s\n  got: %s\n' \
@@ -393,6 +394,12 @@ expect_exact 'ci.yml merge key is one drift entry' \
 expect_exact 'ci.yml line-break key is one drift entry' \
   $'jobs:\n  "a\\nb":\n    runs-on: ubuntu-latest\n' $'x: A\n' \
   "DIR/ci.yml: jobs: ${REFUSED} (first: \"a\\nb\")"$'\n'"DIR/categories.yml: category entry x does not match any job in .github/workflows/"$'\n''2 ci.yml / categories drift entry/entries'
+
+# The refused ci.yml's job list is not read, so an EXEMPT entry is not
+# held against it.
+expect_exact 'ci.yml merge key is one drift entry beside an EXEMPT entry' \
+  $'x: &j\n  baz:\n    runs-on: ubuntu-latest\njobs:\n  <<: *j\n  foo:\n    runs-on: ubuntu-latest\n' $'foo: A\nbaz: B\n' \
+  "DIR/ci.yml: jobs: ${REFUSED} (first: \"<<\")"$'\n'"${ONE_ENTRY}" $'zzz\n'
 
 # ci.yml sits in the workflows directory too and is checked once: a
 # second pass over it would print its finding twice.

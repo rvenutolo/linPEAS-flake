@@ -472,6 +472,13 @@ expect_text_is job-key-merge-key-aliased $'p: &P {j: {runs-on: ubuntu-latest}}\n
 expect_text_is multi-document-no-merge-key $'jobs:\n  j: {runs-on: ubuntu-latest}\n---\nname: second\non: push\njobs:\n  k: {runs-on: ubuntu-latest}\n' \
   $'@F@: the job count is not a number: $\'1\\n1\'\n1 egress-allowlist violation(s)'
 
+# The merge-key count prints one number per document, and a merge key in
+# any document is refused: the first document alone, the last alone.
+expect_text_is merge-key-first-document-only $'x: &b\n  j: {runs-on: ubuntu-latest}\njobs:\n  <<: *b\n---\nname: second\non: push\njobs:\n  k: {runs-on: ubuntu-latest}\n' \
+  $'@F@: jobs: holds a merge key, which GitHub Actions refuses; its jobs are not read\n1 egress-allowlist violation(s)'
+expect_text_is merge-key-last-document-only $'jobs:\n  k: {runs-on: ubuntu-latest}\n---\nx: &b\n  j: {runs-on: ubuntu-latest}\njobs:\n  <<: *b\n' \
+  $'@F@: jobs: holds a merge key, which GitHub Actions refuses; its jobs are not read\n1 egress-allowlist violation(s)'
+
 # A failing read for merge keys is one finding, and no read follows it,
 # even when the later reads would succeed. The shim fails only the read
 # that selects the merge tag.

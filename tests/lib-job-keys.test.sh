@@ -64,6 +64,12 @@ expect_out no-jobs $'on: push\n' "${ODD}" ''
 expect_out second-document-key $'jobs:\n  ok: {a: 1}\n---\njobs:\n  "a\\nb": {x: 1}\n' "${ODD}" '"a\nb"'
 expect_out later-document-merge $'jobs:\n  ok: {a: 1}\n---\nx: &b\n  j: {a: 1}\njobs:\n  <<: *b\n' "${ODD}" '"<<"'
 expect_out clean-two-documents $'jobs:\n  ok: {a: 1}\n---\njobs:\n  fine: {a: 1}\n' "${ODD}" ''
+# One line even when several documents each hold a refused key: the first
+# is named and the rest are not.
+expect_out two-odd-documents $'jobs:\n  "a\\nb": {x: 1}\n---\njobs:\n  "": {x: 1}\n' "${ODD}" '"a\nb"'
+# A file yq cannot parse is a failure of the call, not an empty answer.
+# shellcheck disable=SC2016 # snippet is bash source text for a child process
+expect_out unparsable $'jobs: [\n' 'first_odd_job_key "$2" 2>/dev/null || printf "failed=%d" "$?"' 'failed=1'
 # `jobs:` read through an alias is expanded once, and a merge list inside it
 # must not make `yq` warn.
 expect_out aliased-jobs-merge-list $'p: &P\n  permissions: {contents: write}\nq: &Q\n  permissions: {contents: read}\nx: &b\n  a:\n    <<: [*P, *Q]\njobs: *b\n' "${ODD}" ''
