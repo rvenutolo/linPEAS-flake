@@ -135,4 +135,41 @@ expect_body job-key-twice.yml $'jobs:\n  a:\n    permissions:\n      contents: r
 expect_body job-key-alias.yml $'x-name: &ka named\njobs:\n  *ka :\n    permissions:\n      contents: write\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
   "DIR/job-key-alias.yml: job \\*ka holds guard-required write scope but is missing fork guard ${BT}github.repository == 'rvenutolo/linPEAS-flake'${BT}; got if=''${ONE_JOB}"
 
+# A job key the job list cannot carry (a line break, empty, a merge key
+# under `jobs:`) is a finding, never a job that is read as other names or
+# as none. Each workflow below holds an unguarded write job a skipped key
+# would hide.
+# @arg $1 scenario name  @arg $2 workflow body  @arg $3 expected exit
+# @arg $4 text stderr must hold
+function expect_stderr_has() {
+  local -r name="$1" body="$2" want_exit="$3" want="$4"
+  local dir got_exit=0 got_stderr
+  dir="$(mktemp --directory)"
+  printf '%s' "${body}" >"${dir}/${name}"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${dir}" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  rm --recursive --force -- "${dir}"
+  if [[ ${got_exit} != "${want_exit}" || ${got_stderr} != *"${want}"* ]]; then
+    printf 'FAIL %s: exit %s, want %s and stderr holding %q\n  got: %s\n' \
+      "${name}" "${got_exit}" "${want_exit}" "${want}" "${got_stderr}" >&2
+    return 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+readonly REFUSED='which GitHub Actions refuses'
+expect_stderr_has job-key-line-break.yml $'jobs:\n  "a\\nb":\n    permissions:\n      contents: write\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 "${REFUSED}"
+expect_stderr_has job-key-block-sequence.yml $'jobs:\n  ? - a\n    - b\n  : permissions:\n      contents: write\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 "${REFUSED}"
+expect_stderr_has job-key-empty.yml $'jobs:\n  "":\n    permissions:\n      contents: write\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 "${REFUSED}"
+expect_stderr_has job-key-merge-key.yml $'x: &base\n  j:\n    permissions:\n      contents: write\n    steps:\n      - run: echo PAYLOAD_RAN\njobs:\n  <<: *base\n' 1 "${REFUSED}"
+
+# An App-token step is found through a job written as an alias and
+# through a merge key inside the job, as the job's other reads follow both.
+expect_stderr_has app-token-job-alias.yml $'x: &D\n  permissions:\n    contents: read\n  steps:\n    - uses: actions/create-github-app-token@v1\njobs:\n  a: *D\n' 1 'missing fork guard'
+expect_stderr_has app-token-job-merge-key.yml $'x: &D\n  steps:\n    - uses: actions/create-github-app-token@v1\njobs:\n  a:\n    <<: *D\n    permissions:\n      contents: read\n' 1 'missing fork guard'
+
+# A merge list is read first mapping wins (the YAML merge spec), so the
+# job holds the write scope of the first mapping listed.
+readonly PQ=$'p: &P\n  permissions:\n    contents: write\nq: &Q\n  permissions:\n    contents: read\n'
+expect_stderr_has merge-list-write-first.yml "${PQ}"$'jobs:\n  a:\n    <<: [*P, *Q]\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 'missing fork guard'
+expect_stderr_has merge-list-read-first.yml "${PQ}"$'jobs:\n  a:\n    <<: [*Q, *P]\n    steps:\n      - run: echo PAYLOAD_RAN\n' 0 ''
+
 printf 'all tests passed\n'

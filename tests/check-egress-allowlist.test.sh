@@ -409,6 +409,28 @@ expect_jobs_block job-key-alias $'  *ka :\n'"${CAFE_STEPS}" \
 expect_jobs_block job-key-twice $'  a:\n'"${CLEAN_STEPS}"$'  a:\n'"${CAFE_STEPS}" \
   "@F@: job key 'a' is written more than once, so which job is read is ambiguous"$'\n1 egress-allowlist violation(s)'
 
+# A merge key directly under `jobs:` lists as the key `<<`, so the job it
+# brings in is never read. It is a finding, as GitHub Actions refuses it.
+# A merge list is read first mapping wins (the YAML merge spec).
+# @arg $1 scenario name  @arg $2 file text after `on:`  @arg $3 text
+# stderr must hold
+function expect_text_has() {
+  local -r name="$1" text="$2" want="$3"
+  local got_exit=0 got_stderr
+  printf 'name: %s\non:\n  workflow_dispatch: {}\n%s' "${name}" "${text}" >"${key_dir}/wf/${name}.yml"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER="${name}.yml" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  if [[ ${got_exit} != 1 || ${got_stderr} != *"${want}"* ]]; then
+    printf 'FAIL %s: exit %s, want 1 and stderr holding %q\n  stderr: %s\n' "${name}" "${got_exit}" "${want}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+readonly CAFE_JOB=$'  j:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3\n        with:\n          egress-policy: block\n          allowed-endpoints: >\n            cafe.github.com:443\n'
+expect_text_has job-key-merge-key $'x: &base\n'"${CAFE_JOB}"$'jobs:\n  <<: *base\n' 'which GitHub Actions refuses'
+readonly CAFE_MAP=$'p: &P\n  steps:\n    - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3\n      with:\n        egress-policy: block\n        allowed-endpoints: >\n          cafe.github.com:443\nq: &Q\n  steps:\n    - run: echo PAYLOAD_RAN\n'
+expect_text_has merge-list-first-wins "${CAFE_MAP}"$'jobs:\n  a:\n    <<: [*P, *Q]\n    runs-on: ubuntu-latest\n' "allowlists cafe.github.com"
+
 # The range itself, for a job that is not the last: a marker inside the
 # first job's block exempts it.
 # @arg $1 scenario name  @arg $2 the build job's marker line, or empty

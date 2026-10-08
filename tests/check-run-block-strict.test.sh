@@ -196,4 +196,14 @@ chmod +x -- "${key_dir}/stub/yq"
 expect_workflow job-key-unread $'jobs:\n  a:\n'"${WEAK_STEP}" 2 \
   '@F@: cannot read the key of the job at position 0' "${key_dir}/stub:${PATH}"
 
+# A job key the job list cannot carry, and a merge key under `jobs:`,
+# are findings: the weak run: block each one hides is otherwise unread.
+readonly REFUSED_KEY='which GitHub Actions refuses'
+expect_workflow job-key-line-break $'jobs:\n  "a\\nb":\n'"${WEAK_STEP}" 1 \
+  "@F@: jobs: holds a job key that is empty, holds a line break or a tab, or is a merge key, ${REFUSED_KEY}; its jobs are not read (first: \"a\\nb\")"
+expect_workflow job-key-empty $'jobs:\n  "":\n'"${WEAK_STEP}" 1 \
+  "@F@: jobs: holds a job key that is empty, holds a line break or a tab, or is a merge key, ${REFUSED_KEY}; its jobs are not read (first: \"\")"
+expect_workflow job-key-merge-key $'x: &base\n  j:\n'"${WEAK_STEP}"$'jobs:\n  <<: *base\n' 1 \
+  "@F@: jobs: holds a job key that is empty, holds a line break or a tab, or is a merge key, ${REFUSED_KEY}; its jobs are not read (first: \"<<\")"
+
 printf 'all tests passed\n'

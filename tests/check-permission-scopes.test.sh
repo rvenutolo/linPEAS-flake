@@ -385,6 +385,29 @@ expect_allowlist_shape allowlist-several-documents $'good.yml: {writer: [issues]
   '@AL@: the allowlist holds several YAML documents; it must hold one'
 expect_allowlist_shape allowlist-entry-null $'good.yml:\nother.yml: {writer: [issues]}\n' 1 \
   "${FIXTURES}/good.yml: job writer grants write scope issues not allowed by @AL@"$'\n1 permission-scope violation(s) found'
+# An allowlist name is raw text in the reverse pass's tab-separated rows,
+# so a workflow, job or scope name holding a tab or a line break is
+# refused, as the same names are in a workflow. The entry below would
+# otherwise read as a row for the real writer job and pass as not stale.
+readonly ODD_ALLOW='which GitHub Actions refuses'
+expect_names 'an allowlist job name forging a row is refused' w.yml "${WRITER}" \
+  $'w.yml:\n  writer: [issues]\n  "ghost\\nw.yml\\twriter": [issues]\n' 1 \
+  "@AL@: an allowlist name holds a tab or a line break, ${ODD_ALLOW}; its entries are not read (first: \"ghost\\nw.yml\\twriter\")"
+expect_names 'an allowlist workflow name holding a tab is refused' w.yml "${WRITER}" \
+  $'w.yml:\n  writer: [issues]\n"x\\tw.yml":\n  writer: [issues]\n' 1 \
+  "@AL@: an allowlist name holds a tab or a line break, ${ODD_ALLOW}; its entries are not read (first: \"x\\tw.yml\")"
+expect_names 'an allowlist scope name holding a line break is refused' w.yml "${WRITER}" \
+  $'w.yml:\n  writer: ["issues\\nx"]\n' 1 \
+  "@AL@: an allowlist name holds a tab or a line break, ${ODD_ALLOW}; its entries are not read (first: \"issues\\nx\")"
+# A merge key under jobs: lists as the key `<<`, so the job it brings in
+# is never read; it is refused like any job id GitHub Actions refuses.
+expect_built 'a merge key under jobs is refused' \
+  'on: push\nx: &base\n  j:\n    permissions: {contents: write}\njobs:\n  <<: *base\n' 1 \
+  "%W: ${ODD}kind=scalar, name=\"<<\")
+${ONE}"
+# A merge list is read first mapping wins (the YAML merge spec).
+expect_built 'a merge list reads the first mapping' \
+  'on: push\np: &P\n  permissions: {contents: write}\nq: &Q\n  permissions: {contents: read}\njobs:\n  a:\n    <<: [*Q, *P]\n    steps: []\n' 0 ''
 # A workflow file name is data too.
 expect_names file-name-quote 'q"x.yml' "${WRITER}" \
   $'\'q"x.yml\':\n  writer: [issues]\n' 0 ''

@@ -317,6 +317,39 @@ EOF
     $'x-base: &base\n  job-m: Doc quality\n<<: *base\njob-a: Build + smoke\n'
   ci_dag_key_case "${key_work}" 'written-twice' 'job-d' \
     $'job-d: Build + smoke\njob-d: Doc quality\njob-a: Build + smoke\n'
+  # A job key the job list cannot carry, and a merge key under `jobs:`,
+  # stop the run (exit 2) naming the file, and the diagram is untouched:
+  # a line break renders as two nodes, an empty key as none, and a merge
+  # key as the node `<<`.
+  local refused_name refused_body refused_rc refused_err
+  local -a refused_cases=(
+    'refused-line-break' $'jobs:\n  "a\\nb":\n    runs-on: ubuntu-latest\n    steps:\n      - run: "true"\n'
+    'refused-empty' $'jobs:\n  "":\n    runs-on: ubuntu-latest\n    steps:\n      - run: "true"\n'
+    'refused-merge-key' $'x: &base\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: "true"\njobs:\n  <<: *base\n'
+  )
+  for ((i = 0; i < ${#refused_cases[@]}; i += 2)); do
+    refused_name=${refused_cases[i]}
+    refused_body=${refused_cases[i + 1]}
+    printf 'name: ci\non: push\n%s' "${refused_body}" >"${key_work}/${refused_name}.yml"
+    printf 'job-a: Build + smoke\n' >"${key_work}/${refused_name}.cats.yml"
+    printf '<!-- BEGIN ci-dag -->\n<!-- END ci-dag -->\n' >"${key_work}/${refused_name}.md"
+    cp -- "${key_work}/${refused_name}.md" "${key_work}/${refused_name}.md.orig"
+    refused_rc=0
+    CI_WORKFLOW_OVERRIDE="${key_work}/${refused_name}.yml" CATEGORIES_FILE_OVERRIDE="${key_work}/${refused_name}.cats.yml" \
+      DOC_OVERRIDE="${key_work}/${refused_name}.md" \
+      "${SCRIPT}" >"${key_work}/${refused_name}.out" 2>"${key_work}/${refused_name}.err" || refused_rc=$?
+    printf 'harness-assert-outcome: exit=%d\n' "${refused_rc}" >"${key_work}/${refused_name}.outcome"
+    harness_assert_record "job key refused: ${refused_name}" 'which GitHub Actions refuses' \
+      "${key_work}/${refused_name}.outcome" "${key_work}/${refused_name}.out" "${key_work}/${refused_name}.err"
+    refused_err="$(grep --invert-match --fixed-strings -- '--yaml-fix-merge-anchor-to-spec' "${key_work}/${refused_name}.err" || true)"
+    if [[ ${refused_rc} -eq 2 && ${refused_err} == *"${key_work}/${refused_name}.yml"*'which GitHub Actions refuses'* ]] &&
+      cmp --silent -- "${key_work}/${refused_name}.md" "${key_work}/${refused_name}.md.orig"; then
+      pass "job key refused: ${refused_name}"
+    else
+      fail "job key refused: ${refused_name}: exit ${refused_rc}, want 2 and a message naming the file"
+      cat -- "${key_work}/${refused_name}.err" >&2
+    fi
+  done
   # A category map that is not one map of jobs stops the run (exit 2),
   # as a tool failing to read it does: a list's entries are keyed by
   # index, and every job would read as uncategorised.
